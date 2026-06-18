@@ -25,7 +25,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc (Point)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
-open Orchard.Specs (bitrange bitrange_lt)
+open Orchard.Specs (bitrange bitrange_lt bitrange_add)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
@@ -749,6 +749,88 @@ def MessageCellFacts (gd pkd : Point Fp) (value rho psi : Fp) (cells : MessageCe
   cells.g =
     cells.g0 + cells.g1 * 2 + ((bitrange psi.val 9 240 : ℕ) : Fp) * 1024 ∧
   cells.h = cells.h0 + cells.h1 * 32
+
+theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
+    {value rho psi : Fp} {cells : MessageCells Fp}
+    (hvalue : value.val < 2 ^ 64)
+    (h : MessageCellFacts gd pkd value rho psi cells) :
+    NoteCommitPieceValues (noteScalars gd pkd value rho psi) (messagePieces cells) := by
+  simp only [MessageCellFacts] at h
+  obtain ⟨ha, hb0, hb1, hygd, hb3, hc, hd0, hypkd, hd2, he0, he1, hf, hg0, hg1,
+    hh0, hh1, hb, hd, he, hg, hh⟩ := h
+  have hgdY := isLowBit_iff_mod_two.mp hygd
+  have hpkdY := isLowBit_iff_mod_two.mp hypkd
+  simp only [NoteCommitPieceValues, noteScalars, messagePieces]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa [bitrange, K] using ha
+  · have hcell : cells.b =
+        ((gd.x.val / 2 ^ 250 % 16 + (gd.x.val / 2 ^ 254 % 2) * 16 +
+          (gd.y.val % 2) * 32 + (pkd.x.val % 16) * 64 : ℕ) : Fp) := by
+      rw [hb, hb0, hb1, hgdY, hb3]
+      simp only [bitrange, pow_zero, Nat.div_one]
+      push_cast
+      ring_nf
+    simpa using hcell
+  · simpa [bitrange, K] using hc
+  · have hcell : cells.d =
+        ((pkd.x.val / 2 ^ 254 % 2 + (pkd.y.val % 2) * 2 +
+          (value.val % 2 ^ 58) * 4 : ℕ) : Fp) := by
+      rw [hd, hd0, hpkdY, hd2]
+      have hsplit := bitrange_add value.val 0 8 50
+      norm_num at hsplit
+      have hsplit' :
+          value.val % 2 ^ 58 = value.val % 256 + 256 * (value.val / 256 % 2 ^ 50) := by
+        simpa [bitrange] using hsplit
+      norm_num at hsplit'
+      simp only [bitrange, pow_zero, Nat.div_one]
+      push_cast
+      rw [show ((value.val % 288230376151711744 : ℕ) : Fp) =
+          ((value.val % 256 + 256 * (value.val / 256 % 1125899906842624) : ℕ) : Fp) by
+        rw [hsplit']]
+      push_cast
+      ring_nf
+    simpa using hcell
+  · have hcell : cells.e =
+        ((value.val / 2 ^ 58 % 64 + (rho.val % 16) * 64 : ℕ) : Fp) := by
+      rw [he, he0, he1]
+      simp only [bitrange, pow_zero, Nat.div_one]
+      push_cast
+      ring_nf
+    simpa using hcell
+  · simpa [bitrange, K] using hf
+  · have hcell : cells.g =
+        ((rho.val / 2 ^ 254 % 2 + (psi.val % 2 ^ 249) * 2 : ℕ) : Fp) := by
+      rw [hg, hg0, hg1]
+      have hsplit := bitrange_add psi.val 0 9 240
+      norm_num at hsplit
+      have hsplit' :
+          psi.val % 2 ^ 249 = psi.val % 512 + 512 * (psi.val / 512 % 2 ^ 240) := by
+        simpa [bitrange] using hsplit
+      norm_num at hsplit'
+      simp only [bitrange, pow_zero, Nat.div_one]
+      push_cast
+      rw [show ((psi.val % 904625697166532776746648320380374280103671755200316906558262375061821325312 : ℕ) : Fp) =
+          ((psi.val % 512 +
+            512 * (psi.val / 512 %
+              1766847064778384329583297500742918515827483896875618958121606201292619776) : ℕ) : Fp) by
+        rw [hsplit']]
+      push_cast
+      ring_nf
+    simpa using hcell
+  · have hcell : cells.h =
+        ((psi.val / 2 ^ 249 % 32 + (psi.val / 2 ^ 254 % 2) * 32 : ℕ) : Fp) := by
+      rw [hh, hh0, hh1]
+      simp only [bitrange]
+      push_cast
+      ring_nf
+    simpa using hcell
+  · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  · exact Nat.mod_lt _ (by norm_num)
+  · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  · exact Nat.mod_lt _ (by norm_num)
+  · exact hvalue
+  · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
 
 def AssignedYBits (gd pkd : Point Fp) (cells : MessageCells Fp) : Prop :=
   IsLowBit gd.y cells.b2 ∧
@@ -1735,6 +1817,122 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     (_ : ProverHint Fp) : Prop :=
   ProverNoteCommitRelation G Q R input cm
 
+private theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
+    (hg0_bool : IsBool g0)
+    (hg1_lt : g1.val < 2 ^ 9)
+    (hg2_lt : g2.val < 2 ^ 240)
+    (hg : g = g0 + g1 * 2 + g2 * 1024)
+    (hz13 : z13G = ((g.val / 2 ^ 130 : ℕ) : Fp)) :
+    z13G = (((g1.val + g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) : Fp) := by
+  have hg0_lt : g0.val < 2 := IsBool.val_lt_two hg0_bool
+  have h01sum : g0.val + g1.val * 2 ^ 1 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at *
+    omega
+  have h01val :
+      (g0 + g1 * ((2 ^ 1 : ℕ) : Fp)).val = g0.val + g1.val * 2 ^ 1 :=
+    val_limb2 1 h01sum
+  have hsum :
+      (g0 + g1 * ((2 ^ 1 : ℕ) : Fp)).val + g2.val * 2 ^ 10 <
+        CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    rw [h01val]
+    norm_num at *
+    omega
+  have hg_val : g.val = g0.val + g1.val * 2 + g2.val * 1024 := by
+    rw [hg]
+    have hval := val_limb2 (lo := g0 + g1 * ((2 ^ 1 : ℕ) : Fp)) (hi := g2) 10 hsum
+    rw [show g0 + g1 * 2 + g2 * 1024 =
+        (g0 + g1 * ((2 ^ 1 : ℕ) : Fp)) + g2 * ((2 ^ 10 : ℕ) : Fp) by
+      norm_num]
+    rw [hval, h01val]
+    norm_num
+  have hdiv :
+      (g0.val + g1.val * 2 + g2.val * 1024) / 2 ^ 130 =
+        (g1.val + g2.val * 2 ^ 9) / 2 ^ 129 := by
+    norm_num at *
+    omega
+  rw [hz13, hg_val, hdiv]
+
+private theorem valueCanonicity_assumptions_of_commit
+    (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
+    (env : Environment Fp)
+    (hd2 : (eval env cells).d2.val < 2 ^ 8)
+    (he0 : (eval env cells).e0.val < 2 ^ 6)
+    (hd : (eval env cells).d.val < 2 ^ 60)
+    (hz1d : (HVec.get (Chain.zLengths messagePieceRounds) (eval env O).zs ⟨3, by decide⟩)[1]
+      = (((eval env cells).d.val / 2 ^ 10 : ℕ) : Fp)) :
+    ValueCanonicity.circuit.Assumptions
+      (eval env
+        ({ value := input_var.value, d2 := cells.d2,
+           d3 := (HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨3, by decide⟩)[1],
+           e0 := cells.e0 } : Var ValueCanonicity.Input Fp)) := by
+  rw [show ValueCanonicity.circuit.Assumptions = ValueCanonicity.Assumptions from rfl]
+  simp only [ValueCanonicity.Assumptions, ValueCanonicity.Gate.Assumptions, circuit_norm]
+  refine ⟨by simpa [circuit_norm] using hd2, ?_, by simpa [circuit_norm] using he0⟩
+  have hz1d_eval : Expression.eval env
+      ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨3, by decide⟩)[1]) =
+      (((eval env cells).d.val / 2 ^ 10 : ℕ) : Fp) := by
+    exact (CircuitType.eval_expr env _).symm.trans
+      ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) O.zs ⟨3, by decide⟩ 1
+        (by decide)).trans (by simpa [circuit_norm] using hz1d))
+  change (Expression.eval env
+      ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨3, by decide⟩)[1])).val <
+      2 ^ 50
+  rw [hz1d_eval]
+  rw [ZMod.val_natCast_of_lt]
+  · omega
+  · have hq : (eval env cells).d.val / 2 ^ 10 < 2 ^ 50 := by
+      omega
+    exact lt_trans hq (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+
+private theorem psiCanonicity_assumptions_of_commit
+    (O : Var Commit.Output Fp) (input_var : Var Input Fp) (cells : Var MessageCells Fp)
+    (env : Environment Fp)
+    (hh1_bool : IsBool (Expression.eval env cells.h1))
+    (hg0_bool : IsBool (Expression.eval env cells.g0))
+    (hg_decomp : Expression.eval env cells.g =
+      Expression.eval env cells.g0 + Expression.eval env cells.g1 * 2 +
+        Expression.eval env ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[1]) * 1024)
+    (hg1_lt : (eval env cells).g1.val < 2 ^ 9)
+    (hh0_lt : (eval env cells).h0.val < 2 ^ 5)
+    (hg_lt : (eval env cells).g.val < 2 ^ 250)
+    (hz1g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env O).zs ⟨6, by decide⟩)[1]
+      = (((eval env cells).g.val / 2 ^ 10 : ℕ) : Fp))
+    (hz13g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env O).zs ⟨6, by decide⟩)[13]
+      = (((eval env cells).g.val / 2 ^ 130 : ℕ) : Fp)) :
+    PsiCanonicity.circuit.Assumptions
+      (eval env
+        ({ psi := input_var.psi, h0 := cells.h0, g1 := cells.g1, h1 := cells.h1,
+           g2 := (HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[1],
+           z13G := (HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[13] }
+          : Var PsiCanonicity.Input Fp)) := by
+  rw [show PsiCanonicity.circuit.Assumptions = PsiCanonicity.Assumptions from rfl]
+  simp only [PsiCanonicity.Assumptions, circuit_norm]
+  have hz1g_eval : Expression.eval env
+      ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[1]) =
+      (((eval env cells).g.val / 2 ^ 10 : ℕ) : Fp) := by
+    exact (CircuitType.eval_expr env _).symm.trans
+      ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩ 1
+        (by decide)).trans (by simpa [circuit_norm] using hz1g))
+  have hz13g_eval : Expression.eval env
+      ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[13]) =
+      (((eval env cells).g.val / 2 ^ 130 : ℕ) : Fp) := by
+    exact (CircuitType.eval_expr env _).symm.trans
+      ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩ 13
+        (by decide)).trans (by simpa [circuit_norm] using hz13g))
+  have hg2_lt : (Expression.eval env
+      ((HVec.get (Chain.zLengths messagePieceRounds) O.zs ⟨6, by decide⟩)[1])).val <
+      2 ^ 240 := by
+    rw [hz1g_eval]
+    rw [ZMod.val_natCast_of_lt]
+    · omega
+    · have hq : (eval env cells).g.val / 2 ^ 10 < 2 ^ 240 := by
+        omega
+      exact lt_trans hq (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  refine ⟨hh1_bool, by simpa [circuit_norm] using hg1_lt, hg2_lt,
+    by simpa [circuit_norm] using hh0_lt, ?_⟩
+  exact z13G_tail_of_decompose_g hg0_bool (by simpa [circuit_norm] using hg1_lt) hg2_lt
+    hg_decomp (by simpa [circuit_norm] using hz13g_eval)
+
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
@@ -1897,26 +2095,135 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
           (by decide)).trans (by simpa [circuit_norm] using hz13f)))
   rw [show RhoCanonicity.circuit.Spec = RhoCanonicity.Spec from rfl] at hRhoSpec
   simp only [RhoCanonicity.Spec, circuit_norm] at hRhoSpec
-  -- ROADMAP to finish (all infrastructure is in place above this theorem):
-  --  1. `hAM trivial`, `hCom trivial`, `hMPC trivial` (all have `True`/`fun _ => True`
-  --     assumptions) → `AssignMessagePieces.Spec` (7 range bounds), `Commit.Spec`
-  --     (`∃ chunks r, PieceChunks pieces chunks ∧ ZsFacts ∧ hash`), `MessagePieceChecks.Spec`
-  --     (`IsBool b1/b2/d0/d1/g0/h1` + the b/d/e/g/h decompositions). Use the
-  --     `toSubcircuit_soundness` `rfl` bridge, not `circuit_norm`, to avoid flattening.
-  --  2. From `Commit.Spec`: `obtain ⟨chunks, rcm, hPC, hZs, hHash⟩`. Derive
-  --     `a.val,c.val,f.val < 2^250` via `pieceChunks_val_lt … ⟨0/2/5⟩` and the running-sum
-  --     cells `z13a/z13c/z1d/z13f/z1g/z13g` via `zsFacts_cell … ⟨0/2/3/5/6⟩` at r = 13/1.
-  --  3. `hY1`/`hY2`: discharge `IsBool b2`/`IsBool d1` from `MessagePieceChecks.Spec`
-  --     → `IsLowBit gd.y AM.b2`, `IsLowBit pkd.y AM.d1`.
-  --  4. `hGd/hPkd/hVal/hRho/hPsi`: assemble each gate's `Assumptions` from `IsBool` (MPC),
-  --     the range bound (`AssignMessagePieces.Spec`), the piece bound (step 2), and the z-cell
-  --     (step 2) → the canonical bit-slice `Spec`s (`a = bitrange gd.x 0 250`, …).
-  --  5. Assemble the 8 indexed piece values `hA..hH` (gate slices + MPC decompositions +
-  --     `IsLowBit`), then `pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC …`
-  --     gives `chunks = noteCommitChunks (noteScalars …)`.
-  --  6. Conclude `NoteCommitRelation` with `rcm`, using `hHash` and `hchunks`; then discharge
-  --     the trailing `Requirements` disjunctions (each `Or.inr <the assumption just built>`).
-  sorry
+  have hValSpec := hVal
+    (valueCanonicity_assumptions_of_commit COut input_var AM env hd2_lt he0_lt hd_lt hz1d)
+  rw [show ValueCanonicity.circuit.Spec = ValueCanonicity.Spec from rfl] at hValSpec
+  simp only [ValueCanonicity.Spec, circuit_norm] at hValSpec
+  have hPsiSpec := hPsi (psiCanonicity_assumptions_of_commit COut input_var AM env
+    (by simpa [MPCIn, circuit_norm] using hh1_bool)
+    (by simpa [MPCIn, circuit_norm] using hg0_bool)
+    (by simpa [MPCIn, circuit_norm] using hg_decomp)
+    hg1_lt hh0_lt hg_lt hz1g hz13g)
+  rw [show PsiCanonicity.circuit.Spec = PsiCanonicity.Spec from rfl] at hPsiSpec
+  simp only [PsiCanonicity.Spec, circuit_norm] at hPsiSpec
+  have hMessageFactsVar : MessageCellFacts
+      (eval env input_var.gd) (eval env input_var.pkd)
+      (eval env input_var.value) (eval env input_var.rho)
+      (eval env input_var.psi) (eval env AM) := by
+    simp only [MessageCellFacts]
+    refine ⟨by simpa [circuit_norm] using hGdSpec.1,
+      by simpa [circuit_norm] using hGdSpec.2.1,
+      by simpa [circuit_norm] using hGdSpec.2.2,
+      by simpa [circuit_norm] using hgdY_low,
+      by simpa [circuit_norm] using hPkdSpec.1,
+      by simpa [circuit_norm] using hPkdSpec.2.1,
+      by simpa [circuit_norm] using hPkdSpec.2.2,
+      by simpa [circuit_norm] using hpkdY_low,
+      by simpa [circuit_norm] using hValSpec.2.1,
+      by simpa [circuit_norm] using hValSpec.2.2.2,
+      by simpa [circuit_norm] using hRhoSpec.1,
+      by simpa [circuit_norm] using hRhoSpec.2.1,
+      by simpa [circuit_norm] using hRhoSpec.2.2,
+      by simpa [circuit_norm] using hPsiSpec.1,
+      by simpa [circuit_norm] using hPsiSpec.2.2.1,
+      by simpa [circuit_norm] using hPsiSpec.2.2.2,
+      ?_, ?_, ?_, ?_, ?_⟩
+    · simpa [MPCIn, circuit_norm] using hb_decomp
+    · rw [show (eval env AM).d =
+          (eval env AM).d0 + (eval env AM).d1 * 2 + (eval env AM).d2 * 4 +
+            Expression.eval env
+              ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨3, by decide⟩)[1]) *
+              1024 by
+        simpa [MPCIn, circuit_norm] using hd_decomp]
+      rw [show Expression.eval env
+          ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨3, by decide⟩)[1]) =
+          ((bitrange (ZMod.val (eval env input_var.value)) 8 50 : ℕ) : Fp) by
+        simpa [circuit_norm] using hValSpec.2.2.1]
+      ring
+    · simpa [MPCIn, circuit_norm] using he_decomp
+    · rw [show (eval env AM).g =
+          (eval env AM).g0 + (eval env AM).g1 * 2 +
+            Expression.eval env
+              ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨6, by decide⟩)[1]) *
+              1024 by
+        simpa [MPCIn, circuit_norm] using hg_decomp]
+      rw [show Expression.eval env
+          ((HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨6, by decide⟩)[1]) =
+          ((bitrange (ZMod.val (eval env input_var.psi)) 9 240 : ℕ) : Fp) by
+        simpa [circuit_norm] using hPsiSpec.2.1]
+      ring
+    · simpa [MPCIn, circuit_norm] using hh_decomp
+  have hMessageFacts : MessageCellFacts input.gd input.pkd input.value input.rho input.psi
+      (eval env AM) := by
+    rw [← h_input]
+    simpa [circuit_norm] using hMessageFactsVar
+  have hvalue : (show Fp from input.value).val < 2 ^ 64 := by
+    rw [← h_input]
+    simpa [circuit_norm] using hValSpec.1
+  have hPieceValues :=
+    noteCommitPieceValues_of_messageCellFacts hvalue hMessageFacts
+  have hPCMessage : Chain.PieceChunks messagePieceRounds (messagePieces (eval env AM)) chunks := by
+    simpa [messagePieces, messagePieceRounds] using hPC
+  obtain ⟨hA, hB, hC, hD, hE, hF, hG, hH, hgdX, hgdY, hpkdX, hpkdY, hv, hrho, hpsi⟩ :=
+    hPieceValues
+  have hchunks : chunks =
+      (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks := by
+    exact pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPCMessage hA hB hC hD hE hF hG hH
+      hgdX hgdY hpkdX hpkdY hv hrho hpsi
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simp only [Spec, NoteCommitRelation]
+    refine ⟨rcm, ?_⟩
+    intro B hBhash
+    have hHashB := hHash B (by simpa [hchunks] using hBhash)
+    have hCOutPoint :
+        COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
+      rw [hCOutdef]
+      rfl
+    rw [← hCOutPoint]
+    simpa [circuit_norm] using hHashB
+  · exact Or.inl rfl
+  · exact Or.inl rfl
+  · exact Or.inl rfl
+  · exact Or.inr (by
+      rw [GeneralFormalCircuit.WithHint.toSubcircuit_assumptions]
+      simpa [YCanonicity.Assumptions, circuit_norm] using hb2_bool)
+  · exact Or.inr (by
+      rw [GeneralFormalCircuit.WithHint.toSubcircuit_assumptions]
+      simpa [YCanonicity.Assumptions, circuit_norm] using hd1_bool)
+  · exact Or.inr (by
+      rw [show GdCanonicity.circuit.Assumptions = GdCanonicity.Assumptions from rfl]
+      simp only [GdCanonicity.Assumptions, circuit_norm]
+      refine ⟨hb1_bool, ?_, ?_, ?_⟩
+      · simpa [circuit_norm] using ha_lt
+      · simpa [circuit_norm] using hb0_lt
+      · exact (CircuitType.eval_expr env _).symm.trans
+          ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨0, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13a)))
+  · exact Or.inr (by
+      rw [show PkdCanonicity.circuit.Assumptions = PkdCanonicity.Assumptions from rfl]
+      simp only [PkdCanonicity.Assumptions, circuit_norm]
+      refine ⟨hd0_bool, ?_, ?_, ?_⟩
+      · simpa [circuit_norm] using hc_lt
+      · simpa [circuit_norm] using hb3_lt
+      · exact (CircuitType.eval_expr env _).symm.trans
+          ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨2, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13c)))
+  · exact Or.inr
+      (valueCanonicity_assumptions_of_commit COut input_var AM env hd2_lt he0_lt hd_lt hz1d)
+  · exact Or.inr (by
+      rw [show RhoCanonicity.circuit.Assumptions = RhoCanonicity.Assumptions from rfl]
+      simp only [RhoCanonicity.Assumptions, circuit_norm]
+      refine ⟨hg0_bool, ?_, ?_, ?_⟩
+      · simpa [circuit_norm] using hf_lt
+      · simpa [circuit_norm] using he1_lt
+      · exact (CircuitType.eval_expr env _).symm.trans
+          ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨5, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13f)))
+  · exact ⟨Or.inr (psiCanonicity_assumptions_of_commit COut input_var AM env
+        (by simpa [MPCIn, circuit_norm] using hh1_bool)
+        (by simpa [MPCIn, circuit_norm] using hg0_bool)
+        (by simpa [MPCIn, circuit_norm] using hg_decomp)
+        hg1_lt hh0_lt hg_lt hz1g hz13g), trivial⟩
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
