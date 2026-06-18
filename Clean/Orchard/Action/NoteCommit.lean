@@ -2346,7 +2346,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       { pieces := ?pcs, r := input_rcm } env.data env.hint := by
     refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_⟩
     obtain ⟨B, hB⟩ := hHashEx
-    exact ⟨B, by convert hB using 2⟩
+    obtain ⟨B', hB', -⟩ := hashToPoint_eq_some_iff.mp hB
+    exact ⟨B', by convert hB' using 2⟩
   obtain ⟨hComSpec, hZsHonest, hHashHonest⟩ := hComImpl hCPA
   have hPC := Chain.pieceChunks_honestChunks _ _ hPB
   -- piece bounds
@@ -2418,10 +2419,11 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simpa [← h_input, circuit_norm] using hd1_low
   case rel =>
     intro B hBhash
-    refine hHashHonest B ?_
-    simp only [messagePieces, messagePieceRounds, messagePieceTailRounds] at hHonestEq ⊢
-    rw [hHonestEq]
-    exact hBhash
+    rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
+    have hHashB := hHashHonest B' (by
+      simp only [messagePieces, messagePieceRounds, messagePieceTailRounds] at hHonestEq ⊢
+      rw [hHonestEq]; exact hB')
+    exact Point.ext_coords (by simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
   case val =>
     refine ⟨?_, ?_⟩
     · simp only [ValueCanonicity.Assumptions, ValueCanonicity.Gate.Assumptions,
