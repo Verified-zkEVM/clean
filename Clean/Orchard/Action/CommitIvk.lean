@@ -820,7 +820,8 @@ private theorem honest_pieces_facts (ak nk a b c d : Fp)
     · show d.val < _; exact hdval
   refine ⟨hbounds, ?_⟩
   exact honestChunks_eq_commitIvkChunks hbounds
-    (by simpa using haN) (by simpa using hbN) (by simpa using hcN) (by simpa using hdN) hak hnk
+    (by simpa using haN) (by simpa [bitrange] using hbN) (by simpa using hcN)
+    (by simpa [bitrange] using hdN) hak hnk
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
@@ -1188,9 +1189,9 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hchunks : chunks = Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val :=
     pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
       (by simp only [circuit_norm, K]; exact hPVa)
-      (by simp only [circuit_norm]; exact hPVb)
+      (by simp only [circuit_norm]; simpa [bitrange] using hPVb)
       (by simp only [circuit_norm, K]; exact hPVc)
-      (by simp only [circuit_norm]; exact hPVd) hak hnk
+      (by simp only [circuit_norm]; simpa [bitrange] using hPVd) hak hnk
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
   · refine ⟨rivk, fun B hB => ?_⟩
