@@ -24,7 +24,7 @@ namespace Orchard.Action.AddressIntegrity
 open CompElliptic.Curves.Pasta
 open CompElliptic.CurveForms.ShortWeierstrass
 open Ecc Ecc.ScalarMul
-open Orchard.Specs.Sinsemilla (Generators)
+open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint)
 
 /-- Inputs of the diversified-address integrity block. `ak`, `nk`, and `rivk` feed
 `CommitIvk`; `gDOld` is the old diversified base point, and `pkDOld` is the explicit
@@ -63,14 +63,18 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (ak nk : Fp) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
-    CommitIvk.Spec G Q R ak nk ivk ∧
+    (∃ rivk : Fq, ∀ B : SWPoint Pallas.curve,
+      hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
+        ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1) ∧
     output = ivk.val • gDOld
 
 /-- Honest-prover diversified-address integrity for the concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (ak nk : Fp) (rivk : Fq) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
-    CommitIvk.ProverSpec G Q R ak nk rivk ivk ∧
+    (∀ B : SWPoint Pallas.curve,
+      hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
+        ivk = (Pallas.add (B.x, B.y) (R.mulValue rivk).coords).1) ∧
     output = ivk.val • gDOld
 
 /-- Honest proving requires the explicit `pk_d_old` witness to be the derived address for
@@ -81,10 +85,12 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.
   let nk : Fp := input.nk
   let gDOld : Point Fp := input.gDOld
   let pkDOld : Point Fp := input.pkDOld
-  CommitIvk.ProverAssumptions G Q ak nk ∧
+  (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
   Pallas.OnCurve gDOld.coords ∧
     ∀ ivk : Fp,
-      CommitIvk.ProverSpec G Q R ak nk input.rivk ivk →
+      (∀ B : SWPoint Pallas.curve,
+        hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
+          ivk = (Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords).1) →
       pkDOld = ivk.val • gDOld
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
