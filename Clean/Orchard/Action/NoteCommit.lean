@@ -228,14 +228,14 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
     noteCommitChunks gdX gdY pkdX pkdY v rho psi =
       chunksOf gdX 25 ++
-      [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] ++
+      [bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 + bitrange pkdX 0 4 * 64] ++
       chunksOf (pkdX / 16) 25 ++
       chunksOf
-        (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 ++
-      [v / 2 ^ 58 % 64 + (rho % 16) * 64] ++
+        (bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4) 6 ++
+      [bitrange v 58 6 + bitrange rho 0 4 * 64] ++
       chunksOf (rho / 16) 25 ++
-      chunksOf (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 ++
-      [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
+      chunksOf (bitrange rho 254 1 + bitrange psi 0 249 * 2) 25 ++
+      [bitrange psi 249 5 + bitrange psi 254 1 * 32] := by
   rw [noteCommitChunks_tiling]
   rw [noteCommitChunks_segment_a]
   rw [noteCommitChunks_segment_b _ _ _ _ _ _ _ hgdX hgdY]
@@ -245,6 +245,8 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
   rw [noteCommitChunks_segment_f _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
   rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
   rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
+  simp only [bitrange, pow_zero, Nat.div_one]
+  norm_num
 
 end
 
@@ -325,18 +327,18 @@ message pieces for `s`, with the canonical range facts needed to recover the uni
 natural chunk list from field-valued piece constraints. -/
 def NoteCommitPieceValues (s : NoteCommitScalars)
     (pieces : Vector Fp messagePieceRounds.length) : Prop :=
-  pieces[0] = ((s.gdX % 2 ^ (K * 25) : ℕ) : Fp) ∧
+  pieces[0] = ((bitrange s.gdX 0 250 : ℕ) : Fp) ∧
   pieces[1] =
-    ((s.gdX / 2 ^ 250 % 16 + (s.gdX / 2 ^ 254 % 2) * 16 + s.gdYbit * 32 +
-      (s.pkdX % 16) * 64 : ℕ) : Fp) ∧
-  pieces[2] = (((s.pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp) ∧
+    ((bitrange s.gdX 250 4 + bitrange s.gdX 254 1 * 16 + s.gdYbit * 32 +
+      bitrange s.pkdX 0 4 * 64 : ℕ) : Fp) ∧
+  pieces[2] = ((bitrange s.pkdX 4 250 : ℕ) : Fp) ∧
   pieces[3] =
-    ((s.pkdX / 2 ^ 254 % 2 + s.pkdYbit * 2 + (s.v % 2 ^ 58) * 4 : ℕ) : Fp) ∧
-  pieces[4] = ((s.v / 2 ^ 58 % 64 + (s.rho % 16) * 64 : ℕ) : Fp) ∧
-  pieces[5] = (((s.rho / 16) % 2 ^ (K * 25) : ℕ) : Fp) ∧
+    ((bitrange s.pkdX 254 1 + s.pkdYbit * 2 + bitrange s.v 0 58 * 4 : ℕ) : Fp) ∧
+  pieces[4] = ((bitrange s.v 58 6 + bitrange s.rho 0 4 * 64 : ℕ) : Fp) ∧
+  pieces[5] = ((bitrange s.rho 4 250 : ℕ) : Fp) ∧
   pieces[6] =
-    ((s.rho / 2 ^ 254 % 2 + (s.psi % 2 ^ 249) * 2 : ℕ) : Fp) ∧
-  pieces[7] = ((s.psi / 2 ^ 249 % 32 + (s.psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp) ∧
+    ((bitrange s.rho 254 1 + bitrange s.psi 0 249 * 2 : ℕ) : Fp) ∧
+  pieces[7] = ((bitrange s.psi 249 5 + bitrange s.psi 254 1 * 32 : ℕ) : Fp) ∧
   s.gdX < 2 ^ 255 ∧ s.gdYbit < 2 ∧
   s.pkdX < 2 ^ 255 ∧ s.pkdYbit < 2 ∧
   s.v < 2 ^ 64 ∧ s.rho < 2 ^ 255 ∧ s.psi < 2 ^ 255
@@ -348,22 +350,22 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
     (hmsC : ∀ r, msC r < 2 ^ K) (hmsD : ∀ r, msD r < 2 ^ K)
     (hmsE : ∀ r, msE r < 2 ^ K) (hmsF : ∀ r, msF r < 2 ^ K)
     (hmsG : ∀ r, msG r < 2 ^ K) (hmsH : ∀ r, msH r < 2 ^ K)
-    (hA : ((gdX % 2 ^ (K * 25) : ℕ) : Fp) =
+    (hA : ((bitrange gdX 0 250 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp))
-    (hB : ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
-        (pkdX % 16) * 64 : ℕ) : Fp) =
+    (hB : ((bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 +
+        bitrange pkdX 0 4 * 64 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 1, msB r * 2 ^ (K * r) : ℕ) : Fp))
-    (hC : (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp) =
+    (hC : ((bitrange pkdX 4 250 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 25, msC r * 2 ^ (K * r) : ℕ) : Fp))
-    (hD : ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Fp) =
+    (hD : ((bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 6, msD r * 2 ^ (K * r) : ℕ) : Fp))
-    (hE : ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Fp) =
+    (hE : ((bitrange v 58 6 + bitrange rho 0 4 * 64 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 1, msE r * 2 ^ (K * r) : ℕ) : Fp))
-    (hF : (((rho / 16) % 2 ^ (K * 25) : ℕ) : Fp) =
+    (hF : ((bitrange rho 4 250 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 25, msF r * 2 ^ (K * r) : ℕ) : Fp))
-    (hG : ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Fp) =
+    (hG : ((bitrange rho 254 1 + bitrange psi 0 249 * 2 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 25, msG r * 2 ^ (K * r) : ℕ) : Fp))
-    (hH : ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp) =
+    (hH : ((bitrange psi 249 5 + bitrange psi 254 1 * 32 : ℕ) : Fp) =
       ((∑ r ∈ Finset.range 1, msH r * 2 ^ (K * r) : ℕ) : Fp))
     (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
@@ -377,49 +379,50 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msG ++
       (List.range 1).map msH =
       noteCommitChunks gdX gdY pkdX pkdY v rho psi := by
-  have hBValueLt : gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
-      (pkdX % 16) * 64 < 2 ^ K := by
-    have hb0 : gdX / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
-    have hb1 : gdX / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-    have hb3 : pkdX % 16 < 16 := Nat.mod_lt _ (by norm_num)
+  have hBValueLt : bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 +
+      bitrange pkdX 0 4 * 64 < 2 ^ K := by
+    have hb0 : bitrange gdX 250 4 < 16 := by have := bitrange_lt gdX 250 4; omega
+    have hb1 : bitrange gdX 254 1 < 2 := by have := bitrange_lt gdX 254 1; omega
+    have hb3 : bitrange pkdX 0 4 < 16 := by have := bitrange_lt pkdX 0 4; omega
     norm_num [K]
     omega
-  have hDValueLt : pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 < 2 ^ (K * 6) := by
-    have hd0 : pkdX / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-    have hv0 : v % 2 ^ 58 < 2 ^ 58 := Nat.mod_lt _ (by norm_num)
+  have hDValueLt : bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4 < 2 ^ (K * 6) := by
+    have hd0 : bitrange pkdX 254 1 < 2 := by have := bitrange_lt pkdX 254 1; omega
+    have hv0 : bitrange v 0 58 < 2 ^ 58 := bitrange_lt _ _ _
     norm_num [K]
     omega
-  have hEValueLt : v / 2 ^ 58 % 64 + (rho % 16) * 64 < 2 ^ K := by
-    have he0 : v / 2 ^ 58 % 64 < 64 := Nat.mod_lt _ (by norm_num)
-    have he1 : rho % 16 < 16 := Nat.mod_lt _ (by norm_num)
+  have hEValueLt : bitrange v 58 6 + bitrange rho 0 4 * 64 < 2 ^ K := by
+    have he0 : bitrange v 58 6 < 64 := by have := bitrange_lt v 58 6; omega
+    have he1 : bitrange rho 0 4 < 16 := by have := bitrange_lt rho 0 4; omega
     norm_num [K]
     omega
-  have hGValueLt : rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 < 2 ^ (K * 25) := by
-    have hg0 : rho / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-    have hg2 : psi % 2 ^ 249 < 2 ^ 249 := Nat.mod_lt _ (by norm_num)
+  have hGValueLt : bitrange rho 254 1 + bitrange psi 0 249 * 2 < 2 ^ (K * 25) := by
+    have hg0 : bitrange rho 254 1 < 2 := by have := bitrange_lt rho 254 1; omega
+    have hg2 : bitrange psi 0 249 < 2 ^ 249 := bitrange_lt _ _ _
     norm_num [K]
     omega
-  have hHValueLt : psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 < 2 ^ K := by
-    have hh0 : psi / 2 ^ 249 % 32 < 32 := Nat.mod_lt _ (by norm_num)
-    have hh1 : psi / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  have hHValueLt : bitrange psi 249 5 + bitrange psi 254 1 * 32 < 2 ^ K := by
+    have hh0 : bitrange psi 249 5 < 32 := by have := bitrange_lt psi 249 5; omega
+    have hh1 : bitrange psi 254 1 < 2 := by have := bitrange_lt psi 254 1; omega
     norm_num [K]
     omega
   have hChunksA_low := chunksOf_eq_map_of_cast_sum hmsA hA
-    (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    (lt_trans (bitrange_lt gdX 0 250) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsA 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hChunksA : chunksOf gdX 25 = (List.range 25).map msA := by
     rw [← chunksOf_mod gdX 25]
-    exact hChunksA_low
+    convert hChunksA_low using 2
+    simp [bitrange, Orchard.Specs.Sinsemilla.K]
   have hChunksB := chunksOf_eq_map_of_cast_sum hmsB hB
     (lt_trans hBValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsB 1) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hChunksC_low := chunksOf_eq_map_of_cast_sum hmsC hC
-    (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    (lt_trans (bitrange_lt pkdX 4 250) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsC 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hChunksC : chunksOf (pkdX / 16) 25 =
       (List.range 25).map msC := by
     rw [← chunksOf_mod (pkdX / 16) 25]
-    exact hChunksC_low
+    convert hChunksC_low using 2
   have hChunksD := chunksOf_eq_map_of_cast_sum hmsD hD
     (lt_trans hDValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsD 6) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -427,12 +430,12 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
     (lt_trans hEValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsE 1) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hChunksF_low := chunksOf_eq_map_of_cast_sum hmsF hF
-    (lt_trans (Nat.mod_lt _ (Nat.two_pow_pos (K * 25))) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    (lt_trans (bitrange_lt rho 4 250) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsF 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
   have hChunksF : chunksOf (rho / 16) 25 =
       (List.range 25).map msF := by
     rw [← chunksOf_mod (rho / 16) 25]
-    exact hChunksF_low
+    convert hChunksF_low using 2
   have hChunksG := chunksOf_eq_map_of_cast_sum hmsG hG
     (lt_trans hGValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsG 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -480,20 +483,20 @@ theorem pieceChunks_eq_noteCommitChunks_of_indexed_piece_values
     {pieces : Vector Fp messagePieceRounds.length} {chunks : List ℕ}
     {gdX gdY pkdX pkdY v rho psi : ℕ}
     (hPC : Chain.PieceChunks messagePieceRounds pieces chunks)
-    (hA : pieces[0] = ((gdX % 2 ^ (K * 25) : ℕ) : Fp))
+    (hA : pieces[0] = ((bitrange gdX 0 250 : ℕ) : Fp))
     (hB : pieces[1] =
-      ((gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 +
-        (pkdX % 16) * 64 : ℕ) : Fp))
-    (hC : pieces[2] = (((pkdX / 16) % 2 ^ (K * 25) : ℕ) : Fp))
+      ((bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 +
+        bitrange pkdX 0 4 * 64 : ℕ) : Fp))
+    (hC : pieces[2] = ((bitrange pkdX 4 250 : ℕ) : Fp))
     (hD : pieces[3] =
-      ((pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4 : ℕ) : Fp))
+      ((bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4 : ℕ) : Fp))
     (hE : pieces[4] =
-      ((v / 2 ^ 58 % 64 + (rho % 16) * 64 : ℕ) : Fp))
-    (hF : pieces[5] = (((rho / 16) % 2 ^ (K * 25) : ℕ) : Fp))
+      ((bitrange v 58 6 + bitrange rho 0 4 * 64 : ℕ) : Fp))
+    (hF : pieces[5] = ((bitrange rho 4 250 : ℕ) : Fp))
     (hG : pieces[6] =
-      ((rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2 : ℕ) : Fp))
+      ((bitrange rho 254 1 + bitrange psi 0 249 * 2 : ℕ) : Fp))
     (hH : pieces[7] =
-      ((psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 : ℕ) : Fp))
+      ((bitrange psi 249 5 + bitrange psi 254 1 * 32 : ℕ) : Fp))
     (hgdX255 : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX255 : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
@@ -789,7 +792,9 @@ theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
       simp only [bitrange, pow_zero, Nat.div_one]
       push_cast
       ring_nf
-    simpa using hcell
+    refine hcell.trans ?_
+    congr 1
+    norm_num [bitrange]
   · simpa [bitrange, K] using hc
   · have hcell : cells.d =
         ((pkd.x.val / 2 ^ 254 % 2 + (pkd.y.val % 2) * 2 +
@@ -808,14 +813,18 @@ theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
         rw [hsplit']]
       push_cast
       ring_nf
-    simpa using hcell
+    refine hcell.trans ?_
+    congr 1
+    norm_num [bitrange]
   · have hcell : cells.e =
         ((value.val / 2 ^ 58 % 64 + (rho.val % 16) * 64 : ℕ) : Fp) := by
       rw [he, he0, he1]
       simp only [bitrange, pow_zero, Nat.div_one]
       push_cast
       ring_nf
-    simpa using hcell
+    refine hcell.trans ?_
+    congr 1
+    norm_num [bitrange]
   · simpa [bitrange, K] using hf
   · have hcell : cells.g =
         ((rho.val / 2 ^ 254 % 2 + (psi.val % 2 ^ 249) * 2 : ℕ) : Fp) := by
@@ -835,14 +844,17 @@ theorem noteCommitPieceValues_of_messageCellFacts {gd pkd : Point Fp}
         rw [hsplit']]
       push_cast
       ring_nf
-    simpa using hcell
+    refine hcell.trans ?_
+    congr 1
+    norm_num [bitrange]
   · have hcell : cells.h =
         ((psi.val / 2 ^ 249 % 32 + (psi.val / 2 ^ 254 % 2) * 32 : ℕ) : Fp) := by
       rw [hh, hh0, hh1]
       simp only [bitrange]
       push_cast
       ring_nf
-    simpa using hcell
+    refine hcell.trans ?_
+    congr 1
   · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
   · exact Nat.mod_lt _ (by norm_num)
   · exact lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
@@ -1699,25 +1711,27 @@ theorem note_chunks_eq_of_cellFacts {cells : MessageCells Fp} {chunks : List ℕ
     (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
     (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
   · show cells.a = _
-    rw [ha]; norm_num [bitrange, K, Nat.div_one]
+    exact ha
   · show cells.b = _
     rw [hb_dec, hb0, hb1, hb2', hb3]
     simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
   · show cells.c = _
-    rw [hc]; norm_num [bitrange, K, Nat.div_one]
+    exact hc
   · show cells.d = _
-    rw [hd_dec, hd0, hd1', hd2,
-      show ZMod.val value % 2 ^ 58 = _ from mod_pow_split (ZMod.val value) 8 50]
-    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+    rw [hd_dec, hd0, hd1', hd2]
+    simp only [bitrange, pow_zero, Nat.div_one]
+    rw [show ZMod.val value % 2 ^ 58 = _ from mod_pow_split (ZMod.val value) 8 50]
+    push_cast; ring
   · show cells.e = _
     rw [he_dec, he0, he1]
     simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
   · show cells.f = _
-    rw [hf]; norm_num [bitrange, K, Nat.div_one]
+    exact hf
   · show cells.g = _
-    rw [hg_dec, hg0, hg1,
-      show ZMod.val psi % 2 ^ 249 = _ from mod_pow_split (ZMod.val psi) 9 240]
-    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+    rw [hg_dec, hg0, hg1]
+    simp only [bitrange, pow_zero, Nat.div_one]
+    rw [show ZMod.val psi % 2 ^ 249 = _ from mod_pow_split (ZMod.val psi) 9 240]
+    push_cast; ring
   · show cells.h = _
     rw [hh_dec, hh0, hh1]
     simp only [bitrange]; push_cast; ring
