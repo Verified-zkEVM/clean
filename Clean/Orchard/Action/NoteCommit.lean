@@ -2407,8 +2407,58 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
       (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 13) (by decide)
     simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  obtain ⟨ha_v, hb0_v, hb1_v, hb2_low, hb3_v, hc_v, hd0_v, hd1_low, hd2_v, he0_v, he1_v, hf_v, hg0_v, hg1_v, hh0_v, hh1_v, hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  have hb1_bool : IsBool (eval env AM).b1 := by rw [cell_eq_of_val hb1_v]; exact bitrange_one_isBool _ _
+  have hd0_bool : IsBool (eval env AM).d0 := by rw [cell_eq_of_val hd0_v]; exact bitrange_one_isBool _ _
+  have hg0_bool : IsBool (eval env AM).g0 := by rw [cell_eq_of_val hg0_v]; exact bitrange_one_isBool _ _
+  have hh1_bool : IsBool (eval env AM).h1 := by rw [cell_eq_of_val hh1_v]; exact bitrange_one_isBool _ _
+  have hb2_bool : IsBool (eval env AM).b2 := isBool_of_isLowBit hb2_low
+  have hd1_bool : IsBool (eval env AM).d1 := isBool_of_isLowBit hd1_low
+  have hb0_lt : (eval env AM).b0.val < 2 ^ 4 := by rw [hb0_v]; exact bitrange_lt _ _ _
+  have hb3_lt : (eval env AM).b3.val < 2 ^ 4 := by rw [hb3_v]; exact bitrange_lt _ _ _
+  have hd2_lt : (eval env AM).d2.val < 2 ^ 8 := by rw [hd2_v]; exact bitrange_lt _ _ _
+  have he0_lt : (eval env AM).e0.val < 2 ^ 6 := by rw [he0_v]; exact bitrange_lt _ _ _
+  have he1_lt : (eval env AM).e1.val < 2 ^ 4 := by rw [he1_v]; exact bitrange_lt _ _ _
+  have hg1_lt : (eval env AM).g1.val < 2 ^ 9 := by rw [hg1_v]; exact bitrange_lt _ _ _
+  have hh0_lt : (eval env AM).h0.val < 2 ^ 5 := by rw [hh0_v]; exact bitrange_lt _ _ _
   refine ⟨?_, ?_⟩
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> sorry
+  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · trivial
+    · sorry
+    · sorry
+    · rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
+      simpa [YCanonicity.circuit, YCanonicity.ProverAssumptions, ← h_input, circuit_norm] using hb2_low
+    · rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
+      simpa [YCanonicity.circuit, YCanonicity.ProverAssumptions, ← h_input, circuit_norm] using hd1_low
+    · refine ⟨?_, ?_⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [GdCanonicity.circuit, GdCanonicity.Assumptions, ← h_input, circuit_norm] at hb1_bool hb0_lt ha_lt ⊢
+        exact ⟨hb1_bool, ha_lt, hb0_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨0, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13a))⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [GdCanonicity.circuit, GdCanonicity.Spec, ← h_input, circuit_norm] at ha_v hb0_v hb1_v ⊢
+        exact ⟨ha_v, hb0_v, hb1_v⟩
+    · refine ⟨?_, ?_⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [PkdCanonicity.circuit, PkdCanonicity.Assumptions, ← h_input, circuit_norm] at hd0_bool hc_lt hb3_lt ⊢
+        exact ⟨hd0_bool, hc_lt, hb3_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨2, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13c))⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [PkdCanonicity.circuit, PkdCanonicity.Spec, ← h_input, circuit_norm] at hb3_v hc_v hd0_v ⊢
+        exact ⟨hb3_v, hc_v, hd0_v⟩
+    · sorry
+    · refine ⟨?_, ?_⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [RhoCanonicity.circuit, RhoCanonicity.Assumptions, ← h_input, circuit_norm] at hg0_bool hf_lt he1_lt ⊢
+        exact ⟨hg0_bool, hf_lt, he1_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨5, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13f))⟩
+      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
+        simp only [RhoCanonicity.circuit, RhoCanonicity.Spec, ← h_input, circuit_norm] at he1_v hf_v hg0_v ⊢
+        exact ⟨he1_v, hf_v, hg0_v⟩
+    · sorry
   · simp only [ProverSpec, ProverNoteCommitRelation]
     intro B hBhash
     have hHashB := hHashHonest B (by
