@@ -165,4 +165,7 @@ abbrev VestaBaseField := PallasScalarField
 /-- Vesta scalar field = Pallas base field. -/
 abbrev VestaScalarField := PallasBaseField
 
+abbrev Fp := ZMod PALLAS_BASE_CARD
+abbrev Fq := ZMod PALLAS_SCALAR_CARD
+
 end CompElliptic.Fields.Pasta

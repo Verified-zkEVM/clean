@@ -1001,14 +1001,6 @@ def ProverSpec (start numBits : ℕ) (input : ProverValue (UnconstrainedDep fiel
   let v : Fp := input
   output.val = bitrange v.val start numBits
 
-/-- The honest witness value `↑(bitrange value …)` reads back its `.val` (it is `< 2^numBits ≤
-2^K < p`). -/
-private theorem cast_bitrange_val (start numBits : ℕ) (hNumBits : numBits ≤ K) (value : Fp) :
-    (((bitrange value.val start numBits : ℕ) : Fp)).val = bitrange value.val start numBits :=
-  ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
-    (lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
-      (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])))
-
 instance elaborated (start numBits : ℕ) (hNumBits : numBits ≤ K) :
     ElaboratedCircuit Fp (UnconstrainedDep field) field (main start numBits hNumBits) := by
   elaborate_circuit
@@ -1033,23 +1025,17 @@ theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
     GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
       Fp (main start numBits hNumBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [main, ProverSpec, shortRangeCircuit, shortRangeSpec]
-  have hval := cast_bitrange_val start numBits hNumBits input
-  constructor
-  · rw [h_env, hval]; exact bitrange_lt _ _ _
-  · rw [h_env]; exact hval
+  have numBits_le : numBits ≤ 254 := by grw [hNumBits, K]; norm_num
+  have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
+  simp [h_env, hval]
 
 theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
     GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
       Fp (taggedMain start numBits hBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [taggedMain, ProverSpec, taggedShortRangeCircuit, shortRangeSpec]
-  constructor
-  · rcases hBits with rfl | rfl
-    · rw [h_env, cast_bitrange_val start 4 (by norm_num [K]) input]; exact bitrange_lt _ _ _
-    · rw [h_env, cast_bitrange_val start 5 (by norm_num [K]) input]; exact bitrange_lt _ _ _
-  · rw [h_env]
-    rcases hBits with rfl | rfl
-    · exact cast_bitrange_val start 4 (by norm_num [K]) input
-    · exact cast_bitrange_val start 5 (by norm_num [K]) input
+  have numBits_le : numBits ≤ 254 := by grind
+  have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
+  simp [h_env, hval]
 
 def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
     GeneralFormalCircuit.WithHint Fp (UnconstrainedDep field) field where

@@ -1,4 +1,7 @@
 import Mathlib.Tactic
+import Clean.Orchard.Specs.Elliptic.Fields.Pasta
+
+open CompElliptic.Fields.Pasta (Fp)
 
 /-!
 # Bit ranges of a natural number
@@ -51,5 +54,11 @@ theorem bitrange_mod {n s len m : ℕ} (h : s + len ≤ m) :
   simp only [bitrange]
   rw [show (2 : ℕ) ^ m = 2 ^ s * 2 ^ (m - s) by rw [← pow_add, Nat.add_sub_cancel' hs],
     Nat.mod_mul_right_div_self, Nat.mod_mod_of_dvd _ (pow_dvd_pow 2 hlen)]
+
+theorem cast_bitrange_val {start numBits : ℕ} (hNumBits : numBits ≤ 254) (value : Fp) :
+    (((bitrange value.val start numBits : ℕ) : Fp)).val = bitrange value.val start numBits :=
+  ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _)
+    (lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
+      (by norm_num [Fp])))
 
 end Orchard.Specs
