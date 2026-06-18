@@ -8,6 +8,7 @@ import Clean.Orchard.Action.DeriveNullifier
 import Clean.Orchard.Action.Gate
 import Clean.Orchard.Action.NoteCommit
 import Clean.Orchard.Action.SpendAuthority
+import Clean.Orchard.Action.Synthesis
 import Clean.Orchard.Action.ValueCommit
 
 /-!
