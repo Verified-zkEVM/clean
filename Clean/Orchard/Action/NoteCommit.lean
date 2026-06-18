@@ -863,14 +863,14 @@ def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
   ∃ rcm : Fq, ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + R.mulValue rcm
+      cm = B + rcm • R
 
 def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
   ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + R.mulValue input.rcm
+      cm = B + (show Fq from input.rcm) • R
 
 namespace AssignMessagePieces
 
@@ -2248,8 +2248,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [hCOutdef]
       rfl
     rw [← hCOutPoint]
-    exact Point.ext_coords (by
-      simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
+    simpa only [Point.eval_eq, circuit_norm] using hHashB
   · exact Or.inl rfl
   · exact Or.inl rfl
   · exact Or.inl rfl
@@ -2388,7 +2387,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     have hHashB := hHashHonest B' (by
       simp only [messagePieces, messagePieceRounds, messagePieceTailRounds] at hHonestEq ⊢
       rw [hHonestEq]; exact hB')
-    exact Point.ext_coords (by simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
+    simpa only [circuit_norm, Point.ofSW] using hHashB
   case val =>
     refine ⟨?_, ?_⟩
     · simp only [ValueCanonicity.Assumptions, ValueCanonicity.Gate.Assumptions,

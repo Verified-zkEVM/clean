@@ -664,7 +664,7 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
       (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-        output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue rivk).coords)
+        output.cells.point = Point.ofSW B + rivk • R)
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (_ : ProverData Fp)
@@ -695,7 +695,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
       (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-        output.cells.point.coords = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords)
+        output.cells.point = Point.ofSW B + (show Fq from input.rivk) • R)
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
@@ -950,8 +950,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
           #v[(eval env O).cells.a, (eval env O).cells.b, (eval env O).cells.c, (eval env O).cells.d] chunks ∧
         (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-          (eval env O).cells.point.coords
-            = Pallas.add (B.x, B.y) (R.mulValue input.rivk).coords) := by
+          (eval env O).cells.point = Point.ofSW B + (show Fq from input.rivk) • R) := by
       refine ⟨Orchard.Specs.Sinsemilla.commitIvkChunks
         (Expression.eval env.toEnvironment input_var.ak).val
         (Expression.eval env.toEnvironment input_var.nk).val, ?_, ?_⟩
@@ -966,8 +965,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
           exact hB)
         rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, Commit.eval_cells_point, hO]
         rw [CircuitType.eval_var_prover_to_verifier, Commit.withZs_eval_point] at hpt
-        convert hpt using 4
-        simp only [← h_input, circuit_norm]
+        simpa only [← h_input, circuit_norm] using hpt
     clear_value O
     unfold ProverSpec
     simp only [show (input.ak : Fp) = Expression.eval env.toEnvironment input_var.ak from hak_eq.symm,
@@ -1040,7 +1038,7 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve)
   ∃ rivk : Fq, ∀ B : Point Fp,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
-      ivk = (B + R.mulValue rivk).x
+      ivk = (B + rivk • R).x
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
@@ -1048,7 +1046,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
   ∀ B : Point Fp,
     Orchard.Specs.Sinsemilla.hashToPoint G.S Q
         (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
-      ivk = (B + R.mulValue rivk).x
+      ivk = (B + rivk • R).x
 
 /-- Honest proving needs the Sinsemilla hash-to-point to succeed for the canonical
 `commit_ivk` message. -/
@@ -1197,7 +1195,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · refine ⟨rivk, fun B hB => ?_⟩
     rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', rfl⟩
     have hpt := hHash B' (by rw [hchunks]; exact hB')
-    have hx := congrArg Prod.fst hpt
+    have hx := congrArg Point.x hpt
     rw [hO] at hx
     simpa [Point.add, Point.ofSW, Point.coords, circuit_norm] using hx
   · exact ⟨Or.inl rfl, Or.inl rfl, trivial⟩
@@ -1359,18 +1357,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
         (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])))
     rw [show input.rivk = (eval env input_var).rivk from by rw [h_input]]
-    rw [show (Point.ofSW B' + R.mulValue (eval env input_var).rivk).x
-        = (Pallas.add (B'.x, B'.y) (R.mulValue (eval env input_var).rivk).coords).1 by
-      change (Point.add (Point.ofSW B') (R.mulValue (eval env input_var).rivk)).x
-        = (Pallas.add (B'.x, B'.y) (R.mulValue (eval env input_var).rivk).coords).1
-      rfl, ← hpt]
-    -- align both sides to the verifier `eval` of the (single) commitment point var, then the
-    -- entry output var and the Commit point var coincide definitionally at the same offset
-    rw [show ((eval env O).cells.point.coords.1 : Fp)
-        = (eval env.toEnvironment O.cells.point).x from by
-      rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, Commit.eval_cells_point,
-        Point.coords], hO]
-    -- the entry output var and the Commit point var coincide at the same offset (one var lookup)
+    rw [← congrArg Point.x hpt]
+    rw [hO]
     simp only [circuit_norm, Commit.circuit]
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)

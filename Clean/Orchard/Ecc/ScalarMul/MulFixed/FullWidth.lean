@@ -187,11 +187,11 @@ instance elaborated (B : FixedBase) :
   }
 
 def Spec (B : FixedBase) (_ : Unit) (output : Point Fp) (_ : ProverData Fp) : Prop :=
-  ∃ s : Fq, output = B.mulValue s
+  ∃ s : Fq, output = s • B
 
 def ProverSpec (B : FixedBase) (scalar : Fq) (output : Point Fp) (_ : ProverHint Fp) :
     Prop :=
-  output = B.mulValue scalar
+  output = scalar • B
 
 private theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
     S < PALLAS_SCALAR_CARD := by
@@ -349,7 +349,7 @@ theorem soundness (B : FixedBase) :
       Point Fp)).coords = (env.get (i₀ + 4 + 830 + 1), env.get (i₀ + 4 + 830 + 1 + 1))
     from rfl, hpx, hpy, hacc]
   show Pallas.add ((windowPoint B.point 84 k).x, (windowPoint B.point 84 k).y)
-      ((S • B.point).x, (S • B.point).y) = (B.mulValue _).coords
+      ((S • B.point).x, (S • B.point).y) = ((windowScalar 84 k + (S : Fq)) • B).coords
   rw [Pallas.add_coords]
   show (((windowScalar 84 k).val • B.point + S • B.point).x,
     ((windowScalar 84 k).val • B.point + S • B.point).y) = _
@@ -357,7 +357,7 @@ theorem soundness (B : FixedBase) :
       = (windowScalar 84 k + (S : Fq)).val • B.point := by
     rw [← add_nsmul]
     exact (B.add_natCast_val_nsmul _ _).symm
-  rw [hpt, B.mulValue_coords]
+  rw [hpt, B.smul_coords]
 
 /-- Extract the four field equations from a witnessed `CoordsRow`. Extracting via this
 lemma instead of instantiating the `Fin 4` hypothesis at a target component type keeps
@@ -612,14 +612,14 @@ theorem completeness (B : FixedBase) :
         ((windowPoint B.point 84 (windowVal input 84)).x,
           (windowPoint B.point 84 (windowVal input 84)).y)
         ((S83 • B.point).x, (S83 • B.point).y)
-      = (B.mulValue input).coords
+      = (input • B).coords
     rw [Pallas.add_coords]
     show (((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).x,
       ((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).y) = _
     have hpt : (windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point
         = input.val • B.point := by
       rw [← hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, windowScalar_partialSum]
-    rw [hpt, B.mulValue_coords]
+    rw [hpt, B.smul_coords]
 
 def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point where
   main := main B

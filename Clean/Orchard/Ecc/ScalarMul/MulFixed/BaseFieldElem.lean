@@ -282,7 +282,7 @@ def ProverAssumptions (alpha : Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Pro
 
 def ProverSpec (B : MulFixed.FixedBase) (alpha : Fp) (output : Output Fp)
     (_ : ProverHint Fp) : Prop :=
-  output.result = B.mulValue (alpha.val : Fq) ∧
+  output.result = (alpha.val : Fq) • B ∧
     output.z43 = zValue alpha 43 ∧ output.z44 = zValue alpha 44 ∧
     output.z84 = zValue alpha 84
 
@@ -1291,7 +1291,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   refine ⟨?_, ?_, hz43, hz44, hz84⟩
   swap
   · apply Point.ext_coords
-    rw [B.mulValue_coords, RunningSumMul.natCast_val_nsmul]
+    rw [B.smul_coords, RunningSumMul.natCast_val_nsmul]
     simp only [Point.coords] at hresult ⊢
     exact hresult
   refine ⟨h_z0w, hz0InRange, hz0Coords, ⟨hB 0 (by omega), ?_⟩, hB42.1, hB42.2.1, hB42.2.2,
@@ -1370,7 +1370,7 @@ def Assumptions (_ : Fp) : Prop := True
 /-- The circuit computes `[α]·B`, the fixed-base multiplication of `B` by the base-field
 element `α` (reinterpreted as the scalar `α.val`, which is `< p < q`). -/
 def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
-  output = B.mulValue (alpha.val : Fq)
+  output = (alpha.val : Fq) • B
 
 /-- `p = 2^254 + t_p` for the Pallas base field. -/
 private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
@@ -1648,7 +1648,7 @@ theorem soundness (B : MulFixed.FixedBase) :
   -- hence the output is `[α.val]·B`
   refine hresPt.trans ?_
   apply Point.ext_coords
-  rw [B.mulValue_coords, RunningSumMul.natCast_val_nsmul, hVcanon]
+  rw [B.smul_coords, RunningSumMul.natCast_val_nsmul, hVcanon]
   rfl
 
 theorem completeness (B : MulFixed.FixedBase) :

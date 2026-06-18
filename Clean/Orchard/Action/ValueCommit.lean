@@ -50,10 +50,9 @@ def Spec (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (output : Point Fp) (_ : ProverData Fp) : Prop :=
   ∃ (m : ℕ) (rcv : Fq), m < 2 ^ 64 ∧ input.v.magnitude = (m : Fp) ∧
     ((input.v.sign = 1 ∧
-        output.coords = Pallas.add (V.mulValue (m : Fq)).coords (R.mulValue rcv).coords) ∨
+        output = (m : Fq) • V + rcv • R) ∨
       (input.v.sign = -1 ∧
-        output.coords
-          = Pallas.add (V.mulValue (-(m : Fq))).coords (R.mulValue rcv).coords))
+        output = ((-(m : Fq)) : Fq) • V + rcv • R))
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
@@ -62,11 +61,9 @@ def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
 def ProverSpec (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : Point Fp) (_ : ProverHint Fp) : Prop :=
   (input.v.sign = 1 →
-      output.coords = Pallas.add (V.mulValue (input.v.magnitude.val : Fq)).coords
-        (R.mulValue input.rcv).coords) ∧
+      output = (input.v.magnitude.val : Fq) • V + (show Fq from input.rcv) • R) ∧
     (input.v.sign = -1 →
-      output.coords = Pallas.add (V.mulValue (-(input.v.magnitude.val : Fq))).coords
-        (R.mulValue input.rcv).coords)
+      output = ((-(input.v.magnitude.val : Fq)) : Fq) • V + (show Fq from input.rcv) • R)
 
 theorem soundness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main V R) (fun _ _ => True)
@@ -79,12 +76,16 @@ theorem soundness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
   obtain ⟨m, hm_lt, hmag, hcases⟩ := h_short
   obtain ⟨s, hblind⟩ := h_fw
   have h_final := h_add ⟨by
-      rcases hcases with ⟨_, h⟩ | ⟨_, h⟩ <;> rw [h] <;> exact V.mulValue_valid _,
-    by rw [hblind]; exact R.mulValue_valid s⟩
+      rcases hcases with ⟨_, h⟩ | ⟨_, h⟩ <;> rw [h] <;> exact V.smul_valid _,
+    by rw [hblind]; exact R.smul_valid s⟩
   refine ⟨m, s, hm_lt, hmag, ?_⟩
   rcases hcases with ⟨hsign, hC1⟩ | ⟨hsign, hC1⟩
-  · exact Or.inl ⟨hsign, by rw [h_final.2, hC1, hblind]⟩
-  · exact Or.inr ⟨hsign, by rw [h_final.2, hC1, hblind]⟩
+  · exact Or.inl ⟨hsign, Point.ext_coords (by
+      rw [hC1, hblind] at h_final
+      simpa [Point.add] using h_final.2)⟩
+  · exact Or.inr ⟨hsign, Point.ext_coords (by
+      rw [hC1, hblind] at h_final
+      simpa [Point.add] using h_final.2)⟩
 
 theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main V R) ProverAssumptions
@@ -99,22 +100,26 @@ theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
   have h_final := h_add_env ⟨by
       rcases h_assumptions.2 with h | h
       · rw [hC1 h]
-        exact V.mulValue_valid _
+        exact V.smul_valid _
       · rw [hCneg h]
-        exact V.mulValue_valid _,
-    by rw [hblind]; exact R.mulValue_valid _⟩
+        exact V.smul_valid _,
+    by rw [hblind]; exact R.smul_valid _⟩
   refine ⟨⟨h_assumptions, ?_, ?_⟩, ?_, ?_⟩
   · rcases h_assumptions.2 with h | h
     · rw [hC1 h]
-      exact V.mulValue_valid _
+      exact V.smul_valid _
     · rw [hCneg h]
-      exact V.mulValue_valid _
+      exact V.smul_valid _
   · rw [hblind]
-    exact R.mulValue_valid _
+    exact R.smul_valid _
   · intro hs
-    rw [h_final.2, hC1 hs, hblind]
+    exact Point.ext_coords (by
+      rw [hC1 hs, hblind] at h_final
+      simpa [Point.add] using h_final.2)
   · intro hs
-    rw [h_final.2, hCneg hs, hblind]
+    exact Point.ext_coords (by
+      rw [hCneg hs, hblind] at h_final
+      simpa [Point.add] using h_final.2)
 
 def circuit (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint Fp Input Point where

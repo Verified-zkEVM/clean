@@ -268,18 +268,21 @@ theorem add_natCast_val_nsmul (a : Fq) (S : ℕ) :
   exact (Nat.mod_modEq _ _).trans (Nat.ModEq.add_left _ (Nat.mod_modEq _ _))
 
 /-- The value-level result of multiplying the fixed base by a scalar. -/
-def mulValue (s : Fq) : Point Fp :=
+def scalarMul (s : Fq) : Point Fp :=
   { x := (s.val • B.point).x, y := (s.val • B.point).y }
 
-theorem mulValue_valid (s : Fq) : Pallas.Valid (B.mulValue s).coords :=
+instance : HSMul Fq FixedBase (Point Fp) where
+  hSMul s B := B.scalarMul s
+
+theorem smul_valid (s : Fq) : Pallas.Valid (s • B).coords :=
   (s.val • B.point).onCurve
 
-theorem mulValue_coords (s : Fq) :
-    (B.mulValue s).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
+theorem smul_coords (s : Fq) :
+    (s • B).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
 
 /-- Negating the scalar negates the `y`-coordinate of the result. -/
-theorem mulValue_neg (s : Fq) :
-    B.mulValue (-s) = { x := (B.mulValue s).x, y := -(B.mulValue s).y } := by
+theorem smul_neg (s : Fq) :
+    (((-s) : Fq) • B : Point Fp) = { x := (s • B).x, y := -((s • B).y) } := by
   suffices h : (-s).val • B.point = -(s.val • B.point) by
     show ({ x := ((-s).val • B.point).x, y := ((-s).val • B.point).y } : Point Fp) = _
     rw [h, SWPoint.neg_x, SWPoint.neg_y]
@@ -396,8 +399,8 @@ instance elaborated (B : FixedBase) :
 def Spec (B : FixedBase) (input : MagnitudeSign Fp) (output : Point Fp)
     (_ : ProverData Fp) : Prop :=
   ∃ m : ℕ, m < 2 ^ 64 ∧ input.magnitude = (m : Fp) ∧
-    ((input.sign = 1 ∧ output = B.mulValue (m : Fq)) ∨
-      (input.sign = -1 ∧ output = B.mulValue (-(m : Fq))))
+    ((input.sign = 1 ∧ output = (m : Fq) • B) ∨
+      (input.sign = -1 ∧ output = ((-(m : Fq)) : Fq) • B))
 
 def ProverAssumptions (input : MagnitudeSign Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
@@ -405,8 +408,8 @@ def ProverAssumptions (input : MagnitudeSign Fp) (_ : ProverData Fp)
 
 def ProverSpec (B : FixedBase) (input : MagnitudeSign Fp) (output : Point Fp)
     (_ : ProverHint Fp) : Prop :=
-  (input.sign = 1 → output = B.mulValue (input.magnitude.val : Fq)) ∧
-    (input.sign = -1 → output = B.mulValue (-(input.magnitude.val : Fq)))
+  (input.sign = 1 → output = (input.magnitude.val : Fq) • B) ∧
+    (input.sign = -1 → output = ((-(input.magnitude.val : Fq)) : Fq) • B)
 
 private theorem exists_lt_of_inRange {x : Fp}
     (h : Utilities.RunningSum.InRange (2 ^ 3) x) :
@@ -771,7 +774,7 @@ theorem soundness (B : FixedBase) :
       ({ x := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).x,
          y := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).y }
         : Point Fp)
-      = B.mulValue (m : Fq) := by
+      = (m : Fq) • B := by
     apply Point.ext_coords
     rw [h_final.2]
     show Pallas.add
@@ -786,12 +789,12 @@ theorem soundness (B : FixedBase) :
       hpx21, hpy21, hacc20]
     show Pallas.add ((t21 • B.point).x, (t21 • B.point).y)
         ((S20 • B.point).x, (S20 • B.point).y)
-      = (B.mulValue (m : Fq)).coords
+      = ((m : Fq) • B).coords
     rw [Pallas.add_coords]
     have hpt : t21 • B.point + S20 • B.point = (m : Fq).val • B.point := by
       rw [ht21_def, hS20_def, ← add_nsmul, ← B.add_natCast_val_nsmul, ← hks21,
         windowScalar_partialSum ks, ← hm_def]
-    rw [hpt, B.mulValue_coords]
+    rw [hpt, B.smul_coords]
   -- sign analysis
   simp only [h_signCopy] at h_isSign h_signSel
   refine ⟨m, hm_lt, hmag, ?_⟩
@@ -808,7 +811,7 @@ theorem soundness (B : FixedBase) :
         = -(Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).y) := by
       have h2 := congrArg Prod.snd ((h_signSel (0 : Fp)).2 hsign)
       simpa [CompElliptic.CurveForms.ShortWeierstrass.neg] using h2
-    rw [B.mulValue_neg, ← hmulEq, hyP]
+    rw [B.smul_neg, ← hmulEq, hyP]
 
 /-- Extract the four field equations from a witnessed `RowTail`, keeping the row opaque
 (see `env_get_row` in `FullWidth.lean` and `doc/performance-problems.md`). -/
@@ -1150,7 +1153,7 @@ theorem completeness (B : FixedBase) :
             (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).x,
          y := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).y } : Point Fp)
-      = B.mulValue ((input_magnitude.val : ℕ) : Fq) := by
+      = ((input_magnitude.val : ℕ) : Fq) • B := by
     apply Point.ext_coords
     rw [h_final.2]
     show Pallas.add
@@ -1166,13 +1169,13 @@ theorem completeness (B : FixedBase) :
       hpx21, hpy21, hacc20]
     show Pallas.add ((t21 • B.point).x, (t21 • B.point).y)
         ((S20 • B.point).x, (S20 • B.point).y)
-      = (B.mulValue ((input_magnitude.val : ℕ) : Fq)).coords
+      = (((input_magnitude.val : ℕ) : Fq) • B).coords
     rw [Pallas.add_coords]
     have hpt : t21 • B.point + S20 • B.point
         = ((input_magnitude.val : ℕ) : Fq).val • B.point := by
       rw [ht21_def, hS20_def, ← add_nsmul, ← B.add_natCast_val_nsmul,
         windowScalar_partialSum (windowVal input_magnitude), sum_windowVal hm_lt]
-    rw [hpt, B.mulValue_coords]
+    rw [hpt, B.smul_coords]
   -- assemble the constraints and the prover spec
   refine ⟨⟨h_z0w, ?_, ?_, ?_, ?_, ?_, ?_, ⟨hValidP, hValidAcc⟩, h_signw, h_lastww,
     ?_, ?_, ?_⟩, ?_, ?_⟩
@@ -1241,7 +1244,7 @@ theorem completeness (B : FixedBase) :
       rw [h_yPw, hs]
       ring
     rw [show -((input_magnitude.val : ℕ) : Fq) = -(((input_magnitude.val : ℕ) : Fq)) from rfl,
-      B.mulValue_neg, ← hmulEq, hyP]
+      B.smul_neg, ← hmulEq, hyP]
 
 def circuit (B : FixedBase) : GeneralFormalCircuit Fp MagnitudeSign Point where
   main := main B

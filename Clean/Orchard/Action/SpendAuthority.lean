@@ -52,11 +52,11 @@ def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
 def Spec (SpendAuthG : MulFixed.FixedBase) (input : Value Input Fp)
     (output : Point Fp) (_ : ProverData Fp) : Prop :=
   ∃ alpha : Fq,
-    output.coords = Pallas.add (SpendAuthG.mulValue alpha).coords input.akP.coords
+    output = alpha • SpendAuthG + input.akP
 
 def ProverSpec (SpendAuthG : MulFixed.FixedBase) (input : ProverValue Input Fp)
     (output : Point Fp) (_ : ProverHint Fp) : Prop :=
-  output.coords = Pallas.add (SpendAuthG.mulValue input.alpha).coords input.akP.coords
+  output = (show Fq from input.alpha) • SpendAuthG + input.akP
 
 theorem soundness (SpendAuthG : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main SpendAuthG) Assumptions
@@ -68,9 +68,11 @@ theorem soundness (SpendAuthG : MulFixed.FixedBase) :
   obtain ⟨alpha, h_alpha_commitment⟩ := h_alpha
   have h_final := h_add ⟨by
       rw [h_alpha_commitment]
-      exact SpendAuthG.mulValue_valid alpha,
+      exact SpendAuthG.smul_valid alpha,
     h_assumptions⟩
-  exact ⟨alpha, by rw [h_final.2, h_alpha_commitment]⟩
+  exact ⟨alpha, Point.ext_coords (by
+    rw [h_alpha_commitment] at h_final
+    simpa [Point.add] using h_final.2)⟩
 
 theorem completeness (SpendAuthG : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main SpendAuthG) ProverAssumptions
@@ -82,13 +84,14 @@ theorem completeness (SpendAuthG : MulFixed.FixedBase) :
   obtain ⟨_, h_alpha_commitment⟩ := h_alpha_env
   have h_final := h_add_env ⟨by
       rw [h_alpha_commitment]
-      exact SpendAuthG.mulValue_valid input_alpha,
+      exact SpendAuthG.smul_valid input_alpha,
     h_assumptions⟩
   exact ⟨⟨by
       rw [h_alpha_commitment]
-      exact SpendAuthG.mulValue_valid input_alpha,
-    h_assumptions⟩, by
-      rw [h_final.2, h_alpha_commitment]⟩
+      exact SpendAuthG.smul_valid input_alpha,
+    h_assumptions⟩, Point.ext_coords (by
+      rw [h_alpha_commitment] at h_final
+      simpa [Point.add] using h_final.2)⟩
 
 def circuit (SpendAuthG : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main SpendAuthG
