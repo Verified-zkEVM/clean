@@ -535,7 +535,7 @@ def Assumptions (row : Row Fp) : Prop :=
     row.g2.val < 2 ^ 240 ∧
     row.h0.val < 2 ^ 5 ∧
     row.g1G2' = row.g1 + row.g2 * ((2 ^ 9 : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) - Ecc.tP ∧
-    row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ) ∧
+    row.z13G = ((row.g1.val + row.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) ∧
     ∃ lo : ℕ, lo < 2 ^ 130 ∧ row.g1G2' = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * row.z13G1G2'
 
 /-- The gate's payoff: `g1`/`g2`/`h0`/`h1` are the canonical bit slices of `psi`. -/
@@ -688,9 +688,21 @@ def circuit : FormalAssertion Fp Row where
       rcases hh1cases with h | h
       · rw [hh1_eq, h]; simp
       · rw [hz13G, hin_eq,
-          show bitrange input_psi.val 0 249 / 2 ^ 130 = bitrange input_psi.val 130 119 from
-            bitrange_div_pow input_psi.val 0 130 119,
-          high_bit_high_zero (ZMod.val_lt input_psi) h (by norm_num) (by norm_num)]
+          show bitrange input_psi.val 0 249 / 2 ^ 129 = bitrange input_psi.val 129 120 from
+            bitrange_div_pow input_psi.val 0 129 120]
+        have hlow : bitrange input_psi.val 0 254 < tPNat :=
+          high_bit_low_lt_tP (ZMod.val_lt input_psi) h (by norm_num)
+        have hzero : bitrange input_psi.val 129 120 = 0 := by
+          rw [← bitrange_mod (n := input_psi.val) (s := 129) (len := 120) (m := 254)
+            (by norm_num)]
+          simp only [bitrange]
+          have hlt : input_psi.val % 2 ^ 254 < 2 ^ 129 := by
+            have hlow' := hlow
+            simp only [bitrange, pow_zero, Nat.div_one] at hlow'
+            exact lt_trans hlow' (by norm_num [tPNat])
+          rw [Nat.div_eq_of_lt hlt]
+          simp
+        rw [hzero]
         simp
     · -- h1·z13G1G2' = 0
       rcases hh1cases with h | h

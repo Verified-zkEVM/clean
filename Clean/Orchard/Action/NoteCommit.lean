@@ -1354,7 +1354,7 @@ instance elaborated : ElaboratedCircuit Fp Input unit main := by
 def Assumptions (input : Input Fp) : Prop :=
   IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧ input.g2.val < 2 ^ 240 ∧
     input.h0.val < 2 ^ 5 ∧
-    input.z13G = ((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 130 : ℕ)
+    input.z13G = ((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ)
 
 def Spec (input : Input Fp) : Prop :=
   input.g1 = ((bitrange input.psi.val 0 9 : ℕ) : Fp) ∧
