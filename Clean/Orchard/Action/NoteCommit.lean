@@ -2292,6 +2292,40 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (by simpa [MPCIn, circuit_norm] using hg_decomp)
         hg1_lt hh0_lt hg_lt hz1g hz13g), trivial⟩
 
+/-- A message piece `P = lo + slice·2^10` whose low part is below the shift has its
+honest round-1 running-sum cell `P.val / 2^10` equal to the `slice` value. -/
+theorem cell_div_pow10_eq {P lo : Fp} {slice M : ℕ}
+    (hdec : P = lo + ((slice : ℕ) : Fp) * 1024)
+    (hlo : lo.val < 1024) (hslice : slice < 2 ^ M) (hM : M ≤ 244) :
+    P.val / 2 ^ 10 = slice := by
+  have hcard : lo.val + slice * 1024 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+    have hshift : slice * 1024 < 2 ^ (M + 10) := by
+      calc slice * 1024 < 2 ^ M * 1024 := by gcongr
+        _ = 2 ^ (M + 10) := by rw [pow_add]; norm_num
+    have hle : (2 : ℕ) ^ (M + 10) ≤ 2 ^ 254 := Nat.pow_le_pow_right (by norm_num) (by omega)
+    have : (2 : ℕ) ^ 254 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+    omega
+  have hP : P = ((lo.val + slice * 1024 : ℕ) : Fp) := by
+    rw [hdec]; push_cast [ZMod.natCast_zmod_val]; ring
+  rw [hP, ZMod.val_natCast_of_lt hcard]
+  omega
+
+/-- Low-part bound for the `d`-piece decomposition (`d0 + d1·2 + d2·4 < 2^10`). -/
+theorem lo3_lt {a b c : Fp} (ha : a.val < 2) (hb : b.val < 2) (hc : c.val < 2 ^ 8) :
+    (a + b * 2 + c * 4 : Fp).val < 1024 := by
+  have hcast : (a + b * 2 + c * 4 : Fp) = ((a.val + b.val * 2 + c.val * 4 : ℕ) : Fp) := by
+    push_cast [ZMod.natCast_zmod_val]; ring
+  rw [hcast, ZMod.val_natCast_of_lt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]; omega)]
+  omega
+
+/-- Low-part bound for the `g`-piece decomposition (`g0 + g1·2 < 2^10`). -/
+theorem lo2_lt {a b : Fp} (ha : a.val < 2) (hb : b.val < 2 ^ 9) :
+    (a + b * 2 : Fp).val < 1024 := by
+  have hcast : (a + b * 2 : Fp) = ((a.val + b.val * 2 : ℕ) : Fp) := by
+    push_cast [ZMod.natCast_zmod_val]; ring
+  rw [hcast, ZMod.val_natCast_of_lt (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]; omega)]
+  omega
+
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
@@ -2402,7 +2436,17 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
     · simp only [ValueCanonicity.Spec, ValueCanonicity.Gate.Spec, circuit_norm]
       refine ⟨hvalue, hd2_v, ?_, he0_v⟩
-      sorry
+      change (Expression.eval env.toEnvironment
+        ((HVec.get (Chain.zLengths messagePieceRounds) _ ⟨3, by decide⟩)[1])).val
+          = bitrange (ZMod.val (show Fp from input_value)) 8 50
+      rw [(CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨3, by decide⟩ 1
+          (by decide)).trans (by simpa [circuit_norm] using hz1d)), ZMod.val_natCast_of_lt]
+      · exact cell_div_pow10_eq hd_dec
+          (lo3_lt (by rw [hd0_v]; exact bitrange_lt _ _ _)
+            (isBool_of_isLowBit hd1_low).val_lt_two (by rw [hd2_v]; exact bitrange_lt _ _ _))
+          (bitrange_lt _ _ _) (by norm_num)
+      · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
   case psi => sorry
   case mpc => sorry
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
