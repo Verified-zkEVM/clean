@@ -1543,6 +1543,61 @@ theorem pieceChunks_val_lt :
                     exact Nat.lt_of_succ_lt_succ hk)
       exact hbridge ▸ IH
 
+
+/-- `n % 2^(a+b)` splits into its low `a` bits plus the next `b` bits. -/
+private theorem mod_pow_split (n a b : ℕ) :
+    n % 2 ^ (a + b) = n % 2 ^ a + 2 ^ a * (n / 2 ^ a % 2 ^ b) := by
+  have h := Orchard.Specs.bitrange_add n 0 a b
+  simpa [bitrange] using h
+
+/-- The semantic crux shared by the top-level soundness/completeness: from the assigned
+`MessageCellFacts` (canonical bit slices + decompositions + the two y-coordinate `IsLowBit`
+facts) plus a `PieceChunks` realization, the chunk list is exactly the canonical note
+encoding `noteCommitChunks` of the note scalars. -/
+theorem note_chunks_eq_of_cellFacts {cells : MessageCells Fp} {chunks : List ℕ}
+    {gd pkd : Point Fp} {value rho psi : Fp}
+    (hPC : Chain.PieceChunks messagePieceRounds (messagePieces cells) chunks)
+    (hMCF : MessageCellFacts gd pkd value rho psi cells)
+    (hv : value.val < 2 ^ 64) :
+    chunks = noteCommitChunks gd.x.val (gd.y.val % 2) pkd.x.val (pkd.y.val % 2)
+      value.val rho.val psi.val := by
+  obtain ⟨ha, hb0, hb1, hb2, hb3, hc, hd0, hd1, hd2, he0, he1, hf, hg0, hg1, hh0, hh1,
+    hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  have hb2' : cells.b2 = ((gd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hb2
+  have hd1' : cells.d1 = ((pkd.y.val % 2 : ℕ) : Fp) := isLowBit_iff_mod_two.mp hd1
+  refine pieceChunks_eq_noteCommitChunks_of_indexed_piece_values hPC
+    (gdX := gd.x.val) (gdY := gd.y.val % 2) (pkdX := pkd.x.val) (pkdY := pkd.y.val % 2)
+    (v := value.val) (rho := rho.val) (psi := psi.val)
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+    (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
+    (by omega) (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
+    (by omega) hv
+    (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
+    (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
+  · show cells.a = _
+    rw [ha]; norm_num [bitrange, K, Nat.div_one]
+  · show cells.b = _
+    rw [hb_dec, hb0, hb1, hb2', hb3]
+    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+  · show cells.c = _
+    rw [hc]; norm_num [bitrange, K, Nat.div_one]
+  · show cells.d = _
+    rw [hd_dec, hd0, hd1', hd2,
+      show ZMod.val value % 2 ^ 58 = _ from mod_pow_split (ZMod.val value) 8 50]
+    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+  · show cells.e = _
+    rw [he_dec, he0, he1]
+    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+  · show cells.f = _
+    rw [hf]; norm_num [bitrange, K, Nat.div_one]
+  · show cells.g = _
+    rw [hg_dec, hg0, hg1,
+      show ZMod.val psi % 2 ^ 249 = _ from mod_pow_split (ZMod.val psi) 9 240]
+    simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
+  · show cells.h = _
+    rw [hh_dec, hh0, hh1]
+    simp only [bitrange]; push_cast; ring
+
 end PieceExtraction
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
