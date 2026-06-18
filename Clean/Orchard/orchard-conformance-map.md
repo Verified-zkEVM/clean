@@ -233,6 +233,9 @@ Current Clean coverage:
 - `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry, factored into
   `Commit` (witnessing + `WithZs` hash) and `Canonicity` (CopyCheck decompositions + gate)
   subcircuits
+- `Clean.Orchard.Action.AddressIntegrity.circuit`: diversified-address integrity block
+  from `Circuit::synthesize`; computes `ivk = CommitIvk(ak, nk, rivk)`, runs
+  `[ivk] g_d_old`, constrains it equal to the witnessed `pk_d_old`, and returns that point
 
 ## Known Non-Conformances
 
@@ -375,7 +378,6 @@ checks, y-canonicity, and coordinate canonicity. Entry completeness remains pend
 
 Missing source-level APIs:
 
-- address-integrity wiring in `Circuit::synthesize`
 - completeness proof for `gadgets::note_commit`
 - full `Circuit::synthesize` action circuit
 
@@ -386,7 +388,8 @@ These must compose source-conformant child circuits. In particular:
 - Spend authority (done) is `[alpha] SpendAuthG + ak_P`, parameterized by the
   `SpendAuthG` fixed base. The enclosing action circuit still needs to constrain the
   resulting coordinates to `RK_X` and `RK_Y`.
-- Address integrity computes `ivk = CommitIvk(ak, nk, rivk)` and then `[ivk] g_d_old`.
+- Address integrity (done) computes `ivk = CommitIvk(ak, nk, rivk)` and then
+  `[ivk] g_d_old`, constraining the result to `pk_d_old`.
 
 ### Gate Layout Metadata For VK Reconstruction
 

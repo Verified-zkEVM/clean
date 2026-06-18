@@ -1,5 +1,6 @@
 import Clean.Orchard.Action.Canonicity
 import Clean.Orchard.Action.CanonicityTheorems
+import Clean.Orchard.Action.AddressIntegrity
 import Clean.Orchard.Action.CommitIvk
 import Clean.Orchard.Action.CommitIvkGate
 import Clean.Orchard.Action.Decompose
@@ -44,19 +45,6 @@ TODO(source-conformance): Merkle-path action wiring is not implemented.
 
 The replacement should compose the full `MerklePath::calculate_root` entry circuit inside
 the final action synthesis circuit.
--/
-
-/-!
-TODO(source-conformance): diversified-address integrity wiring is not implemented.
-
-Reference:
-`orchard@0.14.0/src/circuit.rs`
-- `Diversified address integrity`
-- final public-input/action wiring in `Circuit::synthesize`
-
-The replacement should compute `ivk = CommitIvk(ak, nk, rivk)`, convert it to the
-variable-base scalar, compute `[ivk] g_d_old`, and constrain the result to `pk_d_old`
-inside the entry circuit.
 -/
 
 end Orchard.Action

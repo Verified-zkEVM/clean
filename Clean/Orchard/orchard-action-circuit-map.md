@@ -125,7 +125,10 @@ Source baseline:
 
   - Diversified address integrity
     - Source block: `orchard-0.14.0/src/circuit.rs`, `Diversified address integrity`
-    - Clean: not implemented as action wiring. TODO in `Clean/Orchard/Action.lean`.
+    - Clean: implemented as the bundled mid-level circuit
+      `Clean.Orchard.Action.AddressIntegrity.circuit`. It composes
+      `Action.CommitIvk.circuit`, variable-base `Mul.circuit`, and an equality assertion
+      tying the derived point to the witnessed `pk_d_old`.
     - `gadget::commit_ivk`
       - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
       - Clean: implemented in `Clean/Orchard/Action/CommitIvk.lean` as
