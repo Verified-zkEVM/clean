@@ -2448,11 +2448,35 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
           (bitrange_lt _ _ _) (by norm_num)
       · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
   case psi => sorry
-  -- The b/e/h decompositions and all IsBool facts come directly from the cell facts; the d/g
-  -- decompositions equate the running-sum cells `z1d`/`z1g` with `bitrange value`/`bitrange psi`
-  -- via `cell_div_pow10_eq`, but bridging the goal's running-sum cell (whose `Fin` index proof
-  -- differs from the `by decide` form) into that equality whnf-times-out under `change`/`congr`.
-  case mpc => sorry
+  case mpc =>
+    simp only [MessagePieceChecks.Spec, circuit_norm]
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · rw [cell_eq_of_val hb1_v]; exact bitrange_one_isBool _ _
+    · exact isBool_of_isLowBit hb2_low
+    · exact hb_dec
+    · rw [cell_eq_of_val hd0_v]; exact bitrange_one_isBool _ _
+    · exact isBool_of_isLowBit hd1_low
+    · rw [hd_dec, add_right_inj, mul_eq_mul_right_iff]
+      refine Or.inl ?_
+      exact (((CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨3, by decide⟩ 1
+          (by decide)).trans (by simpa [circuit_norm] using hz1d))).trans
+        (congrArg Nat.cast (cell_div_pow10_eq hd_dec
+          (lo3_lt (by rw [hd0_v]; exact bitrange_lt _ _ _)
+            (isBool_of_isLowBit hd1_low).val_lt_two (by rw [hd2_v]; exact bitrange_lt _ _ _))
+          (bitrange_lt _ _ _) (by norm_num)))).symm
+    · exact he_dec
+    · rw [cell_eq_of_val hg0_v]; exact bitrange_one_isBool _ _
+    · rw [hg_dec, add_right_inj, mul_eq_mul_right_iff]
+      refine Or.inl ?_
+      exact (((CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨6, by decide⟩ 1
+          (by decide)).trans (by simpa [circuit_norm] using hz1g))).trans
+        (congrArg Nat.cast (cell_div_pow10_eq hg_dec
+          (lo2_lt (by rw [hg0_v]; exact bitrange_lt _ _ _) (by rw [hg1_v]; exact bitrange_lt _ _ _))
+          (bitrange_lt _ _ _) (by norm_num)))).symm
+    · rw [cell_eq_of_val hh1_v]; exact bitrange_one_isBool _ _
+    · exact hh_dec
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main G Q hQ R
