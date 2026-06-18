@@ -1621,9 +1621,161 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- `Assumptions → Spec` implication; destructure them and keep the (expensive-to-flatten)
   -- `AssignMessagePieces` output opaque so the heavy `eval` never reduces in the kernel.
   circuit_proof_start_core
+  dsimp only [main, circuit_norm] at h_holds ⊢
   obtain ⟨hAM, hCom, hMPC, hY1, hY2, hGd, hPkd, hVal, hRho, hPsi, -⟩ := h_holds
   set AM := AssignMessagePieces.circuit.output input_var i₀ with hAMdef
   clear_value AM
+  set COut := (Commit.circuit G Q hQ R).output
+    { pieces := #v[AM.a, AM.b, AM.c, AM.d, AM.e, AM.f, AM.g, AM.h],
+      r := input_var.rcm }
+    (i₀ + ((AssignMessagePieces.circuit.toSubcircuit i₀ input_var).localLength + 0)) with hCOutdef
+  clear_value COut
+  replace hAM := hAM trivial
+  replace hCom := hCom trivial
+  replace hMPC := hMPC trivial
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hAM hCom
+  rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hY1 hY2
+  have hAMSpec : AssignMessagePieces.Spec input (eval env AM) env.data := by
+    simpa [h_input, hAMdef] using hAM
+  have hComSpec : (Commit.circuit G Q hQ R).Spec
+      { pieces := #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h],
+        r := input.rcm } (eval env COut) env.data := by
+    simpa [h_input, hCOutdef, circuit_norm] using hCom
+  simp only [AssignMessagePieces.Spec, AssignedMessageFacts] at hAMSpec
+  obtain ⟨hb0_lt, hb3_lt, hd2_lt, he0_lt, he1_lt, hg1_lt, hh0_lt⟩ := hAMSpec
+  simp only [Commit.circuit, Commit.Spec, CommitDomain.WithZs.Spec] at hComSpec
+  obtain ⟨chunks, rcm, hPC, hZs, hHash⟩ := hComSpec
+  have ha_lt : (eval env AM).a.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks ⟨0, by decide⟩ hPC (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hc_lt : (eval env AM).c.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks ⟨2, by decide⟩ hPC (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hd_lt : (eval env AM).d.val < 2 ^ 60 := by
+    have h := pieceChunks_val_lt messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks ⟨3, by decide⟩ hPC (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hf_lt : (eval env AM).f.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks ⟨5, by decide⟩ hPC (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hg_lt : (eval env AM).g.val < 2 ^ 250 := by
+    have h := pieceChunks_val_lt messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks ⟨6, by decide⟩ hPC (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13a :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨0, by decide⟩)[13] =
+        (((eval env AM).a.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨0, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13c :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨2, by decide⟩)[13] =
+        (((eval env AM).c.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨2, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz1d :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨3, by decide⟩)[1] =
+        (((eval env AM).d.val / 2 ^ 10 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨3, by decide⟩ hPC hZs (by decide) (r := 1) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13f :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨5, by decide⟩)[13] =
+        (((eval env AM).f.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨5, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz1g :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[1] =
+        (((eval env AM).g.val / 2 ^ 10 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨6, by decide⟩ hPC hZs (by decide) (r := 1) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  have hz13g :
+      (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[13] =
+        (((eval env AM).g.val / 2 ^ 130 : ℕ) : Fp) := by
+    have h := zsFacts_cell messagePieceRounds
+      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
+        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
+      chunks (eval env COut).zs ⟨6, by decide⟩ hPC hZs (by decide) (r := 13) (by decide)
+    simpa [messagePieceRounds, Orchard.Specs.Sinsemilla.K, K] using h
+  let MPCIn : Var MessagePieceChecks.Input Fp :=
+    { cells := AM,
+      z1d := (HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨3, by decide⟩)[1],
+      z1g := (HVec.get (Chain.zLengths messagePieceRounds) COut.zs ⟨6, by decide⟩)[1] }
+  change MessagePieceChecks.Spec (eval env MPCIn) at hMPC
+  simp only [MessagePieceChecks.Spec, circuit_norm] at hMPC
+  obtain ⟨hb1_bool, hb2_bool, hb_decomp, hd0_bool, hd1_bool, hd_decomp, he_decomp,
+    hg0_bool, hg_decomp, hh1_bool, hh_decomp⟩ := hMPC
+  have hY1Spec := hY1 (by
+    rw [GeneralFormalCircuit.WithHint.toSubcircuit_assumptions]
+    simpa [YCanonicity.Assumptions, circuit_norm] using hb2_bool)
+  have hY2Spec := hY2 (by
+    rw [GeneralFormalCircuit.WithHint.toSubcircuit_assumptions]
+    simpa [YCanonicity.Assumptions, circuit_norm] using hd1_bool)
+  simp only [circuit_norm] at hY1Spec hY2Spec
+  have hgdY_low : IsLowBit (Expression.eval env input_var.gd.y) (Expression.eval env AM.b2) := by
+    simpa using hY1Spec.2
+  have hpkdY_low : IsLowBit (Expression.eval env input_var.pkd.y) (Expression.eval env AM.d1) := by
+    simpa using hY2Spec.2
+  have hGdSpec := hGd (by
+    rw [show GdCanonicity.circuit.Assumptions = GdCanonicity.Assumptions from rfl]
+    simp only [GdCanonicity.Assumptions, circuit_norm]
+    refine ⟨hb1_bool, ?_, ?_, ?_⟩
+    · simpa [circuit_norm] using ha_lt
+    · simpa [circuit_norm] using hb0_lt
+    · exact (CircuitType.eval_expr env _).symm.trans
+        ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨0, by decide⟩ 13
+          (by decide)).trans (by simpa [circuit_norm] using hz13a)))
+  rw [show GdCanonicity.circuit.Spec = GdCanonicity.Spec from rfl] at hGdSpec
+  simp only [GdCanonicity.Spec, circuit_norm] at hGdSpec
+  have hPkdSpec := hPkd (by
+    rw [show PkdCanonicity.circuit.Assumptions = PkdCanonicity.Assumptions from rfl]
+    simp only [PkdCanonicity.Assumptions, circuit_norm]
+    refine ⟨hd0_bool, ?_, ?_, ?_⟩
+    · simpa [circuit_norm] using hc_lt
+    · simpa [circuit_norm] using hb3_lt
+    · exact (CircuitType.eval_expr env _).symm.trans
+        ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨2, by decide⟩ 13
+          (by decide)).trans (by simpa [circuit_norm] using hz13c)))
+  rw [show PkdCanonicity.circuit.Spec = PkdCanonicity.Spec from rfl] at hPkdSpec
+  simp only [PkdCanonicity.Spec, circuit_norm] at hPkdSpec
+  have hRhoSpec := hRho (by
+    rw [show RhoCanonicity.circuit.Assumptions = RhoCanonicity.Assumptions from rfl]
+    simp only [RhoCanonicity.Assumptions, circuit_norm]
+    refine ⟨hg0_bool, ?_, ?_, ?_⟩
+    · simpa [circuit_norm] using hf_lt
+    · simpa [circuit_norm] using he1_lt
+    · exact (CircuitType.eval_expr env _).symm.trans
+        ((HVec.eval_getElem env (Chain.zLengths messagePieceRounds) COut.zs ⟨5, by decide⟩ 13
+          (by decide)).trans (by simpa [circuit_norm] using hz13f)))
+  rw [show RhoCanonicity.circuit.Spec = RhoCanonicity.Spec from rfl] at hRhoSpec
+  simp only [RhoCanonicity.Spec, circuit_norm] at hRhoSpec
   -- ROADMAP to finish (all infrastructure is in place above this theorem):
   --  1. `hAM trivial`, `hCom trivial`, `hMPC trivial` (all have `True`/`fun _ => True`
   --     assumptions) → `AssignMessagePieces.Spec` (7 range bounds), `Commit.Spec`
