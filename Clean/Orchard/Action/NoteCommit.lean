@@ -2340,7 +2340,22 @@ theorem psi_canonicity_obligation {psi g0 g1 h0 h1 g z1g z13g : Fp}
         { psi := psi, h0 := h0, g1 := g1, h1 := h1, g2 := z1g, z13G := z13g } ∧
       PsiCanonicity.Spec
         { psi := psi, h0 := h0, g1 := g1, h1 := h1, g2 := z1g, z13G := z13g } := by
-  sorry
+  have hg1_lt : g1.val < 2 ^ 9 := hg1 ▸ bitrange_lt _ _ _
+  have hgdiv : g.val / 2 ^ 10 = bitrange psi.val 9 240 :=
+    cell_div_pow10_eq hg_dec (lo2_lt hg0 hg1_lt) (bitrange_lt _ _ _) (by norm_num)
+  have hz1g_val : z1g.val = bitrange psi.val 9 240 := by
+    rw [hz1g, ZMod.val_natCast_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)), hgdiv]
+  simp only [PsiCanonicity.Assumptions, PsiCanonicity.Spec]
+  refine ⟨⟨?_, hg1_lt, ?_, ?_, ?_⟩, hg1, hz1g_val, hh0, hh1⟩
+  · rw [cell_eq_of_val hh1]; exact bitrange_one_isBool _ _
+  · rw [hz1g_val]; exact bitrange_lt _ _ _
+  · rw [hh0]; exact bitrange_lt _ _ _
+  · rw [hz13g]; congr 1
+    rw [hz1g_val, show (2 : ℕ) ^ 130 = 2 ^ 10 * 2 ^ 120 from by norm_num,
+      ← Nat.div_div_eq_div_mul, hgdiv,
+      show (2 : ℕ) ^ 129 = 2 ^ 9 * 2 ^ 120 from by norm_num, ← Nat.div_div_eq_div_mul]
+    congr 1
+    omega
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
