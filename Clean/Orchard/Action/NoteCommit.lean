@@ -25,7 +25,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc.ScalarMul
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod noteCommitMessage noteCommitChunks
+open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint hashToPoint_eq_some_iff hashToSWPoint sum_head_shift
   sum_digits_lt digit_of_sum chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
   chunksOf_one_eq_singleton)
@@ -36,30 +36,22 @@ set_option exponentiation.threshold 900
 private theorem noteCommitChunks_segment_a (gdX gdY pkdX pkdY v rho psi : ℕ) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 25 =
-      chunksOf gdX 25 := by
-  unfold noteCommitMessage
-  rw [show
-      gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
-          2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
-        gdX + 2 ^ (K * 25) *
-          (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
-            2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by
-    norm_num [K]
-    ring_nf]
-  rw [← chunksOf_mod
-    (gdX + 2 ^ (K * 25) *
-      (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
-        2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi)) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [Nat.add_mul_mod_self_left]
-  exact chunksOf_mod gdX 25
+      chunksOf gdX 25 :=
+  chunksOf_eq_of_mod_eq (by
+    unfold noteCommitMessage
+    rw [show
+        gdX + 2 ^ 255 * gdY + 2 ^ 256 * pkdX + 2 ^ 511 * pkdY +
+            2 ^ 512 * v + 2 ^ 576 * rho + 2 ^ 831 * psi =
+          gdX + 2 ^ (K * 25) *
+            (2 ^ 5 * gdY + 2 ^ 6 * pkdX + 2 ^ 261 * pkdY +
+              2 ^ 262 * v + 2 ^ 326 * rho + 2 ^ 581 * psi) by norm_num [K]; ring_nf]
+    apply Nat.add_mul_mod_self_left)
 
 private theorem noteCommitChunks_segment_b_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) %
-        2 ^ K =
-      gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 0 K =
+      bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 + bitrange pkdX 0 4 * 64 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -69,11 +61,9 @@ private theorem noteCommitChunks_segment_b (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 250) 1 =
-      [gdX / 2 ^ 250 % 16 + (gdX / 2 ^ 254 % 2) * 16 + gdY * 32 + (pkdX % 16) * 64] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange gdX 250 4 + bitrange gdX 254 1 * 16 + gdY * 32 + bitrange pkdX 0 4 * 64] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_b_word gdX gdY pkdX pkdY v rho psi hgdX hgdY]
 
 private theorem noteCommitChunks_segment_c_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -90,19 +80,15 @@ private theorem noteCommitChunks_segment_c (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25 =
-      chunksOf (pkdX / 16) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 260) 25,
-    ← chunksOf_mod (pkdX / 16) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY]
+      chunksOf (pkdX / 16) 25 :=
+  chunksOf_eq_of_mod_eq (noteCommitChunks_segment_c_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY)
 
 private theorem noteCommitChunks_segment_d_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
     (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) %
         2 ^ (K * 6) =
-      (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) % 2 ^ (K * 6) := by
+      (bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4) % 2 ^ (K * 6) := by
+  simp only [bitrange]
   rw [show 2 ^ (K * 6) = 2 ^ 60 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -112,22 +98,16 @@ private theorem noteCommitChunks_segment_d (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2) (hpkdX : pkdX < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6 =
-      chunksOf
-        (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 510) 6,
-    ← chunksOf_mod
-      (pkdX / 2 ^ 254 % 2 + pkdY * 2 + (v % 2 ^ 58) * 4) 6]
-  rw [show 2 ^ (K * 6) = 2 ^ (K * 6) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX]
+      chunksOf (bitrange pkdX 254 1 + pkdY * 2 + bitrange v 0 58 * 4) 6 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_d_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX)
 
 private theorem noteCommitChunks_segment_e_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) %
-        2 ^ K =
-      v / 2 ^ 58 % 64 + (rho % 16) * 64 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 0 K =
+      bitrange v 58 6 + bitrange rho 0 4 * 64 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -138,11 +118,9 @@ private theorem noteCommitChunks_segment_e (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 570) 1 =
-      [v / 2 ^ 58 % 64 + (rho % 16) * 64] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange v 58 6 + bitrange rho 0 4 * 64] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_e_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
 
 private theorem noteCommitChunks_segment_f_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -161,13 +139,9 @@ private theorem noteCommitChunks_segment_f (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2) (hv : v < 2 ^ 64) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25 =
-      chunksOf (rho / 16) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 580) 25,
-    ← chunksOf_mod (rho / 16) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv]
+      chunksOf (rho / 16) 25 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_f_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv)
 
 private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
@@ -175,7 +149,8 @@ private theorem noteCommitChunks_segment_g_mod (gdX gdY pkdX pkdY v rho psi : �
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
     (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) %
         2 ^ (K * 25) =
-      (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) % 2 ^ (K * 25) := by
+      (bitrange rho 254 1 + bitrange psi 0 249 * 2) % 2 ^ (K * 25) := by
+  simp only [bitrange]
   rw [show 2 ^ (K * 25) = 2 ^ 250 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -187,23 +162,17 @@ private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25 =
-      chunksOf
-        (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25 := by
-  rw [← chunksOf_mod
-      (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 830) 25,
-    ← chunksOf_mod
-      (rho / 2 ^ 254 % 2 + (psi % 2 ^ 249) * 2) 25]
-  rw [show 2 ^ (K * 25) = 2 ^ (K * 25) by
-    norm_num [K, K]]
-  rw [noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho]
+      chunksOf (bitrange rho 254 1 + bitrange psi 0 249 * 2) 25 :=
+  chunksOf_eq_of_mod_eq
+    (noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho)
 
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
-    (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) %
-        2 ^ K =
-      psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32 := by
+    bitrange (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 0 K =
+      bitrange psi 249 5 + bitrange psi 254 1 * 32 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold noteCommitMessage
   norm_num at *
@@ -215,11 +184,9 @@ private theorem noteCommitChunks_segment_h (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hv : v < 2 ^ 64) (hrho : rho < 2 ^ 255) (hpsi : psi < 2 ^ 255) :
     chunksOf
         (noteCommitMessage gdX gdY pkdX pkdY v rho psi / 2 ^ 1080) 1 =
-      [psi / 2 ^ 249 % 32 + (psi / 2 ^ 254 % 2) * 32] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
-  rw [show 2 ^ K = 2 ^ K by
-    norm_num [K, K]]
+      [bitrange psi 249 5 + bitrange psi 254 1 * 32] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [noteCommitChunks_segment_h_word gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho hpsi]
 
 private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : ℕ)
@@ -245,8 +212,6 @@ private theorem noteCommitChunks_tiling_segments (gdX gdY pkdX pkdY v rho psi : 
   rw [noteCommitChunks_segment_f _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv]
   rw [noteCommitChunks_segment_g _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho]
   rw [noteCommitChunks_segment_h _ _ _ _ _ _ _ hgdX hgdY hpkdX hpkdY hv hrho hpsi]
-  simp only [bitrange, pow_zero, Nat.div_one]
-  norm_num
 
 end
 
@@ -897,14 +862,14 @@ def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
   ∃ rcm : Fq, ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + R.mulValue rcm
+      cm = B + rcm • R
 
 def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
   ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + R.mulValue input.rcm
+      cm = B + (show Fq from input.rcm) • R
 
 namespace AssignMessagePieces
 
@@ -2282,8 +2247,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [hCOutdef]
       rfl
     rw [← hCOutPoint]
-    exact Point.ext_coords (by
-      simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
+    simpa only [Point.eval_eq, circuit_norm] using hHashB
   · exact Or.inl rfl
   · exact Or.inl rfl
   · exact Or.inl rfl
@@ -2332,162 +2296,115 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
-  -- Mirrors `soundness` (above). `AssignMessagePieces.ProverSpec` gives `MessageCellFacts`
-  -- directly (no gate-spec assembly); `Commit.ProverSpec` gives honest `ZsHonest` + hash. The
-  -- canonicity gate assumptions reuse the same `*_assumptions_of_commit` helpers, with the
-  -- honest running-sum cells from `zsHonest_cell` and the piece bounds from
-  -- `pieceBounds_of_cellFacts`; the relation closes via `honestChunks_eq_noteCommitChunks…`.
-  circuit_proof_start_core
-  dsimp only [main, circuit_norm] at h_env ⊢
-  obtain ⟨hAM, hCom, hMPC, hY1, hY2, hGd, hPkd, hVal, hRho, hPsi⟩ := h_env
-  set AM := AssignMessagePieces.circuit.output input_var i₀ with hAMdef
-  clear_value AM
-  set COut := (Commit.circuit G Q hQ R).output
-    { pieces := #v[AM.a, AM.b, AM.c, AM.d, AM.e, AM.f, AM.g, AM.h],
-      r := input_var.rcm }
-    (i₀ + ((AssignMessagePieces.circuit.toSubcircuit i₀ input_var).localLength + 0)) with hCOutdef
-  clear_value COut
-  rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at hAM hCom
-  have hMCF : MessageCellFacts input.gd input.pkd input.value input.rho input.psi (eval env AM) := by
-    simpa [h_input, hAMdef, AssignMessagePieces.ProverSpec] using (hAM trivial).2
+  circuit_proof_start [AssignMessagePieces.circuit, Commit.circuit, MessagePieceChecks.circuit,
+    GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
+    RhoCanonicity.circuit, PsiCanonicity.circuit]
+  obtain ⟨⟨-, hAMProver⟩, hComImpl, -⟩ := h_env
   obtain ⟨-, -, hvalue, hHashEx⟩ := h_assumptions
+  have hMCF := hAMProver
+  simp only [AssignMessagePieces.ProverSpec, circuit_norm] at hMCF
   have hPB := pieceBounds_of_cellFacts hMCF
-  have hPC : Chain.PieceChunks messagePieceRounds (messagePieces (eval env AM))
-      (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) :=
-    Chain.pieceChunks_honestChunks _ _ hPB
-  have hHonestEq : Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))
-      = noteCommitChunks input.gd.x.val (input.gd.y.val % 2) input.pkd.x.val (input.pkd.y.val % 2)
-        input.value.val input.rho.val input.psi.val :=
-    honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
-  have ha_lt : (eval env AM).a.val < 2 ^ 250 := by
-    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨0, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, K, K] using h
-  have hc_lt : (eval env AM).c.val < 2 ^ 250 := by
-    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨2, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, K, K] using h
-  have hd_lt : (eval env AM).d.val < 2 ^ 60 := by
-    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨3, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, K, K] using h
-  have hf_lt : (eval env AM).f.val < 2 ^ 250 := by
-    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨5, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, K, K] using h
-  have hg_lt : (eval env AM).g.val < 2 ^ 250 := by
-    have h := pieceChunks_val_lt messagePieceRounds (messagePieces (eval env AM)) _ ⟨6, by decide⟩ hPC (by decide)
-    simpa [messagePieces, messagePieceRounds, K, K] using h
-  have hComPS : (Commit.circuit G Q hQ R).ProverSpec
-      { pieces := #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-          (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h], r := input.rcm }
-      (eval env COut) env.hint := by
-    sorry
-  simp only [Commit.circuit, Commit.ProverSpec, CommitDomain.WithZs.ProverSpec] at hComPS
-  obtain ⟨hZsHonest, hHashHonest⟩ := hComPS
-  have hz13a : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨0, by decide⟩)[13] =
-      (((eval env AM).a.val / 2 ^ 130 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨0, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  have hz13c : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨2, by decide⟩)[13] =
-      (((eval env AM).c.val / 2 ^ 130 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨2, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  have hz1d : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨3, by decide⟩)[1] =
-      (((eval env AM).d.val / 2 ^ 10 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨3, by decide⟩ hZsHonest (r := 1) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  have hz13f : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨5, by decide⟩)[13] =
-      (((eval env AM).f.val / 2 ^ 130 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨5, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  have hz1g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[1] =
-      (((eval env AM).g.val / 2 ^ 10 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 1) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  have hz13g : (HVec.get (Chain.zLengths messagePieceRounds) (eval env COut).zs ⟨6, by decide⟩)[13] =
-      (((eval env AM).g.val / 2 ^ 130 : ℕ) : Fp) := by
-    have h := zsHonest_cell messagePieceRounds
-      #v[(eval env AM).a, (eval env AM).b, (eval env AM).c, (eval env AM).d,
-        (eval env AM).e, (eval env AM).f, (eval env AM).g, (eval env AM).h]
-      (eval env COut).zs ⟨6, by decide⟩ hZsHonest (r := 13) (by decide)
-    simpa [messagePieceRounds, K, K] using h
-  obtain ⟨ha_v, hb0_v, hb1_v, hb2_low, hb3_v, hc_v, hd0_v, hd1_low, hd2_v, he0_v, he1_v, hf_v, hg0_v, hg1_v, hh0_v, hh1_v, hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
-  have hb1_bool : IsBool (eval env AM).b1 := by rw [cell_eq_of_val hb1_v]; exact bitrange_one_isBool _ _
-  have hd0_bool : IsBool (eval env AM).d0 := by rw [cell_eq_of_val hd0_v]; exact bitrange_one_isBool _ _
-  have hg0_bool : IsBool (eval env AM).g0 := by rw [cell_eq_of_val hg0_v]; exact bitrange_one_isBool _ _
-  have hh1_bool : IsBool (eval env AM).h1 := by rw [cell_eq_of_val hh1_v]; exact bitrange_one_isBool _ _
-  have hb2_bool : IsBool (eval env AM).b2 := isBool_of_isLowBit hb2_low
-  have hd1_bool : IsBool (eval env AM).d1 := isBool_of_isLowBit hd1_low
-  have hb0_lt : (eval env AM).b0.val < 2 ^ 4 := by rw [hb0_v]; exact bitrange_lt _ _ _
-  have hb3_lt : (eval env AM).b3.val < 2 ^ 4 := by rw [hb3_v]; exact bitrange_lt _ _ _
-  have hd2_lt : (eval env AM).d2.val < 2 ^ 8 := by rw [hd2_v]; exact bitrange_lt _ _ _
-  have he0_lt : (eval env AM).e0.val < 2 ^ 6 := by rw [he0_v]; exact bitrange_lt _ _ _
-  have he1_lt : (eval env AM).e1.val < 2 ^ 4 := by rw [he1_v]; exact bitrange_lt _ _ _
-  have hg1_lt : (eval env AM).g1.val < 2 ^ 9 := by rw [hg1_v]; exact bitrange_lt _ _ _
-  have hh0_lt : (eval env AM).h0.val < 2 ^ 5 := by rw [hh0_v]; exact bitrange_lt _ _ _
-  refine ⟨?_, ?_⟩
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · trivial
-    · sorry
-    · sorry
-    · rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
-      simpa [YCanonicity.circuit, YCanonicity.ProverAssumptions, ← h_input, circuit_norm] using hb2_low
-    · rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
-      simpa [YCanonicity.circuit, YCanonicity.ProverAssumptions, ← h_input, circuit_norm] using hd1_low
-    · refine ⟨?_, ?_⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [GdCanonicity.circuit, GdCanonicity.Assumptions, circuit_norm] at hb1_bool hb0_lt ha_lt ⊢
-        exact ⟨hb1_bool, ha_lt, hb0_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
-          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨0, by decide⟩ 13
-            (by decide)).trans (by simpa [circuit_norm] using hz13a))⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [GdCanonicity.circuit, GdCanonicity.Spec, ← h_input, circuit_norm] at ha_v hb0_v hb1_v ⊢
-        exact ⟨ha_v, hb0_v, hb1_v⟩
-    · refine ⟨?_, ?_⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [PkdCanonicity.circuit, PkdCanonicity.Assumptions, circuit_norm] at hd0_bool hc_lt hb3_lt ⊢
-        exact ⟨hd0_bool, hc_lt, hb3_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
-          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨2, by decide⟩ 13
-            (by decide)).trans (by simpa [circuit_norm] using hz13c))⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [PkdCanonicity.circuit, PkdCanonicity.Spec, ← h_input, circuit_norm] at hb3_v hc_v hd0_v ⊢
-        exact ⟨hb3_v, hc_v, hd0_v⟩
-    · sorry
-    · refine ⟨?_, ?_⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [RhoCanonicity.circuit, RhoCanonicity.Assumptions, circuit_norm] at hg0_bool hf_lt he1_lt ⊢
-        exact ⟨hg0_bool, hf_lt, he1_lt, (CircuitType.eval_expr env.toEnvironment _).symm.trans
-          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) COut.zs ⟨5, by decide⟩ 13
-            (by decide)).trans (by simpa [circuit_norm] using hz13f))⟩
-      · rcases AM with ⟨a,b,c,d,e,f,g,h,b0,b1,b2,b3,d0,d1,d2,e0,e1,g0,g1,h0,h1⟩
-        simp only [RhoCanonicity.circuit, RhoCanonicity.Spec, ← h_input, circuit_norm] at he1_v hf_v hg0_v ⊢
-        exact ⟨he1_v, hf_v, hg0_v⟩
-    · sorry
-  · simp only [ProverSpec, ProverNoteCommitRelation]
+  have hHonestEq := honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
+  have hCPA : (Commit.circuit G Q hQ R).ProverAssumptions
+      { pieces := ?pcs, r := input_rcm } env.data env.hint := by
+    refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_⟩
+    obtain ⟨B, hB⟩ := hHashEx
+    obtain ⟨B', hB', -⟩ := hashToPoint_eq_some_iff.mp hB
+    exact ⟨B', by convert hB' using 2⟩
+  obtain ⟨hComSpec, hZsHonest, hHashHonest⟩ := hComImpl hCPA
+  have hPC := Chain.pieceChunks_honestChunks _ _ hPB
+  -- piece bounds
+  have ha_lt := pieceChunks_val_lt messagePieceRounds _ _ ⟨0, by decide⟩ hPC (by decide)
+  have hc_lt := pieceChunks_val_lt messagePieceRounds _ _ ⟨2, by decide⟩ hPC (by decide)
+  have hd_lt := pieceChunks_val_lt messagePieceRounds _ _ ⟨3, by decide⟩ hPC (by decide)
+  have hf_lt := pieceChunks_val_lt messagePieceRounds _ _ ⟨5, by decide⟩ hPC (by decide)
+  have hg_lt := pieceChunks_val_lt messagePieceRounds _ _ ⟨6, by decide⟩ hPC (by decide)
+  simp only [messagePieces, messagePieceRounds, K, circuit_norm]
+    at ha_lt hc_lt hd_lt hf_lt hg_lt
+  -- honest running-sum z-cells
+  have hz13a := zsHonest_cell messagePieceRounds _ _ ⟨0, by decide⟩ hZsHonest (r := 13) (by decide)
+  have hz13c := zsHonest_cell messagePieceRounds _ _ ⟨2, by decide⟩ hZsHonest (r := 13) (by decide)
+  have hz1d := zsHonest_cell messagePieceRounds _ _ ⟨3, by decide⟩ hZsHonest (r := 1) (by decide)
+  have hz13f := zsHonest_cell messagePieceRounds _ _ ⟨5, by decide⟩ hZsHonest (r := 13) (by decide)
+  have hz1g := zsHonest_cell messagePieceRounds _ _ ⟨6, by decide⟩ hZsHonest (r := 1) (by decide)
+  have hz13g := zsHonest_cell messagePieceRounds _ _ ⟨6, by decide⟩ hZsHonest (r := 13) (by decide)
+  simp only [messagePieceRounds, K, circuit_norm]
+    at hz13a hz13c hz1d hz13f hz1g hz13g
+  -- cell facts
+  obtain ⟨ha_v, hb0_v, hb1_v, hb2_low, hb3_v, hc_v, hd0_v, hd1_low, hd2_v, he0_v, he1_v, hf_v,
+    hg0_v, hg1_v, hh0_v, hh1_v, hb_dec, hd_dec, he_dec, hg_dec, hh_dec⟩ := hMCF
+  dsimp only [] at ha_v hb0_v hb1_v hb2_low hb3_v hc_v hd0_v hd1_low hd2_v he0_v he1_v hf_v hg0_v hg1_v hh0_v hh1_v hb_dec hd_dec he_dec hg_dec hh_dec
+  refine ⟨⟨?cpa, ?mpc, ?y1, ?y2, ?gd, ?pkd, ?val, ?rho, ?psi⟩, ?rel⟩
+  case cpa => exact hCPA
+  case gd =>
+    refine ⟨?_, ?_⟩
+    · simp only [GdCanonicity.Assumptions, circuit_norm]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [cell_eq_of_val hb1_v]; exact bitrange_one_isBool _ _
+      · simpa using ha_lt
+      · rw [hb0_v]; exact bitrange_lt _ _ _
+      · exact (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨0, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13a))
+    · simp only [GdCanonicity.Spec, circuit_norm]
+      simp only [← h_input, circuit_norm] at ha_v hb0_v hb1_v
+      exact ⟨ha_v, hb0_v, hb1_v⟩
+  case pkd =>
+    refine ⟨?_, ?_⟩
+    · simp only [PkdCanonicity.Assumptions, circuit_norm]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [cell_eq_of_val hd0_v]; exact bitrange_one_isBool _ _
+      · simpa using hc_lt
+      · rw [hb3_v]; exact bitrange_lt _ _ _
+      · exact (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨2, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13c))
+    · simp only [PkdCanonicity.Spec, circuit_norm]
+      simp only [← h_input, circuit_norm] at hb3_v hc_v hd0_v
+      exact ⟨hb3_v, hc_v, hd0_v⟩
+  case rho =>
+    refine ⟨?_, ?_⟩
+    · simp only [RhoCanonicity.Assumptions, circuit_norm]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [cell_eq_of_val hg0_v]; exact bitrange_one_isBool _ _
+      · simpa using hf_lt
+      · rw [he1_v]; exact bitrange_lt _ _ _
+      · exact (CircuitType.eval_expr env.toEnvironment _).symm.trans
+          ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨5, by decide⟩ 13
+            (by decide)).trans (by simpa [circuit_norm] using hz13f))
+    · simp only [RhoCanonicity.Spec, circuit_norm]
+      exact ⟨he1_v, hf_v, hg0_v⟩
+  case y1 =>
+    simp only [YCanonicity.circuit, YCanonicity.ProverAssumptions, circuit_norm]
+    simpa [← h_input, circuit_norm] using hb2_low
+  case y2 =>
+    simp only [YCanonicity.circuit, YCanonicity.ProverAssumptions, circuit_norm]
+    simpa [← h_input, circuit_norm] using hd1_low
+  case rel =>
     intro B hBhash
     rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
     have hHashB := hHashHonest B' (by
-      show hashToSWPoint G.S Q
-        (Chain.honestChunks messagePieceRounds (messagePieces (eval env AM))) = some B'
+      simp only [messagePieces, messagePieceRounds, messagePieceTailRounds] at hHonestEq ⊢
       rw [hHonestEq]; exact hB')
-    have hCOutPoint : COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
-      rw [hCOutdef]; rfl
-    rw [← hCOutPoint]
-    exact Point.ext_coords (by
-      simpa only [circuit_norm, Point.add, Point.ofSW] using hHashB)
-
+    simpa only [circuit_norm, Point.ofSW] using hHashB
+  case val =>
+    refine ⟨?_, ?_⟩
+    · simp only [ValueCanonicity.Assumptions, ValueCanonicity.Gate.Assumptions,
+        circuit_norm]
+      refine ⟨by rw [hd2_v]; exact bitrange_lt _ _ _, ?_, by rw [he0_v]; exact bitrange_lt _ _ _⟩
+      change (Expression.eval env.toEnvironment
+        ((HVec.get (Chain.zLengths messagePieceRounds) _ ⟨3, by decide⟩)[1])).val < 2 ^ 50
+      rw [(CircuitType.eval_expr env.toEnvironment _).symm.trans
+        ((HVec.eval_getElem env.toEnvironment (Chain.zLengths messagePieceRounds) _ ⟨3, by decide⟩ 1
+          (by decide)).trans (by simpa [circuit_norm] using hz1d)), ZMod.val_natCast_of_lt]
+      · refine Nat.div_lt_of_lt_mul ?_
+        simpa [← pow_add] using hd_lt
+      · exact lt_of_le_of_lt (Nat.div_le_self _ _) (ZMod.val_lt _)
+    · simp only [ValueCanonicity.Spec, ValueCanonicity.Gate.Spec, circuit_norm]
+      refine ⟨hvalue, hd2_v, ?_, he0_v⟩
+      sorry
+  case psi => sorry
+  case mpc => sorry
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main G Q hQ R

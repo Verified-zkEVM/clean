@@ -15,7 +15,7 @@ namespace Orchard.Action.CommitIvk
 
 open Orchard.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 open Orchard.Specs (K)
-open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod commitIvkMessage commitIvkChunks
+open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq commitIvkMessage commitIvkChunks
   commitIvkChunks_tiling sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
 
@@ -23,18 +23,16 @@ section
 set_option exponentiation.threshold 900
 
 theorem commitIvkChunks_segment_a (ak nk : ℕ) :
-    chunksOf (commitIvkMessage ak nk) 25 = chunksOf ak 25 := by
-  unfold commitIvkMessage
-  rw [show ak + 2 ^ 255 * nk = ak + 2 ^ (K * 25) * (2 ^ 5 * nk) by
-    norm_num [K]
-    ring_nf]
-  rw [← chunksOf_mod (ak + 2 ^ (K * 25) * (2 ^ 5 * nk)) 25]
-  rw [Nat.add_mul_mod_self_left]
-  exact chunksOf_mod ak 25
+    chunksOf (commitIvkMessage ak nk) 25 = chunksOf ak 25 :=
+  chunksOf_eq_of_mod_eq (by
+    unfold commitIvkMessage
+    rw [show ak + 2 ^ 255 * nk = ak + 2 ^ (K * 25) * (2 ^ 5 * nk) by norm_num [K]; ring_nf]
+    apply Nat.add_mul_mod_self_left)
 
 theorem commitIvkChunks_segment_b_word (ak nk : ℕ) (hak : ak < 2 ^ 255) :
-    commitIvkMessage ak nk / 2 ^ 250 % 2 ^ K
-      = ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 := by
+    bitrange (commitIvkMessage ak nk / 2 ^ 250) 0 K
+      = bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold commitIvkMessage
   norm_num at *
@@ -42,9 +40,9 @@ theorem commitIvkChunks_segment_b_word (ak nk : ℕ) (hak : ak < 2 ^ 255) :
 
 theorem commitIvkChunks_segment_b (ak nk : ℕ) (hak : ak < 2 ^ 255) :
     chunksOf (commitIvkMessage ak nk / 2 ^ 250) 1
-      = [ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
+      = [bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [commitIvkChunks_segment_b_word ak nk hak]
 
 theorem commitIvkChunks_segment_c_mod (ak nk : ℕ) (hak : ak < 2 ^ 255) :
@@ -55,30 +53,31 @@ theorem commitIvkChunks_segment_c_mod (ak nk : ℕ) (hak : ak < 2 ^ 255) :
   omega
 
 theorem commitIvkChunks_segment_c (ak nk : ℕ) (hak : ak < 2 ^ 255) :
-    chunksOf (commitIvkMessage ak nk / 2 ^ 260) 24 = chunksOf (nk / 2 ^ 5) 24 := by
-  rw [← chunksOf_mod (commitIvkMessage ak nk / 2 ^ 260) 24,
-    ← chunksOf_mod (nk / 2 ^ 5) 24]
-  rw [commitIvkChunks_segment_c_mod ak nk hak]
+    chunksOf (commitIvkMessage ak nk / 2 ^ 260) 24 = chunksOf (nk / 2 ^ 5) 24 :=
+  chunksOf_eq_of_mod_eq (commitIvkChunks_segment_c_mod ak nk hak)
 
 theorem commitIvkChunks_segment_d_word (ak nk : ℕ) (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
-    commitIvkMessage ak nk / 2 ^ 500 % 2 ^ K = nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 := by
+    bitrange (commitIvkMessage ak nk / 2 ^ 500) 0 K
+      = bitrange nk 245 9 + bitrange nk 254 1 * 512 := by
+  simp only [bitrange]
   rw [show 2 ^ K = 1024 by norm_num [K]]
   unfold commitIvkMessage
   norm_num at *
   omega
 
 theorem commitIvkChunks_segment_d (ak nk : ℕ) (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
-    chunksOf (commitIvkMessage ak nk / 2 ^ 500) 1 = [nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512] := by
-  unfold chunksOf bitrange
-  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero, pow_zero, Nat.div_one]
+    chunksOf (commitIvkMessage ak nk / 2 ^ 500) 1 =
+      [bitrange nk 245 9 + bitrange nk 254 1 * 512] := by
+  unfold chunksOf
+  simp only [List.range_one, List.map_cons, List.map_nil, Nat.mul_zero]
   rw [commitIvkChunks_segment_d_word ak nk hak hnk]
 
 theorem commitIvkChunks_tiling_segments (ak nk : ℕ) (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
     commitIvkChunks ak nk =
       chunksOf ak 25
-      ++ [ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32]
+      ++ [bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32]
       ++ chunksOf (nk / 2 ^ 5) 24
-      ++ [nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512] := by
+      ++ [bitrange nk 245 9 + bitrange nk 254 1 * 512] := by
   rw [commitIvkChunks_tiling]
   rw [commitIvkChunks_segment_a]
   rw [commitIvkChunks_segment_b _ _ hak]
@@ -91,24 +90,24 @@ theorem commitIvkChunks_eq_of_piece_digit_sums {msA msB msC msD : ℕ → ℕ} {
     (hmsA : ∀ r, msA r < 2 ^ K) (hmsB : ∀ r, msB r < 2 ^ K)
     (hmsC : ∀ r, msC r < 2 ^ K) (hmsD : ∀ r, msD r < 2 ^ K)
     (hA : ((ak % 2 ^ (K * 25) : ℕ) : Fp) = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp))
-    (hB : ((ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 : ℕ) : Fp)
+    (hB : ((bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 : ℕ) : Fp)
             = ((∑ r ∈ Finset.range 1, msB r * 2 ^ (K * r) : ℕ) : Fp))
     (hC : (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp) = ((∑ r ∈ Finset.range 24, msC r * 2 ^ (K * r) : ℕ) : Fp))
-    (hD : ((nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 : ℕ) : Fp)
+    (hD : ((bitrange nk 245 9 + bitrange nk 254 1 * 512 : ℕ) : Fp)
             = ((∑ r ∈ Finset.range 1, msD r * 2 ^ (K * r) : ℕ) : Fp))
     (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
     (List.range 25).map msA ++ (List.range 1).map msB
       ++ (List.range 24).map msC ++ (List.range 1).map msD
       = commitIvkChunks ak nk := by
-  have hBValueLt : ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 < 2 ^ K := by
-    have hb0 : ak / 2 ^ 250 % 16 < 16 := Nat.mod_lt _ (by norm_num)
-    have hb1 : ak / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
-    have hb2 : nk % 2 ^ 5 < 2 ^ 5 := Nat.mod_lt _ (by norm_num)
+  have hBValueLt : bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 < 2 ^ K := by
+    have hb0 : bitrange ak 250 4 < 16 := by have := bitrange_lt ak 250 4; omega
+    have hb1 : bitrange ak 254 1 < 2 := by have := bitrange_lt ak 254 1; omega
+    have hb2 : bitrange nk 0 5 < 2 ^ 5 := bitrange_lt _ _ _
     norm_num [K]
     omega
-  have hDValueLt : nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 < 2 ^ K := by
-    have hd0 : nk / 2 ^ 245 % 2 ^ 9 < 2 ^ 9 := Nat.mod_lt _ (by norm_num)
-    have hd1 : nk / 2 ^ 254 % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  have hDValueLt : bitrange nk 245 9 + bitrange nk 254 1 * 512 < 2 ^ K := by
+    have hd0 : bitrange nk 245 9 < 2 ^ 9 := bitrange_lt _ _ _
+    have hd1 : bitrange nk 254 1 < 2 := by have := bitrange_lt nk 254 1; omega
     norm_num [K]
     omega
   have hChunksA_low := chunksOf_eq_map_of_cast_sum hmsA hA
@@ -153,9 +152,9 @@ theorem pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
     {pieces : Vector Fp 4} {chunks : List ℕ} {ak nk : ℕ}
     (hPC : Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
     (hA : pieces[0] = ((ak % 2 ^ (K * 25) : ℕ) : Fp))
-    (hB : pieces[1] = ((ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 : ℕ) : Fp))
+    (hB : pieces[1] = ((bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 : ℕ) : Fp))
     (hC : pieces[2] = (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp))
-    (hD : pieces[3] = ((nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 : ℕ) : Fp))
+    (hD : pieces[3] = ((bitrange nk 245 9 + bitrange nk 254 1 * 512 : ℕ) : Fp))
     (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
     chunks = commitIvkChunks ak nk := by
   simp only [Orchard.Sinsemilla.Chain.PieceChunks] at hPC
@@ -188,9 +187,9 @@ theorem honestChunks_eq_commitIvkChunks
     {pieces : Vector Fp 4} {ak nk : ℕ}
     (hbounds : Orchard.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] pieces)
     (hA : pieces[0] = ((ak % 2 ^ (K * 25) : ℕ) : Fp))
-    (hB : pieces[1] = ((ak / 2 ^ 250 % 16 + (ak / 2 ^ 254 % 2) * 16 + (nk % 2 ^ 5) * 32 : ℕ) : Fp))
+    (hB : pieces[1] = ((bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 : ℕ) : Fp))
     (hC : pieces[2] = (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp))
-    (hD : pieces[3] = ((nk / 2 ^ 245 % 2 ^ 9 + (nk / 2 ^ 254 % 2) * 512 : ℕ) : Fp))
+    (hD : pieces[3] = ((bitrange nk 245 9 + bitrange nk 254 1 * 512 : ℕ) : Fp))
     (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
     Orchard.Sinsemilla.Chain.honestChunks [24, 0, 23, 0] pieces = commitIvkChunks ak nk :=
   pieceChunks_eq_commitIvkChunks_of_indexed_piece_values

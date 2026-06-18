@@ -65,7 +65,7 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
   ∃ ivk : Fp,
     (∃ rivk : Fq, ∀ B : Point Fp,
       hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-        ivk = (B + R.mulValue rivk).x) ∧
+        ivk = (B + rivk • R).x) ∧
     output = ivk.val • gDOld
 
 /-- Honest-prover diversified-address integrity for the concrete `rivk`. -/
@@ -74,7 +74,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
   ∃ ivk : Fp,
     (∀ B : Point Fp,
       hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-        ivk = (B + R.mulValue rivk).x) ∧
+        ivk = (B + rivk • R).x) ∧
     output = ivk.val • gDOld
 
 /-- Honest proving requires the explicit `pk_d_old` witness to be the derived address for
@@ -90,7 +90,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.
     ∀ ivk : Fp,
       (∀ B : Point Fp,
         hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-          ivk = (B + R.mulValue input.rivk).x) →
+          ivk = (B + (show Fq from input.rivk) • R).x) →
       pkDOld = ivk.val • gDOld
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)

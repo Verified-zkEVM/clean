@@ -56,9 +56,8 @@ def Assumptions (input : Input Fp) : Prop :=
 /-- The nullifier `nf = extract_p(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`: the
 `x`-coordinate of the complete sum of `cm` with the base-field-element fixed-base product. -/
 def Spec (K : MulFixed.FixedBase) (input : Input Fp) (output : Fp) : Prop :=
-  output = (Pallas.add input.cm.coords
-    (K.mulValue ((Poseidon.Hash.ConstantLength.value #v[input.nk, input.rho]
-      + input.psi).val : Fq)).coords).1
+  output = (input.cm +
+    ((Poseidon.Hash.ConstantLength.value #v[input.nk, input.rho] + input.psi).val : Fq) • K).x
 
 theorem soundness (K : MulFixed.FixedBase) :
     Soundness Fp (main K) Assumptions (Spec K) := by
@@ -69,7 +68,7 @@ theorem soundness (K : MulFixed.FixedBase) :
     MulFixed.BaseFieldElem.Assumptions,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_hash, h_scalar, h_bfe, h_complete⟩ := h_holds
-  have h_nf := (h_complete ⟨h_assumptions, by rw [h_bfe]; exact K.mulValue_valid _⟩).2
+  have h_nf := (h_complete ⟨h_assumptions, by rw [h_bfe]; exact K.smul_valid _⟩).2
   rw [h_bfe, h_scalar, h_hash] at h_nf
   exact congrArg Prod.fst h_nf
 
@@ -82,7 +81,7 @@ theorem completeness (K : MulFixed.FixedBase) :
     MulFixed.BaseFieldElem.Assumptions,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_hash_env, h_scalar_env, h_bfe_env, -⟩ := h_env
-  exact ⟨h_assumptions, h_bfe_env ▸ K.mulValue_valid _⟩
+  exact ⟨h_assumptions, h_bfe_env ▸ K.smul_valid _⟩
 
 def circuit (K : MulFixed.FixedBase) : FormalCircuit Fp Input field where
   main := main K

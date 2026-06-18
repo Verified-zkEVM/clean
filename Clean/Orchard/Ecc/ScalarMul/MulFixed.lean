@@ -317,14 +317,17 @@ theorem add_natCast_val_nsmul (a : Fq) (S : ℕ) :
   exact (Nat.mod_modEq _ _).trans (Nat.ModEq.add_left _ (Nat.mod_modEq _ _))
 
 /-- The value-level result of multiplying the fixed base by a full-width scalar. -/
-def mulValue (s : Fq) : Point Fp :=
+def scalarMul (s : Fq) : Point Fp :=
   { x := (s.val • B.point).x, y := (s.val • B.point).y }
 
-theorem mulValue_valid (s : Fq) : Pallas.Valid (B.mulValue s).coords :=
+instance : HSMul Fq FixedBase (Point Fp) where
+  hSMul s B := B.scalarMul s
+
+theorem smul_valid (s : Fq) : Pallas.Valid (s • B).coords :=
   (s.val • B.point).onCurve
 
-theorem mulValue_coords (s : Fq) :
-    (B.mulValue s).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
+theorem smul_coords (s : Fq) :
+    (s • B).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
 
 /--
 Soundness of one window row: if the coordinates gate holds on a row whose window value

@@ -97,7 +97,7 @@ Pow5 review: <https://github.com/Verified-zkEVM/clean/pull/405#pullrequestreview
 - Use Clean's existing top-level `IsBool` (from `Gadgets.Boolean`) and its lemmas, not a
   per-namespace re-definition. Do not redefine `IsBool`/`ternary` in a local `Defs` module
   when an exported one exists.
-- State point-valued circuit specs at the `Point` level, e.g. `output = B.mulValue s` (or
+- State point-valued circuit specs at the `Point` level, e.g. `output = s • B` (or
   the point itself), not by projecting coordinates: avoid
   `output.coords = ((s • B.point).x, (s • B.point).y)`. The `.x`/`.coords` projection in a
   contract is ugly and non-semantic; use the high-level point equality.
