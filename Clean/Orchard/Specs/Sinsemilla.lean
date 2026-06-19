@@ -33,51 +33,35 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 /-- Maximum number of chunks in a Sinsemilla message (`sinsemilla::C`). -/
 def C : ℕ := 253
 
-open Classical in
+-- so we can use the cute ⊥ symbol for `none`
+instance {α : Type} : Bot (Option α) := ⟨none⟩
+-- but we remove it in proofs
+@[simp] theorem bot_eq_none {α : Type} : (⊥ : Option α) = none := rfl
+
 /-- Incomplete addition `⸭` (protocol spec §5.4.1.9, `sinsemilla/src/addition.rs`):
 `⊥` if an operand is the identity or the `x`-coordinates collide (equal or opposite
 points), otherwise the group operation. `⊥` operands are handled by `Option.bind` at
 use sites. -/
-noncomputable def incompleteAdd (p q : SWPoint Pallas.curve) :
-    Option (SWPoint Pallas.curve) :=
-  if p = 0 ∨ q = 0 ∨ p.x = q.x then none else some (p + q)
+def incompleteAdd (p q : Point Fp) : Option (Point Fp) :=
+  if p = 0 ∨ q = 0 ∨ p.x = q.x then ⊥ else p + q
 
 /-- One Sinsemilla chunk step: `(acc ⸭ S(m)) ⸭ acc`. -/
-noncomputable def step (S : ℕ → SWPoint Pallas.curve) (acc : SWPoint Pallas.curve) (m : ℕ) :
-    Option (SWPoint Pallas.curve) :=
-  (incompleteAdd acc (S m)).bind fun t => incompleteAdd t acc
+def step (S : ℕ → Point Fp) (m : ℕ) (acc : Point Fp) : Option (Point Fp) := do
+  let t ← incompleteAdd acc (S m)
+  incompleteAdd t acc
 
 /-- `SinsemillaHashToPoint` over a list of `K`-bit chunk values, starting from the
 domain point `Q`. Padding of bit-level messages into chunks (`pad` in the protocol
 spec) is part of message construction and happens before this function. -/
-noncomputable def hashToSWPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
-    (chunks : List ℕ) : Option (SWPoint Pallas.curve) :=
-  chunks.foldl (fun acc m => acc.bind (step S · m)) (some Q)
+def hashToPoint (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ) : Option (Point Fp) :=
+  chunks.foldl (fun acc m => acc.bind (step S m)) (some Q)
 
-/-- Spec-facing `SinsemillaHashToPoint`, represented with the Orchard affine point type
-over the Pallas base field. The internal chain stays on `SWPoint` because its proofs use
-the curve membership carried by that type. -/
-noncomputable def hashToPoint (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
-    (chunks : List ℕ) : Option (Point Fp) :=
-  (hashToSWPoint S Q chunks).map Point.ofSW
-
-theorem hashToPoint_eq_some_iff {S : ℕ → SWPoint Pallas.curve} {Q : SWPoint Pallas.curve}
-    {chunks : List ℕ} {B : Point Fp} :
-    hashToPoint S Q chunks = some B ↔
-      ∃ B' : SWPoint Pallas.curve, hashToSWPoint S Q chunks = some B' ∧
-        Point.ofSW B' = B := by
-  unfold hashToPoint
-  cases h : hashToSWPoint S Q chunks with
-  | none =>
-    simp
-  | some B' =>
-    simp
+variable {S : ℕ → Point Fp} {Q : Point Fp}
 
 /-- `SinsemillaHash`: the `x`-coordinate of the hash point. Our affine encoding maps
 the identity to `(0, 0)`, so `.x` is exactly `Extract⊥` on defined results. -/
-noncomputable def hash (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
-    (chunks : List ℕ) : Option CompElliptic.Fields.Pasta.PallasBaseField :=
-  (hashToSWPoint S Q chunks).map (·.x)
+def hash (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ) : Option Fp :=
+  (hashToPoint S Q chunks).map (·.x)
 
 /--
 The Sinsemilla generator constants: the per-chunk generators
@@ -86,48 +70,43 @@ the circuit needs from them. Group hashing never returns the identity, so all ta
 generators are proper curve points.
 -/
 structure Generators where
-  S : ℕ → SWPoint Pallas.curve
-  S_ne_zero : ∀ k < 2 ^ K, S k ≠ 0
+  S : ℕ → Point Fp
+  S_onCurve : ∀ {k : ℕ}, k < 2 ^ K → (S k).OnCurve
 
-namespace Generators
-
-theorem S_onCurve (G : Generators) {k : ℕ} (hk : k < 2 ^ K) :
-    Point.OnCurve (Point.ofSW (G.S k)) :=
-  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (G.S_ne_zero k hk))
-
-end Generators
+lemma Generators.valid (G : Generators) {k : ℕ} (hk : k < 2 ^ K) : (G.S k).Valid :=
+  Or.inl (G.S_onCurve hk)
 
 /-! ### Chain lemmas -/
 
-theorem hashToSWPoint_nil (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve) :
-    hashToSWPoint S Q [] = some Q := rfl
+theorem hashToPoint_nil (S : ℕ → Point Fp) (Q : Point Fp) :
+    hashToPoint S Q [] = some Q := rfl
 
-private theorem foldl_none (S : ℕ → SWPoint Pallas.curve) (ms : List ℕ) :
-    ms.foldl (fun acc m => acc.bind (step S · m)) none = none := by
+private theorem foldl_none (S : ℕ → Point Fp) (ms : List ℕ) :
+    ms.foldl (fun acc m => acc.bind (step S m)) none = none := by
   induction ms with
   | nil => rfl
   | cons m ms ih => exact ih
 
-theorem hashToSWPoint_cons (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToPoint_cons (S : ℕ → Point Fp) (Q : Point Fp)
     (m : ℕ) (ms : List ℕ) :
-    hashToSWPoint S Q (m :: ms)
-      = (step S Q m).bind fun acc => hashToSWPoint S acc ms := by
-  show List.foldl _ (step S Q m) ms = _
-  cases h : step S Q m with
+    hashToPoint S Q (m :: ms)
+      = (step S m Q).bind fun acc => hashToPoint S acc ms := by
+  show List.foldl _ (step S m Q) ms = _
+  cases h : step S m Q with
   | none =>
     show List.foldl _ none ms = none
     exact foldl_none S ms
   | some acc =>
     rfl
 
-theorem hashToSWPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToPoint_append (S : ℕ → Point Fp) (Q : Point Fp)
     (l₁ l₂ : List ℕ) :
-    hashToSWPoint S Q (l₁ ++ l₂)
-      = (hashToSWPoint S Q l₁).bind fun acc => hashToSWPoint S acc l₂ := by
+    hashToPoint S Q (l₁ ++ l₂)
+      = (hashToPoint S Q l₁).bind fun acc => hashToPoint S acc l₂ := by
   show List.foldl _ _ (l₁ ++ l₂) = _
   rw [List.foldl_append]
-  show List.foldl _ (hashToSWPoint S Q l₁) l₂ = _
-  cases h : hashToSWPoint S Q l₁ with
+  show List.foldl _ (hashToPoint S Q l₁) l₂ = _
+  cases h : hashToPoint S Q l₁ with
   | none =>
     show List.foldl _ none l₂ = none
     exact foldl_none S l₂
@@ -136,40 +115,46 @@ theorem hashToSWPoint_append (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pal
 
 /-- A defined step never lands on the identity: its second incomplete addition
 excludes the colliding `x`-coordinates of equal-or-opposite points. -/
-theorem step_ne_zero {S : ℕ → SWPoint Pallas.curve} {A B : SWPoint Pallas.curve}
-    {m : ℕ} (h : step S A m = some B) : B ≠ 0 := by
-  unfold step at h
-  by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
+theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
+    {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B ≠ 0 := by
+  simp only [step, Option.bind_eq_bind] at h
+  by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
   · rw [incompleteAdd, if_pos hc₁] at h
     simp at h
   rw [incompleteAdd, if_neg hc₁] at h
-  rw [show ((some (A + S m)).bind fun t => incompleteAdd t A)
-    = incompleteAdd (A + S m) A from rfl] at h
-  by_cases hc₂ : A + S m = 0 ∨ A = 0 ∨ (A + S m).x = A.x
+  rw [show ((some (A + G.S m)).bind fun t => incompleteAdd t A)
+    = incompleteAdd (A + G.S m) A from rfl] at h
+  by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
   · rw [incompleteAdd, if_pos hc₂] at h
     simp at h
   rw [incompleteAdd, if_neg hc₂] at h
   push_neg at hc₂
-  obtain rfl : A + S m + A = B := Option.some.inj h
+  obtain rfl : A + G.S m + A = B := Option.some.inj h
   intro h0
-  exact hc₂.2.2 (by rw [add_eq_zero_iff_eq_neg.mp h0, SWPoint.neg_x])
+  replace h0 : A.toSW a_valid + (G.S m).toSW (G.valid hm) + A.toSW a_valid = 0 := by
+    simp only [← Point.toSW_zero, ← Point.toSW_add, h0]
+  rw [add_eq_zero_iff_eq_neg] at h0
+  have h2 : (A.toSW a_valid + (G.S m).toSW (G.valid hm)).x ≠ (A.toSW a_valid).x := by
+    simp_rw [← Point.toSW_add, Point.toSW_x]
+    exact hc₂.2.2
+  exact h2 (by rw [h0, SWPoint.neg_x])
 
 /-- Chain points of a defined hash are never the identity. -/
-theorem hashToSWPoint_ne_zero {S : ℕ → SWPoint Pallas.curve} {Q B : SWPoint Pallas.curve}
-    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToSWPoint S Q l = some B) : B ≠ 0 := by
+theorem hashToSWPoint_ne_zero {S : ℕ → Point Fp} {Q B : Point Fp}
+    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToPoint S Q l = some B) : B ≠ 0 := by
   induction l generalizing Q with
   | nil =>
-    rw [hashToSWPoint_nil] at h
+    rw [hashToPoint_nil] at h
     exact Option.some.inj h ▸ hQ
   | cons m ms ih =>
-    rw [hashToSWPoint_cons] at h
-    cases hs : step S Q m with
+    rw [hashToPoint_cons] at h
+    cases hs : step S m Q with
     | none =>
       rw [hs] at h
       simp at h
     | some C =>
       rw [hs] at h
-      exact ih (step_ne_zero hs) h
+      exact ih (step_ne_zero ?_ hs) h
 
 /-- Split a defined chain at a list boundary. -/
 theorem hashToSWPoint_append_some {S : ℕ → SWPoint Pallas.curve}

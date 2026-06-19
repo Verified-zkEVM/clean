@@ -35,6 +35,7 @@ and circuit expressions.
 structure Point (F : Type) where
   x : F
   y : F
+deriving BEq, DecidableEq, Inhabited, Repr
 
 namespace Point
 variable {F : Type}
@@ -96,13 +97,17 @@ theorem ne_zero_of_onCurve {point : Point Fp} :
 def ofSW (point : SWPoint Pallas.curve) : Point Fp :=
   { x := point.x, y := point.y }
 
-variable {F : Type} [Field F]
-
 def neg [Neg F] (point : Point F) : Point F where
   x := point.x
   y := -point.y
 
 instance [Neg F] : Neg (Point F) := ⟨neg⟩
+
+lemma neg_def (point : Point Fp) :
+  -point = {
+    x := (ShortWeierstrass.neg point.coords).1,
+    y := (ShortWeierstrass.neg point.coords).2 } := rfl
+
 
 def add (p q : Point Fp) : Point Fp :=
   let coords := ShortWeierstrass.add pallasA p.coords q.coords
@@ -238,6 +243,30 @@ theorem y_eq_or_neg_of_same_x {p q : Point Fp}
     exact sub_eq_zero.mp h
   · right
     linear_combination h
+
+def toSW (point : Point Fp) (h : point.Valid) : SWPoint Pallas.curve where
+  x := point.x
+  y := point.y
+  onCurve := (valid_iff point).mp h
+
+@[simp] theorem toSW_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
+    (p + q).toSW (valid_add hp hq) = p.toSW hp + q.toSW hq := by
+  simp only [toSW, add_def]
+  rfl
+
+theorem valid_zero : (0 : Point Fp).Valid := Or.inr rfl
+
+@[simp] theorem toSW_zero : toSW 0 valid_zero = 0 := by
+  simp only [toSW, zero_def]
+  rfl
+
+theorem toSW_x (point : Point Fp) (h : point.Valid) : (toSW point h).x = point.x := rfl
+theorem toSW_y (point : Point Fp) (h : point.Valid) : (toSW point h).y = point.y := rfl
+
+theorem toSW_neg {p : Point Fp} (hp : p.Valid) :
+    (-p).toSW (valid_neg hp) = -(p.toSW hp) := by
+  simp only [toSW, neg_def]
+  rfl
 end Point
 
 end Orchard

@@ -314,7 +314,7 @@ def main (n : ℕ) (input : Var Input Fp) :
     Circuit Fp (Var (Output (n + 1)) Fp) := do
   -- copy the starting running sum, x_a, and y_a (the latter into the lambda_1 column)
   let z₀ <== input.z
-  let xA₀ <== input.xA
+  let xA₀ ← witnessField input.xA
   let yA₀ <== input.yA
   -- the loop rows, witnessed in source assignment order: z, x_p, y_p, λ1, λ2, next x_a
   let rows ← Circuit.mapFinRange (n + 1) fun (r : Fin (n + 1)) => do
