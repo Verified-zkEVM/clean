@@ -97,7 +97,8 @@ Source baseline:
       - Clean: `Sinsemilla.CommitDomain.Short.circuit` in `Clean/Orchard/Sinsemilla/Domain.lean`
         (over `CommitDomain.circuit` + `CommitDomain.blindingFactor`).
     - `ScalarVar::from_base` (`halo2_gadgets/src/ecc`)
-      - **GAP:** no dedicated source-level conversion entry identified.
+      - Pure abstraction wrapping a base field element; no circuit content, so no Clean
+        counterpart needed.
     - `[ivk] g_d_old` (variable-base mul, `halo2_gadgets/src/ecc/chip/mul.rs`)
       - Clean: `Mul.circuit` in `Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`.
       - Incomplete gates: `Clean/Orchard/Ecc/ScalarMul/Mul/Incomplete.lean`.
