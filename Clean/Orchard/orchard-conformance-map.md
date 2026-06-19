@@ -129,9 +129,12 @@ Source: `orchard/src/circuit.rs`, `circuit/gadget.rs`, `circuit/note_commit.rs`,
 
 ### Concrete Circuit Field
 
-Several helpers and assertions are still generic over `{F : Type} [Field F]` (or similar
-typeclass sets). They should be specialized so Orchard circuit packages are concrete
-Pallas-base circuits, with field facts established for that field rather than assumed by callers.
+Some circuit packages and helpers are still generic over `{F : Type} [Field F]` rather than
+the concrete Pallas base field `Fp` — e.g. `Utilities.RunningSum.circuit` and
+`Utilities.LookupRangeCheck.circuit` (the short-lookup-bitshift gate), plus shared helper
+lemmas in several modules. These should be specialized so Orchard circuit packages are
+concrete `Fp` circuits, with field facts established for that field rather than assumed by
+callers.
 
 ### Scalar Multiplication Output Signatures
 
@@ -141,13 +144,6 @@ Pallas-base circuits, with field facts established for that field rather than as
 Fix by returning `(Point, scalar-decomposition)`. (The variable-base `Mul.circuit` similarly
 returns only `Point` where `EccInstructions::mul` returns `(EccPoint, ScalarVar)`, but there
 `ScalarVar` merely re-wraps the input `alpha`, so it is benign.)
-
-### Scalar Multiplication Gate Layout
-
-- `GATE q_mul_{1,2,3} == 1 checks` are source-named, but their row structs are contractual
-  bundles rather than exact Halo2 advice-column/rotation layouts.
-- `MulFixed.Coords.circuit` is an unbranded helper for `coords_check` (not a source `meta.create_gate`).
-- `GATE Canonicity checks` lacks the surrounding lookup/running-sum API and exact column/rotation layout.
 
 ### Sinsemilla Output Signature: Base APIs Point-Only
 
@@ -162,7 +158,8 @@ Exact conformance would thread full `zs` (an `HVec`) through the recursive tower
 ### Gate Layout Metadata For VK Reconstruction
 
 Clean rows generally do not distinguish advice/fixed/selector cells, equality-enabled columns,
-column identity, or rotations. This suffices for arithmetic reasoning but not for reconstructing
-the Halo2 layout or pinned VK. Intended direction: selectors stay modeled by subcircuit calls
-(not inputs), fixed columns stay Lean parameters, and advice row structs make source rotations
-explicit for later serialization.
+column identity, or rotations — e.g. the `GATE q_mul_{1,2,3} == 1 checks` row structs are
+contractual bundles, not exact column/rotation layouts. This suffices for arithmetic reasoning
+but not for reconstructing the Halo2 layout or pinned VK. Intended direction: selectors stay
+modeled by subcircuit calls (not inputs), fixed columns stay Lean parameters, and advice row
+structs make source rotations explicit for later serialization.
