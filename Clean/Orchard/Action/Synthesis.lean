@@ -159,8 +159,10 @@ instance elaborated (P : Params) : ElaboratedCircuit Fp Input unit (main P) := b
   elaborate_circuit
 
 /-- Soundness preconditions: the witnessed points feeding each gadget are well-formed
-Pallas points (the source witnesses them with `Point::new` / `NonIdentityPoint::new`). -/
-def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
+Pallas points (the source witnesses them with `Point::new` / `NonIdentityPoint::new`). This
+is a placeholder paralleling `IntermediateSpec`, to be bridged to the final hand-written
+assumptions. -/
+def IntermediateAssumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
   Pallas.OnCurve input.gdOld.coords ∧ Pallas.OnCurve input.pkdOld.coords ∧
   Pallas.OnCurve input.gdNew.coords ∧ Pallas.OnCurve input.pkdNew.coords ∧
   Pallas.Valid input.cmOld.coords ∧ Pallas.Valid input.akP.coords
@@ -210,13 +212,15 @@ def IntermediateSpec (P : Params) (input : Value Input Fp) (_ : Unit)
     (input.vNew = 0 ∨ input.enableOutputs = 1))
 
 theorem intermediate_spec_of_constraints (P : Params) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main P) Assumptions (IntermediateSpec P) := by
+    GeneralFormalCircuit.WithHint.Soundness Fp (main P)
+      IntermediateAssumptions (IntermediateSpec P) := by
   -- `circuit_proof_start` with the six non-recursive children. CalculateRoot.circuit is
   -- deliberately omitted from the lemma list: its foldl-based output makes the tactic's
   -- final goal-rewrite blow the kernel budget. The merkle child's spec is extracted at its
   -- own hypothesis below instead.
   circuit_proof_start [ValueCommit.circuit, DeriveNullifier.circuit, SpendAuthority.circuit,
     AddressIntegrity.circuit, NoteCommit.circuit, Gate.circuit]
+  simp only [IntermediateAssumptions] at h_assumptions
   -- name composed-gadget facts via projections (discharging each child's Assumptions)
   have hVCeq := h_holds.2.2.1
   have hNFeq := h_holds.2.2.2.2.1
@@ -261,26 +265,78 @@ theorem intermediate_spec_of_constraints (P : Params) :
     · exact h_assumptions.2.2.2.2.1
 
 /-- Honest-prover preconditions: each composed gadget's `ProverAssumptions` instantiated at
-the honest witnesses. -/
-def ProverAssumptions (P : Params) (input : ProverValue Input Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  sorry
+the honest witnesses. Placeholder paralleling `IntermediateAssumptions`, to be bridged to
+the final hand-written prover assumptions. The new note's ρ is the public `nf_old` (the
+honest prover sets that instance cell to the nullifier it derives). -/
+def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
+    (data : ProverData Fp) (hint : ProverHint Fp) : Prop :=
+  -- merkle: the authentication-path hash chain succeeds at every layer
+  Orchard.Sinsemilla.Merkle.CalculateRoot.ProverAssumptions P.Gm P.Qm
+      { leaf := input.cmOld.x, path := input.path, pos := input.pos } data hint ∧
+  -- value commitment: the signed magnitude is a 64-bit value with sign ±1
+  ValueCommit.ProverAssumptions
+      { v := { magnitude := input.vNetMagnitude, sign := input.vNetSign }, rcv := input.rcv }
+      data hint ∧
+  -- nullifier: `cm_old` is a valid point (DeriveNullifier is a `FormalCircuit`)
+  input.cmOld.Valid ∧
+  -- spend authority: `ak_P` is a valid point
+  SpendAuthority.ProverAssumptions { akP := input.akP, alpha := input.alpha } data hint ∧
+  -- diversified address integrity
+  AddressIntegrity.ProverAssumptions P.Gci P.Qci P.Rci
+      { ak := input.akP.x, nk := input.nk, rivk := input.rivk,
+        gDOld := input.gdOld, pkDOld := input.pkdOld } data hint ∧
+  -- old note commitment
+  NoteCommit.ProverAssumptions P.Gnc P.Qnc
+      { gd := input.gdOld, pkd := input.pkdOld, value := input.vOld,
+        rho := input.rhoOld, psi := input.psiOld, rcm := input.rcmOld } data hint ∧
+  -- new note commitment (ρ = the public nf_old)
+  NoteCommit.ProverAssumptions P.Gnc P.Qnc
+      { gd := input.gdNew, pkd := input.pkdNew, value := input.vNew,
+        rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew } data hint
 
+/-- Honest-prover postcondition: the deterministic (`ProverSpec`) image of `IntermediateSpec`.
+Each public-instance cell is the honest gadget evaluation of the private witnesses. -/
 def IntermediateProverSpec (P : Params) (input : ProverValue Input Fp) (_ : Unit)
-    (_ : ProverHint Fp) : Prop :=
-  sorry
+    (hint : ProverHint Fp) : Prop :=
+  ValueCommit.ProverSpec P.V P.Rvc
+      { v := { magnitude := input.vNetMagnitude, sign := input.vNetSign }, rcv := input.rcv }
+      { x := input.cvNetX, y := input.cvNetY } hint ∧
+  DeriveNullifier.Spec P.Knf
+      { nk := input.nk, rho := input.rhoOld, psi := input.psiOld, cm := input.cmOld }
+      input.nfOld ∧
+  SpendAuthority.ProverSpec P.Sag { akP := input.akP, alpha := input.alpha }
+      { x := input.rkX, y := input.rkY } hint ∧
+  AddressIntegrity.ProverSpec P.Gci P.Qci P.Rci
+      input.akP.x input.nk input.rivk input.gdOld input.pkdOld ∧
+  NoteCommit.ProverSpec P.Gnc P.Qnc P.Rnc
+      { gd := input.gdOld, pkd := input.pkdOld, value := input.vOld,
+        rho := input.rhoOld, psi := input.psiOld, rcm := input.rcmOld }
+      input.cmOld hint ∧
+  (∃ cmNewY : Fp,
+    NoteCommit.ProverSpec P.Gnc P.Qnc P.Rnc
+      { gd := input.gdNew, pkd := input.pkdNew, value := input.vNew,
+        rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew }
+      { x := input.cmx, y := cmNewY } hint) ∧
+  (∃ (leaf root : Fp),
+    leaf = input.cmOld.x ∧
+    Orchard.Sinsemilla.Merkle.CalculateRoot.ProverSpec P.Gm P.Qm
+      { leaf := leaf, path := input.path, pos := input.pos } root hint ∧
+    input.vOld = input.vNew + input.vNetMagnitude * input.vNetSign ∧
+    (input.vOld = 0 ∨ root = input.anchor) ∧
+    (input.vOld = 0 ∨ input.enableSpends = 1) ∧
+    (input.vNew = 0 ∨ input.enableOutputs = 1))
 
 theorem intermediate_completeness (P : Params) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main P)
-      (ProverAssumptions P) (IntermediateProverSpec P) := by
+      (IntermediateProverAssumptions P) (IntermediateProverSpec P) := by
   sorry
 
 def circuit (P : Params) : GeneralFormalCircuit.WithHint Fp Input unit where
   main := main P
   elaborated := elaborated P
-  Assumptions
+  Assumptions := IntermediateAssumptions
   Spec := IntermediateSpec P
-  ProverAssumptions := ProverAssumptions P
+  ProverAssumptions := IntermediateProverAssumptions P
   ProverSpec := IntermediateProverSpec P
   soundness := intermediate_spec_of_constraints P
   completeness := intermediate_completeness P

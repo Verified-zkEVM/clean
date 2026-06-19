@@ -946,6 +946,14 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         sibling := fun env => (show Vector Fp 32 from input.path env)[i],
         posBit := fun env => (show Vector Bool 32 from input.pos env)[i] })
 
+-- TODO(perf): this instance gives an explicit `localLength` but inherits the default
+-- `output`, which is the 32-layer `Circuit.foldl` of `main`. When a parent circuit passes
+-- `CalculateRoot.circuit` to `simp`/`circuit_proof_start`, unfolding that foldl-based output
+-- on the goal expands into a cast the kernel cannot re-check (a deterministic timeout — see
+-- `Clean/Orchard/Action/Synthesis.lean`, where the soundness proof must omit this child from
+-- the lemma list as a workaround). Providing an explicit closed-form `output` here (the
+-- layer-31 output cell, e.g. `varFromOffset field (31 * 274 + 273)`) would keep the foldl
+-- folded and let the plain tactic handle a parent that composes the Merkle path.
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
     ElaboratedCircuit Fp Input field (main G Q hQ) where
   localLength _ := 32 * 274
