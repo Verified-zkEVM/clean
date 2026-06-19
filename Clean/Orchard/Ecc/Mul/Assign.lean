@@ -802,7 +802,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     simp only [Point.nsmul, Point.coords,
       CompElliptic.Curves.Pasta.Pallas.curve,
       CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul,
-      pallasA_eq_curve_A]
+      show pallasA = Pallas.curve.A from rfl]
     rw [← hcoords]
   apply Point.ext_coords
   simp only [Add.Assumptions, Add.Spec] at hAcc

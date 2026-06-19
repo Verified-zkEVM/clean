@@ -15,13 +15,11 @@ open CompElliptic.CurveForms
 abbrev Fp := CompElliptic.Fields.Pasta.PallasBaseField
 abbrev Fq := CompElliptic.Fields.Pasta.PallasScalarField
 
-/-- Pallas base-field canonicity threshold used by Orchard range-check gates. -/
-def tP : Fp := 45560315531419706090280762371685220353
-
 def pallasB : Fp := 5
 def pallasA : Fp := 0
 
-theorem pallasA_eq_curve_A : pallasA = CompElliptic.Curves.Pasta.Pallas.curve.A := rfl
+/-- Pallas base-field canonicity threshold used by Orchard range-check gates. -/
+def tP : Fp := 45560315531419706090280762371685220353
 
 instance : (ShortWeierstrass.toW pallasA pallasB).IsElliptic :=
   inferInstanceAs <| WeierstrassCurve.IsElliptic <|
