@@ -7,12 +7,17 @@ import Clean.Orchard.Ecc.Add
 
 Reference: `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla.rs`.
 
-- `HashDomain::hash`: `hash_to_point` followed by `x`-extraction (`Extract⊥`).
 - `CommitDomain::commit`: `M.hash_to_point(msg) + [r] R`, with the blinding term a
-  full-width fixed-base multiplication and the sum a complete addition.
-- `CommitDomain::short_commit`: `commit` followed by `x`-extraction.
+  full-width fixed-base multiplication and the sum a complete addition. The output keeps
+  the per-piece running sums `zs` (halo2's `commit` returns `(Point, Vec<RunningSum>)`),
+  read by `NoteCommit`/`CommitIvk` for their canonicity gates.
 - `CommitDomain::blinding_factor` is the bare `[r] R`, i.e. exactly
   `MulFixed.FullWidth.circuit R`.
+
+`HashDomain::hash` and `CommitDomain::short_commit` (both `hash_to_point`/`commit`
+followed by `x`-extraction) are realized inline where Orchard needs them — `MerkleCRH`
+extracts `x` in `Merkle.HashLayer`, and `commit_ivk` extracts `x` after `commit` — so
+they have no standalone gadget here.
 
 The domain constants (`Q`, the generator table, the blinding base `R`) are abstract
 parameters with the properties the proofs need (`Q ≠ 0`, `Generators.S_ne_zero`,
@@ -25,75 +30,7 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc
 
-/-! ### `HashDomain::hash` -/
-
-namespace HashDomain
-
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (n₀ : ℕ)
-    (ns : List ℕ) (pieces : Var (fields (ns.length + 1)) Fp) :
-    Circuit Fp (Expression Fp) := do
-  let p ← Entry.circuit G Q hQ n₀ ns pieces
-  return p.point.x
-
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (n₀ : ℕ) (ns : List ℕ) :
-    ElaboratedCircuit Fp (fields (ns.length + 1)) field (main G Q hQ n₀ ns) := by
-  elaborate_circuit
-
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : Value (fields (ns.length + 1)) Fp) (output : Value field Fp)
-    (_ : ProverData Fp) : Prop :=
-  ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B → output = B.x
-
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
-    (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-    (Chain.honestChunks (n₀ :: ns) pieces) = some B
-
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (output : ProverValue field Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-      (Chain.honestChunks (n₀ :: ns) pieces) = some B →
-    output = B.x
-
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ n₀ ns)
-      (fun _ _ => True) (Spec G Q n₀ ns) := by
-  circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec]
-  obtain ⟨chunks, hPC, hZ1, hfun⟩ := h_holds
-  refine ⟨chunks, hPC, ?_⟩
-  intro B hB
-  exact congrArg Point.x (hfun B hB)
-
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ n₀ ns)
-      (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, Entry.circuit,
-    Entry.ProverAssumptions, Entry.ProverSpec]
-  refine ⟨h_assumptions, ?_⟩
-  intro B hB
-  exact congrArg Point.x ((h_env h_assumptions).2.2 B hB)
-
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1)) field where
-  main := main G Q hQ n₀ ns
-  elaborated := elaborated G Q hQ n₀ ns
-  Spec := Spec G Q n₀ ns
-  ProverAssumptions := ProverAssumptions G Q n₀ ns
-  ProverSpec := ProverSpec G Q n₀ ns
-  soundness := soundness G Q hQ n₀ ns
-  completeness := completeness G Q hQ n₀ ns
-
-end HashDomain
-
-/-! ### `CommitDomain::commit` and `CommitDomain::short_commit` -/
+/-! ### `CommitDomain::commit` -/
 
 namespace CommitDomain
 
@@ -107,125 +44,9 @@ deriving CircuitType
 instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
   ⟨{ pieces := .replicate k default, r := fun _ => default }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ)
-    (input : Var (Input (ns.length + 1)) Fp) :
-    Circuit Fp (Var Point Fp) := do
-  -- blind = [r] R
-  let blind ← MulFixed.FullWidth.circuit R input.r
-  -- p = M.hash_to_point(msg)
-  let p ← Entry.circuit G Q hQ n₀ ns input.pieces
-  -- commitment = p + blind
-  Ecc.Add.circuit { p := p.point, q := blind }
-
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    ElaboratedCircuit Fp (Input (ns.length + 1)) Point
-      (main G Q hQ R n₀ ns) := by
-  elaborate_circuit
-
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (n₀ : ℕ) (ns : List ℕ) (input : Value (Input (ns.length + 1)) Fp)
-    (output : Point Fp) (_ : ProverData Fp) : Prop :=
-  ∃ (chunks : List ℕ) (r : Fq),
-    Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-      output = Point.ofSW B + r • R
-
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
-    (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Chain.PieceBounds (n₀ :: ns) input.pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-    (Chain.honestChunks (n₀ :: ns) input.pieces) = some B
-
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
-    (output : Point Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-      (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
-    output = Point.ofSW B + (show Fq from input.r) • R
-
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R n₀ ns)
-      (fun _ _ => True) (Spec G Q R n₀ ns) := by
-  circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec,
-    MulFixed.FullWidth.circuit, MulFixed.FullWidth.Spec,
-    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
-  obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
-  obtain ⟨s, hblind⟩ := h_fw
-  obtain ⟨chunks, hPC, hZ1, hfun⟩ := h_entry
-  refine ⟨chunks, s, hPC, ?_⟩
-  intro B hB
-  have hp := hfun B hB
-  have h_final := h_add ⟨by
-      rw [hp]
-      exact Or.inl (by
-        rw [Point.onCurve_iff]
-        exact SWPoint.onCurve_of_ne_zero
-          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hB)),
-    by
-      rw [hblind]
-      exact R.smul_valid s⟩
-  rw [hp, hblind] at h_final
-  simpa [Point.ofSW] using h_final.2
-
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R n₀ ns)
-      (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions,
-    Entry.circuit, Entry.ProverAssumptions, Entry.ProverSpec,
-    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
-    Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
-  obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
-  obtain ⟨hbounds, B, hchain⟩ := h_assumptions
-  obtain ⟨-, hblind⟩ := h_fw_env
-  have hp := (h_entry_env ⟨hbounds, B, hchain⟩).2.2 B hchain
-  have h_final := h_add_env ⟨by
-      rw [hp]
-      exact Or.inl (by
-        rw [Point.onCurve_iff]
-        exact SWPoint.onCurve_of_ne_zero
-          (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain)),
-    by
-      rw [hblind]
-      exact R.smul_valid _⟩
-  refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_⟩
-  · rw [hp]
-    exact Or.inl (by
-      rw [Point.onCurve_iff]
-      exact SWPoint.onCurve_of_ne_zero
-        (Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hQ hchain))
-  · rw [hblind]
-    exact R.smul_valid _
-  · intro B' hB'
-    rw [hchain] at hB'
-    obtain rfl : B = B' := Option.some.inj hB'
-    rw [hp, hblind] at h_final
-    simpa [Point.ofSW] using h_final.2
-
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint Fp (Input (ns.length + 1)) Point where
-  main := main G Q hQ R n₀ ns
-  elaborated := elaborated G Q hQ R n₀ ns
-  Spec := Spec G Q R n₀ ns
-  ProverAssumptions := ProverAssumptions G Q n₀ ns
-  ProverSpec := ProverSpec G Q R n₀ ns
-  soundness := soundness G Q hQ R n₀ ns
-  completeness := completeness G Q hQ R n₀ ns
-
-/-! #### `commit` exposing the hash running sums (`zs`)
-
-`NoteCommit` needs the per-piece running sums returned by `hash_to_point` (halo2's
-`commit` returns `(CommitmentPoint, Vec<Vec<AssignedCell>>)`) to feed its canonicity
-gates. `WithZs` is `commit` keeping those sums in its output; it is otherwise identical
-to `commit` and is the entry the `note_commit` gadget composes. -/
-namespace WithZs
-
-/-- Outputs of the zs-exposing commit: the commitment point and the hash running sums. -/
+/-- Outputs of `commit`: the commitment point and the hash running sums, mirroring
+halo2's `commit` returning `(CommitmentPoint, Vec<RunningSum>)`. `NoteCommit`/`CommitIvk`
+read individual `zs[i][j]` cells for their canonicity gates. -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   zs : HVec (Chain.zLengths ns) F
@@ -246,8 +67,11 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ)
     (input : Var (Input (ns.length + 1)) Fp) :
     Circuit Fp (Var (Output (n₀ :: ns)) Fp) := do
+  -- blind = [r] R
   let blind ← MulFixed.FullWidth.circuit R input.r
-  let p ← EntryZs.circuit G Q hQ n₀ ns input.pieces
+  -- p = M.hash_to_point(msg)
+  let p ← Entry.circuit G Q hQ n₀ ns input.pieces
+  -- commitment = p + blind
   let commitment ← Ecc.Add.circuit { p := p.point, q := blind }
   return { point := commitment, zs := p.zs }
 
@@ -285,7 +109,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R n₀ ns)
       (fun _ _ => True) (Spec G Q R n₀ ns) := by
-  circuit_proof_start [main, Spec, EntryZs.circuit, EntryZs.Spec,
+  circuit_proof_start [main, Spec, Entry.circuit, Entry.Spec,
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.Spec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
@@ -312,7 +136,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions,
-    EntryZs.circuit, EntryZs.ProverAssumptions, EntryZs.ProverSpec,
+    Entry.circuit, Entry.ProverAssumptions, Entry.ProverSpec,
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
@@ -354,73 +178,6 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   ProverSpec := ProverSpec G Q R n₀ ns
   soundness := soundness G Q hQ R n₀ ns
   completeness := completeness G Q hQ R n₀ ns
-
-end WithZs
-
-/-! #### `short_commit` -/
-
-namespace Short
-
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ)
-    (input : Var (Input (ns.length + 1)) Fp) :
-    Circuit Fp (Expression Fp) := do
-  let p ← CommitDomain.circuit G Q hQ R n₀ ns input
-  return p.x
-
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    ElaboratedCircuit Fp (Input (ns.length + 1)) field
-      (main G Q hQ R n₀ ns) := by
-  elaborate_circuit
-
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (n₀ : ℕ) (ns : List ℕ) (input : Value (Input (ns.length + 1)) Fp)
-    (output : Value field Fp) (_ : ProverData Fp) : Prop :=
-  ∃ (chunks : List ℕ) (r : Fq),
-    Chain.PieceChunks (n₀ :: ns) input.pieces chunks ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-      output = (Point.ofSW B + r • R).x
-
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
-    (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
-    (output : ProverValue field Fp) (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-      (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
-    output = (Point.ofSW B + (show Fq from input.r) • R).x
-
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R n₀ ns)
-      (fun _ _ => True) (Spec G Q R n₀ ns) := by
-  circuit_proof_start [main, Spec, CommitDomain.circuit, CommitDomain.Spec]
-  obtain ⟨chunks, r, hPC, hfun⟩ := h_holds
-  refine ⟨chunks, r, hPC, ?_⟩
-  intro B hB
-  exact congrArg Point.x (hfun B hB)
-
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R n₀ ns)
-      (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions,
-    CommitDomain.circuit, CommitDomain.ProverAssumptions, CommitDomain.ProverSpec]
-  refine ⟨h_assumptions, ?_⟩
-  intro B hB
-  exact congrArg Point.x ((h_env h_assumptions).2 B hB)
-
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
-    (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint Fp (Input (ns.length + 1)) field where
-  main := main G Q hQ R n₀ ns
-  elaborated := elaborated G Q hQ R n₀ ns
-  Spec := Spec G Q R n₀ ns
-  ProverAssumptions := ProverAssumptions G Q n₀ ns
-  ProverSpec := ProverSpec G Q R n₀ ns
-  soundness := soundness G Q hQ R n₀ ns
-  completeness := completeness G Q hQ R n₀ ns
-
-end Short
 
 /-- `CommitDomain::blinding_factor` is the bare `[r] R`. -/
 def blindingFactor (R : MulFixed.FixedBase) :

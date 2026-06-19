@@ -87,16 +87,19 @@ Source: `halo2_gadgets/src/sinsemilla{.rs,/chip.rs,/chip/hash_to_point.rs,/merkl
 
 - `Sinsemilla.generatorTable`: `chip/generator_table.rs` lookup table
 - `Sinsemilla.HashPiece.circuit`: `hash_to_point.rs::hash_piece`
-- `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`): `hash_all_pieces` + public-`Q` init;
-  lands at `Specs.Sinsemilla.hashToPoint`
+- `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`): `hash_to_point` (`hash_all_pieces` +
+  public-`Q` init); lands at `Specs.Sinsemilla.hashToPoint`. Output is the hash point and the
+  per-piece running sums `zs` (halo2's `(Point, Vec<RunningSum>)`)
+- `Sinsemilla.EntryZ1s.circuit`: the `z₁`-only view of the same `hash_to_point` chain (forwards
+  the point and each piece's `z₁` cell instead of the full `zs`), used by `MerkleCRH`
 - `Sinsemilla.InitialYQ.circuit`: `GATE Initial y_Q`
 - `Sinsemilla.Gate.circuit`: `GATE Sinsemilla gate`
-- `Sinsemilla.HashDomain.circuit`: `HashDomain::hash`
-- `Sinsemilla.CommitDomain.circuit`: `CommitDomain::commit`
-- `Sinsemilla.CommitDomain.WithZs.circuit`: `CommitDomain::commit` exposing per-piece running
-  sums (used by `note_commit`/`commit_ivk`)
-- `Sinsemilla.CommitDomain.Short.circuit`: `CommitDomain::short_commit`
+- `Sinsemilla.CommitDomain.circuit`: `CommitDomain::commit`, output `(commitment point,
+  running sums zs)` (halo2's `(Point, Vec<RunningSum>)`); used by `note_commit`/`commit_ivk`
 - `Sinsemilla.CommitDomain.blindingFactor`: `CommitDomain::blinding_factor` (`[r] R`)
+- `HashDomain::hash` and `CommitDomain::short_commit` (each `hash_to_point`/`commit` then
+  `x`-extraction) have no standalone gadget — they are realized inline where Orchard uses them
+  (`MerkleCRH` extracts `x` in `Merkle.HashLayer`; `commit_ivk` extracts `x` after `commit`)
 - `Sinsemilla.Merkle.circuit`: `GATE Decomposition check`
 - `Sinsemilla.Merkle.HashLayer.circuit`: `MerkleInstructions::hash_layer`
 - `Sinsemilla.Merkle.CalculateRoot.circuit`: `MerklePath::calculate_root` (`MERKLE_DEPTH = 32`)
@@ -135,15 +138,6 @@ Source: `orchard/src/circuit.rs`, `circuit/gadget.rs`, `circuit/note_commit.rs`,
 Fix by returning `(Point, scalar-decomposition)`. (The variable-base `Mul.circuit` similarly
 returns only `Point` where `EccInstructions::mul` returns `(EccPoint, ScalarVar)`, but there
 `ScalarVar` merely re-wraps the input `alpha`, so it is benign.)
-
-### Sinsemilla Output Signature: Base APIs Point-Only
-
-`CommitDomain.WithZs.circuit` exposes each piece's full running sum
-(`Output.zs : HVec (Chain.zLengths ns)`), and `note_commit`/`commit_ivk` use it. The base
-APIs still mismatch the source: Halo2's `hash_to_point`/`commit` return `(Point, zs)`
-(per-piece running sums `zs[i] = [z_0, ..., z_{w_i}]`), but `HashPiece`/`Chain`/`Entry` expose
-only the `z_1` cells and `HashDomain.circuit`/`CommitDomain.circuit` return only the point.
-Exact conformance would thread full `zs` (an `HVec`) through the recursive tower.
 
 ### Gate Layout Metadata For VK Reconstruction
 
