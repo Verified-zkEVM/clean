@@ -39,8 +39,8 @@ namespace Orchard.Action
 
 open Ecc
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
-open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Sinsemilla.Merkle (MerkleRoot depth)
+open Specs.Sinsemilla (Generators)
+open Sinsemilla.Merkle (MerkleRoot depth)
 
 /-- All fixed-base generators / Sinsemilla domains the action circuit composes. Kept as a
 single bundle to avoid an unwieldy parameter list; the polished version may share or
@@ -113,16 +113,17 @@ structure Input (F : Type) where
   enableOutputs : F
 deriving CircuitType
 
+-- TODO derive this along with CircuitType
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ gdOld := fun _ => default, pkdOld := fun _ => default,
-     vOld := fun _ => default, rhoOld := fun _ => default, psiOld := fun _ => default,
-     rcmOld := fun _ => default, cmOld := fun _ => default, alpha := fun _ => default,
-     akP := fun _ => default, nk := fun _ => default, rivk := fun _ => default,
-     gdNew := fun _ => default, pkdNew := fun _ => default,
-     vNew := fun _ => default, psiNew := fun _ => default,
-     rcmNew := fun _ => default, rcv := fun _ => default,
-     vNetMagnitude := fun _ => default, vNetSign := fun _ => default,
-     path := fun _ => default, pos := fun _ => default,
+  ⟨{ gdOld := default, pkdOld := default,
+     vOld := default, rhoOld := default, psiOld := default,
+     rcmOld := default, cmOld := default, alpha := default,
+     akP := default, nk := default, rivk := default,
+     gdNew := default, pkdNew := default,
+     vNew := default, psiNew := default,
+     rcmNew := default, rcv := default,
+     vNetMagnitude := default, vNetSign := default,
+     path := default, pos := default,
      anchor := default, cvNetX := default, cvNetY := default, nfOld := default,
      rkX := default, rkY := default, cmx := default,
      enableSpends := default, enableOutputs := default }⟩
@@ -139,7 +140,7 @@ def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   let vOld ← witnessField input.vOld
   let vNew ← witnessField input.vNew
   -- Merkle path validity: leaf = cm_old.extract_p()
-  let root ← Orchard.Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm
+  let root ← Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm
     { leaf := cmOld.x, path := input.path, pos := input.pos }
   -- Value commitment integrity: cv_net constrained to (CV_NET_X, CV_NET_Y)
   let vNetMagnitude ← witnessField input.vNetMagnitude
@@ -183,15 +184,8 @@ def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
 instance elaborated (P : Params) : ElaboratedCircuit Fp Input unit (main P) := by
   elaborate_circuit
 
-/-- Soundness preconditions: the witnessed points feeding each gadget are well-formed
-Pallas points (the source witnesses them with `Point::new` / `NonIdentityPoint::new`). This
-is a placeholder paralleling `IntermediateSpec`, to be bridged to the final hand-written
-assumptions. -/
-def IntermediateAssumptions (_input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  True
-
-/-- Placeholder "constraints → meaning" postcondition (to be bridged to a polished final
-`Spec`). Each public-instance value is the gadget evaluation of the private witnesses; the
+/-- Placeholder spec, to be bridged to a polished final
+`Spec`. Each public-instance value is the gadget evaluation of the private witnesses; the
 calculated Merkle root validates `cm_old`; the `q_orchard` arithmetic relation holds. -/
 def IntermediateSpec (P : Params) (input : Value Input Fp) (_ : Unit)
     (pd : ProverData Fp) : Prop :=
@@ -231,16 +225,16 @@ def IntermediateSpec (P : Params) (input : Value Input Fp) (_ : Unit)
   -- (definitionally `MerkleRoot … 0 leaf depth root`).
   ∃ (leaf root : Fp),
     leaf = cmOld.x ∧
-    Orchard.Sinsemilla.Merkle.CalculateRoot.Spec P.Gm P.Qm
+    Sinsemilla.Merkle.CalculateRoot.Spec P.Gm P.Qm
       { leaf := leaf, path := (), pos := () } root pd ∧
     vOld = vNew + vNetMagnitude * vNetSign ∧
     (vOld = 0 ∨ root = input.anchor) ∧
     (vOld = 0 ∨ input.enableSpends = 1) ∧
     (vNew = 0 ∨ input.enableOutputs = 1)
 
-theorem intermediate_spec_of_constraints (P : Params) :
+theorem intermediateSpec_of_constraints (P : Params) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main P)
-      IntermediateAssumptions (IntermediateSpec P) := by
+      (fun _ _ => True) (IntermediateSpec P) := by
   -- Keep `CalculateRoot.circuit` out of the lemma list to avoid the known Merkle output
   -- whnf blow-up; its soundness implication is used directly below.
   circuit_proof_start [WitnessPoint.circuit, WitnessNonIdentityPoint.circuit,
@@ -259,27 +253,10 @@ theorem intermediate_spec_of_constraints (P : Params) :
       hRcvIn, hVNetMagnitudeIn, hVNetSignIn, hPathIn, hPosIn,
       hAnchorIn, hCvNetXIn, hCvNetYIn, hNfOldIn, hRkXIn, hRkYIn,
       hCmxIn, hEnableSpendsIn, hEnableOutputsIn⟩
-  subst input_gdOld
-  subst input_pkdOld
-  subst input_vOld
-  subst input_rhoOld
-  subst input_psiOld
-  subst input_rcmOld
-  subst input_cmOld
-  subst input_alpha
-  subst input_akP
-  subst input_nk
-  subst input_rivk
-  subst input_gdNew
-  subst input_pkdNew
-  subst input_vNew
-  subst input_psiNew
-  subst input_rcmNew
-  subst input_rcv
-  subst input_vNetMagnitude
-  subst input_vNetSign
-  subst input_path
-  subst input_pos
+  subst input_gdOld input_pkdOld input_vOld input_rhoOld input_psiOld
+    input_rcmOld input_cmOld input_alpha input_akP input_nk input_rivk input_gdNew
+    input_pkdNew input_vNew input_psiNew input_rcmNew input_rcv input_vNetMagnitude
+    input_vNetSign input_path input_pos
   have hSA := hSAImpl (Or.inl hAkPOn)
   have hAI := hAIImpl hGdOldOn
   have hNCold := hNColdImpl ⟨hGdOldOn, hPkdOldOn⟩
@@ -300,12 +277,12 @@ theorem intermediate_spec_of_constraints (P : Params) :
   let vNew : Fp := env.get (i₀ + 1 + 1 + 2 + 2 + 2 + 1 + 1)
   let rhoOld : Fp := env.get (i₀ + 1)
   let psiOld : Fp := env.get i₀
-  let merkleInput : Var Orchard.Sinsemilla.Merkle.CalculateRoot.Input Fp :=
+  let merkleInput : Var Sinsemilla.Merkle.CalculateRoot.Input Fp :=
     { leaf := (varFromOffset Point (i₀ + 1 + 1)).x,
       path := input_var.path, pos := input_var.pos }
   let afterMerkle : ℕ :=
     i₀ + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1 +
-      (Orchard.Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm).localLength merkleInput
+      (Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm).localLength merkleInput
   let vNetMagnitude : Fp := env.get afterMerkle
   let vNetSign : Fp := env.get (afterMerkle + 1)
   have hVCSpec :
@@ -370,7 +347,7 @@ directly from these assumptions. They have two parts:
 def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
     (data : ProverData Fp) (hint : ProverHint Fp) : Prop :=
   -- (A) gadget input well-formedness
-  Orchard.Sinsemilla.Merkle.CalculateRoot.ProverAssumptions P.Gm P.Qm
+  Sinsemilla.Merkle.CalculateRoot.ProverAssumptions P.Gm P.Qm
       { leaf := input.cmOld.x, path := input.path, pos := input.pos } data hint ∧
   ValueCommit.ProverAssumptions
       { v := { magnitude := input.vNetMagnitude, sign := input.vNetSign }, rcv := input.rcv }
@@ -407,16 +384,16 @@ def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
         rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew }
       { x := input.cmx, y := cmNewY } hint) ∧
   (∃ root : Fp,
-    Orchard.Sinsemilla.Merkle.CalculateRoot.ProverSpec P.Gm P.Qm
+    Sinsemilla.Merkle.CalculateRoot.ProverSpec P.Gm P.Qm
       { leaf := input.cmOld.x, path := input.path, pos := input.pos } root hint ∧
-    (show Fp from input.vOld) =
+    input.vOld =
       (show Fp from input.vNew) +
         (show Fp from input.vNetMagnitude) * (show Fp from input.vNetSign) ∧
-    ((show Fp from input.vOld) = 0 ∨ root = input.anchor) ∧
-    ((show Fp from input.vOld) = 0 ∨ input.enableSpends = 1) ∧
-    ((show Fp from input.vNew) = 0 ∨ input.enableOutputs = 1))
+    (input.vOld = (0 : Fp) ∨ root = input.anchor) ∧
+    (input.vOld = (0 : Fp) ∨ input.enableSpends = 1) ∧
+    (input.vNew = (0 : Fp) ∨ input.enableOutputs = 1))
 
-theorem intermediate_completeness (P : Params) :
+theorem constraints_of_intermediateProverAssumptions (P : Params) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main P)
       (IntermediateProverAssumptions P) (fun _ _ _ => True) := by
   circuit_proof_start [WitnessPoint.circuit, WitnessNonIdentityPoint.circuit,
@@ -522,12 +499,9 @@ theorem intermediate_completeness (P : Params) :
 def circuit (P : Params) : GeneralFormalCircuit.WithHint Fp Input unit where
   main := main P
   elaborated := elaborated P
-  Assumptions := IntermediateAssumptions
   Spec := IntermediateSpec P
   ProverAssumptions := IntermediateProverAssumptions P
-  -- `ProverSpec` defaults to `True`: it only feeds a parent circuit's completeness, and this
-  -- is the top-level action circuit (no parent).
-  soundness := intermediate_spec_of_constraints P
-  completeness := intermediate_completeness P
+  soundness := intermediateSpec_of_constraints P
+  completeness := constraints_of_intermediateProverAssumptions P
 
 end Orchard.Action
