@@ -228,11 +228,10 @@ Current Clean coverage:
   `CommitDomain.WithZs.circuit` so the subsequent canonicity checks can read the hash
   running sums
 - `Clean.Orchard.Action.NoteCommit.circuit`: `gadgets::note_commit` entry, implemented
-  with semantic specs; entry completeness remains pending
+  with semantic specs; soundness and completeness proven
 - `Clean.Orchard.Action.CommitIvk.Gate.circuit`: `GATE CommitIvk canonicity check`
-- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry, factored into
-  `Commit` (witnessing + `WithZs` hash) and `Canonicity` (CopyCheck decompositions + gate)
-  subcircuits
+- `Clean.Orchard.Action.CommitIvk.circuit`: `gadgets::commit_ivk` entry; soundness and
+  completeness proven
 - `Clean.Orchard.Action.AddressIntegrity.circuit`: diversified-address integrity block
   from `Circuit::synthesize`; computes `ivk = CommitIvk(ak, nk, rivk)`, runs
   `[ivk] g_d_old`, constrains it equal to the witnessed `pk_d_old`, and returns that point
@@ -330,66 +329,36 @@ Missing source-level APIs:
 
 - `SinsemillaInstructions::hash_to_point_with_private_init`
 
-### Sinsemilla Output Signature: Base APIs Still Point-Only
+### Sinsemilla Output Signature: Base APIs Point-Only
 
-This gap is resolved for the canonicity-checking action circuits:
-`CommitDomain.WithZs.circuit` exposes each piece's full running sum
-`Output.zs : HVec (Chain.zLengths ns)`, and both consumers that copy hash-region running
-sums now use it:
+For action circuits that copy hash-region running sums, `CommitDomain.WithZs.circuit`
+exposes each piece's full running sum `Output.zs : HVec (Chain.zLengths ns)`;
+`note_commit` and `commit_ivk` use it.
 
-- `gadgets::note_commit` (`Action.NoteCommit`) reads `zs[i][13]` / `zs[i][1]` for the
-  note-commit canonicity and decomposition checks.
-- `gadgets::commit_ivk` (`Action.CommitIvk`) reads `zs[0][13]` / `zs[2][13]` for its
-  canonicity check.
-
-The remaining source-signature gap is in the base Sinsemilla APIs. Halo2 returns the
-per-piece running sums as part of the output:
-
-```rust
-// halo2_gadgets/src/sinsemilla.rs
-fn hash_to_point(...) -> Result<(NonIdentityPoint, Vec<Vec<AssignedCell<...>>>), Error>
-fn commit(...)        -> Result<(Point,            Vec<Vec<AssignedCell<...>>>), Error>
-// zs[i] = [z_0, ..., z_{w_i}] is piece i's running sum
-```
-
-`HashPiece` computes the full running sum internally, but the base
-`HashPiece`/`Chain`/`Entry` outputs expose only the `z_1` cells used by Merkle, and
-`HashDomain.circuit` / `CommitDomain.circuit` return only the point. If those base APIs
-are brought into exact source-signature conformance, thread full `zs` through the
-recursive tower (an `HVec` shape, not a flat vector) and return `(Point, zs)` from the
-source-shaped domain circuits. Until then, `WithZs` is the conformant path for action
-circuits that need running-sum cells.
+The remaining gap is in the base Sinsemilla APIs. Halo2's `hash_to_point`/`commit` return
+`(Point, zs)` (per-piece running sums `zs[i] = [z_0, ..., z_{w_i}]`); the base
+`HashPiece`/`Chain`/`Entry` outputs expose only the `z_1` cells, and `HashDomain.circuit`
+/ `CommitDomain.circuit` return only the point. Exact source-signature conformance would
+thread full `zs` (an `HVec`) through the recursive tower; until then, `WithZs` is the
+conformant path for action circuits that need running-sum cells.
 
 ### Orchard Entry APIs
 
-`value_commit_orchard` is implemented (`Gadget.ValueCommitOrchard.circuit`),
-`derive_nullifier` is implemented (`Gadget.DeriveNullifier.circuit`), and the
-`Circuit::synthesize` spend-authority block is implemented (`SpendAuthority.circuit`).
+Implemented entry circuits, each with soundness and completeness proven:
 
-`gadgets::commit_ivk` (`Action.CommitIvk.circuit`) uses the message-piece bridge
-`pieceChunks_eq_commitIvkChunks_of_indexed_piece_values` /
-`honestChunks_eq_commitIvkChunks` and the generic shared running-sum theory in
-`Specs.Sinsemilla` (`sum_suffix_div`, `running_sum_telescope`) and `HashToPoint`
-(`piece_recombine`, `pieceChunks_honestChunks`, public `chain_eq_sum`).
-
-`gadgets::note_commit` (`Action.NoteCommit.circuit`) is implemented with semantic specs
-and source-shaped subcircuits for assignment, Sinsemilla commit with `zs`, message-piece
-checks, y-canonicity, and coordinate canonicity. Entry completeness remains pending.
+- `value_commit_orchard`: `Gadget.ValueCommitOrchard.circuit`
+- `derive_nullifier`: `Gadget.DeriveNullifier.circuit`
+  (`ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`)
+- spend-authority block: `SpendAuthority.circuit` (`[alpha] SpendAuthG + ak_P`)
+- diversified-address integrity: `Action.AddressIntegrity.circuit`
+  (`ivk = CommitIvk(ak, nk, rivk)`, then `[ivk] g_d_old` constrained to `pk_d_old`)
+- `gadgets::commit_ivk`: `Action.CommitIvk.circuit`
+- `gadgets::note_commit`: `Action.NoteCommit.circuit`
 
 Missing source-level APIs:
 
-- completeness proof for `gadgets::note_commit`
-- full `Circuit::synthesize` action circuit
-
-These must compose source-conformant child circuits. In particular:
-
-- `derive_nullifier` (done) is `ExtractP(cm + [poseidon_hash(nk, rho) + psi] NullifierK)`,
-  parameterized by the `NullifierK` fixed base.
-- Spend authority (done) is `[alpha] SpendAuthG + ak_P`, parameterized by the
-  `SpendAuthG` fixed base. The enclosing action circuit still needs to constrain the
-  resulting coordinates to `RK_X` and `RK_Y`.
-- Address integrity (done) computes `ivk = CommitIvk(ak, nk, rivk)` and then
-  `[ivk] g_d_old`, constraining the result to `pk_d_old`.
+- full `Circuit::synthesize` action circuit. This top-level public-input wiring is not
+  implemented; the spend-authority coordinate constraints on `RK_X`/`RK_Y` are part of it.
 
 ### Gate Layout Metadata For VK Reconstruction
 

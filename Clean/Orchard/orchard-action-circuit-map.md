@@ -48,12 +48,11 @@ Source baseline:
             - Source: `halo2_gadgets/src/sinsemilla/chip.rs`, `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
             - Clean: implemented in `Clean/Orchard/Sinsemilla/HashToPoint.lean` as
               `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`), proven sound and
-              complete; lands at `Specs.Sinsemilla.hashToPoint`. NON-CONFORMANT output
-              signature: Halo2 returns `(Point, Vec<Vec<AssignedCell>>)` (the per-piece
-              running sums `zs`); Clean returns only the point + a one-off `z1`, not the
-              full `zs`. This blocks `note_commit`/`commit_ivk` canonicity. See the
-              conformance map's "Hash Output Signature: Running Sums" non-conformance.
-              (Also still missing: `hash_to_point_with_private_init`.)
+              complete; lands at `Specs.Sinsemilla.hashToPoint`. Output-signature gap:
+              Halo2 returns `(Point, zs)` (per-piece running sums); the base `Entry`
+              returns only the point and the `z1` cells. Action circuits that need the
+              running sums use `CommitDomain.WithZs` instead. Also missing:
+              `hash_to_point_with_private_init`.
             - Generator lookup table
               - Source: `halo2_gadgets/src/sinsemilla/chip/generator_table.rs`
               - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
@@ -81,10 +80,10 @@ Source baseline:
   - Nullifier integrity
     - `gadget::derive_nullifier`
       - Source: `orchard-0.14.0/src/circuit/gadget.rs`
-      - Clean: `Gadget.DeriveNullifier.circuit` in `Clean/Orchard/Gadget.lean` — fully
-        verified (soundness + completeness, no sorries); composes the Poseidon hash, the
-        `BaseFieldElem` fixed-base mul by `NullifierK`, and the complete addition with
-        `cm`, returning the extracted `x`-coordinate.
+      - Clean: `Gadget.DeriveNullifier.circuit` in `Clean/Orchard/Gadget.lean`; soundness
+        and completeness proven. Composes the Poseidon hash, the `BaseFieldElem`
+        fixed-base mul by `NullifierK`, and the complete addition with `cm`, returning the
+        extracted `x`-coordinate.
       - `PoseidonHash::init`
         - Source: `halo2_gadgets/src/poseidon`
         - Clean: implemented in `Clean/Orchard/Poseidon/Sponge.lean` as `InitialState.circuit`.
@@ -102,7 +101,7 @@ Source baseline:
         - Clean: implemented in `Clean/Orchard/Utilities.lean` as `AddChip.circuit`; gate factored as `AddChip.Gate.circuit`.
       - `[poseidon_hash(nk, rho) + psi] NullifierK`
         - Source: `FixedPointBaseField::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`
-        - Clean: source-level entry `BaseFieldElem.circuit` in `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean` — fully verified (soundness + completeness, no sorries); composes the `RunningSumMul` windowed mul with the canonicity gate.
+        - Clean: source-level entry `BaseFieldElem.circuit` in `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`; soundness and completeness proven. Composes the `RunningSumMul` windowed mul with the canonicity gate.
       - Add result to `cm_old`
         - Source: `halo2_gadgets/src/ecc/chip/add.rs`
         - Clean: implemented in `Clean/Orchard/Ecc/Add.lean`.
@@ -133,24 +132,16 @@ Source baseline:
       - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
       - Clean: implemented in `Clean/Orchard/Action/CommitIvk.lean` as
         `Orchard.Action.CommitIvk.circuit` (a `GeneralFormalCircuit.WithHint` returning the
-        extracted `x`-coordinate `ivk`). Composes the four Sinsemilla pieces `a, b, c, d`
-        over `CommitDomain.WithZs` (rounds `24 :: [0, 23, 0]`), the `ak`/`nk` canonicity
-        decompositions (`CopyCheck 13`/`CopyCheck 14`), and the `CommitIvk.Gate` canonicity
-        gate. Spec is `CommitIvk.Spec` (point-level Sinsemilla short-commit relation over
-        `commitIvkChunks`). **Fully proven — `soundness` and `completeness` both closed**
-        (no `sorry`). The entry is factored into a virtual `Commit` subcircuit (witnessing +
-        `WithZs` hash) composed with a `Canonicity` subcircuit (the two `CopyCheck`
-        decompositions + the gate), each proven sound and complete; the top-level composes
-        them via the chunk bridge `pieceChunks_eq_commitIvkChunks_of_indexed_piece_values`
-        (soundness) and `honestChunks_eq_commitIvkChunks` (completeness).
+        extracted `x`-coordinate `ivk`); soundness and completeness proven. Composes the
+        four Sinsemilla pieces `a, b, c, d` over `CommitDomain.WithZs`, the `ak`/`nk`
+        canonicity decompositions (`CopyCheck`), and the `CommitIvk.Gate` canonicity gate.
+        Spec is the point-level Sinsemilla short-commit relation over `commitIvkChunks`.
       - `CommitIvk canonicity check`
         - Source: `orchard-0.14.0/src/circuit/commit_ivk.rs`
         - Clean: implemented in `Clean/Orchard/Action/CommitIvkGate.lean` as
-          `CommitIvk.Gate.circuit`, proved sound and complete with a **lifted
-          canonical-decomposition `Spec`** (under the lookup `Assumptions`, `a`/`b0`/`b1` are
-          the canonical bit slices of `ak` and `b2`/`c`/`d0`/`d1` of `nk`) — mirroring the
-          `NoteCommit` `GdCanonicity`/`PkdCanonicity` gates and reusing the shared
-          `CanonicityTheorems`.
+          `CommitIvk.Gate.circuit`; soundness and completeness proven. Spec: under the
+          lookup `Assumptions`, `a`/`b0`/`b1` are the canonical bit slices of `ak` and
+          `b2`/`c`/`d0`/`d1` of `nk`.
       - `RangeConstrained::witness_short` for `b_0`, `b_2`, `d_0`
         - Source: `halo2_gadgets/src/utilities/lookup_range_check.rs`
         - Clean: `LookupRangeCheck.WitnessShort.circuit` and
@@ -188,29 +179,30 @@ Source baseline:
   - Old note commitment integrity
     - `gadget::note_commit`
       - Source: `orchard-0.14.0/src/circuit/note_commit.rs`
-      - Clean: only row/custom gates are implemented in `Clean/Orchard/NoteCommit.lean`; full `gadgets::note_commit` entry is missing.
+      - Clean: implemented in `Clean/Orchard/Action/NoteCommit.lean` as
+        `Action.NoteCommit.circuit`; soundness and completeness proven.
       - `DecomposeB`
-        - Clean: `NoteCommit.DecomposeB.circuit`.
+        - Clean: `Action.NoteCommit.DecomposeB.circuit`.
       - `DecomposeD`
-        - Clean: `NoteCommit.DecomposeD.circuit`.
+        - Clean: `Action.NoteCommit.DecomposeD.circuit`.
       - `DecomposeE`
-        - Clean: `NoteCommit.DecomposeE.circuit`.
+        - Clean: `Action.NoteCommit.DecomposeE.circuit`.
       - `DecomposeG`
-        - Clean: `NoteCommit.DecomposeG.circuit`.
+        - Clean: `Action.NoteCommit.DecomposeG.circuit`.
       - `DecomposeH`
-        - Clean: `NoteCommit.DecomposeH.circuit`.
+        - Clean: `Action.NoteCommit.DecomposeH.circuit`.
       - `GdCanonicity`
-        - Clean: `NoteCommit.GdCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.GdCanonicity.circuit`.
       - `PkdCanonicity`
-        - Clean: `NoteCommit.PkdCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.PkdCanonicity.circuit`.
       - `ValueCanonicity`
-        - Clean: `NoteCommit.ValueCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.ValueCanonicity.circuit`.
       - `RhoCanonicity`
-        - Clean: `NoteCommit.RhoCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.RhoCanonicity.circuit`.
       - `PsiCanonicity`
-        - Clean: `NoteCommit.PsiCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.PsiCanonicity.circuit`.
       - `YCanonicity`
-        - Clean: `NoteCommit.YCanonicity.circuit`.
+        - Clean: `Action.NoteCommit.YCanonicity.circuit`.
       - `RangeConstrained::witness_short`
         - Clean: `LookupRangeCheck.WitnessShort.circuit` and
           `LookupRangeCheck.WitnessShort.taggedCircuit` are source-shaped wrappers.
@@ -225,14 +217,16 @@ Source baseline:
         - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
       - Add Sinsemilla hash point to blinding point
         - Source: ECC addition
-        - Clean: `Clean/Orchard/Ecc/Add.lean` / `AddIncomplete.lean` pieces exist; full note-commit wiring missing.
+        - Clean: composed inside `Action.NoteCommit.circuit` via
+          `Sinsemilla.CommitDomain.WithZs.circuit` (hash + `[rcm] NoteCommitR` blinding +
+          complete addition).
 
   - New note commitment integrity
     - Same dependency tree as old note commitment.
     - Difference in action wiring:
       - `rho_new = nf_old`
       - public output is `cm_new.extract_p()` constrained to `CMX`
-    - Clean: not implemented as action wiring.
+    - Clean: the `note_commit` block is reusable; the action-level wiring is not implemented.
 
   - Final Orchard circuit checks
     - Source: `orchard-0.14.0/src/circuit.rs`, region `"Orchard circuit checks"`
@@ -273,7 +267,7 @@ Source baseline:
   - Clean:
     - short signed fixed-base mul: `Clean/Orchard/Ecc/ScalarMul/MulFixed/Short.lean`
     - full-width fixed-base mul: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`
-    - base-field-element fixed-base mul (entry circuit `BaseFieldElem.circuit`, fully verified): `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`
+    - base-field-element fixed-base mul (entry circuit `BaseFieldElem.circuit`): `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`
 
 - Variable-base scalar multiplication
   - Source: `halo2_gadgets/src/ecc/chip/mul*.rs`
