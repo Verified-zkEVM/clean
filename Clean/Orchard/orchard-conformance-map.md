@@ -15,14 +15,33 @@ Authoritative local source checkouts:
 
 ### ECC
 
-Source: `halo2_gadgets/src/ecc/chip/{witness_point,add_incomplete,add}.rs`
+Source: `halo2_gadgets/src/ecc/chip/{witness_point,add_incomplete,add,mul,mul_fixed}*.rs`
 
-- `Ecc.Defs`, `Ecc.Theorems`: shared definitions and lemmas
+- `Ecc.Defs`, `Ecc.Theorems`: shared definitions and lemmas (incl. the scalar-mul gate
+  helpers `ternary` / `tQ`)
 - `Ecc.WitnessPoint.circuit`: `EccInstructions::witness_point` (gate `WitnessPoint.Gate.circuit`)
 - `Ecc.WitnessNonIdentityPoint.circuit`: `EccInstructions::witness_point_non_id`
   (gate `WitnessNonIdentityPoint.Gate.circuit`)
 - `Ecc.AddIncomplete.circuit`: `EccInstructions::add_incomplete` (gate `AddIncomplete.Gate.circuit`)
 - `Ecc.Add.circuit`: `EccInstructions::add` (gate `Add.Gate.circuit`)
+
+Scalar multiplication (`mul*.rs`, `mul_fixed*.rs`):
+
+- `Ecc.Mul.Gate.circuit`: `GATE LSB check`
+- `Ecc.Mul.Complete.circuit`: `GATE Decompose scalar for complete bits`
+- `Ecc.Mul.Incomplete.{Init,MainLoop,Loop}.circuit`: `GATE q_mul_{1,2,3} == 1 checks`
+- `Ecc.Mul.Incomplete.DoubleAndAdd.circuit`:
+  `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`)
+- `Ecc.Mul.Overflow.circuit`: `GATE overflow checks`
+- `Ecc.MulFixed.Coords.circuit`: `coords_check` helper (no source `GATE` name)
+- `Ecc.MulFixed.RunningSumCoords.circuit`: `GATE Running sum coordinates check`
+- `Ecc.MulFixed.FixedBase`: value-level fixed-base model (window tables) parameterizing
+  the fixed-base entries
+- `Ecc.MulFixed.FullWidth.circuit`: `FixedPoint::mul` (gate `FullWidth.Gate.circuit`)
+- `Ecc.MulFixed.BaseFieldElem.circuit`: `FixedPointBaseField::mul`
+  (gate `BaseFieldElem.Gate.circuit`; running-sum decomposition `RunningSumMul.circuit`)
+- `Ecc.MulFixed.Short.circuit`: `FixedPointShort::mul` (gate `Short.Gate.circuit`;
+  value-level `Short.FixedBase` model)
 
 ### Utilities
 
@@ -44,27 +63,6 @@ Source: `halo2_gadgets/src/utilities/{cond_swap,decompose_running_sum,lookup_ran
 - `Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit`: `z_0`/`z_last` projection wrapper
 - `Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit`: 25-word decomposition wrapper
   exposing `z_1`/`z_13`
-
-### Scalar Multiplication
-
-Source: `halo2_gadgets/src/ecc/chip/mul*.rs`, `mul_fixed*.rs`
-
-- `Ecc.Defs`: shared gate helpers
-- `Ecc.Mul.Gate.circuit`: `GATE LSB check`
-- `Ecc.Mul.Complete.circuit`: `GATE Decompose scalar for complete bits`
-- `Ecc.Mul.Incomplete.{Init,MainLoop,Loop}.circuit`: `GATE q_mul_{1,2,3} == 1 checks`
-- `Ecc.Mul.Incomplete.DoubleAndAdd.circuit`:
-  `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`)
-- `Ecc.Mul.Overflow.circuit`: `GATE overflow checks`
-- `Ecc.MulFixed.Coords.circuit`: `coords_check` helper (no source `GATE` name)
-- `Ecc.MulFixed.RunningSumCoords.circuit`: `GATE Running sum coordinates check`
-- `Ecc.MulFixed.FixedBase`: value-level fixed-base model (window tables) parameterizing
-  the fixed-base entries
-- `Ecc.MulFixed.FullWidth.circuit`: `FixedPoint::mul` (gate `FullWidth.Gate.circuit`)
-- `Ecc.MulFixed.BaseFieldElem.circuit`: `FixedPointBaseField::mul`
-  (gate `BaseFieldElem.Gate.circuit`; running-sum decomposition `RunningSumMul.circuit`)
-- `Ecc.MulFixed.Short.circuit`: `FixedPointShort::mul` (gate `Short.Gate.circuit`;
-  value-level `Short.FixedBase` model)
 
 ### Poseidon
 
