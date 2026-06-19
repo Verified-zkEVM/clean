@@ -261,20 +261,13 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
     rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
       = ((0 : Fp), (0 : Fp)) from rfl, hx, hy]
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
-  have hRadd := Ecc.AddIncomplete.outputValue_eq_add
-    (input := { p := { x := A.x, y := A.y }, q := { x := (S m).x, y := (S m).y } })
+  have hRadd := Point.incompleteAdd_eq_add
+    (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
-  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := (S m).x, y := (S m).y } : Point Fp)).coords
-      = ((S m).x, (S m).y) from rfl,
-    Pallas.add_coords, ← hR_def] at hRadd
+  simp only [Point.incompleteAdd, Point.add_def, Ecc.sw_add_coords, Point.mk.injEq] at hRadd
+  rw [← hR_def] at hRadd
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
-  have hRx : slope₁ * slope₁ - A.x - (S m).x = R.x := by
-    have := congrArg Prod.fst hRadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
-  have hRy : slope₁ * (A.x - (slope₁ * slope₁ - A.x - (S m).x)) - A.y = R.y := by
-    have := congrArg Prod.snd hRadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
+  obtain ⟨hRx, hRy⟩ := hRadd
   -- the lookup pins `λ₁` to the chord slope
   have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
   have hl1 : lambda1 = slope₁ := by
@@ -293,19 +286,13 @@ theorem step_pinned (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
     exact hRy
   -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
   have hRxA' : A.x - R.x ≠ 0 := sub_ne_zero.mpr fun h => hRxA h.symm
-  have hBadd := Ecc.AddIncomplete.outputValue_eq_add
-    (input := { p := { x := A.x, y := A.y }, q := { x := R.x, y := R.y } })
+  have hBadd := Point.incompleteAdd_eq_add
+    (p := { x := A.x, y := A.y }) (q := { x := R.x, y := R.y })
     (point_ne_zero hA0) (point_ne_zero hR0) (fun h => hRxA h.symm)
-  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := R.x, y := R.y } : Point Fp)).coords = (R.x, R.y) from rfl,
-    Pallas.add_coords, ← hB] at hBadd
+  simp only [Point.incompleteAdd, Point.add_def, Ecc.sw_add_coords, Point.mk.injEq] at hBadd
+  rw [← hB] at hBadd
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
-  have hBx : slope₂ * slope₂ - A.x - R.x = B.x := by
-    have := congrArg Prod.fst hBadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
-  have hBy : slope₂ * (A.x - (slope₂ * slope₂ - A.x - R.x)) - A.y = B.y := by
-    have := congrArg Prod.snd hBadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
+  obtain ⟨hBx, hBy⟩ := hBadd
   -- the `Y_A` invariant pins `λ₂` to the second chord slope
   have hl2 : lambda2 = slope₂ := by
     apply mul_right_cancel₀ hRxA'
@@ -376,20 +363,13 @@ theorem step_honest (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
     rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
       = ((0 : Fp), (0 : Fp)) from rfl, hx, hy]
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
-  have hRadd := Ecc.AddIncomplete.outputValue_eq_add
-    (input := { p := { x := A.x, y := A.y }, q := { x := (S m).x, y := (S m).y } })
+  have hRadd := Point.incompleteAdd_eq_add
+    (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
-  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := (S m).x, y := (S m).y } : Point Fp)).coords
-      = ((S m).x, (S m).y) from rfl,
-    Pallas.add_coords, ← hR_def] at hRadd
+  simp only [Point.incompleteAdd, Point.add_def, Ecc.sw_add_coords, Point.mk.injEq] at hRadd
+  rw [← hR_def] at hRadd
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
-  have hRx : slope₁ * slope₁ - A.x - (S m).x = R.x := by
-    have := congrArg Prod.fst hRadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
-  have hRy : slope₁ * (A.x - (slope₁ * slope₁ - A.x - (S m).x)) - A.y = R.y := by
-    have := congrArg Prod.snd hRadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
+  obtain ⟨hRx, hRy⟩ := hRadd
   have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
   -- the honest `λ₁` is the first chord slope, and the `y_p` derivation recovers `S(m)`
   have hl1' : l1 = slope₁ := by
@@ -411,19 +391,13 @@ theorem step_honest (S : ℕ → SWPoint Pallas.curve) {A B : SWPoint Pallas.cur
     have hc := mul_inv_cancel₀ hRxA'
     linear_combination (-(2 * A.y)) * hc
   -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
-  have hBadd := Ecc.AddIncomplete.outputValue_eq_add
-    (input := { p := { x := A.x, y := A.y }, q := { x := R.x, y := R.y } })
+  have hBadd := Point.incompleteAdd_eq_add
+    (p := { x := A.x, y := A.y }) (q := { x := R.x, y := R.y })
     (point_ne_zero hA0) (point_ne_zero hR0) (fun h => hRxA h.symm)
-  rw [show (({ x := A.x, y := A.y } : Point Fp)).coords = (A.x, A.y) from rfl,
-    show (({ x := R.x, y := R.y } : Point Fp)).coords = (R.x, R.y) from rfl,
-    Pallas.add_coords, ← hB] at hBadd
+  simp only [Point.incompleteAdd, Point.add_def, Ecc.sw_add_coords, Point.mk.injEq] at hBadd
+  rw [← hB] at hBadd
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
-  have hBx : slope₂ * slope₂ - A.x - R.x = B.x := by
-    have := congrArg Prod.fst hBadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
-  have hBy : slope₂ * (A.x - (slope₂ * slope₂ - A.x - R.x)) - A.y = B.y := by
-    have := congrArg Prod.snd hBadd
-    simpa [Ecc.AddIncomplete.outputValue] using this
+  obtain ⟨hBx, hBy⟩ := hBadd
   have hl2' : l2 = slope₂ := by
     apply mul_right_cancel₀ hRxA'
     rw [hslope₂, mul_assoc,

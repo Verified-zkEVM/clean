@@ -144,7 +144,7 @@ private theorem neg_add_nsmul (B : SWPoint Pallas.curve) {m : ℕ} (hm : 1 ≤ m
 /-- The complete-addition accumulator chain of `Complete.AssignRegion` computes
 double-and-add on scalar multiples: starting from `[M]B`, after `b` steps it holds
 `[accScalar M bits b] B`. Fully general (the identity case is covered by the complete
-addition law `Pallas.add_coords`). -/
+addition law `sw_add_coords`). -/
 private theorem accValue_nsmul (B : SWPoint Pallas.curve) (M : ℕ) (hM : 1 ≤ M)
     (bits : ℕ → Bool) :
     ∀ b, Complete.AssignRegion.accValue B.x B.y ((M • B).x, (M • B).y) bits b
@@ -158,7 +158,7 @@ private theorem accValue_nsmul (B : SWPoint Pallas.curve) (M : ℕ) (hM : 1 ≤ 
     have hU : ((B.x, if bits b then B.y else -B.y) : Fp × Fp)
         = ((if bits b then B else -B).x, (if bits b then B else -B).y) := by
       cases bits b <;> simp
-    rw [hU, Pallas.add_coords, Pallas.add_coords, nsmul_step B _ hA1 (bits b)]
+    rw [hU, sw_add_coords, sw_add_coords, nsmul_step B _ hA1 (bits b)]
     rfl
 
 /-! ### The overflow-check canonicity argument
@@ -797,7 +797,8 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
       (Point.nsmul n input_base).coords
     simp only [Point.nsmul, Point.coords,
       CompElliptic.Curves.Pasta.Pallas.curve,
-      CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul]
+      CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul,
+      CompElliptic.Curves.Pasta.Pallas.a, pallasA]
     rw [← hcoords]
   apply Point.ext_coords
   simp only [Add.Assumptions, Add.Spec] at hAcc
@@ -807,7 +808,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   have hAccPair := congrArg Point.coords hAccPoint
   have hcoordsCoords : input_base.coords = (B.x, B.y) := by
     simpa [Point.coords] using hcoords
-  rw [Point.coords_add, hcoordsCoords, Point.sw_add_coords, ← two_nsmul] at hAccPair
+  rw [Point.coords_add, hcoordsCoords, sw_add_coords, ← two_nsmul] at hAccPair
   -- the decomposition accumulator: [accScalar (accScalar (accScalar 2 ..) ..) ..]B
   have hDecOut := hAccImpl B hB hcoords hAccPair
   -- chain bounds
@@ -1051,7 +1052,7 @@ theorem completeness : Completeness Fp main Assumptions := by
   have hAccPair := congrArg Point.coords hAccPoint
   have hbaseCoords : input_base.coords = (B.x, B.y) := by
     simpa [Point.coords] using hbase
-  rw [Point.coords_add, hbaseCoords, Point.sw_add_coords, ← two_nsmul] at hAccPair
+  rw [Point.coords_add, hbaseCoords, sw_add_coords, ← two_nsmul] at hAccPair
   -- the decomposition prover facts: honest cells as shifted values of k
   have hDecS := hDec ⟨B, hB, hbase, hAccPair⟩
   simp only [Decompose.ProverSpec, Point.coords] at hDecS

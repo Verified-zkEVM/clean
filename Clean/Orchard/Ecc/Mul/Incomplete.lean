@@ -621,40 +621,29 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
       rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos (Or.inr (Or.inr hx))] at hstep
       simp at hstep
   -- the chord construction lands on `R`
-  have hRadd := AddIncomplete.outputValue_eq_add
-    (input := { p := { x := (m • P).x, y := (m • P).y },
-                q := { x := P.x, y := (stepPoint P bits b).y } })
-    (by
-      intro h
-      apply hA0
-      apply SWPoint.ext_pair
-      have hx := congrArg Point.x h
-      have hy := congrArg Point.y h
-      simp only [Point.zero] at hx hy
-      rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
-        = ((0 : Fp), (0 : Fp)) from rfl, hx, hy])
-    (by
-      intro h
-      apply hS0
-      apply SWPoint.ext_pair
-      have hx := congrArg Point.x h
-      have hy := congrArg Point.y h
-      simp only [Point.zero] at hx hy
-      rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
-        = ((0 : Fp), (0 : Fp)) from rfl, hxSP, hx, hy])
-    hxne1
-  rw [show (({ x := (m • P).x, y := (m • P).y } : Point Fp)).coords
-      = ((m • P).x, (m • P).y) from rfl,
-    show (({ x := P.x, y := (stepPoint P bits b).y } : Point Fp)).coords
-      = ((stepPoint P bits b).x, (stepPoint P bits b).y) from by rw [hxSP]; rfl,
-    Pallas.add_coords, ← hR] at hRadd
+  have point_ne_zero : ∀ {S : SWPoint Pallas.curve}, S ≠ 0 →
+      ({ x := S.x, y := S.y } : Point Fp) ≠ Point.zero := by
+    intro S hS h
+    apply hS
+    apply SWPoint.ext_pair
+    have hx := congrArg Point.x h
+    have hy := congrArg Point.y h
+    simp only [Point.zero] at hx hy
+    rw [show ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y)
+      = ((0 : Fp), (0 : Fp)) from rfl, hx, hy]
+  have hRadd := Point.incompleteAdd_eq_add
+    (p := { x := (m • P).x, y := (m • P).y })
+    (q := { x := (stepPoint P bits b).x, y := (stepPoint P bits b).y })
+    (point_ne_zero hA0) (point_ne_zero hS0) (by rw [hxSP]; exact hxne1)
+  simp only [Point.incompleteAdd, Point.add_def, sw_add_coords, Point.mk.injEq] at hRadd
+  rw [← hR] at hRadd
+  rw [hxSP] at hRadd
   have hlam1 : l.lambda1 = ((m • P).y - (stepPoint P bits b).y) / ((m • P).x - P.x) := by
     rw [hl, ← hyPval]
     rfl
   have hxne2 : P.x - (m • P).x ≠ 0 := sub_ne_zero.mpr (Ne.symm hxne1)
   have hRx : l.lambda1 * l.lambda1 - (m • P).x - P.x = R.x := by
-    have h := congrArg Prod.fst hRadd
-    simp only [AddIncomplete.outputValue, Point.coords] at h
+    obtain ⟨h, _⟩ := hRadd
     rw [← h, hlam1]
     field_simp
     ring

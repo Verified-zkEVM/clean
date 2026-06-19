@@ -3,43 +3,10 @@ import Mathlib.Tactic
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms
 
-namespace Orchard.Point
+namespace Orchard.Ecc
 
 lemma sw_add_coords (P Q : ShortWeierstrass.SWPoint Pallas.curve) :
-  ShortWeierstrass.add Pallas.a (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
-
-theorem ne_zero_of_onCurve {point : Point Fp}
-  (hPoint : point.OnCurve) :
-    point ≠ zero := by
-  exact Point.onCurve_ne_zero hPoint
-
-theorem y_eq_zero_of_valid_of_x_eq_zero {point : Point Fp}
-  (hPoint : point.Valid) :
-    point.x = 0 → point.y = 0 := by
-  rcases point with ⟨x, y⟩
-  rw [Point.valid_iff] at hPoint
-  simp only [Point.coords] at hPoint
-  intro hx
-  change x = 0 at hx
-  rcases hPoint with hCurve | hIdentity
-  · rw [hx] at hCurve
-    exact False.elim (Point.no_onCurve_x_zero y ((Point.onCurve_iff { x := 0, y }).mpr hCurve))
-  · simp_all
-
-theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp}
-    (hPoint : point.Valid) (hx : point.x ≠ 0) :
-    point.y ≠ 0 := by
-  rcases point with ⟨x, y⟩
-  rw [Point.valid_iff] at hPoint
-  simp only [Point.coords] at hPoint
-  rintro rfl
-  rcases hPoint with hCurve | hIdentity
-  · apply Pallas.no_onCurve_y_zero x hCurve
-  · simp_all
-
-end Point
-
-namespace Ecc
+  ShortWeierstrass.add pallasA (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
 
 /-! ### Pallas group order -/
 

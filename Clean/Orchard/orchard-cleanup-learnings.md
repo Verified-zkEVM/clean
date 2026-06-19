@@ -51,18 +51,6 @@ Commit range: `6451581a^..0e96c5f1`
 - Lean can enter nested namespaces in one command, such as
   `namespace Orchard.Specs.Pallas`; use that instead of stacked namespace blocks when it
   is clearer.
-- Prefer extending an existing domain namespace over creating a parallel bridge module.
-  For Pallas curve specs, add small specialized definitions to the existing
-  `CompElliptic.Curves.Pasta.Pallas` namespace instead of creating another `Pallas`
-  namespace elsewhere.
-- Do not define Orchard-specific point predicates such as `Point.onCurve`,
-  `Point.isIdentityEncoding`, or `Point.isPointOrIdentity` when the intended meaning is
-  already available from CompElliptic. Use `Point.zero` for the identity representation
-  and `Pallas.OnCurve` / `Pallas.Valid` for curve predicates.
-- Circuit specs over Pallas points should use the specialized Pallas API directly, for
-  example `Pallas.OnCurve output.coords` and `output.coords = Pallas.add p.coords q.coords`.
-  Avoid restating those meanings via local point predicates or raw `ShortWeierstrass`
-  applications in circuit contracts.
 - When proof automation can see through copied values, prefer short proof scripts using
   `set`, `specialize`, `simp only`, and existing helper theorems over manually rebuilding
   full gate input records in the proof.

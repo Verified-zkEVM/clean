@@ -129,7 +129,9 @@ deriving ProvableStruct
 /-- One complete-addition step on coordinate pairs:
 `acc + (U + acc)` with `U = (base.x, ±base.y)`. -/
 def stepValue (baseX baseY : Fp) (acc : Fp × Fp) (bit : Bool) : Fp × Fp :=
-  Pallas.add acc (Pallas.add (baseX, if bit then baseY else -baseY) acc)
+  CompElliptic.CurveForms.ShortWeierstrass.add pallasA acc
+    (CompElliptic.CurveForms.ShortWeierstrass.add pallasA
+      (baseX, if bit then baseY else -baseY) acc)
 
 /-- The accumulator after the first `b` complete-addition steps. -/
 def accValue (baseX baseY : Fp) (acc : Fp × Fp) (bits : ℕ → Bool) : ℕ → Fp × Fp

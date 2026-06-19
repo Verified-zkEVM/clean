@@ -5,7 +5,7 @@ import Mathlib.Tactic
 namespace Orchard
 namespace Ecc
 
-open CompElliptic.Curves.Pasta
+-- open CompElliptic.Curves.Pasta
 
 /-!
 Reference:
@@ -19,7 +19,7 @@ namespace WitnessPoint
 namespace Gate
 
 def main (point : Var Point Fp) : Circuit Fp Unit := do
-  let equation := point.y * point.y - point.x * point.x * point.x - (pallasB : Fp)
+  let equation := point.y * point.y - point.x * point.x * point.x - pallasB
   assertZero (point.x * equation)
   assertZero (point.y * equation)
 
@@ -30,7 +30,7 @@ def circuit : FormalAssertion Fp Point where
   soundness := by
     circuit_proof_start [main, Point.Valid, Point.OnCurve, Point.zero, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.Valid,
-      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve]
     rw [← h_input]
     set x := Expression.eval env input_var.x
     set y := Expression.eval env input_var.y
@@ -50,7 +50,7 @@ def circuit : FormalAssertion Fp Point where
   completeness := by
     circuit_proof_start [main, Point.Valid, Point.OnCurve, Point.zero, Point.coords, pallasB,
       CompElliptic.CurveForms.ShortWeierstrass.Valid,
-      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve]
     rw [← h_input] at h_spec
     set x := Expression.eval env.toEnvironment input_var.x
     set y := Expression.eval env.toEnvironment input_var.y
@@ -102,12 +102,12 @@ def circuit : FormalAssertion Fp Point where
   Spec point := point.OnCurve
   soundness := by
     circuit_proof_start [main, Point.OnCurve, Point.coords, pallasB,
-      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve]
     rw [← h_input]
     linear_combination h_holds
   completeness := by
     circuit_proof_start [main, Point.OnCurve, Point.coords, pallasB,
-      CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b]
+      CompElliptic.CurveForms.ShortWeierstrass.OnCurve]
     rw [← h_input] at h_spec
     linear_combination h_spec
 

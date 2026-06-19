@@ -4,7 +4,7 @@ import Mathlib.Tactic
 
 namespace Orchard.Ecc
 
-open CompElliptic.Curves.Pasta
+open CompElliptic.CurveForms
 
 /-!
 Reference:
@@ -21,24 +21,6 @@ structure Input (F : Type) where
   p : Point F
   q : Point F
 deriving ProvableStruct
-
-def outputValue (input : Input Fp) : Point Fp :=
-  let slope := (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
-  let xR := slope * slope - input.p.x - input.q.x
-  let yR := slope * (input.p.x - xR) - input.p.y
-  { x := xR, y := yR }
-
-theorem outputValue_eq_add {input : Input Fp}
-    (hp : input.p ≠ Point.zero) (hq : input.q ≠ Point.zero)
-    (hx : input.p.x ≠ input.q.x) :
-    (outputValue input).coords = Pallas.add input.p.coords input.q.coords := by
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  simp only [outputValue, Point.coords, Pallas.add, Point.zero, CompElliptic.CurveForms.ShortWeierstrass.add] at *
-  have hp0 : ¬(px, py) = (0, 0) := by grind
-  have hq0 : ¬(qx, qy) = (0, 0) := by grind
-  rw [if_neg hp0, if_neg hq0]
-  rw [if_neg hx, Prod.mk.injEq]
-  constructor <;> ring
 
 namespace Gate
 
@@ -83,27 +65,37 @@ def poly2 {K : Type} [Add K] [Sub K] [Mul K] (input : Input K) : K :=
   (input.y_qr.next + input.y_qr.curr) * (input.x_p - input.x_qr.curr) -
     (input.y_p - input.y_qr.curr) * (input.x_qr.curr - input.x_qr.next)
 
-theorem polys_zero_of_outputValue {input : AddIncomplete.Input Fp}
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  assertZero (poly1 input)
+  assertZero (poly2 input)
+
+def Assumptions (input : Input Fp) : Prop :=
+  input.p.x ≠ input.q.x
+
+def Spec (input : Input Fp) : Prop :=
+  input.r = input.p.incompleteAdd input.q
+
+theorem polys_zero_of_incompleteAdd {input : AddIncomplete.Input Fp}
     (hx : input.p.x ≠ input.q.x) :
-    poly1 (Input.fromPoints input.p input.q (outputValue input)) = 0 ∧
-      poly2 (Input.fromPoints input.p input.q (outputValue input)) = 0 := by
-  unfold poly1 poly2 Input.fromPoints outputValue
+    poly1 (Input.fromPoints input.p input.q (input.p.incompleteAdd input.q)) = 0 ∧
+      poly2 (Input.fromPoints input.p input.q (input.p.incompleteAdd input.q)) = 0 := by
+  unfold poly1 poly2 Input.fromPoints Point.incompleteAdd
   have hden : input.q.x - input.p.x ≠ 0 := by
     intro h
     apply hx
     exact (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
-theorem eq_outputValue_of_polys_zero {input : AddIncomplete.Input Fp}
-    {output : Point Fp}
-    (hx : input.p.x ≠ input.q.x)
-    (h : poly1 (Input.fromPoints input.p input.q output) = 0 ∧
-      poly2 (Input.fromPoints input.p input.q output) = 0) :
-    output = outputValue input := by
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  rcases output with ⟨rx, ry⟩
+theorem eq_incompleteAdd_of_polys_zero {p q r : Point Fp}
+    (hx : p.x ≠ q.x)
+    (h : poly1 (Input.fromPoints p q r) = 0 ∧
+      poly2 (Input.fromPoints p q r) = 0) :
+    r = p.incompleteAdd q := by
+  rcases p with ⟨px, py⟩
+  rcases q with ⟨qx, qy⟩
+  rcases r with ⟨rx, ry⟩
   unfold poly1 poly2 Input.fromPoints at h
-  unfold outputValue
+  unfold Point.incompleteAdd
   have hden : qx - px ≠ 0 := by
     intro hden
     apply hx
@@ -133,28 +125,19 @@ theorem eq_outputValue_of_polys_zero {input : AddIncomplete.Input Fp}
     ring_nf
     exact h2neg
 
-def main (input : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (poly1 input)
-  assertZero (poly2 input)
-
-def Assumptions (input : Input Fp) : Prop :=
-  input.p.x ≠ input.q.x
-
-def Spec (input : Input Fp) : Prop :=
-  input.r = outputValue { p := input.p, q := input.q }
-
 def circuit : FormalAssertion Fp Input where
   name := "GATE incomplete addition"
   main
   Assumptions
   Spec
   soundness := by
-    circuit_proof_start [main, Assumptions, Spec, poly1, poly2, Input.r]
-    apply eq_outputValue_of_polys_zero h_assumptions
-    simpa [poly1, poly2, Input.fromPoints, sub_eq_add_neg] using h_holds
+    circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
+    apply eq_incompleteAdd_of_polys_zero h_assumptions
+    simp only [Input.fromPoints, Input.r, Input.p, Input.q, poly1, poly2]
+    simpa [←sub_eq_add_neg] using h_holds
   completeness := by
     circuit_proof_start [main, Assumptions, Spec, poly1, poly2, Input.r, Input.p, Input.q]
-    have hpolys := polys_zero_of_outputValue (input := {
+    have hpolys := polys_zero_of_incompleteAdd (input := {
       p := { x := input_x_p, y := input_y_p }
       q := { x := input_x_qr_curr, y := input_y_qr_curr }
     }) h_assumptions
@@ -167,7 +150,7 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witness fun env => outputValue { p := eval env p, q := eval env q }
+  let r ← witness fun env => (eval env p).incompleteAdd (eval env q)
   Gate.circuit {
     x_p := p.x
     y_p := p.y
@@ -182,59 +165,14 @@ def Assumptions (input : Input Fp) : Prop :=
     input.p.x ≠ input.q.x
 
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  output.OnCurve ∧
-    output = input.p + input.q
-
-theorem outputValue_onCurve {input : Input Fp}
-    (hp : input.p.OnCurve)
-    (hq : input.q.OnCurve)
-    (hx : input.p.x ≠ input.q.x) :
-    (outputValue input).OnCurve := by
-  have hpNonId : input.p ≠ Point.zero := Point.ne_zero_of_onCurve hp
-  have hqNonId : input.q ≠ Point.zero := Point.ne_zero_of_onCurve hq
-  have hcoords := outputValue_eq_add hpNonId hqNonId hx
-  replace hp := (Point.onCurve_iff input.p).mp hp
-  replace hq := (Point.onCurve_iff input.q).mp hq
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  have hp0 : (px, py) ≠ ((0 : Fp), 0) := by
-    intro h
-    have hx0 : px = 0 := (Prod.ext_iff.mp h).1
-    exact CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero py (by
-      rw [hx0] at hp
-      exact hp)
-  have hq0 : (qx, qy) ≠ ((0 : Fp), 0) := by
-    intro h
-    have hx0 : qx = 0 := (Prod.ext_iff.mp h).1
-    exact CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero qy (by
-      rw [hx0] at hq
-      exact hq)
-  have hxy : ¬(px = qx ∧ py + qy = 0) := by
-    intro h
-    exact hx h.1
-  rw [Point.onCurve_iff]
-  rw [hcoords]
-  simp only [Pallas.add, Pallas.OnCurve, Point.coords]
-  rw [CompElliptic.CurveForms.ShortWeierstrass.add_eq_addXY hp0 hq0 hxy]
-  have hxy' :
-      ¬(px = qx ∧ py =
-        WeierstrassCurve.Affine.negY
-          (CompElliptic.CurveForms.ShortWeierstrass.toW
-            CompElliptic.Curves.Pasta.Pallas.a
-            CompElliptic.Curves.Pasta.Pallas.b) qx qy) := by
-    rintro ⟨hxeq, _⟩
-    exact hx hxeq
-  have hns := WeierstrassCurve.Affine.nonsingular_add
-    (CompElliptic.CurveForms.ShortWeierstrass.nonsingular_toW hp)
-    (CompElliptic.CurveForms.ShortWeierstrass.nonsingular_toW hq)
-    hxy'
-  exact CompElliptic.CurveForms.ShortWeierstrass.equation_toW.mp hns.left
+  output.OnCurve ∧ output = input.p + input.q
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
-    outputValue_eq_add, outputValue_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q,
+    Point.incompleteAdd_eq_add, Point.incompleteAdd_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q,
     Gate.Assumptions]
   rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
   have hp : input_p ≠ Point.zero := Point.ne_zero_of_onCurve hpCurve
@@ -249,8 +187,8 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   specialize hrow hgateAssumptions
   simp only [hrow, hpCopyEq, hqCopyEq]
   constructor
-  · exact outputValue_onCurve hpCurve hqCurve hx
-  · exact Point.ext_coords (outputValue_eq_add (input := { p := input_p, q := input_q }) hp hq hx)
+  · exact Point.incompleteAdd_onCurve hpCurve hqCurve hx
+  · exact Point.incompleteAdd_eq_add (p:=input_p) (q:=input_q) hp hq hx
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]

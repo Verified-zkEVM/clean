@@ -287,8 +287,7 @@ def Assumptions (input : Inputs Fp) : Prop :=
   IsBool input.choice
 
 @[circuit_norm]
-def Spec (input : Inputs Fp) (output : Point Fp) :
-    Prop :=
+def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
   output = if input.choice = 1 then input.right else input.left
 
 def main (input : Var Inputs Fp) :
@@ -356,71 +355,16 @@ asserts that the selected output satisfies the Pallas curve equation.
 
 namespace NonIdentityPointMux
 
-abbrev Inputs := PointMux.Inputs
-
-open CompElliptic.Curves.Pasta in
-@[circuit_norm]
-def Assumptions (input : Inputs Fp) : Prop :=
-  PointMux.Assumptions input ∧ Pallas.OnCurve input.left.coords ∧
-    Pallas.OnCurve input.right.coords
-
-open CompElliptic.Curves.Pasta in
-@[circuit_norm]
-def Spec (input : Inputs Fp) (output : Point Fp) :
-    Prop :=
-  PointMux.Spec input output ∧ Pallas.OnCurve output.coords
-
-def main (input : Var Inputs Fp) :
-    Circuit Fp (Var Point Fp) := do
-  let output ← PointMux.circuit input
-  return output
-
-instance elaborated : ElaboratedCircuit Fp Inputs Point main := by
-  elaborate_circuit
-
-open CompElliptic.Curves.Pasta in
-theorem onCurve_of_spec_and_assumptions
-    {input : Inputs Fp} {output : Point Fp}
-    (hAssumptions : Assumptions input)
-    (hSpec : PointMux.Spec input output) :
-    Pallas.OnCurve output.coords := by
-  rcases hAssumptions with ⟨_, hLeft, hRight⟩
-  by_cases hChoiceOne : input.choice = 1
-  · simp [PointMux.Spec, hChoiceOne] at hSpec
-    rw [hSpec]
-    exact hRight
-  · simp [PointMux.Spec, hChoiceOne] at hSpec
-    rw [hSpec]
-    exact hLeft
-
-theorem soundness :
-    Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec,
-    onCurve_of_spec_and_assumptions]
-  rcases h_assumptions with ⟨hMuxAssumptions, hLeft, hRight⟩
-  have hMux := h_holds hMuxAssumptions
-  constructor
-  · exact hMux
-  · by_cases hChoiceOne : input_choice = 1
-    · simp [hChoiceOne] at hMux
-      rw [hMux]
-      exact hRight
-    · simp [hChoiceOne] at hMux
-      rw [hMux]
-      exact hLeft
-
-theorem completeness :
-    Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, Spec, PointMux.circuit, PointMux.Spec]
-  exact h_assumptions.1
-
-def circuit : FormalCircuit Fp Inputs Point where
-  main
-  elaborated
-  Assumptions
-  Spec
-  soundness
-  completeness
+def circuit : FormalCircuit Fp PointMux.Inputs Point where
+  main input := PointMux.circuit input
+  Assumptions input :=
+    IsBool input.choice ∧
+    input.left.OnCurve ∧ input.right.OnCurve
+  Spec input output :=
+    (output = if input.choice = 1 then input.right else input.left) ∧
+    output.OnCurve
+  soundness := by circuit_proof_all [PointMux.circuit, IsBool]
+  completeness := by circuit_proof_all [PointMux.circuit]
 
 end NonIdentityPointMux
 
