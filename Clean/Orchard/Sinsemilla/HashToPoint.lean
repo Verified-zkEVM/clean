@@ -121,8 +121,6 @@ structure Output (n : ℕ) (F : Type) where
   composing circuits (`MerkleCRH`, `note_commit`, `commit_ivk`) read specific `z_r` cells
   for their decomposition / canonicity gates. -/
   zs : Vector F n
-  /-- The running sum after the first word (`z_1`), a projection `zs[1]`. -/
-  z1 : F
   yANext : UnconstrainedDep field F
 deriving CircuitType
 
@@ -181,7 +179,6 @@ def main (G : Generators) (w : ℕ) (input : Var Input Fp) :
     last := dRows[w]'(by omega),
     xANext := xAs[w]'(by omega),
     zs := zs,
-    z1 := if _ : w = 0 then 0 else zRest[0]'(by omega),
     yANext := fun env =>
       (accAfter G (env input.xA, input.yA env) (env input.piece) (w + 1)).2 }
 
@@ -543,7 +540,6 @@ def Spec (G : Generators) (w : ℕ) (input : Value Input Fp)
   ∃ ms : ℕ → ℕ,
     (∀ r, ms r < 2 ^ K) ∧
     input.piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
-    input.piece = ((ms 0 : ℕ) : Fp) + (2 ^ K : Fp) * output.z1 ∧
     output.zs = Vector.ofFn (fun r : Fin (w + 1) =>
       ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
     output.first.xA = input.xA ∧
@@ -580,7 +576,6 @@ def ProverSpec (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
   output.first.xA = input.xA ∧
   output.xANext = output.last.lambda2 * output.last.lambda2
     - output.last.xA - DoubleAndAdd.xR output.last ∧
-  output.z1 = pieceZ input.piece 1 ∧
   output.zs = Vector.ofFn (fun r : Fin (w + 1) => pieceZ input.piece r.val) ∧
   ∀ A : SWPoint Pallas.curve, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     DoubleAndAdd.yA output.first = 2 * A.y ∧
@@ -720,7 +715,7 @@ theorem completeness (G : Generators) (w : ℕ) :
         - (accAfter G (input_xA, input_yA) input_piece r).2 :=
     fun _ => rfl
   have h2 := mul_inv_cancel₀ two_ne_zero_Fp
-  refine ⟨⟨h_z0, ?_, ?_⟩, h_input.2.1, ?_, ?_, ?_, ?_⟩
+  refine ⟨⟨h_z0, ?_, ?_⟩, h_input.2.1, ?_, ?_, ?_⟩
   · -- lookups
     intro i
     refine ⟨pieceWord input_piece ↑i, pieceWord_lt _ _, ?_, h_xPs i, ?_⟩
@@ -822,18 +817,7 @@ theorem completeness (G : Generators) (w : ℕ) :
     simp only [DoubleAndAdd.xR]
     rw [hxw, hxA_last, hpw, hl1w, hl2w]
     linear_combination haccx w
-  · -- the honest first-word running sum
-    by_cases hw : w = 0
-    · rw [dif_pos hw]
-      rw [hw] at hbound
-      simp only [circuit_norm]
-      unfold pieceZ
-      rw [Nat.div_eq_of_lt (by simpa [K] using hbound)]
-      simp
-    · rw [dif_neg hw]
-      have h : env.get (i₀ + 1 + 0) = pieceZ input_piece (0 + 1) := h_zs ⟨0, by omega⟩
-      simpa using h
-  · -- the honest running-sum vector
+  · -- the running-sum vector
     apply Vector.ext
     intro i hi
     rw [Vector.getElem_map, Vector.getElem_ofFn]
@@ -917,8 +901,6 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
     ∃ ms : ℕ → ℕ,
       (∀ r, ms r < 2 ^ K) ∧
       piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
-      piece = ((ms 0 : ℕ) : Fp)
-        + (2 ^ K : Fp) * (if w = 0 then 0 else zV 1) ∧
       Vector.ofFn (fun r : Fin (w + 1) => zV r.val) =
         Vector.ofFn (fun r : Fin (w + 1) =>
           ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
@@ -978,20 +960,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
     rw [key w (by omega), hlast, Finset.sum_range_succ]
     push_cast
     ring
-  refine ⟨ms, hms_lt, hpiece, ?_, ?_, hxA0, ?_, ?_, ?_⟩
-  · -- the first-word split
-    by_cases hw : w = 0
-    · rw [if_pos hw, ← hz0]
-      have h := hmf_word ⟨0, by omega⟩
-      rw [if_pos (by simp [hw])] at h
-      rw [← hms_at 0 (by omega)] at h
-      rw [h]
-      ring
-    · rw [if_neg hw, ← hz0]
-      have h := hmf_word ⟨0, by omega⟩
-      rw [if_neg (by simp; omega)] at h
-      rw [← hms_at 0 (by omega)] at h
-      linear_combination h
+  refine ⟨ms, hms_lt, hpiece, ?_, hxA0, ?_, ?_, ?_⟩
   · -- the running sums equal the suffix recombinations
     have hword : ∀ s, s < w → zV s = (ms s : Fp) + 2 ^ K * zV (s + 1) := by
       intro s hs
@@ -1660,7 +1629,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     show ∀ r : DoubleAndAddRow Fp, enterYA false r = DoubleAndAdd.yA r
       from fun _ => rfl,
     circuit_norm] at h_piece h_tail h_gate ⊢
-  obtain ⟨ms, hms, hrecomb, -, hzs, hfxA, hlxP, hlyp, hchain⟩ := h_piece
+  obtain ⟨ms, hms, hrecomb, hzs, hfxA, hlxP, hlyp, hchain⟩ := h_piece
   obtain ⟨htfxA, tailChunks, htailPC, htailZs, htailchain⟩ := h_tail
   obtain ⟨hsec, hyck⟩ := h_gate
   refine ⟨⟨hfxA, (List.range (n + 1)).map ms ++ tailChunks, ?_, ?_, ?_⟩, Or.inl hcwr⟩
@@ -1735,7 +1704,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     rw [hp0]
     exact hbounds.1
   have hPSpiece := h_piece_env ⟨hb1, A, B₁, hA0, hAx, hAy, hpre'⟩
-  obtain ⟨-, hfxA0, hsecPS, -, hzsPS, hchainPS⟩ := hPSpiece
+  obtain ⟨-, hfxA0, hsecPS, hzsPS, hchainPS⟩ := hPSpiece
   obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
   obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
   have hB₁0 : B₁ ≠ 0 := Orchard.Specs.Sinsemilla.hashToSWPoint_ne_zero hA0 hpre
