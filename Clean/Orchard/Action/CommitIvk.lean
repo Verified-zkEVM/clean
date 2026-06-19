@@ -32,7 +32,7 @@ namespace Orchard.Action.CommitIvk
 open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc.ScalarMul
+open Orchard.Ecc
 open Orchard.Sinsemilla
 
 /-- Inputs of `commit_ivk`: the already-assigned full viewing key cells `ak`, `nk`, and

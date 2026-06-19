@@ -14,7 +14,7 @@ synthesis helpers (`canon_bitshift_130`, `pkd_x_canonicity`, `rho_canonicity`,
 The custom-gate `FormalAssertion`s live in `Clean.Orchard.Action.NoteCommitGate` under
 `Orchard.Action.NoteCommit`; that module is kept separate (low in the import graph) while
 this entry circuit depends on `Sinsemilla.Domain` (the `CommitDomain.WithZs` hash that
-exposes the running sums), which sits above `ScalarMul`.
+exposes the running sums), which sits above the scalar-multiplication gadgets.
 -/
 
 namespace Orchard.Action.NoteCommit
@@ -22,7 +22,7 @@ namespace Orchard.Action.NoteCommit
 open Orchard.Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc.ScalarMul
+open Orchard.Ecc
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks

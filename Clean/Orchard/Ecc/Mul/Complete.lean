@@ -1,5 +1,5 @@
-import Clean.Orchard.Ecc.ScalarMul.Defs
-import Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete
+import Clean.Orchard.Ecc.Defs
+import Clean.Orchard.Ecc.Mul.Incomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
 
@@ -7,7 +7,7 @@ import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul.Complete
+namespace Orchard.Ecc.Mul.Complete
 
 structure Input (F : Type) where
   zPrev : F
@@ -454,4 +454,4 @@ def circuit : GeneralFormalCircuit.WithHint Fp Input Output where
 
 end AssignRegion
 
-end Orchard.Ecc.ScalarMul.Mul.Complete
+end Orchard.Ecc.Mul.Complete

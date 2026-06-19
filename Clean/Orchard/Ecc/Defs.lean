@@ -29,3 +29,16 @@ theorem Point.eval_eq (env : Environment F) (point : Point (Expression F)) :
   with_unfolding_all rfl
 
 end Orchard
+
+namespace Orchard.Ecc
+
+/-- Shared helpers for the scalar-multiplication gates. -/
+
+def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
+    (choice ifTrue ifFalse : K) : K :=
+  choice * ifTrue + (1 - choice) * ifFalse
+
+def tQ {K : Type} [OfNat K 45560315531506369815346746415080538113] : K :=
+  OfNat.ofNat 45560315531506369815346746415080538113
+
+end Orchard.Ecc

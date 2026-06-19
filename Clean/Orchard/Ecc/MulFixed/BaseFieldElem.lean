@@ -1,4 +1,4 @@
-import Clean.Orchard.Ecc.ScalarMul.MulFixed
+import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
@@ -20,7 +20,7 @@ subcircuit (a purely virtual boundary; no extra constraints or wiring), which ex
 the running-sum cells `z₄₃`, `z₄₄`, `z₈₄` that the canonicity check copies in.
 -/
 
-namespace Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
+namespace Orchard.Ecc.MulFixed.BaseFieldElem
 
 namespace Gate
 
@@ -1706,4 +1706,4 @@ def circuit (B : MulFixed.FixedBase) : FormalCircuit Fp field Point where
   soundness := soundness B
   completeness := completeness B
 
-end Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
+end Orchard.Ecc.MulFixed.BaseFieldElem

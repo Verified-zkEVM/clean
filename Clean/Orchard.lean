@@ -1,7 +1,15 @@
 import Clean.Orchard.Action
 import Clean.Orchard.Ecc
 import Clean.Orchard.Poseidon
-import Clean.Orchard.Ecc.ScalarMul
+import Clean.Orchard.Ecc.Mul
+import Clean.Orchard.Ecc.Mul.Assign
+import Clean.Orchard.Ecc.Mul.Complete
+import Clean.Orchard.Ecc.Mul.Incomplete
+import Clean.Orchard.Ecc.Mul.Overflow
+import Clean.Orchard.Ecc.MulFixed
+import Clean.Orchard.Ecc.MulFixed.FullWidth
+import Clean.Orchard.Ecc.MulFixed.BaseFieldElem
+import Clean.Orchard.Ecc.MulFixed.Short
 import Clean.Orchard.Sinsemilla.Chip
 import Clean.Orchard.Sinsemilla.Domain
 import Clean.Orchard.Sinsemilla.HashToPoint

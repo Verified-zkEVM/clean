@@ -1,11 +1,11 @@
-import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul
+namespace Orchard.Ecc.Mul
 
 namespace Gate
 
@@ -114,4 +114,4 @@ def circuit : FormalAssertion Fp Input where
 
 end Gate
 
-end Orchard.Ecc.ScalarMul.Mul
+end Orchard.Ecc.Mul

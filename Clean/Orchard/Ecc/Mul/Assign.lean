@@ -1,7 +1,7 @@
-import Clean.Orchard.Ecc.ScalarMul.Mul
-import Clean.Orchard.Ecc.ScalarMul.Mul.Incomplete
-import Clean.Orchard.Ecc.ScalarMul.Mul.Complete
-import Clean.Orchard.Ecc.ScalarMul.Mul.Overflow
+import Clean.Orchard.Ecc.Mul
+import Clean.Orchard.Ecc.Mul.Incomplete
+import Clean.Orchard.Ecc.Mul.Complete
+import Clean.Orchard.Ecc.Mul.Overflow
 import Clean.Orchard.Ecc.Add
 
 /-!
@@ -25,7 +25,7 @@ Soundness rests on the identity `2^254 + t_q ≡ 0 (mod q)`: the double-and-add
 accumulates `[2^254 + k] base = [alpha] base`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul
+namespace Orchard.Ecc.Mul
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -1093,4 +1093,4 @@ def circuit : FormalCircuit Fp Input Point where
   soundness
   completeness
 
-end Orchard.Ecc.ScalarMul.Mul
+end Orchard.Ecc.Mul

@@ -2,7 +2,7 @@
 
 Lessons from debugging proofs that exceed `maxHeartbeats` or die with
 `(kernel) deep recursion detected`. The case study behind all of this is
-`Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean` (`completeness`), but the failure
+`Clean/Orchard/Ecc/MulFixed/FullWidth.lean` (`completeness`), but the failure
 modes are generic.
 
 ## The root failure mode: whnf into expensive values

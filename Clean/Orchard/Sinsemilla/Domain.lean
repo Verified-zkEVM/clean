@@ -1,5 +1,5 @@
 import Clean.Orchard.Sinsemilla.HashToPoint
-import Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth
+import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.Add
 
 /-!
@@ -23,7 +23,7 @@ namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Ecc.ScalarMul
+open Orchard.Ecc
 
 /-! ### `HashDomain::hash` -/
 

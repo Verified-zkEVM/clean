@@ -1,11 +1,11 @@
-import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Utilities
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul.Overflow
+namespace Orchard.Ecc.Mul.Overflow
 
 structure Input (F : Type) where
   z0 : F
@@ -255,4 +255,4 @@ def circuit : FormalAssertion Fp Input where
 
 end OverflowCheck
 
-end Orchard.Ecc.ScalarMul.Mul.Overflow
+end Orchard.Ecc.Mul.Overflow

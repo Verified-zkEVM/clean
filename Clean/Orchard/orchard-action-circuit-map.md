@@ -40,7 +40,7 @@ Source baseline:
       - Clean: `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`) in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
       - **GAP:** output signature. Halo2 returns `(Point, zs)` (per-piece running sums); the
         base `Entry` returns only the point and the `z1` cells. Action circuits needing
-        running sums use `CommitDomain.WithZs`. Also missing: `hash_to_point_with_private_init`.
+        running sums use `CommitDomain.WithZs`.
       - Generator table (`halo2_gadgets/src/sinsemilla/chip/generator_table.rs`)
         - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
       - Double-and-add gate (`halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`)
@@ -52,9 +52,9 @@ Source baseline:
     - `gadget::value_commit_orchard` (`orchard-0.14.0/src/circuit/gadget.rs`)
       - Clean: `Gadget.ValueCommitOrchard.circuit` in `Clean/Orchard/Gadget.lean`.
     - `[v] ValueCommitV` (`FixedPointShort::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`)
-      - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/Short.lean`.
+      - Clean: `Clean/Orchard/Ecc/MulFixed/Short.lean`.
     - `[rcv] ValueCommitR` (`FixedPoint::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`)
-      - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
+      - Clean: `Clean/Orchard/Ecc/MulFixed/FullWidth.lean`.
     - Complete addition (`halo2_gadgets/src/ecc/chip/add.rs`)
       - Clean: `Clean/Orchard/Ecc/Add.lean`.
 
@@ -71,7 +71,7 @@ Source baseline:
       - Clean: `AddChip.circuit` (gate `AddChip.Gate.circuit`) in `Clean/Orchard/Utilities.lean`.
     - `[poseidon_hash(nk, rho) + psi] NullifierK`
       (`FixedPointBaseField::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`)
-      - Clean: `BaseFieldElem.circuit` in `Clean/Orchard/Ecc/ScalarMul/MulFixed/BaseFieldElem.lean`.
+      - Clean: `BaseFieldElem.circuit` in `Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean`.
     - Add result to `cm_old` (`halo2_gadgets/src/ecc/chip/add.rs`)
       - Clean: `Clean/Orchard/Ecc/Add.lean`.
 
@@ -80,7 +80,7 @@ Source baseline:
     - Clean: `SpendAuthority.circuit` in `Clean/Orchard/SpendAuthority.lean`
       (the `RK_X`/`RK_Y` public constraints are wired in `Orchard.Action.circuit`).
     - `[alpha] SpendAuthG` (`FixedPoint::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`)
-      - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
+      - Clean: `Clean/Orchard/Ecc/MulFixed/FullWidth.lean`.
     - Add to `ak_P` (`halo2_gadgets/src/ecc/chip/add.rs`)
       - Clean: `Clean/Orchard/Ecc/Add.lean`.
 
@@ -100,10 +100,10 @@ Source baseline:
       - Pure abstraction wrapping a base field element; no circuit content, so no Clean
         counterpart needed.
     - `[ivk] g_d_old` (variable-base mul, `halo2_gadgets/src/ecc/chip/mul.rs`)
-      - Clean: `Mul.circuit` in `Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`.
-      - Incomplete gates: `Clean/Orchard/Ecc/ScalarMul/Mul/Incomplete.lean`.
-      - Complete gates: `Clean/Orchard/Ecc/ScalarMul/Mul/Complete.lean`.
-      - Overflow checks: `Clean/Orchard/Ecc/ScalarMul/Mul/Overflow.lean`.
+      - Clean: `Mul.circuit` in `Clean/Orchard/Ecc/Mul/Assign.lean`.
+      - Incomplete gates: `Clean/Orchard/Ecc/Mul/Incomplete.lean`.
+      - Complete gates: `Clean/Orchard/Ecc/Mul/Complete.lean`.
+      - Overflow checks: `Clean/Orchard/Ecc/Mul/Overflow.lean`.
 
   - Old note commitment integrity
     - `gadget::note_commit` (`orchard-0.14.0/src/circuit/note_commit.rs`)
@@ -119,7 +119,7 @@ Source baseline:
     - `SinsemillaChip::hash_to_point`
       - Clean: `Sinsemilla.Entry.circuit` (see Merkle path above).
     - `[rcm_old] NoteCommitR` (full-width fixed-base mul)
-      - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
+      - Clean: `Clean/Orchard/Ecc/MulFixed/FullWidth.lean`.
     - Add hash point to blinding point (ECC addition)
       - Clean: composed inside `Action.NoteCommit.circuit` via `Sinsemilla.CommitDomain.WithZs.circuit`.
 
@@ -146,6 +146,6 @@ Source baseline:
   - Clean: `Clean/Orchard/Ecc/AddIncomplete.lean`.
 - Fixed-base scalar multiplication (`halo2_gadgets/src/ecc/chip/mul_fixed*.rs`)
   - Clean: `MulFixed/Short.lean`, `MulFixed/FullWidth.lean`, `MulFixed/BaseFieldElem.lean`
-    (all under `Clean/Orchard/Ecc/ScalarMul/`).
+    (all under `Clean/Orchard/Ecc/`).
 - Variable-base scalar multiplication (`halo2_gadgets/src/ecc/chip/mul*.rs`)
-  - Clean: `Mul.circuit` (`Clean/Orchard/Ecc/ScalarMul/Mul/Assign.lean`).
+  - Clean: `Mul.circuit` (`Clean/Orchard/Ecc/Mul/Assign.lean`).

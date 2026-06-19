@@ -530,7 +530,7 @@ def word (windowNumBits : ℕ) (step : Step F) : F :=
 def InRange (range : ℕ) (word : F) : Prop :=
   word = 0 ∨ ∃ i, i ∈ rangeCheckValues (F := F) range ∧ word = i
 
-def Spec (windowNumBits : ℕ) (step : Step F) : Prop :=
+def Spec (windowNumBits : ℕ) (step : Step Fp) : Prop :=
   InRange (2 ^ windowNumBits) (word windowNumBits step)
 
 private theorem rangeCheckFoldl_eq_zero_iff
@@ -588,11 +588,11 @@ private theorem eval_rangeCheckPolyExpr
   unfold rangeCheckPolyExpr rangeCheckPoly
   exact eval_rangeCheckFoldl env (rangeCheckValues range) word word
 
-def main (windowNumBits : ℕ) (step : Var Step F) : Circuit F Unit := do
-  let word := step.zCur - (twoPowWindow windowNumBits : F) * step.zNext
+def main (windowNumBits : ℕ) (step : Var Step Fp) : Circuit Fp Unit := do
+  let word := step.zCur - (twoPowWindow windowNumBits : Fp) * step.zNext
   assertZero (rangeCheckPolyExpr (2 ^ windowNumBits) word)
 
-def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
+def circuit (windowNumBits : ℕ) : FormalAssertion Fp Step where
   name := "GATE range check"
   main := main windowNumBits
   Spec := Spec windowNumBits
@@ -601,21 +601,21 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
       InRange]
     change Expression.eval env
         (rangeCheckPolyExpr (2 ^ windowNumBits)
-          (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) = 0 at h_holds
+          (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) = 0 at h_holds
     have h_eval :
         Expression.eval env
           (rangeCheckPolyExpr (2 ^ windowNumBits)
-            (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) =
+            (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) =
           rangeCheckPoly (2 ^ windowNumBits)
             (Expression.eval env
-              (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) := by
+              (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) := by
       exact eval_rangeCheckPolyExpr env (2 ^ windowNumBits)
-        (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)
+        (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)
     rw [h_eval] at h_holds
     rcases h_input with ⟨hzCur, hzNext⟩
     have hword :
         Expression.eval env
-            (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext) =
+            (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext) =
           input_zCur - twoPowWindow windowNumBits * input_zNext := by
       simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
       ring
@@ -627,21 +627,21 @@ def circuit (windowNumBits : ℕ) : FormalAssertion F Step where
       InRange]
     change Expression.eval env.toEnvironment
         (rangeCheckPolyExpr (2 ^ windowNumBits)
-          (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) = 0
+          (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) = 0
     have h_eval :
         Expression.eval env.toEnvironment
           (rangeCheckPolyExpr (2 ^ windowNumBits)
-            (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) =
+            (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) =
           rangeCheckPoly (2 ^ windowNumBits)
             (Expression.eval env.toEnvironment
-              (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)) := by
+              (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)) := by
       exact eval_rangeCheckPolyExpr env.toEnvironment (2 ^ windowNumBits)
-        (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext)
+        (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext)
     rw [h_eval]
     rcases h_input with ⟨hzCur, hzNext⟩
     have hword :
         Expression.eval env.toEnvironment
-            (input_var_zCur - (twoPowWindow windowNumBits : F) * input_var_zNext) =
+            (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext) =
           input_zCur - twoPowWindow windowNumBits * input_zNext := by
       simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
       ring
@@ -679,13 +679,13 @@ def twoPowK (k : ℕ) : F :=
 def poly (k : ℕ) (input : ShortLookupBitshift F) : F :=
   input.word * twoPowK k * input.invTwoPowS - input.shiftedWord
 
-def bitshiftSpec (k : ℕ) (input : ShortLookupBitshift F) : Prop :=
+def bitshiftSpec (k : ℕ) (input : ShortLookupBitshift Fp) : Prop :=
   input.shiftedWord = input.word * twoPowK k * input.invTwoPowS
 
-def main (k : ℕ) (input : Var ShortLookupBitshift F) : Circuit F Unit := do
-  assertZero (input.word * (twoPowK k : F) * input.invTwoPowS - input.shiftedWord)
+def main (k : ℕ) (input : Var ShortLookupBitshift Fp) : Circuit Fp Unit := do
+  assertZero (input.word * (twoPowK k : Fp) * input.invTwoPowS - input.shiftedWord)
 
-def circuit (k : ℕ) : FormalAssertion F ShortLookupBitshift where
+def circuit (k : ℕ) : FormalAssertion Fp ShortLookupBitshift where
   name := "GATE Short lookup bitshift"
   main := main k
   Spec := bitshiftSpec k
