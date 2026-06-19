@@ -13,7 +13,7 @@ synthesis helpers (`canon_bitshift_130`, `pkd_x_canonicity`, `rho_canonicity`,
 
 The custom-gate `FormalAssertion`s live in `Clean.Orchard.Action.NoteCommitGate` under
 `Orchard.Action.NoteCommit`; that module is kept separate (low in the import graph) while
-this entry circuit depends on `Sinsemilla.Domain` (the `CommitDomain.WithZs` hash that
+this entry circuit depends on `Sinsemilla.Domain` (the `CommitDomain` hash that
 exposes the running sums), which sits above the scalar-multiplication gadgets.
 -/
 
@@ -1050,50 +1050,50 @@ abbrev Input (F : Type) :=
   CommitDomain.Input 8 F
 
 abbrev Output (F : Type) :=
-  CommitDomain.WithZs.Output messagePieceRounds F
+  CommitDomain.Output messagePieceRounds F
 
 def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Output Fp) :=
-  CommitDomain.WithZs.circuit G Q hQ R 24 messagePieceTailRounds input
+  CommitDomain.circuit G Q hQ R 24 messagePieceTailRounds input
 
 instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp
       (CommitDomain.Input 8)
-      (CommitDomain.WithZs.Output messagePieceRounds) (main G Q hQ R) := by
+      (CommitDomain.Output messagePieceRounds) (main G Q hQ R) := by
   elaborate_circuit_with {
     localLength _ := 1407
     output input offset := {
       point := varFromOffset Point (offset + 1400),
-      zs := ((EntryZs.main G Q 24 messagePieceTailRounds input.pieces).output (offset + 849)).zs }
+      zs := ((Entry.main G Q 24 messagePieceTailRounds input.pieces).output (offset + 849)).zs }
   }
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (output : Value Output Fp) (data : ProverData Fp) : Prop :=
-  CommitDomain.WithZs.Spec G Q R 24 messagePieceTailRounds
+  CommitDomain.Spec G Q R 24 messagePieceTailRounds
     input output data
 
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (input : ProverValue Input Fp) (data : ProverData Fp)
     (hint : ProverHint Fp) : Prop :=
-  CommitDomain.WithZs.ProverAssumptions G Q 24 messagePieceTailRounds input data hint
+  CommitDomain.ProverAssumptions G Q 24 messagePieceTailRounds input data hint
 
 def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (hint : ProverHint Fp) :
     Prop :=
-  CommitDomain.WithZs.ProverSpec G Q R 24 messagePieceTailRounds input output hint
+  CommitDomain.ProverSpec G Q R 24 messagePieceTailRounds input output hint
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True) (Spec G Q R) := by
-  circuit_proof_start [CommitDomain.WithZs.circuit]
+  circuit_proof_start [CommitDomain.circuit]
   simpa [Spec, Chain.chainLength, messagePieceTailRounds] using h_holds
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q)
       (ProverSpec G Q R) := by
-  circuit_proof_start [CommitDomain.WithZs.circuit]
+  circuit_proof_start [CommitDomain.circuit]
   refine ⟨?_, ?_⟩
   · simpa using h_assumptions
   · exact ((h_env (by simpa using h_assumptions)).2)
@@ -2029,7 +2029,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simpa [h_input, hCOutdef, circuit_norm] using hCom
   simp only [AssignMessagePieces.Spec, AssignedMessageFacts] at hAMSpec
   obtain ⟨hb0_lt, hb3_lt, hd2_lt, he0_lt, he1_lt, hg1_lt, hh0_lt⟩ := hAMSpec
-  simp only [Commit.circuit, Commit.Spec, CommitDomain.WithZs.Spec] at hComSpec
+  simp only [Commit.circuit, Commit.Spec, CommitDomain.Spec] at hComSpec
   obtain ⟨chunks, rcm, hPC, hZs, hHash⟩ := hComSpec
   have ha_lt : (eval env AM).a.val < 2 ^ 250 := by
     have h := pieceChunks_val_lt messagePieceRounds

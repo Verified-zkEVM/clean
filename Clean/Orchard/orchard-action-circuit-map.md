@@ -37,10 +37,9 @@ Source baseline:
     - `RangeConstrained::witness_short` (`halo2_gadgets/src/utilities/lookup_range_check.rs`)
       - Clean: `LookupRangeCheck.WitnessShort.circuit` / `.taggedCircuit` in `Clean/Orchard/Utilities.lean`.
     - `SinsemillaChip::hash_to_point` (`halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`)
-      - Clean: `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`) in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
-      - **GAP:** output signature. Halo2 returns `(Point, zs)` (per-piece running sums); the
-        base `Entry` returns only the point and the `z1` cells. Action circuits needing
-        running sums use `CommitDomain.WithZs`.
+      - Clean: `Sinsemilla.EntryZ1s.circuit` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`, the
+        `z₁`-only view of the same `hash_to_point` chain as `Sinsemilla.Entry.circuit` (which
+        returns the full `(Point, zs)`). `MerkleCRH` reads only each piece's `z₁` cell.
       - Generator table (`halo2_gadgets/src/sinsemilla/chip/generator_table.rs`)
         - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
       - Double-and-add gate (`halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`)
@@ -94,8 +93,9 @@ Source baseline:
     - `RangeConstrained::witness_short` (`halo2_gadgets/src/utilities/lookup_range_check.rs`)
       - Clean: `LookupRangeCheck.WitnessShort.circuit` / `.taggedCircuit`.
     - `CommitDomain::short_commit` (`halo2_gadgets/src/sinsemilla`)
-      - Clean: `Sinsemilla.CommitDomain.Short.circuit` in `Clean/Orchard/Sinsemilla/Domain.lean`
-        (over `CommitDomain.circuit` + `CommitDomain.blindingFactor`).
+      - Clean: `Sinsemilla.CommitDomain.circuit` (rounds `[0, 23, 0]`) in
+        `Clean/Orchard/Sinsemilla/Domain.lean`, with the trailing `x`-extraction done inline in
+        `CommitIvk.circuit`.
     - `ScalarVar::from_base` (`halo2_gadgets/src/ecc`)
       - Pure abstraction wrapping a base field element; no circuit content, so no Clean
         counterpart needed.
@@ -117,11 +117,12 @@ Source baseline:
     - `CommitDomain::commit` (`halo2_gadgets/src/sinsemilla`)
       - Clean: `Sinsemilla.CommitDomain.circuit` in `Clean/Orchard/Sinsemilla/Domain.lean`.
     - `SinsemillaChip::hash_to_point`
-      - Clean: `Sinsemilla.Entry.circuit` (see Merkle path above).
+      - Clean: `Sinsemilla.Entry.circuit` (full `hash_to_point` returning `(Point, zs)`),
+        composed via `Sinsemilla.CommitDomain.circuit`; the canonicity gates read the `zs` cells.
     - `[rcm_old] NoteCommitR` (full-width fixed-base mul)
       - Clean: `Clean/Orchard/Ecc/MulFixed/FullWidth.lean`.
     - Add hash point to blinding point (ECC addition)
-      - Clean: composed inside `Action.NoteCommit.circuit` via `Sinsemilla.CommitDomain.WithZs.circuit`.
+      - Clean: composed inside `Action.NoteCommit.circuit` via `Sinsemilla.CommitDomain.circuit`.
 
   - New note commitment integrity
     - Same dependency tree as old note commitment; action wiring differs (`rho_new = nf_old`,

@@ -23,7 +23,7 @@ d = d_0 || d_1 = (bits 245..=253 of nk) || (bit 254 of nk)          (10 bits,  1
 
 The custom canonicity gate lives in `Clean.Orchard.Action.CommitIvkGate` under
 `Orchard.Action.CommitIvk.Gate`; this entry circuit depends on `Sinsemilla.Domain` (the
-`CommitDomain.WithZs` hash exposing the running sums needed for the `ak`/`nk` canonicity
+`CommitDomain` hash exposing the running sums needed for the `ak`/`nk` canonicity
 checks).
 -/
 
@@ -537,7 +537,7 @@ private theorem zsHonest_get2_cell_eq_div {pieces : Vector Fp 4}
 /-! ### `Commit`: the witnessing + Sinsemilla hash, isolated behind a clean output
 
 Virtual subcircuit (no constraint/VK impact) wrapping all of `commit_ivk`'s witnessing and
-the `CommitDomain.WithZs` Sinsemilla hash. Factoring it out gives the top-level entry a
+the `CommitDomain` Sinsemilla hash. Factoring it out gives the top-level entry a
 single folded `Commit.Output` at a clean offset, instead of the nested `WithZs`+`WitnessShort`
 offset chain that the `Canonicity` `FormalAssertion` input would otherwise embed (the
 whnf-timeout that blocked the monolithic proof — see `doc/performance-problems.md`). -/
@@ -609,7 +609,7 @@ theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
   simp only [circuit_norm]
 
 theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
-    (out : Var (CommitDomain.WithZs.Output ns) Fp) :
+    (out : Var (CommitDomain.Output ns) Fp) :
     (eval env out).point = eval env out.point := by
   rw [ProvableStruct.eval_eq_eval]
   unfold ProvableStruct.eval
@@ -642,7 +642,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let d ← witnessField fun env => env d0 + env d1 * 2 ^ 9
 
   -- ivk = Commit^ivk_rivk(ak || nk); the short commit also exposes the per-piece running sums.
-  let out ← _root_.Orchard.Sinsemilla.CommitDomain.WithZs.circuit G Q hQ R 24 [0, 23, 0]
+  let out ← _root_.Orchard.Sinsemilla.CommitDomain.circuit G Q hQ R 24 [0, 23, 0]
     { pieces := #v[a, b, c, d], r := input.rivk }
   return { cells := { point := out.point, a, b, c, d, b0, b1, b2, d0, d1 }, zs := out.zs }
 
@@ -713,9 +713,9 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- the WithZs hash spec
   replace hWithZs := hWithZs trivial
   rw [GeneralFormalCircuit.WithHint.toSubcircuit_soundness] at hWithZs
-  rw [show (CommitDomain.WithZs.circuit G Q hQ R 24 [0, 23, 0]).Spec
-      = CommitDomain.WithZs.Spec G Q R 24 [0, 23, 0] from rfl] at hWithZs
-  simp only [CommitDomain.WithZs.Spec] at hWithZs
+  rw [show (CommitDomain.circuit G Q hQ R 24 [0, 23, 0]).Spec
+      = CommitDomain.Spec G Q R 24 [0, 23, 0] from rfl] at hWithZs
+  simp only [CommitDomain.Spec] at hWithZs
   obtain ⟨chunks, r, hPC, hZs, hHash⟩ := hWithZs
   refine ⟨?_, ?_⟩
   swap
@@ -737,12 +737,12 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).1]
     -- align both `zs` spellings to `eval env (… .zs)` (same `EntryZs` term), then the head
     -- cell is one shared `eval`; the head piece value is the entry `a` cell (one cell)
-    rw [CommitDomain.WithZs.eval_zs] at hz13a
+    rw [CommitDomain.eval_zs] at hz13a
     rw [Commit.eval_zs]
     exact hz13a.trans (by simp only [circuit_norm]; rfl)
   · have hz13c := zsFacts_get2_cell_eq_div hPC hZs
     rw [Commit.eval_cells, (Commit.eval_cells_leaves env _).2.2.1]
-    rw [CommitDomain.WithZs.eval_zs] at hz13c
+    rw [CommitDomain.eval_zs] at hz13c
     rw [Commit.eval_zs]
     exact hz13c.trans (by simp only [circuit_norm]; rfl)
   · refine ⟨chunks, r, ?_, fun B hB => ?_⟩
@@ -869,7 +869,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [← h_input]; simp only [circuit_norm]
   -- apply the `WithZs` honest spec: feed it the `ProverAssumptions` (pieces in range, hash exists)
   have hWZspec := (hWZ (by
-    simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverAssumptions,
+    simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
       Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
@@ -877,13 +877,13 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2,
       hak_eq, hnk_eq]
     exact h_assumptions)).2
-  simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverSpec] at hWZspec
+  simp only [CommitDomain.circuit, CommitDomain.ProverSpec] at hWZspec
   obtain ⟨hZsH, hHash⟩ := hWZspec
   refine ⟨⟨trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
     ?_, trivial⟩, ?_⟩
   · -- WithZs.ProverAssumptions
     rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
-    simp only [CommitDomain.WithZs.circuit, CommitDomain.WithZs.ProverAssumptions,
+    simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
       Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
@@ -928,7 +928,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [CircuitType.eval_var_prover_to_verifier] at hz13a
       rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
         (Commit.eval_cells_leaves env.toEnvironment _).1, hO]
-      rw [CommitDomain.WithZs.eval_zs] at hz13a
+      rw [CommitDomain.eval_zs] at hz13a
       rw [Commit.eval_zs]
       exact hz13a.trans (by simp only [circuit_norm]; rfl)
     have hOz13c : (HVec.get _ (eval env O).zs ⟨2, by decide⟩)[13]
@@ -937,7 +937,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       rw [CircuitType.eval_var_prover_to_verifier] at hz13c
       rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells,
         (Commit.eval_cells_leaves env.toEnvironment _).2.2.1, hO]
-      rw [CommitDomain.WithZs.eval_zs] at hz13c
+      rw [CommitDomain.eval_zs] at hz13c
       rw [Commit.eval_zs]
       exact hz13c.trans (by simp only [circuit_norm]; rfl)
     -- the hash existential: the honest chunks `commitIvkChunks ak nk` whose hash is the point
