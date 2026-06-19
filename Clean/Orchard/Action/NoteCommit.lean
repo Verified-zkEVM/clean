@@ -1855,7 +1855,7 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 Clean's point model this is the on-curve half of `NonIdentityEccPoint`; identity is not
 representable as an affine point in the source API at this boundary. -/
 def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  Pallas.OnCurve input.gd.coords ∧ Pallas.OnCurve input.pkd.coords
+  input.gd.OnCurve ∧ input.pkd.OnCurve
 
 /-- `cm` is the Orchard note commitment of the note `(g_d, pk_d, value, rho, psi)` with
 randomness `rcm`: `cm = NoteCommit^Orchard_rcm(g★_d || pk★_d || v || rho || psi)`. The
@@ -1868,8 +1868,8 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
 def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
     (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  Pallas.OnCurve input.gd.coords ∧
-  Pallas.OnCurve input.pkd.coords ∧
+  input.gd.OnCurve ∧
+  input.pkd.OnCurve ∧
   -- the note's value is a `u64` (the prover commits to a valid note); the `value_canonicity`
   -- gate's constraint `value = d2 + d3·2^8 + e0·2^58` is satisfiable only at such values.
   (show Fp from input.value).val < 2 ^ 64 ∧

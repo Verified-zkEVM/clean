@@ -276,10 +276,8 @@ theorem intermediate_spec_of_constraints (P : Params) :
   subst input_pos
   have hSA := hSAImpl (Or.inl hAkPOn)
   have hAI := hAIImpl hGdOldOn
-  have hNCold := hNColdImpl ⟨(Point.onCurve_iff _).mp hGdOldOn,
-    (Point.onCurve_iff _).mp hPkdOldOn⟩
-  have hNCnew := hNCnewImpl ⟨(Point.onCurve_iff _).mp hGdNewOn,
-    (Point.onCurve_iff _).mp hPkdNewOn⟩
+  have hNCold := hNColdImpl ⟨hGdOldOn, hPkdOldOn⟩
+  have hNCnew := hNCnewImpl ⟨hGdNewOn, hPkdNewOn⟩
   have hMerkle := hMerkleImpl trivial
   simp only [Gate.Spec] at hGate
   let cmOld : Point Fp :=
@@ -424,10 +422,10 @@ theorem intermediate_completeness (P : Params) :
     eVNetMag, eVNetSign, eVC, eNF, eSA, ePkdOld, eAI, eNCold, eGdNew, ePkdNew,
     ePsiNew, eNCnew⟩ := h_env
   -- on-curve facts for the witnessed points
-  have hGdOldOn : Point.OnCurve input_gdOld := (Point.onCurve_iff _).mpr haNCold.1
-  have hPkdOldOn : Point.OnCurve input_pkdOld := (Point.onCurve_iff _).mpr haNCold.2.1
-  have hGdNewOn : Point.OnCurve input_gdNew := (Point.onCurve_iff _).mpr haNCnew.1
-  have hPkdNewOn : Point.OnCurve input_pkdNew := (Point.onCurve_iff _).mpr haNCnew.2.1
+  have hGdOldOn : Point.OnCurve input_gdOld := haNCold.1
+  have hPkdOldOn : Point.OnCurve input_pkdOld := haNCold.2.1
+  have hGdNewOn : Point.OnCurve input_gdNew := haNCnew.1
+  have hPkdNewOn : Point.OnCurve input_pkdNew := haNCnew.2.1
   -- witness-cell equalities
   have cmOldCell := (eCmOld haCmOld).2
   have gdOldCell := (eGdOld hGdOldOn).2
