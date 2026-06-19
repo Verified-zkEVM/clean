@@ -352,40 +352,39 @@ theorem intermediate_spec_of_constraints (P : Params) :
     · refine ⟨_, _, rfl, hMerkle, hGate.1, hGate.2.1, hGate.2.2.1, hGate.2.2.2⟩
   · exact ⟨Or.inr trivial, Or.inr hCmOldValid⟩
 
-/-- Honest-prover preconditions: each composed gadget's `ProverAssumptions` instantiated at
-the honest witnesses. Placeholder paralleling `IntermediateAssumptions`, to be bridged to
-the final hand-written prover assumptions. The new note's ρ is the public `nf_old` (the
-honest prover sets that instance cell to the nullifier it derives). -/
+/-- Honest-prover preconditions for the *top-level* action circuit. There is no parent
+circuit, so the `ProverSpec` is the default `True`; consequently completeness must establish
+every constraint — including the public-instance equality edges and the `q_orchard` gate —
+directly from these assumptions. They have two parts:
+
+* **(A) gadget input well-formedness**, so each composed subcircuit's own constraints are
+  satisfiable (the witnessed points are on-curve / valid, magnitudes are 64-bit, the
+  Sinsemilla/Merkle hash chains succeed);
+* **(B) public-instance consistency**: the honest prover sets each instance cell to the
+  gadget output it computes. This is exactly the deterministic (`ProverSpec`) image of
+  `IntermediateSpec`, and is what discharges the `===` edges and the gate. -/
 def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
     (data : ProverData Fp) (hint : ProverHint Fp) : Prop :=
-  -- merkle: the authentication-path hash chain succeeds at every layer
+  -- (A) gadget input well-formedness
   Orchard.Sinsemilla.Merkle.CalculateRoot.ProverAssumptions P.Gm P.Qm
       { leaf := input.cmOld.x, path := input.path, pos := input.pos } data hint ∧
-  -- value commitment: the signed magnitude is a 64-bit value with sign ±1
   ValueCommit.ProverAssumptions
       { v := { magnitude := input.vNetMagnitude, sign := input.vNetSign }, rcv := input.rcv }
       data hint ∧
-  -- nullifier: `cm_old` is a valid point (DeriveNullifier is a `FormalCircuit`)
   input.cmOld.Valid ∧
-  -- spend authority: `ak_P` is a valid point
-  SpendAuthority.ProverAssumptions { akP := input.akP, alpha := input.alpha } data hint ∧
-  -- diversified address integrity
+  -- `ak_P` is a non-identity point (`NonIdentityPoint::new` in the source); this also
+  -- supplies SpendAuthority's weaker `Valid` precondition.
+  input.akP.OnCurve ∧
   AddressIntegrity.ProverAssumptions P.Gci P.Qci P.Rci
       { ak := input.akP.x, nk := input.nk, rivk := input.rivk,
         gDOld := input.gdOld, pkDOld := input.pkdOld } data hint ∧
-  -- old note commitment
   NoteCommit.ProverAssumptions P.Gnc P.Qnc
       { gd := input.gdOld, pkd := input.pkdOld, value := input.vOld,
         rho := input.rhoOld, psi := input.psiOld, rcm := input.rcmOld } data hint ∧
-  -- new note commitment (ρ = the public nf_old)
   NoteCommit.ProverAssumptions P.Gnc P.Qnc
       { gd := input.gdNew, pkd := input.pkdNew, value := input.vNew,
-        rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew } data hint
-
-/-- Honest-prover postcondition: the deterministic (`ProverSpec`) image of `IntermediateSpec`.
-Each public-instance cell is the honest gadget evaluation of the private witnesses. -/
-def IntermediateProverSpec (P : Params) (input : ProverValue Input Fp) (_ : Unit)
-    (hint : ProverHint Fp) : Prop :=
+        rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew } data hint ∧
+  -- (B) public-instance consistency (honest prover sets each instance cell to its output)
   ValueCommit.ProverSpec P.V P.Rvc
       { v := { magnitude := input.vNetMagnitude, sign := input.vNetSign }, rcv := input.rcv }
       { x := input.cvNetX, y := input.cvNetY } hint ∧
@@ -394,8 +393,6 @@ def IntermediateProverSpec (P : Params) (input : ProverValue Input Fp) (_ : Unit
       input.nfOld ∧
   SpendAuthority.ProverSpec P.Sag { akP := input.akP, alpha := input.alpha }
       { x := input.rkX, y := input.rkY } hint ∧
-  AddressIntegrity.ProverSpec P.Gci P.Qci P.Rci
-      input.akP.x input.nk input.rivk input.gdOld input.pkdOld ∧
   NoteCommit.ProverSpec P.Gnc P.Qnc P.Rnc
       { gd := input.gdOld, pkd := input.pkdOld, value := input.vOld,
         rho := input.rhoOld, psi := input.psiOld, rcm := input.rcmOld }
@@ -405,10 +402,9 @@ def IntermediateProverSpec (P : Params) (input : ProverValue Input Fp) (_ : Unit
       { gd := input.gdNew, pkd := input.pkdNew, value := input.vNew,
         rho := input.nfOld, psi := input.psiNew, rcm := input.rcmNew }
       { x := input.cmx, y := cmNewY } hint) ∧
-  (∃ (leaf root : Fp),
-    leaf = input.cmOld.x ∧
+  (∃ root : Fp,
     Orchard.Sinsemilla.Merkle.CalculateRoot.ProverSpec P.Gm P.Qm
-      { leaf := leaf, path := input.path, pos := input.pos } root hint ∧
+      { leaf := input.cmOld.x, path := input.path, pos := input.pos } root hint ∧
     (show Fp from input.vOld) =
       (show Fp from input.vNew) +
         (show Fp from input.vNetMagnitude) * (show Fp from input.vNetSign) ∧
@@ -418,8 +414,106 @@ def IntermediateProverSpec (P : Params) (input : ProverValue Input Fp) (_ : Unit
 
 theorem intermediate_completeness (P : Params) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main P)
-      (IntermediateProverAssumptions P) (IntermediateProverSpec P) := by
-  sorry
+      (IntermediateProverAssumptions P) (fun _ _ _ => True) := by
+  circuit_proof_start [WitnessPoint.circuit, WitnessNonIdentityPoint.circuit,
+    ValueCommit.circuit, DeriveNullifier.circuit, SpendAuthority.circuit,
+    AddressIntegrity.circuit, NoteCommit.circuit, Gate.circuit]
+  obtain ⟨haMerkle, haVC, haCmOld, haAkP, haAI, haNCold, haNCnew,
+    hcVC, hcNF, hcSA, hcNColdSpec, hcNCnew, hcMerkleGate⟩ := h_assumptions
+  obtain ⟨ePsiOld, eRhoOld, eCmOld, eGdOld, eAkP, eNk, eVOld, eVNew, eMerkle,
+    eVNetMag, eVNetSign, eVC, eNF, eSA, ePkdOld, eAI, eNCold, eGdNew, ePkdNew,
+    ePsiNew, eNCnew⟩ := h_env
+  -- on-curve facts for the witnessed points
+  have hGdOldOn : Point.OnCurve input_gdOld := (Point.onCurve_iff _).mpr haNCold.1
+  have hPkdOldOn : Point.OnCurve input_pkdOld := (Point.onCurve_iff _).mpr haNCold.2.1
+  have hGdNewOn : Point.OnCurve input_gdNew := (Point.onCurve_iff _).mpr haNCnew.1
+  have hPkdNewOn : Point.OnCurve input_pkdNew := (Point.onCurve_iff _).mpr haNCnew.2.1
+  -- witness-cell equalities
+  have cmOldCell := (eCmOld haCmOld).2
+  have gdOldCell := (eGdOld hGdOldOn).2
+  have akPCell := (eAkP haAkP).2
+  have pkdOldCell := (ePkdOld hPkdOldOn).2
+  have gdNewCell := (eGdNew hGdNewOn).2
+  have pkdNewCell := (ePkdNew hPkdNewOn).2
+  have cmOldX : Expression.eval env.toEnvironment (varFromOffset Point (i₀ + 1 + 1)).x
+      = input_cmOld.x := congrArg Point.x cmOldCell
+  have akPX : Expression.eval env.toEnvironment (varFromOffset Point (i₀ + 1 + 1 + 2 + 2)).x
+      = input_akP.x := congrArg Point.x akPCell
+  -- nullifier edge: the DeriveNullifier output cell equals the public NF_OLD.
+  have hNfSpec := eNF (by show Point.Valid _; rw [cmOldCell]; exact haCmOld)
+  rw [eNk, eRhoOld, ePsiOld, cmOldCell, DeriveNullifier.Spec] at hNfSpec
+  have hNfEdge := hNfSpec.trans hcNF.symm
+  -- spend-authority edge: the SpendAuthority output cell equals the public (RK_X, RK_Y).
+  have hSAProver := (eSA (by show Point.Valid _; rw [akPCell]; exact Or.inl haAkP)).2
+  rw [akPCell, SpendAuthority.ProverSpec] at hSAProver
+  rw [SpendAuthority.ProverSpec] at hcSA
+  have hRkEdge := hSAProver.trans hcSA.symm
+  -- value-commitment edge: the ValueCommit output cell equals the public (CV_NET_X, CV_NET_Y).
+  have hVCProver := (eVC (by rw [eVNetMag, eVNetSign]; exact haVC)).2
+  rw [eVNetMag, eVNetSign, ValueCommit.ProverSpec] at hVCProver
+  rw [ValueCommit.ProverSpec] at hcVC
+  have hCvEdge :=
+    haVC.2.elim
+      (fun hs => (hVCProver.1 hs).trans (hcVC.1 hs).symm)
+      (fun hs => (hVCProver.2 hs).trans (hcVC.2 hs).symm)
+  -- old note-commitment edge: the derived cm_old output cell equals the witnessed cm_old.
+  have hNCoProver := (eNCold (by
+    rw [gdOldCell, pkdOldCell, eVOld, eRhoOld, ePsiOld]; exact haNCold)).2
+  rw [gdOldCell, pkdOldCell, eVOld, eRhoOld, ePsiOld,
+    NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hNCoProver
+  rw [NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hcNColdSpec
+  obtain ⟨Bold, hBold⟩ := haNCold.2.2.2
+  have hNCoEdge := (hNCoProver Bold hBold).trans (hcNColdSpec Bold hBold).symm
+  -- new note-commitment edge: the derived cm_new output cell's x-coordinate equals CMX.
+  obtain ⟨cmNewY, hcNCnewSpec⟩ := hcNCnew
+  have hNCnProver := (eNCnew (by
+    rw [gdNewCell, pkdNewCell, eVNew, ePsiNew, hNfEdge]; exact haNCnew)).2
+  rw [gdNewCell, pkdNewCell, eVNew, ePsiNew, hNfEdge,
+    NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hNCnProver
+  rw [NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hcNCnewSpec
+  obtain ⟨Bnew, hBnew⟩ := haNCnew.2.2.2
+  have hCmnEdge := (hNCnProver Bnew hBnew).trans (hcNCnewSpec Bnew hBnew).symm
+  refine ⟨haCmOld, hGdOldOn, haAkP, ?_, ?_⟩
+  · -- Merkle ProverAssumptions
+    rw [cmOldX]; exact haMerkle
+  refine ⟨?vcpa, ?cvedge, ?dnassum, ?nfedge, ?sapa, ?rkedge, ?pkdold, ?aipa,
+    ?ncoldpa, ?ncoldedge, ?gdnew, ?pkdnew, ?ncnewpa, ?cmnewedge, ?gate⟩
+  case vcpa => rw [eVNetMag, eVNetSign]; exact haVC
+  case cvedge => exact hCvEdge
+  case dnassum =>
+    show Point.Valid _
+    rw [cmOldCell]; exact haCmOld
+  case nfedge => exact hNfEdge
+  case sapa =>
+    show Point.Valid _
+    rw [akPCell]; exact Or.inl haAkP
+  case rkedge => exact hRkEdge
+  case pkdold => exact hPkdOldOn
+  case aipa =>
+    rw [akPX, eNk, gdOldCell, pkdOldCell]; exact haAI
+  case ncoldpa =>
+    rw [gdOldCell, pkdOldCell, eVOld, eRhoOld, ePsiOld]; exact haNCold
+  case ncoldedge => exact hNCoEdge.trans cmOldCell.symm
+  case gdnew => exact hGdNewOn
+  case pkdnew => exact hPkdNewOn
+  case ncnewpa =>
+    rw [gdNewCell, pkdNewCell, eVNew, ePsiNew, hNfEdge]; exact haNCnew
+  case cmnewedge => exact congrArg Point.x hCmnEdge
+  case gate =>
+    obtain ⟨mroot, hMrootSpec, hVeq, hRoot, hSpend, hOut⟩ := hcMerkleGate
+    -- the witnessed Merkle root cell equals the root determined by the honest hash chain.
+    obtain ⟨r₀, hr₀⟩ := Option.isSome_iff_exists.mp haMerkle
+    have hMerkleProver := (eMerkle (by rw [cmOldX]; exact haMerkle)).2
+    rw [cmOldX] at hMerkleProver
+    simp only [Sinsemilla.Merkle.CalculateRoot.ProverSpec] at hMerkleProver hMrootSpec
+    have hRootEdge : Expression.eval env.toEnvironment
+        ((Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm).output _ _) = mroot :=
+      (hMerkleProver r₀ hr₀).trans (hMrootSpec r₀ hr₀).symm
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [eVOld, eVNew, eVNetMag, eVNetSign]; exact hVeq
+    · rw [eVOld, hRootEdge]; exact hRoot
+    · rw [eVOld]; exact hSpend
+    · rw [eVNew]; exact hOut
 
 def circuit (P : Params) : GeneralFormalCircuit.WithHint Fp Input unit where
   main := main P
@@ -427,7 +521,8 @@ def circuit (P : Params) : GeneralFormalCircuit.WithHint Fp Input unit where
   Assumptions := IntermediateAssumptions
   Spec := IntermediateSpec P
   ProverAssumptions := IntermediateProverAssumptions P
-  ProverSpec := IntermediateProverSpec P
+  -- `ProverSpec` defaults to `True`: it only feeds a parent circuit's completeness, and this
+  -- is the top-level action circuit (no parent).
   soundness := intermediate_spec_of_constraints P
   completeness := intermediate_completeness P
 
