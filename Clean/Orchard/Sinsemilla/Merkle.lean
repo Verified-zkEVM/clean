@@ -950,7 +950,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 -- `output`, which is the 32-layer `Circuit.foldl` of `main`. When a parent circuit passes
 -- `CalculateRoot.circuit` to `simp`/`circuit_proof_start`, unfolding that foldl-based output
 -- on the goal expands into a cast the kernel cannot re-check (a deterministic timeout — see
--- `Clean/Orchard/Action/Synthesis.lean`, where the soundness proof must omit this child from
+-- `Clean/Orchard/Action.lean`, where the soundness proof must omit this child from
 -- the lemma list as a workaround). Providing an explicit closed-form `output` here (the
 -- layer-31 output cell, e.g. `varFromOffset field (31 * 274 + 273)`) would keep the foldl
 -- folded and let the plain tactic handle a parent that composes the Merkle path.
