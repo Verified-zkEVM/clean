@@ -20,7 +20,8 @@ conditionally negates the result according to the sign.
 
 namespace Orchard.Ecc.MulFixed.Short
 
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms
+open ShortWeierstrass (SWPoint)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 namespace Gate
@@ -48,7 +49,7 @@ def SignedPointSelection (row : Input Fp) : Prop :=
   ∀ x : Fp,
     (row.sign = 1 → (x, row.yP) = (x, row.yA)) ∧
       (row.sign = 0 - 1 →
-        (x, row.yP) = CompElliptic.CurveForms.ShortWeierstrass.neg (x, row.yA))
+        (x, row.yP) = ShortWeierstrass.neg (x, row.yA))
 
 def Spec (row : Input Fp) : Prop :=
   IsBool row.lastWindow ∧ IsSign row.sign ∧ SignedPointSelection row
@@ -65,7 +66,7 @@ def circuit : FormalAssertion Fp Input where
   Spec := Spec
   soundness := by
     circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
+      ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
     rcases h_holds with ⟨hLastWindow, hSign, _hY, hNegation⟩
     have hSignedY : input_yA = input_sign * input_yP :=
       (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hNegation)).symm
@@ -90,7 +91,7 @@ def circuit : FormalAssertion Fp Input where
           simp
   completeness := by
     circuit_proof_start [main, Spec, IsSign, SignedPointSelection,
-      CompElliptic.CurveForms.ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
+      ShortWeierstrass.neg, signCheck, yCheck, negationCheck]
     rcases h_spec with ⟨hLastWindow, hSign, hPoint⟩
     refine ⟨?_, ?_, ?_, ?_⟩
     · exact hLastWindow
@@ -224,14 +225,9 @@ theorem windowPoint_ne_zero {w k : ℕ} (hk : k < 8) :
   exact windowScalar_ne_zero hk ((ZMod.val_eq_zero _).mp h0)
 
 theorem windowPoint_onCurve {w k : ℕ} (hk : k < 8) :
-    Pallas.OnCurve ((windowPoint B.point w k).x, (windowPoint B.point w k).y) :=
-  SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk)
-
-theorem windowPoint_point_onCurve {w k : ℕ} (hk : k < 8) :
     ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
-      Point Fp).OnCurve := by
-  rw [Point.onCurve_iff]
-  exact B.windowPoint_onCurve hk
+      Point Fp).OnCurve :=
+  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk))
 
 theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
     n • B.point ≠ 0 := by
@@ -241,13 +237,8 @@ theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
   omega
 
 theorem nsmul_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    Pallas.OnCurve ((n • B.point).x, (n • B.point).y) :=
-  SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt)
-
-theorem nsmul_point_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    ({ x := (n • B.point).x, y := (n • B.point).y } : Point Fp).OnCurve := by
-  rw [Point.onCurve_iff]
-  exact B.nsmul_onCurve hn hlt
+    (Point.ofSW (n • B.point)).OnCurve :=
+  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt))
 
 theorem nsmul_x_ne {s t : ℕ} (hs : 0 < s) (hst : s < t)
     (hsum : s + t < PALLAS_SCALAR_CARD) :
@@ -319,14 +310,19 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 22) (hk : k < 8)
   have hxP : row.xP = (windowPoint B.point w k).x := by
     rw [hx, interpolatedX, hwindow, B.interpolate_eq w hw k hk]
   refine ⟨hxP, ?_⟩
-  have hrowCurve : Pallas.OnCurve ((windowPoint B.point w k).x, row.yP) := by
+  have hrowCurve : ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp).OnCurve := by
     rw [← hxP]
-    show row.yP ^ 2 = row.xP ^ 3 + Pallas.a * row.xP + Pallas.b
-    simp only [Pallas.a, Pallas.b]
+    dsimp [Point.OnCurve]
     linear_combination hcurve
-  rcases y_eq_or_y_eq_neg_of_onCurve hrowCurve (B.windowPoint_onCurve hk) with hy | hy
+  rcases ShortWeierstrass.y_eq_or_y_eq_neg_of_onCurve
+      ((Point.onCurve_iff
+        ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp)).mp hrowCurve)
+      ((Point.onCurve_iff
+        ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
+          Point Fp)).mp (B.windowPoint_onCurve hk)) with hy | hy
   · exact hy
-  · exact absurd ⟨row.u, by rw [hy] at hu; linear_combination -hu⟩
+  · simp only at hy
+    exact absurd ⟨row.u, by rw [hy] at hu; linear_combination -hu⟩
       (B.z_sub_y_not_square w hw k hk)
 
 end FixedBase
@@ -712,20 +708,20 @@ theorem soundness (B : FixedBase) :
       rw [hwp] at hpx hpy
       have h_spec := h_inc ⟨by
           rw [hpx, hpy]
-          exact B.nsmul_point_onCurve (by omega) (by omega),
+          exact B.nsmul_onCurve (by omega) (by omega),
         by
           rw [hacc]
-          exact B.nsmul_point_onCurve hS_pos hS_card,
+          exact B.nsmul_onCurve hS_pos hS_card,
         by
           rw [hpx, hacc]
           show (t • B.point).x ≠ (partialSum ks j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
       apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show Pallas.add ((t • B.point).x, (t • B.point).y)
+      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
           ((partialSum ks j • B.point).x, (partialSum ks j • B.point).y)
         = ((partialSum ks (j + 1) • B.point).x, (partialSum ks (j + 1) • B.point).y)
-      rw [Pallas.add_coords, ← add_nsmul,
+      rw [sw_add_coords, ← add_nsmul,
         show t + partialSum ks j = partialSum ks (j + 1) by rw [partialSum, hval]; omega]
   -- the window-21 point
   have hwindow21 : (RunningSumCoords.coordsRow
@@ -781,7 +777,7 @@ theorem soundness (B : FixedBase) :
          y := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 190 + 4 + 2 + 2)).y }
         : Point Fp).Valid := by
     rw [hacc20]
-    exact Or.inl (B.nsmul_point_onCurve hS_pos hS_card)
+    exact Or.inl (B.nsmul_onCurve hS_pos hS_card)
   have h_final := h_add ⟨hValidP, hValidAcc⟩
   have hmulEq :
       ({ x := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).x,
@@ -790,7 +786,7 @@ theorem soundness (B : FixedBase) :
       = (m : Fq) • B := by
     apply Point.ext_coords
     rw [h_final.2]
-    show Pallas.add
+    show ShortWeierstrass.add pallasA
         (({ x := env.get (i₀ + 1 + 4 + 200 + 1), y := env.get (i₀ + 1 + 4 + 200 + 1 + 1) }
           : Point Fp)).coords
         (({ x := Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 190 + 4 + 2 + 2)).x,
@@ -800,10 +796,10 @@ theorem soundness (B : FixedBase) :
                  y := env.get (i₀ + 1 + 4 + 200 + 1 + 1) } : Point Fp)).coords
       = (env.get (i₀ + 1 + 4 + 200 + 1), env.get (i₀ + 1 + 4 + 200 + 1 + 1)) from rfl,
       hpx21, hpy21, hacc20]
-    show Pallas.add ((t21 • B.point).x, (t21 • B.point).y)
+    show ShortWeierstrass.add pallasA ((t21 • B.point).x, (t21 • B.point).y)
         ((S20 • B.point).x, (S20 • B.point).y)
       = ((m : Fq) • B).coords
-    rw [Pallas.add_coords]
+    rw [sw_add_coords]
     have hpt : t21 • B.point + S20 • B.point = (m : Fq).val • B.point := by
       rw [ht21_def, hS20_def, ← add_nsmul, ← B.add_natCast_val_nsmul, ← hks21,
         windowScalar_partialSum ks, ← hm_def]
@@ -823,7 +819,7 @@ theorem soundness (B : FixedBase) :
     have hyP : env.get (i₀ + 1 + 4 + 200 + 4 + 11 + 1 + 1)
         = -(Expression.eval env (varFromOffset Point (i₀ + 1 + 4 + 200 + 4 + 2 + 2)).y) := by
       have h2 := congrArg Prod.snd ((h_signSel (0 : Fp)).2 hsign)
-      simpa [CompElliptic.CurveForms.ShortWeierstrass.neg] using h2
+      simpa [ShortWeierstrass.neg] using h2
     rw [B.smul_neg, ← hmulEq, hyP]
 
 /-- Extract the four field equations from a witnessed `RowTail`, keeping the row opaque
@@ -909,7 +905,7 @@ private theorem coordsRow_spec (B : FixedBase) (m : Fp) {w : ℕ} (hw : w < 22)
   · rw [show (RunningSumCoords.coordsRow row).yP = row.yP from rfl,
       show (RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx, hy]
     have h := B.windowPoint_onCurve (w := w) (k := windowVal m w) (windowVal_lt m w)
-    simp only [CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b] at h
+    dsimp [Point.OnCurve] at h
     linear_combination h
 
 /-- The running sum starts at the magnitude itself. -/
@@ -1045,22 +1041,22 @@ theorem completeness (B : FixedBase) :
         rfl
       have h_spec := h_step' j hj ⟨by
           rw [hpx, hpy]
-          exact B.nsmul_point_onCurve (by omega) (by omega),
+          exact B.nsmul_onCurve (by omega) (by omega),
         by
           rw [hacc]
-          exact B.nsmul_point_onCurve hS_pos hS_card,
+          exact B.nsmul_onCurve hS_pos hS_card,
         by
           rw [hpx, hacc]
           show (t • B.point).x ≠ (partialSum (windowVal input_magnitude) j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
       apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show Pallas.add ((t • B.point).x, (t • B.point).y)
+      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
           ((partialSum (windowVal input_magnitude) j • B.point).x,
             (partialSum (windowVal input_magnitude) j • B.point).y)
         = ((partialSum (windowVal input_magnitude) (j + 1) • B.point).x,
             (partialSum (windowVal input_magnitude) (j + 1) • B.point).y)
-      rw [Pallas.add_coords, ← add_nsmul,
+      rw [sw_add_coords, ← add_nsmul,
         show t + partialSum (windowVal input_magnitude) j
           = partialSum (windowVal input_magnitude) (j + 1) by rw [partialSum, hval]; omega]
   -- per-iteration constraint obligations
@@ -1109,9 +1105,9 @@ theorem completeness (B : FixedBase) :
         ((hrow j hj).2.2.1.trans (rowTailValue_yP B input_magnitude (j + 1)))
         ((hrow j hj).2.2.2.trans (rowTailValue_u B input_magnitude (j + 1)))
     · rw [hpx, hpy]
-      exact B.nsmul_point_onCurve (by omega) (by omega)
+      exact B.nsmul_onCurve (by omega) (by omega)
     · rw [hacc]
-      exact B.nsmul_point_onCurve hS_pos hS_card
+      exact B.nsmul_onCurve hS_pos hS_card
     · rw [hpx, hacc]
       show (t • B.point).x ≠ (partialSum (windowVal input_magnitude) j • B.point).x
       exact B.nsmul_x_ne hS_pos (by omega) hsum_card
@@ -1158,7 +1154,7 @@ theorem completeness (B : FixedBase) :
           y := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 1 + 4 + 190 + 4 + 2 + 2)).y } : Point Fp).Valid := by
     rw [hacc20]
-    exact Or.inl (B.nsmul_point_onCurve hS_pos hS_card)
+    exact Or.inl (B.nsmul_onCurve hS_pos hS_card)
   have h_final := h_add_env ⟨hValidP, hValidAcc⟩
   have hmulEq :
       ({ x := Expression.eval env.toEnvironment
@@ -1168,7 +1164,7 @@ theorem completeness (B : FixedBase) :
       = ((input_magnitude.val : ℕ) : Fq) • B := by
     apply Point.ext_coords
     rw [h_final.2]
-    show Pallas.add
+    show ShortWeierstrass.add pallasA
         (({ x := env.get (i₀ + 1 + 4 + 200 + 1), y := env.get (i₀ + 1 + 4 + 200 + 1 + 1) }
           : Point Fp)).coords
         (({ x := Expression.eval env.toEnvironment
@@ -1179,10 +1175,10 @@ theorem completeness (B : FixedBase) :
                  y := env.get (i₀ + 1 + 4 + 200 + 1 + 1) } : Point Fp)).coords
       = (env.get (i₀ + 1 + 4 + 200 + 1), env.get (i₀ + 1 + 4 + 200 + 1 + 1)) from rfl,
       hpx21, hpy21, hacc20]
-    show Pallas.add ((t21 • B.point).x, (t21 • B.point).y)
+    show ShortWeierstrass.add pallasA ((t21 • B.point).x, (t21 • B.point).y)
         ((S20 • B.point).x, (S20 • B.point).y)
       = (((input_magnitude.val : ℕ) : Fq) • B).coords
-    rw [Pallas.add_coords]
+    rw [sw_add_coords]
     have hpt : t21 • B.point + S20 • B.point
         = ((input_magnitude.val : ℕ) : Fq).val • B.point := by
       rw [ht21_def, hS20_def, ← add_nsmul, ← B.add_natCast_val_nsmul,

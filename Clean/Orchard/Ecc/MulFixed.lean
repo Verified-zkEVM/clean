@@ -144,7 +144,8 @@ precomputed per-window constants (`lagrange_coeffs()`, `z()`, `u()` from
 enforces out-of-circuit via `test_lagrange_coeffs` / `test_zs_and_us`.
 -/
 
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms
+open ShortWeierstrass (SWPoint)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 /-- `offset_acc`: the accumulated initialization offset
@@ -267,14 +268,9 @@ theorem windowPoint_ne_zero {w k : ℕ} (hk : k < 8) :
   exact windowScalar_ne_zero hk ((ZMod.val_eq_zero _).mp h0)
 
 theorem windowPoint_onCurve {w k : ℕ} (hk : k < 8) :
-    Pallas.OnCurve ((windowPoint B.point w k).x, (windowPoint B.point w k).y) :=
-  SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk)
-
-theorem windowPoint_point_onCurve {w k : ℕ} (hk : k < 8) :
     ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
-      Point Fp).OnCurve := by
-  rw [Point.onCurve_iff]
-  exact B.windowPoint_onCurve hk
+      Point Fp).OnCurve :=
+  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk))
 
 theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
     n • B.point ≠ 0 := by
@@ -284,13 +280,8 @@ theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
   omega
 
 theorem nsmul_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    Pallas.OnCurve ((n • B.point).x, (n • B.point).y) :=
-  SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt)
-
-theorem nsmul_point_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    ({ x := (n • B.point).x, y := (n • B.point).y } : Point Fp).OnCurve := by
-  rw [Point.onCurve_iff]
-  exact B.nsmul_onCurve hn hlt
+    ({ x := (n • B.point).x, y := (n • B.point).y } : Point Fp).OnCurve :=
+  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt))
 
 /--
 The collision-freedom fact behind the incomplete additions of fixed-base scalar
@@ -354,14 +345,19 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 85) (hk : k < 8)
   have hxP : row.xP = (windowPoint B.point w k).x := by
     rw [hx, interpolatedX, hwindow, B.interpolate_eq w hw k hk]
   refine ⟨hxP, ?_⟩
-  have hrowCurve : Pallas.OnCurve ((windowPoint B.point w k).x, row.yP) := by
+  have hrowCurve : ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp).OnCurve := by
     rw [← hxP]
-    show row.yP ^ 2 = row.xP ^ 3 + Pallas.a * row.xP + Pallas.b
-    simp only [Pallas.a, Pallas.b]
+    dsimp [Point.OnCurve]
     linear_combination hcurve
-  rcases y_eq_or_y_eq_neg_of_onCurve hrowCurve (B.windowPoint_onCurve hk) with hy | hy
+  rcases ShortWeierstrass.y_eq_or_y_eq_neg_of_onCurve
+      ((Point.onCurve_iff
+        ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp)).mp hrowCurve)
+      ((Point.onCurve_iff
+        ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
+          Point Fp)).mp (B.windowPoint_onCurve hk)) with hy | hy
   · exact hy
-  · exact absurd ⟨row.u, by rw [hy] at hu; linear_combination -hu⟩
+  · simp only at hy
+    exact absurd ⟨row.u, by rw [hy] at hu; linear_combination -hu⟩
       (B.z_sub_y_not_square w hw k hk)
 
 end FixedBase

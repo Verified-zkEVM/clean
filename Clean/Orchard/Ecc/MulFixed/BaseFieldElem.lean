@@ -166,7 +166,8 @@ def circuit : FormalAssertion Fp Input where
 
 end Gate
 
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Curves.Pasta CompElliptic.CurveForms
+open ShortWeierstrass (SWPoint)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD PALLAS_BASE_CARD)
 
 /-!
@@ -671,21 +672,21 @@ theorem soundness (B : MulFixed.FixedBase) :
       rw [hwp] at hpx hpy
       have h_spec := h_inc ⟨by
           rw [hpx, hpy]
-          exact B.nsmul_point_onCurve (by omega) (by omega),
+          exact B.nsmul_onCurve (by omega) (by omega),
         by
           rw [hacc]
-          exact B.nsmul_point_onCurve hS_pos hS_card,
+          exact B.nsmul_onCurve hS_pos hS_card,
         by
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum ks j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
       apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show Pallas.add ((t • B.point).x, (t • B.point).y)
+      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
           ((MulFixed.partialSum ks j • B.point).x, (MulFixed.partialSum ks j • B.point).y)
         = ((MulFixed.partialSum ks (j + 1) • B.point).x,
             (MulFixed.partialSum ks (j + 1) • B.point).y)
-      rw [Pallas.add_coords, ← add_nsmul,
+      rw [sw_add_coords, ← add_nsmul,
         show t + MulFixed.partialSum ks j = MulFixed.partialSum ks (j + 1) by
           rw [MulFixed.partialSum, hval]; omega]
   -- the window-84 point
@@ -743,7 +744,7 @@ theorem soundness (B : MulFixed.FixedBase) :
             (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
         : Point Fp).Valid := by
     rw [hacc83]
-    exact Or.inl (B.nsmul_point_onCurve hS83_pos hS83_card)
+    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
   have h_final := h_add ⟨hValidP, hValidAcc⟩
   have hresult :
       ({ x := Expression.eval env
@@ -752,7 +753,7 @@ theorem soundness (B : MulFixed.FixedBase) :
             (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 4 + 2 + 2)).y }
         : Point Fp).coords = ((V • B.point).x, (V • B.point).y) := by
     rw [h_final.2]
-    show Pallas.add
+    show ShortWeierstrass.add pallasA
         (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
             y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
           : Point Fp)).coords
@@ -766,9 +767,9 @@ theorem soundness (B : MulFixed.FixedBase) :
       = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
          env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
       hpx84, hpy84, hacc83]
-    show Pallas.add ((t84 • B.point).x, (t84 • B.point).y)
+    show ShortWeierstrass.add pallasA ((t84 • B.point).x, (t84 • B.point).y)
         ((S83 • B.point).x, (S83 • B.point).y) = ((V • B.point).x, (V • B.point).y)
-    rw [Pallas.add_coords]
+    rw [sw_add_coords]
     have hpt : t84 • B.point + S83 • B.point = V • B.point := by
       rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, ← hks84,
         windowScalar_partialSum ks, ← hV_def, natCast_val_nsmul]
@@ -874,7 +875,7 @@ private theorem coordsRow_spec (B : MulFixed.FixedBase) (α : Fp) {w : ℕ} (hw 
   · rw [show (MulFixed.RunningSumCoords.coordsRow row).yP = row.yP from rfl,
       show (MulFixed.RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx, hy]
     have h := B.windowPoint_onCurve (w := w) (k := windowVal α w) (windowVal_lt α w)
-    simp only [CompElliptic.CurveForms.ShortWeierstrass.OnCurve, Pallas.a, Pallas.b] at h
+    dsimp [Point.OnCurve] at h
     linear_combination h
 
 /-- The running sum starts at the base-field element itself. -/
@@ -1053,22 +1054,22 @@ theorem completeness (B : MulFixed.FixedBase) :
         rw [hrowY j hj]; rfl
       have h_spec := h_step' j hj ⟨by
           rw [hpx, hpy]
-          exact B.nsmul_point_onCurve (by omega) (by omega),
+          exact B.nsmul_onCurve (by omega) (by omega),
         by
           rw [hacc]
-          exact B.nsmul_point_onCurve hS_pos hS_card,
+          exact B.nsmul_onCurve hS_pos hS_card,
         by
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
       apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show Pallas.add ((t • B.point).x, (t • B.point).y)
+      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
           ((MulFixed.partialSum (windowVal input) j • B.point).x,
             (MulFixed.partialSum (windowVal input) j • B.point).y)
         = ((MulFixed.partialSum (windowVal input) (j + 1) • B.point).x,
             (MulFixed.partialSum (windowVal input) (j + 1) • B.point).y)
-      rw [Pallas.add_coords, ← add_nsmul,
+      rw [sw_add_coords, ← add_nsmul,
         show t + MulFixed.partialSum (windowVal input) j
           = MulFixed.partialSum (windowVal input) (j + 1) by
           rw [MulFixed.partialSum, hval]; omega]
@@ -1146,7 +1147,7 @@ theorem completeness (B : MulFixed.FixedBase) :
             (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
         : Point Fp).Valid := by
     rw [hacc83]
-    exact Or.inl (B.nsmul_point_onCurve hS83_pos hS83_card)
+    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
   -- per-window constraint obligations (windows `1..83`)
   have hB : ∀ (j : ℕ), j < 83 →
       Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
@@ -1187,9 +1188,9 @@ theorem completeness (B : MulFixed.FixedBase) :
       · rw [hrowY j hj]
       · exact (hrow j hj).2.2.2.trans (rowTailValue_u B input (j + 1))
     · rw [hpx, hpy]
-      exact B.nsmul_point_onCurve (by omega) (by omega)
+      exact B.nsmul_onCurve (by omega) (by omega)
     · rw [hacc]
-      exact B.nsmul_point_onCurve hS_pos hS_card
+      exact B.nsmul_onCurve hS_pos hS_card
     · rw [hpx, hacc]
       show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
       exact B.nsmul_x_ne hS_pos (by omega) hsum_card
@@ -1203,7 +1204,7 @@ theorem completeness (B : MulFixed.FixedBase) :
         : Point Fp).coords
         = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y) := by
     rw [h_final.2]
-    show Pallas.add
+    show ShortWeierstrass.add pallasA
         (({ x := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
             y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) }
           : Point Fp)).coords
@@ -1218,10 +1219,10 @@ theorem completeness (B : MulFixed.FixedBase) :
       = (env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1),
          env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)) from rfl,
       hpx84, hpy84, hacc83]
-    show Pallas.add ((t84 • B.point).x, (t84 • B.point).y)
+    show ShortWeierstrass.add pallasA ((t84 • B.point).x, (t84 • B.point).y)
         ((S83 • B.point).x, (S83 • B.point).y)
       = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y)
-    rw [Pallas.add_coords]
+    rw [sw_add_coords]
     have hpt : t84 • B.point + S83 • B.point = (show Fp from input).val • B.point := by
       rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul,
         windowScalar_partialSum (windowVal input),
