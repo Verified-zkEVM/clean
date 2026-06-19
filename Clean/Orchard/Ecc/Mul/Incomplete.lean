@@ -1,4 +1,4 @@
-import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Ecc.DoubleAndAdd
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Specs.Sinsemilla
@@ -7,7 +7,7 @@ import Clean.Orchard.Specs.Sinsemilla
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.Mul.Incomplete
+namespace Orchard.Ecc.Mul.Incomplete
 
 /- The Rust gate uses `y_a = Y_A / 2`. These constraints multiply those
    equations by `2`, avoiding a division operation while preserving the Pallas
@@ -1207,4 +1207,4 @@ def circuit (n : ℕ) :
 
 end DoubleAndAdd
 
-end Orchard.Ecc.ScalarMul.Mul.Incomplete
+end Orchard.Ecc.Mul.Incomplete

@@ -1,4 +1,4 @@
-import Clean.Orchard.Ecc.ScalarMul.MulFixed
+import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
@@ -18,7 +18,7 @@ additions, offset-corrected most significant window, complete addition), and fin
 conditionally negates the result according to the sign.
 -/
 
-namespace Orchard.Ecc.ScalarMul.MulFixed.Short
+namespace Orchard.Ecc.MulFixed.Short
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -1266,4 +1266,4 @@ def circuit (B : FixedBase) : GeneralFormalCircuit Fp MagnitudeSign Point where
   soundness := soundness B
   completeness := completeness B
 
-end Orchard.Ecc.ScalarMul.MulFixed.Short
+end Orchard.Ecc.MulFixed.Short

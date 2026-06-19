@@ -1,5 +1,5 @@
 import Clean.Circuit
-import Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth
+import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.Add
 
 /-!
@@ -16,7 +16,7 @@ computes `rk = alpha_commitment + ak_P`. The final public-instance constraints o
 
 namespace Orchard.Action.SpendAuthority
 
-open Ecc Ecc.ScalarMul
+open Ecc
 open CompElliptic.Curves.Pasta
 
 /-- Inputs of the spend-authority block: the already-assigned authorizing key point

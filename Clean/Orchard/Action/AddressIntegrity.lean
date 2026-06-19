@@ -1,6 +1,6 @@
 import Clean.Gadgets.Equality
 import Clean.Orchard.Action.CommitIvk
-import Clean.Orchard.Ecc.ScalarMul.Mul.Assign
+import Clean.Orchard.Ecc.Mul.Assign
 
 /-!
 # Orchard diversified address integrity
@@ -23,7 +23,7 @@ namespace Orchard.Action.AddressIntegrity
 
 open CompElliptic.Curves.Pasta
 open CompElliptic.CurveForms.ShortWeierstrass
-open Ecc Ecc.ScalarMul
+open Ecc
 open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint)
 
 /-- Inputs of the diversified-address integrity block. `ak`, `nk`, and `rivk` feed

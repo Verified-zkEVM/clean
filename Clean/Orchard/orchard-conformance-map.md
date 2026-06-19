@@ -49,21 +49,21 @@ Source: `halo2_gadgets/src/utilities/{cond_swap,decompose_running_sum,lookup_ran
 
 Source: `halo2_gadgets/src/ecc/chip/mul*.rs`, `mul_fixed*.rs`
 
-- `Ecc.ScalarMul.Defs`: shared gate helpers
-- `Ecc.ScalarMul.Mul.Gate.circuit`: `GATE LSB check`
-- `Ecc.ScalarMul.Mul.Complete.circuit`: `GATE Decompose scalar for complete bits`
-- `Ecc.ScalarMul.Mul.Incomplete.{Init,MainLoop,Loop}.circuit`: `GATE q_mul_{1,2,3} == 1 checks`
-- `Ecc.ScalarMul.Mul.Incomplete.DoubleAndAdd.circuit`:
+- `Ecc.Defs`: shared gate helpers
+- `Ecc.Mul.Gate.circuit`: `GATE LSB check`
+- `Ecc.Mul.Complete.circuit`: `GATE Decompose scalar for complete bits`
+- `Ecc.Mul.Incomplete.{Init,MainLoop,Loop}.circuit`: `GATE q_mul_{1,2,3} == 1 checks`
+- `Ecc.Mul.Incomplete.DoubleAndAdd.circuit`:
   `incomplete.rs::Config::double_and_add` (`CircuitVersion::AnchoredBase`)
-- `Ecc.ScalarMul.Mul.Overflow.circuit`: `GATE overflow checks`
-- `Ecc.ScalarMul.MulFixed.Coords.circuit`: `coords_check` helper (no source `GATE` name)
-- `Ecc.ScalarMul.MulFixed.RunningSumCoords.circuit`: `GATE Running sum coordinates check`
-- `Ecc.ScalarMul.MulFixed.FixedBase`: value-level fixed-base model (window tables) parameterizing
+- `Ecc.Mul.Overflow.circuit`: `GATE overflow checks`
+- `Ecc.MulFixed.Coords.circuit`: `coords_check` helper (no source `GATE` name)
+- `Ecc.MulFixed.RunningSumCoords.circuit`: `GATE Running sum coordinates check`
+- `Ecc.MulFixed.FixedBase`: value-level fixed-base model (window tables) parameterizing
   the fixed-base entries
-- `Ecc.ScalarMul.MulFixed.FullWidth.circuit`: `FixedPoint::mul` (gate `FullWidth.Gate.circuit`)
-- `Ecc.ScalarMul.MulFixed.BaseFieldElem.circuit`: `FixedPointBaseField::mul`
+- `Ecc.MulFixed.FullWidth.circuit`: `FixedPoint::mul` (gate `FullWidth.Gate.circuit`)
+- `Ecc.MulFixed.BaseFieldElem.circuit`: `FixedPointBaseField::mul`
   (gate `BaseFieldElem.Gate.circuit`; running-sum decomposition `RunningSumMul.circuit`)
-- `Ecc.ScalarMul.MulFixed.Short.circuit`: `FixedPointShort::mul` (gate `Short.Gate.circuit`;
+- `Ecc.MulFixed.Short.circuit`: `FixedPointShort::mul` (gate `Short.Gate.circuit`;
   value-level `Short.FixedBase` model)
 
 ### Poseidon

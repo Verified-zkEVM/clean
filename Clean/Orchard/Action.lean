@@ -37,7 +37,7 @@ ENABLE_OUTPUT=8`.
 
 namespace Orchard.Action
 
-open Ecc Ecc.ScalarMul
+open Ecc
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Sinsemilla.Merkle (MerkleRoot depth)

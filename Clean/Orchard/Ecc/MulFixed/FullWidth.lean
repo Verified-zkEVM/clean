@@ -1,4 +1,4 @@
-import Clean.Orchard.Ecc.ScalarMul.MulFixed
+import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 
@@ -15,7 +15,7 @@ points of windows 1..83 with incomplete addition, and adds the offset-corrected 
 significant window with complete addition.
 -/
 
-namespace Orchard.Ecc.ScalarMul.MulFixed.FullWidth
+namespace Orchard.Ecc.MulFixed.FullWidth
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -672,4 +672,4 @@ def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq
   soundness := soundness B
   completeness := completeness B
 
-end Orchard.Ecc.ScalarMul.MulFixed.FullWidth
+end Orchard.Ecc.MulFixed.FullWidth

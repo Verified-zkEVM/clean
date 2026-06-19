@@ -1,10 +1,10 @@
-import Clean.Orchard.Ecc.ScalarMul.Defs
+import Clean.Orchard.Ecc.Defs
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/
 
-namespace Orchard.Ecc.ScalarMul.MulFixed
+namespace Orchard.Ecc.MulFixed
 
 structure CoordsParams (F : Type) where
   z : F
@@ -366,4 +366,4 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 85) (hk : k < 8)
 
 end FixedBase
 
-end Orchard.Ecc.ScalarMul.MulFixed
+end Orchard.Ecc.MulFixed

@@ -1,7 +1,7 @@
 import Clean.Circuit
-import Clean.Orchard.Ecc.ScalarMul.MulFixed.FullWidth
-import Clean.Orchard.Ecc.ScalarMul.MulFixed.Short
-import Clean.Orchard.Ecc.ScalarMul.MulFixed.BaseFieldElem
+import Clean.Orchard.Ecc.MulFixed.FullWidth
+import Clean.Orchard.Ecc.MulFixed.Short
+import Clean.Orchard.Ecc.MulFixed.BaseFieldElem
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Poseidon.Hash
 import Clean.Orchard.Utilities
@@ -19,7 +19,7 @@ multiplied by the fixed base `ValueCommitR`.
 
 namespace Orchard.Action.ValueCommit
 
-open Ecc Ecc.ScalarMul
+open Ecc
 open CompElliptic.Curves.Pasta
 
 /-- The inputs of `value_commit_orchard`: the magnitude-sign pair behind the
