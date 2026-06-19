@@ -11,6 +11,8 @@ and provides bridge lemmas back to CompElliptic when theorem support is needed.
 namespace Orchard
 
 open CompElliptic.CurveForms
+open ShortWeierstrass (SWPoint)
+open CompElliptic.Curves.Pasta
 
 abbrev Fp := CompElliptic.Fields.Pasta.PallasBaseField
 abbrev Fq := CompElliptic.Fields.Pasta.PallasScalarField
@@ -23,9 +25,7 @@ def tP : Fp := 45560315531419706090280762371685220353
 
 instance : (ShortWeierstrass.toW pallasA pallasB).IsElliptic :=
   inferInstanceAs <| WeierstrassCurve.IsElliptic <|
-  (ShortWeierstrass.toW
-    CompElliptic.Curves.Pasta.Pallas.curve.A
-    CompElliptic.Curves.Pasta.Pallas.curve.B)
+  (ShortWeierstrass.toW Pallas.curve.A Pallas.curve.B)
 
 /--
 This is the point vocabulary used by Orchard-facing specs and circuit interfaces. It is
@@ -86,15 +86,14 @@ theorem not_onCurve_zero : ¬ OnCurve (0 : Point Fp) := by
 
 theorem no_onCurve_of_x_zero (y : Fp) : ¬ OnCurve ({ x := 0, y } : Point Fp) := by
   intro h
-  exact CompElliptic.Curves.Pasta.Pallas.no_onCurve_x_zero y ((onCurve_iff { x := 0, y }).mp h)
+  exact Pallas.no_onCurve_x_zero y ((onCurve_iff { x := 0, y }).mp h)
 
 theorem ne_zero_of_onCurve {point : Point Fp} :
     point.OnCurve → point ≠ 0 := by
   intro h hzero
   exact not_onCurve_zero (hzero ▸ h)
 
-def ofSW (point : ShortWeierstrass.SWPoint
-    CompElliptic.Curves.Pasta.Pallas.curve) : Point Fp :=
+def ofSW (point : SWPoint Pallas.curve) : Point Fp :=
   { x := point.x, y := point.y }
 
 variable {F : Type} [Field F]
@@ -196,7 +195,7 @@ theorem y_ne_zero_of_valid_of_x_ne_zero {point : Point Fp} :
   simp only [Point.valid_iff, Point.coords] at hPoint hx ⊢
   rintro rfl
   rcases hPoint with hCurve | hIdentity
-  · apply CompElliptic.Curves.Pasta.Pallas.no_onCurve_y_zero x hCurve
+  · apply Pallas.no_onCurve_y_zero x hCurve
   · simp_all
 
 theorem x_zero_iff_y_zero_of_valid {point : Point Fp} :
