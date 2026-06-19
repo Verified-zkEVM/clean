@@ -5,6 +5,9 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms
 
 namespace Orchard.Point
 
+lemma sw_add_coords (P Q : ShortWeierstrass.SWPoint Pallas.curve) :
+  ShortWeierstrass.add Pallas.a (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
+
 theorem ne_zero_of_onCurve {point : Point Fp}
   (hPoint : point.OnCurve) :
     point ≠ zero := by

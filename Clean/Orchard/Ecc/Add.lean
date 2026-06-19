@@ -18,12 +18,6 @@ next-row result and auxiliaries, and calls the gate assertion.
 -/
 
 namespace Add
-
-structure Input (F : Type) where
-  p : Point F
-  q : Point F
-deriving ProvableStruct
-
 namespace Gate
 
 structure Input (F : Type) where
@@ -286,7 +280,12 @@ def circuit : FormalAssertion Fp Input where
 
 end Gate
 
-section ValueModel
+structure Input (F : Type) where
+  p : Point F
+  q : Point F
+deriving ProvableStruct
+
+-- TODO this "value model" belongs in Orchard/Specs
 
 def lambdaValue (input : Input Fp) : Fp :=
   if input.q.x = input.p.x then
@@ -319,11 +318,44 @@ def rowValue (input : Input Fp) : Gate.Input Fp where
   alpha := (input.q.x - input.p.x)⁻¹
   beta := input.p.x⁻¹
   gamma := input.q.x⁻¹
-  delta :=
-    if input.q.x = input.p.x then
-      (input.q.y + input.p.y)⁻¹
-    else
-      0
+  delta := if input.q.x = input.p.x then (input.q.y + input.p.y)⁻¹ else 0
+
+def main (input : Var Input Fp) :
+    Circuit Fp (Var Point Fp) := do
+  let p <== input.p
+  let q <== input.q
+  let r ← witness fun env =>
+    (rowValue { p := eval env p, q := eval env q }).r
+  let lambda ← witnessField fun env =>
+    (rowValue { p := eval env p, q := eval env q }).lambda
+  let alpha ← witnessField fun env =>
+    (rowValue { p := eval env p, q := eval env q }).alpha
+  let beta ← witnessField fun env =>
+    (rowValue { p := eval env p, q := eval env q }).beta
+  let gamma ← witnessField fun env =>
+    (rowValue { p := eval env p, q := eval env q }).gamma
+  let delta ← witnessField fun env =>
+    (rowValue { p := eval env p, q := eval env q }).delta
+  Gate.circuit {
+    x_p := p.x
+    y_p := p.y
+    x_qr := { curr := q.x, next := r.x }
+    y_qr := { curr := q.y, next := r.y }
+    lambda
+    alpha
+    beta
+    gamma
+    delta
+  }
+  return r
+
+def Assumptions (input : Input Fp) : Prop :=
+  input.p.Valid ∧ input.q.Valid
+
+def Spec (input : Input Fp) (output : Point Fp) : Prop :=
+  output.Valid ∧ output = input.p + input.q
+
+section ValueModel
 
 theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
     (hp : input.p.Valid)
@@ -426,13 +458,11 @@ theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
   · right
     linear_combination h
 
-end ValueModel
-
 open Gate
 
 theorem rowValue_spec_pallas {input : Input Fp}
     (hp : input.p.Valid) (hq : input.q.Valid) :
-    Spec (rowValue input) := by
+    Gate.Spec (rowValue input) := by
   constructor
   · intro hxdiff
     unfold rowValue lambdaValue
@@ -576,7 +606,7 @@ theorem rowValue_spec_pallas {input : Input Fp}
           exact False.elim (hflag hcontra)
 
 theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
-    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
     row.r = outputValue { p := row.p, q := row.q } := by
   dsimp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hp hq hrow ⊢
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
@@ -666,51 +696,17 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
           exact hr.2
 
 theorem spec_eq_add_pallas {row : Gate.Input Fp}
-    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
     row.r = row.p + row.q := by
   rw [spec_eq_outputValue_pallas hp hq hrow]
   exact outputValue_eq_add hp hq
 
 theorem spec_valid_pallas {row : Gate.Input Fp}
-    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Spec row) :
+    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
     row.r.Valid := by
   rw [spec_eq_outputValue_pallas hp hq hrow]
   exact outputValue_valid_pallas hp hq
-
-def main (input : Var Input Fp) :
-    Circuit Fp (Var Point Fp) := do
-  let p <== input.p
-  let q <== input.q
-  let r ← witness fun env =>
-    (rowValue { p := eval env p, q := eval env q }).r
-  let lambda ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).lambda
-  let alpha ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).alpha
-  let beta ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).beta
-  let gamma ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).gamma
-  let delta ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).delta
-  Gate.circuit {
-    x_p := p.x
-    y_p := p.y
-    x_qr := { curr := q.x, next := r.x }
-    y_qr := { curr := q.y, next := r.y }
-    lambda
-    alpha
-    beta
-    gamma
-    delta
-  }
-  return r
-
-def Assumptions (input : Input Fp) : Prop :=
-  input.p.Valid ∧ input.q.Valid
-
-def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  output.Valid ∧ output = input.p + input.q
+end ValueModel
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit

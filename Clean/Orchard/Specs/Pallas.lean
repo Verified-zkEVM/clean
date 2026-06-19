@@ -97,13 +97,13 @@ def neg [Neg F] (point : Point F) : Point F where
 instance [Neg F] : Neg (Point F) := ⟨neg⟩
 
 def add (p q : Point Fp) : Point Fp :=
-  let coords := CompElliptic.CurveForms.ShortWeierstrass.add Pallas.a p.coords q.coords
+  let coords := ShortWeierstrass.add Pallas.a p.coords q.coords
   { x := coords.1, y := coords.2 }
 
 instance : Add (Point Fp) := ⟨add⟩
 
 @[simp] theorem coords_add (p q : Point Fp) :
-    (p + q).coords = Pallas.add p.coords q.coords := rfl
+    (p + q).coords = ShortWeierstrass.add Pallas.a p.coords q.coords := rfl
 
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)

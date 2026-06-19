@@ -669,10 +669,11 @@ theorem soundness :
         exact A.onCurve⟩).2
     have hAddCoords := congrArg Point.coords hAddS
     rw [Point.coords_add] at hAddCoords
-    simp only [Point.coords] at hAddCoords
-    rw [hCorrNeg, hacc, Pallas.add_coords] at hAddCoords
+    simp only [Point.coords] at hAddCoords ⊢
+    rw [hCorrNeg, hacc] at hAddCoords
     rw [hk0, if_neg (by norm_num : ¬((0 : Fp) = 1))]
-    simpa [Point.coords] using hAddCoords
+    simp only [hAddCoords, SWPoint.add_x, SWPoint.add_y]
+    rfl
   · -- k₀ = 1: the correction point is the identity
     replace hCorrZero := hCorrZero hk0
     have hAddS := (hAdd ⟨by
@@ -683,13 +684,14 @@ theorem soundness :
         exact A.onCurve⟩).2
     have hAddCoords := congrArg Point.coords hAddS
     rw [Point.coords_add] at hAddCoords
-    simp only [Point.coords] at hAddCoords
+    simp only [Point.coords] at hAddCoords ⊢
     rw [hCorrZero, hacc,
       show ((0 : Fp), (0 : Fp)) =
         ((0 : SWPoint Pallas.curve).x, (0 : SWPoint Pallas.curve).y) from rfl,
-      Pallas.add_coords] at hAddCoords
+      ] at hAddCoords
     rw [hk0, if_pos rfl]
-    simpa [Point.coords] using hAddCoords
+    simp only [hAddCoords, SWPoint.add_x, SWPoint.add_y]
+    rfl
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
@@ -805,7 +807,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   have hAccPair := congrArg Point.coords hAccPoint
   have hcoordsCoords : input_base.coords = (B.x, B.y) := by
     simpa [Point.coords] using hcoords
-  rw [Point.coords_add, hcoordsCoords, Pallas.add_coords, ← two_nsmul] at hAccPair
+  rw [Point.coords_add, hcoordsCoords, Point.sw_add_coords, ← two_nsmul] at hAccPair
   -- the decomposition accumulator: [accScalar (accScalar (accScalar 2 ..) ..) ..]B
   have hDecOut := hAccImpl B hB hcoords hAccPair
   -- chain bounds
@@ -1049,7 +1051,7 @@ theorem completeness : Completeness Fp main Assumptions := by
   have hAccPair := congrArg Point.coords hAccPoint
   have hbaseCoords : input_base.coords = (B.x, B.y) := by
     simpa [Point.coords] using hbase
-  rw [Point.coords_add, hbaseCoords, Pallas.add_coords, ← two_nsmul] at hAccPair
+  rw [Point.coords_add, hbaseCoords, Point.sw_add_coords, ← two_nsmul] at hAccPair
   -- the decomposition prover facts: honest cells as shifted values of k
   have hDecS := hDec ⟨B, hB, hbase, hAccPair⟩
   simp only [Decompose.ProverSpec, Point.coords] at hDecS
