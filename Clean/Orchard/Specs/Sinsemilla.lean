@@ -139,30 +139,50 @@ theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     exact hc₂.2.2
   exact h2 (by rw [h0, SWPoint.neg_x])
 
+/-- A defined step from a valid accumulator lands on a valid point. -/
+theorem step_valid {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
+    {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B.Valid := by
+  simp only [step, Option.bind_eq_bind] at h
+  by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
+  · rw [incompleteAdd, if_pos hc₁] at h
+    simp at h
+  rw [incompleteAdd, if_neg hc₁] at h
+  rw [show ((some (A + G.S m)).bind fun t => incompleteAdd t A)
+    = incompleteAdd (A + G.S m) A from rfl] at h
+  by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
+  · rw [incompleteAdd, if_pos hc₂] at h
+    simp at h
+  rw [incompleteAdd, if_neg hc₂] at h
+  obtain rfl : A + G.S m + A = B := Option.some.inj h
+  exact Point.valid_add (Point.valid_add a_valid (G.valid hm)) a_valid
+
 /-- Chain points of a defined hash are never the identity. -/
-theorem hashToSWPoint_ne_zero {S : ℕ → Point Fp} {Q B : Point Fp}
-    {l : List ℕ} (hQ : Q ≠ 0) (h : hashToPoint S Q l = some B) : B ≠ 0 := by
+theorem hashToPoint_ne_zero {G : Generators} {Q B : Point Fp}
+    {l : List ℕ} (hQvalid : Q.Valid) (hQ : Q ≠ 0) (hl : ∀ m ∈ l, m < 2 ^ K)
+    (h : hashToPoint G.S Q l = some B) : B ≠ 0 := by
   induction l generalizing Q with
   | nil =>
     rw [hashToPoint_nil] at h
     exact Option.some.inj h ▸ hQ
   | cons m ms ih =>
     rw [hashToPoint_cons] at h
-    cases hs : step S m Q with
+    cases hs : step G.S m Q with
     | none =>
       rw [hs] at h
       simp at h
     | some C =>
       rw [hs] at h
-      exact ih (step_ne_zero ?_ hs) h
+      exact ih (step_valid hQvalid (hl m (by simp)) hs)
+        (step_ne_zero hQvalid (hl m (by simp)) hs)
+        (fun n hn => hl n (by simp [hn])) h
 
 /-- Split a defined chain at a list boundary. -/
-theorem hashToSWPoint_append_some {S : ℕ → SWPoint Pallas.curve}
-    {Q B : SWPoint Pallas.curve} {l₁ l₂ : List ℕ}
-    (h : hashToSWPoint S Q (l₁ ++ l₂) = some B) :
-    ∃ C, hashToSWPoint S Q l₁ = some C ∧ hashToSWPoint S C l₂ = some B := by
-  rw [hashToSWPoint_append] at h
-  cases hc : hashToSWPoint S Q l₁ with
+theorem hashToPoint_append_some {S : ℕ → Point Fp}
+    {Q B : Point Fp} {l₁ l₂ : List ℕ}
+    (h : hashToPoint S Q (l₁ ++ l₂) = some B) :
+    ∃ C, hashToPoint S Q l₁ = some C ∧ hashToPoint S C l₂ = some B := by
+  rw [hashToPoint_append] at h
+  cases hc : hashToPoint S Q l₁ with
   | none =>
     rw [hc] at h
     simp at h
@@ -171,17 +191,17 @@ theorem hashToSWPoint_append_some {S : ℕ → SWPoint Pallas.curve}
     exact ⟨C, rfl, h⟩
 
 /-- Peel the last step off a chain. -/
-theorem hashToSWPoint_concat (S : ℕ → SWPoint Pallas.curve) (Q : SWPoint Pallas.curve)
+theorem hashToPoint_concat (S : ℕ → Point Fp) (Q : Point Fp)
     (l : List ℕ) (m : ℕ) :
-    hashToSWPoint S Q (l ++ [m])
-      = (hashToSWPoint S Q l).bind fun acc => step S acc m := by
-  rw [hashToSWPoint_append]
-  cases h : hashToSWPoint S Q l with
+    hashToPoint S Q (l ++ [m])
+      = (hashToPoint S Q l).bind fun acc => step S m acc := by
+  rw [hashToPoint_append]
+  cases h : hashToPoint S Q l with
   | none => rfl
   | some acc =>
-    show hashToSWPoint S acc [m] = step S acc m
-    rw [hashToSWPoint_cons]
-    cases h : step S acc m with
+    show hashToPoint S acc [m] = step S m acc
+    rw [hashToPoint_cons]
+    cases h : step S m acc with
     | none => rfl
     | some b => rfl
 
