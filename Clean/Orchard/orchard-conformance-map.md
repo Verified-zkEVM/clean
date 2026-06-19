@@ -127,15 +127,6 @@ Source: `orchard/src/circuit.rs`, `circuit/gadget.rs`, `circuit/note_commit.rs`,
 
 ## Known Non-Conformances
 
-### Concrete Circuit Field
-
-Some circuit packages and helpers are still generic over `{F : Type} [Field F]` rather than
-the concrete Pallas base field `Fp` — e.g. `Utilities.RunningSum.circuit` and
-`Utilities.LookupRangeCheck.circuit` (the short-lookup-bitshift gate), plus shared helper
-lemmas in several modules. These should be specialized so Orchard circuit packages are
-concrete `Fp` circuits, with field facts established for that field rather than assumed by
-callers.
-
 ### Scalar Multiplication Output Signatures
 
 `FixedPoint::mul` returns `(EccPoint, EccScalarFixed)` and `FixedPointShort::mul` returns
