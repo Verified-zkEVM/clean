@@ -12,9 +12,11 @@ Source baseline:
 
 - `Circuit::synthesize`
   - Source: `orchard-0.14.0/src/circuit.rs`
-  - **GAP:** no top-level action entry circuit. Only the final arithmetic gate exists, as
-    `ActionChecks.circuit` in `Clean/Orchard/Action.lean`. Public inputs/wiring (`ANCHOR`,
-    `CV_NET_X/Y`, `NF_OLD`, `RK_X/Y`, `CMX`, `ENABLE_SPEND`, `ENABLE_OUTPUT`) not modeled.
+  - Clean: `Orchard.Action.circuit` in `Clean/Orchard/Action.lean`. Composes the gadget
+    blocks (Merkle/anchor, value commitment, nullifier, spend authority, address integrity,
+    old + new note commitment) and ties their outputs to the public instance cells
+    (`ANCHOR`, `CV_NET_X/Y`, `NF_OLD`, `RK_X/Y`, `CMX`, `ENABLE_SPEND`, `ENABLE_OUTPUT`) plus
+    the `q_orchard` gate (`Action.Gate.circuit`).
   - Witness helpers:
     - `assign_free_advice` (`orchard-0.14.0/src/circuit/gadget.rs`)
       - **GAP:** no dedicated wrapper; single-cell witnesses appear locally where needed.
@@ -75,9 +77,8 @@ Source baseline:
 
   - Spend authority
     - Source: `orchard-0.14.0/src/circuit.rs`, `Spend authority`
-    - Clean: `SpendAuthority.circuit` in `Clean/Orchard/SpendAuthority.lean`.
-      - **GAP:** the public-input constraints on `RK_X`/`RK_Y` are part of the missing
-        top-level action wiring.
+    - Clean: `SpendAuthority.circuit` in `Clean/Orchard/SpendAuthority.lean`
+      (the `RK_X`/`RK_Y` public constraints are wired in `Orchard.Action.circuit`).
     - `[alpha] SpendAuthG` (`FixedPoint::mul`, `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`)
       - Clean: `Clean/Orchard/Ecc/ScalarMul/MulFixed/FullWidth.lean`.
     - Add to `ak_P` (`halo2_gadgets/src/ecc/chip/add.rs`)
@@ -123,12 +124,11 @@ Source baseline:
 
   - New note commitment integrity
     - Same dependency tree as old note commitment; action wiring differs (`rho_new = nf_old`,
-      output `cm_new.extract_p()` constrained to `CMX`).
-    - **GAP:** the `note_commit` block is reusable, but the action-level wiring is not implemented.
+      output `cm_new.extract_p()` constrained to `CMX`). Wired in `Orchard.Action.circuit`.
 
   - Final Orchard circuit checks
     - Source: `orchard-0.14.0/src/circuit.rs`, region `"Orchard circuit checks"`
-    - Clean: `ActionChecks.circuit` in `Clean/Orchard/Action.lean`.
+    - Clean: `Action.Gate.circuit` (the `q_orchard` gate), composed in `Orchard.Action.circuit`.
 
 ## Shared Low-Level Dependencies
 

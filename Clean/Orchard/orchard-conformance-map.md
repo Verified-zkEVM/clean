@@ -122,6 +122,8 @@ Source: `orchard/src/circuit.rs`, `circuit/gadget.rs`, `circuit/note_commit.rs`,
   (`ivk = CommitIvk(ak, nk, rivk)`, `[ivk] g_d_old`, constrained to `pk_d_old`)
 - Entry circuits `Gadget.ValueCommitOrchard.circuit`, `Gadget.DeriveNullifier.circuit`,
   `SpendAuthority.circuit`
+- `Orchard.Action.circuit` in `Clean/Orchard/Action.lean`: `Circuit::synthesize`, the
+  top-level action circuit (gadget blocks + public-instance wiring + `q_orchard` gate)
 
 ## Known Non-Conformances
 
@@ -156,11 +158,6 @@ APIs still mismatch the source: Halo2's `hash_to_point`/`commit` return `(Point,
 only the `z_1` cells and `HashDomain.circuit`/`CommitDomain.circuit` return only the point.
 Exact conformance would thread full `zs` (an `HVec`) through the recursive tower. Also missing:
 `SinsemillaInstructions::hash_to_point_with_private_init`.
-
-### Orchard Entry APIs
-
-Missing: the full `Circuit::synthesize` action circuit (top-level public-input wiring). The
-spend-authority coordinate constraints on `RK_X`/`RK_Y` are part of this missing wiring.
 
 ### Gate Layout Metadata For VK Reconstruction
 
