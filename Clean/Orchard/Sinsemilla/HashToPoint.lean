@@ -1299,7 +1299,7 @@ def z1sOfZs {F : Type} [Zero F] : (ns : List ℕ) → HVec (zLengths ns) F → V
       (#v[if h : 1 < n + 1 then (HVec.head zs)[1]'h else (0 : F)]
         ++ z1sOfZs rest (HVec.tail zs))
 
-@[simp] theorem z1sOfZs_getElem_zero {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
+theorem z1sOfZs_getElem_zero {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) :
     (z1sOfZs (n :: rest) zs)[0]'(by simp) =
       if h : 1 < n + 1 then (HVec.head zs)[1]'h else (0 : F) := by
@@ -2015,14 +2015,15 @@ end Entry
 
 /-! ### `EntryZ1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
 
-`MerkleCRH` reads only each piece's `z₁` running-sum cell, so this view of the shared
-`Chain` hash forwards just the hash point and the `z₁` cells (`Chain.Output.z1s`), keeping
-its concrete-circuit proofs `HVec`-free. It is the same chain and layout as `Entry`,
-differing only in which of `Chain`'s outputs it exposes. -/
+`MerkleCRH` reads only each piece's `z₁` running-sum cell. This is the `z₁`-projecting
+view of `Entry`: `z1s[i] = zs[i][1]` via `Chain.z1sOfZs`, so the single source of truth is
+`hash_to_point`'s running sums `zs`. The output is exposed through the named `output`
+definition, so parents (Merkle) see an opaque `EntryZ1s.output …` reasoned about via the
+`Spec`, rather than the `Chain.z1sOfZs` projection internals. -/
 namespace EntryZ1s
 
 /-- Outputs of the `z₁`-only `hash_to_point` view: the hash point and each piece's `z₁`
-running-sum cell (`Chain.Output.z1s`). -/
+running-sum cell. -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   z1s : Vector F ns.length
@@ -2032,32 +2033,28 @@ instance (ns : List ℕ) : ProvableStruct (Output ns) where
   toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
   fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
+def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Fp) :
     Circuit Fp (Var (Output (n₀ :: ns)) Fp) := do
-  let xQ <== Expression.const Q.x
-  let out ← (Chain.circuit G (n₀ :: ns)).1
-    { pieces := pieces, xA := xQ, yA := fun _ => Q.y }
-  InitialYQ.circuit { yQ := Q.y } { doubleAndAdd := out.first }
-  let z1s : Vector (Expression Fp) (ns.length + 1) := out.z1s
-  return { point := out.point, z1s := z1s }
+  let out ← Entry.circuit G Q hQ n₀ ns pieces
+  return { point := out.point, z1s := Chain.z1sOfZs (n₀ :: ns) out.zs }
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ)
-    (ns : List ℕ) :
+/-- The output cells of `EntryZ1s`, kept as a named (opaque) definition so parent circuits
+reason about `EntryZ1s.output …` via the `Spec` instead of unfolding the `Chain.z1sOfZs`
+projection. It is exactly the output `elaborate_circuit` derives for `main`, so `output_eq`
+is definitional. -/
+def output (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
+    (input : Var (fields (ns.length + 1)) Fp) (offset : ℕ) : Var (Output (n₀ :: ns)) Fp :=
+  let e := (Entry.main G Q n₀ ns input).output offset
+  { point := e.point, z1s := Chain.z1sOfZs (n₀ :: ns) e.zs }
+
+instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+    (n₀ : ℕ) (ns : List ℕ) :
     ElaboratedCircuit Fp (fields (ns.length + 1)) (Output (n₀ :: ns))
-      (main G Q n₀ ns) where
-  localLength _ := 1 + Chain.chainLength (n₀ :: ns)
-  localLength_eq := by
-    intro input offset
-    simp only [main, circuit_norm, (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.1,
-      InitialYQ.circuit]
-  channelsLawful := by
-    dsimp only [ElaboratedCircuit.ChannelsLawful]
-    dsimp only [main]
-    simp only [circuit_norm, seval, InitialYQ.circuit,
-      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.1,
-      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2]
-    try trivial
+      (main G Q hQ n₀ ns) := by
+  elaborate_circuit_with {
+    output input offset := output G Q n₀ ns input offset
+  }
 
 def Spec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : List ℕ)
     (pieces : Value (fields (ns.length + 1)) Fp)
@@ -2086,54 +2083,35 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (n₀ : ℕ) (ns : Li
 
 theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q n₀ ns)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
-  circuit_proof_start [main, Spec, InitialYQ.circuit, InitialYQ.Spec]
-  obtain ⟨h_xQ, h_chain, h_yQ⟩ := h_holds
-  simp only [(Chain.circuit G (n₀ :: ns)).2.2.1] at h_chain
-  replace h_chain := h_chain trivial
-  rw [(Chain.circuit G (n₀ :: ns)).2.1] at h_chain
-  simp only [Chain.Spec] at h_chain
-  obtain ⟨hfxA, chunks, hPC, hZ1, -, hchainAll⟩ := h_chain
-  refine ⟨⟨chunks, hPC, ?_, ?_⟩, Or.inl (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2⟩
-  · convert hZ1 using 2
+  circuit_proof_start [main, Spec, output, Entry.circuit, Entry.Spec]
+  obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
+  refine ⟨chunks, hPC, ?_, ?_⟩
+  · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
+    exact Chain.z1Facts_of_zsFacts _ chunks _ hZs
   · intro B hB
-    obtain ⟨px, py⟩ := hchainAll Q hQ (by rw [h_xQ])
-      (by exact h_yQ.symm) B hB
-    rw [px, py]
+    exact hfun B hB
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q n₀ ns)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, InitialYQ.circuit,
-    InitialYQ.Spec]
-  obtain ⟨h_xQ_env, h_chain_env⟩ := h_env
-  obtain ⟨hbounds, B, hchain⟩ := h_assumptions
-  have hPSchain := h_chain_env (by
-    rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
-    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩)
-  rw [(Chain.circuit G (n₀ :: ns)).2.2.2.2.1] at hPSchain
-  obtain ⟨-, htfxA, hZ1H, -, hAfun⟩ := hPSchain
-  obtain ⟨henter, hBfin⟩ := hAfun Q hQ h_xQ_env.symm rfl
-  obtain ⟨px, py⟩ := hBfin B hchain
-  refine ⟨⟨h_xQ_env, ?_, ?_⟩, ?_, ?_⟩
-  · rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
-    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩
-  · exact henter
-  · convert hZ1H using 2
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, output, Entry.circuit,
+    Entry.ProverAssumptions, Entry.ProverSpec]
+  obtain ⟨-, hZsH, hAfun⟩ := h_env h_assumptions
+  refine ⟨h_assumptions, ?_, ?_⟩
+  · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
+    exact Chain.z1sHonest_of_zsHonest _ _ _ h_assumptions.1 hZsH
   · intro B' hB'
-    rw [hchain] at hB'
-    obtain rfl : B = B' := Option.some.inj hB'
-    dsimp only at px py
-    rw [px, py]
+    exact hAfun B' hB'
 
 def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))
       (Output (n₀ :: ns)) where
-  main := main G Q n₀ ns
-  elaborated := elaborated G Q n₀ ns
+  main := main G Q hQ n₀ ns
+  elaborated := elaborated G Q hQ n₀ ns
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q n₀ ns
