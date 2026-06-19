@@ -676,7 +676,7 @@ private theorem honest_step {P : SWPoint Pallas.curve} (hP : P ≠ 0) (bits : �
     (by ring)
   refine ⟨hYP, hYA, hpinned.1, ?_⟩
   have h := hpinned.2
-  exact mul_left_cancel₀ Add.pallas_two_ne_zero h
+  exact mul_left_cancel₀ two_ne_zero h
 
 theorem soundness (n : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main n) (fun _ _ => True)
@@ -911,7 +911,7 @@ theorem soundness (n : ℕ) :
     obtain ⟨hx, hy⟩ := haux
     simp only [rowXA, Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at hx
     rw [if_pos rfl] at hy
-    exact Prod.ext hx (mul_left_cancel₀ Add.pallas_two_ne_zero hy)
+    exact Prod.ext hx (mul_left_cancel₀ two_ne_zero hy)
 
 /-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
 over `honest_step`'s output conclusions. -/

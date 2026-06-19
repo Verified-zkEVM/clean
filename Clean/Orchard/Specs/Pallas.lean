@@ -119,6 +119,12 @@ lemma add_def (p q : Point Fp) :
 @[simp] theorem coords_add (p q : Point Fp) :
     (p + q).coords = ShortWeierstrass.add pallasA p.coords q.coords := rfl
 
+theorem valid_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
+    (p + q).Valid := by
+  exact (valid_iff (p + q)).mpr
+    (ShortWeierstrass.valid_add
+      ((valid_iff p).mp hp) ((valid_iff q).mp hq))
+
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)
 
@@ -196,4 +202,38 @@ theorem x_zero_iff_y_zero_of_valid {point : Point Fp} :
   · contrapose!
     exact y_ne_zero_of_valid_of_x_ne_zero hPoint
 
-end Orchard.Point
+end Point
+
+theorem two_ne_zero : (2 : Fp) ≠ 0 := by decide
+
+theorem add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
+    y + y ≠ 0 := by
+  intro h
+  have hmul : (2 : Fp) * y = 0 := by linear_combination h
+  simp_all [two_ne_zero]
+
+namespace Point
+theorem y_eq_or_neg_of_same_x {p q : Point Fp}
+    (hp : p.Valid) (hq : q.Valid)
+    (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
+    q.y = p.y ∨ q.y = -p.y := by
+  have hpCurve : p.OnCurve := by
+    rcases hp with hCurve | hIdentity
+    · exact hCurve
+    · exact False.elim (hpx (congrArg Point.x hIdentity))
+  have hqCurve : q.OnCurve := by
+    rcases hq with hCurve | hIdentity
+    · exact hCurve
+    · exact False.elim (hqx (congrArg Point.x hIdentity))
+  unfold Point.OnCurve at hpCurve hqCurve
+  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
+    rw [hx] at hqCurve
+    linear_combination hqCurve - hpCurve
+  rcases mul_eq_zero.mp hsquare with h | h
+  · left
+    exact sub_eq_zero.mp h
+  · right
+    linear_combination h
+end Point
+
+end Orchard

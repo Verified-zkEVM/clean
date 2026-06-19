@@ -4,7 +4,7 @@ import Mathlib.Tactic
 
 namespace Orchard.Ecc
 
-open CompElliptic.Curves.Pasta
+open CompElliptic.CurveForms
 
 /-!
 Reference:
@@ -285,8 +285,6 @@ structure Input (F : Type) where
   q : Point F
 deriving ProvableStruct
 
--- TODO this "value model" belongs in Orchard/Specs
-
 def lambdaValue (input : Input Fp) : Fp :=
   if input.q.x = input.p.x then
     if input.p.y ≠ 0 then
@@ -296,24 +294,11 @@ def lambdaValue (input : Input Fp) : Fp :=
   else
     (input.q.y - input.p.y) * (input.q.x - input.p.x)⁻¹
 
-def outputValue (input : Input Fp) : Point Fp :=
-  let lambda := lambdaValue input
-  if input.p.x = 0 then
-    input.q
-  else if input.q.x = 0 then
-    input.p
-  else if input.q.x = input.p.x ∧ input.q.y = -input.p.y then
-    Point.zero
-  else
-    let xR := lambda * lambda - input.p.x - input.q.x
-    let yR := lambda * (input.p.x - xR) - input.p.y
-    { x := xR, y := yR }
-
 def rowValue (input : Input Fp) : Gate.Input Fp where
   x_p := input.p.x
   y_p := input.p.y
-  x_qr := { curr := input.q.x, next := (outputValue input).x }
-  y_qr := { curr := input.q.y, next := (outputValue input).y }
+  x_qr := { curr := input.q.x, next := (input.p + input.q).x }
+  y_qr := { curr := input.q.y, next := (input.p + input.q).y }
   lambda := lambdaValue input
   alpha := (input.q.x - input.p.x)⁻¹
   beta := input.p.x⁻¹
@@ -355,112 +340,9 @@ def Assumptions (input : Input Fp) : Prop :=
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   output.Valid ∧ output = input.p + input.q
 
-section ValueModel
-
-theorem outputValue_eq_shortWeierstrass_add {input : Input Fp}
-    (hp : input.p.Valid)
-    (hq : input.q.Valid) :
-    (outputValue input).coords =
-      CompElliptic.CurveForms.ShortWeierstrass.add
-        (0 : Fp) input.p.coords input.q.coords := by
-  have hpCoords := (Point.valid_iff input.p).mp hp
-  have hqCoords := (Point.valid_iff input.q).mp hq
-  rcases input with ⟨⟨px, py⟩, ⟨qx, qy⟩⟩
-  have hpNative : ({ x := px, y := py } : Point Fp).Valid := by
-    simpa using hp
-  have hqNative : ({ x := qx, y := qy } : Point Fp).Valid := by
-    simpa using hq
-  unfold Point.coords outputValue lambdaValue
-    CompElliptic.CurveForms.ShortWeierstrass.add at *
-  change Pallas.Valid (px, py) at hpCoords
-  change Pallas.Valid (qx, qy) at hqCoords
-  simp only
-  by_cases hpx : px = 0
-  · have hpy : py = 0 :=
-      Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := px, y := py }) hpNative hpx
-    simp [hpx, hpy]
-  · by_cases hqx : qx = 0
-    · have hqy : qy = 0 :=
-        Point.y_eq_zero_of_valid_of_x_eq_zero (point := { x := qx, y := qy }) hqNative hqx
-      simp [hpx, hqx, hqy]
-    · simp [hpx, hqx]
-      by_cases hx : px = qx
-      · have hx' : qx = px := hx.symm
-        rw [if_pos hx', if_pos hx]
-        by_cases hy : py + qy = 0
-        · have hqy : qy = -py := by linear_combination hy
-          simp [Point.zero, hx', hqy]
-        · have hqy : ¬ qy = -py := by
-            intro h
-            apply hy
-            rw [h]
-            ring
-          simp [hx', hqy, hy]
-          constructor <;>
-            by_cases hpy : py = 0 <;>
-              simp [hpy] <;> ring
-      · have hx' : ¬ qx = px := fun h => hx h.symm
-        simp [hx, hx']
-        constructor <;> ring
-
-theorem outputValue_eq_add {input : Input Fp}
-    (hp : input.p.Valid)
-    (hq : input.q.Valid) :
-    outputValue input = input.p + input.q := by
-  apply Point.ext_coords
-  exact outputValue_eq_shortWeierstrass_add hp hq
-
-theorem outputValue_valid_pallas {input : Input Fp}
-    (hp : input.p.Valid)
-    (hq : input.q.Valid) :
-    (outputValue input).Valid := by
-  rw [outputValue_eq_add hp hq]
-  exact (Point.valid_iff (input.p + input.q)).mpr
-    (CompElliptic.CurveForms.ShortWeierstrass.valid_add
-      ((Point.valid_iff input.p).mp hp) ((Point.valid_iff input.q).mp hq))
-
-theorem pallas_two_ne_zero : (2 : Fp) ≠ 0 := by
-  decide
-
-theorem pallas_add_self_ne_zero {y : Fp} (hy : y ≠ 0) :
-    y + y ≠ 0 := by
-  intro h
-  have hmul : (2 : Fp) * y = 0 := by
-    linear_combination h
-  exact hy ((mul_eq_zero.mp hmul).resolve_left pallas_two_ne_zero)
-
-theorem pallas_y_eq_or_neg_of_same_x {p q : Point Fp}
-    (hp : p.Valid) (hq : q.Valid)
-    (hpx : p.x ≠ 0) (hqx : q.x ≠ 0) (hx : q.x = p.x) :
-    q.y = p.y ∨ q.y = -p.y := by
-  have hpCurve : Pallas.OnCurve p.coords := by
-    replace hp := (Point.valid_iff p).mp hp
-    rcases hp with hCurve | hIdentity
-    · exact hCurve
-    · rcases p with ⟨px, py⟩
-      simp only [Point.coords, Prod.mk.injEq] at hIdentity
-      exact False.elim (hpx hIdentity.1)
-  have hqCurve : Pallas.OnCurve q.coords := by
-    replace hq := (Point.valid_iff q).mp hq
-    rcases hq with hCurve | hIdentity
-    · exact hCurve
-    · rcases q with ⟨qx, qy⟩
-      simp only [Point.coords, Prod.mk.injEq] at hIdentity
-      exact False.elim (hqx hIdentity.1)
-  unfold Pallas.OnCurve CompElliptic.CurveForms.ShortWeierstrass.OnCurve
-    Pallas.a Pallas.b Point.coords at hpCurve hqCurve
-  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
-    rw [hx] at hqCurve
-    linear_combination hqCurve - hpCurve
-  rcases mul_eq_zero.mp hsquare with h | h
-  · left
-    exact sub_eq_zero.mp h
-  · right
-    linear_combination h
-
 open Gate
 
-theorem rowValue_spec_pallas {input : Input Fp}
+theorem rowValue_spec {input : Input Fp}
     (hp : input.p.Valid) (hq : input.q.Valid) :
     Gate.Spec (rowValue input) := by
   constructor
@@ -484,29 +366,31 @@ theorem rowValue_spec_pallas {input : Input Fp}
         simp [hx, hpy, hpx]
       · simp [hx, hpy]
         have hden : (2 : Fp) * input.p.y ≠ 0 :=
-          mul_ne_zero pallas_two_ne_zero hpy
-        field_simp [hden, pallas_two_ne_zero]
+          mul_ne_zero two_ne_zero hpy
+        field_simp [hden, two_ne_zero]
     · have hcontra : (input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ = 1 := by
         field_simp [sub_ne_zero.mpr hx]
       exact False.elim (hflag hcontra)
   constructor
   · intro hprod
-    dsimp [rowValue, outputValue, lambdaValue] at hprod ⊢
+    dsimp [rowValue, lambdaValue] at hprod ⊢
     simp at hprod ⊢
     have hpx : input.p.x ≠ 0 := hprod.1.1
     have hqx : input.q.x ≠ 0 := hprod.1.2
     have hxdiff : input.q.x - input.p.x ≠ 0 := hprod.2
     have hx : input.q.x ≠ input.p.x := fun h => hxdiff (sub_eq_zero.mpr h)
-    simp [hpx, hqx, hx]
+    have hxpq : input.p.x ≠ input.q.x := Ne.symm hx
+    simp [Point.add_def, ShortWeierstrass.add,
+      hpx, hqx, hx, hxpq, pow_two, div_eq_mul_inv]
   constructor
   · intro hprod
-    dsimp [rowValue, outputValue, lambdaValue] at hprod ⊢
+    dsimp [rowValue, lambdaValue] at hprod ⊢
     simp at hprod ⊢
     have hpx : input.p.x ≠ 0 := hprod.1.1
     have hqx : input.q.x ≠ 0 := hprod.1.2
     have hysum : input.q.y + input.p.y ≠ 0 := hprod.2
     by_cases hx : input.q.x = input.p.x
-    · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+    · have hsame := Point.y_eq_or_neg_of_same_x hp hq hpx hqx hx
       rcases hsame with hy | hy
       · have hnotInv : ¬(input.q.x = input.p.x ∧ input.q.y = -input.p.y) := by
           intro hinv
@@ -516,50 +400,68 @@ theorem rowValue_spec_pallas {input : Input Fp}
         have hpy : input.p.y ≠ 0 :=
           Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx
         have hnotY : input.q.y ≠ -input.p.y := fun h => hnotInv ⟨hx, h⟩
-        simp [hpx, hx, hnotY, hpy]
+        have hysum' : input.p.y + input.q.y ≠ 0 := by
+          rw [hy]
+          exact add_self_ne_zero hpy
+        simp [Point.add_def, ShortWeierstrass.add,
+          hpx, hx, hpy, hysum', pallasA, pow_two, div_eq_mul_inv]
+        constructor
+        · ring
+        · exact Or.inl (Or.inl (by ring))
       · exact False.elim (hysum (by rw [hy]; ring))
     · have hnotInv : ¬(input.q.x = input.p.x ∧ input.q.y = -input.p.y) := by
         exact fun h => hx h.1
-      simp [hpx, hqx, hx]
+      have hxpq : input.p.x ≠ input.q.x := Ne.symm hx
+      simp [Point.add_def, ShortWeierstrass.add,
+        hpx, hqx, hx, hxpq, pow_two, div_eq_mul_inv]
   constructor
   · intro hflag
-    dsimp [rowValue, outputValue] at hflag ⊢
+    dsimp [rowValue] at hflag ⊢
     simp at hflag ⊢
     by_cases hpx : input.p.x = 0
-    · simp [hpx]
+    · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
+      change input.p.y = 0 at hpy
+      simp [Point.add_def, ShortWeierstrass.add, hpx, hpy]
     · have hcontra : input.p.x * input.p.x⁻¹ = 1 := by
         field_simp [hpx]
       exact False.elim (hflag hcontra)
   constructor
   · intro hflag
-    dsimp [rowValue, outputValue] at hflag ⊢
+    dsimp [rowValue] at hflag ⊢
     by_cases hpx : input.p.x = 0
     · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
       by_cases hqx : input.q.x = 0
       · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
+        change input.q.y = 0 at hqy
         have hpEq : input.p = Point.zero := by
           rw [Point.mk.injEq]
           exact ⟨hpx, hpy⟩
         have hqEq : input.q = Point.zero := by
           rw [Point.mk.injEq]
           exact ⟨hqx, hqy⟩
-        simp [Point.zero, hpEq, hqEq]
+        simp [Point.add_def, ShortWeierstrass.add,
+          Point.zero, hpEq, hqEq]
       · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
           field_simp [hqx]
         exact False.elim (hflag hcontra)
     · by_cases hqx : input.q.x = 0
-      · simp [hpx, hqx]
+      · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
+        change input.q.y = 0 at hqy
+        simp [Point.add_def, ShortWeierstrass.add, hpx, hqx, hqy]
       · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
           field_simp [hqx]
         exact False.elim (hflag hcontra)
   · intro hflag
-    dsimp [rowValue, outputValue] at hflag ⊢
+    dsimp [rowValue] at hflag ⊢
     simp at hflag ⊢
     by_cases hpx : input.p.x = 0
     · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
+      change input.p.y = 0 at hpy
       by_cases hqx : input.q.x = 0
       · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
-        simp [hpx, hqx, hqy]
+        change input.q.y = 0 at hqy
+        simp [Point.add_def, ShortWeierstrass.add,
+          hpx, hpy, hqx, hqy]
       · have hcontra :
             ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
               if input.q.x = input.p.x then
@@ -581,12 +483,13 @@ theorem rowValue_spec_pallas {input : Input Fp}
         exact False.elim (hflag hcontra)
       · by_cases hx : input.q.x = input.p.x
         · by_cases hy : input.q.y = -input.p.y
-          · simp [Point.zero, hpx, hx, hy]
-          · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+          · simp [Point.add_def, ShortWeierstrass.add,
+              hpx, hx, hy]
+          · have hsame := Point.y_eq_or_neg_of_same_x hp hq hpx hqx hx
             rcases hsame with hyeq | hyneg
             · have hysum : input.q.y + input.p.y ≠ 0 := by
                 rw [hyeq]
-                exact pallas_add_self_ne_zero
+                exact add_self_ne_zero
                   (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
               have hcontra :
                     ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
@@ -605,9 +508,9 @@ theorem rowValue_spec_pallas {input : Input Fp}
             field_simp [sub_ne_zero.mpr hx]
           exact False.elim (hflag hcontra)
 
-theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
+theorem add_of_spec {row : Gate.Input Fp}
     (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
-    row.r = outputValue { p := row.p, q := row.q } := by
+    row.r = row.p + row.q := by
   dsimp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hp hq hrow ⊢
   rcases hrow with ⟨hSlope, hTangent, hNonexceptionalDiff, hNonexceptionalSum,
     hLeftIdentity, hRightIdentity, hInverse⟩
@@ -615,16 +518,20 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
   · have hflag : row.p.x * row.beta ≠ 1 := by
       simp [Gate.Input.p, hpx]
     have hr := hLeftIdentity hflag
-    unfold outputValue
-    simp [hpx]
-    simpa [Point.mk.injEq, Gate.Input.q, Gate.Input.r] using hr
+    have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
+    change row.y_p = 0 at hpy
+    apply Point.ext_coords
+    simpa [Point.add_def, ShortWeierstrass.add,
+      Point.coords, hpx, hpy, Gate.Input.q, Gate.Input.r] using congrArg Point.coords hr
   · by_cases hqx : row.x_qr.curr = 0
     · have hflag : row.q.x * row.gamma ≠ 1 := by
         simp [Gate.Input.q, hqx]
       have hr := hRightIdentity hflag
-      unfold outputValue
-      simp [hpx, hqx]
-      simpa [Point.mk.injEq, Gate.Input.p, Gate.Input.r] using hr
+      have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
+      change row.y_qr.curr = 0 at hqy
+      apply Point.ext_coords
+      simpa [Point.add_def, ShortWeierstrass.add,
+        Point.coords, hpx, hqx, hqy, Gate.Input.p, Gate.Input.r] using congrArg Point.coords hr
     · by_cases hinv : row.x_qr.curr = row.x_p ∧ row.y_qr.curr = -row.y_p
       · have hflag :
             (row.q.x - row.p.x) * row.alpha + (row.q.y + row.p.y) * row.delta ≠ 1 := by
@@ -634,20 +541,21 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
         have hr0 : row.r = Point.zero := by
           rw [Point.mk.injEq]
           exact hr
-        unfold outputValue
-        simp [hpx, hinv]
-        simpa [Point.mk.injEq, Gate.Input.r] using hr0
+        rcases hinv with ⟨hx, hy⟩
+        apply Point.ext_coords
+        simp [Point.add_def, ShortWeierstrass.add,
+          Point.coords, hpx, hx, hy]
+        simpa [Point.zero, Point.coords, Gate.Input.r] using congrArg Point.coords hr0
       · have hr :
             row.r.x = row.lambda * row.lambda - row.p.x - row.q.x ∧
               row.r.y = row.lambda * (row.p.x - row.r.x) - row.p.y := by
           by_cases hx : row.x_qr.curr = row.x_p
-          · have hsame := pallas_y_eq_or_neg_of_same_x hp hq hpx hqx hx
+          · have hsame := Point.y_eq_or_neg_of_same_x hp hq hpx hqx hx
             rcases hsame with hy | hy
             · have hysum : row.q.y + row.p.y ≠ 0 := by
                 simp [Gate.Input.p, Gate.Input.q] at hy ⊢
                 rw [hy]
-                exact pallas_add_self_ne_zero
-                  (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
+                exact add_self_ne_zero (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
               have hprod : row.p.x * row.q.x * (row.q.y + row.p.y) ≠ 0 := by
                 simpa [Gate.Input.p, Gate.Input.q] using
                   mul_ne_zero (mul_ne_zero hpx hqx) hysum
@@ -673,8 +581,8 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
             unfold lambdaValue
             simp [Gate.Input.p, Gate.Input.q, hx, hpy]
             have hden : (2 : Fp) * row.y_p ≠ 0 :=
-              mul_ne_zero pallas_two_ne_zero hpy
-            field_simp [hden, pallas_two_ne_zero]
+              mul_ne_zero two_ne_zero hpy
+            field_simp [hden, two_ne_zero]
             linear_combination htangent
           · have hxdiff : row.q.x - row.p.x ≠ 0 := by
               simp [Gate.Input.p, Gate.Input.q]
@@ -688,32 +596,38 @@ theorem spec_eq_outputValue_pallas {row : Gate.Input Fp}
             linear_combination hslope
         rw [hlambda] at hr
         simp [Gate.Input.p, Gate.Input.q, Gate.Input.r] at hr
-        unfold outputValue
-        simp [hpx, hqx, hinv]
-        constructor
-        · exact hr.1
-        · rw [← hr.1]
-          exact hr.2
-
-theorem spec_eq_add_pallas {row : Gate.Input Fp}
-    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
-    row.r = row.p + row.q := by
-  rw [spec_eq_outputValue_pallas hp hq hrow]
-  exact outputValue_eq_add hp hq
-
-theorem spec_valid_pallas {row : Gate.Input Fp}
-    (hp : row.p.Valid) (hq : row.q.Valid) (hrow : Gate.Spec row) :
-    row.r.Valid := by
-  rw [spec_eq_outputValue_pallas hp hq hrow]
-  exact outputValue_valid_pallas hp hq
-end ValueModel
+        apply Point.ext_coords
+        by_cases hx : row.x_qr.curr = row.x_p
+        · have hsame := Point.y_eq_or_neg_of_same_x hp hq hpx hqx hx
+          rcases hsame with hy | hy
+          · change row.y_qr.curr = row.y_p at hy
+            have hysum : row.y_qr.curr + row.y_p ≠ 0 := by
+              rw [hy]
+              exact add_self_ne_zero
+                (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
+            have hysum' : row.y_p + row.y_qr.curr ≠ 0 := by
+              rw [hy]
+              exact add_self_ne_zero
+                (Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx)
+            simp [Point.add_def, ShortWeierstrass.add,
+              Point.coords, hpx, hx, hysum', pow_two, div_eq_mul_inv]
+            rw [hr.1, hr.2, hr.1]
+            simp [lambdaValue, hx, Point.y_ne_zero_of_valid_of_x_ne_zero hp hpx]
+            simp [pallasA]
+            ring_nf
+            exact ⟨trivial, trivial⟩
+          · exact False.elim (hinv ⟨hx, hy⟩)
+        · have hxpq : row.x_p ≠ row.x_qr.curr := Ne.symm hx
+          simp [Point.add_def, ShortWeierstrass.add,
+            Point.coords, hpx, hqx, hxpq, pow_two, div_eq_mul_inv]
+          rw [hr.1, hr.2, hr.1]
+          simp [lambdaValue, hx]
 
 instance elaborated : ElaboratedCircuit Fp Input Point main := by
   elaborate_circuit
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
-  circuit_proof_start [main, Assumptions, Spec,
-    Gate.circuit, Gate.Spec, spec_eq_add_pallas, spec_valid_pallas]
+  circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases h_holds with ⟨hpCopyEq, hqCopyEq, hrow⟩
   let pCopy : Point Fp := {
@@ -739,19 +653,21 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     simpa [pCopy, hpCopyEq] using hp
   have hqCopy : qCopy.Valid := by
     simpa [qCopy, hqCopyEq] using hq
-  have hvalid := spec_valid_pallas (row := row) hpCopy hqCopy hrow
-  have hcoords := spec_eq_add_pallas (row := row) hpCopy hqCopy hrow
+  have hcoords : row.r = row.p + row.q := add_of_spec (row := row) hpCopy hqCopy hrow
+  have hvalid : row.r.Valid := by
+    rw [hcoords]
+    apply Point.valid_add hpCopy hqCopy
   exact ⟨by simpa [row] using hvalid,
     by simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hcoords⟩
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
-    Gate.circuit, Gate.Spec, rowValue_spec_pallas]
+    Gate.circuit, Gate.Spec, rowValue_spec]
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
   simp_all [circuit_norm, explicit_provable_type]
-  have hrow := rowValue_spec_pallas
+  have hrow := rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
   simpa [Gate.Spec, rowValue] using hrow
 
