@@ -152,8 +152,7 @@ returns only `Point` where `EccInstructions::mul` returns `(EccPoint, ScalarVar)
 APIs still mismatch the source: Halo2's `hash_to_point`/`commit` return `(Point, zs)`
 (per-piece running sums `zs[i] = [z_0, ..., z_{w_i}]`), but `HashPiece`/`Chain`/`Entry` expose
 only the `z_1` cells and `HashDomain.circuit`/`CommitDomain.circuit` return only the point.
-Exact conformance would thread full `zs` (an `HVec`) through the recursive tower. Also missing:
-`SinsemillaInstructions::hash_to_point_with_private_init`.
+Exact conformance would thread full `zs` (an `HVec`) through the recursive tower.
 
 ### Gate Layout Metadata For VK Reconstruction
 

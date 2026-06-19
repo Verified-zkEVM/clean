@@ -40,7 +40,7 @@ Source baseline:
       - Clean: `Sinsemilla.Entry.circuit` (with `HashPiece`/`Chain`) in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
       - **GAP:** output signature. Halo2 returns `(Point, zs)` (per-piece running sums); the
         base `Entry` returns only the point and the `z1` cells. Action circuits needing
-        running sums use `CommitDomain.WithZs`. Also missing: `hash_to_point_with_private_init`.
+        running sums use `CommitDomain.WithZs`.
       - Generator table (`halo2_gadgets/src/sinsemilla/chip/generator_table.rs`)
         - Clean: `generatorTable` in `Clean/Orchard/Sinsemilla/HashToPoint.lean`.
       - Double-and-add gate (`halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`)
