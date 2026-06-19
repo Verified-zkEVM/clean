@@ -92,8 +92,8 @@ structure Generators where
 namespace Generators
 
 theorem S_onCurve (G : Generators) {k : ℕ} (hk : k < 2 ^ K) :
-    CompElliptic.Curves.Pasta.Pallas.OnCurve ((G.S k).x, (G.S k).y) :=
-  SWPoint.onCurve_of_ne_zero (G.S_ne_zero k hk)
+    Point.OnCurve (Point.ofSW (G.S k)) :=
+  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (G.S_ne_zero k hk))
 
 end Generators
 

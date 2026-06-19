@@ -46,8 +46,9 @@ theorem pallas_nsmul_ne_zero {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P
 
 theorem pallas_nsmul_onCurve {P : ShortWeierstrass.SWPoint Pallas.curve} (hP : P ≠ 0)
     {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    Pallas.OnCurve ((n • P).x, (n • P).y) :=
-  ShortWeierstrass.SWPoint.onCurve_of_ne_zero (pallas_nsmul_ne_zero hP hn hlt)
+    Point.OnCurve (Point.ofSW (n • P)) :=
+  (Point.onCurve_iff _).mpr
+    (ShortWeierstrass.SWPoint.onCurve_of_ne_zero (pallas_nsmul_ne_zero hP hn hlt))
 
 /--
 The collision-freedom fact behind incomplete additions on a variable base: distinct

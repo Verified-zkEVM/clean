@@ -285,28 +285,24 @@ theorem soundness :
     rw [hby1] at hyP1
     rw [hby2] at hyP2
     -- the conditionally-negated points are valid
-    have hBaseVP : Pallas.Valid input_base.coords := (Point.valid_iff input_base).mp hBaseV
     have hU0V :
         ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 1) } : Point Fp).Valid := by
       rw [hyP0]
-      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseVP
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+      · exact hBaseV
+      · exact Point.valid_neg hBaseV
     have hU1V :
         ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 24 + 1) } : Point Fp).Valid := by
       rw [hyP1]
-      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseVP
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+      · exact hBaseV
+      · exact Point.valid_neg hBaseV
     have hU2V :
         ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 48 + 1) } : Point Fp).Valid := by
       rw [hyP2]
-      apply (Point.valid_iff _).mpr
       split
-      · exact hBaseVP
-      · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+      · exact hBaseV
+      · exact Point.valid_neg hBaseV
     -- chain the six complete additions
     have hT0 := hAddA0 hU0V hAccV
     have hA1 := hAddB0 hAccV hT0.1
@@ -386,28 +382,24 @@ theorem completeness :
     rw [hz3, hz2]
     rfl
   -- the conditionally-negated points are valid
-  have hBaseVP : Pallas.Valid input_base.coords := (Point.valid_iff input_base).mp hBaseV
   have hU0V :
       ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 1) } : Point Fp).Valid := by
     rw [hyP0]
-    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseVP
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+    · exact hBaseV
+    · exact Point.valid_neg hBaseV
   have hU1V :
       ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 24 + 1) } : Point Fp).Valid := by
     rw [hyP1]
-    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseVP
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+    · exact hBaseV
+    · exact Point.valid_neg hBaseV
   have hU2V :
       ({ x := input_base.x, y := env.get (i₀ + 1 + 3 + 48 + 1) } : Point Fp).Valid := by
     rw [hyP2]
-    apply (Point.valid_iff _).mpr
     split
-    · exact hBaseVP
-    · exact CompElliptic.CurveForms.ShortWeierstrass.valid_neg hBaseVP
+    · exact hBaseV
+    · exact Point.valid_neg hBaseV
   -- chain the six complete additions
   have hT0 := hAdds0.1 hU0V hAccV
   have hA1 := hAdds0.2 hAccV hT0.1

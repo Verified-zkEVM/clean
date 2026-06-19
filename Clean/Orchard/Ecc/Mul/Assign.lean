@@ -395,7 +395,7 @@ def Spec (input : Value Input Fp) (output : Output Fp) (_ : ProverData Fp) : Pro
     ∀ B : SWPoint Pallas.curve, B ≠ 0 →
       (input.base.x, input.base.y) = (B.x, B.y) →
       (input.xA, input.yA) = ((2 • B).x, (2 • B).y) →
-      Pallas.Valid output.acc.coords ∧
+      output.acc.Valid ∧
       output.acc.coords
         = ((accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B).x,
            (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B).y)
@@ -412,7 +412,7 @@ def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
   output.z130 = (chainNat 0 input.bits 125 : Fp) ∧
   output.z1 = (chainNat (chainNat (chainNat 0 input.bits 125)
     (fun i => input.bits (125 + i)) 126) (fun i => input.bits (251 + i)) 3 : Fp) ∧
-  Pallas.Valid output.acc.coords
+  output.acc.Valid
 
 /-- Bounds on the hi/lo accumulator scalars, for arbitrary bit assignments. -/
 private theorem m_bounds (bits1 bits2 : ℕ → Bool) :
@@ -475,7 +475,8 @@ theorem soundness :
   have hCompS := hCAcc
     (by
       rw [Point.valid_iff, Point.coords, hLoOut]
-      exact Or.inl (pallas_nsmul_onCurve hB hmB.2.2.2.2 hmB.2.2.2.1))
+      exact Or.inl ((Point.onCurve_iff _).mp
+        (pallas_nsmul_onCurve hB hmB.2.2.2.2 hmB.2.2.2.1)))
     (by
       rw [Point.valid_iff, Point.coords, hbase]
       exact Or.inl (SWPoint.onCurve_of_ne_zero hB))
@@ -484,7 +485,7 @@ theorem soundness :
     show input_base.y = B.y from congrArg Prod.snd hbase, hLoOut,
     accValue_nsmul B (accScalar (accScalar 2 bitsHi 125) bitsLo 126)
       hmB.2.2.1 bitsC 3] at hCompPair
-  exact ⟨(Point.valid_iff _).mp hValidAcc, hCompPair⟩
+  exact ⟨hValidAcc, hCompPair⟩
 
 theorem completeness :
     GeneralFormalCircuit.WithHint.Completeness Fp main ProverAssumptions ProverSpec := by
@@ -519,7 +520,7 @@ theorem completeness :
       rw [Point.valid_iff, Point.coords, hbase]
       exact Or.inl (SWPoint.onCurve_of_ne_zero hB)⟩
   simp only [Complete.AssignRegion.ProverSpec] at hCompS
-  obtain ⟨-, hCompZs, hCompAcc⟩ := hCompS
+  obtain ⟨hCompValid, hCompZs, hCompAcc⟩ := hCompS
   -- the honest running-sum cells
   have h124 := hHiZs ⟨124, by omega⟩
   have h0c := hHiZs ⟨0, by omega⟩
@@ -555,15 +556,16 @@ theorem completeness :
     simp only [Nat.add_assoc, Nat.reduceAdd] at h2c ⊢
     exact h2c
   · -- the honest accumulator is a valid point
-    rw [show input_base.x = B.x from congrArg Prod.fst hbase,
-      show input_base.y = B.y from congrArg Prod.snd hbase, hLoOut,
-      accValue_nsmul B (accScalar (accScalar 2 (fun i => input_bits i) 125)
-          (fun i => input_bits (125 + i)) 126)
-        hmB.2.2.1 (fun i => input_bits (251 + i)) 3] at hCompAcc
-    rw [hCompAcc]
-    exact ((accScalar (accScalar (accScalar 2 (fun i => input_bits i) 125)
-      (fun i => input_bits (125 + i)) 126)
-      (fun i => input_bits (251 + i)) 3 • B)).onCurve
+    simp only [Complete.AssignRegion.Spec] at hCompValid
+    obtain ⟨_, _, hValid⟩ := hCompValid
+    exact (hValid
+      (by
+        rw [Point.valid_iff, Point.coords, hLoOut]
+        exact ((accScalar (accScalar 2 (fun i => input_bits i) 125)
+          (fun i => input_bits (125 + i)) 126 • B)).onCurve)
+      (by
+        rw [Point.valid_iff, Point.coords, hbase]
+        exact Or.inl (SWPoint.onCurve_of_ne_zero hB))).1
 
 /-- The decomposition section of `mul.rs::Config::assign`: `z_init = 0`, both
 incomplete double-and-add halves, and the three complete-addition bits. -/
@@ -788,8 +790,10 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     intro h0
     have hx : input_base.x = (0 : Fp) := congrArg SWPoint.x h0
     have hy : input_base.y = (0 : Fp) := congrArg SWPoint.y h0
-    rw [Point.onCurve_iff, Point.coords, hx, hy] at h_assumptions
-    exact Pallas.not_onCurve_zero h_assumptions
+    have hzero : input_base = 0 := by
+      rw [Point.mk.injEq]
+      exact ⟨hx, hy⟩
+    exact Point.not_onCurve_zero (hzero ▸ h_assumptions)
   have hcoords : input_base.coords = (B.x, B.y) := rfl
   have hBaseNsmul : ∀ n : ℕ, ((n • B).x, (n • B).y) = (n • input_base).coords := by
     intro n
@@ -798,7 +802,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     simp only [Point.nsmul, Point.coords,
       CompElliptic.Curves.Pasta.Pallas.curve,
       CompElliptic.CurveForms.ShortWeierstrass.coords_nsmul,
-      CompElliptic.Curves.Pasta.Pallas.a, pallasA]
+      pallasA_eq_curve_A]
     rw [← hcoords]
   apply Point.ext_coords
   simp only [Add.Assumptions, Add.Spec] at hAcc
@@ -1043,8 +1047,10 @@ theorem completeness : Completeness Fp main Assumptions := by
     intro h0
     have hx : input_base.x = (0 : Fp) := congrArg SWPoint.x h0
     have hy : input_base.y = (0 : Fp) := congrArg SWPoint.y h0
-    rw [Point.onCurve_iff, Point.coords, hx, hy] at h_assumptions
-    exact Pallas.not_onCurve_zero h_assumptions
+    have hzero : input_base = 0 := by
+      rw [Point.mk.injEq]
+      exact ⟨hx, hy⟩
+    exact Point.not_onCurve_zero (hzero ▸ h_assumptions)
   have hbase : (input_base.x, input_base.y) = (B.x, B.y) := by rw [hBx, hBy]
   -- the doubled base: acc = [2]B
   simp only [Add.Assumptions, Add.Spec] at hAcc
@@ -1055,7 +1061,7 @@ theorem completeness : Completeness Fp main Assumptions := by
   rw [Point.coords_add, hbaseCoords, sw_add_coords, ← two_nsmul] at hAccPair
   -- the decomposition prover facts: honest cells as shifted values of k
   have hDecS := hDec ⟨B, hB, hbase, hAccPair⟩
-  simp only [Decompose.ProverSpec, Point.coords] at hDecS
+  simp only [Decompose.ProverSpec] at hDecS
   obtain ⟨-, h254, h130, h1c, hValidAcc⟩ := hDecS
   have hck := cells_kNat input_alpha
   rw [show (fun i => kBits input_alpha i) = kBits input_alpha from rfl, hck.1] at h254
@@ -1074,9 +1080,7 @@ theorem completeness : Completeness Fp main Assumptions := by
               (fun acc i => varFromOffset Point
                 (i₀ + 11 + 1 + 754 + 760 + 1 + 3 + i.val * 24 + 2 + 11 + 2 + 2))
               { x := var { index := i₀ + 11 + 1 + 754 + 1 + 1 + 1 + 125 * 6 + 1 + 1 + 1 + 1 + 1 },
-                y := var { index := i₀ + 11 + 1 + 754 + 1 + 1 + 1 + 756 } }).y } := by
-    rw [Point.valid_iff, Point.coords]
-    exact hValidAcc
+                y := var { index := i₀ + 11 + 1 + 754 + 1 + 1 + 1 + 756 } }).y } := hValidAcc
   -- the LSB prover facts: the honest z₀ reconstructs k
   have hLsbS := hLsb ⟨h_assumptions, hValidAccPoint⟩
   simp only [ProcessLsb.ProverSpec] at hLsbS

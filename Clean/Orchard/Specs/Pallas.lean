@@ -21,6 +21,8 @@ def tP : Fp := 45560315531419706090280762371685220353
 def pallasB : Fp := 5
 def pallasA : Fp := 0
 
+theorem pallasA_eq_curve_A : pallasA = CompElliptic.Curves.Pasta.Pallas.curve.A := rfl
+
 instance : (ShortWeierstrass.toW pallasA pallasB).IsElliptic :=
   inferInstanceAs <| WeierstrassCurve.IsElliptic <|
   (ShortWeierstrass.toW
@@ -82,7 +84,7 @@ theorem valid_iff (point : Point Fp) :
 
 theorem not_onCurve_zero : ¬ OnCurve (0 : Point Fp) := by
   intro h
-  exact CompElliptic.Curves.Pasta.Pallas.not_onCurve_zero ((onCurve_iff 0).mp h)
+  exact ShortWeierstrass.not_onCurve_zero (by decide) ((onCurve_iff 0).mp h)
 
 theorem no_onCurve_of_x_zero (y : Fp) : ¬ OnCurve ({ x := 0, y } : Point Fp) := by
   intro h
@@ -124,6 +126,11 @@ theorem valid_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
   exact (valid_iff (p + q)).mpr
     (ShortWeierstrass.valid_add
       ((valid_iff p).mp hp) ((valid_iff q).mp hq))
+
+theorem valid_neg {p : Point Fp} (hp : p.Valid) :
+    (-p).Valid := by
+  exact (valid_iff (-p)).mpr
+    (ShortWeierstrass.valid_neg ((valid_iff p).mp hp))
 
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)
