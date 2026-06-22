@@ -23,10 +23,10 @@ pieces to `(l, left, right)` through the hash's own `z_1` running-sum cells, whi
 
 namespace Orchard.Sinsemilla.Merkle
 
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Curves.Pasta
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Specs.Sinsemilla (Generators merkleChunks)
-open Orchard.Specs (K)
+open Specs.Sinsemilla (Generators merkleChunks)
+open Specs (K)
 
 /-! ### MerkleCRH decomposition gate
 
@@ -601,7 +601,7 @@ structure Input (F : Type) where
   right : F
 deriving ProvableStruct
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Expression Fp) := do
   -- witness the three message pieces and the short sub-pieces b_1, b_2
   let a ← witnessField fun env =>
@@ -631,7 +631,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
 -- instance for this circuit produces a proof term whose kernel check exceeds the
 -- default heartbeat budget (the hash subcircuit is large). Splitting the fields, with
 -- an explicit `localLength`, keeps each kernel check small.
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) :
     ElaboratedCircuit Fp Input field (main G Q hQ l) where
   localLength _ := 269
@@ -649,34 +649,34 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       Utilities.LookupRangeCheck.shortRangeCircuit, hECg, hECr]
     try trivial
 
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : Value Input Fp) (output : Value field Fp)
     (_ : ProverData Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
     ((lv : ℕ) : Fp) = input.left ∧ ((rv : ℕ) : Fp) = input.right ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q (merkleChunks l lv rv) = some B →
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
       output = B.x
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def ProverAssumptions (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
     (merkleChunks l (ZMod.val (show Fp from input.left))
       (ZMod.val (show Fp from input.right))) = some B
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def ProverSpec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : ProverValue Input Fp) (output : ProverValue field Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
       (merkleChunks l (ZMod.val (show Fp from input.left))
         (ZMod.val (show Fp from input.right))) = some B →
     output = B.x
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ l)
       (fun _ _ => True) (Spec G Q l) := by
-  circuit_proof_start [main, Spec, HashToPoint.Z1s.circuit, HashToPoint.Z1s.Spec,
+  circuit_proof_start [HashToPoint.Z1s.circuit, HashToPoint.Z1s.Spec,
     Merkle.Gate.circuit, Merkle.Gate.Spec, Merkle.Gate.a0, Merkle.Gate.b0,
     Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec,
@@ -720,11 +720,11 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 -- `HVec` (50 cells) blows up `whnf` when the honest-value hypotheses are used.
 attribute [local irreducible] Chain.z1sOfZs
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ l)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, HashToPoint.Z1s.circuit,
+  circuit_proof_start [HashToPoint.Z1s.circuit,
     HashToPoint.Z1s.ProverAssumptions, HashToPoint.Z1s.ProverSpec, Merkle.Gate.circuit, Merkle.Gate.Spec,
     Merkle.Gate.a0, Merkle.Gate.b0, Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec, Chain.PieceBounds,
@@ -745,7 +745,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (rv := ZMod.val input_right) (aCell := env.get i₀)
     (bCell := env.get (i₀ + 1 + 1 + 1)) (cCell := env.get (i₀ + 1 + 1 + 1 + 1))
     hl hlv hrv ha_w hb_w hc_w
-  have hex : ∃ B', Specs.Sinsemilla.hashToSWPoint G.S Q
+  have hex : ∃ B', Specs.Sinsemilla.hashToPoint G.S Q
       (List.map (pieceWord (env.get i₀)) (List.range 25)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
@@ -780,7 +780,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · exact hg.2.2.2
   · intro B' hB'
     refine congrArg Point.x (hBfun B' ?_)
-    show Specs.Sinsemilla.hashToSWPoint G.S Q
+    show Specs.Sinsemilla.hashToPoint G.S Q
       (List.map (pieceWord (env.get i₀)) (List.range 25)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
@@ -788,7 +788,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [hp.2]
     exact hB'
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l
@@ -803,14 +803,14 @@ end HashLayer
 
 def depth : ℕ := 32
 
-def MerkleStep (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def MerkleStep (G : Generators) (Q : Point Fp) (l : ℕ)
     (node node' : Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
     ((lv : Fp) = node ∨ (rv : Fp) = node) ∧
-    ∀ B, Specs.Sinsemilla.hashToSWPoint G.S Q (merkleChunks l lv rv) = some B →
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (merkleChunks l lv rv) = some B →
       node' = B.x
 
-def MerkleRoot (G : Generators) (Q : SWPoint Pallas.curve) :
+def MerkleRoot (G : Generators) (Q : Point Fp) :
     ℕ → Fp → ℕ → Fp → Prop
   | _, node, 0, root => root = node
   | l, node, k + 1, root =>
@@ -827,13 +827,13 @@ deriving CircuitType
 instance : Inhabited (Var Input Fp) :=
   ⟨{ node := default, sibling := fun _ => default, posBit := fun _ => default }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ) (hl : l < 2 ^ 10)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let sw ← Utilities.CondSwap.Swap.circuit
     { a := input.node, b := input.sibling, swap := input.posBit }
   HashLayer.circuit G Q hQ l hl { left := sw.aSwapped, right := sw.bSwapped }
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     ElaboratedCircuit Fp Input field (main G Q hQ l hl) where
   localLength _ := 274
@@ -849,16 +849,16 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simp only [circuit_norm, seval, Utilities.CondSwap.Swap.circuit, hHLg, hHLr]
     try trivial
 
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : Value Input Fp) (output : Value field Fp)
     (_ : ProverData Fp) : Prop :=
   MerkleStep G Q l input.node output
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ l hl)
       (fun _ _ => True) (Spec G Q l) := by
-  circuit_proof_start [main, Spec, Utilities.CondSwap.Swap.circuit,
+  circuit_proof_start [Utilities.CondSwap.Swap.circuit,
     Utilities.CondSwap.Swap.Spec, HashLayer.circuit, HashLayer.Spec, MerkleStep]
   obtain ⟨⟨b, swap, hbool, hsw⟩, lv, rv, hlv, hrv, hlv_eq, hrv_eq, hfun⟩ := h_holds
   refine ⟨lv, rv, hlv, hrv, ?_, hfun⟩
@@ -877,20 +877,20 @@ def proverChunks (l : ℕ) (input : ProverValue Input Fp) : List ℕ :=
     (ZMod.val (show Fp from if input.posBit then input.sibling else input.node))
     (ZMod.val (show Fp from if input.posBit then input.node else input.sibling))
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def ProverAssumptions (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q (proverChunks l input) = some B
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (l : ℕ)
+def ProverSpec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : ProverValue Input Fp) (output : ProverValue field Fp)
     (_ : ProverHint Fp) : Prop :=
-  ∀ B, Specs.Sinsemilla.hashToSWPoint G.S Q (proverChunks l input) = some B → output = B.x
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q (proverChunks l input) = some B → output = B.x
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ l hl)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, proverChunks,
+  circuit_proof_start [proverChunks,
     Utilities.CondSwap.Swap.circuit, Utilities.CondSwap.Swap.ProverSpec,
     Utilities.CondSwap.Swap.outputValue,
     HashLayer.circuit, HashLayer.ProverAssumptions, HashLayer.ProverSpec]
@@ -901,7 +901,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   rw [h3, h4] at hHL ⊢
   exact ⟨h_assumptions, (hHL h_assumptions).2⟩
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ l hl
@@ -915,7 +915,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 end Layer
 
 /-- Forward induction: a chain of `MerkleStep`s assembles into a `MerkleRoot`. -/
-private theorem merkleRoot_of_steps (G : Generators) (Q : SWPoint Pallas.curve)
+private theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp)
     (f : ℕ → Fp) (l : ℕ) :
     ∀ k, (∀ i, i < k → MerkleStep G Q (l + i) (f i) (f (i + 1))) →
       MerkleRoot G Q l (f 0) k (f k) := by
@@ -944,7 +944,7 @@ deriving CircuitType
 instance : Inhabited (Var Input Fp) :=
   ⟨{ leaf := default, path := fun _ => default, pos := fun _ => default }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) :=
   Circuit.foldl (.finRange 32) input.leaf
     (fun node i => Layer.circuit G Q hQ i.val (by omega)
@@ -960,7 +960,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 -- the lemma list as a workaround). Providing an explicit closed-form `output` here (the
 -- layer-31 output cell, e.g. `varFromOffset field (31 * 274 + 273)`) would keep the foldl
 -- folded and let the plain tactic handle a parent that composes the Merkle path.
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     ElaboratedCircuit Fp Input field (main G Q hQ) where
   localLength _ := 32 * 274
   localLength_eq := by
@@ -989,15 +989,15 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
     simp only [circuit_norm, seval, hLg, hLr]
     try trivial
 
-def Spec (G : Generators) (Q : SWPoint Pallas.curve)
+def Spec (G : Generators) (Q : Point Fp)
     (input : Value Input Fp) (output : Value field Fp)
     (_ : ProverData Fp) : Prop :=
   MerkleRoot G Q 0 input.leaf depth output
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ)
       (fun _ _ => True) (Spec G Q) := by
-  circuit_proof_start [main, Spec]
+  circuit_proof_start
   obtain ⟨h0, hstep⟩ := h_holds
   refine ⟨?_, Or.inl rfl, fun i hi => Or.inl rfl⟩
   -- The per-layer output is a pure offset reference: independent of the layer index,
@@ -1048,31 +1048,31 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
 
 /-- The honest running node after `k` layers (`none` if any layer hash is undefined).
 Index-based to mirror the circuit's `Circuit.foldl`. -/
-noncomputable def honestNode (G : Generators) (Q : SWPoint Pallas.curve)
+def honestNode (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) : ℕ → Option Fp
   | 0 => some (show Fp from input.leaf)
   | k + 1 =>
     if hk : k < 32 then
       (honestNode G Q input k).bind fun node =>
-        (Specs.Sinsemilla.hashToSWPoint G.S Q
+        (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
             { node := node,
               sibling := (show Vector Fp 32 from input.path)[k]'(by omega),
               posBit := (show Vector Bool 32 from input.pos)[k]'(by omega) })).map (·.x)
     else none
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   (honestNode G Q input 32).isSome
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverSpec (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) (output : ProverValue field Fp)
     (_ : ProverHint Fp) : Prop :=
   ∀ root, honestNode G Q input 32 = some root → (show Fp from output) = root
 
 /-- `honestNode` is downward-monotone in success: if it succeeds after `k+1` layers, it
 already succeeds after `k`. -/
-theorem honestNode_isSome_of_succ (G : Generators) (Q : SWPoint Pallas.curve)
+theorem honestNode_isSome_of_succ (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) (k : ℕ)
     (h : (honestNode G Q input (k + 1)).isSome) : (honestNode G Q input k).isSome := by
   rw [honestNode] at h
@@ -1082,7 +1082,7 @@ theorem honestNode_isSome_of_succ (G : Generators) (Q : SWPoint Pallas.curve)
     · simp
   · simp at h
 
-theorem honestNode_isSome_le (G : Generators) (Q : SWPoint Pallas.curve)
+theorem honestNode_isSome_le (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) {i j : ℕ} (hij : i ≤ j)
     (h : (honestNode G Q input j).isSome) : (honestNode G Q input i).isSome := by
   induction j with
@@ -1093,10 +1093,10 @@ theorem honestNode_isSome_le (G : Generators) (Q : SWPoint Pallas.curve)
     · have : i = m + 1 := by omega
       rwa [this]
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ)
       (ProverAssumptions G Q) (ProverSpec G Q) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, Layer.circuit,
+  circuit_proof_start [Layer.circuit,
     Layer.ProverAssumptions, Layer.ProverSpec, Layer.proverChunks]
   obtain ⟨hL0, hLstep⟩ := h_env
   have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
@@ -1125,7 +1125,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       have hk' : k < 32 := by omega
       have hik : honestNode G Q I k = some (acc k) := ih (by omega)
       -- honestNode (k+1) reduces to the layer-k hash, mapped to its x-coordinate
-      have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToSWPoint G.S Q
+      have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
             { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
               posBit := (show Vector Bool 32 from I.pos)[k]'hk' })).map (·.x) := by
@@ -1137,8 +1137,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
       set chunks : List ℕ := Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
           posBit := (show Vector Bool 32 from I.pos)[k]'hk' } with hchunks
-      obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B := by
-        rcases h : Specs.Sinsemilla.hashToSWPoint G.S Q chunks with _ | B
+      obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B := by
+        rcases h : Specs.Sinsemilla.hashToPoint G.S Q chunks with _ | B
         · rw [h] at hsome; simp at hsome
         · exact ⟨B, rfl⟩
       rw [hB]
@@ -1160,18 +1160,18 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
         rw [← spec]
         exact bridge (j + 1) (by omega) _ _ _ rfl
   -- each layer's hash exists (the running node is the honest one, via `key`)
-  have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToSWPoint G.S Q
+  have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) = some B := by
     intro k hk
-    have h1 : (Specs.Sinsemilla.hashToSWPoint G.S Q (Layer.proverChunks k
+    have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk })).map (·.x) = some (acc (k + 1)) := by
       have hk1 := key (k + 1) (by omega)
       rw [honestNode, dif_pos hk, key k (by omega)] at hk1
       exact hk1
-    rcases hh : Specs.Sinsemilla.hashToSWPoint G.S Q (Layer.proverChunks k
+    rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := (show Vector Bool 32 from I.pos)[k]'hk }) with _ | B
     · rw [hh] at h1; simp at h1
@@ -1194,7 +1194,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) 
     obtain rfl : acc 32 = root := Option.some.inj hroot
     exact bridge 31 (by omega) _ _ _ rfl
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) :
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ
   elaborated := elaborated G Q hQ
