@@ -17,13 +17,14 @@ the derived generator `y`-coordinate
 `y_p = Y_A/2 - λ₁·(x_A - x_P)` in this table.
 -/
 
-namespace Orchard.Sinsemilla
+namespace Orchard
+namespace Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
-open Orchard.Specs.Sinsemilla (Generators)
-open Orchard.Specs (K)
-open Orchard.Sinsemilla.Chip
-open Orchard.Ecc
+open Specs.Sinsemilla (Generators)
+open Specs (K)
+open Chip
+open Ecc
 
 /-- One row of the Sinsemilla generator table:
 `(table_idx, table_x, table_y)`. -/
@@ -213,7 +214,7 @@ Hypotheses are exactly the row constraints:
 - `hSecant, hYCheck`: the Sinsemilla gate.
 -/
 theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
-    (hstep : Orchard.Specs.Sinsemilla.step S m A = some B)
+    (hstep : Specs.Sinsemilla.step S m A = some B)
     {xp lambda1 lambda2 xa' YA' : Fp}
     (hYP : 2 * A.y - 2 * lambda1 * (A.x - xp) = 2 * (S m).y)
     (hXP : xp = (S m).x)
@@ -223,21 +224,21 @@ theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     xa' = B.x ∧ YA' = 2 * B.y := by
   have hYP' : A.y - lambda1 * (A.x - xp) = (S m).y :=
     mul_left_cancel₀ two_ne_zero_Fp (by linear_combination hYP)
-  open Orchard.Specs.Sinsemilla in
+  open Specs.Sinsemilla in
   -- unfold the spec-level step into its two incomplete additions
-  unfold Orchard.Specs.Sinsemilla.step at hstep
+  unfold Specs.Sinsemilla.step at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
+  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
     simp at hstep
-  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
+  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
   push_neg at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
-  change Orchard.Specs.Sinsemilla.incompleteAdd R A = some B at hstep
+  change Specs.Sinsemilla.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
+  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
     simp at hstep
-  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
+  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
   push_neg at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -327,7 +328,7 @@ formulas, given as hypotheses) satisfy the row's lookup-`y` derivation and `Y_A`
 invariant, and the next accumulator is `B`.
 -/
 theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
-    (hstep : Orchard.Specs.Sinsemilla.step S m A = some B)
+    (hstep : Specs.Sinsemilla.step S m A = some B)
     {l1 l2 xa' ya' : Fp}
     (hl1 : l1 = (A.y - (S m).y) * (A.x - (S m).x)⁻¹)
     (hl2 : l2 = 2 * A.y * (A.x - (l1 * l1 - A.x - (S m).x))⁻¹ - l1)
@@ -337,19 +338,19 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     2 * A.y = (l1 + l2) * (A.x - (l1 * l1 - A.x - (S m).x)) ∧
     xa' = B.x ∧ ya' = B.y := by
   -- unfold the spec-level step into its two incomplete additions (as in `step_pinned`)
-  unfold Orchard.Specs.Sinsemilla.step at hstep
+  unfold Specs.Sinsemilla.step at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
+  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
     simp at hstep
-  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
+  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
   push_neg at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
-  change Orchard.Specs.Sinsemilla.incompleteAdd R A = some B at hstep
+  change Specs.Sinsemilla.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
+  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
     simp at hstep
-  rw [Orchard.Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
+  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
   push_neg at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -433,27 +434,27 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
 spec-level chain is defined. -/
 theorem accAfter_eq_chain (G : Generators) {A : Point Fp} (p : Fp)
     {r : ℕ} {Ar : Point Fp}
-    (hchain : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    (hchain : Specs.Sinsemilla.hashToPoint G.S A
       ((List.range r).map (pieceWord p)) = some Ar) :
     accAfter G (A.x, A.y) p r = (Ar.x, Ar.y) := by
   induction r generalizing Ar with
   | zero =>
     rw [show ((List.range 0).map (pieceWord p)) = ([] : List ℕ) from rfl,
-      Orchard.Specs.Sinsemilla.hashToPoint_nil] at hchain
+      Specs.Sinsemilla.hashToPoint_nil] at hchain
     obtain rfl : A = Ar := Option.some.inj hchain
     rfl
   | succ r ih =>
     rw [List.range_succ] at hchain
     simp only [List.map_append, List.map_cons, List.map_nil] at hchain
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hchain
-    cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    rw [Specs.Sinsemilla.hashToPoint_concat] at hchain
+    cases hpre : Specs.Sinsemilla.hashToPoint G.S A
         ((List.range r).map (pieceWord p)) with
     | none =>
       rw [hpre] at hchain
       simp at hchain
     | some Ap =>
       rw [hpre] at hchain
-      replace hchain : Orchard.Specs.Sinsemilla.step G.S (pieceWord p r) Ap = some Ar :=
+      replace hchain : Specs.Sinsemilla.step G.S (pieceWord p r) Ap = some Ar :=
         hchain
       have hacc := ih hpre
       show (rowValue (accAfter G (A.x, A.y) p r)
@@ -565,7 +566,7 @@ def Spec (G : Generators) (w : ℕ) (input : Value Input Fp)
         - output.last.lambda1 * (output.last.xA - output.last.xP) = (G.S (ms w)).y ∧
     ∀ A : Point Fp, A.OnCurve → A.x = input.xA →
       2 * A.y = DoubleAndAdd.yA output.first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Specs.Sinsemilla.hashToPoint G.S A
           ((List.range w).map ms) = some B →
         output.last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA output.last
 
@@ -579,7 +580,7 @@ def ProverAssumptions (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   (show Fp from input.piece).val < 2 ^ (K * (w + 1)) ∧
   ∃ (A B : Point Fp), A.OnCurve ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    Specs.Sinsemilla.hashToPoint G.S A
       ((List.range (w + 1)).map (pieceWord input.piece)) = some B
 
 /--
@@ -596,20 +597,20 @@ def ProverSpec (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
   output.zs = Vector.ofFn (fun r : Fin (w + 1) => pieceZ input.piece r.val) ∧
   ∀ A : Point Fp, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     DoubleAndAdd.yA output.first = 2 * A.y ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S A
         ((List.range (w + 1)).map (pieceWord input.piece)) = some B →
       output.xANext = B.x ∧ output.yANext = B.y ∧
       nextYA output.last output.xANext = 2 * B.y
 
 private theorem range_prefix_some (S : ℕ → Point Fp)
     (Q : Point Fp) (f : ℕ → ℕ) {n : ℕ} {B : Point Fp}
-    (hn : Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range n).map f) = some B)
+    (hn : Specs.Sinsemilla.hashToPoint S Q ((List.range n).map f) = some B)
     {r : ℕ} (hr : r ≤ n) :
-    ∃ C, Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) = some C := by
+    ∃ C, Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) = some C := by
   obtain ⟨k, rfl⟩ : ∃ k, n = r + k := ⟨n - r, by omega⟩
   rw [List.range_add, List.map_append,
-    Orchard.Specs.Sinsemilla.hashToPoint_append] at hn
-  cases hc : Orchard.Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) with
+    Specs.Sinsemilla.hashToPoint_append] at hn
+  cases hc : Specs.Sinsemilla.hashToPoint S Q ((List.range r).map f) with
   | none =>
     rw [hc] at hn
     simp at hn
@@ -624,7 +625,7 @@ each declaration within the elaboration budget.
 -/
 private theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
     {A B : Point Fp} (hAx : A.x = xA) (hAy : A.y = yA)
-    (hchain : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    (hchain : Specs.Sinsemilla.hashToPoint G.S A
       ((List.range (w + 1)).map (pieceWord p)) = some B) :
     (∀ r, r ≤ w →
       ((rowValue (accAfter G (xA, yA) p r)
@@ -649,10 +650,10 @@ private theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
   intro r hr
   obtain ⟨Ar, hAr⟩ := range_prefix_some _ _ _ hchain (show r ≤ w + 1 by omega)
   obtain ⟨Ar1, hAr1⟩ := range_prefix_some _ _ _ hchain (show r + 1 ≤ w + 1 by omega)
-  have hstep : Orchard.Specs.Sinsemilla.step G.S (pieceWord p r) Ar = some Ar1 := by
+  have hstep : Specs.Sinsemilla.step G.S (pieceWord p r) Ar = some Ar1 := by
     rw [List.range_succ] at hAr1
     simp only [List.map_append, List.map_cons, List.map_nil] at hAr1
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
+    rw [Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
     exact hAr1
   have hacc := accAfter_eq_chain G p hAr
   have hh := step_honest G.S hstep
@@ -932,7 +933,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
         - (dR w).lambda1 * ((dR w).xA - (dR w).xP) = (G.S (ms w)).y ∧
       ∀ A : Point Fp, A.OnCurve → A.x = xA →
         2 * A.y = DoubleAndAdd.yA (dR 0) →
-        ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+        ∀ B, Specs.Sinsemilla.hashToPoint G.S A
             ((List.range w).map ms) = some B →
           (dR w).xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA (dR w) := by
   -- choose the word values
@@ -1008,28 +1009,28 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
   -- the chain invariant over message prefixes
   intro A hAon hAx hAyA B hchain
   have hinv : ∀ r, r ≤ w → ∀ Ar : Point Fp,
-      Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) = some Ar →
+      Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) = some Ar →
       (dR r).xA = Ar.x ∧ 2 * Ar.y = DoubleAndAdd.yA (dR r) := by
     intro r
     induction r with
     | zero =>
       intro _ Ar hAr
       rw [show ((List.range 0).map ms) = ([] : List ℕ) from rfl,
-        Orchard.Specs.Sinsemilla.hashToPoint_nil] at hAr
+        Specs.Sinsemilla.hashToPoint_nil] at hAr
       obtain rfl : A = Ar := Option.some.inj hAr
       exact ⟨hxA0.trans hAx.symm, hAyA⟩
     | succ r ih =>
       intro hr Ar hAr
       rw [List.range_succ] at hAr
       simp only [List.map_append, List.map_cons, List.map_nil] at hAr
-      rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hAr
-      cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) with
+      rw [Specs.Sinsemilla.hashToPoint_concat] at hAr
+      cases hpre : Specs.Sinsemilla.hashToPoint G.S A ((List.range r).map ms) with
       | none =>
         rw [hpre] at hAr
         simp at hAr
       | some Ap =>
         rw [hpre] at hAr
-        replace hAr : Orchard.Specs.Sinsemilla.step G.S (ms r) Ap = some Ar := hAr
+        replace hAr : Specs.Sinsemilla.step G.S (ms r) Ap = some Ar := hAr
         obtain ⟨hxAr, hyAr⟩ := ih (by omega) Ap hpre
         have hxw := hmf_x ⟨r, by omega⟩
         have hyw := hmf_y ⟨r, by omega⟩
@@ -1389,7 +1390,7 @@ def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Fp)
     ZsFacts ns chunks output.zs ∧
     ∀ A : Point Fp, A.OnCurve → A.x = input.xA →
       2 * A.y = enterYA ns.isEmpty output.first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
+      ∀ B, Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
         output.point.x = B.x ∧ output.point.y = B.y
 
 def ProverAssumptions (G : Generators) (ns : List ℕ)
@@ -1397,7 +1398,7 @@ def ProverAssumptions (G : Generators) (ns : List ℕ)
     (_ : ProverHint Fp) : Prop :=
   PieceBounds ns input.pieces ∧
   ∃ (A B : Point Fp), A.OnCurve ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Orchard.Specs.Sinsemilla.hashToPoint G.S A (honestChunks ns input.pieces) = some B
+    Specs.Sinsemilla.hashToPoint G.S A (honestChunks ns input.pieces) = some B
 
 def ProverSpec (G : Generators) (ns : List ℕ)
     (input : ProverValue (Input ns.length) Fp)
@@ -1406,7 +1407,7 @@ def ProverSpec (G : Generators) (ns : List ℕ)
   ZsHonest ns input.pieces output.zs ∧
   ∀ A : Point Fp, A ≠ 0 → A.x = input.xA → A.y = input.yA →
     enterYA ns.isEmpty output.first = 2 * A.y ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S A
         (honestChunks ns input.pieces) = some B →
       output.point.x = B.x ∧ output.point.y = B.y
 
@@ -1431,7 +1432,7 @@ theorem soundness (G : Generators) :
   refine ⟨[], rfl, ?_⟩
   intro A hAon hAx hAy B hB
   have hAy' : 2 * A.y = 2 * env.get i₀ := by simpa using hAy
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+  rw [Specs.Sinsemilla.hashToPoint_nil] at hB
   obtain rfl : A = B := Option.some.inj hB
   exact ⟨hAx.symm, (mul_left_cancel₀ HashPiece.two_ne_zero_Fp hAy').symm⟩
 
@@ -1445,7 +1446,7 @@ theorem completeness (G : Generators) :
   · simp only [List.isEmpty_nil, if_true]
     rw [h_env, ← hAy]
   · intro B hB
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+    rw [Specs.Sinsemilla.hashToPoint_nil] at hB
     obtain rfl : A = B := Option.some.inj hB
     exact ⟨hAx.symm, by rw [h_env, ← hAy]⟩
 
@@ -1561,7 +1562,7 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
       - last.lambda1 * (last.xA - last.xP) = (G.S (ms n)).y)
     (hchain_piece : ∀ A : Point Fp, A.OnCurve → A.x = xAin →
       2 * A.y = DoubleAndAdd.yA first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Specs.Sinsemilla.hashToPoint G.S A
           ((List.range n).map ms) = some B →
         last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA last)
     (hsec : last.lambda2 * last.lambda2
@@ -1573,38 +1574,38 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
     (tailChunks : List ℕ) {pointX pointY : Fp}
     (htail_chain : ∀ A : Point Fp, A.OnCurve → A.x = xATail →
       2 * A.y = enterYA isFinal tailFirst →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A tailChunks = some B →
+      ∀ B, Specs.Sinsemilla.hashToPoint G.S A tailChunks = some B →
         pointX = B.x ∧ pointY = B.y) :
     ∀ A : Point Fp, A.OnCurve → A.x = xAin →
       2 * A.y = DoubleAndAdd.yA first →
-      ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S A
+      ∀ B, Specs.Sinsemilla.hashToPoint G.S A
           ((List.range (n + 1)).map ms ++ tailChunks) = some B →
         pointX = B.x ∧ pointY = B.y := by
   intro A hAon hAx hAyA B hB
   have hAvalid : A.Valid := Or.inl hAon
   have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
   -- split the chain at the piece boundary
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
-  cases hpre : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+  rw [Specs.Sinsemilla.hashToPoint_append] at hB
+  cases hpre : Specs.Sinsemilla.hashToPoint G.S A
       ((List.range (n + 1)).map ms) with
   | none =>
     rw [hpre] at hB
     simp at hB
   | some B₁ =>
     rw [hpre] at hB
-    replace hB : Orchard.Specs.Sinsemilla.hashToPoint G.S B₁ tailChunks = some B := hB
+    replace hB : Specs.Sinsemilla.hashToPoint G.S B₁ tailChunks = some B := hB
     -- peel the piece's last word
     rw [List.range_succ] at hpre
     simp only [List.map_append, List.map_cons, List.map_nil] at hpre
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hpre
-    cases hpre0 : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+    rw [Specs.Sinsemilla.hashToPoint_concat] at hpre
+    cases hpre0 : Specs.Sinsemilla.hashToPoint G.S A
         ((List.range n).map ms) with
     | none =>
       rw [hpre0] at hpre
       simp at hpre
     | some B₀ =>
       rw [hpre0] at hpre
-      replace hpre : Orchard.Specs.Sinsemilla.step G.S (ms n) B₀ = some B₁ := hpre
+      replace hpre : Specs.Sinsemilla.step G.S (ms n) B₀ = some B₁ := hpre
       obtain ⟨hlast_xA, hlast_yA⟩ := hchain_piece A hAon hAx hAyA B₀ hpre0
       -- the gate completes the last step
       have hyck' : 4 * last.lambda2 * (last.xA - tailFirst.xA)
@@ -1627,15 +1628,15 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         (by linear_combination hsec')
         (by linear_combination hyck' - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
       have hB₀valid : B₀.Valid :=
-        Orchard.Specs.Sinsemilla.hashToPoint_valid hAvalid
+        Specs.Sinsemilla.hashToPoint_valid hAvalid
           (fun m hm => by
             rcases List.mem_map.mp hm with ⟨r, hr, rfl⟩
             exact hms r)
           hpre0
       have hB₁valid : B₁.Valid :=
-        Orchard.Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
+        Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
       have hB₁0 : B₁ ≠ 0 :=
-        Orchard.Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
+        Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
       have hB₁on : B₁.OnCurve := by
         rcases hB₁valid with h | h
         · exact h
@@ -1728,8 +1729,8 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     ext i hi
     simp
   rw [hmt] at hptail
-  obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToPoint_append_some hchain
-  have hpre' : Orchard.Specs.Sinsemilla.hashToPoint G.S A
+  obtain ⟨B₁, hpre, hsuffix⟩ := Specs.Sinsemilla.hashToPoint_append_some hchain
+  have hpre' : Specs.Sinsemilla.hashToPoint G.S A
       ((List.range (n + 1)).map
         (pieceWord (Expression.eval env.toEnvironment input_var.pieces[0])))
       = some B₁ := by
@@ -1744,13 +1745,13 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
   obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
   obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
   have hB₁0 : B₁ ≠ 0 := by
-    apply Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0
+    apply Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0
     · intro m hm
       rcases List.mem_map.mp hm with ⟨r, hr, rfl⟩
       exact HashPiece.pieceWord_lt (Expression.eval env.toEnvironment input_var.pieces[0]) r
     · exact hpre'
   have hB₁valid : B₁.Valid := by
-    apply Orchard.Specs.Sinsemilla.hashToPoint_valid hAvalid
+    apply Specs.Sinsemilla.hashToPoint_valid hAvalid
     · intro m hm
       rcases List.mem_map.mp hm with ⟨r, hr, rfl⟩
       exact HashPiece.pieceWord_lt (Expression.eval env.toEnvironment input_var.pieces[0]) r
@@ -1907,14 +1908,14 @@ def Spec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (_ : ProverData Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
     Chain.ZsFacts (n₀ :: ns) chunks output.zs ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
       output.point = B
 
 def ProverAssumptions (G : Generators) (Q : Point Fp) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
@@ -1922,7 +1923,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (output : ProverValue (Output (n₀ :: ns)) Fp)
     (_ : ProverHint Fp) : Prop :=
   Chain.ZsHonest (n₀ :: ns) pieces output.zs ∧
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = B
 
@@ -2047,14 +2048,14 @@ def Spec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (_ : ProverData Fp) : Prop :=
   ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
     Chain.Z1Facts (n₀ :: ns) chunks output.z1s ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
       output.point = B
 
 def ProverAssumptions (G : Generators) (Q : Point Fp) (n₀ : ℕ)
     (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
     (Chain.honestChunks (n₀ :: ns) pieces) = some B
 
 def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
@@ -2062,7 +2063,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (output : ProverValue (Output (n₀ :: ns)) Fp)
     (_ : ProverHint Fp) : Prop :=
   Chain.Z1sHonest (n₀ :: ns) pieces output.z1s ∧
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = B
 
@@ -2105,4 +2106,5 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
 
 end EntryZ1s
 
-end Orchard.Sinsemilla
+end Sinsemilla
+end Orchard
