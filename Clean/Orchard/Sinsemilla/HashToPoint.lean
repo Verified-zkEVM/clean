@@ -1226,6 +1226,25 @@ theorem pieceChunks_honestChunks : (ns : List ℕ) → (pieces : Vector Fp ns.le
       honestChunks rest pieces.tail, rfl, pieceChunks_honestChunks rest pieces.tail hbrest⟩
     exact HashPiece.piece_recombine pieces[0] (n + 1) hb0
 
+theorem pieceChunks_bound {ns : List ℕ} {pieces : Vector Fp ns.length}
+    {chunks : List ℕ} (h : PieceChunks ns pieces chunks) :
+    ∀ m ∈ chunks, m < 2 ^ K := by
+  induction ns generalizing chunks with
+  | nil =>
+      intro m hm
+      simp only [PieceChunks] at h
+      subst h
+      simp at hm
+  | cons n rest ih =>
+      simp only [PieceChunks] at h
+      obtain ⟨ms, hms, _, tailChunks, hchunks, htail⟩ := h
+      intro m hm
+      rw [hchunks] at hm
+      simp only [List.mem_append, List.mem_map, List.mem_range] at hm
+      rcases hm with ⟨r, hr, rfl⟩ | hm
+      · exact hms r
+      · exact ih htail m hm
+
 /-- Each exposed `z_1` cell is the recombination of its piece's chunks with the first
 word stripped (anchored to the same flat chunk list as `PieceChunks`). -/
 def Z1Facts : (ns : List ℕ) → List ℕ → Vector Fp ns.length → Prop
@@ -1926,7 +1945,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = B
 
-theorem soundness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
@@ -1940,16 +1959,12 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q �
   refine ⟨⟨chunks, hPC, ?_, ?_⟩, Or.inl (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2⟩
   · convert hZs using 2
   · intro B hB
-    have hQon : Q.OnCurve := by
-      rcases hQvalid with h | h
-      · exact h
-      · exact False.elim (hQ h)
-    obtain ⟨px, py⟩ := hchainAll Q hQon (by rw [h_xQ])
+    obtain ⟨px, py⟩ := hchainAll Q hQ (by rw [h_xQ])
       (by exact h_yQ.symm) B hB
     apply Point.ext_coords
     exact Prod.ext px py
 
-theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
@@ -1959,22 +1974,14 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q
   obtain ⟨hbounds, B, hchain⟩ := h_assumptions
   have hPSchain := h_chain_env (by
     rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
-    have hQon : Q.OnCurve := by
-      rcases hQvalid with h | h
-      · exact h
-      · exact False.elim (hQ h)
-    exact ⟨hbounds, Q, B, hQon, h_xQ_env.symm, rfl, hchain⟩)
+    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩)
   rw [(Chain.circuit G (n₀ :: ns)).2.2.2.2.1] at hPSchain
   obtain ⟨-, htfxA, hZsH, hAfun⟩ := hPSchain
-  obtain ⟨henter, hBfin⟩ := hAfun Q hQ h_xQ_env.symm rfl
+  obtain ⟨henter, hBfin⟩ := hAfun Q (Point.ne_zero_of_onCurve hQ) h_xQ_env.symm rfl
   obtain ⟨px, py⟩ := hBfin B hchain
   refine ⟨⟨h_xQ_env, ?_, ?_⟩, ?_, ?_⟩
   · rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
-    have hQon : Q.OnCurve := by
-      rcases hQvalid with h | h
-      · exact h
-      · exact False.elim (hQ h)
-    exact ⟨hbounds, Q, B, hQon, h_xQ_env.symm, rfl, hchain⟩
+    exact ⟨hbounds, Q, B, hQ, h_xQ_env.symm, rfl, hchain⟩
   · exact henter
   · convert hZsH using 2
   · intro B' hB'
@@ -1983,7 +1990,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q
     apply Point.ext_coords
     exact Prod.ext px py
 
-def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))
       (Output (n₀ :: ns)) where
@@ -1992,8 +1999,8 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q n₀ ns
-  soundness := soundness G Q hQvalid hQ n₀ ns
-  completeness := completeness G Q hQvalid hQ n₀ ns
+  soundness := soundness G Q hQ n₀ ns
+  completeness := completeness G Q hQ n₀ ns
 
 /-! ### `Z1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
 
@@ -2015,11 +2022,11 @@ instance (ns : List ℕ) : ProvableStruct (Output ns) where
   toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
   fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
 
-def main (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Fp) :
     Circuit Fp (Var (Output (n₀ :: ns)) Fp) := do
-  let out ← circuit G Q hQvalid hQ n₀ ns pieces
+  let out ← circuit G Q hQ n₀ ns pieces
   return { point := out.point, z1s := Chain.z1sOfZs (n₀ :: ns) out.zs }
 
 /-- The output cells of `Z1s`, kept as a named (opaque) definition so parent circuits
@@ -2031,10 +2038,10 @@ def output (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
   let e := (HashToPoint.main G Q n₀ ns input).output offset
   { point := e.point, z1s := Chain.z1sOfZs (n₀ :: ns) e.zs }
 
-instance elaborated (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     ElaboratedCircuit Fp (fields (ns.length + 1)) (Output (n₀ :: ns))
-      (main G Q hQvalid hQ n₀ ns) := by
+      (main G Q hQ n₀ ns) := by
   elaborate_circuit_with {
     output input offset := output G Q n₀ ns input offset
   }
@@ -2064,9 +2071,9 @@ def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
       (Chain.honestChunks (n₀ :: ns) pieces) = some B →
     output.point = B
 
-theorem soundness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQvalid hQ n₀ ns)
+    GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
   circuit_proof_start [main, Spec, output, HashToPoint.circuit, HashToPoint.Spec]
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
@@ -2076,9 +2083,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q �
   · intro B hB
     exact hfun B hB
 
-theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
-    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQvalid hQ n₀ ns)
+    GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions, output, HashToPoint.circuit,
     HashToPoint.ProverAssumptions, HashToPoint.ProverSpec]
@@ -2089,17 +2096,17 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q
   · intro B' hB'
     exact hAfun B' hB'
 
-def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))
       (Output (n₀ :: ns)) where
-  main := main G Q hQvalid hQ n₀ ns
-  elaborated := elaborated G Q hQvalid hQ n₀ ns
+  main := main G Q hQ n₀ ns
+  elaborated := elaborated G Q hQ n₀ ns
   Spec := Spec G Q n₀ ns
   ProverAssumptions := ProverAssumptions G Q n₀ ns
   ProverSpec := ProverSpec G Q n₀ ns
-  soundness := soundness G Q hQvalid hQ n₀ ns
-  completeness := completeness G Q hQvalid hQ n₀ ns
+  soundness := soundness G Q hQ n₀ ns
+  completeness := completeness G Q hQ n₀ ns
 
 end Z1s
 
