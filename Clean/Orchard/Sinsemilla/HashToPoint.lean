@@ -1977,6 +1977,22 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     apply Point.ext_coords
     exact Prod.ext px py
 
+/--
+WARNING: this source-shaped `hash_to_point` entry is intentionally restricted to
+nonempty messages (`n₀ :: ns`).
+
+The halo2 source API accepts an arbitrary `Vec<MessagePiece>`, including the empty
+vector. That empty-message path is not sound for the semantic spec we want here:
+after public `Q` initialization, no piece row is emitted, so no Sinsemilla chaining
+gate ties the final dummy `y_a` cell to the initialized `Q.y`. The `Initial y_Q` gate
+constrains the entering double-and-add expression, but in the empty case the output
+`y` is the dummy row's `lambda1`; without a piece boundary gate, constraints do not
+force that cell to equal `Q.y`.
+
+So this is a deliberate source non-conformance. The internal `Chain.Nil` circuit
+models the empty tail needed by nonempty messages, not a standalone empty
+`hash_to_point` entry.
+-/
 def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint Fp (fields (ns.length + 1))

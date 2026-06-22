@@ -128,6 +128,14 @@ Source: `orchard/src/circuit.rs`, `circuit/gadget.rs`, `circuit/note_commit.rs`,
 
 ## Known Non-Conformances
 
+### Sinsemilla Empty Messages
+
+`Sinsemilla.HashToPoint.circuit` only exposes nonempty messages (`n₀ :: ns`). The halo2
+source `Message` is a `Vec<MessagePiece>` and accepts the empty vector, but the
+empty-message path is underconstrained for the semantic spec: after public `Q`
+initialization, no piece row is emitted, so the final dummy `y_a` cell is not tied to
+`Q.y` by the Sinsemilla chaining gate. Orchard does not use empty Sinsemilla messages.
+
 ### Scalar Multiplication Output Signatures
 
 `FixedPoint::mul` returns `(EccPoint, EccScalarFixed)` and `FixedPointShort::mul` returns
