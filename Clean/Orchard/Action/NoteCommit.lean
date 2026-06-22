@@ -1,6 +1,6 @@
 import Clean.Orchard.Action.Canonicity
 import Clean.Orchard.Action.Decompose
-import Clean.Orchard.Sinsemilla.Domain
+import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Specs.Bitrange
 import Clean.Orchard.Utilities
 

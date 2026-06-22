@@ -3,7 +3,7 @@ import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.Add
 
 /-!
-# Sinsemilla hash and commit domains
+# Sinsemilla commit domain
 
 Reference: `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla.rs`.
 
@@ -20,7 +20,7 @@ extracts `x` in `Merkle.HashLayer`, and `commit_ivk` extracts `x` after `commit`
 they have no standalone gadget here.
 
 The domain constants (`Q`, the generator table, the blinding base `R`) are abstract
-parameters with the properties the proofs need (`Q ≠ 0`, `Generators.S_ne_zero`,
+parameters with the properties the proofs need (`Q.OnCurve`, `Generators.S_ne_zero`,
 `FixedBase`).
 -/
 

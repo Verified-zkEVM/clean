@@ -11,7 +11,7 @@ import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.MulFixed.BaseFieldElem
 import Clean.Orchard.Ecc.MulFixed.Short
 import Clean.Orchard.Sinsemilla.Chip
-import Clean.Orchard.Sinsemilla.Domain
+import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Sinsemilla.Merkle
 import Clean.Orchard.Specs.CompElliptic.CoordinateSystem
