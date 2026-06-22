@@ -129,6 +129,12 @@ theorem valid_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
     (ShortWeierstrass.valid_add
       ((valid_iff p).mp hp) ((valid_iff q).mp hq))
 
+theorem add_comm {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
+    p + q = q + p := by
+  apply ext_coords
+  rw [coords_add, coords_add]
+  exact ShortWeierstrass.add_comm ((valid_iff p).mp hp) ((valid_iff q).mp hq)
+
 theorem valid_neg {p : Point Fp} (hp : p.Valid) :
     (-p).Valid := by
   exact (valid_iff (-p)).mpr

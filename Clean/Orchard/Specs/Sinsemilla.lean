@@ -176,6 +176,24 @@ theorem hashToPoint_ne_zero {G : Generators} {Q B : Point Fp}
         (step_ne_zero hQvalid (hl m (by simp)) hs)
         (fun n hn => hl n (by simp [hn])) h
 
+theorem hashToPoint_valid {G : Generators} {Q B : Point Fp}
+    {l : List ℕ} (hQvalid : Q.Valid) (hl : ∀ m ∈ l, m < 2 ^ K)
+    (h : hashToPoint G.S Q l = some B) : B.Valid := by
+  induction l generalizing Q with
+  | nil =>
+    rw [hashToPoint_nil] at h
+    exact Option.some.inj h ▸ hQvalid
+  | cons m ms ih =>
+    rw [hashToPoint_cons] at h
+    cases hs : step G.S m Q with
+    | none =>
+      rw [hs] at h
+      simp at h
+    | some C =>
+      rw [hs] at h
+      exact ih (step_valid hQvalid (hl m (by simp)) hs)
+        (fun n hn => hl n (by simp [hn])) h
+
 /-- Split a defined chain at a list boundary. -/
 theorem hashToPoint_append_some {S : ℕ → Point Fp}
     {Q B : Point Fp} {l₁ l₂ : List ℕ}
