@@ -17,7 +17,7 @@ the derived generator `y`-coordinate
 `y_p = Y_A/2 - λ₁·(x_A - x_P)` in this table.
 -/
 
-namespace Orchard.Sinsemilla.HashToPoint
+namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Specs.Sinsemilla (Generators)
@@ -1863,6 +1863,8 @@ running sums `zs`, mirroring halo2's `(Point, Vec<RunningSum>)` `hash_to_point` 
 The `MerkleCRH` path that only needs the `z₁` cells uses the `Z1s` projection below.
 -/
 
+namespace HashToPoint
+
 /-- Outputs of `hash_to_point`: the hash point and the full per-piece running sums. -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
@@ -2101,4 +2103,6 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
 
 end Z1s
 
-end Orchard.Sinsemilla.HashToPoint
+end HashToPoint
+
+end Orchard.Sinsemilla

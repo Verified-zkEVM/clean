@@ -617,7 +617,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0) (l : ℕ)
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b1 }
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b2 }
   -- hash = SinsemillaHashToPoint(Q, a || b || c)
-  let out ← Z1s.circuit G Q hQ 24 [1, 24] #v[a, b, c]
+  let out ← HashToPoint.Z1s.circuit G Q hQ 24 [1, 24] #v[a, b, c]
   -- the decomposition gate ties the pieces to (l, left, right)
   Merkle.Gate.circuit {
     aWhole := a, bWhole := b, cWhole := c,
@@ -637,14 +637,14 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   localLength _ := 269
   localLength_eq := by
     intro input offset
-    have hEL : ∀ x, (Z1s.circuit G Q hQ 24 [1, 24]).localLength x = 262 := fun _ => rfl
+    have hEL : ∀ x, (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).localLength x = 262 := fun _ => rfl
     simp only [main, circuit_norm, hEL, _root_.Orchard.Sinsemilla.Merkle.Gate.circuit,
       Utilities.LookupRangeCheck.shortRangeCircuit]
   channelsLawful := by
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
-    have hECg : (Z1s.circuit G Q hQ 24 [1, 24]).channelsWithGuarantees = [] := rfl
-    have hECr : (Z1s.circuit G Q hQ 24 [1, 24]).channelsWithRequirements = [] := rfl
+    have hECg : (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).channelsWithGuarantees = [] := rfl
+    have hECr : (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).channelsWithRequirements = [] := rfl
     simp only [circuit_norm, seval, _root_.Orchard.Sinsemilla.Merkle.Gate.circuit,
       Utilities.LookupRangeCheck.shortRangeCircuit, hECg, hECr]
     try trivial
@@ -676,7 +676,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ l)
       (fun _ _ => True) (Spec G Q l) := by
-  circuit_proof_start [main, Spec, Z1s.circuit, Z1s.Spec,
+  circuit_proof_start [main, Spec, HashToPoint.Z1s.circuit, HashToPoint.Z1s.Spec,
     Merkle.Gate.circuit, Merkle.Gate.Spec, Merkle.Gate.a0, Merkle.Gate.b0,
     Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec,
@@ -690,7 +690,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     msC, hmsC, hcval, t3, rfl, rfl⟩ := hPC
   have hz1A := Chain.z1Facts_getElem_zero hZ1
   have hz1B := Chain.z1Facts_getElem_one hZ1
-  have heoex : ∃ e, Z1s.output G Q 24 [1, 24]
+  have heoex : ∃ e, HashToPoint.Z1s.output G Q 24 [1, 24]
       #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
         Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
       (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1) = e := ⟨_, rfl⟩
@@ -724,8 +724,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ l)
       (ProverAssumptions G Q l) (ProverSpec G Q l) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, Z1s.circuit,
-    Z1s.ProverAssumptions, Z1s.ProverSpec, Merkle.Gate.circuit, Merkle.Gate.Spec,
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, HashToPoint.Z1s.circuit,
+    HashToPoint.Z1s.ProverAssumptions, HashToPoint.Z1s.ProverSpec, Merkle.Gate.circuit, Merkle.Gate.Spec,
     Merkle.Gate.a0, Merkle.Gate.b0, Utilities.LookupRangeCheck.shortRangeCircuit,
     Utilities.LookupRangeCheck.shortRangeSpec, Chain.PieceBounds,
     Chain.honestChunks, Chain.Z1sHonest,
