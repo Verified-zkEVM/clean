@@ -17,8 +17,7 @@ the derived generator `y`-coordinate
 `y_p = Y_A/2 - λ₁·(x_A - x_P)` in this table.
 -/
 
-namespace Orchard
-namespace Sinsemilla
+namespace Orchard.Sinsemilla.HashToPoint
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Specs.Sinsemilla (Generators)
@@ -1864,8 +1863,6 @@ running sums `zs`, mirroring halo2's `(Point, Vec<RunningSum>)` `hash_to_point` 
 The `MerkleCRH` path that only needs the `z₁` cells uses the `EntryZ1s` projection below.
 -/
 
-namespace Entry
-
 /-- Outputs of `hash_to_point`: the hash point and the full per-piece running sums. -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
@@ -1996,12 +1993,10 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
   soundness := soundness G Q hQvalid hQ n₀ ns
   completeness := completeness G Q hQvalid hQ n₀ ns
 
-end Entry
-
 /-! ### `EntryZ1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
 
 `MerkleCRH` reads only each piece's `z₁` running-sum cell. This is the `z₁`-projecting
-view of `Entry`: `z1s[i] = zs[i][1]` via `Chain.z1sOfZs`, so the single source of truth is
+view of `hash_to_point`: `z1s[i] = zs[i][1]` via `Chain.z1sOfZs`, so the single source of truth is
 `hash_to_point`'s running sums `zs`. The output is exposed through the named `output`
 definition, so parents (Merkle) see an opaque `EntryZ1s.output …` reasoned about via the
 `Spec`, rather than the `Chain.z1sOfZs` projection internals. -/
@@ -2022,7 +2017,7 @@ def main (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
     (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Fp) :
     Circuit Fp (Var (Output (n₀ :: ns)) Fp) := do
-  let out ← Entry.circuit G Q hQvalid hQ n₀ ns pieces
+  let out ← circuit G Q hQvalid hQ n₀ ns pieces
   return { point := out.point, z1s := Chain.z1sOfZs (n₀ :: ns) out.zs }
 
 /-- The output cells of `EntryZ1s`, kept as a named (opaque) definition so parent circuits
@@ -2031,7 +2026,7 @@ projection. It is exactly the output `elaborate_circuit` derives for `main`, so 
 is definitional. -/
 def output (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (input : Var (fields (ns.length + 1)) Fp) (offset : ℕ) : Var (Output (n₀ :: ns)) Fp :=
-  let e := (Entry.main G Q n₀ ns input).output offset
+  let e := (HashToPoint.main G Q n₀ ns input).output offset
   { point := e.point, z1s := Chain.z1sOfZs (n₀ :: ns) e.zs }
 
 instance elaborated (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
@@ -2071,7 +2066,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q �
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQvalid hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
-  circuit_proof_start [main, Spec, output, Entry.circuit, Entry.Spec]
+  circuit_proof_start [main, Spec, output, HashToPoint.circuit, HashToPoint.Spec]
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_, ?_⟩
   · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
@@ -2083,8 +2078,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQvalid hQ n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, output, Entry.circuit,
-    Entry.ProverAssumptions, Entry.ProverSpec]
+  circuit_proof_start [main, ProverSpec, ProverAssumptions, output, HashToPoint.circuit,
+    HashToPoint.ProverAssumptions, HashToPoint.ProverSpec]
   obtain ⟨-, hZsH, hAfun⟩ := h_env h_assumptions
   refine ⟨h_assumptions, ?_, ?_⟩
   · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
@@ -2106,5 +2101,4 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
 
 end EntryZ1s
 
-end Sinsemilla
-end Orchard
+end Orchard.Sinsemilla.HashToPoint
