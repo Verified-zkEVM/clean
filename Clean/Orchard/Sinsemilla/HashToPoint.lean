@@ -671,7 +671,7 @@ private theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
 theorem completeness (G : Generators) (w : ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G w)
       (ProverAssumptions G w) (ProverSpec G w) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, Gate.circuit, Gate.Spec,
+  circuit_proof_start [Gate.circuit, Gate.Spec,
     generatorTable]
   obtain ⟨hbound, A, B, hAon, hAx, hAy, hB⟩ := h_assumptions
   have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
@@ -1054,7 +1054,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
 theorem soundness (G : Generators) (w : ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G w) (fun _ _ => True)
       (Spec G w) := by
-  circuit_proof_start [main, Spec, Gate.circuit, Gate.Spec, generatorTable]
+  circuit_proof_start [Gate.circuit, Gate.Spec, generatorTable]
   obtain ⟨h_copy, h_lookups, h_gates⟩ := h_holds
   simp only [Vector.get, Vector.getElem_ofFn, Vector.getElem_append, Vector.getElem_mapRange,
     circuit_norm] at h_lookups h_gates ⊢
@@ -1212,7 +1212,7 @@ def honestChunks : (ns : List ℕ) → Vector Fp ns.length → List ℕ
 def PieceBounds : (ns : List ℕ) → Vector Fp ns.length → Prop
   | [], _ => True
   | n :: rest, pieces =>
-    ZMod.val (show Fp from pieces[0]) < 2 ^ (K * (n + 1)) ∧
+    ZMod.val pieces[0] < 2 ^ (K * (n + 1)) ∧
       PieceBounds rest pieces.tail
 
 /-- The honest chunk values realize the `PieceChunks` relation when the pieces are in
@@ -1446,7 +1446,7 @@ instance elaborated : ElaboratedCircuit Fp (Input 0) (Output []) main := by
 theorem soundness (G : Generators) :
     GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True)
       (Spec G []) := by
-  circuit_proof_start [main, Spec, PieceChunks, ZsFacts, enterYA]
+  circuit_proof_start [PieceChunks, ZsFacts, enterYA]
   refine ⟨[], rfl, ?_⟩
   intro A hAon hAx hAy B hB
   have hAy' : 2 * A.y = 2 * env.get i₀ := by simpa using hAy
@@ -1457,8 +1457,7 @@ theorem soundness (G : Generators) :
 theorem completeness (G : Generators) :
     GeneralFormalCircuit.WithHint.Completeness Fp main
       (ProverAssumptions G []) (ProverSpec G []) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, honestChunks,
-    ZsHonest, enterYA]
+  circuit_proof_start [honestChunks, ZsHonest, enterYA]
   intro A hAon hAx hAy
   constructor
   · simp only [List.isEmpty_nil, if_true]
@@ -1672,8 +1671,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Soundness Fp (main G n rest tail)
       (fun _ _ => True) (Spec G (n :: rest)) := by
-  circuit_proof_start [main, Spec, HashPiece.circuit, HashPiece.Spec,
-    Gate.circuit, Gate.Spec]
+  circuit_proof_start [HashPiece.circuit, HashPiece.Spec, Gate.circuit, Gate.Spec]
   obtain ⟨h_piece, h_tail, h_gate⟩ := h_holds
   simp only [hAss] at h_tail
   replace h_tail := h_tail trivial
@@ -1727,8 +1725,8 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     letI := elaborated G n rest tail tailLen htail hcwg hcwr
     GeneralFormalCircuit.WithHint.Completeness Fp (main G n rest tail)
       (ProverAssumptions G (n :: rest)) (ProverSpec G (n :: rest)) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, HashPiece.circuit,
-    HashPiece.ProverSpec, HashPiece.ProverAssumptions, Gate.circuit, Gate.Spec]
+  circuit_proof_start [HashPiece.circuit, HashPiece.ProverSpec,
+    HashPiece.ProverAssumptions, Gate.circuit, Gate.Spec]
   obtain ⟨h_piece_env, h_tail_env⟩ := h_env
   obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := h_assumptions
   have hAvalid : A.Valid := Or.inl hAon
@@ -1949,7 +1947,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
-  circuit_proof_start [main, Spec, InitialYQ.circuit, InitialYQ.Spec]
+  circuit_proof_start [InitialYQ.circuit, InitialYQ.Spec]
   obtain ⟨h_xQ, h_chain, h_yQ⟩ := h_holds
   simp only [(Chain.circuit G (n₀ :: ns)).2.2.1] at h_chain
   replace h_chain := h_chain trivial
@@ -1968,8 +1966,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, InitialYQ.circuit,
-    InitialYQ.Spec]
+  circuit_proof_start [InitialYQ.circuit, InitialYQ.Spec]
   obtain ⟨h_xQ_env, h_chain_env⟩ := h_env
   obtain ⟨hbounds, B, hchain⟩ := h_assumptions
   have hPSchain := h_chain_env (by
@@ -2075,7 +2072,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
-  circuit_proof_start [main, Spec, output, HashToPoint.circuit, HashToPoint.Spec]
+  circuit_proof_start [output, HashToPoint.circuit, HashToPoint.Spec]
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_, ?_⟩
   · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
@@ -2087,7 +2084,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions, output, HashToPoint.circuit,
+  circuit_proof_start [output, HashToPoint.circuit,
     HashToPoint.ProverAssumptions, HashToPoint.ProverSpec]
   obtain ⟨-, hZsH, hAfun⟩ := h_env h_assumptions
   refine ⟨h_assumptions, ?_, ?_⟩

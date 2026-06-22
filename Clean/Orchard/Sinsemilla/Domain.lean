@@ -109,7 +109,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R n₀ ns)
       (fun _ _ => True) (Spec G Q R n₀ ns) := by
-  circuit_proof_start [main, Spec, HashToPoint.circuit, HashToPoint.Spec,
+  circuit_proof_start [HashToPoint.circuit, HashToPoint.Spec,
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.Spec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
@@ -134,8 +134,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
-  circuit_proof_start [main, ProverSpec, ProverAssumptions,
-    HashToPoint.circuit, HashToPoint.ProverAssumptions, HashToPoint.ProverSpec,
+  circuit_proof_start [HashToPoint.circuit, HashToPoint.ProverAssumptions, HashToPoint.ProverSpec,
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
