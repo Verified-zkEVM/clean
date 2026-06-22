@@ -1282,44 +1282,27 @@ the `r = 1` running-sum cell (`zs[i][1]`), or `0` for a width-0 piece. This is t
 `MerkleCRH`/`EntryZ1s` view of `hash_to_point`'s running sums `zs`. -/
 def z1sOfZs {F : Type} [Zero F] : (ns : List ℕ) → HVec (zLengths ns) F → Vector F ns.length
   | [], _ => #v[]
-  | n :: rest, zs =>
-    Vector.cast (by rw [List.length_cons]; omega)
-      (#v[if h : 1 < n + 1 then (HVec.head zs)[1]'h else (0 : F)]
-        ++ z1sOfZs rest (HVec.tail zs))
-
-private theorem Vector.tail_cast_singleton_append {α : Type} {n : ℕ} (x : α)
-    (xs : Vector α n) (h : 1 + n = n + 1) :
-    (Vector.cast h (#v[x] ++ xs)).tail = xs := by
-  ext i hi
-  simp
-
-private theorem Vector.map_tail_cast_singleton_append {α β : Type} {n : ℕ} (f : α → β)
-    (x : α) (xs : Vector α n) (h : 1 + n = n + 1) :
-    (Vector.map f (Vector.cast h (#v[x] ++ xs))).tail = Vector.map f xs := by
-  ext i hi
-  simp
+  | n :: rest, zs => .listCons
+    (if h : 1 < n + 1 then (HVec.head zs)[1]'h else (0 : F))
+    (z1sOfZs rest (HVec.tail zs))
 
 @[simp] theorem z1sOfZs_getElem_zero {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) :
     (z1sOfZs (n :: rest) zs)[0]'(by simp) =
       if h : 1 < n + 1 then (HVec.head zs)[1]'h else (0 : F) := by
-  simp only [z1sOfZs, Vector.getElem_cast]
-  rw [Vector.getElem_append_left (by simp)]
-  simp
+  simp [z1sOfZs, Vector.listCons]
 
 theorem z1sOfZs_tail {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) :
     (z1sOfZs (n :: rest) zs).tail = z1sOfZs rest (HVec.tail zs) := by
-  simp only [z1sOfZs]
+  simp only [z1sOfZs, Vector.listCons]
   ext i hi
-  simp [Vector.getElem_cast, Vector.getElem_append_right]
+  simp
 
 theorem z1sOfZs_getElem_succ {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) (k : ℕ) (hk : k + 1 < (n :: rest).length) :
     (z1sOfZs (n :: rest) zs)[k + 1]'hk = (z1sOfZs rest (HVec.tail zs))[k]'(by simpa using hk) := by
-  simp only [z1sOfZs, Vector.getElem_cast]
-  rw [Vector.getElem_append_right (hi := by omega)]
-  simp only [Nat.add_sub_cancel]
+  simp [z1sOfZs, Vector.listCons]
 
 /-- The `z₁` projection of an honest/sound running-sum tower satisfies `Z1Facts`: each
 `z₁` cell is the `r = 1` suffix recombination, exactly the `ZsFacts` entry at `r = 1`. -/
