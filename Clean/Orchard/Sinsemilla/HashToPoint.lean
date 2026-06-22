@@ -1161,6 +1161,9 @@ structure Input (k : ℕ) (F : Type) where
   yA : UnconstrainedDep field F
 deriving CircuitType
 
+instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
+  ⟨{ pieces := default, xA := default, yA := default }⟩
+
 /-- Per-piece running-sum lengths: piece `i` of width `nᵢ` produces `nᵢ + 1`
 running-sum cells (`z₀..z_{nᵢ}`). -/
 def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
@@ -1174,16 +1177,7 @@ structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   first : DoubleAndAddRow F
   zs : HVec (zLengths ns) F
-
-instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Point, DoubleAndAddRow, HVec (zLengths ns)]
-  toComponents := fun { point, first, zs } =>
-    .cons point (.cons first (.cons zs .nil))
-  fromComponents := fun (.cons point (.cons first (.cons zs .nil))) =>
-    { point, first, zs }
-
-instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
-  ⟨{ pieces := .replicate k default, xA := default, yA := fun _ => default }⟩
+deriving ProvableStruct
 
 /-- The entering accumulator `2·y` of a level, as derived by the preceding gate from
 the level's first row: the `Y_A` expression for in-message rows, twice the witnessed
@@ -1886,11 +1880,7 @@ namespace HashToPoint
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   zs : HVec (Chain.zLengths ns) F
-
-instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Point, HVec (Chain.zLengths ns)]
-  toComponents := fun { point, zs } => .cons point (.cons zs .nil)
-  fromComponents := fun (.cons point (.cons zs .nil)) => { point, zs }
+deriving ProvableStruct
 
 def main (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Fp) :

@@ -42,7 +42,7 @@ structure Input (k : ℕ) (F : Type) where
 deriving CircuitType
 
 instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
-  ⟨{ pieces := .replicate k default, r := fun _ => default }⟩
+  ⟨{ pieces := default, r := default }⟩
 
 /-- Outputs of `commit`: the commitment point and the hash running sums, mirroring
 halo2's `commit` returning `(CommitmentPoint, Vec<RunningSum>)`. `NoteCommit`/`CommitIvk`
@@ -50,17 +50,10 @@ read individual `zs[i][j]` cells for their canonicity gates. -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   zs : HVec (Chain.zLengths ns) F
+deriving ProvableStruct
 
-instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Point, HVec (Chain.zLengths ns)]
-  toComponents := fun { point, zs } => .cons point (.cons zs .nil)
-  fromComponents := fun (.cons point (.cons zs .nil)) => { point, zs }
-
-theorem eval_zs {F : Type} [Field F] (env : Environment F) (ns : List ℕ)
-    (out : Var (Output ns) F) :
+theorem eval_zs {F : Type} [Field F] (env : Environment F) (ns : List ℕ) (out : Var (Output ns) F) :
     (eval env out).zs = eval env out.zs := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
   simp only [circuit_norm]
 
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
