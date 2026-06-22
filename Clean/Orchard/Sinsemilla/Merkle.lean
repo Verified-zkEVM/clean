@@ -690,7 +690,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     msC, hmsC, hcval, t3, rfl, rfl⟩ := hPC
   have hz1A := Chain.z1Facts_getElem_zero hZ1
   have hz1B := Chain.z1Facts_getElem_one hZ1
-  have heoex : ∃ e, EntryZ1s.main G Q 24 [1, 24]
+  have heoex : ∃ e, EntryZ1s.output G Q 24 [1, 24]
       #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
         Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
       (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1) = e := ⟨_, rfl⟩
@@ -715,6 +715,10 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   rw [hchunks] at hB
   rw [heo]
   exact congrArg Point.x (hfun B hB)
+
+-- Keep the `z₁` projection atomic: unfolding `Chain.z1sOfZs` over the full running-sum
+-- `HVec` (50 cells) blows up `whnf` when the honest-value hypotheses are used.
+attribute [local irreducible] Chain.z1sOfZs
 
 theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     (l : ℕ) (hl : l < 2 ^ 10) :
@@ -746,16 +750,18 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         ++ (List.map (pieceWord (env.get (i₀ + 1 + 1 + 1))) (List.range 2)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
       = some B' := ⟨B, by rw [hp.2]; exact hchain⟩
-  obtain ⟨⟨hzh1, hzh2, -⟩, hBfun⟩ := (h_entry_env ⟨hp.1, hex⟩).2
-  have hzh2' := (Vector.getElem_extract (by simp)).symm.trans hzh2
-  have hzh2'' := (Vector.getElem_map (Expression.eval env.toEnvironment)
+  have hps := (h_entry_env ⟨hp.1, hex⟩).2
+  have hBfun := hps.2
+  have hzh1 := hps.1.1
+  have hzh2' := (Vector.getElem_extract (by simp)).symm.trans hps.1.2.1
+  have hzh2 := (Vector.getElem_map (Expression.eval env.toEnvironment)
     (by simp)).symm.trans hzh2'
   have hg := honest_gate (l := l) (lv := ZMod.val input_left)
     (rv := ZMod.val input_right) (aCell := env.get i₀)
     (bCell := env.get (i₀ + 1 + 1 + 1)) (b1Cell := env.get (i₀ + 1))
     (b2Cell := env.get (i₀ + 1 + 1)) (cCell := env.get (i₀ + 1 + 1 + 1 + 1))
     (left := input_left) (right := input_right)
-    hl hlv hrv ha_w hb1_w hb2_w hb_w hc_w hzh1 hzh2''
+    hl hlv hrv ha_w hb1_w hb2_w hb_w hc_w hzh1 hzh2
     (ZMod.natCast_zmod_val input_left) (ZMod.natCast_zmod_val input_right)
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
   · rw [hb1_w]
