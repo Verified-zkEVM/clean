@@ -1169,7 +1169,7 @@ def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
 emits the gate pairing its last row with this row; at the end of the message this is
 the dummy row carrying the witnessed final `y_a` in its `λ₁` cell), and the full
 per-piece running sums `zs` (`hash_to_point` returns all running sums; consumers read
-specific cells, e.g. `MerkleCRH` projects each piece's `z_1` via `EntryZ1s`). -/
+specific cells, e.g. `MerkleCRH` projects each piece's `z_1` via `Z1s`). -/
 structure Output (ns : List ℕ) (F : Type) where
   point : Point F
   first : DoubleAndAddRow F
@@ -1279,7 +1279,7 @@ def ZsHonest : (ns : List ℕ) → Vector Fp ns.length → HVec (zLengths ns) Fp
 
 /-- Project the per-piece `z₁` cells out of the full running sums: piece `i`'s `z₁` is
 the `r = 1` running-sum cell (`zs[i][1]`), or `0` for a width-0 piece. This is the
-`MerkleCRH`/`EntryZ1s` view of `hash_to_point`'s running sums `zs`. -/
+`MerkleCRH`/`Z1s` view of `hash_to_point`'s running sums `zs`. -/
 def z1sOfZs {F : Type} [Zero F] : (ns : List ℕ) → HVec (zLengths ns) F → Vector F ns.length
   | [], _ => #v[]
   | n :: rest, zs => .listCons
@@ -1860,7 +1860,7 @@ runs with the accumulator hint `y_Q`, and the `q_sinsemilla4` gate (`Initial y_Q
 pins the first row's derived `Y_A` to `2·y_Q`. The output exposes the full per-piece
 running sums `zs`, mirroring halo2's `(Point, Vec<RunningSum>)` `hash_to_point` output
 (`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells for the canonicity gates).
-The `MerkleCRH` path that only needs the `z₁` cells uses the `EntryZ1s` projection below.
+The `MerkleCRH` path that only needs the `z₁` cells uses the `Z1s` projection below.
 -/
 
 /-- Outputs of `hash_to_point`: the hash point and the full per-piece running sums. -/
@@ -1993,14 +1993,14 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
   soundness := soundness G Q hQvalid hQ n₀ ns
   completeness := completeness G Q hQvalid hQ n₀ ns
 
-/-! ### `EntryZ1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
+/-! ### `Z1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
 
 `MerkleCRH` reads only each piece's `z₁` running-sum cell. This is the `z₁`-projecting
 view of `hash_to_point`: `z1s[i] = zs[i][1]` via `Chain.z1sOfZs`, so the single source of truth is
 `hash_to_point`'s running sums `zs`. The output is exposed through the named `output`
-definition, so parents (Merkle) see an opaque `EntryZ1s.output …` reasoned about via the
+definition, so parents (Merkle) see an opaque `Z1s.output …` reasoned about via the
 `Spec`, rather than the `Chain.z1sOfZs` projection internals. -/
-namespace EntryZ1s
+namespace Z1s
 
 /-- Outputs of the `z₁`-only `hash_to_point` view: the hash point and each piece's `z₁`
 running-sum cell. -/
@@ -2020,8 +2020,8 @@ def main (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
   let out ← circuit G Q hQvalid hQ n₀ ns pieces
   return { point := out.point, z1s := Chain.z1sOfZs (n₀ :: ns) out.zs }
 
-/-- The output cells of `EntryZ1s`, kept as a named (opaque) definition so parent circuits
-reason about `EntryZ1s.output …` via the `Spec` instead of unfolding the `Chain.z1sOfZs`
+/-- The output cells of `Z1s`, kept as a named (opaque) definition so parent circuits
+reason about `Z1s.output …` via the `Spec` instead of unfolding the `Chain.z1sOfZs`
 projection. It is exactly the output `elaborate_circuit` derives for `main`, so `output_eq`
 is definitional. -/
 def output (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
@@ -2099,6 +2099,6 @@ def circuit (G : Generators) (Q : Point Fp) (hQvalid : Q.Valid) (hQ : Q ≠ 0)
   soundness := soundness G Q hQvalid hQ n₀ ns
   completeness := completeness G Q hQvalid hQ n₀ ns
 
-end EntryZ1s
+end Z1s
 
 end Orchard.Sinsemilla.HashToPoint
