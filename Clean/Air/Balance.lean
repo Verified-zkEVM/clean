@@ -173,15 +173,6 @@ theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : Bal
     simp_all [Lean.Grind.IsCharP.natCast_eq_zero_iff_of_lt _ neg_one_count_lt_ringChar]
   · simp_all [CharP.ringChar_zero_iff_CharZero]
 
-def InteractionsWellFormed (interactions : List (Interaction F)) : Prop :=
-  ∀ i ∈ interactions, i.assumeGuarantees = true → i.mult = -1 ∨ i.mult = 0
-
-omit [DecidableEq F] in
-theorem InteractionsWellFormed.of_perm {as bs : List (Interaction F)} :
-    InteractionsWellFormed as → as.Perm bs → InteractionsWellFormed bs := by
-  intro h perm i hi
-  exact h i (perm.mem_iff.mpr hi)
-
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 
 namespace RawChannel
@@ -198,7 +189,6 @@ For `Channel` it holds by definition, see `NormalChannel` below.
 class Consistent (channel : RawChannel F) : Prop where
   consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F),
     BalancedInteractions interactions →
-    InteractionsWellFormed interactions →
     (∀ i ∈ interactions, i.channel = channel ∧ i.Requirements data) →
     (∀ i ∈ interactions, i.Guarantees data)
 
@@ -232,7 +222,7 @@ instance (channel : Channel F Message) : Normal channel.toRaw where
 theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
     channel.Consistent := by
   constructor
-  intro interactions data balance wellformed reqs a a_mem
+  intro interactions data balance reqs a a_mem
   simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector] at reqs ⊢
   intro _
   have a_channel_eq := reqs a a_mem |>.left
@@ -249,15 +239,8 @@ theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
   apply RawChannel.Normal.grts_of_reqs ⟨ a.msg, a_msg_size ⟩ b.mult data b_mult_ne_neg_one b_mult_ne_zero
   have ⟨ b_channel_eq, b_reqs ⟩ := reqs _ b_mem
   symm at b_channel_eq
-  have b_assume_false : b.assumeGuarantees = false := by
-    cases h : b.assumeGuarantees
-    · rfl
-    · have b_mult := wellformed b b_mem h
-      cases b_mult with
-      | inl h_mult => contradiction
-      | inr h_mult => contradiction
   simp only [b_msg_eq] at b_reqs
-  convert b_reqs b_assume_false
+  convert b_reqs
 
 instance (channel : RawChannel F) [channel.Normal] : channel.Consistent :=
   consistent_of_normal channel
@@ -445,8 +428,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
   -- the multiplicities are -1 for pulls and 1 for pushes
-  (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1)
-  (pushes_assumeRequirements : ∀ b ∈ pushes, b.assumeGuarantees = false) :
+  (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
   intro constraints
@@ -482,7 +464,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
         convert fun _ => grt'
       apply RawChannel.Normal.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_neg_one one_ne_zero
       simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
-      convert push_j_req (pushes_assumeRequirements pushes[j] (List.getElem_mem ..))
+      convert push_j_req
     -- if i = j, we're done
     by_cases h_ij : j = i
     · subst h_ij; exact push_j_imp_pull_i push_i_req
@@ -515,10 +497,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
     have pushes'_mult : ∀ b ∈ pushes', b.mult = 1 := by
       simp only [pushes', List.forall_mem_iff_getElem, List.getElem_eraseIdx, List.getElem_set]
       intros; split_ifs <;> simp [*]
-    have pushes'_assumeRequirements : ∀ b ∈ pushes', b.assumeGuarantees = false := by
-      simp only [pushes', List.forall_mem_iff_getElem, List.getElem_eraseIdx, List.getElem_set]
-      intros; split_ifs <;> simp [*]
-    apply ih pulls' pushes' ?balance' pulls'_len pushes'_len ?pulls'_channel ?pushes'_channel pulls'_mult pushes'_mult pushes'_assumeRequirements ?constraints' j' hj'
+    apply ih pulls' pushes' ?balance' pulls'_len pushes'_len ?pulls'_channel ?pushes'_channel pulls'_mult pushes'_mult ?constraints' j' hj'
     <;> clear ih
     case pulls'_channel | pushes'_channel =>
       simp only [pulls', pushes', List.forall_mem_iff_getElem, List.getElem_set, List.getElem_eraseIdx]
@@ -586,7 +565,6 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_gated [Fact (ri
   -- pulls are either active `-1` pulls or disabled, pushes are either active `1` pushes or disabled
   (pulls_mult : ∀ a ∈ pulls, a.mult = -1 ∨ a.mult = 0)
   (pushes_mult : ∀ b ∈ pushes, b.mult = 1 ∨ b.mult = 0)
-  (pushes_assumeRequirements : ∀ b ∈ pushes, b.assumeGuarantees = false)
   -- a pair is disabled on one side iff it is disabled on the other
   (pair_zero : ∀ i (hi_p : i < pulls.length) (hi_q : i < pushes.length),
     pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
@@ -624,17 +602,12 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_gated [Fact (ri
     rcases pushes_mult b hb.1 with h_mult | h_mult
     · exact h_mult
     · contradiction
-  have active_pushes_assumeRequirements : ∀ b ∈ active_pushes, b.assumeGuarantees = false := by
-    intro b hb
-    simp only [active_pushes, activeInteractions, List.mem_filter] at hb
-    exact pushes_assumeRequirements b hb.1
   have active_len : active_pulls.length = active_pushes.length := by
     simpa [active_pulls, active_pushes] using
       activeInteractions_length_eq len_pulls_pushes pair_zero
   have theorem_active := guarantees_of_requirements_of_requirements_of_guarantees
     channel active_pulls active_pushes active_balance data active_pulls.length rfl active_len.symm
     active_pulls_channel active_pushes_channel active_pulls_mult active_pushes_mult
-    active_pushes_assumeRequirements
   have constraints' : ∀ (i : ℕ) (hi : i < active_pulls.length),
       active_pulls[i].Guarantees data → (active_pushes[i]'(by rw [← active_len]; exact hi)).Requirements data := by
     simpa [active_pulls, active_pushes] using constraints

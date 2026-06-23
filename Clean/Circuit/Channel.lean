@@ -214,7 +214,7 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
-  i.assumeGuarantees = false → Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
+  Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
       channel.Guarantees (eval env i.msg) env.data
 end ChannelInteraction
 
@@ -223,7 +223,7 @@ def Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees (env i.mult) (i.msg.map env) env.data
 
 def Requirements (i : AbstractInteraction F) (env : Environment F) : Prop :=
-  i.assumeGuarantees = false → i.channel.Requirements (env i.mult) (i.msg.map env) env.data
+  i.channel.Requirements (env i.mult) (i.msg.map env) env.data
 end AbstractInteraction
 
 namespace ChannelInteraction
@@ -269,7 +269,7 @@ def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
 
 def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
-  i.assumeGuarantees = false → i.channel.Requirements i.mult i.msgVector data
+  i.channel.Requirements i.mult i.msgVector data
 end Interaction
 
 namespace AbstractInteraction

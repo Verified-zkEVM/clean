@@ -329,8 +329,7 @@ lemma verifierTable_assumptions_of_verifier_empty {ens : Ensemble F PublicIO} {w
 @[circuit_norm]
 abbrev BalancedChannel [DecidableEq F] {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) : Prop :=
-  BalancedInteractions (witness.allTablesWitness.interactionsWith channel) ∧
-  InteractionsWellFormed (witness.allTablesWitness.interactionsWith channel)
+  BalancedInteractions (witness.allTablesWitness.interactionsWith channel)
 
 /-- All ensemble interactions with all ensemble channels are balanced. -/
 @[circuit_norm]

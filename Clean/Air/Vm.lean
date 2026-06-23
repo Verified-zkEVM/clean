@@ -445,15 +445,6 @@ lemma pushes_mult {witness : VmWitness vm}
     change witness.rowEnabled table_mem row = 1
     exact h1
 
-lemma pushes_assumeRequirements {witness : VmWitness vm} :
-    ∀ push ∈ witness.pushes, push.assumeGuarantees = false := by
-  simp only [pushes, interactionPairs, List.mem_map, List.mem_flatMap, List.mem_attach, true_and, Subtype.exists,
-    forall_exists_index, and_imp]
-  rintro push pair table table_mem row row_mem hpair hpush
-  subst pair
-  subst push
-  simp only [circuit_norm]
-
 lemma pair_zero {witness : VmWitness vm} :
     ∀ i (hi_p : i < witness.pulls.length) (hi_q : i < witness.pushes.length),
       witness.pulls[i].mult = 0 ↔ witness.pushes[i].mult = 0 := by
@@ -602,7 +593,6 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     (by simp [witness.pulls_length, witness.pushes_length])
     witness.pulls_channel witness.pushes_channel
     (witness.pulls_mult row_enabled_boolean) (witness.pushes_mult row_enabled_boolean)
-    witness.pushes_assumeRequirements
     witness.pair_zero
   -- it remains to prove the (grts → reqs) assumption. this is a reformulation of our `constraints`
   have reqs_of_grts : (∀ i (hi : i < (activeInteractions witness.pulls).length),
@@ -825,7 +815,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro table table_mem
     exact constraints table (.inl table_mem)
   have verifier_guarantees := vmWitness
-    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance.1 vm_constraints
+    |>.verifier_guarantees_of_requirements_of_requirements_of_guarantees vm_balance vm_constraints
   have assumptions' : witness'.Assumptions := by
     simp only [EnsembleWitness.Assumptions, allTables_split, List.mem_append] at assumptions ⊢
     simp only [EnsembleWitness.forall_mem_allTables_iff]
@@ -841,11 +831,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       PartialBalancedChannel (.append vmWitness witness' data_eq) channel := by
     intro channel channel_mem
     apply partialBalancedChannel_of_balancedInteractions
-    · convert (balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])).1 using 1
-      simp only [circuit_norm]
-      rw [EnsembleWitness.interactionsWith_of_verifier_empty verifier_empty]
-      simp only [EnsembleWitness.interactionsWith, allTables_split, circuit_norm]
-    · convert (balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])).2 using 1
+    · convert balance channel (by simp [Ensemble.addVm, finished_subset channel_mem]) using 1
       simp only [circuit_norm]
       rw [EnsembleWitness.interactionsWith_of_verifier_empty verifier_empty]
       simp only [EnsembleWitness.interactionsWith, allTables_split, circuit_norm]
