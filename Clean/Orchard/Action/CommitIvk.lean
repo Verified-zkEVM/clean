@@ -47,8 +47,7 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := fun _ => default }⟩
 
 open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint hashToPoint_eq_some_iff
-  hashToSWPoint running_sum_telescope)
+open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
@@ -617,7 +616,7 @@ theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
 
 @[reducible] def Output : TypeMap := OutputGen [24, 0, 23, 0]
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   let ak := input.ak
   let nk := input.nk
@@ -642,18 +641,18 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   let d ← witnessField fun env => env d0 + env d1 * 2 ^ 9
 
   -- ivk = Commit^ivk_rivk(ak || nk); the short commit also exposes the per-piece running sums.
-  let out ← _root_.Orchard.Sinsemilla.CommitDomain.circuit G Q hQ R 24 [0, 23, 0]
+  let out ← CommitDomain.circuit G Q hQ R 24 [0, 23, 0]
     { pieces := #v[a, b, c, d], r := input.rivk }
   return { cells := { point := out.point, a, b, c, d, b0, b1, b2, d0, d1 }, zs := out.zs }
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Output (main G Q hQ R) := by
   elaborate_circuit
 
 /-- The facts the entry needs from the hash: the short range bounds, the wide-piece bounds,
 the running-sum tail identities, and the existence of a chunk decomposition whose hash is the
 commitment point (blinded by some `rivk`). -/
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (_input : Value Input Fp) (output : Value Output Fp) (_ : ProverData Fp) : Prop :=
   output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
     output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
@@ -662,18 +661,17 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     ∃ (chunks : List ℕ) (rivk : Fq),
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-        output.cells.point = Point.ofSW B + rivk • R)
+      (∀ B, hashToPoint G.S Q chunks = some B →
+        output.cells.point = B + rivk • R)
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverAssumptions (G : Generators) (Q : Point Fp)
     (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
   let ak : Fp := input.ak
   let nk : Fp := input.nk
-  ∃ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q
-    (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B
+  ∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (_ : ProverHint Fp) : Prop :=
   let ak : Fp := input.ak
   let nk : Fp := input.nk
@@ -693,10 +691,10 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
     ∃ (chunks : List ℕ),
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-        output.cells.point = Point.ofSW B + (show Fq from input.rivk) • R)
+      (∀ B, hashToPoint G.S Q chunks = some B →
+        output.cells.point = B + (show Fq from input.rivk) • R)
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
       (Spec G Q R) := by
@@ -822,7 +820,7 @@ private theorem honest_pieces_facts (ak nk a b c d : Fp)
     (by simpa using haN) (by simpa [bitrange] using hbN) (by simpa using hcN)
     (by simpa [bitrange] using hdN) hak hnk
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q R) (ProverSpec G Q R) := by
@@ -948,8 +946,8 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     have hOhash : ∃ (chunks : List ℕ),
         Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
           #v[(eval env O).cells.a, (eval env O).cells.b, (eval env O).cells.c, (eval env O).cells.d] chunks ∧
-        (∀ B, Orchard.Specs.Sinsemilla.hashToSWPoint G.S Q chunks = some B →
-          (eval env O).cells.point = Point.ofSW B + (show Fq from input.rivk) • R) := by
+        (∀ B, hashToPoint G.S Q chunks = some B →
+          (eval env O).cells.point = B + (show Fq from input.rivk) • R) := by
       refine ⟨Orchard.Specs.Sinsemilla.commitIvkChunks
         (Expression.eval env.toEnvironment input_var.ak).val
         (Expression.eval env.toEnvironment input_var.nk).val, ?_, ?_⟩
@@ -996,7 +994,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     · -- the hash existential
       exact hOhash
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
@@ -1008,7 +1006,7 @@ def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
 
 end Commit
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   -- All witnessing + the Sinsemilla hash, isolated behind a single folded `Commit.Output`.
   let out1 ← Commit.circuit G Q hQ R input
@@ -1026,32 +1024,29 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       z13C := (HVec.get _ out1.zs ⟨2, by decide⟩)[13] }
   return out1.cells.point.x
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input field (main G Q hQ R) := by
   elaborate_circuit
 
 /-- The committed `ivk` is the `x`-coordinate of the Sinsemilla short commitment of the
 canonical message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)`, blinded by `[rivk] CommitIvkR`. -/
-def Spec (G : Generators) (Q : SWPoint Pallas.curve)
+def Spec (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
   ∃ rivk : Fq, ∀ B : Point Fp,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
+    hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
       ivk = (B + rivk • R).x
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverSpec (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (ak nk : Fp) (rivk : Fq) (ivk : Fp) : Prop :=
   ∀ B : Point Fp,
-    Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-        (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B →
+    hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
       ivk = (B + rivk • R).x
 
 /-- Honest proving needs the Sinsemilla hash-to-point to succeed for the canonical
 `commit_ivk` message. -/
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (ak nk : Fp) : Prop :=
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
-    (Orchard.Specs.Sinsemilla.commitIvkChunks ak.val nk.val) = some B
+def ProverAssumptions (G : Generators) (Q : Point Fp) (ak nk : Fp) : Prop :=
+  ∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B
 
 -- The top-level composition of `Commit` (witnessing + the `WithZs` Sinsemilla hash, behind a
 -- folded `Commit.Output`) with the `Canonicity` subcircuit (CopyCheck decompositions + gate) is
@@ -1140,7 +1135,7 @@ private theorem canonicity_assumptions_of_commit
       ((HVec.eval_getElem env (Chain.zLengths [24, 0, 23, 0]) O.zs ⟨2, by decide⟩ 13
         (by decide)).trans hz13c)
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True)
       (fun input ivk _ => Spec G Q R input.ak input.nk ivk) := by
@@ -1192,14 +1187,13 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
   · refine ⟨rivk, fun B hB => ?_⟩
-    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', rfl⟩
-    have hpt := hHash B' (by rw [hchunks]; exact hB')
+    have hpt := hHash B (by rw [hchunks]; exact hB)
     have hx := congrArg Point.x hpt
     rw [hO] at hx
-    simpa [Point.add, Point.ofSW, Point.coords, circuit_norm] using hx
+    simpa [Point.add, Point.coords, circuit_norm] using hx
   · exact ⟨Or.inl rfl, Or.inl rfl, trivial⟩
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (fun input _ _ => ProverAssumptions G Q input.ak input.nk)
@@ -1216,8 +1210,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [show ((eval env input_var).ak : Fp) = input.ak from by rw [h_input],
       show ((eval env input_var).nk : Fp) = input.nk from by rw [h_input]]
     rcases h_assumptions with ⟨B, hB⟩
-    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', _⟩
-    exact ⟨B', hB'⟩
+    exact ⟨B, hB⟩
   -- the Commit `ProverSpec`: all the cell values, ranges, z-cells, and the hash existential
   rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at h_env
   have hCommitPS := (h_env.1 hCommitPA).2
@@ -1319,7 +1312,6 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       · rw [hSd1]; apply cast_bitrange_val (by norm_num)
   · -- the entry `ProverSpec`: `ivk = (B + blind).x` via the Commit hash relation
     intro B hB
-    rcases hashToPoint_eq_some_iff.mp hB with ⟨B', hB', rfl⟩
     -- replace the `eval` input keys by the opaque `input.{ak,nk}` (mirrors entry soundness;
     -- keeps the expensive `eval env input_var` out of the chunk bridge's `whnf`)
     simp only [h_input] at hSa hSb0 hSb1 hSb2 hSc hSd0 hSd1 hSb hSd
@@ -1335,13 +1327,10 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     rw [hcd] at hSd
     simp only [hca, hcb, hcc, hcd] at hPC
     -- the four Commit pieces are the canonical `commit_ivk` slices, so their chunk list is
-    -- `commitIvkChunks ak nk` (same bridge as the entry soundness); `ak`, `nk` are inferred.
-    -- the four piece values are the canonical `commit_ivk` slices, so `chunks = commitIvkChunks`;
-    -- `convert hB` supplies the well-typed `ZMod.val input.{ak,nk}` (pinning the bridge's `ak`/`nk`),
-    -- avoiding a fresh `ZMod.val (input.ak : ProverValue field _)` projection.
-    have hpt := hHash B' (by
-      convert hB' using 2
-      exact pieceChunks_eq_commitIvkChunks_of_indexed_piece_values hPC
+    -- `commitIvkChunks ak nk` (same bridge as the entry soundness).
+    have hchunks : chunks = commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val :=
+      pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
+        (ak := (show Fp from input.ak).val) (nk := (show Fp from input.nk).val) hPC
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero];
             rw [hSa]; norm_num [bitrange, K])
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
@@ -1353,14 +1342,15 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
         (by simp only [Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_succ,
               List.getElem_cons_zero];
             rw [hSd, hSd0, hSd1]; simp only [bitrange]; push_cast; ring)
-        (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD]))
-        (lt_trans (ZMod.val_lt _) (by norm_num [PALLAS_BASE_CARD])))
+        (lt_trans (ZMod.val_lt (show Fp from input.ak)) (by norm_num [PALLAS_BASE_CARD]))
+        (lt_trans (ZMod.val_lt (show Fp from input.nk)) (by norm_num [PALLAS_BASE_CARD]))
+    have hpt := hHash B (by rw [hchunks]; exact hB)
     rw [show input.rivk = (eval env input_var).rivk from by rw [h_input]]
     rw [← congrArg Point.x hpt]
     rw [hO]
     simp only [circuit_norm, Commit.circuit]
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input field where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R

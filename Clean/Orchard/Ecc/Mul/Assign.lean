@@ -27,6 +27,7 @@ accumulates `[2^254 + k] base = [alpha] base`.
 
 namespace Orchard.Ecc.Mul
 
+open CompElliptic.CurveForms
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Incomplete.DoubleAndAdd (BitsHint accScalar)
@@ -160,6 +161,15 @@ private theorem accValue_nsmul (B : SWPoint Pallas.curve) (M : ℕ) (hM : 1 ≤ 
       cases bits b <;> simp
     rw [hU, sw_add_coords, sw_add_coords, nsmul_step B _ hA1 (bits b)]
     rfl
+
+private theorem point_nsmul_coords_of_swpoint {P : Point Fp} {B : SWPoint Pallas.curve}
+    (hPB : P.coords = (B.x, B.y)) (m : ℕ) :
+    (m • P).coords = ((m • B).x, (m • B).y) := by
+  rw [Point.nsmul_def]
+  change smul pallasA m P.coords = ((m • B).x, (m • B).y)
+  rw [hPB]
+  rw [show pallasA = Pallas.curve.A from rfl]
+  rw [← coords_nsmul]
 
 /-! ### The overflow-check canonicity argument
 
@@ -400,6 +410,10 @@ def Spec (input : Value Input Fp) (output : Output Fp) (_ : ProverData Fp) : Pro
         = ((accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B).x,
            (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B).y)
 
+def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
+  let base : Point Fp := input.base
+  base.OnCurve
+
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
   ∃ B : SWPoint Pallas.curve, B ≠ 0 ∧
@@ -438,9 +452,12 @@ private theorem m_bounds (bits1 bits2 : ℕ → Bool) :
     omega
 
 theorem soundness :
-    GeneralFormalCircuit.WithHint.Soundness Fp main (fun _ _ => True) Spec := by
+    GeneralFormalCircuit.WithHint.Soundness Fp main Assumptions Spec := by
   circuit_proof_start [Incomplete.DoubleAndAdd.circuit, Complete.AssignRegion.circuit]
   obtain ⟨hz0, hHi, hLo, hComp⟩ := h_holds
+  have hBaseOnCurve : Point.OnCurve input_base := h_assumptions
+  replace hHi := hHi hBaseOnCurve
+  replace hLo := hLo hBaseOnCurve
   simp only [Incomplete.DoubleAndAdd.Spec] at hHi hLo
   obtain ⟨bitsHi, hHiChain, hHiAcc⟩ := hHi
   obtain ⟨bitsLo, hLoChain, hLoAcc⟩ := hLo
@@ -467,22 +484,41 @@ theorem soundness :
     exact hZcCell
   -- the accumulator clause
   intro B hB hbase hAccPair
-  have hHiOut := hHiAcc B 2 hB hbase hAccPair (le_refl 2) (by norm_num)
+  let base : Point Fp := input_base
+  have hbaseCoords : base.coords = (B.x, B.y) := hbase
+  have hAccPairCoords :
+      (input_xA, input_yA) = ((2 • base).x, (2 • base).y) := by
+    change (input_xA, input_yA) = (2 • base).coords
+    rw [point_nsmul_coords_of_swpoint hbaseCoords 2]
+    exact hAccPair
+  have hAccPairPoint : Point.ofCoords (input_xA, input_yA) = 2 • base := by
+    apply Point.ext_coords
+    simp only [Point.ofCoords_coords]
+    exact hAccPairCoords
+  have hHiOut := hHiAcc 2 hAccPairPoint (le_refl 2) (by norm_num)
   have hmB := m_bounds bitsHi bitsLo
-  have hLoOut := hLoAcc B (accScalar 2 bitsHi 125) hB hbase hHiOut hmB.1 hmB.2.1
+  have hLoOut := hLoAcc (accScalar 2 bitsHi 125) hHiOut hmB.1 hmB.2.1
   rw [show accScalar (accScalar 2 bitsHi 125) bitsLo (125 + 1)
     = accScalar (accScalar 2 bitsHi 125) bitsLo 126 from rfl] at hLoOut
+  have hLoOutSW :
+      (env.get (i₀ + 1 + (1 + (1 + (1 + (125 * 6 + 1)))) + 1 + 1 + 1 + 125 * 6 + 1 + 1 + 1 + 1 + 1),
+          env.get (i₀ + 1 + (1 + (1 + (1 + (125 * 6 + 1)))) + 1 + 1 + 1 + 126 * 6)) =
+        ((accScalar (accScalar 2 bitsHi 125) bitsLo 126 • B).x,
+          (accScalar (accScalar 2 bitsHi 125) bitsLo 126 • B).y) := by
+    have hcoords := congrArg Point.coords hLoOut
+    simp only [Point.ofCoords_coords] at hcoords
+    rw [hcoords]
+    exact point_nsmul_coords_of_swpoint hbaseCoords _
   have hCompS := hCAcc
     (by
-      rw [Point.valid_iff, Point.coords, hLoOut]
-      exact Or.inl ((Point.onCurve_iff _).mp
-        (pallas_nsmul_onCurve hB hmB.2.2.2.2 hmB.2.2.2.1)))
+      rw [Point.valid_iff, Point.coords, hLoOutSW]
+      exact (accScalar (accScalar 2 bitsHi 125) bitsLo 126 • B).onCurve)
     (by
       rw [Point.valid_iff, Point.coords, hbase]
       exact Or.inl (SWPoint.onCurve_of_ne_zero hB))
   obtain ⟨hValidAcc, hCompPair⟩ := hCompS
   rw [show input_base.x = B.x from congrArg Prod.fst hbase,
-    show input_base.y = B.y from congrArg Prod.snd hbase, hLoOut,
+    show input_base.y = B.y from congrArg Prod.snd hbase, hLoOutSW,
     accValue_nsmul B (accScalar (accScalar 2 bitsHi 125) bitsLo 126)
       hmB.2.2.1 bitsC 3] at hCompPair
   exact ⟨hValidAcc, hCompPair⟩
@@ -492,28 +528,53 @@ theorem completeness :
   circuit_proof_start [Incomplete.DoubleAndAdd.circuit, Complete.AssignRegion.circuit]
   obtain ⟨B, hB, hbase, hAccPair⟩ := h_assumptions
   obtain ⟨hz0w, hHi, hLo, hComp⟩ := h_env
+  let base : Point Fp := input_base
+  have hbaseCoords : base.coords = (B.x, B.y) := hbase
+  have hBaseOnCurve : base.OnCurve := by
+    rw [Point.onCurve_iff, Point.coords, hbase]
+    exact SWPoint.onCurve_of_ne_zero hB
+  have hAccPairCoords :
+      (input_xA, input_yA) = ((2 • base).x, (2 • base).y) := by
+    change (input_xA, input_yA) = (2 • base).coords
+    rw [point_nsmul_coords_of_swpoint hbaseCoords 2]
+    exact hAccPair
+  have hAccPairPoint : Point.ofCoords (input_xA, input_yA) = 2 • base := by
+    apply Point.ext_coords
+    simp only [Point.ofCoords_coords]
+    exact hAccPairCoords
   -- the hi half
-  have hHiS := hHi ⟨B, 2, hB, hbase, hAccPair, le_refl 2, by norm_num⟩
+  have hHiS := hHi ⟨hBaseOnCurve, 2, hAccPairPoint, le_refl 2, by norm_num⟩
   simp only [Incomplete.DoubleAndAdd.ProverSpec] at hHiS
   obtain ⟨-, hHiZs, hHiAcc⟩ := hHiS
-  have hHiOut := hHiAcc B 2 hB hbase hAccPair (le_refl 2) (by norm_num)
+  have hHiOut := hHiAcc 2 hAccPairPoint (le_refl 2) (by norm_num)
   rw [show accScalar 2 (fun i => input_bits i) (124 + 1)
     = accScalar 2 (fun i => input_bits i) 125 from rfl] at hHiOut
   have hmB := m_bounds (fun i => input_bits i) (fun i => input_bits (125 + i))
   -- the lo half
-  have hLoS := hLo ⟨B, accScalar 2 (fun i => input_bits i) 125, hB, hbase, hHiOut,
+  have hLoS := hLo ⟨hBaseOnCurve, accScalar 2 (fun i => input_bits i) 125, hHiOut,
     hmB.1, hmB.2.1⟩
   simp only [Incomplete.DoubleAndAdd.ProverSpec] at hLoS
   obtain ⟨-, hLoZs, hLoAcc⟩ := hLoS
-  have hLoOut := hLoAcc B (accScalar 2 (fun i => input_bits i) 125) hB hbase hHiOut
+  have hLoOut := hLoAcc (accScalar 2 (fun i => input_bits i) 125) hHiOut
     hmB.1 hmB.2.1
   rw [show accScalar (accScalar 2 (fun i => input_bits i) 125)
       (fun i => input_bits (125 + i)) (125 + 1)
     = accScalar (accScalar 2 (fun i => input_bits i) 125)
       (fun i => input_bits (125 + i)) 126 from rfl] at hLoOut
+  have hLoOutSW :
+      (env.get (i₀ + 1 + (1 + (1 + (1 + (125 * 6 + 1)))) + 1 + 1 + 1 + 125 * 6 + 1 + 1 + 1 + 1 + 1),
+          env.get (i₀ + 1 + (1 + (1 + (1 + (125 * 6 + 1)))) + 1 + 1 + 1 + 126 * 6)) =
+        ((accScalar (accScalar 2 (fun i => input_bits i) 125)
+              (fun i => input_bits (125 + i)) 126 • B).x,
+          (accScalar (accScalar 2 (fun i => input_bits i) 125)
+              (fun i => input_bits (125 + i)) 126 • B).y) := by
+    have hcoords := congrArg Point.coords hLoOut
+    simp only [Point.ofCoords_coords] at hcoords
+    rw [hcoords]
+    exact point_nsmul_coords_of_swpoint hbaseCoords _
   -- the complete bits
   have hCompS := hComp ⟨by
-      rw [Point.valid_iff, Point.coords, hLoOut]
+      rw [Point.valid_iff, Point.coords, hLoOutSW]
       exact ((accScalar (accScalar 2 (fun i => input_bits i) 125)
         (fun i => input_bits (125 + i)) 126 • B)).onCurve,
     by
@@ -542,10 +603,10 @@ theorem completeness :
       (chainNat (chainNat 0 input_bits 125) (fun i => input_bits (125 + i)) 126)
       (fun i => input_bits (251 + i)) 2,
     show (2 : ℕ) + 1 = 3 from rfl] at h2c
-  refine ⟨⟨hz0w, ⟨B, 2, hB, hbase, hAccPair, le_refl 2, by norm_num⟩,
-    ⟨B, accScalar 2 (fun i => input_bits i) 125, hB, hbase, hHiOut, hmB.1, hmB.2.1⟩,
+  refine ⟨⟨hz0w, ⟨hBaseOnCurve, 2, hAccPairPoint, le_refl 2, by norm_num⟩,
+    ⟨hBaseOnCurve, accScalar 2 (fun i => input_bits i) 125, hHiOut, hmB.1, hmB.2.1⟩,
     by
-      rw [Point.valid_iff, Point.coords, hLoOut]
+      rw [Point.valid_iff, Point.coords, hLoOutSW]
       exact ((accScalar (accScalar 2 (fun i => input_bits i) 125)
         (fun i => input_bits (125 + i)) 126 • B)).onCurve,
     by
@@ -560,7 +621,7 @@ theorem completeness :
     obtain ⟨_, _, hValid⟩ := hCompValid
     exact (hValid
       (by
-        rw [Point.valid_iff, Point.coords, hLoOut]
+        rw [Point.valid_iff, Point.coords, hLoOutSW]
         exact ((accScalar (accScalar 2 (fun i => input_bits i) 125)
           (fun i => input_bits (125 + i)) 126 • B)).onCurve)
       (by
@@ -571,6 +632,7 @@ theorem completeness :
 incomplete double-and-add halves, and the three complete-addition bits. -/
 def circuit : GeneralFormalCircuit.WithHint Fp Input Output where
   main
+  Assumptions
   Spec
   ProverAssumptions
   ProverSpec
@@ -774,10 +836,12 @@ def Assumptions (input : Input Fp) : Prop :=
 with the identity encoded as `(0, 0)` coordinates. -/
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   output = input.alpha.val • input.base
+
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [Add.circuit, Decompose.circuit, ProcessLsb.circuit,
     Overflow.OverflowCheck.circuit]
   obtain ⟨hAcc, hDec, hLsb, hOv⟩ := h_holds
+  replace hDec := hDec h_assumptions
   simp only [Decompose.Spec, Point.coords] at hDec
   obtain ⟨bitsHi, bitsLo, bitsC, hK254, hZ130, hZ1, hAccImpl⟩ := hDec
   simp only [ProcessLsb.Spec, Point.coords] at hLsb
@@ -868,10 +932,12 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     intro s hs
     have hq : PALLAS_SCALAR_CARD = 2 ^ 254 + tQNat := by
       norm_num [PALLAS_SCALAR_CARD, tQNat]
+    have hqzero : PALLAS_SCALAR_CARD • B = 0 := by
+      exact (addOrderOf_dvd_iff_nsmul_eq_zero
+        (x := B) (n := PALLAS_SCALAR_CARD)).mp (by rw [Point.addOrderOf_eq hB])
     rw [hs, show 2 ^ 254 + ZMod.val input_alpha + tQNat
         = ZMod.val input_alpha + PALLAS_SCALAR_CARD from by rw [hq]; ring,
-      add_nsmul, (pallas_nsmul_eq_zero_iff hB PALLAS_SCALAR_CARD).mpr dvd_rfl,
-      _root_.add_zero]
+      add_nsmul, hqzero, _root_.add_zero]
   -- the LSB step pins the result to [2^254 + k]B
   have hRes := hResImpl B
     (accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 • B)

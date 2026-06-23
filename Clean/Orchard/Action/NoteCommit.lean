@@ -26,8 +26,8 @@ open Orchard.Ecc
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
-  noteCommitChunks_tiling hashToPoint hashToPoint_eq_some_iff hashToSWPoint sum_head_shift
-  sum_digits_lt digit_of_sum chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
+  noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
+  chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
   chunksOf_one_eq_singleton)
 
 section
@@ -857,14 +857,14 @@ def ProverMessagePiecesEncode (input : ProverValue Input Fp)
   Chain.honestChunks messagePieceRounds (messagePieces cells) =
     (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
-def NoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
+def NoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
   ∃ rcm : Fq, ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
       cm = B + rcm • R
 
-def ProverNoteCommitRelation (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
   ∀ B : Point Fp,
     hashToPoint G.S Q
@@ -1052,12 +1052,12 @@ abbrev Input (F : Type) :=
 abbrev Output (F : Type) :=
   CommitDomain.Output messagePieceRounds F
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Output Fp) :=
   CommitDomain.circuit G Q hQ R 24 messagePieceTailRounds input
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp
       (CommitDomain.Input 8)
       (CommitDomain.Output messagePieceRounds) (main G Q hQ R) := by
@@ -1065,31 +1065,31 @@ instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     localLength _ := 1407
     output input offset := {
       point := varFromOffset Point (offset + 1400),
-      zs := ((Entry.main G Q 24 messagePieceTailRounds input.pieces).output (offset + 849)).zs }
+      zs := ((HashToPoint.main G Q 24 messagePieceTailRounds input.pieces).output (offset + 849)).zs }
   }
 
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (output : Value Output Fp) (data : ProverData Fp) : Prop :=
   CommitDomain.Spec G Q R 24 messagePieceTailRounds
     input output data
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) (data : ProverData Fp)
     (hint : ProverHint Fp) : Prop :=
   CommitDomain.ProverAssumptions G Q 24 messagePieceTailRounds input data hint
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (hint : ProverHint Fp) :
     Prop :=
   CommitDomain.ProverSpec G Q R 24 messagePieceTailRounds input output hint
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) (fun _ _ => True) (Spec G Q R) := by
   circuit_proof_start [CommitDomain.circuit]
   simpa [Spec, Chain.chainLength, messagePieceTailRounds] using h_holds
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R) (ProverAssumptions G Q)
       (ProverSpec G Q R) := by
@@ -1098,7 +1098,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · simpa using h_assumptions
   · exact ((h_env (by simpa using h_assumptions)).2)
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Output where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
@@ -1811,7 +1811,7 @@ theorem honestChunks_eq_noteCommitChunks_of_cellFacts {cells : MessageCells Fp}
 
 end PieceExtraction
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let cells ← AssignMessagePieces.circuit input
@@ -1841,12 +1841,12 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       z13G := z13g }
   return out.point
 
-def mainOutput (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def mainOutput (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) (offset : ℕ) :
     Var Point Fp :=
   (main G Q hQ R input).output offset
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     ElaboratedCircuit Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
@@ -1861,11 +1861,11 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 randomness `rcm`: `cm = NoteCommit^Orchard_rcm(g★_d || pk★_d || v || rho || psi)`. The
 message is the `Sinsemilla` hash of the canonical 109-chunk encoding (the canonicity
 gates force the field inputs into that canonical bit-layout) translated by `[rcm] R`. -/
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
   NoteCommitRelation G Q R input cm
 
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
+def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
   input.gd.OnCurve ∧
@@ -1878,7 +1878,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve)
   ∃ B, hashToPoint G.S Q
     (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
 
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
     (_ : ProverHint Fp) : Prop :=
   ProverNoteCommitRelation G Q R input cm
@@ -1999,7 +1999,7 @@ theorem psiCanonicity_assumptions_of_commit
   exact z13G_tail_of_decompose_g hg0_bool (by simpa [circuit_norm] using hg1_lt) hg2_lt
     hg_decomp (by simpa [circuit_norm] using hz13g_eval)
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions (Spec G Q R) := by
   -- Verified skeleton: `circuit_proof_start_core` exposes each subcircuit's soundness as an
@@ -2240,8 +2240,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   · simp only [Spec, NoteCommitRelation]
     refine ⟨rcm, ?_⟩
     intro B hBhash
-    rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
-    have hHashB := hHash B' (by simpa [hchunks] using hB')
+    have hHashB := hHash B (by simpa [hchunks] using hBhash)
     have hCOutPoint :
         COut.point = (varFromOffset Point (i₀ + 28 + 1400) : Var Point Fp) := by
       rw [hCOutdef]
@@ -2357,7 +2356,7 @@ theorem psi_canonicity_obligation {psi g0 g1 h0 h1 g z1g z13g : Fp}
     congr 1
     omega
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q) (ProverSpec G Q R) := by
@@ -2374,8 +2373,20 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
       { pieces := ?pcs, r := input_rcm } env.data env.hint := by
     refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_⟩
     obtain ⟨B, hB⟩ := hHashEx
-    obtain ⟨B', hB', -⟩ := hashToPoint_eq_some_iff.mp hB
-    exact ⟨B', by convert hB' using 2⟩
+    refine ⟨B, ?_⟩
+    have hHonestEqCommit :
+        Chain.honestChunks (24 :: messagePieceTailRounds)
+            (show ProverValue Commit.Input Fp from {
+              pieces := ?pcs,
+              r := input_rcm
+            }).pieces =
+          noteCommitChunks (show Fp from input_gd.x).val ((show Fp from input_gd.y).val % 2)
+            (show Fp from input_pkd.x).val ((show Fp from input_pkd.y).val % 2)
+            (show Fp from input_value).val (show Fp from input_rho).val
+            (show Fp from input_psi).val := by
+      simpa only [messagePieces, messagePieceRounds, messagePieceTailRounds] using hHonestEq
+    rw [hHonestEqCommit]
+    exact hB
   obtain ⟨hComSpec, hZsHonest, hHashHonest⟩ := hComImpl hCPA
   have hPC := Chain.pieceChunks_honestChunks _ _ hPB
   -- piece bounds
@@ -2447,11 +2458,10 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
     simpa [← h_input, circuit_norm] using hd1_low
   case rel =>
     intro B hBhash
-    rcases hashToPoint_eq_some_iff.mp hBhash with ⟨B', hB', rfl⟩
-    have hHashB := hHashHonest B' (by
+    have hHashB := hHashHonest B (by
       simp only [messagePieces, messagePieceRounds, messagePieceTailRounds] at hHonestEq ⊢
-      rw [hHonestEq]; exact hB')
-    simpa only [circuit_norm, Point.ofSW] using hHashB
+      rw [hHonestEq]; exact hBhash)
+    simpa only [circuit_norm] using hHashB
   case val =>
     refine ⟨?_, ?_⟩
     · simp only [ValueCanonicity.Assumptions, ValueCanonicity.Gate.Assumptions,
@@ -2516,7 +2526,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
           (bitrange_lt _ _ _) (by norm_num)))).symm
     · rw [cell_eq_of_val hh1_v]; exact bitrange_one_isBool _ _
     · exact hh_dec
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R

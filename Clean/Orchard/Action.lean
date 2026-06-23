@@ -38,7 +38,7 @@ ENABLE_OUTPUT=8`.
 namespace Orchard.Action
 
 open Ecc
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
+open CompElliptic.Curves.Pasta
 open Specs.Sinsemilla (Generators)
 open Sinsemilla.Merkle (MerkleRoot depth)
 
@@ -48,18 +48,18 @@ specialise these. -/
 structure Params where
   /-- Merkle CRH Sinsemilla domain. -/
   Gm : Generators
-  Qm : SWPoint Pallas.curve
-  hQm : Qm ≠ 0
+  Qm : Point Fp
+  hQm : Qm.OnCurve
   /-- Note-commitment Sinsemilla domain (shared by the old and new note commitments). -/
   Gnc : Generators
-  Qnc : SWPoint Pallas.curve
-  hQnc : Qnc ≠ 0
+  Qnc : Point Fp
+  hQnc : Qnc.OnCurve
   /-- Note-commitment blinding base `NoteCommit^Orchard_R`. -/
   Rnc : MulFixed.FixedBase
   /-- `CommitIvk` Sinsemilla domain (used inside diversified-address integrity). -/
   Gci : Generators
-  Qci : SWPoint Pallas.curve
-  hQci : Qci ≠ 0
+  Qci : Point Fp
+  hQci : Qci.OnCurve
   /-- `CommitIvk` blinding base. -/
   Rci : MulFixed.FixedBase
   /-- Value-commitment value base `ValueCommitV` (short) and blinding base `ValueCommitR`. -/

@@ -22,7 +22,6 @@ synthesis circuit.
 namespace Orchard.Action.AddressIntegrity
 
 open CompElliptic.Curves.Pasta
-open CompElliptic.CurveForms.ShortWeierstrass
 open Ecc
 open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint)
 
@@ -42,7 +41,7 @@ instance : Inhabited (Var Input Fp) :=
      gDOld := { x := default, y := default },
      pkDOld := { x := default, y := default } }⟩
 
-def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (input : Var Input Fp) : Circuit Fp (Var Point Fp) := do
   let ivk ← CommitIvk.circuit G Q hQ R
     { ak := input.ak, nk := input.nk, rivk := input.rivk }
@@ -50,7 +49,7 @@ def main (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   derived === input.pkDOld
   return input.pkDOld
 
-instance elaborated (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input Point (main G Q hQ R) := by
   elaborate_circuit
 
@@ -60,7 +59,7 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 
 /-- The block returns the witnessed `pk_d_old`, constrained to equal `[ivk] g_d_old` where
 `ivk` is the committed incoming viewing key. -/
-def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (ak nk : Fp) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
     (∃ rivk : Fq, ∀ B : Point Fp,
@@ -69,7 +68,7 @@ def Spec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
     output = ivk.val • gDOld
 
 /-- Honest-prover diversified-address integrity for the concrete `rivk`. -/
-def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (ak nk : Fp) (rivk : Fq) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
     (∀ B : Point Fp,
@@ -79,7 +78,7 @@ def ProverSpec (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBa
 
 /-- Honest proving requires the explicit `pk_d_old` witness to be the derived address for
 the committed `ivk`; otherwise the source equality constraint is unsatisfiable. -/
-def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.FixedBase)
+def ProverAssumptions (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (_data : ProverData Fp) (_hint : ProverHint Fp) : Prop :=
   let ak : Fp := input.ak
   let nk : Fp := input.nk
@@ -93,7 +92,7 @@ def ProverAssumptions (G : Generators) (Q : SWPoint Pallas.curve) (R : MulFixed.
           ivk = (B + (show Fq from input.rivk) • R).x) →
       pkDOld = ivk.val • gDOld
 
-theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions
       (fun input output _ => Spec G Q R input.ak input.nk input.gDOld output) := by
@@ -107,7 +106,7 @@ theorem soundness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   have hmul := h_mul h_assumptions
   exact h_eq.symm.trans (by simpa [ivkOut, circuit_norm] using hmul)
 
-theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q R)
@@ -135,7 +134,7 @@ theorem completeness (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
   refine ⟨(Expression.eval env.toEnvironment ivkOut : Fp), h_ivk_child_prover, ?_⟩
   exact hpkd
 
-def circuit (G : Generators) (Q : SWPoint Pallas.curve) (hQ : Q ≠ 0)
+def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : GeneralFormalCircuit.WithHint Fp Input Point where
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R

@@ -369,14 +369,11 @@ def Spec (n : ℕ) (input : Value Input Fp)
   ∃ bits : ℕ → Bool,
     (output.zs[0] = 2 * input.z + (if bits 0 then 1 else 0) ∧
       ∀ b : Fin n, output.zs[b.val + 1] =
-        2 * output.zs[b.val] +
-          (if bits (b.val + 1) then 1 else 0)) ∧
+        2 * output.zs[b.val] + (if bits (b.val + 1) then 1 else 0)) ∧
     ∀ (m : ℕ),
-      (input.xA, input.yA) = ((m • base).x, (m • base).y) →
+      Point.ofCoords (input.xA, input.yA) = m • base →
       2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
-      (output.xA, output.yA) =
-        ((accScalar m bits (n + 1) • base).x,
-          (accScalar m bits (n + 1) • base).y)
+      Point.ofCoords (output.xA, output.yA) = (accScalar m bits (n + 1)) • base
 
 def Assumptions (_n : ℕ) (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
   let base : Point Fp := input.base
@@ -386,7 +383,7 @@ def ProverAssumptions (n : ℕ) (input : ProverValue Input Fp) (_ : ProverData F
     (_ : ProverHint Fp) : Prop :=
   let base : Point Fp := input.base
   base.OnCurve ∧ ∃ m : ℕ,
-    (input.xA, input.yA) = ((m • base).x, (m • base).y) ∧
+    Point.ofCoords (input.xA, input.yA) = m • base ∧
     2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
 
 def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1) Fp)
@@ -394,11 +391,9 @@ def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1)
   let base : Point Fp := input.base
   (∀ b : Fin (n + 1), output.zs[b.val] = zRunValue input.z input.bits b.val) ∧
   ∀ (m : ℕ),
-    (input.xA, input.yA) = ((m • base).x, (m • base).y) →
+    Point.ofCoords (input.xA, input.yA) = m • base →
     2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
-    (output.xA, output.yA) =
-      ((accScalar m input.bits (n + 1) • base).x,
-        (accScalar m input.bits (n + 1) • base).y)
+    Point.ofCoords (output.xA, output.yA) = (accScalar m input.bits (n + 1)) • base
 
 private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
     ∀ b, 2 ≤ accScalar m bits b
@@ -772,8 +767,9 @@ theorem soundness (n : ℕ) :
       constructor
       · exact congrArg Point.x h
       · exact congrArg Point.y h
-    obtain ⟨haccx, haccy⟩ : input_xA = (mm • Pt).x ∧ input_yA = (mm • Pt).y :=
-      ⟨congrArg Prod.fst hacc, congrArg Prod.snd hacc⟩
+    obtain ⟨haccx, haccy⟩ : input_xA = (mm • Pt).x ∧ input_yA = (mm • Pt).y := by
+      rw [Point.mk.injEq] at hacc
+      exact hacc
     -- base-point constancy along the rows
     have hconst : ∀ r, r ≤ n → rowXP env i₀ r = Pt.x ∧ rowYP env i₀ r = Pt.y := by
       intro r
@@ -903,7 +899,8 @@ theorem soundness (n : ℕ) :
     obtain ⟨hx, hy⟩ := haux
     simp only [rowXA, Nat.succ_ne_zero, if_false, Nat.add_sub_cancel] at hx
     rw [if_pos rfl] at hy
-    exact Prod.ext hx (mul_left_cancel₀ two_ne_zero hy)
+    rw [hx, mul_left_cancel₀ two_ne_zero hy]
+    rfl
 
 /-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
 over `honest_step`'s output conclusions. -/
@@ -945,8 +942,9 @@ theorem completeness (n : ℕ) :
     constructor
     · exact congrArg Point.x h
     · exact congrArg Point.y h
-  obtain ⟨haccx, haccy⟩ : input_xA = (mm • P).x ∧ input_yA = (mm • P).y :=
-    ⟨congrArg Prod.fst hacc, congrArg Prod.snd hacc⟩
+  obtain ⟨haccx, haccy⟩ : input_xA = (mm • P).x ∧ input_yA = (mm • P).y := by
+    rw [Point.mk.injEq] at hacc
+    exact hacc
   -- the honest accumulator in point coordinates
   have hAV : ∀ r, r ≤ n + 1 →
       accVal P.x P.y input_xA input_yA input_bits r
@@ -1146,8 +1144,9 @@ theorem completeness (n : ℕ) :
     exact (hcell bv (by omega)).1
   · -- the final accumulator outputs
     intro mm' hacc' h2m' hbnd'
-    obtain ⟨haccx', haccy'⟩ : input_xA = (mm' • P).x ∧ input_yA = (mm' • P).y :=
-      ⟨congrArg Prod.fst hacc', congrArg Prod.snd hacc'⟩
+    obtain ⟨haccx', haccy'⟩ : input_xA = (mm' • P).x ∧ input_yA = (mm' • P).y := by
+      rw [Point.mk.injEq] at hacc'
+      exact hacc'
     have hAV' : accVal P.x P.y input_xA input_yA input_bits (n + 1)
         = ((accScalar mm' input_bits (n + 1) • P).x,
            (accScalar mm' input_bits (n + 1) • P).y) := by
@@ -1160,7 +1159,8 @@ theorem completeness (n : ℕ) :
         = (accScalar mm' input_bits (n + 1) • P).y := by
       rw [show i₀ + 1 + 1 + 1 + (n + 1) * 6 = (n + 1) * 6 + (i₀ + 1 + 1 + 1) from by ring,
         he_yAF, hbx, hby, hAV']
-    exact Prod.ext hxout hyout
+    rw [hxout, hyout]
+    rfl
 
 /-- `incomplete.rs::Config::<{n+1}>::double_and_add` (`CircuitVersion::AnchoredBase`).
 Instantiated at `n = 124` for the `hi` half and `n = 125` for the `lo` half. -/
