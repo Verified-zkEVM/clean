@@ -312,6 +312,18 @@ theorem nsmul_add_nsmul {P : Point Fp} (hP : P.OnCurve) (a b : ℕ) :
     toSW_nsmul (.inl hP) a, toSW_nsmul (.inl hP) b, toSW_nsmul (.inl hP) (a + b)]
   rw [add_nsmul]
 
+theorem nsmul_add_coords {P : Point Fp} (hP : P.OnCurve) {a b c : ℕ}
+    (h : a + b = c) :
+    ShortWeierstrass.add pallasA ((a • P).x, (a • P).y)
+        ((b • P).x, (b • P).y) = (c • P).coords := by
+  change (a • P + b • P).coords = (c • P).coords
+  rw [nsmul_add_nsmul hP, h]
+
+theorem add_coords_eq {P Q R : Point Fp} (h : P + Q = R) :
+    ShortWeierstrass.add pallasA (P.x, P.y) (Q.x, Q.y) = R.coords := by
+  change (P + Q).coords = R.coords
+  rw [h]
+
 theorem nsmul_add_one {P : Point Fp} (hP : P.OnCurve) (m : ℕ) :
     m • P + P = (m + 1) • P := by
   simpa using nsmul_add_nsmul hP m 1
@@ -400,6 +412,20 @@ theorem nsmul_eq_zero_iff {P : Point Fp} (hP : P.OnCurve) (n : ℕ) :
     rw [h] at hP
     exact not_onCurve_zero hP
   rw [← addOrderOf_eq hp, addOrderOf_dvd_iff_nsmul_eq_zero]
+
+/-- Congruent scalars produce the same multiple of an on-curve point. -/
+theorem nsmul_congr {P : Point Fp} (hP : P.OnCurve)
+    {m n : ℕ} (h : m ≡ n [MOD PALLAS_SCALAR_CARD]) :
+    m • P = n • P := by
+  have hp_valid : P.Valid := .inl hP
+  apply (ext_toSW_iff (valid_nsmul hp_valid m) (valid_nsmul hp_valid n)).mpr
+  rw [toSW_nsmul hp_valid m, toSW_nsmul hp_valid n]
+  rw [nsmul_eq_nsmul_iff_modEq, addOrderOf_eq]
+  exact h
+  intro hzero
+  rw [← toSW_zero, ← ext_toSW_iff] at hzero
+  rw [hzero] at hP
+  exact not_onCurve_zero hP
 
 theorem nsmul_ne_zero {P : Point Fp} (hP : P.OnCurve)
     {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) : n • P ≠ 0 := by

@@ -305,8 +305,8 @@ theorem soundness (B : FixedBase) :
             ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env i₀ j).x := by
         refine ⟨?_, ?_, ?_⟩
         · simp only [winPt]
-          rw [Point.onCurve_iff, hpx, hpy]
-          exact SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero (by omega) (by omega))
+          rw [hpx, hpy]
+          exact B.nsmul_onCurve (by omega) (by omega)
         · rw [hacc]
           exact B.nsmul_onCurve hS_pos hS_card
         · rw [hpx, hacc]
@@ -320,7 +320,7 @@ theorem soundness (B : FixedBase) :
       rw [hpx, hpy, hacc]
       show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y) ((S • B.point).x, (S • B.point).y)
         = (((t + S) • B.point).x, ((t + S) • B.point).y)
-      rw [sw_add_coords, ← add_nsmul]
+      exact B.nsmul_add_coords rfl
   -- final complete addition of the most significant window
   obtain ⟨S, hS_pos, hS_lt, hacc⟩ := h_inv 83 (by omega)
   replace hacc :
@@ -366,14 +366,11 @@ theorem soundness (B : FixedBase) :
     from rfl, hpx, hpy, hacc]
   show ShortWeierstrass.add pallasA ((windowPoint B.point 84 k).x, (windowPoint B.point 84 k).y)
       ((S • B.point).x, (S • B.point).y) = ((windowScalar 84 k + (S : Fq)) • B).coords
-  rw [sw_add_coords]
-  show (((windowScalar 84 k).val • B.point + S • B.point).x,
-    ((windowScalar 84 k).val • B.point + S • B.point).y) = _
   have hpt : (windowScalar 84 k).val • B.point + S • B.point
       = (windowScalar 84 k + (S : Fq)).val • B.point := by
-    rw [← add_nsmul]
+    rw [Point.nsmul_add_nsmul B.onCurve]
     exact (B.add_natCast_val_nsmul _ _).symm
-  rw [hpt, B.smul_coords]
+  exact FixedBase.add_coords_eq hpt
 
 /-- Extract the four field equations from a witnessed `CoordsRow`. Extracting via this
 lemma instead of instantiating the `Fin 4` hypothesis at a target component type keeps
@@ -503,9 +500,8 @@ theorem completeness (B : FixedBase) :
             ¬env.get (i₀ + 4 + j * 10 + 1) = (accPt env.toEnvironment i₀ j).x := by
         refine ⟨?_, ?_, ?_⟩
         · simp only [winPt]
-          rw [Point.onCurve_iff, hrowX j hj, hrowY j hj]
-          exact SWPoint.onCurve_of_ne_zero
-            (B.windowPoint_ne_zero (windowVal_lt input (j + 1)))
+          rw [hrowX j hj, hrowY j hj]
+          exact B.windowPoint_onCurve (windowVal_lt input (j + 1))
         · rw [hacc]
           exact B.nsmul_onCurve hS_pos hS_card
         · rw [hrowX j hj, hacc]
@@ -521,9 +517,9 @@ theorem completeness (B : FixedBase) :
             (partialSum (windowVal input) j • B.point).y)
         = ((partialSum (windowVal input) (j + 1) • B.point).x,
             (partialSum (windowVal input) (j + 1) • B.point).y)
-      rw [sw_add_coords, ← add_nsmul,
-        show t + partialSum (windowVal input) j = partialSum (windowVal input) (j + 1) by
-          rw [partialSum, hval]; omega]
+      exact B.nsmul_add_coords
+        (show t + partialSum (windowVal input) j = partialSum (windowVal input) (j + 1) by
+          rw [partialSum, hval]; omega)
   -- per-iteration constraint obligations
   have hB : ∀ (j : ℕ) (hj : j < 83),
       (Coords.Spec (B.params (j + 1))
@@ -545,8 +541,8 @@ theorem completeness (B : FixedBase) :
     · rw [hrowW j hj]
       exact (rowValue_spec B input (by omega)).2
     · simp only [winPt]
-      rw [Point.onCurve_iff, hrowX j hj, hrowY j hj]
-      exact SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero (windowVal_lt input (j + 1)))
+      rw [hrowX j hj, hrowY j hj]
+      exact B.windowPoint_onCurve (windowVal_lt input (j + 1))
     · rw [hacc]
       exact B.nsmul_onCurve hS_pos hS_card
     · rw [hrowX j hj, hacc]
@@ -647,13 +643,11 @@ theorem completeness (B : FixedBase) :
           (windowPoint B.point 84 (windowVal input 84)).y)
         ((S83 • B.point).x, (S83 • B.point).y)
       = (input • B).coords
-    rw [sw_add_coords]
-    show (((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).x,
-      ((windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point).y) = _
     have hpt : (windowScalar 84 (windowVal input 84)).val • B.point + S83 • B.point
         = input.val • B.point := by
-      rw [← hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, windowScalar_partialSum]
-    rw [hpt, B.smul_coords]
+      rw [Point.nsmul_add_nsmul B.onCurve, ← hS83_def, ← B.add_natCast_val_nsmul,
+        windowScalar_partialSum]
+    exact FixedBase.add_coords_eq hpt
 
 def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point where
   main := main B

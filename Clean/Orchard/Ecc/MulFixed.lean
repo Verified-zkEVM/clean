@@ -160,7 +160,7 @@ def windowScalar (w k : ℕ) : Fq :=
   if w = 84 then (k : Fq) * 8 ^ 84 - (offsetAcc : Fq) else ((k : Fq) + 2) * 8 ^ w
 
 /-- The window-table point for window `w` and window value `k`. -/
-def windowPoint (point : SWPoint Pallas.curve) (w k : ℕ) : SWPoint Pallas.curve :=
+def windowPoint (point : Point Fp) (w k : ℕ) : Point Fp :=
   (windowScalar w k).val • point
 
 theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
@@ -241,8 +241,8 @@ The correctness properties are exactly the halo2 fixed-base invariants
 full prime order `q` of the Pallas group.
 -/
 structure FixedBase where
-  point : SWPoint Pallas.curve
-  order_eq : addOrderOf point = PALLAS_SCALAR_CARD
+  point : Point Fp
+  onCurve : point.OnCurve
   params : ℕ → CoordsParams Fp
   u : ℕ → ℕ → Fp
   interpolate_eq : ∀ (w : ℕ), w < 85 → ∀ (k : ℕ), k < 8 →
@@ -256,7 +256,7 @@ namespace FixedBase
 variable (B : FixedBase)
 
 theorem nsmul_eq_zero_iff (n : ℕ) : n • B.point = 0 ↔ PALLAS_SCALAR_CARD ∣ n := by
-  rw [← B.order_eq, addOrderOf_dvd_iff_nsmul_eq_zero]
+  exact Point.nsmul_eq_zero_iff B.onCurve n
 
 theorem windowPoint_ne_zero {w k : ℕ} (hk : k < 8) :
     windowPoint B.point w k ≠ 0 := by
@@ -268,20 +268,20 @@ theorem windowPoint_ne_zero {w k : ℕ} (hk : k < 8) :
   exact windowScalar_ne_zero hk ((ZMod.val_eq_zero _).mp h0)
 
 theorem windowPoint_onCurve {w k : ℕ} (hk : k < 8) :
-    ({ x := (windowPoint B.point w k).x, y := (windowPoint B.point w k).y } :
-      Point Fp).OnCurve :=
-  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.windowPoint_ne_zero hk))
+    (windowPoint B.point w k).OnCurve := by
+  unfold windowPoint
+  apply Point.nsmul_onCurve B.onCurve
+  · exact Nat.pos_of_ne_zero fun h0 =>
+      windowScalar_ne_zero hk ((ZMod.val_eq_zero _).mp h0)
+  · exact ZMod.val_lt _
 
 theorem nsmul_ne_zero {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    n • B.point ≠ 0 := by
-  rw [Ne, B.nsmul_eq_zero_iff]
-  intro hdvd
-  have := Nat.le_of_dvd hn hdvd
-  omega
+    n • B.point ≠ 0 :=
+  Point.nsmul_ne_zero B.onCurve hn hlt
 
 theorem nsmul_onCurve {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
-    ({ x := (n • B.point).x, y := (n • B.point).y } : Point Fp).OnCurve :=
-  (Point.onCurve_iff _).mpr (SWPoint.onCurve_of_ne_zero (B.nsmul_ne_zero hn hlt))
+    (n • B.point).OnCurve :=
+  Point.nsmul_onCurve B.onCurve hn hlt
 
 /--
 The collision-freedom fact behind the incomplete additions of fixed-base scalar
@@ -291,25 +291,13 @@ relation `t ∓ s ≡ 0` modulo the (large) group order.
 -/
 theorem nsmul_x_ne {s t : ℕ} (hs : 0 < s) (hst : s < t)
     (hsum : s + t < PALLAS_SCALAR_CARD) :
-    (t • B.point).x ≠ (s • B.point).x := by
-  have hs_ne : s • B.point ≠ 0 := B.nsmul_ne_zero hs (by omega)
-  have ht_ne : t • B.point ≠ 0 := B.nsmul_ne_zero (by omega) (by omega)
-  intro hx
-  rcases SWPoint.eq_or_eq_neg_of_x_eq ht_ne hs_ne hx with heq | hneg
-  · rw [nsmul_eq_nsmul_iff_modEq, B.order_eq, Nat.ModEq,
-      Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at heq
-    omega
-  · have hzero : (t + s) • B.point = 0 := by
-      rw [add_nsmul, hneg, neg_add_cancel]
-    rw [B.nsmul_eq_zero_iff] at hzero
-    have := Nat.le_of_dvd (by omega) hzero
-    omega
+    (t • B.point).x ≠ (s • B.point).x :=
+  Point.nsmul_x_ne B.onCurve hs hst hsum
 
 /-- Congruent scalars produce the same multiple of the generator. -/
 theorem nsmul_congr {m n : ℕ} (h : m ≡ n [MOD PALLAS_SCALAR_CARD]) :
-    m • B.point = n • B.point := by
-  rw [nsmul_eq_nsmul_iff_modEq, B.order_eq]
-  exact h
+    m • B.point = n • B.point :=
+  Point.nsmul_congr B.onCurve h
 
 /-- Adding a cast natural to a scalar acts as expected on multiples of the generator. -/
 theorem add_natCast_val_nsmul (a : Fq) (S : ℕ) :
@@ -326,10 +314,21 @@ instance : HSMul Fq FixedBase (Point Fp) where
   hSMul s B := B.scalarMul s
 
 theorem smul_valid (s : Fq) : (s • B).Valid :=
-  (Point.valid_iff (s • B)).mpr (s.val • B.point).onCurve
+  Point.valid_nsmul (.inl B.onCurve) s.val
 
 theorem smul_coords (s : Fq) :
     (s • B).coords = ((s.val • B.point).x, (s.val • B.point).y) := rfl
+
+/-- Coordinate form of adding two scalar multiples of the fixed base. -/
+theorem nsmul_add_coords {a b c : ℕ} (h : a + b = c) :
+    ShortWeierstrass.add pallasA ((a • B.point).x, (a • B.point).y)
+        ((b • B.point).x, (b • B.point).y) = (c • B.point).coords := by
+  exact Point.nsmul_add_coords B.onCurve h
+
+/-- Coordinate form of a known point-addition equality. -/
+theorem add_coords_eq {P Q R : Point Fp} (h : P + Q = R) :
+    ShortWeierstrass.add pallasA (P.x, P.y) (Q.x, Q.y) = R.coords := by
+  exact Point.add_coords_eq h
 
 /--
 Soundness of one window row: if the coordinates gate holds on a row whose window value
