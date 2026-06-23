@@ -136,6 +136,8 @@ deriving ProvableStruct
 
 def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
   main | { enabled, n, x, y } => do
+    -- TODO this doesn't work yet! subcircuit lemmas missing
+    -- assertBool enabled
     assertZero (enabled * (enabled - 1))
     -- pull the current Fibonacci state
     FibonacciChannel.pullIf enabled (n, x, y)
@@ -153,13 +155,37 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     expose FibonacciChannel [
       pullIf input.enabled (input.n, input.x, input.y),
       pushIf input.enabled (input.n + 1, input.y, z) ]
-  exposedChannels_eq := by simp [circuit_norm, Add8Channel, FibonacciChannel]
+  exposedChannels_eq := by
+    intro input offset
+    simp [circuit_norm, Add8Channel, FibonacciChannel]
+    -- TODO circuit_norm support for (toSubcircuit ..).interactions
+    -- intro a ha
+    -- simp only [FormalAssertion.toSubcircuit, Operations.toNested_toFlat] at ha
+    -- change a ∈ [] at ha
+    -- nomatch ha
 
   ProverAssumptions
   | { enabled, n, x, y }, _, _ =>
     enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  requirementsChannelsLawful := by
+    intro input offset
+    -- simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    -- intro env
+    constructor
+    · simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    constructor
+    · simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    · intro env h_bool
+      simp only [circuit_norm, FibonacciChannel, Add8Channel] at *
+      rcases mul_eq_zero.mp h_bool with h_zero | h_one
+      · intro _ h_nonzero
+        simp [h_zero] at h_nonzero
+      · rw [← sub_eq_add_neg] at h_one
+        have h_enabled := sub_eq_zero.mp h_one
+        intro h_not_neg _
+        simp [h_enabled] at h_not_neg
 
   soundness := by
     circuit_proof_start
@@ -171,16 +197,26 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
       · right
         rw [← sub_eq_add_neg] at h_one
         exact sub_eq_zero.mp h_one
-    intro h_not_neg h_nonzero
-    rcases h_enabled_bool with h_zero | h_one
-    · contradiction
-    have ⟨ k, fiby, hk ⟩ := h_fib (by simp [h_one])
-    have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
-    have hz := h_add (by simp [h_one]) hx hy
-    use k + 1
-    simp only [fibonacci, ← fiby]
-    rw [hz, ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
-    simp_all
+    constructor
+    · intro h_not_neg h_nonzero
+      rcases h_enabled_bool with h_zero | h_one
+      · simp [h_zero] at h_nonzero
+      · simp [h_one] at h_not_neg
+    constructor
+    · intro h_not_neg h_nonzero
+      rcases h_enabled_bool with h_zero | h_one
+      · simp [h_zero] at h_nonzero
+      · simp [h_one] at h_not_neg
+    · intro _ h_nonzero
+      rcases h_enabled_bool with h_zero | h_one
+      · contradiction
+      have ⟨ k, fiby, hk ⟩ := h_fib (by simp [h_one])
+      have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
+      have hz := h_add (by simp [h_one]) hx hy
+      use k + 1
+      simp only [fibonacci, ← fiby]
+      rw [hz, ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
+      simp_all
 
   completeness := by
     circuit_proof_start
