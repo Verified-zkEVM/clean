@@ -386,7 +386,7 @@ theorem rowValue_spec {input : Input Fp}
   constructor
   · intro hprod
     dsimp [rowValue, lambdaValue] at hprod ⊢
-    simp [Point.coords_add, Point.toSW_add] at hprod ⊢
+    simp at hprod ⊢
     have hpx : input.p.x ≠ 0 := hprod.1.1
     have hqx : input.q.x ≠ 0 := hprod.1.2
     have hysum : input.q.y + input.p.y ≠ 0 := hprod.2

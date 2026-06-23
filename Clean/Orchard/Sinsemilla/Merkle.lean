@@ -952,6 +952,12 @@ def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
         sibling := fun env => (show Vector Fp 32 from input.path env)[i],
         posBit := fun env => (show Vector Bool 32 from input.pos env)[i] })
 
+def output (G : Generators) (Q : Point Fp) (offset : ℕ) :=
+  HashToPoint.Z1s.output G Q 24 [1, 24]
+    #v[var ⟨offset + 8499⟩, var ⟨offset + 8502⟩, var ⟨offset + 8503⟩]
+    (offset + 8506)
+  |>.point.x
+
 -- TODO(perf): this instance gives an explicit `localLength` but inherits the default
 -- `output`, which is the 32-layer `Circuit.foldl` of `main`. When a parent circuit passes
 -- `CalculateRoot.circuit` to `simp`/`circuit_proof_start`, unfolding that foldl-based output
@@ -963,31 +969,16 @@ def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     ElaboratedCircuit Fp Input field (main G Q hQ) where
   localLength _ := 32 * 274
-  localLength_eq := by
-    intro input offset
-    have hL : ∀ (l : ℕ) (hl : l < 2 ^ 10) x,
-        (Layer.circuit G Q hQ l hl).localLength x = 274 := fun _ _ _ => rfl
-    simp only [main, circuit_norm, hL]
-  subcircuitsConsistent := by
-    intro input offset
-    rw [Operations.SubcircuitsConsistent, ← Circuit.forAll_def]
-    show (Circuit.foldl (.finRange 32) input.leaf _ _ _).forAll offset _
-    rw [Circuit.foldl, Circuit.FoldlM.forAll_iff_finRange]
-    · intro i
-      simp only [circuit_norm, Layer.circuit]
-    · apply Circuit.ConstantLength.fromConstantLength'
-      intro acc i i' n
-      rfl
+  localLength_eq input offset := by
+    simp only [main, circuit_norm, Layer.circuit]
+  output input offset := output G Q offset
+  output_eq input offset := by
+    simp only [output, main, circuit_norm, Layer.circuit, Layer.main, HashLayer.circuit, Utilities.CondSwap.Swap.circuit,
+      HashLayer.main, HashToPoint.Z1s.circuit, Utilities.LookupRangeCheck.shortRangeCircuit]
+  subcircuitsConsistent input offset := by
+    simp only [main, circuit_norm, Layer.circuit]
   channelsLawful := by
-    dsimp only [ElaboratedCircuit.ChannelsLawful]
-    intro input_var offset
-    dsimp only [main]
-    have hLg : ∀ (l : ℕ) (hl : l < 2 ^ 10),
-        (Layer.circuit G Q hQ l hl).channelsWithGuarantees = [] := fun _ _ => rfl
-    have hLr : ∀ (l : ℕ) (hl : l < 2 ^ 10),
-        (Layer.circuit G Q hQ l hl).channelsWithRequirements = [] := fun _ _ => rfl
-    simp only [circuit_norm, seval, hLg, hLr]
-    try trivial
+    simp only [main, circuit_norm, Layer.circuit]
 
 def Spec (G : Generators) (Q : Point Fp)
     (input : Value Input Fp) (output : Value field Fp)
@@ -1044,7 +1035,8 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
   -- the foldl output `goalOut` is the layer-31 canonical output; bridge it to `f 32`
   -- without reducing the output expression.
   refine Eq.mp (congrArg (MerkleRoot G Q 0 (f 0) 32) ?_) hconcl
-  exact (bridge 31 (by omega) _ _ _ (by simp [hlen])).symm
+  simp only [circuit_norm, output, f, Layer.circuit, Layer.main, HashLayer.circuit, Utilities.CondSwap.Swap.circuit,
+    HashLayer.main, HashToPoint.Z1s.circuit, Utilities.LookupRangeCheck.shortRangeCircuit]
 
 /-- The honest running node after `k` layers (`none` if any layer hash is undefined).
 Index-based to mirror the circuit's `Circuit.foldl`. -/
@@ -1192,7 +1184,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     intro root hroot
     rw [key 32 (le_refl 32)] at hroot
     obtain rfl : acc 32 = root := Option.some.inj hroot
-    exact bridge 31 (by omega) _ _ _ rfl
+    simp only [acc, output, circuit_norm, Layer.main, HashLayer.circuit, Utilities.CondSwap.Swap.circuit,
+      HashLayer.main, HashToPoint.Z1s.circuit, Utilities.LookupRangeCheck.shortRangeCircuit]
 
 def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint Fp Input field where
