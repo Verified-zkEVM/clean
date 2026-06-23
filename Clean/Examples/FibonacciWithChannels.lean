@@ -45,8 +45,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
 
-  elaborated := by elaborate_circuit_with {
-    channelsWithRequirements := [ BytesChannel.toRaw ] }
+  channelsWithRequirements := [ BytesChannel.toRaw ]
   Spec _ _ _ := True
   soundness := by circuit_proof_start [BytesTable]
   completeness := by circuit_proof_start
@@ -81,6 +80,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
+  channelsWithRequirements := [ Add8Channel.toRaw ]
 
   soundness := by
     circuit_proof_start [BytesTable, Add8Channel]
@@ -159,6 +159,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
   | { enabled, n, x, y }, _, _ =>
     enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
 
   soundness := by
     circuit_proof_start
@@ -214,6 +215,7 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
   soundness := by
     circuit_proof_start [FibonacciChannel]
     rcases input with ⟨ n, x, y ⟩
@@ -322,8 +324,8 @@ def disabledFalseCircuit : GeneralFormalCircuit (F p) unit unit where
     FalseChannel.pushIf 0 ()
     return
   elaborated := by elaborate_circuit_with {
-    channelsWithGuarantees := [FalseChannel.toRaw]
-    channelsWithRequirements := [FalseChannel.toRaw] }
+    channelsWithGuarantees := [FalseChannel.toRaw] }
+  channelsWithRequirements := [FalseChannel.toRaw]
   Spec _ _ _ := True
   ProverAssumptions _ _ _ := True
   soundness := by circuit_proof_start [FalseChannel]

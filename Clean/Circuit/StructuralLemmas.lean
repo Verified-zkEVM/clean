@@ -31,6 +31,10 @@ def concat
     constructor <;> simp [explicit_circuit_norm]
     · intro a n m
       apply h_localLength_stable
+  channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
+  requirementsChannelsLawful := by
+    intro input offset
+    simp only [circuit_norm]
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
@@ -73,6 +77,8 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
     FormalCircuit F Input Output where
   main := circuit.main
   elaborated := circuit.elaborated
+  channelsWithRequirements := circuit.channelsWithRequirements
+  requirementsChannelsLawful := circuit.requirementsChannelsLawful
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
@@ -96,7 +102,7 @@ lemma weakenSpec_assumptions
 lemma weakenSpec_channelsWithRequirements
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  simp only [FormalCircuitBase.channelsWithRequirements, weakenSpec]
+  rfl
 end FormalCircuit
 
 namespace GeneralFormalCircuit
@@ -110,6 +116,8 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
     GeneralFormalCircuit F Input Output where
   main := circuit.main
   elaborated := circuit.elaborated
+  channelsWithRequirements := circuit.channelsWithRequirements
+  requirementsChannelsLawful := circuit.requirementsChannelsLawful
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions

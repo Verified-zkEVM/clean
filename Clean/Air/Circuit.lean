@@ -54,6 +54,10 @@ def instantiateConst_toFormal (circuit : GeneralFormalCircuit F Input unit) (inp
   Assumptions _ := circuit.Assumptions input
   ProverAssumptions _ := circuit.ProverAssumptions input
   Spec _ _ := circuit.Spec input ()
+  channelsWithRequirements := circuit.channelsWithRequirements
+  requirementsChannelsLawful := by
+    intro input_var offset
+    simp [circuit_norm, instantiateConst]
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
 

@@ -855,7 +855,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     apply partialBalancedChannel_of_sublist (partial_balance _ channel_mem')
     use vmWitness.allTables
     simp only [circuit_norm, List.perm_append_comm]
-    exact reqs_disjoint _ channel_mem'
+    exact ⟨vm_constraints, reqs_disjoint _ channel_mem'⟩
   -- invoke old tables soundness to get reqs for finished channels from constraints
   -- uses `soundChannels`, `constraints'`, `partial_balance'`
   have finished_reqs : ∀ channel ∈ finished, ∀ table ∈ witness'.allTables,
@@ -872,7 +872,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro table table_mem channel channel_mem
     have : channel.Consistent := consistent channel channel_mem
     apply guarantees_of_requirements_append (ts := vmWitness.allTablesWitness)
-      (ss := witness'.allTablesWitness) data_eq (reqs_disjoint _ channel_mem)
+      (ss := witness'.allTablesWitness) data_eq vm_constraints (reqs_disjoint _ channel_mem)
       (partial_balance _ channel_mem) (finished_reqs _ channel_mem) _ table_mem
   -- invoke `requirements_of_partial_guarantees_of_constraints` to get per-row grts → reqs for the vm channel,
   -- and use it in `verifier_guarantees`

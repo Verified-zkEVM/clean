@@ -105,11 +105,14 @@ lemma channelRequirements_iff (env : Environment F) (channel : RawChannel F) :
     component.operations.ChannelRequirements channel env ↔ component.rowOperations.ChannelRequirements channel env := by
   simp only [circuit_norm, interactions_eq]
 
-lemma inChannelsOrRequirements (env : Environment F) :
+lemma inChannelsOrRequirements (env : Environment F)
+    (h_constraints : component.operations.ConstraintsHold env) :
     component.operations.InChannelsOrRequirementsFull component.circuit.channelsWithRequirements env := by
-  have h := component.circuit.in_channels_or_requirements_full
-  simp only [circuit_norm, interactions_eq] at *
-  convert h _ _ env
+  have h_row_constraints : component.rowOperations.ConstraintsHold env :=
+    (component.constraintsHold_iff env).mp h_constraints
+  have h := component.circuit.in_channels_or_requirements_full component.rowInputVar
+    component.rowOffset env h_row_constraints
+  simpa only [circuit_norm, interactions_eq] using h
 
 lemma inChannelsOrGuarantees (env : Environment F) :
     component.operations.InChannelsOrGuaranteesFull component.circuit.channelsWithGuarantees env := by
@@ -270,7 +273,9 @@ lemma interactionsWith_nil_of_channel_not_mem :
   intro component table_mem i i_mem channel_eq
   symm at channel_eq; subst channel_eq
   simp only [Component.interactions_eq] at i_mem
-  apply table.component.circuit.channels_subset
+  have h_subset := table.component.circuit.channels_subset table.component.rowInputVar
+    table.component.rowOffset
+  apply h_subset
   simp only [Operations.channels, List.mem_map]
   exists i
 
@@ -310,26 +315,46 @@ lemma channelRequirements_iff_forall (table : Table F) (channel : RawChannel F) 
   simp only [Table.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
   rfl
 
-lemma requirements_iff_channelRequirements (table : Table F) :
+lemma requirements_iff_channelRequirements (table : Table F)
+    (h_constraints : table.Constraints) :
     table.Requirements ↔
     ∀ channel ∈ table.channelsWithRequirements, table.ChannelRequirements channel := by
   simp only [Table.Requirements, Table.ChannelRequirements, channelsWithRequirements]
   simp only [Component.requirements_iff, Component.channelRequirements_iff, Component.rowOperations]
-  simp only [GeneralFormalCircuit.requirements_iff']
-  constructor <;> simp_all
+  constructor
+  · intro h_reqs channel h_channel row h_row
+    have h_row_constraints :
+        ((table.component.circuit.main table.component.rowInputVar).operations table.component.rowOffset)
+          |>.ConstraintsHold (table.environment row) :=
+      (table.component.constraintsHold_iff (table.environment row)).mp (h_constraints row h_row)
+    exact (GeneralFormalCircuit.requirements_iff' table.component.circuit table.component.rowInputVar
+      table.component.rowOffset (table.environment row) h_row_constraints).mp (h_reqs row h_row)
+      channel h_channel
+  · intro h_reqs row h_row
+    have h_row_constraints :
+        ((table.component.circuit.main table.component.rowInputVar).operations table.component.rowOffset)
+          |>.ConstraintsHold (table.environment row) :=
+      (table.component.constraintsHold_iff (table.environment row)).mp (h_constraints row h_row)
+    exact (GeneralFormalCircuit.requirements_iff' table.component.circuit table.component.rowInputVar
+      table.component.rowOffset (table.environment row) h_row_constraints).mpr
+      (fun channel h_channel => h_reqs channel h_channel row h_row)
 
 lemma channelRequirements_of_requirements (table : Table F) {channel : RawChannel F} :
     table.Requirements → table.ChannelRequirements channel := by
   simp_all [Table.Requirements, Table.ChannelRequirements, circuit_norm]
 
-lemma inChannelsOrRequirements (table : Table F) :
+lemma inChannelsOrRequirements (table : Table F)
+    (h_constraints : table.Constraints) :
     table.InChannelsOrRequirements table.channelsWithRequirements := by
-  simp [InChannelsOrRequirements, channelsWithRequirements, Component.inChannelsOrRequirements]
+  simp only [InChannelsOrRequirements, channelsWithRequirements]
+  intro row h_row
+  exact table.component.inChannelsOrRequirements (table.environment row) (h_constraints row h_row)
 
-lemma requirements_of_not_mem (table : Table F) {channel : RawChannel F} :
+lemma requirements_of_not_mem (table : Table F) {channel : RawChannel F}
+    (h_constraints : table.Constraints) :
     channel ∉ table.channelsWithRequirements → table.ChannelRequirements channel := by
   intro h_not_mem
-  have h_in_or_req := table.inChannelsOrRequirements
+  have h_in_or_req := table.inChannelsOrRequirements h_constraints
   simp only [ChannelRequirements, InChannelsOrRequirements] at *
   intro row h_row
   specialize h_in_or_req row h_row

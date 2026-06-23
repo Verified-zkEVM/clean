@@ -442,6 +442,15 @@ theorem mem_nil_or_mem_nil_of_mem_shallowChannels (n : ℕ) (input : Var (fields
       · apply IH ((m + 3) / 2) (by omega)
       · apply IH ((m + 3) - ((m + 3) / 2)) (by omega)
 
+theorem requirementsChannelsLawful (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+    ((main input).operations offset).RequirementsChannelsLawful [] [] := by
+  constructor
+  · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input offset).1
+  constructor
+  · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input offset
+  · intro env _
+    exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input offset).2 env
+
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
   ∀ (i : ℕ) (h : i < n), IsBool input[i]
@@ -905,11 +914,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
       and_intros
       · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).1
       · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
-      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
-      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
-      · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
       · exact subcircuitChannelsLawful n input_var offset
   }
+  requirementsChannelsLawful := requirementsChannelsLawful n
 
   Assumptions := Assumptions n
   Spec := Spec n

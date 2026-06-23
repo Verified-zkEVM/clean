@@ -209,10 +209,10 @@ declared channel interface.
 @[circuit_norm]
 def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
     (main : Var Input F → Circuit F (Var Output F))
-    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
+    (channelsWithGuarantees : List (RawChannel F)) : Prop :=
   ∀ input_var offset,
     ((main input_var).operations offset).ChannelsLawful
-      channelsWithGuarantees channelsWithRequirements
+      channelsWithGuarantees
 
 /-
 Common base type for circuits that are to be used in formal proofs.
@@ -243,12 +243,11 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
       try first | ac_rfl | trivial
     )
 
-  /-- expose the channel guarantees and requirements, for end-to-end proofs -/
+  /-- expose the channel guarantees for end-to-end proofs -/
   channelsWithGuarantees : List (RawChannel F) := []
-  channelsWithRequirements : List (RawChannel F) := []
 
   channelsLawful : ElaboratedCircuit.ChannelsLawful main
-      channelsWithGuarantees channelsWithRequirements := by
+      channelsWithGuarantees := by
     -- TODO this tactic would be more effective if it would unfold all channel declarations/uses.
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     try dsimp only [main]
@@ -256,7 +255,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
     try first | ac_rfl | trivial | tauto
 
 attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
-  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+  ElaboratedCircuit.channelsWithGuarantees
 
 end
 
