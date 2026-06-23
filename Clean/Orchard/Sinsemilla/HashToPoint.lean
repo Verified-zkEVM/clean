@@ -200,19 +200,8 @@ private theorem double_halved {f g s : Fp} (h : f * (2 : Fp)⁻¹ - g = s) :
     rw [mul_comm f, ← mul_assoc, mul_inv_cancel₀ two_ne_zero_Fp, one_mul]] at h2
   linear_combination h2
 
-/--
-The workhorse of one Sinsemilla row, following the constraint program of the halo2 book
-("Sinsemilla / Constraint program"): for a non-degenerate step `(A ⸭ S) ⸭ A = B`, the
-row equations pin every cell, where `ya`/`ya'` denote the halves of the derived
-`Y_A`-expressions of the current and next row.
-
-Hypotheses are exactly the row constraints:
-- `hYP, hXP`: the lookup, with the derived `y_p` and the generator coordinates,
-- `hYA`: the current accumulator `y` matches the row's `Y_A` expression (the inductive
-  invariant; definitional at initialization and re-established by `hYCheck`),
-- `hSecant, hYCheck`: the Sinsemilla gate.
--/
-theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
+/-- For one Sinsemilla step, the row equations determine the output coordinates. -/
+theorem step_coordinates_of_constraints (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     (hstep : Specs.Sinsemilla.step S m A = some B)
     {xp lambda1 lambda2 xa' YA' : Fp}
     (hYP : 2 * A.y - 2 * lambda1 * (A.x - xp) = 2 * (S m).y)
@@ -221,107 +210,12 @@ theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
     (hYCheck : 4 * lambda2 * (A.x - xa') = 4 * A.y + 2 * YA') :
     xa' = B.x ∧ YA' = 2 * B.y := by
-  have hYP' : A.y - lambda1 * (A.x - xp) = (S m).y :=
-    mul_left_cancel₀ two_ne_zero_Fp (by linear_combination hYP)
-  open Specs.Sinsemilla in
-  -- unfold the spec-level step into its two incomplete additions
-  unfold Specs.Sinsemilla.step Point.doubleAndAdd at hstep
-  by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
-    simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
-  push_neg at hc₁
-  obtain ⟨hA0, hS0, hAxS⟩ := hc₁
-  set R : Point Fp := A + S m with hR_def
-  change Point.incompleteAdd R A = some B at hstep
-  by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
-    simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
-  push_neg at hc₂
-  obtain ⟨hR0, -, hRxA⟩ := hc₂
-  have hB : B = R + A := by
-    have := Option.some.inj hstep
-    rw [← this]
-  subst hXP
-  -- nonzero points have nonzero coordinate encodings
-  have point_ne_zero : ∀ {P : Point Fp}, P ≠ 0 →
-      ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
-    intro P hP h
-    apply hP
-    simpa [Point.zero_def] using h
-  -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
-  have hRadd := Point.nondegenerateAdd_eq_add
-    (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
-    (point_ne_zero hA0) (point_ne_zero hS0) hAxS
-  rw [← hR_def] at hRadd
-  have hRx := congrArg Point.x hRadd
-  have hRy := congrArg Point.y hRadd
-  simp only [Point.nondegenerateAdd] at hRx hRy
-  set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
-  -- the lookup pins `λ₁` to the chord slope
-  have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
-  have hl1 : lambda1 = slope₁ := by
-    apply mul_right_cancel₀ hAxS'
-    rw [hslope₁, mul_assoc,
-      show ((S m).x - A.x)⁻¹ * (A.x - (S m).x) = -1 from by
-        rw [show A.x - (S m).x = -((S m).x - A.x) by ring, mul_neg,
-          inv_mul_cancel₀ (sub_ne_zero.mpr (Ne.symm hAxS))]]
-    linear_combination -hYP'
-  -- hence `x_R` and the intermediate `y` are the real intermediate point
-  have hxR : lambda1 * lambda1 - A.x - (S m).x = R.x := by
-    rw [hl1]
-    exact hRx
-  have hyR : lambda1 * (A.x - R.x) - A.y = R.y := by
-    rw [hl1, ← hRx]
-    exact hRy
-  -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
-  have hRxA' : A.x - R.x ≠ 0 := sub_ne_zero.mpr fun h => hRxA h.symm
-  have hBadd := Point.nondegenerateAdd_eq_add
-    (p := { x := R.x, y := R.y }) (q := { x := A.x, y := A.y })
-    (point_ne_zero hR0) (point_ne_zero hA0) hRxA
-  rw [← hB] at hBadd
-  have hBx := congrArg Point.x hBadd
-  have hBy := congrArg Point.y hBadd
-  simp only [Point.nondegenerateAdd] at hBx hBy
-  set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
-  have hslope₂_alt : (A.y - R.y) * (A.x - R.x)⁻¹ = slope₂ := by
-    rw [hslope₂, show A.y - R.y = -(R.y - A.y) by ring,
-      show A.x - R.x = -(R.x - A.x) by ring, inv_neg]
-    ring
-  rw [hslope₂_alt] at hBx hBy
-  -- the `Y_A` invariant pins `λ₂` to the second chord slope
-  have hl2 : lambda2 = slope₂ := by
-    apply mul_right_cancel₀ hRxA'
-    have hslope₂_mul : slope₂ * (A.x - R.x) = A.y - R.y := by
-      rw [hslope₂, mul_assoc,
-        show (R.x - A.x)⁻¹ * (A.x - R.x) = -1 from by
-          rw [show A.x - R.x = -(R.x - A.x) by ring, mul_neg,
-            inv_mul_cancel₀ (sub_ne_zero.mpr hRxA)]]
-      ring
-    rw [hslope₂_mul]
-    have hYA' : 2 * A.y = (lambda1 + lambda2) * (A.x - R.x) := by
-      rw [← hxR]
-      exact hYA
-    linear_combination -hYA' - hyR
-  have hline₂ : lambda2 * (A.x - R.x) = A.y - R.y := by
-    rw [hl2]
-    rw [hslope₂, mul_assoc,
-      show (R.x - A.x)⁻¹ * (A.x - R.x) = -1 from by
-        rw [show A.x - R.x = -(R.x - A.x) by ring, mul_neg,
-          inv_mul_cancel₀ (sub_ne_zero.mpr hRxA)]]
-    ring
-  -- the gate then pins the next accumulator to `B`
-  constructor
-  · rw [← hBx, ← hl2]
-    linear_combination -hSecant - hxR
-  · apply mul_left_cancel₀ two_ne_zero_Fp
-    rw [← hBy, ← hl2, show lambda2 * lambda2 - R.x - A.x = xa' by
-      linear_combination hSecant + hxR]
-    linear_combination -hYCheck + 4 * hline₂
+  exact DoubleAndAdd.coordinates_of_constraints (S := S m)
+    (by simpa [Specs.Sinsemilla.step] using hstep)
+    hYP hXP hYA hSecant hYCheck
 
 /--
-The honest-prover counterpart of `step_pinned`: when the spec-level step
+The honest-prover counterpart of `step_coordinates_of_constraints`: when the spec-level step
 `(A ⸭ S(m)) ⸭ A = B` is defined, the honest cell values (the `rowValue` assignment
 formulas, given as hypotheses) satisfy the row's lookup-`y` derivation and `Y_A`
 invariant, and the next accumulator is `B`.
@@ -336,7 +230,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     A.y - l1 * (A.x - (S m).x) = (S m).y ∧
     2 * A.y = (l1 + l2) * (A.x - (l1 * l1 - A.x - (S m).x)) ∧
     xa' = B.x ∧ ya' = B.y := by
-  -- unfold the spec-level step into its two incomplete additions (as in `step_pinned`)
+  -- unfold the spec-level step into its two incomplete additions (as in `step_coordinates_of_constraints`)
   unfold Specs.Sinsemilla.step Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
   · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
@@ -549,7 +443,7 @@ private theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → �
     (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
-/-- The verifier-side contract of one piece, see `step_pinned` for the chain step. The
+/-- The verifier-side contract of one piece, see `step_coordinates_of_constraints` for the chain step. The
 chain runs through the first `w` words; the last word's lookup facts are exposed so the
 composing circuit can finish the step with its boundary gate. -/
 def Spec (G : Generators) (w : ℕ) (input : Value Input Fp)
@@ -1038,7 +932,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
         have hyAr' := hyAr
         simp only [DoubleAndAdd.yA, DoubleAndAdd.xR] at hyAr'
         have hyw2 := double_halved hyw
-        have hpin := step_pinned G.S hAr
+        have hpin := step_coordinates_of_constraints G.S hAr
           (xp := (dR r).xP) (lambda1 := (dR r).lambda1) (lambda2 := (dR r).lambda2)
           (xa' := (dR (r + 1)).xA)
           (YA' := DoubleAndAdd.yA (dR (r + 1)))
@@ -1561,7 +1455,7 @@ private theorem gate_yRhs_enterYA (b : Bool) (row : Gate.Row Fp) :
 
 /--
 The chain glue of one level over cleaned values: the piece's prefix contract, the
-gate completing its last step (via `step_pinned`), and the tail's chain contract
+gate completing its last step (via `step_coordinates_of_constraints`), and the tail's chain contract
 compose to the level's chain contract.
 -/
 private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
@@ -1628,7 +1522,7 @@ private theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
       simp only [DoubleAndAdd.yA, DoubleAndAdd.xR] at hlast_yA'
       have hsec' := hsec
       simp only [DoubleAndAdd.xR] at hsec'
-      have hpin := HashPiece.step_pinned G.S hpre
+      have hpin := HashPiece.step_coordinates_of_constraints G.S hpre
         (xp := last.xP) (lambda1 := last.lambda1) (lambda2 := last.lambda2)
         (xa' := tailFirst.xA) (YA' := enterYA isFinal tailFirst)
         (by linear_combination HashPiece.double_halved hlast_yp + hlast_yA

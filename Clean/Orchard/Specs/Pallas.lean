@@ -303,6 +303,37 @@ theorem toSW_nsmul {p : Point Fp} (hp : p.Valid) (n : ℕ) :
   show (ofCoords (ShortWeierstrass.smul Pallas.curve.A n (P.x, P.y))).toSW _ = n • P
   simp_rw [← ShortWeierstrass.coords_nsmul, ofCoords_toSW]
 
+theorem nsmul_add_nsmul {P : Point Fp} (hP : P.OnCurve) (a b : ℕ) :
+    a • P + b • P = (a + b) • P := by
+  apply (ext_toSW_iff
+    (valid_add (valid_nsmul (.inl hP) a) (valid_nsmul (.inl hP) b))
+    (valid_nsmul (.inl hP) (a + b))).mpr
+  rw [toSW_add (valid_nsmul (.inl hP) a) (valid_nsmul (.inl hP) b),
+    toSW_nsmul (.inl hP) a, toSW_nsmul (.inl hP) b, toSW_nsmul (.inl hP) (a + b)]
+  rw [add_nsmul]
+
+theorem nsmul_add_one {P : Point Fp} (hP : P.OnCurve) (m : ℕ) :
+    m • P + P = (m + 1) • P := by
+  simpa using nsmul_add_nsmul hP m 1
+
+theorem nsmul_add_neg_one {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h2 : 2 ≤ m) :
+    m • P + -P = (m - 1) • P := by
+  apply (ext_toSW_iff
+    (valid_add (valid_nsmul (.inl hP) m) (valid_neg (.inl hP)))
+    (valid_nsmul (.inl hP) (m - 1))).mpr
+  rw [toSW_add (valid_nsmul (.inl hP) m) (valid_neg (.inl hP)),
+    toSW_neg (.inl hP), toSW_nsmul (.inl hP) m, toSW_nsmul (.inl hP) (m - 1)]
+  have hm : m • P.toSW (.inl hP) = (m - 1) • P.toSW (.inl hP) + P.toSW (.inl hP) := by
+    rw [← succ_nsmul, Nat.sub_add_cancel (by omega)]
+  rw [hm, add_neg_cancel_right]
+
+theorem neg_ne_zero_of_ne_zero {P : Point Fp} (hP : P ≠ 0) : -P ≠ 0 := by
+  intro h
+  apply hP
+  cases P
+  rw [zero_def, mk.injEq]
+  exact ⟨congrArg Point.x h, neg_eq_zero.mp (congrArg Point.y h)⟩
+
 -- so we can use the cute ⊥ symbol for `none`
 instance {α : Type} : Bot (Option α) := ⟨none⟩
 
