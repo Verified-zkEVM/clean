@@ -40,13 +40,18 @@ deriving BEq, DecidableEq, Inhabited, Repr
 namespace Point
 variable {F : Type}
 
-def coords (point : Point F) : F × F :=
-  (point.x, point.y)
+def coords (point : Point F) : F × F := (point.x, point.y)
 
 theorem ext_coords {p q : Point F} (h : p.coords = q.coords) : p = q := by
-  rcases p with ⟨px, py⟩
-  rcases q with ⟨qx, qy⟩
-  simpa [Point.coords, Prod.ext_iff, mk.injEq] using h
+  rw [mk.injEq]
+  simp_all [coords]
+
+lemma ext_coords_iff {p q : Point F} : p.coords = q.coords ↔ p = q :=
+  ⟨ ext_coords, by rintro rfl; rfl ⟩
+lemma ext_coords_iff_left {p : Point F} {x y : F} : p.coords = (x, y) ↔ p = { x, y } :=
+  ext_coords_iff (q := { x, y })
+lemma ext_coords_iff_right {p : Point F} {x y : F} : (x, y) = p.coords ↔ { x, y } = p :=
+  ext_coords_iff (p := { x, y })
 
 def zero [Zero F] : Point F := { x := 0, y := 0 }
 
@@ -63,65 +68,62 @@ def Valid (point : Point Fp) : Prop :=
   OnCurve point ∨ point = 0
 
 theorem onCurve_iff (point : Point Fp) :
-    point.OnCurve ↔
-      ShortWeierstrass.OnCurve pallasA pallasB point.coords := by
-  simp only [OnCurve, Point.coords,
-    CompElliptic.CurveForms.ShortWeierstrass.OnCurve,
+    point.OnCurve ↔ ShortWeierstrass.OnCurve pallasA pallasB point.coords := by
+  simp only [OnCurve, coords, ShortWeierstrass.OnCurve,
     pallasA, pallasB, zero_mul, add_zero]
 
 theorem valid_iff (point : Point Fp) :
     Valid point ↔ ShortWeierstrass.Valid pallasA pallasB point.coords := by
-  constructor
-  · intro h
-    rcases h with h | h
-    · exact Or.inl ((onCurve_iff point).mp h)
-    · exact Or.inr (by rw [h]; rfl)
-  · intro h
-    rcases h with h | h
-    · exact Or.inl ((onCurve_iff point).mpr h)
-    · exact Or.inr (Point.ext_coords h)
+  simp_rw [Valid, ShortWeierstrass.Valid, onCurve_iff, zero_def, ext_coords_iff_left]
 
-theorem not_onCurve_zero : ¬ OnCurve (0 : Point Fp) := by
-  intro h
-  exact ShortWeierstrass.not_onCurve_zero (by decide) ((onCurve_iff 0).mp h)
+theorem no_onCurve_of_x_zero (y : Fp) : ¬ OnCurve { x := 0, y } := by
+  simp only [onCurve_iff, coords, pallasB]
+  exact Pallas.no_onCurve_x_zero y
 
-theorem no_onCurve_of_x_zero (y : Fp) : ¬ OnCurve ({ x := 0, y } : Point Fp) := by
-  intro h
-  exact Pallas.no_onCurve_x_zero y ((onCurve_iff { x := 0, y }).mp h)
+theorem not_onCurve_zero : ¬ OnCurve 0 := by
+  apply no_onCurve_of_x_zero
 
 theorem ne_zero_of_onCurve {point : Point Fp} :
     point.OnCurve → point ≠ 0 := by
-  intro h hzero
-  exact not_onCurve_zero (hzero ▸ h)
+  contrapose!
+  rintro rfl
+  exact not_onCurve_zero
+
+lemma onCurve_of_valid_of_ne_zero {point : Point Fp} :
+    point.Valid → point ≠ 0 → point.OnCurve := by
+  rintro (hCurve | hIdentity) hNeZero
+  · exact hCurve
+  · exact False.elim (hNeZero hIdentity)
 
 def ofSW (point : SWPoint Pallas.curve) : Point Fp :=
   { x := point.x, y := point.y }
 
-def neg [Neg F] (point : Point F) : Point F where
-  x := point.x
-  y := -point.y
+def ofCoords (xy : Fp × Fp) : Point Fp := { x := xy.1, y := xy.2 }
+
+@[simp] lemma ofCoords_x (xy : Fp × Fp) : (ofCoords xy).x = xy.1 := rfl
+@[simp] lemma ofCoords_y (xy : Fp × Fp) : (ofCoords xy).y = xy.2 := rfl
+@[simp] lemma ofCoords_coords (xy : Fp × Fp) : (ofCoords xy).coords = xy := rfl
+
+def neg [Neg F] (point : Point F) : Point F :=
+  { x := point.x, y := -point.y }
 
 instance [Neg F] : Neg (Point F) := ⟨neg⟩
 
 lemma neg_def (point : Point Fp) :
-  -point = {
-    x := (ShortWeierstrass.neg point.coords).1,
-    y := (ShortWeierstrass.neg point.coords).2 } := rfl
-
+  -point = ofCoords (ShortWeierstrass.neg point.coords) := rfl
+lemma neg_x (point : Point Fp) : (-point).x = point.x := rfl
+lemma neg_y (point : Point Fp) : (-point).y = -point.y := rfl
 
 def add (p q : Point Fp) : Point Fp :=
-  let coords := ShortWeierstrass.add pallasA p.coords q.coords
-  { x := coords.1, y := coords.2 }
+  ofCoords (ShortWeierstrass.add pallasA p.coords q.coords)
 
 instance : Add (Point Fp) := ⟨add⟩
 
 lemma add_def (p q : Point Fp) :
-  p + q = {
-    x := (ShortWeierstrass.add pallasA (p.x, p.y) (q.x, q.y)).1,
-    y := (ShortWeierstrass.add pallasA (p.x, p.y) (q.x, q.y)).2 } := rfl
+  p + q = ofCoords (ShortWeierstrass.add pallasA p.coords q.coords) := rfl
 
-@[simp] theorem coords_add (p q : Point Fp) :
-    (p + q).coords = ShortWeierstrass.add pallasA p.coords q.coords := rfl
+theorem coords_add (p q : Point Fp) :
+  (p + q).coords = ShortWeierstrass.add pallasA p.coords q.coords := rfl
 
 theorem valid_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
     (p + q).Valid := by
@@ -149,30 +151,33 @@ def nsmul (n : ℕ) (point : Point Fp) : Point Fp :=
 
 instance : SMul ℕ (Point Fp) := ⟨nsmul⟩
 
-def incompleteAdd (p q : Point Fp) : Point Fp :=
+lemma nsmul_def (n : ℕ) (point : Point Fp) :
+  n • point = ofCoords (ShortWeierstrass.smul pallasA n point.coords) := rfl
+
+def nondegenerateAdd (p q : Point Fp) : Point Fp :=
   let slope := (q.y - p.y) * (q.x - p.x)⁻¹
   let xR := slope * slope - p.x - q.x
   let yR := slope * (p.x - xR) - p.y
   { x := xR, y := yR }
 
-theorem incompleteAdd_eq_add {p q : Point Fp}
+theorem nondegenerateAdd_eq_add {p q : Point Fp}
     (hp : p ≠ 0) (hq : q ≠ 0) (hx : p.x ≠ q.x) :
-    incompleteAdd p q = p + q := by
+    nondegenerateAdd p q = p + q := by
   rcases p with ⟨px, py⟩
   rcases q with ⟨qx, qy⟩
-  simp only [incompleteAdd, zero_def, add_def, ShortWeierstrass.add] at *
+  simp only [nondegenerateAdd, zero_def, add_def, ofCoords, coords, ShortWeierstrass.add] at *
   have hp0 : ¬(px, py) = (0, 0) := by grind
   have hq0 : ¬(qx, qy) = (0, 0) := by grind
   rw [if_neg hp0, if_neg hq0]
   rw [if_neg hx, mk.injEq]
   constructor <;> ring
 
-theorem incompleteAdd_onCurve {p q : Point Fp}
+theorem nondegenerateAdd_onCurve {p q : Point Fp}
     (hp : p.OnCurve) (hq : q.OnCurve) (hx : p.x ≠ q.x) :
-    (incompleteAdd p q).OnCurve := by
+    (nondegenerateAdd p q).OnCurve := by
   have hpNonId : p ≠ 0 := ne_zero_of_onCurve hp
   have hqNonId : q ≠ 0 := ne_zero_of_onCurve hq
-  rw [incompleteAdd_eq_add hpNonId hqNonId hx]
+  rw [nondegenerateAdd_eq_add hpNonId hqNonId hx]
   rcases p with ⟨px, py⟩
   rcases q with ⟨qx, qy⟩
   simp only [onCurve_iff, coords, add_def] at hp hq hx ⊢
@@ -255,24 +260,171 @@ def toSW (point : Point Fp) (h : point.Valid) : SWPoint Pallas.curve where
   y := point.y
   onCurve := (valid_iff point).mp h
 
-@[simp] theorem toSW_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
+theorem toSW_x (point : Point Fp) (h : point.Valid) : (toSW point h).x = point.x := rfl
+theorem toSW_y (point : Point Fp) (h : point.Valid) : (toSW point h).y = point.y := rfl
+
+theorem ext_toSW_iff {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
+    p = q ↔ p.toSW hp = q.toSW hq := by
+  constructor
+  · rintro rfl
+    rfl
+  · intro h
+    rw [mk.injEq]
+    simp_all [toSW]
+
+theorem toSW_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
     (p + q).toSW (valid_add hp hq) = p.toSW hp + q.toSW hq := by
   simp only [toSW, add_def]
   rfl
 
 theorem valid_zero : (0 : Point Fp).Valid := Or.inr rfl
 
-@[simp] theorem toSW_zero : toSW 0 valid_zero = 0 := by
+theorem toSW_zero : toSW 0 valid_zero = 0 := by
   simp only [toSW, zero_def]
   rfl
-
-theorem toSW_x (point : Point Fp) (h : point.Valid) : (toSW point h).x = point.x := rfl
-theorem toSW_y (point : Point Fp) (h : point.Valid) : (toSW point h).y = point.y := rfl
 
 theorem toSW_neg {p : Point Fp} (hp : p.Valid) :
     (-p).toSW (valid_neg hp) = -(p.toSW hp) := by
   simp only [toSW, neg_def]
   rfl
+
+theorem valid_nsmul {p : Point Fp} (hp : p.Valid) (n : ℕ) :
+    (n • p).Valid := by
+  exact (valid_iff (n • p)).mpr
+    (ShortWeierstrass.valid_smul ((valid_iff p).mp hp) n)
+
+lemma ofCoords_toSW (P : SWPoint Pallas.curve) {hP} :
+  (ofCoords (P.x, P.y)).toSW hP = P := by rfl
+
+theorem toSW_nsmul {p : Point Fp} (hp : p.Valid) (n : ℕ) :
+    (n • p).toSW (valid_nsmul hp n) = n • (p.toSW hp) := by
+  simp_rw [nsmul_def, coords]
+  set P : SWPoint Pallas.curve := p.toSW hp
+  show (ofCoords (ShortWeierstrass.smul Pallas.curve.A n (P.x, P.y))).toSW _ = n • P
+  simp_rw [← ShortWeierstrass.coords_nsmul, ofCoords_toSW]
+
+-- so we can use the cute ⊥ symbol for `none`
+instance {α : Type} : Bot (Option α) := ⟨none⟩
+
+-- but we remove it in proofs
+@[simp] theorem bot_eq_none {α : Type} : (⊥ : Option α) = none := rfl
+
+/-- Incomplete addition `⸭` for Sinsemilla (protocol spec §5.4.1.9):
+`⊥` if an operand is the identity or the `x`-coordinates collide (equal or opposite
+points), otherwise the group operation. `⊥` operands are handled by `Option.bind` at
+use sites. -/
+def incompleteAdd (p q : Point Fp) : Option (Point Fp) :=
+  if p = 0 ∨ q = 0 ∨ p.x = q.x then ⊥ else p + q
+
+infixl:65 " ⸭ " => incompleteAdd
+
+lemma incompleteAdd_def (p q : Point Fp) :
+    p ⸭ q = if p = 0 ∨ q = 0 ∨ p.x = q.x then ⊥ else some (p + q) := rfl
+
+theorem incompleteAdd_some {p q : Point Fp}
+    (hX : p ≠ 0) (hY : q ≠ 0) (hxy : p.x ≠ q.x) :
+    p ⸭ q = some (p + q) := by
+  rw [incompleteAdd_def, if_neg]
+  push_neg
+  exact ⟨hX, hY, hxy⟩
+
+/-- One incomplete double-and-add step: `(acc ⸭ p) ⸭ acc`. -/
+def doubleAndAdd (acc p : Point Fp) : Option (Point Fp) := do
+  let t ← acc ⸭ p
+  t ⸭ acc
+
+/-! ### Pallas group order -/
+
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
+
+/--
+**Axiom**: the Pallas curve group has exactly `q = PALLAS_SCALAR_CARD` points.
+
+This is the published point count of the Pallas curve. The vendored CompElliptic
+formalization has no point counting, so this is the one central trust assumption behind
+scalar-multiplication circuit proofs; all consumers needing order facts derive them from
+here (see `addOrderOf_eq`).
+-/
+axiom pallas_natCard :
+  Nat.card (ShortWeierstrass.SWPoint Pallas.curve) = PALLAS_SCALAR_CARD
+
+/-- Every non-identity Pallas point generates the full prime-order group. -/
+theorem addOrderOf_eq {P : ShortWeierstrass.SWPoint Pallas.curve} (h : P ≠ 0) :
+    addOrderOf P = PALLAS_SCALAR_CARD := by
+  have hdvd := addOrderOf_dvd_natCard P
+  rw [pallas_natCard] at hdvd
+  rcases CompElliptic.Fields.Pasta.PALLAS_SCALAR_is_prime.eq_one_or_self_of_dvd
+      _ hdvd with h1 | hq
+  · exact absurd (AddMonoid.addOrderOf_eq_one_iff.mp h1) h
+  · exact hq
+
+theorem nsmul_eq_zero_iff {P : Point Fp} (hP : P.OnCurve) (n : ℕ) :
+    n • P = 0 ↔ PALLAS_SCALAR_CARD ∣ n := by
+  rw [ext_toSW_iff (valid_nsmul (.inl hP) n) valid_zero,
+    toSW_zero, toSW_nsmul (.inl hP)]
+  set p := P.toSW (.inl hP)
+  have hp : p ≠ 0 := by
+    intro h
+    simp only [p, ← toSW_zero, ← ext_toSW_iff] at h
+    rw [h] at hP
+    exact not_onCurve_zero hP
+  rw [← addOrderOf_eq hp, addOrderOf_dvd_iff_nsmul_eq_zero]
+
+theorem nsmul_ne_zero {P : Point Fp} (hP : P.OnCurve)
+    {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) : n • P ≠ 0 := by
+  rw [Ne, nsmul_eq_zero_iff hP]
+  intro hdvd
+  have := Nat.le_of_dvd hn hdvd
+  omega
+
+theorem nsmul_onCurve {P : Point Fp} (hP : P.OnCurve)
+    {n : ℕ} (hn : 0 < n) (hlt : n < PALLAS_SCALAR_CARD) :
+    (n • P).OnCurve := by
+  apply onCurve_of_valid_of_ne_zero (valid_nsmul (.inl hP) n)
+  apply nsmul_ne_zero hP hn hlt
+
+/-- Nonzero representable points sharing an `x`-coordinate are equal or opposite. -/
+theorem eq_or_eq_neg_of_x_eq {P Q : Point Fp} (hP : P.OnCurve) (hQ : Q.OnCurve) :
+    P.x = Q.x → P = Q ∨ P = -Q := by
+  intro h
+  simp only [OnCurve] at *
+  rw [h, ←hQ] at hP; clear hQ
+  have hy : P.y = Q.y ∨ P.y = -Q.y := by grind
+  rw [mk.injEq, mk.injEq, neg_x, neg_y]
+  grind
+
+/--
+The collision-freedom fact behind incomplete additions on a variable base: distinct
+small positive multiples of a non-identity point have distinct `x`-coordinates, since
+equal `x` would force equal-or-opposite points and hence a relation `t ∓ s ≡ 0` modulo
+the (large) group order.
+-/
+theorem nsmul_x_ne {P : Point Fp} (hP : P.OnCurve)
+    {s t : ℕ} (hs : 0 < s) (hst : s < t) (hsum : s + t < PALLAS_SCALAR_CARD) :
+    (t • P).x ≠ (s • P).x := by
+  have hp_valid : P.Valid := .inl hP
+  have ht_onCurve : (t • P).OnCurve := nsmul_onCurve hP (by omega) (by omega)
+  have ht_valid : (t • P).Valid := .inl ht_onCurve
+  have hs_onCurve : (s • P).OnCurve := nsmul_onCurve hP hs (by omega)
+  have hs_valid : (s • P).Valid := .inl hs_onCurve
+  intro hx
+  rcases eq_or_eq_neg_of_x_eq ht_onCurve hs_onCurve hx with heq | hneg
+  · rw [ext_toSW_iff ht_valid hs_valid, toSW_nsmul hp_valid, toSW_nsmul hp_valid] at heq
+    rw [nsmul_eq_nsmul_iff_modEq, addOrderOf_eq, Nat.ModEq,
+      Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at heq
+    omega
+    intro hzero
+    rw [← toSW_zero, ← ext_toSW_iff] at hzero
+    rw [hzero] at hP
+    exact not_onCurve_zero hP
+  · rw [ext_toSW_iff ht_valid (valid_neg hs_valid), toSW_nsmul hp_valid, toSW_neg hs_valid, toSW_nsmul hp_valid] at hneg
+    have hzero : (t + s) • (P.toSW hp_valid) = 0 := by
+      rw [add_nsmul, hneg, neg_add_cancel]
+    rw [← toSW_nsmul, ← toSW_zero, ← ext_toSW_iff] at hzero
+    rw [nsmul_eq_zero_iff hP] at hzero
+    have := Nat.le_of_dvd (by omega) hzero
+    omega
+
 end Point
 
 end Orchard

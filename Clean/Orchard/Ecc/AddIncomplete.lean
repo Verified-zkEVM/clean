@@ -1,4 +1,5 @@
-import Clean.Orchard.Ecc.Theorems
+import Clean.Orchard.Specs.Pallas
+import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
@@ -73,29 +74,29 @@ def Assumptions (input : Input Fp) : Prop :=
   input.p.x ≠ input.q.x
 
 def Spec (input : Input Fp) : Prop :=
-  input.r = input.p.incompleteAdd input.q
+  input.r = input.p.nondegenerateAdd input.q
 
-theorem polys_zero_of_incompleteAdd {input : AddIncomplete.Input Fp}
+theorem polys_zero_of_nondegenerateAdd {input : AddIncomplete.Input Fp}
     (hx : input.p.x ≠ input.q.x) :
-    poly1 (Input.fromPoints input.p input.q (input.p.incompleteAdd input.q)) = 0 ∧
-      poly2 (Input.fromPoints input.p input.q (input.p.incompleteAdd input.q)) = 0 := by
-  unfold poly1 poly2 Input.fromPoints Point.incompleteAdd
+    poly1 (Input.fromPoints input.p input.q (input.p.nondegenerateAdd input.q)) = 0 ∧
+      poly2 (Input.fromPoints input.p input.q (input.p.nondegenerateAdd input.q)) = 0 := by
+  unfold poly1 poly2 Input.fromPoints Point.nondegenerateAdd
   have hden : input.q.x - input.p.x ≠ 0 := by
     intro h
     apply hx
     exact (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
-theorem eq_incompleteAdd_of_polys_zero {p q r : Point Fp}
+theorem eq_nondegenerateAdd_of_polys_zero {p q r : Point Fp}
     (hx : p.x ≠ q.x)
     (h : poly1 (Input.fromPoints p q r) = 0 ∧
       poly2 (Input.fromPoints p q r) = 0) :
-    r = p.incompleteAdd q := by
+    r = p.nondegenerateAdd q := by
   rcases p with ⟨px, py⟩
   rcases q with ⟨qx, qy⟩
   rcases r with ⟨rx, ry⟩
   unfold poly1 poly2 Input.fromPoints at h
-  unfold Point.incompleteAdd
+  unfold Point.nondegenerateAdd
   have hden : qx - px ≠ 0 := by
     intro hden
     apply hx
@@ -132,12 +133,12 @@ def circuit : FormalAssertion Fp Input where
   Spec
   soundness := by
     circuit_proof_start [main, Assumptions, Spec, poly1, poly2]
-    apply eq_incompleteAdd_of_polys_zero h_assumptions
+    apply eq_nondegenerateAdd_of_polys_zero h_assumptions
     simp only [Input.fromPoints, Input.r, Input.p, Input.q, poly1, poly2]
     simpa [←sub_eq_add_neg] using h_holds
   completeness := by
     circuit_proof_start [main, Assumptions, Spec, poly1, poly2, Input.r, Input.p, Input.q]
-    have hpolys := polys_zero_of_incompleteAdd (input := {
+    have hpolys := polys_zero_of_nondegenerateAdd (input := {
       p := { x := input_x_p, y := input_y_p }
       q := { x := input_x_qr_curr, y := input_y_qr_curr }
     }) h_assumptions
@@ -150,7 +151,7 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witness fun env => (eval env p).incompleteAdd (eval env q)
+  let r ← witness fun env => (eval env p).nondegenerateAdd (eval env q)
   Gate.circuit {
     x_p := p.x
     y_p := p.y
@@ -172,7 +173,7 @@ instance elaborated : ElaboratedCircuit Fp Input Point main := by
 
 theorem soundness : Soundness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec, Gate.circuit, Gate.Spec,
-    Point.incompleteAdd_eq_add, Point.incompleteAdd_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q,
+    Point.nondegenerateAdd_eq_add, Point.nondegenerateAdd_onCurve, Gate.Input.r, Gate.Input.p, Gate.Input.q,
     Gate.Assumptions]
   rcases h_assumptions with ⟨hpCurve, hqCurve, hx⟩
   have hp : input_p ≠ Point.zero := Point.ne_zero_of_onCurve hpCurve
@@ -187,8 +188,8 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   specialize hrow hgateAssumptions
   simp only [hrow, hpCopyEq, hqCopyEq]
   constructor
-  · exact Point.incompleteAdd_onCurve hpCurve hqCurve hx
-  · exact Point.incompleteAdd_eq_add (p:=input_p) (q:=input_q) hp hq hx
+  · exact Point.nondegenerateAdd_onCurve hpCurve hqCurve hx
+  · exact Point.nondegenerateAdd_eq_add (p:=input_p) (q:=input_q) hp hq hx
 
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]

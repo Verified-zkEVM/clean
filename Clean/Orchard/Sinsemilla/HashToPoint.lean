@@ -225,19 +225,19 @@ theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     mul_left_cancel₀ two_ne_zero_Fp (by linear_combination hYP)
   open Specs.Sinsemilla in
   -- unfold the spec-level step into its two incomplete additions
-  unfold Specs.Sinsemilla.step at hstep
+  unfold Specs.Sinsemilla.step Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
+  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
     simp at hstep
-  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
+  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
   push_neg at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
-  change Specs.Sinsemilla.incompleteAdd R A = some B at hstep
+  change Point.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
+  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
     simp at hstep
-  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
+  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
   push_neg at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -251,13 +251,13 @@ theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     apply hP
     simpa [Point.zero_def] using h
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
-  have hRadd := Point.incompleteAdd_eq_add
+  have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
   rw [← hR_def] at hRadd
   have hRx := congrArg Point.x hRadd
   have hRy := congrArg Point.y hRadd
-  simp only [Point.incompleteAdd] at hRx hRy
+  simp only [Point.nondegenerateAdd] at hRx hRy
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
   -- the lookup pins `λ₁` to the chord slope
   have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
@@ -277,13 +277,13 @@ theorem step_pinned (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     exact hRy
   -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
   have hRxA' : A.x - R.x ≠ 0 := sub_ne_zero.mpr fun h => hRxA h.symm
-  have hBadd := Point.incompleteAdd_eq_add
+  have hBadd := Point.nondegenerateAdd_eq_add
     (p := { x := R.x, y := R.y }) (q := { x := A.x, y := A.y })
     (point_ne_zero hR0) (point_ne_zero hA0) hRxA
   rw [← hB] at hBadd
   have hBx := congrArg Point.x hBadd
   have hBy := congrArg Point.y hBadd
-  simp only [Point.incompleteAdd] at hBx hBy
+  simp only [Point.nondegenerateAdd] at hBx hBy
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
   have hslope₂_alt : (A.y - R.y) * (A.x - R.x)⁻¹ = slope₂ := by
     rw [hslope₂, show A.y - R.y = -(R.y - A.y) by ring,
@@ -337,19 +337,19 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     2 * A.y = (l1 + l2) * (A.x - (l1 * l1 - A.x - (S m).x)) ∧
     xa' = B.x ∧ ya' = B.y := by
   -- unfold the spec-level step into its two incomplete additions (as in `step_pinned`)
-  unfold Specs.Sinsemilla.step at hstep
+  unfold Specs.Sinsemilla.step Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₁] at hstep
+  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
     simp at hstep
-  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₁] at hstep
+  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
   push_neg at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
-  change Specs.Sinsemilla.incompleteAdd R A = some B at hstep
+  change Point.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Specs.Sinsemilla.incompleteAdd, if_pos hc₂] at hstep
+  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
     simp at hstep
-  rw [Specs.Sinsemilla.incompleteAdd, if_neg hc₂] at hstep
+  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
   push_neg at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -361,13 +361,13 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     apply hP
     simpa [Point.zero_def] using h
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
-  have hRadd := Point.incompleteAdd_eq_add
+  have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS
   rw [← hR_def] at hRadd
   have hRx := congrArg Point.x hRadd
   have hRy := congrArg Point.y hRadd
-  simp only [Point.incompleteAdd] at hRx hRy
+  simp only [Point.nondegenerateAdd] at hRx hRy
   set slope₁ : Fp := ((S m).y - A.y) * ((S m).x - A.x)⁻¹ with hslope₁
   have hAxS' : A.x - (S m).x ≠ 0 := sub_ne_zero.mpr hAxS
   -- the honest `λ₁` is the first chord slope, and the `y_p` derivation recovers `S(m)`
@@ -390,13 +390,13 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     have hc := mul_inv_cancel₀ hRxA'
     linear_combination (-(2 * A.y)) * hc
   -- the second addition: `B = A ⸭ R`, with the chord through `A` and `R`
-  have hBadd := Point.incompleteAdd_eq_add
+  have hBadd := Point.nondegenerateAdd_eq_add
     (p := { x := R.x, y := R.y }) (q := { x := A.x, y := A.y })
     (point_ne_zero hR0) (point_ne_zero hA0) hRxA
   rw [← hB] at hBadd
   have hBx := congrArg Point.x hBadd
   have hBy := congrArg Point.y hBadd
-  simp only [Point.incompleteAdd] at hBx hBy
+  simp only [Point.nondegenerateAdd] at hBx hBy
   set slope₂ : Fp := (R.y - A.y) * (R.x - A.x)⁻¹ with hslope₂
   have hslope₂_alt : (A.y - R.y) * (A.x - R.x)⁻¹ = slope₂ := by
     rw [hslope₂, show A.y - R.y = -(R.y - A.y) by ring,

@@ -1,4 +1,5 @@
-import Clean.Orchard.Ecc.Theorems
+import Clean.Orchard.Specs.Pallas
+import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 

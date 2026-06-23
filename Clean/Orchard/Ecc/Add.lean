@@ -1,4 +1,5 @@
-import Clean.Orchard.Ecc.Theorems
+import Clean.Orchard.Specs.Pallas
+import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
@@ -380,12 +381,12 @@ theorem rowValue_spec {input : Input Fp}
     have hxdiff : input.q.x - input.p.x ≠ 0 := hprod.2
     have hx : input.q.x ≠ input.p.x := fun h => hxdiff (sub_eq_zero.mpr h)
     have hxpq : input.p.x ≠ input.q.x := Ne.symm hx
-    simp [Point.add_def, ShortWeierstrass.add,
+    simp [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
       hpx, hqx, hx, hxpq, pow_two, div_eq_mul_inv]
   constructor
   · intro hprod
     dsimp [rowValue, lambdaValue] at hprod ⊢
-    simp at hprod ⊢
+    simp [Point.coords_add, Point.toSW_add] at hprod ⊢
     have hpx : input.p.x ≠ 0 := hprod.1.1
     have hqx : input.q.x ≠ 0 := hprod.1.2
     have hysum : input.q.y + input.p.y ≠ 0 := hprod.2
@@ -403,7 +404,7 @@ theorem rowValue_spec {input : Input Fp}
         have hysum' : input.p.y + input.q.y ≠ 0 := by
           rw [hy]
           exact add_self_ne_zero hpy
-        simp [Point.add_def, ShortWeierstrass.add,
+        simp [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
           hpx, hx, hpy, hysum', pallasA, pow_two, div_eq_mul_inv]
         constructor
         · ring
@@ -412,7 +413,7 @@ theorem rowValue_spec {input : Input Fp}
     · have hnotInv : ¬(input.q.x = input.p.x ∧ input.q.y = -input.p.y) := by
         exact fun h => hx h.1
       have hxpq : input.p.x ≠ input.q.x := Ne.symm hx
-      simp [Point.add_def, ShortWeierstrass.add,
+      simp [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
         hpx, hqx, hx, hxpq, pow_two, div_eq_mul_inv]
   constructor
   · intro hflag
@@ -421,7 +422,7 @@ theorem rowValue_spec {input : Input Fp}
     by_cases hpx : input.p.x = 0
     · have hpy := Point.y_eq_zero_of_valid_of_x_eq_zero hp hpx
       change input.p.y = 0 at hpy
-      simp [Point.add_def, ShortWeierstrass.add, hpx, hpy]
+      simp [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,hpx, hpy]
     · have hcontra : input.p.x * input.p.x⁻¹ = 1 := by
         field_simp [hpx]
       exact False.elim (hflag hcontra)
@@ -440,6 +441,7 @@ theorem rowValue_spec {input : Input Fp}
           rw [Point.mk.injEq]
           exact ⟨hqx, hqy⟩
         simp [Point.add_def, ShortWeierstrass.add,
+          Point.ofCoords, Point.coords,
           Point.zero, hpEq, hqEq]
       · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
           field_simp [hqx]
@@ -447,7 +449,7 @@ theorem rowValue_spec {input : Input Fp}
     · by_cases hqx : input.q.x = 0
       · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
         change input.q.y = 0 at hqy
-        simp [Point.add_def, ShortWeierstrass.add, hpx, hqx, hqy]
+        simp [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords, hpx, hqx, hqy]
       · have hcontra : input.q.x * input.q.x⁻¹ = 1 := by
           field_simp [hqx]
         exact False.elim (hflag hcontra)
@@ -461,6 +463,7 @@ theorem rowValue_spec {input : Input Fp}
       · have hqy := Point.y_eq_zero_of_valid_of_x_eq_zero hq hqx
         change input.q.y = 0 at hqy
         simp [Point.add_def, ShortWeierstrass.add,
+          Point.ofCoords, Point.coords,
           hpx, hpy, hqx, hqy]
       · have hcontra :
             ((input.q.x - input.p.x) * (input.q.x - input.p.x)⁻¹ +
@@ -484,6 +487,7 @@ theorem rowValue_spec {input : Input Fp}
       · by_cases hx : input.q.x = input.p.x
         · by_cases hy : input.q.y = -input.p.y
           · simp [Point.add_def, ShortWeierstrass.add,
+              Point.ofCoords, Point.coords,
               hpx, hx, hy]
           · have hsame := Point.y_eq_or_neg_of_same_x hp hq hpx hqx hx
             rcases hsame with hyeq | hyneg

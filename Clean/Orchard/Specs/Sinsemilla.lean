@@ -33,22 +33,9 @@ open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 /-- Maximum number of chunks in a Sinsemilla message (`sinsemilla::C`). -/
 def C : ℕ := 253
 
--- so we can use the cute ⊥ symbol for `none`
-instance {α : Type} : Bot (Option α) := ⟨none⟩
--- but we remove it in proofs
-@[simp] theorem bot_eq_none {α : Type} : (⊥ : Option α) = none := rfl
-
-/-- Incomplete addition `⸭` (protocol spec §5.4.1.9, `sinsemilla/src/addition.rs`):
-`⊥` if an operand is the identity or the `x`-coordinates collide (equal or opposite
-points), otherwise the group operation. `⊥` operands are handled by `Option.bind` at
-use sites. -/
-def incompleteAdd (p q : Point Fp) : Option (Point Fp) :=
-  if p = 0 ∨ q = 0 ∨ p.x = q.x then ⊥ else p + q
-
 /-- One Sinsemilla chunk step: `(acc ⸭ S(m)) ⸭ acc`. -/
-def step (S : ℕ → Point Fp) (m : ℕ) (acc : Point Fp) : Option (Point Fp) := do
-  let t ← incompleteAdd acc (S m)
-  incompleteAdd t acc
+def step (S : ℕ → Point Fp) (m : ℕ) (acc : Point Fp) : Option (Point Fp) :=
+  Point.doubleAndAdd acc (S m)
 
 /-- `SinsemillaHashToPoint` over a list of `K`-bit chunk values, starting from the
 domain point `Q`. Padding of bit-level messages into chunks (`pad` in the protocol
@@ -117,17 +104,17 @@ theorem hashToPoint_append (S : ℕ → Point Fp) (Q : Point Fp)
 excludes the colliding `x`-coordinates of equal-or-opposite points. -/
 theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B ≠ 0 := by
-  simp only [step, Option.bind_eq_bind] at h
+  simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [incompleteAdd, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
     simp at h
-  rw [incompleteAdd, if_neg hc₁] at h
-  rw [show ((some (A + G.S m)).bind fun t => incompleteAdd t A)
-    = incompleteAdd (A + G.S m) A from rfl] at h
+  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
+    = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [incompleteAdd, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
     simp at h
-  rw [incompleteAdd, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, if_neg hc₂] at h
   push_neg at hc₂
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   intro h0
@@ -142,17 +129,17 @@ theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
 /-- A defined step from a valid accumulator lands on a valid point. -/
 theorem step_valid {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B.Valid := by
-  simp only [step, Option.bind_eq_bind] at h
+  simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [incompleteAdd, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
     simp at h
-  rw [incompleteAdd, if_neg hc₁] at h
-  rw [show ((some (A + G.S m)).bind fun t => incompleteAdd t A)
-    = incompleteAdd (A + G.S m) A from rfl] at h
+  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
+    = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [incompleteAdd, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
     simp at h
-  rw [incompleteAdd, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, if_neg hc₂] at h
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   exact Point.valid_add (Point.valid_add a_valid (G.valid hm)) a_valid
 

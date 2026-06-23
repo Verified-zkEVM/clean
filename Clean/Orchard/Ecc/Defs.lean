@@ -41,4 +41,7 @@ def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
 def tQ {K : Type} [OfNat K 45560315531506369815346746415080538113] : K :=
   OfNat.ofNat 45560315531506369815346746415080538113
 
+lemma sw_add_coords (P Q : CompElliptic.CurveForms.ShortWeierstrass.SWPoint CompElliptic.Curves.Pasta.Pallas.curve) :
+  CompElliptic.CurveForms.ShortWeierstrass.add pallasA (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
+
 end Orchard.Ecc
