@@ -1,19 +1,11 @@
 import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Ecc.DoubleAndAdd
-import Clean.Orchard.Sinsemilla.HashToPoint
-import Clean.Orchard.Specs.Sinsemilla
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
 namespace Orchard.Ecc.Mul.Incomplete
-
-/- The Rust gate uses `y_a = Y_A / 2`. These constraints multiply those
-   equations by `2`, avoiding a division operation while preserving the Pallas
-   gate's zero set. -/
-def yADouble {K : Type} [Add K] [Sub K] [Mul K] (row : DoubleAndAddRow K) : K :=
-  DoubleAndAdd.yA row
 
 namespace Init
 
@@ -22,26 +14,21 @@ structure Input (F : Type) where
   next : DoubleAndAddRow F
 deriving ProvableStruct
 
-def poly {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
-  2 * row.yAWitnessed - yADouble row.next
+def Spec (input : Input Fp) : Prop :=
+  2 * input.yAWitnessed = DoubleAndAdd.yA input.next
 
-def Spec (row : Input Fp) : Prop :=
-  2 * row.yAWitnessed = yADouble row.next
-
-def main (row : Var Input Fp) : Circuit Fp Unit := do
-  assertZero (poly row)
+def main (input : Var Input Fp) : Circuit Fp Unit := do
+  assertZero (2 * input.yAWitnessed - DoubleAndAdd.yA input.next)
 
 def circuit : FormalAssertion Fp Input where
   name := "GATE q_mul_1 == 1 checks"
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, poly, yADouble, DoubleAndAdd.yA,
-      DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, DoubleAndAdd.yA, DoubleAndAdd.xR]
     exact sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h_holds)
   completeness := by
-    circuit_proof_start [main, Spec, poly, yADouble, DoubleAndAdd.yA,
-      DoubleAndAdd.xR]
+    circuit_proof_start [main, Spec, DoubleAndAdd.yA, DoubleAndAdd.xR]
     exact by simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec
 
 end Init
@@ -62,7 +49,7 @@ def bit {K : Type} [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
 
 def gradient1 {K : Type} [One K] [Add K] [Sub K] [Mul K] [OfNat K 2]
     (row : Input K) : K :=
-  2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) - yADouble row.cur +
+  2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) - DoubleAndAdd.yA row.cur +
     2 * ((bit row * 2 - 1) * row.yPCur)
 
 def secantLine {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
@@ -70,16 +57,16 @@ def secantLine {K : Type} [Sub K] [Mul K] (row : Input K) : K :=
     DoubleAndAdd.xR row.cur - row.cur.xA
 
 def gradient2 {K : Type} [Add K] [Sub K] [Mul K] [OfNat K 2] (row : Input K) : K :=
-  2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - yADouble row.cur - row.yANextDouble
+  2 * row.cur.lambda2 * (row.cur.xA - row.xANext) - DoubleAndAdd.yA row.cur - row.yANextDouble
 
 def Spec (row : Input Fp) : Prop :=
   IsBool (bit row) ∧
     2 * row.cur.lambda1 * (row.cur.xA - row.cur.xP) +
-        2 * ((bit row * 2 - 1) * row.yPCur) = yADouble row.cur ∧
+        2 * ((bit row * 2 - 1) * row.yPCur) = DoubleAndAdd.yA row.cur ∧
     row.cur.lambda2 * row.cur.lambda2 =
         row.xANext + DoubleAndAdd.xR row.cur + row.cur.xA ∧
     2 * row.cur.lambda2 * (row.cur.xA - row.xANext) =
-        yADouble row.cur + row.yANextDouble
+        DoubleAndAdd.yA row.cur + row.yANextDouble
 
 def main (row : Var Input Fp) : Circuit Fp Unit := do
   assertBool (bit row)
@@ -92,14 +79,14 @@ def circuit : FormalAssertion Fp Input where
   main
   Spec := Spec
   soundness := by
-    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2, yADouble,
+    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2,
       DoubleAndAdd.yA, DoubleAndAdd.xR]
     rcases h_holds with ⟨hBool, hGradient1, hSecant, hGradient2⟩
     exact ⟨by simpa [sub_eq_add_neg] using hBool, by linear_combination hGradient1,
       by linear_combination hSecant,
       by linear_combination hGradient2⟩
   completeness := by
-    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2, yADouble,
+    circuit_proof_start [main, Spec, bit, gradient1, secantLine, gradient2,
       DoubleAndAdd.yA, DoubleAndAdd.xR]
     rcases h_spec with ⟨hBool, hGradient1, hSecant, hGradient2⟩
     exact ⟨by simpa [sub_eq_add_neg] using hBool, by linear_combination hGradient1,
@@ -705,22 +692,22 @@ theorem soundness (n : ℕ) :
         2 * (((rowZ env i₀ j -
           (if j = 0 then input_z else rowZ env i₀ (j - 1)) * 2) * 2 - 1) *
             rowYP env i₀ j)
-        = yADouble (rowD env i₀ j) ∧
+        = DoubleAndAdd.yA (rowD env i₀ j) ∧
       rowL2 env i₀ j * rowL2 env i₀ j
         = rowXA env i₀ (j + 1) +
           DoubleAndAdd.xR (rowD env i₀ j) +
           rowXA env i₀ j ∧
       2 * rowL2 env i₀ j * (rowXA env i₀ j - rowXA env i₀ (j + 1))
-        = yADouble (rowD env i₀ j) + yADouble (rowD env i₀ (j + 1)) := by
+        = DoubleAndAdd.yA (rowD env i₀ j) + DoubleAndAdd.yA (rowD env i₀ (j + 1)) := by
     intro j hj
     have h := h_loop ⟨j, hj⟩
     simp only [Vector.get] at h
     rcases j with _ | j'
     · norm_num at h
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      simp only [circuit_norm, Expression.eval, Loop.bit,
         DoubleAndAdd.yA, DoubleAndAdd.xR] at h
       rw [show env.get i₀ = input_z from h_z0] at h
-      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD,
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       norm_num at h ⊢
       refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
@@ -728,9 +715,9 @@ theorem soundness (n : ℕ) :
       · linear_combination h.2.2.2.2.1
       · linear_combination h.2.2.2.2.2
     · norm_num at h
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      simp only [circuit_norm, Expression.eval, Loop.bit,
         DoubleAndAdd.yA, DoubleAndAdd.xR] at h
-      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD, yADouble,
+      simp only [rowZ, rowXA, rowXP, rowYP, rowL1, rowL2, rowD,
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       norm_num at h ⊢
       refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_, ?_⟩
@@ -766,7 +753,7 @@ theorem soundness (n : ℕ) :
     -- the last row's gate facts
     obtain ⟨hlb, hlg1, hlsec, hlg2⟩ := h_last
     norm_num at hlb hlg1 hlsec hlg2
-    simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+    simp only [circuit_norm, Expression.eval, Loop.bit,
       apply_ite (Expression.eval env), DoubleAndAdd.yA,
       DoubleAndAdd.xR] at hlb hlg1 hlsec hlg2
     norm_num at h_init
@@ -828,7 +815,7 @@ theorem soundness (n : ℕ) :
       (rowXA env i₀) (rowXP env i₀) (rowYP env i₀) (rowL1 env i₀) (rowL2 env i₀)
       (fun r => if r = n + 1 then
           2 * env.get (i₀ + 1 + 1 + 1 + (n + 1) * 6)
-        else yADouble (rowD env i₀ r))
+        else DoubleAndAdd.yA (rowD env i₀ r))
       (fun b => decide (env.get (i₀ + 1 + 1 + 1 + b * 6)
         = (2 * if b = 0 then input_z else env.get (i₀ + 1 + 1 + 1 + (b - 1) * 6)) + 1))
       ?hxA0 ?hYAD0 ?hyad ?hxp ?hyp ?hg1 ?hsec ?hg2
@@ -837,9 +824,8 @@ theorem soundness (n : ℕ) :
     case hYAD0 =>
       simp only []
       rw [if_neg (by omega)]
-      simp only [Expression.eval, yADouble, DoubleAndAdd.yA,
-        DoubleAndAdd.xR] at h_init
-      simp only [rowD, rowXA, rowXP, rowL1, rowL2, yADouble,
+      simp only [Expression.eval, DoubleAndAdd.yA, DoubleAndAdd.xR] at h_init
+      simp only [rowD, rowXA, rowXP, rowL1, rowL2, DoubleAndAdd.yA,
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       norm_num
       rw [← haccy, ← h_yA0]
@@ -848,7 +834,7 @@ theorem soundness (n : ℕ) :
       intro r hr
       simp only []
       rw [if_neg (by omega)]
-      simp only [yADouble, DoubleAndAdd.yA, DoubleAndAdd.xR, rowD]
+      simp only [DoubleAndAdd.yA, DoubleAndAdd.xR, rowD]
       try ring
     case hxp => exact fun r hr => (hconst r hr).1
     case hyp => exact fun r hr => (hconst r hr).2
@@ -864,7 +850,7 @@ theorem soundness (n : ℕ) :
         exact hg
       · have hrn : r = n := by omega
         subst hrn
-        simp only [rowD, rowXA, rowXP, rowYP, rowL1, rowL2, yADouble,
+        simp only [rowD, rowXA, rowXP, rowYP, rowL1, rowL2,
           DoubleAndAdd.yA, DoubleAndAdd.xR]
         rcases Nat.eq_zero_or_pos r with h0 | h0
         · subst h0
@@ -898,7 +884,7 @@ theorem soundness (n : ℕ) :
       · have hrn : r = n := by omega
         subst hrn
         rw [if_neg (show ¬(r = r + 1) by omega), if_pos rfl]
-        simp only [rowD, rowXA, rowXP, rowL1, rowL2, yADouble,
+        simp only [rowD, rowXA, rowXP, rowL1, rowL2,
           DoubleAndAdd.yA, DoubleAndAdd.xR]
         rcases Nat.eq_zero_or_pos r with h0 | h0
         · subst h0
@@ -1058,7 +1044,7 @@ theorem completeness (n : ℕ) :
   · -- q_mul_1: the copied y_a is the derived y of the first row
     obtain ⟨hz0c, hxp0, hyp0, hl10, hl20, hxn0⟩ := hcell 0 (by omega)
     have h0 := (hHS 0 (by omega)).2.1
-    simp only [yADouble, DoubleAndAdd.yA, DoubleAndAdd.xR]
+    simp only [DoubleAndAdd.yA, DoubleAndAdd.xR]
     norm_num
     simp only [Expression.eval]
     norm_num at hxp0 hl10 hl20 h0
@@ -1081,7 +1067,7 @@ theorem completeness (n : ℕ) :
       rw [show 2 * accScalar mm input_bits 0 + (if input_bits 0 then 1 else 0) * 2 - 1
         = accScalar mm input_bits 1 from rfl] at hg
       norm_num
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      simp only [circuit_norm, Expression.eval, Loop.bit,
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       norm_num at hz_j hxp_j hyp_j hl1_j hl2_j hxn_j hxp_j1 hyp_j1 hl1_j1 hl2_j1
       rw [hxp_j, hxp_j1, hyp_j, hyp_j1, hz_j, he_z0, he_xA0, hl1_j, hl2_j, hxn_j,
@@ -1100,8 +1086,7 @@ theorem completeness (n : ℕ) :
           (if input_bits (j' + 1) then 1 else 0) * 2 - 1
         = accScalar mm input_bits (j' + 2) from rfl] at hg
       norm_num
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
-        DoubleAndAdd.yA, DoubleAndAdd.xR]
+      simp only [circuit_norm, Expression.eval, Loop.bit, DoubleAndAdd.yA, DoubleAndAdd.xR]
       rw [hxp_j, hxp_j1, hyp_j, hyp_j1, hz_j, hz_p, hxn_p, hl1_j, hl2_j, hxn_j,
         hl1_j1, hl2_j1]
       refine ⟨rfl, rfl, hb3, ?_, ?_, ?_⟩
@@ -1123,7 +1108,7 @@ theorem completeness (n : ℕ) :
       rw [show 2 * accScalar mm input_bits 0 + (if input_bits 0 then 1 else 0) * 2 - 1
         = accScalar mm input_bits 1 from rfl] at hg
       norm_num
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      simp only [circuit_norm, Expression.eval, Loop.bit,
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       norm_num at hz_n hxp_n hyp_n hl1_n hl2_n hxn_n he_yAFP
       rw [hz_n, he_z0, he_xA0, hxp_n, hyp_n, hl1_n, hl2_n, hxn_n, he_yAFP,
@@ -1140,7 +1125,7 @@ theorem completeness (n : ℕ) :
       rw [show 2 * accScalar mm input_bits n + (if input_bits n then 1 else 0) * 2 - 1
         = accScalar mm input_bits (n + 1) from rfl] at hg
       norm_num
-      simp only [circuit_norm, Expression.eval, Loop.bit, yADouble,
+      simp only [circuit_norm, Expression.eval, Loop.bit,
         apply_ite (Expression.eval env.toEnvironment),
         DoubleAndAdd.yA, DoubleAndAdd.xR]
       simp only [if_neg (Nat.pos_iff_ne_zero.mp hn)]
