@@ -680,15 +680,11 @@ theorem soundness (B : MulFixed.FixedBase) :
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum ks j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
-      apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
-          ((MulFixed.partialSum ks j • B.point).x, (MulFixed.partialSum ks j • B.point).y)
-        = ((MulFixed.partialSum ks (j + 1) • B.point).x,
-            (MulFixed.partialSum ks (j + 1) • B.point).y)
-      rw [sw_add_coords, ← add_nsmul,
-        show t + MulFixed.partialSum ks j = MulFixed.partialSum ks (j + 1) by
-          rw [MulFixed.partialSum, hval]; omega]
+      rw [Point.nsmul_add_nsmul B.onCurve]
+      congr 1
+      rw [MulFixed.partialSum, hval]
+      omega
   -- the window-84 point
   have hwindow84 : (MulFixed.RunningSumCoords.coordsRow
       { zCur := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10),
@@ -710,8 +706,6 @@ theorem soundness (B : MulFixed.FixedBase) :
     rw [← hP84_eq]; exact hpx84
   replace hpy84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) = (t84 • B.point).y := by
     rw [← hP84_eq]; exact hpy84
-  have hP84_ne : t84 • B.point ≠ 0 := by
-    rw [← hP84_eq]; exact B.windowPoint_ne_zero hk84_lt
   obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = MulFixed.partialSum ks 83 := ⟨_, rfl⟩
   have hS83_lt : S83 < 2 * 8 ^ (83 + 1) := by
     rw [hS83_def]; exact MulFixed.partialSum_lt ks 83 fun _ _ => hks_lt _
@@ -734,17 +728,15 @@ theorem soundness (B : MulFixed.FixedBase) :
          y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } :
         Point Fp).Valid := by
     rw [hpx84, hpy84]
-    apply Or.inl
-    rw [Point.onCurve_iff]
-    exact SWPoint.onCurve_of_ne_zero hP84_ne
+    exact Point.valid_nsmul (.inl B.onCurve) t84
   have hValidAcc :
-      ({ x := Expression.eval env
-            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
-          y := Expression.eval env
-            (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
+    ({ x := Expression.eval env
+          (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
+        y := Expression.eval env
+          (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
         : Point Fp).Valid := by
     rw [hacc83]
-    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
+    exact Point.valid_nsmul (.inl B.onCurve) S83
   have h_final := h_add ⟨hValidP, hValidAcc⟩
   have hresult :
       ({ x := Expression.eval env
@@ -769,11 +761,10 @@ theorem soundness (B : MulFixed.FixedBase) :
       hpx84, hpy84, hacc83]
     show ShortWeierstrass.add pallasA ((t84 • B.point).x, (t84 • B.point).y)
         ((S83 • B.point).x, (S83 • B.point).y) = ((V • B.point).x, (V • B.point).y)
-    rw [sw_add_coords]
     have hpt : t84 • B.point + S83 • B.point = V • B.point := by
-      rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul, ← hks84,
+      rw [Point.nsmul_add_nsmul B.onCurve, ht84_def, hS83_def, ← B.add_natCast_val_nsmul, ← hks84,
         windowScalar_partialSum ks, ← hV_def, natCast_val_nsmul]
-    rw [hpt]
+    exact FixedBase.add_coords_eq hpt
   -- running-sum cells via the floor-division telescoping
   have hz85' : zf 85 = 0 := by rw [hzf85]; exact h_z85
   have hzdiv : ∀ w, w ≤ 83 →
@@ -1062,17 +1053,11 @@ theorem completeness (B : MulFixed.FixedBase) :
           rw [hpx, hacc]
           show (t • B.point).x ≠ (MulFixed.partialSum (windowVal input) j • B.point).x
           exact B.nsmul_x_ne hS_pos (by omega) hsum_card⟩
-      apply Point.ext_coords
       rw [h_spec.2, hpx, hpy, hacc]
-      show ShortWeierstrass.add pallasA ((t • B.point).x, (t • B.point).y)
-          ((MulFixed.partialSum (windowVal input) j • B.point).x,
-            (MulFixed.partialSum (windowVal input) j • B.point).y)
-        = ((MulFixed.partialSum (windowVal input) (j + 1) • B.point).x,
-            (MulFixed.partialSum (windowVal input) (j + 1) • B.point).y)
-      rw [sw_add_coords, ← add_nsmul,
-        show t + MulFixed.partialSum (windowVal input) j
-          = MulFixed.partialSum (windowVal input) (j + 1) by
-          rw [MulFixed.partialSum, hval]; omega]
+      rw [Point.nsmul_add_nsmul B.onCurve]
+      congr 1
+      rw [MulFixed.partialSum, hval]
+      omega
   -- honest running-sum cells
   obtain ⟨h0z, h0x, h0y, h0u⟩ := env_get_rowTail h_t0
   have hz0cell : env.get i₀ = zValue input 0 := by rw [h_z0w, zValue_zero]
@@ -1126,8 +1111,6 @@ theorem completeness (B : MulFixed.FixedBase) :
     convert this using 4
   -- window-84 point opaque
   obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ, t = (MulFixed.windowScalar 84 (windowVal input 84)).val := ⟨_, rfl⟩
-  have hP84_ne : t84 • B.point ≠ 0 := by
-    rw [ht84_def]; exact B.windowPoint_ne_zero (windowVal_lt input 84)
   have hpx84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1) = (t84 • B.point).x := by
     rw [hw84x, ht84_def]; rfl
   have hpy84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) = (t84 • B.point).y := by
@@ -1137,9 +1120,7 @@ theorem completeness (B : MulFixed.FixedBase) :
          y := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1) } :
         Point Fp).Valid := by
     rw [hpx84, hpy84]
-    apply Or.inl
-    rw [Point.onCurve_iff]
-    exact SWPoint.onCurve_of_ne_zero hP84_ne
+    exact Point.valid_nsmul (.inl B.onCurve) t84
   have hValidAcc :
       ({ x := Expression.eval env.toEnvironment
             (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).x,
@@ -1147,7 +1128,7 @@ theorem completeness (B : MulFixed.FixedBase) :
             (varFromOffset Point (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10 + 4 + 2 + 2)).y }
         : Point Fp).Valid := by
     rw [hacc83]
-    exact Or.inl (B.nsmul_onCurve hS83_pos hS83_card)
+    exact Point.valid_nsmul (.inl B.onCurve) S83
   -- per-window constraint obligations (windows `1..83`)
   have hB : ∀ (j : ℕ), j < 83 →
       Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
@@ -1222,12 +1203,11 @@ theorem completeness (B : MulFixed.FixedBase) :
     show ShortWeierstrass.add pallasA ((t84 • B.point).x, (t84 • B.point).y)
         ((S83 • B.point).x, (S83 • B.point).y)
       = (((show Fp from input).val • B.point).x, ((show Fp from input).val • B.point).y)
-    rw [sw_add_coords]
     have hpt : t84 • B.point + S83 • B.point = (show Fp from input).val • B.point := by
-      rw [ht84_def, hS83_def, ← add_nsmul, ← B.add_natCast_val_nsmul,
+      rw [Point.nsmul_add_nsmul B.onCurve, ht84_def, hS83_def, ← B.add_natCast_val_nsmul,
         windowScalar_partialSum (windowVal input),
         sum_windowVal (α := (show Fp from input)) hα, natCast_val_nsmul]
-    rw [hpt]
+    exact FixedBase.add_coords_eq hpt
   -- the running-sum cells, honest values
   have hz43 : env.get (i₀ + 1 + 4 + 41 * 10) = zValue input 43 := hzCellSucc 41 (by omega)
   have hz44 : env.get (i₀ + 1 + 4 + 42 * 10) = zValue input 44 := hzCellSucc 42 (by omega)
