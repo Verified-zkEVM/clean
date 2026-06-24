@@ -138,8 +138,7 @@ def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [Cir
       and_intros
       · intro a; ac_rfl
       · intro a n; rfl
-      · try simp only [circuit_norm]; try grind; done)
-    :
+      · try simp only [circuit_norm]; try grind; done) :
     ElaboratedCircuit F Input Output circuit where
   localLength := data.localLength
   output := data.output

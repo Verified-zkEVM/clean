@@ -191,11 +191,11 @@ designed to be used for proving soundness by adding one table after another.
 -/
 def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawChannel F) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
-    ∃ extraInteractions : List (Interaction F),
-      -- the total of known + unknown interactions is balanced
-      BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
-      -- the extra interactions are with the same channel.
-      (∀ i ∈ extraInteractions, i.channel = channel) ∧
+  ∃ extraInteractions : List (Interaction F),
+    -- the total of known + unknown interactions is balanced
+    BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
+    -- the extra interactions are with the same channel.
+    (∀ i ∈ extraInteractions, i.channel = channel) ∧
     -- additionally, we _assume_ that either the requirements on future interactions hold unconditionally,
     -- or that known interactions do not assume guarantees on the same channel.
     -- this restricts the order in which tables can be added. essentially, it requires that the `extraTables`
@@ -205,8 +205,7 @@ def PartialBalancedChannel [DecidableEq F] (tables : Tables F) (channel : RawCha
 
 /-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : Tables F} {channel : RawChannel F} :
-    BalancedInteractions (tables.interactionsWith channel) →
-    PartialBalancedChannel tables channel := by
+    BalancedInteractions (tables.interactionsWith channel) → PartialBalancedChannel tables channel := by
   intro balanced
   use []
   simp [balanced]
@@ -221,7 +220,8 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
   PartialBalancedChannel (.cons table tables same_data) channel →
   OrderedChannelLt channel tables.components [table.component] →
     PartialBalancedChannel tables channel := by
-  rintro table_constraints ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩ not_in_reqs_or
+  rintro table_constraints ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩
+    not_in_reqs_or
   use table.interactionsWith channel ++ extraInteractions
   simp only [circuit_norm] at *
   simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
@@ -238,7 +238,7 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
   rcases extra_reqs_or_no_grts with no_grts | extra_reqs
   · simp_all
   · right
-    have channel_reqs := table.requirements_of_not_mem table_constraints channel_not_in_reqs
+    have channel_reqs := table.requirements_of_not_mem_of_constraints table_constraints channel_not_in_reqs
     rw [Table.channelRequirements_iff_forall, same_data] at channel_reqs
     exact ⟨ channel_reqs, extra_reqs ⟩
 
@@ -281,7 +281,7 @@ lemma guarantees_of_requirements_cons [DecidableEq F]
   simp only [circuit_norm] at ordered_channel
   rcases ordered_channel with grts | reqs
   · exact table.guarantees_of_not_mem grts
-  replace reqs := table.requirements_of_not_mem table_constraints reqs
+  replace reqs := table.requirements_of_not_mem_of_constraints table_constraints reqs
   -- there's a special case to discard where the guarantees are trivially satisfied
   rcases partial_balance with ⟨ extraInteractions, balanced, same_channel, grts | extra_reqs ⟩
   · simp only [circuit_norm] at grts
@@ -367,7 +367,7 @@ lemma partialBalancedChannel_of_sublist [DecidableEq F] {subtables tables : Tabl
       apply perm.symm.subset
       simp [ht]
     rw [← tables.same_data _ ht', ← Table.channelRequirements_iff_forall]
-    apply Table.requirements_of_not_mem
+    apply Table.requirements_of_not_mem_of_constraints
     exact otherConstraints _ ht
     exact otherReqs _ ht
   -- balance

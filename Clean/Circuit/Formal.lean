@@ -1,12 +1,11 @@
 import Clean.Circuit.Explicit
 
-open Lean Meta Elab Tactic
-
 variable {F : Type} [Field F] {α β : Type} {n : ℕ}
 
 section
 variable {Input Output : TypeMap}
 
+open Lean Meta Elab Tactic in
 elab "unfold_formal_circuit_consts" : tactic => do
   withMainContext do
     let noUnfold ← labelled `explicit_circuit_no_unfold
@@ -415,14 +414,15 @@ theorem inChannelsOrRequirements_channelsWithRequirements
   ∀ input_var offset env,
     ConstraintsHold.Shallow env ((circuit.main input_var).operations offset) →
     ((circuit.main input_var).operations offset).InChannelsOrRequirements
-      circuit.channelsWithRequirements env :=
-  fun input_var offset env => (circuit.requirementsChannelsLawful input_var offset).2.2 env
+      circuit.channelsWithRequirements env := by
+  intro input_var offset env
+  exact (circuit.requirementsChannelsLawful input_var offset).2.2 env
 
 theorem mem_channelsWithGuarantees_or_mem_channelsWithRequirements_of_mem_shallowChannels
   (circuit : FormalCircuitBase F Input Output) :
   ∀ input_var offset,
-      let ops := (circuit.main input_var).operations offset
-      ∀ channel ∈ ops.shallowChannels,
+    let ops := (circuit.main input_var).operations offset
+    ∀ channel ∈ ops.shallowChannels,
       channel ∈ circuit.channelsWithGuarantees ∨ channel ∈ circuit.channelsWithRequirements := by
   intro input_var offset
   dsimp only

@@ -32,9 +32,6 @@ def concat
     · intro a n m
       apply h_localLength_stable
   channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
-  requirementsChannelsLawful := by
-    intro input offset
-    simp only [circuit_norm]
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
@@ -102,7 +99,7 @@ lemma weakenSpec_assumptions
 lemma weakenSpec_channelsWithRequirements
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  rfl
+  simp only [weakenSpec]
 end FormalCircuit
 
 namespace GeneralFormalCircuit

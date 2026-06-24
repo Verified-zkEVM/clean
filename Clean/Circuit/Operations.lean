@@ -803,27 +803,16 @@ def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
 
 lemma mem_interactions_of_mem_shallowInteractions {i : AbstractInteraction F} {ops : Operations F} :
     i ∈ ops.shallowInteractions → i ∈ ops.interactions := by
-  induction ops using induct with
-  | empty => simp [shallowInteractions]
-  | witness m c ops ih => simpa [shallowInteractions, interactions] using ih
-  | assert e ops ih => simpa [shallowInteractions, interactions] using ih
-  | lookup l ops ih => simpa [shallowInteractions, interactions] using ih
-  | interact i' ops ih =>
-      simp only [shallowInteractions, interactions, List.mem_cons]
-      intro h
-      rcases h with rfl | h
-      · exact Or.inl rfl
-      · exact Or.inr (ih h)
-  | subcircuit s ops ih =>
-      simp only [shallowInteractions, interactions, List.mem_append]
-      intro h
-      exact Or.inr (ih h)
+  induction ops using induct <;> (
+    simp_all [shallowInteractions, interactions]
+    try tauto)
 
 lemma guarantees_of_fullGuarantees {env : Environment F} {ops : Operations F} :
     ops.FullGuarantees env → ops.Guarantees env := by
-  rw [guarantees_iff_forall_mem]
-  intro h i hi
-  exact h i (mem_interactions_of_mem_shallowInteractions hi)
+  rw [guarantees_iff_forall_mem, FullGuarantees]
+  intro grts i hi
+  apply grts
+  exact mem_interactions_of_mem_shallowInteractions hi
 
 -- TODO rename to ShallowRequirements
 @[circuit_norm]
@@ -1156,9 +1145,17 @@ def RequirementsChannelsLawful (ops : Operations F)
     (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
   -- The `channelsWithRequirements` cover all subcircuit interactions that add requirements.
   ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-  -- Guarantee and requirement channel lists cover all shallow interactions.
+
+  -- Together, the two channel lists cover all interactions.
+  -- Even if the conditions so far theoretically allow it, we must not leave out any channels
+  -- we interacted with from the combination of both lists. This is because "did not interact
+  -- with a given channel" is important knowledge during end-to-end proofs, when we need to prove
+  -- that _all_ interactions with a given channel have some property.
+  -- (If this ever becomes too restrictive for real circuits, we can relax by introducing a third
+  -- list of "other channels".)
   (∀ channel ∈ ops.shallowChannels,
     channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
+
   -- The `channelsWithRequirements` cover all shallow interactions that add requirements, under
   -- the local constraints that may decide whether a conditional interaction is active.
   ∀ env, ConstraintsHold.Shallow env ops →

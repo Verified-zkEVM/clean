@@ -55,10 +55,9 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
 
   tables_channel : tables.Forall fun table =>
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
-      ⟨ channel,
-        [(pullIf (channel:=channel) enabled pull).toRaw,
-          (pushIf (channel:=channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels ∧
-      ∀ env, table.operations.ConstraintsHold env →
+      ⟨ channel, [(channel.pulledIf enabled pull).toRaw, (channel.pushedIf enabled push).toRaw] ⟩ ∈
+        table.circuit.exposedChannels table.rowInputVar table.rowOffset ∧
+      ∀ env, table.rowOperations.ConstraintsHold env →
         Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1
 
   -- the verifier pulls and pushes to the channel, and doesn't push anything else
@@ -237,20 +236,6 @@ variable {vm : VmTables F PublicIO}
 @[circuit_norm] abbrev allTables (vm : VmTables F PublicIO) : List (Component F) :=
   vm.toEnsemble.allTables
 
-private theorem list_forall_mem {α : Type*} {P : α → Prop} :
-    ∀ {xs : List α}, xs.Forall P → ∀ {x}, x ∈ xs → P x
-  | [], _, _, h => by cases h
-  | head :: [], h_forall, _, h_mem => by
-      simp only [List.mem_singleton] at h_mem
-      subst h_mem
-      simpa [List.Forall] using h_forall
-  | head :: next :: tail, h_forall, _, h_mem => by
-      change P head ∧ (next :: tail).Forall P at h_forall
-      simp only [List.mem_cons] at h_mem
-      rcases h_mem with rfl | h_mem
-      · exact h_forall.1
-      · exact list_forall_mem h_forall.2 (by simpa [List.mem_cons] using h_mem)
-
 theorem tables_channel_of_mem (vm : VmTables F PublicIO) {table} (table_mem : table ∈ vm.tables) :
     ∃ enabled : Expression F, ∃ pull push : Var vm.Message F,
       ⟨ vm.channel,
@@ -258,7 +243,10 @@ theorem tables_channel_of_mem (vm : VmTables F PublicIO) {table} (table_mem : ta
           (pushIf (channel:=vm.channel) enabled push).toRaw] ⟩ ∈ table.exposedChannels ∧
       ∀ env, table.operations.ConstraintsHold env →
         Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1 := by
-  exact list_forall_mem vm.tables_channel table_mem
+  have h := vm.tables_channel
+  simp_rw [List.forall_iff_forall_mem] at h
+  simp_rw [table.constraintsHold_iff]
+  exact h _ table_mem
 
 noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
     (table_mem : table ∈ vm.tables) : VmStep vm.Message F where
@@ -588,7 +576,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     apply balancedInteractions_of_perm balance
     apply List.zip_flattenPairs_perm <| witness.pushes_length ▸ witness.pulls_length.symm
   -- we fill in the conditions on pulls and pushes in `guarantees_of_requirements_of_requirements_of_guarantees`
-  have grts_of_reqs := guarantees_of_requirements_of_requirements_of_guarantees_gated
+  have grts_of_reqs := guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff
     vm.channel.toRaw witness.pulls witness.pushes balance witness.data
     (by simp [witness.pulls_length, witness.pushes_length])
     witness.pulls_channel witness.pushes_channel

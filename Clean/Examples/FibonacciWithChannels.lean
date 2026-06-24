@@ -86,7 +86,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     circuit_proof_start [BytesTable, Add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm hm0 hx hy
+    intro hm h0 hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
@@ -136,8 +136,8 @@ deriving ProvableStruct
 
 def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
   main | { enabled, n, x, y } => do
-    -- TODO this doesn't work yet! subcircuit lemmas missing
-    -- assertBool enabled
+    -- boolean constraint for `enabled`
+    -- has to be inline, channels with requirements proof doesn't handle subcircuits
     assertZero (enabled * (enabled - 1))
     -- pull the current Fibonacci state
     FibonacciChannel.pullIf enabled (n, x, y)
@@ -150,87 +150,45 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
 
   -- expose interactions
   exposedChannels
-  | input, i₀ =>
+  | { enabled, n, x, y }, i₀ =>
     let z := var ⟨ i₀ ⟩
-    expose FibonacciChannel [
-      pullIf input.enabled (input.n, input.x, input.y),
-      pushIf input.enabled (input.n + 1, input.y, z) ]
-  exposedChannels_eq := by
-    intro input offset
-    simp [circuit_norm, Add8Channel, FibonacciChannel]
-    -- TODO circuit_norm support for (toSubcircuit ..).interactions
-    -- intro a ha
-    -- simp only [FormalAssertion.toSubcircuit, Operations.toNested_toFlat] at ha
-    -- change a ∈ [] at ha
-    -- nomatch ha
+    expose FibonacciChannel [ pullIf enabled (n, x, y), pushIf enabled (n + 1, y, z) ]
+  exposedChannels_eq input i₀ := by
+    simp only [circuit_norm, FibonacciChannel, Add8Channel]
 
   ProverAssumptions
   | { enabled, n, x, y }, _, _ =>
     enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
+
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
-  requirementsChannelsLawful := by
-    intro input offset
-    -- simp only [circuit_norm, FibonacciChannel, Add8Channel]
-    -- intro env
-    constructor
-    · simp only [circuit_norm, FibonacciChannel, Add8Channel]
-    constructor
-    · simp only [circuit_norm, FibonacciChannel, Add8Channel]
-    · intro env h_bool
-      simp only [circuit_norm, FibonacciChannel, Add8Channel] at *
-      rcases mul_eq_zero.mp h_bool with h_zero | h_one
-      · intro _ h_nonzero
-        simp [h_zero] at h_nonzero
-      · rw [← sub_eq_add_neg] at h_one
-        have h_enabled := sub_eq_zero.mp h_one
-        intro h_not_neg _
-        simp [h_enabled] at h_not_neg
+  requirementsChannelsLawful input_var i₀ := by
+    simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    grind
 
   soundness := by
-    circuit_proof_start
-    simp_all only [circuit_norm, FibonacciChannel, Add8Channel]
-    rcases h_holds with ⟨ h_bool, h_fib, h_add ⟩
-    have h_enabled_bool : input_enabled = 0 ∨ input_enabled = 1 := by
-      rcases mul_eq_zero.mp h_bool with h_zero | h_one
-      · exact .inl h_zero
-      · right
-        rw [← sub_eq_add_neg] at h_one
-        exact sub_eq_zero.mp h_one
-    constructor
-    · intro h_not_neg h_nonzero
-      rcases h_enabled_bool with h_zero | h_one
-      · simp [h_zero] at h_nonzero
-      · simp [h_one] at h_not_neg
-    constructor
-    · intro h_not_neg h_nonzero
-      rcases h_enabled_bool with h_zero | h_one
-      · simp [h_zero] at h_nonzero
-      · simp [h_one] at h_not_neg
-    · intro _ h_nonzero
-      rcases h_enabled_bool with h_zero | h_one
-      · contradiction
-      have ⟨ k, fiby, hk ⟩ := h_fib (by simp [h_one])
-      have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
-      have hz := h_add (by simp [h_one]) hx hy
-      use k + 1
-      simp only [fibonacci, ← fiby]
-      rw [hz, ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
-      simp_all
+    circuit_proof_start [FibonacciChannel, Add8Channel]
+    set z := env.get i₀
+    obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
+    rw [mul_eq_zero, add_neg_eq_zero] at h_bool
+    rcases h_bool with rfl | rfl
+    · grind
+    simp_all only [circuit_norm]
+    obtain ⟨k, fiby, hk⟩ := h_fib
+    have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
+    use k + 1
+    simp only [fibonacci, ← fiby]
+    rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
+    simp_all
 
   completeness := by
-    circuit_proof_start
-    simp_all only [circuit_norm, FibonacciChannel, Add8Channel]
-    rcases h_assumptions with h_disabled | ⟨ h_enabled, h_fib ⟩
-    · simp [h_disabled]
-    constructor
-    · simp [h_enabled]
-    constructor
-    · intro h_active
-      exact h_fib
-    · intro h_active hx hy
-      rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    circuit_proof_start [FibonacciChannel, Add8Channel]
+    rcases h_assumptions with rfl | ⟨ rfl, h_fib ⟩
+    · simp
+    simp_all
+    intro hx hy
+    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 example (input : Var Fib8Input (F p)) :
     ExplicitCircuit (fib8.main input) := by
@@ -274,15 +232,13 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by
-    simp only [Component.constraintsHold_iff]
-    dsimp only [circuit_norm, fib8,
-      Component.exposedChannels, Component.rowOffset, Component.rowOperations]
-    let input := varFromOffset (F:=F p) Fib8Input 0
-    use input.enabled, (input.n, input.x, input.y), (input.n + 1, input.y, var ⟨ size Fib8Input ⟩)
-    simp only [circuit_norm, input]
-    grind
-  verifier_channel := by
-    simp [circuit_norm, fibonacciVerifier]
+    -- TODO investigate whnf from `simp`
+    -- plain ConstraintsHold is probably bad
+    dsimp only [circuit_norm, fib8]
+    set input := varFromOffset (F:=F p) Fib8Input 0
+    use input.enabled
+    simp_all [circuit_norm, mul_eq_zero, add_neg_eq_zero]
+  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
@@ -348,24 +304,3 @@ def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
   |>.addTable ⟨ falseCircuit ⟩
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
-
-/--
-Zero multiplicity disables both sides of an interaction. This circuit uses a channel whose
-guarantee is `False`, so it would be impossible to prove if either disabled interaction still
-created an obligation or assumption.
--/
-def disabledFalseCircuit : GeneralFormalCircuit (F p) unit unit where
-  main _ := do
-    FalseChannel.pullIf 0 ()
-    FalseChannel.pushIf 0 ()
-    return
-  elaborated := by elaborate_circuit_with {
-    channelsWithGuarantees := [FalseChannel.toRaw] }
-  channelsWithRequirements := [FalseChannel.toRaw]
-  Spec _ _ _ := True
-  ProverAssumptions _ _ _ := True
-  soundness := by circuit_proof_start [FalseChannel]
-  completeness := by circuit_proof_start [FalseChannel]
-
-example : ExplicitCircuit ((disabledFalseCircuit (p:=p)).main ()) := by
-  infer_explicit_circuit

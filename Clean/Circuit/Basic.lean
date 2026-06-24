@@ -1,5 +1,4 @@
 import Clean.Circuit.Operations
-import Clean.Utils.Field
 import Mathlib.Control.Monad.Writer
 
 variable {F : Type} [Field F] {α β : Type} {n : ℕ}

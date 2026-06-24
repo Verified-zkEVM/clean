@@ -67,11 +67,10 @@ lemma inChannelsOrRequirements_toFlat {env : Environment F} {ops : Operations F}
 lemma shallowConstraints_of_constraintsHoldFlat {env : Environment F} {ops : Operations F} :
     ConstraintsHoldFlat env ops.toFlat → ConstraintsHold.Shallow env ops := by
   intro h_constraints
-  rw [FlatOperation.constraintsHoldFlat_iff_forall_mem] at h_constraints
+  rw [FlatOperation.constraintsHoldFlat_iff_forall_mem,
+    Operations.constraints_toFlat, Operations.lookups_toFlat,
+    Operations.forall_constraints_iff, Operations.forall_lookups_iff] at h_constraints
   rw [constraintsHold_shallow_iff_forall_mem]
-  rw [Operations.constraints_toFlat, Operations.lookups_toFlat] at h_constraints
-  rw [Operations.forall_constraints_iff] at h_constraints
-  rw [Operations.forall_lookups_iff] at h_constraints
   constructor
   · exact h_constraints.1.1
   · intro l h_mem
@@ -688,40 +687,34 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsWithRequirements
 theorem FormalCircuit.toSubcircuit_channelsLawful
     (circuit : FormalCircuit F Input Output) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  simp only [Subcircuit.ChannelsLawful, FormalCircuit.toSubcircuit, Operations.toNested_toFlat]
   constructor
   · intro env
-    simp only [FormalCircuit.toSubcircuit]
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    rw [FlatOperation.inChannelsOrGuarantees_toFlat]
     exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env h_constraints
-    simp only [FormalCircuit.toSubcircuit] at h_constraints ⊢
-    rw [Operations.toNested_toFlat] at h_constraints
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.in_channels_or_requirements_full input_var n env
-      (Circuit.constraintsHold_toFlat_iff.mp h_constraints)
-  · simp only [FormalCircuit.toSubcircuit]
-    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+    rw [Circuit.constraintsHold_toFlat_iff] at h_constraints
+    rw [FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.in_channels_or_requirements_full_of_constraints h_constraints
+  · rw [Operations.channels_toFlat]
     exact circuit.channels_subset input_var n
 
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_channelsLawful
     (circuit : FormalAssertion F Input) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  simp only [Subcircuit.ChannelsLawful, FormalAssertion.toSubcircuit, Operations.toNested_toFlat]
   constructor
   · intro env
-    simp only [FormalAssertion.toSubcircuit]
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    rw [FlatOperation.inChannelsOrGuarantees_toFlat]
     exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env h_constraints
-    simp only [FormalAssertion.toSubcircuit] at h_constraints ⊢
-    rw [Operations.toNested_toFlat] at h_constraints
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.in_channels_or_requirements_full input_var n env
+    rw [FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.in_channels_or_requirements_full_of_constraints
       (Circuit.constraintsHold_toFlat_iff.mp h_constraints)
-  · simp only [FormalAssertion.toSubcircuit]
-    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+  · rw [Operations.channels_toFlat]
     exact circuit.channels_subset input_var n
 
 @[circuit_norm]
@@ -729,20 +722,18 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_channelsLawful
     {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).ChannelsLawful := by
+  simp only [Subcircuit.ChannelsLawful, GeneralFormalCircuit.WithHint.toSubcircuit,
+    Operations.toNested_toFlat]
   constructor
   · intro env
-    simp only [GeneralFormalCircuit.WithHint.toSubcircuit]
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrGuarantees_toFlat]
+    rw [FlatOperation.inChannelsOrGuarantees_toFlat]
     exact circuit.in_channels_or_guarantees_full input_var n env
   constructor
   · intro env h_constraints
-    simp only [GeneralFormalCircuit.WithHint.toSubcircuit] at h_constraints ⊢
-    rw [Operations.toNested_toFlat] at h_constraints
-    rw [Operations.toNested_toFlat, FlatOperation.inChannelsOrRequirements_toFlat]
-    exact circuit.in_channels_or_requirements_full input_var n env
+    rw [FlatOperation.inChannelsOrRequirements_toFlat]
+    exact circuit.in_channels_or_requirements_full_of_constraints
       (Circuit.constraintsHold_toFlat_iff.mp h_constraints)
-  · simp only [GeneralFormalCircuit.WithHint.toSubcircuit]
-    rw [Operations.toNested_toFlat, Operations.channels_toFlat]
+  · rw [Operations.channels_toFlat]
     exact circuit.channels_subset input_var n
 
 @[circuit_norm]

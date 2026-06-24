@@ -130,10 +130,10 @@ lemma emitted_assumeGuarantees (mult : Expression F) (msg : Message (Expression 
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := -1, msg, assumeGuarantees := true }
 
-/-- Conditional pull. When `gate = 1`, this is a pull; when `gate = 0`, it is disabled. -/
-def pullIf {channel : Channel F Message} (gate : Expression F) (msg : Message (Expression F)) :
+/-- Conditional pull. When `enabled = 1`, this is a pull; when `enabled = 0`, it is disabled. -/
+def pullIf {channel : Channel F Message} (enabled : Expression F) (msg : Message (Expression F)) :
     ChannelInteraction channel :=
-  { mult := -gate, msg, assumeGuarantees := true }
+  { mult := -enabled, msg, assumeGuarantees := true }
 
 @[circuit_norm] lemma pulled_def (msg : Message (Expression F)) :
   ({ mult := -1, msg, assumeGuarantees := true } : ChannelInteraction channel) = pulled msg := rfl
@@ -144,25 +144,23 @@ def pullIf {channel : Channel F Message} (gate : Expression F) (msg : Message (E
 @[circuit_norm] lemma pulled_assumeGuarantees (msg : Message (Expression F)) :
   (pulled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
 
-@[circuit_norm] lemma pullIf_def (gate : Expression F) (msg : Message (Expression F)) :
-  ({ mult := -gate, msg, assumeGuarantees := true } : ChannelInteraction channel) = pullIf gate msg := rfl
-@[circuit_norm] lemma pulled_eq_pullIf_one (msg : Message (Expression F)) :
-  (pulled msg : ChannelInteraction channel) = pullIf 1 msg := rfl
-@[circuit_norm] lemma pullIf_mult (gate : Expression F) (msg : Message (Expression F)) :
-  (pullIf gate msg : ChannelInteraction channel).mult = -gate := rfl
-@[circuit_norm] lemma pullIf_msg (gate : Expression F) (msg : Message (Expression F)) :
-  (pullIf gate msg : ChannelInteraction channel).msg = msg := rfl
-@[circuit_norm] lemma pullIf_assumeGuarantees (gate : Expression F) (msg : Message (Expression F)) :
-  (pullIf gate msg : ChannelInteraction channel).assumeGuarantees = true := rfl
+@[circuit_norm] lemma pullIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+  ({ mult := -enabled, msg, assumeGuarantees := true } : ChannelInteraction channel) = pullIf enabled msg := rfl
+@[circuit_norm] lemma pullIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
+  (pullIf enabled msg : ChannelInteraction channel).mult = -enabled := rfl
+@[circuit_norm] lemma pullIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
+  (pullIf enabled msg : ChannelInteraction channel).msg = msg := rfl
+@[circuit_norm] lemma pullIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
+  (pullIf enabled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
 
 /-- Convenience alias for interaction with multiplicity `1`. -/
 def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := 1, msg, assumeGuarantees := false }
 
-/-- Conditional push. When `gate = 1`, this is a push; when `gate = 0`, it is disabled. -/
-def pushIf {channel : Channel F Message} (gate : Expression F) (msg : Message (Expression F)) :
+/-- Conditional push. When `enabled = 1`, this is a push; when `enabled = 0`, it is disabled. -/
+def pushIf {channel : Channel F Message} (enabled : Expression F) (msg : Message (Expression F)) :
     ChannelInteraction channel :=
-  { mult := gate, msg, assumeGuarantees := false }
+  { mult := enabled, msg, assumeGuarantees := false }
 
 @[circuit_norm] lemma pushed_def (msg : Message (Expression F)) :
   ({ mult := 1, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushed msg := rfl
@@ -175,18 +173,16 @@ def pushIf {channel : Channel F Message} (gate : Expression F) (msg : Message (E
 @[circuit_norm] lemma pushed_assumeGuarantees (msg : Message (Expression F)) :
   (pushed msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
-omit [Field F] in @[circuit_norm] lemma pushIf_def (gate : Expression F) (msg : Message (Expression F)) :
-  ({ mult := gate, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushIf gate msg := rfl
-omit [Field F] in @[circuit_norm] lemma emitted_eq_pushIf (gate : Expression F) (msg : Message (Expression F)) :
-  (emitted gate msg : ChannelInteraction channel) = pushIf gate msg := rfl
-@[circuit_norm] lemma pushed_eq_pushIf_one (msg : Message (Expression F)) :
-  (pushed msg : ChannelInteraction channel) = pushIf 1 msg := rfl
-omit [Field F] in @[circuit_norm] lemma pushIf_mult (gate : Expression F) (msg : Message (Expression F)) :
-  (pushIf gate msg : ChannelInteraction channel).mult = gate := rfl
-omit [Field F] in @[circuit_norm] lemma pushIf_msg (gate : Expression F) (msg : Message (Expression F)) :
-  (pushIf gate msg : ChannelInteraction channel).msg = msg := rfl
-omit [Field F] in @[circuit_norm] lemma pushIf_assumeGuarantees (gate : Expression F) (msg : Message (Expression F)) :
-  (pushIf gate msg : ChannelInteraction channel).assumeGuarantees = false := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+  ({ mult := enabled, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushIf enabled msg := rfl
+omit [Field F] in @[circuit_norm] lemma emitted_eq_pushIf (enabled : Expression F) (msg : Message (Expression F)) :
+  (emitted enabled msg : ChannelInteraction channel) = pushIf enabled msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushIf enabled msg : ChannelInteraction channel).mult = enabled := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushIf enabled msg : ChannelInteraction channel).msg = msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushIf enabled msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
   _root_.emitted (channel := channel) mult msg
@@ -194,6 +190,10 @@ omit [Field F] in @[circuit_norm] lemma pushIf_assumeGuarantees (gate : Expressi
   _root_.pulled (channel := channel) msg
 @[circuit_norm] def Channel.pushed (channel : Channel F Message) msg :=
   _root_.pushed (channel := channel) msg
+@[circuit_norm] def Channel.pulledIf (channel : Channel F Message) enabled msg :=
+  _root_.pullIf (channel := channel) enabled msg
+@[circuit_norm] def Channel.pushedIf (channel : Channel F Message) enabled msg :=
+  _root_.pushIf (channel := channel) enabled msg
 
 namespace ChannelInteraction
 def toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
@@ -215,7 +215,7 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
   Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
-      channel.Guarantees (eval env i.msg) env.data
+    channel.Guarantees (eval env i.msg) env.data
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -295,7 +295,6 @@ lemma eval_requirements {i : AbstractInteraction F} {env : Environment F} :
     (i.eval env).Requirements env.data ↔ i.Requirements env := by
   simp only [Interaction.Requirements, AbstractInteraction.eval, AbstractInteraction.Requirements]
   rfl
-
 end AbstractInteraction
 
 namespace Channel
