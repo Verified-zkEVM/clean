@@ -74,6 +74,8 @@ lemma size_verifier {ens : Ensemble F PublicIO} :
 
 @[circuit_norm] lemma mem_allTables_verifierTable:
   ens.verifierTable ∈ ens.allTables := by simp [allTables]
+lemma mem_allTables_of_mem_tables {table : Component F} :
+    table ∈ ens.tables → table ∈ ens.allTables := by simp_all [allTables]
 
 lemma verifierTable_ext {ens1 ens2 : Ensemble F PublicIO} {witness1 : EnsembleWitness ens1} {witness2 : EnsembleWitness ens2} :
     ens1.verifier = ens2.verifier →

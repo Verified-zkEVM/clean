@@ -556,8 +556,8 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_if
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
   -- pulls are either active `-1` pulls or disabled, pushes are either active `1` pushes or disabled
-  (pulls_mult : ∀ a ∈ pulls, a.mult = -1 ∨ a.mult = 0)
-  (pushes_mult : ∀ b ∈ pushes, b.mult = 1 ∨ b.mult = 0)
+  (pulls_mult : ∀ a ∈ pulls, a.mult = 0 ∨ a.mult = -1)
+  (pushes_mult : ∀ b ∈ pushes, b.mult = 0 ∨ b.mult = 1)
   -- a pair is disabled on one side iff it is disabled on the other
   (pair_zero : ∀ i (hi_p : i < pulls.length) (hi_q : i < pushes.length),
     pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
@@ -586,15 +586,15 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_if
     simp only [active_pulls, activeInteractions, List.mem_filter] at ha
     have a_mult_ne_zero : a.mult ≠ 0 := by simpa using ha.2
     rcases pulls_mult a ha.1 with h_mult | h_mult
-    · exact h_mult
     · contradiction
+    · exact h_mult
   have active_pushes_mult : ∀ b ∈ active_pushes, b.mult = 1 := by
     intro b hb
     simp only [active_pushes, activeInteractions, List.mem_filter] at hb
     have b_mult_ne_zero : b.mult ≠ 0 := by simpa using hb.2
     rcases pushes_mult b hb.1 with h_mult | h_mult
-    · exact h_mult
     · contradiction
+    · exact h_mult
   have active_len : active_pulls.length = active_pushes.length := by
     simpa [active_pulls, active_pushes] using
       activeInteractions_length_eq len_pulls_pushes pair_zero

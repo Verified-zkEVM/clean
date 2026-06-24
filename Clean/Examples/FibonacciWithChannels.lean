@@ -152,7 +152,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
   exposedChannels
   | { enabled, n, x, y }, i₀ =>
     let z := var ⟨ i₀ ⟩
-    expose FibonacciChannel [ pullIf enabled (n, x, y), pushIf enabled (n + 1, y, z) ]
+    expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
   exposedChannels_eq input i₀ := by
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
 

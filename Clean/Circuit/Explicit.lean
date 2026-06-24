@@ -421,7 +421,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
     ExplicitCircuits (F:=F) (channel.pullIf gate) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (pullIf (channel:=channel) gate msg).toRaw]
+  operations msg _ := [.interact (pulledIf (channel:=channel) gate msg).toRaw]
   channelsWithGuarantees _ _ := [channel.toRaw]
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
@@ -436,7 +436,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
     ExplicitCircuits (F:=F) (channel.pushIf gate) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (pushIf (channel:=channel) gate msg).toRaw]
+  operations msg _ := [.interact (pushedIf (channel:=channel) gate msg).toRaw]
   channelsWithGuarantees _ _ := []
 
 attribute [explicit_circuit_unfold_type] Circuit
