@@ -23,11 +23,18 @@ def operations (component : Component F) : Operations F :=
 
 def width (component : Component F) : ℕ := component.circuit.size
 
-@[circuit_norm]
-abbrev rowOffset (component : Component F) : ℕ := size component.Input
-@[circuit_norm]
-abbrev rowInputVar (component : Component F): Var component.Input F :=
+def rowOffset (component : Component F) : ℕ := size component.Input
+
+def rowInputVar (component : Component F): Var component.Input F :=
   varFromOffset component.Input 0
+
+@[circuit_norm]
+lemma rowOffset_mk (circuit : GeneralFormalCircuit F Input Output) :
+  (⟨ circuit ⟩ : Component F).rowOffset = size Input := rfl
+
+@[circuit_norm]
+lemma rowInputVar_mk (circuit : GeneralFormalCircuit F Input Output) :
+  (⟨ circuit ⟩ : Component F).rowInputVar = varFromOffset Input 0 := rfl
 
 /-- first `size Input` elements of the environment are the input -/
 @[circuit_norm]
@@ -40,9 +47,13 @@ def rowOutput (component : Component F) (row : Environment F) : component.Output
   let outputVar := (component.circuit component.rowInputVar).output component.rowOffset
   eval row outputVar
 
-@[circuit_norm]
 def rowOperations (component : Component F) : Operations F :=
   component.circuit.main (varFromOffset component.Input 0) |>.operations (size component.Input)
+
+@[circuit_norm]
+lemma rowOperations_mk (circuit : GeneralFormalCircuit F Input Output) :
+  (⟨ circuit ⟩ : Component F).rowOperations =
+    (circuit.main (varFromOffset Input 0)).operations (size Input) := rfl
 
 def Spec (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Spec (component.rowInput row) (component.rowOutput row) row.data
@@ -50,23 +61,23 @@ def Spec (component : Component F) (row : Environment F) : Prop :=
 def Assumptions (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Assumptions (component.rowInput row) row.data
 
-abbrev exposedChannels (component : Component F) : List (ExposedChannel F) :=
+def exposedChannels (component : Component F) : List (ExposedChannel F) :=
   component.circuit.exposedChannels component.rowInputVar component.rowOffset
 
 variable {component : Component F} {env : Environment F}
 
 lemma constraints_eq : component.operations.constraints = component.rowOperations.constraints := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
+  simp only [circuit_norm, rowOperations, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 
 lemma lookups_eq : component.operations.lookups = component.rowOperations.lookups := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
+  simp only [circuit_norm, rowOperations, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 
 lemma interactions_eq : component.operations.interactions = component.rowOperations.interactions := by
-  simp only [circuit_norm, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
+  simp only [circuit_norm, rowOperations, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,
     GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit, Operations.toNested_toFlat]
 

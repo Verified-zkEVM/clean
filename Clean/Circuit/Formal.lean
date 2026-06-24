@@ -30,7 +30,6 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
   exposedChannels_eq : ∀ input offset,
     ((main input).operations offset).ExposedChannelsLawful (exposedChannels input offset) := by
-    dsimp only [Operations.ExposedChannelsLawful]
     try dsimp only [main]
     simp only [circuit_norm, seval]
     try first | ac_rfl | trivial | tauto

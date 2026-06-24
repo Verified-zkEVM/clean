@@ -231,12 +231,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [⟨ fib8 ⟩]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by
-    -- TODO investigate whnf from `simp`
-    dsimp only [circuit_norm, fib8]
-    set input := varFromOffset (F:=F p) Fib8Input 0
-    use input.enabled
-    simp_all [circuit_norm, mul_eq_zero, add_neg_eq_zero]
+  tables_channel := by simp [circuit_norm, fib8, add_neg_eq_zero]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]

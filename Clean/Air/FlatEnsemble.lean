@@ -102,23 +102,23 @@ def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : 
 lemma verifierTable_constraints :
   ens.verifierTable.operations.constraints = ens.verifierOperations.constraints := by
   rw [Component.constraints_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_lookups :
   ens.verifierTable.operations.lookups = ens.verifierOperations.lookups := by
   rw [Component.lookups_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_interactions :
   ens.verifierTable.operations.interactions = ens.verifierOperations.interactions := by
   rw [Component.interactions_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_interactionsWith {channel : RawChannel F} :
   ens.verifierTable.operations.interactionsWith channel =
     ens.verifierOperations.interactionsWith channel := by
   rw [Component.interactionsWith_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
   ens.allTables.flatMap (·.circuit.channelsWithGuarantees)

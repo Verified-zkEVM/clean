@@ -1167,6 +1167,14 @@ def ExposedChannelsLawful (ops : Operations F) (exposedChannels : List (ExposedC
   (∀ exposed ∈ exposedChannels,
     ops.interactionsWith exposed.channel = exposed.interactions)
 
+@[circuit_norm ↓]
+lemma exposedChannelsLawful_expose {Message : TypeMap} [ProvableType Message]
+    (ops : Operations F) (channel : Channel F Message)
+    (interactions : List (ChannelInteraction channel)) :
+    ops.ExposedChannelsLawful (expose channel interactions) ↔
+      ops.interactionsWith channel.toRaw = interactions.map (·.toRaw) := by
+  simp only [ExposedChannelsLawful, expose, List.mem_singleton, forall_eq]
+
 theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] := by
   simp [ChannelsLawful, InChannelsOrGuarantees, SubcircuitChannelsLawful,
     subcircuitChannelsWithGuarantees, subcircuits, forAllNoOffset]
