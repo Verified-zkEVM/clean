@@ -57,7 +57,7 @@ structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [Pr
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
       ⟨ channel, [(channel.pulledIf enabled pull).toRaw, (channel.pushedIf enabled push).toRaw] ⟩ ∈
         table.circuit.exposedChannels table.rowInputVar table.rowOffset ∧
-      ∀ env, table.rowOperations.ConstraintsHold env →
+      ∀ env, ConstraintsHold.Shallow env table.rowOperations →
         Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1
 
   -- the verifier pulls and pushes to the channel, and doesn't push anything else
@@ -246,7 +246,13 @@ theorem tables_channel_of_mem (vm : VmTables F PublicIO) {table} (table_mem : ta
   have h := vm.tables_channel
   simp_rw [List.forall_iff_forall_mem] at h
   simp_rw [table.constraintsHold_iff]
-  exact h _ table_mem
+  obtain ⟨ enabled, pull, push, h_exposed, h_enabled ⟩ := h _ table_mem
+  use enabled, pull, push, h_exposed
+  intro env h_constraints
+  apply h_enabled
+  apply FlatOperation.shallowConstraints_of_constraintsHoldFlat
+  rw [Circuit.constraintsHold_toFlat_iff]
+  exact h_constraints
 
 noncomputable def step (vm : VmTables F PublicIO) (table : Component F)
     (table_mem : table ∈ vm.tables) : VmStep vm.Message F where

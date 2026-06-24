@@ -233,7 +233,6 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by
     -- TODO investigate whnf from `simp`
-    -- plain ConstraintsHold is probably bad
     dsimp only [circuit_norm, fib8]
     set input := varFromOffset (F:=F p) Fib8Input 0
     use input.enabled
