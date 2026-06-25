@@ -85,6 +85,8 @@ theorem completeness (off : Fin 8) : Completeness (F p) (main off) Assumptions :
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   main := main off
   elaborated := elaborated off
+  requirementsChannelsLawful := by
+    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
   soundness := soundness off

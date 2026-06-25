@@ -24,6 +24,8 @@ def lowerSigma0 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F 
 
 namespace LowerSigma0
 
+-- TODO: This circuit is written BADLY: it hides `main` behind `lowerSigma0`
+-- and inlines `xor32` instead of calling `Xor32.circuit` as a subcircuit.
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   lowerSigma0 x
 
