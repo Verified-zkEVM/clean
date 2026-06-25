@@ -141,8 +141,8 @@ def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F
 
 @[circuit_norm]
 def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (gate : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -gate, msg, true ⟩
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
@@ -153,8 +153,8 @@ def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F
 
 @[circuit_norm]
 def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (gate : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ gate, msg, false ⟩
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Create a new variable of an arbitrary "provable type". -/
