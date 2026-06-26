@@ -11,7 +11,8 @@ Clean is an embedded Lean DSL for writing formally verified zk (zero-knowledge) 
 ```
 Clean/
 ├── Circuit/           # Core circuit DSL and monad
-│   ├── Basic.lean     # Circuit monad, FormalCircuit, soundness/completeness definitions
+│   ├── Basic.lean     # Circuit monad
+│   ├── Formal.lean    # FormalCircuit, soundness/completeness definitions
 │   ├── Expression.lean # Expression AST (var, const, add, mul)
 │   ├── Operations.lean # Operation types (witness, assert, lookup, subcircuit)
 │   ├── Provable.lean  # ProvableType, ProvableStruct - typed circuit values
