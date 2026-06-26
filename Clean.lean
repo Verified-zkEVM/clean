@@ -42,3 +42,9 @@ import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
 import Clean.Examples.FibonacciWithChannels
 import Clean.Gadgets.SHA256.SHA256Compress
+import Clean.Halo2.Ecc
+import Clean.Halo2.Orchard
+import Clean.Halo2.Fixtures.RustPinnedCS
+import Clean.Halo2.Debug
+import Clean.Halo2.Synthesis
+import Clean.Halo2.Formal

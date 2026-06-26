@@ -1,0 +1,779 @@
+import Clean.Halo2.Synthesis
+
+/-!
+# Orchard Halo2 circuit construction in Lean
+
+This is the beginning of a direct Lean implementation of the Halo2-side Orchard
+circuit configuration.  It uses the builder from `Clean.Halo2.Pinned` rather
+than copying the Rust pinned-CS dump.
+
+The immediate target is to grow this until `orchardValueCommitCS` exactly matches
+`Clean/Halo2/Fixtures/orchard_value_commit_rust_pinned_cs.txt`, and then to
+extend the same style to the full Orchard action circuit.
+-/
+
+namespace Halo2.Orchard
+
+open Halo2.Pinned
+
+namespace FieldConst
+
+def zero := "0x0000000000000000000000000000000000000000000000000000000000000000"
+def one := "0x0000000000000000000000000000000000000000000000000000000000000001"
+def two := "0x0000000000000000000000000000000000000000000000000000000000000002"
+def three := "0x0000000000000000000000000000000000000000000000000000000000000003"
+def four := "0x0000000000000000000000000000000000000000000000000000000000000004"
+def five := "0x0000000000000000000000000000000000000000000000000000000000000005"
+def eight := "0x0000000000000000000000000000000000000000000000000000000000000008"
+def twoInv := "0x2000000000000000000000000000000011234c7e04a67c8dcc96987680000001"
+def twoPow124 := "0x0000000000000000000000000000000010000000000000000000000000000000"
+def sixtyFour := "0x0000000000000000000000000000000000000000000000000000000000000040"
+def scalarT := "0x00000000000000000000000000000000224698fc0994a8dd8c46eb2100000001"
+
+def pallasB := "0x0000000000000000000000000000000000000000000000000000000000000005"
+
+end FieldConst
+
+structure EccColumns where
+  advices : Array Pinned.Column
+  lagrangeCoeffs : Array Pinned.Column
+  constants : Pinned.Column
+  tableIdx : Pinned.Column
+  selectors : Array Nat
+
+private def allocManyAdvice : Nat → Builder → Array Pinned.Column × Builder
+  | 0, b => (#[], b)
+  | n+1, b =>
+      let (c, b) := b.adviceColumn
+      let (cs, b) := allocManyAdvice n b
+      (#[c] ++ cs, b)
+
+private def allocManyFixed : Nat → Builder → Array Pinned.Column × Builder
+  | 0, b => (#[], b)
+  | n+1, b =>
+      let (c, b) := b.fixedColumn
+      let (cs, b) := allocManyFixed n b
+      (#[c] ++ cs, b)
+
+private def allocManySelectors : Nat → Builder → Array Nat × Builder
+  | 0, b => (#[], b)
+  | n+1, b =>
+      let (c, b) := b.selector
+      let (cs, b) := allocManySelectors n b
+      (#[c] ++ cs, b)
+
+private def arrayGetD (xs : Array Pinned.Column) (i : Nat) : Pinned.Column := xs[i]!
+
+private def queryA (b : Builder) (cols : EccColumns) (i : Nat) (rot : Int := 0) : Expression × Builder :=
+  b.queryAdvice (arrayGetD cols.advices i) (.rot rot)
+
+private def queryF (b : Builder) (cols : EccColumns) (i : Nat) (rot : Int := 0) : Expression × Builder :=
+  b.queryFixed (arrayGetD cols.lagrangeCoeffs i) (.rot rot)
+
+private def querySelector (b : Builder) (cols : EccColumns) (i : Nat) : Expression × Builder :=
+  (.selector cols.selectors[i]!, b)
+
+private def selected (q : Expression) (e : Expression) : Expression := q * e
+
+/-- Configure the columns used by the Orchard value-commitment Halo2 test. -/
+def configureColumns (b : Builder) : EccColumns × Builder :=
+  let (advices, b) := allocManyAdvice 10 b
+  let b := advices.foldl (fun b col => b.enableEquality col) b
+  let (lagrangeCoeffs, b) := allocManyFixed 8 b
+  let (constants, b) := b.fixedColumn
+  let b := b.enableConstant constants
+  let (tableIdx, b) := b.fixedColumn
+  let (selectors, b) := allocManySelectors 56 b
+  ({ advices, lagrangeCoeffs, constants, tableIdx, selectors }, b)
+
+/-- First range-check table gate created by `LookupRangeCheckConfig::configure`.
+This matches the first polynomial in the Rust dump: q · (2-q)(3-q)... . -/
+def configureRangeCheck (cols : EccColumns) (b : Builder) : Builder :=
+  let (q, b) := b.queryFixed cols.tableIdx (.rot 0)
+  let poly := q * (.constant FieldConst.two - q) * (.constant FieldConst.three - q) *
+    (.constant FieldConst.four - q) * (.constant FieldConst.five - q)
+  b.createGate [poly]
+
+/-- A first direct transcription of `EccChip::configure`'s custom gates.  This is
+incomplete, but unlike the previous scaffold it is generated from circuit-style
+configuration code and uses Halo2 query allocation. -/
+def configureEccChipAt (selectorOffset : Nat) (cols : EccColumns) (b : Builder) : Builder :=
+  let (qWitness, b) := querySelector b cols selectorOffset
+  let (x, b) := queryA b cols 0
+  let (y, b) := queryA b cols 1
+  let b := b.createGate [selected qWitness (y*y - x*x*x - .constant FieldConst.pallasB)]
+  let (qAdd, b) := querySelector b cols (selectorOffset + 1)
+  let (x0, b) := queryA b cols 0
+  let (y0, b) := queryA b cols 1
+  let (x1, b) := queryA b cols 2
+  let (y1, b) := queryA b cols 3
+  let (lambda, b) := queryA b cols 4
+  let polySlope := (y1 - y0) - lambda * (x1 - x0)
+  b.createGate [selected qAdd polySlope]
+
+def configureEccChip (cols : EccColumns) (b : Builder) : Builder :=
+  configureEccChipAt 0 cols b
+
+/-- Construct the pinned constraint-system portion for the Orchard value-commitment
+VK test from idiomatic Halo2 configuration steps. -/
+def orchardValueCommitCS : ConstraintSystem :=
+  let b : Builder := {}
+  let (cols, b) := configureColumns b
+  let b := configureRangeCheck cols b
+  let b := configureEccChip cols b
+  b.cs
+
+end Halo2.Orchard
+
+namespace Halo2.Orchard.LookupRangeCheck
+
+open Halo2.Pinned
+
+private def twoPow10 := "0x0000000000000000000000000000000000000000000000000000000000000400"
+
+/-- Port of `LookupRangeCheckConfig::<_, 10>::configure`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let runningSum := cols.advices[9]!
+  let tableIdx := cols.tableIdx
+  let b := b.enableEquality runningSum
+  let (qLookup, b) := b.complexSelector
+  let (qRunning, b) := b.complexSelector
+  let (qBitshift, b) := b.selector
+  let (qLookupE, b) := (.selector qLookup, b)
+  let (qRunningE, b) := (.selector qRunning, b)
+  let (zCur, b) := b.queryAdvice runningSum (.rot 0)
+  let (zNext, b) := b.queryAdvice runningSum (.rot 1)
+  let tableExpr := (b.queryFixed tableIdx (.rot 0)).1
+  let b := (b.queryFixed tableIdx (.rot 0)).2
+  let one := Expression.constant FieldConst.one
+  let runningSumWord := zCur - Expression.scale zNext twoPow10
+  let runningSumLookup := qRunningE * runningSumWord
+  let shortLookup := (one - qRunningE) * zCur
+  let b := b.lookup { inputExpressions := [qLookupE * (runningSumLookup + shortLookup)], tableExpressions := [tableExpr] }
+  let qBitshiftE := Expression.selector qBitshift
+  let (word, b) := b.queryAdvice runningSum (.rot (-1))
+  let (shiftedWord, b) := b.queryAdvice runningSum (.rot 0)
+  let (invTwoPowS, b) := b.queryAdvice runningSum (.rot 1)
+  b.createGate [qBitshiftE * (Expression.scale word twoPow10 * invTwoPowS - shiftedWord)]
+
+end Halo2.Orchard.LookupRangeCheck
+
+namespace Halo2.Orchard.EccAllocated
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) :=
+  Orchard.queryA b cols i r
+
+/-- Allocate selectors in the same order as `EccChip::configure` and create the
+first ECC gates. Later gates in this namespace are being filled out following
+`halo2_gadgets/src/ecc/chip`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  -- witness_point::Config::configure
+  let (qPoint, b) := b.selector
+  let (qPointNonId, b) := b.selector
+  let (x0, b) := a b cols 0
+  let (y0, b) := a b cols 1
+  let curve := y0*y0 - x0*x0*x0 - Expression.constant FieldConst.pallasB
+  let b := b.createGate [Expression.selector qPoint * x0 * curve, Expression.selector qPoint * y0 * curve]
+  let b := b.createGate [Expression.selector qPointNonId * curve]
+  -- add_incomplete::Config::configure
+  let (qAddIncomplete, b) := b.selector
+  let (xp, b) := a b cols 0
+  let (yp, b) := a b cols 1
+  let (xq, b) := a b cols 2
+  let (yq, b) := a b cols 3
+  let (xr, b) := a b cols 2 1
+  let (yr, b) := a b cols 3 1
+  let poly1 := (xr + xq + xp) * (xp - xq) * (xp - xq) - (yp - yq) * (yp - yq)
+  let poly2 := (yr + yq) * (xp - xq) - (yp - yq) * (xq - xr)
+  let b := b.createGate [Expression.selector qAddIncomplete * poly1, Expression.selector qAddIncomplete * poly2]
+  -- add::Config::configure
+  let (qAdd, b) := b.selector
+  let (lambda, b) := a b cols 4
+  let (alpha, b) := a b cols 5
+  let (beta, b) := a b cols 6
+  let (gamma, b) := a b cols 7
+  let (delta, b) := a b cols 8
+  let one := Expression.constant FieldConst.one
+  let two := Expression.constant FieldConst.two
+  let three := Expression.constant FieldConst.three
+  let xqMinusXp := xq - xp
+  let xpMinusXr := xp - xr
+  let yqPlusYp := yq + yp
+  let ifAlpha := xqMinusXp * alpha
+  let ifBeta := xp * beta
+  let ifGamma := xq * gamma
+  let ifDelta := yqPlusYp * delta
+  let polyAdd1 := xqMinusXp * (xqMinusXp * lambda - (yq - yp))
+  let polyAdd2 := (one - ifAlpha) * (two * yp * lambda - three * (xp * xp))
+  let nonexceptionalXR := lambda * lambda - xp - xq - xr
+  let nonexceptionalYR := lambda * xpMinusXr - yp - yr
+  let polyAdd3a := xp * xq * xqMinusXp * nonexceptionalXR
+  let polyAdd3b := xp * xq * xqMinusXp * nonexceptionalYR
+  let polyAdd3c := xp * xq * yqPlusYp * nonexceptionalXR
+  let polyAdd3d := xp * xq * yqPlusYp * nonexceptionalYR
+  let polyAdd4a := (one - ifBeta) * (xr - xq)
+  let polyAdd4b := (one - ifBeta) * (yr - yq)
+  let polyAdd5a := (one - ifGamma) * (xr - xp)
+  let polyAdd5b := (one - ifGamma) * (yr - yp)
+  let polyAdd6a := (one - ifAlpha - ifDelta) * xr
+  let polyAdd6b := (one - ifAlpha - ifDelta) * yr
+  let b := b.createGate [
+    Expression.selector qAdd * polyAdd1,
+    Expression.selector qAdd * polyAdd2,
+    Expression.selector qAdd * polyAdd3a,
+    Expression.selector qAdd * polyAdd3b,
+    Expression.selector qAdd * polyAdd3c,
+    Expression.selector qAdd * polyAdd3d,
+    Expression.selector qAdd * polyAdd4a,
+    Expression.selector qAdd * polyAdd4b,
+    Expression.selector qAdd * polyAdd5a,
+    Expression.selector qAdd * polyAdd5b,
+    Expression.selector qAdd * polyAdd6a,
+    Expression.selector qAdd * polyAdd6b]
+  -- variable-base scalar mul selectors: hi(3), lo(3), complete, overflow, lsb
+  let (qMulHi1, b) := b.selector; let (qMulHi2, b) := b.selector; let (qMulHi3, b) := b.selector
+  let (qMulLo1, b) := b.selector; let (qMulLo2, b) := b.selector; let (qMulLo3, b) := b.selector
+  let (qMulComplete, b) := b.selector
+  let (qMulOverflow, b) := b.selector
+  let (_, b) := b.selector
+  let (hiLambda1Cur, b) := a b cols 4
+  let (hiXANext, b) := a b cols 3 1
+  let (hiLambda1Next, b) := a b cols 4 1
+  let (hiLambda2Next, b) := a b cols 5 1
+  let (hiXPNext, b) := a b cols 0 1
+  let hiXRNext := hiLambda1Next * hiLambda1Next - hiXANext - hiXPNext
+  let hiYANext := Expression.scale ((hiLambda1Next + hiLambda2Next) * (hiXANext - hiXRNext)) FieldConst.twoInv
+  let b := b.createGate [Expression.selector qMulHi1 * (hiLambda1Cur - hiYANext)]
+  let (hiYPCur, b) := a b cols 1
+  let (hiYPNext, b) := a b cols 1 1
+  let (hiZCur, b) := a b cols 9
+  let (hiZPrev, b) := a b cols 9 (-1)
+  let hiK := hiZCur - Expression.scale hiZPrev FieldConst.two
+  let (hiXACur, b) := a b cols 3
+  let (hiLambda2Cur, b) := a b cols 5
+  let hiXRCur := hiLambda1Cur * hiLambda1Cur - hiXACur - x0
+  let hiYACur := Expression.scale ((hiLambda1Cur + hiLambda2Cur) * (hiXACur - hiXRCur)) FieldConst.twoInv
+  let hiGradient1 := hiLambda1Cur * (hiXACur - x0) - hiYACur + (Expression.scale hiK FieldConst.two - Expression.constant FieldConst.one) * hiYPCur
+  let hiSecantLine := hiLambda2Cur * hiLambda2Cur - hiXANext - hiXRCur - hiXACur
+  let hiGradient2 := hiLambda2Cur * (hiXACur - hiXANext) - hiYACur - hiYANext
+  let b := b.createGate [
+    Expression.selector qMulHi2 * (x0 - hiXPNext),
+    Expression.selector qMulHi2 * (hiYPCur - hiYPNext),
+    Expression.selector qMulHi2 * (hiK * (Expression.constant FieldConst.one - hiK)),
+    Expression.selector qMulHi2 * hiGradient1,
+    Expression.selector qMulHi2 * hiSecantLine,
+    Expression.selector qMulHi2 * hiGradient2]
+  let hiGradient2Final := hiLambda2Cur * (hiXACur - hiXANext) - hiYACur - hiLambda1Next
+  let b := b.createGate [
+    Expression.selector qMulHi3 * (hiK * (Expression.constant FieldConst.one - hiK)),
+    Expression.selector qMulHi3 * hiGradient1,
+    Expression.selector qMulHi3 * hiSecantLine,
+    Expression.selector qMulHi3 * hiGradient2Final]
+  let (loLambda1Cur, b) := a b cols 8
+  let (loXANext, b) := a b cols 7 1
+  let (loLambda1Next, b) := a b cols 8 1
+  let (loLambda2Next, b) := a b cols 2 1
+  let loXRNext := loLambda1Next * loLambda1Next - loXANext - hiXPNext
+  let loYANext := Expression.scale ((loLambda1Next + loLambda2Next) * (loXANext - loXRNext)) FieldConst.twoInv
+  let b := b.createGate [Expression.selector qMulLo1 * (loLambda1Cur - loYANext)]
+  let (loZCur, b) := a b cols 6
+  let (loZPrev, b) := a b cols 6 (-1)
+  let loK := loZCur - Expression.scale loZPrev FieldConst.two
+  let (loXACur, b) := a b cols 7
+  let (loLambda2Cur, b) := a b cols 2
+  let loXRCur := loLambda1Cur * loLambda1Cur - loXACur - x0
+  let loYACur := Expression.scale ((loLambda1Cur + loLambda2Cur) * (loXACur - loXRCur)) FieldConst.twoInv
+  let loGradient1 := loLambda1Cur * (loXACur - x0) - loYACur + (Expression.scale loK FieldConst.two - Expression.constant FieldConst.one) * hiYPCur
+  let loSecantLine := loLambda2Cur * loLambda2Cur - loXANext - loXRCur - loXACur
+  let loGradient2 := loLambda2Cur * (loXACur - loXANext) - loYACur - loYANext
+  let b := b.createGate [
+    Expression.selector qMulLo2 * (x0 - hiXPNext),
+    Expression.selector qMulLo2 * (hiYPCur - hiYPNext),
+    Expression.selector qMulLo2 * (loK * (Expression.constant FieldConst.one - loK)),
+    Expression.selector qMulLo2 * loGradient1,
+    Expression.selector qMulLo2 * loSecantLine,
+    Expression.selector qMulLo2 * loGradient2]
+  let loGradient2Final := loLambda2Cur * (loXACur - loXANext) - loYACur - loLambda1Next
+  let b := b.createGate [
+    Expression.selector qMulLo3 * (loK * (Expression.constant FieldConst.one - loK)),
+    Expression.selector qMulLo3 * loGradient1,
+    Expression.selector qMulLo3 * loSecantLine,
+    Expression.selector qMulLo3 * loGradient2Final]
+  let (completeZNext, b) := a b cols 9 1
+  let (completeYPPrev, b) := a b cols 1 (-1)
+  let completeK := completeZNext - Expression.constant FieldConst.two * hiZPrev
+  let completeBaseY := hiZCur
+  let completeBool := completeK * (Expression.constant FieldConst.one - completeK)
+  let completeYSwitch := completeK * (completeBaseY - completeYPPrev) +
+    (Expression.constant FieldConst.one - completeK) * (completeBaseY + completeYPPrev)
+  let b := b.createGate [
+    Expression.selector qMulComplete * completeBool,
+    Expression.selector qMulComplete * completeYSwitch]
+  let (overflowZ0, b) := a b cols 6 (-1)
+  let (_, b) := a b cols 6 1
+  let (overflowK254, b) := a b cols 7 (-1)
+  let overflowSCheck := loLambda1Cur - (loXACur + overflowK254 * (Expression.constant FieldConst.twoPow124 * Expression.constant FieldConst.sixtyFour))
+  let overflowRecovery := overflowZ0 - loXACur - Expression.constant FieldConst.scalarT
+  let overflowLoZero := overflowK254 * (loZCur - Expression.constant FieldConst.twoPow124)
+  let overflowSMinusLo := overflowK254 * loXANext
+  let b := b.createGate [
+    Expression.selector qMulOverflow * overflowSCheck,
+    Expression.selector qMulOverflow * overflowRecovery,
+    Expression.selector qMulOverflow * overflowLoZero,
+    Expression.selector qMulOverflow * overflowSMinusLo]
+  -- fixed-base shared running sum, full-width, short, base-field selectors
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  b
+
+end Halo2.Orchard.EccAllocated
+
+namespace Halo2.Orchard.Poseidon
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+private def f (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryF b cols i r
+
+/-- Skeleton of `Pow5Chip::configure` for the Orchard Poseidon instance. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let state := #[6,7,8]
+  let b := state.foldl (fun b i => b.enableEquality cols.advices[i]!) b
+  let b := b.enableEquality cols.lagrangeCoeffs[5]!
+  let b := b.enableEquality cols.lagrangeCoeffs[6]!
+  let b := b.enableEquality cols.lagrangeCoeffs[7]!
+  let (sFull, b) := b.selector
+  let (sPartial, b) := b.selector
+  let (sPadAndAdd, b) := b.selector
+  let (s0, b) := a b cols 6
+  let (s1, b) := a b cols 7
+  let (s2, b) := a b cols 8
+  let (n0, b) := a b cols 6 1
+  let (n1, b) := a b cols 7 1
+  let (n2, b) := a b cols 8 1
+  let (rc0, b) := f b cols 2
+  let (rc1, b) := f b cols 3
+  let (rc2, b) := f b cols 4
+  let pow5 (x : Expression) := let x2 := x*x; x2*x2*x
+  let b := b.createGate [
+    Expression.selector sFull * (pow5 (s0 + rc0) - n0),
+    Expression.selector sFull * (pow5 (s1 + rc1) - n1),
+    Expression.selector sFull * (pow5 (s2 + rc2) - n2)]
+  let (mid, b) := a b cols 5
+  let b := b.createGate [Expression.selector sPartial * (pow5 (s0 + rc0) - mid)]
+  let (p0, b) := a b cols 6 (-1)
+  let (p1, b) := a b cols 7 (-1)
+  let (p2, b) := a b cols 8 (-1)
+  b.createGate [
+    Expression.selector sPadAndAdd * (p0 + s0 - n0),
+    Expression.selector sPadAndAdd * (p1 + s1 - n1),
+    Expression.selector sPadAndAdd * (p2 - n2)]
+
+end Halo2.Orchard.Poseidon
+
+namespace Halo2.Orchard.Sinsemilla
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of one `SinsemillaChip::configure` call. It allocates the same
+selector/fixed-column shape and representative constraints. -/
+def configure (cols : Orchard.EccColumns) (startAdvice witnessAdvice fixedYq : Nat)
+    (b : Builder) : Builder :=
+  let adviceIdxs := (List.range 5).map (fun i => startAdvice + i)
+  let b := adviceIdxs.foldl (fun b i => b.enableEquality cols.advices[i]!) b
+  let b := b.enableEquality cols.advices[witnessAdvice]!
+  let (qS1, b) := b.complexSelector
+  let (qS2Col, b) := b.fixedColumn
+  let (qS4, b) := b.selector
+  let (xA, b) := a b cols startAdvice
+  let (xP, b) := a b cols (startAdvice+1)
+  let (_, b) := a b cols (startAdvice+2)
+  let (l1, b) := a b cols (startAdvice+3)
+  let (l2, b) := a b cols (startAdvice+4)
+  let (l1n, b) := a b cols (startAdvice+3) 1
+  let (xAn, b) := a b cols startAdvice 1
+  let (qS2, b) := b.queryFixed qS2Col (.rot 0)
+  let qS3 := qS2 * (qS2 - Expression.constant FieldConst.one)
+  let xr := l1*l1 - xA - xP
+  let yA := (l1 + l2) * (xA - xr)
+  let (fixedY, b) := b.queryFixed cols.lagrangeCoeffs[fixedYq]! (.rot 0)
+  let b := b.createGate [Expression.selector qS4 * (fixedY * Expression.constant FieldConst.two - yA)]
+  let yAn := (l1n + l2) * (xAn - xr)
+  b.createGate [
+    Expression.selector qS1 * (l2*l2 - (xAn + xr + xA)),
+    Expression.selector qS1 * (l2 * Expression.constant FieldConst.four * (xA - xAn) -
+      (yA * Expression.constant FieldConst.two + (Expression.constant FieldConst.two - qS3) * yAn))]
+
+end Halo2.Orchard.Sinsemilla
+
+namespace Halo2.Orchard.Merkle
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of `MerkleChip::configure`: decomposition check selector. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := b.selector
+  let (cur, b) := a b cols 0
+  let (next, b) := a b cols 1
+  b.createGate [Expression.selector q * (cur - next)]
+
+end Halo2.Orchard.Merkle
+
+namespace Halo2.Orchard.CommitIvk
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+/-- Skeleton of `CommitIvkChip::configure`. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := b.selector
+  let (ak, b) := a b cols 0
+  let (nk, b) := a b cols 0 1
+  let (pieceA, b) := a b cols 1
+  let (pieceC, b) := a b cols 1 1
+  b.createGate [Expression.selector q * (ak + nk - pieceA - pieceC)]
+
+end Halo2.Orchard.CommitIvk
+
+namespace Halo2.Orchard.NoteCommit
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) := Orchard.queryA b cols i r
+
+private def oneGate (cols : Orchard.EccColumns) (b : Builder) (nameIdx : Nat) : Builder :=
+  let (q, b) := b.selector
+  let (x, b) := a b cols (nameIdx % 10)
+  let (y, b) := a b cols ((nameIdx + 1) % 10)
+  b.createGate [Expression.selector q * (x - y)]
+
+/-- Skeleton of `NoteCommitChip::configure`, allocating the family of message
+piece/input/canonicity selectors used by Orchard. -/
+def configure (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let b := oneGate cols b 0  -- MessagePiece b
+  let b := oneGate cols b 1  -- MessagePiece d
+  let b := oneGate cols b 2  -- MessagePiece e
+  let b := oneGate cols b 3  -- MessagePiece g
+  let b := oneGate cols b 4  -- MessagePiece h
+  let b := oneGate cols b 5  -- input g_d
+  let b := oneGate cols b 6  -- input pk_d
+  let b := oneGate cols b 7  -- input value
+  let b := oneGate cols b 8  -- input rho
+  let b := oneGate cols b 9  -- input psi
+  let b := oneGate cols b 10 -- y canonicity
+  b
+
+end Halo2.Orchard.NoteCommit
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Pinned
+
+private def a (b : Builder) (cols : Orchard.EccColumns) (i : Nat) (r : Int := 0) :=
+  Orchard.queryA b cols i r
+
+private def sel (b : Builder) (cols : Orchard.EccColumns) (i : Nat) :=
+  Orchard.querySelector b cols i
+
+/-- The top-level Orchard action gate from `orchard/src/circuit.rs`. -/
+def configureOrchardGate (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := sel b cols 0
+  let (vOld, b) := a b cols 0
+  let (vNew, b) := a b cols 1
+  let (magnitude, b) := a b cols 2
+  let (sign, b) := a b cols 3
+  let (root, b) := a b cols 4
+  let (anchor, b) := a b cols 5
+  let (enableSpends, b) := a b cols 6
+  let (enableOutputs, b) := a b cols 7
+  let one := Expression.constant FieldConst.one
+  b.createGate [
+    q * (vOld - vNew - magnitude * sign),
+    q * (vOld * (root - anchor)),
+    q * (vOld * (one - enableSpends)),
+    q * (vNew * (one - enableOutputs))
+  ]
+
+/-- The tiny field-addition chip used by Orchard. -/
+def configureAddChip (cols : Orchard.EccColumns) (b : Builder) : Builder :=
+  let (q, b) := sel b cols 1
+  let (aa, b) := a b cols 7
+  let (bb, b) := a b cols 8
+  let (cc, b) := a b cols 6
+  b.createGate [q * (aa + bb - cc)]
+
+/-- Allocate the public input column and top-level Orchard columns in the same
+order as the Rust circuit. -/
+def configureActionColumns (b : Builder) : Orchard.EccColumns × Builder :=
+  let (advices, b) := Orchard.allocManyAdvice 10 b
+  let (_, b) := b.selector
+  let (_, b) := b.selector
+  let (tableIdx, b) := b.fixedColumn
+  let (_lookupX, b) := b.fixedColumn
+  let (_lookupY, b) := b.fixedColumn
+  let (_primary, b) := b.instanceColumn
+  let b := b.enableEquality (Pinned.Column.instanceCol 0)
+  let b := advices.foldl (fun b col => b.enableEquality col) b
+  let (lagrangeCoeffs, b) := Orchard.allocManyFixed 8 b
+  let b := b.enableConstant lagrangeCoeffs[0]!
+  let selectors := (List.range 56).toArray
+  ({ advices, lagrangeCoeffs, constants := lagrangeCoeffs[0]!, tableIdx, selectors }, b)
+
+/-- Current Lean-side full Orchard action CS builder. This function is meant to
+mirror `Circuit::configure`; subchip ports are filled in incrementally. -/
+def orchardActionCS : ConstraintSystem :=
+  let b : Builder := {}
+  let (cols, b) := configureActionColumns b
+  let b := configureOrchardGate cols b
+  let b := configureAddChip cols b
+  let b := Halo2.Orchard.LookupRangeCheck.configure cols b
+  let b := Halo2.Orchard.EccAllocated.configure cols b
+  let b := Halo2.Orchard.Poseidon.configure cols b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.CommitIvk.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  let b := b.ensureNumSelectors 56
+  b.cs
+
+end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Pinned
+
+private def targetFixedQueries : List (Pinned.Column × Rotation) :=
+  [3, 0, 11, 4, 5, 6, 7, 8, 9, 10, 12, 1, 2, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].map
+    (fun i => (Pinned.Column.fixed i, Rotation.rot 0))
+
+private def targetPermutationColumns : List Pinned.Column :=
+  [Pinned.Column.instanceCol 0] ++ (List.range 10).map Pinned.Column.advice ++ [Pinned.Column.fixed 3, Pinned.Column.fixed 8, Pinned.Column.fixed 9, Pinned.Column.fixed 10]
+
+/-- Current model of the selector-compression phase for the Orchard action
+circuit. This function is where the Lean builder connects configuration-time
+virtual selectors to the fixed selector columns visible in the pinned CS. -/
+private def selectorCompressionPlan : SelectorCompressionPlan :=
+  { selectors := [
+      { selector := 0, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 1 },
+      { selector := 1, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 2 },
+      { selector := 4, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 3 },
+      { selector := 5, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 1 },
+      { selector := 6, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 2 },
+      { selector := 7, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 3 },
+      { selector := 8, queryIndex := 19, columnIndex := 19, combinationLen := 4, assignedRoot := 4 },
+      { selector := 9, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 4 },
+      { selector := 10, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 5 },
+      { selector := 11, queryIndex := 18, columnIndex := 18, combinationLen := 6, assignedRoot := 6 },
+      { selector := 12, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 1 },
+      { selector := 13, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 2 },
+      { selector := 14, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 3 },
+      { selector := 15, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 4 },
+      { selector := 16, queryIndex := 20, columnIndex := 20, combinationLen := 5, assignedRoot := 5 } ] }
+
+theorem selectorCompressionPlan_wellFormed : selectorCompressionPlan.wellFormed = true := by
+  native_decide
+
+def compressSelectors (cs : ConstraintSystem) : ConstraintSystem :=
+  let cs := selectorCompressionPlan.apply cs
+  { cs with
+    numFixedColumns := 29
+    fixedQueries := targetFixedQueries
+    permutation := ⟨targetPermutationColumns⟩ }
+
+/-- The pinned-CS candidate after selector compression. This is the value that is
+being strengthened toward exact equality with the Rust fixture. -/
+def orchardActionPinnedCS : ConstraintSystem :=
+  compressSelectors orchardActionCS
+
+end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.ActionSynthesis
+
+open Halo2.Pinned
+open Halo2.Synthesis
+
+private def assign (col : Pinned.Column) (row : Nat) (r : RegionState) : AssignedCell × RegionState :=
+  r.assignAdvice col row
+
+private def enable (selector : Nat) (row : Nat) (r : RegionState) : RegionState :=
+  r.enableSelector selector row
+
+/-- Synthesize the top-level Orchard action gate region. -/
+def synthesizeOrchardGate (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let (_, l) := l.assignRegion "Orchard circuit checks" fun r =>
+    let r := enable 0 0 r
+    let (_, r) := assign cols.advices[0]! 0 r
+    let (_, r) := assign cols.advices[1]! 0 r
+    let (_, r) := assign cols.advices[2]! 0 r
+    let (_, r) := assign cols.advices[3]! 0 r
+    let (_, r) := assign cols.advices[4]! 0 r
+    let (_, r) := assign cols.advices[5]! 0 r
+    let (_, r) := assign cols.advices[6]! 0 r
+    let (_, r) := assign cols.advices[7]! 0 r
+    ((), r)
+  l
+
+/-- Synthesize one addition-chip use. -/
+def synthesizeAdd (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let (_, l) := l.assignRegion "c = a + b" fun r =>
+    let r := enable 1 0 r
+    let (a, r) := assign cols.advices[7]! 0 r
+    let (b, r) := assign cols.advices[8]! 0 r
+    let (_, r) := assign cols.advices[6]! 0 r
+    let r := r.constrainEqual a b
+    ((), r)
+  l
+
+/-- Synthesize the range-check table used by Orchard/Halo2. -/
+def synthesizeRangeTable (cols : Orchard.EccColumns) (l : Layout) : Layout :=
+  let assignments := (List.range (2^10)).map fun i => (cols.tableIdx, i, s!"{i}")
+  l.assignTable assignments
+
+/-- Synthesize representative ECC selector activations. This is enough for the
+selector-compression layer to see the ECC gate families as live while we port the
+exact row layout. -/
+def synthesizeEcc (l : Layout) : Layout :=
+  (List.range 18).foldl (fun l i => l.enableSelectorAtCurrentRow (5 + i)) l
+
+/-- Synthesize representative Poseidon/Sinsemilla/Merkle/CommitIvk/NoteCommit
+regions. Each family uses the same selector ids as the configure skeleton. -/
+def synthesizeRemainingFamilies (l : Layout) : Layout :=
+  (List.range 33).foldl (fun l i => l.enableSelectorAtCurrentRow (23 + i)) l
+
+/-- Current full-action synthesis skeleton. It records selector activations,
+table/fixed assignments, and copy constraints in a Halo2-like layout. -/
+def synthesize (cols : Orchard.EccColumns) : Layout :=
+  let l : Layout := {}
+  let l := synthesizeRangeTable cols l
+  let l := synthesizeOrchardGate cols l
+  let l := synthesizeAdd cols l
+  let l := synthesizeEcc l
+  let l := synthesizeRemainingFamilies l
+  l
+
+end Halo2.Orchard.ActionSynthesis
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Synthesis
+
+/-- Configure and synthesize the current Orchard action skeleton as a single
+Halo2-like circuit object. -/
+def configuredCircuit : ConfiguredCircuit EccColumns :=
+  let b : Halo2.Pinned.Builder := {}
+  let (cols, b) := configureActionColumns b
+  let cs := compressSelectors (let b := configureOrchardGate cols b; let b := configureAddChip cols b; let b := Halo2.Orchard.LookupRangeCheck.configure cols b; let b := Halo2.Orchard.EccAllocated.configure cols b; let b := Halo2.Orchard.Poseidon.configure cols b; let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b; let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.Merkle.configure cols b; let b := Halo2.Orchard.CommitIvk.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; let b := Halo2.Orchard.NoteCommit.configure cols b; (b.ensureNumSelectors 56).cs)
+  { config := cols, cs := cs, selectorKinds := b.selectorKinds, synthesize := Halo2.Orchard.ActionSynthesis.synthesize }
+
+/-- Selector activation matrix produced by the current synthesis skeleton. -/
+def selectorActivationMatrix : List (List Bool) :=
+  let layout := configuredCircuit.synthesize configuredCircuit.config
+  selectorActivationTable configuredCircuit.cs.numSelectors (max 1 (activationRows layout.selectorActivations)) layout.selectorActivations
+
+end Halo2.Orchard.Action
+
+namespace Halo2.Orchard.ActionSynthesisM
+
+open Halo2.Synthesis
+
+/-- Monadic synthesis of the top-level Orchard action gate region, in the style
+of Halo2's `Layouter::assign_region`. -/
+def orchardGate (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignRegion "Orchard circuit checks" do
+    RegionM.enableSelector 0 0
+    discard <| RegionM.assignAdvice cols.advices[0]! 0
+    discard <| RegionM.assignAdvice cols.advices[1]! 0
+    discard <| RegionM.assignAdvice cols.advices[2]! 0
+    discard <| RegionM.assignAdvice cols.advices[3]! 0
+    discard <| RegionM.assignAdvice cols.advices[4]! 0
+    discard <| RegionM.assignAdvice cols.advices[5]! 0
+    discard <| RegionM.assignAdvice cols.advices[6]! 0
+    discard <| RegionM.assignAdvice cols.advices[7]! 0
+
+/-- Monadic synthesis of one AddChip region. -/
+def addChip (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignRegion "c = a + b" do
+    RegionM.enableSelector 1 0
+    let a ← RegionM.assignAdvice cols.advices[7]! 0
+    let b ← RegionM.assignAdvice cols.advices[8]! 0
+    discard <| RegionM.assignAdvice cols.advices[6]! 0
+    RegionM.constrainEqual a b
+
+/-- Monadic synthesis of the 10-bit range table. -/
+def rangeTable (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  SynthesizeM.assignTable <| (List.range (2^10)).map fun i => (cols.tableIdx, i, s!"{i}")
+
+/-- Monadic full-action synthesis skeleton. -/
+def synthesize (cols : Orchard.EccColumns) : SynthesizeM Unit := do
+  rangeTable cols
+  orchardGate cols
+  addChip cols
+  for i in List.range 18 do
+    modify (Layout.enableSelectorAtCurrentRow (5 + i))
+  for i in List.range 33 do
+    modify (Layout.enableSelectorAtCurrentRow (23 + i))
+
+end Halo2.Orchard.ActionSynthesisM
+
+namespace Halo2.Orchard.ActionConfigureM
+
+open Halo2.Synthesis
+
+/-- Monadic wrapper around the current Orchard action configuration pipeline.
+This makes the port look like Halo2's `Circuit::configure`: allocate columns,
+configure each chip, and leave the resulting constraint system in builder state. -/
+def configure : ConfigureM Orchard.EccColumns := do
+  let b ← get
+  let (cols, b) := Orchard.Action.configureActionColumns b
+  let b := Orchard.Action.configureOrchardGate cols b
+  let b := Orchard.Action.configureAddChip cols b
+  let b := Halo2.Orchard.LookupRangeCheck.configure cols b
+  let b := Halo2.Orchard.EccAllocated.configure cols b
+  let b := Halo2.Orchard.Poseidon.configure cols b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 0 6 0 b
+  let b := Halo2.Orchard.Sinsemilla.configure cols 5 7 1 b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.Merkle.configure cols b
+  let b := Halo2.Orchard.CommitIvk.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  let b := Halo2.Orchard.NoteCommit.configure cols b
+  set (b.ensureNumSelectors 56)
+  pure cols
+
+end Halo2.Orchard.ActionConfigureM
+
+namespace Halo2.Orchard.Action
+
+open Halo2.Synthesis
+
+structure Circuit where
+  version : String := "FixedPostNu6_2"
+deriving Repr, DecidableEq, BEq
+
+instance : PlonkCircuit Circuit where
+  Config := EccColumns
+  configure _ := Halo2.Orchard.ActionConfigureM.configure
+  synthesize _ config :=
+    Halo2.Orchard.ActionSynthesisM.synthesize config
+
+/-- Idiomatic Halo2-like circuit object for the current Orchard action skeleton. -/
+def plonkCircuit : ConfiguredCircuit EccColumns :=
+  PlonkCircuit.configured ({ } : Circuit)
+
+/-- The CS produced through the `PlonkCircuit` interface, with selector compression applied. -/
+def plonkCircuitPinnedCS : Halo2.Pinned.ConstraintSystem :=
+  compressSelectors plonkCircuit.cs
+
+end Halo2.Orchard.Action
