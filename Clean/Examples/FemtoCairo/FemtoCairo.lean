@@ -209,29 +209,33 @@ def memorySize (data : ProverData (F p)) : ℕ :=
   let mem := data.getTable MemoryTable
   mem.size
 
-def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
+def memoryValueEval (env : Environment (F p)) (address : Expression (F p)) : F p :=
   let mem := env.data.getTable MemoryTable
   if he : (env address).val < mem.size then
     mem[(env address).val].value
   else 0
 
+@[circuit_norm]
+def memoryValue (address : Expression (F p)) : Witgen.FExpr (F p) :=
+  MemoryTable.dataGet address.val ⟨1, by decide⟩
+
 omit p_large_enough [Fact (Nat.Prime p)] in
 /--
-  Bridge lemma: the IR `dataGet "memory" 2 _ 1` eval (raw table lookup, column 1,
-  with `getD (replicate 2 0)` for out-of-bounds) equals `memoryValue`, which reads
-  the typed `MemoryEntry` table built via `getTable`/`fromElements`.
+  Bridge lemma: raw table lookup at the memory value column equals `memoryValueEval`,
+  which reads the typed `MemoryEntry` table built via `getTable`/`fromElements`.
 -/
 lemma memoryValue_eq (env : Environment (F p)) (x : F p) :
-    ((env.data "memory" 2)[ZMod.val x]?.getD (Vector.replicate 2 0))[1 % 2]
+    ((env.data (MemoryTable (p := p)).name [1, 1].sum)[ZMod.val x]?.getD
+      (Vector.replicate [1, 1].sum 0))[1]'(by decide)
       = (if hx : x.val < (env.data.getTable MemoryTable).size then
           (env.data.getTable MemoryTable)[x.val].value else 0) := by
-  have hname : (MemoryTable (p := p)).name = "memory" := rfl
-  simp only [ProverData.getTable, hname, Array.size_map, Array.getElem_map]
+  simp only [ProverData.getTable, Array.size_map, Array.getElem_map]
   split
   case isTrue h =>
-    have h2 : x.val < (env.data "memory" 2).size := h
+    have h2 : x.val < (env.data (MemoryTable (p := p)).name [1, 1].sum).size := h
     rw [Array.getElem?_eq_getElem h2, Option.getD_some]
-    have hval : ∀ v : Vector (F p) 2, (fromElements v : MemoryEntry (F p)).value = v[1] := by
+    have hval : ∀ v : Vector (F p) [1, 1].sum,
+        (fromElements v : MemoryEntry (F p)).value = v[1]'(by decide) := by
       intro v
       obtain ⟨⟨l⟩, hl⟩ := v
       match l, hl with
@@ -239,7 +243,7 @@ lemma memoryValue_eq (env : Environment (F p)) (x : F p) :
     rw [hval]
     rfl
   case isFalse h =>
-    have h2 : ¬ x.val < (env.data "memory" 2).size := h
+    have h2 : ¬ x.val < (env.data (MemoryTable (p := p)).name [1, 1].sum).size := h
     rw [Array.getElem?_eq_none (by simpa using h2), Option.getD_none]
     rfl
 
@@ -282,12 +286,11 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    -- read the value column (1) of the prover's memory table at the address row
-    let value1 ← witness (.dataGet "memory" 2 addr1.val 1)
+    let value1 ← witness (memoryValue addr1)
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness (.dataGet "memory" 2 addr2.val 1)
+    let value2 ← witness (memoryValue addr2)
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -319,7 +322,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   soundness := by
     circuit_proof_start [Table.staticOfFn, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
+      memorySize, memoryValueEval, memory, MemoryEntry, MemoryReadInput.mk.injEq]
     set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable] at h_holds
 
@@ -380,7 +383,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 
   completeness := by
     circuit_proof_start [Table.staticOfFn, DecodedAddressingMode.isEncodedCorrectly,
-      Spec.dataMemoryAccess, memory, memorySize, memoryValue, MemoryReadInput.mk.injEq]
+      Spec.dataMemoryAccess, memory, memorySize, memoryValueEval, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)
