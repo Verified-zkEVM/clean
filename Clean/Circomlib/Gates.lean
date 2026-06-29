@@ -905,11 +905,15 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
       and_intros
       · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).1
       · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
-      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).1
-      · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input_var offset).2
-      · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input_var offset
       · exact subcircuitChannelsLawful n input_var offset
   }
+  requirementsChannelsLawful input offset := by
+    constructor
+    · exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input offset).1
+    constructor
+    · exact mem_nil_or_mem_nil_of_mem_shallowChannels n input offset
+    · intro env _
+      exact (subcircuitChannelsWithRequirements_subset_nil_and_inChannelsOrRequirements_nil n input offset).2 env
 
   Assumptions := Assumptions n
   Spec := Spec n

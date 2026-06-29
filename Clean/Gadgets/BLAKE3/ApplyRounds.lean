@@ -398,7 +398,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
   elaborate_circuit_with {
     localLength _ := 5376
     output input i₀ := main input |>.output i₀
-    channelsWithRequirements := []
     channelsWithGuarantees := []
   } using by
     simp only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]

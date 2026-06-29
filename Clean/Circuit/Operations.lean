@@ -298,7 +298,8 @@ structure Subcircuit (F : Type) [FiniteField F] (offset : ℕ) where
 
 def Subcircuit.ChannelsLawful (s : Subcircuit F n) : Prop :=
   (∀ env, FlatOperation.InChannelsOrGuarantees s.channelsWithGuarantees env s.ops.toFlat) ∧
-  (∀ env, FlatOperation.InChannelsOrRequirements s.channelsWithRequirements env s.ops.toFlat) ∧
+  (∀ env, ConstraintsHoldFlat env s.ops.toFlat →
+    FlatOperation.InChannelsOrRequirements s.channelsWithRequirements env s.ops.toFlat) ∧
   FlatOperation.channels s.ops.toFlat ⊆ s.channelsWithGuarantees ++ s.channelsWithRequirements
 
 @[reducible, circuit_norm]
@@ -697,6 +698,16 @@ def ConstraintsHold.Soundness (env : Environment F)
   subcircuit s := s.Assumptions env → s.Spec env
 }
 
+/-- The local constraints used to prove requirement-channel metadata.
+Unlike `ConstraintsHold.Soundness`, this is intentionally shallow: subcircuits prove
+their own metadata lawfulness and are lifted by the library. -/
+@[circuit_norm]
+def ConstraintsHold.Shallow (env : Environment F)
+    (ops : Operations F) : Prop := ops.forAllNoOffset {
+  assert e := env e = 0
+  lookup l := l.Soundness env
+}
+
 /-- Version of `ConstraintsHold` that replaces the statement of subcircuits with their `ProverAssumptions`. -/
 @[circuit_norm]
 def ConstraintsHold.Completeness (env : ProverEnvironment F)
@@ -714,6 +725,12 @@ lemma constraintsHold_soundness_iff_forall_mem {env : Environment F} {ops : Oper
     (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.Assumptions env → s.2.Spec env) := by
   simp [ConstraintsHold.Soundness, Operations.forAllNoOffset_iff_forall_mem]
+
+lemma constraintsHold_shallow_iff_forall_mem {env : Environment F} {ops : Operations F} :
+    ConstraintsHold.Shallow env ops ↔
+    (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
+    (∀ l ∈ ops.shallowLookups, l.Soundness env) := by
+  simp [ConstraintsHold.Shallow, Operations.forAllNoOffset_iff_forall_mem]
 
 lemma constraintsHold_completeness_iff_forall_mem {env : ProverEnvironment F} {ops : Operations F} :
     ConstraintsHold.Completeness env ops ↔
@@ -784,6 +801,19 @@ lemma guarantees_iff_forall_mem {env : Environment F} {ops : Operations F} :
 @[circuit_norm]
 def FullGuarantees (env : Environment F) (ops : Operations F) : Prop :=
   ∀ i ∈ ops.interactions, i.Guarantees env
+
+lemma mem_interactions_of_mem_shallowInteractions {i : AbstractInteraction F} {ops : Operations F} :
+    i ∈ ops.shallowInteractions → i ∈ ops.interactions := by
+  induction ops using induct <;> (
+    simp_all [shallowInteractions, interactions]
+    try tauto)
+
+lemma guarantees_of_fullGuarantees {env : Environment F} {ops : Operations F} :
+    ops.FullGuarantees env → ops.Guarantees env := by
+  rw [guarantees_iff_forall_mem, FullGuarantees]
+  intro grts i hi
+  apply grts
+  exact mem_interactions_of_mem_shallowInteractions hi
 
 -- TODO rename to ShallowRequirements
 @[circuit_norm]
@@ -1063,6 +1093,19 @@ lemma shallowChannels_eq_interactions_map {ops : Operations F} :
     shallowChannels (ops1 ++ ops2) = shallowChannels ops1 ++ shallowChannels ops2 := by
   simp [shallowChannels_eq_interactions_map, shallowInteractions_append]
 
+@[circuit_norm] theorem channels_nil : channels ([] : Operations F) = [] := rfl
+@[circuit_norm] theorem channels_witness (m : ℕ) (c : WitgenIR F m) (ops : Operations F) :
+  channels (.witness m c :: ops) = channels ops := rfl
+@[circuit_norm] theorem channels_assert (e : Expression F) (ops : Operations F) :
+  channels (.assert e :: ops) = channels ops := rfl
+@[circuit_norm] theorem channels_lookup (l : Lookup F) (ops : Operations F) :
+  channels (.lookup l :: ops) = channels ops := rfl
+@[circuit_norm] theorem channels_interact (i : AbstractInteraction F) (ops : Operations F) :
+  channels (.interact i :: ops) = i.channel :: channels ops := rfl
+@[circuit_norm] theorem channels_subcircuit {n : ℕ} (s : Subcircuit F n) (ops : Operations F) :
+  channels (.subcircuit s :: ops) = FlatOperation.channels s.ops.toFlat ++ channels ops := by
+  simp [channels, interactions, FlatOperation.channels]
+
 def SubcircuitChannelsLawful (ops : Operations F) : Prop :=
   ∀ s ∈ ops.subcircuits, s.2.ChannelsLawful
 
@@ -1087,20 +1130,22 @@ def shallowChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
 def shallowChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
   (ops.shallowInteractions.filter fun i => !i.assumeGuarantees).map (·.channel)
 
-/--
-Property we require from a circuit that exposes three channel lists:
-`channelsWithGuarantees`, `channelsWithRequirements`, and `exposedChannels`.
- -/
+/-- Channel metadata used by circuit elaboration: guarantee channels and lawful subcircuit metadata. -/
 @[circuit_norm]
 def ChannelsLawful (ops : Operations F)
-    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
+    (channelsWithGuarantees : List (RawChannel F)) : Prop :=
   -- The `channelsWithGuarantees` cover all interactions that add guarantees.
   ops.subcircuitChannelsWithGuarantees ⊆ channelsWithGuarantees ∧
   (∀ env, ops.InChannelsOrGuarantees channelsWithGuarantees env) ∧
+  -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
+  ops.SubcircuitChannelsLawful
 
-  -- The `channelsWithRequirements` cover all interactions that add requirements.
+/-- Channel metadata for requirements that depends on circuit constraints. -/
+@[circuit_norm]
+def RequirementsChannelsLawful (ops : Operations F)
+    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
+  -- The `channelsWithRequirements` cover all subcircuit interactions that add requirements.
   ops.subcircuitChannelsWithRequirements ⊆ channelsWithRequirements ∧
-  (∀ env, ops.InChannelsOrRequirements channelsWithRequirements env) ∧
 
   -- Together, the two channel lists cover all interactions.
   -- Even if the conditions so far theoretically allow it, we must not leave out any channels
@@ -1112,8 +1157,10 @@ def ChannelsLawful (ops : Operations F)
   (∀ channel ∈ ops.shallowChannels,
     channel ∈ channelsWithGuarantees ∨ channel ∈ channelsWithRequirements) ∧
 
-  -- Every subcircuit used by this circuit exposes lawful channel metadata itself.
-  ops.SubcircuitChannelsLawful
+  -- The `channelsWithRequirements` cover all shallow interactions that add requirements, under
+  -- the local constraints that may decide whether a conditional interaction is active.
+  ∀ env, ConstraintsHold.Shallow env ops →
+    ops.InChannelsOrRequirements channelsWithRequirements env
 
 /-- Exposed channel interactions agree with the actual interactions in the circuit. -/
 @[circuit_norm]
@@ -1121,53 +1168,39 @@ def ExposedChannelsLawful (ops : Operations F) (exposedChannels : List (ExposedC
   (∀ exposed ∈ exposedChannels,
     ops.interactionsWith exposed.channel = exposed.interactions)
 
-theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] [] := by
-  simp [ChannelsLawful, InChannelsOrGuarantees, InChannelsOrRequirements, SubcircuitChannelsLawful,
-    subcircuitChannelsWithGuarantees, subcircuitChannelsWithRequirements, shallowChannels, subcircuits,
-    forAllNoOffset]
+@[circuit_norm ↓]
+lemma exposedChannelsLawful_expose {Message : TypeMap} [ProvableType Message]
+    (ops : Operations F) (channel : Channel F Message)
+    (interactions : List (ChannelInteraction channel)) :
+    ops.ExposedChannelsLawful (expose channel interactions) ↔
+      ops.interactionsWith channel.toRaw = interactions.map (·.toRaw) := by
+  simp only [ExposedChannelsLawful, expose, List.mem_singleton, forall_eq]
+
+theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] := by
+  simp [ChannelsLawful, InChannelsOrGuarantees, SubcircuitChannelsLawful,
+    subcircuitChannelsWithGuarantees, subcircuits, forAllNoOffset]
 
 theorem channelsLawful_append_of_channelsLawful {ops ops' : Operations F}
-    {channelsWithGuarantees channelsWithGuarantees' channelsWithRequirements channelsWithRequirements' :
-      List (RawChannel F)} :
-    ops.ChannelsLawful channelsWithGuarantees channelsWithRequirements →
-    ops'.ChannelsLawful channelsWithGuarantees' channelsWithRequirements' →
+    {channelsWithGuarantees channelsWithGuarantees' : List (RawChannel F)} :
+    ops.ChannelsLawful channelsWithGuarantees →
+    ops'.ChannelsLawful channelsWithGuarantees' →
     (ops ++ ops').ChannelsLawful
-      (channelsWithGuarantees ++ channelsWithGuarantees')
-      (channelsWithRequirements ++ channelsWithRequirements') := by
+      (channelsWithGuarantees ++ channelsWithGuarantees') := by
   intro h h'
   dsimp only [ChannelsLawful] at h h' ⊢
-  obtain ⟨h_g_subset, h_g, h_r_subset, h_r, h_shallow, h_sub⟩ := h
-  obtain ⟨h_g_subset', h_g', h_r_subset', h_r', h_shallow', h_sub'⟩ := h'
-  have append_subset_append {as bs cs ds : List (RawChannel F)}
-      (h_as : as ⊆ cs) (h_bs : bs ⊆ ds) : as ++ bs ⊆ cs ++ ds := by
+  obtain ⟨h_g_subset, h_g, h_sub⟩ := h
+  obtain ⟨h_g_subset', h_g', h_sub'⟩ := h'
+  and_intros
+  · rw [subcircuitChannelsWithGuarantees_append]
     intro channel h_channel
     rw [List.mem_append] at h_channel ⊢
     rcases h_channel with h_channel | h_channel
-    · exact Or.inl (h_as h_channel)
-    · exact Or.inr (h_bs h_channel)
-  and_intros
-  · rw [subcircuitChannelsWithGuarantees_append]
-    exact append_subset_append h_g_subset h_g_subset'
+    · exact Or.inl (h_g_subset h_channel)
+    · exact Or.inr (h_g_subset' h_channel)
   · intro env
     rw [InChannelsOrGuarantees, forAllNoOffset_append]
     exact ⟨h_g env |>.mono (List.subset_append_left _ _),
       h_g' env |>.mono (List.subset_append_right _ _)⟩
-  · rw [subcircuitChannelsWithRequirements_append]
-    exact append_subset_append h_r_subset h_r_subset'
-  · intro env
-    rw [InChannelsOrRequirements, forAllNoOffset_append]
-    exact ⟨h_r env |>.mono (List.subset_append_left _ _),
-      h_r' env |>.mono (List.subset_append_right _ _)⟩
-  · rw [shallowChannels_append]
-    intro channel h_channel
-    rw [List.mem_append] at h_channel
-    rcases h_channel with h_channel | h_channel
-    · rcases h_shallow channel h_channel with h_channel | h_channel
-      · exact Or.inl (List.mem_append_left _ h_channel)
-      · exact Or.inr (List.mem_append_left _ h_channel)
-    · rcases h_shallow' channel h_channel with h_channel | h_channel
-      · exact Or.inl (List.mem_append_right _ h_channel)
-      · exact Or.inr (List.mem_append_right _ h_channel)
   · rw [subcircuitChannelsLawful_append]
     exact ⟨h_sub, h_sub'⟩
 

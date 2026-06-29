@@ -161,9 +161,21 @@ def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
+def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
+def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
 /-- Witness a value of a provable type computed by the given witness-IR program
@@ -235,10 +247,10 @@ declared channel interface.
 @[circuit_norm]
 def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
     (main : Var Input F → Circuit F (Var Output F))
-    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
+    (channelsWithGuarantees : List (RawChannel F)) : Prop :=
   ∀ input_var offset,
     ((main input_var).operations offset).ChannelsLawful
-      channelsWithGuarantees channelsWithRequirements
+      channelsWithGuarantees
 
 /-
 Common base type for circuits that are to be used in formal proofs.
@@ -269,12 +281,11 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [FiniteField F] [Cir
       try first | ac_rfl | trivial
     )
 
-  /-- expose the channel guarantees and requirements, for end-to-end proofs -/
+  /-- expose the channel guarantees for end-to-end proofs -/
   channelsWithGuarantees : List (RawChannel F) := []
-  channelsWithRequirements : List (RawChannel F) := []
 
   channelsLawful : ElaboratedCircuit.ChannelsLawful main
-      channelsWithGuarantees channelsWithRequirements := by
+      channelsWithGuarantees := by
     -- TODO this tactic would be more effective if it would unfold all channel declarations/uses.
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     try dsimp only [main]
@@ -282,7 +293,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [FiniteField F] [Cir
     try first | ac_rfl | trivial | tauto
 
 attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
-  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+  ElaboratedCircuit.channelsWithGuarantees
 
 end
 
@@ -524,7 +535,8 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero zero_add Nat.reduceAdd
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
+  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 

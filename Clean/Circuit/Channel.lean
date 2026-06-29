@@ -37,6 +37,7 @@ def toRaw (channel : Channel F Message) : RawChannel F where
     mult = -1 → channel.Guarantees (fromElements message) data
   Requirements mult message data :=
     mult ≠ -1 →
+    mult ≠ 0 →
     channel.Guarantees (fromElements message) data
 
 instance : CoeOut (Channel F Message) (RawChannel F) where
@@ -62,8 +63,8 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
     size Message = size Message2 ∧
     ((fun mult message data ↦ mult = (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
       fun mult message data ↦ mult = (-1 : F) → channel2.Guarantees (fromElements message) data) ∧
-    (fun mult message data ↦ mult ≠ (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
-      fun mult message data ↦ mult ≠ (-1 : F) → channel2.Guarantees (fromElements message) data := by
+    (fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel1.Guarantees (fromElements message) data) ≍
+      fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel2.Guarantees (fromElements message) data := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
 
@@ -129,6 +130,11 @@ lemma emitted_assumeGuarantees (mult : Expression F) (msg : Message (Expression 
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := -1, msg, assumeGuarantees := true }
 
+/-- Conditional pull. When `enabled = 1`, this is a pull; when `enabled = 0`, it is disabled. -/
+def pulledIf {channel : Channel F Message} (enabled : Expression F) (msg : Message (Expression F)) :
+    ChannelInteraction channel :=
+  { mult := -enabled, msg, assumeGuarantees := true }
+
 @[circuit_norm] lemma pulled_def (msg : Message (Expression F)) :
   ({ mult := -1, msg, assumeGuarantees := true } : ChannelInteraction channel) = pulled msg := rfl
 @[circuit_norm] lemma pulled_mult (msg : Message (Expression F)) :
@@ -138,9 +144,26 @@ def pulled {channel : Channel F Message} (msg : Message (Expression F)) : Channe
 @[circuit_norm] lemma pulled_assumeGuarantees (msg : Message (Expression F)) :
   (pulled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
 
+@[circuit_norm] lemma pulledIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+  ({ mult := -enabled, msg, assumeGuarantees := true } : ChannelInteraction channel) = pulledIf enabled msg := rfl
+@[circuit_norm] lemma pulledIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
+  (pulledIf enabled msg : ChannelInteraction channel).mult = -enabled := rfl
+@[circuit_norm] lemma pulledIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
+  (pulledIf enabled msg : ChannelInteraction channel).msg = msg := rfl
+@[circuit_norm] lemma pulledIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
+  (pulledIf enabled msg : ChannelInteraction channel).assumeGuarantees = true := rfl
+@[circuit_norm] lemma pulledIf_one_eq_pulled (msg : Message (Expression F)) :
+  (pulledIf 1 msg : ChannelInteraction channel) = pulled msg := by
+  simp [pulledIf, pulled]
+
 /-- Convenience alias for interaction with multiplicity `1`. -/
 def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult := 1, msg, assumeGuarantees := false }
+
+/-- Conditional push. When `enabled = 1`, this is a push; when `enabled = 0`, it is disabled. -/
+def pushedIf {channel : Channel F Message} (enabled : Expression F) (msg : Message (Expression F)) :
+    ChannelInteraction channel :=
+  { mult := enabled, msg, assumeGuarantees := false }
 
 @[circuit_norm] lemma pushed_def (msg : Message (Expression F)) :
   ({ mult := 1, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushed msg := rfl
@@ -152,6 +175,20 @@ def pushed {channel : Channel F Message} (msg : Message (Expression F)) : Channe
   (pushed msg : ChannelInteraction channel).msg = msg := rfl
 @[circuit_norm] lemma pushed_assumeGuarantees (msg : Message (Expression F)) :
   (pushed msg : ChannelInteraction channel).assumeGuarantees = false := rfl
+@[circuit_norm] lemma pushedIf_one_eq_pushed (msg : Message (Expression F)) :
+  (pushedIf 1 msg : ChannelInteraction channel) = pushed msg := by
+  simp [pushedIf, pushed]
+
+omit [Field F] in @[circuit_norm] lemma pushedIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+  ({ mult := enabled, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushedIf enabled msg := rfl
+omit [Field F] in @[circuit_norm] lemma emitted_eq_pushedIf (enabled : Expression F) (msg : Message (Expression F)) :
+  (emitted enabled msg : ChannelInteraction channel) = pushedIf enabled msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushedIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushedIf enabled msg : ChannelInteraction channel).mult = enabled := rfl
+omit [Field F] in @[circuit_norm] lemma pushedIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushedIf enabled msg : ChannelInteraction channel).msg = msg := rfl
+omit [Field F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
+  (pushedIf enabled msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
   _root_.emitted (channel := channel) mult msg
@@ -159,6 +196,10 @@ def pushed {channel : Channel F Message} (msg : Message (Expression F)) : Channe
   _root_.pulled (channel := channel) msg
 @[circuit_norm] def Channel.pushed (channel : Channel F Message) msg :=
   _root_.pushed (channel := channel) msg
+@[circuit_norm] def Channel.pulledIf (channel : Channel F Message) enabled msg :=
+  _root_.pulledIf (channel := channel) enabled msg
+@[circuit_norm] def Channel.pushedIf (channel : Channel F Message) enabled msg :=
+  _root_.pushedIf (channel := channel) enabled msg
 
 namespace ChannelInteraction
 def toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
@@ -179,7 +220,8 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
-  Expression.eval env i.mult ≠ -1 → channel.Guarantees (eval env i.msg) env.data
+  Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
+    channel.Guarantees (eval env i.msg) env.data
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -208,10 +250,48 @@ structure ExposedChannel (F : Type) [Field F] where
   channel : RawChannel F
   interactions : List (AbstractInteraction F)
 
-@[circuit_norm]
 def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (interactions : List (ChannelInteraction channel)) : List (ExposedChannel F) :=
   [{ channel, interactions := interactions.map (·.toRaw) }]
+
+lemma channelInteraction_toRaw_inj {i j : ChannelInteraction channel} :
+    i.toRaw = j.toRaw ↔ i = j := by
+  constructor; swap
+  · rintro rfl; rfl
+  intro h
+  rcases i with ⟨ mult, msg, assumeGuarantees ⟩
+  rcases j with ⟨ mult', msg', assumeGuarantees' ⟩
+  simp only [ChannelInteraction.toRaw, AbstractInteraction.mk.injEq,
+    ChannelInteraction.mk.injEq, true_and] at h ⊢
+  rcases h with ⟨ h_mult, h_msg, h_assume ⟩
+  refine ⟨ h_mult, ?_, h_assume ⟩
+  have h_msg_eq : toElements msg = toElements msg' := eq_of_heq h_msg
+  rw [← ProvableType.fromElements_toElements msg,
+    ← ProvableType.fromElements_toElements msg', h_msg_eq]
+
+@[circuit_norm]
+lemma mem_expose_pullIf_pushIf (enabled enabled' : Expression F)
+    (pull pull' push push' : Message (Expression F)) :
+    ⟨ channel.toRaw, [(pulledIf (channel := channel) enabled pull).toRaw,
+      (pushedIf (channel := channel) enabled push).toRaw] ⟩ ∈
+      expose channel [pulledIf enabled' pull', pushedIf enabled' push'] ↔
+    enabled = enabled' ∧ pull = pull' ∧ push = push' := by
+  simp only [expose, List.mem_singleton, List.map_cons, List.map_nil,
+    ExposedChannel.mk.injEq, true_and, List.cons.injEq, and_true,
+    channelInteraction_toRaw_inj, pulledIf, pushedIf]
+  simp
+  tauto
+
+@[circuit_norm]
+lemma mem_expose_pulled_pushed (pull pull' push push' : Message (Expression F)) :
+    ⟨ channel.toRaw, [(pulled (channel := channel) pull).toRaw,
+      (pushed (channel := channel) push).toRaw] ⟩ ∈
+      expose channel [pulled pull', pushed push'] ↔
+    pull = pull' ∧ push = push' := by
+  simp only [expose, List.mem_singleton, List.map_cons, List.map_nil,
+    ExposedChannel.mk.injEq, true_and, List.cons.injEq, and_true,
+    channelInteraction_toRaw_inj, pulled, pushed]
+  simp
 
 /--
 Concrete interaction values are heterogeneous: after evaluation, we collect interactions for
@@ -278,6 +358,34 @@ def pushedValue (channel : Channel F Message) (msg : Message F) : Interaction F 
   same_size := by simp [Channel.toRaw]
   assumeGuarantees := false
 
+@[circuit_norm]
+def pulledIfValue (channel : Channel F Message) (enabled : F) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := -enabled
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := true
+
+@[circuit_norm]
+def pushedIfValue (channel : Channel F Message) (enabled : F) (msg : Message F) : Interaction F where
+  channel := channel.toRaw
+  mult := enabled
+  msg := (toElements msg).toArray
+  same_size := by simp [Channel.toRaw]
+  assumeGuarantees := false
+
+lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
+  {enabled : F} {msg : Message F} {data : ProverData F} :
+    enabled = 0 ∨ enabled = 1 →
+    (channel.pulledIfValue enabled msg).Requirements data := by
+  simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw]
+  grind
+
+lemma pushedIfValue_guarantees {channel : Channel F Message}
+  {enabled : F} {msg : Message F} {data : ProverData F} :
+    (channel.pushedIfValue enabled msg).Guarantees data := by
+  simp [Interaction.Guarantees, Channel.pushedIfValue]
+
 lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
@@ -288,6 +396,26 @@ lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {
 
 lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [and_true, true_and]
+  congr
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+  rfl
+
+lemma eval_pulledIf {channel : Channel F Message} {enabled : Expression F}
+    {msg : Message (Expression F)} {env : Environment F} :
+     (channel.pulledIf enabled msg).toRaw.eval env = channel.pulledIfValue (eval env enabled) (eval env msg) := by
+  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
+  simp only [and_true, true_and]
+  constructor
+  · exact (neg_eq_neg_one_mul (env enabled)).symm
+  · apply congrArg Vector.toArray
+    rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+    rfl
+
+lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
+    {msg : Message (Expression F)} {env : Environment F} :
+     (channel.pushedIf enabled msg).toRaw.eval env = channel.pushedIfValue (eval env enabled) (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
   simp only [and_true, true_and]
   congr
