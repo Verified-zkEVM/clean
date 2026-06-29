@@ -431,7 +431,6 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     · simp at h_mem_access
       simp [addr1, addr2, *]
 
-open Witgen in
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
   a decoded instruction, and the values of the three operands.

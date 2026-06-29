@@ -12,8 +12,6 @@ surface; see `doc/witgen-ir-plan.md` for the design history.
 type is inferred from the argument (like the old closure API):
 
 ```lean
-open Witgen  -- for `=?`, `<?` notation
-
 -- scalar: an `FExpr` (field-sorted IR expression)
 let z ← witness (.ite (x =? 0) 0 x⁻¹)                  -- IsZeroField
 let and ← witness ((x.val &&& y.val).toField)           -- And8

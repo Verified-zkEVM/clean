@@ -5,7 +5,6 @@ import Clean.Utils.Field
 import Clean.Utils.Tactics
 
 namespace Gadgets.IsZeroField
-open Witgen
 variable {F : Type} [FiniteField F] [DecidableEq F]
 
 /--

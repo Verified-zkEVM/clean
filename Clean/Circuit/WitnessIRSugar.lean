@@ -10,7 +10,7 @@ Makes witness-IR programs read like normal code:
   and a coercion from circuit `Expression`s,
 - dot-notation bridges `x.val : NExpr` (on `Expression` and `FExpr`) and
   `n.toField : FExpr`,
-- scoped condition notation `=?` / `<?` (bring into scope with `open Witgen`),
+- condition notation `=?` / `<?`,
 - `VExpr.range n fun i => ...` — loop former whose body receives the index as an
   `NExpr` (applied to `.idx` at construction time, so the lambda is authoring-time
   only and the result is first-order data),
@@ -67,10 +67,10 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-- Cast a Nat-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
 @[reducible] def NExpr.toField (n : NExpr F) : FExpr F := .ofNat n
 
-/-! ## Conditions (scoped: `open Witgen` to use) -/
+/-! ## Conditions -/
 
-@[inherit_doc BExpr.feq] scoped infix:50 " =? " => BExpr.feq
-@[inherit_doc BExpr.lt] scoped infix:50 " <? " => BExpr.lt
+@[inherit_doc BExpr.feq] infix:50 " =? " => BExpr.feq
+@[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
 
 /-! ## Loop former -/
 

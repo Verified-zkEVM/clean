@@ -12,7 +12,6 @@ open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 namespace IsZero
-open Witgen in
 /-
 template IsZero() {
     signal input in;
