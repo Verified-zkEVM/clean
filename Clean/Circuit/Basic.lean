@@ -309,8 +309,8 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   closure-based API). The main entry point. -/
   witness : value (Witgen.FExpr F) → Circuit F (var F)
   /-- Witness a value computed by a general witness-IR program (with `let`-steps and
-  loops, which the per-element form cannot express). Usually needs the result type
-  annotated on the binder. -/
+  loops, which the per-element form cannot express). The first argument gives the
+  result type, since a program's output length alone does not determine it. -/
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   /-- Witness a value computed by an arbitrary Lean closure (not exportable;
   the migration escape hatch). -/
@@ -323,7 +323,15 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   witnessNative_eq (compute : ProverEnvironment F → value F) :
     witnessNative compute = var_eq ▸ ProvableType.witnessNative compute := by intros; rfl
 
-export Witnessable (witness witnessIR witnessNative)
+export Witnessable (witness witnessNative)
+
+/-- Witness a value computed by a general witness-IR program.
+The value type is explicit because a program's output length alone does not determine it. -/
+@[circuit_norm]
+def witnessIR (value : TypeMap) [ProvableType value] {var : TypeMap}
+    [inst : Witnessable F value var] (code : WitgenIR F (size value)) :
+    Circuit F (var F) :=
+  inst.witnessIR code
 
 instance : Witnessable F field Expression where
   witness e := witnessField (.ofFExpr e)

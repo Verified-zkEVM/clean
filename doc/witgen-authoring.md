@@ -1,14 +1,14 @@
 # Writing circuit witnesses (witness IR)
 
 Witness generators in Clean are written in a deep-embedded IR (`Clean/Circuit/WitnessIR.lean`),
-so that witness generation is *data*: serializable for Rust proving backends
+so that witness generation is _data_: serializable for Rust proving backends
 (`#witgen_json`), checkable (`#assert_exportable`), and still evaluated in Lean by a
 verified reference interpreter (`Circuit.witgen`). This guide shows the authoring
 surface; see `doc/witgen-ir-plan.md` for the design history.
 
 ## The common case: `witness` with typed expressions
 
-`witness` takes per-element IR expressions *in the shape of the value type*, so the
+`witness` takes per-element IR expressions _in the shape of the value type_, so the
 type is inferred from the argument (like the old closure API):
 
 ```lean
@@ -26,6 +26,7 @@ let z ← witness (Vector.ofFn fun (i : Fin 32) => Witgen.FExpr.expr (a[i] * b[i
 ```
 
 Building blocks:
+
 - `Expression F` coerces into `FExpr` (`.expr`), so circuit vars/expressions drop in.
 - `x.val : NExpr` (the `ℕ` value of an expression), `n.toField : FExpr` (cast back,
   via `FiniteField.fromNat` so it is also correct on binary fields).
@@ -41,7 +42,7 @@ program. Reference `let`-steps by position (`.localVar 0`), build loop bodies wi
 
 ```lean
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
-let z ← witnessIR (value := (Vector · 32)) (.ir
+let z ← witnessIR (fields 32) (.ir
   [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
   (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
 
@@ -49,8 +50,8 @@ let z ← witnessIR (value := (Vector · 32)) (.ir
 let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 ```
 
-`witnessIR` usually needs the value type named (`(value := ...)`) or a binder
-annotation — a program's type does not determine it.
+`witnessIR` takes the value type explicitly because a program's output length
+does not determine it.
 
 ## Nondeterminism: tables, prover data, hints
 
@@ -74,7 +75,8 @@ annotation — a program's type does not determine it.
 
 The `circuit_norm` simp set reduces IR evaluation to the same normal forms the old
 closures produced. The recurring local fixes:
-1. Proof steps using the *default* simp set on witness values need `circuit_norm`
+
+1. Proof steps using the _default_ simp set on witness values need `circuit_norm`
    added (`simpa [circuit_norm, h_input] using h_env 0`).
 2. Proof-carrying normal forms bridge via dedicated lemmas:
    `FieldUtils.mod_eq_natCast` / `floorDiv_eq_natCast`, `Utils.Bits.getElem_fieldToBits`.

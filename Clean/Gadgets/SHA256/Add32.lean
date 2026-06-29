@@ -28,11 +28,11 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
 private def bitsVal (a : Var (fields 32) (F p)) : Witgen.NExpr (F p) :=
   (List.finRange 32).foldr
-    (fun i acc => a[i.val].val * ((2^i.val : ℕ) : Witgen.NExpr (F p)) + acc) 0
+    (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 
 omit h_large in
 private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
-    (bitsVal a).eval { env := env } = evalBitsNat env a := by
+    (bitsVal a).eval { env } = evalBitsNat env a := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
   generalize List.finRange 32 = l
   induction l with
@@ -44,11 +44,11 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
     Both inputs are assumed to have boolean values in each bit position. -/
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
-  let z ← witnessIR (value := (Vector · 32)) (.ir
+  let z ← witnessIR (fields 32) (.ir
     [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
     (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
   -- Witness the carry-out bit
-  let cout ← witness ((((bitsVal a + bitsVal b) >>> 32) % 2).toField)
+  let cout ← witness (((bitsVal a + bitsVal b) >>> 32) % 2).toField
   -- Boolean constraints on output bits
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] * (z[i] - 1))

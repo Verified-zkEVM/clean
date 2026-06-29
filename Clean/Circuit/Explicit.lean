@@ -362,12 +362,12 @@ instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
 
 /-- Bridge for scalar `witnessIR` call sites at the literal length 1. -/
 instance {code : WitgenIR F 1} :
-    ExplicitCircuit (witnessIR (value := field) (var := Expression) code) :=
+    ExplicitCircuit (witnessIR field (var := Expression) code) :=
   inferInstanceAs (ExplicitCircuit (witnessField code))
 
 /-- Bridge for vector `witnessIR` call sites at literal length `m`. -/
 instance {m : ℕ} {code : WitgenIR F m} :
-    ExplicitCircuit (witnessIR (value := (Vector · m)) (var := fun F => Vector (Expression F) m) code) :=
+    ExplicitCircuit (witnessIR (fields m) (var := fun F => Vector (Expression F) m) code) :=
   inferInstanceAs (ExplicitCircuit (ProvableType.witness (α := fields m) code))
 
 instance : ExplicitCircuits (F:=F) witnessVarNative where
@@ -437,23 +437,23 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
     simp [circuit_norm]
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
-    ExplicitCircuits (witnessIR (F:=F) (value:=value) (var:=var)) where
+    ExplicitCircuits (witnessIR (F:=F) (var:=var) value) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
-    rw [inst.witnessIR_def]
+    rw [witnessIR, inst.witnessIR_def]
     show _ = inst.var_eq ▸ (ProvableType.witness c).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
   localLength _ _ := size value
   localLength_eq c n := by
-    rw [inst.witnessIR_def, Circuit.localLength, eqRec_eq_cast,
+    rw [witnessIR, inst.witnessIR_def, Circuit.localLength, eqRec_eq_cast,
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
   operations c n := [.witness (size value) c]
   operations_eq c n := by
-    rw [inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+    rw [witnessIR, inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     rfl
 
