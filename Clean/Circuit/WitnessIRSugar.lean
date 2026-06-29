@@ -104,6 +104,6 @@ def letF (e : FExpr F) : M F (FExpr F) :=
 vector. The length side condition discharges by `rfl` for concrete programs. -/
 def WitgenIR.build {n : ℕ} (m : M F (VExpr F))
     (length_eq : (m #[]).1.length = n := by rfl) : WitgenIR F n :=
-  .prog (m #[]).2.toList (m #[]).1 length_eq
+  .ir (m #[]).2.toList (m #[]).1 length_eq
 
 end Witgen

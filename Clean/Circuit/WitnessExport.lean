@@ -36,7 +36,7 @@ variable {F : Type}
 the migration escape hatch and cannot be serialized). -/
 def WitgenIR.exportable {m : ℕ} : WitgenIR F m → Bool
   | .native _ => false
-  | .prog _ _ _ => true
+  | .ir _ _ _ => true
 
 /-- Indices (into the flat operation list) of witness operations that are not
 exportable. Empty iff all reachable witness generators are structured IR. -/
@@ -118,7 +118,7 @@ instance : ToJson (Step F) := ⟨Step.toJson⟩
 /-- Serialize a witness program; fails on `.native`. -/
 def WitgenIR.toJson? {m : ℕ} : WitgenIR F m → Except String Json
   | .native _ => .error "witness program contains a native (closure) witness"
-  | .prog steps out _ => .ok <| Json.mkObj [
+  | .ir steps out _ => .ok <| Json.mkObj [
       ("steps", Lean.toJson steps),
       ("output", out.toJson)]
 
