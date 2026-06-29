@@ -31,7 +31,7 @@ theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offse
 def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
   let offset ← getOffset
   ProvableType.witness (α := M) (.ir []
-    (.range (size M) fun i => .envGet (((offset : ℕ) : Witgen.NExpr F) + i)) rfl)
+    (.range (size M) fun i => .envGet (((offset : ℕ) : Witgen.NExpr F) + i)))
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by

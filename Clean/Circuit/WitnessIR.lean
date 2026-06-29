@@ -218,24 +218,18 @@ end
 
 end Eval
 
-/-- Vector-shaped output of a witness program. `mapRange` is kept as a loop (not
-unrolled); its body may reference the running index via `NExpr.idx`. -/
-inductive VExpr (F : Type) where
-  | lit (es : List (FExpr F))
-  | mapRange (n : ℕ) (body : FExpr F)
-  | append (a b : VExpr F)
+/-- Vector-shaped output of a witness program. The length index makes malformed
+output-length proofs unnecessary. `mapRange` is kept as a loop (not unrolled);
+its body may reference the running index via `NExpr.idx`. -/
+inductive VExpr (F : Type) : ℕ → Type where
+  | lit {n : ℕ} (es : Vector (FExpr F) n) : VExpr F n
+  | mapRange (n : ℕ) (body : FExpr F) : VExpr F n
+  | append {m n : ℕ} (a : VExpr F m) (b : VExpr F n) : VExpr F (m + n)
 
-/-- Static length of a vector expression. -/
-def VExpr.length : VExpr F → ℕ
-  | .lit es => es.length
-  | .mapRange n _ => n
-  | .append a b => a.length + b.length
-
-def VExpr.eval [FiniteField F] (ctx : Ctx F) :
-    (v : VExpr F) → Vector F v.length
-  | .lit es => ⟨(es.map (FExpr.eval ctx)).toArray, by simp [VExpr.length]⟩
-  | .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
-  | .append a b => a.eval ctx ++ b.eval ctx
+def VExpr.eval [FiniteField F] (ctx : Ctx F) : {n : ℕ} → VExpr F n → Vector F n
+  | _, .lit es => es.map (FExpr.eval ctx)
+  | _, .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
+  | _, .append a b => a.eval ctx ++ b.eval ctx
 
 /-- A scalar `let`-step: computes one field or Nat value from the environment and
 earlier steps. Referenced by position via `localVar`. -/
@@ -253,18 +247,18 @@ def evalSteps [FiniteField F] (env : ProverEnvironment F)
   | .letN e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
 
 /-- A witness-generation program producing `m` field elements. -/
-inductive WitgenIR (F : Type) (m : ℕ) where
+inductive WitgenIR (F : Type) : ℕ → Type where
   /-- Arbitrary Lean closure — migration escape hatch, not serializable.
   `eval (native f) = f` holds definitionally. -/
-  | native (f : ProverEnvironment F → Vector F m)
+  | native {m : ℕ} (f : ProverEnvironment F → Vector F m) : WitgenIR F m
   /-- Structured straight-line program: `let`-steps, then a vector output. -/
-  | ir (steps : List (Step F)) (out : VExpr F) (length_eq : out.length = m)
+  | ir {m : ℕ} (steps : List (Step F)) (out : VExpr F m) : WitgenIR F m
 
 def WitgenIR.eval {m : ℕ} [FiniteField F] :
     WitgenIR F m → ProverEnvironment F → Vector F m
   | .native f => f
-  | .ir steps out length_eq => fun env =>
-    .cast length_eq (out.eval { env, locals := evalSteps env steps })
+  | .ir steps out => fun env =>
+    out.eval { env, locals := evalSteps env steps }
 
 @[circuit_norm]
 theorem WitgenIR.eval_native {m : ℕ} [FiniteField F]
@@ -285,54 +279,53 @@ simp-normalize to exactly the same hypothesis shapes as the closures they replac
 -/
 
 /-- Witness program producing a single scalar from a field-sorted IR expression. -/
-def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit [e]) rfl
+def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit #v[e])
 
 /-- Witness program computing each output element from its own IR expression. -/
 def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
-  .ir [] (.lit es.toList) (by simp [VExpr.length])
+  .ir [] (.lit es)
 
 /-- Witness program copying the values of given circuit expressions (used by `<==`). -/
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
-  .ir [] (.lit (es.toList.map .expr)) (by simp [VExpr.length])
+  .ir [] (.lit (es.map .expr))
 
 theorem WitgenIR.eval_ofFExpr [FiniteField F] (e : FExpr F) (env : ProverEnvironment F) :
-    (ofFExpr e).eval env = #v[e.eval { env }] := rfl
+    (ofFExpr e).eval env = #v[e.eval { env }] := by
+  ext i hi
+  rcases Nat.lt_one_iff.mp hi
+  simp [ofFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression F) n)
     (env : ProverEnvironment F) :
     (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
   ext i hi
-  simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps, Vector.cast]
+  simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
 attribute [circuit_norm] Array.getElem?_singleton
 
-/-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term
-(the container's length index is the unreduced `VExpr.length`, so `Vector`-level
-getElem lemmas cannot match). -/
+/-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
 theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
-    (i : ℕ) (hi : i < (VExpr.mapRange (F := F) n body).length) :
+    (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
-  simp only [VExpr.eval]
-  exact Vector.getElem_mapRange i (by simpa [VExpr.length] using hi)
+  simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_lit [FiniteField F] (ctx : Ctx F) (es : List (FExpr F))
-    (i : ℕ) (hi : i < (VExpr.lit es).length) :
-    (VExpr.eval ctx (.lit es))[i]
-      = (es[i]'(by simpa [VExpr.length] using hi)).eval ctx := by
-  simp [VExpr.eval, VExpr.length]
+theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
+    (es : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
+    (VExpr.eval ctx (.lit es))[i] = es[i].eval ctx := by
+  simp [VExpr.eval]
 
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
 @[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F))
-    (out : VExpr F) (hlen : out.length = n) (env : ProverEnvironment F)
+    (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :
-    ((WitgenIR.ir steps out hlen).eval env)[i]
-      = (out.eval { env := env, locals := evalSteps env steps })[i]'(hlen ▸ hi) := by
-  simp [WitgenIR.eval, Vector.getElem_cast]
+    ((WitgenIR.ir steps out).eval env)[i]
+      = (out.eval { env := env, locals := evalSteps env steps })[i] := by
+  rfl
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
 @[circuit_norm ↓]
@@ -340,14 +333,14 @@ theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env := env } := by
   rcases Nat.lt_one_iff.mp hi
-  rfl
+  simp [ofFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
 @[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofFExprs es).eval env)[i] = es[i].eval { env := env } := by
-  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps, Vector.cast]
+  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
@@ -362,7 +355,10 @@ produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
 theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
     (env : ProverEnvironment F) :
-    (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := rfl
+    (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := by
+  ext i hi
+  rcases Nat.lt_one_iff.mp hi
+  simp [ofFExpr, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
 /-- Elementwise evaluation of expression-copying witnesses, keyed on `getElem` so it
 fires regardless of how the expression vector was built (matches the codebase's
@@ -393,18 +389,18 @@ theorem val_eq_zero_iff (x : F) : FiniteField.val x = 0 ↔ x = 0 := by
 
 /-- `IsZeroField` witness: `fun env => if env x ≠ 0 then (env x)⁻¹ else 0`. -/
 def isZeroWitness (x : Expression F) : WitgenIR F 1 :=
-  .ir [] (.lit [.ite (.feq (.expr x) (.const 0)) (.const 0) (.inv (.expr x))]) rfl
+  .ir [] (.lit #v[.ite (.feq (.expr x) (.const 0)) (.const 0) (.inv (.expr x))])
 
 example [DecidableEq F] (x : Expression F) (env : ProverEnvironment F) :
     (isZeroWitness x).eval env = #v[if x.eval env.toEnvironment ≠ 0
       then (x.eval env.toEnvironment)⁻¹ else 0] := by
   ext i hi
   simp [isZeroWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, BExpr.eval,
-    evalSteps, Vector.cast, ← FiniteField.ext_iff, ite_not]
+    evalSteps, ← FiniteField.ext_iff, ite_not]
 
 /-- One byte of the Keccak `Xor64` witness: `((env x).val ^^^ (env y).val : F)`. -/
 def xorByteWitness (x y : Expression F) : WitgenIR F 1 :=
-  .ir [] (.lit [.ofNat (.lxor (.val (.expr x)) (.val (.expr y)))]) rfl
+  .ir [] (.lit #v[.ofNat (.lxor (.val (.expr x)) (.val (.expr y)))])
 
 example (x y : Expression F) (env : ProverEnvironment F) :
     (xorByteWitness x y).eval env
@@ -412,7 +408,7 @@ example (x y : Expression F) (env : ProverEnvironment F) :
         (FiniteField.val (x.eval env.toEnvironment) ^^^ FiniteField.val (y.eval env.toEnvironment))] := by
   ext i hi
   simp [xorByteWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, NExpr.eval,
-    evalSteps, Vector.cast]
+    evalSteps]
 
 /-- `Σ i, (env a[i]).val * 2^i` — the Nat value of a vector of bit-variables
 (SHA256 `Add32.evalBitsNat`), folded into an `NExpr` at authoring time. -/
@@ -426,22 +422,20 @@ The shared sum `s` becomes a `letN` step; the 32 output bits a `mapRange` loop. 
 def add32Witness (a b : Vector (Expression F) 32) : WitgenIR F 32 :=
   .ir [.letN (.mod (.add (bitsValExpr a) (bitsValExpr b)) (.const (2^32)))]
     (.mapRange 32 (.ofNat (.mod (.shiftR (.localVar 0) .idx) (.const 2))))
-    rfl
 
 /-- FemtoCairo-style nondeterministic memory read:
 `if (env addr).val < memSize then (data "Memory")[addr.val].value else 0`,
 with rows laid out as `(address, value)` pairs. -/
 def memReadWitness (addr : Expression F) (memSize : ℕ) : WitgenIR F 1 :=
   .ir []
-    (.lit [.ite (.lt (.val (.expr addr)) (.const memSize))
+    (.lit #v[.ite (.lt (.val (.expr addr)) (.const memSize))
       (.dataGet "Memory" 2 (.val (.expr addr)) 1)
       (.const 0)])
-    rfl
 
 /-- `fieldToBits`-style decomposition (`Gadgets.ToBits`): bit `i` is
 `(x.val >>> i) % 2`, as a `mapRange` loop over the index. -/
 def toBitsWitness (n : ℕ) (x : Expression F) : WitgenIR F n :=
-  .ir [] (.mapRange n (.ofNat (.testBit (.val (.expr x)) .idx))) rfl
+  .ir [] (.mapRange n (.ofNat (.testBit (.val (.expr x)) .idx)))
 
 end Examples
 

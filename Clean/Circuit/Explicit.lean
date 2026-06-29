@@ -335,10 +335,11 @@ instance {ir : WitgenIR F 1} : ExplicitCircuit (witnessField ir) where
   operations n := [.witness 1 ir]
   channelsWithGuarantees _ := []
 
-instance {k : ℕ} {ir : WitgenIR F k} : ExplicitCircuit (witnessVector k ir) where
+instance {k : ℕ} {out : Witgen.VExpr F k} :
+    ExplicitCircuit (witnessVector k out) where
   output n := varFromOffset (fields k) n
   localLength _ := k
-  operations n := [.witness k ir]
+  operations n := [.witness k (.ir [] out)]
   channelsWithGuarantees _ := []
 
 instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} :
@@ -357,7 +358,7 @@ instance {e : Witgen.FExpr F} :
 /-- Bridge for vector `witness` call sites at literal length `m`. -/
 instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
     ExplicitCircuit (witness (value := (Vector · m)) (var := fun F => Vector (Expression F) m) v) :=
-  inferInstanceAs (ExplicitCircuit (witnessVector m (.ofFExprs v)))
+  inferInstanceAs (ExplicitCircuit (witnessVector m (.lit v)))
 
 /-- Bridge for scalar `witnessIR` call sites at the literal length 1. -/
 instance {code : WitgenIR F 1} :
@@ -367,7 +368,7 @@ instance {code : WitgenIR F 1} :
 /-- Bridge for vector `witnessIR` call sites at literal length `m`. -/
 instance {m : ℕ} {code : WitgenIR F m} :
     ExplicitCircuit (witnessIR (value := (Vector · m)) (var := fun F => Vector (Expression F) m) code) :=
-  inferInstanceAs (ExplicitCircuit (witnessVector m code))
+  inferInstanceAs (ExplicitCircuit (ProvableType.witness (α := fields m) code))
 
 instance : ExplicitCircuits (F:=F) witnessVarNative where
   output _ n := ⟨ n ⟩

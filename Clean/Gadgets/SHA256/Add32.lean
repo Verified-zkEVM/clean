@@ -46,8 +46,7 @@ def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) 
   -- Witness the lower 32 bits of the sum
   let z ← witnessIR (value := (Vector · 32)) (.ir
     [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
-    (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField)
-    rfl)
+    (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
   -- Witness the carry-out bit
   let cout ← witness ((((bitsVal a + bitsVal b) >>> 32) % 2).toField)
   -- Boolean constraints on output bits

@@ -182,8 +182,7 @@ template Num2BitsNeg(n) {
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
   let diff : Expression (F p) := (2^n : F p) - input
-  let out ← witnessVector n (.ir []
-    (.range n fun i => ((diff.val >>> i) % 2).toField) rfl)
+  let out ← witnessVector n (.range n fun i => ((diff.val >>> i) % 2).toField)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do

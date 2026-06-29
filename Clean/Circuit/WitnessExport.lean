@@ -36,7 +36,7 @@ variable {F : Type}
 the migration escape hatch and cannot be serialized). -/
 def WitgenIR.exportable {m : ℕ} : WitgenIR F m → Bool
   | .native _ => false
-  | .ir _ _ _ => true
+  | .ir _ _ => true
 
 /-- Indices (into the flat operation list) of witness operations that are not
 exportable. Empty iff all reachable witness generators are structured IR. -/
@@ -100,14 +100,14 @@ instance : ToJson (FExpr F) := ⟨FExpr.toJson⟩
 instance : ToJson (NExpr F) := ⟨NExpr.toJson⟩
 instance : ToJson (BExpr F) := ⟨BExpr.toJson⟩
 
-def VExpr.toJson : VExpr F → Json
-  | .lit es => Json.mkObj [("type", "elements"), ("elements", Lean.toJson es)]
+def VExpr.toJson {n : ℕ} : VExpr F n → Json
+  | .lit es => Json.mkObj [("type", "elements"), ("elements", Lean.toJson es.toList)]
   | .mapRange n body => Json.mkObj [("type", "mapRange"),
       ("n", Lean.toJson n), ("body", body.toJson)]
   | .append a b => Json.mkObj [("type", "append"),
       ("left", a.toJson), ("right", b.toJson)]
 
-instance : ToJson (VExpr F) := ⟨VExpr.toJson⟩
+instance {n : ℕ} : ToJson (VExpr F n) := ⟨VExpr.toJson⟩
 
 def Step.toJson : Step F → Json
   | .letF e => Json.mkObj [("sort", "field"), ("value", Lean.toJson e)]
@@ -118,7 +118,7 @@ instance : ToJson (Step F) := ⟨Step.toJson⟩
 /-- Serialize a witness program; fails on `.native`. -/
 def WitgenIR.toJson? {m : ℕ} : WitgenIR F m → Except String Json
   | .native _ => .error "witness program contains a native (closure) witness"
-  | .ir steps out _ => .ok <| Json.mkObj [
+  | .ir steps out => .ok <| Json.mkObj [
       ("steps", Lean.toJson steps),
       ("output", out.toJson)]
 

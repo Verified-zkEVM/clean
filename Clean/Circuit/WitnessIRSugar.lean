@@ -77,7 +77,7 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-- Vector output built per index; the body receives the loop index as an `NExpr`.
 The lambda is applied to `.idx` at construction time — authoring-time HOAS,
 first-order result. -/
-@[reducible] def VExpr.range (n : ℕ) (body : NExpr F → FExpr F) : VExpr F :=
+@[reducible] def VExpr.range (n : ℕ) (body : NExpr F → FExpr F) : VExpr F n :=
   .mapRange n (body .idx)
 
 /-! ## Builder monad for stepped programs -/
@@ -100,10 +100,8 @@ def letN (e : NExpr F) : M F (NExpr F) :=
 def letF (e : FExpr F) : M F (FExpr F) :=
   fun s => (.localVar s.size, s.push (.letF e))
 
-/-- Assemble a witness program from a builder computation returning the output
-vector. The length side condition discharges by `rfl` for concrete programs. -/
-def WitgenIR.build {n : ℕ} (m : M F (VExpr F))
-    (length_eq : (m #[]).1.length = n := by rfl) : WitgenIR F n :=
-  .ir (m #[]).2.toList (m #[]).1 length_eq
+/-- Assemble a witness program from a builder computation returning the output vector. -/
+def WitgenIR.build {n : ℕ} (m : M F (VExpr F n)) : WitgenIR F n :=
+  .ir (m #[]).2.toList (m #[]).1
 
 end Witgen

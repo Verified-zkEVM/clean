@@ -244,8 +244,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     (2^n : F p)
 
   -- Witness output bits
-  let out ← witnessVector n (.ir []
-    (.range n fun i => ((lin.val >>> i) % 2).toField) rfl)
+  let out ← witnessVector n (.range n fun i => ((lin.val >>> i) % 2).toField)
 
   -- Witness aux bit
   -- the borrow bit is exactly the nth bit of lin

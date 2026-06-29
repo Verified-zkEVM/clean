@@ -43,12 +43,10 @@ program. Reference `let`-steps by position (`.localVar 0`), build loop bodies wi
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
 let z ← witnessIR (value := (Vector · 32)) (.ir
   [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
-  (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField)
-  rfl)
+  (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
 
 -- generic-length bit decomposition (Bits, Bitify)
-let bits ← witnessVector n (.ir []
-  (.range n fun i => ((x.val >>> i) % 2).toField) rfl)
+let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 ```
 
 `witnessIR` usually needs the value type named (`(value := ...)`) or a binder

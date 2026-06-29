@@ -128,12 +128,13 @@ def witnessField (ir : WitgenIR F 1) : Circuit F (Expression F) :=
   fun (offset : ℕ) =>
     (var ⟨offset⟩, [.witness 1 ir])
 
-/-- Witness `m` field elements computed by the given witness-IR program.
-IR-based counterpart of `witnessVectorNative`. -/
+/-- Witness `m` field elements computed by a vector-shaped witness-IR expression.
+Use `witnessIR` for programs with `let`-steps. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (ir : WitgenIR F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector (m : ℕ) (out : Witgen.VExpr F m) :
+    Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
-    (varFromOffset (fields m) offset, [.witness m ir])
+    (varFromOffset (fields m) offset, [.witness m (.ir [] out)])
 
 /-- Add a constraint. -/
 @[circuit_norm]
@@ -330,8 +331,8 @@ instance : Witnessable F field Expression where
   witnessNative := witnessFieldNative
 
 instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
-  witness v := witnessVector m (.ofFExprs v)
-  witnessIR := witnessVector m
+  witness v := witnessVector m (.lit v)
+  witnessIR := ProvableType.witness
   witnessNative := witnessVectorNative m
 
 instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
