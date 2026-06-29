@@ -146,7 +146,6 @@ def fetchInstruction
   main (pc : Expression (F p)) := do
     let programTable := .staticOfFn h_programSize "program" program
 
-    -- (out-of-bounds reads are 0, matching `Array.getElem?` + `getD`)
     let programArray := Array.ofFn program
     let rawInstrType ← witness (.arrGet programArray pc.val)
     let op1 ← witness (.arrGet programArray (pc.val + 1))
@@ -432,6 +431,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     · simp at h_mem_access
       simp [addr1, addr2, *]
 
+open Witgen in
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
   a decoded instruction, and the values of the three operands.
@@ -446,10 +446,11 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
 
     -- Witness the claimed next state
-    let nextState : Var State (F p) ← witness (State.mk
-      (.ite (.feq (.expr isLoadState) 1) (.expr v1) (.expr (state.pc + 4)))
-      (.ite (.feq (.expr isLoadState) 1) (.expr v2) (.expr state.ap))
-      (.ite (.feq (.expr isLoadState) 1) (.expr v3) (.expr state.fp)))
+    let nextState : Var State (F p) ← witnessProgram do
+      return State.mk
+        (.ite (isLoadState =? 1) v1 (state.pc + 4))
+        (.ite (isLoadState =? 1) v2 state.ap)
+        (.ite (isLoadState =? 1) v3 state.fp)
 
     isAdd * (v3 - (v1 + v2)) === 0
 

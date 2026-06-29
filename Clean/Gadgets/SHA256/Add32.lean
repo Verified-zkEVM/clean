@@ -44,9 +44,9 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
     Both inputs are assumed to have boolean values in each bit position. -/
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
-  let z ← witnessIR (fields 32) (.ir
-    [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
-    (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
+  let z ← witnessVectorProgram 32 do
+    let sum ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p))
+    return .range 32 fun i => ((sum >>> i) % 2).toField
   -- Witness the carry-out bit
   let cout ← witness (((bitsVal a + bitsVal b) >>> 32) % 2).toField
   -- Boolean constraints on output bits

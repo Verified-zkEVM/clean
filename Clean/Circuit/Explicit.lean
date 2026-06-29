@@ -471,6 +471,17 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       snd_cast (by rw [inst.var_eq])]
     simp [circuit_norm]
 
+instance {value var : TypeMap} [ProvableType value] [Witnessable F value var]
+    {c : Witgen.M F (value (Witgen.FExpr F))} :
+    ExplicitCircuit (witnessProgram (F:=F) (value:=value) (var:=var) c) :=
+  inferInstanceAs (ExplicitCircuit (witnessIR (F:=F) (var:=var) value (Witgen.WitgenIR.build do
+    let xs ← c
+    return .lit (toElements xs))))
+
+instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
+    ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=
+  inferInstanceAs (ExplicitCircuit (ProvableType.witness (α := fields m) (Witgen.WitgenIR.build c)))
+
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witnessNative (F:=F) (value:=value) (var:=var)) where
   output _ n := inst.var_eq ▸ varFromOffset value n

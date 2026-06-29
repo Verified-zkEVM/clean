@@ -34,24 +34,32 @@ Building blocks:
   `+ * - ⁻¹` and constants.
 - conditions: `a =? b` (field equality), `a <? b` (Nat comparison), used with `.ite`.
 
-## Programs with sharing or loops: `witnessIR`
+## Programs with sharing: `witnessProgram`
 
-When the witness needs `let`-bound shared values or a length-`n` loop, use a full
-program. Reference `let`-steps by position (`.localVar 0`), build loop bodies with
-`.range` (the lambda receives the index as an `NExpr`):
+When a typed witness needs `let`-bound shared values, use `witnessProgram`.
+It is `witness`, but in the `Witgen.M` builder monad. Binding an `FExpr` or
+`NExpr` with `←` creates a shared witness-IR step:
+
+```lean
+let z ← witnessProgram do
+  let y ← x + 1
+  return U64.mk y ...
+```
+
+For vector witnesses, `witnessVectorProgram` exposes the lower-level `VExpr` API,
+including compact loops via `.range` (the lambda receives the index as an `NExpr`):
 
 ```lean
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
-let z ← witnessIR (fields 32) (.ir
-  [.letN ((bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p)))]
-  (.range 32 fun i => (((.localVar 0) >>> i) % 2).toField))
+let z ← witnessVectorProgram 32 do
+  let sum ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p))
+  return .range 32 fun i => ((sum >>> i) % 2).toField
 
 -- generic-length bit decomposition (Bits, Bitify)
 let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 ```
 
-`witnessIR` takes the value type explicitly because a program's output length
-does not determine it.
+`witnessIR` remains available for constructing a `WitgenIR` directly.
 
 ## Nondeterminism: tables, prover data, hints
 

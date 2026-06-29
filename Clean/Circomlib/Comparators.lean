@@ -12,6 +12,7 @@ open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 namespace IsZero
+open Witgen in
 /-
 template IsZero() {
     signal input in;
@@ -26,8 +27,7 @@ template IsZero() {
 }
 -/
 def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
-  let inv ← witness (.ite (.feq (.expr input) 0) 0 (.inv (.expr input)))
-
+  let inv ← witness (.ite (input =? 0) 0 input⁻¹)
   let out <== -input * inv + 1
   input * out === 0
   return out

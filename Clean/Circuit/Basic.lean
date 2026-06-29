@@ -333,6 +333,23 @@ def witnessIR (value : TypeMap) [ProvableType value] {var : TypeMap}
     Circuit F (var F) :=
   inst.witnessIR code
 
+/-- Witness `m` field elements computed by a monadic witness-IR program.
+Use this when the vector witness has shared `letF`/`letN` computations or compact loops. -/
+@[circuit_norm]
+def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
+    Circuit F (Vector (Expression F) m) :=
+  ProvableType.witness (α := fields m) (Witgen.WitgenIR.build program)
+
+/-- Witness a provable value computed by a monadic witness-IR program.
+This is `witness`, but with shared `letF`/`letN` computations. -/
+@[circuit_norm]
+def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
+    [Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
+    Circuit F (var F) :=
+  witnessIR value (Witgen.WitgenIR.build do
+    let xs ← program
+    return .lit (toElements xs))
+
 instance : Witnessable F field Expression where
   witness e := witnessField (.ofFExpr e)
   witnessIR := witnessField

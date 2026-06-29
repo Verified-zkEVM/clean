@@ -19,13 +19,13 @@ Makes witness-IR programs read like normal code:
 
 Example (SHA256 `Add32`-style):
 ```
-witnessVector 32 <| .build do
-  let s ← letN ((bitsVal a + bitsVal b) % (2^32 : ℕ))
+witnessVectorProgram 32 do
+  let s ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : NExpr F)
   return .range 32 fun i => ((s >>> i) % 2).toField
 ```
 -/
 
-variable {F : Type}
+variable {F : Type} {α β : Type}
 
 namespace Witgen
 
@@ -77,8 +77,12 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-- Vector output built per index; the body receives the loop index as an `NExpr`.
 The lambda is applied to `.idx` at construction time — authoring-time HOAS,
 first-order result. -/
-@[reducible] def VExpr.range (n : ℕ) (body : NExpr F → FExpr F) : VExpr F n :=
+def VExpr.range (n : ℕ) (body : NExpr F → FExpr F) : VExpr F n :=
   .mapRange n (body .idx)
+
+@[circuit_norm]
+theorem VExpr.range_def (n : ℕ) (body : NExpr F → FExpr F) :
+    VExpr.range n body = .mapRange n (body .idx) := rfl
 
 /-! ## Builder monad for stepped programs -/
 
@@ -92,16 +96,46 @@ instance : Monad (M F) where
   bind m f := fun s => let (a, s') := m s; f a s'
   map f m := fun s => let (a, s') := m s; (f a, s')
 
+attribute [circuit_norm] Array.size_empty Array.getElem?_push
+
+@[circuit_norm]
+theorem M.pure_def (a : α) :
+    (pure a : M F α) = fun s => (a, s) := rfl
+
+@[circuit_norm]
+theorem M.bind_def (m : M F α) (f : α → M F β) :
+    (m >>= f) = fun s => let (a, s') := m s; f a s' := rfl
+
+@[circuit_norm]
+theorem M.map_def (f : α → β) (m : M F α) :
+    (f <$> m) = fun s => let (a, s') := m s; (f a, s') := rfl
+
 /-- Bind a Nat-sorted value as a shared step; returns a reference to it. -/
 def letN (e : NExpr F) : M F (NExpr F) :=
   fun s => (.localVar s.size, s.push (.letN e))
+
+instance : CoeOut (NExpr F) (M F (NExpr F)) := ⟨letN⟩
+
+@[circuit_norm]
+theorem letN_def (e : NExpr F) :
+    letN e = fun s => (.localVar s.size, s.push (.letN e)) := rfl
 
 /-- Bind a field-sorted value as a shared step; returns a reference to it. -/
 def letF (e : FExpr F) : M F (FExpr F) :=
   fun s => (.localVar s.size, s.push (.letF e))
 
+instance : CoeOut (FExpr F) (M F (FExpr F)) := ⟨letF⟩
+
+@[circuit_norm]
+theorem letF_def (e : FExpr F) :
+    letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
+
 /-- Assemble a witness program from a builder computation returning the output vector. -/
 def WitgenIR.build {n : ℕ} (m : M F (VExpr F n)) : WitgenIR F n :=
   .ir (m #[]).2.toList (m #[]).1
+
+@[circuit_norm]
+theorem WitgenIR.build_def {n : ℕ} (m : M F (VExpr F n)) :
+    WitgenIR.build m = .ir (m #[]).2.toList (m #[]).1 := rfl
 
 end Witgen
