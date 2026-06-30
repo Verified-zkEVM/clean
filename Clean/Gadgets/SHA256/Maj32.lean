@@ -24,11 +24,10 @@ Witnesses 64 variables: 32 for t, 32 for z.
       (2)  c·(a + b − 2·t) = z − t -/
 def maj32 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the intermediate product t[i] = a[i] * b[i]
-  let t : Var (fields 32) (F p) ← witness (Vector.ofFn fun (i : Fin 32) =>
-    Witgen.FExpr.expr (a[i] * b[i]))
+  -- TODO WITGENIR
+  let t ← witnessVector 32 (.lit <| .ofFn fun i => (a[i] * b[i]))
   -- Witness the majority output
-  let z ← witness (Vector.ofFn fun (i : Fin 32) =>
-    Witgen.FExpr.expr (t[i] + c[i] * (a[i] + b[i] - 2 * t[i])))
+  let z ← witnessVector 32 (.lit <| .ofFn fun i => (t[i] + c[i] * (a[i] + b[i] - 2 * t[i])))
   -- Constraint (1): t[i] = a[i] * b[i]
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (t[i] - a[i] * b[i])

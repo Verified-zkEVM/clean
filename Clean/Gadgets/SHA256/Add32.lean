@@ -45,7 +45,7 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
   let z ← witnessVectorProgram 32 do
-    let sum ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p))
+    let sum ← (bitsVal a + bitsVal b) % (2^32 : ℕ)
     return .range 32 fun i => ((sum >>> i) % 2).toField
   -- Witness the carry-out bit
   let cout ← witness (((bitsVal a + bitsVal b) >>> 32) % 2).toField
@@ -319,8 +319,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  obtain ⟨S, hS_def⟩ : ∃ S, S = evalBitsNat env input_var_a + evalBitsNat env input_var_b := ⟨_, rfl⟩
-  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow, ← hS_def] at h_env_z h_env_cout
+  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
+  set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith

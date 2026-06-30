@@ -146,6 +146,7 @@ def fetchInstruction
   main (pc : Expression (F p)) := do
     let programTable := .staticOfFn h_programSize "program" program
 
+    -- TODO WITGENIR can we define a GetElem instance to replace .arrGet?
     let programArray := Array.ofFn program
     let rawInstrType ← witness (.arrGet programArray pc.val)
     let op1 ← witness (.arrGet programArray (pc.val + 1))

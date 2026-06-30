@@ -17,10 +17,12 @@ deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
-  let xorByte (a b : Expression (F p)) : Witgen.FExpr (F p) :=
-    (a.val ^^^ b.val).toField
-  let z ← witness (U32.mk
-    (xorByte x.x0 y.x0) (xorByte x.x1 y.x1) (xorByte x.x2 y.x2) (xorByte x.x3 y.x3))
+  let z ← witness <|
+    let z0 := (x.x0.val ^^^ y.x0.val).toField
+    let z1 := (x.x1.val ^^^ y.x1.val).toField
+    let z2 := (x.x2.val ^^^ y.x2.val).toField
+    let z3 := (x.x3.val ^^^ y.x3.val).toField
+    U32.mk z0 z1 z2 z3
 
   lookup ByteXorTable (x.x0, y.x0, z.x0)
   lookup ByteXorTable (x.x1, y.x1, z.x1)

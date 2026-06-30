@@ -32,7 +32,10 @@ namespace Witgen
 /-! ## Operators and coercions -/
 
 instance : Coe (Expression F) (FExpr F) := ⟨.expr⟩
+instance : Coe (Expression F) (field (FExpr F)) where
+  coe e := .expr e
 instance : Coe F (FExpr F) := ⟨.const⟩
+instance : Coe F (field (FExpr F)) := ⟨.const⟩
 instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)⟩
 instance : Add (FExpr F) := ⟨.add⟩
 instance : Mul (FExpr F) := ⟨.mul⟩
@@ -45,12 +48,20 @@ instance {n : ℕ} : OfNat (NExpr F) n := ⟨.const n⟩
 instance : Add (NExpr F) := ⟨.add⟩
 instance : Mul (NExpr F) := ⟨.mul⟩
 instance : Div (NExpr F) := ⟨.div⟩
+instance : HDiv (NExpr F) ℕ (NExpr F) where
+  hDiv n m := .div n m
 instance : Mod (NExpr F) := ⟨.mod⟩
+instance : HMod (NExpr F) ℕ (NExpr F) where
+  hMod n m := .mod n m
 instance : AndOp (NExpr F) := ⟨.land⟩
 instance : OrOp (NExpr F) := ⟨.lor⟩
 instance : XorOp (NExpr F) := ⟨.lxor⟩
 instance : ShiftLeft (NExpr F) := ⟨.shiftL⟩
 instance : ShiftRight (NExpr F) := ⟨.shiftR⟩
+instance : HShiftLeft (NExpr F) ℕ (NExpr F) where
+  hShiftLeft n m := .shiftL n m
+instance : HShiftRight (NExpr F) ℕ (NExpr F) where
+  hShiftRight n m := .shiftR n m
 
 /-- A single field-sorted expression is a length-1 witness program, so scalar
 sites can pass an `FExpr` to the generic `witness`. -/

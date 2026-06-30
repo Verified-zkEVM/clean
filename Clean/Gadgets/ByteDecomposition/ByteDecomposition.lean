@@ -20,8 +20,8 @@ deriving ProvableStruct
   and the high part is the most significant `8 - offset` bits.
 -/
 def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let low ← witness ((x.val % ((2^offset.val : ℕ) : Witgen.NExpr (F p))).toField)
-  let high ← witness ((x.val / ((2^offset.val : ℕ) : Witgen.NExpr (F p))).toField)
+  let low ← witness (x.val % (2^offset.val : ℕ)).toField
+  let high ← witness (x.val / (2^offset.val : ℕ)).toField
 
   lookup ByteTable ((2^(8-offset.val) : F p) * low)
   lookup ByteTable high
@@ -101,6 +101,7 @@ theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Out
 
   and_intros
 
+  -- TODO WITGENIR review proof uglification
   · have lt : (2^offset.val : ℕ+) < p := by
       rw [PNat.pow_coe, PNat.val_ofNat]; exact two_pow_lt _ (by omega)
     rw [show ((ZMod.val x % 2 ^ offset.val : ℕ) : F p) = FieldUtils.mod x (2^offset.val) lt by

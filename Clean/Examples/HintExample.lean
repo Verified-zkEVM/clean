@@ -23,6 +23,8 @@ namespace Examples.HintExample
 -/
 def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field where
   main (hint : ProverEnvironment (F p) → Bool) := do
+    -- TODO WITGENIR we should be able to define prover hints written using IR
+    -- and this example should use that
     let b ← witnessNative fun env => if hint env then 1 else 0
     assertBool b
     return b

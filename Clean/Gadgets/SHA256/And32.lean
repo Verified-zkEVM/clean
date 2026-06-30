@@ -3,6 +3,9 @@ import Clean.Gadgets.SHA256.BitwiseOps
 section
 variable {p : ℕ} [Fact p.Prime]
 
+instance {F: Type} [Field F] {n} : CoeOut (Vector (Witgen.FExpr F) n) (Witgen.VExpr F n) where
+  coe es := .lit es
+
 namespace Gadgets.SHA256
 
 /-!
@@ -15,8 +18,10 @@ Witnesses 32 output bits.
 /-- Bitwise AND of two 32-bit words.
     Per bit: z = a · b  (correct when a, b ∈ {0, 1}). -/
 def and32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let z ← witness (Vector.ofFn fun (i : Fin 32) =>
-    Witgen.FExpr.expr (a[i] * b[i]))
+  -- TODO WITGENIR: can we have a more intuitive way to write this?
+  -- probably, "indexing into a vector of expressions" should be expressible _within_ the IR,
+  -- not just at the meta level
+  let z ← witnessVector 32 (.lit <| .ofFn fun i => a[i] * b[i])
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - a[i] * b[i])
   return z

@@ -1,7 +1,4 @@
 import Clean.Circuit
-import Clean.Circuit.WitnessIR
-import Clean.Circuit.WitnessGeneration
-import Clean.Circuit.WitnessExport
 import Clean.Examples.WitnessExport
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath

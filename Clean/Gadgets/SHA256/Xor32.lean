@@ -16,8 +16,7 @@ Witnesses 32 output bits.
     Per bit: z = a + b − 2·a·b  (correct when a, b ∈ {0, 1}).
     Witnesses 32 output bits. -/
 def xor32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  let z ← witness (Vector.ofFn fun (i : Fin 32) =>
-    (a[i].val ^^^ b[i].val).toField)
+  let z ← witnessVector 32 (.lit <| .ofFn fun i => (a[i].val ^^^ b[i].val).toField)
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - a[i] - b[i] + 2 * a[i] * b[i])
   return z

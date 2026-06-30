@@ -23,11 +23,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witness (((x + y + carryIn).val % 256).toField)
+  let z ← witness ((x + y + carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness (((x + y + carryIn).val / 256).toField)
+  let carryOut ← witness ((x + y + carryIn).val / 256).toField
   assertBool carryOut
 
   assertZero (x + y + carryIn - z - carryOut * 256)
@@ -111,6 +111,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have carry_in_bound := IsBool.val_lt_two as_carry_in
 
     -- bridge cast normal forms back to the FieldUtils.mod256 / floorDiv forms used by the lemmas
+    -- TODO WITGENIR this proof got uglified, change Addition8.Theorems layer
     have h_carry_eq : (↑(ZMod.val (x + y + carry_in) / 256) : F p)
         = FieldUtils.floorDiv (x + y + carry_in) 256 := by
       rw [FieldUtils.floorDiv]; exact FieldUtils.natToField_eq_natCast _
@@ -136,17 +137,8 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
-    intro env env'
-    refine ⟨fun _ h => ?_, fun _ h => ?_⟩
-    · simp_all only [Witgen.WitgenIR.eval_ofFExpr, Witgen.FExpr.eval, Witgen.NExpr.eval]
-      obtain ⟨hx, hy, hc⟩ := h
-      simp only [circuit_norm, hx, hy, hc]
-    · ext i hi
-      obtain rfl : i = 0 := by omega
-      simp_all only [Witgen.WitgenIR.getElem_eval_ofFExprs]
-      obtain ⟨hx, hy, hc⟩ := h
-      simp only [circuit_norm, hx, hy, hc, Witgen.FExpr.eval, Witgen.NExpr.eval]
+      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq,
+      Witgen.WitgenIR.eval_ofFExpr, Witgen.WitgenIR.eval_ofFExprs_singleton]
 }
 
 end Gadgets.Addition8FullCarry

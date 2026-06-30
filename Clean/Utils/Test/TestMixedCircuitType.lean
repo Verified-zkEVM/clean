@@ -20,6 +20,7 @@ deriving CircuitType
 instance : Inhabited (Var Input F) where
   default := { x := default, inverse _ := default }
 
+-- TODO WITGENIR port this example from native to IR
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
     let inverse ← witnessNative input.inverse

@@ -17,10 +17,10 @@ let z ← witness (.ite (x =? 0) 0 x⁻¹)                  -- IsZeroField
 let and ← witness ((x.val &&& y.val).toField)           -- And8
 
 -- structs: the value type's constructor, fields are FExprs
-let z ← witness (U64.mk (xorByte x.x0 y.x0) ... )       -- Xor64
+let z ← witness <| U64.mk (x.x0.val ^^^ y.x0.val).toField ... -- Xor64
 
 -- vectors
-let z ← witness (Vector.ofFn fun (i : Fin 32) => Witgen.FExpr.expr (a[i] * b[i]))
+let z ← witness (Vector.ofFn fun (i : Fin 32) => .expr (a[i] * b[i]))
 ```
 
 Building blocks:
@@ -50,7 +50,7 @@ including compact loops via `.range` (the lambda receives the index as an `NExpr
 ```lean
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
 let z ← witnessVectorProgram 32 do
-  let sum ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : Witgen.NExpr (F p))
+  let sum ← (bitsVal a + bitsVal b) % (2^32 : ℕ)
   return .range 32 fun i => ((sum >>> i) % 2).toField
 
 -- generic-length bit decomposition (Bits, Bitify)
@@ -91,7 +91,7 @@ closures produced. The recurring local fixes:
    resulting `if`-conditions at the extraction sites with `FiniteField.val_inj_F`
    (deliberately not in `circuit_norm`) plus the case facts.
 
-## Remaining `.native` uses (audited, phase 7)
+## Remaining `.native` uses
 
 - `HintExample` — a `Bool`-valued hint closure; the canonical escape-hatch use.
 - `LookupCircuit.fromTable` — the output is computed by the circuit's

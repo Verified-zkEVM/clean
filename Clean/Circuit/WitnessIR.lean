@@ -367,6 +367,9 @@ inductive VExpr (F : Type) : ℕ → Type where
   | mapRange (n : ℕ) (body : FExpr F) : VExpr F n
   | append {m n : ℕ} (a : VExpr F m) (b : VExpr F n) : VExpr F (m + n)
 
+instance {n} : Coe (Vector (FExpr F) n) (VExpr F n) where
+  coe es := .lit es
+
 def VExpr.eval [FiniteField F] (ctx : Ctx F) : {n : ℕ} → VExpr F n → Vector F n
   | _, .lit es => es.map (FExpr.eval ctx)
   | _, .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
@@ -441,6 +444,10 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
     (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
+
+theorem WitgenIR.eval_ofFExprs_singleton [FiniteField F] (e : FExpr F) (env : ProverEnvironment F) :
+    (ofFExprs #v[e]).eval env = #v[e.eval { env }] := by
+  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 attribute [circuit_norm] Array.getElem?_singleton
 
