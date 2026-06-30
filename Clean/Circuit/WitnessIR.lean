@@ -223,6 +223,94 @@ variable {M : TypeMap} [ProvableType M]
 def eval (ctx : Ctx F) (x : M (Witgen.FExpr F)) : M F :=
   toElements x |> Vector.map (FExpr.eval ctx) |> fromElements
 
+@[circuit_norm]
+lemma eval_field (ctx : Ctx F) (x : FExpr F) :
+    Witgen.eval (M := field) ctx x = FExpr.eval ctx x := by
+  simp [Witgen.eval, explicit_provable_type]
+
+namespace StructEval
+
+variable {M : TypeMap} [ProvableStruct M]
+
+/-- Struct-preserving evaluation for witness-IR expressions. -/
+@[circuit_norm]
+def eval (ctx : Ctx F) (var : M (FExpr F)) : M F :=
+  toComponents var |> go (components M) |> fromComponents
+where
+  @[circuit_norm]
+  go : (cs : List _root_.ProvableStruct.WithProvableType) →
+      _root_.ProvableStruct.ProvableTypeList (FExpr F) cs →
+        _root_.ProvableStruct.ProvableTypeList F cs
+    | [], .nil => .nil
+    | _ :: cs, .cons a as => .cons (Witgen.eval ctx a) (go cs as)
+
+theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExpr F)) :
+    Witgen.eval ctx x = StructEval.eval ctx x := by
+  symm
+  simp only [Witgen.eval, eval, fromElements, toElements, size]
+  congr 1
+  apply eval_eq_eval_aux
+where
+  eval_eq_eval_aux (ctx : Ctx F) : (cs : List _root_.ProvableStruct.WithProvableType) →
+      (as : _root_.ProvableStruct.ProvableTypeList (FExpr F) cs) →
+    eval.go ctx cs as =
+      (_root_.ProvableStruct.componentsToElements cs as |> Vector.map (FExpr.eval ctx) |>
+        _root_.ProvableStruct.componentsFromElements cs)
+  | [], .nil => rfl
+  | c :: cs, .cons a as => by
+    simp only [_root_.ProvableStruct.componentsToElements,
+      _root_.ProvableStruct.componentsFromElements, eval.go]
+    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+    congr
+    apply eval_eq_eval_aux
+
+end StructEval
+
+open Lean Meta Simp in
+private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.FExpr.eval && args.size >= 2 do
+    return .continue
+  let ctx := args[args.size - 2]!
+  let projected := args[args.size - 1]!
+  let view? : Option (Expr × (Expr → MetaM Expr)) ←
+      match projected with
+      | .proj structName idx base =>
+        pure <| some (base, fun evalBase => pure <| mkProj structName idx evalBase)
+      | _ =>
+        let .const projName _ := projected.getAppFn | pure none
+        let some pinfo ← getProjectionFnInfo? projName | pure none
+        let projArgs := projected.getAppArgs
+        if h : pinfo.numParams < projArgs.size then
+          pure <| some (projArgs[pinfo.numParams],
+            fun evalBase => mkProjection evalBase (Name.mkSimple projName.getString!))
+        else
+          pure none
+  let some (base, mkRhs) := view?
+    | return Simp.Step.continue
+  let evalBase ← try
+      mkAppM ``Witgen.eval #[ctx, base]
+    catch _ =>
+      return Simp.Step.continue
+  let rhs ← mkRhs evalBase
+  let mut thms : SimpTheorems := {}
+  thms ← thms.addConst ``Witgen.StructEval.eval_eq_eval
+  thms ← thms.addConst ``Witgen.eval_field
+  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval
+  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval.go
+  thms ← thms.addDeclToUnfold ``ProvableStruct.components
+  thms ← thms.addDeclToUnfold ``ProvableStruct.toComponents
+  thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
+  let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+  let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
+  unless ← isDefEq rhsSimp.expr e do
+    return Simp.Step.continue
+  let result ← rhsSimp.mkEqSymm rhs
+  return .done result
+
+simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
+attribute [circuit_norm] evalProjection
+
 end Eval
 
 /-- Vector-shaped output of a witness program. The length index makes malformed

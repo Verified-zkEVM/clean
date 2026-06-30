@@ -65,9 +65,8 @@ let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
   Example: FemtoCairo instruction fetch over `Array.ofFn program`.
 - `.dataGet key width row col` / `.hintGet ...` — read committed prover data /
   uncommitted hints (`ProverData`-keyed). Prefer `Table.dataGet` /
-  `Table.hintGet`, or a domain wrapper such as FemtoCairo's
-  `witness (memoryValue addr)`, so table names and column indices are kept in
-  one place.
+  `Table.hintGet`, which return typed rows, or a domain wrapper such as
+  FemtoCairo's `witness (memoryValue addr)`.
 - `witnessNative fun env => ...` — the escape hatch for genuinely arbitrary Lean
   (e.g. a `Bool`-valued hint closure, `HintExample`). Not exportable:
   `#assert_exportable` rejects it, and it stays interpreted in Lean.
