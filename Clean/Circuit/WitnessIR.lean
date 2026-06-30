@@ -266,6 +266,7 @@ where
 
 end StructEval
 
+open Lean Meta Simp in
 /--
 Normalize witness-IR evaluation of projections out of provable structs.
 
@@ -292,7 +293,6 @@ structure projection like `.value`, `.address`, etc.  The meta code recognizes p
 applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
 simplifying the generated RHS with the small struct-evaluation theorem set below.
 -/
-open Lean Meta Simp in
 private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
   -- the evaluation context and the scalar expression being evaluated.
