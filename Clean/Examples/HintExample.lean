@@ -40,7 +40,7 @@ def witnessBool : GeneralFormalCircuit.WithHint (F p) (UnconstrainedNative Bool)
 
   completeness := by
     circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    cases input <;> simp_all [IsBool]
+    cases input <;> simp_all
 
 structure Input (F : Type) where
   x : F

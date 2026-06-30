@@ -474,9 +474,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
 instance {value var : TypeMap} [ProvableType value] [Witnessable F value var]
     {c : Witgen.M F (value (Witgen.FExpr F))} :
     ExplicitCircuit (witnessProgram (F:=F) (value:=value) (var:=var) c) :=
-  inferInstanceAs (ExplicitCircuit (witnessIR (F:=F) (var:=var) value (Witgen.WitgenIR.build do
-    let xs ← c
-    return .lit (toElements xs))))
+  inferInstanceAs (ExplicitCircuit (witnessIR (F:=F) (var:=var) value (Witgen.M.toIR c)))
 
 instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
     ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=

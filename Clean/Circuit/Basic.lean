@@ -346,9 +346,7 @@ This is `witness`, but with shared `letF`/`letN` computations. -/
 def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
     [Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
     Circuit F (var F) :=
-  witnessIR value (Witgen.WitgenIR.build do
-    let xs ← program
-    return .lit (toElements xs))
+  witnessIR value (Witgen.M.toIR program)
 
 instance : Witnessable F field Expression where
   witness e := witnessField (.ofFExpr e)

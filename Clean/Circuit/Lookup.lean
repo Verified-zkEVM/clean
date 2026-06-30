@@ -72,7 +72,7 @@ def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
   data table.name (size Row) |>.map fromElements
 
 namespace Lookup
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Contains (env.data lookup.table.name lookup.table.arity)
@@ -95,7 +95,7 @@ lemma soundess_def {Row : TypeMap} [ProvableType Row]
   rfl
 
 @[circuit_norm]
-lemma soundess_def_field {F : Type} [Field F]
+lemma soundess_def_field {F : Type} [FiniteField F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
@@ -112,7 +112,7 @@ lemma completeness_def {Row : TypeMap} [ProvableType Row]
   rfl
 
 @[circuit_norm]
-lemma completeness_def_field {F : Type} [Field F]
+lemma completeness_def_field {F : Type} [FiniteField F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by

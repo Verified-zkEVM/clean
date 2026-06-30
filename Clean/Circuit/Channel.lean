@@ -3,7 +3,7 @@ import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 import Mathlib.Data.Finsupp.Defs
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
@@ -113,16 +113,16 @@ variable {channel : Channel F Message}
 def emitted (mult : Expression F) (msg : Message (Expression F)) : ChannelInteraction channel :=
   { mult, msg, assumeGuarantees := false }
 
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma emitted_def (mult : Expression F) (msg : Message (Expression F)) :
   ({ mult, msg, assumeGuarantees := false } : ChannelInteraction channel) = emitted mult msg := rfl
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma emitted_mult (mult : Expression F) (msg : Message (Expression F)) :
   (emitted mult msg : ChannelInteraction channel).mult = mult := rfl
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma emitted_msg (mult : Expression F) (msg : Message (Expression F)) :
   (emitted mult msg : ChannelInteraction channel).msg = msg := rfl
-omit [Field F] in @[circuit_norm]
+omit [FiniteField F] in @[circuit_norm]
 lemma emitted_assumeGuarantees (mult : Expression F) (msg : Message (Expression F)) :
   (emitted mult msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
@@ -179,15 +179,15 @@ def pushedIf {channel : Channel F Message} (enabled : Expression F) (msg : Messa
   (pushedIf 1 msg : ChannelInteraction channel) = pushed msg := by
   simp [pushedIf, pushed]
 
-omit [Field F] in @[circuit_norm] lemma pushedIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+omit [FiniteField F] in @[circuit_norm] lemma pushedIf_def (enabled : Expression F) (msg : Message (Expression F)) :
   ({ mult := enabled, msg, assumeGuarantees := false } : ChannelInteraction channel) = pushedIf enabled msg := rfl
-omit [Field F] in @[circuit_norm] lemma emitted_eq_pushedIf (enabled : Expression F) (msg : Message (Expression F)) :
+omit [FiniteField F] in @[circuit_norm] lemma emitted_eq_pushedIf (enabled : Expression F) (msg : Message (Expression F)) :
   (emitted enabled msg : ChannelInteraction channel) = pushedIf enabled msg := rfl
-omit [Field F] in @[circuit_norm] lemma pushedIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
+omit [FiniteField F] in @[circuit_norm] lemma pushedIf_mult (enabled : Expression F) (msg : Message (Expression F)) :
   (pushedIf enabled msg : ChannelInteraction channel).mult = enabled := rfl
-omit [Field F] in @[circuit_norm] lemma pushedIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
+omit [FiniteField F] in @[circuit_norm] lemma pushedIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
   (pushedIf enabled msg : ChannelInteraction channel).msg = msg := rfl
-omit [Field F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
+omit [FiniteField F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled : Expression F) (msg : Message (Expression F)) :
   (pushedIf enabled msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=

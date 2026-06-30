@@ -40,6 +40,7 @@ instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)�
 instance : Add (FExpr F) := ⟨.add⟩
 instance : Mul (FExpr F) := ⟨.mul⟩
 instance : Inv (FExpr F) := ⟨.inv⟩
+instance : Inv (field (Witgen.FExpr F)) := inferInstanceAs (Inv (Witgen.FExpr F))
 instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
 instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
@@ -141,6 +142,41 @@ instance : CoeOut (FExpr F) (M F (FExpr F)) := ⟨letF⟩
 theorem letF_def (e : FExpr F) :
     letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
 
+instance {F: Type} [Field F] : Inhabited (FExpr F) where
+  default := .const 0
+
+instance [Field F] {value : TypeMap} [ProvableType value] : Inhabited (value (FExpr F)) where
+  default := fromElements default
+
+namespace M
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
+-- TODO WITGENIR the simp behavior currently takes an ugly low-level path because we were
+-- too lazy to craft a high-level path that works in all cases
+
+@[circuit_norm]
+def eval (env : ProverEnvironment F) (program : M F (value (FExpr F))) : value F :=
+  let (out, steps) := program #[]
+  Witgen.eval { env, locals := evalSteps env steps.toList } out
+
+theorem eval_pure (out : value (FExpr F)) (env : ProverEnvironment F) :
+    eval env (fun s => (out, s)) = Witgen.eval { env } out := by
+  rfl
+
+@[circuit_norm]
+def toIR (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
+  let built := program #[]
+  .ir built.2.toList (.lit (toElements built.1))
+
+theorem eval_toIR (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
+    program.toIR.eval env = toElements (program.eval env) := by
+  simp [toIR, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
+
+instance [Field F] {value : TypeMap} [ProvableType value] :
+    Inhabited (M F (value (FExpr F))) where
+  default := pure default
+end M
+
 /-- Assemble a witness program from a builder computation returning the output vector. -/
 def WitgenIR.build {n : ℕ} (m : M F (VExpr F n)) : WitgenIR F n :=
   .ir (m #[]).2.toList (m #[]).1
@@ -150,3 +186,57 @@ theorem WitgenIR.build_def {n : ℕ} (m : M F (VExpr F n)) :
     WitgenIR.build m = .ir (m #[]).2.toList (m #[]).1 := rfl
 
 end Witgen
+
+/--
+IR-backed prover-only inputs for `GeneralFormalCircuit.WithHint`.
+
+The verifier view is erased to `Unit`; the prover view is a typed witness program evaluated
+against the prover environment. The closure-backed escape hatch is `UnconstrainedNative`.
+-/
+structure Unconstrained (M : TypeMap) (F : Type) where
+  program : Witgen.M F (M (Witgen.FExpr F))
+
+namespace Unconstrained
+variable {value : TypeMap} [ProvableType value]
+open Witgen
+
+instance : CircuitType (Unconstrained value) where
+  Var F := M F (value (FExpr F))
+  ProverValue := value
+  Value _ := Unit
+  evalVerifier _ _ := ()
+  evalProver env program := program.eval env
+
+instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
+  inferInstanceAs (Inhabited (M F (value (FExpr F))))
+
+@[circuit_norm] lemma var_of_unconstrained :
+    Var (Unconstrained value) F = M F (value (FExpr F)) := rfl
+
+@[circuit_norm] lemma proverValue_of_unconstrained :
+    ProverValue (Unconstrained value) F = value F := rfl
+
+@[circuit_norm] lemma value_of_unconstrained :
+    Value (Unconstrained value) F = Unit := rfl
+
+@[circuit_norm] lemma eval_unconstrained [FiniteField F]
+    (env : Environment F) (v : Var (Unconstrained value) F) :
+    eval env v = () := by rfl
+
+@[circuit_norm] lemma eval_unconstrained_prover [FiniteField F]
+    (env : ProverEnvironment F) (v : Var (Unconstrained value) F) :
+    eval env v = M.eval (value := value) env v := by
+  rw [CircuitType.eval_prover (M := Unconstrained value)]
+  rfl
+
+@[circuit_norm] lemma eval_unconstrained_prover' [FiniteField F] :
+  @eval (ProverEnvironment F) (M F (value (FExpr F))) (value F) (CircuitType.proverEval (Unconstrained value))
+    = M.eval := by
+  with_unfolding_all rfl
+
+@[circuit_norm]
+def unconstrained (program : Witgen.M F (value (Witgen.FExpr F))) : Var (Unconstrained value) F :=
+  program
+end Unconstrained
+
+export Unconstrained (unconstrained)

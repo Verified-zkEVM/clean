@@ -13,17 +13,16 @@ variable {F : Type} [FiniteField F]
 
 structure Input (F : Type) where
   x : F
-  inverse : UnconstrainedDepNative field F
+  inverse : Unconstrained field F
 deriving CircuitType
 
 -- TODO automate this in the CircuitType deriver
 instance : Inhabited (Var Input F) where
-  default := { x := default, inverse _ := default }
+  default := { x := default, inverse := default }
 
--- TODO WITGENIR port this example from native to IR
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
-    let inverse ← witnessNative input.inverse
+    let inverse ← witnessProgram input.inverse
     input.x * inverse === 1
     return inverse
 
@@ -49,13 +48,13 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     -- prover-only hint is connected to the generated witness by `h_env`.
     fail_if_success (exact input)
     guard_hyp h_input :
-      input_var.x.eval env.toEnvironment = input_x ∧ input_var.inverse env = input_inverse
+      input_var.x.eval env.toEnvironment = input_x ∧ (Witgen.FExpr.eval _ _ : F) = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
 def parent : GeneralFormalCircuit F field field where
-  main input := do
-    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
+  main (input : Expression F) := do
+    circuit { x := input, inverse := unconstrained (do return input⁻¹) }
 
   Spec input out _ :=
     input * out = 1

@@ -1,4 +1,5 @@
 import Clean.Circuit.Expression
+import Clean.Utils.FiniteField
 
 /--
 _Circuit types_ are usually just structured collections of field elements.
@@ -8,7 +9,7 @@ _Circuit types_ are usually just structured collections of field elements.
 -/
 abbrev TypeMap := Type → Type
 
-variable {F : Type} [Field F] {M : TypeMap}
+variable {F : Type} [FiniteField F] {M : TypeMap}
 
 /--
 Generic typeclass for evaluation of a `Var` (symbolic circuit variable)
@@ -68,8 +69,8 @@ class CircuitType (M : TypeMap) where
   Value : TypeMap
   /-- Prover value: hint fields carry their underlying type. -/
   ProverValue : TypeMap
-  evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
-  evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
+  evalVerifier : ∀ {F : Type} [FiniteField F], Environment F → Var F → Value F
+  evalProver   : ∀ {F : Type} [FiniteField F], ProverEnvironment F → Var F → ProverValue F
 
 export CircuitType (Var Value ProverValue)
 
