@@ -188,6 +188,11 @@ lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
   simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
   simp
 
+lemma mapFinRange_eq_self {α : Type} {n : ℕ} (v : Vector α n) :
+    Vector.mapFinRange n (fun i => v[i.val]) = v := by
+  ext i
+  simp only [Vector.getElem_mapFinRange]
+
 lemma map_mapFinRange {n : ℕ} {create : Fin n → α} {f : α → β} :
   Vector.map f (Vector.mapFinRange n create) =
     Vector.mapFinRange n (fun i => f (create i)) := by

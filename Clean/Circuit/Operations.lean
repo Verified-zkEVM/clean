@@ -1,27 +1,11 @@
 import Clean.Circuit.Expression
-import Clean.Circuit.WitnessIRSugar
 import Clean.Circuit.Lookup
+import Clean.Circuit.WitnessIRSugar
 import Clean.Circuit.Provable
 import Clean.Circuit.Channel
 import Clean.Circuit.SimpGadget
 
 variable {F : Type} [FiniteField F] {α : Type} {n : ℕ}
-
-namespace Table
-
-/-- Read committed prover data through a typed table description. -/
-@[circuit_norm]
-def dataGet {Row : TypeMap} [ProvableType Row] (table : Table F Row)
-    (row : Witgen.NExpr F) (col : Fin (size Row)) : Witgen.FExpr F :=
-  .dataGet table.name (size Row) row col
-
-/-- Read prover hints through a typed table description. -/
-@[circuit_norm]
-def hintGet {Row : TypeMap} [ProvableType Row] (table : Table F Row)
-    (row : Witgen.NExpr F) (col : Fin (size Row)) : Witgen.FExpr F :=
-  .hintGet table.name (size Row) row col
-
-end Table
 
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.

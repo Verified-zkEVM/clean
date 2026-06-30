@@ -2,6 +2,7 @@ import Clean.Circuit.Expression
 import Clean.Utils.Field
 import Clean.Utils.FiniteField
 import Clean.Utils.Vector
+import Clean.Circuit.Provable
 
 /-!
 # Witness-generation IR (phase 1 sketch)
@@ -184,9 +185,9 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .arrGet xs i => xs[i.eval ctx]?.getD 0
   | .dataGet key n row col =>
-    ((ctx.env.data key n)[row.eval ctx]?.getD (.replicate n 0))[col.val]'col.isLt
+    ((ctx.env.data key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
-    ((ctx.env.hint key n)[row.eval ctx]?.getD (.replicate n 0))[col.val]'col.isLt
+    ((ctx.env.hint key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
 
 @[circuit_norm]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
@@ -215,6 +216,12 @@ def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .not b => !b.eval ctx
 
 end
+
+variable {M : TypeMap} [ProvableType M]
+
+/-- Evaluation for higher-level provable types. -/
+def eval (ctx : Ctx F) (x : M (Witgen.FExpr F)) : M F :=
+  toElements x |> Vector.map (FExpr.eval ctx) |> fromElements
 
 end Eval
 
