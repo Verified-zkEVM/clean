@@ -25,4 +25,10 @@ example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.NExpr F) :
       (((ctx.env.data.getTable (TestTable F))[row.eval ctx]?.getD default).second) := by
   simp [circuit_norm]
 
+example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.NExpr F) :
+    Witgen.FExpr.eval ctx ((TestTable F).hintGet row).second =
+      ((fromElements (((ctx.env.hint (TestTable F).name (size TestRow))[row.eval ctx]?).getD default)
+        : TestRow F).second) := by
+  simp [circuit_norm]
+
 end TestWitgenEvalProjection

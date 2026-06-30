@@ -177,4 +177,17 @@ lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.NExpr F) 
   · simp [h, Vector.mapFinRange_eq_self]
     simp only [default, ProvableType.toElements_fromElements]
 
+@[circuit_norm]
+lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.NExpr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (table.hintGet row) =
+      fromElements (((ctx.env.hint table.name (size Row))[row.eval ctx]?).getD default) := by
+  simp only [Witgen.eval, hintGet]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : row.eval ctx < (ctx.env.hint table.name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]
+
 end Table
