@@ -266,13 +266,47 @@ where
 
 end StructEval
 
+/--
+Normalize witness-IR evaluation of projections out of provable structs.
+
+The motivating term comes from typed table reads such as
+`MemoryTable.dataGet row : MemoryEntry (FExpr F)`.  When a circuit witnesses only one field, Lean
+sees a scalar expression:
+
+```
+FExpr.eval ctx (MemoryTable.dataGet row).value
+```
+
+The row-level theorem `Table.eval_dataGet` cannot fire on that term, because the projection has
+already selected one `FExpr`.  This simproc recovers the row-level shape by rewriting projections:
+
+```
+FExpr.eval ctx r.value  ~~>  (Witgen.eval ctx r).value
+```
+
+After that, ordinary `circuit_norm` can use row-level lemmas, and normal projection reduction gives
+the field that the proof actually needs.
+
+This is a simproc rather than a lemma because Lean lemmas cannot quantify over an arbitrary
+structure projection like `.value`, `.address`, etc.  The meta code recognizes projection
+applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
+simplifying the generated RHS with the small struct-evaluation theorem set below.
+-/
 open Lean Meta Simp in
 private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+  -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
+  -- the evaluation context and the scalar expression being evaluated.
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.FExpr.eval && args.size >= 2 do
     return .continue
   let ctx := args[args.size - 2]!
   let projected := args[args.size - 1]!
+
+  -- Try to view the scalar expression as a projection `base.field`.
+  --
+  -- Lean can represent projections either as a dedicated `.proj` node or as an application of the
+  -- projection function.  In both cases we return the projected base and a function that rebuilds
+  -- the same projection on a new base.
   let view? : Option (Expr × (Expr → MetaM Expr)) ←
       match projected with
       | .proj structName idx base =>
@@ -288,11 +322,19 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
           pure none
   let some (base, mkRhs) := view?
     | return Simp.Step.continue
+
+  -- Build the candidate RHS `(Witgen.eval ctx base).field`.  `mkAppM` also ensures that this is
+  -- only used when the base type has the required `ProvableType` instance.
   let evalBase ← try
       mkAppM ``Witgen.eval #[ctx, base]
     catch _ =>
       return Simp.Step.continue
   let rhs ← mkRhs evalBase
+
+  -- Prove that the candidate RHS reduces back to the original scalar evaluation.  This internal
+  -- simp set is intentionally small: using the ambient `circuit_norm` set here would let row-level
+  -- lemmas such as `Table.eval_dataGet` fire too early, before this simproc returns the row-level
+  -- term to the outer simplifier.
   let mut thms : SimpTheorems := {}
   thms ← thms.addConst ``Witgen.StructEval.eval_eq_eval
   thms ← thms.addConst ``Witgen.eval_field
@@ -305,6 +347,10 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
   unless ← isDefEq rhsSimp.expr e do
     return Simp.Step.continue
+
+  -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
+  -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
+  -- continue from there, instead of immediately descending back into scalar projections.
   let result ← rhsSimp.mkEqSymm rhs
   return .done result
 
