@@ -209,43 +209,11 @@ def memorySize (data : ProverData (F p)) : ℕ :=
   let mem := data.getTable MemoryTable
   mem.size
 
-def memoryValueEval (env : Environment (F p)) (address : Expression (F p)) : F p :=
+def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
   let mem := env.data.getTable MemoryTable
   if he : (env address).val < mem.size then
     mem[(env address).val].value
   else 0
-
-@[circuit_norm]
-def memoryValue (address : Expression (F p)) : Witgen.FExpr (F p) :=
-  MemoryTable.dataGet address.val ⟨1, by decide⟩
-
-omit p_large_enough [Fact (Nat.Prime p)] in
-/--
-  Bridge lemma: raw table lookup at the memory value column equals `memoryValueEval`,
-  which reads the typed `MemoryEntry` table built via `getTable`/`fromElements`.
--/
-lemma memoryValue_eq (env : Environment (F p)) (x : F p) :
-    ((env.data (MemoryTable (p := p)).name [1, 1].sum)[ZMod.val x]?.getD
-      (Vector.replicate [1, 1].sum 0))[1]'(by decide)
-      = (if hx : x.val < (env.data.getTable MemoryTable).size then
-          (env.data.getTable MemoryTable)[x.val].value else 0) := by
-  simp only [ProverData.getTable, Array.size_map, Array.getElem_map]
-  split
-  case isTrue h =>
-    have h2 : x.val < (env.data (MemoryTable (p := p)).name [1, 1].sum).size := h
-    rw [Array.getElem?_eq_getElem h2, Option.getD_some]
-    have hval : ∀ v : Vector (F p) [1, 1].sum,
-        (fromElements v : MemoryEntry (F p)).value = v[1]'(by decide) := by
-      intro v
-      obtain ⟨⟨l⟩, hl⟩ := v
-      match l, hl with
-      | [a, b], _ => rfl
-    rw [hval]
-    rfl
-  case isFalse h =>
-    have h2 : ¬ x.val < (env.data (MemoryTable (p := p)).name [1, 1].sum).size := h
-    rw [Array.getElem?_eq_none (by simpa using h2), Option.getD_none]
-    rfl
 
 def memory (env : ProverData (F p)) : Fin (memorySize env) → F p :=
   let mem := env.getTable MemoryTable
@@ -286,11 +254,11 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
 
-    let value1 ← witness (memoryValue addr1)
+    let value1 ← witness (MemoryTable.dataGet addr1.val).value
 
     let addr2 <== mode.isDoubleAddressing * value1
 
-    let value2 ← witness (memoryValue addr2)
+    let value2 ← witness (MemoryTable.dataGet addr2.val).value
     lookup MemoryTable ⟨addr1, value1⟩
     lookup MemoryTable ⟨addr2, value2⟩
 
@@ -322,7 +290,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   soundness := by
     circuit_proof_start [Table.staticOfFn, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      memorySize, memoryValueEval, memory, MemoryEntry, MemoryReadInput.mk.injEq]
+      memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
     set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
     simp only [MemoryTable] at h_holds
 
@@ -383,7 +351,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 
   completeness := by
     circuit_proof_start [Table.staticOfFn, DecodedAddressingMode.isEncodedCorrectly,
-      Spec.dataMemoryAccess, memory, memorySize, memoryValueEval, MemoryReadInput.mk.injEq]
+      Spec.dataMemoryAccess, memory, memorySize, memoryValue, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)
@@ -409,12 +377,12 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       constructor
       · use h_addr1_lt
         use h_mem_completeness addr1 h_addr1_lt |>.symm
-        rw [value1_def, memoryValue_eq]
-        rw [dif_pos (by rw [h_memory_table_def] at h_addr1_lt; exact h_addr1_lt)]
+        rw [value1_def]
+        simp [h_addr1_lt]
       · use h_addr2_lt
         use h_mem_completeness addr2 h_addr2_lt |>.symm
-        rw [value2_def, memoryValue_eq]
-        rw [dif_pos (by rw [h_memory_table_def] at h_addr2_lt; exact h_addr2_lt)]
+        rw [value2_def]
+        simp [h_addr2_lt]
 
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
@@ -425,8 +393,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       obtain ⟨ h_addr1_lt, h_addr2_lt ⟩ := h_mem_access
       simp only [addr1, addr1_def, addr2, addr2_def, value1_def, memoryTable]
       refine ⟨h_addr1_lt, ?_⟩
-      rw [memoryValue_eq, dif_pos h_addr1_lt]
-      exact h_addr2_lt
+      simpa [h_addr1_lt] using h_addr2_lt
     · simp at h_mem_access
       simp [addr1, addr2, *]
     · simp at h_mem_access
