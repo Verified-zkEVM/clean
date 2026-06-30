@@ -136,12 +136,18 @@ inductive NExpr (F : Type) where
 
 /-- Conditions. -/
 inductive BExpr (F : Type) where
+  | true
+  | false
   /-- Field equality condition (decided via the injective `ℕ` embedding). -/
   | feq (x y : FExpr F)
+  /-- Nat equality condition. -/
+  | neq (x y : NExpr F)
   /-- Nat-sorted less-than condition. -/
   | lt (x y : NExpr F)
   /-- Negation of a condition. -/
   | not (b : BExpr F)
+  /-- Conjunction of conditions. -/
+  | and (x y : BExpr F)
 
 end
 
@@ -211,9 +217,13 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
 
 @[circuit_norm]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
+  | .true => true
+  | .false => false
   | .feq x y => FiniteField.val (x.eval ctx) = FiniteField.val (y.eval ctx)
+  | .neq x y => x.eval ctx = y.eval ctx
   | .lt x y => x.eval ctx < y.eval ctx
   | .not b => !b.eval ctx
+  | .and x y => x.eval ctx && y.eval ctx
 
 end
 
@@ -494,7 +504,7 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
 `ℕ` embedding). -/
 @[circuit_norm]
 theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
-    (BExpr.feq x y).eval ctx = true ↔ x.eval ctx = y.eval ctx := by
+    (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]
   exact FiniteField.ext_iff.symm
 

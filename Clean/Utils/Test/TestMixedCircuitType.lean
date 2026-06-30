@@ -75,4 +75,48 @@ def parent : GeneralFormalCircuit F field field where
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
 
+structure BoolNatInput (F : Type) where
+  x : F
+  isZero : UnconstrainedBool F
+  xNat : UnconstrainedNat F
+deriving CircuitType
+
+-- TODO automate this in the CircuitType deriver
+instance : Inhabited (Var BoolNatInput F) where
+  default := { x := default, isZero := default, xNat := default }
+
+def boolNatCircuit : GeneralFormalCircuit.WithHint F BoolNatInput field where
+  main input := return input.x
+
+  Spec input out _ :=
+    out = input.x
+
+  ProverAssumptions input _ _ :=
+    input.isZero = ((FiniteField.val (F:=F) input.x : ℕ) = 0) ∧
+    input.xNat = FiniteField.val (F:=F) input.x
+
+  soundness := by
+    circuit_proof_start
+
+  completeness := by
+    circuit_proof_start
+
+def boolNatParent : GeneralFormalCircuit F field field where
+  main (input : Expression F) := do
+    boolNatCircuit {
+      x := input
+      isZero := unconstrainedBool (do return ((input.val =? 0) &&& .true))
+      xNat := unconstrainedNat (do return input.val)
+    }
+
+  Spec input out _ :=
+    out = input
+
+  soundness := by
+    circuit_proof_start [boolNatCircuit]
+
+  completeness := by
+    circuit_proof_start [boolNatCircuit]
+    simp
+
 end TestMixedCircuitType

@@ -46,6 +46,8 @@ instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
 instance : Coe ℕ (NExpr F) := ⟨.const⟩
 instance {n : ℕ} : OfNat (NExpr F) n := ⟨.const n⟩
+instance : Inhabited (NExpr F) where
+  default := .const 0
 instance : Add (NExpr F) := ⟨.add⟩
 instance : Mul (NExpr F) := ⟨.mul⟩
 instance : Div (NExpr F) := ⟨.div⟩
@@ -82,7 +84,11 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-! ## Conditions -/
 
 @[inherit_doc BExpr.feq] infix:50 " =? " => BExpr.feq
+@[inherit_doc BExpr.neq] infix:50 " =? " => BExpr.neq
 @[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
+
+instance : Inhabited (BExpr F) := ⟨.false⟩
+instance : AndOp (BExpr F) := ⟨.and⟩
 
 /-! ## Loop former -/
 
@@ -159,6 +165,16 @@ def eval (env : ProverEnvironment F) (program : M F (value (FExpr F))) : value F
   let (out, steps) := program #[]
   Witgen.eval { env, locals := evalSteps env steps.toList } out
 
+@[circuit_norm]
+def evalBool (env : ProverEnvironment F) (program : M F (BExpr F)) : Bool :=
+  let (out, steps) := program #[]
+  out.eval { env, locals := evalSteps env steps.toList }
+
+@[circuit_norm]
+def evalNat (env : ProverEnvironment F) (program : M F (NExpr F)) : ℕ :=
+  let (out, steps) := program #[]
+  out.eval { env, locals := evalSteps env steps.toList }
+
 theorem eval_pure (out : value (FExpr F)) (env : ProverEnvironment F) :
     eval env (fun s => (out, s)) = Witgen.eval { env } out := by
   rfl
@@ -172,8 +188,7 @@ theorem eval_toIR (program : M F (value (FExpr F))) (env : ProverEnvironment F) 
     program.toIR.eval env = toElements (program.eval env) := by
   simp [toIR, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
 
-instance [Field F] {value : TypeMap} [ProvableType value] :
-    Inhabited (M F (value (FExpr F))) where
+instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M
 
@@ -240,3 +255,99 @@ def unconstrained (program : Witgen.M F (value (Witgen.FExpr F))) : Var (Unconst
 end Unconstrained
 
 export Unconstrained (unconstrained)
+
+/-- IR-backed prover-only Boolean input for `GeneralFormalCircuit.WithHint`. -/
+structure UnconstrainedBool (F : Type) where
+  program : Witgen.M F (Witgen.BExpr F)
+
+namespace UnconstrainedBool
+open Witgen
+
+instance : CircuitType UnconstrainedBool where
+  Var F := M F (BExpr F)
+  ProverValue _ := Bool
+  Value _ := Unit
+  evalVerifier _ _ := ()
+  evalProver env program := program.evalBool env
+
+instance : Inhabited (Var UnconstrainedBool F) :=
+  inferInstanceAs (Inhabited (M F (BExpr F)))
+
+@[circuit_norm] lemma var_of_unconstrainedBool :
+    Var UnconstrainedBool F = M F (BExpr F) := rfl
+
+@[circuit_norm] lemma proverValue_of_unconstrainedBool :
+    ProverValue UnconstrainedBool F = Bool := rfl
+
+@[circuit_norm] lemma value_of_unconstrainedBool :
+    Value UnconstrainedBool F = Unit := rfl
+
+@[circuit_norm] lemma eval_unconstrainedBool [FiniteField F]
+    (env : Environment F) (v : Var UnconstrainedBool F) :
+    eval env v = () := by rfl
+
+@[circuit_norm] lemma eval_unconstrainedBool_prover [FiniteField F]
+    (env : ProverEnvironment F) (v : Var UnconstrainedBool F) :
+    eval env v = M.evalBool env v := by
+  rw [CircuitType.eval_prover (M := UnconstrainedBool)]
+  rfl
+
+@[circuit_norm] lemma eval_unconstrainedBool_prover' [FiniteField F] :
+  @eval (ProverEnvironment F) (M F (BExpr F)) Bool (CircuitType.proverEval UnconstrainedBool)
+    = M.evalBool := by
+  with_unfolding_all rfl
+
+@[circuit_norm]
+def unconstrainedBool (program : Witgen.M F (Witgen.BExpr F)) : Var UnconstrainedBool F :=
+  program
+end UnconstrainedBool
+
+export UnconstrainedBool (unconstrainedBool)
+
+/-- IR-backed prover-only Nat input for `GeneralFormalCircuit.WithHint`. -/
+structure UnconstrainedNat (F : Type) where
+  program : Witgen.M F (Witgen.NExpr F)
+
+namespace UnconstrainedNat
+open Witgen
+
+instance : CircuitType UnconstrainedNat where
+  Var F := M F (NExpr F)
+  ProverValue _ := ℕ
+  Value _ := Unit
+  evalVerifier _ _ := ()
+  evalProver env program := program.evalNat env
+
+instance : Inhabited (Var UnconstrainedNat F) :=
+  inferInstanceAs (Inhabited (M F (NExpr F)))
+
+@[circuit_norm] lemma var_of_unconstrainedNat :
+    Var UnconstrainedNat F = M F (NExpr F) := rfl
+
+@[circuit_norm] lemma proverValue_of_unconstrainedNat :
+    ProverValue UnconstrainedNat F = ℕ := rfl
+
+@[circuit_norm] lemma value_of_unconstrainedNat :
+    Value UnconstrainedNat F = Unit := rfl
+
+@[circuit_norm] lemma eval_unconstrainedNat [FiniteField F]
+    (env : Environment F) (v : Var UnconstrainedNat F) :
+    eval env v = () := by rfl
+
+@[circuit_norm] lemma eval_unconstrainedNat_prover [FiniteField F]
+    (env : ProverEnvironment F) (v : Var UnconstrainedNat F) :
+    eval env v = M.evalNat env v := by
+  rw [CircuitType.eval_prover (M := UnconstrainedNat)]
+  rfl
+
+@[circuit_norm] lemma eval_unconstrainedNat_prover' [FiniteField F] :
+  @eval (ProverEnvironment F) (M F (NExpr F)) ℕ (CircuitType.proverEval UnconstrainedNat)
+    = M.evalNat := by
+  with_unfolding_all rfl
+
+@[circuit_norm]
+def unconstrainedNat (program : Witgen.M F (Witgen.NExpr F)) : Var UnconstrainedNat F :=
+  program
+end UnconstrainedNat
+
+export UnconstrainedNat (unconstrainedNat)

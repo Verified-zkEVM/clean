@@ -21,18 +21,18 @@ namespace Examples.HintExample
   The hint callback tells the prover which boolean value to witness.
   The circuit constrains the output to be boolean (0 or 1).
 -/
-def witnessBool : GeneralFormalCircuit.WithHint (F p) (UnconstrainedNative Bool) field where
-  main (hint : ProverEnvironment (F p) → Bool) := do
+def witnessBool : GeneralFormalCircuit.WithHint (F p) UnconstrainedBool field where
+  main (hint : Witgen.M _ _) := do
     -- TODO WITGENIR we should be able to define prover hints written using IR
     -- and this example should use that
-    let b ← witnessNative fun env => if hint env then 1 else 0
+    let b ← witnessProgram do
+      let b ← hint
+      return .ite b 1 0
     assertBool b
     return b
 
-  Assumptions (_ : Unit) _ := True
   Spec (_ : Unit) (output : F p) _ := IsBool output
 
-  ProverAssumptions (hint : Bool) _ _ := True
   ProverSpec (hint : Bool) (b : F p) _ := b = if hint then 1 else 0
 
   soundness := by
@@ -56,7 +56,7 @@ deriving ProvableStruct
 def booleanAnd : FormalCircuit (F p) Input field where
   main | ⟨x, y⟩ => do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
-    let z ← witnessBool fun env => eval env x = 1 ∧ eval env y = 1
+    let z ← witnessBool <| unconstrainedBool (pure ((x =? 1) &&& (y =? 1)))
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z
@@ -72,10 +72,10 @@ def booleanAnd : FormalCircuit (F p) Input field where
     · grind
 
   completeness := by
-    circuit_proof_start [witnessBool, assertBool, IsBool]
+    circuit_proof_start [witnessBool, assertBool, IsBool, ZMod.val_one]
     simp_all
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
-      <;> simp_all
+      <;> simp_all [ZMod.val_one]
 
 structure MixedInput (F : Type) where
   someElement : U32 F

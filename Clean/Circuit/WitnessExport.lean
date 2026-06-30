@@ -90,9 +90,13 @@ def NExpr.toJson : NExpr F → Json
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
 
 def BExpr.toJson : BExpr F → Json
+  | .true => Json.mkObj [("type", "true")]
+  | .false => Json.mkObj [("type", "false")]
   | .feq x y => Json.mkObj [("type", "eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .neq x y => Json.mkObj [("type", "natEq"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .lt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .not b => Json.mkObj [("type", "not"), ("arg", b.toJson)]
+  | .and x y => Json.mkObj [("type", "and"), ("lhs", x.toJson), ("rhs", y.toJson)]
 
 end
 
