@@ -394,7 +394,7 @@ instance {M : TypeMap} [ProvableType M] : ExplicitCircuits (ProvableType.witness
   operations c n := [.witness (size M) (.native (toElements ∘ c))]
   channelsWithGuarantees _ _ := []
 
-instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDep M) F) :
+instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDepNative M) F) :
     ExplicitCircuit (witnessNative c (self := inferInstanceAs (Witnessable F M (Var M)))) where
   localLength _ := size M
   output offset := varFromOffset M offset

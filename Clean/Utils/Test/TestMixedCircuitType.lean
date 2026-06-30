@@ -13,7 +13,7 @@ variable {F : Type} [FiniteField F]
 
 structure Input (F : Type) where
   x : F
-  inverse : UnconstrainedDep field F
+  inverse : UnconstrainedDepNative field F
 deriving CircuitType
 
 -- TODO automate this in the CircuitType deriver

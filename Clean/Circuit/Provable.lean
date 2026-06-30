@@ -188,10 +188,10 @@ instance : ProvableType unit where
   toElements _ := #v[]
   fromElements _ := ()
 
-instance {Hint : Type} : ProvableType (Value (Unconstrained Hint)) :=
+instance {Hint : Type} : ProvableType (Value (UnconstrainedNative Hint)) :=
   inferInstanceAs (ProvableType unit)
 
-instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDep Hint)) :=
+instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :=
   inferInstanceAs (ProvableType unit)
 
 abbrev field : TypeMap := id

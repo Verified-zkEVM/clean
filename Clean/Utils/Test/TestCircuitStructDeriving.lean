@@ -5,7 +5,7 @@ namespace TestCircuitStructDeriving
 
 structure Inputs (F : Type) where
   someElement : U32 F
-  someHint : Unconstrained Bool F
+  someHint : UnconstrainedNative Bool F
 deriving CircuitType
 
 example : CircuitType Inputs := inferInstance

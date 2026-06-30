@@ -21,7 +21,7 @@ namespace Examples.HintExample
   The hint callback tells the prover which boolean value to witness.
   The circuit constrains the output to be boolean (0 or 1).
 -/
-def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field where
+def witnessBool : GeneralFormalCircuit.WithHint (F p) (UnconstrainedNative Bool) field where
   main (hint : ProverEnvironment (F p) → Bool) := do
     -- TODO WITGENIR we should be able to define prover hints written using IR
     -- and this example should use that
@@ -79,7 +79,7 @@ def booleanAnd : FormalCircuit (F p) Input field where
 
 structure MixedInput (F : Type) where
   someElement : U32 F
-  someHint : Unconstrained Bool F
+  someHint : UnconstrainedNative Bool F
 deriving CircuitType
 
 example (input : MixedInput.Var (F p)) : U32 (Expression (F p)) × (ProverEnvironment (F p) → Bool) :=
@@ -91,11 +91,11 @@ example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
 
 /--
   This captures the field-dependent hint case: the prover-only data mentions the
-  circuit field type, so `Unconstrained Bool` is not expressive enough.
+  circuit field type, so `UnconstrainedNative Bool` is not expressive enough.
 -/
 structure InputWithFieldHint (F : Type) where
   publicInput : F
-  hinted : UnconstrainedDep field F
+  hinted : UnconstrainedDepNative field F
 deriving CircuitType
 
 example (input : InputWithFieldHint.Var (F p)) :
