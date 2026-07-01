@@ -163,15 +163,6 @@ def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
     Circuit F (Vector (Expression F) m) :=
   witnessIR (fields m) program.toIR
 
-/-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
-produces the same normal form as the closure it replaced. -/
-@[circuit_norm]
-theorem Witgen.WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
-    (x : M (Expression F)) (env : ProverEnvironment F) :
-    (WitgenIR.ofExprs (toElements x)).eval env
-      = toElements (Eval.eval env.toEnvironment x) := by
-  rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
-
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
 matches the output of the witness generator passed along with a `witness` declaration,

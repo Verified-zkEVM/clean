@@ -5,12 +5,9 @@ import Clean.Utils.Vector
 import Clean.Circuit.Provable
 
 /-!
-# Witness-generation IR (phase 1 sketch)
+# Witness-generation IR
 
-A deep-embedded IR for witness-generation callbacks, replacing shallow Lean closures
-`ProverEnvironment F → Vector F m`. Goal: witgen becomes serializable data that Rust
-proving backends can interpret or compile, mirroring how constraints already export
-(see `doc/witgen-ir-plan.md` and `doc/witgen-ir-requirements.md`).
+A deep-embedded IR for witness-generation callbacks
 
 ## Design
 
@@ -18,12 +15,11 @@ A witness program (`WitgenIR F m`) is either
 - `native f` — an arbitrary Lean closure, the migration escape hatch. Not serializable.
   `eval (native f) = f` holds definitionally, which is what lets phase 2 wrap all
   existing callbacks without touching any gadget or proof.
-- `ir steps out` — structured IR: a list of scalar `let`-steps (for sharing,
-  e.g. the 32-bit sum in SHA256 `Add32` that all output bits reference), followed by a
+- `ir steps out` — structured IR: a list of scalar `let`-steps, followed by a
   vector-shaped output expression.
 
-Scalar expressions come in two sorts, reflecting the codebase's pervasive
-`field → ZMod.val → Nat ops → cast → field` pattern (requirements B.4/B.5, risk E.1):
+Scalar expressions come in 3 sorts, reflecting the codebase's pervasive
+`field → ZMod.val → Nat ops → cast → field` pattern:
 - `FExpr` — field-sorted: embedded circuit `Expression`s (which is how callbacks read
   inputs and earlier witnesses), env reads at computed indices, arithmetic, inverse
   (IsZeroField), conditionals, constant-table reads, prover-data/hint reads.
@@ -32,51 +28,17 @@ Scalar expressions come in two sorts, reflecting the codebase's pervasive
 - `BExpr` — conditions: field equality and Nat comparison (requirement B.7).
 
 The output is a `VExpr`: a literal list, a `mapRange n body` (body may reference the
-running index via `NExpr.idx`) — kept as a *loop* rather than unrolled, per the
-PR #401 lessons — or an append.
+running index via `NExpr.idx`) — kept as a *loop* rather than unrolled — or an append.
 
-## Requirements mapping (doc/witgen-ir-requirements.md, sections B/C)
+## TOOD Potential open issues
 
-- B.1 env reads ............ `FExpr.expr` (embeds `Expression F`), `FExpr.envGet`
-- B.2 field arithmetic ..... `FExpr.add/mul/const` (+ `sub/neg` smart constructors)
-- B.3 field inversion ...... `FExpr.inv`
-- B.4 val/cast round trip .. `NExpr.val`, `FExpr.ofNat` (via `FiniteField.val`/`fromNat`,
-                             so the bridge is also correct on binary fields)
-- B.5 Nat-domain ops ....... `NExpr.add/mul/div/mod/land/lor/lxor/shiftL/shiftR`
-                             (`2^k` = `shiftL 1 k`, `testBit i` = `shiftR · i % 2`)
-- B.6 vector construction .. `VExpr.lit/mapRange/append` (`set`/`rotate` from the
-                             requirements appear only in circuit-level composition of
-                             expression vectors, not inside callbacks — not needed here)
-- B.7 conditionals ......... `FExpr.ite`/`NExpr.ite` over `BExpr`
-- B.8 let-bindings ......... `Step.letF/letN` + `localVar` references
-- B.9 struct packing ....... authoring-layer concern: structs flatten to `VExpr.lit`
-                             in `ProvableType.toElements` order (phase 4/5)
-- B.10 constant tables ..... `FExpr.listGet` (getD-0 semantics)
-- C.1 inverse intrinsic .... first-class as `FExpr.inv`
-- C.3 hint nondeterminism .. `FExpr.dataGet`/`FExpr.hintGet`, keyed like `ProverData`
-
-## Open design questions (for review)
-
-1. **(resolved)** Evaluating `NExpr.val` needs `F → ℕ`. We use the existing
-   `FiniteField` class (issue #154), whose canonical `val : F → ℕ` embedding is designed
-   to cover both prime fields (`ZMod.val`) and binary fields `GF(2^n)`. `eval` requires
-   only `[FiniteField F]`: field equality in `BExpr.feq` is decided via `val` using
-   `val_injective`, so no separate `[DecidableEq F]` is needed. The class gained a
-   `fromNat` inverse of `val` (= `Nat.cast` on prime fields) so that the Nat→F bridge
-   is also meaningful on binary fields, where `Nat.cast` collapses mod 2. Phase 2 threads
-   `FiniteField` through the witgen-touching parts of core — fine per review, since
-   Clean only ever targets finite fields and `FiniteField` was meant for gadgets anyway.
-2. **One index binder.** `NExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
+1. **One index binder.** `NExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
    nesting shadows. No surveyed gadget nests mapRanges inside a single callback. If that
    changes, `idx` generalizes to de Bruijn levels.
-3. **Untyped locals.** `localVar i` is resolved in an `F ⊕ ℕ` array with a 0 default on
+2. **Untyped locals.** `localVar i` is resolved in an `F ⊕ ℕ` array with a 0 default on
    sort mismatch / out of range, keeping `eval` total without intrinsically-typed
    syntax. A decidable well-sortedness check can be layered on top later (it will be
    needed for serialization anyway).
-4. **General intrinsic registry deferred.** The surveyed gadgets need exactly two
-   nondeterministic primitives (`dataGet`, `hintGet`), so those are built in. A general
-   named-intrinsic registry (sorts, decompositions as opaque ops) is deferred to the
-   export phase; until then `native` covers anything unusual.
 -/
 
 variable {F : Type}
@@ -243,135 +205,6 @@ lemma eval_field (ctx : Ctx F) (x : FExpr F) :
     Witgen.eval (M := field) ctx x = FExpr.eval ctx x := by
   simp [Witgen.eval, explicit_provable_type]
 
-namespace StructEval
-
-variable {M : TypeMap} [ProvableStruct M]
-
-/-- Struct-preserving evaluation for witness-IR expressions. -/
-@[circuit_norm]
-def eval (ctx : Ctx F) (var : M (FExpr F)) : M F :=
-  toComponents var |> go (components M) |> fromComponents
-where
-  @[circuit_norm]
-  go : (cs : List _root_.ProvableStruct.WithProvableType) →
-      _root_.ProvableStruct.ProvableTypeList (FExpr F) cs →
-        _root_.ProvableStruct.ProvableTypeList F cs
-    | [], .nil => .nil
-    | _ :: cs, .cons a as => .cons (Witgen.eval ctx a) (go cs as)
-
-theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExpr F)) :
-    Witgen.eval ctx x = StructEval.eval ctx x := by
-  symm
-  simp only [Witgen.eval, eval, fromElements, toElements, size]
-  congr 1
-  apply eval_eq_eval_aux
-where
-  eval_eq_eval_aux (ctx : Ctx F) : (cs : List _root_.ProvableStruct.WithProvableType) →
-      (as : _root_.ProvableStruct.ProvableTypeList (FExpr F) cs) →
-    eval.go ctx cs as =
-      (_root_.ProvableStruct.componentsToElements cs as |> Vector.map (FExpr.eval ctx) |>
-        _root_.ProvableStruct.componentsFromElements cs)
-  | [], .nil => rfl
-  | c :: cs, .cons a as => by
-    simp only [_root_.ProvableStruct.componentsToElements,
-      _root_.ProvableStruct.componentsFromElements, eval.go]
-    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
-    congr
-    apply eval_eq_eval_aux
-
-end StructEval
-
-open Lean Meta Simp in
-/--
-Normalize witness-IR evaluation of projections out of provable structs.
-
-The motivating term comes from typed table reads such as
-`MemoryTable.dataGet row : MemoryEntry (FExpr F)`.  When a circuit witnesses only one field, Lean
-sees a scalar expression:
-
-```
-FExpr.eval ctx (MemoryTable.dataGet row).value
-```
-
-The row-level theorem `Table.eval_dataGet` cannot fire on that term, because the projection has
-already selected one `FExpr`.  This simproc recovers the row-level shape by rewriting projections:
-
-```
-FExpr.eval ctx r.value  ~~>  (Witgen.eval ctx r).value
-```
-
-After that, ordinary `circuit_norm` can use row-level lemmas, and normal projection reduction gives
-the field that the proof actually needs.
-
-This is a simproc rather than a lemma because Lean lemmas cannot quantify over an arbitrary
-structure projection like `.value`, `.address`, etc.  The meta code recognizes projection
-applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
-simplifying the generated RHS with the small struct-evaluation theorem set below.
--/
-private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
-  -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
-  -- the evaluation context and the scalar expression being evaluated.
-  let args := e.getAppArgs
-  unless e.getAppFn.isConstOf ``Witgen.FExpr.eval && args.size >= 2 do
-    return .continue
-  let ctx := args[args.size - 2]!
-  let projected := args[args.size - 1]!
-
-  -- Try to view the scalar expression as a projection `base.field`.
-  --
-  -- Lean can represent projections either as a dedicated `.proj` node or as an application of the
-  -- projection function.  In both cases we return the projected base and a function that rebuilds
-  -- the same projection on a new base.
-  let view? : Option (Expr × (Expr → MetaM Expr)) ←
-      match projected with
-      | .proj structName idx base =>
-        pure <| some (base, fun evalBase => pure <| mkProj structName idx evalBase)
-      | _ =>
-        let .const projName _ := projected.getAppFn | pure none
-        let some pinfo ← getProjectionFnInfo? projName | pure none
-        let projArgs := projected.getAppArgs
-        if h : pinfo.numParams < projArgs.size then
-          pure <| some (projArgs[pinfo.numParams],
-            fun evalBase => mkProjection evalBase (Name.mkSimple projName.getString!))
-        else
-          pure none
-  let some (base, mkRhs) := view?
-    | return Simp.Step.continue
-
-  -- Build the candidate RHS `(Witgen.eval ctx base).field`.  `mkAppM` also ensures that this is
-  -- only used when the base type has the required `ProvableType` instance.
-  let evalBase ← try
-      mkAppM ``Witgen.eval #[ctx, base]
-    catch _ =>
-      return Simp.Step.continue
-  let rhs ← mkRhs evalBase
-
-  -- Prove that the candidate RHS reduces back to the original scalar evaluation.  This internal
-  -- simp set is intentionally small: using the ambient `circuit_norm` set here would let row-level
-  -- lemmas such as `Table.eval_dataGet` fire too early, before this simproc returns the row-level
-  -- term to the outer simplifier.
-  let mut thms : SimpTheorems := {}
-  thms ← thms.addConst ``Witgen.StructEval.eval_eq_eval
-  thms ← thms.addConst ``Witgen.eval_field
-  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval
-  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval.go
-  thms ← thms.addDeclToUnfold ``ProvableStruct.components
-  thms ← thms.addDeclToUnfold ``ProvableStruct.toComponents
-  thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
-  let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
-  let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
-  unless ← isDefEq rhsSimp.expr e do
-    return Simp.Step.continue
-
-  -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
-  -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
-  -- continue from there, instead of immediately descending back into scalar projections.
-  let result ← rhsSimp.mkEqSymm rhs
-  return .done result
-
-simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
-attribute [circuit_norm] evalProjection
-
 end Eval
 
 /-- Vector-shaped output of a witness program. The length index makes malformed
@@ -535,74 +368,147 @@ theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
   rw [eval_ofExprs]
   simp
 
-/-!
-## Expressibility checks
+/-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
+produces the same normal form as the closure it replaced. -/
+@[circuit_norm]
+theorem WitgenIR.eval_ofExprs_toElements [FiniteField F] {M : TypeMap} [ProvableType M]
+    (x : M (Expression F)) (env : ProverEnvironment F) :
+    (WitgenIR.ofExprs (toElements x)).eval env
+      = toElements (Eval.eval env.toEnvironment x) := by
+  rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
 
-The four key callbacks from the requirements doc (`IsZeroField`, Keccak `Xor64`,
-SHA256 `Add32`, FemtoCairo memory read), expressed as IR programs. Where the agreement
-proof with the original lambda is cheap, we prove it; the rest are constructions whose
-ports (phase 5) will carry the proofs.
+/-!
+## Eval-simplification tooling
 -/
 
-section Examples
-variable [FiniteField F]
+section Eval
+variable [FiniteField F] {M : TypeMap} [ProvableStruct M]
 
-/-- Deciding field equality via the `ℕ` embedding agrees with propositional equality. -/
-theorem val_eq_zero_iff (x : F) : FiniteField.val x = 0 ↔ x = 0 := by
-  rw [← FiniteField.val_zero (F := F), FiniteField.val_inj]
+namespace StructEval
+/-- Struct-preserving evaluation for witness-IR expressions. -/
+@[circuit_norm]
+def eval (ctx : Ctx F) (var : M (FExpr F)) : M F :=
+  toComponents var |> go (components M) |> fromComponents
+where
+  @[circuit_norm]
+  go : (cs : List _root_.ProvableStruct.WithProvableType) →
+      _root_.ProvableStruct.ProvableTypeList (FExpr F) cs →
+        _root_.ProvableStruct.ProvableTypeList F cs
+    | [], .nil => .nil
+    | _ :: cs, .cons a as => .cons (Witgen.eval ctx a) (go cs as)
 
-/-- `IsZeroField` witness: `fun env => if env x ≠ 0 then (env x)⁻¹ else 0`. -/
-def isZeroWitness (x : Expression F) : WitgenIR F 1 :=
-  .ir [] (.lit #v[.ite (.feq (.expr x) (.const 0)) (.const 0) (.inv (.expr x))])
+theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExpr F)) :
+    Witgen.eval ctx x = StructEval.eval ctx x := by
+  symm
+  simp only [Witgen.eval, eval, fromElements, toElements, size]
+  congr 1
+  apply eval_eq_eval_aux
+where
+  eval_eq_eval_aux (ctx : Ctx F) : (cs : List _root_.ProvableStruct.WithProvableType) →
+      (as : _root_.ProvableStruct.ProvableTypeList (FExpr F) cs) →
+    eval.go ctx cs as =
+      (_root_.ProvableStruct.componentsToElements cs as |> Vector.map (FExpr.eval ctx) |>
+        _root_.ProvableStruct.componentsFromElements cs)
+  | [], .nil => rfl
+  | c :: cs, .cons a as => by
+    simp only [_root_.ProvableStruct.componentsToElements,
+      _root_.ProvableStruct.componentsFromElements, eval.go]
+    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+    congr
+    apply eval_eq_eval_aux
+end StructEval
 
-example [DecidableEq F] (x : Expression F) (env : ProverEnvironment F) :
-    (isZeroWitness x).eval env = #v[if x.eval env.toEnvironment ≠ 0
-      then (x.eval env.toEnvironment)⁻¹ else 0] := by
-  ext i hi
-  simp [isZeroWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, BExpr.eval,
-    evalSteps, ite_not]
+open Lean Meta Simp in
+/--
+Normalize witness-IR evaluation of projections out of provable structs.
 
-/-- One byte of the Keccak `Xor64` witness: `((env x).val ^^^ (env y).val : F)`. -/
-def xorByteWitness (x y : Expression F) : WitgenIR F 1 :=
-  .ir [] (.lit #v[.ofNat (.lxor (.val (.expr x)) (.val (.expr y)))])
+The motivating term comes from typed table reads such as
+`MemoryTable.dataGet row : MemoryEntry (FExpr F)`.  When a circuit witnesses only one field, Lean
+sees a scalar expression:
 
-example (x y : Expression F) (env : ProverEnvironment F) :
-    (xorByteWitness x y).eval env
-      = #v[FiniteField.fromNat
-        (FiniteField.val (x.eval env.toEnvironment) ^^^ FiniteField.val (y.eval env.toEnvironment))] := by
-  ext i hi
-  simp [xorByteWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, NExpr.eval,
-    evalSteps]
+```
+FExpr.eval ctx (MemoryTable.dataGet row).value
+```
 
-/-- `Σ i, (env a[i]).val * 2^i` — the Nat value of a vector of bit-variables
-(SHA256 `Add32.evalBitsNat`), folded into an `NExpr` at authoring time. -/
-def bitsValExpr (a : Vector (Expression F) 32) : NExpr F :=
-  Fin.foldl 32 (fun acc i =>
-    .add acc (.shiftL (.val (.expr a[i.val])) (.const i.val))) (.const 0)
+The row-level theorem `Table.eval_dataGet` cannot fire on that term, because the projection has
+already selected one `FExpr`.  This simproc recovers the row-level shape by rewriting projections:
 
-/-- SHA256 `Add32` sum witness:
-`let s := (evalBitsNat a + evalBitsNat b) % 2^32; Vector.ofFn fun i => (s / 2^i % 2 : F)`.
-The shared sum `s` becomes a `letN` step; the 32 output bits a `mapRange` loop. -/
-def add32Witness (a b : Vector (Expression F) 32) : WitgenIR F 32 :=
-  .ir [.letN (.mod (.add (bitsValExpr a) (bitsValExpr b)) (.const (2^32)))]
-    (.mapRange 32 (.ofNat (.mod (.shiftR (.localVar 0) .idx) (.const 2))))
+```
+FExpr.eval ctx r.value  ~~>  (Witgen.eval ctx r).value
+```
 
-/-- FemtoCairo-style nondeterministic memory read:
-`if (env addr).val < memSize then (data "Memory")[addr.val].value else 0`,
-with rows laid out as `(address, value)` pairs. -/
-def memReadWitness (addr : Expression F) (memSize : ℕ) : WitgenIR F 1 :=
-  .ir []
-    (.lit #v[.ite (.lt (.val (.expr addr)) (.const memSize))
-      (.dataGet "Memory" 2 (.val (.expr addr)) 1)
-      (.const 0)])
+After that, ordinary `circuit_norm` can use row-level lemmas, and normal projection reduction gives
+the field that the proof actually needs.
 
-/-- `fieldToBits`-style decomposition (`Gadgets.ToBits`): bit `i` is
-`(x.val >>> i) % 2`, as a `mapRange` loop over the index. -/
-def toBitsWitness (n : ℕ) (x : Expression F) : WitgenIR F n :=
-  .ir [] (.mapRange n (.ofNat (.testBit (.val (.expr x)) .idx)))
+This is a simproc rather than a lemma because Lean lemmas cannot quantify over an arbitrary
+structure projection like `.value`, `.address`, etc.  The meta code recognizes projection
+applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
+simplifying the generated RHS with the small struct-evaluation theorem set below.
+-/
+private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+  -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
+  -- the evaluation context and the scalar expression being evaluated.
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.FExpr.eval && args.size >= 2 do
+    return .continue
+  let ctx := args[args.size - 2]!
+  let projected := args[args.size - 1]!
 
-end Examples
+  -- Try to view the scalar expression as a projection `base.field`.
+  --
+  -- Lean can represent projections either as a dedicated `.proj` node or as an application of the
+  -- projection function.  In both cases we return the projected base and a function that rebuilds
+  -- the same projection on a new base.
+  let view? : Option (Expr × (Expr → MetaM Expr)) ←
+      match projected with
+      | .proj structName idx base =>
+        pure <| some (base, fun evalBase => pure <| mkProj structName idx evalBase)
+      | _ =>
+        let .const projName _ := projected.getAppFn | pure none
+        let some pinfo ← getProjectionFnInfo? projName | pure none
+        let projArgs := projected.getAppArgs
+        if h : pinfo.numParams < projArgs.size then
+          pure <| some (projArgs[pinfo.numParams],
+            fun evalBase => mkProjection evalBase (Name.mkSimple projName.getString!))
+        else
+          pure none
+  let some (base, mkRhs) := view?
+    | return Simp.Step.continue
 
+  -- Build the candidate RHS `(Witgen.eval ctx base).field`.  `mkAppM` also ensures that this is
+  -- only used when the base type has the required `ProvableType` instance.
+  let evalBase ← try
+      mkAppM ``Witgen.eval #[ctx, base]
+    catch _ =>
+      return Simp.Step.continue
+  let rhs ← mkRhs evalBase
+
+  -- Prove that the candidate RHS reduces back to the original scalar evaluation.  This internal
+  -- simp set is intentionally small: using the ambient `circuit_norm` set here would let row-level
+  -- lemmas such as `Table.eval_dataGet` fire too early, before this simproc returns the row-level
+  -- term to the outer simplifier.
+  let mut thms : SimpTheorems := {}
+  thms ← thms.addConst ``Witgen.StructEval.eval_eq_eval
+  thms ← thms.addConst ``Witgen.eval_field
+  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval
+  thms ← thms.addDeclToUnfold ``Witgen.StructEval.eval.go
+  thms ← thms.addDeclToUnfold ``ProvableStruct.components
+  thms ← thms.addDeclToUnfold ``ProvableStruct.toComponents
+  thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
+  let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+  let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
+  unless ← isDefEq rhsSimp.expr e do
+    return Simp.Step.continue
+
+  -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
+  -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
+  -- continue from there, instead of immediately descending back into scalar projections.
+  let result ← rhsSimp.mkEqSymm rhs
+  return .done result
+
+simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
+attribute [circuit_norm] evalProjection
+end Eval
 end Witgen
 
 export Witgen (WitgenIR)
