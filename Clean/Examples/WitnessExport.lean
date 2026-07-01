@@ -30,7 +30,7 @@ namespace Examples.WitnessExport
 
 -- a native witness is rejected, with its location
 def nativeCircuit : Circuit (F pBabybear) (Expression (F pBabybear)) :=
-  witnessFieldNative fun _ => 42
+  witnessNative fun _ => 42
 
 /-- error: not exportable: witness operations at flat indices [0] are native closures -/
 #guard_msgs in

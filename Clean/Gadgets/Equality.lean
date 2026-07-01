@@ -161,7 +161,7 @@ instance : HasAssignEq (Expression F) F where
 
 instance : HasAssignEq (M (Expression F)) F where
   assignEq := fun rhs => do
-    let w ← ProvableType.witness (.ofExprs (toElements rhs))
+    let w ← ProvableType.witness M (.ofExprs (toElements rhs))
     w === rhs
     return w
 

@@ -14,8 +14,7 @@ Makes witness-IR programs read like normal code:
 - `VExpr.range n fun i => ...` — loop former whose body receives the index as an
   `NExpr` (applied to `.idx` at construction time, so the lambda is authoring-time
   only and the result is first-order data),
-- a builder monad `Witgen.M` with `letF`/`letN` for shared intermediate values,
-  assembled by `WitgenIR.build`.
+- a builder monad `Witgen.M` with `letF`/`letN` for shared intermediate values.
 
 Example (SHA256 `Add32`-style):
 ```
@@ -243,27 +242,24 @@ theorem eval_pure (out : value (FExpr F)) (env : ProverEnvironment F) :
     eval env (fun s => (out, s)) = Witgen.eval { env } out := by
   rfl
 
+/-- Assemble a witness program from a builder computation returning the output vector. -/
 @[circuit_norm]
-def toIR (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
-  let built := program #[]
-  .ir built.2.toList (.lit (toElements built.1))
+def toIR {n : ℕ} (program : M F (VExpr F n)) : WitgenIR F n :=
+  let (out, steps) := program #[]
+  .ir steps.toList out
 
-theorem eval_toIR (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
-    program.toIR.eval env = toElements (program.eval env) := by
-  simp [toIR, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
+@[circuit_norm]
+def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
+  let (out, steps) := program #[]
+  .ir steps.toList (.lit (toElements out))
+
+theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
+    program.toIRLiteral.eval env = toElements (program.eval env) := by
+  simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
 
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M
-
-/-- Assemble a witness program from a builder computation returning the output vector. -/
-def WitgenIR.build {n : ℕ} (m : M F (VExpr F n)) : WitgenIR F n :=
-  .ir (m #[]).2.toList (m #[]).1
-
-@[circuit_norm]
-theorem WitgenIR.build_def {n : ℕ} (m : M F (VExpr F n)) :
-    WitgenIR.build m = .ir (m #[]).2.toList (m #[]).1 := rfl
-
 end Witgen
 
 /--

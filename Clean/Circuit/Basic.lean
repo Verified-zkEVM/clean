@@ -87,49 +87,19 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 -- core operations we can do in a circuit
 
-/-- Create a new variable. -/
-@[circuit_norm]
-def witnessVarNative (compute : ProverEnvironment F → F) : Circuit F (Variable F) :=
-  fun (offset : ℕ) =>
-    let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 (.native fun env => #v[compute env])])
-
-/-- Create a new variable, as an `Expression`. -/
-@[circuit_norm]
-def witnessFieldNative (compute : ProverEnvironment F → F) := do
-  let v ← witnessVarNative compute
-  return var v
-
-/-- Create a vector of variables. -/
-@[circuit_norm]
-def witnessVarsNative (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
-  fun (offset : ℕ) =>
-    let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m (.native compute)])
-
-/-- Create a vector of expressions. -/
-@[circuit_norm]
-def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
-  fun (offset : ℕ) =>
-    let vars := varFromOffset (fields m) offset
-    (vars, [.witness m (.native compute)])
-
-/-- Witness a single field element computed by the given witness-IR program,
-returning the raw `Variable`. -/
+/-- Low-level method to create a new `Variable` from a scalar `WitgenIR`. -/
 @[circuit_norm]
 def witnessVar (ir : WitgenIR F 1) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     (⟨offset⟩, [.witness 1 ir])
 
-/-- Witness a single field element computed by the given witness-IR program.
-Prefer the generic `witness` entry point; an `FExpr` coerces into `WitgenIR F 1`. -/
+/-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (ir : WitgenIR F 1) : Circuit F (Expression F) :=
+def witnessField (e : Witgen.FExpr F) : Circuit F (Expression F) :=
   fun (offset : ℕ) =>
-    (var ⟨offset⟩, [.witness 1 ir])
+    (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
 
-/-- Witness `m` field elements computed by a vector-shaped witness-IR expression.
-Use `witnessIR` for programs with `let`-steps. -/
+/-- Create a vector of expressions. -/
 @[circuit_norm]
 def witnessVector (m : ℕ) (out : Witgen.VExpr F m) :
     Circuit F (Vector (Expression F) m) :=
@@ -179,36 +149,28 @@ def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel
   let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
-/-- Witness a value of a provable type computed by the given witness-IR program
-(producing its `size α` field elements in `toElements` order).
-IR-based counterpart of `ProvableType.witnessNative`. -/
+/-- Low-level method to create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (ir : WitgenIR F (size α)) :
-    Circuit F (α (Expression F)) :=
+def ProvableType.witness (M : TypeMap) [ProvableType M] (ir : WitgenIR F (size M)) :
+    Circuit F (M (Expression F)) :=
   fun (offset : ℕ) =>
-    (varFromOffset α offset, [.witness (size α) ir])
+    (varFromOffset M offset, [.witness (size M) ir])
+
+/-- Create a vector of expressions computed by a monadic witness-IR program.
+Use this when the vector witness has shared `let` computations or compact loops. -/
+@[circuit_norm]
+def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
+    Circuit F (Vector (Expression F) m) :=
+  ProvableType.witness (M := fields m) program.toIR
 
 /-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem Witgen.WitgenIR.eval_ofExprs_toElements {α : TypeMap} [ProvableType α]
-    (x : α (Expression F)) (env : ProverEnvironment F) :
+theorem Witgen.WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
+    (x : M (Expression F)) (env : ProverEnvironment F) :
     (Witgen.WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
   rw [Witgen.WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
-
-/-- Create a new variable of an arbitrary "provable type". -/
-@[circuit_norm]
-def ProvableType.witnessNative {α : TypeMap} [ProvableType α] (compute : ProverEnvironment F → α F) :
-    Circuit F (α (Expression F)) :=
-  fun (offset : ℕ) =>
-    let var := varFromOffset α offset
-    (var, [.witness (size α) (.native fun env => compute env |> toElements)])
-
-@[circuit_norm]
-def ProvableVector.witnessNative {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
-  ProvableType.witnessNative (α:=ProvableVector α m) compute
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -298,8 +260,7 @@ attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 end
 
-export Circuit (witnessVar witnessField witnessVector
-  witnessVarNative witnessFieldNative witnessVarsNative witnessVectorNative assertZero lookup)
+export Circuit (witnessVar witnessField witnessVector assertZero lookup)
 
 -- general `witness` method
 
@@ -312,18 +273,13 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   loops, which the per-element form cannot express). The first argument gives the
   result type, since a program's output length alone does not determine it. -/
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
-  /-- Witness a value computed by an arbitrary Lean closure (not exportable;
-  the migration escape hatch). -/
-  witnessNative : (ProverEnvironment F → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_def (xs : value (Witgen.FExpr F)) :
-    witness xs = var_eq ▸ ProvableType.witness (.ofFExprs (toElements xs)) := by intros; rfl
+    witness xs = var_eq ▸ ProvableType.witness value (.ofFExprs (toElements xs)) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
-    witnessIR code = var_eq ▸ ProvableType.witness code := by intros; rfl
-  witnessNative_eq (compute : ProverEnvironment F → value F) :
-    witnessNative compute = var_eq ▸ ProvableType.witnessNative compute := by intros; rfl
+    witnessIR code = var_eq ▸ ProvableType.witness value code := by intros; rfl
 
-export Witnessable (witness witnessNative)
+export Witnessable (witness)
 
 /-- Witness a value computed by a general witness-IR program.
 The value type is explicit because a program's output length alone does not determine it. -/
@@ -333,41 +289,36 @@ def witnessIR (value : TypeMap) [ProvableType value] {var : TypeMap}
     Circuit F (var F) :=
   inst.witnessIR code
 
-/-- Witness `m` field elements computed by a monadic witness-IR program.
-Use this when the vector witness has shared `letF`/`letN` computations or compact loops. -/
 @[circuit_norm]
-def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
-    Circuit F (Vector (Expression F) m) :=
-  ProvableType.witness (α := fields m) (Witgen.WitgenIR.build program)
+def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
+    [inst : Witnessable F value var] (compute : ProverEnvironment F → value F) :
+    Circuit F (var F) :=
+  inst.witnessIR (.native fun env => compute env |> toElements)
 
 /-- Witness a provable value computed by a monadic witness-IR program.
-This is `witness`, but with shared `letF`/`letN` computations. -/
+This is `witness`, but with shared `let` computations. -/
 @[circuit_norm]
 def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
     [Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
     Circuit F (var F) :=
-  witnessIR value (Witgen.M.toIR program)
+  witnessIR value program.toIRLiteral
 
 instance : Witnessable F field Expression where
-  witness e := witnessField (.ofFExpr e)
-  witnessIR := witnessField
-  witnessNative := witnessFieldNative
+  witness e offset := (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
+  witnessIR code offset := (var ⟨offset⟩, [.witness 1 code])
 
-instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
+instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
   witness v := witnessVector m (.lit v)
-  witnessIR := ProvableType.witness
-  witnessNative := witnessVectorNative m
+  witnessIR := ProvableType.witness (fields m)
 
-instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
-  witness xs := ProvableType.witness (.ofFExprs (toElements xs))
-  witnessIR := ProvableType.witness
-  witnessNative := ProvableType.witnessNative
+instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
+  witness xs := ProvableType.witness M (.ofFExprs (toElements xs))
+  witnessIR := ProvableType.witness M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness xs := ProvableType.witness (.ofFExprs (toElements xs))
-  witnessIR := ProvableType.witness
-  witnessNative := ProvableVector.witnessNative m
+  witness xs := ProvableType.witness (ProvableVector α m) (.ofFExprs (toElements xs))
+  witnessIR := ProvableType.witness (ProvableVector α m)
 
 -- witness generation
 
@@ -466,8 +417,8 @@ macro_rules
 
 example :
   let add (x : Expression F) := do
-    let y : Expression F ← witnessNative fun _ => 1
-    let z ← witnessNative fun eval => eval (x + y)
+    let y ← witness 1
+    let z ← witness (x + y)
     assertZero (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length
