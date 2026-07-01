@@ -1,12 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
-section
+namespace Gadgets.SHA256.And32
 variable {p : ℕ} [Fact p.Prime]
-
-instance {F: Type} [Field F] {n} : CoeOut (Vector (Witgen.FExpr F) n) (Witgen.VExpr F n) where
-  coe es := .lit es
-
-namespace Gadgets.SHA256
 
 /-!
 # 32-bit Bitwise AND for SHA-256
@@ -15,26 +10,17 @@ Per bit: z = a · b  (correct when a, b ∈ {0, 1}).
 Witnesses 32 output bits.
 -/
 
-/-- Bitwise AND of two 32-bit words.
-    Per bit: z = a · b  (correct when a, b ∈ {0, 1}). -/
-def and32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  -- TODO WITGENIR: can we have a more intuitive way to write this?
-  -- probably, "indexing into a vector of expressions" should be expressible _within_ the IR,
-  -- not just at the meta level
-  let z ← witnessVector 32 (.lit <| .ofFn fun i => a[i] * b[i])
-  Circuit.forEach (Vector.finRange 32) fun i =>
-    assertZero (z[i] - a[i] * b[i])
-  return z
-
-namespace And32
-
 structure Inputs (F : Type) where
   a : fields 32 F
   b : fields 32 F
 deriving ProvableStruct
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
-  and32 input.a input.b
+/-- Bitwise AND of two 32-bit words.
+    Per bit: z = a · b  (correct when a, b ∈ {0, 1}). -/
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
+  let { a, b } := input
+  let z <== Vector.ofFn fun i => a[i] * b[i]
+  return z
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   Normalized input.a ∧ Normalized input.b
@@ -103,50 +89,31 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
   elaborate_circuit
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [and32]
+  circuit_proof_start
+  rw [h_holds]; clear h_holds
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
-  have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
-    intro i
-    have := h_holds i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp (by rw [sub_eq_add_neg]; exact this)
-  have h_z : Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + i} : Expression (F p)))
-      = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
-    ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
-  rw [h_z]
-  have h_norm : ∀ i : Fin 32, env.get (i₀ + i.val) = 0 ∨ env.get (i₀ + i.val) = 1 := by
-    intro i; rw [h_eq i]; exact IsBool.and_is_bool (ha i) (hb i)
-  refine ⟨?_, fun i => ?_⟩
-  · simp only [valueBits]
-    simp_rw [show ∀ i : Fin 32, (Vector.ofFn fun j : Fin 32 => env.get (i₀ + j.val))[i] =
-        env.get (i₀ + i.val) from fun i => by simp [Vector.getElem_ofFn]]
-    simp_rw [h_eq, IsBool.and_eq_val_and (ha _) (hb _)]
-    exact (bool_finsum_and 32 (fun i => (input_a[i] : F p).val) (fun i => (input_b[i] : F p).val)
-      (fun i => by rcases ha i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one])
-      (fun i => by rcases hb i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one])).symm
-  · have : (Vector.ofFn fun j : Fin 32 => env.get (i₀ + j.val))[i] = env.get (i₀ + i.val) := by
-      simp [Vector.getElem_ofFn]
-    rw [this]; exact h_norm i
+  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input_a h_input_b
+  have h : Vector.map (Expression.eval env) (.ofFn fun i => input_var_a[i.val] * input_var_b[i.val])
+      = .ofFn fun i => input_a[i.val] * input_b[i.val] := by
+    simp [Vector.ext_iff, circuit_norm, h_input_a, h_input_b]
+  rw [h]
+  simp_all only [Normalized, valueBits, Fin.getElem_fin, Vector.getElem_ofFn]
+  constructor; swap
+  · intro i
+    specialize ha i; specialize hb i
+    grind
+  simp_rw [IsBool.and_eq_val_and (ha _) (hb _)]
+  apply (bool_finsum_and 32 (fun i => (input_a[i] : F p).val) (fun i => (input_b[i] : F p).val)
+    (fun i => by rcases ha i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one])
+    (fun i => by rcases hb i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one])).symm
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  circuit_proof_start [and32]
-  intro i
-  have := h_env i
-  simp only [circuit_norm, Vector.getElem_ofFn] at this
-  rw [this]; ring
+  circuit_proof_start
+  simp_all [circuit_norm, Vector.ext_iff]
+  grind
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
 
-end And32
-end Gadgets.SHA256
-end
+end Gadgets.SHA256.And32
