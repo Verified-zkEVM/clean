@@ -341,12 +341,15 @@ instance {k : ℕ} : ExplicitCircuits (F:=F) (witnessVector k) where
   operations out n := [.witness k (.ir [] out)]
   channelsWithGuarantees _ _ := []
 
-instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} :
-    ExplicitCircuit (ProvableType.witness M ir) where
+instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} : ExplicitCircuit (witnessIR M ir) where
   localLength _ := size M
   output n := varFromOffset M n
   operations n := [.witness (size M) ir]
   channelsWithGuarantees _ := []
+
+instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
+    ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=
+  inferInstanceAs (ExplicitCircuit (witnessIR (fields m) c.toIR))
 
 /-- Bridge for scalar `witness` call sites (the family instance is keyed at
 `field (FExpr F)` / `size field`, while call sites elaborate at the literal). -/
@@ -358,16 +361,6 @@ instance {e : Witgen.FExpr F} :
 instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
     ExplicitCircuit (witness (value := (Vector · m)) (var := Var (fields m)) v) :=
   inferInstanceAs (ExplicitCircuit (witnessVector m (.lit v)))
-
-/-- Bridge for scalar `witnessIR` call sites at the literal length 1. -/
-instance {code : WitgenIR F 1} :
-    ExplicitCircuit (witnessIR field (var := Expression) code) :=
-  inferInstanceAs (ExplicitCircuit (ProvableType.witness field code))
-
-/-- Bridge for vector `witnessIR` call sites at literal length `m`. -/
-instance {m : ℕ} {code : WitgenIR F m} :
-    ExplicitCircuit (witnessIR (fields m) (var := Var (fields m)) code) :=
-  inferInstanceAs (ExplicitCircuit (ProvableType.witness (fields m) code))
 
 instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDepNative M) F) :
     ExplicitCircuit (witnessNative c (inst := inferInstanceAs (Witnessable F M (Var M)))) where
@@ -381,7 +374,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
     rw [inst.witness_def]
-    show _ = inst.var_eq ▸ (ProvableType.witness value (.ofFExprs (toElements c))).output n
+    show _ = inst.var_eq ▸ (witnessIR value (.ofFExprs (toElements c))).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -412,23 +405,23 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
     simp [circuit_norm]
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
-    ExplicitCircuits (witnessIR (F:=F) (var:=var) value) where
+    ExplicitCircuits (inst.witnessIR (F:=F) (var:=var) (value := value)) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
-    rw [witnessIR, inst.witnessIR_def]
-    show _ = inst.var_eq ▸ (ProvableType.witness value c).output n
+    rw [inst.witnessIR_def]
+    show _ = inst.var_eq ▸ (witnessIR value c).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
   localLength _ _ := size value
   localLength_eq c n := by
-    rw [witnessIR, inst.witnessIR_def, Circuit.localLength, eqRec_eq_cast,
+    rw [inst.witnessIR_def, Circuit.localLength, eqRec_eq_cast,
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
   operations c n := [.witness (size value) c]
   operations_eq c n := by
-    rw [witnessIR, inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+    rw [inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]
     rfl
 
@@ -446,14 +439,10 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       snd_cast (by rw [inst.var_eq])]
     simp [circuit_norm]
 
-instance {value var : TypeMap} [ProvableType value] [Witnessable F value var]
+instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var]
     {c : Witgen.M F (value (Witgen.FExpr F))} :
     ExplicitCircuit (witnessProgram (F:=F) (value:=value) (var:=var) c) :=
-  inferInstanceAs (ExplicitCircuit (witnessIR (F:=F) (var:=var) value c.toIRLiteral))
-
-instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
-    ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=
-  inferInstanceAs (ExplicitCircuit (ProvableType.witness (fields m) c.toIR))
+  inferInstanceAs (ExplicitCircuit (inst.witnessIR (F:=F) (var:=var) (value := value) c.toIRLiteral))
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witnessNative (F:=F) (value:=value) (var:=var)) where
@@ -461,7 +450,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output_eq c n := by
     simp only [witnessNative]
     rw [inst.witnessIR_def]
-    show _ = inst.var_eq ▸ (ProvableType.witness value (.native (fun env => c env |> toElements))).output n
+    show _ = inst.var_eq ▸ (witnessIR value (.native (fun env => c env |> toElements))).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -545,8 +534,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
 attribute [explicit_circuit_unfold_type] Circuit
 
 attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessField witnessVector
-  ProvableType.witness witness witnessNative
-  witnessIR witnessProgram witnessVectorProgram
+  witness witnessNative witnessIR witnessProgram witnessVectorProgram
   assertZero lookup Channel.emit Channel.pull Channel.push Channel.pullIf Channel.pushIf
   Pure.pure Bind.bind Functor.map
 

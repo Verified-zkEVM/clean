@@ -435,7 +435,7 @@ theorem WitgenIR.eval_native_apply {m : ℕ} [FiniteField F]
 ## Smart constructors
 
 The base building blocks used by the IR-based witness entry points
-(`witnessField`, `witnessVector`, `ProvableType.witness`) and by `<==`.
+(`witnessField`, `witnessVector`, `witnessIR`) and by `<==`.
 Their `eval` lemmas are tagged `circuit_norm` so that IR-built witnesses
 simp-normalize to exactly the same hypothesis shapes as the closures they replace.
 -/

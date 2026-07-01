@@ -154,14 +154,14 @@ class HasAssignEq (β : Type) (F : outParam Type) [FiniteField F] where
   assignEq : β → Circuit F β
 
 instance : HasAssignEq (Expression F) F where
-  assignEq := fun rhs => do
+  assignEq rhs := do
     let w ← witness (.expr rhs)
     w === rhs
     return w
 
 instance : HasAssignEq (M (Expression F)) F where
-  assignEq := fun rhs => do
-    let w ← ProvableType.witness M (.ofExprs (toElements rhs))
+  assignEq rhs := do
+    let w ← witnessIR M (.ofExprs (toElements rhs))
     w === rhs
     return w
 

@@ -149,9 +149,9 @@ def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel
   let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
-/-- Low-level method to create a new variable of an arbitrary "provable type". -/
+/-- Low-level method to create a new variable of an arbitrary "provable type" from raw `WitgenIR`. -/
 @[circuit_norm]
-def ProvableType.witness (M : TypeMap) [ProvableType M] (ir : WitgenIR F (size M)) :
+def witnessIR (M : TypeMap) [ProvableType M] (ir : WitgenIR F (size M)) :
     Circuit F (M (Expression F)) :=
   fun (offset : ℕ) =>
     (varFromOffset M offset, [.witness (size M) ir])
@@ -161,16 +161,16 @@ Use this when the vector witness has shared `let` computations or compact loops.
 @[circuit_norm]
 def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
     Circuit F (Vector (Expression F) m) :=
-  ProvableType.witness (M := fields m) program.toIR
+  witnessIR (fields m) program.toIR
 
 /-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
 theorem Witgen.WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
     (x : M (Expression F)) (env : ProverEnvironment F) :
-    (Witgen.WitgenIR.ofExprs (toElements x)).eval env
+    (WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
-  rw [Witgen.WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
+  rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -265,30 +265,20 @@ export Circuit (witnessVar witnessField witnessVector assertZero lookup)
 -- general `witness` method
 
 class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  /-- Witness a value given per-element witness-IR expressions, in the shape of the
-  value type itself (so the type is inferred from the argument, as with the old
-  closure-based API). The main entry point. -/
+  /-- Witness a provable value. -/
   witness : value (Witgen.FExpr F) → Circuit F (var F)
-  /-- Witness a value computed by a general witness-IR program (with `let`-steps and
-  loops, which the per-element form cannot express). The first argument gives the
-  result type, since a program's output length alone does not determine it. -/
+  /-- Witness a value computed by a general witness-IR program, with `let`-steps and
+  loops, which the per-element form cannot express. -/
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_def (xs : value (Witgen.FExpr F)) :
-    witness xs = var_eq ▸ ProvableType.witness value (.ofFExprs (toElements xs)) := by intros; rfl
+    witness xs = var_eq ▸ _root_.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
-    witnessIR code = var_eq ▸ ProvableType.witness value code := by intros; rfl
+    witnessIR code = var_eq ▸ _root_.witnessIR value code := by intros; rfl
 
 export Witnessable (witness)
 
-/-- Witness a value computed by a general witness-IR program.
-The value type is explicit because a program's output length alone does not determine it. -/
-@[circuit_norm]
-def witnessIR (value : TypeMap) [ProvableType value] {var : TypeMap}
-    [inst : Witnessable F value var] (code : WitgenIR F (size value)) :
-    Circuit F (var F) :=
-  inst.witnessIR code
-
+/-- Witness a provable value computed by an arbitrary Lean closure. -/
 @[circuit_norm]
 def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
     [inst : Witnessable F value var] (compute : ProverEnvironment F → value F) :
@@ -299,26 +289,26 @@ def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
 This is `witness`, but with shared `let` computations. -/
 @[circuit_norm]
 def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
-    [Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
+    [inst : Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
     Circuit F (var F) :=
-  witnessIR value program.toIRLiteral
+  inst.witnessIR (value := value) program.toIRLiteral
 
 instance : Witnessable F field Expression where
   witness e offset := (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
   witnessIR code offset := (var ⟨offset⟩, [.witness 1 code])
 
 instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
-  witness v := witnessVector m (.lit v)
-  witnessIR := ProvableType.witness (fields m)
+  witness v := witnessVector m v
+  witnessIR := witnessIR _
 
 instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
-  witness xs := ProvableType.witness M (.ofFExprs (toElements xs))
-  witnessIR := ProvableType.witness M
+  witness xs := witnessIR M (.ofFExprs (toElements xs))
+  witnessIR := witnessIR M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness xs := ProvableType.witness (ProvableVector α m) (.ofFExprs (toElements xs))
-  witnessIR := ProvableType.witness (ProvableVector α m)
+  witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
+  witnessIR := witnessIR (ProvableVector α m)
 
 -- witness generation
 
