@@ -22,12 +22,8 @@ namespace Examples.HintExample
   The circuit constrains the output to be boolean (0 or 1).
 -/
 def witnessBool : GeneralFormalCircuit.WithHint (F p) UnconstrainedBool field where
-  main (hint : Witgen.M _ _) := do
-    -- TODO WITGENIR we should be able to define prover hints written using IR
-    -- and this example should use that
-    let b ← witnessProgram do
-      let b ← hint
-      return .ite b 1 0
+  main hint := do
+    let b ← witnessProgram do return (← hint).toField
     assertBool b
     return b
 
@@ -35,12 +31,8 @@ def witnessBool : GeneralFormalCircuit.WithHint (F p) UnconstrainedBool field wh
 
   ProverSpec (hint : Bool) (b : F p) _ := b = if hint then 1 else 0
 
-  soundness := by
-    circuit_proof_all [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-
-  completeness := by
-    circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    cases input <;> simp_all
+  soundness := by circuit_proof_all
+  completeness := by circuit_proof_all
 
 structure Input (F : Type) where
   x : F
@@ -56,7 +48,8 @@ deriving ProvableStruct
 def booleanAnd : FormalCircuit (F p) Input field where
   main | ⟨x, y⟩ => do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
-    let z ← witnessBool <| unconstrainedBool (pure ((x =? 1) &&& (y =? 1)))
+    let z ← witnessBool <| unconstrainedBool do
+      return (x =? 1) &&& (y =? 1)
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z
@@ -65,17 +58,16 @@ def booleanAnd : FormalCircuit (F p) Input field where
   Spec | ⟨x, y⟩, z => IsBool z ∧ z.val = x.val &&& y.val
 
   soundness := by
-    circuit_proof_start [witnessBool, assertBool, IsBool]
+    circuit_proof_start [witnessBool, IsBool]
     rcases h_holds.1 with z | notz
     · simp_all
       cases h_holds <;> simp_all
     · grind
 
   completeness := by
-    circuit_proof_start [witnessBool, assertBool, IsBool, ZMod.val_one]
-    simp_all
+    circuit_proof_start [witnessBool, IsBool]
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
-      <;> simp_all [ZMod.val_one]
+    <;> simp_all
 
 structure MixedInput (F : Type) where
   someElement : U32 F

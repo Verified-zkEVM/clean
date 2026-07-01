@@ -500,17 +500,17 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
       · have h_env0 := h_env 0
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env0
+          zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
       · have h_env1 := h_env 1
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
           Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env1
+          zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
       · have h_env2 := h_env 2
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
           Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env2
+          zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
@@ -518,17 +518,15 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
       · have h_env0 := h_env 0
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_mul, ↓reduceIte] at h_env0
+          h_input2, h_mul, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
       · have h_env1 := h_env 1
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
-          Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_mul, ↓reduceIte] at h_env1
+          Vector.getElem_mk, List.getElem_toArray, h_input2, h_mul, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
       · have h_env2 := h_env 2
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
-          Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_mul, ↓reduceIte] at h_env2
+          Vector.getElem_mk, List.getElem_toArray, h_input2, h_mul, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
@@ -538,17 +536,15 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
       · have h_env0 := h_env 0
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
           add_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_load, ↓reduceIte] at h_env0
+          h_input2, h_load, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
       · have h_env1 := h_env 1
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
-          Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_load, ↓reduceIte] at h_env1
+          Vector.getElem_mk, List.getElem_toArray, h_input2, h_load, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
       · have h_env2 := h_env 2
         simp only [circuit_norm, explicit_provable_type, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.mod_succ,
-          Vector.getElem_mk, List.getElem_toArray,
-          FiniteField.val_inj_F, zero_ne_one, h_input2, h_load, ↓reduceIte] at h_env2
+          Vector.getElem_mk, List.getElem_toArray, h_input2, h_load, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_store, zero_ne_one, ↓reduceIte] at h_exec h_env ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros

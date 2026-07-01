@@ -73,13 +73,16 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-! ## Bridges as dot notation -/
 
 /-- The `ℕ` value of an IR field expression: `e.val`. -/
-@[reducible] def FExpr.val (e : FExpr F) : NExpr F := .val e
+abbrev FExpr.val (e : FExpr F) : NExpr F := .val e
 
 /-- The `ℕ` value of a circuit expression, as a witness-IR expression: `x.val`. -/
-@[reducible] def _root_.Expression.val (e : Expression F) : NExpr F := .val (.expr e)
+abbrev _root_.Expression.val (e : Expression F) : NExpr F := .val (.expr e)
 
 /-- Cast a Nat-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
-@[reducible] def NExpr.toField (n : NExpr F) : FExpr F := .ofNat n
+abbrev NExpr.toField (n : NExpr F) : FExpr F := .ofNat n
+
+/-- Cast a boolean expression to a field element that is 0 or 1. -/
+abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 
 /-! ## Conditions -/
 

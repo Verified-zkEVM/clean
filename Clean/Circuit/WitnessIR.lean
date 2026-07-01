@@ -219,7 +219,7 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .true => true
   | .false => false
-  | .feq x y => FiniteField.val (x.eval ctx) = FiniteField.val (y.eval ctx)
+  | .feq x y => x.eval ctx = y.eval ctx
   | .neq x y => x.eval ctx = y.eval ctx
   | .lt x y => x.eval ctx < y.eval ctx
   | .not b => !b.eval ctx
@@ -506,7 +506,6 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
 theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]
-  exact FiniteField.ext_iff.symm
 
 /-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
@@ -542,8 +541,7 @@ variable [FiniteField F]
 
 /-- Deciding field equality via the `ℕ` embedding agrees with propositional equality. -/
 theorem val_eq_zero_iff (x : F) : FiniteField.val x = 0 ↔ x = 0 := by
-  rw [← FiniteField.val_zero (F := F)]
-  exact FiniteField.ext_iff.symm
+  rw [← FiniteField.val_zero (F := F), FiniteField.val_inj]
 
 /-- `IsZeroField` witness: `fun env => if env x ≠ 0 then (env x)⁻¹ else 0`. -/
 def isZeroWitness (x : Expression F) : WitgenIR F 1 :=
@@ -554,7 +552,7 @@ example [DecidableEq F] (x : Expression F) (env : ProverEnvironment F) :
       then (x.eval env.toEnvironment)⁻¹ else 0] := by
   ext i hi
   simp [isZeroWitness, WitgenIR.eval, VExpr.eval, FExpr.eval, BExpr.eval,
-    evalSteps, ← FiniteField.ext_iff, ite_not]
+    evalSteps, ite_not]
 
 /-- One byte of the Keccak `Xor64` witness: `((env x).val ^^^ (env y).val : F)`. -/
 def xorByteWitness (x y : Expression F) : WitgenIR F 1 :=

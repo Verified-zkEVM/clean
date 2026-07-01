@@ -70,6 +70,9 @@ field equality in circuit proofs. -/
 @[circuit_norm]
 theorem val_inj {x y : F} : val x = val y ↔ x = y := ext_iff.symm
 
+instance : DecidableEq F := fun _ _ =>
+  propext (ext_iff (F:=F)) ▸ inferInstance
+
 end FiniteField
 
 /-! ## Instance for prime fields (`F p = ZMod p`) -/

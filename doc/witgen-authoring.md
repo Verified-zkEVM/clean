@@ -64,12 +64,10 @@ let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 - `.arrGet xs i` — read a constant `Array F` at a computed index (0 out of bounds).
   Example: FemtoCairo instruction fetch over `Array.ofFn program`.
 - `.dataGet key width row col` / `.hintGet ...` — read committed prover data /
-  uncommitted hints (`ProverData`-keyed). Prefer `Table.dataGet` /
-  `Table.hintGet`, which return typed rows, or a domain wrapper such as
-  FemtoCairo's `witness (memoryValue addr)`.
-- `witnessNative fun env => ...` — the escape hatch for genuinely arbitrary Lean
-  (e.g. a `Bool`-valued hint closure, `HintExample`). Not exportable:
-  `#assert_exportable` rejects it, and it stays interpreted in Lean.
+  uncommitted hints (`ProverData`-keyed). Prefer `Table.dataGet` / `Table.hintGet`,
+  which return typed rows (see FemtoCairo).
+- `witnessNative fun env => ...` — the escape hatch for genuinely arbitrary Lean.
+  Not exportable: `#assert_exportable` rejects it, and it stays interpreted in Lean.
 
 ## Checking and export
 
@@ -77,29 +75,3 @@ let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 #assert_exportable (Gadgets.Xor64.circuit (p := pBabybear))   -- fails on .native
 #witgen_json (Gadgets.IsZeroField.circuit (F := F pBabybear)) -- Rust payload
 ```
-
-## Proof-side notes (when porting or writing proofs)
-
-The `circuit_norm` simp set reduces IR evaluation to the same normal forms the old
-closures produced. The recurring local fixes:
-
-1. Proof steps using the _default_ simp set on witness values need `circuit_norm`
-   added (`simpa [circuit_norm, h_input] using h_env 0`).
-2. Proof-carrying normal forms bridge via dedicated lemmas:
-   `FieldUtils.mod_eq_natCast` / `floorDiv_eq_natCast`, `Utils.Bits.getElem_fieldToBits`.
-3. IR conditionals are data until per-element extraction reduces them; resolve the
-   resulting `if`-conditions at the extraction sites with `FiniteField.val_inj_F`
-   (deliberately not in `circuit_norm`) plus the case facts.
-
-## Remaining `.native` uses
-
-- `HintExample` — a `Bool`-valued hint closure; the canonical escape-hatch use.
-- `LookupCircuit.fromTable` — the output is computed by the circuit's
-  `constantOutput` function (a per-circuit Lean function, i.e. a hint); making such
-  circuits exportable means registering their function as a named intrinsic with a
-  Rust-side implementation (future work, see plan phase 6 notes).
-- `Clean/Examples/WitnessExport.lean` — a deliberately-native circuit testing that
-  `#assert_exportable` rejects it.
-
-`.native` remains available for prototyping: write the closure first, port to IR when
-the gadget stabilizes; `grep witnessNative` / `#assert_exportable` show what's left.
