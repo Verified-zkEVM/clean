@@ -63,14 +63,18 @@ def FExpr.toJson : FExpr F → Json
   | .ofNat n => Json.mkObj [("type", "ofNat"), ("arg", n.toJson)]
   | .ite c t e => Json.mkObj [("type", "ite"),
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
-  | .arrGet xs i => Json.mkObj [("type", "arrGet"),
-      ("array", Lean.toJson xs), ("index", i.toJson)]
+  | .listGet xs i => Json.mkObj [("type", "listGet"),
+      ("items", Json.arr (FExpr.listToJson xs).toArray), ("index", i.toJson)]
   | .dataGet key n row col => Json.mkObj [("type", "dataGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
       ("row", row.toJson), ("col", Lean.toJson col.val)]
   | .hintGet key n row col => Json.mkObj [("type", "hintGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
       ("row", row.toJson), ("col", Lean.toJson col.val)]
+
+def FExpr.listToJson : List (FExpr F) → List Json
+  | [] => []
+  | x :: xs => x.toJson :: FExpr.listToJson xs
 
 def NExpr.toJson : NExpr F → Json
   | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n)]
@@ -140,6 +144,12 @@ def FlatOperation.witgenJson? : FlatOperation F → Except String Json
     return Json.mkObj [("witness", toJson m), ("code", codeJson)]
   | op => .ok (toJson op)
 
+def FlatOperation.localLengthFold (ops : List (FlatOperation F)) : ℕ :=
+  ops.foldl (fun acc op =>
+    match op with
+    | .witness m _ => acc + m
+    | _ => acc) 0
+
 /--
 Serialize the operations of a circuit for an external witgen implementation:
 the flattened operation list, each witness op carrying its IR program.
@@ -152,7 +162,7 @@ def Operations.witgenJson? (ops : Operations F) : Except String Json := do
   let opsJson ← flat.mapM FlatOperation.witgenJson?
   return Json.mkObj [
     ("version", 1),
-    ("localLength", toJson (FlatOperation.localLength flat)),
+    ("localLength", toJson (FlatOperation.localLengthFold flat)),
     ("operations", Json.arr opsJson.toArray)]
 
 /-! ## Dispatch for the user-facing commands
@@ -189,7 +199,7 @@ namespace WitgenExport
 def check {C : Type} {F : Type} [FiniteField F] [WitgenOps C F] (c : C) : IO Unit := do
   let flat := (WitgenOps.operations (F := F) c).toFlat
   match Witgen.unexportableWitnesses flat with
-  | [] => IO.println s!"exportable ✓ ({FlatOperation.localLength flat} witness cells)"
+  | [] => IO.println s!"exportable ✓ ({FlatOperation.localLengthFold flat} witness cells)"
   | bad =>
     throw (IO.userError s!"not exportable: witness operations at flat indices {bad} are native closures")
 

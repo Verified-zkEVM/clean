@@ -51,7 +51,7 @@ PR #401 lessons — or an append.
 - B.8 let-bindings ......... `Step.letF/letN` + `localVar` references
 - B.9 struct packing ....... authoring-layer concern: structs flatten to `VExpr.lit`
                              in `ProvableType.toElements` order (phase 4/5)
-- B.10 constant tables ..... `FExpr.arrGet` (getD-0 semantics)
+- B.10 constant tables ..... `FExpr.listGet` (getD-0 semantics)
 - C.1 inverse intrinsic .... first-class as `FExpr.inv`
 - C.3 hint nondeterminism .. `FExpr.dataGet`/`FExpr.hintGet`, keyed like `ProverData`
 
@@ -104,9 +104,8 @@ inductive FExpr (F : Type) where
   on binary fields, where `Nat.cast` would collapse via the characteristic). -/
   | ofNat (n : NExpr F)
   | ite (c : BExpr F) (t e : FExpr F)
-  /-- Read a constant table at a computed index, 0 if out of range
-  (FemtoCairo program, SHA/Poseidon round constants when dynamically indexed). -/
-  | arrGet (xs : Array F) (i : NExpr F)
+  /-- Read an expression list at a computed index, 0 if out of range -/
+  | listGet (xs : List (FExpr F)) (i : NExpr F)
   /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
   row `row` of table `key` with rows of width `n`, projected at column `col`.
   Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory). -/
@@ -189,11 +188,17 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .inv x => (x.eval ctx)⁻¹
   | .ofNat n => FiniteField.fromNat (n.eval ctx)
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
-  | .arrGet xs i => xs[i.eval ctx]?.getD 0
+  | .listGet xs i => FExpr.evalList ctx (i.eval ctx) xs
   | .dataGet key n row col =>
     ((ctx.env.data key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
+
+@[circuit_norm]
+def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
+  | _, [] => 0
+  | 0, x :: _ => x.eval ctx
+  | i + 1, _ :: xs => FExpr.evalList ctx i xs
 
 @[circuit_norm]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
@@ -371,7 +376,10 @@ end Eval
 
 /-- Vector-shaped output of a witness program. The length index makes malformed
 output-length proofs unnecessary. `mapRange` is kept as a loop (not unrolled);
-its body may reference the running index via `NExpr.idx`. -/
+its body may reference the running index via `NExpr.idx`.
+
+TODO WITGENIR do we need fully general (foldl) loops?
+-/
 inductive VExpr (F : Type) : ℕ → Type where
   | lit {n : ℕ} (es : Vector (FExpr F) n) : VExpr F n
   | mapRange (n : ℕ) (body : FExpr F) : VExpr F n

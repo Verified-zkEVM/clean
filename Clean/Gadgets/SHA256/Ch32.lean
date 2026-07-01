@@ -20,7 +20,7 @@ Witnesses 32 output bits.
     One R1CS constraint per bit: e·(f − g) = ch − g. -/
 def ch32 (e f g : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- TODO WITGENIR
-  let z ← witness (Vector.ofFn fun (i : Fin 32) => .expr (g[i] + e[i] * (f[i] - g[i])))
+  let z ← witnessVector 32 (.range _ fun i => g[i] + e[i] * (f[i] - g[i]))
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - g[i] - e[i] * (f[i] - g[i]))
   return z
@@ -198,10 +198,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have h_gi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_g[i.val] = input_g[i] := by
     intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
-  have henv := h_env i
-  simp only [circuit_norm, Vector.getElem_ofFn] at henv
-  rw [h_ei i, h_fi i, h_gi i] at henv
-  rw [henv, h_gi i, h_ei i, h_fi i]; ring
+  replace h_env := h_env i
+  simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env
+  rw [h_ei i, h_fi i, h_gi i] at h_env
+  rw [h_env, h_gi i, h_ei i, h_fi i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

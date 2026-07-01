@@ -400,7 +400,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
     have h1 := h_env1 i
-    simp only [circuit_norm, Vector.getElem_ofFn] at h1
+    simp only [circuit_norm] at h1
     rw [h1, hr7, hr18]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
@@ -415,8 +415,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hs3 := eval_shr32 env.toEnvironment input_var input h_input 3 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, Vector.getElem_ofFn, mul_zero, zero_add] at h2
-    simp only [circuit_norm, Vector.getElem_ofFn] at h1
+    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm] at h1
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr7, hr18, hs3]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)

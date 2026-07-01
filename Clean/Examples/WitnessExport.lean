@@ -2,6 +2,7 @@ import Clean.Circuit.WitnessExport
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Bits
+import Clean.Gadgets.Keccak.Permutation
 import Clean.Utils.Primes
 
 /-!
@@ -22,6 +23,10 @@ namespace Examples.WitnessExport
 /-- info: exportable ✓ (16 witness cells) -/
 #guard_msgs in
 #assert_exportable (Gadgets.toBits (p := pBabybear) 16 (by native_decide))
+
+/-- info: exportable ✓ (30912 witness cells) -/
+#guard_msgs in
+#assert_exportable (Gadgets.Keccak256.Permutation.circuit (p := pBabybear))
 
 -- a native witness is rejected, with its location
 def nativeCircuit : Circuit (F pBabybear) (Expression (F pBabybear)) :=

@@ -145,13 +145,12 @@ def fetchInstruction
     GeneralFormalCircuit (F p) field RawInstruction where
   main (pc : Expression (F p)) := do
     let programTable := .staticOfFn h_programSize "program" program
+    let programVector := Vector.ofFn program
 
-    -- TODO WITGENIR can we define a GetElem instance to replace .arrGet?
-    let programArray := Array.ofFn program
-    let rawInstrType ← witness (.arrGet programArray pc.val)
-    let op1 ← witness (.arrGet programArray (pc.val + 1))
-    let op2 ← witness (.arrGet programArray (pc.val + 2))
-    let op3 ← witness (.arrGet programArray (pc.val + 3))
+    let rawInstrType ← witness programVector[pc.val]
+    let op1 ← witness programVector[pc.val + 1]
+    let op2 ← witness programVector[pc.val + 2]
+    let op3 ← witness programVector[pc.val + 3]
 
     lookup programTable ⟨pc, rawInstrType⟩
     lookup programTable ⟨pc + 1, op1⟩
@@ -180,8 +179,7 @@ def fetchInstruction
       grind
 
   completeness := by
-    circuit_proof_start
-    simp only [Table.staticOfFn, circuit_norm]
+    circuit_proof_start [Table.staticOfFn]
     have val_3 : ZMod.val (3 : F p) = 3 := ZMod.val_natCast_of_lt (by linarith)
     have val_2 : ZMod.val (2 : F p) = 2 := ZMod.val_natCast_of_lt (by linarith)
     have val_1 : ZMod.val (1 : F p) = 1 := ZMod.val_one p

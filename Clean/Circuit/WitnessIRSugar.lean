@@ -93,6 +93,41 @@ abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 instance : Inhabited (BExpr F) := ⟨.false⟩
 instance : AndOp (BExpr F) := ⟨.and⟩
 
+/-! ## Index access notation for .listGet -/
+
+instance {F : Type} {n : ℕ} : GetElem (Vector F n) (NExpr F) (FExpr F) (fun _ _ => True) where
+  getElem v i _ := FExpr.listGet (v.toList.map FExpr.const) i
+
+instance {F : Type} {n : ℕ} : GetElem (Vector (Expression F) n) (NExpr F) (FExpr F) (fun _ _ => True) where
+  getElem v i _ := FExpr.listGet (v.toList.map FExpr.expr) i
+
+instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (NExpr F) (FExpr F) (fun _ _ => True) :=
+  inferInstanceAs (GetElem (Vector (Expression F) n) (NExpr F) _ _)
+
+instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (NExpr F) (FExpr F) (fun _ _ => True) where
+  getElem v i _ := FExpr.listGet v.toList i
+
+@[circuit_norm]
+lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
+    FExpr.evalList ctx i (v.toList.map FExpr.const) = if hi : i < n then v[i] else 0 := by
+  induction v using Vector.induct generalizing i with
+  | nil => simp [FExpr.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+
+@[circuit_norm]
+lemma evalList_map_vector_expr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (Expression F) n) (i : ℕ) :
+    FExpr.evalList ctx i (v.toList.map FExpr.expr) = if hi : i < n then v[i].eval ctx.env else 0 := by
+  induction v using Vector.induct generalizing i with
+  | nil => simp [FExpr.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+
+@[circuit_norm]
+lemma evalList_map_vector_fexpr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (FExpr F) n) (i : ℕ) :
+    FExpr.evalList ctx i v.toList = if hi : i < n then v[i].eval ctx else 0 := by
+  induction v using Vector.induct generalizing i with
+  | nil => simp [FExpr.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList]
+
 /-! ## Loop former -/
 
 /-- Vector output built per index; the body receives the loop index as an `NExpr`.

@@ -147,7 +147,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
   have henv := h_env i
-  simp only [circuit_norm, Vector.getElem_ofFn] at henv
+  simp only [circuit_norm] at henv
   rw [h_ai i, h_bi i] at henv
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
       input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by

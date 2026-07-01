@@ -50,7 +50,15 @@ theorem toList_length_two {α : Type} (v : Vector α 2) :
 def listCons (a : α) (v : Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
-theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+@[simp] theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_zero {a : α} {v : Vector α n} :
+    (listCons a v)[0] = a := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_succ {a : α} {v : Vector α n} (i : ℕ) (hi : i < n) :
+    (listCons a v)[i + 1] = v[i] := by
   simp [listCons]
 
 def set? (v : Vector α n) (i : ℕ) (a : α) : Vector α n :=

@@ -539,7 +539,7 @@ attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push
 attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_map Vector.getElem_mapFinRange Vector.getElem_mapRange Vector.getElem_finRange
   Vector.getElem_push Vector.getElem_set Vector.getElem_cast
-  Vector.getElem_mk Vector.getElem_toArray
+  Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
 
 /-
