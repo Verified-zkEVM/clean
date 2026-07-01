@@ -9,8 +9,8 @@ variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime] [Fact (p > 512)]
 
 def var (b : Byte (F p)) := Expression.var b.1
 
-def witness (compute : ProverEnvironment (F p) → F p) := do
-  let x ← witnessVar compute
+def witness (e : Witgen.FExpr (F p)) := do
+  let x ← witnessVar (.ofFExpr e)
   lookup ByteTable (.var x)
   return Byte.mk x
 

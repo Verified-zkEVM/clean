@@ -5,10 +5,10 @@ import Clean.Air.FlatComponent
 import Clean.Air.Balance
 
 namespace Air.Flat
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-structure Ensemble (F : Type) [Field F] (PublicIO : TypeMap) [ProvableType PublicIO] where
+structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   tables : List (Component F)
   channels : List (RawChannel F)
   -- TODO: the verifier shouldn't be treated as a "circuit", and possibly shouldn't even be on here
@@ -50,7 +50,7 @@ variable {ens : Ensemble F PublicIO}
 def allTables (ens : Ensemble F PublicIO) : List (Component F) :=
   ens.verifierTable :: ens.tables
 
-def empty (F : Type) [Field F] (PublicIO : TypeMap) [ProvableType PublicIO] :
+def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
   Ensemble F PublicIO where
     tables := []
     channels := []
@@ -74,6 +74,8 @@ lemma size_verifier {ens : Ensemble F PublicIO} :
 
 @[circuit_norm] lemma mem_allTables_verifierTable:
   ens.verifierTable ∈ ens.allTables := by simp [allTables]
+lemma mem_allTables_of_mem_tables {table : Component F} :
+    table ∈ ens.tables → table ∈ ens.allTables := by simp_all [allTables]
 
 lemma verifierTable_ext {ens1 ens2 : Ensemble F PublicIO} {witness1 : EnsembleWitness ens1} {witness2 : EnsembleWitness ens2} :
     ens1.verifier = ens2.verifier →
@@ -100,23 +102,23 @@ def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : 
 lemma verifierTable_constraints :
   ens.verifierTable.operations.constraints = ens.verifierOperations.constraints := by
   rw [Component.constraints_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_lookups :
   ens.verifierTable.operations.lookups = ens.verifierOperations.lookups := by
   rw [Component.lookups_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_interactions :
   ens.verifierTable.operations.interactions = ens.verifierOperations.interactions := by
   rw [Component.interactions_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 lemma verifierTable_interactionsWith {channel : RawChannel F} :
   ens.verifierTable.operations.interactionsWith channel =
     ens.verifierOperations.interactionsWith channel := by
   rw [Component.interactionsWith_eq]
-  simp only [circuit_norm]
+  simp only [circuit_norm, Component.rowOperations]
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
   ens.allTables.flatMap (·.circuit.channelsWithGuarantees)
@@ -369,7 +371,7 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
-structure FormalEnsemble (F : Type) [Field F] [DecidableEq F]
+structure FormalEnsemble (F : Type) [FiniteField F] [DecidableEq F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   ensemble : Ensemble F PublicIO
   Assumptions : PublicIO F → Prop := fun _ => True

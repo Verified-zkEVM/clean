@@ -14,7 +14,7 @@ import Clean.Circuit.Provable
   The `CircuitType` macro generates companion `Var`, `Value`, and `ProverValue`
   structures, plus a `CircuitType` instance, for structures whose fields implement
   `CircuitType`. This allows circuit inputs to mix ordinary provable data with
-  prover-only hints such as `Unconstrained`.
+  prover-only hints such as `UnconstrainedNative`.
 
   ## Basic usage
 
@@ -39,7 +39,7 @@ import Clean.Circuit.Provable
   ```lean
   structure Inputs (F : Type) where
     someElement : U32 F
-    someHint : Unconstrained Bool F
+    someHint : UnconstrainedNative Bool F
   deriving CircuitType
   ```
 

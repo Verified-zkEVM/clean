@@ -11,7 +11,8 @@ Clean is an embedded Lean DSL for writing formally verified zk (zero-knowledge) 
 ```
 Clean/
 ├── Circuit/           # Core circuit DSL and monad
-│   ├── Basic.lean     # Circuit monad, FormalCircuit, soundness/completeness definitions
+│   ├── Basic.lean     # Circuit monad
+│   ├── Formal.lean    # FormalCircuit, soundness/completeness definitions
 │   ├── Expression.lean # Expression AST (var, const, add, mul)
 │   ├── Operations.lean # Operation types (witness, assert, lookup, subcircuit)
 │   ├── Provable.lean  # ProvableType, ProvableStruct - typed circuit values
@@ -44,16 +45,17 @@ Circuits are written using the `Circuit F α` monad, which accumulates operation
 
 ```lean
 def myCircuit (x : Expression F) : Circuit F (Expression F) := do
-  let y ← witness fun env => env x + 1  -- witness a new variable
-  y === x + 1                           -- add constraint: y = x + 1
+  let y ← witness (x + 1)  -- witness a new variable
+  y === x + 1              -- add constraint: y = x + 1
   return y
 ```
 
 In that example, `===` is custom syntax which adds an `assertZero` operation.
+The witness value is given in witness IR (see `doc/witgen-authoring.md`).
 
 ### Key Operations
 
-- `witness` / `witnessVar` / `witnessField`: Create new witness variables
+- `witness`: Create new witness variables
 - `lookup`: Add lookup constraint (value must be in table)
 - `===`: Assert equality between two values
 - `<==`: Witness and constrain equal to expression
@@ -215,6 +217,11 @@ parent proof.
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
 - Never modify maxHeartbeats
+
+## Documentation
+
+- `doc/proving-guide.md` — tips for user-facing circuit formalization proofs
+- `doc/witgen-authoring.md` — how to write circuit witnesses in the witness IR
 
 ## Key Files to Understand
 

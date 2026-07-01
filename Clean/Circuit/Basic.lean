@@ -1,7 +1,7 @@
 import Clean.Circuit.Operations
 import Mathlib.Control.Monad.Writer
 
-variable {F : Type} [Field F] {α β : Type} {n : ℕ}
+variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 /--
 The monad to write circuits. Lets you use `do` notation while in the background
@@ -25,7 +25,7 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
+def Circuit (F : Type) [FiniteField F] (α : Type) := ℕ → α × List (Operation F)
 
 namespace Circuit
 -- definition of the circuit monad
@@ -87,32 +87,24 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 -- core operations we can do in a circuit
 
-/-- Create a new variable. -/
+/-- Low-level method to create a new `Variable` from a scalar `WitgenIR`. -/
 @[circuit_norm]
-def witnessVar (compute : ProverEnvironment F → F) : Circuit F (Variable F) :=
+def witnessVar (ir : WitgenIR F 1) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
-    let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 fun env => #v[compute env]])
+    (⟨offset⟩, [.witness 1 ir])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : ProverEnvironment F → F) := do
-  let v ← witnessVar compute
-  return var v
-
-/-- Create a vector of variables. -/
-@[circuit_norm]
-def witnessVars (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessField (e : Witgen.FExpr F) : Circuit F (Expression F) :=
   fun (offset : ℕ) =>
-    let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m compute])
+    (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : ProverEnvironment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector (m : ℕ) (out : Witgen.VExpr F m) :
+    Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
-    let vars := varFromOffset (fields m) offset
-    (vars, [.witness m compute])
+    (varFromOffset (fields m) offset, [.witness m (.ir [] out)])
 
 /-- Add a constraint. -/
 @[circuit_norm]
@@ -140,23 +132,36 @@ def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F
   ((), [.interact interaction.toRaw])
 
 @[circuit_norm]
+def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
+  ((), [.interact interaction.toRaw])
+
+@[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
   let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
   ((), [.interact interaction.toRaw])
 
-/-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : ProverEnvironment F → α F) :
-    Circuit F (α (Expression F)) :=
-  fun (offset : ℕ) =>
-    let var := varFromOffset α offset
-    (var, [.witness (size α) (fun env => compute env |> toElements)])
+def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
+    (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
+  ((), [.interact interaction.toRaw])
 
+/-- Low-level method to create a new variable of an arbitrary "provable type" from raw `WitgenIR`. -/
 @[circuit_norm]
-def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : ProverEnvironment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
-  ProvableType.witness (α:=ProvableVector α m) compute
+def witnessIR (M : TypeMap) [ProvableType M] (ir : WitgenIR F (size M)) :
+    Circuit F (M (Expression F)) :=
+  fun (offset : ℕ) =>
+    (varFromOffset M offset, [.witness (size M) ir])
+
+/-- Create a vector of expressions computed by a monadic witness-IR program.
+Use this when the vector witness has shared `let` computations or compact loops. -/
+@[circuit_norm]
+def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
+    Circuit F (Vector (Expression F) m) :=
+  witnessIR (fields m) program.toIR
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -166,7 +171,7 @@ for all variables declared locally within the circuit.
 This is the condition needed to prove completeness of a circuit.
 -/
 def ProverEnvironment.UsesLocalWitnesses (env : ProverEnvironment F) (offset : ℕ) (ops : Operations F) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
+  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute.eval env) n }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
@@ -174,7 +179,7 @@ Modification of `UsesLocalWitnesses` where subcircuits replace the condition wit
 @[circuit_norm]
 def ProverEnvironment.UsesLocalWitnessesCompleteness (env : ProverEnvironment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
+  | .witness m c :: ops => env.ExtendsVector (c.eval env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .interact _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
@@ -182,7 +187,7 @@ def ProverEnvironment.UsesLocalWitnessesCompleteness (env : ProverEnvironment F)
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def ProverEnvironment.UsesLocalWitnessesFlat (env : ProverEnvironment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
+  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute.eval env) n } ops
 
 section
 variable {Input Output : TypeMap}
@@ -196,10 +201,10 @@ declared channel interface.
 @[circuit_norm]
 def ElaboratedCircuit.ChannelsLawful [CircuitType Input] [CircuitType Output]
     (main : Var Input F → Circuit F (Var Output F))
-    (channelsWithGuarantees channelsWithRequirements : List (RawChannel F)) : Prop :=
+    (channelsWithGuarantees : List (RawChannel F)) : Prop :=
   ∀ input_var offset,
     ((main input_var).operations offset).ChannelsLawful
-      channelsWithGuarantees channelsWithRequirements
+      channelsWithGuarantees
 
 /-
 Common base type for circuits that are to be used in formal proofs.
@@ -207,7 +212,7 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitType Input] [CircuitType Output]
+class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [FiniteField F] [CircuitType Input] [CircuitType Output]
     (main : Var Input F → Circuit F (Var Output F)) where
   /-- how many local witnesses this circuit introduces -/
   localLength : Var Input F → ℕ
@@ -230,12 +235,11 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
       try first | ac_rfl | trivial
     )
 
-  /-- expose the channel guarantees and requirements, for end-to-end proofs -/
+  /-- expose the channel guarantees for end-to-end proofs -/
   channelsWithGuarantees : List (RawChannel F) := []
-  channelsWithRequirements : List (RawChannel F) := []
 
   channelsLawful : ElaboratedCircuit.ChannelsLawful main
-      channelsWithGuarantees channelsWithRequirements := by
+      channelsWithGuarantees := by
     -- TODO this tactic would be more effective if it would unfold all channel declarations/uses.
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     try dsimp only [main]
@@ -243,34 +247,59 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [CircuitTy
     try first | ac_rfl | trivial | tauto
 
 attribute [circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
-  ElaboratedCircuit.channelsWithGuarantees ElaboratedCircuit.channelsWithRequirements
+  ElaboratedCircuit.channelsWithGuarantees
 
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVector assertZero lookup)
 
 -- general `witness` method
 
-class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  witness : (ProverEnvironment F → value F) → Circuit F (var F)
+class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
+  /-- Witness a provable value. -/
+  witness : value (Witgen.FExpr F) → Circuit F (var F)
+  /-- Witness a value computed by a general witness-IR program, with `let`-steps and
+  loops, which the per-element form cannot express. -/
+  witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_eq (compute : ProverEnvironment F → value F) :
-    witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
+  witness_def (xs : value (Witgen.FExpr F)) :
+    witness xs = var_eq ▸ _root_.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
+  witnessIR_def (code : WitgenIR F (size value)) :
+    witnessIR code = var_eq ▸ _root_.witnessIR value code := by intros; rfl
 
 export Witnessable (witness)
 
+/-- Witness a provable value computed by an arbitrary Lean closure. -/
+@[circuit_norm]
+def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
+    [inst : Witnessable F value var] (compute : ProverEnvironment F → value F) :
+    Circuit F (var F) :=
+  inst.witnessIR (.native fun env => compute env |> toElements)
+
+/-- Witness a provable value computed by a monadic witness-IR program.
+This is `witness`, but with shared `let` computations. -/
+@[circuit_norm]
+def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
+    [inst : Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
+    Circuit F (var F) :=
+  inst.witnessIR (value := value) program.toIRLiteral
+
 instance : Witnessable F field Expression where
-  witness := witnessField
+  witness e offset := (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
+  witnessIR code offset := (var ⟨offset⟩, [.witness 1 code])
 
-instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
-  witness := witnessVector m
+instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
+  witness v := witnessVector m v
+  witnessIR := witnessIR _
 
-instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
-  witness := ProvableType.witness
+instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
+  witness xs := witnessIR M (.ofFExprs (toElements xs))
+  witnessIR := witnessIR M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness := ProvableVector.witness m
+  witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
+  witnessIR := witnessIR (ProvableVector α m)
 
 -- witness generation
 
@@ -281,7 +310,7 @@ def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : Prov
   hint
 
 def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute (.fromList acc hint)).toList
+  | .witness _ compute => (compute.eval (.fromList acc hint)).toList
   | .assert _ => []
   | .lookup _ => []
   | .interact _ => []
@@ -303,7 +332,7 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute env = compute env' }
+  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute.eval env = compute.eval env' }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
@@ -320,14 +349,14 @@ def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHint F) (in
 
 def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (ProverEnvironment F → F) (localLength l)
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c.eval env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .interact _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (ProverEnvironment F → F) ops.localLength
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c.eval env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .interact _ :: ops => witnessGenerators ops
@@ -369,8 +398,8 @@ macro_rules
 
 example :
   let add (x : Expression F) := do
-    let y : Expression F ← witness fun _ => 1
-    let z ← witness fun eval => eval (x + y)
+    let y ← witness 1
+    let z ← witness (x + y)
     assertZero (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length
@@ -442,7 +471,7 @@ attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push
 attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_map Vector.getElem_mapFinRange Vector.getElem_mapRange Vector.getElem_finRange
   Vector.getElem_push Vector.getElem_set Vector.getElem_cast
-  Vector.getElem_mk Vector.getElem_toArray
+  Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
 
 /-
@@ -462,7 +491,8 @@ attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
-attribute [circuit_norm] neg_mul one_mul add_zero zero_add Nat.reduceAdd
+attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
+  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 

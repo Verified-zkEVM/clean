@@ -22,14 +22,11 @@ Witnesses 64 variables: 32 for t, 32 for z.
     Two R1CS constraints per bit:
       (1)  a·b = t
       (2)  c·(a + b − 2·t) = z − t -/
-def maj32 (a b c : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
+def maj32 (a b c : Vector (Expression (F p)) 32) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the intermediate product t[i] = a[i] * b[i]
-  let t ← witnessVector 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) => env a[i] * env b[i]
+  let t ← witnessVector 32 (.range _ fun i => (a[i] * b[i]))
   -- Witness the majority output
-  let z ← witnessVector 32 fun env =>
-    Vector.ofFn fun (i : Fin 32) =>
-      env t[i] + env c[i] * (env a[i] + env b[i] - 2 * env t[i])
+  let z ← witnessVector 32 (.range _ fun i => (t[i] + c[i] * (a[i] + b[i] - 2 * t[i])))
   -- Constraint (1): t[i] = a[i] * b[i]
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (t[i] - a[i] * b[i])
@@ -243,12 +240,13 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
+  simp only [Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have := (h_env.1) i
-    simp only [Vector.getElem_ofFn] at this
+    simp only [circuit_norm] at this
     rw [this]; ring
   · have := (h_env.2.1) i
-    simp only [Vector.getElem_ofFn] at this
+    simp only [circuit_norm] at this
     rw [this]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where

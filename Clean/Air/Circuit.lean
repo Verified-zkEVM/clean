@@ -4,7 +4,7 @@ Shared circuit infrastructure for Clean.Air.
 import Clean.Circuit
 import Clean.Circuit.Extensions
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 abbrev Environment.fromInput (row : Input F) (data : ProverData F) : Environment F :=
@@ -54,6 +54,7 @@ def instantiateConst_toFormal (circuit : GeneralFormalCircuit F Input unit) (inp
   Assumptions _ := circuit.Assumptions input
   ProverAssumptions _ := circuit.ProverAssumptions input
   Spec _ _ := circuit.Spec input ()
+  channelsWithRequirements := circuit.channelsWithRequirements
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
 
@@ -68,7 +69,7 @@ def size (circuit : GeneralFormalCircuit F Input Output) : ℕ :=
 lemma size_eq (circuit : GeneralFormalCircuit F Input Output) :
   circuit.size = (ProvableType.size Input) + circuit.localLength (varFromOffset Input 0) := rfl
 
-def empty (F : Type) [Field F] (Input : TypeMap) [ProvableType Input] :
+def empty (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] :
     GeneralFormalCircuit F Input unit where
   main _ := return
   Assumptions | _, _ => True

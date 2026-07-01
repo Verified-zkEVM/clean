@@ -1,4 +1,5 @@
 import Clean.Circuit.Expression
+import Clean.Utils.FiniteField
 
 /--
 _Circuit types_ are usually just structured collections of field elements.
@@ -8,7 +9,7 @@ _Circuit types_ are usually just structured collections of field elements.
 -/
 abbrev TypeMap := Type → Type
 
-variable {F : Type} [Field F] {M : TypeMap}
+variable {F : Type} [FiniteField F] {M : TypeMap}
 
 /--
 Generic typeclass for evaluation of a `Var` (symbolic circuit variable)
@@ -68,8 +69,8 @@ class CircuitType (M : TypeMap) where
   Value : TypeMap
   /-- Prover value: hint fields carry their underlying type. -/
   ProverValue : TypeMap
-  evalVerifier : ∀ {F : Type} [Field F], Environment F → Var F → Value F
-  evalProver   : ∀ {F : Type} [Field F], ProverEnvironment F → Var F → ProverValue F
+  evalVerifier : ∀ {F : Type} [FiniteField F], Environment F → Var F → Value F
+  evalProver   : ∀ {F : Type} [FiniteField F], ProverEnvironment F → Var F → ProverValue F
 
 export CircuitType (Var Value ProverValue)
 
@@ -123,14 +124,14 @@ theorem eval_prover (env : ProverEnvironment F) :
 end DerivedCircuitType
 
 /--
-`Unconstrained` acts as a type marker for circuit inputs that should only be hints to the prover.
+`UnconstrainedNative` acts as a type marker for circuit inputs that should only be hints to the prover.
 -/
-structure Unconstrained (Hint : Type) (F : Type) where
+structure UnconstrainedNative (Hint : Type) (F : Type) where
   value : Hint
 
 variable {Hint : Type}
 
-instance Unconstrained.toCircuitType : CircuitType (Unconstrained Hint) where
+instance UnconstrainedNative.toCircuitType : CircuitType (UnconstrainedNative Hint) where
   Var F := ProverEnvironment F → Hint
   ProverValue _ := Hint
   Value _ := Unit
@@ -138,40 +139,40 @@ instance Unconstrained.toCircuitType : CircuitType (Unconstrained Hint) where
   evalProver env v := v env
 
 namespace CircuitType
-@[circuit_norm] lemma var_of_unconstrained (Hint F) :
-  Var (Unconstrained Hint) F = (ProverEnvironment F → Hint) := rfl
-@[circuit_norm] lemma proverValue_of_unconstrained (Hint F) :
-  ProverValue (Unconstrained Hint) F = Hint := rfl
-@[circuit_norm] lemma value_of_unconstrained (Hint F) :
-  Value (Unconstrained Hint) F = Unit := rfl
+@[circuit_norm] lemma var_of_unconstrainedNative (Hint F) :
+  Var (UnconstrainedNative Hint) F = (ProverEnvironment F → Hint) := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedNative (Hint F) :
+  ProverValue (UnconstrainedNative Hint) F = Hint := rfl
+@[circuit_norm] lemma value_of_unconstrainedNative (Hint F) :
+  Value (UnconstrainedNative Hint) F = Unit := rfl
 
 /- forwarding instances to help instance search get through defeq -/
-instance : VerifierEval F (ProverEnvironment F → Hint) Unit := verifierEval (Unconstrained Hint)
-instance : ProverEval F (ProverEnvironment F → Hint) Hint := proverEval (Unconstrained Hint)
+instance : VerifierEval F (ProverEnvironment F → Hint) Unit := verifierEval (UnconstrainedNative Hint)
+instance : ProverEval F (ProverEnvironment F → Hint) Hint := proverEval (UnconstrainedNative Hint)
 
-instance [Inhabited Hint] : Inhabited (Var (Unconstrained Hint) F) where
+instance [Inhabited Hint] : Inhabited (Var (UnconstrainedNative Hint) F) where
   default := fun _ => default
 
-@[circuit_norm] lemma eval_unconstrained (env : Environment F) (v : ProverEnvironment F → Hint) :
+@[circuit_norm] lemma eval_unconstrainedNative (env : Environment F) (v : ProverEnvironment F → Hint) :
   eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_unconstrained_prover (env : ProverEnvironment F)
+@[circuit_norm] lemma eval_unconstrainedNative_prover (env : ProverEnvironment F)
     (v : ProverEnvironment F → Hint) :
     eval env v = v env := by
-  rw [eval_prover (M := Unconstrained Hint)]
+  rw [eval_prover (M := UnconstrainedNative Hint)]
   rfl
 end CircuitType
 
 /--
-`UnconstrainedDep` is the field-dependent version of `Unconstrained`.
+`UnconstrainedDepNative` is the field-dependent version of `UnconstrainedNative`.
 Use it when the prover-only hint itself mentions the circuit field type.
 -/
-structure UnconstrainedDep (Hint : TypeMap) (F : Type) where
+structure UnconstrainedDepNative (Hint : TypeMap) (F : Type) where
   value : Hint F
 
 variable {HintMap : TypeMap}
 
-instance UnconstrainedDep.toCircuitType : CircuitType (UnconstrainedDep HintMap) where
+instance UnconstrainedDepNative.toCircuitType : CircuitType (UnconstrainedDepNative HintMap) where
   Var F := ProverEnvironment F → HintMap F
   ProverValue F := HintMap F
   Value _ := Unit
@@ -179,29 +180,29 @@ instance UnconstrainedDep.toCircuitType : CircuitType (UnconstrainedDep HintMap)
   evalProver env v := v env
 
 namespace CircuitType
-@[circuit_norm] lemma var_of_unconstrainedDep (Hint F) :
-  Var (UnconstrainedDep Hint) F = (ProverEnvironment F → Hint F) := rfl
-@[circuit_norm] lemma proverValue_of_unconstrainedDep (Hint F) :
-  ProverValue (UnconstrainedDep Hint) F = Hint F := rfl
-@[circuit_norm] lemma value_of_unconstrainedDep (Hint F) :
-  Value (UnconstrainedDep Hint) F = Unit := rfl
+@[circuit_norm] lemma var_of_unconstrainedDepNative (Hint F) :
+  Var (UnconstrainedDepNative Hint) F = (ProverEnvironment F → Hint F) := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedDepNative (Hint F) :
+  ProverValue (UnconstrainedDepNative Hint) F = Hint F := rfl
+@[circuit_norm] lemma value_of_unconstrainedDepNative (Hint F) :
+  Value (UnconstrainedDepNative Hint) F = Unit := rfl
 
 /- forwarding instances to help instance search get through defeq -/
 instance : VerifierEval F (ProverEnvironment F → HintMap F) Unit :=
-  verifierEval (UnconstrainedDep HintMap)
+  verifierEval (UnconstrainedDepNative HintMap)
 instance : ProverEval F (ProverEnvironment F → HintMap F) (HintMap F) :=
-  proverEval (UnconstrainedDep HintMap)
+  proverEval (UnconstrainedDepNative HintMap)
 
-instance [Inhabited (HintMap F)] : Inhabited (Var (UnconstrainedDep HintMap) F) where
+instance [Inhabited (HintMap F)] : Inhabited (Var (UnconstrainedDepNative HintMap) F) where
   default := fun _ => default
 
-@[circuit_norm] lemma eval_unconstrainedDep (env : Environment F)
+@[circuit_norm] lemma eval_unconstrainedDepNative (env : Environment F)
     (v : ProverEnvironment F → HintMap F) :
   eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_unconstrainedDep_prover (env : ProverEnvironment F)
+@[circuit_norm] lemma eval_unconstrainedDepNative_prover (env : ProverEnvironment F)
     (v : ProverEnvironment F → HintMap F) :
     eval env v = v env := by
-  rw [eval_prover (M := UnconstrainedDep HintMap)]
+  rw [eval_prover (M := UnconstrainedDepNative HintMap)]
   rfl
 end CircuitType

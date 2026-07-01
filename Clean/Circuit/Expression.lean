@@ -30,6 +30,9 @@ def ProverHint (F : Type) :=
 /-- Placeholder `ProverHint` that returns an empty array for every key. -/
 def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
 
+instance : Inhabited (ProverHint F) where
+  default := ProverHint.empty F
+
 /--
   `Environment` represents the data that is provided at runtime to concretely
   specify the witness assignment of a circuit (`get`) and any additional witness data

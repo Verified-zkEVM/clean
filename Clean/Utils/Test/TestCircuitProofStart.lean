@@ -14,7 +14,7 @@ section BasicTests
 -- 3. Unfolds circuit definitions
 
 -- Test that the tactic works for simple soundness proofs
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit] (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
@@ -26,7 +26,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test that the tactic works for simple completeness proofs
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit] (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
@@ -37,7 +37,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test parametrized soundness
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit offset)]
     (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
     Soundness F (circuit offset) Assumptions (Spec offset) := by
@@ -46,7 +46,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test parametrized completeness
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit offset)]
     (Assumptions : Input F → Prop) :
     Completeness F (circuit offset) Assumptions := by
@@ -55,7 +55,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test multiple parameters
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit n k)]
     (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
     Soundness F (circuit n k) Assumptions (Spec n k) := by
@@ -68,7 +68,7 @@ end BasicTests
 section NamePreservationTests
 -- Test that parameter names are preserved correctly
 
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit]
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
@@ -85,7 +85,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ConstraintsHold.Soundness env (circuit input_var i₀).2 := h_holds
   sorry
 
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit]
     (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by

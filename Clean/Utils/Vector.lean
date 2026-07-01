@@ -50,7 +50,15 @@ theorem toList_length_two {α : Type} (v : Vector α 2) :
 def listCons (a : α) (v : Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
-theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+@[simp] theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_zero {a : α} {v : Vector α n} :
+    (listCons a v)[0] = a := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_succ {a : α} {v : Vector α n} (i : ℕ) (hi : i < n) :
+    (listCons a v)[i + 1] = v[i] := by
   simp [listCons]
 
 def set? (v : Vector α n) (i : ℕ) (a : α) : Vector α n :=
@@ -187,6 +195,11 @@ lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
   ext i
   simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
   simp
+
+lemma mapFinRange_eq_self {α : Type} {n : ℕ} (v : Vector α n) :
+    Vector.mapFinRange n (fun i => v[i.val]) = v := by
+  ext i
+  simp only [Vector.getElem_mapFinRange]
 
 lemma map_mapFinRange {n : ℕ} {create : Fin n → α} {f : α → β} :
   Vector.map f (Vector.mapFinRange n create) =

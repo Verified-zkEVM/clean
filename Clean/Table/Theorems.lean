@@ -121,7 +121,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
 
 end TraceOfLength
 
-variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
+variable {F : Type} [FiniteField F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
 

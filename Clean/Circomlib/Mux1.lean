@@ -104,7 +104,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       | inr h1 =>
         -- When s = 1
         rw [h1]
-        simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
+        simp only [mul_one, circuit_norm]
         norm_num
 
   completeness := by

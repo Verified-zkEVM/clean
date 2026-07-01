@@ -9,20 +9,20 @@ verifier/prover values.
 -/
 
 namespace TestMixedCircuitType
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 structure Input (F : Type) where
   x : F
-  inverse : UnconstrainedDep field F
+  inverse : Unconstrained field F
 deriving CircuitType
 
 -- TODO automate this in the CircuitType deriver
 instance : Inhabited (Var Input F) where
-  default := { x := default, inverse _ := default }
+  default := { x := default, inverse := default }
 
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
-    let inverse ← witness input.inverse
+    let inverse ← witnessProgram input.inverse
     input.x * inverse === 1
     return inverse
 
@@ -48,13 +48,13 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     -- prover-only hint is connected to the generated witness by `h_env`.
     fail_if_success (exact input)
     guard_hyp h_input :
-      input_var.x.eval env.toEnvironment = input_x ∧ input_var.inverse env = input_inverse
+      input_var.x.eval env.toEnvironment = input_x ∧ (Witgen.FExpr.eval _ _ : F) = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
 def parent : GeneralFormalCircuit F field field where
-  main input := do
-    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
+  main (input : Expression F) := do
+    circuit { x := input, inverse := unconstrained (do return input⁻¹) }
 
   Spec input out _ :=
     input * out = 1
@@ -74,5 +74,49 @@ def parent : GeneralFormalCircuit F field field where
     -- inline inverse hint.
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
+
+structure BoolNatInput (F : Type) where
+  x : F
+  isZero : UnconstrainedBool F
+  xNat : UnconstrainedNat F
+deriving CircuitType
+
+-- TODO automate this in the CircuitType deriver
+instance : Inhabited (Var BoolNatInput F) where
+  default := { x := default, isZero := default, xNat := default }
+
+def boolNatCircuit : GeneralFormalCircuit.WithHint F BoolNatInput field where
+  main input := return input.x
+
+  Spec input out _ :=
+    out = input.x
+
+  ProverAssumptions input _ _ :=
+    input.isZero = ((FiniteField.val (F:=F) input.x : ℕ) = 0) ∧
+    input.xNat = FiniteField.val (F:=F) input.x
+
+  soundness := by
+    circuit_proof_start
+
+  completeness := by
+    circuit_proof_start
+
+def boolNatParent : GeneralFormalCircuit F field field where
+  main (input : Expression F) := do
+    boolNatCircuit {
+      x := input
+      isZero := unconstrainedBool (do return ((input.val =? 0) &&& .true))
+      xNat := unconstrainedNat (do return input.val)
+    }
+
+  Spec input out _ :=
+    out = input
+
+  soundness := by
+    circuit_proof_start [boolNatCircuit]
+
+  completeness := by
+    circuit_proof_start [boolNatCircuit]
+    simp
 
 end TestMixedCircuitType

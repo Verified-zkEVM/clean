@@ -17,11 +17,11 @@ deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← witness fun env =>
-    let z0 := (env x.x0).val ^^^ (env y.x0).val
-    let z1 := (env x.x1).val ^^^ (env y.x1).val
-    let z2 := (env x.x2).val ^^^ (env y.x2).val
-    let z3 := (env x.x3).val ^^^ (env y.x3).val
+  let z ← witness <|
+    let z0 := (x.x0.val ^^^ y.x0.val).toField
+    let z1 := (x.x1.val ^^^ y.x1.val).toField
+    let z2 := (x.x2.val ^^^ y.x2.val).toField
+    let z3 := (x.x3.val ^^^ y.x3.val).toField
     U32.mk z0 z1 z2 z3
 
   lookup ByteXorTable (x.x0, y.x0, z.x0)
@@ -93,8 +93,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type] at h_env ⊢
-  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
-  simp_all [xor_val]
+  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa [circuit_norm, h_input] using h_env 0
+  simp_all [circuit_norm, xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   main

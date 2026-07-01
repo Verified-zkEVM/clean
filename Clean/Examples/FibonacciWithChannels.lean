@@ -45,8 +45,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
     let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
       BytesChannel.emit multiplicities[i] (const i)
 
-  elaborated := by elaborate_circuit_with {
-    channelsWithRequirements := [ BytesChannel.toRaw ] }
+  channelsWithRequirements := [ BytesChannel.toRaw ]
   Spec _ _ _ := True
   soundness := by circuit_proof_start [BytesTable]
   completeness := by circuit_proof_start
@@ -71,7 +70,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
     -- witness the output carry
-    let carry ← witness fun env => floorDiv (env (x + y)) 256
+    let carry ← witness ((x + y).val / 256).toField
     assertBool carry
     -- assert correctness
     x + y === z + carry * 256
@@ -81,12 +80,13 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   ProverAssumptions
   | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
+  channelsWithRequirements := [ Add8Channel.toRaw ]
 
   soundness := by
     circuit_proof_start [BytesTable, Add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm hx hy
+    intro hm h0 hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
@@ -98,8 +98,11 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     simp only [add_zero] at add_completeness_bool add_completeness_add
     have h_input_z : input_z = mod256 (input_x + input_y) := by
       apply FieldUtils.ext
-      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+      rw [heq, mod256, FieldUtils.mod, ZMod.val_natCast_of_lt, ZMod.val_add_of_lt, PNat.val_ofNat]
+      · linarith [hx, hy, ‹Fact (p > 512)›.elim]
+      · grw [Nat.mod_lt _ (by norm_num)]
+        linarith [‹Fact (p > 512)›.elim]
+    change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 
 example (input : Var Add8Inputs (F p)) :
@@ -127,37 +130,54 @@ instance FibonacciChannel : Channel (F p) fieldTriple where
   | (n, x, y), _ =>
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
 
-def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
-  main | (n, x, y) => do
+structure Fib8Input F where
+  enabled : F
+  n : F
+  x : F
+  y : F
+deriving ProvableStruct
+
+def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
+  main | { enabled, n, x, y } => do
+    -- boolean constraint for `enabled`
+    -- has to be inline, channels with requirements proof doesn't handle subcircuits
+    assertZero (enabled * (enabled - 1))
     -- pull the current Fibonacci state
-    FibonacciChannel.pull (n, x, y)
+    FibonacciChannel.pullIf enabled (n, x, y)
     -- witness the next Fibonacci value
-    let z ← witness fun eval => mod256 (eval (x + y))
+    let z ← witness ((x + y).val % 256).toField
     -- pull from the Add8 channel to check addition
-    Add8Channel.pull (x, y, z)
+    Add8Channel.pullIf enabled (x, y, z)
     -- push the next Fibonacci state
-    FibonacciChannel.push (n + 1, y, z)
+    FibonacciChannel.pushIf enabled (n + 1, y, z)
 
   -- expose interactions
   exposedChannels
-  | (n, x, y), i₀ =>
+  | { enabled, n, x, y }, i₀ =>
     let z := var ⟨ i₀ ⟩
-    expose FibonacciChannel [ pulled (n, x, y), pushed (n + 1, y, z) ]
-  exposedChannels_eq := by simp only [circuit_norm, Add8Channel, FibonacciChannel]
+    expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
+  exposedChannels_eq input i₀ := by
+    simp only [circuit_norm, FibonacciChannel, Add8Channel]
 
   ProverAssumptions
-  | (n, x, y), _, _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  | { enabled, n, x, y }, _, _ =>
+    enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
 
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  requirementsChannelsLawful input_var i₀ := by
+    simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    grind
+
   soundness := by
-    circuit_proof_start
-    rcases input with ⟨ n, x, y ⟩ -- TODO circuit_proof_start should have done this
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm]
+    circuit_proof_start [FibonacciChannel, Add8Channel]
     set z := env.get i₀
-    simp only [circuit_norm, FibonacciChannel, Add8Channel] at h_holds ⊢
-    obtain ⟨ ⟨k, fiby, hk⟩, hadd ⟩ := h_holds
+    obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
+    rw [mul_eq_zero, add_neg_eq_zero] at h_bool
+    rcases h_bool with rfl | rfl
+    · grind
+    simp_all only [circuit_norm]
+    obtain ⟨k, fiby, hk⟩ := h_fib
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
     use k + 1
     simp only [fibonacci, ← fiby]
@@ -165,15 +185,15 @@ def fib8 : GeneralFormalCircuit (F p) fieldTriple unit where
     simp_all
 
   completeness := by
-    circuit_proof_start
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, FibonacciChannel, Add8Channel]
+    circuit_proof_start [FibonacciChannel, Add8Channel]
+    rcases h_assumptions with rfl | ⟨ rfl, h_fib ⟩
+    · simp
+    simp_all
     intro hx hy
-    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    rw [ZMod.val_natCast_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
-example (input : Var fieldTriple (F p)) :
+example (input : Var Fib8Input (F p)) :
     ExplicitCircuit (fib8.main input) := by
   infer_explicit_circuit
 
@@ -192,6 +212,7 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   Spec
   | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  channelsWithRequirements := [ FibonacciChannel.toRaw ]
   soundness := by
     circuit_proof_start [FibonacciChannel]
     rcases input with ⟨ n, x, y ⟩
@@ -213,7 +234,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [⟨ fib8 ⟩]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by simp [circuit_norm, fib8]
+  tables_channel := by simp [circuit_norm, fib8, add_neg_eq_zero]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
