@@ -16,7 +16,7 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.IsEqual
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {α : TypeMap} [ProvableType α] [DecidableEq (α F)]
 
 /--

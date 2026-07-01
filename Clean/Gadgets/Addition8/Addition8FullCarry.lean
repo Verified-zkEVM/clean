@@ -6,7 +6,7 @@ import Clean.Gadgets.Addition8.Theorems
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod256 floorDiv256)
+open ByteUtils (mod256)
 
 structure Inputs (F : Type) where
   x: F
@@ -23,11 +23,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witness fun eval => mod256 (eval (x + y + carryIn))
+  let z ← witness ((x + y + carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness fun eval => floorDiv256 (eval (x + y + carryIn))
+  let carryOut ← witness ((x + y + carryIn).val / 256).toField
   assertBool carryOut
 
   assertZero (x + y + carryIn - z - carryOut * 256)
@@ -99,10 +99,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     let goal_bool := IsBool carry_out
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
+    change z = mod256 (x + y + carry_in) at hz
 
     have completeness1 : z.val < 256 := by
-      rw [hz]
-      apply ByteUtils.mod256_lt
+      rw [hz, ByteUtils.mod256, FieldUtils.mod_val]
+      exact Nat.mod_lt _ (by norm_num)
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := IsBool.val_lt_two as_carry_in
@@ -125,7 +126,8 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
+      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq,
+      Witgen.WitgenIR.eval_ofFExpr, Witgen.WitgenIR.eval_ofFExprs_singleton]
 }
 
 end Gadgets.Addition8FullCarry

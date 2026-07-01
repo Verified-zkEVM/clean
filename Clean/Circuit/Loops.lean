@@ -11,7 +11,7 @@ import Lean.Elab.Tactic
 
 open Lean Meta Elab Tactic
 
-variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n m : ℕ} {F : Type} [FiniteField F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     xs.forM body = forM xs.toList body := by
@@ -114,9 +114,11 @@ lemma forAllNoOffset_flatten {prop' : ConditionNoOffset F}
 
 -- helper lemma to do induction on (List.ofFn ...).flatten terms
 private lemma ofFn_flatten_cons {circuit : α → Circuit F β} (constant : ConstantLength circuit) (x : α) (xs : Vector α m) (n : ℕ) :
-  (List.ofFn fun i => (circuit (Vector.listCons x xs)[i.val]).operations (n + i * constant.localLength)).flatten
-    = (circuit x).operations n ++ (List.ofFn fun i => (circuit xs[i.val]).operations (n + constant.localLength + i * constant.localLength)).flatten := by
-  simp +arith [Vector.listCons, add_mul]
+  (List.ofFn fun (i : Fin (m + 1)) =>
+      (circuit (Vector.listCons x xs)[i.val]).operations (n + i.val * constant.localLength)).flatten
+    = (circuit x).operations n ++ (List.ofFn fun (i : Fin m) =>
+      (circuit xs[i.val]).operations (n + constant.localLength + i.val * constant.localLength)).flatten := by
+  simp +arith [Vector.listCons, Nat.succ_mul]
 
 namespace ForM
 variable {circuit : α → Circuit F Unit} (xs : Vector α m) (constant : ConstantLength circuit) (n : ℕ)

@@ -9,7 +9,7 @@ instance : ToJson RowIndex where
     | .fromStart i => toJson (i : Int)
     | .fromEnd i => toJson (-(i : Int) - 1)
 
-variable {F : Type} {S : Type → Type} [ProvableType S] {W : ℕ+} {α : Type} [Field F] [ToJson F]
+variable {F : Type} {S : Type → Type} [ProvableType S] {W : ℕ+} {α : Type} [FiniteField F] [ToJson F]
 
 instance : ToJson (CellOffset W S) where
   toJson off := Json.mkObj [

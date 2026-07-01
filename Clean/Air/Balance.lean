@@ -1,6 +1,6 @@
 import Clean.Circuit
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {Message : TypeMap} [ProvableType Message]
 
 /-

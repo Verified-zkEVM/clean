@@ -7,7 +7,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {M : TypeMap} [ProvableType M]
 
 /--
@@ -104,7 +104,7 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
 Conditional selection.
 -/
 @[circuit_norm]
-def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
+def ifElse [FiniteField F] [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 

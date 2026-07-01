@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Examples.WitnessExport
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
 import Clean.Utils.OfflineMemory

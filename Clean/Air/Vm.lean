@@ -1,7 +1,7 @@
 import Clean.Air.FlatEnsemble
 import Clean.Air.OrderedChannel
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-
@@ -44,7 +44,7 @@ structure VmStep (Message : TypeMap) [ProvableType Message] (F : Type) where
   pull : Var Message F
   push : Var Message F
 
-structure VmTables (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
+structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
 
@@ -95,12 +95,12 @@ def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
     witness.BalancedChannels →
       ens.VerifierGuarantees witness.publicInput witness.data
 
-structure SoundVmEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+structure SoundVmEnsemble (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
   soundVmChannel : ensemble.SoundVmChannel
 
 namespace SoundVmEnsemble
-def toFormal (F : Type) [Field F] [DecidableEq F] (ens : SoundVmEnsemble F PublicIO)
+def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F PublicIO)
   -- TODO is this useful in practice? Right now, tables don't have access to public input so that's weird
   (ExtraAssumptions : PublicIO F → ProverData F → Prop)
   (extraAssumptionsConsistency : ∀ publicInput data, ExtraAssumptions publicInput data →

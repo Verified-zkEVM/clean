@@ -8,7 +8,7 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.IsZero
 
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {M : TypeMap} [ProvableType M]
 
 /--

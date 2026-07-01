@@ -21,24 +21,18 @@ namespace Examples.HintExample
   The hint callback tells the prover which boolean value to witness.
   The circuit constrains the output to be boolean (0 or 1).
 -/
-def witnessBool : GeneralFormalCircuit.WithHint (F p) (Unconstrained Bool) field where
-  main (hint : ProverEnvironment (F p) → Bool) := do
-    let b ← witness fun env => if hint env then 1 else 0
+def witnessBool : GeneralFormalCircuit.WithHint (F p) UnconstrainedBool field where
+  main hint := do
+    let b ← witnessProgram do return (← hint).toField
     assertBool b
     return b
 
-  Assumptions (_ : Unit) _ := True
   Spec (_ : Unit) (output : F p) _ := IsBool output
 
-  ProverAssumptions (hint : Bool) _ _ := True
   ProverSpec (hint : Bool) (b : F p) _ := b = if hint then 1 else 0
 
-  soundness := by
-    circuit_proof_all [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-
-  completeness := by
-    circuit_proof_start [assertBool, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-    cases input_var env <;> simp_all
+  soundness := by circuit_proof_all
+  completeness := by circuit_proof_all
 
 structure Input (F : Type) where
   x : F
@@ -54,7 +48,8 @@ deriving ProvableStruct
 def booleanAnd : FormalCircuit (F p) Input field where
   main | ⟨x, y⟩ => do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
-    let z ← witnessBool fun env => eval env x = 1 ∧ eval env y = 1
+    let z ← witnessBool <| unconstrainedBool do
+      return (x =? 1) &&& (y =? 1)
     -- Constrain result = x * y (multiplication is AND for booleans)
     z === x * y
     return z
@@ -63,21 +58,20 @@ def booleanAnd : FormalCircuit (F p) Input field where
   Spec | ⟨x, y⟩, z => IsBool z ∧ z.val = x.val &&& y.val
 
   soundness := by
-    circuit_proof_start [witnessBool, assertBool, IsBool]
+    circuit_proof_start [witnessBool, IsBool]
     rcases h_holds.1 with z | notz
     · simp_all
       cases h_holds <;> simp_all
     · grind
 
   completeness := by
-    circuit_proof_start [witnessBool, assertBool, IsBool]
-    simp_all
+    circuit_proof_start [witnessBool, IsBool]
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
-      <;> simp_all
+    <;> simp_all
 
 structure MixedInput (F : Type) where
   someElement : U32 F
-  someHint : Unconstrained Bool F
+  someHint : UnconstrainedNative Bool F
 deriving CircuitType
 
 example (input : MixedInput.Var (F p)) : U32 (Expression (F p)) × (ProverEnvironment (F p) → Bool) :=
@@ -89,11 +83,11 @@ example (input : MixedInput.Value (F p)) : U32 (F p) × Unit :=
 
 /--
   This captures the field-dependent hint case: the prover-only data mentions the
-  circuit field type, so `Unconstrained Bool` is not expressive enough.
+  circuit field type, so `UnconstrainedNative Bool` is not expressive enough.
 -/
 structure InputWithFieldHint (F : Type) where
   publicInput : F
-  hinted : UnconstrainedDep field F
+  hinted : UnconstrainedDepNative field F
 deriving CircuitType
 
 example (input : InputWithFieldHint.Var (F p)) :

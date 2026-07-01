@@ -244,24 +244,21 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     (2^n : F p)
 
   -- Witness output bits
-  let out ← witnessVector n fun env =>
-    fieldToBits n (lin.eval env)
+  let out ← witnessVector n (.range n fun i => ((lin.val >>> i) % 2).toField)
 
   -- Witness aux bit
-  let aux ← witness fun env =>
-    let lin_val := lin.eval env
-    -- Extract the nth bit (borrow bit)
-    if (lin_val.val / (2^n)) % 2 = 1 then (1 : F p) else (0 : F p)
+  -- the borrow bit is exactly the nth bit of lin
+  let aux ← witness ((lin.val >>> n) % 2).toField
 
   -- Calculate output linear sum and constrain bits
   let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
     -- Ensure out[i] is binary
-    out[i] * (out[i] - (1 : Expression (F p))) === (0 : Expression (F p))
+    out[i] * (out[i] - 1) === 0
     let lout := lout + out[i] * e2
     return (lout, e2 + e2)
 
   -- Ensure aux is binary
-  aux * (aux - (1 : Expression (F p))) === (0 : Expression (F p))
+  aux * (aux - 1) === 0
 
   -- Add aux contribution to lout
   let lout := lout + aux * ((2^n : F p) : Expression (F p))
@@ -348,13 +345,14 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 2: Establish that the 'out' bits in the environment are binary
     have h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)) := by
       rintro ⟨i, h⟩
-      simp only [h_env_out ⟨i, h⟩]
-      exact fieldToBits_boolean _ ⟨i, h⟩
+      simp only [h_env_out ⟨i, h⟩, IsBool]
+      rcases Nat.mod_two_eq_zero_or_one (_ >>> i) with hb | hb <;> rw [hb] <;> simp
 
     -- Step 3: Establish that the 'aux' bit is binary
     have h_aux_binary : IsBool (env.get (i₀ + n)) := by
       rw [h_env_aux]
-      exact aux_bit_boolean lin
+      simp only [IsBool]
+      rcases Nat.mod_two_eq_zero_or_one (_ >>> n) with hb | hb <;> rw [hb] <;> simp
 
     -- Final Goal: Prove the conjunction of constraints
     and_intros
@@ -369,6 +367,18 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       . rw [h0]; norm_num
       . rw [h1]; norm_num
     · -- Constraint 3: The linear sum check (lin === lout)
-      exact completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out h_env_aux
+      have h_env_out' : ∀ (i : Fin n),
+          env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i] := by
+        intro i
+        rw [h_env_out i, Fin.getElem_fin, getElem_fieldToBits]
+        rfl
+      have h_env_aux' : env.get (i₀ + n) =
+          if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0 := by
+        rw [h_env_aux, Nat.shiftRight_eq_div_pow]
+        show (↑((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2) : F p) = _
+        rcases Nat.mod_two_eq_zero_or_one
+          ((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n) with hb | hb <;>
+          rw [hb] <;> simp
+      exact completeness_reconstruction hnout env i₀ input input_var h_input h_assumptions h_out_binary h_env_out' h_env_aux'
 end BinSub
 end Circomlib

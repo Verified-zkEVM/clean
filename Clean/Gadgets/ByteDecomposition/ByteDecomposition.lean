@@ -20,8 +20,8 @@ deriving ProvableStruct
   and the high part is the most significant `8 - offset` bits.
 -/
 def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
-  let high ← witness fun env => floorDiv (env x) (2^offset.val)
+  let low ← witness (x.val % (2^offset.val : ℕ)).toField
+  let high ← witness (x.val / (2^offset.val : ℕ)).toField
 
   lookup ByteTable ((2^(8-offset.val) : F p) * low)
   lookup ByteTable high
@@ -98,11 +98,11 @@ theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Out
   simp only [circuit_norm, main, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
-
+  have lt : (2^offset.val : ℕ+) < p := by simp [two_pow_lt]
   and_intros
 
-  · show (2^(8-offset.val) * mod x (2^offset.val) _).val < 2^8
-    suffices ((2 : F p)^(8-offset.val)).val * (mod x (2^offset.val) _).val < 2^8 by
+  · show (2^(8-offset.val) * mod x (2^offset.val) lt).val < 2^8
+    suffices ((2 : F p)^(8-offset.val)).val * (mod x (2^offset.val) lt).val < 2^8 by
       rwa [ZMod.val_mul_of_lt (by linarith [p_large_enough.elim])]
     rw [two_pow_val _ (by omega), pow_8_nat]
     exact Nat.mul_lt_mul_of_pos_left FieldUtils.mod_lt (Nat.pow_pos (by norm_num))
@@ -114,8 +114,9 @@ theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Out
     apply Nat.mul_le_mul_right
     exact Nat.succ_le_of_lt (by norm_num)
 
-  · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
-    rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
+  · show x = mod x (2^offset.val) lt + floorDiv x (2^offset.val) * (2^offset.val : F p)
+    have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
+    rw [this, mul_comm, FieldUtils.mod_add_floorDiv lt]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   main := main offset

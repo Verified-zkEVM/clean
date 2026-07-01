@@ -139,7 +139,7 @@ theorem soundness (x y out carry_in carry_out : F p):
 /--
   Given the default witness generation, we show that the addition constraint is satisfied
 -/
-theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in : F p) :
+theorem completeness_add (x y carry_in : F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -150,43 +150,10 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in : F p) :
   simp
   rw [←sub_eq_add_neg, sub_eq_zero, add_eq_of_eq_sub]
   ring_nf
-  dsimp only [ByteUtils.mod256, FieldUtils.mod, PNat.val_ofNat]
-
-  -- lift everything to the naturals
-  apply_fun ZMod.val
-  · simp only [ZMod.val_add (FieldUtils.floorDiv (x + y + carry_in) 256 * 256)]
-    dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
-    rw [ZMod.val_mul, FieldUtils.natToField_val, FieldUtils.natToField_val]
-    repeat rw [ZMod.val_add]
-    simp
-
-    -- we need to show that the sum does not wrap around
-    set T := ZMod.val x + ZMod.val y + ZMod.val carry_in
-    have T_not_wrap : T % p = T := by
-      dsimp only
-      rw [Nat.mod_eq_iff_lt p_neq_zero.out]
-      have sum_bound := ByteUtils.byte_sum_le_bound x y as_x as_y
-      have sum_lt_512 : (x + y).val + carry_in.val ≤ 511 := by
-        apply Nat.le_sub_one_of_lt at sum_bound
-        apply Nat.le_sub_one_of_lt at carry_in_bound
-        simp at sum_bound
-        simp at carry_in_bound
-        apply Nat.add_le_add sum_bound carry_in_bound
-      have sum_lt_p : (x + y).val + carry_in.val < p := Nat.lt_trans
-        (by apply Nat.lt_add_one_of_le at sum_lt_512; assumption) p_large_enough.elim
-      rw [ByteUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_lt_p
-      assumption
-    rw [T_not_wrap]
-
-    -- now we just need to prove a simple result about euclidean division over T
-    have obv : (256 : F p).val = 256 % p := by apply ZMod.val_natCast
-    have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
-      rw [mul_comm, obv]
-      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr
-        (Nat.lt_trans (by norm_num) p_large_enough.elim), Nat.div_add_mod]
-
-    rw [h, T_not_wrap]
-  · apply ZMod.val_injective
+  dsimp only [ByteUtils.mod256, FieldUtils.floorDiv, FieldUtils.mod]
+  rw [add_comm (_ * 256) _, mul_comm _ 256]
+  symm
+  apply ByteUtils.mod_add_div256
 
 /--
   Given the default witness generation, we show that the output carry
@@ -199,46 +166,6 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in : F p) :
     let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
     IsBool carry_out := by
   intro as_x as_y carry_in_bound
-  dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
-
-  -- we show that the carry_out is either 0 or 1 by explicitly
-  -- constructing the two cases
-  have carry? := Nat.lt_or_ge (x.val + y.val + carry_in.val) 256
-  rcases carry? with sum_lt_256 | sum_ge_256
-  · -- we want to show that the carry is 0
-    apply Or.inl
-    apply_fun ZMod.val
-    · rw [FieldUtils.natToField_val]
-      have h : (x + y + carry_in).val = x.val + y.val + carry_in.val := by
-        rw [ZMod.val_add, ZMod.val_add x]
-        simp
-        rw [(Nat.mod_eq_iff_lt p_neq_zero.out).mpr
-          (Nat.lt_trans sum_lt_256 (by linarith [p_large_enough.elim]))]
-      rw [h]
-      rw [Nat.div_eq_of_lt sum_lt_256]
-      simp
-    · apply ZMod.val_injective
-  · have sum_bound := ByteUtils.byte_sum_le_bound x y as_x as_y
-    have sum_le_511 : (x + y).val + carry_in.val ≤ 511 := by
-      apply Nat.le_sub_one_of_lt at sum_bound
-      apply Nat.le_sub_one_of_lt at carry_in_bound
-      simp at sum_bound
-      simp at carry_in_bound
-      rw [add_comm]
-      apply Nat.add_le_add carry_in_bound sum_bound
-    rw [ByteUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_le_511
-
-    -- we want to show that the carry is 1
-    apply Or.inr
-    apply_fun ZMod.val
-    · rw [FieldUtils.natToField_val]
-      have div_one : (x.val + y.val + carry_in.val) / 256 = 1 := by
-        apply Nat.div_eq_of_lt_le
-        · simp; apply sum_ge_256
-        · simp; apply Nat.lt_add_one_of_le; apply sum_le_511
-      rw [ZMod.val_one]
-      rw [ByteUtils.byte_sum_and_bit_do_not_wrap' x y carry_in as_x as_y carry_in_bound]
-      assumption
-    · apply ZMod.val_injective
-
+  apply ByteUtils.floorDiv256_bool
+  field_to_nat
 end Gadgets.Addition8.Theorems

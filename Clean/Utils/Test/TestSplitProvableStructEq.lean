@@ -16,7 +16,7 @@ structure NonProvableStruct (F : Type) where
   b : F
 
 -- Ordinary records without ProvableStruct should remain opaque.
-theorem test_non_provable_struct_not_split {F : Type} [Field F]
+theorem test_non_provable_struct_not_split {F : Type} [FiniteField F]
     (h : (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4) :
     (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4 := by
   fail_if_success
@@ -25,7 +25,7 @@ theorem test_non_provable_struct_not_split {F : Type} [Field F]
   exact h
 
 -- Test basic struct literal = struct literal
-theorem test_struct_literal_eq_literal {F : Type} [Field F]
+theorem test_struct_literal_eq_literal {F : Type} [FiniteField F]
     (h : (TestInputs.mk 1 2 3 : TestInputs F) = TestInputs.mk 4 5 6) :
     (1 : F) = 4 := by
   split_provable_struct_eq
@@ -33,7 +33,7 @@ theorem test_struct_literal_eq_literal {F : Type} [Field F]
   exact h.1
 
 -- Test struct literal = struct variable
-theorem test_struct_literal_eq_variable {F : Type} [Field F] (input : TestInputs F)
+theorem test_struct_literal_eq_variable {F : Type} [FiniteField F] (input : TestInputs F)
     (h : TestInputs.mk 1 2 3 = input) :
     input.x = 1 := by
   split_provable_struct_eq
@@ -42,7 +42,7 @@ theorem test_struct_literal_eq_variable {F : Type} [Field F] (input : TestInputs
   exact h.1.symm
 
 -- Test struct variable = struct literal
-theorem test_struct_variable_eq_literal {F : Type} [Field F] (input : TestInputs F)
+theorem test_struct_variable_eq_literal {F : Type} [FiniteField F] (input : TestInputs F)
     (h : input = TestInputs.mk 1 2 3) :
     input.x = 1 := by
   split_provable_struct_eq
@@ -51,7 +51,7 @@ theorem test_struct_variable_eq_literal {F : Type} [Field F] (input : TestInputs
   exact h.1
 
 -- Test multiple struct equalities
-theorem test_multiple_equalities {F : Type} [Field F] (input1 input2 : TestInputs F)
+theorem test_multiple_equalities {F : Type} [FiniteField F] (input1 input2 : TestInputs F)
     (h1 : TestInputs.mk 1 2 3 = input1)
     (h2 : input2 = TestInputs.mk 4 5 6) :
     input1.x = 1 ∧ input2.y = 5 := by
@@ -64,7 +64,7 @@ theorem test_multiple_equalities {F : Type} [Field F] (input1 input2 : TestInput
   · exact h2.2.1
 
 -- Test with conjunctions containing struct equalities
-theorem test_conjunction_with_struct_eq {F : Type} [Field F] (input : TestInputs F) (x : F)
+theorem test_conjunction_with_struct_eq {F : Type} [FiniteField F] (input : TestInputs F) (x : F)
     (h : TestInputs.mk 1 2 3 = input ∧ x = 7) :
     input.x = 1 ∧ x = 7 := by
   split_provable_struct_eq
@@ -76,7 +76,7 @@ theorem test_conjunction_with_struct_eq {F : Type} [Field F] (input : TestInputs
   · exact h.2
 
 -- Test with nested conjunctions and multiple struct equalities
-theorem test_nested_conjunctions {F : Type} [Field F] (input1 input2 : TestInputs F) (x : F)
+theorem test_nested_conjunctions {F : Type} [FiniteField F] (input1 input2 : TestInputs F) (x : F)
     (h : (TestInputs.mk 1 2 3 = input1 ∧ x = 7) ∧ input2 = TestInputs.mk 4 5 6) :
     input1.x = 1 ∧ input2.y = 5 := by
   split_provable_struct_eq
@@ -86,7 +86,7 @@ theorem test_nested_conjunctions {F : Type} [Field F] (input1 input2 : TestInput
   · exact h.2.2.1
 
 -- Test with some equation to be split and some not to be split
-theorem test_with_base_and_non_base {F : Type} [Field F] (input1 input2 input3 : TestInputs F) (x : F)
+theorem test_with_base_and_non_base {F : Type} [FiniteField F] (input1 input2 input3 : TestInputs F) (x : F)
     (h : (TestInputs.mk 1 2 3 = input1 ∧ x = 7) ∧ input2 = input3) :
     input1.x = 1 := by
   split_provable_struct_eq

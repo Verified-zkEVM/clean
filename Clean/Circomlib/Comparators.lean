@@ -25,11 +25,8 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) := do
-  let inv ← witness fun env =>
-    let x := input.eval env
-    if x ≠ 0 then x⁻¹ else 0
-
+def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+  let inv ← witness (.ite (input =? 0) 0 input⁻¹)
   let out <== -input * inv + 1
   input * out === 0
   return out
@@ -60,8 +57,8 @@ def circuit : FormalCircuit (F p) field field where
     circuit_proof_start
     cases h_env with
     | intro left right =>
-      simp only [left, id_eq, ite_not, mul_ite, mul_zero] at right
-      simp only [id_eq, right, left, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      simp only [left] at right
+      simp only [id_eq, right, left, mul_ite, mul_zero, mul_eq_zero, true_and]
       split_ifs <;> aesop
 
 end IsZero

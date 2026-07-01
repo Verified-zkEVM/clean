@@ -70,7 +70,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- (x and y are guaranteed to be range-checked from earlier interactions)
     BytesChannel.pull z
     -- witness the output carry
-    let carry ← witness fun env => floorDiv (env (x + y)) 256
+    let carry ← witness ((x + y).val / 256).toField
     assertBool carry
     -- assert correctness
     x + y === z + carry * 256
@@ -98,8 +98,11 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     simp only [add_zero] at add_completeness_bool add_completeness_add
     have h_input_z : input_z = mod256 (input_x + input_y) := by
       apply FieldUtils.ext
-      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+      rw [heq, mod256, FieldUtils.mod, ZMod.val_natCast_of_lt, ZMod.val_add_of_lt, PNat.val_ofNat]
+      · linarith [hx, hy, ‹Fact (p > 512)›.elim]
+      · grw [Nat.mod_lt _ (by norm_num)]
+        linarith [‹Fact (p > 512)›.elim]
+    change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 
 example (input : Var Add8Inputs (F p)) :
@@ -142,7 +145,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     -- pull the current Fibonacci state
     FibonacciChannel.pullIf enabled (n, x, y)
     -- witness the next Fibonacci value
-    let z ← witness fun eval => mod256 (eval (x + y))
+    let z ← witness ((x + y).val % 256).toField
     -- pull from the Add8 channel to check addition
     Add8Channel.pullIf enabled (x, y, z)
     -- push the next Fibonacci state
@@ -187,7 +190,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     · simp
     simp_all
     intro hx hy
-    rw [mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
+    rw [ZMod.val_natCast_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 example (input : Var Fib8Input (F p)) :

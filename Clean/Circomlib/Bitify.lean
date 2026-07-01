@@ -34,7 +34,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n : ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
+  let out ← witnessVector n (.range n fun i => ((inp.val >>> i) % 2).toField)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -96,12 +96,14 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
-    · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
+    · intro i hi
+      rw [h_env i hi]
+      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
     show fieldFromBits bits = input
     have : bits = fieldToBits n input := by
       rw [Vector.ext_iff]
       intro i hi
-      simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+      simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p

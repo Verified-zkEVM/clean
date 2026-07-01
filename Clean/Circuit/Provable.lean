@@ -3,7 +3,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.CircuitType
 import Clean.Circuit.SimpGadget
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 /--
 Class of types that can be used inside a circuit,
@@ -188,10 +188,10 @@ instance : ProvableType unit where
   toElements _ := #v[]
   fromElements _ := ()
 
-instance {Hint : Type} : ProvableType (Value (Unconstrained Hint)) :=
+instance {Hint : Type} : ProvableType (Value (UnconstrainedNative Hint)) :=
   inferInstanceAs (ProvableType unit)
 
-instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDep Hint)) :=
+instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :=
   inferInstanceAs (ProvableType unit)
 
 abbrev field : TypeMap := id
@@ -385,7 +385,7 @@ instance ProvableType.fromStruct {α : TypeMap} [ProvableStruct α] : ProvableTy
     simp only [Vector.cast_cast, Vector.cast_rfl]
 
 namespace ProvableStruct
-variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
+variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 
 /--
 Alternative `eval` which evaluates each component separately.
@@ -446,7 +446,7 @@ where
     | [], _ => .nil
     | c :: cs, offset => .cons (ProvableType.varFromOffset c.type offset) (go cs (offset + c.provableType.size))
 
-omit [Field F] in
+omit [FiniteField F] in
 /--
   `varFromOffset` === `ProvableStruct.varFromOffset`
 -/
@@ -613,7 +613,7 @@ theorem eval_const {env : Environment F} {x : α F} :
   rw [this, Vector.map_id_fun, id_eq, fromElements_toElements]
 
 @[circuit_norm]
-theorem eval_const_prover {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+theorem eval_const_prover {F : Type} [FiniteField F] {α : TypeMap} [ProvableType α]
     {env : ProverEnvironment F} {x : α F} :
     Eval.eval env (const x) = x := by
   exact (CircuitType.eval_expression_prover env (const x)).trans (by
@@ -871,12 +871,12 @@ namespace CircuitType
       (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
   exact eval_var_pair_prover env p.1 p.2
 
-@[circuit_norm] lemma eval_field_pair (F : Type) [Field F]
+@[circuit_norm] lemma eval_field_pair (F : Type) [FiniteField F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
   exact eval_pair (α:=field) (β:=field) env p1 p2
 
-@[circuit_norm] lemma eval_field_pair_prover (F : Type) [Field F]
+@[circuit_norm] lemma eval_field_pair_prover (F : Type) [FiniteField F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
   exact eval_var_pair_prover env p1 p2
@@ -928,7 +928,7 @@ theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
         (eval (Value:=fields m F) env (b : fields m (Expression F)) : fields m F)) :=
   eval_pair (α:=fields n) (β:=fields m) env a b
 
-omit [Field F] in
+omit [FiniteField F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
     varFromOffset (F:=F) (ProvablePair α β) offset

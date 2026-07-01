@@ -1,6 +1,6 @@
 import Clean.Air.FlatEnsemble
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 open Air.Flat (Component Table Tables)
 
 -- TODO deduplicate and add to Basic
@@ -637,7 +637,7 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
   exact soundChannels_cons_of_soundChannels h_sound
 end Ensemble
 
-structure SoundEnsemble (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+structure SoundEnsemble (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
   finished : List (RawChannel F)
   finished_consistent : ∀ channel ∈ finished, channel.Consistent
@@ -658,7 +658,7 @@ lemma soundChannels (ens : SoundEnsemble F PublicIO) : ens.SoundChannels ens.fin
   rw [ens.channelsWithGuarantees_subset_iff] at subset_finished
   simp_all only [circuit_norm]
 
-def empty (F : Type) [Field F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
+def empty (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] :
   SoundEnsemble F PublicIO where
     ensemble := .empty F PublicIO
     finished := []

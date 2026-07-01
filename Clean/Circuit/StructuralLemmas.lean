@@ -2,7 +2,7 @@ import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Theorems
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
   {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
 
 namespace FormalCircuit

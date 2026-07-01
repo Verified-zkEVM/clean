@@ -2,7 +2,7 @@ import Clean.Circuit
 
 namespace ReduceDataExperiment
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 namespace Small
 
