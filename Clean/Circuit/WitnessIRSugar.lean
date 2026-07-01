@@ -36,6 +36,8 @@ instance : Coe (Expression F) (field (FExpr F)) where
   coe e := .expr e
 instance : Coe F (FExpr F) := ⟨.const⟩
 instance : Coe F (field (FExpr F)) := ⟨.const⟩
+instance {M : TypeMap} [ProvableType M] : Coe (M (Expression F)) (M (FExpr F)) where
+  coe v := fromElements (toElements v |>.map .expr)
 instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)⟩
 instance : Add (FExpr F) := ⟨.add⟩
 instance : Mul (FExpr F) := ⟨.mul⟩
@@ -86,8 +88,32 @@ abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 
 /-! ## Conditions -/
 
-@[inherit_doc BExpr.feq] infix:50 " =? " => BExpr.feq
-@[inherit_doc BExpr.neq] infix:50 " =? " => BExpr.neq
+/-- Overload witness-IR equality tests while keeping a single parser entry for
+`=?`. Field-sorted operands become `BExpr.feq`; Nat-sorted operands become
+`BExpr.neq` (Nat equality).  The operand types are heterogeneous so
+`x =? 0` can keep `x` as an `Expression` while interpreting `0` as an IR
+constant, preserving the exported witness shape. -/
+class EqCond (α β : Type) (F : outParam Type) where
+  /-- Build a witness-IR equality condition for these operand sorts. -/
+  eqCond : α → β → BExpr F
+
+@[inherit_doc EqCond.eqCond] infix:50 " =? " => EqCond.eqCond
+
+instance : EqCond (FExpr F) (FExpr F) F := ⟨.feq⟩
+instance : EqCond (Expression F) (FExpr F) F where eqCond x y := .feq x y
+instance : EqCond (FExpr F) (Expression F) F where eqCond x y := .feq x y
+instance : EqCond (FExpr F) F F where eqCond x y := .feq x y
+instance : EqCond F (FExpr F) F where eqCond x y := .feq y x
+instance : EqCond (Expression F) F F where eqCond x y := .feq x y
+instance : EqCond F (Expression F) F where eqCond x y := .feq x y
+instance [NatCast F] : EqCond (Expression F) ℕ F where eqCond x n := .feq x (n : F)
+instance [NatCast F] : EqCond ℕ (Expression F) F where eqCond n x := .feq (n : F) x
+instance [NatCast F] : EqCond (FExpr F) ℕ F where eqCond x n := .feq x (n : F)
+instance [NatCast F] : EqCond ℕ (FExpr F) F where eqCond n x := .feq (n : F) x
+instance : EqCond (NExpr F) (NExpr F) F := ⟨.neq⟩
+instance : EqCond (NExpr F) ℕ F where eqCond x n := .neq x (.const n)
+instance : EqCond ℕ (NExpr F) F where eqCond n x := .neq (.const n) x
+
 @[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
 
 instance : Inhabited (BExpr F) := ⟨.false⟩

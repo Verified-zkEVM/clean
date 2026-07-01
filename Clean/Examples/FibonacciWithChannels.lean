@@ -98,10 +98,11 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     simp only [add_zero] at add_completeness_bool add_completeness_add
     have h_input_z : input_z = mod256 (input_x + input_y) := by
       apply FieldUtils.ext
-      rw [heq, mod256, FieldUtils.mod, FieldUtils.natToField_val, ZMod.val_add_of_lt, PNat.val_ofNat]
-      linarith [hx, hy, ‹Fact (p > 512)›.elim]
-    replace h_env : carry = floorDiv (input_x + input_y) 256 := by
-      simp [floorDiv, h_env, ← FieldUtils.natToField_eq_natCast]
+      rw [heq, mod256, FieldUtils.mod, ZMod.val_natCast_of_lt, ZMod.val_add_of_lt, PNat.val_ofNat]
+      · linarith [hx, hy, ‹Fact (p > 512)›.elim]
+      · grw [Nat.mod_lt _ (by norm_num)]
+        linarith [‹Fact (p > 512)›.elim]
+    change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 
 example (input : Var Add8Inputs (F p)) :

@@ -8,7 +8,8 @@ import Clean.Utils.Tactics
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod256 floorDiv256)
+open ByteUtils (mod256)
+open FieldUtils (floorDiv)
 
 structure Inputs (F : Type) where
   x: U32 F
@@ -114,25 +115,18 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz : z = ↑(ZMod.val (x + y + c_in) % 256))
-    (hc_out : c_out = ↑(ZMod.val (x + y + c_in) / 256)) :
+    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → IsBool c_in →
     z.val < 256 ∧ IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
-    -- bridge cast normal forms back to mod256 / floorDiv256
-    -- TODO WITGENIR this proof got uglified
-    rw [show (↑(ZMod.val (x + y + c_in) % 256) : F p) = mod256 (x + y + c_in) from by
-      rw [ByteUtils.mod256, FieldUtils.mod]; exact FieldUtils.natToField_eq_natCast _] at hz
-    rw [show (↑(ZMod.val (x + y + c_in) / 256) : F p) = floorDiv256 (x + y + c_in) from by
-      rw [ByteUtils.floorDiv256, FieldUtils.floorDiv]; exact FieldUtils.natToField_eq_natCast _] at hc_out
     have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
     use this
     have carry_lt_2 : c_in.val < 2 := IsBool.val_lt_two hc
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
     use (hc_out ▸ ByteUtils.floorDiv256_bool this)
-    rw [ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
+    rw [← ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
     ring
 
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := h_assumptions

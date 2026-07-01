@@ -6,7 +6,7 @@ import Clean.Gadgets.Addition8.Theorems
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod256 floorDiv256)
+open ByteUtils (mod256)
 
 structure Inputs (F : Type) where
   x: F
@@ -99,33 +99,22 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     let goal_bool := IsBool carry_out
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
+    change z = mod256 (x + y + carry_in) at hz
 
     have completeness1 : z.val < 256 := by
-      rw [hz]
-      have h256 : (x + y + carry_in).val % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      have hp : (512 : ℕ) < p := Fact.out
-      rw [ZMod.val_natCast_of_lt (by omega)]
-      exact h256
+      rw [hz, ByteUtils.mod256, FieldUtils.mod_val]
+      exact Nat.mod_lt _ (by norm_num)
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := IsBool.val_lt_two as_carry_in
 
-    -- bridge cast normal forms back to the FieldUtils.mod256 / floorDiv forms used by the lemmas
-    -- TODO WITGENIR this proof got uglified, change Addition8.Theorems layer
-    have h_carry_eq : (↑(ZMod.val (x + y + carry_in) / 256) : F p)
-        = FieldUtils.floorDiv (x + y + carry_in) 256 := by
-      rw [FieldUtils.floorDiv]; exact FieldUtils.natToField_eq_natCast _
-    have h_z_eq : (↑(ZMod.val (x + y + carry_in) % 256) : F p)
-        = ByteUtils.mod256 (x + y + carry_in) := by
-      rw [ByteUtils.mod256, FieldUtils.mod]; exact FieldUtils.natToField_eq_natCast _
-
     have completeness2 : IsBool carry_out := by
-      rw [hcarry_out, h_carry_eq]
+      rw [hcarry_out]
       apply Addition8.Theorems.completeness_bool
       repeat assumption
 
     have completeness3 : x + y + carry_in + -z + -(carry_out * 256) = 0 := by
-      rw [hz, hcarry_out, h_z_eq, h_carry_eq]
+      rw [hz, hcarry_out]
       apply Addition8.Theorems.completeness_add
       repeat assumption
 
