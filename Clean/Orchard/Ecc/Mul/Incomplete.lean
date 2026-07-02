@@ -701,7 +701,6 @@ theorem soundness (n : ℕ) :
         = DoubleAndAdd.yA (rowD env i₀ j) + DoubleAndAdd.yA (rowD env i₀ (j + 1)) := by
     intro j hj
     have h := h_loop ⟨j, hj⟩
-    simp only [Vector.get] at h
     rcases j with _ | j'
     · norm_num at h
       simp only [circuit_norm, Expression.eval, Loop.bit,
@@ -1055,7 +1054,6 @@ theorem completeness (n : ℕ) :
   · -- q_mul_2 row gates
     intro i
     obtain ⟨j, hj⟩ := i
-    simp only [Vector.get]
     obtain ⟨hz_j, hxp_j, hyp_j, hl1_j, hl2_j, hxn_j⟩ := hcell j (by omega)
     obtain ⟨hz_j1, hxp_j1, hyp_j1, hl1_j1, hl2_j1, hxn_j1⟩ := hcell (j + 1) (by omega)
     have hg := hHS j (by omega)

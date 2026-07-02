@@ -631,13 +631,13 @@ def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (fun env => eval env nk)
 
   -- The single-bit subpieces b_1, d_1 are boolean-constrained in the canonicity gate.
-  let b1 ← witness (ak.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
-  let d1 ← witness (nk.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let b1 ← witness (ak.val.bitrange 254 1).toField
+  let d1 ← witness (nk.val.bitrange 254 1).toField
 
   -- The four Sinsemilla message pieces.
-  let a ← witness (ak.val / (2 ^ 0 : ℕ) % (2 ^ 250 : ℕ)).toField
+  let a ← witness (ak.val.bitrange 0 250).toField
   let b ← witness (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) : Expression Fp)
-  let c ← witness (nk.val / (2 ^ 5 : ℕ) % (2 ^ 240 : ℕ)).toField
+  let c ← witness (nk.val.bitrange 5 240).toField
   let d ← witness (d0 + d1 * (2 ^ 9 : Fp) : Expression Fp)
 
   -- ivk = Commit^ivk_rivk(ak || nk); the short commit also exposes the per-piece running sums.
@@ -860,15 +860,6 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   -- the two recombination cells `b`, `d`, expressed through their sub-cells' honest values
   rw [hB0, hEb1, hB2] at hEb
   rw [hD0, hEd1] at hEd
-  -- bridge `FiniteField.fromNat`/`.val` (stated generically over `F p`) to `Fp`-specific
-  -- `Nat.cast`/`ZMod.val` form, so `simp` can actually match them (the generic lemmas'
-  -- LHS pattern `F ?p` doesn't unify with `Fp` at simp's discrimination-tree matching,
-  -- even though it does via `rw`/term elaboration).
-  have fromNat_Fp : ∀ n : ℕ, (FiniteField.fromNat n : Fp) = (n : Fp) := fun n => FiniteField.fromNat_F n
-  have val_Fp : ∀ x : Fp, FiniteField.val x = ZMod.val x := fun x => FiniteField.val_F x
-  -- fold the raw div/mod the ported witnesses now produce back into `bitrange` form, to
-  -- match `honest_pieces_facts`'s statement
-  have bitrange_eq : ∀ n s l : ℕ, n / 2 ^ s % 2 ^ l = bitrange n s l := fun _ _ _ => rfl
   -- the two key field values (the pieces read the input through `eval`)
   have hak_eq : Expression.eval env.toEnvironment input_var.ak = input.ak := by
     rw [← h_input]; simp only [circuit_norm]
@@ -877,7 +868,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   -- apply the `WithZs` honest spec: feed it the `ProverAssumptions` (pieces in range, hash exists)
   have hWZspec := (hWZ (by
     simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
-      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, fromNat_Fp, val_Fp, bitrange_eq]
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
     rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
@@ -891,7 +882,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   · -- WithZs.ProverAssumptions
     rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
     simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
-      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, fromNat_Fp, val_Fp, bitrange_eq]
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
     rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
@@ -965,7 +956,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       · intro B hB
         have hpt := hHash B (by
           simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm,
-            hEa, hEb, hEc, hEd, fromNat_Fp, val_Fp, bitrange_eq]
+            hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
           rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
               (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2]
           exact hB)

@@ -575,7 +575,7 @@ theorem completeness (G : Generators) (w : ℕ) :
     simp only [h_zs i, pieceZ]
     rfl
   have haux := completeness_aux G w input_piece input_xA input_yA hAx hAy hB
-  simp only [Vector.get, Vector.getElem_ofFn, Vector.getElem_append,
+  simp only [Vector.getElem_append,
     Vector.getElem_mapRange, circuit_norm]
   -- cell-value views
   have hxA_cell : ∀ r : ℕ, r < w + 1 →
@@ -953,7 +953,7 @@ theorem soundness (G : Generators) (w : ℕ) :
       (Spec G w) := by
   circuit_proof_start [Gate.circuit, Gate.Spec, generatorTable]
   obtain ⟨h_copy, h_lookups, h_gates⟩ := h_holds
-  simp only [Vector.get, Vector.getElem_ofFn, Vector.getElem_append, Vector.getElem_mapRange,
+  simp only [Vector.getElem_append, Vector.getElem_mapRange,
     circuit_norm] at h_lookups h_gates ⊢
   obtain ⟨dR, hdR⟩ : ∃ dR : ℕ → DoubleAndAddRow Fp, dR = fun r =>
       { xA := if _ : r = 0 then input_xA
@@ -1434,7 +1434,7 @@ def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Fp (Input rest.length) (Output rest))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
-    (hcwr : tail.channelsWithRequirements = []) :
+    (_hcwr : tail.channelsWithRequirements = []) :
     ElaboratedCircuit Fp (Input (rest.length + 1)) (Output (n :: rest))
       (main G n rest tail) where
   localLength input := (HashPiece.circuit G n).localLength
@@ -1445,7 +1445,7 @@ def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
   channelsLawful := by
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
-    simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, hcwg, hcwr]
+    simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, hcwg]
     try trivial
 
 /-- The gate's `y`-polynomial right-hand side computes twice the entering-`Y_A`
@@ -1567,7 +1567,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
   simp only [hAss] at h_tail
   replace h_tail := h_tail trivial
   rw [hS] at h_tail
-  simp only [Spec, Vector.get, Vector.getElem_ofFn, List.isEmpty_cons,
+  simp only [Spec, List.isEmpty_cons,
     show ∀ r : DoubleAndAddRow Fp, enterYA false r = DoubleAndAdd.yA r
       from fun _ => rfl,
     circuit_norm] at h_piece h_tail h_gate ⊢
@@ -1741,7 +1741,7 @@ def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
   completeness := completeness G n rest tail tailLen htail hcwg hcwr hPA hPS
   requirementsChannelsLawful := by
     try dsimp only [main]
-    simp only [circuit_norm, seval, hcwg, hcwr]
+    simp only [circuit_norm, seval, hcwr]
     try first | ac_rfl | trivial | tauto
 
 end Cons
@@ -1805,8 +1805,7 @@ instance elaborated (G : Generators) (Q : Point Fp) (n₀ : ℕ)
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
     simp only [circuit_norm, seval, InitialYQ.circuit,
-      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.1,
-      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2]
+      (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.1]
     try trivial
 
 def Spec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)

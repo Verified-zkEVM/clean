@@ -26,7 +26,7 @@ namespace Orchard.Sinsemilla.Merkle
 open CompElliptic.Curves.Pasta
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Specs.Sinsemilla (Generators merkleChunks)
-open Specs (K)
+open Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
 
 /-! ### MerkleCRH decomposition gate
 
@@ -488,16 +488,22 @@ set_option exponentiation.threshold 600 in
 private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
     (hlv : lv < 2 ^ 255) (hrv : rv < 2 ^ 255)
     {aCell bCell cCell : Fp}
-    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp))
-    (hbw : bCell = ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp))
-    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Fp)) :
+    (haw : aCell = ((l + 2 ^ 10 * bitrange lv 0 240 : ℕ) : Fp))
+    (hbw : bCell = ((bitrange lv 240 10 + 2 ^ 10 * bitrange lv 250 5
+      + 2 ^ 15 * bitrange rv 0 5 : ℕ) : Fp))
+    (hcw : cCell = ((bitrange rv 5 250 : ℕ) : Fp)) :
     (ZMod.val aCell < 2 ^ (K * 25) ∧ ZMod.val bCell < 2 ^ (K * 2)
       ∧ ZMod.val cCell < 2 ^ (K * 25))
     ∧ List.map (pieceWord aCell) (List.range 25)
         ++ (List.map (pieceWord bCell) (List.range 2)
           ++ List.map (pieceWord cCell) (List.range 25))
         = merkleChunks l lv rv := by
+  have hb240 : bitrange lv 240 10 = lv / 2 ^ 240 % 2 ^ 10 := rfl
+  have hb250 : bitrange lv 250 5 = lv / 2 ^ 250 :=
+    bitrange_eq_div_of_lt (Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hlv))
+  have hc5 : bitrange rv 5 250 = rv / 2 ^ 5 :=
+    bitrange_eq_div_of_lt (Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hrv))
+  simp only [bitrange_zero, hb240, hb250, hc5] at haw hbw hcw
   subst haw hbw hcw
   have hK : K = 10 := rfl
   have hvalA : ZMod.val ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp)
@@ -534,20 +540,26 @@ private theorem honest_pieces {l lv rv : ℕ} (hl : l < 2 ^ 10)
 set_option exponentiation.threshold 600 in
 /-- The decomposition-gate equations hold on the honest witness values. -/
 private theorem honest_gate {l lv rv : ℕ} (hl : l < 2 ^ 10)
-    (hlv : lv < 2 ^ 255) (_hrv : rv < 2 ^ 255)
+    (hlv : lv < 2 ^ 255) (hrv : rv < 2 ^ 255)
     {aCell bCell b1Cell b2Cell cCell z1A z1B left right : Fp}
-    (haw : aCell = ((l + 2 ^ 10 * (lv % 2 ^ 240) : ℕ) : Fp))
-    (hb1w : b1Cell = ((lv / 2 ^ 250 : ℕ) : Fp))
-    (hb2w : b2Cell = ((rv % 2 ^ 5 : ℕ) : Fp))
-    (hbw : bCell = ((lv / 2 ^ 240 % 2 ^ 10 + 2 ^ 10 * (lv / 2 ^ 250)
-      + 2 ^ 15 * (rv % 2 ^ 5) : ℕ) : Fp))
-    (hcw : cCell = ((rv / 2 ^ 5 : ℕ) : Fp))
+    (haw : aCell = ((l + 2 ^ 10 * bitrange lv 0 240 : ℕ) : Fp))
+    (hb1w : b1Cell = ((bitrange lv 250 5 : ℕ) : Fp))
+    (hb2w : b2Cell = ((bitrange rv 0 5 : ℕ) : Fp))
+    (hbw : bCell = ((bitrange lv 240 10 + 2 ^ 10 * bitrange lv 250 5
+      + 2 ^ 15 * bitrange rv 0 5 : ℕ) : Fp))
+    (hcw : cCell = ((bitrange rv 5 250 : ℕ) : Fp))
     (hz1A : z1A = pieceZ aCell 1) (hz1B : z1B = pieceZ bCell 1)
     (hleft : ((lv : ℕ) : Fp) = left) (hright : ((rv : ℕ) : Fp) = right) :
     ((l : ℕ) : Fp) = aCell - z1A * twoPow10
       ∧ left = z1A + (bCell - z1B * twoPow10 + b1Cell * twoPow10) * twoPow240
       ∧ right = b2Cell + cCell * twoPow5
       ∧ z1B = b1Cell + b2Cell * twoPow5 := by
+  have hb240 : bitrange lv 240 10 = lv / 2 ^ 240 % 2 ^ 10 := rfl
+  have hb250 : bitrange lv 250 5 = lv / 2 ^ 250 :=
+    bitrange_eq_div_of_lt (Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hlv))
+  have hc5 : bitrange rv 5 250 = rv / 2 ^ 5 :=
+    bitrange_eq_div_of_lt (Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hrv))
+  simp only [bitrange_zero, hb240, hb250, hc5] at haw hb1w hb2w hbw hcw
   have e5 : (twoPow5 : Fp) = ((2 ^ 5 : ℕ) : Fp) := by norm_num [twoPow5]
   have e10 : (twoPow10 : Fp) = ((2 ^ 10 : ℕ) : Fp) := by norm_num [twoPow10]
   have e240 : (twoPow240 : Fp) = ((2 ^ 240 : ℕ) : Fp) := by
@@ -604,13 +616,13 @@ deriving ProvableStruct
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Expression Fp) := do
   -- witness the three message pieces and the short sub-pieces b_1, b_2
-  let a ← witness (l + (2 ^ 10 : ℕ) * (input.left.val % (2 ^ 240 : ℕ))).toField
-  let b1 ← witness (input.left.val / (2 ^ 250 : ℕ)).toField
-  let b2 ← witness (input.right.val % (2 ^ 5 : ℕ)).toField
-  let b ← witness (input.left.val / (2 ^ 240 : ℕ) % (2 ^ 10 : ℕ)
-    + (2 ^ 10 : ℕ) * (input.left.val / (2 ^ 250 : ℕ))
-    + (2 ^ 15 : ℕ) * (input.right.val % (2 ^ 5 : ℕ))).toField
-  let c ← witness (input.right.val / (2 ^ 5 : ℕ)).toField
+  let a ← witness (l + (2 ^ 10 : ℕ) * input.left.val.bitrange 0 240).toField
+  let b1 ← witness (input.left.val.bitrange 250 5).toField
+  let b2 ← witness (input.right.val.bitrange 0 5).toField
+  let b ← witness (input.left.val.bitrange 240 10
+    + (2 ^ 10 : ℕ) * input.left.val.bitrange 250 5
+    + (2 ^ 15 : ℕ) * input.right.val.bitrange 0 5).toField
+  let c ← witness (input.right.val.bitrange 5 250).toField
   -- constrain b_1 and b_2 to 5 bits
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b1 }
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b2 }
@@ -642,9 +654,8 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
     have hECg : (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).channelsWithGuarantees = [] := rfl
-    have hECr : (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).channelsWithRequirements = [] := rfl
     simp only [circuit_norm, seval, _root_.Orchard.Sinsemilla.Merkle.Gate.circuit,
-      Utilities.LookupRangeCheck.shortRangeCircuit, hECg, hECr]
+      Utilities.LookupRangeCheck.shortRangeCircuit, hECg]
     try trivial
 
 def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
@@ -762,15 +773,12 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     hl hlv hrv ha_w hb1_w hb2_w hb_w hc_w hzh1 hzh2
     (ZMod.natCast_zmod_val input_left) (ZMod.natCast_zmod_val input_right)
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
-  · rw [hb1_w, FiniteField.fromNat_F, FiniteField.val_F]
-    have hd : ZMod.val input_left / 2 ^ 250 < 2 ^ 5 :=
-      Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hlv)
-    rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
-    exact hd
-  · rw [hb2_w, FiniteField.fromNat_F, FiniteField.val_F]
-    have hd : ZMod.val input_right % 2 ^ 5 < 2 ^ 5 := Nat.mod_lt _ (by norm_num)
-    rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
-    exact hd
+  · rw [hb1_w, FiniteField.fromNat_F, FiniteField.val_F,
+      ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 250 5) (by norm_num [PALLAS_BASE_CARD]))]
+    exact bitrange_lt _ 250 5
+  · rw [hb2_w, FiniteField.fromNat_F, FiniteField.val_F,
+      ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 5) (by norm_num [PALLAS_BASE_CARD]))]
+    exact bitrange_lt _ 0 5
   · exact ⟨hp.1, hex⟩
   · exact hg.1
   · exact hg.2.1
@@ -843,8 +851,7 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
     have hHLg : (HashLayer.circuit G Q hQ l hl).channelsWithGuarantees = [] := rfl
-    have hHLr : (HashLayer.circuit G Q hQ l hl).channelsWithRequirements = [] := rfl
-    simp only [circuit_norm, seval, Utilities.CondSwap.Swap.circuit, hHLg, hHLr]
+    simp only [circuit_norm, seval, Utilities.CondSwap.Swap.circuit, hHLg]
     try trivial
 
 def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
