@@ -226,8 +226,8 @@ subcircuit boundary — `main`'s own `soundness`/`completeness` proofs unfold it
 stop `simp`/the kernel from reasoning about both windowed-multiplication `Circuit.foldl`
 calls in one giant unfolded term, which blows the kernel's recursion limit (bisected in
 detail; see `doc/performance-problems.md`). -/
-private def prefixCircuit (B : MulFixed.FixedBase) (alpha : Var field Fp) :
-    Circuit Fp (Var Point Fp × Expression Fp × Expression Fp) := do
+def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
+    Circuit Fp (Var Output Fp) := do
   -- `copy_decompose`: `z_0` is a copy of `α`
   let z₀ <== alpha
   -- window 0 initializes the accumulator
@@ -250,13 +250,8 @@ private def prefixCircuit (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   MulFixed.RunningSumCoords.circuit (B.params 43)
     { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
   let acc₄₃ ← AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
-  return (acc₄₃, z₄₃, t₄₃.zNext)
-
-def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
-    Circuit Fp (Var Output Fp) := do
-  let (acc₄₃, z₄₃, z₄₄) ← prefixCircuit B alpha
   -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
-  let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, z₄₄) fun (acc, zCur) i => do
+  let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
     let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) (i.val + 44)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
@@ -272,7 +267,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   t₈₄.zNext === (0 : Expression Fp)
   -- `[α]B` by complete addition of the most significant window
   let result ← Add.circuit { p := { x := t₈₄.xP, y := t₈₄.yP }, q := acc₈₃ }
-  return { result := result, z43 := z₄₃, z44 := z₄₄, z84 := z₈₄ }
+  return { result := result, z43 := z₄₃, z44 := t₄₃.zNext, z84 := z₈₄ }
 
 instance elaborated (B : MulFixed.FixedBase) :
     ElaboratedCircuit Fp field Output (main B) := by
@@ -502,7 +497,7 @@ private theorem natCast_val_nsmul (B : MulFixed.FixedBase) (V : ℕ) :
 
 theorem soundness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
-  circuit_proof_start [main, prefixCircuit, Spec,
+  circuit_proof_start [main, Spec,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
@@ -919,7 +914,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   -- non-canonical accumulated offset). Expanding it by hand, plus the kernel size cliff
   -- this 85-window two-foldl completeness sits on (see `doc/performance-problems.md`,
   -- "Kernel size cliffs in completeness proofs of large compositions"), is the open work.
-  circuit_proof_start [main, prefixCircuit, ProverSpec, ProverAssumptions,
+  circuit_proof_start [main, ProverSpec, ProverAssumptions,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
@@ -1301,53 +1296,8 @@ theorem completeness (B : MulFixed.FixedBase) :
   -- foldl2 (windows 45..83)
   · intro i hi
     have h := hB (i + 44) (by omega)
-    rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env.toEnvironment i₀ (by omega),
-      show i₀ + 1 + 4 + (i + 44 - 1) * 10 = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + i * 10 from by omega,
-      show i₀ + 1 + 4 + (i + 44) * 10 = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + (i + 1) * 10 from by omega,
-      show i + 44 + 1 = i + 1 + 44 from by omega] at h
-    exact h
-
-/-! #### `requirementsChannelsLawful` for `circuit`
-
-The default `requirementsChannelsLawful` proof (`dsimp only [main]; simp only [circuit_norm,
-seval]; ...`) kernel-fails on this circuit: `main` sequences *two* `Circuit.foldl` calls
-(windows `1..42` and `44..83`), and reasoning about both in one unfolded term, chained
-through the intervening window-43 addition, blows the kernel's recursion limit (confirmed
-by bisection; see `doc/performance-problems.md`). The fix mirrors the "bundle it" principle
-for proof boundaries: `prefixCircuit` (window `0..43`) is kept opaque here (never unfolded),
-so only the *second* fold's internals are ever exposed to `simp`/the kernel at once. -/
-
-/-- Orchard never emits raw channel interactions (only subcircuits, which don't contribute
-to `shallowChannels`), so `RequirementsChannelsLawful` reduces to two structural facts:
-no subcircuit has requirements, and there are no shallow channels at all (which trivializes
-the "under local constraints" obligation, since it can only concern `shallowInteractions`). -/
-private theorem requirementsChannelsLawful_of_nil
-    {ops : Operations Fp} {guarantees : List (RawChannel Fp)}
-    (h1 : ops.subcircuitChannelsWithRequirements = [])
-    (h2 : ops.shallowChannels = []) :
-    ops.RequirementsChannelsLawful guarantees [] := by
-  have hint : ops.shallowInteractions = [] := by
-    have h2' := h2
-    rw [Operations.shallowChannels_eq_interactions_map] at h2'
-    exact List.map_eq_nil_iff.mp h2'
-  refine ⟨by rw [h1]; exact List.nil_subset _, by rw [h2]; simp, ?_⟩
-  intro env _
-  rw [Operations.inChannelsOrRequirements_iff_forall_mem, hint]
-  simp
-
-private theorem prefixCircuit_shallowChannels_nil
-    (B : MulFixed.FixedBase) (alpha : Var field Fp) (offset : ℕ) :
-    ((prefixCircuit B alpha).operations offset).shallowChannels = [] := by
-  dsimp only [prefixCircuit]
-  simp only [circuit_norm, seval]
-
-private theorem prefixCircuit_subcircuitChannelsWithRequirements_nil
-    (B : MulFixed.FixedBase) (alpha : Var field Fp) (offset : ℕ) :
-    ((prefixCircuit B alpha).operations offset).subcircuitChannelsWithRequirements = [] := by
-  dsimp only [prefixCircuit]
-  simp only [circuit_norm, seval]
-  unfold_formal_circuit_consts
-  simp only [circuit_norm, seval]
+    rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env.toEnvironment i₀ (by omega)] at h
+    simpa +arith using h
 
 /-- The decomposition + windowed-multiplication regions of
 `base_field_elem.rs::Config::assign`. -/
@@ -1360,14 +1310,25 @@ def circuit (B : MulFixed.FixedBase) :
   ProverSpec := ProverSpec B
   soundness := soundness B
   completeness := completeness B
-  requirementsChannelsLawful := by
-    intro alpha offset
-    dsimp only [main]
-    apply requirementsChannelsLawful_of_nil <;>
-      simp only [circuit_norm, seval, prefixCircuit_shallowChannels_nil,
-        prefixCircuit_subcircuitChannelsWithRequirements_nil]
-    all_goals try unfold_formal_circuit_consts
-    all_goals simp only [circuit_norm, seval]
+  requirementsChannelsLawful input offset := by
+    and_intros
+    · dsimp only [main, Utilities.RunningSum.circuit, MulFixed.RunningSumCoords.circuit,
+        AddIncomplete.circuit, Add.circuit]
+      simp only [circuit_norm]
+    · -- TODO this proof is super ugly to avoid kernel recursion
+      intro channel h_mem
+      dsimp only [main, CircuitType.var_of_provableType, Circuit.pure_def,
+        Circuit.bind_def, assertion.eq_1, List.cons_append, List.nil_append,
+        List.map_cons, List.map_nil, subcircuit.eq_1,
+        Operations.localLength.eq_6, FormalAssertion.toSubcircuit_localLength,
+        Circuit.operations,
+        Operations.shallowChannels_witness, Operations.shallowChannels_subcircuit] at h_mem
+      simp only [Operations.shallowChannels_append,
+        ↓Circuit.foldl.shallowChannels, Circuit.operations,
+        Operations.shallowChannels_subcircuit, Operations.shallowChannels_nil] at h_mem
+      nomatch h_mem
+    · intro env _
+      simp only [main, circuit_norm]
 
 end RunningSumMul
 
