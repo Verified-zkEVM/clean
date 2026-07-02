@@ -218,14 +218,6 @@ structure Output (F : Type) where
   z84 : F
 deriving ProvableStruct
 
-/-- `main`'s window `0..43` prefix (window 0, the `1..42` incomplete-addition fold, and
-the explicit window 43), factored out into its own definition purely so that `circuit`'s
-`requirementsChannelsLawful` proof can reason about it as an opaque unit. This is *not* a
-subcircuit boundary — `main`'s own `soundness`/`completeness` proofs unfold it fully via
-`dsimp` alongside `main`, exactly as if it were inlined. Splitting it out exists solely to
-stop `simp`/the kernel from reasoning about both windowed-multiplication `Circuit.foldl`
-calls in one giant unfolded term, which blows the kernel's recursion limit (bisected in
-detail; see `doc/performance-problems.md`). -/
 def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
     Circuit Fp (Var Output Fp) := do
   -- `copy_decompose`: `z_0` is a copy of `α`
