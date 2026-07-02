@@ -493,46 +493,46 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     simp only [h_input2] at ⊢ h_env
     -- `State` is a custom `ProvableType` (not `ProvableStruct`), so the struct-level
     -- `h_env` equation needs the explicit unfolding path to decompose into components
-    simp only [circuit_norm, explicit_provable_type, Witgen.eval, State.mk.injEq] at h_env
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_env
     obtain ⟨h_env0, h_env1, h_env2⟩ := h_env
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [← h_exec]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env0
+      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env1
+      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
-      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_input2, h_add, ↓reduceIte] at h_env2
+      · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [← h_exec]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_mul, ↓reduceIte] at h_env0
+      · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_mul, ↓reduceIte] at h_env1
+      · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_mul, ↓reduceIte] at h_env2
+      · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [h_exec, ← h_input1]; ring_nf
       · simp only [h_exec, ← h_input1]; ring_nf
       · simp only [h_exec, ← h_input1]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_load, ↓reduceIte] at h_env0
+      · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_load, ↓reduceIte] at h_env1
+      · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
-      · simp only [circuit_norm, explicit_provable_type, h_input2, h_load, ↓reduceIte] at h_env2
+      · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_store, zero_ne_one, ↓reduceIte] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_input2, h_store, ↓reduceIte] at h_env0
-        simp only [circuit_norm, explicit_provable_type, h_env0, h_input_v1]
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_input2, h_store, ↓reduceIte] at h_env1
-        simp only [circuit_norm, explicit_provable_type, h_env1, h_input_v2]
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_input2, h_store, ↓reduceIte] at h_env2
-        simp only [circuit_norm, explicit_provable_type, h_env2, h_input_v3]
+      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env0
+        simp only [circuit_norm, explicit_provable_type, h_env0]
+      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env1
+        simp only [circuit_norm, explicit_provable_type, h_env1]
+      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env2
+        simp only [circuit_norm, explicit_provable_type, h_env2]
 
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,

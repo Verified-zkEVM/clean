@@ -501,13 +501,9 @@ def circuitP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
     circuit_proof_start [mainP128, PartialRounds.main, Gate.circuit,
       Gate.Spec]
     rcases h_env with ⟨hmid, hnext⟩
-    have hnext0 := hnext ⟨0, by norm_num⟩
-    have hnext1 := hnext ⟨1, by norm_num⟩
-    have hnext2 := hnext ⟨2, by norm_num⟩
-    norm_num at hnext0 hnext1 hnext2
-    simp only [circuit_norm, explicit_provable_type] at hnext0 hnext1 hnext2
-    simp [mid0SboxValue, value, Gate.Params.toFExpr, Witgen.FExpr.eval, pow5_FExpr_eval, h_input]
-      at hmid hnext0 hnext1 hnext2
+    simp [mid0SboxValue, value, Gate.Params.toFExpr, circuit_norm, Permute.State.mk.injEq,
+      pow5_FExpr_eval, h_input] at hmid hnext
+    obtain ⟨hnext0, hnext1, hnext2⟩ := hnext
     rw [hmid, hnext0, hnext1, hnext2]
     change Gate.Spec (paramsP128 roundConstants round)
       (inputP128 roundConstants round { x0 := input_x0, x1 := input_x1, x2 := input_x2 })

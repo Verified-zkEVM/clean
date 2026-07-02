@@ -156,7 +156,7 @@ def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   -- copy the running sum from incomplete addition
   let z₀ <== input.z
   -- the interstitial running-sum cells of the three complete bits
-  let zs : Vector (Expression Fp) 3 ← witnessNative (var := Var (fields 3)) fun env =>
+  let zs ← witnessVectorNative 3 fun env =>
     Vector.ofFn fun (b : Fin 3) => zRunValue (env input.z) (input.bits env) b.val
   let zsAll := Vector.cast (Nat.add_comm 1 3) ((#v[z₀] : Vector (Expression Fp) 1) ++ zs)
   let acc₀ : Var Point Fp := { x := input.xA, y := input.yA }

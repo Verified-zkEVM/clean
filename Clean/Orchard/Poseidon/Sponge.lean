@@ -97,12 +97,8 @@ def circuit : FormalCircuit Fp AddInputInput Permute.State where
   completeness := by
     circuit_proof_start [main, Spec, value, PadAndAdd.circuit, PadAndAdd.Spec]
     rcases h_env with ⟨hinit0, hinit1, hinit2, hinput0, hinput1, houtput⟩
-    have hout0 := houtput ⟨0, by norm_num⟩
-    have hout1 := houtput ⟨1, by norm_num⟩
-    have hout2 := houtput ⟨2, by norm_num⟩
-    norm_num at hout0 hout1 hout2
-    simp only [circuit_norm, explicit_provable_type] at hout0 hout1 hout2
-    simp [Witgen.FExpr.eval, h_input] at hout0 hout1 hout2
+    simp only [circuit_norm, Permute.State.mk.injEq] at houtput
+    obtain ⟨hout0, hout1, hout2⟩ := houtput
     exact ⟨hinit0, hinit1, hinit2, hinput0, hinput1,
       by
         constructor

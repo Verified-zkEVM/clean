@@ -280,6 +280,20 @@ def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit #v[e])
 def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
   .ir [] (.lit es)
 
+/-- Witness program computing a whole provable value from a native Lean closure — the
+payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
+so that the completeness obligation of `witnessNative` stays recognizable and can be
+rewritten at the level of provable values (`ProverEnvironment.extendsVector_nativeValue`
+in `Clean.Circuit.Basic`) instead of unfolding element-wise into `toElements` internals.
+For the same reason, this is deliberately not tagged `@[circuit_norm]`. -/
+def WitgenIR.nativeValue {value : TypeMap} [ProvableType value]
+    (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
+  .native fun env => compute env |> toElements
+
+theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
+    (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
+    (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
+
 /-- Witness program copying the values of given circuit expressions (used by `<==`). -/
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
   .ir [] (.lit (es.map .expr))
@@ -532,16 +546,35 @@ private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
     return .continue
+  let ctx := args[args.size - 2]!
   let x := args[args.size - 1]!
   -- only fire on literal constructor applications
   let .const fn _ := x.getAppFn | return .continue
-  let some (.ctorInfo _) := (← getEnv).find? fn | return .continue
-  -- `mkAppM` synthesizes the `ProvableStruct` instance; bail for custom `ProvableType`s
-  -- (those get per-type lemmas instead, like `Point.eval_eq` on the regular side)
-  let proof ← try mkAppM ``Witgen.StructEval.eval_eq_eval #[args[args.size - 2]!, x]
-    catch _ => return .continue
-  let some (_, _, rhs) := (← inferType proof).eq? | return .continue
-  return .visit { expr := rhs, proof? := proof }
+  let some (.ctorInfo info) := (← getEnv).find? fn | return .continue
+  -- `ProvableStruct` route: rewrite via `StructEval` (`mkAppM` synthesizes the instance)
+  try
+    let proof ← mkAppM ``Witgen.StructEval.eval_eq_eval #[ctx, x]
+    let some (_, _, rhs) := (← inferType proof).eq? | return .continue
+    return .visit { expr := rhs, proof? := proof }
+  catch _ => pure ()
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
+  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
+  -- constructor order.
+  try
+    let ctorArgs := x.getAppArgs
+    if ctorArgs.size != info.numParams + info.numFields then return .continue
+    let mut newArgs : Array (Option Expr) := #[]
+    for _ in [0:info.numParams] do
+      newArgs := newArgs.push none
+    for a in ctorArgs[info.numParams:] do
+      newArgs := newArgs.push (some (← mkAppM ``Witgen.FExpr.eval #[ctx, a]))
+    let rhs ← mkAppOptM fn newArgs
+    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
+    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
+    unless ← withTransparency .all (isDefEq e rhs) do return .continue
+    return .visit { expr := rhs, proof? := none }
+  catch _ => return .continue
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
 attribute [circuit_norm] evalStructLiteral

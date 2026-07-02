@@ -373,22 +373,17 @@ theorem soundness (B : FixedBase) :
   exact FixedBase.add_coords_eq hpt
 
 /-- Extract the four field equations from a witnessed `CoordsRow`. Extracting via this
-lemma instead of instantiating the `Fin 4` hypothesis at a target component type keeps
-elaboration cheap: the simp proof reduces `(toElements r)[i]` syntactically, whereas
+lemma instead of projecting the struct equation at a target component type keeps
+elaboration cheap: the `congrArg` projections reduce on the literal side, whereas
 unification against a concrete `rowValue` makes `whnf` unfold
 `windowScalar`/`offsetAcc` values. -/
 private theorem env_get_row {env : ProverEnvironment Fp} {n : ℕ} {r : CoordsRow Fp}
-    (h : ∀ i : Fin 4, env.get (n + i.val) = (toElements r)[i.val]) :
+    (h : ({ window := env.get n, xP := env.get (n + 1), yP := env.get (n + 1 + 1),
+            u := env.get (n + 1 + 1 + 1) } : CoordsRow Fp) = r) :
     env.get n = r.window ∧ env.get (n + 1) = r.xP ∧
-      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u := by
-  obtain ⟨window, xP, yP, u⟩ := r
-  have h0 := h 0
-  have h1 := h 1
-  have h2 := h 2
-  have h3 := h 3
-  simp only [explicit_provable_type, circuit_norm, Nat.reduceMod, Nat.add_zero]
-    at h0 h1 h2 h3
-  exact ⟨h0, h1, h2, h3⟩
+      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u :=
+  ⟨congrArg CoordsRow.window h, congrArg CoordsRow.xP h,
+    congrArg CoordsRow.yP h, congrArg CoordsRow.u h⟩
 
 /-- `rfl` bridges between `rowValue` fields and `windowPoint` coordinates, stated at
 symbolic `w` where they are cheap to check: with `w` opaque, `windowScalar`'s `w = 84`

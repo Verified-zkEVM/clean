@@ -892,17 +892,12 @@ theorem soundness (B : FixedBase) :
 /-- Extract the four field equations from a witnessed `RowTail`, keeping the row opaque
 (see `env_get_row` in `FullWidth.lean` and `doc/performance-problems.md`). -/
 private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowTail Fp}
-    (h : ∀ i : Fin 4, env.get (n + i.val) = (toElements r)[i.val]) :
+    (h : ({ zNext := env.get n, xP := env.get (n + 1), yP := env.get (n + 1 + 1),
+            u := env.get (n + 1 + 1 + 1) } : RowTail Fp) = r) :
     env.get n = r.zNext ∧ env.get (n + 1) = r.xP ∧
-      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u := by
-  obtain ⟨zNext, xP, yP, u⟩ := r
-  have h0 := h 0
-  have h1 := h 1
-  have h2 := h 2
-  have h3 := h 3
-  simp only [explicit_provable_type, circuit_norm, Nat.reduceMod, Nat.add_zero]
-    at h0 h1 h2 h3
-  exact ⟨h0, h1, h2, h3⟩
+      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u :=
+  ⟨congrArg RowTail.zNext h, congrArg RowTail.xP h,
+    congrArg RowTail.yP h, congrArg RowTail.u h⟩
 
 /-- The running sum step relation on honest values. -/
 private theorem zValue_step (m : Fp) (w : ℕ) :

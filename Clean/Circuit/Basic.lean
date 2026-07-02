@@ -274,7 +274,18 @@ export Witnessable (witness)
 def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
     [inst : Witnessable F value var] (compute : ProverEnvironment F → value F) :
     Circuit F (var F) :=
-  inst.witnessIR (.native fun env => compute env |> toElements)
+  inst.witnessIR (.nativeValue compute)
+
+/-- Witness a vector of field elements computed by an arbitrary Lean closure.
+
+Unlike struct-valued `witnessNative`, the completeness obligation stays *element-wise*
+(`env.get (n + i) = (compute env)[i]`), which is the natural form for vectors — use this
+for vector closures instead of `witnessNative (var := Var (fields m))`. -/
+@[circuit_norm]
+def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m) :
+    Circuit F (Vector (Expression F) m) :=
+  fun (offset : ℕ) =>
+    (varFromOffset (fields m) offset, [.witness m (.native compute)])
 
 /-- Witness a provable value computed by a monadic witness-IR program.
 This is `witness`, but with shared `let` computations. -/
@@ -298,6 +309,33 @@ theorem ProverEnvironment.extendsVector_toIRLiteral {value : TypeMap} [ProvableT
   simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
     ProverEnvironment.ExtendsVector]
   exact ⟨fun h i hi => h ⟨i, hi⟩, fun h i => h i.val i.isLt⟩
+
+/-- The completeness obligation of `witnessNative`, stated at the level of provable
+values: the witnessed variable evaluates to the closure's value. See
+`ProverEnvironment.extendsVector_toIRLiteral`. -/
+@[circuit_norm ↓ high]
+theorem ProverEnvironment.extendsVector_nativeValue {value : TypeMap} [ProvableType value]
+    (env : ProverEnvironment F) (compute : ProverEnvironment F → value F) (n : ℕ) :
+    env.ExtendsVector ((Witgen.WitgenIR.nativeValue compute).eval env) n ↔
+      Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
+        = compute env := by
+  rw [Witgen.WitgenIR.eval_nativeValue, ProvableType.eval_varFromOffset, ProvableType.ext_iff]
+  simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
+    ProverEnvironment.ExtendsVector]
+  exact ⟨fun h i hi => h ⟨i, hi⟩, fun h i => h i.val i.isLt⟩
+
+/-- The completeness obligation of struct-valued `witness`, stated at the level of
+provable values: the witnessed variable evaluates to the value of the given expressions.
+See `ProverEnvironment.extendsVector_toIRLiteral`. -/
+@[circuit_norm ↓ high]
+theorem ProverEnvironment.extendsVector_ofFExprs {value : TypeMap} [ProvableType value]
+    (env : ProverEnvironment F) (xs : value (Witgen.FExpr F)) (n : ℕ) :
+    env.ExtendsVector ((Witgen.WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
+      Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
+        = Witgen.eval { env := env } xs := by
+  rw [show Witgen.WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
+    ProverEnvironment.extendsVector_toIRLiteral,
+    show Witgen.M.eval env (pure xs) = Witgen.eval { env := env } xs from rfl]
 
 instance : Witnessable F field Expression where
   witness e offset := (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
