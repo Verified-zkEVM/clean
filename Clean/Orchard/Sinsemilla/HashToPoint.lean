@@ -132,12 +132,12 @@ def main (G : Generators) (w : ℕ) (input : Var Input Fp) :
     Circuit Fp (Var (Output (w + 1)) Fp) := do
   -- running sum: z_0 is a copy of the piece, z_1 .. z_w are witnessed
   let z₀ <== input.piece
-  let zRest : Vector (Expression Fp) w ← witness (var := Var (fields w))
-    (Vector.ofFn fun (i : Fin w) => (input.piece.val / (2 ^ (K * (i.val + 1)) : ℕ)).toField)
+  let zRest ← witnessVector w (Vector.ofFn fun (i : Fin w) =>
+    (input.piece.val / (2 ^ (K * (i.val + 1)) : ℕ)).toField)
   let zs : Vector (Expression Fp) (w + 1) :=
     Vector.cast (Nat.add_comm 1 w) ((#v[z₀] : Vector (Expression Fp) 1) ++ zRest)
   -- row cells: x_p, λ₁, λ₂ per word, and the next-row x_a per word
-  let xPs : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+  let xPs : Var (fields (w + 1)) Fp ← witnessNative fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) => (G.S (pieceWord (env input.piece) i.val)).x
   let l1s : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) =>

@@ -131,20 +131,20 @@ instance : Inhabited (Var Input Fp) :=
 def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- Witness private inputs used across multiple checks, matching the source block at the
   -- start of `Circuit::synthesize`.
-  let psiOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.psiOld
-  let rhoOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.rhoOld
+  let psiOld ← witnessNative input.psiOld
+  let rhoOld ← witnessNative input.rhoOld
   let cmOld ← WitnessPoint.circuit input.cmOld
   let gdOld ← WitnessNonIdentityPoint.circuit input.gdOld
   let akP ← WitnessNonIdentityPoint.circuit input.akP
-  let nk ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.nk
-  let vOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vOld
-  let vNew ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNew
+  let nk ← witnessNative input.nk
+  let vOld ← witnessNative input.vOld
+  let vNew ← witnessNative input.vNew
   -- Merkle path validity: leaf = cm_old.extract_p()
   let root ← Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm
     { leaf := cmOld.x, path := input.path, pos := input.pos }
   -- Value commitment integrity: cv_net constrained to (CV_NET_X, CV_NET_Y)
-  let vNetMagnitude ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNetMagnitude
-  let vNetSign ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNetSign
+  let vNetMagnitude ← witnessNative input.vNetMagnitude
+  let vNetSign ← witnessNative input.vNetSign
   let cvNet ← ValueCommit.circuit P.V P.Rvc
     { v := { magnitude := vNetMagnitude, sign := vNetSign }, rcv := input.rcv }
   cvNet === { x := input.cvNetX, y := input.cvNetY }
@@ -169,7 +169,7 @@ def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- New note commitment integrity: rho_new = nf_old; cmx = cm_new.extract_p()
   let gdNew ← WitnessNonIdentityPoint.circuit input.gdNew
   let pkdNew ← WitnessNonIdentityPoint.circuit input.pkdNew
-  let psiNew ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.psiNew
+  let psiNew ← witnessNative input.psiNew
   let cmNew ← NoteCommit.circuit P.Gnc P.Qnc P.hQnc P.Rnc
     { gd := gdNew, pkd := pkdNew, value := vNew,
       rho := nfOld, psi := psiNew, rcm := input.rcmNew }
