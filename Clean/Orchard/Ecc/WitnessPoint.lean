@@ -84,9 +84,9 @@ def circuit : GeneralFormalCircuit.WithHint Fp (Unconstrained Point) Point where
     exact h_holds
 
   completeness := by
-    circuit_proof_start [Gate.circuit, explicit_provable_type]
+    circuit_proof_start [Gate.circuit]
     rcases input with ⟨x, y⟩
-    simp_all [circuit_norm, Witgen.eval, explicit_provable_type]
+    simp_all [circuit_norm]
 
 end WitnessPoint
 
@@ -129,9 +129,9 @@ def circuit : GeneralFormalCircuit.WithHint Fp (Unconstrained Point) Point where
     exact h_holds
 
   completeness := by
-    circuit_proof_start [Gate.circuit, explicit_provable_type]
+    circuit_proof_start [Gate.circuit]
     rcases input with ⟨x, y⟩
-    simp_all [circuit_norm, Witgen.eval, explicit_provable_type]
+    simp_all [circuit_norm]
 
 end WitnessNonIdentityPoint
 

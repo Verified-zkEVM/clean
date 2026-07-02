@@ -508,6 +508,43 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
 
 simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
 attribute [circuit_norm] evalProjection
+
+open Lean Meta Simp in
+/--
+Evaluate witness-IR *struct literals* component-wise.
+
+`Witgen.eval ctx s`, where `s` is a literal constructor application of a `ProvableStruct`
+type, decomposes into per-component evaluations (via `StructEval.eval`) — mirroring the
+component-preserving normal form of the regular `ProvableStruct.eval`. This is the shape
+produced by struct-valued `witnessProgram`s whose `do`-block assembles an output record
+(e.g. Poseidon's `Permute.State`), where the proof needs the per-component values.
+
+*Opaque* values (hint programs, table rows) are deliberately left alone: they stay
+row-level `Witgen.eval` atoms, to be consumed by row-level facts — `h_input` equations
+from hint inputs, or `Table.eval_dataGet` — working together with the `evalProjection`
+simproc above. Decomposing an opaque value via structure eta would produce
+`FExpr.eval ctx s.field` terms that `evalProjection` immediately rewrites back to
+`(Witgen.eval ctx s).field`, looping. Restricting to literals makes the two simprocs
+confluent: a literal's components are the program's own expressions, never projections
+of an opaque base.
+-/
+private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
+    return .continue
+  let x := args[args.size - 1]!
+  -- only fire on literal constructor applications
+  let .const fn _ := x.getAppFn | return .continue
+  let some (.ctorInfo _) := (← getEnv).find? fn | return .continue
+  -- `mkAppM` synthesizes the `ProvableStruct` instance; bail for custom `ProvableType`s
+  -- (those get per-type lemmas instead, like `Point.eval_eq` on the regular side)
+  let proof ← try mkAppM ``Witgen.StructEval.eval_eq_eval #[args[args.size - 2]!, x]
+    catch _ => return .continue
+  let some (_, _, rhs) := (← inferType proof).eq? | return .continue
+  return .visit { expr := rhs, proof? := proof }
+
+simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
+attribute [circuit_norm] evalStructLiteral
 end Eval
 end Witgen
 

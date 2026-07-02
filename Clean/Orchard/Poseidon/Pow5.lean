@@ -179,11 +179,7 @@ def circuit (params : Gate.Params Fp) : FormalCircuit Fp Permute.State Permute.S
     exact ⟨h0, h1, h2⟩
   completeness := by
     circuit_proof_start [main, value, Gate.circuit, Gate.Spec, pow5]
-    constructor
-    · simpa using h_env ⟨0, by norm_num⟩
-    constructor
-    · simpa using h_env ⟨1, by norm_num⟩
-    · simpa using h_env ⟨2, by norm_num⟩
+    simp_all [circuit_norm, Permute.State.mk.injEq]
 
 end FullRound
 

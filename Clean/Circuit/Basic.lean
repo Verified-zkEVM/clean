@@ -284,6 +284,21 @@ def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
     Circuit F (var F) :=
   inst.witnessIR (value := value) program.toIRLiteral
 
+/-- The completeness obligation of `witnessProgram`, stated at the level of provable
+values: the witnessed variable evaluates to the program's value. Tagged `↓ high` so it
+fires before `ExtendsVector` and the witness-IR evaluation unfold element-wise — user
+proofs connect hint programs to witnessed outputs without ever seeing `toElements`. -/
+@[circuit_norm ↓ high]
+theorem ProverEnvironment.extendsVector_toIRLiteral {value : TypeMap} [ProvableType value]
+    (env : ProverEnvironment F) (program : Witgen.M F (value (Witgen.FExpr F))) (n : ℕ) :
+    env.ExtendsVector (program.toIRLiteral.eval env) n ↔
+      Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
+        = program.eval env := by
+  rw [Witgen.M.eval_toIRLiteral, ProvableType.eval_varFromOffset, ProvableType.ext_iff]
+  simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
+    ProverEnvironment.ExtendsVector]
+  exact ⟨fun h i hi => h ⟨i, hi⟩, fun h i => h i.val i.isLt⟩
+
 instance : Witnessable F field Expression where
   witness e offset := (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
   witnessIR code offset := (var ⟨offset⟩, [.witness 1 code])
