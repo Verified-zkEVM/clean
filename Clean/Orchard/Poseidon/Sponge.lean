@@ -69,7 +69,10 @@ def main (input : Var AddInputInput Fp) : Circuit Fp (Var Permute.State Fp) := d
   let initial2 <== input.initialState.x2
   let input0 <== input.input.x0
   let input1 <== input.input.x1
-  let output ← witness fun env => value (eval env input)
+  let output ← witness <|
+    Permute.State.mk (input.initialState.x0 + input.input.x0)
+      (input.initialState.x1 + input.input.x1)
+      input.initialState.x2
   PadAndAdd.circuit
     { initial0, initial1, initial2, input0, input1,
       output0 := output.x0, output1 := output.x1, output2 := output.x2 }
@@ -98,17 +101,18 @@ def circuit : FormalCircuit Fp AddInputInput Permute.State where
     have hout1 := houtput ⟨1, by norm_num⟩
     have hout2 := houtput ⟨2, by norm_num⟩
     norm_num at hout0 hout1 hout2
-    simp at hout0 hout1 hout2
+    simp only [circuit_norm, explicit_provable_type] at hout0 hout1 hout2
+    simp [Witgen.FExpr.eval, h_input] at hout0 hout1 hout2
     exact ⟨hinit0, hinit1, hinit2, hinput0, hinput1,
       by
         constructor
         · rw [hinit0, hinput0]
-          simpa using hout0
+          exact hout0
         constructor
         · rw [hinit1, hinput1]
-          simpa using hout1
+          exact hout1
         · rw [hinit2]
-          simpa using hout2⟩
+          exact hout2⟩
 
 end AddInput
 

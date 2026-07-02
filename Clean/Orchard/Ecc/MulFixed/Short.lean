@@ -394,21 +394,21 @@ def main (B : FixedBase) (input : Var MagnitudeSign Fp) :
   -- `copy_decompose`: `z_0` is a copy of the magnitude
   let z₀ <== input.magnitude
   -- window 0 initializes the accumulator
-  let t₀ : Var RowTail Fp ← witness fun env => rowTailValue B (env input.magnitude) 0
+  let t₀ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) 0
   Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
   RunningSumCoords.circuit (B.params 0)
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
   let acc₀ : Var Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..20 are added with incomplete addition
   let (acc, z₂₁) ← Circuit.foldl (.finRange 20) (acc₀, t₀.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witness fun env => rowTailValue B (env input.magnitude) (i.val + 1)
+    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) (i.val + 1)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     RunningSumCoords.circuit (B.params (i.val + 1))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- most significant window 21
-  let t₂₁ : Var RowTail Fp ← witness fun env => rowTailValue B (env input.magnitude) 21
+  let t₂₁ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) 21
   Utilities.RunningSum.circuit 3 { zCur := z₂₁, zNext := t₂₁.zNext }
   RunningSumCoords.circuit (B.params 21)
     { zCur := z₂₁, zNext := t₂₁.zNext, xP := t₂₁.xP, yP := t₂₁.yP, u := t₂₁.u }
@@ -419,7 +419,7 @@ def main (B : FixedBase) (input : Var MagnitudeSign Fp) :
   -- final row: copy sign and last window, conditionally negate the `y`-coordinate
   let sign <== input.sign
   let lastWindow <== z₂₁
-  let yP ← witnessField fun env => env input.sign * env magnitudeMul.y
+  let yP ← witness <| input.sign * magnitudeMul.y
   Gate.circuit { yP := yP, yA := magnitudeMul.y, lastWindow := lastWindow, sign := sign }
   return { x := magnitudeMul.x, y := yP }
 

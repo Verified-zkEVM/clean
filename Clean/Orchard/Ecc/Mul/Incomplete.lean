@@ -145,7 +145,7 @@ multiplication. This ports the `CircuitVersion::AnchoredBase` variant: the first
 `x_p, y_p` cells are copies of `base`, and the `q_mul_2` constancy checks propagate the
 base to every row.
 
-The scalar bits are prover-side `Value<bool>`s, modeled as an `Unconstrained` hint
+The scalar bits are prover-side `Value<bool>`s, modeled as an `UnconstrainedNative` hint
 (MSB-first, indexed from the first processed bit).
 
 The running accumulator's y-coordinate is not a per-row cell in the source; it exists
@@ -176,7 +176,7 @@ structure Input (F : Type) where
   xA : F
   yA : F
   z : F
-  bits : Unconstrained BitsHint F
+  bits : UnconstrainedNative BitsHint F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -305,16 +305,16 @@ def main (n : ℕ) (input : Var Input Fp) :
   let yA₀ <== input.yA
   -- the loop rows, witnessed in source assignment order: z, x_p, y_p, λ1, λ2, next x_a
   let rows ← Circuit.mapFinRange (n + 1) fun (r : Fin (n + 1)) => do
-    let z ← witnessField fun env => zRunValue (env input.z) (input.bits env) r.val
-    let xP ← witnessField fun env => env input.base.x
-    let yP ← witnessField fun env => env input.base.y
-    let l1 ← witnessField fun env =>
+    let z ← witnessNative fun env => zRunValue (env input.z) (input.bits env) r.val
+    let xP ← witness input.base.x
+    let yP ← witness input.base.y
+    let l1 ← witnessNative fun env =>
       (rowLambdaValue (env input.base.x) (env input.base.y) (env input.xA)
         (env input.yA) (input.bits env) r.val).lambda1
-    let l2 ← witnessField fun env =>
+    let l2 ← witnessNative fun env =>
       (rowLambdaValue (env input.base.x) (env input.base.y) (env input.xA)
         (env input.yA) (input.bits env) r.val).lambda2
-    let xANext ← witnessField fun env =>
+    let xANext ← witnessNative fun env =>
       (accVal (env input.base.x) (env input.base.y) (env input.xA) (env input.yA)
         (input.bits env) (r.val + 1)).1
     return ({ z, xP, yP, lambda1 := l1, lambda2 := l2, xANext } : RowCells (Expression Fp))
@@ -323,7 +323,7 @@ def main (n : ℕ) (input : Var Input Fp) :
   rows[0].xP === input.base.x
   rows[0].yP === input.base.y
   -- the witnessed final y_a
-  let yAFinal ← witnessField fun env =>
+  let yAFinal ← witnessNative fun env =>
     (accVal (env input.base.x) (env input.base.y) (env input.xA) (env input.yA)
       (input.bits env) (n + 1)).2
   -- the double-and-add row structs (x_a chained from the copied accumulator)

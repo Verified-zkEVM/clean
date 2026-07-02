@@ -31,7 +31,7 @@ witness constrained equal to `[ivk] gDOld`. -/
 structure Input (F : Type) where
   ak : F
   nk : F
-  rivk : Unconstrained Fq F
+  rivk : UnconstrainedNative Fq F
   gDOld : Point F
   pkDOld : Point F
 deriving CircuitType

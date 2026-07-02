@@ -26,7 +26,7 @@ namespace Utilities
 
 open Orchard.Specs (K)
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 def ternary (choice ifTrue ifFalse : F) : F :=
   choice * ifTrue + (1 - choice) * ifFalse
@@ -94,8 +94,8 @@ def outputValue (input : CondSwapInputs Fp) :
 
 def main (input : Var CondSwapInputs Fp) :
     Circuit Fp (Var CondSwapOutput Fp) := do
-  let aSwapped ← witnessField fun env => ternary (env input.swap) (env input.b) (env input.a)
-  let bSwapped ← witnessField fun env => ternary (env input.swap) (env input.a) (env input.b)
+  let aSwapped ← witness (.ite (input.swap =? 1) input.b input.a)
+  let bSwapped ← witness (.ite (input.swap =? 1) input.a input.b)
   Gate.circuit { a := input.a, b := input.b, aSwapped, bSwapped, swap := input.swap }
   return { aSwapped, bSwapped }
 
@@ -140,10 +140,9 @@ theorem soundness :
 
 theorem completeness :
     Completeness Fp main Assumptions := by
-  circuit_proof_start [main, Assumptions, outputValue, ternary]
-  constructor
-  · trivial
-  · exact ⟨h_env.1, h_env.2, h_assumptions⟩
+  circuit_proof_start [main, Assumptions, outputValue, ternary, Gate.circuit, Gate.Spec, IsBool]
+  obtain ⟨hA, hB⟩ := h_env
+  rcases h_assumptions with hzero | hone <;> simp_all
 
 def circuit : FormalCircuit Fp CondSwapInputs CondSwapOutput where
   main
@@ -167,8 +166,8 @@ namespace Swap
 
 structure Input (F : Type) where
   a : F
-  b : UnconstrainedDep field F
-  swap : Unconstrained Bool F
+  b : UnconstrainedDepNative field F
+  swap : UnconstrainedNative Bool F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -182,10 +181,10 @@ def outputValue (input : Input.ProverValue Fp) :
 def main (input : Input.Var Fp) :
     Circuit Fp (Var CondSwapOutput Fp) := do
   let a <== input.a
-  let b ← witness input.b
-  let swap ← witness fun env => if input.swap env then 1 else 0
-  let aSwapped ← witness fun env => if input.swap env then env b else env a
-  let bSwapped ← witness fun env => if input.swap env then env a else env b
+  let b ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.b
+  let swap ← witnessNative fun env => if input.swap env then 1 else 0
+  let aSwapped ← witnessNative fun env => if input.swap env then env b else env a
+  let bSwapped ← witnessNative fun env => if input.swap env then env a else env b
   Gate.circuit { a, b, aSwapped, bSwapped, swap }
   return { aSwapped, bSwapped }
 
@@ -408,7 +407,7 @@ end Gate
 def main (input : Var fieldPair Fp) :
     Circuit Fp (Var field Fp) := do
   let (a, b) := input
-  let c ← witnessField fun env => env a + env b
+  let c ← witness (a + b)
   Gate.circuit (a, b, c)
   return c
 
@@ -748,8 +747,7 @@ private theorem shortRange_completeness_shifted (numBits : ℕ) (hNumBits : numB
 def shortRangeMain (numBits : ℕ) (_hNumBits : numBits ≤ K)
     (input : Var ShortRangeCheck Fp) : Circuit Fp Unit := do
   lookup tableIdx input.word
-  let shiftedWord ← witnessField fun env =>
-    env input.word * (2 ^ (K - numBits) : Fp)
+  let shiftedWord ← witness (input.word * (2 ^ (K - numBits) : Fp))
   lookup tableIdx shiftedWord
   circuit K {
     word := input.word
@@ -918,52 +916,52 @@ can only state that the output is range-constrained; the prover spec records the
 -/
 
 def main (start numBits : ℕ) (hNumBits : numBits ≤ K)
-    (input : Var (UnconstrainedDep field) Fp) : Circuit Fp (Var field Fp) := do
-  let word ← witnessField fun env =>
+    (input : Var (UnconstrainedDepNative field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessNative fun env =>
     let v : Fp := input env
     ((bitrange v.val start numBits : ℕ) : Fp)
   shortRangeCircuit numBits hNumBits { word }
   return word
 
 def taggedMain (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5)
-    (input : Var (UnconstrainedDep field) Fp) : Circuit Fp (Var field Fp) := do
-  let word ← witnessField fun env =>
+    (input : Var (UnconstrainedDepNative field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessNative fun env =>
     let v : Fp := input env
     ((bitrange v.val start numBits : ℕ) : Fp)
   taggedShortRangeCircuit numBits hBits { word }
   return word
 
-def Spec (numBits : ℕ) (_input : Value (UnconstrainedDep field) Fp) (output : Fp)
+def Spec (numBits : ℕ) (_input : Value (UnconstrainedDepNative field) Fp) (output : Fp)
     (_ : ProverData Fp) : Prop :=
   output.val < 2 ^ numBits
 
-def ProverSpec (start numBits : ℕ) (input : ProverValue (UnconstrainedDep field) Fp)
+def ProverSpec (start numBits : ℕ) (input : ProverValue (UnconstrainedDepNative field) Fp)
     (output : Fp) (_ : ProverHint Fp) : Prop :=
   let v : Fp := input
   output.val = bitrange v.val start numBits
 
 instance elaborated (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    ElaboratedCircuit Fp (UnconstrainedDep field) field (main start numBits hNumBits) := by
+    ElaboratedCircuit Fp (UnconstrainedDepNative field) field (main start numBits hNumBits) := by
   elaborate_circuit
 
 instance taggedElaborated (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    ElaboratedCircuit Fp (UnconstrainedDep field) field (taggedMain start numBits hBits) := by
+    ElaboratedCircuit Fp (UnconstrainedDepNative field) field (taggedMain start numBits hBits) := by
   elaborate_circuit
 
 theorem soundness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDep field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDepNative field) (Output:=field)
       Fp (main start numBits hNumBits) (fun _ _ => True) (Spec numBits) := by
   circuit_proof_start [main, Spec, shortRangeCircuit]
   exact h_holds
 
 theorem taggedSoundness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDep field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDepNative field) (Output:=field)
       Fp (taggedMain start numBits hBits) (fun _ _ => True) (Spec numBits) := by
   circuit_proof_start [taggedMain, Spec, taggedShortRangeCircuit]
   exact h_holds
 
 theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDepNative field) (Output:=field)
       Fp (main start numBits hNumBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [main, ProverSpec, shortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grw [hNumBits, K]; norm_num
@@ -971,7 +969,7 @@ theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
   simp [h_env, hval]
 
 theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDep field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDepNative field) (Output:=field)
       Fp (taggedMain start numBits hBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [taggedMain, ProverSpec, taggedShortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grind
@@ -979,7 +977,7 @@ theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBit
   simp [h_env, hval]
 
 def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint Fp (UnconstrainedDep field) field where
+    GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative field) field where
   main := main start numBits hNumBits
   elaborated := elaborated start numBits hNumBits
   Spec := Spec numBits
@@ -988,7 +986,7 @@ def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
   completeness := completeness start numBits hNumBits
 
 def taggedCircuit (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint Fp (UnconstrainedDep field) field where
+    GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative field) field where
   main := taggedMain start numBits hBits
   elaborated := taggedElaborated start numBits hBits
   Spec := Spec numBits
@@ -1005,9 +1003,8 @@ def main (numWords : ℕ) (element : Expression Fp) :
   -- copy `element` into the running-sum column as `z_0`
   let z₀ <== element
   -- z_{i+1} = (z_i - a_i) / 2^K; for the honest prover, z_i = element >> (K * i)
-  let zRest ← witnessVector numWords fun env =>
-    .ofFn fun (i : Fin numWords) =>
-      (((env element).val / 2 ^ (K * (i.val + 1)) : ℕ) : Fp)
+  let zRest : Vector (Expression Fp) numWords ← witness (var := Var (fields numWords))
+    (Vector.ofFn fun (i : Fin numWords) => (element.val / (2 ^ (K * (i.val + 1)) : ℕ)).toField)
   let zs := Vector.cast (Nat.add_comm 1 numWords) (#v[z₀] ++ zRest)
   let words : Vector (Expression Fp) numWords := .ofFn fun i =>
     zs[i.val]'(Nat.lt_succ_of_lt i.isLt) -
@@ -1165,10 +1162,8 @@ theorem soundness (numWords : ℕ) :
   · simpa [circuit_norm] using h_copy
   · intro i
     have h := h_lookup i
-    simp only [Vector.getElem_ofFn] at h
     refine ⟨_, h, ?_⟩
     rw [ZMod.natCast_zmod_val]
-    simp only [circuit_norm]
     ring
 
 /-- The honest word `z_i - 2^K * z_{i+1}` with `z_i = a, z_{i+1} = a / 2^K` is the low
@@ -1199,7 +1194,6 @@ theorem completeness (numWords : ℕ) :
     simpa using h
   constructor
   · refine ⟨h_z0, fun i => ?_⟩
-    simp only [Vector.getElem_ofFn]
     rcases i with ⟨_ | j, hi⟩
     · have h1 := h_zval 0 hi
       norm_num at h1

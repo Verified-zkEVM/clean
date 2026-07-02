@@ -154,7 +154,7 @@ instance : SMul ℕ (Point Fp) := ⟨nsmul⟩
 lemma nsmul_def (n : ℕ) (point : Point Fp) :
   n • point = ofCoords (ShortWeierstrass.smul pallasA n point.coords) := rfl
 
-def nondegenerateAdd (p q : Point Fp) : Point Fp :=
+def nondegenerateAdd {K : Type} [Sub K] [Mul K] [Inv K] (p q : Point K) : Point K :=
   let slope := (q.y - p.y) * (q.x - p.x)⁻¹
   let xR := slope * slope - p.x - q.x
   let yR := slope * (p.x - xR) - p.y

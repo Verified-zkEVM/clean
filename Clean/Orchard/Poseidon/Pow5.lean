@@ -24,6 +24,11 @@ def pow5 {K : Type} [Mul K] (x : K) : K :=
   let x2 := x * x
   x2 * x2 * x
 
+/-- `pow5` commutes with witness-IR evaluation, since it is built purely from `*`. -/
+theorem pow5_FExpr_eval (ctx : Witgen.Ctx Fp) (x : Witgen.FExpr Fp) :
+    Witgen.FExpr.eval ctx (pow5 x) = pow5 (Witgen.FExpr.eval ctx x) := by
+  simp [pow5, circuit_norm]
+
 private theorem eq_of_add_neg_eq_zero {a b : Fp} (h : a + -b = 0) : b = a := by
   exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
 
@@ -149,7 +154,14 @@ def value (params : FullRound.Gate.Params Fp) (state : Permute.State Fp) : Permu
 `full round` gate. -/
 def main (params : Gate.Params Fp) (state : Var Permute.State Fp) :
     Circuit Fp (Var Permute.State Fp) := do
-  let next ← witness fun env => value params (eval env state)
+  let next : Var Permute.State Fp ← witnessProgram do
+    let s0 ← pow5 (K := Witgen.FExpr Fp) (state.x0 + params.rcA0)
+    let s1 ← pow5 (K := Witgen.FExpr Fp) (state.x1 + params.rcA1)
+    let s2 ← pow5 (K := Witgen.FExpr Fp) (state.x2 + params.rcA2)
+    return Permute.State.mk
+      (s0 * params.m00 + s1 * params.m01 + s2 * params.m02)
+      (s0 * params.m10 + s1 * params.m11 + s2 * params.m12)
+      (s0 * params.m20 + s1 * params.m21 + s2 * params.m22)
   Gate.circuit params
     { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
       next0 := next.x0, next1 := next.x1, next2 := next.x2 }
@@ -216,6 +228,33 @@ deriving ProvableStruct
 
 def Params.toExpr (params : Params Fp) :
     Params (Expression Fp) where
+  rcA0 := params.rcA0
+  rcA1 := params.rcA1
+  rcA2 := params.rcA2
+  rcB0 := params.rcB0
+  rcB1 := params.rcB1
+  rcB2 := params.rcB2
+  m00 := params.m00
+  m01 := params.m01
+  m02 := params.m02
+  m10 := params.m10
+  m11 := params.m11
+  m12 := params.m12
+  m20 := params.m20
+  m21 := params.m21
+  m22 := params.m22
+  mInv00 := params.mInv00
+  mInv01 := params.mInv01
+  mInv02 := params.mInv02
+  mInv10 := params.mInv10
+  mInv11 := params.mInv11
+  mInv12 := params.mInv12
+  mInv20 := params.mInv20
+  mInv21 := params.mInv21
+  mInv22 := params.mInv22
+
+def Params.toFExpr (params : Params Fp) :
+    Params (Witgen.FExpr Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -334,11 +373,12 @@ def paramsP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
   params roundConstants Permute.P128Pow5T3.mds Permute.P128Pow5T3.mdsInv round
 
 /-- The first-round S-box value witnessed in a partial-round row. -/
-def mid0SboxValue (params : Gate.Params Fp) (state : Permute.State Fp) : Fp :=
+def mid0SboxValue {K : Type} [Add K] [Mul K] (params : Gate.Params K) (state : Permute.State K) : K :=
   pow5 (state.x0 + params.rcA0)
 
 /-- Value-level partial-round-row transition, matching `Pow5State::partial_round`. -/
-def value (params : Gate.Params Fp) (state : Permute.State Fp) : Permute.State Fp :=
+def value {K : Type} [Add K] [Mul K] (params : Gate.Params K) (state : Permute.State K) :
+    Permute.State K :=
   let mid0Sbox := mid0SboxValue params state
   let mid0 := mid0Sbox * params.m00 + (state.x1 + params.rcA1) * params.m01 +
     (state.x2 + params.rcA2) * params.m02
@@ -421,8 +461,10 @@ theorem inputP128_spec (roundConstants : Nat → Permute.State Fp) (round : Nat)
 internally and assert the `partial rounds` gate. -/
 def main (params : Gate.Params Fp) (state : Var Permute.State Fp) :
     Circuit Fp (Var Permute.State Fp) := do
-  let mid0Sbox ← witness fun env => mid0SboxValue params (eval env state)
-  let next ← witness fun env => value params (eval env state)
+  let mid0Sbox ← witness <|
+    mid0SboxValue (K := Witgen.FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
+  let next ← witness <|
+    value (K := Witgen.FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
   Gate.circuit params
     { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
       mid0Sbox,
@@ -467,7 +509,9 @@ def circuitP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
     have hnext1 := hnext ⟨1, by norm_num⟩
     have hnext2 := hnext ⟨2, by norm_num⟩
     norm_num at hnext0 hnext1 hnext2
-    simp at hnext0 hnext1 hnext2
+    simp only [circuit_norm, explicit_provable_type] at hnext0 hnext1 hnext2
+    simp [mid0SboxValue, value, Gate.Params.toFExpr, Witgen.FExpr.eval, pow5_FExpr_eval, h_input]
+      at hmid hnext0 hnext1 hnext2
     rw [hmid, hnext0, hnext1, hnext2]
     change Gate.Spec (paramsP128 roundConstants round)
       (inputP128 roundConstants round { x0 := input_x0, x1 := input_x1, x2 := input_x2 })

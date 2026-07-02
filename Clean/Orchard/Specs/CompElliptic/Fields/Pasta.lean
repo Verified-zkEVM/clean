@@ -5,6 +5,7 @@ as described in the files LICENSE-APACHE and LICENSE-MIT.
 Authors: Daira-Emma Hopwood
 -/
 import Clean.Orchard.Specs.CompPoly.Fields.PrattCertificate
+import Clean.Utils.FiniteField
 
 /-!
 # The Pasta (Pallas / Vesta) base and scalar prime fields
@@ -88,6 +89,7 @@ theorem PALLAS_BASE_is_prime : Nat.Prime PALLAS_BASE_CARD := by
 
 instance : Fact (Nat.Prime PALLAS_BASE_CARD) := ⟨PALLAS_BASE_is_prime⟩
 instance : Field PallasBaseField := ZMod.instField PALLAS_BASE_CARD
+instance : FiniteField PallasBaseField := inferInstanceAs (FiniteField (F PALLAS_BASE_CARD))
 
 -- Pallas scalar field q (= Vesta base field).
 @[reducible] def PALLAS_SCALAR_CARD : Nat := 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
@@ -159,6 +161,7 @@ theorem PALLAS_SCALAR_is_prime : Nat.Prime PALLAS_SCALAR_CARD := by
 
 instance : Fact (Nat.Prime PALLAS_SCALAR_CARD) := ⟨PALLAS_SCALAR_is_prime⟩
 instance : Field PallasScalarField := ZMod.instField PALLAS_SCALAR_CARD
+instance : FiniteField PallasScalarField := inferInstanceAs (FiniteField (F PALLAS_SCALAR_CARD))
 
 /-- Vesta base field = Pallas scalar field. -/
 abbrev VestaBaseField := PallasScalarField

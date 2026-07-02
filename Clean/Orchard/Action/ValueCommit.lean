@@ -27,7 +27,7 @@ open CompElliptic.Curves.Pasta
 scalar behind the `ScalarFixed` value `rcv`. -/
 structure Input (F : Type) where
   v : MulFixed.Short.MagnitudeSign F
-  rcv : Unconstrained Fq F
+  rcv : UnconstrainedNative Fq F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=

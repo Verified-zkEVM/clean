@@ -23,7 +23,7 @@ open CompElliptic.Curves.Pasta
 `ak_P` and the prover-side randomizer `alpha`. -/
 structure Input (F : Type) where
   akP : Point F
-  alpha : Unconstrained Fq F
+  alpha : UnconstrainedNative Fq F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=

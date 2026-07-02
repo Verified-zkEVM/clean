@@ -18,7 +18,7 @@ This assertion models the four arithmetic constraints enabled by the Halo2
 
 namespace Orchard.Action.Gate
 
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 
 private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
   rcases h with h | h <;> rw [h] <;> simp

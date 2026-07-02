@@ -310,17 +310,16 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witness fun env =>
+  let r ← witnessNative fun env =>
     (rowValue { p := eval env p, q := eval env q }).r
-  let lambda ← witnessField fun env =>
+  let lambda ← witnessNative fun env =>
     (rowValue { p := eval env p, q := eval env q }).lambda
-  let alpha ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).alpha
-  let beta ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).beta
-  let gamma ← witnessField fun env =>
-    (rowValue { p := eval env p, q := eval env q }).gamma
-  let delta ← witnessField fun env =>
+  let px : Witgen.FExpr Fp := p.x
+  let qx : Witgen.FExpr Fp := q.x
+  let alpha ← witness <| (qx - px)⁻¹
+  let beta ← witness <| px⁻¹
+  let gamma ← witness <| qx⁻¹
+  let delta ← witnessNative fun env =>
     (rowValue { p := eval env p, q := eval env q }).delta
   Gate.circuit {
     x_p := p.x
@@ -673,7 +672,7 @@ theorem completeness : Completeness Fp main Assumptions := by
   simp_all [circuit_norm, explicit_provable_type]
   have hrow := rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
-  simpa [Gate.Spec, rowValue] using hrow
+  simpa [Gate.Spec, rowValue, sub_eq_add_neg] using hrow
 
 def circuit : FormalCircuit Fp Input Point where
   main

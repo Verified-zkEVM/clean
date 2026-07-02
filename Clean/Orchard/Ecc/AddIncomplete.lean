@@ -151,7 +151,8 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witness fun env => (eval env p).nondegenerateAdd (eval env q)
+  let r ← witness <|
+    (Point.mk p.x p.y : Point (Witgen.FExpr Fp)).nondegenerateAdd (Point.mk q.x q.y)
   Gate.circuit {
     x_p := p.x
     y_p := p.y
@@ -194,7 +195,10 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]
   rcases h_assumptions with ⟨_hp, _hq, hx⟩
-  simp_all [circuit_norm, explicit_provable_type, Gate.Input.p, Gate.Input.q, Gate.Input.r]
+  simp_all [circuit_norm, explicit_provable_type, Gate.Input.p, Gate.Input.q, Gate.Input.r,
+    Point.nondegenerateAdd]
+  rw [← h_input.1, ← h_input.2]
+  constructor <;> ring
 
 def circuit : FormalCircuit Fp Input Point where
   main

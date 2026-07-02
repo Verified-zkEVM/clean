@@ -85,7 +85,7 @@ def get : (ns : List ℕ) → HVec ns F → (i : Fin ns.length) → Vector F ns[
   | _ :: ns, f, ⟨i + 1, h⟩ => get ns (tail f) ⟨i, Nat.lt_of_succ_lt_succ h⟩
 
 /-- `eval` commutes with `head`. -/
-theorem eval_head [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
+theorem eval_head [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ}
     (v : Var (HVec (n :: ns)) F) :
     eval env (head v) = head (eval env v) := by
   simp only [head]
@@ -97,7 +97,7 @@ theorem eval_head [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
   rfl
 
 /-- `eval` commutes with `tail`. -/
-theorem eval_tail [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
+theorem eval_tail [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ}
     (v : Var (HVec (n :: ns)) F) :
     eval env (tail v) = tail (eval env v) := by
   rw [CircuitType.eval_expression (M := HVec ns)]
@@ -108,7 +108,7 @@ theorem eval_tail [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
 
 /-- `eval` commutes with function-style heterogeneous-vector access. -/
-theorem eval_get [Field F] (env : Environment F) :
+theorem eval_get [FiniteField F] (env : Environment F) :
     (ns : List ℕ) → (v : Var (HVec ns) F) → (i : Fin ns.length) →
       eval env (get ns v i) = get ns (eval env v) i
   | [], _, i => i.elim0
@@ -118,7 +118,7 @@ theorem eval_get [Field F] (env : Environment F) :
       simpa only [get, htail] using eval_get env ns (tail v) ⟨i, Nat.lt_of_succ_lt_succ h⟩
 
 /-- `eval` commutes with indexing a function-style heterogeneous-vector access. -/
-theorem eval_getElem [Field F] (env : Environment F) (ns : List ℕ)
+theorem eval_getElem [FiniteField F] (env : Environment F) (ns : List ℕ)
     (v : Var (HVec ns) F) (i : Fin ns.length) (j : ℕ) (hj : j < ns[i]) :
     eval env ((get ns v i)[j]'hj) = (get ns (eval env v) i)[j]'hj := by
   rw [ProvableType.eval_field]
@@ -126,7 +126,7 @@ theorem eval_getElem [Field F] (env : Environment F) (ns : List ℕ)
   rw [eval_get]
 
 /-- `eval` distributes over `cons`. -/
-theorem eval_cons [Field F] (env : Environment F) {n : ℕ} {ns : List ℕ}
+theorem eval_cons [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ}
     (a : Var (fields n) F) (b : Var (HVec ns) F) :
     (eval env (HVec.cons a b : Var (HVec (n :: ns)) F) : HVec (n :: ns) F)
       = HVec.cons (eval env a) (eval env b) := by

@@ -120,14 +120,13 @@ deriving ProvableStruct
 
 def main (input : Var Input Fp) : Circuit Fp Unit := do
   -- s = alpha + k_254 ⋅ 2^130
-  let s ← witnessField fun env => env input.alpha + env input.k254 * (2 ^ 130 : Fp)
+  let s ← witness (input.alpha + input.k254 * (2 ^ 130 : Fp))
   -- decompose the low 130 bits of s using thirteen 10-bit lookups
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 s
   -- s_minus_lo_130 = (s - (2^0 s_0 + ... + 2^129 s_129)) / 2^130
   let sMinusLo130 := zsDecomp[13]
   -- η = inv0(z_130)
-  let eta ← witnessField fun env =>
-    if env input.z130 = 0 then 0 else (env input.z130)⁻¹
+  let eta ← witness (.ite (input.z130 =? 0) 0 input.z130⁻¹)
   Overflow.circuit {
     z0 := input.z0, z130 := input.z130, eta, k254 := input.k254,
     alpha := input.alpha, sMinusLo130, s }
@@ -238,7 +237,7 @@ theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec
   · rcases hEtaSpec with h | hz | h0
     · exact Or.inl h
     · refine Or.inr (Or.inl ?_)
-      rw [h_eta, if_neg hz]
+      rw [h_eta, if_neg (by simp [hz])]
       exact mul_inv_cancel₀ hz
     · refine Or.inr (Or.inr ?_)
       rw [h13, show (1361129467683753853853498429727072845824 : ℕ) = 2 ^ 130 from by

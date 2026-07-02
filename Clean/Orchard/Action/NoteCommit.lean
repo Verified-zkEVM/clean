@@ -233,7 +233,7 @@ structure Input (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : Unconstrained Fq F
+  rcm : UnconstrainedNative Fq F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -538,9 +538,9 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
     (fun env => eval env input.y)
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
     (fun env => eval env input.y)
-  let k3 ← witnessField fun env => let v : Fp := eval env input.y; ((bitrange v.val 254 1 : ℕ) : Fp)
-  let j ← witnessField fun env =>
-    env input.lsb + 2 * env k0 + (2 ^ 10 : Fp) * (let v : Fp := eval env input.y; ((bitrange v.val 10 240 : ℕ) : Fp))
+  let k3 ← witness (input.y.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let j ← witness ((input.lsb + k0 * (2 : Fp) : Expression Fp)
+    + (input.y.val / (2 ^ 10 : ℕ) % (2 ^ 240 : ℕ)).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
   let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
@@ -610,7 +610,8 @@ theorem completeness :
   have hk0F : env.get i₀ = ((bitrange input_y.val 1 9 : ℕ) : Fp) := by
     rw [← hk0]; exact (ZMod.natCast_zmod_val _).symm
   have hj_br : jv = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
-    rw [hj, hlsb, hk0F, htile]
+    have hbr1024 : input_y.val / 2 ^ 10 % 2 ^ 240 = bitrange input_y.val 10 240 := rfl
+    rw [hj, hlsb, hk0F, htile, FiniteField.fromNat_F, FiniteField.val_F, hbr1024]
     push_cast; ring
   have hj_val : jv.val = bitrange input_y.val 0 250 := by
     rw [hj_br]; apply cast_bitrange_val (by norm_num)
@@ -896,29 +897,27 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
     (fun env => eval env psi)
   let h0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 249 5 (by norm_num [K])
     (fun env => eval env psi)
-  let b1 ← witnessField fun env => let v : Fp := eval env gdX; ((bitrange v.val 254 1 : ℕ) : Fp)
-  let b2 ← witnessField fun env => let v : Fp := eval env gdY; ((bitrange v.val 0 1 : ℕ) : Fp)
-  let d0 ← witnessField fun env => let v : Fp := eval env pkdX; ((bitrange v.val 254 1 : ℕ) : Fp)
-  let d1 ← witnessField fun env => let v : Fp := eval env pkdY; ((bitrange v.val 0 1 : ℕ) : Fp)
-  let g0 ← witnessField fun env => let v : Fp := eval env rho; ((bitrange v.val 254 1 : ℕ) : Fp)
-  let h1 ← witnessField fun env => let v : Fp := eval env psi; ((bitrange v.val 254 1 : ℕ) : Fp)
+  let b1 ← witness (gdX.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let b2 ← witness (gdY.val / (2 ^ 0 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let d0 ← witness (pkdX.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let d1 ← witness (pkdY.val / (2 ^ 0 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let g0 ← witness (rho.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
+  let h1 ← witness (psi.val / (2 ^ 254 : ℕ) % (2 ^ 1 : ℕ)).toField
 
   -- `y_canonicity` (for the `ỹ` sign cells `b2`/`d1`) is *not* run here: it requires
   -- `IsBool b2`/`IsBool d1`, which the source establishes in the `b`/`d` message-piece
   -- decomposition gates (`MessagePieceChecks`). It is therefore composed at the top level,
   -- after `MessagePieceChecks`, as a sibling of the x-canonicity gates.
-  let a ← witnessField fun env => let v : Fp := eval env gdX; ((bitrange v.val 0 250 : ℕ) : Fp)
-  let b ← witnessField fun env =>
-    env b0 + env b1 * 2 ^ 4 + env b2 * 2 ^ 5 + env b3 * 2 ^ 6
-  let c ← witnessField fun env => let v : Fp := eval env pkdX; ((bitrange v.val 4 250 : ℕ) : Fp)
-  let d ← witnessField fun env =>
-    env d0 + env d1 * 2 + env d2 * 2 ^ 2 +
-    (let vv : Fp := eval env v; ((bitrange vv.val 8 50 : ℕ) : Fp)) * 2 ^ 10
-  let e ← witnessField fun env => env e0 + env e1 * 2 ^ 6
-  let f ← witnessField fun env => let v : Fp := eval env rho; ((bitrange v.val 4 250 : ℕ) : Fp)
-  let g ← witnessField fun env => env g0 + env g1 * 2 +
-    (let v : Fp := eval env psi; ((bitrange v.val 9 240 : ℕ) : Fp)) * 2 ^ 10
-  let h ← witnessField fun env => env h0 + env h1 * 2 ^ 5
+  let a ← witness (gdX.val / (2 ^ 0 : ℕ) % (2 ^ 250 : ℕ)).toField
+  let b ← witness (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp) : Expression Fp)
+  let c ← witness (pkdX.val / (2 ^ 4 : ℕ) % (2 ^ 250 : ℕ)).toField
+  let d ← witness ((d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) : Expression Fp)
+    + (v.val / (2 ^ 8 : ℕ) % (2 ^ 50 : ℕ)).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
+  let e ← witness (e0 + e1 * (2 ^ 6 : Fp) : Expression Fp)
+  let f ← witness (rho.val / (2 ^ 4 : ℕ) % (2 ^ 250 : ℕ)).toField
+  let g ← witness ((g0 + g1 * (2 : Fp) : Expression Fp)
+    + (psi.val / (2 ^ 9 : ℕ) % (2 ^ 240 : ℕ)).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
+  let h ← witness (h0 + h1 * (2 ^ 5 : Fp) : Expression Fp)
   return {
     a, b, c, d, e, f, g, h,
     b0, b1, b2, b3,
@@ -962,6 +961,13 @@ theorem completeness :
   subst h_gd; subst h_pkd; subst h_v; subst h_rho; subst h_psi
   obtain ⟨⟨_, e_b0⟩, ⟨_, e_b3⟩, ⟨_, e_d2⟩, ⟨_, e_e0⟩, ⟨_, e_e1⟩, ⟨_, e_g1⟩, ⟨_, e_h0⟩,
     e_b1, e_b2, e_d0, e_d1, e_g0, e_h1, e_a, e_b, e_c, e_d, e_e, e_f, e_g, e_h⟩ := h_env
+  -- bridge `FiniteField.fromNat`/`.val` (stated generically over `F p`) to `Fp`-specific
+  -- `Nat.cast`/`ZMod.val` form so the `d`/`g` recombination witnesses' `bitrange` slices
+  -- (produced by the typed-IR `.val`/`.toField` port) match the `bitrange`/`Nat.cast` shape
+  -- the rest of this proof (and `MessageCellFacts`) already expects.
+  have fromNat_Fp : ∀ n : ℕ, (FiniteField.fromNat n : Fp) = (n : Fp) := fun n => FiniteField.fromNat_F n
+  have val_Fp : ∀ x : Fp, FiniteField.val x = ZMod.val x := fun x => FiniteField.val_F x
+  have bitrange_eq : ∀ n s l : ℕ, n / 2 ^ s % 2 ^ l = bitrange n s l := fun _ _ _ => rfl
   refine ⟨val_eq_of_cell_eq (by norm_num) e_a, e_b0,
     val_eq_of_cell_eq (by norm_num) e_b1, ?_, e_b3,
     val_eq_of_cell_eq (by norm_num) e_c, val_eq_of_cell_eq (by norm_num) e_d0, ?_,
@@ -969,7 +975,9 @@ theorem completeness :
     e_e1, val_eq_of_cell_eq (by norm_num) e_f,
     val_eq_of_cell_eq (by norm_num) e_g0, e_g1,
     e_h0, val_eq_of_cell_eq (by norm_num) e_h1,
-    e_b.trans (by ring), e_d.trans (by ring), e_e.trans (by ring), e_g.trans (by ring),
+    e_b.trans (by ring),
+    e_d.trans (by rw [val_Fp, bitrange_eq, fromNat_Fp]; ring), e_e.trans (by ring),
+    e_g.trans (by rw [val_Fp, bitrange_eq, fromNat_Fp]; ring),
     e_h.trans (by ring)⟩
   · rw [e_b2]; exact isLowBit_bitrange _
   · rw [e_d1]; exact isLowBit_bitrange _

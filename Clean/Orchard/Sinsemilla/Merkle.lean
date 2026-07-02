@@ -604,15 +604,13 @@ deriving ProvableStruct
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Expression Fp) := do
   -- witness the three message pieces and the short sub-pieces b_1, b_2
-  let a ← witnessField fun env =>
-    ((l + 2 ^ 10 * ((env input.left).val % 2 ^ 240) : ℕ) : Fp)
-  let b1 ← witnessField fun env => (((env input.left).val / 2 ^ 250 : ℕ) : Fp)
-  let b2 ← witnessField fun env => (((env input.right).val % 2 ^ 5 : ℕ) : Fp)
-  let b ← witnessField fun env =>
-    (((env input.left).val / 2 ^ 240 % 2 ^ 10
-      + 2 ^ 10 * ((env input.left).val / 2 ^ 250)
-      + 2 ^ 15 * ((env input.right).val % 2 ^ 5) : ℕ) : Fp)
-  let c ← witnessField fun env => (((env input.right).val / 2 ^ 5 : ℕ) : Fp)
+  let a ← witness (l + (2 ^ 10 : ℕ) * (input.left.val % (2 ^ 240 : ℕ))).toField
+  let b1 ← witness (input.left.val / (2 ^ 250 : ℕ)).toField
+  let b2 ← witness (input.right.val % (2 ^ 5 : ℕ)).toField
+  let b ← witness (input.left.val / (2 ^ 240 : ℕ) % (2 ^ 10 : ℕ)
+    + (2 ^ 10 : ℕ) * (input.left.val / (2 ^ 250 : ℕ))
+    + (2 ^ 15 : ℕ) * (input.right.val % (2 ^ 5 : ℕ))).toField
+  let c ← witness (input.right.val / (2 ^ 5 : ℕ)).toField
   -- constrain b_1 and b_2 to 5 bits
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b1 }
   Utilities.LookupRangeCheck.shortRangeCircuit 5 (by decide) { word := b2 }
@@ -764,12 +762,12 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     hl hlv hrv ha_w hb1_w hb2_w hb_w hc_w hzh1 hzh2
     (ZMod.natCast_zmod_val input_left) (ZMod.natCast_zmod_val input_right)
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
-  · rw [hb1_w]
+  · rw [hb1_w, FiniteField.fromNat_F, FiniteField.val_F]
     have hd : ZMod.val input_left / 2 ^ 250 < 2 ^ 5 :=
       Nat.div_lt_of_lt_mul (by rw [← pow_add]; exact hlv)
     rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
     exact hd
-  · rw [hb2_w]
+  · rw [hb2_w, FiniteField.fromNat_F, FiniteField.val_F]
     have hd : ZMod.val input_right % 2 ^ 5 < 2 ^ 5 := Nat.mod_lt _ (by norm_num)
     rw [ZMod.val_natCast_of_lt (lt_trans hd (by norm_num [PALLAS_BASE_CARD]))]
     exact hd
@@ -820,8 +818,8 @@ namespace Layer
 
 structure Input (F : Type) where
   node : F
-  sibling : UnconstrainedDep field F
-  posBit : Unconstrained Bool F
+  sibling : UnconstrainedDepNative field F
+  posBit : UnconstrainedNative Bool F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -937,8 +935,8 @@ namespace CalculateRoot
 
 structure Input (F : Type) where
   leaf : F
-  path : UnconstrainedDep (fields 32) F
-  pos : Unconstrained (Vector Bool 32) F
+  path : UnconstrainedDepNative (fields 32) F
+  pos : UnconstrainedNative (Vector Bool 32) F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=

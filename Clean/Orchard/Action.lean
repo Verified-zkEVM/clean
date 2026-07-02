@@ -72,35 +72,35 @@ structure Params where
 
 /-- Inputs of the action circuit: the prover-side private values from `Circuit::synthesize`
 plus the nine public-instance cells. Values witnessed by Rust inside `synthesize` are
-`Unconstrained`/`UnconstrainedDep` here and are witnessed inside `main`, not exposed as
+`UnconstrainedNative`/`UnconstrainedDepNative` here and are witnessed inside `main`, not exposed as
 already-assigned cells. -/
 structure Input (F : Type) where
   -- old note
-  gdOld : UnconstrainedDep Point F
-  pkdOld : UnconstrainedDep Point F
-  vOld : UnconstrainedDep field F
-  rhoOld : UnconstrainedDep field F
-  psiOld : UnconstrainedDep field F
-  rcmOld : Unconstrained Fq F
-  cmOld : UnconstrainedDep Point F
+  gdOld : UnconstrainedDepNative Point F
+  pkdOld : UnconstrainedDepNative Point F
+  vOld : UnconstrainedDepNative field F
+  rhoOld : UnconstrainedDepNative field F
+  psiOld : UnconstrainedDepNative field F
+  rcmOld : UnconstrainedNative Fq F
+  cmOld : UnconstrainedDepNative Point F
   -- spend authority / key material
-  alpha : Unconstrained Fq F
-  akP : UnconstrainedDep Point F
-  nk : UnconstrainedDep field F
-  rivk : Unconstrained Fq F
+  alpha : UnconstrainedNative Fq F
+  akP : UnconstrainedDepNative Point F
+  nk : UnconstrainedDepNative field F
+  rivk : UnconstrainedNative Fq F
   -- new note
-  gdNew : UnconstrainedDep Point F
-  pkdNew : UnconstrainedDep Point F
-  vNew : UnconstrainedDep field F
-  psiNew : UnconstrainedDep field F
-  rcmNew : Unconstrained Fq F
+  gdNew : UnconstrainedDepNative Point F
+  pkdNew : UnconstrainedDepNative Point F
+  vNew : UnconstrainedDepNative field F
+  psiNew : UnconstrainedDepNative field F
+  rcmNew : UnconstrainedNative Fq F
   -- value commitment
-  rcv : Unconstrained Fq F
-  vNetMagnitude : UnconstrainedDep field F
-  vNetSign : UnconstrainedDep field F
+  rcv : UnconstrainedNative Fq F
+  vNetMagnitude : UnconstrainedDepNative field F
+  vNetSign : UnconstrainedDepNative field F
   -- merkle path
-  path : UnconstrainedDep (fields 32) F
-  pos : Unconstrained (Vector Bool 32) F
+  path : UnconstrainedDepNative (fields 32) F
+  pos : UnconstrainedNative (Vector Bool 32) F
   -- public instance cells
   anchor : F
   cvNetX : F
@@ -131,20 +131,20 @@ instance : Inhabited (Var Input Fp) :=
 def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- Witness private inputs used across multiple checks, matching the source block at the
   -- start of `Circuit::synthesize`.
-  let psiOld ← witnessField input.psiOld
-  let rhoOld ← witnessField input.rhoOld
+  let psiOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.psiOld
+  let rhoOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.rhoOld
   let cmOld ← WitnessPoint.circuit input.cmOld
   let gdOld ← WitnessNonIdentityPoint.circuit input.gdOld
   let akP ← WitnessNonIdentityPoint.circuit input.akP
-  let nk ← witnessField input.nk
-  let vOld ← witnessField input.vOld
-  let vNew ← witnessField input.vNew
+  let nk ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.nk
+  let vOld ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vOld
+  let vNew ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNew
   -- Merkle path validity: leaf = cm_old.extract_p()
   let root ← Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm
     { leaf := cmOld.x, path := input.path, pos := input.pos }
   -- Value commitment integrity: cv_net constrained to (CV_NET_X, CV_NET_Y)
-  let vNetMagnitude ← witnessField input.vNetMagnitude
-  let vNetSign ← witnessField input.vNetSign
+  let vNetMagnitude ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNetMagnitude
+  let vNetSign ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.vNetSign
   let cvNet ← ValueCommit.circuit P.V P.Rvc
     { v := { magnitude := vNetMagnitude, sign := vNetSign }, rcv := input.rcv }
   cvNet === { x := input.cvNetX, y := input.cvNetY }
@@ -169,7 +169,7 @@ def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- New note commitment integrity: rho_new = nf_old; cmx = cm_new.extract_p()
   let gdNew ← WitnessNonIdentityPoint.circuit input.gdNew
   let pkdNew ← WitnessNonIdentityPoint.circuit input.pkdNew
-  let psiNew ← witnessField input.psiNew
+  let psiNew ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.psiNew
   let cmNew ← NoteCommit.circuit P.Gnc P.Qnc P.hQnc P.Rnc
     { gd := gdNew, pkd := pkdNew, value := vNew,
       rho := nfOld, psi := psiNew, rcm := input.rcmNew }
@@ -331,7 +331,7 @@ theorem intermediateSpec_of_constraints (P : Params) :
       ?_⟩
     · exact hSAeq ▸ hSA
     · refine ⟨_, _, rfl, hMerkle, hGate.1, hGate.2.1, hGate.2.2.1, hGate.2.2.2⟩
-  · exact ⟨Or.inr trivial, Or.inr hCmOldValid⟩
+  · exact Or.inl rfl
 
 /-- Honest-prover preconditions for the *top-level* action circuit. There is no parent
 circuit, so the `ProverSpec` is the default `True`; consequently completeness must establish
@@ -503,5 +503,9 @@ def circuit (P : Params) : GeneralFormalCircuit.WithHint Fp Input unit where
   ProverAssumptions := IntermediateProverAssumptions P
   soundness := intermediateSpec_of_constraints P
   completeness := constraints_of_intermediateProverAssumptions P
+  requirementsChannelsLawful := by
+    try dsimp only [main]
+    simp only [circuit_norm, seval]
+    try first | ac_rfl | trivial | tauto
 
 end Orchard.Action

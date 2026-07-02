@@ -167,21 +167,21 @@ theorem rowValue_spec (B : FixedBase) (s : Fq) {w : ℕ} (hw : w < 85) :
         * (windowPoint B.point w (windowVal s w)).x + 5
     linear_combination h
 
-def main (B : FixedBase) (scalar : Var (Unconstrained Fq) Fp) :
+def main (B : FixedBase) (scalar : Var (UnconstrainedNative Fq) Fp) :
     Circuit Fp (Var Point Fp) := do
-  let row₀ ← witness fun env => rowValue B (scalar env) 0
+  let row₀ ← witnessNative fun env => rowValue B (scalar env) 0
   Gate.circuit (B.params 0) row₀
   let acc₀ : Var Point Fp := { x := row₀.xP, y := row₀.yP }
   let acc ← Circuit.foldlRange 83 acc₀ fun acc i => do
-    let row ← witness fun env => rowValue B (scalar env) (i.val + 1)
+    let row ← witnessNative fun env => rowValue B (scalar env) (i.val + 1)
     Gate.circuit (B.params (i.val + 1)) row
     AddIncomplete.circuit { p := { x := row.xP, y := row.yP }, q := acc }
-  let row₈₄ ← witness fun env => rowValue B (scalar env) 84
+  let row₈₄ ← witnessNative fun env => rowValue B (scalar env) 84
   Gate.circuit (B.params 84) row₈₄
   Add.circuit { p := { x := row₈₄.xP, y := row₈₄.yP }, q := acc }
 
 instance elaborated (B : FixedBase) :
-    ElaboratedCircuit Fp (Unconstrained Fq) Point (main B) := by
+    ElaboratedCircuit Fp (UnconstrainedNative Fq) Point (main B) := by
   elaborate_circuit_with {
     localLength _ := 849
     output _ offset := varFromOffset Point (offset + 842)
@@ -649,7 +649,7 @@ theorem completeness (B : FixedBase) :
         windowScalar_partialSum]
     exact FixedBase.add_coords_eq hpt
 
-def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point where
+def circuit (B : FixedBase) : GeneralFormalCircuit.WithHint Fp (UnconstrainedNative Fq) Point where
   main := main B
   elaborated := elaborated B
   Spec := Spec B

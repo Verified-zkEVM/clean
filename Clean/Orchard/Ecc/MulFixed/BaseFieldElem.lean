@@ -218,40 +218,53 @@ structure Output (F : Type) where
   z84 : F
 deriving ProvableStruct
 
-def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
-    Circuit Fp (Var Output Fp) := do
+/-- `main`'s window `0..43` prefix (window 0, the `1..42` incomplete-addition fold, and
+the explicit window 43), factored out into its own definition purely so that `circuit`'s
+`requirementsChannelsLawful` proof can reason about it as an opaque unit. This is *not* a
+subcircuit boundary — `main`'s own `soundness`/`completeness` proofs unfold it fully via
+`dsimp` alongside `main`, exactly as if it were inlined. Splitting it out exists solely to
+stop `simp`/the kernel from reasoning about both windowed-multiplication `Circuit.foldl`
+calls in one giant unfolded term, which blows the kernel's recursion limit (bisected in
+detail; see `doc/performance-problems.md`). -/
+private def prefixCircuit (B : MulFixed.FixedBase) (alpha : Var field Fp) :
+    Circuit Fp (Var Point Fp × Expression Fp × Expression Fp) := do
   -- `copy_decompose`: `z_0` is a copy of `α`
   let z₀ <== alpha
   -- window 0 initializes the accumulator
-  let t₀ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 0
+  let t₀ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 0
   Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 0)
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
   let acc₀ : Var Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..42 are added with incomplete addition; final `zCur = z_43`
   let (acc₄₂, z₄₃) ← Circuit.foldl (Vector.finRange 42) (acc₀, t₀.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 1)
+    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) (i.val + 1)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 1))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- explicit window 43; `t₄₃.zNext = z_44`
-  let t₄₃ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 43
+  let t₄₃ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 43
   Utilities.RunningSum.circuit 3 { zCur := z₄₃, zNext := t₄₃.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 43)
     { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
   let acc₄₃ ← AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
+  return (acc₄₃, z₄₃, t₄₃.zNext)
+
+def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
+    Circuit Fp (Var Output Fp) := do
+  let (acc₄₃, z₄₃, z₄₄) ← prefixCircuit B alpha
   -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
-  let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) (i.val + 44)
+  let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, z₄₄) fun (acc, zCur) i => do
+    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) (i.val + 44)
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- most significant window 84
-  let t₈₄ : Var RowTail Fp ← witness fun env => rowTailValue B (env alpha) 84
+  let t₈₄ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 84
   Utilities.RunningSum.circuit 3 { zCur := z₈₄, zNext := t₈₄.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 84)
     { zCur := z₈₄, zNext := t₈₄.zNext, xP := t₈₄.xP, yP := t₈₄.yP, u := t₈₄.u }
@@ -259,7 +272,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   t₈₄.zNext === (0 : Expression Fp)
   -- `[α]B` by complete addition of the most significant window
   let result ← Add.circuit { p := { x := t₈₄.xP, y := t₈₄.yP }, q := acc₈₃ }
-  return { result := result, z43 := z₄₃, z44 := t₄₃.zNext, z84 := z₈₄ }
+  return { result := result, z43 := z₄₃, z44 := z₄₄, z84 := z₈₄ }
 
 instance elaborated (B : MulFixed.FixedBase) :
     ElaboratedCircuit Fp field Output (main B) := by
@@ -489,7 +502,7 @@ private theorem natCast_val_nsmul (B : MulFixed.FixedBase) (V : ℕ) :
 
 theorem soundness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main B) (fun _ _ => True) (Spec B) := by
-  circuit_proof_start [main, Spec,
+  circuit_proof_start [main, prefixCircuit, Spec,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
@@ -906,7 +919,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   -- non-canonical accumulated offset). Expanding it by hand, plus the kernel size cliff
   -- this 85-window two-foldl completeness sits on (see `doc/performance-problems.md`,
   -- "Kernel size cliffs in completeness proofs of large compositions"), is the open work.
-  circuit_proof_start [main, ProverSpec, ProverAssumptions,
+  circuit_proof_start [main, prefixCircuit, ProverSpec, ProverAssumptions,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
@@ -1294,16 +1307,67 @@ theorem completeness (B : MulFixed.FixedBase) :
       show i + 44 + 1 = i + 1 + 44 from by omega] at h
     exact h
 
+/-! #### `requirementsChannelsLawful` for `circuit`
+
+The default `requirementsChannelsLawful` proof (`dsimp only [main]; simp only [circuit_norm,
+seval]; ...`) kernel-fails on this circuit: `main` sequences *two* `Circuit.foldl` calls
+(windows `1..42` and `44..83`), and reasoning about both in one unfolded term, chained
+through the intervening window-43 addition, blows the kernel's recursion limit (confirmed
+by bisection; see `doc/performance-problems.md`). The fix mirrors the "bundle it" principle
+for proof boundaries: `prefixCircuit` (window `0..43`) is kept opaque here (never unfolded),
+so only the *second* fold's internals are ever exposed to `simp`/the kernel at once. -/
+
+/-- Orchard never emits raw channel interactions (only subcircuits, which don't contribute
+to `shallowChannels`), so `RequirementsChannelsLawful` reduces to two structural facts:
+no subcircuit has requirements, and there are no shallow channels at all (which trivializes
+the "under local constraints" obligation, since it can only concern `shallowInteractions`). -/
+private theorem requirementsChannelsLawful_of_nil
+    {ops : Operations Fp} {guarantees : List (RawChannel Fp)}
+    (h1 : ops.subcircuitChannelsWithRequirements = [])
+    (h2 : ops.shallowChannels = []) :
+    ops.RequirementsChannelsLawful guarantees [] := by
+  have hint : ops.shallowInteractions = [] := by
+    have h2' := h2
+    rw [Operations.shallowChannels_eq_interactions_map] at h2'
+    exact List.map_eq_nil_iff.mp h2'
+  refine ⟨by rw [h1]; exact List.nil_subset _, by rw [h2]; simp, ?_⟩
+  intro env _
+  rw [Operations.inChannelsOrRequirements_iff_forall_mem, hint]
+  simp
+
+private theorem prefixCircuit_shallowChannels_nil
+    (B : MulFixed.FixedBase) (alpha : Var field Fp) (offset : ℕ) :
+    ((prefixCircuit B alpha).operations offset).shallowChannels = [] := by
+  dsimp only [prefixCircuit]
+  simp only [circuit_norm, seval]
+
+private theorem prefixCircuit_subcircuitChannelsWithRequirements_nil
+    (B : MulFixed.FixedBase) (alpha : Var field Fp) (offset : ℕ) :
+    ((prefixCircuit B alpha).operations offset).subcircuitChannelsWithRequirements = [] := by
+  dsimp only [prefixCircuit]
+  simp only [circuit_norm, seval]
+  unfold_formal_circuit_consts
+  simp only [circuit_norm, seval]
+
 /-- The decomposition + windowed-multiplication regions of
 `base_field_elem.rs::Config::assign`. -/
 def circuit (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint Fp field Output where
   main := main B
+  elaborated := elaborated B
   Spec := Spec B
   ProverAssumptions := ProverAssumptions
   ProverSpec := ProverSpec B
   soundness := soundness B
   completeness := completeness B
+  requirementsChannelsLawful := by
+    intro alpha offset
+    dsimp only [main]
+    apply requirementsChannelsLawful_of_nil <;>
+      simp only [circuit_norm, seval, prefixCircuit_shallowChannels_nil,
+        prefixCircuit_subcircuitChannelsWithRequirements_nil]
+    all_goals try unfold_formal_circuit_consts
+    all_goals simp only [circuit_norm, seval]
 
 end RunningSumMul
 
@@ -1327,13 +1391,13 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- region 3: canonicity of the base-field element.
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
-  let alpha0Prime ← witnessField fun env =>
+  let alpha0Prime ← witnessNative fun env =>
     (env alpha - env (m.z84) * (2 ^ 252 : Fp)) + (2 ^ 130 : Fp) - (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]
   -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate
-  let alpha1 ← witnessField fun env => ((env (m.z84)).val % 4 : ℕ)
-  let alpha2 ← witnessField fun env => ((env (m.z84)).val / 4 : ℕ)
+  let alpha1 ← witnessNative fun env => ((env (m.z84)).val % 4 : ℕ)
+  let alpha2 ← witnessNative fun env => ((env (m.z84)).val / 4 : ℕ)
   let z84Alpha <== m.z84
   let z44Alpha <== m.z44
   let z43Alpha <== m.z43
@@ -1359,27 +1423,6 @@ def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
 /-- `p = 2^254 + t_p` for the Pallas base field. -/
 private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
   norm_num [PALLAS_BASE_CARD, tPNat]
-
-/-- Telescoping a 13-step `2^10`-radix running sum to its 130-bit digit sum. Stated over
-abstract cell values so the heavy combination is kernel-checked once, not inlined into
-the (giant-term) entry-circuit soundness proof. -/
-private theorem telescope13_eq {z0 z1 z2 z3 z4 z5 z6 z7 z8 z9 z10 z11 z12 ap : Fp}
-    {w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 : ℕ}
-    (h0 : z0 = ap)
-    (e0 : z0 = 2 ^ 10 * z1 + (w0 : Fp)) (e1 : z1 = 2 ^ 10 * z2 + (w1 : Fp))
-    (e2 : z2 = 2 ^ 10 * z3 + (w2 : Fp)) (e3 : z3 = 2 ^ 10 * z4 + (w3 : Fp))
-    (e4 : z4 = 2 ^ 10 * z5 + (w4 : Fp)) (e5 : z5 = 2 ^ 10 * z6 + (w5 : Fp))
-    (e6 : z6 = 2 ^ 10 * z7 + (w6 : Fp)) (e7 : z7 = 2 ^ 10 * z8 + (w7 : Fp))
-    (e8 : z8 = 2 ^ 10 * z9 + (w8 : Fp)) (e9 : z9 = 2 ^ 10 * z10 + (w9 : Fp))
-    (e10 : z10 = 2 ^ 10 * z11 + (w10 : Fp)) (e11 : z11 = 2 ^ 10 * z12 + (w11 : Fp))
-    (e12 : z12 = (w12 : Fp)) :
-    ap = ((w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 + 2 ^ 40 * w4 + 2 ^ 50 * w5 +
-      2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 + 2 ^ 90 * w9 + 2 ^ 100 * w10 +
-      2 ^ 110 * w11 + 2 ^ 120 * w12 : ℕ) : Fp) := by
-  push_cast
-  linear_combination -h0 + e0 + 2 ^ 10 * e1 + 2 ^ 20 * e2 + 2 ^ 30 * e3 + 2 ^ 40 * e4 +
-    2 ^ 50 * e5 + 2 ^ 60 * e6 + 2 ^ 70 * e7 + 2 ^ 80 * e8 + 2 ^ 90 * e9 +
-    2 ^ 100 * e10 + 2 ^ 110 * e11 + 2 ^ 120 * e12
 
 /-- From the lookup digit sum `S < 2^130` and the field equation `S = α0 + 2^130 - t_p`
 (with `α0 < 2^132` ruling out wraparound), conclude `α0 < t_p`. Factored so the heavy
@@ -1498,8 +1541,7 @@ private theorem honest_canon_spec {row : Input Fp} {α : Fp}
 theorem soundness (B : MulFixed.FixedBase) :
     Soundness Fp (main B) Assumptions (Spec B) := by
   circuit_proof_start [main, Spec, RunningSumMul.circuit, Gate.circuit,
-    Gate.Spec, Utilities.LookupRangeCheck.CopyCheck.circuit,
-    Utilities.LookupRangeCheck.CopyCheck.Spec]
+    Gate.Spec, Utilities.LookupRangeCheck.CopyCheck.circuit]
   obtain ⟨hRSM, hCopy, hz84eq, hz44eq, hz43eq, hGate⟩ := h_holds
   -- the windowed-mul spec: the decomposed value `V`, with `α = (V : Fp)`
   obtain ⟨ks, hks_lt, hαV, hresPt, hz43V, hz44V, hz84V⟩ := hRSM
@@ -1583,49 +1625,27 @@ theorem soundness (B : MulFixed.FixedBase) :
       -- The 13-window lookup on `α_0_prime` forces `α0 < t_p`.
       --
       -- `hα0prime : α_0_prime = α0 + 2^130 - t_p` (after the rewrites below), and the
-      -- lookup (`hCopy`) with `z_13 = 0` (`hz13`) gives `α_0_prime = ↑S` for some
-      -- `S < 2^130` (the 130-bit digit sum). Since `α0 < 2^132` (`hα0lt132`), the
-      -- value `α0 + 2^130 - t_p < p` does not wrap, so `S = α0 + 2^130 - t_p < 2^130`,
-      -- i.e. `α0 < t_p`. The telescoping is proven in `telescope13_eq`; wiring it onto
-      -- the concrete `CopyCheck` output vector currently hits a kernel/whnf cliff on the
-      -- giant getElem terms (see commit notes / task #5). TODO: reformulate the lookup
-      -- running sum over a plain `ℕ → Fp` function to sidestep the getElem reduction.
+      -- lookup (`hCopy`) telescopes (via `CopyCheck.spec_telescope`, which is stated over
+      -- an abstract `ℕ → Fp` function and so sidesteps the kernel/whnf cliff on the
+      -- concrete getElem chain, see `doc/performance-problems.md`) from `z_0 = α_0_prime`
+      -- to `z_13 = 0` (`hz13`), giving `α_0_prime = ↑lo` for some `lo < 2^130` (the
+      -- 130-bit digit sum). Since `α0 < 2^132` (`hα0lt132`), the value
+      -- `α0 + 2^130 - t_p < p` does not wrap, so `lo = α0 + 2^130 - t_p < 2^130`,
+      -- i.e. `α0 < t_p`.
       rw [hαV, e84, hz84val,
         show (V : Fp) = (α0 : Fp) + (4 : ℕ) * OfNat.ofNat (2 ^ 252) from by
           rw [hV254]; push_cast; ring] at hα0prime
-      obtain ⟨hz0c, hChain⟩ := hCopy
-      obtain ⟨w0, hw0, he0⟩ := hChain ⟨0, by norm_num⟩
-      obtain ⟨w1, hw1, he1⟩ := hChain ⟨1, by norm_num⟩
-      obtain ⟨w2, hw2, he2⟩ := hChain ⟨2, by norm_num⟩
-      obtain ⟨w3, hw3, he3⟩ := hChain ⟨3, by norm_num⟩
-      obtain ⟨w4, hw4, he4⟩ := hChain ⟨4, by norm_num⟩
-      obtain ⟨w5, hw5, he5⟩ := hChain ⟨5, by norm_num⟩
-      obtain ⟨w6, hw6, he6⟩ := hChain ⟨6, by norm_num⟩
-      obtain ⟨w7, hw7, he7⟩ := hChain ⟨7, by norm_num⟩
-      obtain ⟨w8, hw8, he8⟩ := hChain ⟨8, by norm_num⟩
-      obtain ⟨w9, hw9, he9⟩ := hChain ⟨9, by norm_num⟩
-      obtain ⟨w10, hw10, he10⟩ := hChain ⟨10, by norm_num⟩
-      obtain ⟨w11, hw11, he11⟩ := hChain ⟨11, by norm_num⟩
-      obtain ⟨w12, hw12, he12⟩ := hChain ⟨12, by norm_num⟩
-      clear hChain
-      -- collapse the giant nested cell-offset expressions (`[1,1,1,1].sum`, nested adds)
-      -- to plain numerals, so applying `telescope13_eq` to the `env.get` terms below does
-      -- not send the kernel into deep recursion reducing those offsets
-      simp only [Orchard.Specs.K, List.sum_cons, List.sum_nil, Nat.reduceMul,
-        Nat.reduceAdd] at hz0c hz13 hα0prime he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
-      norm_num [Orchard.Specs.K] at hw0 hw1 hw2 hw3 hw4 hw5 hw6 hw7 hw8 hw9 hw10 hw11 hw12
-      rw [hz13, mul_zero, _root_.zero_add] at he12
-      obtain ⟨S, hSdef⟩ : ∃ S : ℕ, S = w0 + 2 ^ 10 * w1 + 2 ^ 20 * w2 + 2 ^ 30 * w3 +
-        2 ^ 40 * w4 + 2 ^ 50 * w5 + 2 ^ 60 * w6 + 2 ^ 70 * w7 + 2 ^ 80 * w8 +
-        2 ^ 90 * w9 + 2 ^ 100 * w10 + 2 ^ 110 * w11 + 2 ^ 120 * w12 := ⟨_, rfl⟩
-      have hSlt : S < 2 ^ 130 := by rw [hSdef]; omega
-      have hapS :=
-        telescope13_eq hz0c he0 he1 he2 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12
-      have hfield : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp) := by
-        rw [hSdef, ← hapS, hα0prime]
+      obtain ⟨lo, hlo, htel⟩ := Utilities.LookupRangeCheck.CopyCheck.spec_telescope hCopy 13 le_rfl
+      rw [hCopy.1] at htel
+      simp only [Vector.getElem_map, Vector.getElem_cast] at htel
+      rw [hz13, mul_zero, _root_.add_zero] at htel
+      have hK13 : Orchard.Specs.K * 13 = 130 := by norm_num [Orchard.Specs.K]
+      rw [hK13] at hlo
+      have hfield : (lo : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp) := by
+        rw [← htel, hα0prime]
         push_cast [tP, tPNat]
         ring
-      have hα0tp : α0 < tPNat := alpha0_lt_tp hSlt hα0lt132 hfield
+      have hα0tp : α0 < tPNat := alpha0_lt_tp hlo hα0lt132 hfield
       rw [hV254]; omega
   have hVcanon : V = ZMod.val (show Fp from input) := by
     rw [hαV, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
@@ -1682,6 +1702,7 @@ theorem completeness (B : MulFixed.FixedBase) :
 fixed-base scalar multiplication `[α]B`. -/
 def circuit (B : MulFixed.FixedBase) : FormalCircuit Fp field Point where
   main := main B
+  elaborated := elaborated B
   Assumptions := Assumptions
   Spec := Spec B
   soundness := soundness B

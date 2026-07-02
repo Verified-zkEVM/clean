@@ -114,7 +114,7 @@ structure Input (F : Type) where
   xA : F
   yA : F
   z : F
-  bits : Unconstrained BitsHint F
+  bits : UnconstrainedNative BitsHint F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -156,14 +156,14 @@ def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   -- copy the running sum from incomplete addition
   let z₀ <== input.z
   -- the interstitial running-sum cells of the three complete bits
-  let zs ← witnessVector 3 fun env =>
-    .ofFn fun (b : Fin 3) => zRunValue (env input.z) (input.bits env) b.val
+  let zs : Vector (Expression Fp) 3 ← witnessNative (var := Var (fields 3)) fun env =>
+    Vector.ofFn fun (b : Fin 3) => zRunValue (env input.z) (input.bits env) b.val
   let zsAll := Vector.cast (Nat.add_comm 1 3) ((#v[z₀] : Vector (Expression Fp) 1) ++ zs)
   let acc₀ : Var Point Fp := { x := input.xA, y := input.yA }
   let accFinal ← Circuit.foldlRange 3 acc₀ fun acc i => do
     -- copy base.y for the decomposition gate, witness the conditionally-negated y_p
     let baseY <== input.base.y
-    let yP ← witnessField fun env =>
+    let yP ← witnessNative fun env =>
       if input.bits env i.val then env input.base.y else -(env input.base.y)
     Complete.circuit {
       zPrev := zsAll[i.val]'(by have := i.isLt; omega),
@@ -348,7 +348,6 @@ theorem completeness :
     have h := h_input.1
     rw [← h]
     exact ⟨rfl, rfl⟩
-  simp only [Vector.getElem_ofFn] at h_zsw
   have hz1 := h_zsw ⟨0, by norm_num⟩
   have hz2 := h_zsw ⟨1, by norm_num⟩
   have hz3 := h_zsw ⟨2, by norm_num⟩

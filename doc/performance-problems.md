@@ -159,6 +159,167 @@ BLAKE3 and SHA-2 tractable. Rule of thumb: *when a parent circuit's completeness
 kernel-fails at the theorem header and bisection shows a cliff rather than a culprit,
 the circuit is asking for a subcircuit boundary.*
 
+## Chained `Circuit.foldl` calls: a composition cliff, fixed by an opaque prefix `def`
+
+`Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean`'s `RunningSumMul.main` sequences two
+`Circuit.foldl` calls (windows `1..42` and `44..83`, with an explicit window 43 in
+between). The default `requirementsChannelsLawful` proof on `FormalCircuitBase`
+(`dsimp only [main]; simp only [circuit_norm, seval]; ...`) kernel-fails
+(`(kernel) deep recursion detected` at the theorem header) on this circuit, while the
+sibling `FullWidth.lean` — same rough complexity, a *single* `Circuit.foldlRange 83` —
+builds fine with the same default proof.
+
+Bisection (via standalone `lean <scratch-file>.lean` runs against the same `LEAN_PATH`,
+not full `lake build`, for fast iteration) pinned this down precisely:
+
+- **One fold, alone, is fine.** `simp only [circuit_norm, seval]` proves
+  `((Circuit.foldl (Vector.finRange 42) init body).operations n).shallowChannels = []`
+  standalone with no issue, for any `init`/`n` (even symbolic).
+- **Two folds side by side, with independent/fresh `init`s, are also fine together** —
+  so "two folds" alone is not the problem.
+- **Two folds *chained through real data flow*** — fold1's output feeds an intervening
+  window's `AddIncomplete.circuit`, whose output feeds fold2's `init` — is what breaks,
+  and this reproduces even with a *tiny* second fold (`Vector.finRange 2`), so it is not
+  about the second fold's size either. The problem is that fold2's `init`, by the time
+  its own channel facts are wanted, is a deeply-layered expression (several extra
+  `Circuit.bind` layers from the intervening window) sitting on top of fold1's own
+  nontrivial output — reasoning about both inside one `simp` call / kernel check crosses
+  the recursion-depth wall. This is a novel case for "kernel size cliffs" above: it's not
+  really about the *number* of subcircuit calls in the parent, but about the *nesting
+  depth of `.output`/`.localLength` computations* chaining through successive `Circuit.bind`
+  layers before the second fold is reached.
+- The default proof **does** close the goal via this path (confirmed: removing its closing
+  fallback tactics changes nothing) — the failure is purely a *kernel check* on the
+  resulting term, not an elaboration-time timeout. This matters: a *conditional-rewrite*
+  lemma stating "a fold's `shallowChannels` is `[]` if its body's is, for abstract
+  `acc`/`a`/`offset`" does NOT help if `main` is still `dsimp`'d in one shot, because
+  `Circuit.foldl.output_eq`/`localLength_eq` (still needed elsewhere, to know where the
+  next window starts) re-derive the fold body in an "already normalized" shape (`match` on
+  a pair reduced to `.1`/`.2` projections) that no longer syntactically matches a fresh
+  restatement of the same body — so a lemma written out fresh doesn't fire via `rw`/`simp`,
+  and letting `simp` re-derive everything reproduces the exact same blowup.
+
+**The fix**: extract the chained prefix (window 0 + the *first* fold + the intervening
+window) into its own **opaque `def`** — *not* a subcircuit (no separate
+soundness/completeness needed), purely to stop `simp`/the kernel from reasoning about the
+whole chain in one term:
+
+```lean
+private def prefixCircuit (B : ...) (alpha : Var field Fp) :
+    Circuit Fp (Var Point Fp × Expression Fp × Expression Fp) := do
+  <window 0, the first fold, the intervening window>
+  return (acc, zBeforeWindow, zAfterWindow)  -- return everything downstream code needs
+
+def main (B : ...) (alpha : Var field Fp) : Circuit Fp (Var Output Fp) := do
+  let (acc, zBeforeWindow, zAfterWindow) ← prefixCircuit B alpha
+  <second fold, using zAfterWindow as its init component; zBeforeWindow used later>
+```
+
+Critically, **`main`'s own source has to call `prefixCircuit`** — it is not enough to
+state an external `main = prefixCircuit >>= rest := rfl` lemma without touching `main`.
+That `rfl` works fine for the prefix alone, but blows the *elaborator's* recursion budget
+(`maximum recursion depth`, then a heartbeat timeout even after raising `maxRecDepth`) once
+the whole tail (through the final output-struct assembly) is included in one equality —
+apparently proving a *fresh* copy of the full circuit is definitionally equal to `main`
+forces exactly the same expensive comparison the extraction was meant to avoid. Changing
+`main`'s source directly sidesteps needing that equality at all: `dsimp only [main]`
+naturally exposes `prefixCircuit B alpha` as an opaque call with the second fold's `init`
+bound to *fresh pattern-bound variables* — not a deeply layered expression — which is what
+actually defuses the blowup.
+
+Since this is a pure repackaging (identical constraints/witnesses/offsets — `prefixCircuit`
+is never itself a subcircuit boundary), the *existing* `main`-unfolding proofs
+(`soundness`/`completeness`, via `circuit_proof_start [main, ...]`) keep working completely
+unchanged, just by adding `prefixCircuit` to their unfold argument list alongside `main`
+(since the two unfold together, the resulting term is identical to before the split).
+
+For the standalone `requirementsChannelsLawful`, prove `prefixCircuit`'s own
+`shallowChannels`/`subcircuitChannelsWithRequirements` facts standalone (cheap — this is
+exactly the "single fold, no chaining" case confirmed fast above), then combine with a
+small helper turning `subcircuitChannelsWithRequirements = []` + `shallowChannels = []`
+into the full `RequirementsChannelsLawful` fact (a circuit that never emits raw channel
+interactions has `shallowChannels = [] ⟹ shallowInteractions = []`, which trivializes the
+"under local constraints" conjunct). Once the prefix is opaque, the plain *default*
+`Circuit.foldl.shallowChannels`/`subcircuitChannelsWithRequirements` simp lemmas handle the
+second fold directly — no custom conditional fold lemma is needed at that point.
+
+As a side effect, this same file's `completeness` proof had an unrelated-looking
+`(deterministic) timeout at isDefEq/whnf` failure in a bullet reasoning about the *second*
+fold's windows (a `rw [...] at h` chain bridging offset spellings) — bisection there
+suggested no single culprit tactic. That failure disappeared with no changes to its own
+proof text once `prefixCircuit` shrank the term `dsimp only [main]` produces everywhere in
+the file; it was apparently sensitive to the same cumulative-size pressure.
+
+## RESOLVED: a kernel/elaborator size cliff from unifying against an unfolded `∀`-spec
+
+`Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean`'s outer `soundness` proof had a `have hVltp
+: V < PALLAS_BASE_CARD := by rw [base_card_eq]; rcases hAlpha2 with ha2 | ha2 · ... · ...`
+whose second (`α2 = 1`) branch was ~70 lines, ending by wiring 13 individual
+`hChain ⟨k, _⟩` facts (from a 13-window `CopyCheck` lookup) into a `telescope13_eq` helper.
+This branch timed out (`(deterministic) timeout at whnf`, both at a step deep in the branch
+and, separately, at the *theorem header*).
+
+Bisection (moving a `sorry` through the proof) showed this was a genuine cliff, not a
+single culprit tactic: a **bare `sorry` placed immediately after** `rcases hAlpha2 with ha2
+| ha2` (i.e. before any of the `α2 = 1` branch's own reasoning ran) still timed out at the
+exact same location, and neither the `obtain ⟨S, hSdef⟩ := ⟨_, rfl⟩` line nor its explicit-
+witness variant was the culprit (both failed identically, and removing the `obtain`
+entirely still failed at the same spot) — the cumulative proof term up to that point was
+already at the cliff.
+
+**The fix**: replace the 13 individual `hChain ⟨k, _⟩` destructures + `telescope13_eq` with
+a single application of `Utilities.LookupRangeCheck.CopyCheck.spec_telescope` — a generic
+lemma already proven in `Utilities.lean`, stated over an abstract `let f : ℕ → Fp := fun i
+=> if hi : i < numWords + 1 then zs[i]'hi else 0` indirection specifically so the ∀-quantified
+running-sum chain is proven once, over an opaque function, rather than combined ad hoc from
+13 concrete getElem instances every time a consumer needs it.
+
+The subtlety (this is the part that wasn't obvious going in): **naively applying
+`spec_telescope` to the existing `hCopy` still timed out**, just relocated to the `obtain`
+line itself. Root cause: `hCopy` came from a `circuit_proof_start [..., CopyCheck.circuit,
+CopyCheck.Spec]` call with `CopyCheck.Spec` in the unfold list, so `hCopy`'s type was the
+*fully-unfolded raw conjunction* (`zs[0]'_ = element ∧ ∀ i : Fin 13, ∃ word, ... zs[i.val]'_
+= ...`), with the messy concrete `Vector.cast`/`Vector.append`/`Vector.mapRange` getElem
+chain sitting *inside* the `∀`'s body. Applying `spec_telescope` (whose hypothesis argument
+has an implicit `zs`) then forces Lean to unify `Spec ?numWords ?element ?zs ?data` against
+that already-unfolded conjunction, which requires descending under the `∀` binder and
+unifying `?zs[i.val]'_` — for a *symbolic* bound `i` — against the concrete vector's getElem
+expression. Since `?zs` isn't applied directly to `i` (it's wrapped in a `GetElem.getElem`
+projection), this isn't a Miller/higher-order pattern, so Lean can't assign `?zs` cheaply;
+it falls into general unification that tries to `whnf` the concrete vector expression at a
+symbolic index, gets stuck (case-splits on `Decidable` instances that can't reduce for a
+non-literal index), and loops until the heartbeat budget is exhausted.
+
+**The actual fix**: remove `Utilities.LookupRangeCheck.CopyCheck.Spec` from the
+`circuit_proof_start` unfold list (keep `.circuit`). This leaves `hCopy : CopyCheck.Spec 13
+alpha0Prime zsBigTerm data` *folded* — an opaque application to already-resolved concrete
+arguments. Unifying `spec_telescope`'s implicit args against `hCopy`'s type is then a
+**direct argument-by-argument match on the outer `Spec` application**, never unfolding
+`Spec`'s body (the `∀`) at all, since both sides share the head symbol `Spec`. This is the
+"keep the dangerous value opaque before any defeq touches it" principle from the "Patterns
+that fix it" section above, applied to an entire hypothesis's *type* (by controlling
+`circuit_proof_start`'s unfold list) rather than to a witnessed value.
+
+Two smaller follow-on fixes, both cheap once the timeout was gone:
+- After `rw [hCopy.1] at htel` (cheap — `htel`'s `zs[0]` subterm is literally `hCopy`'s own
+  `zs[0]` term post-unification, a syntactic match), `htel`'s remaining `zs[13]` subterm was
+  spelled `(Vector.map (Expression.eval env) (Vector.cast ⋯ V))[13]`, while the `hz13`
+  hypothesis it needed to combine with (from a *different* destructuring path via
+  `Gate.CanonicalHighBit`) was already simplified to `Expression.eval env (V[13])` by an
+  earlier, unrelated simp pass. Fixed with `simp only [Vector.getElem_map,
+  Vector.getElem_cast] at htel` (both `@[simp]` in Lean core) — cheap here because `htel` at
+  this point is a single concrete equation, the `∀` having already been consumed inside
+  `spec_telescope`/`chain_telescope`. Must run *after* `rw [hCopy.1]`, not before, else it
+  also normalizes the `zs[0]` subterm and breaks that rewrite's syntactic match.
+- `have hK13 : K * 13 = 130 := by norm_num [Orchard.Specs.K]` silently elaborated the bare
+  `K` as an unrelated local type variable (this file uses `K` as a type-variable name in
+  several other defs), producing a nonsensical goal. Fixed by using the fully-qualified
+  `Orchard.Specs.K` in the statement itself, not just inside `norm_num`'s lemma list.
+
+`telescope13_eq` became fully dead code after this change (verified via a whole-repo
+`grep`) and was deleted; `alpha0_lt_tp` is still used. Confirmed via a fresh `lake build`
+(stale `.olean` removed first): green, zero `sorry`s, zero lint warnings.
+
 ## Measuring honestly
 
 - **`#count_heartbeats in` lies for this purpose.** It runs the command with an

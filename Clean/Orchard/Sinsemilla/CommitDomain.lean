@@ -38,7 +38,7 @@ namespace CommitDomain
 scalar behind the `ScalarFixed` value `r`. -/
 structure Input (k : ℕ) (F : Type) where
   pieces : Vector F k
-  r : Unconstrained Fq F
+  r : UnconstrainedNative Fq F
 deriving CircuitType
 
 instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
@@ -52,7 +52,7 @@ structure Output (ns : List ℕ) (F : Type) where
   zs : HVec (Chain.zLengths ns) F
 deriving ProvableStruct
 
-theorem eval_zs {F : Type} [Field F] (env : Environment F) (ns : List ℕ) (out : Var (Output ns) F) :
+theorem eval_zs {F : Type} [FiniteField F] (env : Environment F) (ns : List ℕ) (out : Var (Output ns) F) :
     (eval env out).zs = eval env out.zs := by
   simp only [circuit_norm]
 
@@ -169,7 +169,7 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 
 /-- `CommitDomain::blinding_factor` is the bare `[r] R`. -/
 def blindingFactor (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint Fp (Unconstrained Fq) Point :=
+    GeneralFormalCircuit.WithHint Fp (UnconstrainedNative Fq) Point :=
   MulFixed.FullWidth.circuit R
 
 end CommitDomain

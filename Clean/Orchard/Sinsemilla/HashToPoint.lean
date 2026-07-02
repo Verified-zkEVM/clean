@@ -106,7 +106,7 @@ entering accumulator `y`-coordinate as a prover-side hint. -/
 structure Input (F : Type) where
   piece : F
   xA : F
-  yA : UnconstrainedDep field F
+  yA : UnconstrainedDepNative field F
 deriving CircuitType
 
 /-- Outputs of one piece: its first and last gate rows (the composing circuit emits
@@ -121,7 +121,7 @@ structure Output (n : ℕ) (F : Type) where
   composing circuits (`MerkleCRH`, `note_commit`, `commit_ivk`) read specific `z_r` cells
   for their decomposition / canonicity gates. -/
   zs : Vector F n
-  yANext : UnconstrainedDep field F
+  yANext : UnconstrainedDepNative field F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -132,25 +132,25 @@ def main (G : Generators) (w : ℕ) (input : Var Input Fp) :
     Circuit Fp (Var (Output (w + 1)) Fp) := do
   -- running sum: z_0 is a copy of the piece, z_1 .. z_w are witnessed
   let z₀ <== input.piece
-  let zRest ← witnessVector w fun env =>
-    .ofFn fun (i : Fin w) => pieceZ (env input.piece) (i.val + 1)
+  let zRest : Vector (Expression Fp) w ← witness (var := Var (fields w))
+    (Vector.ofFn fun (i : Fin w) => (input.piece.val / (2 ^ (K * (i.val + 1)) : ℕ)).toField)
   let zs : Vector (Expression Fp) (w + 1) :=
     Vector.cast (Nat.add_comm 1 w) ((#v[z₀] : Vector (Expression Fp) 1) ++ zRest)
   -- row cells: x_p, λ₁, λ₂ per word, and the next-row x_a per word
-  let xPs ← witnessVector (w + 1) fun env =>
-    .ofFn fun (i : Fin (w + 1)) => (G.S (pieceWord (env input.piece) i.val)).x
-  let l1s ← witnessVector (w + 1) fun env =>
-    .ofFn fun (i : Fin (w + 1)) =>
+  let xPs : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+    Vector.ofFn fun (i : Fin (w + 1)) => (G.S (pieceWord (env input.piece) i.val)).x
+  let l1s : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+    Vector.ofFn fun (i : Fin (w + 1)) =>
       (rowValue (accAfter G (env input.xA, input.yA env) (env input.piece) i.val)
         ((G.S (pieceWord (env input.piece) i.val)).x,
           (G.S (pieceWord (env input.piece) i.val)).y)).1
-  let l2s ← witnessVector (w + 1) fun env =>
-    .ofFn fun (i : Fin (w + 1)) =>
+  let l2s : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+    Vector.ofFn fun (i : Fin (w + 1)) =>
       (rowValue (accAfter G (env input.xA, input.yA env) (env input.piece) i.val)
         ((G.S (pieceWord (env input.piece) i.val)).x,
           (G.S (pieceWord (env input.piece) i.val)).y)).2.1
-  let xAs ← witnessVector (w + 1) fun env =>
-    .ofFn fun (i : Fin (w + 1)) =>
+  let xAs : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+    Vector.ofFn fun (i : Fin (w + 1)) =>
       (accAfter G (env input.xA, input.yA env) (env input.piece) (i.val + 1)).1
   -- the double-and-add row structs (x_a chained from the input cell)
   let dRows : Vector (Var DoubleAndAddRow Fp) (w + 1) := .ofFn fun i =>
@@ -570,7 +570,10 @@ theorem completeness (G : Generators) (w : ℕ) :
   obtain ⟨hbound, A, B, hAon, hAx, hAy, hB⟩ := h_assumptions
   have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
   obtain ⟨h_z0, h_zs, h_xPs, h_l1s, h_l2s, h_xAs, -⟩ := h_env
-  simp only [Vector.getElem_ofFn] at h_zs h_xPs h_l1s h_l2s h_xAs
+  replace h_zs : ∀ i : Fin w, env.get (i₀ + 1 + i.val) = pieceZ input_piece (i.val + 1) := by
+    intro i
+    simp only [h_zs i, pieceZ]
+    rfl
   have haux := completeness_aux G w input_piece input_xA input_yA hAx hAy hB
   simp only [Vector.get, Vector.getElem_ofFn, Vector.getElem_append,
     Vector.getElem_mapRange, circuit_norm]
@@ -627,7 +630,7 @@ theorem completeness (G : Generators) (w : ℕ) :
         - (accAfter G (input_xA, input_yA) input_piece r).2 :=
     fun _ => rfl
   have h2 := mul_inv_cancel₀ two_ne_zero_Fp
-  refine ⟨⟨h_z0, ?_, ?_⟩, h_input.2.1, ?_, ?_, ?_⟩
+  refine ⟨⟨h_z0, ?_, ?_⟩, ?_, ?_, ?_⟩
   · -- lookups
     intro i
     refine ⟨pieceWord input_piece ↑i, pieceWord_lt _ _, ?_, h_xPs i, ?_⟩
@@ -760,7 +763,7 @@ theorem completeness (G : Generators) (w : ℕ) :
                 (G.S (pieceWord input_piece 0)).y)).2.1 := h_l2s ⟨0, by omega⟩
       obtain ⟨hYI0, -⟩ := haux.1 0 (by omega)
       simp only [DoubleAndAdd.yA, DoubleAndAdd.xR]
-      rw [h_input.2.1, hp0, hl10, hl20]
+      rw [hp0, hl10, hl20]
       have hacc0x : (accAfter G (input_xA, input_yA) input_piece 0).1 = input_xA := rfl
       have hacc0y : (accAfter G (input_xA, input_yA) input_piece 0).2 = input_yA := rfl
       linear_combination hYI0
@@ -1052,7 +1055,7 @@ accumulator `x_A` cell, and the entering accumulator `y` as a prover hint. -/
 structure Input (k : ℕ) (F : Type) where
   pieces : Vector F k
   xA : F
-  yA : UnconstrainedDep field F
+  yA : UnconstrainedDepNative field F
 deriving CircuitType
 
 instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
@@ -1266,7 +1269,7 @@ theorem z1sHonest_of_zsHonest : (ns : List ℕ) → (pieces : Vector Fp ns.lengt
 /-- `eval` commutes with the `z₁` projection (it is a pointwise selection of running-sum
 cells), letting a `zs`-projecting `hash_to_point` view bridge its evaluated output to the
 running sums. -/
-theorem eval_z1sOfZs {F : Type} [Field F] (env : Environment F) : (ns : List ℕ) →
+theorem eval_z1sOfZs {F : Type} [FiniteField F] (env : Environment F) : (ns : List ℕ) →
     (zs : Var (HVec (zLengths ns)) F) →
     (eval env (z1sOfZs ns zs) : Vector F ns.length) = z1sOfZs ns (eval env zs)
   | [], zs => by
@@ -1322,7 +1325,7 @@ def ProverSpec (G : Generators) (ns : List ℕ)
 namespace Nil
 
 def main (input : Var (Input 0) Fp) : Circuit Fp (Var (Output []) Fp) := do
-  let yFin ← witnessField fun env => input.yA env
+  let yFin ← witnessNative fun env => input.yA env
   return {
     point := { x := input.xA, y := yFin },
     first := { xA := input.xA, xP := 0, lambda1 := yFin, lambda2 := 0 },
@@ -1568,10 +1571,10 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
     show ∀ r : DoubleAndAddRow Fp, enterYA false r = DoubleAndAdd.yA r
       from fun _ => rfl,
     circuit_norm] at h_piece h_tail h_gate ⊢
-  obtain ⟨ms, hms, hrecomb, hzs, hfxA, hlxP, hlyp, hchain⟩ := h_piece
+  obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyp, hchain⟩ := h_piece
   obtain ⟨htfxA, tailChunks, htailPC, htailZs, htailchain⟩ := h_tail
   obtain ⟨hsec, hyck⟩ := h_gate
-  refine ⟨⟨hfxA, (List.range (n + 1)).map ms ++ tailChunks, ?_, ?_, ?_⟩, Or.inl hcwr⟩
+  refine ⟨⟨(List.range (n + 1)).map ms ++ tailChunks, ?_, ?_, ?_⟩, Or.inl hcwr⟩
   · -- the pieces decompose into the chunks
     simp only [PieceChunks]
     refine ⟨ms, hms, ?_, tailChunks, rfl, ?_⟩
@@ -1645,7 +1648,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     rw [hp0]
     exact hbounds.1
   have hPSpiece := h_piece_env ⟨hb1, A, B₁, hAon, hAx, hAy, hpre'⟩
-  obtain ⟨-, hfxA0, hsecPS, hzsPS, hchainPS⟩ := hPSpiece
+  obtain ⟨-, hsecPS, hzsPS, hchainPS⟩ := hPSpiece
   obtain ⟨hYA0, hBfun⟩ := hchainPS A hA0 hAx hAy
   obtain ⟨hxAsN, hyAcc, hnext⟩ := hBfun B₁ hpre'
   have hB₁0 : B₁ ≠ 0 := by
@@ -1676,7 +1679,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
   obtain ⟨henter, hBfin⟩ := hAfun B₁ hB₁0 hxAsN.symm hyAcc.symm
   obtain ⟨hpx, hpy⟩ := hBfin B (by rw [hptail]; exact hsuffix)
   dsimp only at htfxA henter hpx hpy
-  refine ⟨⟨⟨hb1, A, B₁, hAon, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, hfxA0, ?_, ?_⟩
+  refine ⟨⟨⟨hb1, A, B₁, hAon, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, ?_, ?_⟩
   · -- the tail's honest-prover assumptions
     rw [hPA]
     refine ⟨?_, B₁, B, hB₁on, hxAsN.symm, hyAcc.symm, ?_⟩
@@ -1736,6 +1739,10 @@ def circuit (G : Generators) (n : ℕ) (rest : List ℕ)
   ProverSpec := ProverSpec G (n :: rest)
   soundness := soundness G n rest tail tailLen htail hcwg hcwr hS hAss
   completeness := completeness G n rest tail tailLen htail hcwg hcwr hPA hPS
+  requirementsChannelsLawful := by
+    try dsimp only [main]
+    simp only [circuit_norm, seval, hcwg, hcwr]
+    try first | ac_rfl | trivial | tauto
 
 end Cons
 
@@ -1898,6 +1905,9 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   ProverSpec := ProverSpec G Q n₀ ns
   soundness := soundness G Q hQ n₀ ns
   completeness := completeness G Q hQ n₀ ns
+  requirementsChannelsLawful := by
+    try dsimp only [main]
+    simp only [circuit_norm, seval, InitialYQ.circuit, (Chain.circuit G (n₀ :: ns)).2.2.2.2.2.2.2]
 
 /-! ### `Z1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
 

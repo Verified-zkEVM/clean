@@ -69,9 +69,9 @@ def circuit : FormalAssertion Fp Point where
       · rw [hy]; ring
 end Gate
 
-def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
+def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Point where
   main value := do
-    let point ← witness value
+    let point ← witnessNative value
     Gate.circuit point
     return point
 
@@ -114,9 +114,9 @@ def circuit : FormalAssertion Fp Point where
 
 end Gate
 
-def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDep Point) Point where
+def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Point where
   main value := do
-    let point ← witness value
+    let point ← witnessNative value
     Gate.circuit point
     return point
 

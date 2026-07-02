@@ -354,7 +354,7 @@ structure Input (F : Type) where
   base : Point F
   xA : F
   yA : F
-  bits : Unconstrained BitsHint F
+  bits : UnconstrainedNative BitsHint F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -372,7 +372,7 @@ deriving ProvableStruct
 
 def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   -- initialize the running sum to zero (`assign_advice_from_constant`)
-  let zInit ← witnessField fun _ => 0
+  let zInit ← witness (0 : Fp)
   zInit === 0
   -- double-and-add over the `hi` half of the scalar decomposition (125 bits)
   let hi ← Incomplete.DoubleAndAdd.circuit 124 {
@@ -651,7 +651,7 @@ structure Input (F : Type) where
   base : Point F
   z1 : F
   acc : Point F
-  bit : Unconstrained Bool F
+  bit : UnconstrainedNative Bool F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
@@ -665,15 +665,15 @@ deriving ProvableStruct
 
 def main (input : Var Input Fp) : Circuit Fp (Var Output Fp) := do
   -- z_0 = 2⋅z_1 + k_0
-  let z0 ← witnessField fun env =>
+  let z0 ← witnessNative fun env =>
     2 * env input.z1 + (if input.bit env then 1 else 0)
   -- copy in base_x, base_y for the LSB gate
   let baseX <== input.base.x
   let baseY <== input.base.y
   -- the correction point: identity if k_0 = 1, else -base
-  let corrX ← witnessField fun env =>
+  let corrX ← witnessNative fun env =>
     if input.bit env then 0 else env input.base.x
-  let corrY ← witnessField fun env =>
+  let corrY ← witnessNative fun env =>
     if input.bit env then 0 else -(env input.base.y)
   Mul.Gate.circuit { z1 := input.z1, z0, xP := corrX, yP := corrY, baseX, baseY }
   -- complete addition of the correction point
