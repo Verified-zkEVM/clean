@@ -181,7 +181,7 @@ def outputValue (input : Input.ProverValue Fp) :
 def main (input : Input.Var Fp) :
     Circuit Fp (Var CondSwapOutput Fp) := do
   let a <== input.a
-  let b ← witnessNative (inst := inferInstanceAs (Witnessable Fp field (Var field))) input.b
+  let b ← witnessNative input.b
   let swap ← witnessNative fun env => if input.swap env then 1 else 0
   let aSwapped ← witnessNative fun env => if input.swap env then env b else env a
   let bSwapped ← witnessNative fun env => if input.swap env then env a else env b
