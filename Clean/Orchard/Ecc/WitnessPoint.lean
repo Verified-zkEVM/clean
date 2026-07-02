@@ -69,9 +69,9 @@ def circuit : FormalAssertion Fp Point where
       · rw [hy]; ring
 end Gate
 
-def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Point where
+def circuit : GeneralFormalCircuit.WithHint Fp (Unconstrained Point) Point where
   main value := do
-    let point ← witnessNative value
+    let point ← witnessProgram value
     Gate.circuit point
     return point
 
@@ -86,7 +86,7 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Po
   completeness := by
     circuit_proof_start [Gate.circuit, explicit_provable_type]
     rcases input with ⟨x, y⟩
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, Witgen.eval, explicit_provable_type]
 
 end WitnessPoint
 
@@ -114,9 +114,9 @@ def circuit : FormalAssertion Fp Point where
 
 end Gate
 
-def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Point where
+def circuit : GeneralFormalCircuit.WithHint Fp (Unconstrained Point) Point where
   main value := do
-    let point ← witnessNative value
+    let point ← witnessProgram value
     Gate.circuit point
     return point
 
@@ -131,7 +131,7 @@ def circuit : GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative Point) Po
   completeness := by
     circuit_proof_start [Gate.circuit, explicit_provable_type]
     rcases input with ⟨x, y⟩
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, Witgen.eval, explicit_provable_type]
 
 end WitnessNonIdentityPoint
 

@@ -76,28 +76,28 @@ plus the nine public-instance cells. Values witnessed by Rust inside `synthesize
 already-assigned cells. -/
 structure Input (F : Type) where
   -- old note
-  gdOld : UnconstrainedDepNative Point F
-  pkdOld : UnconstrainedDepNative Point F
-  vOld : UnconstrainedDepNative field F
-  rhoOld : UnconstrainedDepNative field F
-  psiOld : UnconstrainedDepNative field F
+  gdOld : Unconstrained Point F
+  pkdOld : Unconstrained Point F
+  vOld : Unconstrained field F
+  rhoOld : Unconstrained field F
+  psiOld : Unconstrained field F
   rcmOld : UnconstrainedNative Fq F
-  cmOld : UnconstrainedDepNative Point F
+  cmOld : Unconstrained Point F
   -- spend authority / key material
   alpha : UnconstrainedNative Fq F
-  akP : UnconstrainedDepNative Point F
-  nk : UnconstrainedDepNative field F
+  akP : Unconstrained Point F
+  nk : Unconstrained field F
   rivk : UnconstrainedNative Fq F
   -- new note
-  gdNew : UnconstrainedDepNative Point F
-  pkdNew : UnconstrainedDepNative Point F
-  vNew : UnconstrainedDepNative field F
-  psiNew : UnconstrainedDepNative field F
+  gdNew : Unconstrained Point F
+  pkdNew : Unconstrained Point F
+  vNew : Unconstrained field F
+  psiNew : Unconstrained field F
   rcmNew : UnconstrainedNative Fq F
   -- value commitment
   rcv : UnconstrainedNative Fq F
-  vNetMagnitude : UnconstrainedDepNative field F
-  vNetSign : UnconstrainedDepNative field F
+  vNetMagnitude : Unconstrained field F
+  vNetSign : Unconstrained field F
   -- merkle path
   path : UnconstrainedDepNative (fields 32) F
   pos : UnconstrainedNative (Vector Bool 32) F
@@ -131,20 +131,20 @@ instance : Inhabited (Var Input Fp) :=
 def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- Witness private inputs used across multiple checks, matching the source block at the
   -- start of `Circuit::synthesize`.
-  let psiOld ← witnessNative input.psiOld
-  let rhoOld ← witnessNative input.rhoOld
+  let psiOld ← witnessProgram input.psiOld
+  let rhoOld ← witnessProgram input.rhoOld
   let cmOld ← WitnessPoint.circuit input.cmOld
   let gdOld ← WitnessNonIdentityPoint.circuit input.gdOld
   let akP ← WitnessNonIdentityPoint.circuit input.akP
-  let nk ← witnessNative input.nk
-  let vOld ← witnessNative input.vOld
-  let vNew ← witnessNative input.vNew
+  let nk ← witnessProgram input.nk
+  let vOld ← witnessProgram input.vOld
+  let vNew ← witnessProgram input.vNew
   -- Merkle path validity: leaf = cm_old.extract_p()
   let root ← Sinsemilla.Merkle.CalculateRoot.circuit P.Gm P.Qm P.hQm
     { leaf := cmOld.x, path := input.path, pos := input.pos }
   -- Value commitment integrity: cv_net constrained to (CV_NET_X, CV_NET_Y)
-  let vNetMagnitude ← witnessNative input.vNetMagnitude
-  let vNetSign ← witnessNative input.vNetSign
+  let vNetMagnitude ← witnessProgram input.vNetMagnitude
+  let vNetSign ← witnessProgram input.vNetSign
   let cvNet ← ValueCommit.circuit P.V P.Rvc
     { v := { magnitude := vNetMagnitude, sign := vNetSign }, rcv := input.rcv }
   cvNet === { x := input.cvNetX, y := input.cvNetY }
@@ -169,7 +169,7 @@ def main (P : Params) (input : Var Input Fp) : Circuit Fp (Var unit Fp) := do
   -- New note commitment integrity: rho_new = nf_old; cmx = cm_new.extract_p()
   let gdNew ← WitnessNonIdentityPoint.circuit input.gdNew
   let pkdNew ← WitnessNonIdentityPoint.circuit input.pkdNew
-  let psiNew ← witnessNative input.psiNew
+  let psiNew ← witnessProgram input.psiNew
   let cmNew ← NoteCommit.circuit P.Gnc P.Qnc P.hQnc P.Rnc
     { gd := gdNew, pkd := pkdNew, value := vNew,
       rho := nfOld, psi := psiNew, rcm := input.rcmNew }

@@ -139,17 +139,17 @@ def main (G : Generators) (w : ℕ) (input : Var Input Fp) :
   -- row cells: x_p, λ₁, λ₂ per word, and the next-row x_a per word
   let xPs : Var (fields (w + 1)) Fp ← witnessNative fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) => (G.S (pieceWord (env input.piece) i.val)).x
-  let l1s : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+  let l1s : Var (fields (w + 1)) Fp ← witnessNative fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) =>
       (rowValue (accAfter G (env input.xA, input.yA env) (env input.piece) i.val)
         ((G.S (pieceWord (env input.piece) i.val)).x,
           (G.S (pieceWord (env input.piece) i.val)).y)).1
-  let l2s : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+  let l2s : Var (fields (w + 1)) Fp ← witnessNative fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) =>
       (rowValue (accAfter G (env input.xA, input.yA env) (env input.piece) i.val)
         ((G.S (pieceWord (env input.piece) i.val)).x,
           (G.S (pieceWord (env input.piece) i.val)).y)).2.1
-  let xAs : Vector (Expression Fp) (w + 1) ← witnessNative (var := Var (fields (w + 1))) fun env =>
+  let xAs : Var (fields (w + 1)) Fp ← witnessNative fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) =>
       (accAfter G (env input.xA, input.yA env) (env input.piece) (i.val + 1)).1
   -- the double-and-add row structs (x_a chained from the input cell)

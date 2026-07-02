@@ -7,46 +7,80 @@ the new typed IR (`witness`/`witnessProgram`/`witnessVectorProgram`, see
 file tracks every site left on `witnessNative`, with the reason it wasn't (yet, or ever)
 ported. It is a living document — update it as further porting work lands.
 
-## Genuine external hints (no parent-committed expression to derive from)
+## External hints: `Unconstrained`/`UnconstrainedNat` migration
 
-These are the actual private witness inputs to the whole proof — there is nothing "more
-primary" within the circuit tree to construct an IR program from, so they must stay
-`UnconstrainedDepNative`/`UnconstrainedNative`/`witnessNative` regardless of what the IR
-supports elsewhere.
+Correction (superseding an earlier, wrong version of this section): a genuinely top-level
+circuit's "external hint" `Input` fields are *not* exempt from the `Unconstrained`/
+`UnconstrainedBool`/`UnconstrainedNat` upgrade. `Var (Unconstrained M) F` is just a type —
+as opaque a bound variable as any `Expression F`/`Point (Expression F)` field — so nothing
+about it requires a parent circuit to construct a value from already-committed data. The
+`unconstrained`/`unconstrainedBool`/`unconstrainedNat` *constructor* functions are only
+needed by callers building a hint out of other in-scope expressions (see
+`Clean/Utils/Test/TestMixedCircuitType.lean`, `Clean/Examples/HintExample.lean`); a
+genuinely top-level struct field with no caller inside Clean just changes type, with no
+construction step needed anywhere.
 
-- `Clean/Orchard/Ecc/WitnessPoint.lean`: `WitnessPoint.circuit` and
-  `WitnessNonIdentityPoint.circuit`, both `GeneralFormalCircuit.WithHint Fp
-  (UnconstrainedDepNative Point) Point`. Callers (`Action.lean`) always supply these from
-  the action circuit's own top-level `Input` fields (`cmOld`, `gdOld`, `akP`, `pkdOld`,
-  `gdNew`, `pkdNew` — diversified generators / public keys / note-commitment points),
-  which are themselves genuine external secrets, not derived values.
+**Migrated** (`Unconstrained M`/`UnconstrainedNat` now used):
+- `Clean/Orchard/Ecc/WitnessPoint.lean`: `WitnessPoint.circuit`/`WitnessNonIdentityPoint.circuit`,
+  `Input := Unconstrained Point` (was `UnconstrainedDepNative Point`), read via
+  `witnessProgram` (was `witnessNative`).
+- `Clean/Orchard/Action.lean`'s `Input`: 15 fields — `gdOld/pkdOld/cmOld/akP/gdNew/pkdNew :
+  Unconstrained Point`, `vOld/rhoOld/psiOld/nk/vNew/psiNew/vNetMagnitude/vNetSign :
+  Unconstrained field` — migrated, with `main`'s plain pass-through reads switched from
+  `witnessNative input.X` to `witnessProgram input.X`, and the `WitnessPoint.circuit`/
+  `WitnessNonIdentityPoint.circuit` subcircuit calls now type-aligned automatically (no
+  wrapper needed — the field flows straight from `Action.Input` into the callee's `Input`).
+
+**Not yet migrated, with reasons**:
+- `Clean/Orchard/Action.lean`'s `path : UnconstrainedDepNative (fields 32) F` and
+  `pos : UnconstrainedNative (Vector Bool 32) F`, and the matching fields in
+  `Clean/Orchard/Sinsemilla/Merkle.lean`'s `CalculateRoot.Input`/`Layer.Input`
+  (`sibling`/`posBit`), and `Clean/Orchard/Utilities.lean`'s `CondSwap.Swap.Input`
+  (`b`/`swap`, consumed by `Layer.main`). `path`/`pos` are field-independent *vector*
+  hints (`fields 32` fits `Unconstrained` fine; `Vector Bool 32` doesn't fit any
+  `Unconstrained*` shape directly — there's no vector-hint carrier besides the two scalar
+  ones, `UnconstrainedBool`/`UnconstrainedNat`, so `pos` would need packing into a single
+  `UnconstrainedNat` with per-layer bits read back via `NExpr.testBit`).
+  **Attempted and reverted**: migrating `path`→`Unconstrained (fields 32)` alone (even
+  before touching `pos`) made `CalculateRoot.completeness`'s `circuit_proof_start` hit a
+  `(deterministic) timeout at whnf` — a genuine kernel/elaborator size cliff, the same
+  class of problem `Ecc/MulFixed/BaseFieldElem.lean` hit and eventually fixed (see
+  `doc/performance-problems.md`), but this one is unresolved. Root cause hypothesis (not
+  confirmed): `Circuit.foldl (.finRange 32) ...` constructing a fresh
+  `unconstrained (do return (← input.path)[i])` term on each of the 32 unrolled
+  iterations is a much larger term for `circuit_proof_start`'s default unfold to chew
+  through than the old closure `fun env => (show Vector Fp 32 from input.path env)[i]` —
+  unlike `Unconstrained`/`UnconstrainedBool`/`UnconstrainedNat` on non-looped call sites
+  (`WitnessPoint.lean`, the Point/field `Action.Input` fields above, and
+  `Utilities.lean`'s `CondSwap.Swap.b` field in isolation — verified independently green),
+  which have no such blowup. Needs a dedicated investigation (likely an "opaque prefix"
+  extraction analogous to `BaseFieldElem.lean`'s `prefixCircuit` fix, or restructuring
+  `CalculateRoot`'s 32-layer fold into a bundled subcircuit) before attempting again — not
+  done here given the risk of an open-ended kernel-cliff debugging session on a proof this
+  size. `CondSwap.Swap.swap`/`Layer.posBit`/`CalculateRoot.pos` are entangled with this
+  same fold (the `swap` field flows into `Layer.main` which flows into `CalculateRoot`'s
+  32x unrolled construction), so they're reverted alongside `path` rather than left
+  half-migrated.
 - `Clean/Orchard/Action/AddressIntegrity.lean` (`rivk : UnconstrainedNative Fq F`),
   `Clean/Orchard/Action/SpendAuthority.lean` (`alpha : UnconstrainedNative Fq F`),
-  `Clean/Orchard/Action/ValueCommit.lean` (`rcv : UnconstrainedNative Fq F`): all
-  pure pass-throughs of `Action.lean`'s own top-level `Fq`-valued scalar inputs
-  (`rivk`, `alpha`, `rcv`) down into the fixed-base multiplication gadgets. These
-  scalars are genuinely external (random blinding factors / the incoming viewing key /
-  the spend-authorization randomizer) — see the fixed-base-table note below for why even
-  an `Unconstrained`→`UnconstrainedNat` upgrade at this boundary wouldn't unlock porting
-  the *downstream* window-decomposition witnessing (that's blocked by the table, not by
-  the scalar's hint-ness).
-- `Clean/Orchard/Action.lean` (`main`): the `Input` struct's `UnconstrainedDepNative`/
-  `UnconstrainedNative`-typed fields describing the actual note plaintexts, keys, and
-  blinding scalars (`vOld/vNew/rhoOld/psiOld/psiNew/nk/rcmOld/rcmNew/rcv/rivk/alpha/
-  vNetMagnitude/vNetSign/path/pos/gdOld/pkdOld/cmOld/akP/gdNew/pkdNew`) are the circuit's
-  true external witness — not eligible for the `Unconstrained`/`UnconstrainedBool`/
-  `UnconstrainedNat` (IR-backed) upgrade, since that mechanism is for hints a *parent*
-  constructs from its own already-committed values, and `Action.main` has no parent
-  within Clean. The plain pass-through reads of these fields (`psiOld`, `rhoOld`, `nk`,
-  `vOld`, `vNew`, `vNetMagnitude`, `vNetSign`, `psiNew`) — i.e. "commit the external value
-  as-is with no arithmetic" — stay on `witnessNative (inst := inferInstanceAs
-  (Witnessable Fp field (Var field))) input.X`: since the *value itself* is a raw
-  `ProverEnvironment F → Hint` closure (per `UnconstrainedDepNative`'s definition), only
-  `witnessNative` can accept it — bare `witness` (the typed-IR entry) fundamentally cannot,
-  it expects an `FExpr`-shaped value. (An earlier pass mistakenly used bare `witness` here;
-  caught and fixed once `Action.lean` finally compiled far enough to type-check it — see
-  the fix-patterns scratch notes, gotcha #20, for the misleading error this produces.)
-  These 8 sites are correctly-named plumbing, not a porting gap.
+  `Clean/Orchard/Action/ValueCommit.lean` (`rcv : UnconstrainedNative Fq F`), and
+  `Action.lean`'s own `rcmOld`/`rcmNew : UnconstrainedNative Fq F`: `Fq` (the Pallas
+  *scalar* field, fixed and independent of the circuit's own field `Fp`) has no
+  `Unconstrained*` carrier of its own — the natural fit is `UnconstrainedNat` holding
+  `Fq.val : ℕ` (mirroring the `NExpr.val`/`FExpr.ofNat` `F ↔ ℕ` bridge used elsewhere), but
+  this wasn't attempted: the *downstream* consumer (`MulFixed`'s window-decomposition
+  witness generation, reading the scalar via `.testBit`/`.val` on the actual `Fq`
+  element) is itself blocked on the abstract fixed-base generator tables (see the
+  "Fixed-base multiplication window tables" section below) having no concrete backing
+  data — so migrating just the scalar's carrier type wouldn't unlock anything further
+  down the chain, and risks its own version of the same kernel-cliff class of issue seen
+  above given no `Unconstrained*`/`Fq` combination has been tried yet.
+- `Clean/Orchard/Ecc/Mul/{Incomplete,Complete,Assign}.lean`'s per-round bit hints and
+  `Clean/Orchard/Utilities.lean`'s `WitnessShort.Input` — not attempted this round; see the
+  "Type-level native" section below for the design (packed `UnconstrainedNat` +
+  `NExpr.testBit`/`.range`), which carries the same open kernel-cliff risk given how
+  `Ecc/Mul/*` also loop over many rounds (`Circuit.foldlRange`/`foldl` over 3–83
+  iterations, structurally similar to `CalculateRoot`'s 32-layer fold).
 
 ## Fixed-base multiplication window tables (abstract, no concrete backing data)
 
@@ -120,8 +154,15 @@ follow-up migration, roughly in decreasing order of expected payoff:
   (`Input := UnconstrainedDepNative field F`). At real call sites (`Merkle.lean`), these
   ARE constructed from already-committed expressions (`fun env => eval env someExpr`) —
   i.e. they're internal plumbing, not genuine external secrets, and are exactly the shape
-  the `Unconstrained`/`UnconstrainedBool` upgrade targets. Not attempted here for the
-  same reason as above (struct-shape + call-site + proof migration, not a routine port).
+  the `Unconstrained`/`UnconstrainedBool` upgrade targets. **Partially attempted**: `b :
+  Unconstrained field F` alone, migrated and verified independently green (zero warnings,
+  zero sorries). `swap : UnconstrainedBool F` was also migrated, but its only real
+  consumer (`Merkle.lean`'s `Layer.main`, inside `CalculateRoot`'s 32-layer
+  `Circuit.foldl`) hit the same kernel/elaborator size cliff documented above under
+  "External hints" — reverted alongside `path`/`pos`/`Layer.posBit`/`CalculateRoot.pos`
+  rather than left half-migrated. `b`'s migration was reverted too, purely so this file's
+  `CondSwap.Swap.Input` stays internally consistent (`a`/`b` migrated but `swap` not would
+  be a strange, undocumented halfway state) — not because `b` itself had any issue.
 - `Clean/Orchard/Sinsemilla/HashToPoint.lean` (`Chain.Nil.main`'s `yFin`, reading
   `input.yA : UnconstrainedDepNative field F`): the `Y_A` accumulator value is
   *deliberately* kept off the constraint system as a hint by the halo2 source design
