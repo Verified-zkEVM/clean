@@ -397,11 +397,11 @@ def circuit : FormalAssertion Fp fieldTriple where
     simp only [Prod.mk.injEq] at h_input
     rcases h_input with ⟨ha, hb, hc⟩
     rw [← ha, ← hb, ← hc]
-    exact (eq_of_add_neg_eq_zero h_holds).symm
+    exact (sub_eq_zero.mp h_holds).symm
   completeness := by
     circuit_proof_start
     rw [← h_input] at h_spec
-    simpa [sub_eq_add_neg] using sub_eq_zero.mpr h_spec.symm
+    exact sub_eq_zero.mpr h_spec.symm
 
 end Gate
 

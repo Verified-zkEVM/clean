@@ -91,8 +91,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   -- The constraint from lookup is about xor = 2*or - x - y
-  -- which in field arithmetic is 2*w + -x + -y
-  set xor := 2*w + -x + -y
+  set xor := 2*w - x - y
   have h_xor : xor.val = x.val ^^^ y.val := h_constraint
   have value_goal : w.val = x.val ||| y.val := by
     have two_or_field : 2*w = x + y + xor := by ring
@@ -131,7 +130,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y
   have hw : w = ZMod.val x ||| ZMod.val y := rfl
-  let z := 2*w - x - y
 
   -- now it's pretty much the soundness proof in reverse
   have or_byte : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx_byte hy_byte
@@ -150,9 +148,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   have two_or_ge : (2*w).val ≥ (x + y).val := by
     rw [two_or_val, x_y_val]
     exact two_or_ge_add hx_byte hy_byte
-
-  have : 2 * w + -x + -y = 2*w - x - y := by ring
-  rw [this]
 
   simp only [w]
   rw [← or_times_two_sub_xor']

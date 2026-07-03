@@ -14,11 +14,11 @@ remaining native site in `Clean/Orchard` is blocked on exactly one documented ro
    `zRunValue`/`rowLambdaValue` chains, incl. their `BitsHint` carriers whose consumers
    are these), and `Sinsemilla/HashToPoint.lean`'s `l1s`/`l2s`/`xAs`/`yANext` + `Chain`
    `yA` threading (`accAfter`).
-2. **Local exceptions**: `BaseFieldElem.lean`'s `alpha0Prime` (in-code note: FExpr
-   subtraction spelling vs a costly-defeq-sensitive application; single site, not worth
-   forcing). (`Ecc/Add.lean`'s `r` — the full `Point.add` dispatch — is *not*
-   fold-blocked: its pair-equality branching is expressible as nested `.ite`s over
-   component `=?`s under `&&&`.)
+That is the *only* root cause left: `Ecc/Add.lean`'s `r` (the full `Point.add`
+dispatch) is ported as nested `.ite`s over component `=?`s under `&&&`, and
+`BaseFieldElem.lean`'s `alpha0Prime` — the last local exception — ported cleanly once
+`circuit_norm` normalized the `+ -1 * _` subtraction spelling back to `-`
+(`neg_one_mul`/`add_neg_eq_sub`, added exactly for this).
 Everything else — all hints, tables, scalars, vectors, and derived values — is on the
 typed IR.
 

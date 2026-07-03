@@ -389,7 +389,7 @@ lemma pushedIfValue_guarantees {channel : Channel F Message}
 lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [mul_one, and_true, true_and]
+  simp only [and_true, true_and]
   congr
   rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
@@ -407,11 +407,9 @@ lemma eval_pulledIf {channel : Channel F Message} {enabled : Expression F}
      (channel.pulledIf enabled msg).toRaw.eval env = channel.pulledIfValue (eval env enabled) (eval env msg) := by
   simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
   simp only [and_true, true_and]
-  constructor
-  · exact (neg_eq_neg_one_mul (env enabled)).symm
-  · apply congrArg Vector.toArray
-    rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-    rfl
+  apply congrArg Vector.toArray
+  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
+  rfl
 
 lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
     {msg : Message (Expression F)} {env : Environment F} :

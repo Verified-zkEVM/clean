@@ -1008,10 +1008,6 @@ theorem soundness (G : Generators) (w : ℕ) :
           Nat.add_zero]
         all_goals linear_combination hidx
       · split_ifs at hidx ⊢ <;> try omega
-        all_goals try simp only [circuit_norm,
-          show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl] at hidx
-        all_goals try simp only [show ∀ a : ℕ, a + 1 - 1 = a from fun _ => rfl]
-        all_goals linear_combination hidx
     · simp only [hdR, DoubleAndAdd.yA, DoubleAndAdd.xR]
       linear_combination hy
   have hG : ∀ r, r < w →

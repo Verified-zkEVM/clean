@@ -40,7 +40,7 @@ def circuit : FormalAssertion Fp Row where
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hb1, hb2, hdec⟩
-    exact ⟨hb1, hb2, left_eq_of_add_neg_eq_zero hdec⟩
+    exact ⟨hb1, hb2, sub_eq_zero.mp hdec⟩
   completeness := by
     circuit_proof_start
     rcases h_spec with ⟨hb1, hb2, hdec⟩
@@ -75,7 +75,7 @@ def circuit : FormalAssertion Fp Row where
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hd0, hd1, hdec⟩
-    exact ⟨hd0, hd1, left_eq_of_add_neg_eq_zero hdec⟩
+    exact ⟨hd0, hd1, sub_eq_zero.mp hdec⟩
   completeness := by
     circuit_proof_start
     rcases h_spec with ⟨hd0, hd1, hdec⟩
@@ -103,7 +103,7 @@ def circuit : FormalAssertion Fp Row where
   Spec
   soundness := by
     circuit_proof_start
-    exact left_eq_of_add_neg_eq_zero h_holds
+    exact sub_eq_zero.mp h_holds
   completeness := by
     circuit_proof_start
     rw [h_spec]
@@ -135,7 +135,7 @@ def circuit : FormalAssertion Fp Row where
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hg0, hdec⟩
-    exact ⟨hg0, left_eq_of_add_neg_eq_zero hdec⟩
+    exact ⟨hg0, sub_eq_zero.mp hdec⟩
   completeness := by
     circuit_proof_start
     rcases h_spec with ⟨hg0, hdec⟩
@@ -166,7 +166,7 @@ def circuit : FormalAssertion Fp Row where
   soundness := by
     circuit_proof_start
     rcases h_holds with ⟨hh1, hdec⟩
-    exact ⟨hh1, left_eq_of_add_neg_eq_zero hdec⟩
+    exact ⟨hh1, sub_eq_zero.mp hdec⟩
   completeness := by
     circuit_proof_start
     rcases h_spec with ⟨hh1, hdec⟩

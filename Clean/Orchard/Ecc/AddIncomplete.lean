@@ -199,7 +199,8 @@ theorem completeness : Completeness Fp main Assumptions := by
   subst hp hq
   simp_all [circuit_norm, explicit_provable_type, Gate.Input.p, Gate.Input.q, Gate.Input.r,
     Point.nondegenerateAdd]
-  constructor <;> ring
+  constructor
+  ring
 
 def circuit : FormalCircuit Fp Input Point where
   main
