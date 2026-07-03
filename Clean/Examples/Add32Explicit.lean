@@ -23,12 +23,12 @@ instance reducedElaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circ
 -- These only unfold the generated elaborated instance. They do not unfold or simplify the explicit
 -- circuit derivation, so they check that the reduced tactic stores the nice metadata directly.
 example : ElaboratedCircuit.localLength (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default = 8 := by
-  dsimp only [reducedElaborated]
+  dsimp only [reducedElaborated, ElaboratedCircuit.localLength]
 
 example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
-  dsimp only [reducedElaborated]
+  dsimp only [reducedElaborated, ElaboratedCircuit.output]
 
 -- #whnf elaborated.localLength default
 -- #whnf elaborated.output default 0
@@ -36,7 +36,7 @@ example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Out
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := rfl
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
-  dsimp only [explicit_circuit_norm, explicit, assertBool]
+  dsimp +instances only [explicit_circuit_norm, explicit, assertBool]
 
 example : ExplicitCircuit.output (circuit32 default) 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
@@ -44,11 +44,11 @@ example : ExplicitCircuit.output (circuit32 default) 0 =
 example : ExplicitCircuit.output (circuit32 default) 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
-  dsimp only [explicit_circuit_norm, explicit, assertBool]
+  dsimp +instances only [explicit_circuit_norm, explicit, assertBool]
 
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := rfl
 example : ExplicitCircuit.channelsWithGuarantees (circuit32 default) 0 = [] := by
-  dsimp only [explicit_circuit_norm, explicit, assertBool]
+  dsimp +instances only [explicit_circuit_norm, explicit, assertBool]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
@@ -80,7 +80,7 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Expression (F pBabybear)) env (i0 : �
   -- second version: using `ExplicitCircuit`
   -- resolve explicit circuit operations
   rw [ExplicitCircuits.operations_eq (circuit := circuit32)]
-  dsimp only [explicit_circuit_norm, explicit, assertBool]
+  dsimp +instances only [explicit_circuit_norm, explicit, assertBool]
   -- simp `ConstraintsHold` expression
   simp only [ConstraintsHold.Soundness, Operations.forAllNoOffset,
     FormalAssertion.toSubcircuit_soundness, FormalAssertion.toSubcircuit_assumptions,
