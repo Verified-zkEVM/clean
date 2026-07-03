@@ -164,6 +164,10 @@ def processOps (numInputs : ℕ) : List (Operation F) → VarMap → ℕ → Lis
         (newLs, vm', vi + 1)
       ) (acc, vm, vi)
       processOps numInputs rest newVm newVi newAcc
+    | .ir [] (.mapRange n _body) =>
+      -- witnessAny: input variables, already mapped to function params. Just allocate slots.
+      let newVm := { vm with nextLocal := vm.nextLocal + n }
+      processOps numInputs rest newVm (vi + n) acc
     | _ => processOps numInputs rest vm vi acc
   | _ :: rest, vm, vi, acc => processOps numInputs rest vm vi acc
 
