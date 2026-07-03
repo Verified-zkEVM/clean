@@ -310,17 +310,34 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).r
-  let lambda ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).lambda
   let px : Witgen.FExpr Fp := p.x
   let qx : Witgen.FExpr Fp := q.x
+  let py : Witgen.FExpr Fp := p.y
+  let qy : Witgen.FExpr Fp := q.y
+  let rX : Witgen.FExpr Fp :=
+    .ite ((px =? 0) &&& (py =? 0)) qx <|
+    .ite ((qx =? 0) &&& (qy =? 0)) px <|
+    .ite (px =? qx)
+      (.ite (py + qy =? 0) 0
+        ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx))
+      ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)
+  let rY : Witgen.FExpr Fp :=
+    .ite ((px =? 0) &&& (py =? 0)) qy <|
+    .ite ((qx =? 0) &&& (qy =? 0)) py <|
+    .ite (px =? qx)
+      (.ite (py + qy =? 0) 0
+        ((3 * px * px) * (2 * py)⁻¹ *
+          (px - ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx)) - py))
+      ((qy - py) * (qx - px)⁻¹ *
+        (px - ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)) - py)
+  let r ← witness <| (Point.mk rX rY : Point (Witgen.FExpr Fp))
+  let lambda ← witness <| .ite (qx =? px)
+    (.ite (py =? 0) 0 ((3 * px * px) * (2 * py)⁻¹))
+    ((qy - py) * (qx - px)⁻¹)
   let alpha ← witness <| (qx - px)⁻¹
   let beta ← witness <| px⁻¹
   let gamma ← witness <| qx⁻¹
-  let delta ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).delta
+  let delta ← witness <| .ite (qx =? px) ((qy + py)⁻¹) 0
   Gate.circuit {
     x_p := p.x
     y_p := p.y
@@ -663,16 +680,93 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   exact ⟨by simpa [row] using hvalid,
     by simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hcoords⟩
 
+/-- The evaluated `.ite` witness program for `lambda` is `lambdaValue`. Stated with the
+`Decidable` instances as variables: `BExpr.feq`'s evaluation decides field equality
+through its own instance, which is not syntactically the canonical one — an
+instance-generic statement lets `simp` match either spelling (after
+`decide_eq_true_eq` has turned the conditions propositional). -/
+private theorem ite_lambdaValue (px py qx qy : Fp)
+    {d1 : Decidable (qx = px)} {d2 : Decidable (py = 0)} :
+    (@ite _ (qx = px) d1
+      (@ite _ (py = 0) d2 (0 : Fp) (3 * px * px * (2 * py)⁻¹))
+      ((qy - py) * (qx - px)⁻¹))
+    = lambdaValue { p := { x := px, y := py }, q := { x := qx, y := qy } } := by
+  unfold lambdaValue
+  by_cases h : qx = px <;> by_cases h' : py = 0 <;> simp_all
+
+/-- Same for the `delta` witness program and `rowValue`'s delta component. -/
+private theorem ite_deltaValue (px py qx qy : Fp) {d : Decidable (qx = px)} :
+    (@ite _ (qx = px) d ((qy + py)⁻¹) 0)
+    = (rowValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).delta := by
+  unfold rowValue
+  by_cases h : qx = px <;> simp_all
+
+/-- The evaluated `.ite` witness tree for `r.x` computes the x-coordinate of the
+complete point addition. Decidable instances are variables for the same reason as in
+`ite_lambdaValue` (the compound `&&&` conditions arrive in this propositional shape
+via `Bool.and_eq_true`/`decide_eq_true_eq`, both in `circuit_norm`). -/
+private theorem ite_rX (px py qx qy : Fp)
+    {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
+    {d3 : Decidable (px = qx)} {d4 : Decidable (py + qy = 0)} :
+    (@ite _ (px = 0 ∧ py = 0) d1 qx
+      (@ite _ (qx = 0 ∧ qy = 0) d2 px
+        (@ite _ (px = qx) d3
+          (@ite _ (py + qy = 0) d4 0
+            (3 * px * px * (2 * py)⁻¹ * (3 * px * px * (2 * py)⁻¹) - px - qx))
+          ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx))))
+    = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).x := by
+  simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
+    Prod.mk.injEq, pallasA]
+  by_cases h1 : px = 0 ∧ py = 0
+  · simp only [eq_true h1, reduceIte]
+  · by_cases h2 : qx = 0 ∧ qy = 0
+    · simp only [eq_false h1, eq_true h2, reduceIte]
+    · by_cases h3 : px = qx
+      · by_cases h4 : py + qy = 0
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
+          ring
+      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
+        ring
+
+/-- Same for the `r.y` witness tree and the y-coordinate of the complete addition. -/
+private theorem ite_rY (px py qx qy : Fp)
+    {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
+    {d3 : Decidable (px = qx)} {d4 : Decidable (py + qy = 0)} :
+    (@ite _ (px = 0 ∧ py = 0) d1 qy
+      (@ite _ (qx = 0 ∧ qy = 0) d2 py
+        (@ite _ (px = qx) d3
+          (@ite _ (py + qy = 0) d4 0
+            (3 * px * px * (2 * py)⁻¹ *
+              (px - (3 * px * px * (2 * py)⁻¹ * (3 * px * px * (2 * py)⁻¹) - px - qx)) - py))
+          ((qy - py) * (qx - px)⁻¹ *
+            (px - ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)) - py))))
+    = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).y := by
+  simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
+    Prod.mk.injEq, pallasA]
+  by_cases h1 : px = 0 ∧ py = 0
+  · simp only [eq_true h1, reduceIte]
+  · by_cases h2 : qx = 0 ∧ qy = 0
+    · simp only [eq_false h1, eq_true h2, reduceIte]
+    · by_cases h3 : px = qx
+      · by_cases h4 : py + qy = 0
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
+          ring
+      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
+        ring
+
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec]
+  simp only [ite_lambdaValue, ite_deltaValue, ite_rX, ite_rY] at h_env
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
   simp_all [circuit_norm, explicit_provable_type]
   have hrow := rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
-  simpa [Gate.Spec, rowValue, sub_eq_add_neg] using hrow
+  simpa [Gate.Spec, rowValue] using hrow
 
 def circuit : FormalCircuit Fp Input Point where
   main

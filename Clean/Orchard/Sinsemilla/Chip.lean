@@ -101,31 +101,11 @@ def circuit (params : Params Fp) : FormalAssertion Fp Row where
   Spec := Spec params
   soundness := by
     circuit_proof_start [yLhs, yRhs, qS3, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
-    constructor
-    · have hSec :
-          input_cur_lambda2 * input_cur_lambda2 -
-              (input_next_xA +
-                (input_cur_lambda1 * input_cur_lambda1 - input_cur_xA - input_cur_xP) +
-                input_cur_xA) = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact sub_eq_zero.mp hSec
-    · have hY :
-          4 * input_cur_lambda2 * (input_cur_xA - input_next_xA) -
-              (2 *
-                  ((input_cur_lambda1 + input_cur_lambda2) *
-                    (input_cur_xA -
-                      (input_cur_lambda1 * input_cur_lambda1 - input_cur_xA - input_cur_xP))) +
-                (2 - params.qS2 * (params.qS2 - 1)) *
-                  ((input_next_lambda1 + input_next_lambda2) *
-                    (input_next_xA -
-                      (input_next_lambda1 * input_next_lambda1 - input_next_xA - input_next_xP))) +
-                params.qS2 * (params.qS2 - 1) * 2 * input_next_lambda1) = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact sub_eq_zero.mp hY
+    rcases h_holds with ⟨hSec, hY⟩
+    exact ⟨sub_eq_zero.mp hSec, sub_eq_zero.mp hY⟩
   completeness := by
     circuit_proof_start [yLhs, yRhs, qS3, Params.toExpr, DoubleAndAdd.yA, DoubleAndAdd.xR]
-    simp_all [sub_eq_add_neg]
-    constructor <;> ring
+    simp_all
 
 end Gate
 

@@ -106,6 +106,22 @@ instance : Neg (Expression F) where neg e := mul (const (-1)) e
 instance : Sub (Expression F) where sub e₁ e₂ := add e₁ (-e₂)
 instance : Mul (Expression F) where mul := mul
 
+/- The `Neg`/`Sub` instances above (and their witness-IR `FExpr` counterparts) desugar
+`-e` to `(-1) * e` and `e₁ - e₂` to `e₁ + (-1) * e₂`, so *evaluated* goals come out
+spelled `x + -1 * y`. Normalize back to `-x` / `x - y` in `circuit_norm`, so user-facing
+goals read like the circuit source and `-`-spelled lemmas apply directly (previously
+every proof needed `sub_eq_add_neg` bridges). -/
+attribute [circuit_norm] neg_one_mul
+
+@[circuit_norm]
+theorem add_neg_eq_sub {α : Type*} [SubtractionMonoid α] (a b : α) :
+    a + -b = a - b := (sub_eq_add_neg a b).symm
+
+/- Boolean conjunctions from witness-IR `&&&` conditions surface as `(a && b) = true`;
+normalize to the propositional conjunction (companion to `decide_eq_true_eq`, tagged in
+`Clean.Circuit.WitnessIR`). -/
+attribute [circuit_norm] Bool.and_eq_true
+
 instance : Coe F (Expression F) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)

@@ -27,6 +27,7 @@ parameters with the properties the proofs need (`Q.OnCurve`, `Generators.S_ne_ze
 namespace Orchard.Sinsemilla
 
 open CompElliptic.Curves.Pasta
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 open Specs.Sinsemilla (Generators)
 open Ecc
 
@@ -35,10 +36,11 @@ open Ecc
 namespace CommitDomain
 
 /-- Inputs of `commit`: the message pieces and the prover-side full-width blinding
-scalar behind the `ScalarFixed` value `r`. -/
+scalar behind the `ScalarFixed` value `r` (the canonical natural representative of the
+`Fq` scalar). -/
 structure Input (k : ℕ) (F : Type) where
   pieces : Vector F k
-  r : UnconstrainedNative Fq F
+  r : UnconstrainedNat F
 deriving CircuitType
 
 instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
@@ -87,8 +89,9 @@ def ProverAssumptions (G : Generators) (Q : Point Fp) (n₀ : ℕ)
     (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
     (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
   Chain.PieceBounds (n₀ :: ns) input.pieces ∧
-  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
-    (Chain.honestChunks (n₀ :: ns) input.pieces) = some B
+  (∃ B, Specs.Sinsemilla.hashToPoint G.S Q
+    (Chain.honestChunks (n₀ :: ns) input.pieces) = some B) ∧
+  (show ℕ from input.r) < PALLAS_SCALAR_CARD
 
 def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (n₀ : ℕ) (ns : List ℕ) (input : ProverValue (Input (ns.length + 1)) Fp)
@@ -96,7 +99,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
   Chain.ZsHonest (n₀ :: ns) input.pieces output.zs ∧
   ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Chain.honestChunks (n₀ :: ns) input.pieces) = some B →
-    output.point = B + (show Fq from input.r) • R
+    output.point = B + ((show ℕ from input.r : ℕ) : Fq) • R
 
 theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) (n₀ : ℕ) (ns : List ℕ) :
@@ -128,11 +131,12 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R n₀ ns)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q R n₀ ns) := by
   circuit_proof_start [HashToPoint.circuit, HashToPoint.ProverAssumptions, HashToPoint.ProverSpec,
-    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
+    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverAssumptions,
+    MulFixed.FullWidth.ProverSpec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
   obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
-  obtain ⟨hbounds, B, hchain⟩ := h_assumptions
-  obtain ⟨-, hblind⟩ := h_fw_env
+  obtain ⟨hbounds, ⟨B, hchain⟩, hr⟩ := h_assumptions
+  obtain ⟨-, hblind⟩ := h_fw_env hr
   obtain ⟨hZsH, hp0⟩ := (h_entry_env ⟨hbounds, B, hchain⟩).2
   have hp := hp0 B hchain
   have hPC := Chain.pieceChunks_honestChunks (n₀ :: ns) input.pieces hbounds
@@ -144,7 +148,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     by
       rw [hblind]
       exact R.smul_valid _⟩
-  refine ⟨⟨⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_, ?_⟩
+  refine ⟨⟨hr, ⟨hbounds, B, hchain⟩, ?_, ?_⟩, ?_, ?_⟩
   · rw [hp]
     exact hBvalid
   · rw [hblind]
@@ -169,7 +173,7 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 
 /-- `CommitDomain::blinding_factor` is the bare `[r] R`. -/
 def blindingFactor (R : MulFixed.FixedBase) :
-    GeneralFormalCircuit.WithHint Fp (UnconstrainedNative Fq) Point :=
+    GeneralFormalCircuit.WithHint Fp UnconstrainedNat Point :=
   MulFixed.FullWidth.circuit R
 
 end CommitDomain

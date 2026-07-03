@@ -218,40 +218,53 @@ structure Output (F : Type) where
   z84 : F
 deriving ProvableStruct
 
+/-- The witness program of one window row: take window `w` of the base-8 decomposition
+of the committed base-field element (`k = α.val / 8^w % 8`, matching `windowVal`
+definitionally), witness the next running-sum value, and read the three window-table
+columns at `k`. -/
+def rowProgram (B : MulFixed.FixedBase) (alpha : Expression Fp) (w : ℕ) :
+    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+  let xs := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).x
+  let ys := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).y
+  let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
+  let s := alpha.val
+  let k := s / (8 ^ w : ℕ) % 8
+  return RowTail.mk (s / (8 ^ (w + 1) : ℕ)).toField xs[k] ys[k] us[k]
+
 def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
     Circuit Fp (Var Output Fp) := do
   -- `copy_decompose`: `z_0` is a copy of `α`
   let z₀ <== alpha
   -- window 0 initializes the accumulator
-  let t₀ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 0
+  let t₀ : Var RowTail Fp ← witnessProgram (rowProgram B alpha 0)
   Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 0)
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
   let acc₀ : Var Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..42 are added with incomplete addition; final `zCur = z_43`
   let (acc₄₂, z₄₃) ← Circuit.foldl (Vector.finRange 42) (acc₀, t₀.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) (i.val + 1)
+    let t : Var RowTail Fp ← witnessProgram (rowProgram B alpha (i.val + 1))
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 1))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- explicit window 43; `t₄₃.zNext = z_44`
-  let t₄₃ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 43
+  let t₄₃ : Var RowTail Fp ← witnessProgram (rowProgram B alpha 43)
   Utilities.RunningSum.circuit 3 { zCur := z₄₃, zNext := t₄₃.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 43)
     { zCur := z₄₃, zNext := t₄₃.zNext, xP := t₄₃.xP, yP := t₄₃.yP, u := t₄₃.u }
   let acc₄₃ ← AddIncomplete.circuit { p := { x := t₄₃.xP, y := t₄₃.yP }, q := acc₄₂ }
   -- windows 44..83 are added with incomplete addition; final `zCur = z_84`
   let (acc₈₃, z₈₄) ← Circuit.foldl (Vector.finRange 40) (acc₄₃, t₄₃.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) (i.val + 44)
+    let t : Var RowTail Fp ← witnessProgram (rowProgram B alpha (i.val + 44))
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     MulFixed.RunningSumCoords.circuit (B.params (i.val + 44))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- most significant window 84
-  let t₈₄ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env alpha) 84
+  let t₈₄ : Var RowTail Fp ← witnessProgram (rowProgram B alpha 84)
   Utilities.RunningSum.circuit 3 { zCur := z₈₄, zNext := t₈₄.zNext }
   MulFixed.RunningSumCoords.circuit (B.params 84)
     { zCur := z₈₄, zNext := t₈₄.zNext, xP := t₈₄.xP, yP := t₈₄.yP, u := t₈₄.u }
@@ -786,17 +799,12 @@ theorem soundness (B : MulFixed.FixedBase) :
 /-- Extract the four field equations from a witnessed `RowTail`, keeping the row opaque
 (see `env_get_row` in `FullWidth.lean` and `doc/performance-problems.md`). -/
 private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowTail Fp}
-    (h : ∀ i : Fin 4, env.get (n + i.val) = (toElements r)[i.val]) :
+    (h : ({ zNext := env.get n, xP := env.get (n + 1), yP := env.get (n + 1 + 1),
+            u := env.get (n + 1 + 1 + 1) } : RowTail Fp) = r) :
     env.get n = r.zNext ∧ env.get (n + 1) = r.xP ∧
-      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u := by
-  obtain ⟨zNext, xP, yP, u⟩ := r
-  have h0 := h 0
-  have h1 := h 1
-  have h2 := h 2
-  have h3 := h 3
-  simp only [explicit_provable_type, circuit_norm, Nat.reduceMod, Nat.add_zero]
-    at h0 h1 h2 h3
-  exact ⟨h0, h1, h2, h3⟩
+      env.get (n + 1 + 1) = r.yP ∧ env.get (n + 1 + 1 + 1) = r.u :=
+  ⟨congrArg RowTail.zNext h, congrArg RowTail.xP h,
+    congrArg RowTail.yP h, congrArg RowTail.u h⟩
 
 /-- `rfl` bridges between `rowTailValue` fields and their honest values, stated at
 symbolic `w` (`doc/performance-problems.md`). -/
@@ -811,6 +819,25 @@ private theorem rowTailValue_yP (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
 
 private theorem rowTailValue_u (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
     (rowTailValue B α w).u = B.u w (windowVal α w) := rfl
+
+/-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
+an opaque base-field element `α`, where every reduction is cheap. The LHS is the
+`circuit_norm` normal form of the witness-IR completeness hypothesis:
+`FiniteField.fromNat`/`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one
+range-guarded window-table read per column from the `.listGet` evaluation (see
+`rowProgram_value` in `FullWidth.lean`). -/
+private theorem rowProgram_value (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
+    RowTail.mk (F := Fp) (FiniteField.fromNat (FiniteField.val α / 8 ^ (w + 1)))
+      (if _ : FiniteField.val α / 8 ^ w % 8 < 8 then
+        (MulFixed.windowPoint B.point w (FiniteField.val α / 8 ^ w % 8)).x else 0)
+      (if _ : FiniteField.val α / 8 ^ w % 8 < 8 then
+        (MulFixed.windowPoint B.point w (FiniteField.val α / 8 ^ w % 8)).y else 0)
+      (if _ : FiniteField.val α / 8 ^ w % 8 < 8 then
+        B.u w (FiniteField.val α / 8 ^ w % 8) else 0)
+    = rowTailValue B α w := by
+  have h8 : FiniteField.val α / 8 ^ w % 8 < 8 := Nat.mod_lt _ (by norm_num)
+  simp only [dif_pos h8]
+  rfl
 
 /-- The running sum step relation on honest values. -/
 private theorem zValue_step (α : Fp) (w : ℕ) :
@@ -906,7 +933,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   -- non-canonical accumulated offset). Expanding it by hand, plus the kernel size cliff
   -- this 85-window two-foldl completeness sits on (see `doc/performance-problems.md`,
   -- "Kernel size cliffs in completeness proofs of large compositions"), is the open work.
-  circuit_proof_start [main, ProverSpec, ProverAssumptions,
+  circuit_proof_start [main, rowProgram, ProverSpec, ProverAssumptions,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     MulFixed.RunningSumCoords.circuit, MulFixed.RunningSumCoords.Spec,
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
@@ -921,6 +948,12 @@ theorem completeness (B : MulFixed.FixedBase) :
     ⟨⟨h_t44, h_inc44⟩, h_seg2_loop⟩, h_t84, h_add⟩ := h_env
   simp only [h_input] at h_t44 h_seg2_loop
   simp only [AddIncomplete.Assumptions, AddIncomplete.Spec] at h_inc44 h_seg2_loop
+  -- bridge the witness-IR row values to the honest `rowTailValue`s, at literal windows
+  replace h_t0 := h_t0.trans (rowProgram_value B input 0)
+  replace h_t1 := h_t1.trans (rowProgram_value B input 1)
+  replace h_t43 := h_t43.trans (rowProgram_value B input 43)
+  replace h_t44 := h_t44.trans (rowProgram_value B input 44)
+  replace h_t84 := h_t84.trans (rowProgram_value B input 84)
   have hα := h_assumptions
   -- per-window witnessed row values (windows `1..83`, window `j + 1`), gluing both foldl
   -- segments and the explicit window 43
@@ -935,39 +968,25 @@ theorem completeness (B : MulFixed.FixedBase) :
     · obtain rfl : j = 0 := by omega
       exact env_get_rowTail (n := i₀ + 1 + 4 + 0 * 10) (by simpa using h_t1)
     rcases Nat.lt_or_ge j 42 with hj42 | hj42'
-    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
-          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
-        intro i
-        have := (h_seg1_loop (j - 1) (by omega)).1 i
-        rw [show (j - 1 + 1) * 10 = j * 10 from by omega] at this
-        simp only [show j - 1 + 1 + 1 = j + 1 from by omega] at this
-        exact this
+    · have hb := ((h_seg1_loop (j - 1) (by omega)).1).trans
+        (rowProgram_value B input (j - 1 + 1 + 1))
+      rw [show (j - 1 + 1) * 10 = j * 10 from by omega] at hb
+      simp only [show j - 1 + 1 + 1 = j + 1 from by omega] at hb
       exact env_get_rowTail hb
     rcases Nat.lt_or_ge j 43 with hj43 | hj43'
-    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
-          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
-        intro i
-        have hje : (43 : ℕ) = j + 1 := by omega
-        have := h_t43 i
-        rw [hje, show (420 : ℕ) + (i₀ + 1 + 4) = i₀ + 1 + 4 + j * 10 from by omega] at this
-        exact this
+    · have hje : (43 : ℕ) = j + 1 := by omega
+      have hb := h_t43
+      rw [hje, show (420 : ℕ) + (i₀ + 1 + 4) = i₀ + 1 + 4 + j * 10 from by omega] at hb
       exact env_get_rowTail hb
     rcases Nat.lt_or_ge j 44 with hj44 | hj44'
-    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
-          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
-        intro i
-        have hje : (44 : ℕ) = j + 1 := by omega
-        have := h_t44 i
-        rw [hje, show i₀ + 1 + 4 + 420 + 4 + 6 = i₀ + 1 + 4 + j * 10 from by omega] at this
-        exact this
+    · have hje : (44 : ℕ) = j + 1 := by omega
+      have hb := h_t44
+      rw [hje, show i₀ + 1 + 4 + 420 + 4 + 6 = i₀ + 1 + 4 + j * 10 from by omega] at hb
       exact env_get_rowTail hb
-    · have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + j * 10 + i.val)
-          = (toElements (rowTailValue B input (j + 1)))[i.val] := by
-        intro i
-        have := (h_seg2_loop (j - 44) (by omega)).1 i
-        rw [show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44 + 1) * 10 = i₀ + 1 + 4 + j * 10 from by omega] at this
-        simp only [show j - 44 + 1 + 44 = j + 1 from by omega] at this
-        exact this
+    · have hb := ((h_seg2_loop (j - 44) (by omega)).1).trans
+        (rowProgram_value B input (j - 44 + 1 + 44))
+      rw [show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44 + 1) * 10 = i₀ + 1 + 4 + j * 10 from by omega] at hb
+      simp only [show j - 44 + 1 + 44 = j + 1 from by omega] at hb
       exact env_get_rowTail hb
   -- per-window AddIncomplete implication (windows `1..83`), raw OnCurve form
   have h_step' : ∀ (j : ℕ), j < 83 →
@@ -1066,32 +1085,17 @@ theorem completeness (B : MulFixed.FixedBase) :
   have hz1cell : env.get (i₀ + 1) = zValue input 1 :=
     h0z.trans (rowTailValue_zNext B input 0)
   -- window-84 witness cells
-  have hw84z : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = zValue input 85 := by
-    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
-        = (toElements (rowTailValue B input 84))[i.val] := by
-      intro i
-      have := h_t84 i
-      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
-      exact this
-    exact (env_get_rowTail hb).1.trans (rowTailValue_zNext B input 84)
+  rw [show (400 : ℕ) + (i₀ + 1 + 4 + 420 + 4 + 6)
+    = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at h_t84
+  have hrow84 := env_get_rowTail h_t84
+  have hw84z : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = zValue input 85 :=
+    hrow84.1.trans (rowTailValue_zNext B input 84)
   have hw84x : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1)
-      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).x := by
-    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
-        = (toElements (rowTailValue B input 84))[i.val] := by
-      intro i
-      have := h_t84 i
-      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
-      exact this
-    exact (env_get_rowTail hb).2.1.trans (rowTailValue_xP B input 84)
+      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).x :=
+    hrow84.2.1.trans (rowTailValue_xP B input 84)
   have hw84y : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1)
-      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).y := by
-    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
-        = (toElements (rowTailValue B input 84))[i.val] := by
-      intro i
-      have := h_t84 i
-      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
-      exact this
-    exact (env_get_rowTail hb).2.2.1.trans (rowTailValue_yP B input 84)
+      = (MulFixed.windowPoint B.point 84 (windowVal input 84)).y :=
+    hrow84.2.2.1.trans (rowTailValue_yP B input 84)
   -- the final accumulator after window 83
   obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = MulFixed.partialSum (windowVal input) 83 := ⟨_, rfl⟩
   have hS83_lt : S83 < 2 * 8 ^ (83 + 1) := by
@@ -1229,14 +1233,8 @@ theorem completeness (B : MulFixed.FixedBase) :
   have hw84z' : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) = zValue input 85 := hw84z
   have hzc84 : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10) = zValue input 84 := hz84
   have hw84u : env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + 1 + 1 + 1)
-      = B.u 84 (windowVal input 84) := by
-    have hb : ∀ i : Fin 4, env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 + i.val)
-        = (toElements (rowTailValue B input 84))[i.val] := by
-      intro i
-      have := h_t84 i
-      rw [show 400 + (i₀ + 1 + 4 + 420 + 4 + 6) = i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10 from by omega] at this
-      exact this
-    exact (env_get_rowTail hb).2.2.2.trans (rowTailValue_u B input 84)
+      = B.u 84 (windowVal input 84) :=
+    hrow84.2.2.2.trans (rowTailValue_u B input 84)
   have hw84InRange : Utilities.RunningSum.InRange (2 ^ 3) (Utilities.RunningSum.word 3
       { zCur := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 39 * 10),
         zNext := env.get (i₀ + 1 + 4 + 42 * 10 + 4 + 6 + 40 * 10) }) :=
@@ -1344,13 +1342,14 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- region 3: canonicity of the base-field element.
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
-  let alpha0Prime ← witnessNative fun env =>
-    (env alpha - env (m.z84) * (2 ^ 252 : Fp)) + (2 ^ 130 : Fp) - (tPNat : Fp)
+  let alpha0Prime ← witness <|
+    (Witgen.FExpr.expr alpha - Witgen.FExpr.expr m.z84 * Witgen.FExpr.const (2 ^ 252 : Fp))
+      + Witgen.FExpr.const (2 ^ 130 : Fp) - Witgen.FExpr.const (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]
   -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate
-  let alpha1 ← witnessNative fun env => ((env (m.z84)).val % 4 : ℕ)
-  let alpha2 ← witnessNative fun env => ((env (m.z84)).val / 4 : ℕ)
+  let alpha1 ← witness (m.z84.val % (4 : ℕ)).toField
+  let alpha2 ← witness (m.z84.val / (4 : ℕ)).toField
   let z84Alpha <== m.z84
   let z44Alpha <== m.z44
   let z43Alpha <== m.z43
@@ -1627,6 +1626,7 @@ theorem completeness (B : MulFixed.FixedBase) :
     Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
   -- the honest top window `d = α.val / 8^84 < 8`, used in `α1`, `α2`, `α0'`
   rw [hz84v] at ha1 ha2 hap0
+  simp only [Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp] at ha1 ha2
   rw [ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
   refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_⟩
   · -- IsAlpha1 α1

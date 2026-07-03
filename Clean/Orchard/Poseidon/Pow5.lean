@@ -29,12 +29,6 @@ theorem pow5_FExpr_eval (ctx : Witgen.Ctx Fp) (x : Witgen.FExpr Fp) :
     Witgen.FExpr.eval ctx (pow5 x) = pow5 (Witgen.FExpr.eval ctx x) := by
   simp [pow5, circuit_norm]
 
-private theorem eq_of_add_neg_eq_zero {a b : Fp} (h : a + -b = 0) : b = a := by
-  exact (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
-
-private theorem left_eq_of_add_neg_eq_zero {a b : Fp} (h : a + -b = 0) : a = b :=
-  (eq_of_add_neg_eq_zero h).symm
-
 namespace FullRound
 namespace Gate
 
@@ -113,16 +107,10 @@ def circuit (params : Params Fp) : FormalAssertion Fp Input where
   soundness := by
     circuit_proof_start [main, Spec, pow5, Params.toExpr]
     rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · exact eq_of_add_neg_eq_zero h0
-    constructor
-    · exact eq_of_add_neg_eq_zero h1
-    · exact eq_of_add_neg_eq_zero h2
+    exact ⟨(sub_eq_zero.mp h0).symm, (sub_eq_zero.mp h1).symm, (sub_eq_zero.mp h2).symm⟩
   completeness := by
     circuit_proof_start [main, Spec, pow5, Params.toExpr]
     simp_all
-    ring_nf
-    simp
 
 end Gate
 /-- Constants needed by one width-3 full round. -/
@@ -179,11 +167,7 @@ def circuit (params : Gate.Params Fp) : FormalCircuit Fp Permute.State Permute.S
     exact ⟨h0, h1, h2⟩
   completeness := by
     circuit_proof_start [main, value, Gate.circuit, Gate.Spec, pow5]
-    constructor
-    · simpa using h_env ⟨0, by norm_num⟩
-    constructor
-    · simpa using h_env ⟨1, by norm_num⟩
-    · simpa using h_env ⟨2, by norm_num⟩
+    simp_all [circuit_norm, Permute.State.mk.injEq]
 
 end FullRound
 
@@ -325,18 +309,11 @@ def circuit (params : Params Fp) : FormalAssertion Fp Input where
   soundness := by
     circuit_proof_start [main, Spec, pow5, Params.toExpr]
     rcases h_holds with ⟨hmid, h0, h1, h2⟩
-    constructor
-    · exact eq_of_add_neg_eq_zero hmid
-    constructor
-    · exact eq_of_add_neg_eq_zero h0
-    constructor
-    · exact eq_of_add_neg_eq_zero h1
-    · exact eq_of_add_neg_eq_zero h2
+    exact ⟨(sub_eq_zero.mp hmid).symm, (sub_eq_zero.mp h0).symm,
+      (sub_eq_zero.mp h1).symm, (sub_eq_zero.mp h2).symm⟩
   completeness := by
     circuit_proof_start [main, Spec, pow5, Params.toExpr]
     simp_all
-    ring_nf
-    simp
 
 end Gate
 /-- Constants needed by one width-3 partial-round row, which checks two source rounds. -/
@@ -505,13 +482,9 @@ def circuitP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
     circuit_proof_start [mainP128, PartialRounds.main, Gate.circuit,
       Gate.Spec]
     rcases h_env with ⟨hmid, hnext⟩
-    have hnext0 := hnext ⟨0, by norm_num⟩
-    have hnext1 := hnext ⟨1, by norm_num⟩
-    have hnext2 := hnext ⟨2, by norm_num⟩
-    norm_num at hnext0 hnext1 hnext2
-    simp only [circuit_norm, explicit_provable_type] at hnext0 hnext1 hnext2
-    simp [mid0SboxValue, value, Gate.Params.toFExpr, Witgen.FExpr.eval, pow5_FExpr_eval, h_input]
-      at hmid hnext0 hnext1 hnext2
+    simp [mid0SboxValue, value, Gate.Params.toFExpr, circuit_norm, Permute.State.mk.injEq,
+      pow5_FExpr_eval, h_input] at hmid hnext
+    obtain ⟨hnext0, hnext1, hnext2⟩ := hnext
     rw [hmid, hnext0, hnext1, hnext2]
     change Gate.Spec (paramsP128 roundConstants round)
       (inputP128 roundConstants round { x0 := input_x0, x1 := input_x1, x2 := input_x2 })
@@ -549,21 +522,10 @@ def circuit : FormalAssertion Fp Input where
   soundness := by
     circuit_proof_start [main, Spec]
     rcases h_holds with ⟨h0, h1, h2⟩
-    constructor
-    · have h0' : input_initial0 + input_input0 - input_output0 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h0').symm
-    constructor
-    · have h1' : input_initial1 + input_input1 - input_output1 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h1').symm
-    · have h2' : input_initial2 - input_output2 = 0 := by
-        simp_all [sub_eq_add_neg]
-      exact (sub_eq_zero.mp h2').symm
+    exact ⟨(sub_eq_zero.mp h0).symm, (sub_eq_zero.mp h1).symm, (sub_eq_zero.mp h2).symm⟩
   completeness := by
     circuit_proof_start [main, Spec]
     simp_all
-    constructor <;> ring
 
 end PadAndAdd
 

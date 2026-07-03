@@ -17,7 +17,6 @@ lemma eval_not {env : Environment (F p)} {x_var : U64 (Expression (F p))} :
     eval env (not64_bytewise x_var) = not64_bytewise_value (eval env x_var) := by
   rw [not64_bytewise, not64_bytewise_value, U64.map, U64.map]
   simp only [circuit_norm, explicit_provable_type]
-  ring_nf
 
 theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = ↑n - 1 - ↑x := by
   have n_ge_1 : 1 ≤ n := by linarith

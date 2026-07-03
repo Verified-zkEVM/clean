@@ -195,10 +195,12 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Gate.circuit, Gate.Assumptions, Gate.Spec]
   rcases h_assumptions with ⟨_hp, _hq, hx⟩
+  obtain ⟨hp, hq⟩ := h_input
+  subst hp hq
   simp_all [circuit_norm, explicit_provable_type, Gate.Input.p, Gate.Input.q, Gate.Input.r,
     Point.nondegenerateAdd]
-  rw [← h_input.1, ← h_input.2]
-  constructor <;> ring
+  constructor
+  ring
 
 def circuit : FormalCircuit Fp Input Point where
   main

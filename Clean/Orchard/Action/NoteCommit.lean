@@ -233,12 +233,12 @@ structure Input (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : UnconstrainedNative Fq F
+  rcm : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
   ⟨{ gd := default, pkd := default, value := default, rho := default, psi := default,
-     rcm := fun _ => default }⟩
+     rcm := default }⟩
 
 structure MessageCells (F : Type) where
   a : F
@@ -535,9 +535,9 @@ deriving ProvableStruct
 that `lsb` is the sign bit. No raw running-sum vector ever reaches this proof. -/
 def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
-    (fun env => eval env input.y)
+    (unconstrained do return input.y)
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env input.y)
+    (unconstrained do return input.y)
   let k3 ← witness (input.y.val.bitrange 254 1).toField
   let j ← witness ((input.lsb + k0 * (2 : Fp) : Expression Fp)
     + (input.y.val.bitrange 10 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
@@ -577,7 +577,7 @@ theorem soundness :
     Utilities.LookupRangeCheck.CopyCheck.Decomposed.Spec,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
     Gate.circuit, Gate.Spec, Gate.Assumptions]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨hk0, hk2, hd, htel, h_gate⟩ := h_holds
   obtain ⟨lo, hlo, hdec⟩ := htel.2
   simp only [show K * 13 = 130 from rfl] at hlo hdec
@@ -628,7 +628,7 @@ theorem completeness :
   case B2 => exact hjlt
   case B3 => rw [hk0]; exact bitrange_lt _ _ _
   case B4 => rw [hk2]; exact bitrange_lt _ _ _
-  case B5 => rw [htz0]; ring
+  case B5 => rw [htz0]
   case B6 => exact (hDec hjlt).2.1
   case B7 => exact (hDec hjlt).2.2
   case B8 =>
@@ -640,7 +640,6 @@ theorem completeness :
     intro h1
     obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_y) (bit_one_of_eq hk3 h1)
     rw [htzLast, show K * 13 = 130 from rfl,
-      show jv + ((2 ^ 130 : ℕ) : Fp) + -tP = jv + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
       shifted_high_zero (by norm_num) (by norm_num) (by rw [hj_val]; exact hatp)]
     simp
 
@@ -869,7 +868,7 @@ def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
   ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + (show Fq from input.rcm) • R
+      cm = B + ((show ℕ from input.rcm : ℕ) : Fq) • R
 
 namespace AssignMessagePieces
 
@@ -883,19 +882,19 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let psi := input.psi
 
   let b0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env gdX)
+    (unconstrained do return gdX)
   let b3 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
-    (fun env => eval env pkdX)
+    (unconstrained do return pkdX)
   let d2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 8 (by norm_num [K])
-    (fun env => eval env v)
+    (unconstrained do return v)
   let e0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 58 6 (by norm_num [K])
-    (fun env => eval env v)
+    (unconstrained do return v)
   let e1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
-    (fun env => eval env rho)
+    (unconstrained do return rho)
   let g1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 9 (by norm_num [K])
-    (fun env => eval env psi)
+    (unconstrained do return psi)
   let h0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 249 5 (by norm_num [K])
-    (fun env => eval env psi)
+    (unconstrained do return psi)
   let b1 ← witness (gdX.val.bitrange 254 1).toField
   let b2 ← witness (gdY.val.bitrange 0 1).toField
   let d0 ← witness (pkdX.val.bitrange 254 1).toField
@@ -1144,7 +1143,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨ ⟨ z0_eq, element_eq ⟩, h_gate ⟩ := h_holds
   rw [z0_eq] at h_gate
   obtain ⟨ h1, h2, h3, _ ⟩ := h_gate ⟨ rfl,  element_eq ⟩
@@ -1164,8 +1163,7 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     by linear_combination hdec + hz0⟩, ha_val, hb0_val, hb1_val, fun h1 => ?_⟩
   -- `b1 = 1` ⇒ `g_d` canonical ⇒ `a < t_P` ⇒ the honest tail `zLast` from `ProverSpec` vanishes.
   obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_val_eq hb1_val h1)
-  rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -tP
-      = input_a + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
+  rw [hzLast,
     shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
   simp
 
@@ -1214,7 +1212,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1240,8 +1238,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hb3_val hc_val (ZMod.val_lt input_pkdX)
     (bit_one_of_val_eq hd0_val h1) (by norm_num)
   rw [hzLast,
-    show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -tP
-      = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1329,7 +1325,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1355,8 +1351,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val he1_val hf_val (ZMod.val_lt input_rho)
     (bit_one_of_val_eq hg0_val h1) (by norm_num)
   rw [hzLast,
-    show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -tP
-      = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1409,7 +1403,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1435,8 +1429,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hg1_val hg2_val (ZMod.val_lt input_psi)
     (bit_one_of_val_eq hh1_val h1) (by norm_num)
   rw [hzLast,
-    show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -tP
-      = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1873,6 +1865,8 @@ def ProverAssumptions (G : Generators) (Q : Point Fp)
   -- the note's value is a `u64` (the prover commits to a valid note); the `value_canonicity`
   -- gate's constraint `value = d2 + d3·2^8 + e0·2^58` is satisfiable only at such values.
   (show Fp from input.value).val < 2 ^ 64 ∧
+  -- the commitment randomness hint is the canonical natural representative of `rcm : Fq`
+  (show ℕ from input.rcm) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
   let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
     noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∃ B, hashToPoint G.S Q
@@ -2364,14 +2358,14 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
     RhoCanonicity.circuit, PsiCanonicity.circuit]
   obtain ⟨⟨-, hAMProver⟩, hComImpl, -⟩ := h_env
-  obtain ⟨-, -, hvalue, hHashEx⟩ := h_assumptions
+  obtain ⟨-, -, hvalue, hrcm, hHashEx⟩ := h_assumptions
   have hMCF := hAMProver
   simp only [AssignMessagePieces.ProverSpec, circuit_norm] at hMCF
   have hPB := pieceBounds_of_cellFacts hMCF
   have hHonestEq := honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
   have hCPA : (Commit.circuit G Q hQ R).ProverAssumptions
       { pieces := ?pcs, r := input_rcm } env.data env.hint := by
-    refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_⟩
+    refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_, hrcm⟩
     obtain ⟨B, hB⟩ := hHashEx
     refine ⟨B, ?_⟩
     have hHonestEqCommit :
