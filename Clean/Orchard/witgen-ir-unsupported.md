@@ -7,6 +7,20 @@ the new typed IR (`witness`/`witnessProgram`/`witnessVectorProgram`, see
 file tracks every site left on `witnessNative`, with the reason it wasn't (yet, or ever)
 ported. It is a living document — update it as further porting work lands.
 
+**Final state of this porting effort (see PR #409 for the paper-cut ledger)**: every
+remaining native site in `Clean/Orchard` is blocked on exactly one documented root cause:
+1. **IR fold loops** (the `TODO WITGENIR … foldl loops?` extension): recursive
+   accumulator witnesses — `Ecc/Mul/{Incomplete,Complete,Assign}.lean` (`accVal`/
+   `zRunValue`/`rowLambdaValue` chains, incl. their `BitsHint` carriers whose consumers
+   are these), `Ecc/Add.lean`'s `r` (full `Point.add` dispatch), and
+   `Sinsemilla/HashToPoint.lean`'s `l1s`/`l2s`/`xAs`/`yANext` + `Chain` `yA` threading
+   (`accAfter`).
+2. **One local exception**: `BaseFieldElem.lean`'s `alpha0Prime` (in-code note: FExpr
+   subtraction spelling vs a costly-defeq-sensitive application; single site, not worth
+   forcing).
+Everything else — all hints, tables, scalars, vectors, and derived values — is on the
+typed IR.
+
 ## External hints: `Unconstrained`/`UnconstrainedNat` migration
 
 Correction (superseding an earlier, wrong version of this section): a genuinely top-level
