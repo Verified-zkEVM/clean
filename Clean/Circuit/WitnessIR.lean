@@ -412,8 +412,10 @@ where
   | [], .nil => rfl
   | c :: cs, .cons a as => by
     simp only [_root_.ProvableStruct.componentsToElements,
-      _root_.ProvableStruct.componentsFromElements, eval.go]
-    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+      _root_.ProvableStruct.componentsFromElements, eval.go,
+      _root_.ProvableStruct.combinedSize', List.map_cons, List.sum_cons]
+    simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
+      Vector.cast_drop_append_of_eq_length]
     congr
     apply eval_eq_eval_aux
 end StructEval

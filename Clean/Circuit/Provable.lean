@@ -516,7 +516,7 @@ theorem eval_field (env : Environment F) (x : field (Expression F)) :
   simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm] lemma const_field {F} (x : field F) :
-  const x = Expression.const x := by simp [circuit_norm, const]
+  const x = Expression.const x := by simp [circuit_norm, const, explicit_provable_type]
 
 end ProvableType
 
@@ -558,7 +558,7 @@ theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
   rfl
 
 @[circuit_norm] lemma const_fields {F} (x : fields n F) :
-  const x = x.map Expression.const := by simp [circuit_norm, const]
+  const x = x.map Expression.const := by simp [circuit_norm, const, explicit_provable_type]
 
 @[circuit_norm ↓]
 theorem varFromOffset_fields {F} (offset : ℕ) :
