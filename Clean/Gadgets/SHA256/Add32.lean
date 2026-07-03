@@ -148,14 +148,14 @@ private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
   ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
 
 omit h_large in
-/-- IsBool from boolean constraint x * (x + -1) = 0 -/
-private lemma isbool_of_bool_constraint {x : F p} (h : x * (x + -1) = 0) : IsBool x := by
-  rwa [show x + -1 = x - 1 by ring, ← IsBool.iff_mul_sub_one] at h
+/-- IsBool from boolean constraint x * (x - 1) = 0 -/
+private lemma isbool_of_bool_constraint {x : F p} (h : x * (x - 1) = 0) : IsBool x := by
+  rwa [← IsBool.iff_mul_sub_one] at h
 
 omit h_large in
 /-- Normalized z from boolean constraints -/
 private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
-    (h : ∀ i : Fin 32, env.get (i₀ + i.val) * (env.get (i₀ + i.val) + -1) = 0) :
+    (h : ∀ i : Fin 32, env.get (i₀ + i.val) * (env.get (i₀ + i.val) - 1) = 0) :
     Normalized (Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val)) := by
   intro i
   have hi := h i
@@ -269,18 +269,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       Expression.eval env (fromBitsExpr
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
       (2^32 : F p) * env.get (i₀ + 32) := by
-    rw [← sub_eq_zero]
-    have h_ring : Expression.eval env (fromBitsExpr input_var_a) +
-        Expression.eval env (fromBitsExpr input_var_b) -
-        (Expression.eval env (fromBitsExpr
-          (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
-        (2^32 : F p) * env.get (i₀ + 32)) =
-        Expression.eval env (fromBitsExpr input_var_a) +
-        Expression.eval env (fromBitsExpr input_var_b) +
-        -Expression.eval env (fromBitsExpr
-          (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) +
-        -((2^32 : F p) * env.get (i₀ + 32)) := by ring
-    rw [h_ring]
+    rw [← sub_eq_zero, ← sub_sub]
     exact h_lin
   have h_sum_lt_p : valueBits input_a + valueBits input_b < p := by linarith
   have h_lhs_val : (Expression.eval env (fromBitsExpr input_var_a) +
@@ -325,7 +314,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith
   refine ⟨fun i => ?_, ?_, ?_⟩
-  · -- Boolean constraint for z[i]: z[i] * (z[i] + -1) = 0
+  · -- Boolean constraint for z[i]: z[i] * (z[i] - 1) = 0
     have henv_i := h_env_z i
     rw [henv_i]
     rcases Nat.mod_two_eq_zero_or_one (S % 2^32 / 2^i.val) with h | h <;>
@@ -399,12 +388,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
       rw [Nat.cast_add, Nat.cast_add, Nat.cast_mul] at h
       rw [show ((2^32 : ℕ) : F p) = (2^32 : F p) from by push_cast; ring] at h
       exact h
-    -- Goal: ↑va + ↑vb + -↑(S%2^32) + -((2^32 : F p) * ↑(S/2^32%2)) = 0
-    have rearrange : ((valueBits input_a : ℕ) : F p) + ((valueBits input_b : ℕ) : F p) +
-        -((S % 2^32 : ℕ) : F p) + -((2^32 : F p) * ((S / 2^32 % 2 : ℕ) : F p)) =
-        (((valueBits input_a : ℕ) : F p) + ((valueBits input_b : ℕ) : F p)) -
-        (((S % 2^32 : ℕ) : F p) + (2^32 : F p) * ((S / 2^32 % 2 : ℕ) : F p)) := by ring
-    rw [rearrange, hF, sub_self]
+    -- Goal: ↑va + ↑vb - ↑(S%2^32) - (2^32 : F p) * ↑(S/2^32%2) = 0
+    rw [sub_sub, sub_eq_zero]
+    exact hF
 
 def circuit [Fact (p > 2^33)] : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

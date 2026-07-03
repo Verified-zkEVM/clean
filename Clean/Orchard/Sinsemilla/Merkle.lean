@@ -37,9 +37,6 @@ Reference:
 Ports the `q_decompose` gate that connects the three Sinsemilla message pieces
 `a`, `b`, `c` to `(l, left, right)`. -/
 
-private theorem left_eq_of_add_neg_eq_zero {a b : Fp} (h : a + -b = 0) : a = b :=
-  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
-
 def twoPow5 {K : Type} [OfNat K (2 ^ 5)] : K := OfNat.ofNat (2 ^ 5)
 
 def twoPow10 {K : Type} [OfNat K (2 ^ 10)] : K := OfNat.ofNat (2 ^ 10)
@@ -100,15 +97,8 @@ def circuit : FormalAssertion Fp Row where
     circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]
     rcases h_holds with ⟨hl, hleft, hright, hb⟩
-    constructor
-    · rw [sub_eq_add_neg]
-      exact (left_eq_of_add_neg_eq_zero hl).symm
-    constructor
-    · rw [sub_eq_add_neg]
-      exact (left_eq_of_add_neg_eq_zero hleft).symm
-    constructor
-    · exact (left_eq_of_add_neg_eq_zero hright).symm
-    · exact left_eq_of_add_neg_eq_zero hb
+    exact ⟨(sub_eq_zero.mp hl).symm, (sub_eq_zero.mp hleft).symm,
+      (sub_eq_zero.mp hright).symm, sub_eq_zero.mp hb⟩
   completeness := by
     circuit_proof_start [main, Spec, a0, leftCheck, rightCheck, b1B2Check,
       b0, twoPow5, twoPow10, twoPow240]

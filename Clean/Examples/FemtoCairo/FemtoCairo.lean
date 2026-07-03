@@ -468,7 +468,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 
     -- case analysis on the instruction type
     rcases h_assumptions with isAdd_cases | isMul_cases | isStoreState_cases | isLoadState_cases
-    <;> split <;> simp_all [add_eq_zero_iff_eq_neg]
+    <;> split <;> simp_all [sub_eq_zero]
 
   completeness := by
     circuit_proof_start [Spec.computeNextState]

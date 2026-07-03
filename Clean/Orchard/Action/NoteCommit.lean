@@ -577,7 +577,7 @@ theorem soundness :
     Utilities.LookupRangeCheck.CopyCheck.Decomposed.Spec,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec,
     Gate.circuit, Gate.Spec, Gate.Assumptions]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨hk0, hk2, hd, htel, h_gate⟩ := h_holds
   obtain ⟨lo, hlo, hdec⟩ := htel.2
   simp only [show K * 13 = 130 from rfl] at hlo hdec
@@ -628,7 +628,7 @@ theorem completeness :
   case B2 => exact hjlt
   case B3 => rw [hk0]; exact bitrange_lt _ _ _
   case B4 => rw [hk2]; exact bitrange_lt _ _ _
-  case B5 => rw [htz0]; ring
+  case B5 => rw [htz0]
   case B6 => exact (hDec hjlt).2.1
   case B7 => exact (hDec hjlt).2.2
   case B8 =>
@@ -640,7 +640,6 @@ theorem completeness :
     intro h1
     obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_y) (bit_one_of_eq hk3 h1)
     rw [htzLast, show K * 13 = 130 from rfl,
-      show jv + ((2 ^ 130 : ℕ) : Fp) + -tP = jv + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
       shifted_high_zero (by norm_num) (by norm_num) (by rw [hj_val]; exact hatp)]
     simp
 
@@ -1144,7 +1143,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨ ⟨ z0_eq, element_eq ⟩, h_gate ⟩ := h_holds
   rw [z0_eq] at h_gate
   obtain ⟨ h1, h2, h3, _ ⟩ := h_gate ⟨ rfl,  element_eq ⟩
@@ -1164,8 +1163,7 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     by linear_combination hdec + hz0⟩, ha_val, hb0_val, hb1_val, fun h1 => ?_⟩
   -- `b1 = 1` ⇒ `g_d` canonical ⇒ `a < t_P` ⇒ the honest tail `zLast` from `ProverSpec` vanishes.
   obtain ⟨_, hatp, _⟩ := high_bit_canonical (ZMod.val_lt input_gdX) (bit_one_of_val_eq hb1_val h1)
-  rw [hzLast, show input_a + ((2 ^ 130 : ℕ) : Fp) + -tP
-      = input_a + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
+  rw [hzLast,
     shifted_high_zero (by norm_num) (by norm_num) (by rw [ha_val]; exact hatp)]
   simp
 
@@ -1214,7 +1212,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1240,8 +1238,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hb3_val hc_val (ZMod.val_lt input_pkdX)
     (bit_one_of_val_eq hd0_val h1) (by norm_num)
   rw [hzLast,
-    show input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -tP
-      = (input_b3 + ((2 ^ 4 : ℕ) : Fp) * input_c) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1329,7 +1325,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1355,8 +1351,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val he1_val hf_val (ZMod.val_lt input_rho)
     (bit_one_of_val_eq hg0_val h1) (by norm_num)
   rw [hzLast,
-    show input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f + ((2 ^ 140 : ℕ) : Fp) + -tP
-      = (input_e1 + ((2 ^ 4 : ℕ) : Fp) * input_f) + ((2 ^ 140 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 
@@ -1409,7 +1403,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit, Gate.circuit,
     Utilities.LookupRangeCheck.CopyCheck.Telescoped.Spec, Gate.Spec, Gate.Assumptions
   ]
-  simp_all only [true_and, ←sub_eq_add_neg]
+  simp_all only [true_and]
   obtain ⟨⟨z0_eq, element_eq⟩, h_gate⟩ := h_holds
   rw [z0_eq] at h_gate
   have hshift :
@@ -1435,8 +1429,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   have hbase_lt := base_val_lt_tP_val hg1_val hg2_val (ZMod.val_lt input_psi)
     (bit_one_of_val_eq hh1_val h1) (by norm_num)
   rw [hzLast,
-    show input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2 + ((2 ^ 130 : ℕ) : Fp) + -tP
-      = (input_g1 + ((2 ^ 9 : ℕ) : Fp) * input_g2) + ((2 ^ 130 : ℕ) : Fp) - tP from by ring,
     shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
   simp
 

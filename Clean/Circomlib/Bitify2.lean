@@ -56,7 +56,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     dsimp only [Num2Bits.main, AliasCheck.circuit] at h_holds ⊢
     simp_all only [circuit_norm, Vector.map_mapRange]
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
+      id_eq, mul_eq_zero, sub_eq_zero] at h_holds
     obtain ⟨ ⟨h_bits, h_eq⟩, h_alias ⟩ := h_holds
     specialize h_alias h_bits
     rw [← h_eq, fieldToBits, fieldFromBits,
@@ -75,7 +75,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+      id_eq, mul_eq_zero, sub_eq_zero] at h_env ⊢
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
     have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
@@ -231,7 +231,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
       by_cases h_input_zero : input = 0
       · subst h_input_zero
-        simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, neg_zero, sub_zero] at h_eq ⊢
+        simp only [id_eq, mul_zero, dite_eq_ite, ite_self, add_zero, sub_zero] at h_eq ⊢
         rw [← h_eq]
         have h_f := fieldToBits_fieldFromBits hn bits h_bits'
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self, add_zero,
@@ -251,7 +251,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
       · simp_all only [↓reduceIte, mul_zero, dite_eq_ite, ite_self, add_zero, zero_mul]
-        rw [sub_eq_add_neg, ← h_eq]
+        rw [← h_eq]
         simp only [fieldFromBits_eval]
         rw [fieldToBits_fieldFromBits hn]
         exact h_bits'
@@ -267,7 +267,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         add_zero, lt_self_iff_false, ↓reduceDIte, true_and, Fin.foldl_zero, mul_one]
       by_cases h_input_zero : input = 0
       · rw [h_input_zero]
-        simp only [Expression.eval, ↓reduceIte, neg_zero, add_zero, add_eq_right]
+        simp only [Expression.eval, ↓reduceIte, zero_add, sub_zero]
       · simp_all only [id_eq, ↓reduceIte, add_zero]
         simp only [Expression.eval]
         rw [← h_env]
@@ -278,7 +278,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       · intro i
         rw [h_bits]
         simp only [IsBool]
-        rcases Nat.mod_two_eq_zero_or_one (ZMod.val ((2 ^ n : F p) + -input) >>> i.val) with h | h <;>
+        rcases Nat.mod_two_eq_zero_or_one (ZMod.val ((2 ^ n : F p) - input) >>> i.val) with h | h <;>
           rw [h] <;> simp
       · rw [h_eq]
         simp_all only [Nat.reducePow, gt_iff_lt, id_eq, mul_zero, dite_eq_ite, ite_self,
@@ -305,7 +305,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
             rw [← ZMod.val_natCast_of_lt hn]
             simp only [Nat.cast_pow, Nat.cast_ofNat]
 
-          simp_all only [neg_zero, add_zero, ↓reduceIte]
+          simp_all only [sub_zero, ↓reduceIte]
           have hbit0 : ∀ (i : Fin n), Expression.eval env.toEnvironment bits_vars[i.val] = 0 := by
             intro i
             rw [this i]
@@ -339,7 +339,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
           rw [← h_1]
           rw [ZMod.cast_id]
           rw [fieldFromBits_fieldToBits]
-          simp only [sub_eq_add_neg]
 
           have hnowrap : 2 ^ n - ZMod.val input < p :=
             lt_of_le_of_lt (Nat.sub_le _ _) hn

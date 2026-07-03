@@ -220,7 +220,7 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   refine ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, ?_, hz13A, ⟨loA, hloA, ?_⟩, ?_, ?_, hz13C,
     ⟨loB, hloB, ?_⟩, ?_⟩
   · -- aPrime = a + 2^130 - tP
-    rw [ha0]; push_cast; ring
+    rw [ha0]
   · -- aPrime = loA + 2^130 · z13APrime
     rw [show (K : ℕ) * 13 = 130 from by norm_num [K]] at hdecA
     convert hdecA using 2
@@ -285,10 +285,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   simp only [show (K : ℕ) * 0 = 0 from by norm_num, show (K : ℕ) * 13 = 130 from by norm_num [K],
     show (K : ℕ) * 14 = 140 from by norm_num [K], pow_zero, Nat.div_one]
     at hcellA0 hcellA13 hcellB0 hcellB14
-  -- normalize the elements to the `aP`/`bP` spellings
-  rw [show input_a + ((2 ^ 130 : ℕ) : Fp) + -tP = aP from by rw [haP_def]; ring] at hcellA0 hcellA13
-  rw [show input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) + -tP = bP from by
-    rw [hbP_def]; ring] at hcellB0 hcellB14
   -- `b_1 = 1 → a'.val / 2^130 = 0`
   have hImplA : input_b1 = 1 → ((input_a.val / 2 ^ 130 : ℕ) : Fp) = 0 ∧
       ((aP.val / 2 ^ 130 : ℕ) : Fp) = 0 := by

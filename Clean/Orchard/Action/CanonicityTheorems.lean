@@ -19,9 +19,6 @@ variable {F : Type} [FiniteField F]
 theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
   rcases h with h | h <;> rw [h] <;> simp
 
-theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
-  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
-
 /-! ### Foundational bit-decomposition / canonicity facts
 
 These are stated over `Orchard.Specs.bitrange` and the Pallas base modulus, with no

@@ -23,9 +23,6 @@ variable {F : Type} [FiniteField F]
 private theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
   rcases h with h | h <;> rw [h] <;> simp
 
-private theorem left_eq_of_add_neg_eq_zero {a b : F} (h : a + -b = 0) : a = b :=
-  sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)
-
 structure Input (F : Type) where
   vOld : F
   vNew : F
@@ -61,12 +58,10 @@ def circuit : FormalAssertion Fp Input where
       ring_nf at hValue ⊢
       exact hValue
     constructor
-    · exact (mul_eq_zero.mp hRoot).imp_right fun h => left_eq_of_add_neg_eq_zero h
+    · exact (mul_eq_zero.mp hRoot).imp_right fun h => sub_eq_zero.mp h
     constructor
-    · exact (mul_eq_zero.mp hSpend).imp_right fun h =>
-        (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
-    exact (mul_eq_zero.mp hOutput).imp_right fun h =>
-      (sub_eq_zero.mp (by simpa [sub_eq_add_neg] using h)).symm
+    · exact (mul_eq_zero.mp hSpend).imp_right fun h => (sub_eq_zero.mp h).symm
+    exact (mul_eq_zero.mp hOutput).imp_right fun h => (sub_eq_zero.mp h).symm
   completeness := by
     circuit_proof_start
     rcases h_spec with ⟨hValue, hRoot, hSpend, hOutput⟩
