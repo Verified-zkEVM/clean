@@ -689,7 +689,7 @@ private theorem ite_deltaValue (px py qx qy : Fp) {d : Decidable (qx = px)} :
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec]
-  simp only [decide_eq_true_eq, ite_lambdaValue, ite_deltaValue] at h_env
+  simp only [ite_lambdaValue, ite_deltaValue] at h_env
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩

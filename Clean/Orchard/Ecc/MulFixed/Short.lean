@@ -389,26 +389,38 @@ private theorem rowTailValue_yP (B : FixedBase) (m : Fp) (w : ℕ) :
 private theorem rowTailValue_u (B : FixedBase) (m : Fp) (w : ℕ) :
     (rowTailValue B m w).u = B.u w (windowVal m w) := rfl
 
+/-- The witness program of one window row: take window `w` of the base-8 decomposition
+of the committed magnitude (`k = m.val / 8^w % 8`, matching `windowVal` definitionally),
+witness the next running-sum value, and read the three window-table columns at `k`. -/
+def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
+    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+  let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
+  let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
+  let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
+  let s := magnitude.val
+  let k := s / (8 ^ w : ℕ) % 8
+  return RowTail.mk (s / (8 ^ (w + 1) : ℕ)).toField xs[k] ys[k] us[k]
+
 def main (B : FixedBase) (input : Var MagnitudeSign Fp) :
     Circuit Fp (Var Point Fp) := do
   -- `copy_decompose`: `z_0` is a copy of the magnitude
   let z₀ <== input.magnitude
   -- window 0 initializes the accumulator
-  let t₀ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) 0
+  let t₀ : Var RowTail Fp ← witnessProgram (rowProgram B input.magnitude 0)
   Utilities.RunningSum.circuit 3 { zCur := z₀, zNext := t₀.zNext }
   RunningSumCoords.circuit (B.params 0)
     { zCur := z₀, zNext := t₀.zNext, xP := t₀.xP, yP := t₀.yP, u := t₀.u }
   let acc₀ : Var Point Fp := { x := t₀.xP, y := t₀.yP }
   -- windows 1..20 are added with incomplete addition
   let (acc, z₂₁) ← Circuit.foldl (.finRange 20) (acc₀, t₀.zNext) fun (acc, zCur) i => do
-    let t : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) (i.val + 1)
+    let t : Var RowTail Fp ← witnessProgram (rowProgram B input.magnitude (i.val + 1))
     Utilities.RunningSum.circuit 3 { zCur := zCur, zNext := t.zNext }
     RunningSumCoords.circuit (B.params (i.val + 1))
       { zCur := zCur, zNext := t.zNext, xP := t.xP, yP := t.yP, u := t.u }
     let acc' ← AddIncomplete.circuit { p := { x := t.xP, y := t.yP }, q := acc }
     return (acc', t.zNext)
   -- most significant window 21
-  let t₂₁ : Var RowTail Fp ← witnessNative fun env => rowTailValue B (env input.magnitude) 21
+  let t₂₁ : Var RowTail Fp ← witnessProgram (rowProgram B input.magnitude 21)
   Utilities.RunningSum.circuit 3 { zCur := z₂₁, zNext := t₂₁.zNext }
   RunningSumCoords.circuit (B.params 21)
     { zCur := z₂₁, zNext := t₂₁.zNext, xP := t₂₁.xP, yP := t₂₁.yP, u := t₂₁.u }
@@ -899,6 +911,25 @@ private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowT
   ⟨congrArg RowTail.zNext h, congrArg RowTail.xP h,
     congrArg RowTail.yP h, congrArg RowTail.u h⟩
 
+/-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
+an opaque magnitude `m`, where every reduction is cheap. The LHS is the `circuit_norm`
+normal form of the witness-IR completeness hypothesis: `FiniteField.fromNat`/
+`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one range-guarded
+window-table read per column from the `.listGet` evaluation (see `rowProgram_value` in
+`FullWidth.lean`). -/
+private theorem rowProgram_value (B : FixedBase) (m : Fp) (w : ℕ) :
+    RowTail.mk (F := Fp) (FiniteField.fromNat (FiniteField.val m / 8 ^ (w + 1)))
+      (if _ : FiniteField.val m / 8 ^ w % 8 < 8 then
+        (windowPoint B.point w (FiniteField.val m / 8 ^ w % 8)).x else 0)
+      (if _ : FiniteField.val m / 8 ^ w % 8 < 8 then
+        (windowPoint B.point w (FiniteField.val m / 8 ^ w % 8)).y else 0)
+      (if _ : FiniteField.val m / 8 ^ w % 8 < 8 then
+        B.u w (FiniteField.val m / 8 ^ w % 8) else 0)
+    = rowTailValue B m w := by
+  have h8 : FiniteField.val m / 8 ^ w % 8 < 8 := Nat.mod_lt _ (by norm_num)
+  simp only [dif_pos h8]
+  rfl
+
 /-- The running sum step relation on honest values. -/
 private theorem zValue_step (m : Fp) (w : ℕ) :
     zValue m w = (windowVal m w : Fp) + 8 * zValue m (w + 1) := by
@@ -1141,7 +1172,7 @@ private theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
 
 theorem completeness (B : FixedBase) :
     GeneralFormalCircuit.Completeness Fp (main B) ProverAssumptions (ProverSpec B) := by
-  circuit_proof_start [Gate.circuit, Gate.Spec,
+  circuit_proof_start [rowProgram, Gate.circuit, Gate.Spec,
     Gate.IsSign, Gate.SignedPointSelection,
     Utilities.RunningSum.circuit, Utilities.RunningSum.Spec,
     RunningSumCoords.circuit, RunningSumCoords.Spec,
@@ -1153,7 +1184,8 @@ theorem completeness (B : FixedBase) :
     at h_add_env h_signw h_lastww h_yPw ⊢
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h_signw h_lastww h_yPw
   -- witnessed row values
-  obtain ⟨h0z, h0x, h0y, h0u⟩ := env_get_rowTail h_t0
+  obtain ⟨h0z, h0x, h0y, h0u⟩ :=
+    env_get_rowTail (h_t0.trans (rowProgram_value B input_magnitude 0))
   have hrow : ∀ (j : ℕ) (hj : j < 20),
       env.get (i₀ + 1 + 4 + j * 10) = (rowTailValue B input_magnitude (j + 1)).zNext ∧
         env.get (i₀ + 1 + 4 + j * 10 + 1) = (rowTailValue B input_magnitude (j + 1)).xP ∧
@@ -1163,13 +1195,16 @@ theorem completeness (B : FixedBase) :
           = (rowTailValue B input_magnitude (j + 1)).u :=
     fun j hj => by
       rcases j with _ | j'
-      · exact env_get_rowTail h_loop_env.1.1
-      · exact env_get_rowTail (h_loop_env.2 j' (by omega)).1
+      · exact env_get_rowTail
+          (h_loop_env.1.1.trans (rowProgram_value B input_magnitude 1))
+      · exact env_get_rowTail
+          ((h_loop_env.2 j' (by omega)).1.trans
+            (rowProgram_value B input_magnitude (j' + 1 + 1)))
   have h21 : env.get (200 + (i₀ + 1 + 4)) = (rowTailValue B input_magnitude 21).zNext ∧
       env.get (200 + (i₀ + 1 + 4) + 1) = (rowTailValue B input_magnitude 21).xP ∧
         env.get (200 + (i₀ + 1 + 4) + 1 + 1) = (rowTailValue B input_magnitude 21).yP ∧
         env.get (200 + (i₀ + 1 + 4) + 1 + 1 + 1) = (rowTailValue B input_magnitude 21).u :=
-    env_get_rowTail h_t21
+    env_get_rowTail (h_t21.trans (rowProgram_value B input_magnitude 21))
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h21
   obtain ⟨h21z, h21x, h21y, h21u⟩ := h21
   -- the z-chain cells in honest form

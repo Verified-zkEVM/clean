@@ -527,11 +527,11 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
         simp only [circuit_norm, explicit_provable_type, h_env2]
     · simp only [h_store, zero_ne_one, ↓reduceIte] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env0
+      · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env0
         simp only [circuit_norm, explicit_provable_type, h_env0]
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env1
+      · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env1
         simp only [circuit_norm, explicit_provable_type, h_env1]
-      · simp only [circuit_norm, explicit_provable_type, decide_eq_true_eq, h_store, ↓reduceIte] at h_env2
+      · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
 
 /--

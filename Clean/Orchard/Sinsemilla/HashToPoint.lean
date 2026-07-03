@@ -136,9 +136,17 @@ def main (G : Generators) (w : ℕ) (input : Var Input Fp) :
     (input.piece.val / (2 ^ (K * (i.val + 1)) : ℕ)).toField)
   let zs : Vector (Expression Fp) (w + 1) :=
     Vector.cast (Nat.add_comm 1 w) ((#v[z₀] : Vector (Expression Fp) 1) ++ zRest)
-  -- row cells: x_p, λ₁, λ₂ per word, and the next-row x_a per word
-  let xPs ← witnessVectorNative (w + 1) fun env =>
-    Vector.ofFn fun (i : Fin (w + 1)) => (G.S (pieceWord (env input.piece) i.val)).x
+  -- row cells: x_p, λ₁, λ₂ per word, and the next-row x_a per word.
+  -- x_p is a pure generator-table read: the x-column of `G.S`, indexed by the piece
+  -- word `z_r mod 2^K` (an IR table read, mirroring the fixed-base window tables)
+  let genX : Vector Fp (2 ^ K) := Vector.ofFn fun k => (G.S k.val).x
+  let xPs ← witnessVector (w + 1) (Vector.ofFn fun (i : Fin (w + 1)) =>
+    genX[input.piece.val / (2 ^ (K * i.val) : ℕ) % (2 ^ K : ℕ)])
+  -- λ₁, λ₂ and the next-row x_a stay native: their honest values chain through the
+  -- recursive accumulator `accAfter` (row i needs i prior incomplete additions; the
+  -- witness IR has no fold loops, and unrolling is O(i) term size per row), and they
+  -- read the `UnconstrainedDepNative` hint `input.yA`, which no IR expression can
+  -- consume
   let l1s ← witnessVectorNative (w + 1) fun env =>
     Vector.ofFn fun (i : Fin (w + 1)) =>
       (rowValue (accAfter G (env input.xA, input.yA env) (env input.piece) i.val)
@@ -370,6 +378,20 @@ theorem accAfter_eq_chain (G : Generators) {A : Point Fp} (p : Fp)
 theorem pieceWord_lt (p : Fp) (r : ℕ) : pieceWord p r < 2 ^ K :=
   Nat.mod_lt _ (by norm_num [K])
 
+/-- The evaluated generator-column read is the honest `x_p` value: the range guard of
+the `.listGet` table read discharges since the word is a `mod 2^K` residue, and the raw
+div/mod index folds back into `pieceWord` (with `FiniteField.val = ZMod.val`)
+definitionally. The LHS is the `circuit_norm` normal form of the witness-IR
+completeness hypothesis for `xPs`. -/
+private theorem genX_read_value (G : Generators) (p : Fp) (r : ℕ) :
+    (if _ : FiniteField.val p / 2 ^ (K * r) % 2 ^ K < 2 ^ K
+      then (G.S (FiniteField.val p / 2 ^ (K * r) % 2 ^ K)).x else 0)
+    = (G.S (pieceWord p r)).x := by
+  have hlt : FiniteField.val p / 2 ^ (K * r) % 2 ^ K < 2 ^ K :=
+    Nat.mod_lt _ (by norm_num [K])
+  simp only [dif_pos hlt]
+  rfl
+
 theorem pieceZ_zero (p : Fp) : pieceZ p 0 = p := by
   unfold pieceZ
   rw [Nat.mul_zero, pow_zero, Nat.div_one]
@@ -574,6 +596,9 @@ theorem completeness (G : Generators) (w : ℕ) :
     intro i
     simp only [h_zs i, pieceZ]
     rfl
+  replace h_xPs : ∀ i : Fin (w + 1), env.get (i₀ + 1 + w + i.val)
+      = (G.S (pieceWord input_piece i.val)).x :=
+    fun i => (h_xPs i).trans (genX_read_value G input_piece i.val)
   have haux := completeness_aux G w input_piece input_xA input_yA hAx hAy hB
   simp only [Vector.getElem_append,
     Vector.getElem_mapRange, circuit_norm]

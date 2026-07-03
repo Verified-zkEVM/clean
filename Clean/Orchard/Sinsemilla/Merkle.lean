@@ -1118,6 +1118,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     | k + 1 => Expression.eval env.toEnvironment
         (Layer.main G Q hQ 0 hpf default (i₀ + k * 274)).1
   set I : ProverValue Input Fp := { leaf := input_leaf, path := input_path, pos := input_pos }
+    with hI
   -- the chunk list hashed at layer `k` with running node `acc k`
   have key : ∀ k, k ≤ 32 → honestNode G Q I k = some (acc k) := by
     intro k
@@ -1147,6 +1148,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       rw [hB]
       show some B.x = some (acc (k + 1))
       congr 1
+      -- align `hB` with the propositional condition spelling of `hL0`/`hLstep`
+      -- (their `decide _ = true` conditions are `circuit_norm`-normalized)
+      rw [hchunks] at hB
+      simp only [Layer.proverChunks, hI, decide_eq_true_eq] at hB
       -- now show `B.x = acc (k+1)` via the per-layer prover spec
       rcases k with _ | j
       · -- layer 0: feed `hL0` the existence we just produced
@@ -1181,6 +1186,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
           posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) }) with _ | B
     · rw [hh] at h1; simp at h1
     · exact ⟨B, rfl⟩
+  -- align with the propositional condition spelling of the goals
+  simp only [Layer.proverChunks, hI, decide_eq_true_eq] at hAsm
   refine ⟨⟨?_, ?_⟩, ?_⟩
   · -- layer-0 assumption
     exact hAsm 0 (by norm_num)

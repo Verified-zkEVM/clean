@@ -333,6 +333,16 @@ theorem WitgenIR.eval_ofFExprs_singleton [FiniteField F] (e : FExpr F) (env : Pr
 
 attribute [circuit_norm] Array.getElem?_singleton
 
+/- Witness-IR `BExpr` conditions surface in goals as `decide P = true` (via the
+`Bool → Prop` coercion in `FExpr.eval`'s `.ite` case), with the `Decidable` instance
+baked at `BExpr.eval`'s definition site — which is *not* syntactically the instance a
+user writes at a concrete field, so `decide`-spelled proof patterns never match.
+Normalizing to the propositional form in `circuit_norm` removes the instance from the
+condition entirely (it survives only as the `ite`'s instance argument, where
+instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); together with
+`FiniteField.val_inj` this gives `.feq` conditions the plain `x = y` shape. -/
+attribute [circuit_norm] decide_eq_true_eq
+
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
 theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
