@@ -40,15 +40,15 @@ the prover-side full-width blinding scalar behind the `ScalarFixed` value `rivk`
 structure Input (F : Type) where
   ak : F
   nk : F
-  rivk : UnconstrainedNative Fq F
+  rivk : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ ak := default, nk := default, rivk := fun _ => default }⟩
+  ⟨{ ak := default, nk := default, rivk := default }⟩
 
 open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
 open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
-open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
 
@@ -669,7 +669,9 @@ def ProverAssumptions (G : Generators) (Q : Point Fp)
     (_ : ProverHint Fp) : Prop :=
   let ak : Fp := input.ak
   let nk : Fp := input.nk
-  ∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B
+  (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
+  -- the blinding-scalar hint is the canonical natural representative of `rivk : Fq`
+  (show ℕ from input.rivk) < PALLAS_SCALAR_CARD
 
 def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : ProverValue Output Fp) (_ : ProverHint Fp) : Prop :=
@@ -692,7 +694,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
       Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
         #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
       (∀ B, hashToPoint G.S Q chunks = some B →
-        output.cells.point = B + (show Fq from input.rivk) • R)
+        output.cells.point = B + ((show ℕ from input.rivk : ℕ) : Fq) • R)
 
 theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
@@ -870,11 +872,15 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
       Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
-        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
-    rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_, ?_⟩
+    · rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2,
-      hak_eq, hnk_eq]
-    exact h_assumptions)).2
+        hak_eq, hnk_eq]
+      exact h_assumptions.1
+    · show Witgen.M.evalNat env input_var.rivk < PALLAS_SCALAR_CARD
+      rw [show Witgen.M.evalNat env input_var.rivk = input.rivk from by
+        rw [← h_input]; simp only [circuit_norm]]
+      exact h_assumptions.2)).2
   simp only [CommitDomain.circuit, CommitDomain.ProverSpec] at hWZspec
   obtain ⟨hZsH, hHash⟩ := hWZspec
   refine ⟨⟨trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
@@ -884,11 +890,15 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
       Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
-        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_⟩
-    rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
+        (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_, ?_⟩
+    · rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2,
-      hak_eq, hnk_eq]
-    exact h_assumptions
+        hak_eq, hnk_eq]
+      exact h_assumptions.1
+    · show Witgen.M.evalNat env input_var.rivk < PALLAS_SCALAR_CARD
+      rw [show Witgen.M.evalNat env input_var.rivk = input.rivk from by
+        rw [← h_input]; simp only [circuit_norm]]
+      exact h_assumptions.2
   · -- the strengthened ProverSpec; re-fold the (dsimp-reduced) output to a clean opaque var
     show ProverSpec G Q R input
       (eval env (ElaboratedCircuit.output (main G Q hQ R) input_var i₀)) env.hint
@@ -947,7 +957,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
         Orchard.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
           #v[(eval env O).cells.a, (eval env O).cells.b, (eval env O).cells.c, (eval env O).cells.d] chunks ∧
         (∀ B, hashToPoint G.S Q chunks = some B →
-          (eval env O).cells.point = B + (show Fq from input.rivk) • R) := by
+          (eval env O).cells.point = B + ((show ℕ from input.rivk : ℕ) : Fq) • R) := by
       refine ⟨Orchard.Specs.Sinsemilla.commitIvkChunks
         (Expression.eval env.toEnvironment input_var.ak).val
         (Expression.eval env.toEnvironment input_var.nk).val, ?_, ?_⟩
@@ -1196,8 +1206,10 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
-      (fun input _ _ => ProverAssumptions G Q input.ak input.nk)
-      (fun input ivk _ => ProverSpec G Q R input.ak input.nk input.rivk ivk) := by
+      (fun input _ _ => ProverAssumptions G Q input.ak input.nk ∧
+        (show ℕ from input.rivk) < PALLAS_SCALAR_CARD)
+      (fun input ivk _ =>
+        ProverSpec G Q R input.ak input.nk ((show ℕ from input.rivk : ℕ) : Fq) ivk) := by
   circuit_proof_start_core
   dsimp only [main, circuit_norm] at h_env ⊢
   -- Commit's prover assumptions: the hash exists for the honest `commit_ivk` chunks
@@ -1208,9 +1220,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   have hCommitPA : (Commit.circuit G Q hQ R).ProverAssumptions (eval env input_var) env.data env.hint := by
     simp only [Commit.circuit, Commit.ProverAssumptions]
     rw [show ((eval env input_var).ak : Fp) = input.ak from by rw [h_input],
-      show ((eval env input_var).nk : Fp) = input.nk from by rw [h_input]]
-    rcases h_assumptions with ⟨B, hB⟩
-    exact ⟨B, hB⟩
+      show ((eval env input_var).nk : Fp) = input.nk from by rw [h_input],
+      show (eval env input_var).rivk = input.rivk from by rw [h_input]]
+    rcases h_assumptions with ⟨⟨B, hB⟩, hrivk⟩
+    exact ⟨⟨B, hB⟩, hrivk⟩
   -- the Commit `ProverSpec`: all the cell values, ranges, z-cells, and the hash existential
   rw [GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses] at h_env
   have hCommitPS := (h_env.1 hCommitPA).2
@@ -1355,8 +1368,10 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   main := main G Q hQ R
   elaborated := elaborated G Q hQ R
   Spec := fun input ivk _ => Spec G Q R input.ak input.nk ivk
-  ProverAssumptions := fun input _ _ => ProverAssumptions G Q input.ak input.nk
-  ProverSpec := fun input ivk _ => ProverSpec G Q R input.ak input.nk input.rivk ivk
+  ProverAssumptions := fun input _ _ => ProverAssumptions G Q input.ak input.nk ∧
+    (show ℕ from input.rivk) < PALLAS_SCALAR_CARD
+  ProverSpec := fun input ivk _ =>
+    ProverSpec G Q R input.ak input.nk ((show ℕ from input.rivk : ℕ) : Fq) ivk
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
 

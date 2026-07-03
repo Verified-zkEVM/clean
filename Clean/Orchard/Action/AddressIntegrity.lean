@@ -22,6 +22,7 @@ synthesis circuit.
 namespace Orchard.Action.AddressIntegrity
 
 open CompElliptic.Curves.Pasta
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 open Ecc
 open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint)
 
@@ -31,13 +32,13 @@ witness constrained equal to `[ivk] gDOld`. -/
 structure Input (F : Type) where
   ak : F
   nk : F
-  rivk : UnconstrainedNative Fq F
+  rivk : UnconstrainedNat F
   gDOld : Point F
   pkDOld : Point F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ ak := default, nk := default, rivk := fun _ => default,
+  ⟨{ ak := default, nk := default, rivk := default,
      gDOld := { x := default, y := default },
      pkDOld := { x := default, y := default } }⟩
 
@@ -85,11 +86,13 @@ def ProverAssumptions (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
   let gDOld : Point Fp := input.gDOld
   let pkDOld : Point Fp := input.pkDOld
   (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
+  -- the blinding-scalar hint is the canonical natural representative of `rivk : Fq`
+  (show ℕ from input.rivk) < PALLAS_SCALAR_CARD ∧
   gDOld.OnCurve ∧
     ∀ ivk : Fp,
       (∀ B : Point Fp,
         hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-          ivk = (B + (show Fq from input.rivk) • R).x) →
+          ivk = (B + ((show ℕ from input.rivk : ℕ) : Fq) • R).x) →
       pkDOld = ivk.val • gDOld
 
 theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -110,18 +113,21 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
       (ProverAssumptions G Q R)
-      (fun input output _ => ProverSpec G Q R input.ak input.nk input.rivk input.gDOld output) := by
+      (fun input output _ =>
+        ProverSpec G Q R input.ak input.nk ((show ℕ from input.rivk : ℕ) : Fq)
+          input.gDOld output) := by
   circuit_proof_start [CommitIvk.circuit, Mul.circuit]
-  obtain ⟨h_hash_exists, h_gd, h_pkd⟩ := h_assumptions
+  obtain ⟨h_hash_exists, h_rivk, h_gd, h_pkd⟩ := h_assumptions
   have h_commit_assumptions :
       (CommitIvk.circuit G Q hQ R).ProverAssumptions
         { ak := input_ak, nk := input_nk, rivk := input_rivk }
         env.data env.hint := by
-    simpa [CommitIvk.circuit, CommitIvk.ProverAssumptions] using h_hash_exists
+    exact ⟨by simpa [CommitIvk.circuit, CommitIvk.ProverAssumptions] using h_hash_exists,
+      h_rivk⟩
   let ivkOut : Var field Fp := (CommitIvk.circuit G Q hQ R).output
     { ak := input_var.ak, nk := input_var.nk, rivk := input_var.rivk } i₀
   have h_ivk_child_prover :
-      CommitIvk.ProverSpec G Q R input_ak input_nk input_rivk
+      CommitIvk.ProverSpec G Q R input_ak input_nk ((show ℕ from input_rivk : ℕ) : Fq)
         (Expression.eval env.toEnvironment ivkOut) := by
     simpa [ivkOut, CommitIvk.ProverSpec, circuit_norm]
       using (h_env.1 h_commit_assumptions).2
@@ -141,7 +147,9 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   Assumptions
   Spec := fun input output _ => Spec G Q R input.ak input.nk input.gDOld output
   ProverAssumptions := ProverAssumptions G Q R
-  ProverSpec := fun input output _ => ProverSpec G Q R input.ak input.nk input.rivk input.gDOld output
+  ProverSpec := fun input output _ =>
+    ProverSpec G Q R input.ak input.nk ((show ℕ from input.rivk : ℕ) : Fq)
+      input.gDOld output
   soundness := soundness G Q hQ R
   completeness := completeness G Q hQ R
 

@@ -53,31 +53,58 @@ construction step needed anywhere.
   vectors still reduce via `Vector.getElem_ofFn` first). With it, the whole migration goes
   through with only spelling-level proof adjustments in `CalculateRoot.completeness`, and
   `Utilities.lean`/`Action.lean` need zero proof changes.
-- `Clean/Orchard/Action/AddressIntegrity.lean` (`rivk : UnconstrainedNative Fq F`),
-  `Clean/Orchard/Action/SpendAuthority.lean` (`alpha : UnconstrainedNative Fq F`),
-  `Clean/Orchard/Action/ValueCommit.lean` (`rcv : UnconstrainedNative Fq F`), and
-  `Action.lean`'s own `rcmOld`/`rcmNew : UnconstrainedNative Fq F`: `Fq` (the Pallas
-  *scalar* field, fixed and independent of the circuit's own field `Fp`) has no
-  `Unconstrained*` carrier of its own — the natural fit is `UnconstrainedNat` holding
-  `Fq.val : ℕ` (mirroring the `NExpr.val`/`FExpr.ofNat` `F ↔ ℕ` bridge used elsewhere), but
-  this wasn't attempted: the *downstream* consumer (`MulFixed`'s window-decomposition
-  witness generation, reading the scalar via `.testBit`/`.val` on the actual `Fq`
-  element) is itself blocked on the abstract fixed-base generator tables (see the
-  "Fixed-base multiplication window tables" section below) having no concrete backing
-  data — so migrating just the scalar's carrier type wouldn't unlock anything further
-  down the chain, and risks its own version of the same kernel-cliff class of issue seen
-  above given no `Unconstrained*`/`Fq` combination has been tried yet.
-- `Clean/Orchard/Ecc/Mul/{Incomplete,Complete,Assign}.lean`'s per-round bit hints and
-  `Clean/Orchard/Utilities.lean`'s `WitnessShort.Input` — not attempted this round; see the
-  "Type-level native" section below for the design (packed `UnconstrainedNat` +
-  `NExpr.testBit`/`.range`), which carries the same open kernel-cliff risk given how
-  `Ecc/Mul/*` also loop over many rounds (`Circuit.foldlRange`/`foldl` over 3–83
-  iterations, structurally similar to `CalculateRoot`'s 32-layer fold).
+- The `Fq` scalar hints (`rivk`/`alpha`/`rcv`/`rcmOld`/`rcmNew` across `SpendAuthority`/
+  `ValueCommit`/`AddressIntegrity`/`CommitIvk`/`NoteCommit`/`CommitDomain`/`Action.lean`):
+  migrated to `UnconstrainedNat` carrying `Fq.val`, as part of the fixed-base table port
+  (see the next section) — `ProverAssumptions` gains `scalar < PALLAS_SCALAR_CARD`,
+  `ProverSpec` casts `(scalar : Fq)`, verifier-side contracts unchanged.
+- `Clean/Orchard/Ecc/Mul/{Incomplete,Complete,Assign}.lean`'s per-round bit hints: the
+  *bits themselves* could be packed into `UnconstrainedNat`, but the consuming witnesses
+  (`z`, `l1`, `l2`, `xANext`, `yAFinal`) are **recursive accumulator computations** — each
+  row's value chains r prior EC additions (`accVal`/`zRunValue`/`rowLambdaValue`). The IR
+  has no fold/accumulator loop former (`VExpr` is `lit`/`mapRange`/`append` only; the
+  `TODO WITGENIR do we need fully general (foldl) loops?` in `WitnessIR.lean` is exactly
+  this), so a compact IR expression per row is impossible today — per-row expansion would
+  be O(n²) term size for n=254 rounds. **This is a genuine IR-extension candidate (fold
+  loops), not portable as-is.** `Utilities.lean`'s `WitnessShort.Input` remains on the old
+  carrier for now (small, non-blocking).
 
-## Fixed-base multiplication window tables (abstract, no concrete backing data)
+## Fixed-base multiplication window tables
 
-- `Clean/Orchard/Ecc/MulFixed/FullWidth.lean` (`FullWidth.main`, 3 sites: `row₀`/`row`/
-  `row₈₄`), `Clean/Orchard/Ecc/MulFixed/Short.lean` (`Short.main`, 3 sites: `t₀`/`t`/`t₂₁`),
+**PORTED for `FullWidth.lean`** (prototype; replication to `Short.lean`/`BaseFieldElem.lean`/
+`HashToPoint.lean` in progress): the earlier claim that these need concrete backing data
+was wrong (per review) — the abstract `B.point`/`B.u` functions are turned into per-window
+8-entry tables *inline* with `Vector.ofFn`, and indexed by the NExpr window value using the
+IR's `v[k]`/`.listGet` sugar (the FemtoCairo pattern):
+
+```lean
+def rowProgram (B : FixedBase) (scalar : Var UnconstrainedNat Fp) (w : ℕ) :
+    Witgen.M Fp (CoordsRow (Witgen.FExpr Fp)) := do
+  let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x  -- ys, us likewise
+  let s ← scalar
+  let k := s / (8 ^ w : ℕ) % 8
+  return CoordsRow.mk k.toField xs[k] ys[k] us[k]
+```
+
+Prerequisite folded in: the `Fq` scalar hints became `UnconstrainedNat` carrying `s.val`,
+with `ProverAssumptions` gaining `scalar < PALLAS_SCALAR_CARD` and `ProverSpec` casting
+`(scalar : Fq)` — verifier-side `Spec`/`Assumptions` untouched (this covers the previously
+deferred `rivk`/`alpha`/`rcv`/`rcm*` items: `SpendAuthority`, `ValueCommit`,
+`CommitDomain.r`, `NoteCommit.rcm`, `CommitIvk.rivk`, `AddressIntegrity.rivk`, and
+`Action.lean`'s five scalar fields are all migrated). No new framework lemmas were needed;
+notable design point: read the scalar with a plain `let` after `← scalar` (not
+`Witgen.letN`) — a `letN` behind an opaque program prefix lands at a step index with no
+`circuit_norm` evaluation path today (see fix-patterns #24-29).
+
+### Still remaining in this section
+
+- Replication of the `FullWidth.lean` pattern to `Clean/Orchard/Ecc/MulFixed/Short.lean`
+  (3 sites), `Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean` (5 sites), and
+  `Clean/Orchard/Sinsemilla/HashToPoint.lean`'s generator reads (`xPs`/`l1s`/`l2s`/`xAs`,
+  reading `G.S : ℕ → Point Fp` — a 2^10-entry `Vector.ofFn` table indexed by `pieceWord`)
+  — in progress.
+- (superseded text below kept for the original site inventory)
+  `Clean/Orchard/Ecc/MulFixed/Short.lean` (`Short.main`, 3 sites: `t₀`/`t`/`t₂₁`),
   `Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean` (`RunningSumMul.main`, 5 sites: `t₀`/`t`
   ×2/`t₄₃`/`t₈₄`): all compute `rowValue`/`rowTailValue B scalar w`, which reads
   `B.point`/`B.u` — fields of the abstract `MulFixed.FixedBase` structure
@@ -169,14 +196,15 @@ follow-up migration, roughly in decreasing order of expected payoff:
   `Point.add`/`ShortWeierstrass.add`), `lambda`, and `delta`. `ShortWeierstrass.add`
   dispatches on `Decidable`-equality of *point pairs* (`p = (0,0)`, `q = (0,0)`,
   `p.1 = q.1`, nested) — porting it to the IR requires decomposing pair-equality into
-  component `BExpr.feq`s (`.ite ((p1=?0) &&& (p2=?0)) ...`), which is a genuine rewrite of
-  shared spec-level branching logic, not just a witness-level annotation; `lambda`/`delta`
-  (which only need scalar equality, not pair equality) were attempted directly via
-  `.ite`/`=?` but produced a soundness/completeness proof-shape mismatch downstream (the
-  `Gate.Spec` conjunction's `simp`-normal-form differs between the `lambdaValue`-unfolded
-  path and the raw `.ite`-evaluated path in a way that didn't reconcile with a
-  reasonable amount of `simp`-lemma tuning) — reverted to `witnessNative` rather than
-  force a fix. `alpha`/`beta`/`gamma` (pure `⁻¹`, no conditional) WERE successfully
+  component `BExpr.feq`s (`.ite ((p1=?0) &&& (p2=?0)) ...`), a genuine rewrite of shared
+  spec-level branching logic; still native. `lambda`/`delta` **are now ported** via
+  `.ite`/`=?` (second attempt): the original proof-shape mismatch is resolved by
+  instance-generic bridge lemmas (`ite_lambdaValue`/`ite_deltaValue`, stated with the
+  `Decidable` instances as variables) applied right after `circuit_proof_start` — needed
+  because `BExpr.feq`'s evaluation decides field equality through its own instance, which
+  is not syntactically the canonical `DecidableEq Fp`, so `decide`-spelled patterns never
+  match (convert conditions propositional with `decide_eq_true_eq` first, then bridge
+  before mathlib's `mul_ite`/`ite_mul` distribution can scatter the `if` into products). `alpha`/`beta`/`gamma` (pure `⁻¹`, no conditional) WERE successfully
   ported. `Clean/Orchard/Ecc/AddIncomplete.lean`'s single witness site (also point
   arithmetic, but *without* any conditional — `nondegenerateAdd`, a straight-line
   `-,*,⁻¹` formula) was fully ported by generalizing `Point.nondegenerateAdd` to work

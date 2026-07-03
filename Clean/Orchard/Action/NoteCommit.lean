@@ -233,12 +233,12 @@ structure Input (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : UnconstrainedNative Fq F
+  rcm : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
   ⟨{ gd := default, pkd := default, value := default, rho := default, psi := default,
-     rcm := fun _ => default }⟩
+     rcm := default }⟩
 
 structure MessageCells (F : Type) where
   a : F
@@ -869,7 +869,7 @@ def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
   ∀ B : Point Fp,
     hashToPoint G.S Q
         (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + (show Fq from input.rcm) • R
+      cm = B + ((show ℕ from input.rcm : ℕ) : Fq) • R
 
 namespace AssignMessagePieces
 
@@ -1873,6 +1873,8 @@ def ProverAssumptions (G : Generators) (Q : Point Fp)
   -- the note's value is a `u64` (the prover commits to a valid note); the `value_canonicity`
   -- gate's constraint `value = d2 + d3·2^8 + e0·2^58` is satisfiable only at such values.
   (show Fp from input.value).val < 2 ^ 64 ∧
+  -- the commitment randomness hint is the canonical natural representative of `rcm : Fq`
+  (show ℕ from input.rcm) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
   let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
     noteScalarsOf input.gd input.pkd input.value input.rho input.psi
   ∃ B, hashToPoint G.S Q
@@ -2364,14 +2366,14 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     GdCanonicity.circuit, PkdCanonicity.circuit, ValueCanonicity.circuit,
     RhoCanonicity.circuit, PsiCanonicity.circuit]
   obtain ⟨⟨-, hAMProver⟩, hComImpl, -⟩ := h_env
-  obtain ⟨-, -, hvalue, hHashEx⟩ := h_assumptions
+  obtain ⟨-, -, hvalue, hrcm, hHashEx⟩ := h_assumptions
   have hMCF := hAMProver
   simp only [AssignMessagePieces.ProverSpec, circuit_norm] at hMCF
   have hPB := pieceBounds_of_cellFacts hMCF
   have hHonestEq := honestChunks_eq_noteCommitChunks_of_cellFacts hMCF hvalue
   have hCPA : (Commit.circuit G Q hQ R).ProverAssumptions
       { pieces := ?pcs, r := input_rcm } env.data env.hint := by
-    refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_⟩
+    refine ⟨by simpa [messagePieces, messagePieceRounds] using hPB, ?_, hrcm⟩
     obtain ⟨B, hB⟩ := hHashEx
     refine ⟨B, ?_⟩
     have hHonestEqCommit :

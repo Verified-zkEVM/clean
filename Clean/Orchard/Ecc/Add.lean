@@ -312,15 +312,17 @@ def main (input : Var Input Fp) :
   let q <== input.q
   let r ← witnessNative fun env =>
     (rowValue { p := eval env p, q := eval env q }).r
-  let lambda ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).lambda
   let px : Witgen.FExpr Fp := p.x
   let qx : Witgen.FExpr Fp := q.x
+  let py : Witgen.FExpr Fp := p.y
+  let qy : Witgen.FExpr Fp := q.y
+  let lambda ← witness <| .ite (qx =? px)
+    (.ite (py =? 0) 0 ((3 * px * px) * (2 * py)⁻¹))
+    ((qy - py) * (qx - px)⁻¹)
   let alpha ← witness <| (qx - px)⁻¹
   let beta ← witness <| px⁻¹
   let gamma ← witness <| qx⁻¹
-  let delta ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).delta
+  let delta ← witness <| .ite (qx =? px) ((qy + py)⁻¹) 0
   Gate.circuit {
     x_p := p.x
     y_p := p.y
@@ -663,9 +665,31 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   exact ⟨by simpa [row] using hvalid,
     by simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hcoords⟩
 
+/-- The evaluated `.ite` witness program for `lambda` is `lambdaValue`. Stated with the
+`Decidable` instances as variables: `BExpr.feq`'s evaluation decides field equality
+through its own instance, which is not syntactically the canonical one — an
+instance-generic statement lets `simp` match either spelling (after
+`decide_eq_true_eq` has turned the conditions propositional). -/
+private theorem ite_lambdaValue (px py qx qy : Fp)
+    {d1 : Decidable (qx = px)} {d2 : Decidable (py = 0)} :
+    (@ite _ (qx = px) d1
+      (@ite _ (py = 0) d2 (0 : Fp) (3 * px * px * (2 * py)⁻¹))
+      ((qy + -py) * (qx + -px)⁻¹))
+    = lambdaValue { p := { x := px, y := py }, q := { x := qx, y := qy } } := by
+  unfold lambdaValue
+  by_cases h : qx = px <;> by_cases h' : py = 0 <;> simp_all [sub_eq_add_neg]
+
+/-- Same for the `delta` witness program and `rowValue`'s delta component. -/
+private theorem ite_deltaValue (px py qx qy : Fp) {d : Decidable (qx = px)} :
+    (@ite _ (qx = px) d ((qy + py)⁻¹) 0)
+    = (rowValue { p := { x := px, y := py }, q := { x := qx, y := qy } }).delta := by
+  unfold rowValue
+  by_cases h : qx = px <;> simp_all
+
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec]
+  simp only [decide_eq_true_eq, ite_lambdaValue, ite_deltaValue] at h_env
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩

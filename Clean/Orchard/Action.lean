@@ -81,21 +81,21 @@ structure Input (F : Type) where
   vOld : Unconstrained field F
   rhoOld : Unconstrained field F
   psiOld : Unconstrained field F
-  rcmOld : UnconstrainedNative Fq F
+  rcmOld : UnconstrainedNat F
   cmOld : Unconstrained Point F
   -- spend authority / key material
-  alpha : UnconstrainedNative Fq F
+  alpha : UnconstrainedNat F
   akP : Unconstrained Point F
   nk : Unconstrained field F
-  rivk : UnconstrainedNative Fq F
+  rivk : UnconstrainedNat F
   -- new note
   gdNew : Unconstrained Point F
   pkdNew : Unconstrained Point F
   vNew : Unconstrained field F
   psiNew : Unconstrained field F
-  rcmNew : UnconstrainedNative Fq F
+  rcmNew : UnconstrainedNat F
   -- value commitment
-  rcv : UnconstrainedNative Fq F
+  rcv : UnconstrainedNat F
   vNetMagnitude : Unconstrained field F
   vNetSign : Unconstrained field F
   -- merkle path
@@ -357,6 +357,9 @@ def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
   -- `ak_P` is a non-identity point (`NonIdentityPoint::new` in the source); this also
   -- supplies SpendAuthority's weaker `Valid` precondition.
   input.akP.OnCurve ∧
+  -- the spend-authority randomizer hint is the canonical natural representative of
+  -- `alpha : Fq`
+  (show ℕ from input.alpha) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
   AddressIntegrity.ProverAssumptions P.Gci P.Qci P.Rci
       { ak := input.akP.x, nk := input.nk, rivk := input.rivk,
         gDOld := input.gdOld, pkDOld := input.pkdOld } data hint ∧
@@ -400,7 +403,7 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
   circuit_proof_start [WitnessPoint.circuit, WitnessNonIdentityPoint.circuit,
     ValueCommit.circuit, DeriveNullifier.circuit, SpendAuthority.circuit,
     AddressIntegrity.circuit, NoteCommit.circuit, Gate.circuit]
-  obtain ⟨haMerkle, haVC, haCmOld, haAkP, haAI, haNCold, haNCnew,
+  obtain ⟨haMerkle, haVC, haCmOld, haAkP, haAlpha, haAI, haNCold, haNCnew,
     hcVC, hcNF, hcSA, hcNColdSpec, hcNCnew, hcMerkleGate⟩ := h_assumptions
   obtain ⟨ePsiOld, eRhoOld, eCmOld, eGdOld, eAkP, eNk, eVOld, eVNew, eMerkle,
     eVNetMag, eVNetSign, eVC, eNF, eSA, ePkdOld, eAI, eNCold, eGdNew, ePkdNew,
@@ -426,7 +429,8 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
   rw [eNk, eRhoOld, ePsiOld, cmOldCell, DeriveNullifier.Spec] at hNfSpec
   have hNfEdge := hNfSpec.trans hcNF.symm
   -- spend-authority edge: the SpendAuthority output cell equals the public (RK_X, RK_Y).
-  have hSAProver := (eSA (by show Point.Valid _; rw [akPCell]; exact Or.inl haAkP)).2
+  have hSAProver := (eSA ⟨by show Point.Valid _; rw [akPCell]; exact Or.inl haAkP,
+    haAlpha⟩).2
   rw [akPCell, SpendAuthority.ProverSpec] at hSAProver
   rw [SpendAuthority.ProverSpec] at hcSA
   have hRkEdge := hSAProver.trans hcSA.symm
@@ -435,7 +439,7 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
   rw [eVNetMag, eVNetSign, ValueCommit.ProverSpec] at hVCProver
   rw [ValueCommit.ProverSpec] at hcVC
   have hCvEdge :=
-    haVC.2.elim
+    haVC.2.1.elim
       (fun hs => (hVCProver.1 hs).trans (hcVC.1 hs).symm)
       (fun hs => (hVCProver.2 hs).trans (hcVC.2 hs).symm)
   -- old note-commitment edge: the derived cm_old output cell equals the witnessed cm_old.
@@ -444,7 +448,7 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
   rw [gdOldCell, pkdOldCell, eVOld, eRhoOld, ePsiOld,
     NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hNCoProver
   rw [NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hcNColdSpec
-  obtain ⟨Bold, hBold⟩ := haNCold.2.2.2
+  obtain ⟨Bold, hBold⟩ := haNCold.2.2.2.2
   have hNCoEdge := (hNCoProver Bold hBold).trans (hcNColdSpec Bold hBold).symm
   -- new note-commitment edge: the derived cm_new output cell's x-coordinate equals CMX.
   obtain ⟨cmNewY, hcNCnewSpec⟩ := hcNCnew
@@ -453,7 +457,7 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
   rw [gdNewCell, pkdNewCell, eVNew, ePsiNew, hNfEdge,
     NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hNCnProver
   rw [NoteCommit.ProverSpec, NoteCommit.ProverNoteCommitRelation] at hcNCnewSpec
-  obtain ⟨Bnew, hBnew⟩ := haNCnew.2.2.2
+  obtain ⟨Bnew, hBnew⟩ := haNCnew.2.2.2.2
   have hCmnEdge := (hNCnProver Bnew hBnew).trans (hcNCnewSpec Bnew hBnew).symm
   refine ⟨haCmOld, hGdOldOn, haAkP, ?_, ?_⟩
   · -- Merkle ProverAssumptions
@@ -467,8 +471,7 @@ theorem constraints_of_intermediateProverAssumptions (P : Params) :
     rw [cmOldCell]; exact haCmOld
   case nfedge => exact hNfEdge
   case sapa =>
-    show Point.Valid _
-    rw [akPCell]; exact Or.inl haAkP
+    exact ⟨by show Point.Valid _; rw [akPCell]; exact Or.inl haAkP, haAlpha⟩
   case rkedge => exact hRkEdge
   case pkdold => exact hPkdOldOn
   case aipa =>

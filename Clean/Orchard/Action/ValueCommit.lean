@@ -21,17 +21,19 @@ namespace Orchard.Action.ValueCommit
 
 open Ecc
 open CompElliptic.Curves.Pasta
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 /-- The inputs of `value_commit_orchard`: the magnitude-sign pair behind the
 `ScalarFixedShort` value `v` (already-assigned cells) and the prover-side full-width
-scalar behind the `ScalarFixed` value `rcv`. -/
+scalar behind the `ScalarFixed` value `rcv` (the canonical natural representative of
+the `Fq` scalar). -/
 structure Input (F : Type) where
   v : MulFixed.Short.MagnitudeSign F
-  rcv : UnconstrainedNative Fq F
+  rcv : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ v := { magnitude := default, sign := default }, rcv := fun _ => default }⟩
+  ⟨{ v := { magnitude := default, sign := default }, rcv := default }⟩
 
 def main (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase)
     (input : Var Input Fp) : Circuit Fp (Var Point Fp) := do
@@ -56,14 +58,17 @@ def Spec (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase)
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  input.v.magnitude.val < 2 ^ 64 ∧ (input.v.sign = 1 ∨ input.v.sign = -1)
+  input.v.magnitude.val < 2 ^ 64 ∧ (input.v.sign = 1 ∨ input.v.sign = -1) ∧
+    (show ℕ from input.rcv) < PALLAS_SCALAR_CARD
 
 def ProverSpec (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase)
     (input : ProverValue Input Fp) (output : Point Fp) (_ : ProverHint Fp) : Prop :=
   (input.v.sign = 1 →
-      output = (input.v.magnitude.val : Fq) • V + (show Fq from input.rcv) • R) ∧
+      output = (input.v.magnitude.val : Fq) • V
+        + ((show ℕ from input.rcv : ℕ) : Fq) • R) ∧
     (input.v.sign = -1 →
-      output = ((-(input.v.magnitude.val : Fq)) : Fq) • V + (show Fq from input.rcv) • R)
+      output = ((-(input.v.magnitude.val : Fq)) : Fq) • V
+        + ((show ℕ from input.rcv : ℕ) : Fq) • R)
 
 theorem soundness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main V R) (fun _ _ => True)
@@ -90,20 +95,22 @@ theorem completeness (V : MulFixed.Short.FixedBase) (R : MulFixed.FixedBase) :
       (ProverSpec V R) := by
   circuit_proof_start [main, ProverSpec, ProverAssumptions,
     MulFixed.Short.circuit, MulFixed.Short.ProverSpec, MulFixed.Short.ProverAssumptions,
-    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
+    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverAssumptions,
+    MulFixed.FullWidth.ProverSpec,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_short_env, h_fw_env, h_add_env⟩ := h_env
-  obtain ⟨_, hC1, hCneg⟩ := h_short_env h_assumptions
-  obtain ⟨_, hblind⟩ := h_fw_env
+  obtain ⟨hmag, hsign, hrcv⟩ := h_assumptions
+  obtain ⟨_, hC1, hCneg⟩ := h_short_env ⟨hmag, hsign⟩
+  obtain ⟨_, hblind⟩ := h_fw_env hrcv
   have h_final := h_add_env ⟨by
-      rcases h_assumptions.2 with h | h
+      rcases hsign with h | h
       · rw [hC1 h]
         exact V.smul_valid _
       · rw [hCneg h]
         exact V.smul_valid _,
     by rw [hblind]; exact R.smul_valid _⟩
-  refine ⟨⟨h_assumptions, ?_, ?_⟩, ?_, ?_⟩
-  · rcases h_assumptions.2 with h | h
+  refine ⟨⟨⟨hmag, hsign⟩, hrcv, ?_, ?_⟩, ?_, ?_⟩
+  · rcases hsign with h | h
     · rw [hC1 h]
       exact V.smul_valid _
     · rw [hCneg h]

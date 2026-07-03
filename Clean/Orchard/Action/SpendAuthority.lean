@@ -18,16 +18,18 @@ namespace Orchard.Action.SpendAuthority
 
 open Ecc
 open CompElliptic.Curves.Pasta
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 /-- Inputs of the spend-authority block: the already-assigned authorizing key point
-`ak_P` and the prover-side randomizer `alpha`. -/
+`ak_P` and the prover-side randomizer `alpha` (the canonical natural representative of
+the `Fq` scalar). -/
 structure Input (F : Type) where
   akP : Point F
-  alpha : UnconstrainedNative Fq F
+  alpha : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ akP := { x := default, y := default }, alpha := fun _ => default }⟩
+  ⟨{ akP := { x := default, y := default }, alpha := default }⟩
 
 def main (SpendAuthG : MulFixed.FixedBase) (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
@@ -46,7 +48,7 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 
 def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
     (_ : ProverHint Fp) : Prop :=
-  input.akP.Valid
+  input.akP.Valid ∧ (show ℕ from input.alpha) < PALLAS_SCALAR_CARD
 
 /-- The spend validating key is randomized as `rk = [alpha] SpendAuthG + ak_P`. -/
 def Spec (SpendAuthG : MulFixed.FixedBase) (input : Value Input Fp)
@@ -56,7 +58,7 @@ def Spec (SpendAuthG : MulFixed.FixedBase) (input : Value Input Fp)
 
 def ProverSpec (SpendAuthG : MulFixed.FixedBase) (input : ProverValue Input Fp)
     (output : Point Fp) (_ : ProverHint Fp) : Prop :=
-  output = (show Fq from input.alpha) • SpendAuthG + input.akP
+  output = ((show ℕ from input.alpha : ℕ) : Fq) • SpendAuthG + input.akP
 
 theorem soundness (SpendAuthG : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main SpendAuthG) Assumptions
@@ -78,18 +80,19 @@ theorem completeness (SpendAuthG : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main SpendAuthG) ProverAssumptions
       (ProverSpec SpendAuthG) := by
   circuit_proof_start [main, ProverAssumptions, ProverSpec,
-    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverSpec,
+    MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverAssumptions,
+    MulFixed.FullWidth.ProverSpec,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_alpha_env, h_add_env⟩ := h_env
-  obtain ⟨_, h_alpha_commitment⟩ := h_alpha_env
+  obtain ⟨_, h_alpha_commitment⟩ := h_alpha_env h_assumptions.2
   have h_final := h_add_env ⟨by
       rw [h_alpha_commitment]
-      exact SpendAuthG.smul_valid input_alpha,
-    h_assumptions⟩
-  exact ⟨⟨by
+      exact SpendAuthG.smul_valid _,
+    h_assumptions.1⟩
+  exact ⟨⟨h_assumptions.2, by
       rw [h_alpha_commitment]
-      exact SpendAuthG.smul_valid input_alpha,
-    h_assumptions⟩, by
+      exact SpendAuthG.smul_valid _,
+    h_assumptions.1⟩, by
       rw [h_alpha_commitment] at h_final
       exact h_final.2⟩
 
