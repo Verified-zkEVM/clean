@@ -62,6 +62,16 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
   simp only [U32.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
+omit p_large_enough in
+/-- Unfold `eval` on a lookup entry triple into its componentwise evaluations. -/
+private lemma eval_triple (env : Environment (F p)) (t : fieldTriple (Expression (F p))) :
+    eval env t = (Expression.eval env t.1, Expression.eval env t.2.1, Expression.eval env t.2.2) := by
+  have h : eval env t = (Expression.eval env t.1, eval env t.2) :=
+    eval_pair_left_expr (β := fieldPair) env t.1 t.2
+  have h2 : eval env t.2 = (Expression.eval env t.2.1, Expression.eval env t.2.2) :=
+    eval_pair_both_expr env t.2.1 t.2.2
+  rw [h, h2]
+
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ByteXorTable]
   rcases input_x with ⟨ x0, x1, x2, x3 ⟩
@@ -69,7 +79,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
   simp only [circuit_norm] at h_assumptions
   obtain ⟨ x_norm, y_norm ⟩ := h_assumptions
-  simp only [h_input, circuit_norm, explicit_provable_type] at h_holds
+  simp only [h_input, circuit_norm, explicit_provable_type, eval_triple] at h_holds
   apply soundness_to_u32 (by simp [circuit_norm, x_norm]) (by simp [circuit_norm, y_norm])
   simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
@@ -91,10 +101,13 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
+  simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff, eval_triple] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa [circuit_norm, h_input] using h_env 0
-  simp_all [circuit_norm, xor_val]
+  simp_all [circuit_norm]
+  have hxor : ∀ {a b : F p}, a.val < 256 → b.val < 256 → (a.val ^^^ b.val) % p = a.val ^^^ b.val :=
+    fun ha hb => Nat.mod_eq_of_lt (by linarith [Nat.xor_lt_two_pow (n:=8) ha hb, p_large_enough.elim])
+  exact ⟨hxor x0_byte y0_byte, hxor x1_byte y1_byte, hxor x2_byte y2_byte, hxor x3_byte y3_byte⟩
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   main

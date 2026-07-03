@@ -147,7 +147,5 @@ theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F
   | witness | assert | lookup | subcircuit | interact =>
     simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Vector.toArray_append, Array.append_assoc]
-    symm
-    rfl
 
 end CellAssignment
