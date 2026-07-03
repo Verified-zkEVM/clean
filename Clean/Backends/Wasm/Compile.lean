@@ -74,6 +74,7 @@ def fieldHelpers (p : ℕ) : String :=
 structure VarMap where
   env : List (ℕ × ℕ) := []
   nextLocal : ℕ := 0
+  loopIdx : Option ℕ := none  -- WASM local holding current loop index
 
 def VarMap.init (numInputs : ℕ) : VarMap :=
   { env := List.range numInputs |>.map fun i => (i, i), nextLocal := numInputs }
@@ -118,7 +119,9 @@ partial def compileFExpr (vm : VarMap) : FExpr F → Builder → Builder
 partial def compileNExpr (vm : VarMap) : NExpr F → Builder → Builder
   | .const n, b => b.push s!"i64.const {n}"
   | .val x, b => compileFExpr vm x b
-  | .idx, b => b.push "i64.const 0"
+  | .idx, b => match vm.loopIdx with
+    | some li => b.push s!"local.get {li}"
+    | none => b.push "i64.const 0  ;; idx outside loop"
   | .localVar _, b => b.push "i64.const 0"
   | .add a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.add"
   | .mul a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.mul"
@@ -164,11 +167,34 @@ def processOps (numInputs : ℕ) : List (Operation F) → VarMap → ℕ → Lis
         (newLs, vm', vi + 1)
       ) (acc, vm, vi)
       processOps numInputs rest newVm newVi newAcc
-    | .ir [] (.mapRange n _body) =>
-      -- witnessAny: input variables, already mapped to function params. Just allocate slots.
-      let newVm := { vm with nextLocal := vm.nextLocal + n }
-      processOps numInputs rest newVm (vi + n) acc
-    | _ => processOps numInputs rest vm vi acc
+    | .ir [] vexpr =>
+      match vexpr with
+      | .mapRange n body =>
+        -- Check if this is witnessAny (body = envGet): just allocate input slots
+        let isInput := match body with | .envGet _ => true | _ => false
+        if isInput then
+          -- witnessAny: inputs are already in VarMap. Skip.
+          processOps numInputs rest vm vi acc
+        else
+          -- Proper mapRange compilation: unroll loop with idx=0,1,...,n-1
+          let (newLs, newVm, newVi) := (List.range n).foldl (fun ((ls, vm, vi) : List String × VarMap × ℕ) i =>
+            let (vm1, idxLocals) := vm.alloc 1 vi
+            let idxLocal := idxLocals.head?.getD 0
+            let vmIdx := { vm1 with loopIdx := some idxLocal }
+            let eb : Builder := {}
+            let eb := compileFExpr vmIdx body eb
+            let (vm2, outLocals) := { vmIdx with loopIdx := none }.alloc 1 (vi + 1)
+            let outLocal := outLocals.head?.getD 0
+            let ls' := s!"    i64.const {i}" :: ls
+            let ls' := s!"    local.set {idxLocal}" :: ls'
+            let ls' := eb.build :: ls'
+            let ls' := s!"    local.set {outLocal}" :: ls'
+            (ls', vm2, vi + 2)
+          ) (acc, vm, vi)
+          processOps numInputs rest newVm newVi newLs
+      | _ => processOps numInputs rest vm vi acc
+    | .ir _ _ => processOps numInputs rest vm vi acc
+    | .native _ => processOps numInputs rest vm vi acc
   | _ :: rest, vm, vi, acc => processOps numInputs rest vm vi acc
 
 def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
