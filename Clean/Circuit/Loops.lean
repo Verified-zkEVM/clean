@@ -25,7 +25,6 @@ lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m]
   rw [←Vector.toArray_mapM, Functor.map_map]
   congr
 
-
 namespace Circuit
 variable {prop : Condition F}
 
