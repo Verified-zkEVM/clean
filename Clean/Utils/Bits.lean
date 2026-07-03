@@ -136,6 +136,14 @@ Convert a field element to a vector of bits, which are themselves field elements
 def fieldToBits (n : ℕ) (x : F p) : Vector (F p) n :=
   .map (↑) (toBits n x.val)
 
+/-- Elementwise characterization of `fieldToBits` via shift-and-mask, the form
+produced by witness-IR bit decompositions. -/
+lemma getElem_fieldToBits {n : ℕ} (x : F p) (i : ℕ) (hi : i < n) :
+    (fieldToBits n x)[i] = ((x.val >>> i % 2 : ℕ) : F p) := by
+  simp only [fieldToBits, toBits, Vector.getElem_map, Vector.getElem_mapRange,
+    Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
+  rcases Nat.mod_two_eq_zero_or_one (x.val / 2^i) with h | h <;> simp [h]
+
 /--
 Convert a vector of bits to a field element.
 -/

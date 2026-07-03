@@ -12,6 +12,12 @@ instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
 instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
 
+@[circuit_norm]
+lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
+  intro h
+  apply zero_ne_one (α:=F)
+  rw [← neg_zero, h, neg_neg]
+
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
@@ -93,7 +99,7 @@ theorem natToField_eq_natCast {n : ℕ} (lt : n < p) : ↑n = FieldUtils.natToFi
   apply ext
   rw [val_lt_p n lt, natToField_eq _ rfl]
 
-theorem val_of_natToField_eq {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
+theorem natToField_val {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
@@ -115,19 +121,26 @@ lemma fin_val_natCast_val_eq_of_lt {p : ℕ} {n : ℕ} (x : Fin n) (hn : n < p) 
   rw [ZMod.val_natCast_of_lt (a := x.val)]
   linarith [hn, x.isLt]
 
-def mod (x : F p) (c : ℕ+) (lt : c < p) : F p :=
-  FieldUtils.natToField (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])
+def mod (x : F p) (c : ℕ+) (_lt : c < p) : F p := (x.val % c : ℕ)
 
-def floorDiv (x : F p) (c : ℕ+) : F p :=
-  FieldUtils.natToField (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
+def floorDiv (x : F p) (c : ℕ+) : F p := (x.val / c : ℕ)
+
+lemma mod_val {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val = x.val % c := by
+  rw [mod, ZMod.val_natCast_of_lt]
+  grw [Nat.mod_lt x.val c.pos]
+  exact lt
+
+lemma floorDiv_val {x : F p} {c : ℕ+} : (floorDiv x c).val = x.val / c := by
+  rw [floorDiv, ZMod.val_natCast_of_lt]
+  grw [Nat.div_le_self]
+  apply ZMod.val_lt
 
 theorem mod_lt {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val < c := by
-  rcases p with _ | p; cases p_ne_zero rfl
-  show (x.val % c) < c
+  rw [mod_val]
   exact Nat.mod_lt x.val (by norm_num)
 
 theorem floorDiv_lt {x : F p} {c : ℕ+} {d : ℕ} (h : x.val < c * d) : (floorDiv x c).val < d := by
-  rcases p with _ | n; cases p_ne_zero rfl
+  rw [floorDiv_val]
   exact Nat.div_lt_of_lt_mul h
 
 lemma val_mul_floorDiv_self {x : F p} {c : ℕ+} (lt : c < p) : (c * (floorDiv x c)).val = c * (x.val / c) := by
@@ -135,7 +148,7 @@ lemma val_mul_floorDiv_self {x : F p} {c : ℕ+} (lt : c < p) : (c * (floorDiv x
   have : c * (x.val / c) ≤ x.val := Nat.mul_div_le (ZMod.val x) ↑c
   have h : x.val < n + 1 := x.is_lt
   rw [ZMod.val_mul, ZMod.val_cast_of_lt lt,
-    show ZMod.val (floorDiv x c) = x.val / c by rfl, Nat.mod_eq_of_lt (by linarith)]
+    floorDiv_val, Nat.mod_eq_of_lt (by linarith)]
 
 theorem mod_add_floorDiv {x : F p} {c : ℕ+} (lt : c < p) :
     mod x c lt + c * (floorDiv x c) = x := by
@@ -143,7 +156,7 @@ theorem mod_add_floorDiv {x : F p} {c : ℕ+} (lt : c < p) :
   have h : x.val < n + 1 := x.is_lt
   apply ext
   suffices x.val % c + (c * (floorDiv x c)).val = x.val by
-    change (mod x c lt).val + _ = _ at this
+    rw [← mod_val (lt := lt)] at this
     rwa [ZMod.val_add_of_lt]
     rwa [this]
   rw [val_mul_floorDiv_self lt, Nat.mod_add_div x.val c]
@@ -204,6 +217,8 @@ omit p_prime in
 lemma two_lt : 2 < p := by
   linarith [‹Fact (p > 512)›.elim]
 
+instance : Fact (p > 2) := .mk two_lt
+
 lemma two_val : (2 : F p).val = 2 :=
   FieldUtils.val_lt_p 2 two_lt
 
@@ -218,6 +233,30 @@ lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by
   exact two_pow_lt _ hn
 end
 
+section
+-- lemmas that only assume p > 2
+variable [gt2 : Fact (p > 2)]
+
+-- lemmas to resolve (if -1 = 1 then T else E) = E
+-- this is commonly needed to resolve the right statement in channel interactions,
+-- which split on the multiplicity (which is often 1 or -1)
+
+@[circuit_norm]
+lemma neg_one_ne_one :
+    ¬(-1 : F p) = 1 := by
+  intro h_eq
+  suffices h : (1 : F p) + 1 = 0 by
+    replace h := congrArg ZMod.val h
+    rw [ZMod.val_add] at h
+    simp [ZMod.val_one, Nat.mod_eq_of_lt gt2.elim] at h
+  nth_rw 1 [← h_eq]
+  ring
+
+@[circuit_norm]
+lemma one_ne_neg_one : ¬(1 : F p) = -1 :=
+  fun h => neg_one_ne_one h.symm
+end
+
 end FieldUtils
 
 -- utils related to bytes, and specifically field elements that are bytes (< 256)
@@ -228,30 +267,21 @@ variable {p : ℕ} [p_prime: Fact p.Prime]
 def mod256 (x : F p) [p_large_enough: Fact (p > 512)] : F p :=
   mod x 256 (by linarith [p_large_enough.elim])
 
-def floorDiv256 (x : F p) : F p := floorDiv x 256
-
 theorem mod256_lt [Fact (p > 512)] (x : F p) : (mod256 x).val < 256 := mod_lt
 
 theorem floorDiv256_bool [Fact (p > 512)] {x : F p} (h : x.val < 512) :
-  floorDiv256 x = 0 ∨ floorDiv256 x = 1 := by
+    floorDiv x 256 = 0 ∨ floorDiv x 256 = 1 := by
   rcases p with _ | n; cases p_ne_zero rfl
   let z := x.val / 256
   have : z < 2 := Nat.div_lt_of_lt_mul h
   -- show z = 0 ∨ z = 1
   rcases (Nat.lt_trichotomy z 1) with _ | h1 | _
-  · left; apply ext; show z = 0; linarith
-  · right; apply ext; show z = ZMod.val 1; rw [h1, ZMod.val_one]
+  · left; apply ext; rw [floorDiv_val]; show z = 0; linarith
+  · right; apply ext; rw [floorDiv_val, ZMod.val_one]; exact h1
   · linarith -- contradiction
 
-theorem mod_add_div256 [Fact (p > 512)] (x : F p) : x = mod256 x + 256 * (floorDiv256 x) := by
-  rcases p with _ | n; cases p_ne_zero rfl
-  let p := n + 1
-  apply ext
-  rw [ZMod.val_add, ZMod.val_mul]
-  have : ZMod.val 256 = 256 := val_lt_p (p:=p) 256 (by linarith [‹Fact (p > 512)›.elim])
-  rw [this, Nat.add_mod_mod]
-  show x.val = (x.val % 256 + 256 * (x.val / 256)) % p
-  rw [Nat.mod_add_div, (Nat.mod_eq_of_lt x.is_lt : x.val % p = x.val)]
+theorem mod_add_div256 [Fact (p > 512)] (x : F p) : mod256 x + 256 * floorDiv x 256 = x := by
+  apply FieldUtils.mod_add_floorDiv (c:=256)
 
 def splitTwoBytes (i : Fin (256 * 256)) : Fin 256 × Fin 256 :=
   let x := i.val / 256
@@ -303,7 +333,7 @@ def fromByte (x : Fin 256) : F p :=
 
 lemma fromByte_lt (x : Fin 256) : (fromByte (p:=p) x).val < 256 := by
   dsimp [fromByte]
-  rw [FieldUtils.val_of_natToField_eq]
+  rw [natToField_val]
   exact x.is_lt
 
 lemma fromByte_eq (x : F p) (x_lt : x.val < 256) : fromByte ⟨ x.val, x_lt ⟩ = x := by

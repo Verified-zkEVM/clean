@@ -7,7 +7,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 namespace Gadgets.Conditional
 
 section
-variable {F : Type} [Field F]
+variable {F : Type} [FiniteField F]
 variable {M : TypeMap} [ProvableType M]
 
 /--
@@ -55,14 +55,11 @@ Specification: Output is selected based on selector value using if-then-else.
 def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
-instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
-  main
-  localLength _ := 0
-  output
-  | { selector, ifTrue, ifFalse }, _ => output selector ifTrue ifFalse
+instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := by
+  elaborate_circuit
 
-theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
-  circuit_proof_start [output]
+theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
+  circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
@@ -88,7 +85,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
+theorem completeness [DecidableEq F] : Completeness F (Input := Inputs M) main Assumptions := by
   circuit_proof_start
 
 /--
@@ -96,7 +93,8 @@ Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
 @[circuit_norm]
 def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
-  elaborated := elaborated
+  main
+  elaborated
   Assumptions
   Spec
   soundness
@@ -106,16 +104,15 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
 Conditional selection.
 -/
 @[circuit_norm]
-def ifElse [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M]
+def ifElse [FiniteField F] [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
-omit [Field F] in
 /--
   Lemma to simplify the evaluated output
 -/
 @[circuit_norm]
-theorem eval_ifElse_output [Field F] [DecidableEq F] {M : TypeMap} [ProvableType M] {env}
+theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) :
   eval env (output selector ifTrue ifFalse) =
     outputValue (selector.eval env) (eval env ifTrue) (eval env ifFalse) := by

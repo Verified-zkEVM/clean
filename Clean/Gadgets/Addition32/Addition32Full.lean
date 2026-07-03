@@ -8,7 +8,8 @@ import Clean.Utils.Tactics
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod256 floorDiv256)
+open ByteUtils (mod256)
+open FieldUtils (floorDiv)
 
 structure Inputs (F : Type) where
   x: U32 F
@@ -47,14 +48,10 @@ Elaborated circuit data can be found as follows:
 #eval (main (p:=p_babybear) default).output
 ```
 -/
-instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
-  main
-  localLength _ := 8
-  -- unfortunately, `rfl` in default tactic times out here
-  localLength_eq _ i0 := by
-    simp only [circuit_norm, main, Addition8FullCarry.main]
+instance elaborated : ElaboratedCircuit (F p) Inputs Outputs main := by
+  elaborate_circuit
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
@@ -94,7 +91,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -118,7 +115,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv256 (x + y + c_in)) :
+    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → IsBool c_in →
     z.val < 256 ∧ IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
@@ -129,7 +126,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
     use (hc_out ▸ ByteUtils.floorDiv256_bool this)
-    rw [ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
+    rw [← ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
     ring
 
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := h_assumptions
@@ -143,6 +140,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
+  main
+  elaborated
   Assumptions
   Spec
   soundness

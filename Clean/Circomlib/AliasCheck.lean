@@ -36,7 +36,6 @@ def main (input : Vector (Expression (F p)) 254) := do
 
 def circuit : FormalAssertion (F p) (fields 254) where
   main
-  localLength _ := 127 + 1 + 135 + 1
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 

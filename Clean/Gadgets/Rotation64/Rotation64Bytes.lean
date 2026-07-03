@@ -34,8 +34,7 @@ def Assumptions (input : U64 (F p)) := input.Normalized
 def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
-  main := main off
+@[reducible] instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 (main off) where
   localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
@@ -51,6 +50,8 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   subcircuitsConsistent x i0 := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  channelsLawful := by
+    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -61,7 +62,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (main off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   simp only [circuit_norm, explicit_provable_type, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
@@ -72,18 +73,20 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
   dsimp only [Assumptions, U64.Normalized] at as
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := as
 
-  simp [circuit_norm, Spec, U64.value, -Nat.reducePow]
+  simp [circuit_norm, main, Spec, U64.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
+  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, U64.Normalized, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, explicit_provable_type]
 
-theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
+theorem completeness (off : Fin 8) : Completeness (F p) (main off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
-  elaborated off with
   main := main off
+  elaborated := elaborated off
+  requirementsChannelsLawful := by
+    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
   soundness := soundness off

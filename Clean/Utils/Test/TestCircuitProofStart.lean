@@ -14,8 +14,8 @@ section BasicTests
 -- 3. Unfolds circuit definitions
 
 -- Test that the tactic works for simple soundness proofs
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit] (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
   circuit_proof_start
@@ -26,8 +26,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test that the tactic works for simple completeness proofs
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit] (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point:
@@ -37,8 +37,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test parametrized soundness
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (offset : Fin 8) (circuit : Fin 8 → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit offset)]
     (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
     Soundness F (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
@@ -46,8 +46,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test parametrized completeness
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (offset : Fin 8) (circuit : Fin 8 → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit offset)]
     (Assumptions : Input F → Prop) :
     Completeness F (circuit offset) Assumptions := by
   circuit_proof_start
@@ -55,8 +55,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   sorry
 
 -- Test multiple parameters
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output (circuit n k)]
     (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
     Soundness F (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
@@ -68,8 +68,8 @@ end BasicTests
 section NamePreservationTests
 -- Test that parameter names are preserved correctly
 
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit]
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
@@ -82,11 +82,11 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input F := input
   have : eval env input_var = input := h_input
   have : Assumptions input := h_assumptions
-  have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
+  have : ConstraintsHold.Soundness env (circuit input_var i₀).2 := h_holds
   sorry
 
-example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output)
+example {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output circuit]
     (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
@@ -96,7 +96,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ℕ := i₀
   have : ProverEnvironment F := env
   have : Input (Expression F) := input_var
-  have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
+  have : env.UsesLocalWitnessesCompleteness i₀ (circuit input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
   sorry
 
@@ -119,8 +119,12 @@ def Assumptions (input : unit (F p)) : Prop :=
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
+def testCircuit : Var unit (F p) → Circuit (F p) (Var unit (F p)) :=
+  fun _ => pure ()
+
+instance : ElaboratedCircuit (F p) unit unit testCircuit where
+  localLength _ := 0
+  output _ _ := ()
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
@@ -143,24 +147,35 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output ∧
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
+def testCircuit : Var unit (F p) → Circuit (F p) (Var unit (F p)) :=
+  fun _ => pure ()
+
+instance : ElaboratedCircuit (F p) unit unit testCircuit where
+  localLength _ := 0
+  output _ _ := ()
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
   -- Check that Assumptions was unfolded to reveal TestAssumptions
-  guard_hyp h_assumptions : TestAssumptions input ∧ TestAssumptions input
+  guard_hyp h_assumptions : TestAssumptions input
   sorry
 end UnfoldTest2
 
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
-def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq _ _ := rfl }
+def testCircuit : Var unit (F p) → Circuit (F p) (Var unit (F p)) :=
+  fun _ => pure ()
 
-def elaborated : ElaboratedCircuit (F p) unit unit :=
+instance : ElaboratedCircuit (F p) unit unit testCircuit where
+  localLength _ := 0
+  output _ _ := ()
+
+def elaborated : Var unit (F p) → Circuit (F p) (Var unit (F p)) :=
   testCircuit
+
+instance : ElaboratedCircuit (F p) unit unit elaborated := inferInstanceAs
+  (ElaboratedCircuit (F p) unit unit testCircuit)
 
 def TestAssumptions (_ : unit (F p)) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
@@ -169,7 +184,12 @@ example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main
-  guard_hyp h_holds : ConstraintsHold.Soundness env (testCircuit.main input_var i₀).2
+  guard_hyp h_holds : Operations.forAllNoOffset {
+    assert e := env e = 0
+    lookup l := l.Soundness env
+    interact i := i.Guarantees env
+    subcircuit s := s.Assumptions env → s.Spec env
+  } (testCircuit input_var i₀).2
   sorry
 end UnfoldTest3
 

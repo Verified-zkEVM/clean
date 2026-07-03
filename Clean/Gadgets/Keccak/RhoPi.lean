@@ -25,19 +25,16 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
-  localLength _ := 400
-  localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
-  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit
 
 -- recharacterize rhoPi as a loop
 lemma rhoPi_loop (state : Vector ℕ 25) :
     Specs.Keccak256.rhoPi state = rhoPiConstants.map fun (i, s) => rotLeft64 state[i.val] s := by
   simp [Specs.Keccak256.rhoPi, rhoPiConstants, rhoPiIndices, rhoPiShifts]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [Rotation64.circuit, Rotation64.elaborated]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -47,10 +44,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [KeccakState.Normalized] at h_assumptions
   simp only [h_input, h_assumptions, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
+    Rotation64.Assumptions, Rotation64.Spec] at h_holds
+
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
 
   -- simplify assumptions
@@ -60,6 +58,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [circuit_norm, Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakState KeccakState where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Keccak256.RhoPi

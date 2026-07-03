@@ -124,7 +124,7 @@ def partialRoundsOpt_t2 (C : Vector ℕ 72) (S : Vector ℕ 168)
     have hr'' : sRound + 1 + r ≤ 56 := by omega
     partialRoundsOpt_t2 C S r (cOffset + 1) (sRound + 1) state' hr''
 
-def poseidon1Opt (input : F) : F :=
+def poseidon1Permutation (input : F) : Vector F 2 :=
   let t := 2
   let nRoundsF := 8
   let nP := 56
@@ -151,9 +151,11 @@ def poseidon1Opt (input : F) : F :=
   let state := fullRoundsOpt_t2 C_t2 M_t2 3 66 state
 
   -- 6. Final round: SBOX → MIX(M) (no ARK)
-  let state := state |> sboxFull |> mix M_t2
+  state |> sboxFull |> mix M_t2
 
-  -- Output first element
+def poseidon1Opt (input : F) : F :=
+  let state := poseidon1Permutation input
+  -- Output first element of the final state
   state[0]
 
 /-

@@ -26,9 +26,9 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
-  main
-  localLength _ := 120
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
+  elaborate_circuit
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
@@ -36,13 +36,13 @@ def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   intro i0 env row_var row h_input row_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
-  dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
+  dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Fin.reduceSub] at h_holds ⊢
   simp only [circuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
-  simp only [zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd] at h_holds
+  simp only [and_imp, add_assoc, Nat.reduceAdd] at h_holds
   simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, eval_vector]
 
   have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
@@ -73,14 +73,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [Xor64.circuit, Rotation64.circuit, Rotation64.elaborated]
+theorem completeness : Completeness (F p) main Assumptions := by
+  circuit_proof_start [Xor64.circuit, Rotation64.circuit]
   simp only [KeccakRow.normalized_iff] at h_assumptions
   simp_all only [circuit_norm, getElem_eval_vector,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, true_and]
 
-def circuit : FormalCircuit (F p) KeccakRow KeccakRow :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
+  main, Assumptions, Spec, soundness, completeness
+}
 
 end Gadgets.Keccak256.ThetaD

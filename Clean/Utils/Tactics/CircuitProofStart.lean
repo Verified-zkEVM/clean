@@ -1,5 +1,5 @@
 import Lean
-import Clean.Circuit.Basic
+import Clean.Circuit.Formal
 import Clean.Utils.Tactics.ProvableStructSimp
 
 open Lean Elab Tactic Meta
@@ -90,7 +90,8 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   **Supported goal types**: This tactic works on `Soundness`, `Completeness`,
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
-  `GeneralFormalCircuit.Soundness`, or `GeneralFormalCircuit.Completeness` goals.
+  `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`,
+  `GeneralFormalCircuit.WithHint.Soundness`, `GeneralFormalCircuit.WithHint.Completeness`.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
@@ -129,6 +130,9 @@ elab_rules : tactic
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `main):ident] at *))
 
+  -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
+  try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
+
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
@@ -157,5 +161,6 @@ elab_rules : tactic
   | `(tactic| circuit_proof_all $[[$terms:term,*]]?) => do
   let lemmas := terms.getD (.mk #[])
   evalTactic (← `(tactic| circuit_proof_start [$lemmas,*]))
-  evalTactic (← `(tactic| try first | simp_all | grind))
+  evalTactic (← `(tactic| try simp_all))
+  evalTactic (← `(tactic| try grind))
   evalTactic (← `(tactic| done))

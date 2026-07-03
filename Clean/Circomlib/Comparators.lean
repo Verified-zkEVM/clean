@@ -25,18 +25,14 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) := do
-  let inv ← witness fun env =>
-    let x := input.eval env
-    if x ≠ 0 then x⁻¹ else 0
-
+def main (input : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
+  let inv ← witness (.ite (input =? 0) 0 input⁻¹)
   let out <== -input * inv + 1
   input * out === 0
   return out
 
 def circuit : FormalCircuit (F p) field field where
   main
-  localLength _ := 2
 
   Spec input output :=
     output = (if input = 0 then 1 else 0)
@@ -61,8 +57,8 @@ def circuit : FormalCircuit (F p) field field where
     circuit_proof_start
     cases h_env with
     | intro left right =>
-      simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
-      simp only [id_eq, right, left, ne_eq, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      simp only [left] at right
+      simp only [id_eq, right, left, mul_ite, mul_zero, mul_eq_zero, true_and]
       split_ifs <;> aesop
 
 end IsZero
@@ -87,7 +83,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 
 def circuit : FormalCircuit (F p) fieldPair field where
   main
-  localLength _ := 2
 
   Spec input output :=
     output = (if input.1 = input.2 then 1 else 0)
@@ -96,7 +91,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp only [circuit_norm, main, IsZero.circuit]
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [IsZero.circuit]
     rw [← h_input]
     simp only [id_eq]
 
@@ -106,8 +101,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rw [← h_input]
 
     rw [h1, h2] at h_holds
-    simp only [IsZero.circuit] at h_holds ⊢
-
     rw [h_holds, h1, h2]
 
     apply ite_congr
@@ -118,8 +111,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rfl
     . intro h_eq
       rfl
-
-    trivial
 
 end IsEqual
 
@@ -148,7 +139,6 @@ def main (inputs : Var Inputs (F p)) := do
 
 def circuit : FormalAssertion (F p) Inputs where
   main
-  localLength _ := 2
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
@@ -157,7 +147,7 @@ def circuit : FormalAssertion (F p) Inputs where
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [IsZero.circuit]
     intro h_ie
     simp_all only [one_ne_zero, or_true, id_eq, one_mul]
     cases h_input with
@@ -168,15 +158,11 @@ def circuit : FormalAssertion (F p) Inputs where
       | intro h1 h2 =>
         rw [h1] at h2
         rw [add_comm] at h2
-        simp only [id_eq] at h2
         split_ifs at h2 with h_ifs
         . simp_all only [neg_add_cancel]
           rw [add_comm, neg_add_eq_zero] at h_ifs
           exact h_ifs
         . simp_all only [neg_zero, zero_add, one_ne_zero]
-        rw [add_comm, neg_add_eq_zero] at h2
-        rw [h2] at h1
-        trivial
 
   completeness := by
     circuit_proof_start
@@ -219,10 +205,6 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
-  localLength _ := n + 2
-  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
-  output _ i := var ⟨ i + n + 1 ⟩
-  output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 
@@ -230,8 +212,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val < y.val then 1 else 0)
 
   soundness := by
-    circuit_proof_start
-    simp only [circuit_norm, Num2Bits.circuit] at h_holds ⊢
+    circuit_proof_start [Num2Bits.circuit]
     rcases h_assumptions with ⟨hx, hy⟩
     have hx_eval : Expression.eval env input_var.1 = input.1 := by
       simpa using congrArg Prod.fst h_input
@@ -282,6 +263,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h2 := h_holds.left.right
 
     rw [add_assoc] at hout
+    rw [← hout]
     rw [← hout] at h3
     rw [h3]
     --simp the goal basic math
@@ -326,6 +308,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have h1 := h_holds.left.left
 
     rw [add_assoc] at hout
+    rw [← hout]
     rw [← hout] at h3
     rw [h3]
     --simp the goal basic math
@@ -419,8 +402,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
 
-  localLength _ := n + 2
-
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
     output = (if x.val <= y.val then 1 else 0)
@@ -490,8 +471,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
 
-  localLength _ := n + 2
-
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
   Spec := fun (x, y) output =>
@@ -529,8 +508,6 @@ template GreaterEqThan(n) {
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
-
-  localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>

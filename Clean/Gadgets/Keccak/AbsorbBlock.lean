@@ -23,14 +23,9 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   -- apply the permutation
   Permutation.circuit state'
 
-instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
-  main
-  localLength _ := 31048
-  output _ i0 := Permutation.stateVar (i0 + 136) 23
-
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) Input KeccakState main := by
+  elaborate_circuit
 
 @[reducible] def Assumptions (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized
@@ -39,7 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) main Assumptions Spec := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
@@ -74,7 +69,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
@@ -109,6 +104,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-def circuit : FormalCircuit (F p) Input KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) Input KeccakState where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Keccak256.AbsorbBlock

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BENCH="scripts/bench"
+
+rm -f measurements.jsonl
+lake exe cache get
+
+"$BENCH/measure.py" --append --topic build --default-metrics -- lake build
+"$BENCH/build/heartbeats-all"

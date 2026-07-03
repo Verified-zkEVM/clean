@@ -284,13 +284,13 @@ end CellAssignment
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
-structure TableContext (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
+structure TableContext (W : ℕ+) (S : Type → Type) (F : Type) [FiniteField F] [ProvableType S] where
   inputSize : ℕ := 0
   circuit : Operations F
   assignment : CellAssignment W S
 deriving Repr
 
-variable [Field F] {α : Type}
+variable [FiniteField F] {α : Type}
 
 namespace TableContext
 @[reducible, table_norm, table_assignment_norm]
@@ -304,7 +304,7 @@ def offset (table : TableContext W S F) : ℕ := table.inputSize + table.circuit
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
-def TableConstraint (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
+def TableConstraint (W : ℕ+) (S : Type → Type) (F : Type) [FiniteField F] [ProvableType S] :=
   StateM (TableContext W S F)
 
 @[table_norm, table_assignment_norm]
@@ -322,6 +322,7 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .interact _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
@@ -366,14 +367,12 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 def windowEnv (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : ProverEnvironment F :=
   let assignment := table.finalAssignment
-  { get i :=
+  { aux_env with get i :=
       if hi : i < assignment.offset then
         match assignment.vars[i] with
         | .input ⟨i, j⟩ => window.get i j
         | .aux k => aux_env.get k
-      else aux_env.get (i + assignment.aux_length)
-    data := aux_env.data
-    hint := aux_env.hint }
+      else aux_env.get (i + assignment.aux_length) }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -384,7 +383,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : ProverEnvironment F) : Prop :=
   let env := windowEnv table window aux_env
-  Circuit.ConstraintsHold.Soundness env table.operations
+  ConstraintsHold.Soundness env table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -398,7 +397,8 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       inputSize := ctx.inputSize,
-      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
+      circuit := ctx.circuit ++ [.witness (size S) (.ir []
+        (.range (size S) fun i => .envGet (((ctx.offset : ℕ) : Witgen.NExpr F) + i)))],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')
@@ -454,7 +454,7 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVar fun env => x.eval env
+    let new_var ← witnessVar (.ofFExpr (.expr x))
     assertZero (x - var new_var)
     assignVar off new_var
 
@@ -474,17 +474,17 @@ end TableConstraint
 export TableConstraint (windowEnv getCurrRow getNextRow readCurrRow readNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
-def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
+def SingleRowConstraint (S : Type → Type) (F : Type) [FiniteField F] [ProvableType S] := TableConstraint 1 S F Unit
 
 @[reducible]
-def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
+def TwoRowsConstraint (S : Type → Type) (F : Type) [FiniteField F] [ProvableType S] := TableConstraint 2 S F Unit
 
 -- specify a row, either counting from the start or from the end of the trace.
 inductive RowIndex where
   | fromStart : ℕ → RowIndex
   | fromEnd : ℕ → RowIndex
 
-inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
+inductive TableOperation (S : Type → Type) (F : Type) [FiniteField F] [ProvableType S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
@@ -524,8 +524,8 @@ structure TableEnvironments (F : Type) where
   data : ProverData F
 
 def TableEnvironments.toEnvironment {F : Type} (envs : TableEnvironments F) (constraint row : ℕ) : ProverEnvironment F :=
-  { get := envs.witnessEnvs constraint row,
-    data := envs.data,
+  { envs with
+    get := envs.witnessEnvs constraint row
     hint := .empty F }
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
@@ -591,7 +591,7 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     -- if the trace is empty, we are done
     | <+>, _ => True
 
-structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
+structure FormalTable (F : Type) [FiniteField F] (S : Type → Type) [ProvableType S] where
   /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
@@ -626,7 +626,6 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace : TraceOfLe
 attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm low] size fromElements toElements
 attribute [table_assignment_norm low] toElements
-attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 

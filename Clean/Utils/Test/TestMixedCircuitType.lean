@@ -9,29 +9,22 @@ verifier/prover values.
 -/
 
 namespace TestMixedCircuitType
-variable {F : Type} [Field F]
-
--- TODO still annoying that we need this with such specificity but could be acceptable
-omit [Field F] in @[circuit_norm]
-lemma hmul_fieldexpr_fieldexpr :
-  (@HMul.hMul (field (Expression F)) (field (Expression F)) (field (Expression F))
-    (@instHMul (field (Expression F)) (@instMulVarField F))) =
-  (@HMul.hMul (field (Expression F)) (field (Expression F)) (field (Expression F))
-    inferInstance) := by rfl
+variable {F : Type} [FiniteField F]
 
 structure Input (F : Type) where
   x : F
-  inverse : UnconstrainedDep field F
+  inverse : Unconstrained field F
 deriving CircuitType
+
+-- TODO automate this in the CircuitType deriver
+instance : Inhabited (Var Input F) where
+  default := { x := default, inverse := default }
 
 def circuit : GeneralFormalCircuit.WithHint F Input field where
   main input := do
-    let inverse ← witness input.inverse
+    let inverse ← witnessProgram input.inverse
     input.x * inverse === 1
     return inverse
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
 
   Spec input out _ :=
     input.x * out = 1
@@ -42,8 +35,6 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
 
   soundness := by
     circuit_proof_start
-    -- normalization pass that goes beyond circuit_norm, possibly using different simp set
-    simp only [circuit_norm, field, id_eq] at input_x input_inverse input_var h_input
     -- Regression checks for the intended post-`circuit_proof_start` shape:
     -- the high-level verifier input is gone, and the constraints mention `input_x`.
     fail_if_success (exact input)
@@ -53,23 +44,17 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
 
   completeness := by
     circuit_proof_start
-    -- normalization pass that goes beyond circuit_norm, possibly using different simp set
-    simp only [circuit_norm, field, id_eq] at input_x input_inverse input_var h_input
     -- The prover-side equality should also be fieldwise; in particular the
     -- prover-only hint is connected to the generated witness by `h_env`.
     fail_if_success (exact input)
     guard_hyp h_input :
-      @Eq F (input_var.x.eval env.toEnvironment) input_x ∧
-      @Eq F (input_var.inverse env) input_inverse
+      input_var.x.eval env.toEnvironment = input_x ∧ (Witgen.FExpr.eval _ _ : F) = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
 def parent : GeneralFormalCircuit F field field where
-  main input := do
-    circuit { x := input, inverse := fun env => (eval env input)⁻¹ }
-
-  output _ offset := varFromOffset field offset
-  localLength _ := 1
+  main (input : Expression F) := do
+    circuit { x := input, inverse := unconstrained (do return input⁻¹) }
 
   Spec input out _ :=
     input * out = 1
@@ -80,7 +65,7 @@ def parent : GeneralFormalCircuit F field field where
     circuit_proof_start [circuit]
     -- The subcircuit spec should be stated in terms of the parent input, not
     -- the inline mixed child input passed to the subcircuit.
-    guard_hyp h_holds :~ input * env.get i₀ = 1
+    guard_hyp h_holds : input * env.get i₀ = 1
     exact h_holds
 
   completeness := by
@@ -89,5 +74,49 @@ def parent : GeneralFormalCircuit F field field where
     -- inline inverse hint.
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
+
+structure BoolNatInput (F : Type) where
+  x : F
+  isZero : UnconstrainedBool F
+  xNat : UnconstrainedNat F
+deriving CircuitType
+
+-- TODO automate this in the CircuitType deriver
+instance : Inhabited (Var BoolNatInput F) where
+  default := { x := default, isZero := default, xNat := default }
+
+def boolNatCircuit : GeneralFormalCircuit.WithHint F BoolNatInput field where
+  main input := return input.x
+
+  Spec input out _ :=
+    out = input.x
+
+  ProverAssumptions input _ _ :=
+    input.isZero = ((FiniteField.val (F:=F) input.x : ℕ) = 0) ∧
+    input.xNat = FiniteField.val (F:=F) input.x
+
+  soundness := by
+    circuit_proof_start
+
+  completeness := by
+    circuit_proof_start
+
+def boolNatParent : GeneralFormalCircuit F field field where
+  main (input : Expression F) := do
+    boolNatCircuit {
+      x := input
+      isZero := unconstrainedBool (do return ((input.val =? 0) &&& .true))
+      xNat := unconstrainedNat (do return input.val)
+    }
+
+  Spec input out _ :=
+    out = input
+
+  soundness := by
+    circuit_proof_start [boolNatCircuit]
+
+  completeness := by
+    circuit_proof_start [boolNatCircuit]
+    simp
 
 end TestMixedCircuitType

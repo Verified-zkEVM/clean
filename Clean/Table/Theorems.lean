@@ -121,7 +121,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
 
 end TraceOfLength
 
-variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
+variable {F : Type} [FiniteField F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
 
@@ -136,7 +136,7 @@ theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
-  | witness | assert | lookup | subcircuit =>
+  | witness | assert | lookup | subcircuit | interact =>
     simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
 theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F) :
@@ -144,7 +144,7 @@ theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F
       ).cast (assignmentFromCircuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
-  | witness | assert | lookup | subcircuit =>
+  | witness | assert | lookup | subcircuit | interact =>
     simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Vector.toArray_append, Array.append_assoc]
     symm

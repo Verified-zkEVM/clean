@@ -34,7 +34,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n : ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
+  let out ← witnessVector n (.range n fun i => ((inp.val >>> i) % 2).toField)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -66,11 +66,6 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
-  localLength _ := n
-  localLength_eq := by simp +arith [circuit_norm, main]
-  output _ i := varFromOffset (fields n) i
-
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   ProverAssumptions input _ _ := input.val < 2^n
 
@@ -101,19 +96,19 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
-    · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
+    · intro i hi
+      rw [h_env i hi]
+      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
     show fieldFromBits bits = input
     have : bits = fieldToBits n input := by
       rw [Vector.ext_iff]
       intro i hi
-      simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+      simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main input := arbitraryBitLengthCircuit n input
-  localLength _ := n
-  output _ i := varFromOffset (fields n) i
 
   ProverAssumptions input _ _ := input.val < 2^n
 
@@ -180,9 +175,6 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
-  localLength _  := 1
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1

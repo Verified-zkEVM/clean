@@ -10,7 +10,7 @@ mod clean_ast;
 mod config;
 mod key;
 mod lookup;
-mod permutation;
+mod lookup_trace;
 mod prover;
 mod verifier;
 
@@ -20,6 +20,6 @@ pub use clean_ast::*;
 pub use config::*;
 pub use key::*;
 pub use lookup::*;
-pub use permutation::*;
+pub use lookup_trace::*;
 pub use prover::prove;
 pub use verifier::verify;

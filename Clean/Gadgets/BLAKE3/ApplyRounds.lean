@@ -28,74 +28,39 @@ The spec follows the pattern from the applyRounds function:
 - Permute the message
 -/
 def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
-  main := fun input => do
-    let state ← subcircuit Round.circuit input
-    let permuted_message ← subcircuit Permute.circuit input.message
+  main input := do
+    let state ← Round.circuit input
+    let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
-  localLength_eq := by
-    intro input offset
-    simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
-    rfl
-  output := fun input offset =>
-    let state_out := Round.circuit.output input offset
-    let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
-    ⟨state_out, msg_out⟩
-  output_eq := by
-    intro input offset
-    simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+
+  -- TODO default causes proof churn, fix locally
+  elaborated := by elaborate_circuit_with {
+    localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
+    output input offset :=
+      let state_out := Round.circuit.output input offset
+      let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
+      ⟨state_out, msg_out⟩
+  }
 
   Assumptions := Round.Assumptions
-  Spec := fun input output =>
+  Spec input output :=
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
     output.state.Normalized ∧
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
+
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
-    simp only [circuit_norm] at h_holds
-    simp only [Round.circuit] at h_holds
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
-    simp only [circuit_norm, h_eval] at h_holds
+    circuit_proof_start [Round.circuit, Permute.circuit,
+      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec]
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
-    simp only [Permute.circuit, Permute.Assumptions] at h_holds2
-    rcases h_assumptions with ⟨ asm1, asm2 ⟩
-    -- h_holds2 requires the message to be normalized
-    specialize h_holds2 asm2
-
-    -- Now we need to show the spec holds for the output
-    simp only [circuit_norm]
-    simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
-
-    constructor
-    · exact h_holds1.1
-    constructor
-    · exact h_holds1.2
-    · exact h_holds2
-
+    specialize h_holds2 h_assumptions.right
+    exact ⟨ h_holds1.1, h_holds1.2, h_holds2 ⟩
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
-
-    -- Unpack what we have
-    simp only [circuit_norm] at h_env_uses_witnesses ⊢
-    obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
-
-    constructor
-    · simp only [Round.circuit, h_eval]
-      exact h_assumptions
-
-    · -- Show Permute assumptions hold (message is normalized)
-      rcases h_assumptions with ⟨_, h_msg_norm⟩
-      dsimp only [Permute.circuit, Permute.Assumptions]
-      simp only [h_eval]
-      exact h_msg_norm
+    circuit_proof_start [Round.circuit, Permute.circuit,
+      Round.Assumptions, Permute.Assumptions]
+    exact ⟨ h_assumptions, h_assumptions.right ⟩
 
 /--
 Combines two roundWithPermute operations using the concat combinator.
@@ -166,7 +131,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -237,7 +202,7 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -424,20 +389,21 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
-  localLength _ := 5376
-  localLength_eq input i0 := by
-    dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
-      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
-      FormalCircuit.concat,
-      Permute.circuit, Circuit.pure_def, Circuit.bind_def,
-      subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
-      ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
-      List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
-      Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
+-- TODO AUTOELAB the generated instance without here is not fully reduced, it contains
+-- nested definitions like `sevenRoundsFinal` which we have to unfold in the soundness
+-- proof, which makes the proof much more brittle and expensive. See https://github.com/Verified-zkEVM/clean/issues/394
+-- that said -- full unfolding is also kind of bad for outputs here because it's a long chain of `Round.main ...`
+-- that's why we override the output.
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  elaborate_circuit_with {
+    localLength _ := 5376
+    output input i₀ := main input |>.output i₀
+    channelsWithGuarantees := []
+  } using by
+    simp only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
+    simp only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
+      sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
+      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
@@ -493,8 +459,8 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [sevenRoundsApplyStyle]
 
   -- Equations for counter values
   have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
@@ -526,15 +492,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
   -- We need to unpack what this means and relate it to our Spec
 
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal,
-             FormalCircuit.concat] at h_spec
+  simp only [FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat] at h_spec
 
   -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
   simp only [SevenRoundsSpec] at h_spec
 
   obtain ⟨h_value, h_normalized⟩ := h_spec
 
-  constructor
+  and_intros
   · -- Show out.value = applyRounds ...
     -- Use our lemma to express applyRounds in terms of applySevenRounds
     rw [applyRounds_eq_applySevenRounds]
@@ -547,11 +512,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         clear h_value
         simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
         simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
-
   · -- Show out.Normalized
     exact h_normalized
+  · left; trivial
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
@@ -564,7 +529,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.ApplyRounds

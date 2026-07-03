@@ -50,7 +50,15 @@ theorem toList_length_two {α : Type} (v : Vector α 2) :
 def listCons (a : α) (v : Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
-theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+@[simp] theorem toList_listCons {a : α} {v : Vector α n} : (listCons a v).toList = a :: v.toList := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_zero {a : α} {v : Vector α n} :
+    (listCons a v)[0] = a := by
+  simp [listCons]
+
+@[simp] theorem getElem_listCons_succ {a : α} {v : Vector α n} (i : ℕ) (hi : i < n) :
+    (listCons a v)[i + 1] = v[i] := by
   simp [listCons]
 
 def set? (v : Vector α n) (i : ℕ) (a : α) : Vector α n :=
@@ -198,6 +206,17 @@ lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
   simp only [Vector.getElem_mapFinRange, Vector.getElem_map]
   simp
 
+lemma mapFinRange_eq_self {α : Type} {n : ℕ} (v : Vector α n) :
+    Vector.mapFinRange n (fun i => v[i.val]) = v := by
+  ext i
+  simp only [Vector.getElem_mapFinRange]
+
+lemma map_mapFinRange {n : ℕ} {create : Fin n → α} {f : α → β} :
+  Vector.map f (Vector.mapFinRange n create) =
+    Vector.mapFinRange n (fun i => f (create i)) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapFinRange, getElem_map]
+
 def mapRange (n : ℕ) (create : ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]
@@ -231,6 +250,19 @@ theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
   rw [Vector.ext_iff]
   simp [getElem_mapRange, getElem_map]
 
+theorem mapRange_eq_mapFinRange {n} {create : ℕ → α} :
+    Vector.mapRange n create = Vector.mapFinRange n (fun i => create i.val) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_mapFinRange]
+
+theorem zip_mapRange {n} {create1 : ℕ → α} (v : Vector β n) :
+    Vector.zip (mapRange n create1) v =
+      Vector.mapFinRange n fun i => (create1 i.val, v[i]) := by
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_zip, Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  rfl
+
 theorem mapRange_add_eq_append {n m} (create : ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
   induction m with
@@ -247,9 +279,6 @@ theorem getElem_fill {n} {a : α} {i : ℕ} {hi : i < n} :
   induction n with
   | zero => nomatch hi
   | succ => simp_all [fill, getElem_push]
-
-instance [Inhabited α] {n : ℕ} : Inhabited (Vector α n) where
-  default := fill n default
 
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
@@ -376,5 +405,9 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
   simp only [Vector.takeShort]
   ext k h_k
   simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
+
+/-- coerce any Array to a Vector of the given size -/
+def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
+  ⟨ arr.take n |>.rightpad n default, by simp ⟩
 
 end Vector

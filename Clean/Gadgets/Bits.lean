@@ -7,9 +7,9 @@ namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-def main (n : ℕ) (x : Expression (F p)) := do
+def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
+  let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits assertBool
@@ -22,12 +22,6 @@ def main (n : ℕ) (x : Expression (F p)) := do
 
 def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
-  localLength _ := n
-  output _ i := varFromOffset (fields n) i
-
-  localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
-  subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
-    -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
   ProverAssumptions (x : F p) _ _ := x.val < 2^n
 
@@ -55,7 +49,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     constructor
     · intro i
       rw [h_env i]
-      simp [fieldToBits, Utils.Bits.toBits, Vector.getElem_mapRange, IsBool]
+      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i.val) with h | h <;> simp [h, IsBool]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
 
@@ -63,7 +57,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
       rw [Vector.ext_iff]
       intro i hi
       simp only [circuit_norm, bit_vars]
-      exact h_env ⟨ i, hi ⟩
+      rw [h_env ⟨ i, hi ⟩, getElem_fieldToBits]
 
     show input = env (fieldFromBitsExpr bit_vars)
     rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
@@ -75,13 +69,10 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits n hn x
 
-  localLength _ := n
-
-  Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, toBits]
-  completeness := by simp_all only [circuit_norm, toBits]
+  soundness := by circuit_proof_all [toBits]
+  completeness := by circuit_proof_all [toBits]
 
 end ToBits
 export ToBits (toBits)

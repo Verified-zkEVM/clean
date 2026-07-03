@@ -23,44 +23,42 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main := main rc
-  localLength _ := 1288
-  output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
+-- overridden so that `Permutation` can keep its nice proof which uses
+-- `Vector.mapRange` instead of `Vector.mapFinRange`.
+@[reducible]
+instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
+  elaborate_circuit_with {
+    output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
+      |>.set 0 (varFromOffset U64 (i0 + 1280))
+  } using by
+    simp +arith only [circuit_norm, Vector.mapRange_eq_mapFinRange]
 
-  localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
-  output_eq state i0 := by
-    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
-
-theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
-  intro i0 env state_var state h_input state_norm h_holds
+theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
+  circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+    Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
+  simp_rw [Vector.mapRange_eq_mapFinRange]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [circuit_norm, eval_vector, keccakRound, iota]
 
   -- simplify constraints
-  simp only [Assumptions] at state_norm
-  simp only [circuit_norm] at h_input state_norm
-  simp only [main, h_input, state_norm, circuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
-    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
-  ] at h_holds
+  simp only [h_assumptions, circuit_norm] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
   obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
   have ⟨ rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
   have ⟨ chi_norm, chi_eq ⟩ := h_chi rhopi_norm
   rw [rhopi_eq, theta_eq] at chi_eq
-  clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
+  clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi h_assumptions h_input
 
   -- simplify round constant constraint
-  set state0_before_rc := eval env (varFromOffset U64 (F:=F p) (i0 + 888))
+  set state0_before_rc := eval env (varFromOffset U64 (F:=F p) (i₀ + 480 + 400 + 8))
   have h_rc_norm : state0_before_rc.Normalized := by
     simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
     exact chi_norm 0
-  have h_rc_eq : state0_before_rc.value = (chi (rhoPi (theta state.value)))[0] := by
+  have h_rc_eq : state0_before_rc.value = (chi (rhoPi (theta input.value)))[0] := by
     simp only [Vector.ext_iff] at chi_eq
     specialize chi_eq 0 (by linarith)
     rw [←chi_eq]
@@ -73,13 +71,13 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   by_cases hi : 0 = i.val <;> simp only [hi, reduceIte]
   · simp [←hi, h_rc]
   simp only [KeccakState.value, KeccakState.Normalized, eval_vector,
-    Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at chi_norm chi_eq
+    Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapFinRange] at chi_norm chi_eq
   specialize chi_eq i i.is_lt
   specialize chi_norm i
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
+theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
@@ -93,11 +91,11 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumpti
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated rc with
+def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
+  main := main rc
+  elaborated := elaborated rc
   Spec := Spec rc
   Assumptions
-  soundness := soundness rc,
-  completeness := completeness rc,
-}
+  soundness := soundness rc
+  completeness := completeness rc
 end Gadgets.Keccak256.KeccakRound

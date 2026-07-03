@@ -97,12 +97,6 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
 def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field where
   main := main c
-  localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
-  subcircuitsConsistent input n := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
-    and_intros <;> ac_rfl
-
   Assumptions input :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
 
@@ -133,7 +127,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
       intro i
       have h_parts_i := congrArg (fun v => v[i]) h_parts
-      simp only [circuit_norm, Vector.getElem_ofFn] at h_parts_i
+      simp only [circuit_norm] at h_parts_i
       show (Vector.mapRange 127 fun j => env.get (i₀ + j))[i.val] = _
       simp only [Vector.getElem_mapRange, h_parts_i]
       simp only [apply_ite (Expression.eval env)]
@@ -221,7 +215,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
       intro i
       have h_parts_i := h_parts i
-      simp only [circuit_norm, Vector.getElem_ofFn] at h_parts_i
+      simp only [circuit_norm] at h_parts_i
       show (Vector.mapRange 127 fun j => env.get (i₀ + j))[i.val] = _
       simp only [Vector.getElem_mapRange, h_parts_i]
       simp only [apply_ite (Expression.eval env.toEnvironment)]

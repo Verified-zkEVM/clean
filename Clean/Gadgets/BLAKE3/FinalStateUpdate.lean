@@ -40,32 +40,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
--- #eval main (p:=p_babybear) default |>.local_length
--- #eval main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
-  localLength _ := 64
-  output inputs i0 := #v[
-    varFromOffset U32 (i0 + 0),
-    varFromOffset U32 (i0 + 4),
-    varFromOffset U32 (i0 + 8),
-    varFromOffset U32 (i0 + 12),
-    varFromOffset U32 (i0 + 16),
-    varFromOffset U32 (i0 + 20),
-    varFromOffset U32 (i0 + 24),
-    varFromOffset U32 (i0 + 28),
-    varFromOffset U32 (i0 + 32),
-    varFromOffset U32 (i0 + 36),
-    varFromOffset U32 (i0 + 40),
-    varFromOffset U32 (i0 + 44),
-    varFromOffset U32 (i0 + 48),
-    varFromOffset U32 (i0 + 52),
-    varFromOffset U32 (i0 + 56),
-    varFromOffset U32 (i0 + 60)
-  ]
-
-  localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
@@ -75,17 +51,15 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start [Xor32.circuit, Xor32.elaborated]
 
-  simp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
   simp only [Xor32.Assumptions, getElem_eval_vector, h_input, Xor32.Spec, and_imp] at h_holds
 
   ring_nf at h_holds
 
-  simp only [Assumptions, BLAKE3State.Normalized] at h_normalized
-  obtain ⟨state_norm, chaining_value_norm⟩ := h_normalized
+  simp only [BLAKE3State.Normalized] at h_assumptions
+  obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
 
   obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15⟩ := h_holds
   specialize c0 (state_norm 0) (state_norm 8)
@@ -105,7 +79,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [Spec, circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]
@@ -114,7 +88,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
   obtain ⟨h_input_state, h_input_cv⟩ := h_input
@@ -134,8 +108,12 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     ⟨chaining_value_norm 4, state_norm 12⟩, ⟨chaining_value_norm 5, state_norm 13⟩,
     ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
-def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
-}
+def circuit : FormalCircuit (F p) Inputs BLAKE3State where
+  main := main
+  elaborated := elaborated
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
 
 end Gadgets.BLAKE3.FinalStateUpdate
