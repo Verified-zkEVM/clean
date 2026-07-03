@@ -547,7 +547,7 @@ lemma list_sum_val_bound {l : List (F p)} {bound : ℕ}
 
 lemma vector_sum_eq_list_sum' {α} [AddCommMonoid α] {n : ℕ} (v : Vector α n) :
     v.sum = v.toList.sum := by
-  rw [Vector.sum_mk, ← Array.sum_eq_sum_toList]
+  rw [Vector.sum_mk, ← Array.sum_toList]
   rfl
 
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
@@ -833,7 +833,7 @@ lemma losses_below_win_position (input : Vector (F p) 254) (ct : ℕ) (k : Fin 1
     (h_loss : signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) :
     i < k := by
   by_contra h_not_lt
-  push_neg at h_not_lt
+  push Not at h_not_lt
   have h_ge_k : k ≤ i := h_not_lt
   rcases Nat.lt_or_eq_of_le h_ge_k with h_gt_k | h_eq_k
   · have h_tie := h_tie_above i h_gt_k
@@ -854,7 +854,7 @@ lemma wins_below_lose_position (input : Vector (F p) 254) (ct : ℕ) (k : Fin 12
     (h_win : signalPairValF input[i.val * 2] input[i.val * 2 + 1] > constPairValAt i.val ct) :
     i < k := by
   by_contra h_not_lt
-  push_neg at h_not_lt
+  push Not at h_not_lt
   have h_ge_k : k ≤ i := h_not_lt
   rcases Nat.lt_or_eq_of_le h_ge_k with h_gt_k | h_eq_k
   · have h_tie := h_tie_above i h_gt_k
@@ -917,7 +917,7 @@ lemma div_losses_case (n W Λ : ℕ) (h_n_pos : n ≥ 1) (hW_bound : W ≤ 2^127
     calc 2 * n * 2^127 + (Λ - W) < 2 * n * 2^127 + 2^127 := by omega
       _ = (2 * n + 1) * 2^127 := by ring
   apply Nat.div_eq_of_lt_le
-  · omega
+  · exact Nat.le_add_right _ _
   · exact h_upper
 
 omit [Fact (p < 2 ^ 254)] in

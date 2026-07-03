@@ -309,11 +309,11 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     match n with
     | 0 => simp only [circuit_norm, main]
     | 1 => simp only [circuit_norm, main]
-    | 2 => simp only [circuit_norm, main, AND.circuit]
+    | 2 => simp +instances only [circuit_norm, main, AND.circuit]
     | m + 3 =>
       let ih1 := IH ((m + 3) / 2) (by omega)
       let ih2 := IH ((m + 3) - ((m + 3) / 2)) (by omega)
-      simp only [circuit_norm, main, AND.circuit, ih1, ih2]
+      simp +instances only [circuit_norm, main, AND.circuit, ih1, ih2]
       omega
 
 -- Helper lemma: SubcircuitsConsistent preserved by bind
@@ -378,9 +378,9 @@ theorem subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_n
     match n with
     | 0 => simp only [main, circuit_norm]
     | 1 => simp only [main, circuit_norm]
-    | 2 => simp only [main, circuit_norm, AND.circuit]
+    | 2 => simp +instances only [main, circuit_norm, AND.circuit]
     | m + 3 =>
-      simp only [main, circuit_norm, AND.circuit, List.append_eq_nil_iff]
+      simp +instances only [main, circuit_norm, AND.circuit, List.append_eq_nil_iff]
       let n1 := (m + 3) / 2
       let n2 := (m + 3) - n1
       constructor
