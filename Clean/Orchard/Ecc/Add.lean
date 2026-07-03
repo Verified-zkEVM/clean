@@ -310,12 +310,27 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let r ← witnessNative fun env =>
-    (rowValue { p := eval env p, q := eval env q }).r
   let px : Witgen.FExpr Fp := p.x
   let qx : Witgen.FExpr Fp := q.x
   let py : Witgen.FExpr Fp := p.y
   let qy : Witgen.FExpr Fp := q.y
+  let rX : Witgen.FExpr Fp :=
+    .ite ((px =? 0) &&& (py =? 0)) qx <|
+    .ite ((qx =? 0) &&& (qy =? 0)) px <|
+    .ite (px =? qx)
+      (.ite (py + qy =? 0) 0
+        ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx))
+      ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)
+  let rY : Witgen.FExpr Fp :=
+    .ite ((px =? 0) &&& (py =? 0)) qy <|
+    .ite ((qx =? 0) &&& (qy =? 0)) py <|
+    .ite (px =? qx)
+      (.ite (py + qy =? 0) 0
+        ((3 * px * px) * (2 * py)⁻¹ *
+          (px - ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx)) - py))
+      ((qy - py) * (qx - px)⁻¹ *
+        (px - ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)) - py)
+  let r ← witness <| (Point.mk rX rY : Point (Witgen.FExpr Fp))
   let lambda ← witness <| .ite (qx =? px)
     (.ite (py =? 0) 0 ((3 * px * px) * (2 * py)⁻¹))
     ((qy - py) * (qx - px)⁻¹)
@@ -686,10 +701,66 @@ private theorem ite_deltaValue (px py qx qy : Fp) {d : Decidable (qx = px)} :
   unfold rowValue
   by_cases h : qx = px <;> simp_all
 
+/-- The evaluated `.ite` witness tree for `r.x` computes the x-coordinate of the
+complete point addition. Decidable instances are variables for the same reason as in
+`ite_lambdaValue` (the compound `&&&` conditions additionally need `Bool.and_eq_true`
+and `decide_eq_true_eq` to arrive in this propositional shape). -/
+private theorem ite_rX (px py qx qy : Fp)
+    {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
+    {d3 : Decidable (px = qx)} {d4 : Decidable (py + qy = 0)} :
+    (@ite _ (px = 0 ∧ py = 0) d1 qx
+      (@ite _ (qx = 0 ∧ qy = 0) d2 px
+        (@ite _ (px = qx) d3
+          (@ite _ (py + qy = 0) d4 0
+            (3 * px * px * (2 * py)⁻¹ * (3 * px * px * (2 * py)⁻¹) + -px + -qx))
+          ((qy + -py) * (qx + -px)⁻¹ * ((qy + -py) * (qx + -px)⁻¹) + -px + -qx))))
+    = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).x := by
+  simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
+    Prod.mk.injEq, pallasA]
+  by_cases h1 : px = 0 ∧ py = 0
+  · simp only [eq_true h1, reduceIte]
+  · by_cases h2 : qx = 0 ∧ qy = 0
+    · simp only [eq_false h1, eq_true h2, reduceIte]
+    · by_cases h3 : px = qx
+      · by_cases h4 : py + qy = 0
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
+          ring
+      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
+        ring
+
+/-- Same for the `r.y` witness tree and the y-coordinate of the complete addition. -/
+private theorem ite_rY (px py qx qy : Fp)
+    {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
+    {d3 : Decidable (px = qx)} {d4 : Decidable (py + qy = 0)} :
+    (@ite _ (px = 0 ∧ py = 0) d1 qy
+      (@ite _ (qx = 0 ∧ qy = 0) d2 py
+        (@ite _ (px = qx) d3
+          (@ite _ (py + qy = 0) d4 0
+            (3 * px * px * (2 * py)⁻¹ *
+              (px + -(3 * px * px * (2 * py)⁻¹ * (3 * px * px * (2 * py)⁻¹) + -px + -qx)) + -py))
+          ((qy + -py) * (qx + -px)⁻¹ *
+            (px + -((qy + -py) * (qx + -px)⁻¹ * ((qy + -py) * (qx + -px)⁻¹) + -px + -qx)) + -py))))
+    = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).y := by
+  simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
+    Prod.mk.injEq, pallasA]
+  by_cases h1 : px = 0 ∧ py = 0
+  · simp only [eq_true h1, reduceIte]
+  · by_cases h2 : qx = 0 ∧ qy = 0
+    · simp only [eq_false h1, eq_true h2, reduceIte]
+    · by_cases h3 : px = qx
+      · by_cases h4 : py + qy = 0
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
+        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
+          ring
+      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
+        ring
+
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec]
-  simp only [ite_lambdaValue, ite_deltaValue] at h_env
+  simp only [Bool.and_eq_true, decide_eq_true_eq, ite_lambdaValue, ite_deltaValue,
+    ite_rX, ite_rY] at h_env
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
