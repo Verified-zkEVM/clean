@@ -21,6 +21,8 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
+-- TODO(4.30 bump): whnf recursion depth grew on the 24-round unrolled circuit
+set_option maxRecDepth 4096 in
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
   elaborate_circuit_with {
     output _ i0 := stateVar i0 23
@@ -34,6 +36,8 @@ lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
   rw [← Array.foldl_toList, ← List.foldl_map]
   simp [List.finRange]
 
+-- TODO(4.30 bump): whnf recursion depth grew on the 24-round unrolled circuit
+set_option maxRecDepth 4096 in
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
@@ -69,6 +73,8 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [keccakPermutation, ← fin_foldl_eq_vector_foldl] at h ⊢
   exact h
 
+-- TODO(4.30 bump): whnf recursion depth grew on the 24-round unrolled circuit
+set_option maxRecDepth 4096 in
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [KeccakRound.circuit, KeccakRound.Spec, KeccakRound.Assumptions]
 
