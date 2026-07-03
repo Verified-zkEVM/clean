@@ -535,9 +535,9 @@ deriving ProvableStruct
 that `lsb` is the sign bit. No raw running-sum vector ever reaches this proof. -/
 def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 1 9 (by norm_num [K])
-    (fun env => eval env input.y)
+    (unconstrained do return input.y)
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env input.y)
+    (unconstrained do return input.y)
   let k3 ← witness (input.y.val.bitrange 254 1).toField
   let j ← witness ((input.lsb + k0 * (2 : Fp) : Expression Fp)
     + (input.y.val.bitrange 10 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
@@ -883,19 +883,19 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let psi := input.psi
 
   let b0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env gdX)
+    (unconstrained do return gdX)
   let b3 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
-    (fun env => eval env pkdX)
+    (unconstrained do return pkdX)
   let d2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 8 (by norm_num [K])
-    (fun env => eval env v)
+    (unconstrained do return v)
   let e0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 58 6 (by norm_num [K])
-    (fun env => eval env v)
+    (unconstrained do return v)
   let e1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 4 (by norm_num [K])
-    (fun env => eval env rho)
+    (unconstrained do return rho)
   let g1 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 9 (by norm_num [K])
-    (fun env => eval env psi)
+    (unconstrained do return psi)
   let h0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 249 5 (by norm_num [K])
-    (fun env => eval env psi)
+    (unconstrained do return psi)
   let b1 ← witness (gdX.val.bitrange 254 1).toField
   let b2 ← witness (gdY.val.bitrange 0 1).toField
   let d0 ← witness (pkdX.val.bitrange 254 1).toField

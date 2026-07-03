@@ -1342,13 +1342,16 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- region 3: canonicity of the base-field element.
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
+  -- NOTE: kept native. An `.ite`-free FExpr port of this exact expression evaluates with
+  -- `+ -1 * _` subtraction spelling, and re-aligning it inside `honest_canon_spec`'s
+  -- recursion-sensitive application hits the "costly defeq" wall documented below.
   let alpha0Prime ← witnessNative fun env =>
     (env alpha - env (m.z84) * (2 ^ 252 : Fp)) + (2 ^ 130 : Fp) - (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]
   -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate
-  let alpha1 ← witnessNative fun env => ((env (m.z84)).val % 4 : ℕ)
-  let alpha2 ← witnessNative fun env => ((env (m.z84)).val / 4 : ℕ)
+  let alpha1 ← witness (m.z84.val % (4 : ℕ)).toField
+  let alpha2 ← witness (m.z84.val / (4 : ℕ)).toField
   let z84Alpha <== m.z84
   let z44Alpha <== m.z44
   let z43Alpha <== m.z43
@@ -1625,6 +1628,7 @@ theorem completeness (B : MulFixed.FixedBase) :
     Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
   -- the honest top window `d = α.val / 8^84 < 8`, used in `α1`, `α2`, `α0'`
   rw [hz84v] at ha1 ha2 hap0
+  simp only [Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp] at ha1 ha2
   rw [ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
   refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_⟩
   · -- IsAlpha1 α1

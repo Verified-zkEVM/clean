@@ -72,7 +72,7 @@ structure Params where
 
 /-- Inputs of the action circuit: the prover-side private values from `Circuit::synthesize`
 plus the nine public-instance cells. Values witnessed by Rust inside `synthesize` are
-`UnconstrainedNative`/`UnconstrainedDepNative` here and are witnessed inside `main`, not exposed as
+`Unconstrained`/`UnconstrainedNat` (witgen-IR hint carriers) here and are witnessed inside `main`, not exposed as
 already-assigned cells. -/
 structure Input (F : Type) where
   -- old note

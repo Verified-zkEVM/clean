@@ -624,11 +624,11 @@ def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   -- Witness and range-constrain the short subpieces b_0 (4 bits), b_2 (5 bits) of `ak`/`nk`,
   -- and d_0 (9 bits) of `nk`.
   let b0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
-    (fun env => eval env ak)
+    (unconstrained do return ak)
   let b2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 0 5 (by norm_num [K])
-    (fun env => eval env nk)
+    (unconstrained do return nk)
   let d0 ← Utilities.LookupRangeCheck.WitnessShort.circuit 245 9 (by norm_num [K])
-    (fun env => eval env nk)
+    (unconstrained do return nk)
 
   -- The single-bit subpieces b_1, d_1 are boolean-constrained in the canonicity gate.
   let b1 ← witness (ak.val.bitrange 254 1).toField

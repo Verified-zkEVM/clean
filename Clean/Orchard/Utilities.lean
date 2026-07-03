@@ -917,68 +917,68 @@ can only state that the output is range-constrained; the prover spec records the
 -/
 
 def main (start numBits : ℕ) (hNumBits : numBits ≤ K)
-    (input : Var (UnconstrainedDepNative field) Fp) : Circuit Fp (Var field Fp) := do
-  let word ← witnessNative fun env =>
-    let v : Fp := input env
-    ((bitrange v.val start numBits : ℕ) : Fp)
+    (input : Var (Unconstrained field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessProgram do
+    let v ← input
+    return (v.val.bitrange start numBits).toField
   shortRangeCircuit numBits hNumBits { word }
   return word
 
 def taggedMain (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5)
-    (input : Var (UnconstrainedDepNative field) Fp) : Circuit Fp (Var field Fp) := do
-  let word ← witnessNative fun env =>
-    let v : Fp := input env
-    ((bitrange v.val start numBits : ℕ) : Fp)
+    (input : Var (Unconstrained field) Fp) : Circuit Fp (Var field Fp) := do
+  let word ← witnessProgram do
+    let v ← input
+    return (v.val.bitrange start numBits).toField
   taggedShortRangeCircuit numBits hBits { word }
   return word
 
-def Spec (numBits : ℕ) (_input : Value (UnconstrainedDepNative field) Fp) (output : Fp)
+def Spec (numBits : ℕ) (_input : Value (Unconstrained field) Fp) (output : Fp)
     (_ : ProverData Fp) : Prop :=
   output.val < 2 ^ numBits
 
-def ProverSpec (start numBits : ℕ) (input : ProverValue (UnconstrainedDepNative field) Fp)
+def ProverSpec (start numBits : ℕ) (input : ProverValue (Unconstrained field) Fp)
     (output : Fp) (_ : ProverHint Fp) : Prop :=
   let v : Fp := input
   output.val = bitrange v.val start numBits
 
 instance elaborated (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    ElaboratedCircuit Fp (UnconstrainedDepNative field) field (main start numBits hNumBits) := by
+    ElaboratedCircuit Fp (Unconstrained field) field (main start numBits hNumBits) := by
   elaborate_circuit
 
 instance taggedElaborated (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    ElaboratedCircuit Fp (UnconstrainedDepNative field) field (taggedMain start numBits hBits) := by
+    ElaboratedCircuit Fp (Unconstrained field) field (taggedMain start numBits hBits) := by
   elaborate_circuit
 
 theorem soundness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDepNative field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Soundness (Input:=Unconstrained field) (Output:=field)
       Fp (main start numBits hNumBits) (fun _ _ => True) (Spec numBits) := by
   circuit_proof_start [main, Spec, shortRangeCircuit]
   exact h_holds
 
 theorem taggedSoundness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint.Soundness (Input:=UnconstrainedDepNative field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Soundness (Input:=Unconstrained field) (Output:=field)
       Fp (taggedMain start numBits hBits) (fun _ _ => True) (Spec numBits) := by
   circuit_proof_start [taggedMain, Spec, taggedShortRangeCircuit]
   exact h_holds
 
 theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDepNative field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Completeness (Input:=Unconstrained field) (Output:=field)
       Fp (main start numBits hNumBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [main, ProverSpec, shortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grw [hNumBits, K]; norm_num
   have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
-  simp [h_env, hval]
+  simp [h_env, hval, Specs.fromNat_Fp, Specs.val_Fp]
 
 theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint.Completeness (Input:=UnconstrainedDepNative field) (Output:=field)
+    GeneralFormalCircuit.WithHint.Completeness (Input:=Unconstrained field) (Output:=field)
       Fp (taggedMain start numBits hBits) (fun _ _ _ => True) (ProverSpec start numBits) := by
   circuit_proof_start [taggedMain, ProverSpec, taggedShortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grind
   have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
-  simp [h_env, hval]
+  simp [h_env, hval, Specs.fromNat_Fp, Specs.val_Fp]
 
 def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
-    GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative field) field where
+    GeneralFormalCircuit.WithHint Fp (Unconstrained field) field where
   main := main start numBits hNumBits
   elaborated := elaborated start numBits hNumBits
   Spec := Spec numBits
@@ -987,7 +987,7 @@ def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
   completeness := completeness start numBits hNumBits
 
 def taggedCircuit (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
-    GeneralFormalCircuit.WithHint Fp (UnconstrainedDepNative field) field where
+    GeneralFormalCircuit.WithHint Fp (Unconstrained field) field where
   main := taggedMain start numBits hBits
   elaborated := taggedElaborated start numBits hBits
   Spec := Spec numBits
