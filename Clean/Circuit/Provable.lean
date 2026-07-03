@@ -218,13 +218,13 @@ abbrev fieldPair : TypeMap := fun F => F × F
 
 abbrev fieldTriple : TypeMap := fun F => F × F × F
 
-instance : ProvableType fieldPair where
+instance (priority := high) : ProvableType fieldPair where
   size := 2
   toElements := fun (x, y) => #v[x, y]
   fromElements := fun ⟨⟨[x, y]⟩, _ ⟩ => (x, y)
 instance : NonEmptyProvableType fieldPair where
 
-instance : ProvableType fieldTriple where
+instance (priority := high) : ProvableType fieldTriple where
   size := 3
   toElements := fun (x, y, z) => #v[x, y, z]
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
@@ -899,12 +899,12 @@ namespace CircuitType
 @[circuit_norm] lemma eval_field_pair (F : Type) [FiniteField F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_pair (α:=field) (β:=field) env p1 p2
+  with_unfolding_all rfl
 
 @[circuit_norm] lemma eval_field_pair_prover (F : Type) [FiniteField F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_var_pair_prover env p1 p2
+  with_unfolding_all rfl
 
 end CircuitType
 
@@ -928,7 +928,7 @@ theorem eval_pair_both_expr (env : Environment F)
   (a b : Expression F) :
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
-  simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
+  with_unfolding_all rfl
 
 omit [FiniteField F] in
 @[circuit_norm ↓ high]

@@ -71,23 +71,13 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-omit p_large_enough in
-/-- Unfold `eval` on a lookup entry triple into its componentwise evaluations. -/
-private lemma eval_triple (env : Environment (F p)) (t : fieldTriple (Expression (F p))) :
-    eval env t = (Expression.eval env t.1, Expression.eval env t.2.1, Expression.eval env t.2.2) := by
-  have h : eval env t = (Expression.eval env t.1, eval env t.2) :=
-    eval_pair_left_expr (β := fieldPair) env t.1 t.2
-  have h2 : eval env t.2 = (Expression.eval env t.2.1, Expression.eval env t.2.2) :=
-    eval_pair_both_expr env t.2.1 t.2.2
-  rw [h, h2]
-
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   elaborate_circuit
 
 theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
-  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq, eval_triple]
+  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   set z := x + y + -(2*w)
@@ -117,7 +107,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq, eval_triple]
+  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl

@@ -85,28 +85,15 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   elaborate_circuit
 
--- Decompose `eval` of a `fieldTriple` literal, at the exact `Eval` instance that
--- `lookup` constraints elaborate with (which simp lemmas like `eval_fieldTriple` miss).
-omit p_large_enough in
-private lemma eval_triple (env : Environment (F p)) (a b c : Expression (F p)) :
-    @eval _ _ _ (CircuitType.instVerifierEvalExpression (M := fieldTriple)) env (a, b, c)
-      = ((a.eval env, b.eval env, c.eval env) : fieldTriple (F p)) := by
-  rw [show @eval _ _ _ (CircuitType.instVerifierEvalExpression (M := fieldTriple)) env (a, b, c)
-    = eval env ((a, (b, c)) : ProvablePair field (ProvablePair field field) (Expression (F p)))
-    from rfl]
-  simp [circuit_norm]
-
 theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
-  rw [eval_triple] at h_constraint
-  simp only [circuit_norm, h_input] at h_constraint
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   -- The constraint from lookup is about xor = 2*or - x - y
   -- which in field arithmetic is 2*w + -x + -y
   set xor := 2*w + -x + -y
-  have h_xor : xor.val = x.val ^^^ y.val := h_constraint.2.2
+  have h_xor : xor.val = x.val ^^^ y.val := h_constraint
   have value_goal : w.val = x.val ||| y.val := by
     have two_or_field : 2*w = x + y + xor := by ring
     have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
@@ -141,7 +128,6 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq] at h_input h_assumptions h_env ⊢
-  rw [eval_triple]
   simp only [circuit_norm, h_input] at h_env ⊢
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   refine ⟨hx_byte, hy_byte, ?_⟩
