@@ -25,10 +25,6 @@ lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m]
   rw [←Vector.toArray_mapM, Functor.map_map]
   congr
 
-lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : β → α → m β) (init : β) :
-    xs.foldlM body init = xs.toList.foldlM body init := by
-  rw [Vector.foldlM_mk, List.foldlM_toArray]
-  congr
 
 namespace Circuit
 variable {prop : Condition F}
@@ -252,8 +248,8 @@ lemma foldlM_cons (x : α) :
   (Vector.listCons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
-  rw [Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
-  simp only [←Vector.foldlM_toList]
+  rw [← Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
+  simp only [Vector.foldlM_toList]
 
 theorem localLength_eq :
     (xs.foldlM circuit init).localLength n = m * constant.localLength := by
@@ -1215,7 +1211,7 @@ instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       rw [foldl]
       cases xs with
       | mk toArray hsize =>
-        simp [Vector.foldlM_toList] at hsize ⊢
+        simp at hsize ⊢
         cases toArray
         simp_all
         rfl

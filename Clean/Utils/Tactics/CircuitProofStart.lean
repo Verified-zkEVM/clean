@@ -133,6 +133,12 @@ elab_rules : tactic
   -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
 
+  -- collapse the `field`/`id` type synonym everywhere, so that hypotheses and goals
+  -- are stated at the underlying field type with canonical instances.
+  -- Since Lean 4.29, automation (simp matching, grind e-matching/ring) no longer
+  -- identifies `field F`-instance applications with canonical `F` ones up to defeq.
+  try (evalTactic (← `(tactic| dsimp only [field, id_eq] at *))) catch _ => pure ()
+
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 

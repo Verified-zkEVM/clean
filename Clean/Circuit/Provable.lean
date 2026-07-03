@@ -75,7 +75,7 @@ instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   evalProver env v := ProvableType.eval env.toEnvironment v
 
 instance {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
-  inferInstanceAs (ProvableType M)
+  (inferInstance : ProvableType M)
 
 @[explicit_provable_type]
 def const (x : M F) : M (Expression F) :=
@@ -134,7 +134,7 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 
 instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
     [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
-  inferInstanceAs (GetElem (α (Expression F)) ℕ elem valid)
+  (inferInstance : GetElem (α (Expression F)) ℕ elem valid)
 
 @[explicit_provable_type] lemma eval_var (env : Environment F) (v : Var M F) :
     eval env v = ProvableType.eval env (v : M (Expression F)) := by
@@ -189,10 +189,10 @@ instance : ProvableType unit where
   fromElements _ := ()
 
 instance {Hint : Type} : ProvableType (Value (UnconstrainedNative Hint)) :=
-  inferInstanceAs (ProvableType unit)
+  (inferInstance : ProvableType unit)
 
 instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :=
-  inferInstanceAs (ProvableType unit)
+  (inferInstance : ProvableType unit)
 
 abbrev field : TypeMap := id
 
@@ -968,113 +968,114 @@ instance {α : TypeMap} [ProvableType α] : Zero (α F) where
 
 -- be able to use `field (Expression F)` in expressions
 
-instance : HAdd (field (Expression F)) (Expression F) (Expression F) where
-  hAdd (x : Expression F) y := x + y
-instance : HAdd (Expression F) (field (Expression F)) (Expression F) where
-  hAdd x (y : Expression F) := x + y
-instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hAdd (a : Expression F) (b : Expression F) := a + b
+@[reducible] instance : HAdd (field (Expression F)) (Expression F) (Expression F) :=
+  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HAdd (Expression F) (field (Expression F)) (Expression F) :=
+  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
+  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
 
-instance : HSub (field (Expression F)) (Expression F) (Expression F) where
-  hSub (x : Expression F) y := x - y
-instance : HSub (Expression F) (field (Expression F)) (Expression F) where
-  hSub x (y : Expression F) := x - y
-instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hSub (a : Expression F) (b : Expression F) := a - b
+@[reducible] instance : HSub (field (Expression F)) (Expression F) (Expression F) :=
+  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (Expression F) (field (Expression F)) (Expression F) :=
+  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
+  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
 
-instance : HMul (field (Expression F)) (Expression F) (Expression F) where
-  hMul (x : Expression F) y := x * y
-instance : HMul (Expression F) (field (Expression F)) (Expression F) where
-  hMul x (y : Expression F) := x * y
-instance : HMul F (field (Expression F)) (field (Expression F)) where
-  hMul x y : Expression F := x * y
-instance : HMul (field (Expression F)) F (field (Expression F)) where
-  hMul x y : Expression F := x * y
-instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hMul (a : Expression F) (b : Expression F) := a * b
+@[reducible] instance : HMul (field (Expression F)) (Expression F) (Expression F) :=
+  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul (Expression F) (field (Expression F)) (Expression F) :=
+  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul F (field (Expression F)) (field (Expression F)) :=
+  (inferInstance : HMul F (Expression F) (Expression F))
+@[reducible] instance : HMul (field (Expression F)) F (field (Expression F)) :=
+  (inferInstance : HMul (Expression F) F (Expression F))
+@[reducible] instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
+  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
 
-instance {n : ℕ} [OfNat F n] : OfNat (field F) n where
-  ofNat : F := OfNat.ofNat n
+@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (field F) n :=
+  (inferInstance : OfNat F n)
 
-instance [Coe ℕ F] : Coe ℕ (field F) where
+@[reducible] instance [Coe ℕ F] : Coe ℕ (field F) where
   coe n : F := n
-instance [CoeOut ℕ F] : CoeOut ℕ (field F) where
+@[reducible] instance [CoeOut ℕ F] : CoeOut ℕ (field F) where
   coe n : F := n
-instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
+@[reducible] instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
   coe n : F := n
-instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
+@[reducible] instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
   coe n : F := n
 
-instance [DecidableEq F] : DecidableEq (field F) :=
-  inferInstanceAs (DecidableEq F)
+@[reducible] instance [DecidableEq F] : DecidableEq (field F) :=
+  (inferInstance : DecidableEq F)
 
 -- make `Var field F` behave like `Expression F` in expressions
-instance : Zero (Var field F) := inferInstanceAs (Zero (Expression F))
-instance : One (Var field F) := inferInstanceAs (One (Expression F))
-instance : Add (Var field F) := inferInstanceAs (Add (Expression F))
-instance : Neg (Var field F) := inferInstanceAs (Neg (Expression F))
-instance : Sub (Var field F) := inferInstanceAs (Sub (Expression F))
-instance : Mul (Var field F) := inferInstanceAs (Mul (Expression F))
-instance : Coe F (Var field F) := inferInstanceAs (Coe F (Expression F))
-instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := inferInstanceAs (OfNat (Expression F) n)
-instance : HMul (Var field F) F (Expression F) := inferInstanceAs (HMul (Expression F) F (Expression F))
-instance : HMul F (Var field F) (Expression F) := inferInstanceAs (HMul F (Expression F) (Expression F))
-instance : HAdd (Expression F) (Var field F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HAdd (Var field F) (Expression F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HSub (Expression F) (Var field F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HSub (Var field F) (Expression F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HMul (Expression F) (Var field F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HMul (Var field F) (Expression F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HDiv (Var field F) F (Expression F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
-instance : HDiv (Var field F) ℕ (Expression F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
+@[reducible] instance : Zero (Var field F) := (inferInstance : Zero (Expression F))
+@[reducible] instance : One (Var field F) := (inferInstance : One (Expression F))
+@[reducible] instance : Add (Var field F) := (inferInstance : Add (Expression F))
+@[reducible] instance : Neg (Var field F) := (inferInstance : Neg (Expression F))
+@[reducible] instance : Sub (Var field F) := (inferInstance : Sub (Expression F))
+@[reducible] instance : Mul (Var field F) := (inferInstance : Mul (Expression F))
+@[reducible] instance : Coe F (Var field F) := (inferInstance : Coe F (Expression F))
+@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := (inferInstance : OfNat (Expression F) n)
+@[reducible] instance : HMul (Var field F) F (Expression F) := (inferInstance : HMul (Expression F) F (Expression F))
+@[reducible] instance : HMul F (Var field F) (Expression F) := (inferInstance : HMul F (Expression F) (Expression F))
+@[reducible] instance : HAdd (Expression F) (Var field F) (Expression F) := (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HAdd (Var field F) (Expression F) (Expression F) := (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (Expression F) (Var field F) (Expression F) := (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (Var field F) (Expression F) (Expression F) := (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul (Expression F) (Var field F) (Expression F) := (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul (Var field F) (Expression F) (Expression F) := (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HDiv (Var field F) F (Expression F) := (inferInstance : HDiv (Expression F) F (Expression F))
+@[reducible] instance : HDiv (Var field F) ℕ (Expression F) := (inferInstance : HDiv (Expression F) ℕ (Expression F))
 
   -- make `field F` behave like `F` in expressions
-instance : Zero (field F) := inferInstanceAs (Zero F)
-instance : One (field F) := inferInstanceAs (One F)
-instance : Add (field F) := inferInstanceAs (Add F)
-instance : Neg (field F) := inferInstanceAs (Neg F)
-instance : Sub (field F) := inferInstanceAs (Sub F)
-instance : Mul (field F) := inferInstanceAs (Mul F)
-instance : Inv (field F) := inferInstanceAs (Inv F)
-instance : HAdd F (field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv F (field F) F := inferInstanceAs (HDiv F F F)
-instance : HDiv (field F) F F := inferInstanceAs (HDiv F F F)
+@[reducible] instance : FiniteField (field F) := (inferInstance : FiniteField F)
+@[reducible] instance : Zero (field F) := (inferInstance : Zero F)
+@[reducible] instance : One (field F) := (inferInstance : One F)
+@[reducible] instance : Add (field F) := (inferInstance : Add F)
+@[reducible] instance : Neg (field F) := (inferInstance : Neg F)
+@[reducible] instance : Sub (field F) := (inferInstance : Sub F)
+@[reducible] instance : Mul (field F) := (inferInstance : Mul F)
+@[reducible] instance : Inv (field F) := (inferInstance : Inv F)
+@[reducible] instance : HAdd F (field F) F := (inferInstance : HAdd F F F)
+@[reducible] instance : HAdd (field F) F F := (inferInstance : HAdd F F F)
+@[reducible] instance : HSub F (field F) F := (inferInstance : HSub F F F)
+@[reducible] instance : HSub (field F) F F := (inferInstance : HSub F F F)
+@[reducible] instance : HMul F (field F) F := (inferInstance : HMul F F F)
+@[reducible] instance : HMul (field F) F F := (inferInstance : HMul F F F)
+@[reducible] instance : HDiv F (field F) F := (inferInstance : HDiv F F F)
+@[reducible] instance : HDiv (field F) F F := (inferInstance : HDiv F F F)
 
 -- make `Value field F` behave like `F` in expressions
-instance : Zero (Value field F) := inferInstanceAs (Zero F)
-instance : One (Value field F) := inferInstanceAs (One F)
-instance : Add (Value field F) := inferInstanceAs (Add F)
-instance : Neg (Value field F) := inferInstanceAs (Neg F)
-instance : Sub (Value field F) := inferInstanceAs (Sub F)
-instance : Mul (Value field F) := inferInstanceAs (Mul F)
-instance {n : ℕ} [OfNat F n] : OfNat (Value field F) n := inferInstanceAs (OfNat F n)
-instance : HAdd F (Value field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (Value field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (Value field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (Value field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (Value field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (Value field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv (Value field F) F F := inferInstanceAs (HDiv F F F)
-instance : HDiv F (Value field F) F := inferInstanceAs (HDiv F F F)
+@[reducible] instance : Zero (Value field F) := (inferInstance : Zero F)
+@[reducible] instance : One (Value field F) := (inferInstance : One F)
+@[reducible] instance : Add (Value field F) := (inferInstance : Add F)
+@[reducible] instance : Neg (Value field F) := (inferInstance : Neg F)
+@[reducible] instance : Sub (Value field F) := (inferInstance : Sub F)
+@[reducible] instance : Mul (Value field F) := (inferInstance : Mul F)
+@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (Value field F) n := (inferInstance : OfNat F n)
+@[reducible] instance : HAdd F (Value field F) F := (inferInstance : HAdd F F F)
+@[reducible] instance : HAdd (Value field F) F F := (inferInstance : HAdd F F F)
+@[reducible] instance : HSub F (Value field F) F := (inferInstance : HSub F F F)
+@[reducible] instance : HSub (Value field F) F F := (inferInstance : HSub F F F)
+@[reducible] instance : HMul F (Value field F) F := (inferInstance : HMul F F F)
+@[reducible] instance : HMul (Value field F) F F := (inferInstance : HMul F F F)
+@[reducible] instance : HDiv (Value field F) F F := (inferInstance : HDiv F F F)
+@[reducible] instance : HDiv F (Value field F) F := (inferInstance : HDiv F F F)
 
 -- make `ProverValue field F` behave like `F` in expressions
-instance : Zero (ProverValue field F) := inferInstanceAs (Zero F)
-instance : One (ProverValue field F) := inferInstanceAs (One F)
-instance : Add (ProverValue field F) := inferInstanceAs (Add F)
-instance : Neg (ProverValue field F) := inferInstanceAs (Neg F)
-instance : Sub (ProverValue field F) := inferInstanceAs (Sub F)
-instance : Mul (ProverValue field F) := inferInstanceAs (Mul F)
-instance {n : ℕ} [OfNat F n] : OfNat (ProverValue field F) n := inferInstanceAs (OfNat F n)
-instance : HAdd F (ProverValue field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (ProverValue field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (ProverValue field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (ProverValue field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (ProverValue field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (ProverValue field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv (ProverValue field F) F F := inferInstanceAs (HDiv F F F)
-instance : HDiv F (ProverValue field F) F := inferInstanceAs (HDiv F F F)
+@[reducible] instance : Zero (ProverValue field F) := (inferInstance : Zero F)
+@[reducible] instance : One (ProverValue field F) := (inferInstance : One F)
+@[reducible] instance : Add (ProverValue field F) := (inferInstance : Add F)
+@[reducible] instance : Neg (ProverValue field F) := (inferInstance : Neg F)
+@[reducible] instance : Sub (ProverValue field F) := (inferInstance : Sub F)
+@[reducible] instance : Mul (ProverValue field F) := (inferInstance : Mul F)
+@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (ProverValue field F) n := (inferInstance : OfNat F n)
+@[reducible] instance : HAdd F (ProverValue field F) F := (inferInstance : HAdd F F F)
+@[reducible] instance : HAdd (ProverValue field F) F F := (inferInstance : HAdd F F F)
+@[reducible] instance : HSub F (ProverValue field F) F := (inferInstance : HSub F F F)
+@[reducible] instance : HSub (ProverValue field F) F F := (inferInstance : HSub F F F)
+@[reducible] instance : HMul F (ProverValue field F) F := (inferInstance : HMul F F F)
+@[reducible] instance : HMul (ProverValue field F) F F := (inferInstance : HMul F F F)
+@[reducible] instance : HDiv (ProverValue field F) F F := (inferInstance : HDiv F F F)
+@[reducible] instance : HDiv F (ProverValue field F) F := (inferInstance : HDiv F F F)

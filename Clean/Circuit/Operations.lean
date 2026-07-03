@@ -51,7 +51,7 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
     | lookup l => l.Contains eval ∧ ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
-@[circuit_norm]
+@[implicit_reducible, circuit_norm]
 def localLength : List (FlatOperation F) → ℕ
   | [] => 0
   | witness m _ :: ops => m + localLength ops
@@ -331,7 +331,7 @@ instance [Repr F] : Repr (Operation F) where
 /--
 The number of witness variables introduced by this operation.
 -/
-@[circuit_norm]
+@[implicit_reducible, circuit_norm]
 def localLength : Operation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
@@ -377,7 +377,7 @@ def toNested : Operations F → List (NestedOperations F)
 /--
 The number of witness variables introduced by these operations.
 -/
-@[circuit_norm]
+@[implicit_reducible, circuit_norm]
 def localLength : Operations F → ℕ
   | [] => 0
   | .witness m _ :: ops => m + localLength ops
@@ -1300,8 +1300,9 @@ theorem localLength_cons {a : Operation F} {as : Operations F} :
 theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : ProverEnvironment F) :
   localWitnesses env (op :: ops) =
     (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
-  cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
-  all_goals (try (rw [Vector.empty_append]; simp))
+  apply Vector.toArray_inj.mp
+  cases op <;> simp [localWitnesses, Operation.localWitnesses,
+    Vector.toArray_cast, Vector.toArray_append]
 
 @[circuit_norm]
 theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
