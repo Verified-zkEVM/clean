@@ -166,12 +166,13 @@ namespace Swap
 
 structure Input (F : Type) where
   a : F
-  b : UnconstrainedDepNative field F
-  swap : UnconstrainedNative Bool F
+  b : Unconstrained field F
+  swap : UnconstrainedBool F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ a := default, b := fun _ => default, swap := fun _ => default }⟩
+  ⟨{ a := default, b := unconstrained (do return default),
+     swap := unconstrainedBool (do return .false) }⟩
 
 def outputValue (input : Input.ProverValue Fp) :
     CondSwapOutput Fp where
@@ -181,10 +182,10 @@ def outputValue (input : Input.ProverValue Fp) :
 def main (input : Input.Var Fp) :
     Circuit Fp (Var CondSwapOutput Fp) := do
   let a <== input.a
-  let b ← witnessNative input.b
-  let swap ← witnessNative fun env => if input.swap env then 1 else 0
-  let aSwapped ← witnessNative fun env => if input.swap env then env b else env a
-  let bSwapped ← witnessNative fun env => if input.swap env then env a else env b
+  let b ← witnessProgram input.b
+  let swap ← witnessProgram (do return (← input.swap).toField)
+  let aSwapped ← witnessProgram (do return .ite (← input.swap) b (Witgen.FExpr.expr a))
+  let bSwapped ← witnessProgram (do return .ite (← input.swap) (Witgen.FExpr.expr a) b)
   Gate.circuit { a, b, aSwapped, bSwapped, swap }
   return { aSwapped, bSwapped }
 

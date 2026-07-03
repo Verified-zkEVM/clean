@@ -294,6 +294,23 @@ theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableTyp
     (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
     (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
 
+/-- `Witgen.eval` on `fields n` is elementwise evaluation (the witgen analogue of
+`ProvableType.eval_fields`). -/
+theorem eval_fields' [FiniteField F] {n : ℕ} (ctx : Ctx F) (xs : Vector (FExpr F) n) :
+    Witgen.eval (M := fields n) ctx xs = xs.map (FExpr.eval ctx) := rfl
+
+/-- Vector analogue of the `evalProjection` simproc: evaluating one element of a vector
+of IR expressions is one element of the evaluated vector. Lifts stuck element reads of
+*opaque* vectors (e.g. per-index reads of an `Unconstrained (fields n)` hint) to the
+vector level, where row-level facts (`h_input` equations) can consume them. Stated as a
+post-rewrite so that literal vectors reduce first (`Vector.getElem_ofFn` etc.) and never
+reach this lemma. -/
+@[circuit_norm]
+theorem FExpr.eval_getElem [FiniteField F] {n : ℕ} (ctx : Ctx F)
+    (xs : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
+    FExpr.eval ctx xs[i] = (Witgen.eval (M := fields n) ctx xs)[i] := by
+  rw [eval_fields', Vector.getElem_map]
+
 /-- Witness program copying the values of given circuit expressions (used by `<==`). -/
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
   .ir [] (.lit (es.map .expr))

@@ -99,8 +99,9 @@ structure Input (F : Type) where
   vNetMagnitude : Unconstrained field F
   vNetSign : Unconstrained field F
   -- merkle path
-  path : UnconstrainedDepNative (fields 32) F
-  pos : UnconstrainedNative (Vector Bool 32) F
+  path : Unconstrained (fields 32) F
+  /-- The 32 Merkle position bits, packed into a natural number (bit `i` = layer `i`). -/
+  pos : UnconstrainedNat F
   -- public instance cells
   anchor : F
   cvNetX : F
@@ -123,7 +124,7 @@ instance : Inhabited (Var Input Fp) :=
      vNew := default, psiNew := default,
      rcmNew := default, rcv := default,
      vNetMagnitude := default, vNetSign := default,
-     path := default, pos := default,
+     path := unconstrained (do return default), pos := unconstrainedNat (do return 0),
      anchor := default, cvNetX := default, cvNetY := default, nfOld := default,
      rkX := default, rkY := default, cmx := default,
      enableSpends := default, enableOutputs := default }⟩

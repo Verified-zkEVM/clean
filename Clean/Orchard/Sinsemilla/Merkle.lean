@@ -826,12 +826,13 @@ namespace Layer
 
 structure Input (F : Type) where
   node : F
-  sibling : UnconstrainedDepNative field F
-  posBit : UnconstrainedNative Bool F
+  sibling : Unconstrained field F
+  posBit : UnconstrainedBool F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ node := default, sibling := fun _ => default, posBit := fun _ => default }⟩
+  ⟨{ node := default, sibling := unconstrained (do return default),
+     posBit := unconstrainedBool (do return .false) }⟩
 
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
@@ -942,20 +943,25 @@ namespace CalculateRoot
 
 structure Input (F : Type) where
   leaf : F
-  path : UnconstrainedDepNative (fields 32) F
-  pos : UnconstrainedNative (Vector Bool 32) F
+  /-- The 32 position bits, packed into a single natural number (bit `i` = the position
+  bit of layer `i`): there is no `Unconstrained*` carrier for a field-independent vector
+  hint, only the scalar `UnconstrainedBool`/`UnconstrainedNat` — so the packed-Nat form
+  with per-layer `NExpr.testBit` unpacking is the IR-native representation. -/
+  path : Unconstrained (fields 32) F
+  pos : UnconstrainedNat F
 deriving CircuitType
 
 instance : Inhabited (Var Input Fp) :=
-  ⟨{ leaf := default, path := fun _ => default, pos := fun _ => default }⟩
+  ⟨{ leaf := default, path := unconstrained (do return default),
+     pos := unconstrainedNat (do return 0) }⟩
 
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) :=
   Circuit.foldl (.finRange 32) input.leaf
     (fun node i => Layer.circuit G Q hQ i.val (by omega)
       { node := node,
-        sibling := fun env => (show Vector Fp 32 from input.path env)[i],
-        posBit := fun env => (show Vector Bool 32 from input.pos env)[i] })
+        sibling := unconstrained (do return (← input.path)[i]),
+        posBit := unconstrainedBool (do return (← input.pos).testBit i.val =? 1) })
 
 def output (G : Generators) (Q : Point Fp) (offset : ℕ) :=
   HashToPoint.Z1s.output G Q 24 [1, 24]
@@ -1055,7 +1061,7 @@ def honestNode (G : Generators) (Q : Point Fp)
           (Layer.proverChunks k
             { node := node,
               sibling := (show Vector Fp 32 from input.path)[k]'(by omega),
-              posBit := (show Vector Bool 32 from input.pos)[k]'(by omega) })).map (·.x)
+              posBit := decide ((show ℕ from input.pos) >>> k % 2 = 1) })).map (·.x)
     else none
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
@@ -1125,7 +1131,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
             { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
-              posBit := (show Vector Bool 32 from I.pos)[k]'hk' })).map (·.x) := by
+              posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) })).map (·.x) := by
         rw [honestNode, dif_pos hk', hik]; rfl
       have hsome : (honestNode G Q I (k + 1)).isSome :=
         honestNode_isSome_le G Q I (by omega) h_assumptions
@@ -1133,7 +1139,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       -- the layer-k hash exists
       set chunks : List ℕ := Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk',
-          posBit := (show Vector Bool 32 from I.pos)[k]'hk' } with hchunks
+          posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) } with hchunks
       obtain ⟨B, hB⟩ : ∃ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B := by
         rcases h : Specs.Sinsemilla.hashToPoint G.S Q chunks with _ | B
         · rw [h] at hsome; simp at hsome
@@ -1150,8 +1156,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       · -- layer j+1: the running node equals the canonical `acc (j+1)` (bridge)
         have hbe : Expression.eval env.toEnvironment
             (Layer.main G Q hQ j (by omega)
-              { node := default, sibling := fun e => (input_var.path e)[j],
-                posBit := fun e => (input_var.pos e)[j] } (i₀ + j * 274)).1 = acc (j + 1) :=
+              { node := default,
+                sibling := fun s => ((input_var.path s).1[j], (input_var.path s).2),
+                posBit := fun s => ((input_var.pos s).1.testBit (Witgen.NExpr.const j) =? 1,
+                  (input_var.pos s).2) } (i₀ + j * 274)).1 = acc (j + 1) :=
           bridge j (by omega) _ _ _ rfl
         have spec := (hLstep j hk' ⟨B, by rw [hbe]; exact hB⟩).2 B (by rw [hbe]; exact hB)
         rw [← spec]
@@ -1160,17 +1168,17 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
   have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
-          posBit := (show Vector Bool 32 from I.pos)[k]'hk }) = some B := by
+          posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) }) = some B := by
     intro k hk
     have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
-          posBit := (show Vector Bool 32 from I.pos)[k]'hk })).map (·.x) = some (acc (k + 1)) := by
+          posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) })).map (·.x) = some (acc (k + 1)) := by
       have hk1 := key (k + 1) (by omega)
       rw [honestNode, dif_pos hk, key k (by omega)] at hk1
       exact hk1
     rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
-          posBit := (show Vector Bool 32 from I.pos)[k]'hk }) with _ | B
+          posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) }) with _ | B
     · rw [hh] at h1; simp at h1
     · exact ⟨B, rfl⟩
   refine ⟨⟨?_, ?_⟩, ?_⟩
@@ -1180,8 +1188,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     intro i hi
     have hbe : Expression.eval env.toEnvironment
         (Layer.main G Q hQ i (by omega)
-          { node := default, sibling := fun e => (input_var.path e)[i],
-            posBit := fun e => (input_var.pos e)[i] } (i₀ + i * 274)).1 = acc (i + 1) :=
+          { node := default,
+            sibling := fun s => ((input_var.path s).1[i], (input_var.path s).2),
+            posBit := fun s => ((input_var.pos s).1.testBit (Witgen.NExpr.const i) =? 1,
+              (input_var.pos s).2) } (i₀ + i * 274)).1 = acc (i + 1) :=
       bridge i (by omega) _ _ _ rfl
     rw [hbe]
     exact hAsm (i + 1) (by omega)

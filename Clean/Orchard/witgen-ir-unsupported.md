@@ -31,36 +31,28 @@ construction step needed anywhere.
   `WitnessNonIdentityPoint.circuit` subcircuit calls now type-aligned automatically (no
   wrapper needed — the field flows straight from `Action.Input` into the callee's `Input`).
 
-**Not yet migrated, with reasons**:
-- `Clean/Orchard/Action.lean`'s `path : UnconstrainedDepNative (fields 32) F` and
-  `pos : UnconstrainedNative (Vector Bool 32) F`, and the matching fields in
-  `Clean/Orchard/Sinsemilla/Merkle.lean`'s `CalculateRoot.Input`/`Layer.Input`
-  (`sibling`/`posBit`), and `Clean/Orchard/Utilities.lean`'s `CondSwap.Swap.Input`
-  (`b`/`swap`, consumed by `Layer.main`). `path`/`pos` are field-independent *vector*
-  hints (`fields 32` fits `Unconstrained` fine; `Vector Bool 32` doesn't fit any
-  `Unconstrained*` shape directly — there's no vector-hint carrier besides the two scalar
-  ones, `UnconstrainedBool`/`UnconstrainedNat`, so `pos` would need packing into a single
-  `UnconstrainedNat` with per-layer bits read back via `NExpr.testBit`).
-  **Attempted and reverted**: migrating `path`→`Unconstrained (fields 32)` alone (even
-  before touching `pos`) made `CalculateRoot.completeness`'s `circuit_proof_start` hit a
-  `(deterministic) timeout at whnf` — a genuine kernel/elaborator size cliff, the same
-  class of problem `Ecc/MulFixed/BaseFieldElem.lean` hit and eventually fixed (see
-  `doc/performance-problems.md`), but this one is unresolved. Root cause hypothesis (not
-  confirmed): `Circuit.foldl (.finRange 32) ...` constructing a fresh
-  `unconstrained (do return (← input.path)[i])` term on each of the 32 unrolled
-  iterations is a much larger term for `circuit_proof_start`'s default unfold to chew
-  through than the old closure `fun env => (show Vector Fp 32 from input.path env)[i]` —
-  unlike `Unconstrained`/`UnconstrainedBool`/`UnconstrainedNat` on non-looped call sites
-  (`WitnessPoint.lean`, the Point/field `Action.Input` fields above, and
-  `Utilities.lean`'s `CondSwap.Swap.b` field in isolation — verified independently green),
-  which have no such blowup. Needs a dedicated investigation (likely an "opaque prefix"
-  extraction analogous to `BaseFieldElem.lean`'s `prefixCircuit` fix, or restructuring
-  `CalculateRoot`'s 32-layer fold into a bundled subcircuit) before attempting again — not
-  done here given the risk of an open-ended kernel-cliff debugging session on a proof this
-  size. `CondSwap.Swap.swap`/`Layer.posBit`/`CalculateRoot.pos` are entangled with this
-  same fold (the `swap` field flows into `Layer.main` which flows into `CalculateRoot`'s
-  32x unrolled construction), so they're reverted alongside `path` rather than left
-  half-migrated.
+**Also migrated** (second round, after the struct-level-obligation framework work):
+- `Clean/Orchard/Utilities.lean`'s `CondSwap.Swap.Input` (`b : Unconstrained field F`,
+  `swap : UnconstrainedBool F`), `Clean/Orchard/Sinsemilla/Merkle.lean`'s `Layer.Input`
+  (`sibling : Unconstrained field F`, `posBit : UnconstrainedBool F`) and
+  `CalculateRoot.Input` / `Clean/Orchard/Action.lean`'s `path : Unconstrained (fields 32)
+  F` and `pos : UnconstrainedNat F`. Since there is no vector-hint carrier besides the two
+  scalar ones, `pos` (32 Merkle position bits) is *packed into a single natural number*
+  (bit `i` = layer `i`) and unpacked per-layer via `NExpr.testBit`; `path` element reads
+  are per-index `unconstrained (do return (← input.path)[i])` programs inside the
+  32-layer `Circuit.foldl`.
+  A **first attempt at this migration was reverted** after `CalculateRoot.completeness`
+  hit `(deterministic) timeout at whnf` at the theorem header, then believed to be a
+  kernel/elaborator size cliff. It was not: the timeouts were *cascading elaboration
+  failure* from a missing `circuit_norm` normalization path — `FExpr.eval ctx xs[i]`
+  (evaluating one stuck element read of an opaque `Unconstrained (fields n)` hint) had no
+  lift to the vector level, so `h_env` couldn't meet `h_input`'s whole-vector equation,
+  and the resulting ill-typed applications blew up `whnf` downstream. The fix is the
+  framework lemma `Witgen.FExpr.eval_getElem` (`FExpr.eval ctx xs[i] = (Witgen.eval ctx
+  xs)[i]`, the vector analogue of the `evalProjection` simproc; a post-rewrite so literal
+  vectors still reduce via `Vector.getElem_ofFn` first). With it, the whole migration goes
+  through with only spelling-level proof adjustments in `CalculateRoot.completeness`, and
+  `Utilities.lean`/`Action.lean` need zero proof changes.
 - `Clean/Orchard/Action/AddressIntegrity.lean` (`rivk : UnconstrainedNative Fq F`),
   `Clean/Orchard/Action/SpendAuthority.lean` (`alpha : UnconstrainedNative Fq F`),
   `Clean/Orchard/Action/ValueCommit.lean` (`rcv : UnconstrainedNative Fq F`), and
