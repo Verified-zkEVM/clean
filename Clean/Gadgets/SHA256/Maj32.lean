@@ -221,7 +221,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_t : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
     intro i
     have := h_holds_t i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp (by rw [sub_eq_add_neg]; exact this)
+    exact sub_eq_zero.mp this
   -- z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
   have h_z : ∀ i : Fin 32, env.get (i₀ + 32 + i.val) =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by

@@ -78,7 +78,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- apply the main soundness theorem
   obtain ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h_holds
-  rw [add_neg_eq_zero, add_neg_eq_iff_eq_add] at h0 h1 h2 h3
+  rw [sub_eq_zero, sub_eq_iff_eq_add] at h0 h1 h2 h3
 
   obtain ⟨ x_norm, y_norm, carry_in_bool ⟩ := h_assumptions
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
@@ -117,7 +117,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have add8_completeness {x y c_in z c_out : F p}
     (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → IsBool c_in →
-    z.val < 256 ∧ IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
+    z.val < 256 ∧ IsBool c_out ∧ x + y + c_in - z - c_out * 256 = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
