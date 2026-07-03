@@ -12,12 +12,13 @@ remaining native site in `Clean/Orchard` is blocked on exactly one documented ro
 1. **IR fold loops** (the `TODO WITGENIR … foldl loops?` extension): recursive
    accumulator witnesses — `Ecc/Mul/{Incomplete,Complete,Assign}.lean` (`accVal`/
    `zRunValue`/`rowLambdaValue` chains, incl. their `BitsHint` carriers whose consumers
-   are these), `Ecc/Add.lean`'s `r` (full `Point.add` dispatch), and
-   `Sinsemilla/HashToPoint.lean`'s `l1s`/`l2s`/`xAs`/`yANext` + `Chain` `yA` threading
-   (`accAfter`).
-2. **One local exception**: `BaseFieldElem.lean`'s `alpha0Prime` (in-code note: FExpr
+   are these), and `Sinsemilla/HashToPoint.lean`'s `l1s`/`l2s`/`xAs`/`yANext` + `Chain`
+   `yA` threading (`accAfter`).
+2. **Local exceptions**: `BaseFieldElem.lean`'s `alpha0Prime` (in-code note: FExpr
    subtraction spelling vs a costly-defeq-sensitive application; single site, not worth
-   forcing).
+   forcing). (`Ecc/Add.lean`'s `r` — the full `Point.add` dispatch — is *not*
+   fold-blocked: its pair-equality branching is expressible as nested `.ite`s over
+   component `=?`s under `&&&`.)
 Everything else — all hints, tables, scalars, vectors, and derived values — is on the
 typed IR.
 
