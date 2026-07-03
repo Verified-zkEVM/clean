@@ -28,7 +28,7 @@ def concat
       FormalCircuit F Input Output where
   main := (circuit1 · >>= circuit2)
   elaborated := .fromExplicit (by infer_explicit_circuits) <| by
-    constructor <;> simp [explicit_circuit_norm]
+    constructor <;> simp +instances [explicit_circuit_norm, circuit_norm]
     · intro a n m
       apply h_localLength_stable
   channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
@@ -50,7 +50,7 @@ lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F 
 lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
   (c1.concat c2 p0 p1).localLength inp =
     c1.localLength inp + c2.localLength (c1.output inp 0) := by
-  simp only [concat, circuit_norm, id_eq]
+  simp +instances only [concat, circuit_norm, explicit_circuit_norm]
 
 /--
 Weaken the specification of a FormalCircuit.
