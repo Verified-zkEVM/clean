@@ -117,6 +117,5 @@ def boolNatParent : GeneralFormalCircuit F field field where
 
   completeness := by
     circuit_proof_start [boolNatCircuit]
-    simp
 
 end TestMixedCircuitType
