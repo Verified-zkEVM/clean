@@ -67,7 +67,7 @@ with the input type, and `Var` is `M ∘ Expression`.
 The instance lives in `Provable.lean`, after `ProvableType` is defined, to keep
 `CircuitType.lean` below `Provable.lean` in the import graph.
 -/
-instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
+@[reducible] instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   Var F := M (Expression F)
   ProverValue := M
   Value := M
@@ -194,7 +194,7 @@ instance {Hint : Type} : ProvableType (Value (UnconstrainedNative Hint)) :=
 instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :=
   (inferInstance : ProvableType unit)
 
-abbrev field : TypeMap := id
+abbrev field : TypeMap := fun F => F
 
 @[circuit_norm]
 instance : ProvableType field where
@@ -913,7 +913,6 @@ theorem eval_pair_left_expr {β : TypeMap} [ProvableType β] (env : Environment 
     eval env ((a, b) : ProvablePair field β (Expression F)) =
       (Expression.eval env a, eval env b) := by
   rw [eval_pair (α:=field), ProvableType.eval_field]
-  rfl
 
 @[circuit_norm ↓ high]
 theorem eval_pair_right_expr {α : TypeMap} [ProvableType α] (env : Environment F)
@@ -921,7 +920,6 @@ theorem eval_pair_right_expr {α : TypeMap} [ProvableType α] (env : Environment
     eval env ((a, b) : ProvablePair α field (Expression F)) =
       (eval env a, Expression.eval env b) := by
   rw [eval_pair (β:=field), ProvableType.eval_field]
-  rfl
 
 @[circuit_norm ↓ high]
 theorem eval_pair_both_expr (env : Environment F)
@@ -929,30 +927,29 @@ theorem eval_pair_both_expr (env : Environment F)
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
   simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
-  rfl
 
 -- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
 @[circuit_norm ↓ high]
 theorem eval_pair_left_vector_expr {n : ℕ} {β : TypeMap} [ProvableType β] (env : Environment F)
   (a : Vector (Expression F) n) (b : β (Expression F)) :
     eval env ((a, b) : ProvablePair (fields n) β (Expression F)) =
-      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F), eval env b) :=
-  eval_pair (α:=fields n) env a b
+      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F), eval env b) := by
+  with_unfolding_all exact eval_pair (α:=fields n) env a b
 
 @[circuit_norm ↓ high]
 theorem eval_pair_right_vector_expr {n : ℕ} {α : TypeMap} [ProvableType α] (env : Environment F)
   (a : α (Expression F)) (b : Vector (Expression F) n) :
     eval env ((a, b) : ProvablePair α (fields n) (Expression F)) =
-      (eval env a, (eval (Value:=fields n F) env (b : fields n (Expression F)) : fields n F)) :=
-  eval_pair (β:=fields n) env a b
+      (eval env a, (eval (Value:=fields n F) env (b : fields n (Expression F)) : fields n F)) := by
+  with_unfolding_all exact eval_pair (β:=fields n) env a b
 
 @[circuit_norm ↓ high]
 theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
   (a : Vector (Expression F) n) (b : Vector (Expression F) m) :
     eval env ((a, b) : ProvablePair (fields n) (fields m) (Expression F)) =
       ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F),
-        (eval (Value:=fields m F) env (b : fields m (Expression F)) : fields m F)) :=
-  eval_pair (α:=fields n) (β:=fields m) env a b
+        (eval (Value:=fields m F) env (b : fields m (Expression F)) : fields m F)) := by
+  with_unfolding_all exact eval_pair (α:=fields n) (β:=fields m) env a b
 
 omit [FiniteField F] in
 @[circuit_norm ↓ high]
@@ -1029,7 +1026,6 @@ instance {α : TypeMap} [ProvableType α] : Zero (α F) where
 @[reducible] instance : HDiv (Var field F) ℕ (Expression F) := (inferInstance : HDiv (Expression F) ℕ (Expression F))
 
   -- make `field F` behave like `F` in expressions
-@[reducible] instance : FiniteField (field F) := (inferInstance : FiniteField F)
 @[reducible] instance : Zero (field F) := (inferInstance : Zero F)
 @[reducible] instance : One (field F) := (inferInstance : One F)
 @[reducible] instance : Add (field F) := (inferInstance : Add F)

@@ -494,6 +494,12 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
   channelsWithGuarantees _ _ := []
 
+/-- Single-application bridge: since Lean 4.29, the generic `ExplicitCircuits.toSingle`
+resolution does not fire on `lookup table entry` applications. -/
+instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F} :
+    ExplicitCircuit (lookup table entry) :=
+  ExplicitCircuits.toSingle (lookup table) entry
+
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
     {mult : Expression F} :
     ExplicitCircuits (F:=F) (channel.emit mult) where

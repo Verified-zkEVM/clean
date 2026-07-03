@@ -137,7 +137,8 @@ elab_rules : tactic
   -- are stated at the underlying field type with canonical instances.
   -- Since Lean 4.29, automation (simp matching, grind e-matching/ring) no longer
   -- identifies `field F`-instance applications with canonical `F` ones up to defeq.
-  try (evalTactic (← `(tactic| dsimp only [field, id_eq] at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
+    CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
 
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()

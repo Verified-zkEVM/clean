@@ -480,7 +480,7 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- Build the candidate RHS `(Witgen.eval ctx base).field`.  `mkAppM` also ensures that this is
   -- only used when the base type has the required `ProvableType` instance.
   let evalBase ← try
-      mkAppM ``Witgen.eval #[ctx, base]
+      withDefault <| mkAppM ``Witgen.eval #[ctx, base]
     catch _ =>
       return Simp.Step.continue
   let rhs ← mkRhs evalBase
@@ -499,7 +499,7 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
   let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
-  unless ← isDefEq rhsSimp.expr e do
+  unless ← withDefault <| isDefEq rhsSimp.expr e do
     return Simp.Step.continue
 
   -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
