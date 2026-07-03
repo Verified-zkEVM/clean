@@ -211,8 +211,20 @@ end Eval
 output-length proofs unnecessary. `mapRange` is kept as a loop (not unrolled);
 its body may reference the running index via `NExpr.idx`.
 
-TODO WITGENIR do we need fully general (foldl) loops?
--/
+TODO WITGENIR add fold/scan loops (an accumulator-carrying `mapRange`). This is the
+one known expressiveness gap, established by porting a full production circuit code
+base (Zcash Orchard, PR #409): every witness left on the closure-based `witnessNative`
+escape hatch there is a *recursive accumulator* — row `r`'s value chains `r` prior
+steps, so it has no compact `VExpr`/`FExpr` form, and unrolled per-row expansion would
+be O(n²) term size (n = 254 rounds for EC scalar multiplication). The blocked shapes:
+running-sum decompositions and double-and-add accumulators of variable-base scalar mul
+(each row chains EC additions with inverses, plus the packed scalar-bit hints whose
+only consumers are those accumulators), and Sinsemilla hash chains (each piece chains
+incomplete additions). A `scanRange`-style former (body sees `NExpr.idx` plus one
+`localVar`-like accumulator slot, producing all intermediate values) would cover every
+known site; evaluation and `circuit_norm` lemmas can mirror `mapRange`'s. Caveat from
+the halo2 source design: the Sinsemilla y-accumulator is *deliberately* kept off the
+constraint system — porting its computation to the IR must keep it a hint. -/
 inductive VExpr (F : Type) : ℕ → Type where
   | lit {n : ℕ} (es : Vector (FExpr F) n) : VExpr F n
   | mapRange (n : ℕ) (body : FExpr F) : VExpr F n
