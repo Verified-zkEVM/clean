@@ -341,6 +341,12 @@ instance {k : ℕ} : ExplicitCircuits (F:=F) (witnessVector k) where
   operations out n := [.witness k (.ir [] out)]
   channelsWithGuarantees _ _ := []
 
+instance {k : ℕ} : ExplicitCircuits (F:=F) (witnessVectorNative k) where
+  output _ n := varFromOffset (fields k) n
+  localLength _ _ := k
+  operations c n := [.witness k (.native c)]
+  channelsWithGuarantees _ _ := []
+
 instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} : ExplicitCircuit (witnessIR M ir) where
   localLength _ := size M
   output n := varFromOffset M n
@@ -368,6 +374,10 @@ instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDepNative M) F) :
   output offset := varFromOffset M offset
   operations _ := [.witness (size M) (.native (toElements ∘ c))]
   channelsWithGuarantees _ := []
+
+instance (x : Var (UnconstrainedDepNative field) F) :
+    ExplicitCircuit (witnessNative (var:=Expression) x) :=
+  inferInstanceAs (ExplicitCircuit (witnessNative (var:=Var field) x))
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
@@ -450,7 +460,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output_eq c n := by
     simp only [witnessNative]
     rw [inst.witnessIR_def]
-    show _ = inst.var_eq ▸ (witnessIR value (.native (fun env => c env |> toElements))).output n
+    show _ = inst.var_eq ▸ (witnessIR value (.nativeValue c)).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -461,7 +471,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (.native (toElements ∘ c))]
+  operations c n := [.witness (size value) (.nativeValue c)]
   operations_eq c n := by
     simp only [witnessNative]
     rw [inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
@@ -534,7 +544,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
 attribute [explicit_circuit_unfold_type] Circuit
 
 attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessField witnessVector
-  witness witnessNative witnessIR witnessProgram witnessVectorProgram
+  witness witnessNative witnessIR witnessProgram witnessVectorProgram witnessVectorNative
   assertZero lookup Channel.emit Channel.pull Channel.push Channel.pullIf Channel.pushIf
   Pure.pure Bind.bind Functor.map
 

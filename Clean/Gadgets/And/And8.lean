@@ -80,7 +80,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
-  set z := x + y + -(2*w)
+  set z := x + y - 2*w
   show w.val = x.val &&& y.val
 
   -- it's easier to prove something about 2*w since it features in the constraint
@@ -111,7 +111,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
-  let z := x + y + -(2*w)
 
   -- now it's pretty much the soundness proof in reverse
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
@@ -130,7 +129,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
-  rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
+  rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=

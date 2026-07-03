@@ -123,7 +123,6 @@ theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   intro i hi
   rw [ProvableType.eval_fromElements]
   simp only [circuit_norm, Vector.getElem_map, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
-  ring
 end
 
 end Gadgets.Conditional

@@ -299,7 +299,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     have h_out_bool : ∀ i < n, IsBool (env.get (i₀ + i)) := by
       intro i hi
       specialize h_out_constrs ⟨i, hi⟩
-      simpa [add_eq_zero_iff_eq_neg] using h_out_constrs
+      simpa [sub_eq_zero] using h_out_constrs
 
     -- Step 2: Establish that the aux bit is Boolean
     have h_aux_bool : IsBool (env.get (i₀ + n)) := by
