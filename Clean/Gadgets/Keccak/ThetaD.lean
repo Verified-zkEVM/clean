@@ -26,6 +26,8 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 
   return #v[c0, c1, c2, c3, c4]
 
+-- TODO(4.30 bump): scoped legacy defeq; see Fibonacci8
+set_option backward.isDefEq.respectTransparency false in
 @[reducible]
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
   elaborate_circuit
