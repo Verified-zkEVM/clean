@@ -141,7 +141,7 @@ lemma valueBits_rotate (x : fields 32 (F p)) (hx : Normalized x) (k : ℕ) :
     intro i hi
     have h_eq : bits[i] = ZMod.val (x[i]'hi) := by
       show (Vector.map ZMod.val x)[i] = _
-      rw [Vector.getElem_map]; rfl
+      rw [Vector.getElem_map]
     rw [h_eq]
     have h := hx ⟨i, hi⟩
     rcases h with h | h
