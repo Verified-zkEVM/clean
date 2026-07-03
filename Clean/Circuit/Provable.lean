@@ -74,7 +74,9 @@ The instance lives in `Provable.lean`, after `ProvableType` is defined, to keep
   evalVerifier env v := ProvableType.eval env v
   evalProver env v := ProvableType.eval env.toEnvironment v
 
-instance {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
+-- low priority: with a reducible `toCircuitType`, this head is close to universal;
+-- prefer direct instances
+instance (priority := low) {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
   (inferInstance : ProvableType M)
 
 @[explicit_provable_type]
@@ -82,10 +84,10 @@ def const (x : M F) : M (Expression F) :=
   let values : Vector F _ := toElements x
   fromElements (values.map .const)
 
-instance [Field F] : Inhabited (M F) where
+instance (priority := low) [Field F] : Inhabited (M F) where
   default := fromElements default
 
-instance [Field F] : Inhabited (M (Expression F)) where
+instance (priority := low) [Field F] : Inhabited (M (Expression F)) where
   default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`
@@ -207,8 +209,6 @@ namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
 instance : ProverEval F (Expression F) F := proverEval field
-instance : VerifierEval F (M (Var field F)) (M F) := verifierEval M
-instance : ProverEval F (M (Var field F)) (M F) := proverEval M
 
 end CircuitType
 
@@ -236,7 +236,9 @@ abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
 abbrev fields (n : ℕ) := fun F => Vector F n
 
 @[circuit_norm]
-instance : ProvableType (fields n) where
+-- high priority: since `field` is a transparent synonym for the identity,
+-- `ProvableVector field n` also unifies with `fields n`; prefer this direct instance
+instance (priority := high) : ProvableType (fields n) where
   size := n
   toElements x := x
   fromElements v := v
@@ -928,29 +930,6 @@ theorem eval_pair_both_expr (env : Environment F)
       (Expression.eval env a, Expression.eval env b) := by
   simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
 
--- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
-@[circuit_norm ↓ high]
-theorem eval_pair_left_vector_expr {n : ℕ} {β : TypeMap} [ProvableType β] (env : Environment F)
-  (a : Vector (Expression F) n) (b : β (Expression F)) :
-    eval env ((a, b) : ProvablePair (fields n) β (Expression F)) =
-      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F), eval env b) := by
-  with_unfolding_all exact eval_pair (α:=fields n) env a b
-
-@[circuit_norm ↓ high]
-theorem eval_pair_right_vector_expr {n : ℕ} {α : TypeMap} [ProvableType α] (env : Environment F)
-  (a : α (Expression F)) (b : Vector (Expression F) n) :
-    eval env ((a, b) : ProvablePair α (fields n) (Expression F)) =
-      (eval env a, (eval (Value:=fields n F) env (b : fields n (Expression F)) : fields n F)) := by
-  with_unfolding_all exact eval_pair (β:=fields n) env a b
-
-@[circuit_norm ↓ high]
-theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
-  (a : Vector (Expression F) n) (b : Vector (Expression F) m) :
-    eval env ((a, b) : ProvablePair (fields n) (fields m) (Expression F)) =
-      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F),
-        (eval (Value:=fields m F) env (b : fields m (Expression F)) : fields m F)) := by
-  with_unfolding_all exact eval_pair (α:=fields n) (β:=fields m) env a b
-
 omit [FiniteField F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
@@ -960,52 +939,16 @@ theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] 
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
 
-instance {α : TypeMap} [ProvableType α] : Zero (α F) where
+-- low priority: must not shadow canonical `Zero F` instances on the transparent
+-- `field F` synonym (a `fromElements`-based zero is not syntactically canonical)
+instance (priority := low) {α : TypeMap} [ProvableType α] : Zero (α F) where
   zero := fromElements (Vector.replicate _ 0)
 
--- be able to use `field (Expression F)` in expressions
-
-@[reducible] instance : HAdd (field (Expression F)) (Expression F) (Expression F) :=
-  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HAdd (Expression F) (field (Expression F)) (Expression F) :=
-  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
-  (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
-
-@[reducible] instance : HSub (field (Expression F)) (Expression F) (Expression F) :=
-  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HSub (Expression F) (field (Expression F)) (Expression F) :=
-  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
-  (inferInstance : HSub (Expression F) (Expression F) (Expression F))
-
-@[reducible] instance : HMul (field (Expression F)) (Expression F) (Expression F) :=
-  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HMul (Expression F) (field (Expression F)) (Expression F) :=
-  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
-@[reducible] instance : HMul F (field (Expression F)) (field (Expression F)) :=
-  (inferInstance : HMul F (Expression F) (Expression F))
-@[reducible] instance : HMul (field (Expression F)) F (field (Expression F)) :=
-  (inferInstance : HMul (Expression F) F (Expression F))
-@[reducible] instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) :=
-  (inferInstance : HMul (Expression F) (Expression F) (Expression F))
-
-@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (field F) n :=
-  (inferInstance : OfNat F n)
-
-@[reducible] instance [Coe ℕ F] : Coe ℕ (field F) where
-  coe n : F := n
-@[reducible] instance [CoeOut ℕ F] : CoeOut ℕ (field F) where
-  coe n : F := n
-@[reducible] instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
-  coe n : F := n
-@[reducible] instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
-  coe n : F := n
-
-@[reducible] instance [DecidableEq F] : DecidableEq (field F) :=
-  (inferInstance : DecidableEq F)
-
--- make `Var field F` behave like `Expression F` in expressions
+-- make `Var field F` behave like `Expression F` in expressions.
+-- These are needed for elaboration: typeclass search does not reduce the
+-- projection-headed type `Var field F` to `Expression F` in goals. The bodies
+-- are the canonical `Expression F` instances, so no new instance constants leak
+-- into normalized terms.
 @[reducible] instance : Zero (Var field F) := (inferInstance : Zero (Expression F))
 @[reducible] instance : One (Var field F) := (inferInstance : One (Expression F))
 @[reducible] instance : Add (Var field F) := (inferInstance : Add (Expression F))
@@ -1025,53 +968,7 @@ instance {α : TypeMap} [ProvableType α] : Zero (α F) where
 @[reducible] instance : HDiv (Var field F) F (Expression F) := (inferInstance : HDiv (Expression F) F (Expression F))
 @[reducible] instance : HDiv (Var field F) ℕ (Expression F) := (inferInstance : HDiv (Expression F) ℕ (Expression F))
 
-  -- make `field F` behave like `F` in expressions
-@[reducible] instance : Zero (field F) := (inferInstance : Zero F)
-@[reducible] instance : One (field F) := (inferInstance : One F)
-@[reducible] instance : Add (field F) := (inferInstance : Add F)
-@[reducible] instance : Neg (field F) := (inferInstance : Neg F)
-@[reducible] instance : Sub (field F) := (inferInstance : Sub F)
-@[reducible] instance : Mul (field F) := (inferInstance : Mul F)
-@[reducible] instance : Inv (field F) := (inferInstance : Inv F)
-@[reducible] instance : HAdd F (field F) F := (inferInstance : HAdd F F F)
-@[reducible] instance : HAdd (field F) F F := (inferInstance : HAdd F F F)
-@[reducible] instance : HSub F (field F) F := (inferInstance : HSub F F F)
-@[reducible] instance : HSub (field F) F F := (inferInstance : HSub F F F)
-@[reducible] instance : HMul F (field F) F := (inferInstance : HMul F F F)
-@[reducible] instance : HMul (field F) F F := (inferInstance : HMul F F F)
-@[reducible] instance : HDiv F (field F) F := (inferInstance : HDiv F F F)
-@[reducible] instance : HDiv (field F) F F := (inferInstance : HDiv F F F)
-
--- make `Value field F` behave like `F` in expressions
-@[reducible] instance : Zero (Value field F) := (inferInstance : Zero F)
-@[reducible] instance : One (Value field F) := (inferInstance : One F)
-@[reducible] instance : Add (Value field F) := (inferInstance : Add F)
-@[reducible] instance : Neg (Value field F) := (inferInstance : Neg F)
-@[reducible] instance : Sub (Value field F) := (inferInstance : Sub F)
-@[reducible] instance : Mul (Value field F) := (inferInstance : Mul F)
-@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (Value field F) n := (inferInstance : OfNat F n)
-@[reducible] instance : HAdd F (Value field F) F := (inferInstance : HAdd F F F)
-@[reducible] instance : HAdd (Value field F) F F := (inferInstance : HAdd F F F)
-@[reducible] instance : HSub F (Value field F) F := (inferInstance : HSub F F F)
-@[reducible] instance : HSub (Value field F) F F := (inferInstance : HSub F F F)
-@[reducible] instance : HMul F (Value field F) F := (inferInstance : HMul F F F)
-@[reducible] instance : HMul (Value field F) F F := (inferInstance : HMul F F F)
-@[reducible] instance : HDiv (Value field F) F F := (inferInstance : HDiv F F F)
-@[reducible] instance : HDiv F (Value field F) F := (inferInstance : HDiv F F F)
-
--- make `ProverValue field F` behave like `F` in expressions
-@[reducible] instance : Zero (ProverValue field F) := (inferInstance : Zero F)
-@[reducible] instance : One (ProverValue field F) := (inferInstance : One F)
-@[reducible] instance : Add (ProverValue field F) := (inferInstance : Add F)
-@[reducible] instance : Neg (ProverValue field F) := (inferInstance : Neg F)
-@[reducible] instance : Sub (ProverValue field F) := (inferInstance : Sub F)
-@[reducible] instance : Mul (ProverValue field F) := (inferInstance : Mul F)
-@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (ProverValue field F) n := (inferInstance : OfNat F n)
-@[reducible] instance : HAdd F (ProverValue field F) F := (inferInstance : HAdd F F F)
-@[reducible] instance : HAdd (ProverValue field F) F F := (inferInstance : HAdd F F F)
-@[reducible] instance : HSub F (ProverValue field F) F := (inferInstance : HSub F F F)
-@[reducible] instance : HSub (ProverValue field F) F F := (inferInstance : HSub F F F)
-@[reducible] instance : HMul F (ProverValue field F) F := (inferInstance : HMul F F F)
-@[reducible] instance : HMul (ProverValue field F) F F := (inferInstance : HMul F F F)
-@[reducible] instance : HDiv (ProverValue field F) F F := (inferInstance : HDiv F F F)
-@[reducible] instance : HDiv F (ProverValue field F) F := (inferInstance : HDiv F F F)
+-- Note: no bespoke instances are needed on `field F` / `Var field F` / `Value field F` etc.:
+-- `field` is a fully transparent synonym, so typeclass resolution finds the canonical
+-- instances on `F` and `Expression F` directly. (Bespoke instances would in fact be
+-- pathological now: their heads normalize to e.g. `Zero F` with premise `Zero F`.)

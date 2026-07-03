@@ -155,6 +155,7 @@ lemma value_of_decomposedNat_of_small (x : ℕ) :
   have h4 := Nat.div_add_mod (x / 256 ^ 3) 256
   omega
 
+omit p_large_enough in
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt32, decomposeNat]
   have h (y : ℕ) : y % 256 % p < 256 :=
@@ -238,6 +239,9 @@ lemma value_zero :
     (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
   aesop
 
+-- TODO(4.30 bump): an `Inhabited`/`Nonempty` instance search inside `simp [circuit_norm]`
+-- recurses deeply (but finitely) through the generic TypeMap instances; find and tame it
+set_option maxRecDepth 2048 in
 omit p_large_enough in
 @[circuit_norm]
 lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :

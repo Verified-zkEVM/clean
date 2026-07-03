@@ -134,7 +134,7 @@ def assertEquals (x y : M (Expression F)) : Circuit F Unit :=
 
 @[circuit_norm, reducible]
 def Expression.assertEquals (x y : Expression F) : Circuit F Unit :=
-  Gadgets.Equality.circuit id (x, y)
+  Gadgets.Equality.circuit field (x, y)
 
 class HasAssertEq (β : Type) (F : outParam Type) [FiniteField F] where
   assert_eq : β → β → Circuit F Unit

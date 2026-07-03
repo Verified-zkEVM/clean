@@ -157,6 +157,11 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
 
+  -- collapse the field/id synonym again: the simp passes above can reintroduce
+  -- `field F`-typed statements (e.g. from unfolded Specs)
+  try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
+    CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
+
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
   circuitProofStartCore
