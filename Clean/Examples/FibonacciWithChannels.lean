@@ -173,7 +173,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     circuit_proof_start [FibonacciChannel, Add8Channel]
     set z := env.get i₀
     obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
-    rw [mul_eq_zero, add_neg_eq_zero] at h_bool
+    rw [mul_eq_zero, sub_eq_zero] at h_bool
     rcases h_bool with rfl | rfl
     · grind
     simp_all only [circuit_norm]
@@ -234,7 +234,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [⟨ fib8 ⟩]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by simp [circuit_norm, fib8, add_neg_eq_zero]
+  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]

@@ -136,12 +136,11 @@ lemma sum_interchange {α : Type*} [CommSemiring α] {n ops : ℕ} (f : Fin ops 
 
 /-- Splits an inner sum in a foldl into two separate folds and distributes multiplication over addition -/
 lemma foldl_split_mul_add_distrib {α : Type*} [CommRing α] {n : ℕ} (f : Fin 2 → Fin n → α) (g : ℕ → α) :
-    Fin.foldl n (fun acc i => acc + f 0 i * g i.val + - (f 1 i * g i.val)) (2^n : α) =
+    Fin.foldl n (fun acc i => acc + f 0 i * g i.val - f 1 i * g i.val) (2^n : α) =
     (Fin.foldl n (fun acc' i => acc' + f 0 i * g i.val) 0) +
     2^n -
     (Fin.foldl n (fun acc' i => acc' + f 1 i * g i.val) 0) := by
-  simp only [add_assoc]
-  simp only [← sub_eq_add_neg]
+  simp only [add_sub_assoc]
   simp only [foldl_to_sum_init_value]
   simp only [Finset.sum_sub_distrib]
   grind

@@ -211,8 +211,20 @@ end Eval
 output-length proofs unnecessary. `mapRange` is kept as a loop (not unrolled);
 its body may reference the running index via `NExpr.idx`.
 
-TODO WITGENIR do we need fully general (foldl) loops?
--/
+TODO WITGENIR add fold/scan loops (an accumulator-carrying `mapRange`). This is the
+one known expressiveness gap, established by porting a full production circuit code
+base (Zcash Orchard, PR #409): every witness left on the closure-based `witnessNative`
+escape hatch there is a *recursive accumulator* — row `r`'s value chains `r` prior
+steps, so it has no compact `VExpr`/`FExpr` form, and unrolled per-row expansion would
+be O(n²) term size (n = 254 rounds for EC scalar multiplication). The blocked shapes:
+running-sum decompositions and double-and-add accumulators of variable-base scalar mul
+(each row chains EC additions with inverses, plus the packed scalar-bit hints whose
+only consumers are those accumulators), and Sinsemilla hash chains (each piece chains
+incomplete additions). A `scanRange`-style former (body sees `NExpr.idx` plus one
+`localVar`-like accumulator slot, producing all intermediate values) would cover every
+known site; evaluation and `circuit_norm` lemmas can mirror `mapRange`'s. Caveat from
+the halo2 source design: the Sinsemilla y-accumulator is *deliberately* kept off the
+constraint system — porting its computation to the IR must keep it a hint. -/
 inductive VExpr (F : Type) : ℕ → Type where
   | lit {n : ℕ} (es : Vector (FExpr F) n) : VExpr F n
   | mapRange (n : ℕ) (body : FExpr F) : VExpr F n
@@ -280,6 +292,37 @@ def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit #v[e])
 def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
   .ir [] (.lit es)
 
+/-- Witness program computing a whole provable value from a native Lean closure — the
+payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
+so that the completeness obligation of `witnessNative` stays recognizable and can be
+rewritten at the level of provable values (`ProverEnvironment.extendsVector_nativeValue`
+in `Clean.Circuit.Basic`) instead of unfolding element-wise into `toElements` internals.
+For the same reason, this is deliberately not tagged `@[circuit_norm]`. -/
+def WitgenIR.nativeValue {value : TypeMap} [ProvableType value]
+    (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
+  .native fun env => compute env |> toElements
+
+theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
+    (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
+    (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
+
+/-- `Witgen.eval` on `fields n` is elementwise evaluation (the witgen analogue of
+`ProvableType.eval_fields`). -/
+theorem eval_fields' [FiniteField F] {n : ℕ} (ctx : Ctx F) (xs : Vector (FExpr F) n) :
+    Witgen.eval (M := fields n) ctx xs = xs.map (FExpr.eval ctx) := rfl
+
+/-- Vector analogue of the `evalProjection` simproc: evaluating one element of a vector
+of IR expressions is one element of the evaluated vector. Lifts stuck element reads of
+*opaque* vectors (e.g. per-index reads of an `Unconstrained (fields n)` hint) to the
+vector level, where row-level facts (`h_input` equations) can consume them. Stated as a
+post-rewrite so that literal vectors reduce first (`Vector.getElem_ofFn` etc.) and never
+reach this lemma. -/
+@[circuit_norm]
+theorem FExpr.eval_getElem [FiniteField F] {n : ℕ} (ctx : Ctx F)
+    (xs : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
+    FExpr.eval ctx xs[i] = (Witgen.eval (M := fields n) ctx xs)[i] := by
+  rw [eval_fields', Vector.getElem_map]
+
 /-- Witness program copying the values of given circuit expressions (used by `<==`). -/
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
   .ir [] (.lit (es.map .expr))
@@ -301,6 +344,16 @@ theorem WitgenIR.eval_ofFExprs_singleton [FiniteField F] (e : FExpr F) (env : Pr
   simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 attribute [circuit_norm] Array.getElem?_singleton
+
+/- Witness-IR `BExpr` conditions surface in goals as `decide P = true` (via the
+`Bool → Prop` coercion in `FExpr.eval`'s `.ite` case), with the `Decidable` instance
+baked at `BExpr.eval`'s definition site — which is *not* syntactically the instance a
+user writes at a concrete field, so `decide`-spelled proof patterns never match.
+Normalizing to the propositional form in `circuit_norm` removes the instance from the
+condition entirely (it survives only as the `ite`'s instance argument, where
+instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); together with
+`FiniteField.val_inj` this gives `.feq` conditions the plain `x = y` shape. -/
+attribute [circuit_norm] decide_eq_true_eq
 
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
@@ -510,6 +563,62 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
 
 simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
 attribute [circuit_norm] evalProjection
+
+open Lean Meta Simp in
+/--
+Evaluate witness-IR *struct literals* component-wise.
+
+`Witgen.eval ctx s`, where `s` is a literal constructor application of a `ProvableStruct`
+type, decomposes into per-component evaluations (via `StructEval.eval`) — mirroring the
+component-preserving normal form of the regular `ProvableStruct.eval`. This is the shape
+produced by struct-valued `witnessProgram`s whose `do`-block assembles an output record
+(e.g. Poseidon's `Permute.State`), where the proof needs the per-component values.
+
+*Opaque* values (hint programs, table rows) are deliberately left alone: they stay
+row-level `Witgen.eval` atoms, to be consumed by row-level facts — `h_input` equations
+from hint inputs, or `Table.eval_dataGet` — working together with the `evalProjection`
+simproc above. Decomposing an opaque value via structure eta would produce
+`FExpr.eval ctx s.field` terms that `evalProjection` immediately rewrites back to
+`(Witgen.eval ctx s).field`, looping. Restricting to literals makes the two simprocs
+confluent: a literal's components are the program's own expressions, never projections
+of an opaque base.
+-/
+private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
+    return .continue
+  let ctx := args[args.size - 2]!
+  let x := args[args.size - 1]!
+  -- only fire on literal constructor applications
+  let .const fn _ := x.getAppFn | return .continue
+  let some (.ctorInfo info) := (← getEnv).find? fn | return .continue
+  -- `ProvableStruct` route: rewrite via `StructEval` (`mkAppM` synthesizes the instance)
+  try
+    let proof ← mkAppM ``Witgen.StructEval.eval_eq_eval #[ctx, x]
+    let some (_, _, rhs) := (← inferType proof).eq? | return .continue
+    return .visit { expr := rhs, proof? := proof }
+  catch _ => pure ()
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
+  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
+  -- constructor order.
+  try
+    let ctorArgs := x.getAppArgs
+    if ctorArgs.size != info.numParams + info.numFields then return .continue
+    let mut newArgs : Array (Option Expr) := #[]
+    for _ in [0:info.numParams] do
+      newArgs := newArgs.push none
+    for a in ctorArgs[info.numParams:] do
+      newArgs := newArgs.push (some (← mkAppM ``Witgen.FExpr.eval #[ctx, a]))
+    let rhs ← mkAppOptM fn newArgs
+    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
+    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
+    unless ← withTransparency .all (isDefEq e rhs) do return .continue
+    return .visit { expr := rhs, proof? := none }
+  catch _ => return .continue
+
+simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
+attribute [circuit_norm] evalStructLiteral
 end Eval
 end Witgen
 

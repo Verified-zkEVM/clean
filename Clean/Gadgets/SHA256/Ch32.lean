@@ -19,7 +19,6 @@ Witnesses 32 output bits.
     Per bit: ch = g + e·(f − g), which equals f when e = 1 and g when e = 0.
     One R1CS constraint per bit: e·(f − g) = ch − g. -/
 def ch32 (e f g : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  -- TODO WITGENIR
   let z ← witnessVector 32 (.range _ fun i => g[i] + e[i] * (f[i] - g[i]))
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - g[i] - e[i] * (f[i] - g[i]))

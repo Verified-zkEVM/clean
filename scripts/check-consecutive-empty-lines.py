@@ -6,6 +6,7 @@ This script is used in CI to ensure code quality.
 """
 
 import sys
+import subprocess
 from pathlib import Path
 
 
@@ -46,21 +47,48 @@ def check_file(file_path: Path) -> list[tuple[int, int]]:
     return violations
 
 
+def lean_files(root: Path) -> list[Path]:
+    """Find Lean files, excluding files ignored by git."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "*.lean",
+            ],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return [
+            root / path
+            for path in result.stdout.splitlines()
+            if (root / path).is_file()
+        ]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return [f for f in root.rglob("*.lean") if ".lake" not in f.parts]
+
+
 def main():
     """Main function to check all Lean files for consecutive empty lines."""
     print("Checking for consecutive empty lines in Lean files...")
 
-    # Find all .lean files, excluding the .lake build directory
+    # Find all .lean files, excluding files ignored by git.
     root = Path(".")
-    lean_files = [f for f in root.rglob("*.lean") if ".lake" not in f.parts]
+    files = lean_files(root)
 
-    if not lean_files:
+    if not files:
         print("No Lean files found to check.")
         return 0
 
     violations_found = False
 
-    for file_path in sorted(lean_files):
+    for file_path in sorted(files):
         violations = check_file(file_path)
 
         if violations:

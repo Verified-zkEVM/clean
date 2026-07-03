@@ -59,6 +59,29 @@ let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 
 `witnessIR` remains available for constructing a `WitgenIR` directly.
 
+### Sharing after an opaque program prefix: use plain `let`
+
+When a program starts by binding an *opaque* sub-program — typically reading an
+`Unconstrained*` hint passed in from the caller — derive values from it with a plain
+Lean `let`, not `←`/`letN`/`letF`:
+
+```lean
+let row ← witnessProgram do
+  let s ← scalar               -- opaque hint program: the one monadic bind
+  let k := s / (8 ^ w : ℕ) % 8 -- plain `let`: duplicates the node in the IR, and that's fine
+  return CoordsRow.mk k.toField xs[k] ys[k] us[k]
+```
+
+A `letN` here would allocate its local at a step index that depends on the opaque
+prefix's step count, and — more fundamentally — proofs would need to know that the
+prefix's own output is unaffected by the extension of the locals array, an invariant
+with no syntactic handle in `circuit_norm`. Plain `let` duplicates the derived node in
+the serialized IR (usually one small arithmetic node), and every read matches the
+hint's `h_input` equation directly. Reserve `←`-sharing for programs whose prefix
+consists of literal steps. If a use case ever genuinely needs sharing behind an opaque
+prefix, that's the signal to add a locals-boundedness lawfulness class to `Witgen.M` —
+deliberately deferred until then.
+
 ## Nondeterminism: tables, prover data, hints
 
 - `.arrGet xs i` — read a constant `Array F` at a computed index (0 out of bounds).

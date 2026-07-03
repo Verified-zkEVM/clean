@@ -248,7 +248,10 @@ def toIR {n : ℕ} (program : M F (VExpr F n)) : WitgenIR F n :=
   let (out, steps) := program #[]
   .ir steps.toList out
 
-@[circuit_norm]
+/-- Not tagged `@[circuit_norm]`: `toIRLiteral` must stay intact inside `.witness`
+operations so that `witnessProgram`'s completeness obligation can be recognized and
+rewritten at the level of provable values (`ProverEnvironment.extendsVector_toIRLiteral`
+in `Clean.Circuit.Basic`), instead of unfolding element-wise into `toElements` internals. -/
 def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
   let (out, steps) := program #[]
   .ir steps.toList (.lit (toElements out))

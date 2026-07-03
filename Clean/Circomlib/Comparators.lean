@@ -157,25 +157,21 @@ def circuit : FormalAssertion (F p) Inputs where
       cases h_holds with
       | intro h1 h2 =>
         rw [h1] at h2
-        rw [add_comm] at h2
         split_ifs at h2 with h_ifs
-        . simp_all only [neg_add_cancel]
-          rw [add_comm, neg_add_eq_zero] at h_ifs
-          exact h_ifs
-        . simp_all only [neg_zero, zero_add, one_ne_zero]
+        . exact (sub_eq_zero.mp h_ifs).symm
+        . simp_all only [sub_zero, one_ne_zero]
 
   completeness := by
     circuit_proof_start
     constructor
     trivial
-    rw [mul_eq_zero, add_comm, neg_add_eq_zero]
+    rw [mul_eq_zero, sub_eq_zero]
     cases h_assumptions with
     | inl h_enabled_l => apply Or.inl h_enabled_l
     | inr h_enabled_r =>
       simp_all only [forall_const, one_ne_zero, false_or]
       have h_spec := h_spec.symm
       rw [← sub_eq_zero, ← h_input.right] at h_spec
-      rw [← sub_eq_add_neg] at h_env
       rw [h_env]
       simp only [h_spec, ↓reduceIte]
       trivial
@@ -276,10 +272,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simp only [Vector.getElem_map, Vector.getElem_mapRange,
       Nat.cast_ite, Nat.cast_one, Nat.cast_zero, circuit_norm] at h2
 
-    simp only [← sub_eq_add_neg, Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true,
-      ↓reduceIte] at h2
+    simp only [Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true, ↓reduceIte] at h2
     rw [h2]
-    simp only [neg_zero, add_zero]
+    simp only [sub_zero]
 
     -- CASE input.1 >= input.2
     simp only [hlt, ↓reduceIte]
@@ -320,22 +315,22 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simp only [Vector.getElem_map, Vector.getElem_mapRange,
       Nat.cast_ite, Nat.cast_one, Nat.cast_zero, circuit_norm] at h2
 
-    have hf: (ZMod.val (input.1 + 2^n + -input.2)).testBit n = true := by
+    have hf: (ZMod.val (input.1 + 2^n - input.2)).testBit n = true := by
       have hpos : 0 < 2^n := pow_pos (by decide) n
-      have hlt2 : (ZMod.val (input.1 + 2^n + -input.2)) / 2^n < 2 := by
-        have : (ZMod.val (input.1 + 2^n + -input.2)) < 2^n * 2 := by simpa [pow_succ, two_mul, mul_two] using h1
+      have hlt2 : (ZMod.val (input.1 + 2^n - input.2)) / 2^n < 2 := by
+        have : (ZMod.val (input.1 + 2^n - input.2)) < 2^n * 2 := by simpa [pow_succ, two_mul, mul_two] using h1
         exact Nat.div_lt_of_lt_mul this
 
-      have hge1 : 1 ≤ (ZMod.val (input.1 + 2^n + -input.2)) / 2^n :=
-        (Nat.le_div_iff_mul_le hpos).mpr (by simpa [one_mul, sub_eq_add_neg] using hdiff_ge)
+      have hge1 : 1 ≤ (ZMod.val (input.1 + 2^n - input.2)) / 2^n :=
+        (Nat.le_div_iff_mul_le hpos).mpr (by simpa [one_mul] using hdiff_ge)
 
-      have hxdiv : (ZMod.val (input.1 + 2^n + -input.2)) / 2^n = 1 :=
+      have hxdiv : (ZMod.val (input.1 + 2^n - input.2)) / 2^n = 1 :=
         le_antisymm (Nat.lt_succ_iff.mp hlt2) hge1
 
       simp [Nat.testBit, Nat.shiftRight_eq_div_pow, hxdiv]
 
     simp only [hf, ↓reduceIte] at h2
-    simp only [h2, add_neg_cancel]
+    simp only [h2, sub_self]
 
   completeness := by
     circuit_proof_start

@@ -52,9 +52,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
-      ring_nf
     · convert xor_is_bool h_a h_b using 1
-      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -167,7 +165,6 @@ def circuit : FormalCircuit (F p) field field where
     · convert not_eq_val_not h_in using 1
       ring_nf
     · convert @IsBool.not_is_bool (F p) _ _ h_in using 1
-      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -204,9 +201,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
-      ring_nf
     · convert nand_is_bool h_a h_b using 1
-      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -243,9 +238,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only
     constructor
     · convert nor_eq_val_nor h_a h_b using 1
-      ring_nf
     · convert nor_is_bool h_a h_b using 1
-      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
