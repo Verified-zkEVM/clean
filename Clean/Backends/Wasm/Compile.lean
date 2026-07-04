@@ -119,7 +119,7 @@ partial def compileBExpr (vm : VarMap) : BExpr F → Builder → Builder
   | .false, b => b.push "i64.const 0"
   | .feq a e, b => let b := compileFExpr vm a b; let b := compileFExpr vm e b; b.push "i64.eq"
   | .lt a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.lt_u"
-  | .neq a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.eq  i64.eqz"
+  | .neq a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.eq"
   | .not x, b => let b := compileBExpr vm x b; b.push "i64.eqz"
   | .and a e, b => let b := compileBExpr vm a b; let b := compileBExpr vm e b; b.push "i64.and"
 end
@@ -133,12 +133,12 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × �
       let eb : Builder := {}
       let eb := compileFExpr vm e eb
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, s!"    local.set {locs.head?.getD 0}" :: eb.build :: ls)
+      (vm', vi + 1, ls ++ [eb.build, s!"    local.set {locs.head?.getD 0}"])
     | .letN e =>
       let eb : Builder := {}
       let eb := compileNExpr vm e eb
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, s!"    local.set {locs.head?.getD 0}" :: eb.build :: ls)
+      (vm', vi + 1, ls ++ [eb.build, s!"    local.set {locs.head?.getD 0}"])
   ) (vm, vi, [])
 
 def compileLit (vm : VarMap) (vi : ℕ) (acc : List String) (es : List (FExpr F)) : VarMap × ℕ × List String :=
@@ -146,7 +146,7 @@ def compileLit (vm : VarMap) (vi : ℕ) (acc : List String) (es : List (FExpr F)
     let eb : Builder := {}
     let eb := compileFExpr vm e eb
     let (vm', locs) := vm.alloc 1 vi
-    (vm', vi + 1, s!"    local.set {locs.head?.getD 0}" :: eb.build :: ls)
+    (vm', vi + 1, ls ++ [eb.build, s!"    local.set {locs.head?.getD 0}"])
   ) (vm, vi, acc)
 
 def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List String) : {m : ℕ} → VExpr F m → VarMap × ℕ × List String
@@ -164,13 +164,13 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List String) : {m : ℕ} → VE
         let vmB := { vmOut' with loopIdx := some idxLocal }
         let eb : Builder := {}
         let eb := compileFExpr vmB body eb
-        s!"    local.set {outBase + i}" :: eb.build :: s!"    local.set {idxLocal}" :: s!"    i64.const {i}" :: ls
+        ls ++ [s!"    i64.const {i}", s!"    local.set {idxLocal}", eb.build, s!"    local.set {outBase + i}"]
       ) acc
       ({ vmOut' with loopIdx := none }, vi + n, ls)
   | _, .append _ _ => (vm, vi, "    ;; append NYI" :: acc)
 
 def processOps (numInputs : ℕ) : List (Operation F) → VarMap → ℕ → List String → VarMap × ℕ × List String
-  | [], vm, _, lines => (vm, numInputs, lines.reverse)
+  | [], vm, _, lines => (vm, numInputs, lines)
   | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc =>
     let vmStep := { vm with letBase := vi }
     let (vmS, viS, stepLines) := compileSteps vmStep vi steps
