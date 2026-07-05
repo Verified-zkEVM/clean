@@ -26,83 +26,286 @@ def Builder.indented (n : ℕ) (f : Builder → Builder) (b : Builder) : Builder
 def Builder.build (b : Builder) : String :=
   String.intercalate "\n" b.lines.reverse
 
-def fieldHelpers (p : ℕ) (numWords : ℕ) : String :=
-  -- Single-word arithmetic (numWords=1, primes < 2^63)
+/-! ## Single-word field arithmetic (numWords=1) -/
+
+def genSingleWordArith (p : ℕ) : String :=
   let ps := toString p
+  let pm2 := toString (p - 2)
+  String.intercalate "\n" [
+    s!"  ;; Field arithmetic modulo {ps} (single-word)",
+    s!"  (func $fadd (param i64) (param i64) (result i64)",
+    s!"    local.get 0 local.get 1 i64.add i64.const {ps} i64.rem_u)",
+    s!"  (func $fmul (param i64) (param i64) (result i64)",
+    s!"    local.get 0 local.get 1 i64.mul i64.const {ps} i64.rem_u)",
+    s!"  (func $fsub (param i64) (param i64) (result i64)",
+    s!"    (local $d i64) local.get 0 local.get 1 i64.sub local.tee $d",
+    s!"    i64.const 0 i64.lt_s",
+    s!"    (if (result i64) (then local.get $d i64.const {ps} i64.add) (else local.get $d))",
+    s!"    i64.const {ps} i64.rem_u)",
+    s!"  (func $fpow (param i64) (param i64) (result i64)",
+    s!"    (local $r i64) (local $b i64) (local $e i64)",
+    s!"    i64.const 1 local.set $r  local.get 0 local.set $b  local.get 1 local.set $e",
+    s!"    (block $done (loop $loop",
+    s!"      local.get $e i64.eqz br_if $done",
+    s!"      local.get $e i64.const 1 i64.and i64.eqz",
+    s!"      (if (then) (else local.get $r local.get $b call $fmul local.set $r))",
+    s!"      local.get $b local.get $b call $fmul local.set $b",
+    s!"      local.get $e i64.const 1 i64.shr_u local.set $e br $loop))",
+    s!"    local.get $r)",
+    s!"  (func $finv (param i64) (result i64)",
+    s!"    local.get 0 i64.const {pm2} call $fpow)" ]
+
+/-! ## Multi-word field arithmetic (numWords > 1) -/
+
+/-- Split a Nat into numWords 64-bit limbs (little-endian). -/
+def toLimbs (n numWords : ℕ) : List ℕ :=
+  List.range numWords |>.map fun i => (n >>> (i * 64)) % (2^64)
+
+/-- Generate WAT for 64×64→128 multiplication helper. -/
+def genMul64x64 : String :=
+  String.intercalate "\n" [
+    "  ;; 64×64 → 128-bit multiplication helper",
+    "  (func $mul64x64 (param $a i64) (param $b i64) (result i64 i64)",
+    "    (local $a_lo i64) (local $a_hi i64) (local $b_lo i64) (local $b_hi i64)",
+    "    (local $p00 i64) (local $p01 i64) (local $p10 i64) (local $p11 i64)",
+    "    (local $lo i64) (local $hi i64)",
+    "    ;; Split a",
+    "    local.get $a  i64.const 0xFFFFFFFF  i64.and  local.set $a_lo",
+    "    local.get $a  i64.const 32  i64.shr_u  local.set $a_hi",
+    "    ;; Split b",
+    "    local.get $b  i64.const 0xFFFFFFFF  i64.and  local.set $b_lo",
+    "    local.get $b  i64.const 32  i64.shr_u  local.set $b_hi",
+    "    ;; p00 = a_lo * b_lo",
+    "    local.get $a_lo  local.get $b_lo  i64.mul  local.set $p00",
+    "    ;; p01 = a_lo * b_hi",
+    "    local.get $a_lo  local.get $b_hi  i64.mul  local.set $p01",
+    "    ;; p10 = a_hi * b_lo",
+    "    local.get $a_hi  local.get $b_lo  i64.mul  local.set $p10",
+    "    ;; p11 = a_hi * b_hi",
+    "    local.get $a_hi  local.get $b_hi  i64.mul  local.set $p11",
+    "    ;; lo = p00 + (p01<<32) + (p10<<32)",
+    "    local.get $p00",
+    "    local.get $p01  i64.const 0xFFFFFFFF  i64.and  i64.const 32  i64.shl  i64.add",
+    "    local.get $p10  i64.const 0xFFFFFFFF  i64.and  i64.const 32  i64.shl  i64.add",
+    "    local.set $lo",
+    "    ;; hi = p11 + (p01>>32) + (p10>>32) + carry",
+    "    local.get $p11",
+    "    local.get $p01  i64.const 32  i64.shr_u  i64.add",
+    "    local.get $p10  i64.const 32  i64.shr_u  i64.add",
+    "    local.get $lo  local.get $p00  i64.lt_u  i64.extend_i32_u  i64.add",
+    "    local.set $hi",
+    "    local.get $lo  local.get $hi",
+    "  )" ]
+
+/-- Generate WAT for one limb multiplication + accumulation: c[k] += a[i]*b[j] with full carry propagation.
+    Returns list of WAT lines. -/
+def genLimbMulAccum (N i j : ℕ) : List String :=
+  let k := i + j
+  let body := [
+    s!"    ;; c[{k}] += a[{i}] * b[{j}]",
+    s!"    local.get $a{i}  local.get $b{j}  call $mul64x64",
+    s!"    local.set $hi  local.set $lo",
+    s!"    ;; c[{k}] += lo",
+    s!"    local.get $c{k}  local.get $lo  i64.add  local.tee $c{k}",
+    s!"    local.get $lo  i64.lt_u  i64.extend_i32_u  local.set $carry",
+    s!"    ;; c[{k+1}] += hi + carry",
+    s!"    local.get $hi  local.get $carry  i64.add  local.set $sum",
+    s!"    local.get $c{k+1}  local.get $sum  i64.add  local.tee $c{k+1}",
+    s!"    local.get $sum  i64.lt_u  i64.extend_i32_u  local.set $carry"
+  ]
+  -- Propagate carry through remaining limbs
+  let propagate : List String :=
+    (List.range ((2*N) - (k+2))) >>= fun d =>
+      let idx := k + 2 + d
+      [
+        s!"    ;; propagate carry to c[{idx}]",
+        s!"    local.get $c{idx}  local.get $carry  i64.add  local.tee $c{idx}",
+        s!"    local.get $carry  i64.lt_u  i64.extend_i32_u  local.set $carry"
+      ]
+  body ++ propagate
+
+/-- Generate WAT for multi-word modular multiplication: a[0..N-1] * b[0..N-1] mod p → r[0..N-1]. -/
+def genFmul (_p numWords : ℕ) : String :=
+  let N := numWords
+  let limbs2N := 2 * N
+  -- Generate schoolbook loop: for i in 0..N-1, for j in 0..N-1
+  let schoolbook : List String :=
+    (List.range N) >>= fun i =>
+      (List.range N) >>= fun j =>
+        genLimbMulAccum N i j
+  -- The schoolbook uses: $lo(i64), $hi(i64), $carry(i64), $sum(i64), $hi_tmp(i64)
+  -- And product limbs $c0..$c{2N-1}
+  let locals := String.intercalate " " ([
+    s!"(local $lo i64) (local $hi i64) (local $carry i64) (local $sum i64)"
+  ] ++ (List.range limbs2N).map fun i => s!"(local $c{i} i64)")
+  let aParams := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
+  let bParams := String.intercalate " " ((List.range N).map fun i => s!"(param $b{i} i64)")
+  let params := s!"{aParams} {bParams}"
+  let results := String.intercalate " " (List.replicate N "i64")
+  let init := (List.range limbs2N).map fun i => s!"    i64.const 0  local.set $c{i}"
+  String.intercalate "\n" ([
+    s!"  ;; Modular multiplication ({N}×64-bit schoolbook)",
+    s!"  (func $fmul {params} (result {results})",
+    s!"    {locals}"
+  ] ++ init ++ schoolbook ++ [
+    s!"    ;; Return low {N} limbs (unreduced for now — TODO: proper reduction)",
+    s!"    {String.intercalate " " (List.range N |>.map fun i => s!"local.get $c{i}")}",
+    s!"  )"
+  ])
+
+/-- Generate WAT for multi-word modular addition. -/
+def genFadd (numWords : ℕ) : String :=
+  let N := numWords
+  let aParams := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
+  let bParams := String.intercalate " " ((List.range N).map fun i => s!"(param $b{i} i64)")
+  let params := s!"{aParams} {bParams}"
+  let results := String.intercalate " " (List.replicate N "i64")
+  let locals := String.intercalate " " ((List.range N).map fun i => s!"(local $r{i} i64)") ++ " (local $c i64)"
+  -- Add limb 0
+  let add0 := [
+    s!"    local.get $a0  local.get $b0  i64.add  local.set $r0",
+    s!"    local.get $r0  local.get $a0  i64.lt_u  i64.extend_i32_u  local.set $c"
+  ]
+  -- Add limbs 1..N-1 with carry
+  let addRest := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [
+      s!"    local.get $a{idx}  local.get $b{idx}  i64.add  local.get $c  i64.add  local.set $r{idx}",
+      s!"    local.get $r{idx}  local.get $a{idx}  i64.lt_u  i64.extend_i32_u",
+      s!"    local.get $r{idx}  local.get $b{idx}  i64.lt_u  i64.extend_i32_u  i64.or  local.set $c"
+    ]
+  let rets := String.intercalate " " (List.range N |>.map fun i => s!"local.get $r{i}")
+  String.intercalate "\n" ([
+    s!"  ;; Modular addition ({N}×64-bit, unreduced)",
+    s!"  (func $fadd {params} (result {results})",
+    s!"    {locals}"
+  ] ++ add0 ++ addRest ++ [
+    s!"    {rets}",
+    s!"  )"
+  ])
+
+/-- Generate WAT for multi-word modular subtraction. -/
+def genFsub (numWords : ℕ) : String :=
+  let N := numWords
+  let aParams := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
+  let bParams := String.intercalate " " ((List.range N).map fun i => s!"(param $b{i} i64)")
+  let params := s!"{aParams} {bParams}"
+  let results := String.intercalate " " (List.replicate N "i64")
+  let locals := String.intercalate " " ((List.range N).map fun i => s!"(local $r{i} i64)") ++ " (local $br i64)"
+  -- Sub limb 0
+  let sub0 := [
+    s!"    local.get $a0  local.get $b0  i64.sub  local.set $r0",
+    s!"    local.get $a0  local.get $b0  i64.lt_u  i64.extend_i32_u  local.set $br"
+  ]
+  -- Sub limbs 1..N-1 with borrow
+  let subRest := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [
+      s!"    local.get $a{idx}  local.get $b{idx}  i64.sub  local.get $br  i64.sub  local.set $r{idx}",
+      s!"    local.get $a{idx}  local.get $b{idx}  i64.lt_u  i64.extend_i32_u",
+      s!"    local.get $a{idx}  local.get $b{idx}  i64.eq  i64.extend_i32_u",
+      s!"    local.get $br  i64.and  i64.or  local.set $br"
+    ]
+  let rets := String.intercalate " " (List.range N |>.map fun i => s!"local.get $r{i}")
+  String.intercalate "\n" ([
+    s!"  ;; Modular subtraction ({N}×64-bit, unreduced)",
+    s!"  (func $fsub {params} (result {results})",
+    s!"    {locals}"
+  ] ++ sub0 ++ subRest ++ [
+    s!"    {rets}",
+    s!"  )"
+  ])
+
+/-- Generate the full multi-word arithmetic module (numWords > 1). -/
+def genMultiWordArith (p numWords : ℕ) : String :=
+  let ps := toString p
+  let N := numWords
+  let nBits := N * 64
+  -- f inv: stub for now (returns 0 for all limbs)
+  let zeros := String.intercalate " " (List.replicate N "i64.const 0")
+  let params := String.intercalate " " ((List.range N).map fun _ => s!"(param i64)")
+  let results := String.intercalate " " (List.replicate N "i64")
+  String.intercalate "\n" [
+    s!"  ;; Multi-word field arithmetic for prime {ps} ({N} words, {nBits} bits)",
+    genMul64x64,
+    genFmul p N,
+    genFadd N,
+    genFsub N,
+    s!"  ;; Modular inverse (stub — returns 0)",
+    s!"  (func $finv {params} (result {results})",
+    s!"    {zeros})"
+  ]
+
+def fieldHelpers (p : ℕ) (numWords : ℕ) : String :=
   if numWords = 1 then
-    let pm2 := toString (p - 2)
-    String.intercalate "\n" [
-      s!"  ;; Field arithmetic modulo {ps} (single-word)",
-      s!"  (func $fadd (param i64) (param i64) (result i64)",
-      s!"    local.get 0 local.get 1 i64.add i64.const {ps} i64.rem_u)",
-      s!"  (func $fmul (param i64) (param i64) (result i64)",
-      s!"    local.get 0 local.get 1 i64.mul i64.const {ps} i64.rem_u)",
-      s!"  (func $fsub (param i64) (param i64) (result i64)",
-      s!"    (local $d i64) local.get 0 local.get 1 i64.sub local.tee $d",
-      s!"    i64.const 0 i64.lt_s",
-      s!"    (if (result i64) (then local.get $d i64.const {ps} i64.add) (else local.get $d))",
-      s!"    i64.const {ps} i64.rem_u)",
-      s!"  (func $fpow (param i64) (param i64) (result i64)",
-      s!"    (local $r i64) (local $b i64) (local $e i64)",
-      s!"    i64.const 1 local.set $r  local.get 0 local.set $b  local.get 1 local.set $e",
-      s!"    (block $done (loop $loop",
-      s!"      local.get $e i64.eqz br_if $done",
-      s!"      local.get $e i64.const 1 i64.and i64.eqz",
-      s!"      (if (then) (else local.get $r local.get $b call $fmul local.set $r))",
-      s!"      local.get $b local.get $b call $fmul local.set $b",
-      s!"      local.get $e i64.const 1 i64.shr_u local.set $e br $loop))",
-      s!"    local.get $r)",
-      s!"  (func $finv (param i64) (result i64)",
-      s!"    local.get 0 i64.const {pm2} call $fpow)" ]
+    genSingleWordArith p
   else
-    -- Multi-word arithmetic: expression-level compilation is TODO.
-    -- The snarkjs ABI correctly handles n32 = numWords*2 for large primes.
-    -- Full multi-word field ops (fadd_N, fmul_N, fsub_N, finv_N) will be
-    -- implemented as a separate WAT module that the compiler includes.
-    String.intercalate "\n" [
-      s!"  ;; Multi-word field arithmetic for prime {ps} ({numWords} words)",
-      s!"  ;; NOTE: expression-level multi-word compilation is TODO.",
-      s!"  ;; The snarkjs ABI handles n32={numWords * 2} for memory-based access.",
-      s!"  (func $fadd (param i64 i64) (result i64) i64.const 0)",
-      s!"  (func $fmul (param i64 i64) (result i64) i64.const 0)",
-      s!"  (func $fsub (param i64 i64) (result i64) i64.const 0)",
-      s!"  (func $finv (param i64) (result i64) i64.const 0)" ]
+    genMultiWordArith p numWords
 
 structure VarMap where
   env : List (ℕ × ℕ) := []
   nextLocal : ℕ := 0
   loopIdx : Option ℕ := none
   letBase : ℕ := 0
+  numWords : ℕ := 1
 
-def VarMap.init (numInputs : ℕ) : VarMap :=
-  { env := List.range numInputs |>.map fun i => (i, i), nextLocal := numInputs }
+def VarMap.init (numInputs : ℕ) (numWords : ℕ := 1) : VarMap :=
+  { env := List.range numInputs |>.map fun i => (i, i * numWords)
+    nextLocal := numInputs * numWords
+    numWords }
 
 def VarMap.lookup (vm : VarMap) (idx : ℕ) : ℕ :=
-  match vm.env.find? fun (i, _) => i = idx with | some (_, w) => w | none => idx
+  match vm.env.find? fun (i, _) => i = idx with | some (_, w) => w | none => idx * vm.numWords
 
 def VarMap.alloc (vm : VarMap) (m : ℕ) (baseVarIdx : ℕ) : VarMap × List ℕ :=
-  let wasmLocals := List.range m |>.map fun i => vm.nextLocal + i
-  let newEnv := (List.range m |>.map fun i => (baseVarIdx + i, vm.nextLocal + i)) ++ vm.env
-  ({ env := newEnv, nextLocal := vm.nextLocal + m, loopIdx := vm.loopIdx, letBase := vm.letBase }, wasmLocals)
+  let nw := vm.numWords
+  let wasmLocals := List.range (m * nw) |>.map fun i => vm.nextLocal + i
+  let newEnv := (List.range m |>.map fun i => (baseVarIdx + i, vm.nextLocal + i * nw)) ++ vm.env
+  ({ env := newEnv, nextLocal := vm.nextLocal + m * nw, loopIdx := vm.loopIdx,
+     letBase := vm.letBase, numWords := nw }, wasmLocals)
+
+def pushConst (c : F) (vm : VarMap) (b : Builder) : Builder :=
+  let nw := vm.numWords
+  let val := FiniteField.val c
+  if nw = 1 then
+    b.push s!"i64.const {val}"
+  else
+    List.range nw |>.foldl (fun (b' : Builder) (w : ℕ) =>
+      let limb := (val >>> (w * 64)) % (2^64)
+      b'.push s!"i64.const {limb}") b
+
+def pushVar (idx : ℕ) (vm : VarMap) (b : Builder) : Builder :=
+  let nw := vm.numWords
+  let base := vm.lookup idx
+  if nw = 1 then
+    b.push s!"local.get {base}"
+  else
+    List.range nw |>.foldl (fun (b' : Builder) (w : ℕ) =>
+      b'.push s!"local.get {base + w}") b
 
 mutual
 partial def compileFExpr (vm : VarMap) : FExpr F → Builder → Builder
-  | .const c, b => b.push s!"i64.const {FiniteField.val c}"
+  | .const c, b => pushConst c vm b
   | .add a e, b => let b := compileFExpr vm a b; let b := compileFExpr vm e b; b.push "call $fadd"
   | .mul a e, b => let b := compileFExpr vm a b; let b := compileFExpr vm e b; b.push "call $fmul"
   | .inv a, b => let b := compileFExpr vm a b; b.push "call $finv"
-  | .expr (.var i), b => b.push s!"local.get {vm.lookup i.index}"
-  | .expr (.const c), b => b.push s!"i64.const {FiniteField.val c}"
+  | .expr (.var i), b => pushVar i.index vm b
+  | .expr (.const c), b => pushConst c vm b
   | .expr (.add a e), b => let b := compileFExpr vm (.expr a) b; let b := compileFExpr vm (.expr e) b; b.push "call $fadd"
   | .expr (.mul a e), b => let b := compileFExpr vm (.expr a) b; let b := compileFExpr vm (.expr e) b; b.push "call $fmul"
   | .ite c t e, b =>
-    let b := compileBExpr vm c b
-    let b := b.push "(if (result i64) (then"
-    let b := Builder.indented 1 (compileFExpr vm t) b
-    let b := b.push ") (else"
-    let b := Builder.indented 1 (compileFExpr vm e) b; b.push "))"
+    let nw := vm.numWords
+    if nw = 1 then
+      let b := compileBExpr vm c b
+      let b := b.push "(if (result i64) (then"
+      let b := Builder.indented 1 (compileFExpr vm t) b
+      let b := b.push ") (else"
+      let b := Builder.indented 1 (compileFExpr vm e) b; b.push "))"
+    else
+      -- Multi-word ite not yet supported; push nw zeros
+      List.range nw |>.foldl (fun (b' : Builder) _ => b'.push "i64.const 0  ;; ite MW stub") b
   | .ofNat n, b => compileNExpr vm n b
-  | .localVar i, b => b.push s!"local.get {vm.lookup (vm.letBase + i)}"
+  | .localVar i, b => pushVar (vm.letBase + i) vm b
   | .envGet _, b => b.push "i64.const 0  ;; envGet stub"
   | .listGet _ _, b => b.push "i64.const 0  ;; listGet stub"
   | .dataGet _ _ _ _, b => b.push "i64.const 0  ;; dataGet stub"
@@ -315,39 +518,49 @@ def processFlatOps (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ
   | _ :: rest, vm, vi, acc => processFlatOps numInputs rest vm vi acc
 
 def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ := 1) : String :=
-  let vm := VarMap.init numInputs
+  let nw := numWords
+  let vm := VarMap.init numInputs nw
   let flatOps := flattenOps ops
-  let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm numInputs []
-  let tw := finalVm.nextLocal - numInputs
-  let n32 := numWords * 2  -- i32 words per field element
+  let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm (numInputs * nw) []
+  let witnessWords := finalVm.nextLocal - numInputs * nw
+  let witnessCount := witnessWords / nw
+  let n32 := nw * 2  -- i32 words per field element
   -- Memory layout: 0=computed_flag, 4=SRWM(n32*4 bytes), 4+n32*4=signal_array(N*n32*4 bytes)
   let srwmBase := 4
   let signalBase := 4 + n32 * 4
   let signalBytes := n32 * 4  -- bytes per signal
   -- Discover R1CS intermediates from assert expressions
-  let startSignal := 1 + finalVm.nextLocal  -- next signal after WASM locals + constant
+  let startSignal := 1 + finalVm.nextLocal / nw  -- next signal index after WASM locals + constant
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes
-  let totalSignals := startSignal + numInt  -- includes constant + inputs + witnesses + intermediates
-  let inputParams := String.intercalate " " (List.range numInputs |>.map fun i => s!"(param $in_{i} i64)")
+  let totalSignals := startSignal + numInt
+  -- $compute params: each input = nw i64 values
+  let inputParams := String.intercalate " " (List.range numInputs  >>= fun i =>
+    (List.range nw).map fun w => s!"(param $in_{i}_{w} i64)")
+  -- $compute locals: witnesses + idx
   let locals := String.intercalate " "
-    ((List.replicate tw "(local i64)") ++ ["(local $idx i64)"])
-  let rets := List.range tw |>.map fun i => s!"    local.get {numInputs + i}"
+    ((List.replicate witnessWords "(local i64)") ++ ["(local $idx i64)"])
+  -- $compute returns witness words
+  let rets := List.range witnessWords |>.map fun i => s!"    local.get {numInputs * nw + i}"
   let computeBody := String.intercalate "\n" (bodyLines ++ rets)
-  let results := if tw > 0 then
-    s!"(result {String.intercalate " " (List.replicate tw "i64")})" else ""
-  -- Input load lines: read each input from memory as i32, extend to i64
-  let inputLoads := String.intercalate "\n" (List.range numInputs |>.map fun i =>
-    s!"    i32.const {signalBase + (1 + i) * signalBytes} i32.load  i64.extend_i32_u  local.set $in_{i}")
-  -- Push inputs onto stack for calling $compute
-  let inputPush := String.intercalate "\n" (List.range numInputs |>.map fun i =>
-    s!"    local.get $in_{i}")
-  -- Output store for getWitness: wrap i64 to i32, store to signal array
-  let outputStoresW := String.intercalate "\n" (List.range tw |>.map fun i =>
-    s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes}  local.get $w_{i}  i32.wrap_i64  i32.store")
-  -- Intermediate computation: compute each intermediate from signal memory, store back
-  let intComputation := String.intercalate "\n" intCode
-  let intLocalsStr := String.intercalate " " intLocals
+  let results := if witnessWords > 0 then
+    s!"(result {String.intercalate " " (List.replicate witnessWords "i64")})" else ""
+  -- Input loads: read nw i32 values per input, extend to i64, set input word locals
+  let inputLoads := String.intercalate "\n" (List.range numInputs  >>= fun i =>
+    (List.range nw).map fun w =>
+      s!"    i32.const {signalBase + (1 + i) * signalBytes + w * 4} i32.load  i64.extend_i32_u  local.set $in_{i}_{w}")
+  -- Push inputs for $compute call
+  let inputPush := String.intercalate "\n" (List.range numInputs  >>= fun i =>
+    (List.range nw).map fun w => s!"    local.get $in_{i}_{w}")
+  -- Output stores: wrap each witness word i64 to i32, store to signal array
+  let outputStoresW := String.intercalate "\n" (List.range witnessCount  >>= fun i =>
+    (List.range nw).map fun w =>
+      s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes + w * 4}  local.get $w_{i}_{w}  i32.wrap_i64  i32.store")
+  -- getWitness locals: inputs + witnesses + intermediates
+  let gwInputLocals := String.intercalate " " (List.range numInputs  >>= fun i =>
+    (List.range nw).map fun w => s!"(local $in_{i}_{w} i64)")
+  let gwWitnessLocals := String.intercalate " " (List.range witnessCount  >>= fun i =>
+    (List.range nw).map fun w => s!"(local $w_{i}_{w} i64)")
   -- snarkjs ABI exports
   let snarkjsExports := String.intercalate "\n\n" [
     s!"  (func (export \"getFieldNumLen32\") (result i32) i32.const {n32})",
@@ -364,16 +577,15 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     s!"    i32.const {srwmBase}  i32.load",
     s!"    i32.store)",
     s!"  (func (export \"getWitness\") (param $i i32)",
-    s!"    (local $tmp i32) {String.intercalate " " (List.range numInputs |>.map fun i => s!"(local $in_{i} i64)")} {String.intercalate " " (List.range tw |>.map fun i => s!"(local $w_{i} i64)")} {intLocalsStr} (local $idx i64)",
+    s!"    (local $tmp i32) {gwInputLocals} {gwWitnessLocals} {String.intercalate " " intLocals} (local $idx i64)",
     s!"    i32.const 0  i32.load  i32.eqz",
     s!"    (if (then",
     s!"{inputLoads}",
     s!"{inputPush}",
     s!"      call $compute",
-    s!"{String.intercalate "\n" (List.range tw |>.reverse.map fun i => s!"      local.set $w_{i}")}",
+    s!"{String.intercalate "\n" (List.range witnessWords |>.reverse.map fun i => s!"      local.set $w_{i / nw}_{i % nw}")}",
     s!"{outputStoresW}",
-    -- Compute and store intermediates (after witnesses are in memory)
-    s!"{intComputation}",
+    s!"{String.intercalate "\n" intCode}",
     s!"      i32.const {signalBase}  i32.const 1  i32.store",
     s!"      i32.const 0  i32.const 1  i32.store",
     s!"    ))",
@@ -391,7 +603,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     s!"  (memory (export \"memory\") 1)",
     s!"  ;; Pre-initialize signal[0] = 1 (constant)",
     s!"  (data (i32.const {signalBase}) \"\\01{String.join (List.replicate (signalBytes - 1) "\\00")}\")",
-    fieldHelpers fieldPrime numWords,
+    fieldHelpers fieldPrime nw,
     s!"  ;; Internal compute function (our existing witness logic)",
     s!"  (func $compute {inputParams} {results}",
     s!"    {locals}",
