@@ -23,8 +23,6 @@ structure FlattenState where
 def isConstant (lc : LinComb) : Bool :=
   match lc with | [(0, _)] => true | _ => false
 
-def modP (x : ℕ) (p : ℕ) : ℕ := x % p
-
 def scaleLinComb (c : ℕ) (lc : LinComb) (p : ℕ) : LinComb :=
   lc.map fun (i, coeff) => (i, (c * coeff) % p)
 
@@ -58,18 +56,18 @@ partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState 
       let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
       ([(k, 1)], st3)
 
-def processOps (p : ℕ) (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState) (nextSig : ℕ)
-    (acc : List Constraint) : List Constraint × ℕ :=
+def processOps (p : ℕ) (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState) :
+    List Constraint × ℕ :=
   match ops with
-  | [] => (acc, st.nextSignal)
+  | [] => (st.constraints, st.nextSignal)
   | .witness _ _ :: rest =>
-    processOps p vm rest st nextSig acc  -- VarMap already handles witness allocation
+    processOps p vm rest st  -- VarMap already handles witness allocation
   | .assert e :: rest =>
     let (lc, st1) := flattenExpr p vm e st
     let constr : Constraint := (lc, [(0, 1)], [])
     let st2 := { st1 with constraints := constr :: st1.constraints }
-    processOps p vm rest st2 nextSig (constr :: acc)
-  | _ :: rest => processOps p vm rest st nextSig acc
+    processOps p vm rest st2
+  | _ :: rest => processOps p vm rest st
 
 def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
   let flatOps := flattenOps ops
@@ -79,7 +77,7 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String
   let (finalVm, _, _) := processFlatOps numInputs flatOps vm numInputs []
   let totalSignals := 1 + finalVm.nextLocal  -- +1 for constant signal
   let st : FlattenState := { nextSignal := totalSignals }
-  let (allConstraints, nVars) := processOps fieldPrime vm flatOps st (1 + numInputs) []
+  let (allConstraints, nVars) := processOps fieldPrime vm flatOps st
   let ps := toString fieldPrime
   let constraintLines := allConstraints.reverse.map fun (a, b, c) =>
     "    [" ++ linCombToJson a ++ ", " ++ linCombToJson b ++ ", " ++ linCombToJson c ++ "]"

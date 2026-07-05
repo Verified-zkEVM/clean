@@ -208,7 +208,6 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm numInputs []
   let tw := finalVm.nextLocal - numInputs
   let totalSignals := 1 + numInputs + tw
-  let ps := toString fieldPrime
   let n32 := numWords * 2  -- i32 words per field element
   -- Memory layout: 0=computed_flag, 4=SRWM(n32*4 bytes), 4+n32*4=signal_array(totalSignals*n32*4 bytes)
   let srwmBase := 4
