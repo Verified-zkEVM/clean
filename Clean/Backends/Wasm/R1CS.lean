@@ -38,7 +38,7 @@ def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
     else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
 
 partial def flattenExpr (p : ℕ) : Expression F → FlattenState → (LinComb × FlattenState)
-  | .var i, st => ([(i.index, 1)], st)
+  | .var i, st => ([(1 + i.index, 1)], st)  -- signal 0 = constant, so var i → signal i+1
   | .const c, st =>
     let val := FiniteField.val c % p
     ([(0, val)], st)
