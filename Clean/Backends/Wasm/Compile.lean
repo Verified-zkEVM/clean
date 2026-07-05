@@ -88,15 +88,15 @@ partial def compileFExpr (vm : VarMap) : FExpr F → Builder → Builder
     let b := Builder.indented 1 (compileFExpr vm e) b; b.push "))"
   | .ofNat n, b => compileNExpr vm n b
   | .localVar i, b => b.push s!"local.get {vm.lookup (vm.letBase + i)}"
-  | .envGet _, b => b.push "i64.const 0"
-  | .listGet _ _, b => b.push "i64.const 0"
-  | .dataGet _ _ _ _, b => b.push "i64.const 0"
-  | .hintGet _ _ _ _, b => b.push "i64.const 0"
+  | .envGet _, b => b.push "i64.const 0  ;; envGet stub"
+  | .listGet _ _, b => b.push "i64.const 0  ;; listGet stub"
+  | .dataGet _ _ _ _, b => b.push "i64.const 0  ;; dataGet stub"
+  | .hintGet _ _ _ _, b => b.push "i64.const 0  ;; hintGet stub"
 
 partial def compileNExpr (vm : VarMap) : NExpr F → Builder → Builder
   | .const n, b => b.push s!"i64.const {n}"
   | .val x, b => compileFExpr vm x b
-  | .idx, b => match vm.loopIdx with | some li => b.push s!"local.get {li}" | none => b.push "i64.const 0"
+  | .idx, b => match vm.loopIdx with | some _ => b.push "local.get $idx" | none => b.push "i64.const 0"
   | .localVar i, b => b.push s!"local.get {vm.lookup (vm.letBase + i)}"
   | .add a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.add"
   | .mul a e, b => let b := compileNExpr vm a b; let b := compileNExpr vm e b; b.push "i64.mul"
@@ -157,16 +157,13 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List String) : {m : ℕ} → VE
     | _ =>
       let (vmOut, _) := vm.alloc n vi
       let outBase := vmOut.nextLocal - n
-      -- Use nextLocal as the idx temp (one extra, not counted in witnesses)
-      let idxLocal := vmOut.nextLocal
-      let vmOut' := { vmOut with nextLocal := vmOut.nextLocal + 1 }
       let ls := (List.range n).foldl (fun (ls : List String) (i : ℕ) =>
-        let vmB := { vmOut' with loopIdx := some idxLocal }
+        let vmB := { vmOut with loopIdx := some 0 }
         let eb : Builder := {}
         let eb := compileFExpr vmB body eb
-        ls ++ [s!"    i64.const {i}", s!"    local.set {idxLocal}", eb.build, s!"    local.set {outBase + i}"]
+        ls ++ [s!"    i64.const {i}", "    local.set $idx", eb.build, s!"    local.set {outBase + i}"]
       ) acc
-      ({ vmOut' with loopIdx := none }, vi + n, ls)
+      ({ vmOut with loopIdx := none }, vi + n, ls)
   | _, .append _ _ => (vm, vi, "    ;; append NYI" :: acc)
 
 def processOps (numInputs : ℕ) : List (Operation F) → VarMap → ℕ → List String → VarMap × ℕ × List String
@@ -182,19 +179,18 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Stri
   let vm := VarMap.init numInputs
   let (finalVm, _, bodyLines) := processOps numInputs ops vm numInputs []
   let tw := finalVm.nextLocal - numInputs
-  -- The return values: WASM locals numInputs .. nextLocal-1, skipping idx temps.
-  -- We compute which locals to return by filtering out temps (those not in the VarMap env).
-  -- Simpler: return all allocated locals. Extra temps will be ignored by snarkjs.
   let rets := List.range tw |>.map fun i => s!"    local.get {numInputs + i}"
   let allBody := String.intercalate "\n" (bodyLines ++ rets)
   let inputParams := String.intercalate " " (List.range numInputs |>.map fun i => s!"(param $in_{i} i64)")
-  let locals := String.intercalate " " (List.replicate tw "(local i64)")
-  let results := String.intercalate " " (List.replicate tw "i64")
+  let locals := String.intercalate " "
+    ((List.replicate tw "(local i64)") ++ ["(local $idx i64)"])
+  let results := if tw > 0 then
+    s!"(result {String.intercalate " " (List.replicate tw "i64")})" else ""
   String.intercalate "\n" [
     s!"(module",
     s!"  (memory (export \"memory\") 1)",
     fieldHelpers fieldPrime,
-    s!"  (func (export \"witness\") {inputParams} (result {results})",
+    s!"  (func (export \"witness\") {inputParams} {results}",
     s!"    {locals}",
     allBody,
     s!"  )",
