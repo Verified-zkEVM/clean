@@ -124,36 +124,133 @@ def genLimbMulAccum (N i j : ℕ) : List String :=
       ]
   body ++ propagate
 
-/-- Generate WAT for multi-word modular multiplication: a[0..N-1] * b[0..N-1] mod p → r[0..N-1]. -/
-def genFmul (_p numWords : ℕ) : String :=
+/-- Generate WAT for multi-word modular multiplication with Barrett reduction.
+    Schoolbook N×N→2N, then one-pass reduction: c_lo + c_hi * (2^(N*64) mod p),
+    carry handling loop, and conditional subtraction of p. -/
+def genFmul (p numWords : ℕ) : String :=
   let N := numWords
   let limbs2N := 2 * N
-  -- Generate schoolbook loop: for i in 0..N-1, for j in 0..N-1
+  let rModP := (2^(N*64)) % p
+  let rLimbs := toLimbs rModP N
+  let pLimbs := toLimbs p N
+  -- Main schoolbook: a[0..N-1] × b[0..N-1] → c[0..2N-1]
   let schoolbook : List String :=
     (List.range N) >>= fun i =>
       (List.range N) >>= fun j =>
         genLimbMulAccum N i j
-  -- The schoolbook uses: $lo(i64), $hi(i64), $carry(i64), $sum(i64), $hi_tmp(i64)
-  -- And product limbs $c0..$c{2N-1}
-  let locals := String.intercalate " " ([
-    s!"(local $lo i64) (local $hi i64) (local $carry i64) (local $sum i64)"
-  ] ++ (List.range limbs2N).map fun i => s!"(local $c{i} i64)")
+  -- Reduction schoolbook: c[N..2N-1] × r[0..N-1] → t[0..2N-1]
+  let redMul : List String :=
+    (List.range N) >>= fun i =>
+      (List.range N) >>= fun j =>
+        let k := i + j
+        [
+          s!"    ;; t[{k}] += c[{N+i}] * r[{j}]",
+          s!"    local.get $c{N+i}  local.get $r{j}  call $mul64x64",
+          s!"    local.set $hi  local.set $lo",
+          s!"    local.get $t{k}  local.get $lo  i64.add  local.tee $t{k}",
+          s!"    local.get $lo  i64.lt_u  i64.extend_i32_u  local.set $carry",
+          s!"    local.get $hi  local.get $carry  i64.add  local.set $sum",
+          s!"    local.get $t{k+1}  local.get $sum  i64.add  local.tee $t{k+1}",
+          s!"    local.get $sum  i64.lt_u  i64.extend_i32_u  local.set $carry"
+        ] ++ (List.range (limbs2N - (k+2))).map fun d =>
+          let idx := k + 2 + d
+          s!"    local.get $t{idx}  local.get $carry  i64.add  local.tee $t{idx}\n    local.get $carry  i64.lt_u  i64.extend_i32_u  local.set $carry"
+  -- Add t[0..N-1] to c[0..N-1] (with carry)
+  let addRedHeader : List String := [
+    s!"    ;; c_lo += t_lo",
+    s!"    local.get $c0  local.get $t0  i64.add  local.set $c0",
+    s!"    local.get $c0  local.get $t0  i64.lt_u  i64.extend_i32_u  local.set $carry"
+  ]
+  let addRedBody : List String := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [
+      s!"    local.get $c{idx}  local.get $t{idx}  i64.add  local.get $carry  i64.add  local.set $c{idx}",
+      s!"    local.get $c{idx}  local.get $t{idx}  i64.lt_u  i64.extend_i32_u",
+      s!"    local.get $c{idx}  local.get $carry  i64.lt_u  i64.extend_i32_u  i64.or  local.set $carry"
+    ]
+  let addRed : List String := addRedHeader ++ addRedBody
+  -- Carry elimination loop: while carry, add R_mod_p to c
+  let carryLoopHeader : List String := [
+    s!"    ;; While carry, add R_mod_p to c",
+    s!"    (block $carry_done",
+    s!"    (loop $carry_loop",
+    s!"      local.get $carry  i64.eqz  br_if $carry_done",
+    s!"      i64.const 0  local.set $carry",
+    s!"      local.get $c0  local.get $r0  i64.add  local.tee $c0",
+    s!"      local.get $c0  local.get $r0  i64.lt_u  i64.extend_i32_u  local.set $carry"
+  ]
+  let carryLoopBody : List String := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [
+      s!"      local.get $c{idx}  local.get $r{idx}  i64.add  local.get $carry  i64.add  local.tee $c{idx}",
+      s!"      local.get $c{idx}  local.get $r{idx}  i64.lt_u  i64.extend_i32_u",
+      s!"      local.get $c{idx}  local.get $carry  i64.lt_u  i64.extend_i32_u  i64.or  local.set $carry"
+    ]
+  let carryLoopFooter : List String := [
+    s!"      br $carry_loop",
+    s!"    ))"
+  ]
+  let carryLoop : List String := carryLoopHeader ++ carryLoopBody ++ carryLoopFooter
+  -- Conditional subtraction of p: compute c - p → t, use t if c >= p (no borrow)
+  let condSubHeader : List String := [
+    s!"    ;; Compute c - p into t[0..{N-1}]",
+    s!"    local.get $c0  local.get $p0  i64.sub  local.set $t0",
+    s!"    local.get $c0  local.get $p0  i64.lt_u  i64.extend_i32_u  local.set $carry"
+  ]
+  let condSubBody : List String := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [
+      s!"    local.get $c{idx}  local.get $p{idx}  i64.sub  local.get $carry  i64.sub  local.set $t{idx}",
+      s!"    local.get $c{idx}  local.get $p{idx}  i64.lt_u  i64.extend_i32_u",
+      s!"    local.get $c{idx}  local.get $p{idx}  i64.eq  i64.extend_i32_u",
+      s!"    local.get $carry  i64.and  i64.or  local.set $carry"
+    ]
+  let condSubIfHeader : List String := [
+    s!"    ;; If no borrow (carry=0), c >= p, use t",
+    s!"    (if (i64.eqz (local.get $carry))",
+    s!"      (then"
+  ]
+  let condSubIfBody : List String := (List.range N) >>= fun i =>
+    [s!"        local.get $t{i}  local.set $c{i}"]
+  let condSubIfFooter : List String := [
+    s!"      )",
+    s!"    )"
+  ]
+  let condSub : List String := condSubHeader ++ condSubBody ++ condSubIfHeader ++ condSubIfBody ++ condSubIfFooter
+  -- Locals: working + product c[0..2N-1] + temp t[0..2N-1] + constants r[0..N-1] + p[0..N-1]
+  let locList : List String :=
+    ["(local $lo i64) (local $hi i64) (local $carry i64) (local $sum i64)"] ++
+    ((List.range limbs2N).map fun i => s!"(local $c{i} i64)") ++
+    ((List.range limbs2N).map fun i => s!"(local $t{i} i64)") ++
+    ((List.range N).map fun i => s!"(local $r{i} i64)") ++
+    ((List.range N).map fun i => s!"(local $p{i} i64)")
+  let locals := String.intercalate " " locList
   let aParams := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
   let bParams := String.intercalate " " ((List.range N).map fun i => s!"(param $b{i} i64)")
   let params := s!"{aParams} {bParams}"
   let results := String.intercalate " " (List.replicate N "i64")
-  let init := (List.range limbs2N).map fun i => s!"    i64.const 0  local.set $c{i}"
+  -- Init product c and temp t
+  let initC := (List.range limbs2N).map fun i => s!"    i64.const 0  local.set $c{i}"
+  let initT := (List.range limbs2N).map fun i => s!"    i64.const 0  local.set $t{i}"
+  let loadR := (rLimbs.zip (List.range N)).map fun (val, i) =>
+    s!"    i64.const {val}  local.set $r{i}"
+  let loadP := (pLimbs.zip (List.range N)).map fun (val, i) =>
+    s!"    i64.const {val}  local.set $p{i}"
   String.intercalate "\n" ([
-    s!"  ;; Modular multiplication ({N}×64-bit schoolbook)",
+    s!"  ;; Modular multiplication ({N}x{N} schoolbook + Barrett reduction)",
     s!"  (func $fmul {params} (result {results})",
     s!"    {locals}"
-  ] ++ init ++ schoolbook ++ [
-    s!"    ;; Return low {N} limbs (unreduced for now — TODO: proper reduction)",
+  ] ++ initC ++ initT ++ loadR ++ loadP ++ [
+    s!"    ;; ── Schoolbook multiplication ──"
+  ] ++ schoolbook ++ [
+    s!"    ;; ── Reduction: t = c_hi * R_mod_p ──"
+  ] ++ redMul ++ addRed ++ carryLoop ++ [
+    s!"    ;; ── Conditional subtraction of p ──"
+  ] ++ condSub ++ [
     s!"    {String.intercalate " " (List.range N |>.map fun i => s!"local.get $c{i}")}",
     s!"  )"
   ])
 
-/-- Generate WAT for multi-word modular addition. -/
 def genFadd (numWords : ℕ) : String :=
   let N := numWords
   let aParams := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
