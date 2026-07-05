@@ -55,16 +55,14 @@ def fieldHelpers (p : ℕ) (numWords : ℕ) : String :=
       s!"  (func $finv (param i64) (result i64)",
       s!"    local.get 0 i64.const {pm2} call $fpow)" ]
   else
-    -- Multi-word arithmetic for large primes (BN254 etc.)
-    -- Each field element is numWords i64 values on the stack / in memory.
-    -- For now, we use memory-based helpers: params pass pointer to 8*numWords bytes.
-    -- For simplicity, we inline the single-word helpers with a note that multi-word
-    -- is not yet fully implemented at the expression level.
+    -- Multi-word arithmetic: expression-level compilation is TODO.
+    -- The snarkjs ABI correctly handles n32 = numWords*2 for large primes.
+    -- Full multi-word field ops (fadd_N, fmul_N, fsub_N, finv_N) will be
+    -- implemented as a separate WAT module that the compiler includes.
     String.intercalate "\n" [
-      s!"  ;; Field arithmetic modulo {ps} (multi-word, {numWords} words)",
-      s!"  ;; NOTE: multi-word compilation at expression level is TODO.",
-      s!"  ;; The snarkjs ABI handles n32={numWords * 2} correctly.",
-      s!"  ;; Direct witness() uses memory: params are pointers to {numWords}×i64 arrays.",
+      s!"  ;; Multi-word field arithmetic for prime {ps} ({numWords} words)",
+      s!"  ;; NOTE: expression-level multi-word compilation is TODO.",
+      s!"  ;; The snarkjs ABI handles n32={numWords * 2} for memory-based access.",
       s!"  (func $fadd (param i64 i64) (result i64) i64.const 0)",
       s!"  (func $fmul (param i64 i64) (result i64) i64.const 0)",
       s!"  (func $fsub (param i64 i64) (result i64) i64.const 0)",
