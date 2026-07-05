@@ -23,51 +23,53 @@ structure FlattenState where
 def isConstant (lc : LinComb) : Bool :=
   match lc with | [(0, _)] => true | _ => false
 
-def scaleLinComb (c : ℕ) (lc : LinComb) : LinComb :=
-  lc.map fun (i, coeff) => (i, c * coeff)
+def modP (x : ℕ) (p : ℕ) : ℕ := x % p
 
-def addLinCombs (a b : LinComb) : LinComb :=
+def scaleLinComb (c : ℕ) (lc : LinComb) (p : ℕ) : LinComb :=
+  lc.map fun (i, coeff) => (i, (c * coeff) % p)
+
+def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
   match a, b with
   | [], _ => b
   | _, [] => a
   | (i1, c1) :: xs, (i2, c2) :: ys =>
-    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys)
-    else if i1 = i2 then (i1, c1 + c2) :: addLinCombs xs ys
-    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys
+    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys) p
+    else if i1 = i2 then (i1, (c1 + c2) % p) :: addLinCombs xs ys p
+    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
 
-partial def flattenExpr : Expression F → FlattenState → (LinComb × FlattenState)
+partial def flattenExpr (p : ℕ) : Expression F → FlattenState → (LinComb × FlattenState)
   | .var i, st => ([(i.index, 1)], st)
   | .const c, st =>
-    let val := FiniteField.val c
+    let val := FiniteField.val c % p
     ([(0, val)], st)
   | .add a b, st =>
-    let (la, st1) := flattenExpr a st
-    let (lb, st2) := flattenExpr b st1
-    (addLinCombs la lb, st2)
+    let (la, st1) := flattenExpr p a st
+    let (lb, st2) := flattenExpr p b st1
+    (addLinCombs la lb p, st2)
   | .mul a b, st =>
-    let (la, st1) := flattenExpr a st
-    let (lb, st2) := flattenExpr b st1
+    let (la, st1) := flattenExpr p a st
+    let (lb, st2) := flattenExpr p b st1
     if isConstant la then
-      (scaleLinComb ((la.head?.getD (0,0)).2) lb, st2)
+      (scaleLinComb ((la.head?.getD (0,0)).2) lb p, st2)
     else if isConstant lb then
-      (scaleLinComb ((lb.head?.getD (0,0)).2) la, st2)
+      (scaleLinComb ((lb.head?.getD (0,0)).2) la p, st2)
     else
       let k := st2.nextSignal
       let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
       ([(k, 1)], st3)
 
-def processOps (ops : List (FlatOperation F)) (st : FlattenState) (nextSig : ℕ)
+def processOps (p : ℕ) (ops : List (FlatOperation F)) (st : FlattenState) (nextSig : ℕ)
     (acc : List Constraint) : List Constraint × ℕ :=
   match ops with
   | [] => (acc, st.nextSignal)
   | .witness m _ :: rest =>
-    processOps rest { st with nextSignal := st.nextSignal + m } (nextSig + m) acc
+    processOps p rest { st with nextSignal := st.nextSignal + m } (nextSig + m) acc
   | .assert e :: rest =>
-    let (lc, st1) := flattenExpr e st
+    let (lc, st1) := flattenExpr p e st
     let constr : Constraint := (lc, [(0, 1)], [])
     let st2 := { st1 with constraints := constr :: st1.constraints }
-    processOps rest st2 nextSig (constr :: acc)
-  | _ :: rest => processOps rest st nextSig acc
+    processOps p rest st2 nextSig (constr :: acc)
+  | _ :: rest => processOps p rest st nextSig acc
 
 def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
   let flatOps := flattenOps ops
@@ -75,7 +77,7 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String
   let totalWitness : ℕ := flatOps.foldl (fun (acc : ℕ) (op : FlatOperation F) =>
     match op with | .witness m _ => acc + m | _ => acc) 0
   let st : FlattenState := { nextSignal := 1 + numInputs + totalWitness }
-  let (allConstraints, nVars) := processOps flatOps st (1 + numInputs) []
+  let (allConstraints, nVars) := processOps fieldPrime flatOps st (1 + numInputs) []
   let ps := toString fieldPrime
   -- Build JSON manually (avoid s! for escaped quotes)
   let constraintLines := allConstraints.reverse.map fun (a, b, c) =>
