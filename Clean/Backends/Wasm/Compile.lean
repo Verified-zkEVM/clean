@@ -139,6 +139,118 @@ partial def compileBExpr (vm : VarMap) : BExpr F → Builder → Builder
   | .and a e, b => let b := compileBExpr vm a b; let b := compileBExpr vm e b; b.push "i64.and"
 end
 
+/-! ## Expression flattening (shared by WASM and R1CS compilers) -/
+
+abbrev LinComb := List (ℕ × ℕ)  -- sparse (signalIndex × coefficient) pairs
+abbrev Constraint := LinComb × LinComb × LinComb  -- (A, B, C)
+
+structure FlattenState where
+  nextSignal : ℕ := 1
+  constraints : List Constraint := []
+
+def isConstant (lc : LinComb) : Bool :=
+  match lc with | [(0, _)] => true | _ => false
+
+def scaleLinComb (c : ℕ) (lc : LinComb) (p : ℕ) : LinComb :=
+  lc.map fun (i, coeff) => (i, (c * coeff) % p)
+
+def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
+  match a, b with
+  | [], _ => b
+  | _, [] => a
+  | (i1, c1) :: xs, (i2, c2) :: ys =>
+    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys) p
+    else if i1 = i2 then (i1, (c1 + c2) % p) :: addLinCombs xs ys p
+    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
+
+open Expression (var const add mul) in
+partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState → (LinComb × FlattenState)
+  | .var i, st => ([(1 + vm.lookup i.index, 1)], st)  -- R1CS signal = 1 + WASM local
+  | .const c, st =>
+    let val := FiniteField.val c % p
+    ([(0, val)], st)
+  | .add a b, st =>
+    let (la, st1) := flattenExpr p vm a st
+    let (lb, st2) := flattenExpr p vm b st1
+    (addLinCombs la lb p, st2)
+  | .mul a b, st =>
+    let (la, st1) := flattenExpr p vm a st
+    let (lb, st2) := flattenExpr p vm b st1
+    if isConstant la then
+      (scaleLinComb ((la.head?.getD (0,0)).2) lb p, st2)
+    else if isConstant lb then
+      (scaleLinComb ((lb.head?.getD (0,0)).2) la p, st2)
+    else
+      let k := st2.nextSignal
+      let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
+      ([(k, 1)], st3)
+
+/-! ## WASM code generation for intermediate signals -/
+
+/-- Generate WAT to load signal i from memory as i64. Signal 0 is the constant 1. -/
+def loadSignal (i signalBase signalBytes : ℕ) : String :=
+  if i = 0 then "i64.const 1"
+  else s!"i32.const {signalBase + i * signalBytes}  i32.load  i64.extend_i32_u"
+
+/-- Generate WAT to evaluate a linear combination, leaving the result as i64 on the stack. -/
+def compileLinCombWAT (lc : LinComb) (signalBase signalBytes : ℕ) : String :=
+  match lc with
+  | [] => "i64.const 0"
+  | [(0, c)] => s!"i64.const {c}"
+  | [(i, c)] =>
+    s!"{loadSignal i signalBase signalBytes}\n    i64.const {c}\n    call $fmul"
+  | (i1, c1) :: rest =>
+    -- Start with first term, then accumulate
+    let first := if i1 = 0 then s!"i64.const {c1}"
+      else s!"{loadSignal i1 signalBase signalBytes}\n    i64.const {c1}\n    call $fmul"
+    let restWAT := rest.map fun (p : ℕ × ℕ) =>
+      let i := p.1; let c := p.2
+      if i = 0 then s!"    i64.const {c}\n    call $fadd"
+      else s!"{loadSignal i signalBase signalBytes}\n    i64.const {c}\n    call $fmul\n    call $fadd"
+    String.intercalate "\n" (first :: restWAT)
+
+/--
+Discover intermediate signals from assert expressions. Returns:
+- numIntermediates: count of extra signals
+- intLocals: WAT local declarations for each intermediate
+- intComputation: WAT code to compute each intermediate and store to memory
+- total extra signals (to add to totalSignals)
+-/
+def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (FlatOperation F))
+    (startSignal signalBase signalBytes : ℕ) : ℕ × List String × List String :=
+  -- Walk assert expressions, run flattenExpr to discover intermediates
+  let (st, _) := flatOps.foldl (fun (acc : FlattenState × Unit) (op : FlatOperation F) =>
+    match op with
+    | .assert e =>
+      let (_, st') := flattenExpr p vm e acc.1
+      (st', ())
+    | _ => acc
+  ) ({ nextSignal := startSignal }, ())
+  let numInt := st.nextSignal - startSignal
+  -- Generate WAT for each intermediate constraint (la, lb, [{k, 1}])
+  -- Process reversed for oldest-first dependency order
+  let intConstraintsRev := List.reverse st.constraints
+  -- Recursively build locals and computation lines
+  let rec buildWAT (idx : ℕ) (lines : List String) (locals : List String)
+      (remaining : List Constraint) : ℕ × List String × List String :=
+    match remaining with
+    | [] => (idx, lines, locals)
+    | (la, lb, [(k, _)]) :: rest =>
+      let localName := s!"$int_{idx}"
+      let laWAT := compileLinCombWAT la signalBase signalBytes
+      let lbWAT := compileLinCombWAT lb signalBase signalBytes
+      let computeLine := String.intercalate "\n" [
+        s!"{laWAT}",
+        s!"{lbWAT}",
+        s!"    call $fmul",
+        s!"    local.set {localName}",
+        s!"    i32.const {signalBase + k * signalBytes}  local.get {localName}  i32.wrap_i64  i32.store"
+      ]
+      buildWAT (idx + 1) (computeLine :: lines) (s!"(local {localName} i64)" :: locals) rest
+    | _ :: rest => buildWAT idx lines locals rest
+  let (_, lines, locals) := buildWAT 0 [] [] intConstraintsRev
+  (numInt, List.reverse locals, List.reverse lines)
+
 /-! ## Module compilation -/
 
 def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × ℕ × List String :=
@@ -207,12 +319,16 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let flatOps := flattenOps ops
   let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm numInputs []
   let tw := finalVm.nextLocal - numInputs
-  let totalSignals := 1 + numInputs + tw
   let n32 := numWords * 2  -- i32 words per field element
-  -- Memory layout: 0=computed_flag, 4=SRWM(n32*4 bytes), 4+n32*4=signal_array(totalSignals*n32*4 bytes)
+  -- Memory layout: 0=computed_flag, 4=SRWM(n32*4 bytes), 4+n32*4=signal_array(N*n32*4 bytes)
   let srwmBase := 4
   let signalBase := 4 + n32 * 4
   let signalBytes := n32 * 4  -- bytes per signal
+  -- Discover R1CS intermediates from assert expressions
+  let startSignal := 1 + finalVm.nextLocal  -- next signal after WASM locals + constant
+  let (numInt, intLocals, intCode) :=
+    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes
+  let totalSignals := startSignal + numInt  -- includes constant + inputs + witnesses + intermediates
   let inputParams := String.intercalate " " (List.range numInputs |>.map fun i => s!"(param $in_{i} i64)")
   let locals := String.intercalate " "
     ((List.replicate tw "(local i64)") ++ ["(local $idx i64)"])
@@ -229,6 +345,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- Output store for getWitness: wrap i64 to i32, store to signal array
   let outputStoresW := String.intercalate "\n" (List.range tw |>.map fun i =>
     s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes}  local.get $w_{i}  i32.wrap_i64  i32.store")
+  -- Intermediate computation: compute each intermediate from signal memory, store back
+  let intComputation := String.intercalate "\n" intCode
+  let intLocalsStr := String.intercalate " " intLocals
   -- snarkjs ABI exports
   let snarkjsExports := String.intercalate "\n\n" [
     s!"  (func (export \"getFieldNumLen32\") (result i32) i32.const {n32})",
@@ -245,7 +364,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     s!"    i32.const {srwmBase}  i32.load",
     s!"    i32.store)",
     s!"  (func (export \"getWitness\") (param $i i32)",
-    s!"    (local $tmp i32) {String.intercalate " " (List.range numInputs |>.map fun i => s!"(local $in_{i} i64)")} {String.intercalate " " (List.range tw |>.map fun i => s!"(local $w_{i} i64)")} (local $idx i64)",
+    s!"    (local $tmp i32) {String.intercalate " " (List.range numInputs |>.map fun i => s!"(local $in_{i} i64)")} {String.intercalate " " (List.range tw |>.map fun i => s!"(local $w_{i} i64)")} {intLocalsStr} (local $idx i64)",
     s!"    i32.const 0  i32.load  i32.eqz",
     s!"    (if (then",
     s!"{inputLoads}",
@@ -253,6 +372,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     s!"      call $compute",
     s!"{String.intercalate "\n" (List.range tw |>.reverse.map fun i => s!"      local.set $w_{i}")}",
     s!"{outputStoresW}",
+    -- Compute and store intermediates (after witnesses are in memory)
+    s!"{intComputation}",
     s!"      i32.const {signalBase}  i32.const 1  i32.store",
     s!"      i32.const 0  i32.const 1  i32.store",
     s!"    ))",

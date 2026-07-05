@@ -2,6 +2,7 @@
 R1CS Constraint Export
 
 Converts Clean circuit operations to R1CS JSON format compatible with snarkjs.
+Uses the shared flattening logic from Compile.lean.
 -/
 import Clean.Circuit.Expression
 import Clean.Circuit.Operations
@@ -12,49 +13,6 @@ namespace Backends.Wasm
 open Expression (var const add mul)
 
 variable {F : Type} [FiniteField F]
-
-abbrev LinComb := List (ℕ × ℕ)  -- sparse (signalIndex × coefficient) pairs
-abbrev Constraint := LinComb × LinComb × LinComb  -- (A, B, C)
-
-structure FlattenState where
-  nextSignal : ℕ := 1
-  constraints : List Constraint := []
-
-def isConstant (lc : LinComb) : Bool :=
-  match lc with | [(0, _)] => true | _ => false
-
-def scaleLinComb (c : ℕ) (lc : LinComb) (p : ℕ) : LinComb :=
-  lc.map fun (i, coeff) => (i, (c * coeff) % p)
-
-def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
-  match a, b with
-  | [], _ => b
-  | _, [] => a
-  | (i1, c1) :: xs, (i2, c2) :: ys =>
-    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys) p
-    else if i1 = i2 then (i1, (c1 + c2) % p) :: addLinCombs xs ys p
-    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
-
-partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState → (LinComb × FlattenState)
-  | .var i, st => ([(1 + vm.lookup i.index, 1)], st)  -- R1CS signal = 1 + WASM local
-  | .const c, st =>
-    let val := FiniteField.val c % p
-    ([(0, val)], st)
-  | .add a b, st =>
-    let (la, st1) := flattenExpr p vm a st
-    let (lb, st2) := flattenExpr p vm b st1
-    (addLinCombs la lb p, st2)
-  | .mul a b, st =>
-    let (la, st1) := flattenExpr p vm a st
-    let (lb, st2) := flattenExpr p vm b st1
-    if isConstant la then
-      (scaleLinComb ((la.head?.getD (0,0)).2) lb p, st2)
-    else if isConstant lb then
-      (scaleLinComb ((lb.head?.getD (0,0)).2) la p, st2)
-    else
-      let k := st2.nextSignal
-      let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
-      ([(k, 1)], st3)
 
 def processOps (p : ℕ) (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState) :
     List Constraint × ℕ :=
