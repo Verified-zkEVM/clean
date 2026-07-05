@@ -37,18 +37,18 @@ def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
     else if i1 = i2 then (i1, (c1 + c2) % p) :: addLinCombs xs ys p
     else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
 
-partial def flattenExpr (p : ℕ) : Expression F → FlattenState → (LinComb × FlattenState)
-  | .var i, st => ([(1 + i.index, 1)], st)  -- signal 0 = constant, so var i → signal i+1
+partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState → (LinComb × FlattenState)
+  | .var i, st => ([(1 + vm.lookup i.index, 1)], st)  -- R1CS signal = 1 + WASM local
   | .const c, st =>
     let val := FiniteField.val c % p
     ([(0, val)], st)
   | .add a b, st =>
-    let (la, st1) := flattenExpr p a st
-    let (lb, st2) := flattenExpr p b st1
+    let (la, st1) := flattenExpr p vm a st
+    let (lb, st2) := flattenExpr p vm b st1
     (addLinCombs la lb p, st2)
   | .mul a b, st =>
-    let (la, st1) := flattenExpr p a st
-    let (lb, st2) := flattenExpr p b st1
+    let (la, st1) := flattenExpr p vm a st
+    let (lb, st2) := flattenExpr p vm b st1
     if isConstant la then
       (scaleLinComb ((la.head?.getD (0,0)).2) lb p, st2)
     else if isConstant lb then
@@ -58,28 +58,29 @@ partial def flattenExpr (p : ℕ) : Expression F → FlattenState → (LinComb �
       let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
       ([(k, 1)], st3)
 
-def processOps (p : ℕ) (ops : List (FlatOperation F)) (st : FlattenState) (nextSig : ℕ)
+def processOps (p : ℕ) (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState) (nextSig : ℕ)
     (acc : List Constraint) : List Constraint × ℕ :=
   match ops with
   | [] => (acc, st.nextSignal)
-  | .witness m _ :: rest =>
-    processOps p rest { st with nextSignal := st.nextSignal + m } (nextSig + m) acc
+  | .witness _ _ :: rest =>
+    processOps p vm rest st nextSig acc  -- VarMap already handles witness allocation
   | .assert e :: rest =>
-    let (lc, st1) := flattenExpr p e st
+    let (lc, st1) := flattenExpr p vm e st
     let constr : Constraint := (lc, [(0, 1)], [])
     let st2 := { st1 with constraints := constr :: st1.constraints }
-    processOps p rest st2 nextSig (constr :: acc)
-  | _ :: rest => processOps p rest st nextSig acc
+    processOps p vm rest st2 nextSig (constr :: acc)
+  | _ :: rest => processOps p vm rest st nextSig acc
 
 def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
   let flatOps := flattenOps ops
-  -- Count witnesses for signal allocation
-  let totalWitness : ℕ := flatOps.foldl (fun (acc : ℕ) (op : FlatOperation F) =>
-    match op with | .witness m _ => acc + m | _ => acc) 0
-  let st : FlattenState := { nextSignal := 1 + numInputs + totalWitness }
-  let (allConstraints, nVars) := processOps fieldPrime flatOps st (1 + numInputs) []
+  -- Use the WASM compiler's VarMap to get the same signal layout
+  -- Process operations to build the variable-to-signal mapping
+  let vm := VarMap.init numInputs
+  let (finalVm, _, _) := processFlatOps numInputs flatOps vm numInputs []
+  let totalSignals := 1 + finalVm.nextLocal  -- +1 for constant signal
+  let st : FlattenState := { nextSignal := totalSignals }
+  let (allConstraints, nVars) := processOps fieldPrime vm flatOps st (1 + numInputs) []
   let ps := toString fieldPrime
-  -- Build JSON manually (avoid s! for escaped quotes)
   let constraintLines := allConstraints.reverse.map fun (a, b, c) =>
     "    [" ++ linCombToJson a ++ ", " ++ linCombToJson b ++ ", " ++ linCombToJson c ++ "]"
   "{\n" ++
