@@ -166,18 +166,31 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List String) : {m : ℕ} → VE
       ({ vmOut with loopIdx := none }, vi + n, ls)
   | _, .append _ _ => (vm, vi, "    ;; append NYI" :: acc)
 
-def processOps (numInputs : ℕ) : List (Operation F) → VarMap → ℕ → List String → VarMap × ℕ × List String
+def flattenOp : Operation F → List (FlatOperation F)
+  | .witness m code => [.witness m code]
+  | .assert e => [.assert e]
+  | .lookup l => [.lookup l]
+  | .interact i => [.interact i]
+  | .subcircuit s => s.ops.toFlat
+
+def flattenOps (ops : List (Operation F)) : List (FlatOperation F) :=
+  match ops with
+  | [] => []
+  | op :: rest => flattenOp op ++ flattenOps rest
+
+def processFlatOps (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ → List String → VarMap × ℕ × List String
   | [], vm, _, lines => (vm, numInputs, lines)
   | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc =>
     let vmStep := { vm with letBase := vi }
     let (vmS, viS, stepLines) := compileSteps vmStep vi steps
     let (vmOut, viOut, outLines) := compileVExpr vmS viS stepLines vexpr
-    processOps numInputs rest vmOut viOut (acc ++ outLines)
-  | _ :: rest, vm, vi, acc => processOps numInputs rest vm vi acc
+    processFlatOps numInputs rest vmOut viOut (acc ++ outLines)
+  | _ :: rest, vm, vi, acc => processFlatOps numInputs rest vm vi acc
 
 def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
   let vm := VarMap.init numInputs
-  let (finalVm, _, bodyLines) := processOps numInputs ops vm numInputs []
+  let flatOps := flattenOps ops
+  let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm numInputs []
   let tw := finalVm.nextLocal - numInputs
   let totalSignals := 1 + numInputs + tw
   let ps := toString fieldPrime
