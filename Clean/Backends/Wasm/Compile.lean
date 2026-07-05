@@ -631,17 +631,18 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes
   let totalSignals := startSignal + numInt
-  -- $compute params: each input = nw i64 values
+  -- $compute params: each input = nw i64 values, no results (stores to memory)
   let inputParams := String.intercalate " " (List.range numInputs  >>= fun i =>
     (List.range nw).map fun w => s!"(param $in_{i}_{w} i64)")
   -- $compute locals: witnesses + idx
   let locals := String.intercalate " "
     ((List.replicate witnessWords "(local i64)") ++ ["(local $idx i64)"])
-  -- $compute returns witness words
-  let rets := List.range witnessWords |>.map fun i => s!"    local.get {numInputs * nw + i}"
-  let computeBody := String.intercalate "\n" (bodyLines ++ rets)
-  let results := if witnessWords > 0 then
-    s!"(result {String.intercalate " " (List.replicate witnessWords "i64")})" else ""
+  -- After witness computation, store each witness word to signal memory
+  let outputStoresInCompute := String.intercalate "\n" (List.range witnessCount  >>= fun i =>
+    (List.range nw).map fun w =>
+      s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes + w * 4}  local.get {numInputs * nw + i * nw + w}  i32.wrap_i64  i32.store")
+  let computeBody := String.intercalate "\n" (bodyLines ++ [outputStoresInCompute])
+  let results := "" -- no multi-value returns; results stored to memory
   -- Input loads: read nw i32 values per input, extend to i64, set input word locals
   let inputLoads := String.intercalate "\n" (List.range numInputs  >>= fun i =>
     (List.range nw).map fun w =>
@@ -649,19 +650,15 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- Push inputs for $compute call
   let inputPush := String.intercalate "\n" (List.range numInputs  >>= fun i =>
     (List.range nw).map fun w => s!"    local.get $in_{i}_{w}")
-  -- Output stores: wrap each witness word i64 to i32, store to signal array
-  let outputStoresW := String.intercalate "\n" (List.range witnessCount  >>= fun i =>
-    (List.range nw).map fun w =>
-      s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes + w * 4}  local.get $w_{i}_{w}  i32.wrap_i64  i32.store")
-  -- getWitness locals: inputs + witnesses + intermediates
+  -- getWitness: no need for witness locals (results stored to memory by $compute)
   let gwInputLocals := String.intercalate " " (List.range numInputs  >>= fun i =>
     (List.range nw).map fun w => s!"(local $in_{i}_{w} i64)")
-  let gwWitnessLocals := String.intercalate " " (List.range witnessCount  >>= fun i =>
-    (List.range nw).map fun w => s!"(local $w_{i}_{w} i64)")
   -- snarkjs ABI exports
   let snarkjsExports := String.intercalate "\n\n" [
     s!"  (func (export \"getFieldNumLen32\") (result i32) i32.const {n32})",
-    s!"  (func (export \"getRawPrime\")  i32.const {srwmBase}  i32.const {fieldPrime}  i32.store)",
+    s!"  (func (export \"getRawPrime\")" ++
+    (String.intercalate "\n" ((List.range n32).map fun w =>
+      s!"    i32.const {srwmBase + w * 4}  i32.const {(fieldPrime >>> (w * 32)) % (2^32)}  i32.store")) ++ ")",
     s!"  (func (export \"readSharedRWMemory\") (param i32) (result i32)",
     s!"    i32.const {srwmBase}  local.get 0  i32.const 4  i32.mul  i32.add  i32.load)",
     s!"  (func (export \"writeSharedRWMemory\") (param $j i32) (param $v i32)",
@@ -674,14 +671,13 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     s!"    i32.const {srwmBase}  i32.load",
     s!"    i32.store)",
     s!"  (func (export \"getWitness\") (param $i i32)",
-    s!"    (local $tmp i32) {gwInputLocals} {gwWitnessLocals} {String.intercalate " " intLocals} (local $idx i64)",
+    s!"    (local $tmp i32) {gwInputLocals} {String.intercalate " " intLocals} (local $idx i64)",
     s!"    i32.const 0  i32.load  i32.eqz",
     s!"    (if (then",
     s!"{inputLoads}",
     s!"{inputPush}",
     s!"      call $compute",
-    s!"{String.intercalate "\n" (List.range witnessWords |>.reverse.map fun i => s!"      local.set $w_{i / nw}_{i % nw}")}",
-    s!"{outputStoresW}",
+    -- Compute and store intermediates (after witnesses are in memory)
     s!"{String.intercalate "\n" intCode}",
     s!"      i32.const {signalBase}  i32.const 1  i32.store",
     s!"      i32.const 0  i32.const 1  i32.store",
