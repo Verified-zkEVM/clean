@@ -179,21 +179,80 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Stri
   let vm := VarMap.init numInputs
   let (finalVm, _, bodyLines) := processOps numInputs ops vm numInputs []
   let tw := finalVm.nextLocal - numInputs
-  let rets := List.range tw |>.map fun i => s!"    local.get {numInputs + i}"
-  let allBody := String.intercalate "\n" (bodyLines ++ rets)
+  let totalSignals := 1 + numInputs + tw
+  let ps := toString fieldPrime
+  -- Memory layout: 0=computed_flag, 4=SRWM(word0), 8=signal_array(totalSignals*4 bytes)
+  let srwmBase := 4
+  let signalBase := 8
   let inputParams := String.intercalate " " (List.range numInputs |>.map fun i => s!"(param $in_{i} i64)")
   let locals := String.intercalate " "
     ((List.replicate tw "(local i64)") ++ ["(local $idx i64)"])
+  let rets := List.range tw |>.map fun i => s!"    local.get {numInputs + i}"
+  let computeBody := String.intercalate "\n" (bodyLines ++ rets)
   let results := if tw > 0 then
     s!"(result {String.intercalate " " (List.replicate tw "i64")})" else ""
+  -- Input load lines: read each input from memory as i32, extend to i64 for computation
+  let inputLoads := String.intercalate "\n" (List.range numInputs |>.map fun i =>
+    s!"    i32.const {signalBase + (1 + i) * 4} i32.load  i64.extend_i32_u  local.set $in_{i}")
+  -- Push inputs onto stack for calling $compute
+  let inputPush := String.intercalate "\n" (List.range numInputs |>.map fun i =>
+    s!"    local.get $in_{i}")
+  -- Output store for getWitness: wrap i64 to i32, store to signal array
+  let outputStoresW := String.intercalate "\n" (List.range tw |>.map fun i =>
+    s!"    i32.const {signalBase + (1 + numInputs + i) * 4}  local.get $w_{i}  i32.wrap_i64  i32.store")
+  -- snarkjs ABI exports
+  let snarkjsExports := String.intercalate "\n\n" [
+    s!"  (func (export \"getFieldNumLen32\") (result i32) i32.const 1)",
+    s!"  (func (export \"getRawPrime\")  i32.const {srwmBase}  i32.const {fieldPrime}  i32.store)",
+    s!"  (func (export \"readSharedRWMemory\") (param i32) (result i32)",
+    s!"    i32.const {srwmBase}  local.get 0  i32.const 4  i32.mul  i32.add  i32.load)",
+    s!"  (func (export \"writeSharedRWMemory\") (param $j i32) (param $v i32)",
+    s!"    i32.const {srwmBase}  local.get $j  i32.const 4  i32.mul  i32.add  local.get $v  i32.store)",
+    s!"  (func (export \"getInputSignalSize\") (param i32) (param i32) (result i32) i32.const {numInputs})",
+    s!"  (func (export \"getInputSize\") (result i32) i32.const {numInputs})",
+    s!"  (func (export \"getWitnessSize\") (result i32) i32.const {totalSignals})",
+    s!"  (func (export \"setInputSignal\") (param $hMSB i32) (param $hLSB i32) (param $idx i32)",
+    s!"    i32.const {signalBase + 4}  local.get $idx  i32.const 4  i32.mul  i32.add",
+    s!"    i32.const {srwmBase}  i32.load",
+    s!"    i32.store)",
+    s!"  (func (export \"getWitness\") (param $i i32)",
+    s!"    (local $tmp i32) {String.intercalate " " (List.range numInputs |>.map fun i => s!"(local $in_{i} i64)")} {String.intercalate " " (List.range tw |>.map fun i => s!"(local $w_{i} i64)")} (local $idx i64)",
+    s!"    i32.const 0  i32.load  i32.eqz",
+    s!"    (if (then",
+    s!"{inputLoads}",
+    s!"{inputPush}",
+    s!"      call $compute",
+    s!"{String.intercalate "\n" (List.range tw |>.reverse.map fun i => s!"      local.set $w_{i}")}",
+    s!"{outputStoresW}",
+    s!"      i32.const {signalBase}  i32.const 1  i32.store",
+    s!"      i32.const 0  i32.const 1  i32.store",
+    s!"    ))",
+    s!"    i32.const 0",
+    s!"    i32.const {signalBase}  local.get $i  i32.const 4  i32.mul  i32.add  i32.load",
+    s!"    i32.store offset={srwmBase})",
+    s!"  (func (export \"getMessageChar\") (result i32) i32.const 0)",
+    s!"  (func (export \"getVersion\") (result i32) i32.const 2)",
+    s!"  (func (export \"getMinorVersion\") (result i32) i32.const 0)",
+    s!"  (func (export \"getPatchVersion\") (result i32) i32.const 0)",
+    s!"  (func (export \"init\") (param i32) i32.const 0 i32.const 0 i32.store  i32.const {signalBase} i32.const 1 i32.store)"
+  ]
   String.intercalate "\n" [
     s!"(module",
     s!"  (memory (export \"memory\") 1)",
+    s!"  ;; Pre-initialize signal[0] = 1 (constant)",
+    s!"  (data (i32.const {signalBase}) \"\\01\\00\\00\\00\")",
     fieldHelpers fieldPrime,
+    s!"  ;; Internal compute function (our existing witness logic)",
+    s!"  (func $compute {inputParams} {results}",
+    s!"    {locals}",
+    computeBody,
+    s!"  )",
+    s!"  ;; Direct witness export (for testing)",
     s!"  (func (export \"witness\") {inputParams} {results}",
     s!"    {locals}",
-    allBody,
+    computeBody,
     s!"  )",
+    snarkjsExports,
     s!")"
   ]
 
