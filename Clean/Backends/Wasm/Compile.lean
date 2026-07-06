@@ -618,11 +618,12 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × �
     | .letF e =>
       let cb := compileFExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+      -- Capture all nw limbs: forward order pops lowest limb first
+      (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
     | .letN e =>
       let cb := compileNExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+      (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
   ) (vm, vi, [])
 
 /-- compile a list of FExpr literals to instructions. -/
@@ -630,7 +631,7 @@ def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F))
   es.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) =>
     let cb := compileFExpr vm e {}
     let (vm', locs) := vm.alloc 1 vi
-    (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+    (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
   ) (vm, vi, acc)
 
 /-- compile a VExpr to instructions. -/
