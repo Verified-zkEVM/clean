@@ -190,15 +190,18 @@ def genMul64x64AST : Func :=
 def genMul64x64 : String := Ast.Func.toString genMul64x64AST
 
 /-- AST version: c[k] += a[i]*b[j] with full carry propagation.
-    Uses locals: a(0..N-1), b(N..2N-1), lo(2N), hi(2N+1), carry(2N+2), sum(2N+3), c(2N+4..2N+4+2N-1) -/
-def genSchoolbookAccum (N i j srcAOff srcBOff destOff : ℕ) : List Instr :=
+    scratchOff (default 0) sets the base for 4 working locals (lo, hi, carry, sum).
+    When 0, uses 2*N..2*N+3. Use a non-zero offset to avoid conflicts
+    when using genSchoolbook with different N values in the same function. -/
+def genSchoolbookAccum (N i j srcAOff srcBOff destOff : ℕ) (scratchOff : ℕ := 0) : List Instr :=
+  let base := if scratchOff = 0 then 2*N else scratchOff
   let k := i + j
   let aIdx := srcAOff + i
   let bIdx := srcBOff + j
-  let loIdx := 2*N      -- working locals are still at 2N..2N+3
-  let hiIdx := 2*N + 1
-  let carryIdx := 2*N + 2
-  let sumIdx := 2*N + 3
+  let loIdx := base
+  let hiIdx := base + 1
+  let carryIdx := base + 2
+  let sumIdx := base + 3
   let dIdx (x : ℕ) : ℕ := destOff + x
   let dk := dIdx k
   let dk1 := dIdx (k+1)
@@ -218,88 +221,155 @@ def genSchoolbookAccum (N i j srcAOff srcBOff destOff : ℕ) : List Instr :=
         local.get carryIdx, i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
   body ++ propagate
 
-/-- Full schoolbook for two N-limb operands. -/
-def genSchoolbook (N srcAOff srcBOff destOff : ℕ) : List Instr :=
+/-- Full schoolbook for two N-limb operands. scratchOff is forwarded to genSchoolbookAccum. -/
+def genSchoolbook (N srcAOff srcBOff destOff : ℕ) (scratchOff : ℕ := 0) : List Instr :=
   (List.range N) >>= fun i =>
     (List.range N) >>= fun j =>
-      genSchoolbookAccum N i j srcAOff srcBOff destOff
+      genSchoolbookAccum N i j srcAOff srcBOff destOff scratchOff
 
-/-- Generate multi-word modular multiplication AST Func with Barrett reduction. -/
+/--
+Generate multi-word modular multiplication AST Func with word-aligned Barrett reduction
+(HAC Algorithm 14.42). Operates on N 64-bit limbs per field element.
+
+Algorithm for N=4, k=256:
+  1. c = a * b (8 limbs, schoolbook)
+  2. q1 = c >> 192 (5 limbs)
+  3. q2 = q1 * μ (5×5 schoolbook, 9 limbs, μ = floor(2^512 / p))
+  4. q3 = q2 >> 320 (4 limbs)
+  5. r1 = c mod 2^320 (5 limbs)
+  6. r2 = (q3 * p) mod 2^320 (5 limbs)
+  7. r = r1 - r2 (5-limb sub, result < 3p by Barrett guarantee)
+  8. Conditional subtract p up to 2 times
+  9. Return r[0..N-1]
+
+Local layout (N=4):
+  params: a[0..3] at 0-3, b[4..7] at 4-7
+  scratchN4[lo,hi,carry,sum]: 8-11 (for N=4 schoolbooks)
+  scratchN5[lo,hi,carry,sum]: 12-15 (for 5×5 schoolbook, avoids overlap with scratchN4 at 10-11)
+  c[0..7]:      16-23 (full a*b product)
+  q1[0..4]:     24-28 (c>>192), also q3[0..3]/result[0..3] at 24-27
+  q2[0..8]:     29-37 (q1*μ), also r2_full[0..7] at 29-36
+  muArr[0..4]:  38-42 (μ = floor(2^512/p), 5 limbs)
+  pArr[0..3]:   43-46 (prime p, 4 limbs)
+  r1[0..4]:     47-51 (c mod 2^320)
+-/
 def genFmulAST (p numWords : ℕ) : Func :=
   let N := numWords
   let limbs2N := 2 * N
-  let rModP := (2^(N*64)) % p
-  let rLimbs := toLimbs rModP N
-  let pLimbs := toLimbs p N
-  -- Local indices (after 2N params)
-  let carryIdx := 2*N+2; let sumIdx := 2*N+3
-  let cBase := 2*N+4; let tBase := cBase+limbs2N; let rBase := tBase+limbs2N; let pBase := rBase+N
-  -- Main schoolbook: a × b → c
-  let mainSB := genSchoolbook N 0 N cBase
-  -- Barrett: t = c_hi * R → t, then c_lo += t_lo, then handle t_hi with one more pass
-  let redSB := genSchoolbook N (cBase+N) rBase tBase
-  -- addRedLo: c_lo += t_lo with proper carry detection
-  let addRedLo : List Instr :=
-    [ local.get (cBase+0), local.get (tBase+0), i64.add, local.tee (cBase+0),
-      local.get (tBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
-    ++ ((List.range (N-1)) >>= fun i =>
-      let idx := i + 1
-      [ local.get (tBase+idx), local.get carryIdx, i64.add, local.tee sumIdx,
-        local.get (tBase+idx), i64.lt_u, i64.extend_i32_u, local.set carryIdx,
-        local.get (cBase+idx), local.get sumIdx, i64.add, local.tee (cBase+idx),
-        local.get sumIdx, i64.lt_u, i64.extend_i32_u,
-        local.get carryIdx, i64.or, local.set carryIdx ])
-  -- Carry elimination loop
-  let carryLoop : List Instr :=
-    [ block "c_done" [ loop "c_loop" (
-        [ local.get carryIdx, i64.eqz, br_if "c_done", i64.const 0, local.set carryIdx,
-          local.get (cBase+0), local.get (rBase+0), i64.add, local.tee (cBase+0),
-          local.get (rBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
-        ++ ((List.range (N-1)) >>= fun i =>
-          let idx := i + 1
-          [ local.get (rBase+idx), local.get carryIdx, i64.add, local.tee sumIdx,
-            local.get (rBase+idx), i64.lt_u, i64.extend_i32_u, local.set carryIdx,
-            local.get (cBase+idx), local.get sumIdx, i64.add, local.tee (cBase+idx),
-            local.get sumIdx, i64.lt_u, i64.extend_i32_u,
-            local.get carryIdx, i64.or, local.set carryIdx ])
-        ++ [ br "c_loop" ]
-      ) ] ]
-  -- One extra pass to reduce t_hi: copy t_hi to c_hi, zero t, redSB, addRedLo, carryLoop
-  let extraPass : List Instr :=
-    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ]) ++
-    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
-    redSB ++ addRedLo ++ carryLoop
-  -- Conditional subtraction
-  let subOne : List Instr :=
-    [ local.get (cBase+0), local.get (pBase+0), i64.sub, local.set (tBase+0),
-      local.get (cBase+0), local.get (pBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
-    ++ ((List.range (N-1)) >>= fun i =>
-      let idx := i + 1
-      [ local.get (cBase+idx), local.get (pBase+idx), i64.sub, local.get carryIdx, i64.sub, local.set (tBase+idx),
-        local.get (cBase+idx), local.get (pBase+idx), i64.lt_u, i64.extend_i32_u,
-        local.get (cBase+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
-        local.get carryIdx, i64.and, i64.or, local.set carryIdx ])
-    ++ [ local.get carryIdx, i64.eqz,
-         .ifElse none ((List.range N) >>= fun i => [ local.get (tBase+i), local.set (cBase+i) ]) [] ]
+  -- Barrett precomputed constant: μ = floor(b^(2k) / p) = floor(2^(2*N*64) / p)
+  let mu := (2^(2*N*64)) / p
+  let muLimbs := toLimbs mu (N+1)   -- μ has N+1 limbs (5 for N=4)
+  let pLimbs := toLimbs p N          -- p has N limbs
+
+  -- Local index layout
+  let scratchN5 := 2*N + 4           -- 12 (scratch base for N+1 schoolbook, avoids N=4 at 8-11)
+  let cBase := 2*N + 8               -- 16 (a*b: 8 limbs)
+  let q1Base := cBase + limbs2N      -- 24 (c>>192: N+1 limbs, also q3[0..N-1] / result[0..N-1])
+  -- q2 needs 2*(N+1) limbs (10 for N=4), since 5×5 schoolbook produces up to 10 limbs.
+  -- Overlap with mu would corrupt the multiplier during carry propagation.
+  let q2Base := q1Base + (N+1)       -- 29 (q1*μ: 2*(N+1) limbs, also r2_full[0..2N-1])
+  let muBase := q2Base + 2*(N+1)     -- 39 (μ: N+1 limbs)
+  let pBase := muBase + (N+1)        -- 44 (p: N limbs)
+  let r1Base := pBase + N            -- 48 (c mod 2^(k+1): N+1 limbs)
+  let brIdx := 2*N+2                 -- 10 (borrow flag, reuses scratchN4 carry slot)
+
+  -- Step 1: Initialize working arrays
   let initAll : List Instr :=
-    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (cBase+i) ]) ++
-    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
-    ((rLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (rBase+i) ]) ++
+    ((muLimbs.zip (List.range (N+1))) >>= fun (val, i) => [ i64.const val, local.set (muBase+i) ]) ++
     ((pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ])
-  let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+i) ]
+
+  -- Step 2: c = a * b (N×N schoolbook → 2N limbs, scratch at 8-11)
+  let mainSB := genSchoolbook N 0 N cBase
+
+  -- Step 3: q1 = c[3..7] (c >> 192, 5 limbs)
+  let extractQ1 : List Instr :=
+    (List.range (N+1)) >>= fun i => [ local.get (cBase + 3 + i), local.set (q1Base + i) ]
+
+  -- Step 4: q2 = q1 * μ (5×5 schoolbook → 9 limbs, scratch at 12-15)
+  let muMult := genSchoolbook (N+1) q1Base muBase q2Base scratchN5
+
+  -- Step 5: q3 = q2[5..8] (q2 >> 320, 4 limbs), reuse q1Base[0..3]
+  let extractQ3 : List Instr :=
+    (List.range N) >>= fun i => [ local.get (q2Base + 5 + i), local.set (q1Base + i) ]
+
+  -- Step 6: r1 = c[0..4] (c mod 2^320, 5 limbs)
+  let extractR1 : List Instr :=
+    (List.range (N+1)) >>= fun i => [ local.get (cBase + i), local.set (r1Base + i) ]
+
+  -- Step 7: r2_full = q3 * p (N×N schoolbook → 8 limbs, scratch at 8-11)
+  -- r2 = low 5 limbs at q2Base[0..4]
+  -- IMPORTANT: zero q2Base first since genSchoolbook ADDS to destination,
+  -- and q2Base still contains the muMult result (q2 = q1*μ).
+  let zeroR2 : List Instr :=
+    (List.range limbs2N) >>= fun i => [ i64.const 0, local.set (q2Base+i) ]
+  let r2Mult := genSchoolbook N q1Base pBase q2Base
+
+  -- Step 8: r = r1 - r2 (5-limb subtraction with borrow, result at q1Base[0..3]).
+  -- Barrett guarantees the result fits in 4 limbs (< 3p < 2^256 for N=4),
+  -- so limb 4 is computed (for borrow detection) but discarded.
+  let sub5Limb : List Instr :=
+    -- Limb 0
+    [ local.get (r1Base+0), local.get (q2Base+0), i64.sub, local.set (q1Base+0),
+      local.get (r1Base+0), local.get (q2Base+0), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
+    -- Limbs 1..3
+    ++ ((List.range (N-1)) >>= fun i =>
+      let idx := i + 1
+      [ local.get (r1Base+idx), local.get (q2Base+idx), i64.sub, local.get brIdx, i64.sub, local.set (q1Base+idx),
+        local.get (r1Base+idx), local.get (q2Base+idx), i64.lt_u, i64.extend_i32_u,
+        local.get (r1Base+idx), local.get (q2Base+idx), i64.eq, i64.extend_i32_u,
+        local.get brIdx, i64.and, i64.or, local.set brIdx ])
+    -- Limb 4: compute borrow, discard result
+    ++ [ local.get (r1Base+4), local.get (q2Base+4), i64.sub, local.get brIdx, i64.sub,
+         Instr.drop,
+         local.get (r1Base+4), local.get (q2Base+4), i64.lt_u, i64.extend_i32_u,
+         local.get (r1Base+4), local.get (q2Base+4), i64.eq, i64.extend_i32_u,
+         local.get brIdx, i64.and, i64.or, local.set brIdx ]
+
+  -- Step 9: Conditional subtraction. r = r - p if r >= p, at most 2 times.
+  -- Computes r-p at q2Base[0..3], copies back to q1Base[0..3] if no borrow (r >= p).
+  let subOneP : List Instr :=
+    [ local.get (q1Base+0), local.get (pBase+0), i64.sub, local.set (q2Base+0),
+      local.get (q1Base+0), local.get (pBase+0), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
+    ++ ((List.range (N-1)) >>= fun i =>
+      let idx := i + 1
+      [ local.get (q1Base+idx), local.get (pBase+idx), i64.sub, local.get brIdx, i64.sub, local.set (q2Base+idx),
+        local.get (q1Base+idx), local.get (pBase+idx), i64.lt_u, i64.extend_i32_u,
+        local.get (q1Base+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
+        local.get brIdx, i64.and, i64.or, local.set brIdx ])
+    ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
+         .ifElse none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
+
+  -- Build return sequence. In WASM multi-value returns, the first result type
+  -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
+  -- so we push limbs in reverse order (highest limb first) so that the lowest limb
+  -- is popped first and matches the first result type.
+  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (q1Base+i) ]
+
   { name := "$fmul"
-    params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64)) ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
+    params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64))
+      ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
     results := List.replicate N ValType.i64
     locals :=
+      -- scratchN4 (lo,hi,carry,sum): 4 locals at 8-11
       [("$lo", ValType.i64), ("$hi", ValType.i64), ("$carry", ValType.i64), ("$sum", ValType.i64)]
+      -- scratchN5 (lo,hi,carry,sum): 4 locals at 12-15
+      ++ [("$lo5", ValType.i64), ("$hi5", ValType.i64), ("$carry5", ValType.i64), ("$sum5", ValType.i64)]
+      -- c[0..7]: 8 locals at 16-23
       ++ ((List.range limbs2N).map fun i => (s!"$c{i}", ValType.i64))
-      ++ ((List.range limbs2N).map fun i => (s!"$t{i}", ValType.i64))
-      ++ ((List.range N).map fun i => (s!"$r{i}", ValType.i64))
-      ++ ((List.range N).map fun i => (s!"$p{i}", ValType.i64))
-    body := initAll ++ mainSB ++ redSB ++ addRedLo ++ carryLoop ++ extraPass ++ extraPass ++
-            extraPass ++ extraPass ++ extraPass ++ extraPass ++ extraPass ++ extraPass ++
-            extraPass ++ extraPass ++ extraPass ++ extraPass ++ extraPass ++ extraPass ++
-            extraPass ++ extraPass ++ subOne ++ subOne ++ subOne ++ rets }
+      -- q1[0..4] / q3[0..3] / result[0..3]: 5 locals at 24-28
+      ++ ((List.range (N+1)).map fun i => (s!"$q1{i}", ValType.i64))
+      -- q2[0..2*(N+1)-1] / r2_full[0..2N-1]: 2*(N+1) locals at 29.. for N=4
+      ++ ((List.range (2*(N+1))).map fun i => (s!"$q2{i}", ValType.i64))
+      -- muArr[0..4]: 5 locals at 38-42
+      ++ ((List.range (N+1)).map fun i => (s!"$mu{i}", ValType.i64))
+      -- pArr[0..3]: 4 locals at 43-46
+      ++ ((List.range N).map fun i => (s!"$pArr{i}", ValType.i64))
+      -- r1[0..4]: 5 locals at 47-51
+      ++ ((List.range (N+1)).map fun i => (s!"$r1{i}", ValType.i64))
+    body := initAll ++ mainSB ++ extractQ1 ++ muMult ++ extractQ3
+            ++ extractR1 ++ zeroR2 ++ r2Mult ++ sub5Limb ++ subOneP ++ subOneP ++ rets
+    exportName := none
+  }
 
 def genFmul (p numWords : ℕ) : String := Ast.Func.toString (genFmulAST p numWords)
 
@@ -315,7 +385,8 @@ def genFaddAST (numWords : ℕ) : Func :=
     [ local.get idx, local.get (N + idx), i64.add, local.get cIdx, i64.add, local.set (ri idx),
       local.get (ri idx), local.get idx, i64.lt_u, i64.extend_i32_u,
       local.get (ri idx), local.get (N + idx), i64.lt_u, i64.extend_i32_u, i64.or, local.set cIdx ]
-  let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
+  -- Return in reverse order (highest limb first) to match $fmul convention
+  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
     results := List.replicate N .i64
@@ -338,7 +409,8 @@ def genFsubAST (numWords : ℕ) : Func :=
       local.get idx, local.get (N + idx), i64.lt_u, i64.extend_i32_u,
       local.get idx, local.get (N + idx), i64.eq, i64.extend_i32_u,
       local.get brIdx, i64.and, i64.or, local.set brIdx ]
-  let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
+  -- Return in reverse order (highest limb first) to match $fmul convention
+  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
   { name := "$fsub"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
     results := List.replicate N .i64
@@ -356,18 +428,24 @@ def genFinvAST (p numWords : ℕ) : Func :=
   let ri (i : ℕ) : ℕ := N + i  -- r limbs at offset N (after params a0..a{N-1})
   let pushR : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   let pushA : List Instr := (List.range N) >>= fun i => [ local.get i ]
-  let captureR : List Instr := (List.range N).reverse >>= fun i => [ local.set (ri i) ]
+  -- captureR pops the return values from $fmul (which pushes highest limb first,
+  -- lowest limb last). Forward capture: first pop (top=lowest limb) → ri[0].
+  let captureR : List Instr := (List.range N) >>= fun i => [ local.set (ri i) ]
+  let finvRets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
   let square : List Instr := pushR ++ pushR ++ [ call "$fmul" ] ++ captureR
   let multiply : List Instr := pushR ++ pushA ++ [ call "$fmul" ] ++ captureR
   let init : List Instr :=
-    (i64.const 1 :: (List.replicate (N-1) (i64.const 0))) ++ captureR
+    -- Push N limbs: N-1 zeros (highest limbs), then 1 (lowest limb).
+    -- This matches $fmul's return order (highest first, lowest last on top)
+    -- so that captureR (forward) stores: ri[0]=1, ri[1..N-1]=0.
+    (List.replicate (N-1) (i64.const 0) ++ [i64.const 1]) ++ captureR
   let steps : List Instr := (List.range (msb+1) |>.reverse) >>= fun b =>
     if (exp >>> b) % 2 = 1 then square ++ multiply else square
   { name := "$finv"
     params := (List.range N).map fun i => (s!"$a{i}", .i64)
     results := List.replicate N .i64
     locals := (List.range N).map fun i => (s!"$r{i}", .i64)
-    body := init ++ steps ++ pushR }
+    body := init ++ steps ++ finvRets }
 
 def genFinv (p numWords : ℕ) : String := Ast.Func.toString (genFinvAST p numWords)
 
