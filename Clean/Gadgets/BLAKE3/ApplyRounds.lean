@@ -396,9 +396,12 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- proof, which makes the proof much more brittle and expensive. See https://github.com/Verified-zkEVM/clean/issues/394
 -- that said -- full unfolding is also kind of bad for outputs here because it's a long chain of `Round.main ...`
 -- that's why we override the output.
--- TODO(4.31 bump): the metadata bridge below exceeds isDefEq/whnf heartbeats; the derived
--- metadata is stuck on the `weakenSpec`/`concat` wrapper chain (unfold-collection sees only
--- declarations in the original term). Needs a profiled fix in elaborate_circuit's normalizer.
+-- TODO(4.31 bump): this bridge fits the default heartbeat budget on 4.30 but exceeds it on
+-- 4.31 (toolchain reduction-perf regression: at death, diagnostics show ~600K unfoldings of
+-- Vector.toArray/Array.set/List.casesOn while normalizing the seven rounds of raw
+-- `(main input).output` set-chains). Identical sources are green on 4.30. Fix directions:
+-- store explicit outputs Keccak-style in the round-chain circuits instead of the raw
+-- `main.output` override, or upstream the whnf perf regression.
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
   elaborate_circuit_with {
     localLength _ := 5376
