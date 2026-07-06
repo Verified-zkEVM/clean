@@ -688,7 +688,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let signalBytes := n32 * 4
   let startSignal := 1 + finalVm.nextLocal / nw
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
-  let intLocalBase := 3 + numInputs
+  -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
+  let intLocalBase := 3 + numInputs * nw
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes intLocalBase
   let totalSignals := startSignal + numInt
@@ -710,14 +711,18 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   }
   -- Build getWitness body
   let gwInputLocals : List (String × ValType) :=
-    ((List.range numInputs).map fun i => (s!"$in_{i}", ValType.i64))
-  -- Input loads: read each input from signal memory, extend to i64, set input local
+    (List.range numInputs) >>= fun i =>
+      (List.range nw).map fun w => (s!"$in_{i}_{w}", ValType.i64)
+  -- Input loads: for each input i and limb w, read i32, extend to i64, set input local
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
-    [ i32.const (signalBase + (1 + i) * signalBytes), i32.load 0, i64.extend_i32_u,
-      local.set (3 + i) ]  -- $in_i at local index 3+i
-  -- Input push: push all input locals for $compute call
+    (List.range nw) >>= fun w =>
+      [ i32.const (signalBase + (1 + i) * signalBytes + w * 4),
+        i32.load 0, i64.extend_i32_u,
+        local.set (3 + i * nw + w) ]
+  -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
-    [ local.get (3 + i) ]
+    (List.range nw) >>= fun w =>
+      [ local.get (3 + i * nw + w) ]
   -- Build the getWitness function body
   let gwBody : List Instr :=
     [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
