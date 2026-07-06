@@ -105,15 +105,15 @@ def Instr.toString (i : Instr) (indent : ℕ := 0) : String :=
   | .localGet idx => s!"{pad}local.get {idx}"
   | .localSet idx => s!"{pad}local.set {idx}"
   | .localTee idx => s!"{pad}local.tee {idx}"
-  | .call name => s!"{pad}call ${name}"
+  | .call name => pad ++ "call " ++ name
   | .block label result body =>
     let resultStr := match result with | some t => s!" (result {ValType.toString t})" | none => ""
-    s!"{pad}block ${label}{resultStr}\n{bodyListToString body (indent+1)}\n{pad}end"
+    pad ++ "block $" ++ label ++ resultStr ++ "\n" ++ bodyListToString body (indent+1) ++ "\n" ++ pad ++ "end"
   | .loop label result body =>
     let resultStr := match result with | some t => s!" (result {ValType.toString t})" | none => ""
-    s!"{pad}loop ${label}{resultStr}\n{bodyListToString body (indent+1)}\n{pad}end"
-  | .br label => s!"{pad}br ${label}"
-  | .brIf label => s!"{pad}br_if ${label}"
+    pad ++ "loop $" ++ label ++ resultStr ++ "\n" ++ bodyListToString body (indent+1) ++ "\n" ++ pad ++ "end"
+  | .br label => pad ++ "br $" ++ label
+  | .brIf label => pad ++ "br_if $" ++ label
   | .ifElse result thenBody elseBody =>
     let resultStr := match result with | some t => s!" (result {ValType.toString t})" | none => ""
     let thenStr := bodyListToString thenBody (indent+1)
@@ -132,16 +132,22 @@ where
     String.intercalate "\n" (body.map fun instr => instr.toString indent)
 
 def Func.toString (f : Func) : String :=
-  let paramsStr := String.intercalate " " (f.params.map fun (n, t) => s!"(param ${n} {ValType.toString t})")
+  let paramItem (n : String) (t : ValType) : String :=
+    if n.isEmpty then s!"(param {ValType.toString t})"
+    else ("(param " ++ n ++ " " ++ ValType.toString t ++ ")")
+  let paramsStr := String.intercalate " " (f.params.map fun (n, t) => paramItem n t)
   let resultStr := match f.results with
     | [] => ""
     | [t] => s!" (result {ValType.toString t})"
     | ts => s!" (result {String.intercalate " " (ts.map ValType.toString)})"
-  let localsStr := String.intercalate " " (f.locals.map fun (n, t) => s!"(local ${n} {ValType.toString t})")
+  let localItem (n : String) (t : ValType) : String :=
+    if n.isEmpty then s!"(local {ValType.toString t})"
+    else ("(local " ++ n ++ " " ++ ValType.toString t ++ ")")
+  let localsStr := String.intercalate " " (f.locals.map fun (n, t) => localItem n t)
   let exportStr := match f.exportName with
     | some n => s!" (export \"{escapeStr n}\")" | none => ""
   let bodyStr := String.intercalate "\n" (f.body.map fun i => i.toString 2)
-  s!"  (func ${f.name}{exportStr} {paramsStr}{resultStr}\n    {localsStr}\n{bodyStr}\n  )"
+  ("  (func " ++ f.name) ++ exportStr ++ " " ++ paramsStr ++ resultStr ++ "\n    " ++ localsStr ++ "\n" ++ bodyStr ++ "\n  )"
 
 def Module.toString (m : Module) : String :=
   let memoryStr := s!"  (memory (export \"memory\") {m.memoryPages})"

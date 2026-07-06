@@ -46,32 +46,63 @@ def Builder.build (b : Builder) : String :=
 
 /-! ## Single-word field arithmetic (numWords=1) -/
 
+/-- Generate single-word field arithmetic as AST Func values. -/
+def genSingleWordArithAST (p : ℕ) : List Func :=
+  let pVal : ℕ := p
+  let pm2 : ℕ := p - 2
+  [
+    { name := "$fadd"
+      params := [("", .i64), ("", .i64)]
+      results := [.i64]
+      body := [.localGet 0, .localGet 1, .binop .i64 .add,
+               .const .i64 pVal, .binop .i64 .rem_u] }
+    ,
+    { name := "$fmul"
+      params := [("", .i64), ("", .i64)]
+      results := [.i64]
+      body := [.localGet 0, .localGet 1, .binop .i64 .mul,
+               .const .i64 pVal, .binop .i64 .rem_u] }
+    ,
+    { name := "$fsub"
+      params := [("", .i64), ("", .i64)]
+      results := [.i64]
+      locals := [("$d", .i64)]
+      body := [.localGet 0, .localGet 1, .binop .i64 .sub, .localTee 2,
+               .const .i64 0, .relop .i64 .lt_s,
+               .ifElse (some .i64)
+                 [.localGet 2, .const .i64 pVal, .binop .i64 .add]
+                 [.localGet 2],
+               .const .i64 pVal, .binop .i64 .rem_u] }
+    ,
+    { name := "$fpow"
+      params := [("", .i64), ("", .i64)]
+      results := [.i64]
+      locals := [("$r", .i64), ("$b", .i64), ("$e", .i64)]
+      body := [.const .i64 1, .localSet 2,
+               .localGet 0, .localSet 3,
+               .localGet 1, .localSet 4,
+               .block "done" none [
+                 .loop "loop" none [
+                   .localGet 4, .relop .i64 .eqz, .brIf "done",
+                   .localGet 4, .const .i64 1, .binop .i64 .and,
+                   .relop .i64 .eqz,
+                   .ifElse none [] [.localGet 2, .localGet 3, .call "$fmul", .localSet 2],
+                   .localGet 3, .localGet 3, .call "$fmul", .localSet 3,
+                   .localGet 4, .const .i64 1, .binop .i64 .shr_u, .localSet 4,
+                   .br "loop"
+                 ]
+               ],
+               .localGet 2] }
+    ,
+    { name := "$finv"
+      params := [("", .i64)]
+      results := [.i64]
+      body := [.localGet 0, .const .i64 pm2, .call "$fpow"] }
+  ]
+
 def genSingleWordArith (p : ℕ) : String :=
-  let ps := toString p
-  let pm2 := toString (p - 2)
-  String.intercalate "\n" [
-    s!"  ;; Field arithmetic modulo {ps} (single-word)",
-    s!"  (func $fadd (param i64) (param i64) (result i64)",
-    s!"    local.get 0 local.get 1 i64.add i64.const {ps} i64.rem_u)",
-    s!"  (func $fmul (param i64) (param i64) (result i64)",
-    s!"    local.get 0 local.get 1 i64.mul i64.const {ps} i64.rem_u)",
-    s!"  (func $fsub (param i64) (param i64) (result i64)",
-    s!"    (local $d i64) local.get 0 local.get 1 i64.sub local.tee $d",
-    s!"    i64.const 0 i64.lt_s",
-    s!"    (if (result i64) (then local.get $d i64.const {ps} i64.add) (else local.get $d))",
-    s!"    i64.const {ps} i64.rem_u)",
-    s!"  (func $fpow (param i64) (param i64) (result i64)",
-    s!"    (local $r i64) (local $b i64) (local $e i64)",
-    s!"    i64.const 1 local.set $r  local.get 0 local.set $b  local.get 1 local.set $e",
-    s!"    (block $done (loop $loop",
-    s!"      local.get $e i64.eqz br_if $done",
-    s!"      local.get $e i64.const 1 i64.and i64.eqz",
-    s!"      (if (then) (else local.get $r local.get $b call $fmul local.set $r))",
-    s!"      local.get $b local.get $b call $fmul local.set $b",
-    s!"      local.get $e i64.const 1 i64.shr_u local.set $e br $loop))",
-    s!"    local.get $r)",
-    s!"  (func $finv (param i64) (result i64)",
-    s!"    local.get 0 i64.const {pm2} call $fpow)" ]
+  String.intercalate "\n" ([s!"  ;; Field arithmetic modulo {toString p} (single-word)"]
+    ++ (genSingleWordArithAST p).map Func.toString)
 
 /-! ## Multi-word field arithmetic (numWords > 1) -/
 

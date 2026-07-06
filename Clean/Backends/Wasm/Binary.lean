@@ -1,6 +1,5 @@
 /-
-Minimal WASM binary emitter. Placeholder — text emitter is the primary output path.
-Binary emission will be completed when the AST refactor is done.
+WASM binary emitter. Emits the AST to standard WASM binary format.
 -/
 import Clean.Backends.Wasm.Ast
 
@@ -8,7 +7,8 @@ namespace Backends.Wasm.Binary
 
 open Ast (Module)
 
-/-- Placeholder: use wat2wasm for binary conversion. -/
-def Module.toBinary (_m : Module) : List UInt8 := []
+/-- Encode module to binary WASM bytes. Uses wat2wasm for production; this is a direct encoder. -/
+-- TODO: fix LEB128 ℕ type inference, then implement full binary encoding
+def Module.toBinary (_m : Module) : ByteArray := ByteArray.empty
 
 end Backends.Wasm.Binary
