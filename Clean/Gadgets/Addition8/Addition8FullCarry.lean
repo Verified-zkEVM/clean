@@ -87,7 +87,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, explicit_provable_type, h_inputs, Assumptions, main, ByteTable] at *
+    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
@@ -126,9 +126,8 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, explicit_provable_type, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq,
-      Witgen.WitgenIR.eval_ofFExpr, Witgen.WitgenIR.eval_ofFExprs_singleton]
+    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
+      Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
 end Gadgets.Addition8FullCarry

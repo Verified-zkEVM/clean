@@ -327,6 +327,7 @@ theorem FExpr.eval_getElem [FiniteField F] {n : ℕ} (ctx : Ctx F)
 def WitgenIR.ofExprs {n : ℕ} (es : Vector (Expression F) n) : WitgenIR F n :=
   .ir [] (.lit (es.map .expr))
 
+@[circuit_norm]
 theorem WitgenIR.eval_ofFExpr [FiniteField F] (e : FExpr F) (env : ProverEnvironment F) :
     (ofFExpr e).eval env = #v[e.eval { env }] := by
   ext i hi
@@ -339,9 +340,6 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
-theorem WitgenIR.eval_ofFExprs_singleton [FiniteField F] (e : FExpr F) (env : ProverEnvironment F) :
-    (ofFExprs #v[e]).eval env = #v[e.eval { env }] := by
-  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 attribute [circuit_norm] Array.getElem?_singleton
 
@@ -383,7 +381,7 @@ theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F
 @[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
-    ((ofFExpr e).eval env)[i] = e.eval { env := env } := by
+    ((ofFExpr e).eval env)[i] = e.eval { env } := by
   rcases Nat.lt_one_iff.mp hi
   simp [ofFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
@@ -391,8 +389,14 @@ theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
 @[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
-    ((ofFExprs es).eval env)[i] = es[i].eval { env := env } := by
+    ((ofFExprs es).eval env)[i] = es[i].eval { env } := by
   simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
+
+@[circuit_norm]
+theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+    (x : FExpr F) (env : ProverEnvironment F) :
+    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
+  with_unfolding_all rfl
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
