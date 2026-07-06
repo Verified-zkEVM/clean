@@ -4,12 +4,30 @@ WASM WAT Compiler: WitgenIR → WAT text
 import Clean.Circuit.WitnessIR
 import Clean.Circuit.Expression
 import Clean.Circuit.Operations
+import Clean.Backends.Wasm.Ast
 
 namespace Backends.Wasm
 
 open Witgen (FExpr NExpr BExpr VExpr Step WitgenIR)
+open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
 variable {F : Type} [FiniteField F]
+
+/-! ## Instruction builder (AST-based) -/
+
+structure CodeBuilder where
+  instrs : List Instr := []
+
+def CodeBuilder.push (i : Instr) (cb : CodeBuilder) : CodeBuilder :=
+  { cb with instrs := i :: cb.instrs }
+
+def CodeBuilder.pushList (is : List Instr) (cb : CodeBuilder) : CodeBuilder :=
+  { cb with instrs := is.reverse ++ cb.instrs }
+
+def CodeBuilder.build (cb : CodeBuilder) : List Instr :=
+  cb.instrs.reverse
+
+/-! ## String-based builder (legacy, being replaced) -/
 
 structure Builder where
   lines : List String := []
@@ -105,13 +123,17 @@ def genLimbMulAccum (N i j : ℕ) : List String :=
     s!"    ;; c[{k}] += a[{i}] * b[{j}]",
     s!"    local.get $a{i}  local.get $b{j}  call $mul64x64",
     s!"    local.set $hi  local.set $lo",
-    s!"    ;; c[{k}] += lo",
+    -- c[k] += lo, carry1 = overflow of c[k] + lo
     s!"    local.get $c{k}  local.get $lo  i64.add  local.tee $c{k}",
     s!"    local.get $lo  i64.lt_u  i64.extend_i32_u  local.set $carry",
-    s!"    ;; c[{k+1}] += hi + carry",
-    s!"    local.get $hi  local.get $carry  i64.add  local.set $sum",
+    -- sum = hi + carry (detect overflow of hi+carry)
+    s!"    local.get $hi  local.get $carry  i64.add  local.tee $sum",
+    s!"    local.get $hi  i64.lt_u  i64.extend_i32_u  local.set $carry",
+    -- c[k+1] += sum, carry2 = overflow of c[k+1] + sum
     s!"    local.get $c{k+1}  local.get $sum  i64.add  local.tee $c{k+1}",
-    s!"    local.get $sum  i64.lt_u  i64.extend_i32_u  local.set $carry"
+    s!"    local.get $sum  i64.lt_u  i64.extend_i32_u",
+    -- combine carries: carry1_from_hi_plus_carry | carry1_from_c_plus_sum
+    s!"    local.get $carry  i64.or  local.set $carry"
   ]
   -- Propagate carry through remaining limbs
   let propagate : List String :=
