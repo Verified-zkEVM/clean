@@ -237,8 +237,8 @@ def genFmulAST (p numWords : ℕ) : Func :=
   let mainSB := genSchoolbook N 0 N cBase
   -- Reduction schoolbook: c_hi(cBase+N) × r(rBase) → t(tBase)
   let redSB := genSchoolbook N (cBase+N) rBase tBase
-  -- Add t_lo to c_lo (addRed)
-  let addRed : List Instr :=
+  -- Add t_lo to c_lo (addRed low)
+  let addRedLo : List Instr :=
     [ local.get (cBase+0), local.get (tBase+0), i64.add, local.set (cBase+0),
       local.get (cBase+0), local.get (tBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
     ++ ((List.range (N-1)) >>= fun i =>
@@ -246,6 +246,10 @@ def genFmulAST (p numWords : ℕ) : Func :=
       [ local.get (cBase+idx), local.get (tBase+idx), i64.add, local.get carryIdx, i64.add, local.tee (cBase+idx),
         local.get (tBase+idx), i64.lt_u, i64.extend_i32_u,
         local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ])
+  -- Set c_hi = t_hi (replacement, not addition — the reduced value is c_lo_new + t_hi * 2^256)
+  let setCHi : List Instr :=
+    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ])
+  let addRed : List Instr := addRedLo ++ setCHi
   -- Carry elimination loop
   let carryLoop : List Instr :=
     [ block "carry_done" [
@@ -260,37 +264,6 @@ def genFmulAST (p numWords : ℕ) : Func :=
               local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ])
           ++ [ br "carry_loop" ]
         ) ] ]
-  -- Repeated conditional subtraction: loop until c < p
-  -- Iterative reduction: copy t_hi to c_hi, recompute schoolbook, add to c_lo, repeat
-  let reduceOnePass : List Instr :=
-    -- Copy t_hi (t[N..2N-1]) to c_hi (c[N..2N-1])
-    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ]) ++
-    -- Zero t
-    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
-    -- Schoolbook: c_hi * R → t
-    ((List.range N) >>= fun i => (List.range N) >>= fun j =>
-      genSchoolbookAccum N i j (cBase+N) rBase tBase) ++
-    -- Add t_lo to c_lo
-    [ local.get (cBase+0), local.get (tBase+0), i64.add, local.set (cBase+0),
-      local.get (cBase+0), local.get (tBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
-    ++ ((List.range (N-1)) >>= fun i =>
-      let idx := i + 1
-      [ local.get (cBase+idx), local.get (tBase+idx), i64.add, local.get carryIdx, i64.add, local.set (cBase+idx),
-        local.get (cBase+idx), local.get (tBase+idx), i64.lt_u, i64.extend_i32_u,
-        local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ]) ++
-    -- Carry loop
-    [ block "rc_done" [ loop "rc_loop" (
-        [ local.get carryIdx, i64.eqz, br_if "rc_done", i64.const 0, local.set carryIdx,
-          local.get (cBase+0), local.get (rBase+0), i64.add, local.tee (cBase+0),
-          local.get (cBase+0), local.get (rBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
-        ++ ((List.range (N-1)) >>= fun i =>
-          let idx := i + 1
-          [ local.get (cBase+idx), local.get (rBase+idx), i64.add, local.get carryIdx, i64.add, local.tee (cBase+idx),
-            local.get (cBase+idx), local.get (rBase+idx), i64.lt_u, i64.extend_i32_u,
-            local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ])
-        ++ [ br "rc_loop" ]
-    ) ] ]
-  let iterReductions : List Instr := reduceOnePass ++ reduceOnePass ++ reduceOnePass
   -- Conditional subtraction: c - p → t, if no borrow use t (up to 3 passes for safety)
   let subOne : List Instr :=
     [ local.get (cBase+0), local.get (pBase+0), i64.sub, local.set (tBase+0),
@@ -313,11 +286,7 @@ def genFmulAST (p numWords : ℕ) : Func :=
   -- Result: return c[0..N-1]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+i) ]
   -- Handle t_hi from Barrett: copy to c_hi, zero t, run redSB+addRed again
-  let reduceT_Hi : List Instr :=
-    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ]) ++
-    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
-    redSB ++ addRed ++ carryLoop
-  -- Assemble
+  let onePass := redSB ++ addRed ++ carryLoop
   { name := "$fmul"
     params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64)) ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
     results := List.replicate N ValType.i64
@@ -327,9 +296,7 @@ def genFmulAST (p numWords : ℕ) : Func :=
       ++ ((List.range limbs2N).map fun i => (s!"$t{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$r{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$p{i}", ValType.i64))
-    body := initAll ++ mainSB ++ redSB ++ addRed ++ carryLoop ++
-            reduceT_Hi ++ reduceT_Hi ++ reduceT_Hi ++ reduceT_Hi ++
-            condSub ++ rets }
+    body := initAll ++ mainSB ++ onePass ++ onePass ++ onePass ++ onePass ++ condSub ++ rets }
 
 def genFmul (p numWords : ℕ) : String := Ast.Func.toString (genFmulAST p numWords)
 
