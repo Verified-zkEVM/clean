@@ -396,6 +396,9 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- proof, which makes the proof much more brittle and expensive. See https://github.com/Verified-zkEVM/clean/issues/394
 -- that said -- full unfolding is also kind of bad for outputs here because it's a long chain of `Round.main ...`
 -- that's why we override the output.
+-- TODO(4.31 bump): the metadata bridge below exceeds isDefEq/whnf heartbeats; the derived
+-- metadata is stuck on the `weakenSpec`/`concat` wrapper chain (unfold-collection sees only
+-- declarations in the original term). Needs a profiled fix in elaborate_circuit's normalizer.
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
   elaborate_circuit_with {
     localLength _ := 5376
@@ -433,13 +436,15 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
+  obtain ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩ := input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector
+    ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩
   simp only [Assumptions] at h_normalized
   simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env (cv_var[i]'(by omega))).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
