@@ -255,7 +255,7 @@ the `(0, 0)` sentinel maps to `0` (i.e. `(0, 0)` is genuinely off the curve). -/
 
 /-- The Mathlib point of a representable point: `𝒪 ↦ 0`, on-curve `(x, y) ↦ some x y`. -/
 noncomputable def toPt (a b : F) [(toW a b).IsElliptic] (p : F × F) : Point (toW a b) :=
-  if h : OnCurve a b p then .some (nonsingular_toW h) else 0
+  if h : OnCurve a b p then .some p.1 p.2 (nonsingular_toW h) else 0
 
 /-- Coordinate left-inverse of `toPt` (`0 ↦ 𝒪`, `some x y _ ↦ (x, y)`). -/
 def ofPt {a b : F} (P : Point (toW a b)) : F × F :=
@@ -264,7 +264,7 @@ def ofPt {a b : F} (P : Point (toW a b)) : F × F :=
   | @Point.some _ _ _ x y _ => (x, y)
 
 lemma toPt_some {a b : F} [(toW a b).IsElliptic] {x y : F} (h : OnCurve a b (x, y)) :
-    toPt a b (x, y) = .some (nonsingular_toW h) := dif_pos h
+    toPt a b (x, y) = .some x y (nonsingular_toW h) := dif_pos h
 
 lemma toPt_zero {a b : F} (hb : b ≠ 0) [(toW a b).IsElliptic] : toPt a b (0, 0) = 0 :=
   dif_neg (not_onCurve_zero hb)
