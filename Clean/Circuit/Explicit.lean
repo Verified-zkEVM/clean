@@ -754,7 +754,9 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
     try unfold_explicit_circuits_head
-    try simp only
+    -- dsimp, not simp: a propositional rewrite here wraps the inferred instance in
+    -- `Eq.mpr`, which blocks all downstream projection reduction (parametric circuits)
+    try dsimp only
     apply ExplicitCircuits.fromSingle
     intro a
     infer_explicit_circuit
