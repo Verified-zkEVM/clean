@@ -271,7 +271,7 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
     | succ i =>
       simp only [eraseIdx_cons_succ, countP_cons, getElem_cons_succ]
       rw [← ih (Nat.lt_of_succ_lt_succ hi)]
-      ring
+      ring_nf
 
 /--
 Assume you have a list of channel interactions that is made up of pairs (-1, pull_i), (1, push_i),

@@ -39,14 +39,14 @@ def circuit : FormalCircuit (F p) field field where
 
   soundness := by
     circuit_proof_start
-    simp only [id_eq, h_holds]
+    simp only [h_holds]
     split_ifs with h_ifs
     . simp only [h_ifs, zero_mul, neg_zero, zero_add]
     . rw [neg_add_eq_zero]
       have h1 := h_holds.left
       have h2 := h_holds.right
       rw [h1] at h2
-      simp only [id_eq, mul_eq_zero] at h2
+      simp only [mul_eq_zero] at h2
       cases h2
       case neg.inl hl => contradiction
       case neg.inr hr =>
@@ -58,7 +58,7 @@ def circuit : FormalCircuit (F p) field field where
     cases h_env with
     | intro left right =>
       simp only [left] at right
-      simp only [id_eq, right, left, mul_ite, mul_zero, mul_eq_zero, true_and]
+      simp only [right, left, mul_ite, mul_zero, mul_eq_zero, true_and]
       split_ifs <;> aesop
 
 end IsZero
@@ -93,7 +93,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   soundness := by
     circuit_proof_start [IsZero.circuit]
     rw [← h_input]
-    simp only [id_eq]
+    simp only
 
     have h1 : Expression.eval env input_var.1 = input.1 := by
       rw [← h_input]
@@ -149,7 +149,7 @@ def circuit : FormalAssertion (F p) Inputs where
   soundness := by
     circuit_proof_start [IsZero.circuit]
     intro h_ie
-    simp_all only [one_ne_zero, or_true, id_eq, one_mul]
+    simp_all only [one_ne_zero, or_true, one_mul]
     cases h_input with
     | intro h_enabled h_inp =>
       rw [← h_inp]
@@ -163,7 +163,6 @@ def circuit : FormalAssertion (F p) Inputs where
 
   completeness := by
     circuit_proof_start
-    simp_all only [id_eq]
     constructor
     trivial
     rw [mul_eq_zero, sub_eq_zero]
@@ -174,7 +173,7 @@ def circuit : FormalAssertion (F p) Inputs where
       have h_spec := h_spec.symm
       rw [← sub_eq_zero, ← h_input.right] at h_spec
       rw [h_env]
-      simp only [id_eq, h_spec, ↓reduceIte]
+      simp only [h_spec, ↓reduceIte]
       trivial
 
 end ForceEqualIfEnabled
@@ -215,7 +214,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
 
-    simp only [hx_eval, hy_eval, id_eq] at h_holds
+    simp only [hx_eval, hy_eval] at h_holds
 
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
@@ -233,7 +232,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     by_cases hlt : ZMod.val input.1 < ZMod.val input.2
 
     -- CASE input.1 < input.2
-    simp only [id_eq, hlt, ↓reduceIte]
+    simp only [hlt, ↓reduceIte]
 
     have hdiff_lt : ZMod.val (input.1 + 2^n - input.2) < 2^n := by
       rw [ZMod.val_sub]
@@ -277,7 +276,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     simp only [sub_zero]
 
     -- CASE input.1 >= input.2
-    simp only [id_eq, hlt, ↓reduceIte]
+    simp only [hlt, ↓reduceIte]
     have hdiff_ge : ZMod.val (input.1 + 2^n - input.2) >= 2^n := by
       rw [ZMod.val_sub]
       · rw [ZMod.val_add_of_lt]
@@ -340,7 +339,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simpa using congrArg Prod.fst h_input
     have hy_eval : Expression.eval env input_var.2 = input.2 := by
       simpa using congrArg Prod.snd h_input
-    simp only [hx_eval, hy_eval, Prod.mk.eta, id_eq] at *
+    simp only [hx_eval, hy_eval, Prod.mk.eta] at *
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by
       have : 2^n ≤ 2^(n+1) := by gcongr; repeat linarith

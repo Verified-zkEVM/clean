@@ -155,13 +155,11 @@ lemma value_of_decomposedNat_of_small (x : ℕ) :
   have h4 := Nat.div_add_mod (x / 256 ^ 3) 256
   omega
 
+omit p_large_enough in
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt32, decomposeNat]
-  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-    have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-    rw [FieldUtils.val_lt_p]
-    assumption
-    linarith [p_large_enough.elim]
+  have h (y : ℕ) : y % 256 % p < 256 :=
+    lt_of_le_of_lt (Nat.mod_le _ _) (Nat.mod_lt _ (by norm_num))
   simp [h]
 
 theorem value_fromUInt32 (x : UInt32) : value (fromUInt32 (p:=p) x) = x.toNat := by
@@ -174,13 +172,12 @@ def fromByte (x : Fin 256) : U32 (F p) :=
 
 lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
   simp [value, fromByte]
-  apply FieldUtils.val_lt_p x
-  linarith [x.is_lt, p_large_enough.elim]
+  exact Nat.mod_eq_of_lt (by linarith [x.is_lt, p_large_enough.elim])
 
 lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
-  rw [FieldUtils.val_lt_p x]
-  repeat linarith [x.is_lt, p_large_enough.elim]
+  rw [Nat.mod_eq_of_lt (by linarith [x.is_lt, p_large_enough.elim])]
+  exact x.is_lt
 
 omit p_large_enough in
 lemma value_injective_on_normalized (x y : U32 (F p))
@@ -251,8 +248,9 @@ lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
     norm_num)
   constructor
   · intro h_val_zero
-    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
-    specialize this (by trivial)
+    -- `zero_mul, add_zero` reduce the value equation before `forall_const` can attempt a
+    -- `Nonempty` synthesis on the unreduced numeral Prop (deep defeq recursion)
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero, zero_mul, add_zero] at this
     assumption
   · intro h_zero
     simp only [h_zero, circuit_norm, ZMod.val_zero]

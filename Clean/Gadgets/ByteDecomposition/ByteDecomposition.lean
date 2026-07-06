@@ -42,7 +42,7 @@ instance elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs (ma
 
 theorem soundness (offset : Fin 8) : Soundness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
-  simp only [id_eq, circuit_norm] at h_input
+  simp only [circuit_norm] at h_input
   simp only [circuit_norm, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 

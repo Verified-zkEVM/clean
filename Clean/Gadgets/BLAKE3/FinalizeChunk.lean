@@ -56,7 +56,7 @@ lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : BLAKE3Buffe
   simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
   and_intros <;> assumption
 
-omit [Fact (Nat.Prime p)] p_large_enough in
+omit p_large_enough in
 lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
     (U32.mk buffer_len 0 0 0 : U32 (F p)).Normalized := by
   simp [U32.Normalized, ZMod.val_zero]
@@ -128,7 +128,17 @@ private lemma eval_bytesToWords (env : Environment (F p))
   rw [Vector.ext_iff]
   intro i hi
   simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
-  rfl
+
+omit p_large_enough in
+private lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
+    (h : ∀ i : Fin 16, (eval env v : BLAKE3State (F p))[i.val].Normalized) (i : ℕ) (h_i : i < 8) :
+    ((eval env (v.take 8) : ProvableVector U32 8 (F p))[i]'(by omega)).Normalized := by
+  have h_eq : (eval env (v.take 8) : ProvableVector U32 8 (F p)) =
+      (eval env v : BLAKE3State (F p)).take 8 := eval_vector_take env v 8
+  rw [h_eq]
+  show (((eval env v : BLAKE3State (F p)).take 8)[i]'(by omega)).Normalized
+  simp only [Vector.getElem_take]
+  exact h ⟨i, by omega⟩
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
@@ -138,7 +148,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     ApplyRounds.Spec, ApplyRounds.Assumptions,
     FinalStateUpdate.circuit, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
-  simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_true, true_and,
+  simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, mul_one, Nat.ofNat_pos, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
   specialize h_Or32_1 (by
     split <;> simp [ZMod.val_one])
@@ -147,7 +157,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
   specialize h_Or32_2 (by simp [val_two])
   specialize h_Compress (by simp_all)
-    (by apply bytesToWords_normalized; simp_all)
+    (by apply bytesToWords_normalized; simp_all [circuit_norm, eval_vector])
     (by linarith)
     h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
@@ -155,13 +165,13 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
   rw [← eval_vector] at h_compress'
   simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
-    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
+    List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
     Vector.map_map] at h_compress'
   rw [← Vector.take_eq_extract] at h_compress'
   apply And.intro
   · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
-    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
-    rw [h_compress']
+    List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
+    refine h_compress'.trans ?_
     simp only [finalizeChunk]
     apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
     have : Vector.map (U32.value ∘ eval env) (bytesToWords input_var_buffer_data) =
@@ -169,7 +179,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
       rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
-      simp only [h_input]
+      have h_buf : (eval env input_var_buffer_data : BLAKE3Buffer (F p)) = input_buffer_data := by
+        simp only [circuit_norm]
+        exact h_input.2.2.1
+      rw [h_buf]
       simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
       ext i hi
       simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
@@ -189,17 +202,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       simp only [startFlag, chunkStart]
       split <;> simp_all [circuit_norm]
   · rintro ⟨i, h_i⟩
-    simp only [eval_vector]
-    rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
-    conv =>
-      arg 1
-      arg 2
-      change (Vector.take _ 8)[i]'(by omega)
-      rw [Vector.getElem_take]
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
-    specialize h_Compress_Normalized ⟨ i, by omega ⟩
-    simp only [getElem_eval_vector, h_Compress_Normalized]
+    exact eval_take_normalized env _ h_Compress_Normalized i h_i
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
@@ -259,7 +264,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   clear h_or h_env
   constructor
   · apply bytesToWords_normalized
-    simp_all
+    simp_all [circuit_norm, eval_vector]
   · constructor
     · norm_num
     · constructor

@@ -35,7 +35,7 @@ def inputLinearSub (n : ℕ) (inp : BinSubInput n (Expression (F p))) : Expressi
   Fin.foldl n (fun lin k => lin + inp[0][k] * (2^k.val : F p) - (inp[1][k] * (2^k.val : F p))) (2^n : F p)
 
 -- Lemma: evaluating `inputLinearSub` corresponds to the circuit's desired output
-lemma inputLinearSub_eval_eq_sub {n : ℕ} [hn : NeZero n] (env : Environment (F p))
+lemma inputLinearSub_eval_eq_sub {n : ℕ} [NeZero n] (env : Environment (F p))
   (input : Var (BinSubInput n) (F p)) (input_val : BinSubInput n (F p)) (h_eval : eval env input = input_val) :
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
@@ -319,7 +319,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;
       any_goals exact fun i => h_out_bool _ i.2;
-      · simp +zetaDelta only [id_eq, mul_eq_zero, Nat.cast_ofNat] at *;
+      · simp +zetaDelta only [mul_eq_zero, Nat.cast_ofNat] at *;
         -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
         have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
         convert h_fieldFromBits_eq_foldl _;

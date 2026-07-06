@@ -164,8 +164,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           rw [ih]
           simp only [circuit_norm]
       simp only [Vector.sum, Vector.toArray_map]
-      conv_lhs => rw [← Array.sum_eq_sum_toList, Array.toList_map]
-      conv_rhs => rw [← Array.sum_eq_sum_toList]
+      conv_lhs => rw [← Array.sum_toList, Array.toList_map]
+      conv_rhs => rw [← Array.sum_toList]
       exact h_list_sum_eval _
 
     have h_sum_encodes' : sout.val.testBit 127 = (input_val > c) := by
@@ -252,8 +252,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           rw [ih]
           simp only [circuit_norm]
       simp only [Vector.sum, Vector.toArray_map]
-      conv_lhs => rw [← Array.sum_eq_sum_toList, Array.toList_map]
-      conv_rhs => rw [← Array.sum_eq_sum_toList]
+      conv_lhs => rw [← Array.sum_toList, Array.toList_map]
+      conv_rhs => rw [← Array.sum_toList]
       exact h_list_sum_eval _
 
     have h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128 := by

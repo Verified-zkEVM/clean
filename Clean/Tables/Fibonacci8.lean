@@ -92,6 +92,9 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
 
+-- TODO(4.30 bump): the new isDefEq transparency rules make the heavyweight table
+-- elaboration (offset_consistent autoParam, windowEnv defeq) time out; scoped legacy mode.
+set_option backward.isDefEq.respectTransparency false in
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
