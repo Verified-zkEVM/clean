@@ -609,7 +609,7 @@ def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (Fla
       buildAST (idx + 1) (computeInstrs ++ instrs) ((localName, .i64) :: locals) rest
     | _ :: rest => buildAST idx instrs locals rest
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
-  (numInt, locals.reverse, instrs.reverse)
+  (numInt, locals.reverse, instrs)
 
 /-- compile let-steps (letF/letN) to instructions. -/
 def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × ℕ × List Instr :=
