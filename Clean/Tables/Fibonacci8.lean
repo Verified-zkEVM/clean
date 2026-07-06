@@ -88,12 +88,13 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
 
   have hx : first_row.x = env.get 0 := by rfl
   have hy : first_row.y = env.get 1 := by rfl
-  replace boundary2 : env.get 1 = 1 := calc
-    _ = env.get 1 + (1 + -env.get 1) := by rw [boundary2]; ring
-    _ = 1 := by ring
+  replace boundary2 : env.get 1 = 1 := (sub_eq_zero.mp boundary2).symm
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
 
+-- TODO(4.30 bump): the new isDefEq transparency rules make the heavyweight table
+-- elaboration (offset_consistent autoParam, windowEnv defeq) time out; scoped legacy mode.
+set_option backward.isDefEq.respectTransparency false in
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
@@ -154,7 +155,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       clear env_simp
 
       have ⟨eq_holds, add_holds⟩ := ConstraintsHold
-      rw [add_neg_eq_zero] at eq_holds
+      rw [sub_eq_zero] at eq_holds
 
       -- and finally now we prove the actual relations
 

@@ -19,7 +19,6 @@ Witnesses 32 output bits.
     Per bit: ch = g + e·(f − g), which equals f when e = 1 and g when e = 0.
     One R1CS constraint per bit: e·(f − g) = ch − g. -/
 def ch32 (e f g : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
-  -- TODO WITGENIR
   let z ← witnessVector 32 (.range _ fun i => g[i] + e[i] * (f[i] - g[i]))
   Circuit.forEach (Vector.finRange 32) fun i =>
     assertZero (z[i] - g[i] - e[i] * (f[i] - g[i]))
@@ -75,7 +74,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
     · simp only [hk, ite_true]
       have ih' := ih (f ∘ Fin.castSucc) (fun i => hf _) ⟨k.val, hk⟩
       simp only [Function.comp] at ih'; rw [ih']; congr 1
-    · push_neg at hk
+    · push Not at hk
       have hkeq : k.val = m := Nat.le_antisymm (Nat.lt_succ_iff.mp k.isLt) hk
       simp only [hkeq, lt_irrefl, ite_false, Nat.sub_self]
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
@@ -113,7 +112,7 @@ private lemma ch_finsum_eq (e f g z : Fin 32 → ℕ)
     rw [h_eq ⟨j, hj⟩]
     rcases he ⟨j, hj⟩ with hej|hej <;> rcases hf ⟨j, hj⟩ with hfj|hfj <;>
         rcases hg ⟨j, hj⟩ with hgj|hgj <;> simp [hej, hfj, hgj]
-  · push_neg at hj
+  · push Not at hj
     have pow_le : 2^32 ≤ 2^j := Nat.pow_le_pow_right (by norm_num) hj
     have le1 : ∀ x : ℕ, x = 0 ∨ x = 1 → x ≤ 1 := fun x h => by rcases h with h|h <;> simp [h]
     have hzS := sum_bool_lt_two_pow 32 z (fun i => le1 _ (hz i))

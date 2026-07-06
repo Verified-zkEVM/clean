@@ -88,7 +88,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
     · simp only [hk, ite_true]
       have ih' := ih (f ∘ Fin.castSucc) (fun i => hf _) ⟨k.val, hk⟩
       simp only [Function.comp] at ih'; rw [ih']; congr 1
-    · push_neg at hk
+    · push Not at hk
       have hkeq : k.val = m := Nat.le_antisymm (Nat.lt_succ_iff.mp k.isLt) hk
       simp only [hkeq, lt_irrefl, ite_false, Nat.sub_self]
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
@@ -133,7 +133,7 @@ private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
         testBit_binary_sum n _ hmaj ⟨j, hj⟩]
     rcases hf ⟨j, hj⟩ with hfi | hfi <;> rcases hg ⟨j, hj⟩ with hgi | hgi <;>
       rcases hk ⟨j, hj⟩ with hki | hki <;> simp [hfi, hgi, hki]
-  · push_neg at hj
+  · push Not at hj
     have pow_le : 2^n ≤ 2^j := Nat.pow_le_pow_right (by norm_num) hj
     have hfS := sum_bool_lt_two_pow n f (fun i => by rcases hf i with hx | hx <;> simp [hx])
     have hgS := sum_bool_lt_two_pow n g (fun i => by rcases hg i with hx | hx <;> simp [hx])
@@ -221,7 +221,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_t : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
     intro i
     have := h_holds_t i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp (by rw [sub_eq_add_neg]; exact this)
+    exact sub_eq_zero.mp this
   -- z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
   have h_z : ∀ i : Fin 32, env.get (i₀ + 32 + i.val) =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by

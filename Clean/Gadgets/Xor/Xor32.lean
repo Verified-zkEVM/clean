@@ -74,11 +74,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 
+omit [Fact (Nat.Prime p)] in
 lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-  (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
-  apply FieldUtils.val_lt_p
+    (x.val ^^^ y.val) % p = x.val ^^^ y.val := by
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
-  linarith [p_large_enough.elim]
+  exact Nat.mod_eq_of_lt (by linarith [p_large_enough.elim])
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env input_var h_env input h_input as
@@ -91,9 +91,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorTable, Fin.forall_iff] at h_env ⊢
-  simp only [circuit_norm, explicit_provable_type] at h_env ⊢
-  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa [circuit_norm, h_input] using h_env 0
+  simp only [h_input, circuit_norm, main, ByteXorTable] at h_env ⊢
+  simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where

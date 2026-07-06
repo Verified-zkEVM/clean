@@ -25,11 +25,6 @@ lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m]
   rw [←Vector.toArray_mapM, Functor.map_map]
   congr
 
-lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : β → α → m β) (init : β) :
-    xs.foldlM body init = xs.toList.foldlM body init := by
-  rw [Vector.foldlM_mk, List.foldlM_toArray]
-  congr
-
 namespace Circuit
 variable {prop : Condition F}
 
@@ -37,7 +32,7 @@ lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_ : Cons
    (circuit a).localLength n = (circuit default).localLength 0 := by
   simp only [ConstantLength.localLength_eq]
 
-def ConstantLength.fromConstantLength' [Inhabited β] (body : β × Fin m → Circuit F β)
+instance ConstantLength.fromConstantLength' [Inhabited β] (body : β × Fin m → Circuit F β)
     (h : ∀ (acc : β) (i i' : Fin m) n,
       (body (acc, i)).localLength n = (body (default, i')).localLength 0) :
     ConstantLength body where
@@ -163,7 +158,11 @@ variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantL
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
   induction xs using Vector.inductPush
   case nil =>
-    rw [Vector.mapM_mk_empty, pure_localLength_eq, zero_mul]
+    rw [zero_mul]
+    apply Eq.trans
+    · apply congrArg (fun c : Circuit F (Vector β 0) => c.localLength n)
+      exact Vector.mapM_mk_empty
+    exact pure_localLength_eq #v[] n
   case push xs x ih =>
     rw [Vector.mapM_push, bind_localLength_eq, bind_localLength_eq, pure_localLength_eq, ih, constant.localLength_eq]
     ring
@@ -201,7 +200,12 @@ lemma mapM_cons (xs : Vector α n) (body : α → Circuit F β) (x : α) :
 theorem operations_eq : (xs.mapM circuit).operations n =
     (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.localLength)).flatten := by
   induction xs using Vector.induct generalizing n
-  case nil => simp [pure_operations_eq]
+  case nil =>
+    rw [List.ofFn_zero, List.flatten_nil]
+    apply Eq.trans
+    · apply congrArg (fun c : Circuit F (Vector β 0) => c.operations n)
+      exact Vector.mapM_mk_empty
+    exact pure_operations_eq #v[] n
   case cons x xs ih =>
     rw [mapM_cons, bind_operations_eq, bind_operations_eq, pure_operations_eq, ih,
       constant.localLength_eq, List.append_nil, ofFn_flatten_cons]
@@ -243,8 +247,8 @@ lemma foldlM_cons (x : α) :
   (Vector.listCons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
-  rw [Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
-  simp only [←Vector.foldlM_toList]
+  rw [← Vector.foldlM_toList, Vector.listCons, Vector.toList_mk, List.foldlM_cons]
+  simp only [Vector.foldlM_toList]
 
 theorem localLength_eq :
     (xs.foldlM circuit init).localLength n = m * constant.localLength := by
@@ -1206,7 +1210,7 @@ instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       rw [foldl]
       cases xs with
       | mk toArray hsize =>
-        simp [Vector.foldlM_toList] at hsize ⊢
+        simp at hsize ⊢
         cases toArray
         simp_all
         rfl

@@ -173,7 +173,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     circuit_proof_start [FibonacciChannel, Add8Channel]
     set z := env.get i₀
     obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
-    rw [mul_eq_zero, add_neg_eq_zero] at h_bool
+    rw [mul_eq_zero, sub_eq_zero] at h_bool
     rcases h_bool with rfl | rfl
     · grind
     simp_all only [circuit_norm]
@@ -190,7 +190,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     · simp
     simp_all
     intro hx hy
-    rw [ZMod.val_natCast_of_lt (by grind), ZMod.val_add_of_lt]
+    rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 example (input : Var Fib8Input (F p)) :
@@ -234,7 +234,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [⟨ fib8 ⟩]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by simp [circuit_norm, fib8, add_neg_eq_zero]
+  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
@@ -245,11 +245,11 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨ add8 ⟩
-    (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
+    (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
+    (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])

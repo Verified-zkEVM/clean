@@ -135,7 +135,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
       simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
-      simp only [computePart, bCoeff, aCoeff]
+      simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
         rw [Int.cast_sub, Nat.cast_sub h_pow_le]
@@ -164,8 +164,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           rw [ih]
           simp only [circuit_norm]
       simp only [Vector.sum, Vector.toArray_map]
-      conv_lhs => rw [← Array.sum_eq_sum_toList, Array.toList_map]
-      conv_rhs => rw [← Array.sum_eq_sum_toList]
+      conv_lhs => rw [← Array.sum_toList, Array.toList_map]
+      conv_rhs => rw [← Array.sum_toList]
       exact h_list_sum_eval _
 
     have h_sum_encodes' : sout.val.testBit 127 = (input_val > c) := by
@@ -223,7 +223,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
       simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
-      simp only [computePart, bCoeff, aCoeff]
+      simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
         rw [Int.cast_sub, Nat.cast_sub h_pow_le]
@@ -252,8 +252,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           rw [ih]
           simp only [circuit_norm]
       simp only [Vector.sum, Vector.toArray_map]
-      conv_lhs => rw [← Array.sum_eq_sum_toList, Array.toList_map]
-      conv_rhs => rw [← Array.sum_eq_sum_toList]
+      conv_lhs => rw [← Array.sum_toList, Array.toList_map]
+      conv_rhs => rw [← Array.sum_toList]
       exact h_list_sum_eval _
 
     have h_parts_bounded : ∀ i : Fin 127, parts[i].val ≤ 2^128 := by

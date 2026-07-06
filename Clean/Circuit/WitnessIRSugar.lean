@@ -41,7 +41,7 @@ instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)�
 instance : Add (FExpr F) := ⟨.add⟩
 instance : Mul (FExpr F) := ⟨.mul⟩
 instance : Inv (FExpr F) := ⟨.inv⟩
-instance : Inv (field (Witgen.FExpr F)) := inferInstanceAs (Inv (Witgen.FExpr F))
+@[reducible] instance : Inv (field (Witgen.FExpr F)) := (inferInstance : Inv (Witgen.FExpr F))
 instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
 instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
@@ -248,7 +248,10 @@ def toIR {n : ℕ} (program : M F (VExpr F n)) : WitgenIR F n :=
   let (out, steps) := program #[]
   .ir steps.toList out
 
-@[circuit_norm]
+/-- Not tagged `@[circuit_norm]`: `toIRLiteral` must stay intact inside `.witness`
+operations so that `witnessProgram`'s completeness obligation can be recognized and
+rewritten at the level of provable values (`ProverEnvironment.extendsVector_toIRLiteral`
+in `Clean.Circuit.Basic`), instead of unfolding element-wise into `toElements` internals. -/
 def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
   let (out, steps) := program #[]
   .ir steps.toList (.lit (toElements out))
@@ -275,7 +278,7 @@ namespace Unconstrained
 variable {value : TypeMap} [ProvableType value]
 open Witgen
 
-instance : CircuitType (Unconstrained value) where
+@[reducible] instance : CircuitType (Unconstrained value) where
   Var F := M F (value (FExpr F))
   ProverValue := value
   Value _ := Unit
@@ -323,7 +326,7 @@ structure UnconstrainedBool (F : Type) where
 namespace UnconstrainedBool
 open Witgen
 
-instance : CircuitType UnconstrainedBool where
+@[reducible] instance : CircuitType UnconstrainedBool where
   Var F := M F (BExpr F)
   ProverValue _ := Bool
   Value _ := Unit
@@ -371,7 +374,7 @@ structure UnconstrainedNat (F : Type) where
 namespace UnconstrainedNat
 open Witgen
 
-instance : CircuitType UnconstrainedNat where
+@[reducible] instance : CircuitType UnconstrainedNat where
   Var F := M F (NExpr F)
   ProverValue _ := ℕ
   Value _ := Unit

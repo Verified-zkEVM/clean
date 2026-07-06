@@ -84,16 +84,16 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     · apply fieldFromBits_lt
       intro i hi
       simp only [circuit_norm]
-      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+      simpa [sub_eq_zero] using h_holds.left ⟨i, hi⟩
     · intro i hi
-      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+      simpa [sub_eq_zero] using h_holds.left ⟨i, hi⟩
     · congr 1
       rw [Vector.ext_iff]
       simp [circuit_norm]
 
   completeness := by
     circuit_proof_start
-    simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+    simp only [lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
     · intro i hi

@@ -108,6 +108,41 @@ def main (input : Var Inputs F) : Circuit F (Var Outputs F) := do
   ...
 ```
 
+When composing already-defined gadgets or circuits, always call the bundled circuit as a
+subcircuit. Do not inline a child gadget by calling `Child.main input` from a parent
+circuit. Inlining defeats Clean's subcircuit proof structure and forces parent proofs to
+trace through every nested child operation.
+
+A plain `Circuit` definition is not a proof boundary. If a circuit fragment is intended
+to be reasoned about independently, kept opaque in a parent proof, or exposed through
+helper theorems about its behavior, it must be packaged as a `FormalCircuit`,
+`GeneralFormalCircuit.WithHint`, or `FormalAssertion` with a semantic spec. This is what
+Clean's subcircuit mechanism is for.
+
+Do not define standalone helper circuits, mark them opaque/no-unfold, add
+`localLength`/`output` infrastructure, and then prove external facts about their
+`ConstraintsHold` trace. That reinvents the subcircuit mechanism and produces brittle
+parent proofs.
+
+Use this rule:
+- Bundle it if it is a proof boundary.
+- Inline it if it is not a proof boundary.
+- Never leave it in the middle as an unbundled `Circuit` that parent proofs are expected
+  to treat abstractly.
+
+### ElaboratedCircuit and `elaborate_circuit`
+
+FormalCircuit and variants carry an instance of `ElaboratedCircuit`, which exposes
+circuit data like `localLength` and `output` in explicit, fully reduced form. This helps parent
+circuits simplify without unfolding child circuit internals.
+
+Inline `FormalCircuit` declarations get their elaborated metadata from the default `elaborated := by elaborate_circuit`; factored circuits have to define a standalone `ElaboratedCircuit` instance since that is needed by `Soundness`. In the latter case, for performance reasons, it is _very_ important to pass in `elaborated` as an explicit field (otherwise `soundness` has to elaborate with metavariables since `elaborate` is not filled in at that time).
+
+If elaboration fails, do not treat that as an insurmountable blocker. Inspect a potential failing `ExplicitCircuit` / `ExplicitCircuits` goal. Sometimes adding the right leaf instance can get past that. In rare cases, defining the `ElaboratedCircuit` by hand is a workaround for failing `elaborate_circuit`.
+
+Relevant code and examples are in `Clean/Circuit/Explicit.lean`, especially `infer_explicit_circuit`,
+`infer_explicit_circuits`, `elaborate_circuit`, `elaborate_circuit_with`.
+
 ## Proof Patterns
 
 ### Starting a Proof
@@ -121,6 +156,47 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
   ...
 ```
 
+Do not pass the current circuit's `main`, `Spec`, or `Assumptions` to
+`circuit_proof_start`; the tactic unfolds them automatically. Use the argument list for
+helper definitions, child circuit specs, theorem names, or extra simp facts needed after
+setup.
+
+For soundness/completeness work, start from the actual `soundness` or `completeness`
+theorem before building helper lemmas. Run `circuit_proof_start` on that theorem and let
+the generated proof state determine what facts are needed.
+
+Do not begin by manually unpacking `ConstraintsHold.Soundness`, `Operations.Requirements`,
+`Circuit.bind_forAllNoOffset`, offsets, or nested tuple projections into helper lemmas.
+If those facts are needed repeatedly, that usually means a circuit fragment should either
+be a bundled subcircuit with a semantic spec, or should be inlined into the parent proof.
+
+Helper lemmas should be reserved for real mathematical arguments: arithmetic bounds,
+bit decomposition facts, chunk tiling, field/natural-number conversions, algebraic
+canonicity arguments, etc. Do not add helper lemmas that only:
+- unpack Clean circuit traces,
+- restate a child circuit's spec from `ConstraintsHold`,
+- wrap one or two existing lemmas,
+- close by a short `simp`/`rw`/`exact` script,
+- name local offsets or output cells solely to avoid unfolding.
+
+Inline those in the proof instead.
+
+Bad pattern:
+
+```lean
+def phase : Circuit F Output := do
+  ...
+
+@[circuit_norm] theorem phase_localLength ...
+
+theorem phase_some_fact_of_soundness
+    (h : ConstraintsHold.Soundness env ((phase input).operations offset)) : ...
+```
+
+If `phase_some_fact_of_soundness` is important, `phase` should be a bundled circuit with
+that fact in its `Spec`. If it is not important enough to spec, inline `phase` in the
+parent proof.
+
 ### Key Simp Sets
 
 - `circuit_norm`: Main simplification set for circuit reasoning
@@ -130,6 +206,14 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 
 - Use `F p` for field type where `p` is prime
 - Specs are pure Lean propositions relating inputs to outputs
+- Specs must state the highest-level intended meaning of the circuit that can be described
+  from its inputs and outputs. The circuit operations are the implementation; the `Spec` is
+  the semantic contract being proved.
+- Do not define specs by copying, restating, or trivially wrapping the circuit constraints.
+  Do not introduce separate `constraints` definitions as substitutes for semantic specs.
+  For example, an incomplete-addition gadget spec should state the intended incomplete
+  elliptic-curve addition relation, not merely the finite-field equations enforced by the
+  circuit.
 - Assumptions capture preconditions (e.g., value ranges)
 - Follow Mathlib naming conventions
 - Never modify maxHeartbeats
@@ -157,6 +241,10 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
 4. Prove `soundness` and `completeness`
 5. Bundle into `FormalCircuit`
 
+Before proving the gadget, check that all child gadgets are composed through their bundled
+`.circuit`/formal assertion interface and that the `Spec` describes meaning rather than
+constraints.
+
 ### Working on Lean Proofs
 
 When writing or debugging Lean proofs, the **lean-mcp skill** in `./skills/lean-mcp/SKILL.md` is useful.
@@ -182,6 +270,9 @@ Practical recommendations:
 - In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
+
+When a proof exceeds `maxHeartbeats` or fails with `(kernel) deep recursion detected`,
+read `doc/performance-problems.md` first.
 
 ### Debugging
 

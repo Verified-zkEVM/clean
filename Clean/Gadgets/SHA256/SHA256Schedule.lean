@@ -34,6 +34,7 @@ private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
   let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
+@[implicit_reducible]
 private def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227

@@ -85,9 +85,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     simp only [circuit_norm, toTable] at *
     simp only [h_input] at h_env ⊢
     use h_assumptions
-    rw [ProvableType.ext_iff]
-    intro i hi
-    rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
 
 @[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=

@@ -70,7 +70,7 @@ class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) (explicit : 
   channelsWithGuarantees_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.channelsWithGuarantees a n = explicit.channelsWithGuarantees a' m := by intros; rfl
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ExplicitCircuits.toElaborated {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   (circuit : Var Input F → Circuit F (Var Output F))
@@ -88,7 +88,7 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     convert explicit.channelsLawful a n using 1
     rw [explicit_elaborated.channelsWithGuarantees_eq]
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.fromExplicit {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   {circuit : Var Input F → Circuit F (Var Output F)}
@@ -126,7 +126,7 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
   {circuit : Var Input F → Circuit F (Var Output F)}
   (derived : ElaboratedCircuit F Input Output circuit)
@@ -180,6 +180,7 @@ theorem ElaboratedCircuit.withData_channelsWithGuarantees {Input Output : TypeMa
 
 -- move between family and single explicit circuit
 
+@[implicit_reducible]
 def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
     (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
   output a n := (explicit a).output n
@@ -341,6 +342,12 @@ instance {k : ℕ} : ExplicitCircuits (F:=F) (witnessVector k) where
   operations out n := [.witness k (.ir [] out)]
   channelsWithGuarantees _ _ := []
 
+instance {k : ℕ} : ExplicitCircuits (F:=F) (witnessVectorNative k) where
+  output _ n := varFromOffset (fields k) n
+  localLength _ _ := k
+  operations c n := [.witness k (.native c)]
+  channelsWithGuarantees _ _ := []
+
 instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} : ExplicitCircuit (witnessIR M ir) where
   localLength _ := size M
   output n := varFromOffset M n
@@ -363,11 +370,15 @@ instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
   inferInstanceAs (ExplicitCircuit (witnessVector m (.lit v)))
 
 instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDepNative M) F) :
-    ExplicitCircuit (witnessNative c (inst := inferInstanceAs (Witnessable F M (Var M)))) where
+    ExplicitCircuit (witnessNative c (inst := (inferInstance : Witnessable F M (Var M)))) where
   localLength _ := size M
   output offset := varFromOffset M offset
   operations _ := [.witness (size M) (.native (toElements ∘ c))]
   channelsWithGuarantees _ := []
+
+instance (x : Var (UnconstrainedDepNative field) F) :
+    ExplicitCircuit (witnessNative (var:=Expression) x) :=
+  inferInstanceAs (ExplicitCircuit (witnessNative (var:=Var field) x))
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
@@ -450,7 +461,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output_eq c n := by
     simp only [witnessNative]
     rw [inst.witnessIR_def]
-    show _ = inst.var_eq ▸ (witnessIR value (.native (fun env => c env |> toElements))).output n
+    show _ = inst.var_eq ▸ (witnessIR value (.nativeValue c)).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -461,7 +472,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (.native (toElements ∘ c))]
+  operations c n := [.witness (size value) (.nativeValue c)]
   operations_eq c n := by
     simp only [witnessNative]
     rw [inst.witnessIR_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
@@ -492,6 +503,12 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
   channelsWithGuarantees _ _ := []
+
+/-- Single-application bridge: since Lean 4.29, the generic `ExplicitCircuits.toSingle`
+resolution does not fire on `lookup table entry` applications. -/
+instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F} :
+    ExplicitCircuit (lookup table entry) :=
+  ExplicitCircuits.toSingle (lookup table) entry
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
     {mult : Expression F} :
@@ -534,7 +551,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
 attribute [explicit_circuit_unfold_type] Circuit
 
 attribute [explicit_circuit_no_unfold] Circuit.bind witnessVar witnessField witnessVector
-  witness witnessNative witnessIR witnessProgram witnessVectorProgram
+  witness witnessNative witnessIR witnessProgram witnessVectorProgram witnessVectorNative
   assertZero lookup Channel.emit Channel.pull Channel.push Channel.pullIf Channel.pushIf
   Pure.pure Bind.bind Functor.map
 
@@ -702,7 +719,9 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
     try unfold_explicit_circuits_head
-    try simp only
+    -- dsimp, not simp: a propositional rewrite here wraps the inferred instance in
+    -- `Eq.mpr`, which blocks all downstream projection reduction (parametric circuits)
+    try dsimp only
     apply ExplicitCircuits.fromSingle
     intro a
     infer_explicit_circuit
@@ -814,7 +833,10 @@ elab "elaborate_circuit" : tactic => withMainContext do
     let mut thms := explicitThms
     for decl in decls do
       thms ← thms.addDeclToUnfold decl
-    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    -- `instances := true`: since Lean 4.29, simp/dsimp no longer visit instance arguments or
+    -- unfold class projections applied to instances by default; without this, child metadata
+    -- like `ElaboratedCircuit.localLength <sub>.main …` stays stuck (e.g. Keccak ThetaC).
+    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
       (simpTheorems := #[thms]) congrThms
 
   -- Normalize the inferred explicit metadata once with the common unfold set.  The
@@ -826,7 +848,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let commonDsimpCtx ← mkDsimpCtx commonDecls
   let explicitMetadata := (← dsimp explicit commonDsimpCtx).1
 
-  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
   let simpProcs ← do
     let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
@@ -952,7 +974,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
       let ops := pArgs[2]!
       let actualGuarantees := pArgs[3]!
       let rawChannelType := mkApp (mkConst ``RawChannel) F
-      let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
+      let rawChannelListType := mkApp (mkConst ``List [Level.zero]) rawChannelType
       let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
       let currentGuarantees := mkApp2 channelsWithGuaranteesFun input offset
       let guaranteesProofType ← mkEq actualGuarantees currentGuarantees
@@ -1073,7 +1095,7 @@ private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option 
       | throwError "unknown simp attribute explicit_circuit_norm"
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
-  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
 
   -- This is the core of the tactic: build the ordinary `.withData` expression and
