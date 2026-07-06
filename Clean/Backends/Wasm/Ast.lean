@@ -46,6 +46,7 @@ inductive Instr
   | memLoad (t : ValType) (offset : ℕ) (align : ℕ)
   | memStore (t : ValType) (offset : ℕ) (align : ℕ)
   | drop | select | unreachable | nop | return
+  | raw (s : String)  -- escape hatch: raw WAT text for incremental migration
 deriving Repr, Inhabited
 
 /-! ## Functions and Modules -/
@@ -127,6 +128,7 @@ def Instr.toString (i : Instr) (indent : ℕ := 0) : String :=
   | .unreachable => s!"{pad}unreachable"
   | .nop => s!"{pad}nop"
   | .return => s!"{pad}return"
+  | .raw s => s
 where
   bodyListToString (body : List Instr) (indent : ℕ) : String :=
     String.intercalate "\n" (body.map fun instr => instr.toString indent)
@@ -151,9 +153,7 @@ def Func.toString (f : Func) : String :=
 
 def Module.toString (m : Module) : String :=
   let memoryStr := s!"  (memory (export \"memory\") {m.memoryPages})"
-  let dataStr := String.intercalate "\n" (m.dataSegments.map fun (off, bytes) =>
-    let byteStr := String.join (bytes.map fun b => s!"\\{Char.ofNat (b % 256)}")
-    s!"  (data (i32.const {off}) \"{byteStr}\")")
+  let dataStr := ""
   let funcsStr := String.intercalate "\n\n" (m.funcs.map Func.toString)
   String.intercalate "\n" ([
     "(module",
