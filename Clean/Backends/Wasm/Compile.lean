@@ -480,6 +480,64 @@ partial def compileBExpr (vm : VarMap) : BExpr F → Builder → Builder
   | .and a e, b => let b := compileBExpr vm a b; let b := compileBExpr vm e b; b.push "i64.and"
 end
 
+/-! ## AST-based expression compilers (for CodeBuilder) -/
+
+def pushConstAST (c : F) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
+  let nw := vm.numWords
+  let val := FiniteField.val c
+  if nw = 1 then cb.push (i64.const val)
+  else List.range nw |>.foldl (fun cb' w => cb'.push (i64.const ((val >>> (w * 64)) % (2^64)))) cb
+
+def pushVarAST (idx : ℕ) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
+  let nw := vm.numWords
+  let base := vm.lookup idx
+  if nw = 1 then cb.push (local.get base)
+  else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (base + w))) cb
+
+mutual
+partial def compileFExprAST (vm : VarMap) : FExpr F → CodeBuilder → CodeBuilder
+  | .const c, cb => pushConstAST c vm cb
+  | .add a e, cb => let cb := compileFExprAST vm a cb; let cb := compileFExprAST vm e cb; cb.push (call "$fadd")
+  | .mul a e, cb => let cb := compileFExprAST vm a cb; let cb := compileFExprAST vm e cb; cb.push (call "$fmul")
+  | .inv a, cb => let cb := compileFExprAST vm a cb; cb.push (call "$finv")
+  | .expr (.var i), cb => pushVarAST i.index vm cb
+  | .expr (.const c), cb => pushConstAST c vm cb
+  | .expr (.add a e), cb => let cb := compileFExprAST vm (.expr a) cb; let cb := compileFExprAST vm (.expr e) cb; cb.push (call "$fadd")
+  | .expr (.mul a e), cb => let cb := compileFExprAST vm (.expr a) cb; let cb := compileFExprAST vm (.expr e) cb; cb.push (call "$fmul")
+  | .ite _ _ _, cb => cb  -- stub for MW
+  | .ofNat n, cb => compileNExprAST vm n cb
+  | .localVar i, cb => pushVarAST (vm.letBase + i) vm cb
+  | .envGet _, cb => cb.push (i64.const 0)
+  | .listGet _ _, cb => cb.push (i64.const 0)
+  | .dataGet _ _ _ _, cb => cb.push (i64.const 0)
+  | .hintGet _ _ _ _, cb => cb.push (i64.const 0)
+
+partial def compileNExprAST (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
+  | .const n, cb => cb.push (i64.const n)
+  | .val x, cb => compileFExprAST vm x cb
+  | .idx, cb => match vm.loopIdx with | some _ => cb.push (local.get 0) | none => cb.push (i64.const 0)
+  | .localVar i, cb => cb.push (local.get (vm.lookup (vm.letBase + i)))
+  | .add a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.add
+  | .mul a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.mul
+  | .div a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push (.binop .i64 .div_u)
+  | .mod a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.rem_u
+  | .land a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.and
+  | .lor a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.or
+  | .lxor a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push (.binop .i64 .xor)
+  | .shiftL a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.shl
+  | .shiftR a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.shr_u
+  | .ite _ _ _, cb => cb  -- stub
+
+partial def compileBExprAST (vm : VarMap) : BExpr F → CodeBuilder → CodeBuilder
+  | .true, cb => cb.push (i64.const 1)
+  | .false, cb => cb.push (i64.const 0)
+  | .feq a e, cb => let cb := compileFExprAST vm a cb; let cb := compileFExprAST vm e cb; cb.push i64.eq
+  | .lt a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.lt_u
+  | .neq a e, cb => let cb := compileNExprAST vm a cb; let cb := compileNExprAST vm e cb; cb.push i64.eq
+  | .not x, cb => let cb := compileBExprAST vm x cb; cb.push i64.eqz
+  | .and a e, cb => let cb := compileBExprAST vm a cb; let cb := compileBExprAST vm e cb; cb.push i64.and
+end
+
 /-! ## Expression flattening (shared by WASM and R1CS compilers) -/
 
 abbrev LinComb := List (ℕ × ℕ)  -- sparse (signalIndex × coefficient) pairs
