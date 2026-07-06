@@ -610,7 +610,7 @@ theorem completeness :
   have hk0F : env.get i₀ = ((bitrange input_y.val 1 9 : ℕ) : Fp) := by
     rw [← hk0]; exact (ZMod.natCast_zmod_val _).symm
   have hj_br : jv = ((bitrange input_y.val 0 250 : ℕ) : Fp) := by
-    rw [hj, hlsb, hk0F, htile, FiniteField.fromNat_F, FiniteField.val_F]
+    rw [hj, hlsb, hk0F, htile]
     push_cast; ring
   have hj_val : jv.val = bitrange input_y.val 0 250 := by
     rw [hj_br]; apply cast_bitrange_val (by norm_num)
@@ -967,8 +967,8 @@ theorem completeness :
     val_eq_of_cell_eq (by norm_num) e_g0, e_g1,
     e_h0, val_eq_of_cell_eq (by norm_num) e_h1,
     e_b.trans (by ring),
-    e_d.trans (by rw [Orchard.Specs.val_Fp, Orchard.Specs.fromNat_Fp]; ring), e_e.trans (by ring),
-    e_g.trans (by rw [Orchard.Specs.val_Fp, Orchard.Specs.fromNat_Fp]; ring),
+    e_d.trans (by rw [Orchard.Specs.val_Fp]; ring), e_e.trans (by ring),
+    e_g.trans (by rw [Orchard.Specs.val_Fp]; ring),
     e_h.trans (by ring)⟩
   · rw [e_b2]; exact isLowBit_bitrange _
   · rw [e_d1]; exact isLowBit_bitrange _

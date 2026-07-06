@@ -95,6 +95,9 @@ def circuit : FormalCircuit Fp AddInputInput Permute.State where
       by simpa [hcopy1, hcopy4] using h1,
       by simpa [hcopy2] using h2⟩
   completeness := by
+    -- TODO(4.30 bump): legacy defeq so circuit_norm's witness-IR completeness lemmas
+    -- keep matching through stuck size indices (lean4#12179); see Pow5.circuitP128.
+    set_option backward.isDefEq.respectTransparency false in
     circuit_proof_start [main, Spec, value, PadAndAdd.circuit, PadAndAdd.Spec]
     rcases h_env with ⟨hinit0, hinit1, hinit2, hinput0, hinput1, houtput⟩
     simp only [circuit_norm, Permute.State.mk.injEq] at houtput

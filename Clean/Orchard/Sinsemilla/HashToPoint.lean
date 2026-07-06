@@ -1953,6 +1953,16 @@ instance (ns : List ℕ) : ProvableStruct (Output ns) where
   toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
   fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
 
+/-- Hand-written analogue of the `deriving ProvableStruct` handler's generated
+`fromComponents_cons` simp lemma (the instance above is hand-written, so none is
+generated): lets `simp` reduce `fromComponents` applications without going through the
+private match auxiliary, which no longer reduces at reducible transparency (4.30 bump). -/
+@[circuit_norm]
+theorem Output.fromComponents_cons (ns : List ℕ) {F : Type}
+    (point : Point F) (z1s : Vector F ns.length) :
+    fromComponents (α := Output ns) (F := F)
+      (.cons point (.cons z1s .nil)) = { point, z1s } := rfl
+
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ)
     (pieces : Var (fields (ns.length + 1)) Fp) :

@@ -357,8 +357,32 @@ def main (n : ℕ) (input : Var Input Fp) :
     yANextDouble := 2 * yAFinal }
   return { xA := rows[n].xANext, yA := yAFinal, zs := rows.map (·.z) }
 
+-- TODO(4.30 bump): for the parametric `main n`, `elaborate_circuit`'s normalizer leaves
+-- the metadata as stuck `ExplicitCircuits` projections onto the huge inferred instance
+-- term, which makes every parent-circuit proof pathologically deep. Store the reduced
+-- metadata explicitly instead (cf. `MulFixed.FullWidth.elaborated`).
+set_option maxRecDepth 4096 in
 instance elaborated (n : ℕ) : ElaboratedCircuit Fp Input (Output (n + 1)) (main n) := by
-  elaborate_circuit
+  elaborate_circuit_with {
+    localLength _ := (n + 1) * 6 + 4
+    output _ i₀ := {
+      xA := var { index := i₀ + 1 + 1 + 1 + n * 6 + 1 + 1 + 1 + 1 + 1 },
+      yA := var { index := i₀ + 1 + 1 + 1 + (n + 1) * 6 },
+      zs := Vector.map (fun x => x.z) (Vector.mapFinRange (n + 1) fun i =>
+        ({ z := var { index := i₀ + 1 + 1 + 1 + i.val * 6 },
+           xP := var { index := i₀ + 1 + 1 + 1 + i.val * 6 + 1 },
+           yP := var { index := i₀ + 1 + 1 + 1 + i.val * 6 + 1 + 1 },
+           lambda1 := var { index := i₀ + 1 + 1 + 1 + i.val * 6 + 1 + 1 + 1 },
+           lambda2 := var { index := i₀ + 1 + 1 + 1 + i.val * 6 + 1 + 1 + 1 + 1 },
+           xANext := var { index := i₀ + 1 + 1 + 1 + i.val * 6 + 1 + 1 + 1 + 1 + 1 } }
+          : RowCells (Expression Fp))) }
+  } using by
+    refine ⟨fun a => ?_, fun a i₀ => ?_, fun _ h => h⟩
+    · simp only [← ExplicitCircuits.localLength_eq]
+      simp +instances only [circuit_norm, main, Init.circuit, MainLoop.circuit, Loop.circuit]
+      omega
+    · simp only [← ExplicitCircuits.output_eq]
+      simp +instances only [circuit_norm, main, Init.circuit, MainLoop.circuit, Loop.circuit]
 
 /-- Soundness contract. The constraints pin a bit sequence through the running-sum
 chain, and — for any base/accumulator interpretation satisfying the incomplete-addition
@@ -673,11 +697,6 @@ theorem soundness (n : ℕ) :
   -- 4.30 bump: collapse the `Value field` synonym on the intro'd values, so that the
   -- mixed `ite`/arithmetic statements below elaborate at `Fp`
   change Fp at input_z input_xA input_yA
-  -- 4.30 bump: reduce the stuck `ExplicitCircuits.output` projections in the goal to
-  -- concrete `env.get` cells; otherwise every later case split re-runs a whnf storm
-  -- through `main`'s monadic chain
-  simp only [← ExplicitCircuits.output_eq]
-  simp +instances only [circuit_norm, main]
   -- 4.30 bump: `obtain` on the big `h_holds` conjunction triggers a whnf storm during
   -- motive abstraction (re-unifying subcircuit instance args); plain projections avoid it.
   have h_z0 := h_holds.1
@@ -951,11 +970,6 @@ theorem completeness (n : ℕ) :
     MainLoop.circuit, MainLoop.Spec, Loop.circuit, Loop.Spec]
   -- 4.30 bump: collapse the `ProverValue field` synonym on the intro'd values
   change Fp at input_z input_xA input_yA
-  -- 4.30 bump: reduce the stuck `ExplicitCircuits.output` projections in the goal to
-  -- concrete `env.get` cells; otherwise every later case split re-runs a whnf storm
-  -- through `main`'s monadic chain
-  simp only [← ExplicitCircuits.output_eq]
-  simp +instances only [circuit_norm, main]
   -- 4.30 bump: `obtain` on the big `h_env` conjunction triggers a whnf storm during
   -- motive abstraction (re-unifying subcircuit instance args); plain projections avoid it.
   have he_z0 := h_env.1
