@@ -140,7 +140,7 @@ private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
     rw [show (Vector.map (Expression.eval env)
           (Vector.ofFn (fun i : Fin 32 => Expression.const ((n / 2^i.val % 2 : ℕ) : F p))))[i] =
         ((n / 2^i.val % 2 : ℕ) : F p) from by
-      simp [Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]]
+      simp [Vector.getElem_ofFn, Expression.eval]]
     rw [h2 i]
   rw [heq]
   -- Standard bit-decomposition: ∑ i < 32, (n / 2^i % 2) * 2^i = n % 2^32

@@ -297,13 +297,13 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp only [id_eq, CircuitType.eval_expression, fromElements, ProvableType.eval,
+    simp only [CircuitType.eval_expression, fromElements, ProvableType.eval,
       size, toElements, Vector.map_mk, List.map_toArray,
       List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
       ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
       DecodedAddressingMode.mk.injEq] at h_holds h_assumptions h_input
     simp only [h_input] at h_holds
-    simp only [Option.bind_eq_bind, id_eq]
+    simp only [Option.bind_eq_bind]
     obtain ⟨ h_addr1, h_addr2, ⟨ h_addr1_lt, h_mem1 ⟩, ⟨ h_addr2_lt, h_mem2 ⟩, h_value ⟩ := h_holds
     obtain ⟨ h_addr1', h_value1 ⟩ := h_mem1
     obtain ⟨ h_addr2', h_value2 ⟩ := h_mem2

@@ -56,7 +56,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     dsimp only [Num2Bits.main, AliasCheck.circuit] at h_holds ⊢
     simp_all only [circuit_norm, Vector.map_mapRange]
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      id_eq, mul_eq_zero, sub_eq_zero] at h_holds
+      mul_eq_zero, sub_eq_zero] at h_holds
     obtain ⟨ ⟨h_bits, h_eq⟩, h_alias ⟩ := h_holds
     specialize h_alias h_bits
     rw [← h_eq, fieldToBits, fieldFromBits,
@@ -75,7 +75,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      id_eq, mul_eq_zero, sub_eq_zero] at h_env ⊢
+      mul_eq_zero, sub_eq_zero] at h_env ⊢
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
     have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by

@@ -424,6 +424,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.Normalized
 
 -- Helper lemma that proves the initial state and messages are normalized
+omit p_large_enough in
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
     (input_var : Var Inputs (F p))
