@@ -360,11 +360,13 @@ def GeneralFormalCircuit.toWithHint {F : Type} [FiniteField F] {Input Output : T
   ProverAssumptions input data hint := circuit.ProverAssumptions input data hint
   ProverSpec input output hint := circuit.ProverSpec input output hint
   soundness := by
-    simpa only [GeneralFormalCircuit.WithHint.Soundness,
+    -- 4.31 (#13636): simpa's closing defeq is at reducible transparency now,
+    -- so unfold `Soundness` explicitly instead of relying on the transparency bump
+    simpa only [GeneralFormalCircuit.WithHint.Soundness, Soundness,
       CircuitType.eval_verifier, CircuitType.value_of_provableType]
       using circuit.soundness
   completeness := by
-    simpa only [GeneralFormalCircuit.WithHint.Completeness,
+    simpa only [GeneralFormalCircuit.WithHint.Completeness, Completeness,
       CircuitType.eval_prover, CircuitType.proverValue_of_provableType]
       using circuit.completeness
 

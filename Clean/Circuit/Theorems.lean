@@ -33,7 +33,7 @@ theorem ext {f g : Circuit F α}
 
 instance : LawfulMonad (Circuit F) where
   bind_pure_comp {α β} (g : α → β) (f : Circuit F α) := by
-    simp only [bind_def, Functor.map, List.append_nil]
+    simp only [bind_def, map_def, pure_def, List.append_nil]
   bind_map {α β} (g : Circuit F (α → β)) (f : Circuit F α) := rfl
   pure_bind {α β} (x : α) (f : α → Circuit F β) := by
     simp only [bind_def, pure, List.nil_append]; rfl

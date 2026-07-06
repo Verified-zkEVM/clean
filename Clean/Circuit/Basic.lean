@@ -355,6 +355,30 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
   witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
   witnessIR := witnessIR (ProvableVector α m)
 
+/- Since 4.31, simp no longer unfolds the `Witnessable.witnessIR` class projection applied
+to the instances above (stricter transparency for projection unfolding); expose per-instance
+`@[circuit_norm]` rfl-lemmas keyed on the projection instead. -/
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_field (code : WitgenIR F 1) :
+    Witnessable.witnessIR (F := F) (value := field) (var := Expression) code =
+      fun offset => (var ⟨offset⟩, [.witness 1 code]) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_fields {m : ℕ} (code : WitgenIR F (size (fields m))) :
+    Witnessable.witnessIR (F := F) (value := fields m) (var := Var (fields m)) code =
+      _root_.witnessIR (fields m) code := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_provable (M : TypeMap) [ProvableType M] (code : WitgenIR F (size M)) :
+    Witnessable.witnessIR (F := F) (value := M) (var := Var M) code = _root_.witnessIR M code := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyProvableType α]
+    (code : WitgenIR F (size (ProvableVector α m))) :
+    Witnessable.witnessIR (F := F) (value := ProvableVector α m)
+      (var := Var (ProvableVector α m)) code = _root_.witnessIR (ProvableVector α m) code := rfl
+
 -- witness generation
 
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/

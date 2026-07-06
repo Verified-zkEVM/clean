@@ -84,10 +84,10 @@ def const (x : M F) : M (Expression F) :=
   let values : Vector F _ := toElements x
   fromElements (values.map .const)
 
-instance (priority := low) [Field F] : Inhabited (M F) where
+instance (priority := low) : Inhabited (M F) where
   default := fromElements default
 
-instance (priority := low) [Field F] : Inhabited (M (Expression F)) where
+instance (priority := low) : Inhabited (M (Expression F)) where
   default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`

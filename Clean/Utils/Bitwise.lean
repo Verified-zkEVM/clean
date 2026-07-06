@@ -1,6 +1,7 @@
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Clean.Utils.Field
 import Mathlib.Data.Nat.Bitwise
+import Std.Tactic.BVDecide
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
