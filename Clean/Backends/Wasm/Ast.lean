@@ -66,10 +66,6 @@ structure Module where
   funcs : List Func := []
 deriving Repr, Inhabited
 
-/-! ## Helper: empty module -/
-
-def emptyModule : Module := {}
-
 /-! ## Text emitter (WAT format) -/
 
 def ValType.toString : ValType → String
@@ -153,12 +149,19 @@ def Func.toString (f : Func) : String :=
 
 def Module.toString (m : Module) : String :=
   let memoryStr := s!"  (memory (export \"memory\") {m.memoryPages})"
-  let dataStr := ""
+  let byteToEscape (b : ℕ) : String :=
+    let hi := b / 16
+    let lo := b % 16
+    let d (n : ℕ) : Char := Nat.digitChar n
+    s!"\\{d hi}{d lo}"
+  let dataSegmentStr (off : ℕ) (bytes : List ℕ) : String :=
+    s!"  (data (i32.const {off}) \"{String.join (bytes.map byteToEscape)}\")"
+  let dataStrs := m.dataSegments.map fun (off, bytes) => dataSegmentStr off bytes
   let funcsStr := String.intercalate "\n\n" (m.funcs.map Func.toString)
   String.intercalate "\n" ([
     "(module",
     memoryStr
-  ] ++ (if m.dataSegments.isEmpty then [] else [dataStr]) ++ [
+  ] ++ dataStrs ++ [
     funcsStr,
     ")"
   ])
