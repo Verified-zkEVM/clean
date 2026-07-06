@@ -1038,9 +1038,11 @@ def compileModuleAST (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (nu
   -- Arithmetic helpers
   let arithFuncs := if nw == 1 then genSingleWordArithAST fieldPrime
     else genMultiWordArithAST fieldPrime nw
-  -- Assemble module
+  -- Assemble module. Compute required memory pages for the signal array.
   let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
-  { memoryPages := 1
+  let memNeeded := signalBase + totalSignals * signalBytes
+  let memPages := (memNeeded + 65535) / 65536  -- ceil division
+  { memoryPages := memPages
     dataSegments := [(signalBase, signalInit)]
     funcs := arithFuncs ++ [computeFunc,
       { computeFunc with name := "$witness", exportName := some "witness" }]
