@@ -51,6 +51,9 @@ def i32.const (n : ℕ) : Instr := .const .i32 n
 def i32.load (off : ℕ := 0) : Instr := .memLoad .i32 off 2
 def i32.store (off : ℕ := 0) : Instr := .memStore .i32 off 2
 def i32.wrap_i64 : Instr := .unop .i32 .wrap_i64
+def i32.eqz : Instr := .relop .i32 .eqz
+def i32.mul : Instr := .binop .i32 .mul
+def i32.add : Instr := .binop .i32 .add
 
 -- Local access (by index)
 def local.get (idx : ℕ) : Instr := .localGet idx
@@ -671,6 +674,108 @@ partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState 
       let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
       ([(k, 1)], st3)
 
+/-! ## AST-based witness computation helpers -/
+
+/-- AST version: load signal i from memory as i64. Signal 0 is the constant 1. -/
+def loadSignalAST (i signalBase signalBytes : ℕ) : List Instr :=
+  if i = 0 then [i64.const 1]
+  else [i32.const (signalBase + i * signalBytes), i32.load 0, i64.extend_i32_u]
+
+/-- AST version: evaluate a linear combination, leaving N i64 values on the stack. -/
+def compileLinCombAST (lc : LinComb) (signalBase signalBytes : ℕ) : List Instr :=
+  match lc with
+  | [] => [i64.const 0]
+  | [(0, c)] => [i64.const c]
+  | [(i, c)] => loadSignalAST i signalBase signalBytes ++ [i64.const c, call "$fmul"]
+  | (i1, c1) :: rest =>
+    let first := if i1 = 0 then [i64.const c1]
+      else loadSignalAST i1 signalBase signalBytes ++ [i64.const c1, call "$fmul"]
+    let restInstrs : List Instr := rest >>= fun (i, c) =>
+      if i = 0 then [i64.const c, call "$fadd"]
+      else loadSignalAST i signalBase signalBytes ++ [i64.const c, call "$fmul", call "$fadd"]
+    first ++ restInstrs
+
+/--
+AST version: discover intermediate signals from assert expressions.
+Returns (numIntermediates, local declarations, computation instructions).
+-/
+def discoverAndCompileIntermediatesAST (p : ℕ) (vm : VarMap) (flatOps : List (FlatOperation F))
+    (startSignal signalBase signalBytes : ℕ) : ℕ × List (String × ValType) × List Instr :=
+  let (st, _) := flatOps.foldl (fun (acc : FlattenState × Unit) (op : FlatOperation F) =>
+    match op with
+    | .assert e =>
+      let (_, st') := flattenExpr p vm e acc.1
+      (st', ())
+    | _ => acc
+  ) ({ nextSignal := startSignal }, ())
+  let numInt := st.nextSignal - startSignal
+  let intConstraintsRev := List.reverse st.constraints
+  let rec buildAST (idx : ℕ) (instrs : List Instr) (locals : List (String × ValType))
+      (remaining : List Constraint) : ℕ × List (String × ValType) × List Instr :=
+    match remaining with
+    | [] => (idx, locals, instrs)
+    | (la, lb, [(k, _)]) :: rest =>
+      let localName := s!"$int_{idx}"
+      let laInstrs := compileLinCombAST la signalBase signalBytes
+      let lbInstrs := compileLinCombAST lb signalBase signalBytes
+      let computeInstrs : List Instr :=
+        laInstrs ++ lbInstrs ++ [call "$fmul", local.set 0,
+         i32.const (signalBase + k * signalBytes), local.get 0, i32.wrap_i64, i32.store 0]
+      -- Note: local.set/get 0 is a placeholder; the actual local index is fixed in compileModuleAST
+      buildAST (idx + 1) (computeInstrs ++ instrs) ((localName, .i64) :: locals) rest
+    | _ :: rest => buildAST idx instrs locals rest
+  let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
+  (numInt, locals.reverse, instrs.reverse)
+
+/-- AST version: compile let-steps (letF/letN) to instructions. -/
+def compileStepsAST (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × ℕ × List Instr :=
+  steps.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) step =>
+    match step with
+    | .letF e =>
+      let cb := compileFExprAST vm e {}
+      let (vm', locs) := vm.alloc 1 vi
+      (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+    | .letN e =>
+      let cb := compileNExprAST vm e {}
+      let (vm', locs) := vm.alloc 1 vi
+      (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+  ) (vm, vi, [])
+
+/-- AST version: compile a list of FExpr literals to instructions. -/
+def compileLitAST (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F)) : VarMap × ℕ × List Instr :=
+  es.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) =>
+    let cb := compileFExprAST vm e {}
+    let (vm', locs) := vm.alloc 1 vi
+    (vm', vi + 1, instrs ++ cb.build ++ [local.set (locs.head?.getD 0)])
+  ) (vm, vi, acc)
+
+/-- AST version: compile a VExpr to instructions. -/
+def compileVExprAST (vm : VarMap) (vi : ℕ) (acc : List Instr) : {m : ℕ} → VExpr F m → VarMap × ℕ × List Instr
+  | _, .lit es => compileLitAST vm vi acc es.toList
+  | _, .mapRange n body =>
+    match body with
+    | .envGet _ => (vm, vi, acc)
+    | _ =>
+      let (vmOut, _) := vm.alloc n vi
+      let outBase := vmOut.nextLocal - n
+      let instrs := (List.range n).foldl (fun (is : List Instr) (i : ℕ) =>
+        let vmB := { vmOut with loopIdx := some 0 }
+        let cb := compileFExprAST vmB body {}
+        is ++ [i64.const i, local.set 0] ++ cb.build ++ [local.set (outBase + i)]
+      ) acc
+      ({ vmOut with loopIdx := none }, vi + n, instrs)
+  | _, .append _ _ => (vm, vi, acc)
+
+/-- AST version: process flat operations, accumulating instructions. -/
+def processFlatOpsAST (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ → List Instr → VarMap × ℕ × List Instr
+  | [], vm, _, instrs => (vm, numInputs, instrs)
+  | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc =>
+    let vmStep := { vm with letBase := vi }
+    let (vmS, viS, stepInstrs) := compileStepsAST vmStep vi steps
+    let (vmOut, viOut, outInstrs) := compileVExprAST vmS viS stepInstrs vexpr
+    processFlatOpsAST numInputs rest vmOut viOut (acc ++ outInstrs)
+  | _ :: rest, vm, vi, acc => processFlatOpsAST numInputs rest vm vi acc
+
 /-! ## WASM code generation for intermediate signals -/
 
 /-- Generate WAT to load signal i from memory as i64. Signal 0 is the constant 1. -/
@@ -800,12 +905,12 @@ def processFlatOps (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ
     processFlatOps numInputs rest vmOut viOut (acc ++ outLines)
   | _ :: rest, vm, vi, acc => processFlatOps numInputs rest vm vi acc
 
-/-- Compile to AST Module (new path). Produces typed WASM AST with struct fields. -/
+/-- Compile to AST Module. Produces typed WASM AST without any .raw string fallbacks. -/
 def compileModuleAST (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ := 1) : Module :=
   let nw := numWords
   let vm := VarMap.init numInputs nw
   let flatOps := flattenOps ops
-  let (finalVm, _, bodyLines) := processFlatOps numInputs flatOps vm (numInputs * nw) []
+  let (finalVm, _, bodyInstrs) := processFlatOpsAST numInputs flatOps vm (numInputs * nw) []
   let witnessWords := finalVm.nextLocal - numInputs * nw
   let witnessCount := witnessWords / nw
   let n32 := nw * 2
@@ -814,14 +919,55 @@ def compileModuleAST (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (nu
   let signalBytes := n32 * 4
   let startSignal := 1 + finalVm.nextLocal / nw
   let (numInt, intLocals, intCode) :=
-    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes
+    discoverAndCompileIntermediatesAST fieldPrime vm flatOps startSignal signalBase signalBytes
   let totalSignals := startSignal + numInt
-  -- build witness computation body as raw WAT
-  let outputStores := String.intercalate "\n" (List.range witnessCount >>= fun i =>
-    (List.range nw).map fun w =>
-      s!"    i32.const {signalBase + (1 + numInputs + i) * signalBytes + w * 4}  local.get {numInputs * nw + i * nw + w}  i32.wrap_i64  i32.store")
-  let computeBodyRaw := s!"{String.intercalate "\n" bodyLines}\n{outputStores}"
-  -- snarkjs ABI functions as AST
+  -- Build witness output stores: write each witness word to signal memory
+  let outputStoresAST : List Instr := (List.range witnessCount) >>= fun i =>
+    (List.range nw) >>= fun w =>
+      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 4),
+        local.get (numInputs * nw + i * nw + w),
+        i32.wrap_i64,
+        i32.store 0 ]
+  -- Build the compute function with proper AST body
+  let inputParams := (List.range numInputs) >>= fun i =>
+    (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
+  let computeFunc : Func := {
+    name := "$compute"
+    params := inputParams
+    locals := (List.replicate witnessWords ("", .i64)) ++ [("$idx", .i64)]
+    body := bodyInstrs ++ outputStoresAST
+  }
+  -- Build getWitness body with proper AST instructions
+  let gwInputLocals : List (String × ValType) :=
+    ((List.range numInputs).map fun i => (s!"$in_{i}", ValType.i64))
+  -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
+  let intLocalBase := 3 + numInputs
+  -- Fix intermediate code to use correct local indices
+  let intCodeFixed : List Instr := intCode.map fun instr =>
+    match instr with
+    | .localSet 0 => .localSet intLocalBase  -- placeholder → actual base
+    | .localGet 0 => .localGet intLocalBase
+    | _ => instr
+  -- Input loads: read each input from signal memory, extend to i64, set input local
+  let inputLoadsAST : List Instr := (List.range numInputs) >>= fun i =>
+    [ i32.const (signalBase + (1 + i) * signalBytes), i32.load 0, i64.extend_i32_u,
+      local.set (3 + i) ]  -- $in_i at local index 3+i
+  -- Input push: push all input locals for $compute call
+  let inputPushAST : List Instr := (List.range numInputs) >>= fun i =>
+    [ local.get (3 + i) ]  -- push $in_i
+  -- Build the getWitness function body
+  let gwBodyAST : List Instr :=
+    [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
+    ++ [ if_ none
+          (inputLoadsAST ++ inputPushAST ++ [call "$compute"] ++ intCodeFixed
+           ++ [ i32.const signalBase, i32.const 1, i32.store 0,  -- store constant 1
+                i32.const 0, i32.const 1, i32.store 0 ])           -- set computed flag
+          [] ]
+    ++ [ i32.const 0,  -- SRWM base
+         i32.const signalBase, local.get 0, i32.const signalBytes, i32.mul, i32.add,
+         i32.load 0,
+         i32.store (srwmBase) ]
+  -- snarkjs ABI functions
   let abiFuncs : List Func := [
     { name := "$getFieldNumLen32"
       exportName := some "getFieldNumLen32"
@@ -865,16 +1011,8 @@ def compileModuleAST (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (nu
       exportName := some "getWitness"
       params := [("$i", .i32)]
       locals := [("$tmp", ValType.i32), ("$idx", ValType.i64)]
-        ++ ((List.range numInputs).map fun i => (s!"$in_{i}", ValType.i64))
-        ++ (List.range (intLocals.length)).map fun idx => (s!"$int_{idx}", ValType.i64)
-      body :=
-        let inputLoadStr := String.intercalate "\n" ((List.range numInputs).map fun i =>
-          s!"      i32.const {signalBase + (1 + i) * signalBytes} i32.load i64.extend_i32_u local.set $in_{i}")
-        let inputPushStr := String.intercalate "\n" ((List.range numInputs).map fun i =>
-          s!"      local.get $in_{i}")
-        let gwBody := s!"{inputLoadStr}\n{inputPushStr}\n      call $compute\n{String.intercalate "\n" intCode}\n      i32.const {signalBase} i32.const 1 i32.store\n      i32.const 0 i32.const 1 i32.store"
-        let gwTail := s!"    i32.const 0\n    i32.const {signalBase} local.get $i i32.const {signalBytes} i32.mul i32.add i32.load\n    i32.store offset={srwmBase}"
-        [.raw s!"    i32.const 0 i32.load i32.eqz\n    (if (then\n{gwBody}\n    ))\n{gwTail}"] },
+        ++ gwInputLocals ++ intLocals
+      body := gwBodyAST },
     { name := "$getMessageChar"
       exportName := some "getMessageChar"
       results := [.i32]
@@ -897,20 +1035,9 @@ def compileModuleAST (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (nu
       body := [ i32.const 0, i32.const 0, .memStore .i32 0 2,
                 i32.const signalBase, i32.const 1, .memStore .i32 0 2 ] }
   ]
-  -- Build the compute function
-  let inputParams := (List.range numInputs) >>= fun i =>
-    (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
-  let computeFunc : Func := {
-    name := "$compute"
-    params := inputParams
-    locals := (List.replicate witnessWords ("", .i64)) ++ [("$idx", .i64)]
-    body := [.raw computeBodyRaw]
-  }
   -- Arithmetic helpers
   let arithFuncs := if nw == 1 then genSingleWordArithAST fieldPrime
-    else genMultiWordArithAST fieldPrime nw ++
-         -- genMultiWordArithAST doesn't include genFmul (still string-based)
-         []
+    else genMultiWordArithAST fieldPrime nw
   -- Assemble module
   let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
   { memoryPages := 1
