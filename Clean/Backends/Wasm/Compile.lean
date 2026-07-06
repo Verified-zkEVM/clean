@@ -285,9 +285,14 @@ def genFmulAST (p numWords : ℕ) : Func :=
     ((pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ])
   -- Result: return c[0..N-1]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+i) ]
-  -- Handle t_hi from Barrett: copy to c_hi, zero t, run redSB+addRed again
-  let onePass := redSB ++ addRed ++ carryLoop
-  { name := "$fmul"
+  let zeroT : List Instr := ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ])
+  let onePass := zeroT ++ redSB ++ addRed ++ carryLoop
+  let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+i) ]
+  -- ~16 reduction passes needed for convergence: R/2^256 ≈ 0.055
+  let allPasses := onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass ++
+                   onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass ++ onePass
+  {
+    name := "$fmul"
     params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64)) ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
     results := List.replicate N ValType.i64
     locals :=
@@ -296,7 +301,7 @@ def genFmulAST (p numWords : ℕ) : Func :=
       ++ ((List.range limbs2N).map fun i => (s!"$t{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$r{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$p{i}", ValType.i64))
-    body := initAll ++ mainSB ++ onePass ++ onePass ++ onePass ++ onePass ++ condSub ++ rets }
+    body := initAll ++ mainSB ++ allPasses ++ condSub ++ rets }
 
 def genFmul (p numWords : ℕ) : String := Ast.Func.toString (genFmulAST p numWords)
 
