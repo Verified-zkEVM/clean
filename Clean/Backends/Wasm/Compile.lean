@@ -313,24 +313,60 @@ def genFsub (numWords : ℕ) : String :=
     s!"  )"
   ])
 
-/-- Generate the full multi-word arithmetic module (numWords > 1). -/
+/-- Generate WAT for modular inverse via Fermat's little theorem: a^(p-2) mod p.
+    Uses square-and-multiply, calling $fmul for each step (~254 squarings + ~127 muls). -/
+def genFinv (p numWords : ℕ) : String :=
+  let N := numWords
+  let exp := p - 2  -- exponent for Fermat
+  -- Find MSB position by scanning from high bit down
+  let bitPositions := List.range (N*64) |>.reverse
+  let msb := (bitPositions.find? fun b => (exp >>> b) % 2 = 1).getD (N*64 - 1)
+  let params := String.intercalate " " ((List.range N).map fun i => s!"(param $a{i} i64)")
+  let results := String.intercalate " " (List.replicate N "i64")
+  let rLocals := String.intercalate " " ((List.range N).map fun i => s!"(local $r{i} i64)")
+  -- Push r limbs and constant 1 (for initialization)
+  let pushR := String.intercalate " " ((List.range N).map fun i => s!"local.get $r{i}")
+  let pushA := String.intercalate " " ((List.range N).map fun i => s!"local.get $a{i}")
+  let push1 := String.intercalate " " ("i64.const 1" :: (List.replicate (N-1) "i64.const 0"))
+  -- Capture fmul result into r (stack: r0..rN-1, with rN-1 on top)
+  let captureR := String.intercalate "\n    " ((List.range N).reverse.map fun i => s!"local.set $r{i}")
+  -- Generate square: r = fmul(r, r)
+  let square := s!"    {pushR}  {pushR}\n    call $fmul\n    {captureR}"
+  -- Generate multiply: r = fmul(r, a)
+  let multiply := s!"    {pushR}  {pushA}\n    call $fmul\n    {captureR}"
+  -- Standard square-and-multiply: r=1, then for each bit MSB→0: square, conditionally multiply
+  let init := [
+    s!"    ;; r = 1",
+    s!"    {push1}",
+    s!"    {captureR}"
+  ]
+  -- Process ALL bits from MSB down to 0: square, then multiply if bit is set
+  let steps : List String := (List.range (msb+1) |>.reverse) >>= fun b =>
+    if (exp >>> b) % 2 = 1 then
+      [square, multiply]
+    else
+      [square]
+  String.intercalate "\n" ([
+    s!"  ;; Modular inverse via Fermat: a^(p-2) mod p ({msb+1} bits)",
+    s!"  (func $finv {params} (result {results})",
+    s!"    {rLocals}"
+  ] ++ init ++ steps ++ [
+    s!"    ;; Return r",
+    s!"    {pushR}",
+    s!"  )"
+  ])
+
 def genMultiWordArith (p numWords : ℕ) : String :=
   let ps := toString p
   let N := numWords
   let nBits := N * 64
-  -- f inv: stub for now (returns 0 for all limbs)
-  let zeros := String.intercalate " " (List.replicate N "i64.const 0")
-  let params := String.intercalate " " ((List.range N).map fun _ => s!"(param i64)")
-  let results := String.intercalate " " (List.replicate N "i64")
   String.intercalate "\n" [
     s!"  ;; Multi-word field arithmetic for prime {ps} ({N} words, {nBits} bits)",
     genMul64x64,
     genFmul p N,
     genFadd N,
     genFsub N,
-    s!"  ;; Modular inverse (stub — returns 0)",
-    s!"  (func $finv {params} (result {results})",
-    s!"    {zeros})"
+    genFinv p N
   ]
 
 def fieldHelpers (p : ℕ) (numWords : ℕ) : String :=
