@@ -132,7 +132,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
     constructor <;> aesop
   ) (by simp +instances [circuit_norm, twoRoundsWithPermute, roundWithPermute,
-    Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated])
+    Round.circuit, Permute.circuit])
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -204,7 +204,7 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
     constructor <;> aesop
   ) (by simp +instances [circuit_norm, twoRoundsWithPermute, roundWithPermute,
-    Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated])
+    Round.circuit, Permute.circuit])
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.

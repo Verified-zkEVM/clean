@@ -34,8 +34,6 @@ def main (input : Vector (Expression (F p)) 254) := do
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
--- TODO(4.30 bump): scoped legacy defeq; see Fibonacci8
-set_option backward.isDefEq.respectTransparency false in
 def circuit : FormalAssertion (F p) (fields 254) where
   main
 
@@ -44,15 +42,14 @@ def circuit : FormalAssertion (F p) (fields 254) where
   Spec bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp +instances only [circuit_norm, main, CompConstant.circuit]
-    simp_all
+    circuit_proof_start [CompConstant.circuit]
+    obtain ⟨ h_comp, h_eq ⟩ := h_holds
+    simp_all only [implies_true, right_eq_ite_iff, zero_ne_one, imp_false, forall_const]
     have : p > 2^135 := hp135.elim
-    have ppre_small : p - 1 < 2^254 := hppre254.elim
-    intros offset env input_var h_binary h_sub
     omega
 
   completeness := by
-    simp +instances only [circuit_norm, main, CompConstant.circuit]
+    circuit_proof_start [CompConstant.circuit]
     simp_all
     have ppre_small : p - 1 < 2^254 := hppre254.elim
     omega

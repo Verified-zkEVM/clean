@@ -187,7 +187,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [h_sum_encodes']
 
     have h_out' : out = bits[127] := by
-      simp only [mul_zero, dite_eq_ite, ite_self, add_zero] at h_out
       change env.get (i₀ + 127 + 1 + 135) = (Vector.mapRange 135 fun i => env.get (i₀ + 127 + 1 + i))[127]
       simp only [Vector.getElem_mapRange, h_out]
 
