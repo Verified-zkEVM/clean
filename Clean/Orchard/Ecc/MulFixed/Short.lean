@@ -664,7 +664,8 @@ theorem soundness (B : FixedBase) :
     RunningSumCoords.circuit, RunningSumCoords.Spec, AddIncomplete.circuit,
     AddIncomplete.Spec, AddIncomplete.Assumptions, Add.circuit, Add.Spec,
     Add.Assumptions, List.sum_cons, List.sum_nil]
-  simp only [Nat.reduceMul, Nat.reduceSub, circuit_norm] at h_holds ⊢
+  simp +instances only [Nat.reduceMul, Nat.reduceSub, circuit_norm,
+    AddIncomplete.Gate.circuit, Add.Gate.circuit] at h_holds ⊢
   obtain ⟨h_z0, h_rs0, h_coords0, h_loop, h_rs21, h_coords21, h_z22, h_add,
     h_signCopy, h_lastwCopy, h_isBool, h_isSign, h_signSel⟩ := h_holds
   -- clean up the per-iteration loop hypothesis
@@ -1170,6 +1171,10 @@ private theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
   have h := sum_base8 m.val 22
   rwa [Nat.mod_eq_of_lt (by norm_num; omega)] at h
 
+-- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
+-- (`extendsVector_toIRLiteral` etc.) keep matching through stuck `size`/`localLength`
+-- indices (lean4#12179).
+set_option backward.isDefEq.respectTransparency false in
 theorem completeness (B : FixedBase) :
     GeneralFormalCircuit.Completeness Fp (main B) ProverAssumptions (ProverSpec B) := by
   circuit_proof_start [rowProgram, Gate.circuit, Gate.Spec,
@@ -1180,7 +1185,8 @@ theorem completeness (B : FixedBase) :
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨hm_lt, h_sign⟩ := h_assumptions
   obtain ⟨h_z0w, h_t0, h_loop_env, h_t21, h_add_env, h_signw, h_lastww, h_yPw⟩ := h_env
-  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul, circuit_norm]
+  simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+    circuit_norm, AddIncomplete.Gate.circuit, Add.Gate.circuit]
     at h_add_env h_signw h_lastww h_yPw ⊢
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h_signw h_lastww h_yPw
   -- witnessed row values
