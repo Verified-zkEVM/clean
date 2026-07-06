@@ -215,7 +215,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
       intro i
       have h_parts_i := h_parts i
-      simp only [circuit_norm] at h_parts_i
       show (Vector.mapRange 127 fun j => env.get (i₀ + j))[i.val] = _
       simp only [Vector.getElem_mapRange, h_parts_i]
       simp only [apply_ite (Expression.eval env.toEnvironment)]
@@ -298,7 +297,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     and_intros
     · ext i hi
       have h_parts_i := h_parts ⟨i, hi⟩
-      simpa [Vector.getElem_map, Vector.getElem_mapRange] using h_parts_i
+      simpa [Vector.getElem_map, Vector.getElem_mapRange,
+        apply_ite (Expression.eval env.toEnvironment), circuit_norm] using h_parts_i
     · exact h_sout
     · exact h_sout_lt
     · exact h_out

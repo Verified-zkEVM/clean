@@ -76,7 +76,7 @@ lemma balanceOf_eq_of_const_mult {interactions : List (Interaction F)} {msg : Ar
   set count : ℕ := interactions.countP (·.msg = msg)
   suffices (interactions.filter (·.msg = msg)).map (·.mult) = List.replicate count mult by
     convert (congrArg List.sum this)
-    simp [mul_comm]
+    all_goals first | rfl | simp [List.sum_replicate, mul_comm]
   apply List.ext_getElem
   · simp [count, List.countP_eq_length_filter]
   intro i hi hi'
@@ -331,6 +331,8 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
       suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         simp only [Interaction.Guarantees]
         convert fun _ => grt'
+        rw [pull_i_msg]
+        rfl
       apply RawChannel.Normal.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_zero one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
       convert push_j_req

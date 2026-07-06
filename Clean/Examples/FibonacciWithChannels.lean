@@ -50,7 +50,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   soundness := by circuit_proof_start [BytesTable]
   completeness := by circuit_proof_start
 
-instance Add8Channel : Channel (F p) fieldTriple where
+def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | (x, y, z), _ =>
@@ -123,7 +123,7 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 2
     specialize ih rfl
     simp_all [fibonacci, Nat.mod_lt]
 
-instance FibonacciChannel : Channel (F p) fieldTriple where
+def FibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
   -- when pulling, we want the guarantee that the input is a valid Fibonacci step
   Guarantees
@@ -157,6 +157,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     let z := var ⟨ i₀ ⟩
     expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
   exposedChannels_eq input i₀ := by
+    obtain ⟨enabled, n, x, y⟩ := input
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
 
   ProverAssumptions
@@ -166,6 +167,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
 
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
   requirementsChannelsLawful input_var i₀ := by
+    obtain ⟨enabled, n, x, y⟩ := input_var
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
     grind
 

@@ -324,7 +324,7 @@ lemma verifierInteractionsWith_eq {vm : VmTables F PublicIO} :
   vm.toEnsemble.verifierTable.operations.interactionsWith vm.channel.toRaw = [
     (vm.channel.pulledIf vm.verifierStep.enabled vm.verifierStep.pull).toRaw,
     (vm.channel.pushedIf vm.verifierStep.enabled vm.verifierStep.push).toRaw ] := by
-  simpa only [step] using interactionsWith_eq Ensemble.mem_allTables_verifierTable
+  simpa only [step, reduceDIte] using interactionsWith_eq Ensemble.mem_allTables_verifierTable
 end VmTables
 
 namespace VmWitness
@@ -615,6 +615,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     simp only [← env_data_eq, AbstractInteraction.eval_guarantees, AbstractInteraction.eval_requirements,
       Operations.forall_interactionsWith_iff]
     convert constraints table table_mem row row_mem
+    all_goals rfl
   -- to get the conclusion about the verifier, we specialize to index 0
   specialize grts_of_reqs reqs_of_grts 0 activeInteractions_pulls_length_pos
   rw [witness.activeInteractions_pulls_getElem_zero_eq,

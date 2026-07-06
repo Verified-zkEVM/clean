@@ -177,9 +177,7 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
     #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
        .input ⟨0, 7⟩] := by
   dsimp only [table_assignment_norm, circuit_norm, boundary]
-  simp only [circuit_norm, FormalCircuitBase.localLength]
   dsimp only [table_assignment_norm, circuit_norm, MonadLift.monadLift]
-  simp +instances only [circuit_norm]
   with_unfolding_all rfl
 
 omit p_large_enough in

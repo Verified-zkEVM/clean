@@ -392,7 +392,7 @@ assuming constraints and channel balance.
 This is just Soundness, except for per-table soundness implying global soundness.
 -/
 @[circuit_norm]
-def TableSoundness [DecidableEq F] (ens : Ensemble F PublicIO) : Prop :=
+def TableSoundness (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →

@@ -118,6 +118,8 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
+-- scoped legacy defeq for the window-env assignment reasoning; see Fibonacci8
+set_option backward.isDefEq.respectTransparency false in
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : ProverEnvironment F} :
   ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
@@ -179,6 +181,8 @@ private lemma composite_vars_second {W : ℕ+} {S : TypeMap} [ProvableType S]
     CellAssignment.pushRow, CellAssignment.empty, Vector.getElem_cast,
     Vector.getElem_mapFinRange, hi]
 
+-- scoped legacy defeq for the window-env assignment reasoning; see Fibonacci8
+set_option backward.isDefEq.respectTransparency false in
 lemma table_soundness_aux (table : InductiveTable F State Input) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : TableEnvironments F) :
   table.Spec input [] 0 rfl input env.data →
@@ -312,19 +316,23 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       intro i hi
       simp only [curr_var, varFromOffset_pair]
       convert (h_env_input_1 i hi).symm
-      simp only [ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, zero_add]
-      convert Vector.getElem_mapRange _ hi
+      · simp only [ProvableType.eval_varFromOffset,
+          ProvableType.toElements_fromElements, zero_add]
+        convert Vector.getElem_mapRange _ hi
+        -- `convert` side goals: the unapplied `Value State = State` synonym equation
+        all_goals exact (funext CircuitType.value_of_provableType).symm
+      all_goals exact funext CircuitType.value_of_provableType
 
     have input_eq_2 : eval env'.toEnvironment curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
       intro i hi
       simp only [curr_var, varFromOffset_pair]
       convert (h_env_input_2 i hi).symm
-      simp only [s, ProvableType.eval_varFromOffset,
-        ProvableType.toElements_fromElements, zero_add]
-      convert Vector.getElem_mapRange _ hi using 1
-      ac_rfl
+      · simp only [s, ProvableType.eval_varFromOffset,
+          ProvableType.toElements_fromElements, zero_add]
+        convert Vector.getElem_mapRange _ hi using 1
+        all_goals first | rfl | ac_rfl
+      all_goals exact funext CircuitType.value_of_provableType
 
     have next_eq : eval env'.toEnvironment (varFromOffset (F := F) State (size State + size Input + main_ops.localLength)) = next.1 := by
       rw [ProvableType.ext_iff]

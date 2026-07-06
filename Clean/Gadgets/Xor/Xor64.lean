@@ -96,6 +96,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env input_var h_env input h_input as
+  let ⟨⟨ xv0, xv1, xv2, xv3, xv4, xv5, xv6, xv7 ⟩, ⟨ yv0, yv1, yv2, yv3, yv4, yv5, yv6, yv7 ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
   simp only [Assumptions, circuit_norm, U64.Normalized] at as

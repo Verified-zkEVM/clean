@@ -187,6 +187,7 @@ private lemma sha256Compress_eq_valStateAfterRound
         valStateAfterRound input_state input_schedule k by
     have := h 64 (le_refl 64)
     convert this using 1
+    rfl
   intro k hk
   induction k with
   | zero => simp [valStateAfterRound, Fin.foldl_zero]

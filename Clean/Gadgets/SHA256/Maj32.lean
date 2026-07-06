@@ -243,10 +243,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have := (h_env.1) i
-    simp only [circuit_norm] at this
     rw [this]; ring
   · have := (h_env.2.1) i
-    simp only [circuit_norm] at this
     rw [this]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where

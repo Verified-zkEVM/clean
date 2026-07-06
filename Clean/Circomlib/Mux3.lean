@@ -139,11 +139,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       -- Left side: eval of varFromOffset
       simp only [Vector.getElem_map, Vector.getElem_mapRange]
       -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
-      simp only [Expression.eval]
+      simp only [circuit_norm]
       -- Right side: eval of the computed expression
       have h_env_i := h_env ⟨i, hi⟩
       rw [h_env_i]
-      ring
 
 end MultiMux3
 

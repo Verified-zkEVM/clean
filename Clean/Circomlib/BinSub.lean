@@ -150,6 +150,7 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
       have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
         rw [soundness_lhs_eval env input_var input h_input]
         convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+        norm_cast
       have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
         exact Nat.div_lt_of_lt_mul h_lin_lt
       grind
@@ -299,7 +300,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     have h_out_bool : ∀ i < n, IsBool (env.get (i₀ + i)) := by
       intro i hi
       specialize h_out_constrs ⟨i, hi⟩
-      simpa [sub_eq_zero] using h_out_constrs
+      simpa [sub_eq_zero, IsBool] using h_out_constrs
 
     -- Step 2: Establish that the aux bit is Boolean
     have h_aux_bool : IsBool (env.get (i₀ + n)) := by
