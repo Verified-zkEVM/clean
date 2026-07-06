@@ -261,20 +261,36 @@ def genFmulAST (p numWords : ℕ) : Func :=
           ++ [ br "carry_loop" ]
         ) ] ]
   -- Repeated conditional subtraction: loop until c < p
-  -- Two-pass reduction: after redSB + addRed, c_hi might still be non-zero (carry from addRed).
-  -- Do a second Barrett pass using c[N] as c_hi.
-  let secondPass : List Instr :=
-    -- Multiply c_hi2 (just c[N]) by r → t2
-    ((List.range N) >>= fun j =>
-      genSchoolbookAccum N 0 j (cBase+N) rBase tBase) ++
-    -- Add t2_lo to c_lo again
+  -- Iterative reduction: copy t_hi to c_hi, recompute schoolbook, add to c_lo, repeat
+  let reduceOnePass : List Instr :=
+    -- Copy t_hi (t[N..2N-1]) to c_hi (c[N..2N-1])
+    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ]) ++
+    -- Zero t
+    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
+    -- Schoolbook: c_hi * R → t
+    ((List.range N) >>= fun i => (List.range N) >>= fun j =>
+      genSchoolbookAccum N i j (cBase+N) rBase tBase) ++
+    -- Add t_lo to c_lo
     [ local.get (cBase+0), local.get (tBase+0), i64.add, local.set (cBase+0),
       local.get (cBase+0), local.get (tBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
     ++ ((List.range (N-1)) >>= fun i =>
       let idx := i + 1
       [ local.get (cBase+idx), local.get (tBase+idx), i64.add, local.get carryIdx, i64.add, local.set (cBase+idx),
         local.get (cBase+idx), local.get (tBase+idx), i64.lt_u, i64.extend_i32_u,
-        local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ])
+        local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ]) ++
+    -- Carry loop
+    [ block "rc_done" [ loop "rc_loop" (
+        [ local.get carryIdx, i64.eqz, br_if "rc_done", i64.const 0, local.set carryIdx,
+          local.get (cBase+0), local.get (rBase+0), i64.add, local.tee (cBase+0),
+          local.get (cBase+0), local.get (rBase+0), i64.lt_u, i64.extend_i32_u, local.set carryIdx ]
+        ++ ((List.range (N-1)) >>= fun i =>
+          let idx := i + 1
+          [ local.get (cBase+idx), local.get (rBase+idx), i64.add, local.get carryIdx, i64.add, local.tee (cBase+idx),
+            local.get (cBase+idx), local.get (rBase+idx), i64.lt_u, i64.extend_i32_u,
+            local.get (cBase+idx), local.get carryIdx, i64.lt_u, i64.extend_i32_u, i64.or, local.set carryIdx ])
+        ++ [ br "rc_loop" ]
+    ) ] ]
+  let iterReductions : List Instr := reduceOnePass ++ reduceOnePass ++ reduceOnePass
   -- Conditional subtraction: c - p → t, if no borrow use t (up to 3 passes for safety)
   let subOne : List Instr :=
     [ local.get (cBase+0), local.get (pBase+0), i64.sub, local.set (tBase+0),
@@ -296,6 +312,11 @@ def genFmulAST (p numWords : ℕ) : Func :=
     ((pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ])
   -- Result: return c[0..N-1]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+i) ]
+  -- Handle t_hi from Barrett: copy to c_hi, zero t, run redSB+addRed again
+  let reduceT_Hi : List Instr :=
+    ((List.range N) >>= fun i => [ local.get (tBase+N+i), local.set (cBase+N+i) ]) ++
+    ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++
+    redSB ++ addRed ++ carryLoop
   -- Assemble
   { name := "$fmul"
     params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64)) ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
@@ -307,8 +328,8 @@ def genFmulAST (p numWords : ℕ) : Func :=
       ++ ((List.range N).map fun i => (s!"$r{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$p{i}", ValType.i64))
     body := initAll ++ mainSB ++ redSB ++ addRed ++ carryLoop ++
-            ((List.range limbs2N) >>= fun i => [ i64.const 0, local.set (tBase+i) ]) ++  -- re-init t
-            secondPass ++ carryLoop ++ condSub ++ rets }
+            reduceT_Hi ++ reduceT_Hi ++ reduceT_Hi ++ reduceT_Hi ++
+            condSub ++ rets }
 
 def genFmul (p numWords : ℕ) : String := Ast.Func.toString (genFmulAST p numWords)
 
