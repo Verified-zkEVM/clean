@@ -579,11 +579,12 @@ def compileLinComb (lc : LinComb) (signalBase signalBytes : ℕ) : List Instr :=
     first ++ restInstrs
 
 /--
-Discover intermediate signals from assert expressions.
+Discover intermediate signals from assert expressions and compile to instructions.
+`intLocalBase` is the starting local index for intermediate locals in the calling function.
 Returns (numIntermediates, local declarations, computation instructions).
 -/
 def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (FlatOperation F))
-    (startSignal signalBase signalBytes : ℕ) : ℕ × List (String × ValType) × List Instr :=
+    (startSignal signalBase signalBytes intLocalBase : ℕ) : ℕ × List (String × ValType) × List Instr :=
   let (st, _) := flatOps.foldl (fun (acc : FlattenState × Unit) (op : FlatOperation F) =>
     match op with
     | .assert e =>
@@ -599,12 +600,12 @@ def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (Fla
     | [] => (idx, locals, instrs)
     | (la, lb, [(k, _)]) :: rest =>
       let localName := s!"$int_{idx}"
+      let li := intLocalBase + idx
       let laInstrs := compileLinComb la signalBase signalBytes
       let lbInstrs := compileLinComb lb signalBase signalBytes
       let computeInstrs : List Instr :=
-        laInstrs ++ lbInstrs ++ [call "$fmul", local.set 0,
-         i32.const (signalBase + k * signalBytes), local.get 0, i32.wrap_i64, i32.store 0]
-      -- Note: local.set/get 0 is a placeholder; the actual local index is fixed in compileModule
+        laInstrs ++ lbInstrs ++ [call "$fmul", local.set li,
+         i32.const (signalBase + k * signalBytes), local.get li, i32.wrap_i64, i32.store 0]
       buildAST (idx + 1) (computeInstrs ++ instrs) ((localName, .i64) :: locals) rest
     | _ :: rest => buildAST idx instrs locals rest
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
@@ -686,48 +687,42 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let signalBase := 4 + n32 * 4
   let signalBytes := n32 * 4
   let startSignal := 1 + finalVm.nextLocal / nw
+  -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
+  let intLocalBase := 3 + numInputs
   let (numInt, intLocals, intCode) :=
-    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes
+    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each witness word to signal memory
-  let outputStoresAST : List Instr := (List.range witnessCount) >>= fun i =>
+  let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 4),
         local.get (numInputs * nw + i * nw + w),
         i32.wrap_i64,
         i32.store 0 ]
-  -- Build the compute function with proper AST body
+  -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
     (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
   let computeFunc : Func := {
     name := "$compute"
     params := inputParams
     locals := (List.replicate witnessWords ("", .i64)) ++ [("$idx", .i64)]
-    body := bodyInstrs ++ outputStoresAST
+    body := bodyInstrs ++ outputStores
   }
-  -- Build getWitness body with proper AST instructions
+  -- Build getWitness body
   let gwInputLocals : List (String × ValType) :=
     ((List.range numInputs).map fun i => (s!"$in_{i}", ValType.i64))
-  -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
-  let intLocalBase := 3 + numInputs
-  -- Fix intermediate code to use correct local indices
-  let intCodeFixed : List Instr := intCode.map fun instr =>
-    match instr with
-    | .localSet 0 => .localSet intLocalBase  -- placeholder → actual base
-    | .localGet 0 => .localGet intLocalBase
-    | _ => instr
   -- Input loads: read each input from signal memory, extend to i64, set input local
-  let inputLoadsAST : List Instr := (List.range numInputs) >>= fun i =>
+  let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
     [ i32.const (signalBase + (1 + i) * signalBytes), i32.load 0, i64.extend_i32_u,
       local.set (3 + i) ]  -- $in_i at local index 3+i
   -- Input push: push all input locals for $compute call
-  let inputPushAST : List Instr := (List.range numInputs) >>= fun i =>
-    [ local.get (3 + i) ]  -- push $in_i
+  let inputPush : List Instr := (List.range numInputs) >>= fun i =>
+    [ local.get (3 + i) ]
   -- Build the getWitness function body
-  let gwBodyAST : List Instr :=
+  let gwBody : List Instr :=
     [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
     ++ [ if_ none
-          (inputLoadsAST ++ inputPushAST ++ [call "$compute"] ++ intCodeFixed
+          (inputLoads ++ inputPush ++ [call "$compute"] ++ intCode
            ++ [ i32.const signalBase, i32.const 1, i32.store 0,  -- store constant 1
                 i32.const 0, i32.const 1, i32.store 0 ])           -- set computed flag
           [] ]
@@ -780,7 +775,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       params := [("$i", .i32)]
       locals := [("$tmp", ValType.i32), ("$idx", ValType.i64)]
         ++ gwInputLocals ++ intLocals
-      body := gwBodyAST },
+      body := gwBody },
     { name := "$getMessageChar"
       exportName := some "getMessageChar"
       results := [.i32]
