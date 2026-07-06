@@ -215,7 +215,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simpa using congrArg Prod.snd h_input
 
     simp only [hx_eval, hy_eval] at h_holds
-    simp only [mul_zero, dite_eq_ite, ite_self, add_zero] at h_holds ⊢
 
     set out := env.get (i₀ + n + 1) with hout
     have two_exp_n_small : 2^n < p := by

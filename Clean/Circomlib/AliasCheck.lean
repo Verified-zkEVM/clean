@@ -34,8 +34,6 @@ def main (input : Vector (Expression (F p)) 254) := do
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
--- TODO(4.30 bump): scoped legacy defeq; see Fibonacci8
-set_option backward.isDefEq.respectTransparency false in
 def circuit : FormalAssertion (F p) (fields 254) where
   main
 

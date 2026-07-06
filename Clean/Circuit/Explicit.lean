@@ -831,7 +831,10 @@ elab "elaborate_circuit" : tactic => withMainContext do
     let mut thms := explicitThms
     for decl in decls do
       thms ← thms.addDeclToUnfold decl
-    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+    -- `instances := true`: since Lean 4.29, simp/dsimp no longer visit instance arguments or
+    -- unfold class projections applied to instances by default; without this, child metadata
+    -- like `ElaboratedCircuit.localLength <sub>.main …` stays stuck (e.g. Keccak ThetaC).
+    Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
       (simpTheorems := #[thms]) congrThms
 
   -- Normalize the inferred explicit metadata once with the common unfold set.  The
@@ -843,7 +846,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let commonDsimpCtx ← mkDsimpCtx commonDecls
   let explicitMetadata := (← dsimp explicit commonDsimpCtx).1
 
-  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+  let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
   let simpProcs ← do
     let some ext ← Simp.getSimprocExtension? `explicit_circuit_norm
@@ -1090,7 +1093,7 @@ private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option 
       | throwError "unknown simp attribute explicit_circuit_norm"
     ext.getTheorems
   let congrThms ← getSimpCongrTheorems
-  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true }
+  let dsimpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
 
   -- This is the core of the tactic: build the ordinary `.withData` expression and
