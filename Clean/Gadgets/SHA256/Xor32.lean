@@ -69,7 +69,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
     · simp only [hk, ite_true]
       have ih' := ih (f ∘ Fin.castSucc) (fun i => hf _) ⟨k.val, hk⟩
       simp only [Function.comp] at ih'; rw [ih']; congr 1
-    · push_neg at hk
+    · push Not at hk
       have hkeq : k.val = m := Nat.le_antisymm (Nat.lt_succ_iff.mp k.isLt) hk
       simp only [hkeq, lt_irrefl, ite_false, Nat.sub_self]
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
@@ -86,7 +86,7 @@ private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i =
     rw [Nat.testBit_xor, testBit_binary_sum n f hf ⟨j, hj⟩, testBit_binary_sum n g hg ⟨j, hj⟩,
         testBit_binary_sum n _ hfg ⟨j, hj⟩]
     rcases hf ⟨j, hj⟩ with hfi | hfi <;> rcases hg ⟨j, hj⟩ with hgi | hgi <;> simp [hfi, hgi]
-  · push_neg at hj
+  · push Not at hj
     have pow_le : 2^n ≤ 2^j := Nat.pow_le_pow_right (by norm_num) hj
     have hfS := sum_bool_lt_two_pow n f (fun i => by rcases hf i with h|h <;> simp [h])
     have hgS := sum_bool_lt_two_pow n g (fun i => by rcases hg i with h|h <;> simp [h])

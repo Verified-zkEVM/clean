@@ -30,7 +30,9 @@ instance elaborated : ElaboratedCircuit F M field main := by
     localLength _ := 2 * size M
     output input i₀ := Fin.foldl (size M)
       (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
-  } using by simp +arith [circuit_norm]
+  } using by
+    unfold_formal_circuit_consts
+    simp +arith +instances [circuit_norm]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -56,15 +58,16 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
   simp only [IsZeroField.circuit] at h_isZero
   induction n generalizing i₀
   · simp only [Fin.foldl_zero, Expression.eval]
-    simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
+    simp only [not_lt_zero, IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
     let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
     let vals_pre := vals.take pre |>.cast (by simp : min pre (pre + 1) = pre)
     have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by
       simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
-        Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl, Vector.map_pop,
-        vals_pre, vars_pre, h_eval]
+        Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl,
+        vals_pre, vars_pre, ← h_eval]
+      exact Vector.map_pop
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at *
     simp only [Vector.getElem_cast, forall_const] at h_ih
@@ -73,7 +76,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       intro i
       specialize h_isZero i.castSucc
       norm_num at h_isZero ⊢
-      simp only [h_isZero])
+      exact h_isZero)
     simp only [Vector.getElem_take] at h_ih
     rw [h_ih]
     specialize h_isZero (.last pre) trivial

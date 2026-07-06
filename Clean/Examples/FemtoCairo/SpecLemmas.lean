@@ -266,7 +266,7 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
       · right; left; simp +decide [h6_one, h7_zero, ZMod.val_one]
       · right; right; right; simp +decide [h6_one, h7_one, ZMod.val_one]
 
-omit [Fact (Nat.Prime p)] p_large_enough in
+omit p_large_enough in
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
 lemma dataMemoryAccess_mode0_bound
     {memorySize : ℕ} (memory : Fin memorySize → F p)
@@ -287,7 +287,7 @@ lemma dataMemoryAccess_mode0_bound
     case isFalse h_neg =>
       simp at h_first
 
-omit [Fact (Nat.Prime p)] p_large_enough in
+omit p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 1 (ap-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode1_bound
     {memorySize : ℕ} (memory : Fin memorySize → F p)
@@ -297,7 +297,7 @@ lemma dataMemoryAccess_mode1_bound
   simp only [dataMemoryAccess, memoryAccess] at h
   split at h <;> simp_all
 
-omit [Fact (Nat.Prime p)] p_large_enough in
+omit p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 2 (fp-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode2_bound
     {memorySize : ℕ} (memory : Fin memorySize → F p)

@@ -31,10 +31,12 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
     output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
       |>.set 0 (varFromOffset U64 (i0 + 1280))
   } using by
-    simp +arith only [circuit_norm, Vector.mapRange_eq_mapFinRange]
+    simp +arith +instances only [circuit_norm, Vector.mapRange_eq_mapFinRange,
+      Xor64.circuit, And.And64.circuit, Not.circuit]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+    And.And64.circuit, Not.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
   simp_rw [Vector.mapRange_eq_mapFinRange]
@@ -79,6 +81,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc
 
 theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+    And.And64.circuit, Not.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
 

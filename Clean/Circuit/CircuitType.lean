@@ -39,6 +39,15 @@ abbrev VerifierEval (F : Type) Var (Value : outParam Type) := Eval (Environment 
 abbrev ProverEval (F : Type) Var (Value : outParam Type) := Eval (ProverEnvironment F) Var Value
 
 /--
+Evaluation into `Unit` is trivial (e.g. the verifier view of prover-only hints).
+Stated for an arbitrary instance so it fires regardless of how the instance
+argument was normalized; holds by `Unit` eta.
+-/
+@[circuit_norm]
+lemma eval_unit {Env X : Type} [Eval Env X Unit] (env : Env) (v : X) :
+    eval env v = () := rfl
+
+/--
 Explicit verifier view: even on a `ProverEnvironment`, this forces the verifier
 instance via the `ProverEnvironment → Environment` projection.
 -/
@@ -131,7 +140,7 @@ structure UnconstrainedNative (Hint : Type) (F : Type) where
 
 variable {Hint : Type}
 
-instance UnconstrainedNative.toCircuitType : CircuitType (UnconstrainedNative Hint) where
+@[reducible] instance UnconstrainedNative.toCircuitType : CircuitType (UnconstrainedNative Hint) where
   Var F := ProverEnvironment F → Hint
   ProverValue _ := Hint
   Value _ := Unit
@@ -172,7 +181,7 @@ structure UnconstrainedDepNative (Hint : TypeMap) (F : Type) where
 
 variable {HintMap : TypeMap}
 
-instance UnconstrainedDepNative.toCircuitType : CircuitType (UnconstrainedDepNative HintMap) where
+@[reducible] instance UnconstrainedDepNative.toCircuitType : CircuitType (UnconstrainedDepNative HintMap) where
   Var F := ProverEnvironment F → HintMap F
   ProverValue F := HintMap F
   Value _ := Unit

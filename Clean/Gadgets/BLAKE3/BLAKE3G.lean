@@ -53,6 +53,8 @@ def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : �
     |>.set c (⟨var ⟨i₀ + 76⟩, var ⟨i₀ + 78⟩, var ⟨i₀ + 80⟩, var ⟨i₀ + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i₀ + 68)) d.is_lt
 
+-- TODO(4.30 bump): scoped legacy defeq; see Fibonacci8
+set_option backward.isDefEq.respectTransparency false in
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) := by
   elaborate_circuit_with {
     output inputs i0 := output a b c d inputs.state i0

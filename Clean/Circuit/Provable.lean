@@ -67,25 +67,27 @@ with the input type, and `Var` is `M ∘ Expression`.
 The instance lives in `Provable.lean`, after `ProvableType` is defined, to keep
 `CircuitType.lean` below `Provable.lean` in the import graph.
 -/
-instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
+@[reducible] instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   Var F := M (Expression F)
   ProverValue := M
   Value := M
   evalVerifier env v := ProvableType.eval env v
   evalProver env v := ProvableType.eval env.toEnvironment v
 
-instance {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
-  inferInstanceAs (ProvableType M)
+-- low priority: with a reducible `toCircuitType`, this head is close to universal;
+-- prefer direct instances
+instance (priority := low) {M : TypeMap} [ProvableType M] : ProvableType (Value M) :=
+  (inferInstance : ProvableType M)
 
 @[explicit_provable_type]
 def const (x : M F) : M (Expression F) :=
   let values : Vector F _ := toElements x
   fromElements (values.map .const)
 
-instance [Field F] : Inhabited (M F) where
+instance (priority := low) [Field F] : Inhabited (M F) where
   default := fromElements default
 
-instance [Field F] : Inhabited (M (Expression F)) where
+instance (priority := low) [Field F] : Inhabited (M (Expression F)) where
   default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`
@@ -134,7 +136,7 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 
 instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
     [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
-  inferInstanceAs (GetElem (α (Expression F)) ℕ elem valid)
+  (inferInstance : GetElem (α (Expression F)) ℕ elem valid)
 
 @[explicit_provable_type] lemma eval_var (env : Environment F) (v : Var M F) :
     eval env v = ProvableType.eval env (v : M (Expression F)) := by
@@ -189,12 +191,12 @@ instance : ProvableType unit where
   fromElements _ := ()
 
 instance {Hint : Type} : ProvableType (Value (UnconstrainedNative Hint)) :=
-  inferInstanceAs (ProvableType unit)
+  (inferInstance : ProvableType unit)
 
 instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :=
-  inferInstanceAs (ProvableType unit)
+  (inferInstance : ProvableType unit)
 
-abbrev field : TypeMap := id
+abbrev field : TypeMap := fun F => F
 
 @[circuit_norm]
 instance : ProvableType field where
@@ -207,8 +209,6 @@ namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
 instance : ProverEval F (Expression F) F := proverEval field
-instance : VerifierEval F (M (Var field F)) (M F) := verifierEval M
-instance : ProverEval F (M (Var field F)) (M F) := proverEval M
 
 end CircuitType
 
@@ -218,13 +218,13 @@ abbrev fieldPair : TypeMap := fun F => F × F
 
 abbrev fieldTriple : TypeMap := fun F => F × F × F
 
-instance : ProvableType fieldPair where
+instance (priority := high) : ProvableType fieldPair where
   size := 2
   toElements := fun (x, y) => #v[x, y]
   fromElements := fun ⟨⟨[x, y]⟩, _ ⟩ => (x, y)
 instance : NonEmptyProvableType fieldPair where
 
-instance : ProvableType fieldTriple where
+instance (priority := high) : ProvableType fieldTriple where
   size := 3
   toElements := fun (x, y, z) => #v[x, y, z]
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
@@ -236,13 +236,15 @@ abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
 abbrev fields (n : ℕ) := fun F => Vector F n
 
 @[circuit_norm]
-instance : ProvableType (fields n) where
+-- high priority: since `field` is a transparent synonym for the identity,
+-- `ProvableVector field n` also unifies with `fields n`; prefer this direct instance
+instance (priority := high) : ProvableType (fields n) where
   size := n
   toElements x := x
   fromElements v := v
 
 instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
-nonempty := Nat.zero_lt_succ n
+  nonempty := Nat.zero_lt_succ n
 
 namespace CircuitType
 
@@ -328,7 +330,7 @@ class ProvableStruct (α : TypeMap) where
 
 export ProvableStruct (components toComponents fromComponents)
 
-attribute [circuit_norm] components toComponents fromComponents
+attribute [circuit_norm] components toComponents
   ProvableStruct.combinedSize ProvableStruct.combinedSize'
 
 namespace ProvableStruct
@@ -420,8 +422,9 @@ where
     eval.go env cs as = (componentsToElements cs as |> Vector.map (Expression.eval env) |> componentsFromElements cs)
   | [], .nil => rfl
   | c :: cs, .cons a as => by
-    simp only [componentsToElements, componentsFromElements, eval.go]
-    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+    simp only [componentsToElements, componentsFromElements, eval.go,
+      combinedSize', List.map_cons, List.sum_cons]
+    simp only [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     · exact (ProvableType.fromElements_eval_toElements (env:=env) a).symm
     -- recursively use this lemma!
@@ -433,6 +436,34 @@ theorem eval_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvi
     Eval.eval env x = ProvableStruct.eval env.toEnvironment x := by
   rw [CircuitType.eval_expression_prover_to_verifier]
   exact eval_eq_eval env.toEnvironment x
+
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env (x : α (Expression F)) := by
+  rw [CircuitType.eval_var]
+  rw [← CircuitType.eval_expression]
+  exact eval_eq_eval env (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
+    (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env.toEnvironment (x : α (Expression F)) := by
+  rw [CircuitType.eval_var_prover]
+  rw [← CircuitType.eval_expression]
+  exact eval_eq_eval env.toEnvironment (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_field_var_eq_eval {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : α (Var field F)) :
+    Eval.eval env x = ProvableStruct.eval env (x : α (Expression F)) := by
+  exact eval_eq_eval env (x : α (Expression F))
+
+@[circuit_norm ↓ high]
+theorem eval_field_var_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
+    (x : α (Var field F)) :
+    Eval.eval env x = ProvableStruct.eval env.toEnvironment (x : α (Expression F)) := by
+  exact eval_eq_eval_prover env (x : α (Expression F))
 
 /--
 Alternative `varFromOffset` which creates each component separately.
@@ -466,8 +497,9 @@ where
     | c :: cs, offset => by
       simp only [varFromOffset.go, componentsFromElements, ProvableType.varFromOffset]
       have h_size : combinedSize' (c :: cs) = size c.type + combinedSize' cs := rfl
-      rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append, Vector.cast_rfl,
-        Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+      rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append]
+      simp only [combinedSize', List.map_cons, List.sum_cons]
+      simp_rw [Vector.cast_rfl, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
       congr
       -- recursively use this lemma
       rw [varFromOffset_eq_varFromOffset_aux]
@@ -486,7 +518,7 @@ theorem eval_field (env : Environment F) (x : field (Expression F)) :
   simp [circuit_norm, explicit_provable_type]
 
 @[circuit_norm] lemma const_field {F} (x : field F) :
-  const x = Expression.const x := by simp [circuit_norm, const]
+  const x = Expression.const x := by simp [circuit_norm, const, explicit_provable_type]
 
 end ProvableType
 
@@ -528,7 +560,7 @@ theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
   rfl
 
 @[circuit_norm] lemma const_fields {F} (x : fields n F) :
-  const x = x.map Expression.const := by simp [circuit_norm, const]
+  const x = x.map Expression.const := by simp [circuit_norm, const, explicit_provable_type]
 
 @[circuit_norm ↓]
 theorem varFromOffset_fields {F} (offset : ℕ) :
@@ -667,28 +699,25 @@ theorem getElem_eval_toElements
 theorem getElem_eval_fields (env : Environment F) (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression]
-  simp only [explicit_provable_type, fromElements, instProvableTypeFields, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
 
 theorem getElem_eval_fields_prover {n : ℕ} {env : ProverEnvironment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
-  simp only [explicit_provable_type, fromElements, instProvableTypeFields, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
 end ProvableType
 
 -- more concrete ProvableType instances
 
 -- `ProvableVector`
 section
-variable {n : ℕ} {α : TypeMap} [NonEmptyProvableType α]
-
-abbrev psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
-  ⟨ size α, NonEmptyProvableType.nonempty ⟩
+variable {n : ℕ} {α : TypeMap} [ProvableType α]
 
 instance ProvableVector.instance : ProvableType (ProvableVector α n) where
   size := n * size α
   toElements x := x.map toElements |>.flatten
-  fromElements v := v.toChunks (psize α) |>.map fromElements
+  fromElements v := v.toChunks (size α) |>.map fromElements
   fromElements_toElements x := by
     rw [Vector.flatten_toChunks, Vector.map_map, ProvableType.fromElements_comp_toElements, Vector.map_id]
   toElements_fromElements v := by
@@ -717,21 +746,17 @@ theorem eval_vector (env : Environment F)
   simp [explicit_provable_type]
 
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
-    (eval env x[i]) = (eval env x)[i] := by
+    eval env x[i] = (eval env x)[i] := by
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
 
-lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment F)
-    (vars : Vector (M (Expression F)) n)
-    (vals : Vector (M F) n)
-    (h : (eval env (vars : ProvableVector M n (Expression F)) : ProvableVector M n F) =
-      (vals : ProvableVector M n F))
-    (i : ℕ) (h_i : i < n) :
+lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
+    (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)
+    (h : eval env vars = vals) (i : ℕ) (h_i : i < n) :
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
-  have h' := congrArg (fun xs : Vector (M F) n => xs[i]) h
-  simpa only [eval_vector, Vector.getElem_map] using h'
+  rw [getElem_eval_vector, h]
 
-lemma eval_vector_take {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment F)
+lemma eval_vector_take {n : ℕ} (env : Environment F)
     (vars : ProvableVector M n (Expression F)) (i : ℕ) :
     (eval (Value:=ProvableVector M (min i n) F) env
         (vars.take i : ProvableVector M (min i n) (Expression F)) :
@@ -739,7 +764,7 @@ lemma eval_vector_take {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : E
       (eval env vars).take i := by
   simp only [eval_vector, Vector.take_eq_extract, Vector.map_extract]
 
-lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment F)
+lemma eval_vector_takeShort {n : ℕ} (env : Environment F)
     (vars : ProvableVector M n (Expression F)) (i : ℕ) (h_i : i < n) :
     (eval (Value:=ProvableVector M i F) env
         (vars.takeShort i h_i : ProvableVector M i (Expression F)) :
@@ -750,7 +775,7 @@ lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (en
   ext j h_j
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.map_take, Vector.getElem_map]
 
-theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
+theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [ProvableType α] (offset : ℕ) :
     varFromOffset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => varFromOffset α (offset + (size α)*i) := by
   induction n with
@@ -874,12 +899,12 @@ namespace CircuitType
 @[circuit_norm] lemma eval_field_pair (F : Type) [FiniteField F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_pair (α:=field) (β:=field) env p1 p2
+  with_unfolding_all rfl
 
 @[circuit_norm] lemma eval_field_pair_prover (F : Type) [FiniteField F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  exact eval_var_pair_prover env p1 p2
+  with_unfolding_all rfl
 
 end CircuitType
 
@@ -903,152 +928,47 @@ theorem eval_pair_both_expr (env : Environment F)
   (a b : Expression F) :
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
-  simp only [eval_pair (α:=field) (β:=field), ProvableType.eval_field]
-
--- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
-@[circuit_norm ↓ high]
-theorem eval_pair_left_vector_expr {n : ℕ} {β : TypeMap} [ProvableType β] (env : Environment F)
-  (a : Vector (Expression F) n) (b : β (Expression F)) :
-    eval env ((a, b) : ProvablePair (fields n) β (Expression F)) =
-      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F), eval env b) :=
-  eval_pair (α:=fields n) env a b
-
-@[circuit_norm ↓ high]
-theorem eval_pair_right_vector_expr {n : ℕ} {α : TypeMap} [ProvableType α] (env : Environment F)
-  (a : α (Expression F)) (b : Vector (Expression F) n) :
-    eval env ((a, b) : ProvablePair α (fields n) (Expression F)) =
-      (eval env a, (eval (Value:=fields n F) env (b : fields n (Expression F)) : fields n F)) :=
-  eval_pair (β:=fields n) env a b
-
-@[circuit_norm ↓ high]
-theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
-  (a : Vector (Expression F) n) (b : Vector (Expression F) m) :
-    eval env ((a, b) : ProvablePair (fields n) (fields m) (Expression F)) =
-      ((eval (Value:=fields n F) env (a : fields n (Expression F)) : fields n F),
-        (eval (Value:=fields m F) env (b : fields m (Expression F)) : fields m F)) :=
-  eval_pair (α:=fields n) (β:=fields m) env a b
+  with_unfolding_all rfl
 
 omit [FiniteField F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
     varFromOffset (F:=F) (ProvablePair α β) offset
     = (varFromOffset α offset, varFromOffset β (offset + size α)) := by
-  simp only [varFromOffset, ProvablePair.instance]
+  simp only [varFromOffset, circuit_norm, fromElements]
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
 
-instance {α : TypeMap} [ProvableType α] : Zero (α F) where
+-- low priority: must not shadow canonical `Zero F` instances on the transparent
+-- `field F` synonym (a `fromElements`-based zero is not syntactically canonical)
+instance (priority := low) {α : TypeMap} [ProvableType α] : Zero (α F) where
   zero := fromElements (Vector.replicate _ 0)
 
--- be able to use `field (Expression F)` in expressions
+-- make `Var field F` behave like `Expression F` in expressions.
+-- These are needed for elaboration: typeclass search does not reduce the
+-- projection-headed type `Var field F` to `Expression F` in goals. The bodies
+-- are the canonical `Expression F` instances, so no new instance constants leak
+-- into normalized terms.
+@[reducible] instance : Zero (Var field F) := (inferInstance : Zero (Expression F))
+@[reducible] instance : One (Var field F) := (inferInstance : One (Expression F))
+@[reducible] instance : Add (Var field F) := (inferInstance : Add (Expression F))
+@[reducible] instance : Neg (Var field F) := (inferInstance : Neg (Expression F))
+@[reducible] instance : Sub (Var field F) := (inferInstance : Sub (Expression F))
+@[reducible] instance : Mul (Var field F) := (inferInstance : Mul (Expression F))
+@[reducible] instance : Coe F (Var field F) := (inferInstance : Coe F (Expression F))
+@[reducible] instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := (inferInstance : OfNat (Expression F) n)
+@[reducible] instance : HMul (Var field F) F (Expression F) := (inferInstance : HMul (Expression F) F (Expression F))
+@[reducible] instance : HMul F (Var field F) (Expression F) := (inferInstance : HMul F (Expression F) (Expression F))
+@[reducible] instance : HAdd (Expression F) (Var field F) (Expression F) := (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HAdd (Var field F) (Expression F) (Expression F) := (inferInstance : HAdd (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (Expression F) (Var field F) (Expression F) := (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HSub (Var field F) (Expression F) (Expression F) := (inferInstance : HSub (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul (Expression F) (Var field F) (Expression F) := (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HMul (Var field F) (Expression F) (Expression F) := (inferInstance : HMul (Expression F) (Expression F) (Expression F))
+@[reducible] instance : HDiv (Var field F) F (Expression F) := (inferInstance : HDiv (Expression F) F (Expression F))
+@[reducible] instance : HDiv (Var field F) ℕ (Expression F) := (inferInstance : HDiv (Expression F) ℕ (Expression F))
 
-instance : HAdd (field (Expression F)) (Expression F) (Expression F) where
-  hAdd (x : Expression F) y := x + y
-instance : HAdd (Expression F) (field (Expression F)) (Expression F) where
-  hAdd x (y : Expression F) := x + y
-instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hAdd (a : Expression F) (b : Expression F) := a + b
-
-instance : HSub (field (Expression F)) (Expression F) (Expression F) where
-  hSub (x : Expression F) y := x - y
-instance : HSub (Expression F) (field (Expression F)) (Expression F) where
-  hSub x (y : Expression F) := x - y
-instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hSub (a : Expression F) (b : Expression F) := a - b
-
-instance : HMul (field (Expression F)) (Expression F) (Expression F) where
-  hMul (x : Expression F) y := x * y
-instance : HMul (Expression F) (field (Expression F)) (Expression F) where
-  hMul x (y : Expression F) := x * y
-instance : HMul F (field (Expression F)) (field (Expression F)) where
-  hMul x y : Expression F := x * y
-instance : HMul (field (Expression F)) F (field (Expression F)) where
-  hMul x y : Expression F := x * y
-instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hMul (a : Expression F) (b : Expression F) := a * b
-
-instance {n : ℕ} [OfNat F n] : OfNat (field F) n where
-  ofNat : F := OfNat.ofNat n
-
-instance [Coe ℕ F] : Coe ℕ (field F) where
-  coe n : F := n
-instance [CoeOut ℕ F] : CoeOut ℕ (field F) where
-  coe n : F := n
-instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
-  coe n : F := n
-instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
-  coe n : F := n
-
-instance [DecidableEq F] : DecidableEq (field F) :=
-  inferInstanceAs (DecidableEq F)
-
--- make `Var field F` behave like `Expression F` in expressions
-instance : Zero (Var field F) := inferInstanceAs (Zero (Expression F))
-instance : One (Var field F) := inferInstanceAs (One (Expression F))
-instance : Add (Var field F) := inferInstanceAs (Add (Expression F))
-instance : Neg (Var field F) := inferInstanceAs (Neg (Expression F))
-instance : Sub (Var field F) := inferInstanceAs (Sub (Expression F))
-instance : Mul (Var field F) := inferInstanceAs (Mul (Expression F))
-instance : Coe F (Var field F) := inferInstanceAs (Coe F (Expression F))
-instance {n : ℕ} [OfNat F n] : OfNat (Var field F) n := inferInstanceAs (OfNat (Expression F) n)
-instance : HMul (Var field F) F (Expression F) := inferInstanceAs (HMul (Expression F) F (Expression F))
-instance : HMul F (Var field F) (Expression F) := inferInstanceAs (HMul F (Expression F) (Expression F))
-instance : HAdd (Expression F) (Var field F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HAdd (Var field F) (Expression F) (Expression F) := inferInstanceAs (HAdd (Expression F) (Expression F) (Expression F))
-instance : HSub (Expression F) (Var field F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HSub (Var field F) (Expression F) (Expression F) := inferInstanceAs (HSub (Expression F) (Expression F) (Expression F))
-instance : HMul (Expression F) (Var field F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HMul (Var field F) (Expression F) (Expression F) := inferInstanceAs (HMul (Expression F) (Expression F) (Expression F))
-instance : HDiv (Var field F) F (Expression F) := inferInstanceAs (HDiv (Expression F) F (Expression F))
-instance : HDiv (Var field F) ℕ (Expression F) := inferInstanceAs (HDiv (Expression F) ℕ (Expression F))
-
-  -- make `field F` behave like `F` in expressions
-instance : Zero (field F) := inferInstanceAs (Zero F)
-instance : One (field F) := inferInstanceAs (One F)
-instance : Add (field F) := inferInstanceAs (Add F)
-instance : Neg (field F) := inferInstanceAs (Neg F)
-instance : Sub (field F) := inferInstanceAs (Sub F)
-instance : Mul (field F) := inferInstanceAs (Mul F)
-instance : Inv (field F) := inferInstanceAs (Inv F)
-instance : HAdd F (field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv F (field F) F := inferInstanceAs (HDiv F F F)
-instance : HDiv (field F) F F := inferInstanceAs (HDiv F F F)
-
--- make `Value field F` behave like `F` in expressions
-instance : Zero (Value field F) := inferInstanceAs (Zero F)
-instance : One (Value field F) := inferInstanceAs (One F)
-instance : Add (Value field F) := inferInstanceAs (Add F)
-instance : Neg (Value field F) := inferInstanceAs (Neg F)
-instance : Sub (Value field F) := inferInstanceAs (Sub F)
-instance : Mul (Value field F) := inferInstanceAs (Mul F)
-instance {n : ℕ} [OfNat F n] : OfNat (Value field F) n := inferInstanceAs (OfNat F n)
-instance : HAdd F (Value field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (Value field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (Value field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (Value field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (Value field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (Value field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv (Value field F) F F := inferInstanceAs (HDiv F F F)
-instance : HDiv F (Value field F) F := inferInstanceAs (HDiv F F F)
-
--- make `ProverValue field F` behave like `F` in expressions
-instance : Zero (ProverValue field F) := inferInstanceAs (Zero F)
-instance : One (ProverValue field F) := inferInstanceAs (One F)
-instance : Add (ProverValue field F) := inferInstanceAs (Add F)
-instance : Neg (ProverValue field F) := inferInstanceAs (Neg F)
-instance : Sub (ProverValue field F) := inferInstanceAs (Sub F)
-instance : Mul (ProverValue field F) := inferInstanceAs (Mul F)
-instance {n : ℕ} [OfNat F n] : OfNat (ProverValue field F) n := inferInstanceAs (OfNat F n)
-instance : HAdd F (ProverValue field F) F := inferInstanceAs (HAdd F F F)
-instance : HAdd (ProverValue field F) F F := inferInstanceAs (HAdd F F F)
-instance : HSub F (ProverValue field F) F := inferInstanceAs (HSub F F F)
-instance : HSub (ProverValue field F) F F := inferInstanceAs (HSub F F F)
-instance : HMul F (ProverValue field F) F := inferInstanceAs (HMul F F F)
-instance : HMul (ProverValue field F) F F := inferInstanceAs (HMul F F F)
-instance : HDiv (ProverValue field F) F F := inferInstanceAs (HDiv F F F)
-instance : HDiv F (ProverValue field F) F := inferInstanceAs (HDiv F F F)
+-- Note: no bespoke instances are needed on `field F` / `Var field F` / `Value field F` etc.:
+-- `field` is a fully transparent synonym, so typeclass resolution finds the canonical
+-- instances on `F` and `Expression F` directly. (Bespoke instances would in fact be
+-- pathological now: their heads normalize to e.g. `Zero F` with premise `Zero F`.)

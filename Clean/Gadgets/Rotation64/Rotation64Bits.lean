@@ -43,7 +43,7 @@ def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
     localLength _ := 16
     output _inputs i0 := output off i0
   } using by
-    simp only [circuit_norm]
+    simp +instances only [circuit_norm]
     intro inputs i0
     apply congrArg U64.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]

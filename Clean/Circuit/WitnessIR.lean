@@ -465,8 +465,10 @@ where
   | [], .nil => rfl
   | c :: cs, .cons a as => by
     simp only [_root_.ProvableStruct.componentsToElements,
-      _root_.ProvableStruct.componentsFromElements, eval.go]
-    rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+      _root_.ProvableStruct.componentsFromElements, eval.go,
+      _root_.ProvableStruct.combinedSize', List.map_cons, List.sum_cons]
+    simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
+      Vector.cast_drop_append_of_eq_length]
     congr
     apply eval_eq_eval_aux
 end StructEval
@@ -531,7 +533,7 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- Build the candidate RHS `(Witgen.eval ctx base).field`.  `mkAppM` also ensures that this is
   -- only used when the base type has the required `ProvableType` instance.
   let evalBase ← try
-      mkAppM ``Witgen.eval #[ctx, base]
+      withDefault <| mkAppM ``Witgen.eval #[ctx, base]
     catch _ =>
       return Simp.Step.continue
   let rhs ← mkRhs evalBase
@@ -550,7 +552,7 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
   let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
-  unless ← isDefEq rhsSimp.expr e do
+  unless ← withDefault <| isDefEq rhsSimp.expr e do
     return Simp.Step.continue
 
   -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.

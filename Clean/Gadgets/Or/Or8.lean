@@ -126,8 +126,11 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
+  simp only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq] at h_input h_assumptions h_env ⊢
+  simp only [circuit_norm, h_input] at h_env ⊢
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  refine ⟨hx_byte, hy_byte, ?_⟩
+  rw [h_env]
   set w : F p := ZMod.val x ||| ZMod.val y
   have hw : w = ZMod.val x ||| ZMod.val y := rfl
 

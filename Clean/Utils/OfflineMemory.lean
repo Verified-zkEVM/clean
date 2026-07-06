@@ -275,7 +275,7 @@ example : MemoryAccessList.isConsistentOnline [
   (2, 0, 42, 44),
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by simp [MemoryAccessList.isTimestampSorted]):= by
+].reverse (by letI : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 example : ¬ MemoryAccessList.isConsistentOnline [
@@ -284,7 +284,7 @@ example : ¬ MemoryAccessList.isConsistentOnline [
   (2, 0, 43, 44), -- inconsistent read
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by simp [MemoryAccessList.isTimestampSorted]):= by
+].reverse (by letI : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 /--
@@ -310,7 +310,8 @@ theorem MemoryAccessList.filterAddress_cons (head : MemoryAccess) (tail : Memory
       (head :: (MemoryAccessList.filterAddress tail addr))
         else (MemoryAccessList.filterAddress tail addr))) := by
   obtain ⟨_t, a, _r, _w⟩ := head
-  simp [filterAddress, List.filter_cons]
+  simp only [filterAddress, List.filter_cons]
+  split_ifs <;> simp_all
 
 /--
   A memory access list is consistent for a single address if the reads and writes to that address are consistent.

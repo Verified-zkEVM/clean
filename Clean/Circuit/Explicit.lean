@@ -70,7 +70,7 @@ class ExplicitCircuits.IsElaborated (circuit : α → Circuit F β) (explicit : 
   channelsWithGuarantees_eq : ∀ (a a' : α) (n m : ℕ),
     explicit.channelsWithGuarantees a n = explicit.channelsWithGuarantees a' m := by intros; rfl
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ExplicitCircuits.toElaborated {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   (circuit : Var Input F → Circuit F (Var Output F))
@@ -88,7 +88,7 @@ def ExplicitCircuits.toElaborated {Input Output : TypeMap}
     convert explicit.channelsLawful a n using 1
     rw [explicit_elaborated.channelsWithGuarantees_eq]
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.fromExplicit {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output] [Inhabited (Var Input F)]
   {circuit : Var Input F → Circuit F (Var Output F)}
@@ -126,7 +126,7 @@ structure ElaboratedCircuit.Data {Input Output : TypeMap} [CircuitType Input] [C
   output : Var Input F → ℕ → Var Output F := elaborated.output
   channelsWithGuarantees : List (RawChannel F) := elaborated.channelsWithGuarantees
 
-@[circuit_norm, explicit_circuit_norm]
+@[implicit_reducible, circuit_norm, explicit_circuit_norm]
 def ElaboratedCircuit.withData {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
   {circuit : Var Input F → Circuit F (Var Output F)}
   (derived : ElaboratedCircuit F Input Output circuit)
@@ -180,6 +180,7 @@ theorem ElaboratedCircuit.withData_channelsWithGuarantees {Input Output : TypeMa
 
 -- move between family and single explicit circuit
 
+@[implicit_reducible]
 def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
     (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
   output a n := (explicit a).output n
@@ -369,7 +370,7 @@ instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
   inferInstanceAs (ExplicitCircuit (witnessVector m (.lit v)))
 
 instance {M : TypeMap} [ProvableType M] (c : Var (UnconstrainedDepNative M) F) :
-    ExplicitCircuit (witnessNative c (inst := inferInstanceAs (Witnessable F M (Var M)))) where
+    ExplicitCircuit (witnessNative c (inst := (inferInstance : Witnessable F M (Var M)))) where
   localLength _ := size M
   output offset := varFromOffset M offset
   operations _ := [.witness (size M) (.native (toElements ∘ c))]
@@ -502,6 +503,12 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
   channelsWithGuarantees _ _ := []
+
+/-- Single-application bridge: since Lean 4.29, the generic `ExplicitCircuits.toSingle`
+resolution does not fire on `lookup table entry` applications. -/
+instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F} :
+    ExplicitCircuit (lookup table entry) :=
+  ExplicitCircuits.toSingle (lookup table) entry
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
     {mult : Expression F} :
@@ -962,7 +969,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
       let ops := pArgs[2]!
       let actualGuarantees := pArgs[3]!
       let rawChannelType := mkApp (mkConst ``RawChannel) F
-      let rawChannelListType := mkApp (mkConst ``List [levelZero]) rawChannelType
+      let rawChannelListType := mkApp (mkConst ``List [Level.zero]) rawChannelType
       let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
       let currentGuarantees := mkApp2 channelsWithGuaranteesFun input offset
       let guaranteesProofType ← mkEq actualGuarantees currentGuarantees
