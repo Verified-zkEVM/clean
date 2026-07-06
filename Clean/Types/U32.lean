@@ -239,9 +239,6 @@ lemma value_zero :
     (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
   aesop
 
--- TODO(4.30 bump): an `Inhabited`/`Nonempty` instance search inside `simp [circuit_norm]`
--- recurses deeply (but finitely) through the generic TypeMap instances; find and tame it
-set_option maxRecDepth 2048 in
 omit p_large_enough in
 @[circuit_norm]
 lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
@@ -251,8 +248,9 @@ lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
     norm_num)
   constructor
   · intro h_val_zero
-    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
-    specialize this (by trivial)
+    -- `zero_mul, add_zero` reduce the value equation before `forall_const` can attempt a
+    -- `Nonempty` synthesis on the unreduced numeral Prop (deep defeq recursion)
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero, zero_mul, add_zero] at this
     assumption
   · intro h_zero
     simp only [h_zero, circuit_norm, ZMod.val_zero]
