@@ -559,23 +559,34 @@ partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState 
 
 /-! ## AST-based witness computation helpers -/
 
-/-- load signal i from memory as i64. Signal 0 is the constant 1. -/
-def loadSignal (i signalBase signalBytes : ℕ) : List Instr :=
-  if i = 0 then [i64.const 1]
-  else [i32.const (signalBase + i * signalBytes), i32.load 0, i64.extend_i32_u]
+/-- Load signal i from memory. Pushes nw i64 limbs (lowest limb on top for multi-word). -/
+def loadSignal (i signalBase signalBytes numWords : ℕ) : List Instr :=
+  let nw := numWords
+  if i = 0 then
+    -- Signal 0 is the constant 1: push [1, 0, ..., 0] as nw limbs
+    i64.const 1 :: (List.replicate (nw - 1) (i64.const 0))
+  else
+    -- Load each limb from signal memory: signalBase + i*signalBytes + w*4
+    (List.range nw) >>= fun w =>
+      [ i32.const (signalBase + i * signalBytes + w * 4), i32.load 0, i64.extend_i32_u ]
 
-/-- evaluate a linear combination, leaving N i64 values on the stack. -/
-def compileLinComb (lc : LinComb) (signalBase signalBytes : ℕ) : List Instr :=
+/-- Push a Nat constant as nw i64 limbs. -/
+def pushCoeff (c numWords : ℕ) : List Instr :=
+  (List.range numWords).map fun w => i64.const ((c >>> (w * 64)) % (2^64))
+
+/-- Evaluate a linear combination over nw-limb field elements. Leaves nw i64 on the stack. -/
+def compileLinComb (lc : LinComb) (signalBase signalBytes numWords : ℕ) : List Instr :=
+  let nw := numWords
   match lc with
-  | [] => [i64.const 0]
-  | [(0, c)] => [i64.const c]
-  | [(i, c)] => loadSignal i signalBase signalBytes ++ [i64.const c, call "$fmul"]
+  | [] => List.replicate nw (i64.const 0)
+  | [(0, c)] => pushCoeff c nw
+  | [(i, c)] => loadSignal i signalBase signalBytes nw ++ pushCoeff c nw ++ [call "$fmul"]
   | (i1, c1) :: rest =>
-    let first := if i1 = 0 then [i64.const c1]
-      else loadSignal i1 signalBase signalBytes ++ [i64.const c1, call "$fmul"]
+    let first := if i1 = 0 then pushCoeff c1 nw
+      else loadSignal i1 signalBase signalBytes nw ++ pushCoeff c1 nw ++ [call "$fmul"]
     let restInstrs : List Instr := rest >>= fun (i, c) =>
-      if i = 0 then [i64.const c, call "$fadd"]
-      else loadSignal i signalBase signalBytes ++ [i64.const c, call "$fmul", call "$fadd"]
+      if i = 0 then pushCoeff c nw ++ [call "$fadd"]
+      else loadSignal i signalBase signalBytes nw ++ pushCoeff c nw ++ [call "$fmul", call "$fadd"]
     first ++ restInstrs
 
 /--
@@ -584,7 +595,8 @@ Discover intermediate signals from assert expressions and compile to instruction
 Returns (numIntermediates, local declarations, computation instructions).
 -/
 def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (FlatOperation F))
-    (startSignal signalBase signalBytes intLocalBase : ℕ) : ℕ × List (String × ValType) × List Instr :=
+    (startSignal signalBase signalBytes numWords intLocalBase : ℕ) : ℕ × List (String × ValType) × List Instr :=
+  let nw := numWords
   let (st, _) := flatOps.foldl (fun (acc : FlattenState × Unit) (op : FlatOperation F) =>
     match op with
     | .assert e =>
@@ -599,14 +611,18 @@ def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (Fla
     match remaining with
     | [] => (idx, locals, instrs)
     | (la, lb, [(k, _)]) :: rest =>
-      let localName := s!"$int_{idx}"
-      let li := intLocalBase + idx
-      let laInstrs := compileLinComb la signalBase signalBytes
-      let lbInstrs := compileLinComb lb signalBase signalBytes
-      let computeInstrs : List Instr :=
-        laInstrs ++ lbInstrs ++ [call "$fmul", local.set li,
-         i32.const (signalBase + k * signalBytes), local.get li, i32.wrap_i64, i32.store 0]
-      buildAST (idx + 1) (computeInstrs ++ instrs) ((localName, .i64) :: locals) rest
+      let laInstrs := compileLinComb la signalBase signalBytes nw
+      let lbInstrs := compileLinComb lb signalBase signalBytes nw
+      -- Each intermediate uses nw consecutive locals
+      let base := intLocalBase + idx * nw
+      let captureAll : List Instr := (List.range nw).map fun w => local.set (base + w)
+      let storeAll : List Instr := (List.range nw) >>= fun w =>
+        [ i32.const (signalBase + k * signalBytes + w * 4),
+          local.get (base + w), i32.wrap_i64, i32.store 0 ]
+      let localNames : List (String × ValType) :=
+        (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
+      let computeInstrs : List Instr := laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll ++ storeAll
+      buildAST (idx + 1) (computeInstrs ++ instrs) (localNames ++ locals) rest
     | _ :: rest => buildAST idx instrs locals rest
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
   (numInt, locals.reverse, instrs)
@@ -690,9 +706,10 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let startSignal := 1 + finalVm.nextLocal / nw
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
+  -- Each intermediate uses nw consecutive locals
   let intLocalBase := 3 + numInputs * nw
   let (numInt, intLocals, intCode) :=
-    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes intLocalBase
+    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each witness word to signal memory
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
