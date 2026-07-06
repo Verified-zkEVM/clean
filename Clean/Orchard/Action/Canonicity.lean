@@ -102,7 +102,8 @@ def circuit : FormalAssertion Fp Row where
         rw [hz, mul_zero, _root_.add_zero] at hdec
         rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
         exact hlo
-      rw [hlo_val, hb0z, ZMod.val_zero]; omega
+      -- `simp` first: `omega` exceeds the recursion limit on the raw `0 * 2 ^ 250` goal
+      rw [hlo_val, hb0z, ZMod.val_zero]; simp only [zero_mul, add_zero]; omega
     -- top-bit decomposition of `gdX`
     have hrecL : input_gdX = (input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp))
         + input_b1 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
@@ -787,7 +788,8 @@ def circuit : FormalAssertion Fp Row where
         rw [hz, mul_zero, _root_.add_zero] at hdec
         rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
         exact hlo
-      rw [hlo_val, hk2z, ZMod.val_zero]; omega
+      -- `simp` first: `omega` exceeds the recursion limit on the raw `0 * 2 ^ 250` goal
+      rw [hlo_val, hk2z, ZMod.val_zero]; simp only [zero_mul, add_zero]; omega
     have hrecL : input_y = (input_j + input_k2 * ((2 ^ 250 : ℕ) : Fp))
         + input_k3 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination hrec
     obtain ⟨_, hlo_eq, hk3_eq⟩ := canonical_top_decomp hrecL hlo_lt hk3 hcanon

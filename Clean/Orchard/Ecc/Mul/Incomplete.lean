@@ -670,7 +670,25 @@ theorem soundness (n : ℕ) :
       (Spec n) := by
   circuit_proof_start [Assumptions, Spec, Init.circuit, Init.Spec, MainLoop.circuit,
     MainLoop.Spec, Loop.circuit, Loop.Spec]
-  obtain ⟨h_z0, h_xA0, h_yA0, h_xP0, h_yP0, h_init, h_loop, h_last⟩ := h_holds
+  -- 4.30 bump: collapse the `Value field` synonym on the intro'd values, so that the
+  -- mixed `ite`/arithmetic statements below elaborate at `Fp`
+  change Fp at input_z input_xA input_yA
+  -- 4.30 bump: reduce the stuck `ExplicitCircuits.output` projections in the goal to
+  -- concrete `env.get` cells; otherwise every later case split re-runs a whnf storm
+  -- through `main`'s monadic chain
+  simp only [← ExplicitCircuits.output_eq]
+  simp +instances only [circuit_norm, main]
+  -- 4.30 bump: `obtain` on the big `h_holds` conjunction triggers a whnf storm during
+  -- motive abstraction (re-unifying subcircuit instance args); plain projections avoid it.
+  have h_z0 := h_holds.1
+  have h_xA0 := h_holds.2.1
+  have h_yA0 := h_holds.2.2.1
+  have h_xP0 := h_holds.2.2.2.1
+  have h_yP0 := h_holds.2.2.2.2.1
+  have h_init := h_holds.2.2.2.2.2.1
+  have h_loop := h_holds.2.2.2.2.2.2.1
+  have h_last := h_holds.2.2.2.2.2.2.2
+  clear h_holds
   have hchain_of_bool : ∀ zP zN : Fp, IsBool (zN - zP * 2) →
       zN = 2 * zP + (if decide (zN = 2 * zP + 1) = true then 1 else 0) := by
     intro zP zN hb
@@ -931,7 +949,21 @@ theorem completeness (n : ℕ) :
       (ProverSpec n) := by
   circuit_proof_start [main, ProverAssumptions, ProverSpec, Init.circuit, Init.Spec,
     MainLoop.circuit, MainLoop.Spec, Loop.circuit, Loop.Spec]
-  obtain ⟨he_z0, he_xA0, he_yA0, he_rows, he_yAF, -⟩ := h_env
+  -- 4.30 bump: collapse the `ProverValue field` synonym on the intro'd values
+  change Fp at input_z input_xA input_yA
+  -- 4.30 bump: reduce the stuck `ExplicitCircuits.output` projections in the goal to
+  -- concrete `env.get` cells; otherwise every later case split re-runs a whnf storm
+  -- through `main`'s monadic chain
+  simp only [← ExplicitCircuits.output_eq]
+  simp +instances only [circuit_norm, main]
+  -- 4.30 bump: `obtain` on the big `h_env` conjunction triggers a whnf storm during
+  -- motive abstraction (re-unifying subcircuit instance args); plain projections avoid it.
+  have he_z0 := h_env.1
+  have he_xA0 := h_env.2.1
+  have he_yA0 := h_env.2.2.1
+  have he_rows := h_env.2.2.2.1
+  have he_yAF := h_env.2.2.2.2.1
+  clear h_env
   obtain ⟨hP, mm, hacc, h2m, hbnd⟩ := h_assumptions
   let P : Point Fp := input_base
   obtain ⟨hbx, hby⟩ : Expression.eval env.toEnvironment input_var.base.x = P.x ∧
