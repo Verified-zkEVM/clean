@@ -568,7 +568,7 @@ def loadSignal (i signalBase signalBytes numWords : ℕ) : List Instr :=
   else
     -- Load each limb from signal memory: signalBase + i*signalBytes + w*4
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + i * signalBytes + w * 4), i32.load 0, i64.extend_i32_u ]
+      [ i32.const (signalBase + i * signalBytes + w * 8), .memLoad .i64 0 3 ]
 
 /-- Push a Nat constant as nw i64 limbs. -/
 def pushCoeff (c numWords : ℕ) : List Instr :=
@@ -617,8 +617,8 @@ def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (Fla
       let base := intLocalBase + idx * nw
       let captureAll : List Instr := (List.range nw).map fun w => local.set (base + w)
       let storeAll : List Instr := (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + k * signalBytes + w * 4),
-          local.get (base + w), i32.wrap_i64, i32.store 0 ]
+        [ i32.const (signalBase + k * signalBytes + w * 8),
+          local.get (base + w), .memStore .i64 0 3 ]
       let localNames : List (String × ValType) :=
         (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
       let computeInstrs : List Instr := laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll ++ storeAll
@@ -701,7 +701,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let witnessCount := witnessWords / nw
   let n32 := nw * 2
   let srwmBase := 4
-  let signalBase := 4 + n32 * 4
+  -- Signal array must be 8-byte aligned for i64.store/i64.load
+  let signalBaseRaw := 4 + n32 * 4
+  let signalBase := ((signalBaseRaw + 7) / 8) * 8
   let signalBytes := n32 * 4
   let startSignal := 1 + finalVm.nextLocal / nw
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
@@ -711,13 +713,12 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
-  -- Build witness output stores: write each witness word to signal memory
+  -- Build witness output stores: write each 64-bit limb to signal memory
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 4),
+      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
         local.get (numInputs * nw + i * nw + w),
-        i32.wrap_i64,
-        i32.store 0 ]
+        .memStore .i64 0 3 ]
   -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
     (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
@@ -731,11 +732,11 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let gwInputLocals : List (String × ValType) :=
     (List.range numInputs) >>= fun i =>
       (List.range nw).map fun w => (s!"$in_{i}_{w}", ValType.i64)
-  -- Input loads: for each input i and limb w, read i32, extend to i64, set input local
+  -- Input loads: for each input i and limb w, read i64 from signal memory
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + i) * signalBytes + w * 4),
-        i32.load 0, i64.extend_i32_u,
+      [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
+        .memLoad .i64 0 3,
         local.set (3 + i * nw + w) ]
   -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
