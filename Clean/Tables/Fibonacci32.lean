@@ -110,7 +110,8 @@ private instance {W : ℕ+} {S : Type → Type} [ProvableType S] : DecidableEq (
 
 -- assignment copied from eval:
 -- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
--- TODO(4.30 bump): scoped legacy defeq; see Fibonacci8
+-- TODO(4.30 bump): scoped legacy defeq; see the PR notes (still needed after the
+-- elaborate_circuit fix: this is a concrete 24-cell assignment computation)
 set_option backward.isDefEq.respectTransparency false in
 lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
