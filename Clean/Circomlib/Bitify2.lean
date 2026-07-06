@@ -134,8 +134,7 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    circuit_proof_start
-    simp +instances only [circuit_norm, Bits2Num.main, AliasCheck.circuit] at h_input h_assumptions h_holds ⊢
+    circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
     set output := (env.get (i₀ + (127 + 1 + 135 + 1)))
     simp_all only [implies_true, forall_const, fields]
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
@@ -145,14 +144,10 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     simp only [← Fin.getElem_fin, Bits2Num.lc_eq]
 
   completeness := by
-    simp only [circuit_norm, main]
-    intro i0 env input_var h_env input h_input assumptions
-    simp only [circuit_norm, Bits2Num.main] at h_env h_input ⊢
-    simp only [h_input, circuit_norm] at h_env ⊢
-    obtain ⟨assumption₁, assumption₂⟩ := assumptions
-    simp only [circuit_norm, AliasCheck.circuit, assumption₁, assumption₂] at ⊢
+    circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
+    obtain ⟨assumption₁, assumption₂⟩ := h_assumptions
+    simp only [circuit_norm, assumption₁, assumption₂] at ⊢
     rw [← h_env]
-    rfl
 end Bits2Num_strict
 
 namespace Num2BitsNeg

@@ -35,7 +35,6 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
 
 theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    And.And64.circuit, Not.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
   simp_rw [Vector.mapRange_eq_mapFinRange]
@@ -80,7 +79,6 @@ theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc
 
 theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    And.And64.circuit, Not.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
 

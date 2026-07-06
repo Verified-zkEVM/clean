@@ -125,30 +125,27 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq] at h_input h_assumptions h_env ⊢
-  simp only [circuit_norm, h_input] at h_env ⊢
+  circuit_proof_start [ByteXorTable]
+  simp_all only [true_and]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  refine ⟨hx_byte, hy_byte, ?_⟩
-  rw [h_env]
-  set w : F p := ZMod.val x ||| ZMod.val y
-  have hw : w = ZMod.val x ||| ZMod.val y := rfl
+  set w : F p := ZMod.val input_x ||| ZMod.val input_y
+  have hw : w = ZMod.val input_x ||| ZMod.val input_y := rfl
 
   -- now it's pretty much the soundness proof in reverse
-  have or_byte : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx_byte hy_byte
+  have or_byte : input_x.val ||| input_y.val < 256 := Nat.or_lt_two_pow (n:=8) hx_byte hy_byte
   have p_large := p_large_enough.elim
-  have or_lt : x.val ||| y.val < p := by linarith
+  have or_lt : input_x.val ||| input_y.val < p := by linarith
   rw [natToField_eq_natCast or_lt] at hw
-  have h_or : w.val = x.val ||| y.val := natToField_eq w hw
+  have h_or : w.val = input_x.val ||| input_y.val := natToField_eq w hw
 
-  have two_or_val : (2*w).val = 2*(x.val ||| y.val) := by
+  have two_or_val : (2*w).val = 2*(input_x.val ||| input_y.val) := by
     rw [ZMod.val_mul_of_lt, val_two, h_or]
     rw [val_two]
     linarith
 
-  have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
+  have x_y_val : (input_x + input_y).val = input_x.val + input_y.val := by field_to_nat
 
-  have two_or_ge : (2*w).val ≥ (x + y).val := by
+  have two_or_ge : (2*w).val ≥ (input_x + input_y).val := by
     rw [two_or_val, x_y_val]
     exact two_or_ge_add hx_byte hy_byte
 
@@ -163,15 +160,15 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
           omega
         omega
       · calc
-          _ ≤ ZMod.val (x + y) := by linarith
+          _ ≤ ZMod.val (input_x + input_y) := by linarith
           _ ≤ _ := by omega
     · rw [ZMod.val_sub]
       · apply Nat.le_sub_of_add_le
         calc
-          _ ≤ ZMod.val (x + y) := by linarith
+          _ ≤ ZMod.val (input_x + input_y) := by linarith
           _ ≤ _ := by omega
       · calc
-          _ ≤ ZMod.val (x + y) := by linarith
+          _ ≤ ZMod.val (input_x + input_y) := by linarith
           _ ≤ _ := by omega
   · omega
   · omega

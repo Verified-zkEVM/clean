@@ -23,12 +23,12 @@ instance reducedElaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circ
 -- These only unfold the generated elaborated instance. They do not unfold or simplify the explicit
 -- circuit derivation, so they check that the reduced tactic stores the nice metadata directly.
 example : ElaboratedCircuit.localLength (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default = 8 := by
-  dsimp only [reducedElaborated, ElaboratedCircuit.localLength]
+  dsimp +instances only [reducedElaborated]
 
 example : ElaboratedCircuit.output (F:=F pBabybear) (Input:=Inputs) (Output:=Outputs) circuit32Reduced default 0 =
   { z := ⟨ varFromOffset field 0, varFromOffset field 2, varFromOffset field 4, varFromOffset field 6 ⟩,
     carryOut := varFromOffset field 7 } := by
-  dsimp only [reducedElaborated, ElaboratedCircuit.output]
+  dsimp  +instances only [reducedElaborated]
 
 -- #whnf elaborated.localLength default
 -- #whnf elaborated.output default 0

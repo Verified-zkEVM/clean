@@ -248,7 +248,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel, BytesTable])
+    (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
