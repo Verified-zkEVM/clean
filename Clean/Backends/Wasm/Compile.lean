@@ -140,7 +140,7 @@ def genSingleWordArithAST (p : ℕ) : List Func :=
 
 def genSingleWordArith (p : ℕ) : String :=
   String.intercalate "\n" ([s!"  ;; Field arithmetic modulo {toString p} (single-word)"]
-    ++ (genSingleWordArithAST p).map Func.toString)
+    ++ (genSingleWordArithAST p).map Ast.Func.toString)
 
 /-! ## Multi-word field arithmetic (numWords > 1) -/
 
@@ -186,7 +186,7 @@ def genMul64x64AST : Func :=
       ++ [ local.get lo, local.get hi ]
   }
 
-def genMul64x64 : String := Func.toString genMul64x64AST
+def genMul64x64 : String := Ast.Func.toString genMul64x64AST
 
 /-- AST version: c[k] += a[i]*b[j] with full carry propagation.
     Uses locals: a(0..N-1), b(N..2N-1), lo(2N), hi(2N+1), carry(2N+2), sum(2N+3), c(2N+4..2N+4+2N-1) -/
@@ -292,7 +292,7 @@ def genFmulAST (p numWords : ℕ) : Func :=
       ++ ((List.range N).map fun i => (s!"$p{i}", ValType.i64))
     body := initAll ++ mainSB ++ redSB ++ addRed ++ carryLoop ++ condSub ++ rets }
 
-def genFmul (p numWords : ℕ) : String := Func.toString (genFmulAST p numWords)
+def genFmul (p numWords : ℕ) : String := Ast.Func.toString (genFmulAST p numWords)
 
 def genFaddAST (numWords : ℕ) : Func :=
   let N := numWords
@@ -313,7 +313,7 @@ def genFaddAST (numWords : ℕ) : Func :=
     locals := ((List.range N).map fun i => (s!"$r{i}", .i64)) ++ [("$c", .i64)]
     body := addLimb0 ++ addRest ++ rets }
 
-def genFadd (numWords : ℕ) : String := Func.toString (genFaddAST numWords)
+def genFadd (numWords : ℕ) : String := Ast.Func.toString (genFaddAST numWords)
 
 /-- Generate multi-word modular subtraction as AST Func. -/
 def genFsubAST (numWords : ℕ) : Func :=
@@ -336,7 +336,7 @@ def genFsubAST (numWords : ℕ) : Func :=
     locals := ((List.range N).map fun i => (s!"$r{i}", .i64)) ++ [("$br", .i64)]
     body := subLimb0 ++ subRest ++ rets }
 
-def genFsub (numWords : ℕ) : String := Func.toString (genFsubAST numWords)
+def genFsub (numWords : ℕ) : String := Ast.Func.toString (genFsubAST numWords)
 
 /-- Generate multi-word modular inverse as AST Func (Fermat square-and-multiply). -/
 def genFinvAST (p numWords : ℕ) : Func :=
@@ -360,7 +360,7 @@ def genFinvAST (p numWords : ℕ) : Func :=
     locals := (List.range N).map fun i => (s!"$r{i}", .i64)
     body := init ++ steps ++ pushR }
 
-def genFinv (p numWords : ℕ) : String := Func.toString (genFinvAST p numWords)
+def genFinv (p numWords : ℕ) : String := Ast.Func.toString (genFinvAST p numWords)
 
 /-- Generate multi-word arithmetic as AST Func list. -/
 def genMultiWordArithAST (p numWords : ℕ) : List Func :=
@@ -372,7 +372,7 @@ def genMultiWordArith (p numWords : ℕ) : String :=
   let nBits := N * 64
   String.intercalate "\n" ([
     s!"  ;; Multi-word field arithmetic for prime {ps} ({N} words, {nBits} bits)"
-  ] ++ (genMultiWordArithAST p numWords).map Func.toString)
+  ] ++ (genMultiWordArithAST p numWords).map Ast.Func.toString)
 
 def fieldHelpers (p : ℕ) (numWords : ℕ) : String :=
   if numWords = 1 then
