@@ -166,16 +166,16 @@ lemma eval_add (env : Environment F) (a b : Expression F) :
     Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
   simp only [Expression.eval]
 
-/-- Expression.eval distributes over negation. Keyed on the `-a` surface syntax: since 4.31,
-the `Expression.eval` matcher no longer unfolds the composite `Neg`/`Sub` instances
-(leanprover/lean4#13363), so the `Expression.mul`-keyed lemmas do not reach these spellings. -/
+/-- Expression.eval distributes over negation. Keyed on the `-a` surface syntax: the
+`Expression.eval` matcher does not unfold the composite `Neg`/`Sub` instances, so the
+`Expression.mul`-keyed lemmas do not reach these spellings. -/
 @[circuit_norm]
 lemma eval_neg (env : Environment F) (a : Expression F) :
     Expression.eval env (-a) = -Expression.eval env a := by
   show Expression.eval env (Expression.mul (Expression.const (-1)) a) = _
   simp only [Expression.eval, neg_one_mul]
 
-/-- Expression.eval distributes over subtraction (see `eval_neg` for the 4.31 context). -/
+/-- Expression.eval distributes over subtraction (see `eval_neg`). -/
 @[circuit_norm]
 lemma eval_sub (env : Environment F) (a b : Expression F) :
     Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by

@@ -355,9 +355,31 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
   witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
   witnessIR := witnessIR (ProvableVector α m)
 
-/- Since 4.31, simp no longer unfolds the `Witnessable.witnessIR` class projection applied
-to the instances above (stricter transparency for projection unfolding); expose per-instance
-`@[circuit_norm]` rfl-lemmas keyed on the projection instead. -/
+/- simp does not unfold the `Witnessable.witness`/`witnessIR` class projections applied to
+the instances above; expose per-instance `@[circuit_norm]` rfl-lemmas keyed on the
+projection instead. -/
+
+@[circuit_norm]
+theorem Witnessable.witness_field (e : Witgen.FExpr F) :
+    Witnessable.witness (F := F) (value := field) (var := Expression) e =
+      fun offset => (var ⟨offset⟩, [.witness 1 (.ofFExpr e)]) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_fields {m : ℕ} (v : fields m (Witgen.FExpr F)) :
+    Witnessable.witness (F := F) (value := fields m) (var := Var (fields m)) v =
+      Circuit.witnessVector m v := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_provable (M : TypeMap) [ProvableType M] (xs : M (Witgen.FExpr F)) :
+    Witnessable.witness (F := F) (value := M) (var := Var M) xs =
+      _root_.witnessIR M (.ofFExprs (toElements xs)) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_provableVector {m : ℕ} (α : TypeMap) [NonEmptyProvableType α]
+    (xs : ProvableVector α m (Witgen.FExpr F)) :
+    Witnessable.witness (F := F) (value := ProvableVector α m)
+      (var := Var (ProvableVector α m)) xs =
+      _root_.witnessIR (ProvableVector α m) (.ofFExprs (toElements xs)) := rfl
 
 @[circuit_norm]
 theorem Witnessable.witnessIR_field (code : WitgenIR F 1) :

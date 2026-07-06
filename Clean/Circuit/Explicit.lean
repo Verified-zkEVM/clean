@@ -689,6 +689,39 @@ def inferExplicitHead : TacticM Unit := withMainContext do
 
 elab "infer_explicit_head" : tactic => inferExplicitHead
 
+/--
+If the goal is `ExplicitCircuit c` where `c` (after beta) is a `match` on a local variable,
+destructure that variable with `cases` so the match can reduce. This supports the pervasive
+`fun (x, y) => ...` / `fun { x, y } => ...` pattern-match style for circuit `main`s: the
+matcher cannot reduce on an opaque variable, and matcher reduction does not eta-expand
+structure variables, so we introduce the constructor form explicitly. Single-constructor
+structures only — `cases` then yields exactly one goal.
+-/
+def casesMatchDiscr : TacticM Unit := withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  unless target.getAppFn.isConstOf ``ExplicitCircuit && !args.isEmpty do
+    throwError "target is not an ExplicitCircuit"
+  let circuit := args[args.size - 1]!.headBeta
+  let some declName := circuit.getAppFn.constName?
+    | throwError "circuit head is not a constant"
+  let some info ← getMatcherInfo? declName
+    | throwError "circuit head is not a matcher"
+  let mArgs := circuit.getAppArgs
+  let firstDiscr := info.numParams + 1
+  for i in [0:info.numDiscrs] do
+    let idx := firstDiscr + i
+    if h : idx < mArgs.size then
+      let discr := mArgs[idx]
+      if discr.isFVar then
+        liftMetaTactic fun g => do
+          let goals ← g.cases discr.fvarId!
+          return goals.toList.map (·.mvarId)
+        return
+  throwError "no local-variable discriminant to destructure"
+
+elab "cases_match_discr" : tactic => casesMatchDiscr
+
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
@@ -697,6 +730,8 @@ macro_rules
       first
         -- O(1) head dispatch via the `explicit_circuit_constructor` registry.
         | infer_explicit_head
+        -- a `match` stuck on a variable (pattern-match lambda `main`s): destructure and retry
+        | cases_match_discr
         -- Fallback for heads that are user defs unfolding to a core constructor:
         -- prefer structural decomposition before typeclass search, so it doesn't
         -- `whnf` a large body and expand fixed-size `Vector.ofFn` witnesses.
