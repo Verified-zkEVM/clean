@@ -1468,7 +1468,7 @@ no-channels facts are threaded through the chain recursion. -/
   channelsLawful := by
     dsimp only [ElaboratedCircuit.ChannelsLawful]
     dsimp only [main]
-    simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, Gadgets.Equality.circuit, hcwg]
+    simp only [circuit_norm, seval, HashPiece.circuit, Gate.circuit, hcwg]
     try trivial
 
 /-- The gate's `y`-polynomial right-hand side computes twice the entering-`Y_A`

@@ -250,7 +250,7 @@ theorem soundness (B : FixedBase) :
   obtain ⟨⟨h_coords0, h_win0⟩, h_loop, ⟨h_coords84, h_win84⟩, h_add⟩ := h_holds
   simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
     Fin.foldl_const, Fin.val_last, circuit_norm,
-    AddIncomplete.Gate.circuit] at h_coords84 h_win84 h_add ⊢
+    ] at h_coords84 h_win84 h_add ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_coords84 h_win84 h_add
   -- clean up the per-iteration loop hypothesis: the accumulator entering iteration `j`
   -- is `accPt env i₀ j`
@@ -270,7 +270,7 @@ theorem soundness (B : FixedBase) :
     have h := h_loop ⟨j, hj⟩
     simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
       Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm,
-      AddIncomplete.Gate.circuit, Gadgets.Equality.circuit] at h
+      ] at h
     rcases j with _ | j'
     · simp only [Fin.foldl_zero] at h
       exact h
@@ -455,7 +455,7 @@ theorem completeness (B : FixedBase) :
   obtain ⟨h_w0, h_loop_env, h_w84, h_add_env⟩ := h_env
   simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
     Fin.foldl_const, Fin.val_last, circuit_norm,
-    AddIncomplete.Gate.circuit] at h_add_env ⊢
+    ] at h_add_env ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_add_env ⊢
   -- witnessed row values
   obtain ⟨h0w, h0x, h0y, h0u⟩ := env_get_row (h_w0.trans (rowProgram_value B input 0))
@@ -492,7 +492,7 @@ theorem completeness (B : FixedBase) :
     have h := (h_loop_env ⟨j, hj⟩).2
     simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
       Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm,
-      AddIncomplete.Gate.circuit, Gadgets.Equality.circuit] at h
+      ] at h
     rcases j with _ | j'
     · simp only [Fin.foldl_zero] at h
       exact h
@@ -651,7 +651,7 @@ theorem completeness (B : FixedBase) :
   · intro i
     obtain ⟨j, hj⟩ := i
     simp +instances only [Nat.reduceAdd, Circuit.FoldlM.foldlAcc, Vector.getElem_finRange,
-      Fin.val_mk, circuit_norm, AddIncomplete.Gate.circuit, Gadgets.Equality.circuit]
+      Fin.val_mk, circuit_norm]
     rcases j with _ | j'
     · simp only [Fin.foldl_zero]
       exact hB 0 hj

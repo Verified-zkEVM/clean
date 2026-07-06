@@ -665,7 +665,7 @@ theorem soundness (B : FixedBase) :
     AddIncomplete.Spec, AddIncomplete.Assumptions, Add.circuit, Add.Spec,
     Add.Assumptions, List.sum_cons, List.sum_nil]
   simp +instances only [Nat.reduceMul, Nat.reduceSub, circuit_norm,
-    AddIncomplete.Gate.circuit, Add.Gate.circuit] at h_holds ⊢
+    ] at h_holds ⊢
   obtain ⟨h_z0, h_rs0, h_coords0, h_loop, h_rs21, h_coords21, h_z22, h_add,
     h_signCopy, h_lastwCopy, h_isBool, h_isSign, h_signSel⟩ := h_holds
   -- clean up the per-iteration loop hypothesis
@@ -1186,7 +1186,7 @@ theorem completeness (B : FixedBase) :
   obtain ⟨hm_lt, h_sign⟩ := h_assumptions
   obtain ⟨h_z0w, h_t0, h_loop_env, h_t21, h_add_env, h_signw, h_lastww, h_yPw⟩ := h_env
   simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-    circuit_norm, AddIncomplete.Gate.circuit, Add.Gate.circuit]
+    circuit_norm]
     at h_add_env h_signw h_lastww h_yPw ⊢
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h_signw h_lastww h_yPw
   -- witnessed row values
