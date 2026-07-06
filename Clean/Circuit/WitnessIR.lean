@@ -340,7 +340,6 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
-
 attribute [circuit_norm] Array.getElem?_singleton
 
 /- Witness-IR `BExpr` conditions surface in goals as `decide P = true` (via the
