@@ -21,8 +21,7 @@ replacements:
   cell references, as returned by `assignAdvice` and passed between gadgets.
 
 `Environment` generalizes main Clean's `get : ℕ → F` to cell locations: columns at
-(integer) rows, plus region placement. `ProverHint` is shared with main Clean, not
-copied.
+(integer) rows. `ProverHint` is shared with main Clean, not copied.
 
 Rust references (halo2 `halo2_gadgets-0.5.0`):
 - `halo2_proofs/src/plonk/circuit.rs` — `Column`, `Any`, `Selector`, `TableColumn`,
@@ -140,23 +139,25 @@ witness assignment of a circuit, and any additional witness data external to the
 circuit (`data`).
 
 This is the halo2 counterpart of main Clean's `Environment`: `get` reads a cell by
-column and (absolute, integer) row instead of by tape index. `regionStart` places each
-region at an absolute row; it is what makes region-relative cells evaluable, and since
-proofs quantify over arbitrary `Environment`s, gadget soundness/completeness never
-depends on actual placement.
+column and (absolute, integer) row instead of by tape index.
 
-There is no analogue of main Clean's `data` (halo2 lookup tables are fixed columns,
-already covered by `get`), and no selector values: selector activation patterns are
-circuit data, not runtime assignments — enabling a selector is an operation whose
-semantics instantiates the gate's constraints at that row.
+The environment contains cell values and nothing else. In particular:
+
+- No region placement: placement is circuit data — the floor planner computes it from
+  the operations. Semantics take a `place : RegionIndex → ℕ` parameter, the analogue of
+  main Clean's `offset`: proofs are generic over it, and the top-level statement
+  instantiates the actual placement.
+- No selector values: selector activation patterns are circuit data too — enabling a
+  selector is an operation whose semantics instantiates the gate's constraints at that
+  row.
+- No analogue of main Clean's `data`: halo2 lookup tables are fixed columns, already
+  covered by `get`.
 
 Soundness theorems have the form `∀ env : Environment F, ...`.
 -/
 structure Environment (F : Type) where
   /-- Assignment of all cells: column, absolute row ↦ field element. -/
   get : AnyColumn → ℤ → F
-  /-- Absolute start row of each region. -/
-  regionStart : RegionIndex → ℤ
 
 /--
 `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.
@@ -269,11 +270,14 @@ structure AssignedCell (F : Type) where
   cell : Cell
 deriving DecidableEq, Repr
 
-/-- Evaluate an assigned cell in an environment: read its column at the region's
-placement plus the cell's offset. -/
+/-- Evaluate an assigned cell: read its column at the region's placement plus the
+cell's offset. `place` is the region-placement parameter of the semantics (the analogue
+of main Clean's `offset`) — proofs are generic over it; the top level instantiates the
+floor planner's output. -/
 @[circuit_norm]
-def AssignedCell.eval [Field F] (env : Environment F) (c : AssignedCell F) : F :=
-  env.get c.cell.column (env.regionStart c.cell.regionIndex + c.cell.rowOffset)
+def AssignedCell.eval [Field F] (place : RegionIndex → ℕ) (env : Environment F)
+    (c : AssignedCell F) : F :=
+  env.get c.cell.column (place c.cell.regionIndex + c.cell.rowOffset)
 
 /-! ## Lemmas about Expression evaluation -/
 
