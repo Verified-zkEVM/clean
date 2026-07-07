@@ -819,9 +819,19 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$setInputSignal"
       exportName := some "setInputSignal"
       params := [("$hMSB", .i32), ("$hLSB", .i32), ("$idx", .i32)]
-      body := [ i32.const (signalBase + signalBytes), local.get 2, i32.const signalBytes,
-                .binop .i32 .mul, .binop .i32 .add,
-                i32.const srwmBase, .memLoad .i32 0 2, .memStore .i32 0 2 ] },
+      -- For multi-word, idx ranges over nw limbs per input. Compute which
+      -- element and which limb, then store the 64-bit value at the right offset.
+      body := [
+        -- Compute target address: signalBase + signalBytes + (idx/nw)*signalBytes + (idx%nw)*8
+        i32.const (signalBase + signalBytes),
+        local.get 2, i32.const nw, .binop .i32 .div_u, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+        local.get 2, i32.const nw, .binop .i32 .rem_u, i32.const 8, .binop .i32 .mul, .binop .i32 .add,
+        -- Read 64-bit value from SRWM: low 32 bits at srwmBase, high 32 at srwmBase+4
+        i32.const srwmBase, .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+        i32.const (srwmBase + 4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+        i64.const 32, i64.shl, i64.or,
+        .memStore .i64 0 3
+      ] },
     { name := "$getWitness"
       exportName := some "getWitness"
       params := [("$i", .i32)]
