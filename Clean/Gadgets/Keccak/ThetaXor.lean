@@ -15,13 +15,6 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>
     Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
--- TODO this works to remove the match statement which blocks `elaborate_circuit` below
-instance {state} {d} : ExplicitCircuit
-  (match ({ state := state, d := d } : Inputs (Expression (F p))) with
-  | { state, d } => Circuit.mapFinRange (F:=F p) 25 (fun i ↦ Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩)) := by
-  dsimp only
-  infer_explicit_circuit
-
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
   elaborate_circuit
 
