@@ -170,7 +170,12 @@ def structEvalLiteralProc : Simproc := fun e => do
         else
           withDefault <| mkAppM ``Eval.eval #[env, a]
       newArgs := newArgs.push (some evalA)
-    let rhs ← mkAppOptM fn newArgs
+    -- `.default` transparency: a component's evaluated type is often spelled through the
+    -- `CircuitType.Value` synonym (e.g. `Value KeccakState F` for a vector field), which
+    -- unifies with the constructor's expected field type only through the reducible
+    -- `ProvableType`-derived `CircuitType` instance; `mkAppOptM`'s default elaboration
+    -- transparency does not resolve that, silently discarding the rewrite
+    let rhs ← withTransparency .default <| mkAppOptM fn newArgs
     -- validate at `.all` (like the witgen struct-literal simproc): the reduction goes
     -- through instance and class-projection unfoldings that default transparency no
     -- longer performs; the kernel re-checks the resulting rfl-step unrestricted

@@ -489,9 +489,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     apply initial_state_and_messages_are_normalized env
       ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
        input_var_counter_low, input_var_block_len, input_var_flags⟩
+      input_block_words input_chaining_value input_counter_high input_counter_low
+      input_block_len input_flags
     · simp only [circuit_norm]
-      -- the block_words conjunct is discharged by simp; the rest is h_input
-      exact ⟨h_input.1, h_input.2.2⟩
+      exact h_input
     · simp only [Assumptions]
       aesop
   )
@@ -532,9 +533,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
   apply initial_state_and_messages_are_normalized (p := p) env
     ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
      input_var_counter_low, input_var_block_len, input_var_flags⟩
+    input_block_words input_chaining_value input_counter_high input_counter_low
+    input_block_len input_flags
   · simp only [circuit_norm]
-    -- the block_words conjunct is discharged by simp; the rest is h_input
-    exact ⟨h_input.1, h_input.2.2⟩
+    exact h_input
   · simp only [Assumptions]
     aesop
 
