@@ -328,7 +328,7 @@ def genFmul (p numWords : ℕ) : Func :=
   -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
   -- so we push limbs in reverse order (highest limb first) so that the lowest limb
   -- is popped first and matches the first result type.
-  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (q1Base+i) ]
+  let rets : List Instr := (List.range N) >>= fun i => [ local.get (q1Base+i) ]
 
   { name := "$fmul"
     params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64))
@@ -390,7 +390,7 @@ def genFadd (p numWords : ℕ) : Func :=
   let condSub : List Instr :=
     [ local.get brIdx, i64.eqz,
       .ifElse none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
-  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
+  let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
     results := List.replicate N .i64
@@ -415,7 +415,7 @@ def genFsub (numWords : ℕ) : Func :=
       local.get idx, local.get (N + idx), i64.eq, i64.extend_i32_u,
       local.get brIdx, i64.and, i64.or, local.set brIdx ]
   -- Return in reverse order (highest limb first) to match $fmul convention
-  let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
+  let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fsub"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
     results := List.replicate N .i64
@@ -433,15 +433,14 @@ def genFinv (p numWords : ℕ) : Func :=
   let pushA : List Instr := (List.range N) >>= fun i => [ local.get i ]
   -- captureR pops the return values from $fmul (which pushes highest limb first,
   -- lowest limb last). Forward capture: first pop (top=lowest limb) → ri[0].
-  let captureR : List Instr := (List.range N) >>= fun i => [ local.set (ri i) ]
-  let finvRets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
+  let captureR : List Instr := (List.range N).reverse >>= fun i => [ local.set (ri i) ]
+  let finvRets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   let square : List Instr := pushR ++ pushR ++ [ call "$fmul" ] ++ captureR
   let multiply : List Instr := pushR ++ pushA ++ [ call "$fmul" ] ++ captureR
   let init : List Instr :=
-    -- Push N limbs: N-1 zeros (highest limbs), then 1 (lowest limb).
-    -- This matches $fmul's return order (highest first, lowest last on top)
-    -- so that captureR (forward) stores: ri[0]=1, ri[1..N-1]=0.
-    (List.replicate (N-1) (i64.const 0) ++ [i64.const 1]) ++ captureR
+    -- Push N limbs: 1 (limb 0, deepest), then N-1 zeros.
+    -- Returns are now ascending (limb[0] deepest), captureR is reverse.
+    ([i64.const 1] ++ List.replicate (N-1) (i64.const 0)) ++ captureR
   let steps : List Instr := (List.range (msb+1) |>.reverse) >>= fun b =>
     if (exp >>> b) % 2 = 1 then square ++ multiply else square
   { name := "$finv"
@@ -639,7 +638,7 @@ def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (Fla
       let lbInstrs := compileLinComb lb signalBase signalBytes nw
       -- Each intermediate uses nw consecutive locals
       let base := intLocalBase + idx * nw
-      let captureAll : List Instr := (List.range nw).map fun w => local.set (base + w)
+      let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (base + w)
       let storeAll : List Instr := (List.range nw) >>= fun w =>
         [ i32.const (signalBase + k * signalBytes + w * 8),
           local.get (base + w), .memStore .i64 0 3 ]
@@ -659,11 +658,11 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × �
       let cb := compileFExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
       -- Capture all nw limbs: forward order pops lowest limb first
-      (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
+      (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
     | .letN e =>
       let cb := compileNExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
+      (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
   ) (vm, vi, [])
 
 /-- compile a list of FExpr literals to instructions. -/
@@ -671,7 +670,7 @@ def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F))
   es.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) =>
     let cb := compileFExpr vm e {}
     let (vm', locs) := vm.alloc 1 vi
-    (vm', vi + 1, instrs ++ cb.build ++ locs.map fun idx => local.set idx)
+    (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
   ) (vm, vi, acc)
 
 /-- compile a VExpr to instructions. -/
@@ -720,7 +719,10 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let nw := numWords
   let vm := VarMap.init numInputs nw
   let flatOps := flattenOps ops
-  let (finalVm, _, bodyInstrs) := processFlatOps numInputs flatOps vm (numInputs * nw) []
+  -- vi starts at numInputs so that circuit variable indices (which start at 0 for
+  -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
+  -- and pushVar uses the circuit variable index from the witness IR directly.
+  let (finalVm, _, bodyInstrs) := processFlatOps numInputs flatOps vm numInputs []
   let witnessWords := finalVm.nextLocal - numInputs * nw
   let witnessCount := witnessWords / nw
   let n32 := nw * 2
