@@ -42,11 +42,10 @@ inductive Instr
   | loop (label : String) (result : Option ValType) (body : List Instr)
   | br (label : String)
   | brIf (label : String)
-  | ifElse (result : Option ValType) (thenBody : List Instr) (elseBody : List Instr)
+  | ifElse (result : List ValType) (thenBody : List Instr) (elseBody : List Instr)
   | memLoad (t : ValType) (offset : ℕ) (align : ℕ)
   | memStore (t : ValType) (offset : ℕ) (align : ℕ)
   | drop | select | unreachable | nop | return
-  | raw (s : String)  -- escape hatch: raw WAT text for incremental migration
 deriving Repr, Inhabited
 
 /-! ## Functions and Modules -/
@@ -112,7 +111,9 @@ def Instr.toString (i : Instr) (indent : ℕ := 0) : String :=
   | .br label => pad ++ "br $" ++ label
   | .brIf label => pad ++ "br_if $" ++ label
   | .ifElse result thenBody elseBody =>
-    let resultStr := match result with | some t => s!" (result {ValType.toString t})" | none => ""
+    let resultStr := match result with
+      | [] => ""
+      | ts => s!" (result {String.intercalate " " (ts.map ValType.toString)})"
     let thenStr := bodyListToString thenBody (indent+1)
     let elseStr := if elseBody.isEmpty then "" else
       s!"\n{pad}else\n{bodyListToString elseBody (indent+1)}"
@@ -124,7 +125,6 @@ def Instr.toString (i : Instr) (indent : ℕ := 0) : String :=
   | .unreachable => s!"{pad}unreachable"
   | .nop => s!"{pad}nop"
   | .return => s!"{pad}return"
-  | .raw s => s
 where
   bodyListToString (body : List Instr) (indent : ℕ) : String :=
     String.intercalate "\n" (body.map fun instr => instr.toString indent)

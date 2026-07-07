@@ -55,9 +55,12 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) : Instr
   | .brIf _ => putULEB128 (arr.push 0x0D) 0
   | .block _ _ body => encodeBlock arr resolveCall 0x02 body
   | .loop _ _ body => encodeBlock arr resolveCall 0x03 body
-  | .ifElse _ thenBody elseBody =>
+  | .ifElse result thenBody elseBody =>
     let arr := arr.push 0x04
-    let arr := arr.push 0x40  -- empty block type
+    let arr := match result with
+      | [] => arr.push 0x40  -- empty block type
+      | [t] => arr.push (vtOpc t)  -- single result type
+      | _ => arr.push 0x40  -- multi-value: placeholder (needs type section ref)
     let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall i) arr
     let arr := if elseBody.isEmpty then arr else
       (arr.push 0x05) |> fun a => elseBody.foldl (fun a' i => encodeInstr a' resolveCall i) a
@@ -71,7 +74,6 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) : Instr
   | .unreachable => arr.push 0x00
   | .nop => arr.push 0x01
   | .return => arr.push 0x0F
-  | .raw _ => arr  -- cannot encode raw strings to binary; skip
 
 /-- Encode a block/loop body. -/
 partial def encodeBlock (arr : ByteArray) (resolveCall : String → ℕ) (opcode : UInt8) (body : List Instr) : ByteArray :=

@@ -71,8 +71,9 @@ def block (label : String) (body : List Instr) : Instr := .block label none body
 def loop (label : String) (body : List Instr) : Instr := .loop label none body
 def br (label : String) : Instr := .br label
 def br_if (label : String) : Instr := .brIf label
-def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse t thenB elseB
-def ifNone (thenB elseB : List Instr) : Instr := .ifElse none thenB elseB
+def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse (match t with | some x => [x] | none => []) thenB elseB
+def ifNone (thenB elseB : List Instr) : Instr := .ifElse [] thenB elseB
+def ifMulti (ts : List ValType) (thenB elseB : List Instr) : Instr := .ifElse ts thenB elseB
 
 /-! ## Single-word field arithmetic (numWords=1) -/
 
@@ -99,7 +100,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
       locals := [("$d", .i64)]
       body := [.localGet 0, .localGet 1, .binop .i64 .sub, .localTee 2,
                .const .i64 0, .relop .i64 .lt_s,
-               .ifElse (some .i64)
+               .ifElse [ValType.i64]
                  [.localGet 2, .const .i64 pVal, .binop .i64 .add]
                  [.localGet 2],
                .const .i64 pVal, .binop .i64 .rem_u] }
@@ -116,7 +117,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
                    .localGet 4, .relop .i64 .eqz, .brIf "done",
                    .localGet 4, .const .i64 1, .binop .i64 .and,
                    .relop .i64 .eqz,
-                   .ifElse none [] [.localGet 2, .localGet 3, .call "$fmul", .localSet 2],
+                   .ifElse [] [] [.localGet 2, .localGet 3, .call "$fmul", .localSet 2],
                    .localGet 3, .localGet 3, .call "$fmul", .localSet 3,
                    .localGet 4, .const .i64 1, .binop .i64 .shr_u, .localSet 4,
                    .br "loop"
@@ -322,7 +323,7 @@ def genFmul (p numWords : ℕ) : Func :=
         local.get (q1Base+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
         local.get brIdx, i64.and, i64.or, local.set brIdx ])
     ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
-         .ifElse none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
+         .ifElse [] ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
 
   -- Build return sequence. In WASM multi-value returns, the first result type
   -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
@@ -389,7 +390,7 @@ def genFadd (p numWords : ℕ) : Func :=
   -- If no borrow (r >= p), copy tmp to result. Return in reverse order.
   let condSub : List Instr :=
     [ local.get brIdx, i64.eqz,
-      .ifElse none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
+      .ifElse [] ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
@@ -501,14 +502,13 @@ partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → CodeBuilder
   | .expr (.add a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fadd")
   | .expr (.mul a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fmul")
   | .ite c t e, cb =>
-    if vm.numWords = 1 then
-      let cb := compileBExpr vm c cb
-      let thenCB := compileFExpr vm t {}
-      let elseCB := compileFExpr vm e {}
-      -- compileBExpr pushes i64; ifElse expects i32 condition
-      cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse (some .i64) thenCB.build elseCB.build)
-    else
-      cb  -- multi-word ite not yet supported
+    let nw := vm.numWords
+    let cb := compileBExpr vm c cb
+    let thenCB := compileFExpr vm t {}
+    let elseCB := compileFExpr vm e {}
+    -- compileBExpr pushes i64; ifElse expects i32 condition
+    let results := List.replicate nw ValType.i64
+    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse results thenCB.build elseCB.build)
   | .ofNat n, cb => compileNExpr vm n cb
   | .localVar i, cb => pushVar (vm.letBase + i) vm cb
   | .envGet _, cb => cb.push (i64.const 0)
@@ -534,7 +534,7 @@ partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
     let cb := compileBExpr vm c cb
     let thenCB := compileNExpr vm t {}
     let elseCB := compileNExpr vm e {}
-    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse (some .i64) thenCB.build elseCB.build)
+    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse [ValType.i64] thenCB.build elseCB.build)
 
 partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → CodeBuilder
   | .true, cb => cb.push (i64.const 1)
