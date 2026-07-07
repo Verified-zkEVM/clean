@@ -48,7 +48,10 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String
   -- Use the WASM compiler's VarMap to get the same signal layout
   let vm := VarMap.init numInputs
   let (finalVm, _, _) := processFlatOps numInputs flatOps vm numInputs []
-  let totalSignals := 1 + finalVm.nextLocal  -- +1 for constant signal
+  -- finalVm.nextLocal counts WASM locals (limbs). Convert to field element count.
+  let witnessLocals := finalVm.nextLocal - numInputs * vm.numWords
+  let witnessCount := witnessLocals / vm.numWords
+  let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
   let st : FlattenState := { nextSignal := totalSignals }
   let (allConstraints, nVars) := processOps fieldPrime vm flatOps st
   let ps := toString fieldPrime

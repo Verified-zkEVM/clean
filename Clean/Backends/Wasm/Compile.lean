@@ -572,7 +572,7 @@ def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
 
 open Expression (var const add mul) in
 partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState → (LinComb × FlattenState)
-  | .var i, st => ([(1 + vm.lookup i.index, 1)], st)  -- R1CS signal = 1 + WASM local
+  | .var i, st => ([(1 + vm.lookup i.index / vm.numWords, 1)], st)  -- R1CS signal = 1 + field element index
   | .const c, st =>
     let val := FiniteField.val c % p
     ([(0, val)], st)
@@ -782,6 +782,13 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
       [ local.get (3 + i * nw + w) ]
+  -- Tail: copy all n32 32-bit words of signal $i to SRWM[0..n32-1].
+  let gwTail : List Instr := (List.range n32) >>= fun w =>
+    [ i32.const (srwmBase + w * 4),
+      i32.const signalBase, local.get 0, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+      i32.const (w * 4), .binop .i32 .add,
+      i32.load 0,
+      .memStore .i32 0 2 ]
   -- Build the getWitness function body
   let gwBody : List Instr :=
     [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
@@ -790,10 +797,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
            ++ [ i32.const signalBase, i32.const 1, i32.store 0,  -- store constant 1
                 i32.const 0, i32.const 1, i32.store 0 ])           -- set computed flag
           [] ]
-    ++ [ i32.const 0,  -- SRWM base
-         i32.const signalBase, local.get 0, i32.const signalBytes, i32.mul, i32.add,
-         i32.load 0,
-         i32.store (srwmBase) ]
+    ++ gwTail
   -- snarkjs ABI functions
   let abiFuncs : List Func := [
     { name := "$getFieldNumLen32"
