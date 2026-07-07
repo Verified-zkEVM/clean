@@ -356,10 +356,15 @@ def genFmul (p numWords : ℕ) : Func :=
     exportName := none
   }
 
-def genFadd (numWords : ℕ) : Func :=
+def genFadd (p numWords : ℕ) : Func :=
   let N := numWords
-  let ri (i : ℕ) : ℕ := 2*N + i   -- result limbs at offset 2*N
-  let cIdx : ℕ := 2*N + N          -- carry at 3*N
+  let pLimbs := toLimbs p N
+  let ri (i : ℕ) : ℕ := 2*N + i       -- result limbs at 2*N
+  let cIdx : ℕ := 2*N + N              -- carry at 3*N
+  let pBase : ℕ := 3*N + 1             -- p limbs at 3*N+1
+  let tmpBase : ℕ := pBase + N         -- temp for subtraction at 4*N+1
+  let brIdx : ℕ := tmpBase + N         -- borrow at 5*N+1
+  -- Limb-by-limb addition
   let addLimb0 : List Instr :=
     [ local.get 0, local.get N, i64.add, local.set (ri 0),
       local.get (ri 0), local.get 0, i64.lt_u, i64.extend_i32_u, local.set cIdx ]
@@ -368,13 +373,32 @@ def genFadd (numWords : ℕ) : Func :=
     [ local.get idx, local.get (N + idx), i64.add, local.get cIdx, i64.add, local.set (ri idx),
       local.get (ri idx), local.get idx, i64.lt_u, i64.extend_i32_u,
       local.get (ri idx), local.get (N + idx), i64.lt_u, i64.extend_i32_u, i64.or, local.set cIdx ]
-  -- Return in reverse order (highest limb first) to match $fmul convention
+  -- Init prime limbs
+  let initP : List Instr := (pLimbs.zip (List.range N)) >>= fun (val, i) =>
+    [ i64.const val, local.set (pBase + i) ]
+  -- Conditional subtraction: if r >= p, return r - p; else return r
+  let subLimb0 : List Instr :=
+    [ local.get (ri 0), local.get (pBase), i64.sub, local.set (tmpBase),
+      local.get (ri 0), local.get (pBase), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
+  let subRest : List Instr := (List.range (N-1)) >>= fun i =>
+    let idx := i + 1
+    [ local.get (ri idx), local.get (pBase + idx), i64.sub, local.get brIdx, i64.sub, local.set (tmpBase + idx),
+      local.get (ri idx), local.get (pBase + idx), i64.lt_u, i64.extend_i32_u,
+      local.get (ri idx), local.get (pBase + idx), i64.eq, i64.extend_i32_u,
+      local.get brIdx, i64.and, i64.or, local.set brIdx ]
+  -- If no borrow (r >= p), copy tmp to result. Return in reverse order.
+  let condSub : List Instr :=
+    [ local.get brIdx, i64.eqz,
+      .ifElse none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
   let rets : List Instr := (List.range N).reverse >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
     results := List.replicate N .i64
     locals := ((List.range N).map fun i => (s!"$r{i}", .i64)) ++ [("$c", .i64)]
-    body := addLimb0 ++ addRest ++ rets }
+      ++ ((List.range N).map fun i => (s!"$pl{i}", .i64))
+      ++ ((List.range N).map fun i => (s!"$t{i}", .i64))
+      ++ [("$br", .i64)]
+    body := initP ++ addLimb0 ++ addRest ++ subLimb0 ++ subRest ++ condSub ++ rets }
 
 /-- Generate multi-word modular subtraction as AST Func. -/
 def genFsub (numWords : ℕ) : Func :=
@@ -428,7 +452,7 @@ def genFinv (p numWords : ℕ) : Func :=
 
 /-- Generate multi-word arithmetic as AST Func list. -/
 def genMultiWordArith (p numWords : ℕ) : List Func :=
-  [ genMul64x64, genFmul p numWords, genFadd numWords, genFsub numWords, genFinv p numWords ]
+  [ genMul64x64, genFmul p numWords, genFadd p numWords, genFsub numWords, genFinv p numWords ]
 
 structure VarMap where
   env : List (ℕ × ℕ) := []
