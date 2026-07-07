@@ -80,42 +80,21 @@ deriving DecidableEq, Repr
 /-- Index of a region in a layouter. Rust: `pub struct RegionIndex(usize)`. -/
 abbrev RegionIndex := ℕ
 
-/-!
-Queries of columns at relative locations: the variables of gate expressions at the
-circuit-writing layer. The `index` is the query's position in the constraint system's
-per-kind query list, assigned during configure; it is bookkeeping needed for VK matching
-and ignored by evaluation.
--/
+/-- A gate-expression variable: a selector or a column query at a relative row offset.
+These are the atoms returned by `querySelector`/`queryFixed`/`queryAdvice`/
+`queryInstance` in gate definitions (the `Selector`/`Fixed`/`Advice`/`Instance` atom
+cases of Rust's `Expression<F>`).
 
-/-- Query of a fixed column at a relative location. Rust: `FixedQuery`. -/
-structure FixedQuery where
-  index : ℕ
-  columnIndex : ℕ
-  rotation : Rotation
-deriving DecidableEq, Repr
-
-/-- Query of an advice column at a relative location. Rust: `AdviceQuery`. -/
-structure AdviceQuery where
-  index : ℕ
-  columnIndex : ℕ
-  rotation : Rotation
-deriving DecidableEq, Repr
-
-/-- Query of an instance column at a relative location. Rust: `InstanceQuery`. -/
-structure InstanceQuery where
-  index : ℕ
-  columnIndex : ℕ
-  rotation : Rotation
-deriving DecidableEq, Repr
-
-/-- A gate-expression variable: a selector or a column query. These are the atoms
-returned by `querySelector`/`queryFixed`/`queryAdvice`/`queryInstance` during configure
-(the `Selector`/`Fixed`/`Advice`/`Instance` atom cases of Rust's `Expression<F>`). -/
+Unlike Rust's query structs, atoms carry no query index: query indices are positions in
+the constraint system's per-kind query lists, assigned by a deterministic
+first-encounter walk over the finished constraint system at VK-compilation time
+(mirroring Rust's `query_advice_index` registration) — not during gate authoring. This
+makes gate bodies pure expression construction. -/
 inductive Query where
   | selector : Selector → Query
-  | fixed : FixedQuery → Query
-  | advice : AdviceQuery → Query
-  | «instance» : InstanceQuery → Query
+  | fixed : Column .fixed → Rotation → Query
+  | advice : Column .advice → Rotation → Query
+  | «instance» : Column .instance → Rotation → Query
 deriving DecidableEq, Repr
 
 /-- Main Clean's `Expression`, generalized over the variable type `L`.
@@ -175,8 +154,7 @@ instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := �
 
 /-- Evaluate a query in an environment, at a `row`, given a valuation of the selectors:
 column queries read their column at `row + rotation` (selector queries are not rotated —
-halo2's `query_selector` takes no rotation). The query index is CS bookkeeping and does
-not affect evaluation.
+halo2's `query_selector` takes no rotation).
 
 The selector valuation is not part of the `Environment` because activation patterns are
 circuit data: at gate-call sites it is `fun _ => 1` (the gate is enabled at this row);
@@ -184,9 +162,9 @@ at the VK bridge it is the activation table computed from the layout. -/
 @[circuit_norm]
 def Query.eval [Field F] (env : Environment F) (selectors : ℕ → F) (row : ℤ) : Query → F
   | .selector s => selectors s.index
-  | .fixed q => env.get ⟨.fixed, q.columnIndex⟩ (row + q.rotation)
-  | .advice q => env.get ⟨.advice, q.columnIndex⟩ (row + q.rotation)
-  | .«instance» q => env.get ⟨.instance, q.columnIndex⟩ (row + q.rotation)
+  | .fixed c rot => env.get c.toAny (row + rot)
+  | .advice c rot => env.get c.toAny (row + rot)
+  | .«instance» c rot => env.get c.toAny (row + rot)
 
 namespace Expression
 variable [Field F]

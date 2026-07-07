@@ -88,10 +88,12 @@ file so the reusable part has no dependency on Clean's tape-indexed layer).
 ### Two-layer DSL, mirroring halo2
 
 1. **Configure layer**: define custom gates and lookups as expressions over
-   (column, rotation) queries, with **first-class selectors**. Gate-authoring AST matches
-   halo2's `Expression` node set (constant, selector, fixed/advice/instance query,
-   negated, sum, product, scaled) so that dumped ASTs can match syntactically.
-   Chip `configure` functions are ported verbatim from Rust.
+   (column, rotation) queries, with **first-class selectors**. The gate AST is main
+   Clean's four-node `Expression`, generalized over the variable type only
+   (`Expression F Query`); halo2's extra `Negated`/`Scaled` nodes are handled by a
+   total, semantics-preserving erasure (halo2 → clean direction) at the VK-comparison
+   boundary, so fixture matching stays an exact tree equality. Chip `configure`
+   functions are ported verbatim from Rust.
 2. **Synthesize layer**: monadic region DSL mirroring the halo2 `Region` API surface:
    `assignAdvice`, `assignAdviceFromConstant`, `assignAdviceFromInstance`, `assignFixed`,
    `copyAdvice`, `constrainEqual`, `constrainConstant`, selector `enable`;
