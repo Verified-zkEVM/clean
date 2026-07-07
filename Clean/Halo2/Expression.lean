@@ -21,8 +21,8 @@ replacements:
   cell references, as returned by `assignAdvice` and passed between gadgets.
 
 `Environment` generalizes main Clean's `get : ℕ → F` to cell locations: columns at
-(integer) rows, plus selector values and region placement. `ProverData`/`ProverHint`
-are shared with main Clean, not copied.
+(integer) rows, plus region placement. `ProverHint` is shared with main Clean, not
+copied.
 
 Rust references (halo2 `halo2_gadgets-0.5.0`):
 - `halo2_proofs/src/plonk/circuit.rs` — `Column`, `Any`, `Selector`, `TableColumn`,
@@ -140,26 +140,23 @@ witness assignment of a circuit, and any additional witness data external to the
 circuit (`data`).
 
 This is the halo2 counterpart of main Clean's `Environment`: `get` reads a cell by
-column and (absolute, integer) row instead of by tape index. Selector values and region
-placement are extra assignment dimensions with no main-Clean counterpart:
+column and (absolute, integer) row instead of by tape index. `regionStart` places each
+region at an absolute row; it is what makes region-relative cells evaluable, and since
+proofs quantify over arbitrary `Environment`s, gadget soundness/completeness never
+depends on actual placement.
 
-- `selector` gives each selector's virtual 0/1 value per row (selector compression into
-  fixed columns happens at the data level, outside of proofs).
-- `regionStart` places each region at an absolute row. Proofs quantify over arbitrary
-  `Environment`s, so gadget soundness/completeness never depends on actual placement.
+There is no analogue of main Clean's `data` (halo2 lookup tables are fixed columns,
+already covered by `get`), and no selector values: selector activation patterns are
+circuit data, not runtime assignments — enabling a selector is an operation whose
+semantics instantiates the gate's constraints at that row.
 
 Soundness theorems have the form `∀ env : Environment F, ...`.
 -/
 structure Environment (F : Type) where
   /-- Assignment of all cells: column, absolute row ↦ field element. -/
   get : AnyColumn → ℤ → F
-  /-- Virtual per-row selector values. -/
-  selector : ℕ → ℤ → F
   /-- Absolute start row of each region. -/
   regionStart : RegionIndex → ℤ
-  /-- Additional witness data not part of the current circuit's witness, such as the
-   content of lookup tables. Shared with main Clean. -/
-  data : ProverData F
 
 /--
 `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.
@@ -175,12 +172,17 @@ instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.
 instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
-/-- Evaluate a query in an environment, at a `row`: read the queried column at
-`row + rotation` (resp. the selector's virtual value at `row`). The query index is CS
-bookkeeping and does not affect evaluation. -/
+/-- Evaluate a query in an environment, at a `row`, given a valuation of the selectors:
+column queries read their column at `row + rotation` (selector queries are not rotated —
+halo2's `query_selector` takes no rotation). The query index is CS bookkeeping and does
+not affect evaluation.
+
+The selector valuation is not part of the `Environment` because activation patterns are
+circuit data: at gate-call sites it is `fun _ => 1` (the gate is enabled at this row);
+at the VK bridge it is the activation table computed from the layout. -/
 @[circuit_norm]
-def Query.eval [Field F] (env : Environment F) (row : ℤ) : Query → F
-  | .selector s => env.selector s.index row
+def Query.eval [Field F] (env : Environment F) (selectors : ℕ → F) (row : ℤ) : Query → F
+  | .selector s => selectors s.index
   | .fixed q => env.get ⟨.fixed, q.columnIndex⟩ (row + q.rotation)
   | .advice q => env.get ⟨.advice, q.columnIndex⟩ (row + q.rotation)
   | .«instance» q => env.get ⟨.instance, q.columnIndex⟩ (row + q.rotation)
@@ -191,10 +193,10 @@ variable [Field F]
 /--
 Evaluate an expression given a valuation of its variables.
 
-Gate expressions are evaluated as `e.eval (Query.eval env row)`, for an external
-`Environment` that determines the assignment of all cells; this is needed when we want
-to make statements about a circuit in the adversarial situation where the prover can
-assign anything to cells.
+Gate expressions are evaluated as `e.eval (Query.eval env selectors row)`, for an
+external `Environment` that determines the assignment of all cells; this is needed when
+we want to make statements about a circuit in the adversarial situation where the prover
+can assign anything to cells.
 -/
 @[circuit_norm]
 def eval (v : L → F) : Expression F L → F
