@@ -95,12 +95,12 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   exact Nat.mod_eq_of_lt (by linarith [p_large_enough.elim])
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  intro i0 env input_var h_env input h_input as
-  let ⟨⟨ xv0, xv1, xv2, xv3, xv4, xv5, xv6, xv7 ⟩, ⟨ yv0, yv1, yv2, yv3, yv4, yv5, yv6, yv7 ⟩⟩ := input_var
-  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
-  simp only [Assumptions, circuit_norm, U64.Normalized] at as
-  simp only [h_input, circuit_norm, main, ByteXorTable] at h_env ⊢
+  circuit_proof_start [ByteXorTable]
+  rcases input_x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+  rcases input_y with ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
+  simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_input
+  simp only [circuit_norm, U64.Normalized] at h_assumptions
+  simp only [h_input, circuit_norm] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 
