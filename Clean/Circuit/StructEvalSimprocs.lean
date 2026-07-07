@@ -64,9 +64,49 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
     return .continue
   let env := args[args.size - 2]!
   let projected := args[args.size - 1]!
+  -- indexing into a *projected* vector field lifts to the row level in one step:
+  -- `Expression.eval env (s.c[i]) ~~> (ProvableStruct.eval env s).c[i]` (and likewise
+  -- `Eval.eval env (s.c[i]) ~~> (ProvableStruct.eval env s).c[i]` for element types that
+  -- are themselves provable). The proof is `getElem_eval_fields` / `getElem_eval_vector`,
+  -- whose right-hand side `(eval env s.c)[i]` is definitionally the row-level form.
+  -- Restricted to projections: literal vectors reduce element-wise instead, and this
+  -- avoids introducing a bare `Eval.eval` of a vector, which other lemmas rewrite to the
+  -- element-map spelling.
+  if (evalHead == ``Expression.eval || evalHead == ``Eval.eval) &&
+      projected.isAppOfArity ``GetElem.getElem 8 then
+    let gArgs := projected.getAppArgs
+    let xs := gArgs[5]!
+    let i := gArgs[6]!
+    let hval := gArgs[7]!
+    let some (base, mkRhs) ← projectionView? xs | return .continue
+    try
+      let xsType ← withDefault <| whnf (← inferType xs)
+      unless xsType.isAppOf ``Vector do return .continue
+      let lemmaName := if evalHead == ``Expression.eval then
+        ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
+      let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
+      let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
+      -- validate that the proof's left-hand side really is the term being rewritten
+      -- (`mkAppM` can pick a different `GetElem`/`Eval` instance than the term's)
+      unless ← withDefault <| isDefEq lhs0 e do return .continue
+      -- the lemma's right-hand side is `(eval env xs)[i]`; swap in the row-level
+      -- spelling of the same (definitionally equal) vector
+      unless rhs0.isAppOfArity ``GetElem.getElem 8 do return .continue
+      let evalBase ← withDefault <| mkAppM ``ProvableStruct.eval #[env, base]
+      let projEval ← mkRhs evalBase
+      -- the swap is a pure spelling change: validate that the row-level projection is
+      -- definitionally the evaluation of the projected field (the lemma's own equality
+      -- is propositional and needs no validation)
+      unless ← withTransparency .all <| isDefEq projEval rhs0.getAppArgs[5]! do
+        trace[Meta.Tactic.simp.rewrite] "getElem lift: defeq failed {projEval} vs {rhs0.getAppArgs[5]!}"
+        return .continue
+      let rhs := mkAppN rhs0.getAppFn (rhs0.getAppArgs.set! 5 projEval)
+      return .visit { expr := rhs, proof? := some proof }
+    catch _ => return .continue
   let some (base, mkRhs) ← projectionView? projected | return .continue
-  -- only lift projections out of `Expression`-level structs (the base must be a
-  -- `ProvableStruct` at the `Expression F` functor; `mkAppM` synthesizes the instance)
+  -- only lift projections out of `ProvableStruct` bases (`mkAppM` synthesizes the
+  -- instance). Notably *not* out of pairs: their `circuit_norm` normal form is
+  -- element-wise (`eval_var_pair` and friends), so lifting `.1`/`.2` would loop.
   let evalBase ← try
       withDefault <| mkAppM ``ProvableStruct.eval #[env, base]
     catch _ =>
@@ -84,6 +124,13 @@ def structEvalProjectionExprProc : Simproc :=
 /-- `evalProjectionLiftCore` registered on struct evaluation. -/
 def structEvalProjectionProc : Simproc :=
   evalProjectionLiftCore ``ProvableStruct.eval
+
+/-- `evalProjectionLiftCore` registered on the `Eval` class projection. This covers
+projected fields whose own type is not a `ProvableStruct` (e.g. vector fields), where the
+`eval_eq_eval` bridge to `ProvableStruct.eval` cannot fire:
+`Eval.eval env s.c ~~> (ProvableStruct.eval env s).c`. -/
+def structEvalProjectionEvalProc : Simproc :=
+  evalProjectionLiftCore ``Eval.eval
 
 simproc structEvalProjectionExpr (Expression.eval _ _) := structEvalProjectionExprProc
 attribute [circuit_norm] structEvalProjectionExpr
@@ -133,6 +180,65 @@ def structEvalLiteralProc : Simproc := fun e => do
     return .visit { expr := rhs, proof? := none }
   catch _ => return .continue
 
+/-- Gate for `structEqSplit`: the equality's type is a provable struct (its `TypeMap` has
+a `ProvableStruct` instance) or the value view of a `DerivedCircuitType`. -/
+private def isProvableStructLike (type : Expr) : MetaM Bool := do
+  -- `Value M F` / `ProverValue M F` wrappers of derived circuit types
+  if type.getAppFn.isConstOf ``CircuitType.Value ||
+      type.getAppFn.isConstOf ``CircuitType.ProverValue then
+    if let some m := type.getAppArgs[0]? then
+      let instType ← mkAppM ``DerivedCircuitType #[m]
+      if (← trySynthInstance instType) matches .some _ then
+        return true
+  -- `S ps F`: check `ProvableStruct (S ps)`; reducible whnf sees through type synonyms
+  let type' ← withTransparency .reducible <| whnf type
+  let .app typeCtor _ := type' | return false
+  try
+    let instType ← mkAppM ``ProvableStruct #[typeCtor]
+    return (← trySynthInstance instType) matches .some _
+  catch _ => return false
+
+/--
+Split a constructor equality of provable structs into field-wise equalities:
+
+```
+(⟨a, b, …⟩ : S _) = ⟨a', b', …⟩  ~~>  a = a' ∧ b = b' ∧ …
+```
+
+The proof is the structure's generated `mk.injEq` lemma. A simproc rather than per-type
+simp lemmas so the split applies uniformly to every provable struct — without collecting
+`mk.injEq` instances up front, and regardless of when the constructor shape materializes
+during a simp pass (e.g. only after the literal-decomposition simproc has fired on an
+`eval` equation). Restricted to `ProvableStruct`/`DerivedCircuitType` structures so that
+`circuit_norm` does not change how simp treats arbitrary record equalities.
+-/
+def structEqSplitProc : Simproc := fun e => do
+  unless e.isAppOfArity ``Eq 3 do return .continue
+  let args := e.getAppArgs
+  let lhs := args[1]!.consumeMData
+  let rhs := args[2]!.consumeMData
+  let .const ctorName _ := lhs.getAppFn | return .continue
+  unless rhs.getAppFn.isConstOf ctorName do return .continue
+  let some (.ctorInfo info) := (← getEnv).find? ctorName | return .continue
+  unless info.numFields > 0 do return .continue
+  unless lhs.getAppNumArgs == info.numParams + info.numFields &&
+      rhs.getAppNumArgs == info.numParams + info.numFields do return .continue
+  let injEqName := ctorName ++ `injEq
+  unless (← getEnv).contains injEqName do return .continue
+  unless ← isProvableStructLike args[0]! do return .continue
+  try
+    -- `mk.injEq` binders are the structure params followed by the fields of both sides
+    let params := lhs.getAppArgs[:info.numParams].toArray.map some
+    let lhsFields := lhs.getAppArgs[info.numParams:].toArray.map some
+    let rhsFields := rhs.getAppArgs[info.numParams:].toArray.map some
+    let proof ← mkAppOptM injEqName (params ++ lhsFields ++ rhsFields)
+    let some (_, _, conj) := (← inferType proof).eq? | return .continue
+    return .visit { expr := conj, proof? := some proof }
+  catch _ => return .continue
+
+simproc structEqSplit (_ = _) := structEqSplitProc
+attribute [circuit_norm] structEqSplit
+
 /-!
 The surface `simproc … (ProvableStruct.eval _ _)` syntax cannot express these patterns:
 pattern elaboration insists on synthesizing the `ProvableStruct ?α` instance. Compute the
@@ -140,14 +246,16 @@ discrimination keys with plain metavariables and register directly.
 -/
 open Elab in
 run_cmd Command.liftTermElabM do
-  let keys ← do
-    let f ← mkConstWithFreshMVarLevels ``ProvableStruct.eval
+  let mkKeys := fun (head : Name) => do
+    let f ← mkConstWithFreshMVarLevels head
     let (mvars, _, _) ← forallMetaTelescope (← inferType f)
-    let pattern := mkAppN f mvars
-    withSimpGlobalConfig <| DiscrTree.mkPath pattern
-  registerSimproc ``ProvableStruct.structEvalProjectionProc keys
-  registerSimproc ``ProvableStruct.structEvalLiteralProc keys
+    withSimpGlobalConfig <| DiscrTree.mkPath (mkAppN f mvars)
+  let structEvalKeys ← mkKeys ``ProvableStruct.eval
+  registerSimproc ``ProvableStruct.structEvalProjectionProc structEvalKeys
+  registerSimproc ``ProvableStruct.structEvalLiteralProc structEvalKeys
+  registerSimproc ``ProvableStruct.structEvalProjectionEvalProc (← mkKeys ``Eval.eval)
 
-attribute [circuit_norm] ProvableStruct.structEvalProjectionProc ProvableStruct.structEvalLiteralProc
+attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
+  ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
 
 end ProvableStruct

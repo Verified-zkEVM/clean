@@ -130,7 +130,7 @@ elab_rules : tactic
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `main):ident] at *))
 
-  -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
+  -- needed because struct-var destructuring would time out on `(ElaboratedCircuit.WithData ...).output` like terms
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
 
   -- collapse the `field`/`id` type synonym everywhere, so that hypotheses and goals
@@ -161,11 +161,6 @@ elab_rules : tactic
   -- `field F`-typed statements (e.g. from unfolded Specs)
   try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
     CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
-
-  -- split constructor equalities that only materialized during the simp passes above
-  -- (e.g. `h_input : ⟨eval …, …⟩ = ⟨…, …⟩` after the struct-eval simprocs decomposed
-  -- the literals), so hypotheses are field-level equations usable as rewrites
-  try (evalTactic (← `(tactic| split_provable_struct_eq))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
