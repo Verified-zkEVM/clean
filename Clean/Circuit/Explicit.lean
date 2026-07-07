@@ -696,6 +696,12 @@ destructure that variable with `cases` so the match can reduce. This supports th
 matcher cannot reduce on an opaque variable, and matcher reduction does not eta-expand
 structure variables, so we introduce the constructor form explicitly. Single-constructor
 structures only — `cases` then yields exactly one goal.
+
+If instead every discriminant is already a constructor application (e.g. because an
+enclosing `cases_match_discr` substituted the outer variable everywhere, turning a nested
+match's discriminant from a variable into a literal), destructuring has nothing left to do;
+`reduceMatcher?` can iota-reduce the match directly against the literal, so `change` the
+goal to that reduced form instead of erroring out.
 -/
 def casesMatchDiscr : TacticM Unit := withMainContext do
   let target ← getMainTarget
@@ -718,7 +724,13 @@ def casesMatchDiscr : TacticM Unit := withMainContext do
           let goals ← g.cases discr.fvarId!
           return goals.toList.map (·.mvarId)
         return
-  throwError "no local-variable discriminant to destructure"
+  -- no variable discriminant left: the match is stuck only because nothing has forced its
+  -- iota reduction yet, not because a variable needs destructuring first
+  match ← reduceMatcher? circuit with
+  | .reduced reduced =>
+    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) reduced.headBeta)
+    liftMetaTactic fun g => return [← g.change newTarget (checkDefEq := false)]
+  | _ => throwError "no local-variable discriminant to destructure, and the match does not reduce"
 
 elab "cases_match_discr" : tactic => casesMatchDiscr
 
