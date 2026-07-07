@@ -12,13 +12,11 @@ import CompPoly.Fields.BN254
 namespace Specs.Poseidon
 
 -- BN254 scalar field prime (same as used in circomlib/snarkjs)
-def BN254_PRIME : ℕ := 21888242871839275222246405745257275088548364400416034343698204186575808495617
+-- Definitionally equal to CompPoly's scalarFieldSize, which has a Pratt certificate proof.
+abbrev BN254_PRIME := BN254.scalarFieldSize
 
 -- Proven prime via CompPoly's Pratt certificate
-instance : Fact (Nat.Prime BN254_PRIME) := ⟨by
-  have h : BN254_PRIME = BN254.scalarFieldSize := by native_decide
-  rw [h]
-  exact BN254.ScalarField_is_prime⟩
+instance : Fact (Nat.Prime BN254_PRIME) := ⟨BN254.ScalarField_is_prime⟩
 
 abbrev F := ZMod BN254_PRIME
 
