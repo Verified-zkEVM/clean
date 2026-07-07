@@ -10,8 +10,13 @@ Port of `Clean/Circuit/Expression.lean` to the halo2 layout model. Main Clean's
 replacements:
 
 - `Expression` — the configure-layer constraint language: gate polynomials over
-  (column, rotation) queries and selectors. Matches halo2's `Expression` node set
-  exactly, so that constraint systems dumped from Rust can match syntactically.
+  variables. It is main Clean's `Expression` with the same four nodes, generalized over
+  the variable type `L`. Circuit authors write gates in `Expression F Query`, where a
+  `Query` is a selector or a (column, rotation) query, mirroring halo2's
+  `meta.query_advice` etc. For VK comparison, gates are later projected to bare
+  query-index variables (matching ironwood's `Expr` after a semantics-preserving erasure
+  of its `Negated`/`Scaled` nodes); at consolidation time, main Clean's `Expression F`
+  becomes the `L := Variable F` instance.
 - `Cell` / `AssignedCell` — the synthesize-layer composition currency: region-relative
   cell references, as returned by `assignAdvice` and passed between gadgets.
 
@@ -28,7 +33,7 @@ Rust references (halo2 `halo2_gadgets-0.5.0`):
 
 namespace Halo2
 
-variable {F : Type}
+variable {F : Type} {L : Type}
 
 /-- Kind of a column. Rust: `pub enum Any { Advice, Fixed, Instance }`.
 
@@ -77,9 +82,10 @@ deriving DecidableEq, Repr
 abbrev RegionIndex := ℕ
 
 /-!
-Queries of columns at relative locations, as they appear inside gate expressions.
-The `index` is the query's position in the constraint system's query list, assigned
-during configure; it is bookkeeping needed for VK matching and ignored by `eval`.
+Queries of columns at relative locations: the variables of gate expressions at the
+circuit-writing layer. The `index` is the query's position in the constraint system's
+per-kind query list, assigned during configure; it is bookkeeping needed for VK matching
+and ignored by evaluation.
 -/
 
 /-- Query of a fixed column at a relative location. Rust: `FixedQuery`. -/
@@ -103,22 +109,30 @@ structure InstanceQuery where
   rotation : Rotation
 deriving DecidableEq, Repr
 
-/-- Low-degree expression representing an identity that must hold over the committed
-columns; the constraint language of custom gates.
+/-- A gate-expression variable: a selector or a column query. These are the atoms
+returned by `querySelector`/`queryFixed`/`queryAdvice`/`queryInstance` during configure
+(the `Selector`/`Fixed`/`Advice`/`Instance` atom cases of Rust's `Expression<F>`). -/
+inductive Query where
+  | selector : Selector → Query
+  | fixed : FixedQuery → Query
+  | advice : AdviceQuery → Query
+  | «instance» : InstanceQuery → Query
+deriving DecidableEq, Repr
 
-Constructor set matches Rust `Expression<F>` exactly (this replaces main Clean's
-`var/const/add/mul` node set, so dumped gate ASTs can be compared syntactically). -/
-inductive Expression (F : Type) where
-  | constant : F → Expression F
-  | selector : Selector → Expression F
-  | fixed : FixedQuery → Expression F
-  | advice : AdviceQuery → Expression F
-  | «instance» : InstanceQuery → Expression F
-  | negated : Expression F → Expression F
-  | sum : Expression F → Expression F → Expression F
-  | product : Expression F → Expression F → Expression F
-  | scaled : Expression F → F → Expression F
+/-- Main Clean's `Expression`, generalized over the variable type `L`.
+
+Halo2 uses `Expression F Query` at the circuit-writing layer. Rust's
+`Negated`/`Sum`/`Product`/`Scaled` nodes correspond to `mul (const (-1)) ·` / `add` /
+`mul` / `mul · (const c)`; the correspondence is a semantics-preserving erasure applied
+to dumped constraint systems at the VK-comparison boundary. -/
+inductive Expression (F : Type) (L : Type) where
+  | var : L → Expression F L
+  | const : F → Expression F L
+  | add : Expression F L → Expression F L → Expression F L
+  | mul : Expression F L → Expression F L → Expression F L
 deriving DecidableEq
+
+export Expression (var)
 
 /--
 `Environment` represents the data that is provided at runtime to concretely specify the
@@ -161,64 +175,75 @@ instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.
 instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
+/-- Evaluate a query in an environment, at a `row`: read the queried column at
+`row + rotation` (resp. the selector's virtual value at `row`). The query index is CS
+bookkeeping and does not affect evaluation. -/
+@[circuit_norm]
+def Query.eval [Field F] (env : Environment F) (row : ℤ) : Query → F
+  | .selector s => env.selector s.index row
+  | .fixed q => env.get ⟨.fixed, q.columnIndex⟩ (row + q.rotation)
+  | .advice q => env.get ⟨.advice, q.columnIndex⟩ (row + q.rotation)
+  | .«instance» q => env.get ⟨.instance, q.columnIndex⟩ (row + q.rotation)
+
 namespace Expression
 variable [Field F]
 
 /--
-Evaluate a gate expression at a `row`, given an external `environment` that determines
-the assignment of all cells. Queries read their column at `row + rotation`; the query
-index is CS bookkeeping and does not affect evaluation.
+Evaluate an expression given a valuation of its variables.
 
-This is needed when we want to make statements about a circuit in the adversarial
-situation where the prover can assign anything to cells.
+Gate expressions are evaluated as `e.eval (Query.eval env row)`, for an external
+`Environment` that determines the assignment of all cells; this is needed when we want
+to make statements about a circuit in the adversarial situation where the prover can
+assign anything to cells.
 -/
 @[circuit_norm]
-def eval (env : Environment F) (row : ℤ) : Expression F → F
-  | constant c => c
-  | selector s => env.selector s.index row
-  | fixed q => env.get ⟨.fixed, q.columnIndex⟩ (row + q.rotation)
-  | advice q => env.get ⟨.advice, q.columnIndex⟩ (row + q.rotation)
-  | «instance» q => env.get ⟨.instance, q.columnIndex⟩ (row + q.rotation)
-  | negated e => -eval env row e
-  | sum x y => eval env row x + eval env row y
-  | product x y => eval env row x * eval env row y
-  | scaled e c => eval env row e * c
+def eval (v : L → F) : Expression F L → F
+  | var q => v q
+  | const c => c
+  | add x y => eval v x + eval v y
+  | mul x y => eval v x * eval v y
 
-def toString [Repr F] : Expression F → String
-  | constant c => reprStr c
-  | selector s => "sel " ++ reprStr s.index
-  | fixed q => s!"fixed[{q.columnIndex}]@{q.rotation}"
-  | advice q => s!"advice[{q.columnIndex}]@{q.rotation}"
-  | «instance» q => s!"instance[{q.columnIndex}]@{q.rotation}"
-  | negated e => "(-" ++ toString e ++ ")"
-  | sum x y => "(" ++ toString x ++ " + " ++ toString y ++ ")"
-  | product x y => "(" ++ toString x ++ " * " ++ toString y ++ ")"
-  | scaled e c => "(" ++ toString e ++ " * " ++ reprStr c ++ ")"
+/-- Rename/project the variables of an expression. Eval-compatibility is
+`eval_mapVar` below. Used to project circuit-writing gates (`L := Query`) to the
+VK-comparison form over bare query indices. -/
+@[circuit_norm]
+def mapVar {L' : Type} (f : L → L') : Expression F L → Expression F L'
+  | var q => var (f q)
+  | const c => const c
+  | add x y => add (mapVar f x) (mapVar f y)
+  | mul x y => mul (mapVar f x) (mapVar f y)
 
-instance [Repr F] : Repr (Expression F) where
+def toString [Repr F] [Repr L] : Expression F L → String
+  | var q => reprStr q
+  | const c => reprStr c
+  | add x y => "(" ++ toString x ++ " + " ++ toString y ++ ")"
+  | mul x y => "(" ++ toString x ++ " * " ++ toString y ++ ")"
+
+instance [Repr F] [Repr L] : Repr (Expression F L) where
   reprPrec e _ := toString e
 
-/- Operator instances produce exactly the AST nodes of the Rust operator impls
-(`Neg → Negated`, `Add → Sum`, `Sub → Sum(a, Negated b)`, `Mul → Product`,
-`Mul<F> → Scaled`), so gates ported verbatim build identical trees. The Rust
-runtime panics on simple-selector misuse are not operator behavior; they become a
-wellformedness predicate later. -/
-instance : Zero (Expression F) where zero := constant 0
-instance : One (Expression F) where one := constant 1
-instance : Neg (Expression F) where neg := negated
-instance : Add (Expression F) where add := sum
-instance : Sub (Expression F) where sub x y := sum x (negated y)
-instance : Mul (Expression F) where mul := product
-instance : HMul (Expression F) F (Expression F) where hMul := scaled
+-- combine expressions elegantly (verbatim from main Clean)
+instance : Zero (Expression F L) where zero := const 0
+instance : One (Expression F L) where one := const 1
+instance : Add (Expression F L) where add := add
+instance : Neg (Expression F L) where neg e := mul (const (-1)) e
+instance : Sub (Expression F L) where sub e₁ e₂ := add e₁ (-e₂)
+instance : Mul (Expression F L) where mul := mul
 
-instance : Coe F (Expression F) where coe f := constant f
-instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
-  ofNat := constant (OfNat.ofNat n)
+instance : Coe F (Expression F L) where coe f := const f
+instance {n : ℕ} [OfNat F n] : OfNat (Expression F L) n where
+  ofNat := const (OfNat.ofNat n)
+
+instance : HMul F (Expression F L) (Expression F L) where hMul f e := mul (const f) e
+instance : HMul (Expression F L) F (Expression F L) where hMul e f := mul e (const f)
+
+instance : HDiv (Expression F L) F (Expression F L) where hDiv e f := mul (const (f⁻¹ : F)) e
+instance : HDiv (Expression F L) ℕ (Expression F L) where hDiv e f := mul (const ((f : F)⁻¹)) e
 
 end Expression
 
-instance [Field F] : Inhabited (Expression F) where
-  default := .constant 0
+instance [Field F] : Inhabited (Expression F L) where
+  default := .const 0
 
 /--
 A pointer to a cell within a circuit, relative to the start of its region.
@@ -251,29 +276,29 @@ def AssignedCell.eval [Field F] (env : Environment F) (c : AssignedCell F) : F :
 /-! ## Lemmas about Expression evaluation -/
 
 section EvalLemmas
-variable [Field F]
+variable [Field F] (v : L → F)
 
+/-- Expression.eval distributes over multiplication -/
 @[circuit_norm]
-lemma eval_sum (env : Environment F) (row : ℤ) (a b : Expression F) :
-    Expression.eval env row (Expression.sum a b) =
-      Expression.eval env row a + Expression.eval env row b := by
+lemma eval_mul (a b : Expression F L) :
+    Expression.eval v (Expression.mul a b) = Expression.eval v a * Expression.eval v b := by
   simp only [Expression.eval]
 
+/-- Expression.eval distributes over addition -/
 @[circuit_norm]
-lemma eval_product (env : Environment F) (row : ℤ) (a b : Expression F) :
-    Expression.eval env row (Expression.product a b) =
-      Expression.eval env row a * Expression.eval env row b := by
+lemma eval_add (a b : Expression F L) :
+    Expression.eval v (Expression.add a b) = Expression.eval v a + Expression.eval v b := by
   simp only [Expression.eval]
 
+/-- Variable renaming composes with evaluation. -/
 @[circuit_norm]
-lemma eval_negated (env : Environment F) (row : ℤ) (a : Expression F) :
-    Expression.eval env row (Expression.negated a) = -Expression.eval env row a := by
-  simp only [Expression.eval]
-
-@[circuit_norm]
-lemma eval_scaled (env : Environment F) (row : ℤ) (a : Expression F) (c : F) :
-    Expression.eval env row (Expression.scaled a c) = Expression.eval env row a * c := by
-  simp only [Expression.eval]
+lemma eval_mapVar {L' : Type} (f : L → L') (v' : L' → F) (e : Expression F L) :
+    Expression.eval v' (e.mapVar f) = Expression.eval (v' ∘ f) e := by
+  induction e with
+  | var q => rfl
+  | const c => rfl
+  | add x y ihx ihy => simp only [Expression.mapVar, Expression.eval, ihx, ihy]
+  | mul x y ihx ihy => simp only [Expression.mapVar, Expression.eval, ihx, ihy]
 
 end EvalLemmas
 
