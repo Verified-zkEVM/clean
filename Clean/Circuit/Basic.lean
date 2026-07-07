@@ -25,6 +25,7 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
+@[implicit_reducible]
 def Circuit (F : Type) [FiniteField F] (α : Type) := ℕ → α × List (Operation F)
 
 namespace Circuit
@@ -428,7 +429,7 @@ class ConstantLength (circuit : α → Circuit F β) where
   localLength : ℕ
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
 
-@[circuit_norm]
+@[implicit_reducible, circuit_norm]
 def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
     (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
   localLength := (circuit default).localLength 0

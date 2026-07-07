@@ -244,7 +244,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
   · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
     simp at hstep
   rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
-  push_neg at hc₁
+  push Not at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
   change Point.incompleteAdd R A = some B at hstep
@@ -252,7 +252,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
   · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
     simp at hstep
   rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
-  push_neg at hc₂
+  push Not at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
     have := Option.some.inj hstep
@@ -1228,7 +1228,7 @@ theorem z1sOfZs_tail {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (z1sOfZs (n :: rest) zs).tail = z1sOfZs rest (HVec.tail zs) := by
   simp only [z1sOfZs, Vector.listCons]
   ext i hi
-  simp
+  simp; rfl
 
 theorem z1sOfZs_getElem_succ {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) (k : ℕ) (hk : k + 1 < (n :: rest).length) :
@@ -1308,10 +1308,12 @@ theorem eval_z1sOfZs {F : Type} [FiniteField F] (env : Environment F) : (ns : Li
       by_cases hn : 1 < n + 1
       · simp only [dif_pos hn]
         rw [ProvableType.getElem_eval_fields, HVec.eval_head]
+        rfl
       · simp only [dif_neg hn]
         rfl
-    · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ← htail,
-        ProvableType.getElem_eval_fields]
+    · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ProvableType.getElem_eval_fields,
+        eval_z1sOfZs env rest (HVec.tail zs), HVec.eval_tail]
+      rfl
 
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Fp)
     (output : Value (Output ns) Fp) (_ : ProverData Fp) : Prop :=
@@ -1451,7 +1453,7 @@ def main (G : Generators) (n : ℕ) (rest : List ℕ)
 /-- Hand-written elaboration data: `elaborate_circuit` cannot derive the local length
 through the recursive tail, whose bundle is a variable here; the constant-length and
 no-channels facts are threaded through the chain recursion. -/
-def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
+@[reducible] def elaborated (G : Generators) (n : ℕ) (rest : List ℕ)
     (tail : GeneralFormalCircuit.WithHint Fp (Input rest.length) (Output rest))
     (tailLen : ℕ) (htail : ∀ inp, tail.localLength inp = tailLen)
     (hcwg : tail.channelsWithGuarantees = [])
@@ -1610,8 +1612,8 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
       rw [hv]
       exact htailPC
   · -- the running-sum vectors
-    rw [HVec.eval_cons]
-    simp only [ZsFacts, HVec.head_cons, HVec.tail_cons]
+    erw [HVec.eval_cons]
+    simp only [ZsFacts, HVec.head_cons]
     refine ⟨?_, ?_⟩
     · rw [CircuitType.eval_var_fields, hzs]
       apply Vector.ext
@@ -1622,6 +1624,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
       intro j hj
       rw [chunks_head_getD ms tailChunks (r + j) (by simp only [Finset.mem_range] at hj; omega)]
     · rw [chunks_drop_append]
+      erw [HVec.tail_cons]
       exact htailZs
   · -- the chain contract
     exact soundness_aux G n rest.isEmpty ms hms hlxP hlyp hchain hsec hyck htfxA
@@ -1691,22 +1694,22 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
   have hPStail := h_tail_env (by
     rw [hPA]
     refine ⟨?_, B₁, B, hB₁on, hxAsN.symm, hyAcc.symm, ?_⟩
-    · rw [hptail]
+    · erw [hptail]
       exact hbounds.2
-    · rw [hptail]
+    · erw [hptail]
       exact hsuffix)
   rw [hPS] at hPStail
   obtain ⟨-, htfxA, htailZsH, hAfun⟩ := hPStail
   obtain ⟨henter, hBfin⟩ := hAfun B₁ hB₁0 hxAsN.symm hyAcc.symm
-  obtain ⟨hpx, hpy⟩ := hBfin B (by rw [hptail]; exact hsuffix)
+  obtain ⟨hpx, hpy⟩ := hBfin B (by erw [hptail]; exact hsuffix)
   dsimp only at htfxA henter hpx hpy
   refine ⟨⟨⟨hb1, A, B₁, hAon, hAx, hAy, hpre'⟩, ?_, ?_, ?_⟩, ?_, ?_⟩
   · -- the tail's honest-prover assumptions
     rw [hPA]
     refine ⟨?_, B₁, B, hB₁on, hxAsN.symm, hyAcc.symm, ?_⟩
-    · rw [hptail]
+    · erw [hptail]
       exact hbounds.2
-    · rw [hptail]
+    · erw [hptail]
       exact hsuffix
   · -- the gate's secant equation on honest values
     rw [htfxA]
@@ -1719,14 +1722,15 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     rw [htfxA] at henter ⊢
     linear_combination 2 * hnext' - 2 * henter
   · -- the honest running-sum vectors
-    rw [HVec.eval_cons]
-    simp only [ZsHonest, HVec.head_cons, HVec.tail_cons]
+    erw [HVec.eval_cons]
+    simp only [ZsHonest, HVec.head_cons]
     refine ⟨?_, ?_⟩
     · rw [CircuitType.eval_var_fields, hzsPS]
       congr 1
       funext r
       exact congrArg (fun p => pieceZ p r.val) hp0
-    · rw [← hptail]
+    · erw [HVec.tail_cons]
+      rw [← hptail]
       exact htailZsH
   · -- the level's chain contract
     intro A' hA'0 hA'x hA'y
@@ -1948,6 +1952,16 @@ instance (ns : List ℕ) : ProvableStruct (Output ns) where
   components := [Point, fields ns.length]
   toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
   fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
+
+/-- Hand-written analogue of the `deriving ProvableStruct` handler's generated
+`fromComponents_cons` simp lemma (the instance above is hand-written, so none is
+generated): lets `simp` reduce `fromComponents` applications without going through the
+private match auxiliary, which no longer reduces at reducible transparency (4.30 bump). -/
+@[circuit_norm]
+theorem Output.fromComponents_cons (ns : List ℕ) {F : Type}
+    (point : Point F) (z1s : Vector F ns.length) :
+    fromComponents (α := Output ns) (F := F)
+      (.cons point (.cons z1s .nil)) = { point, z1s } := rfl
 
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (n₀ : ℕ) (ns : List ℕ)

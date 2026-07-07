@@ -74,11 +74,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 
+omit [Fact (Nat.Prime p)] in
 lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-  (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
-  apply FieldUtils.val_lt_p
+    (x.val ^^^ y.val) % p = x.val ^^^ y.val := by
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
-  linarith [p_large_enough.elim]
+  exact Nat.mod_eq_of_lt (by linarith [p_large_enough.elim])
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env input_var h_env input h_input as

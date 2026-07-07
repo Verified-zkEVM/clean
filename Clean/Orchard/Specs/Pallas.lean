@@ -368,7 +368,7 @@ theorem incompleteAdd_some {p q : Point Fp}
     (hX : p ≠ 0) (hY : q ≠ 0) (hxy : p.x ≠ q.x) :
     p ⸭ q = some (p + q) := by
   rw [incompleteAdd_def, if_neg]
-  push_neg
+  push Not
   exact ⟨hX, hY, hxy⟩
 
 /-- One incomplete double-and-add step: `(acc ⸭ p) ⸭ acc`. -/

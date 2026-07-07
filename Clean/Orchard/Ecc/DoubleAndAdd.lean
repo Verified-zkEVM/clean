@@ -54,7 +54,7 @@ theorem coordinates_of_constraints {A S B : Point Fp}
   · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
     simp at hstep
   rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
-  push_neg at hc₁
+  push Not at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S with hR_def
   change Point.incompleteAdd R A = some B at hstep
@@ -62,7 +62,7 @@ theorem coordinates_of_constraints {A S B : Point Fp}
   · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
     simp at hstep
   rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
-  push_neg at hc₂
+  push Not at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
     have := Option.some.inj hstep

@@ -915,6 +915,10 @@ private theorem sum_windowVal {α : Fp} (hα : α.val < PALLAS_BASE_CARD) :
   have h := MulFixed.sum_base8 α.val 85
   rwa [Nat.mod_eq_of_lt (lt_of_lt_of_le hα (by norm_num [PALLAS_BASE_CARD]))] at h
 
+-- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
+-- (`extendsVector_toIRLiteral` etc.) keep matching through stuck `size`/`localLength`
+-- indices (lean4#12179).
+set_option backward.isDefEq.respectTransparency false in
 theorem completeness (B : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main B) ProverAssumptions
       (ProverSpec B) := by
@@ -1626,7 +1630,6 @@ theorem completeness (B : MulFixed.FixedBase) :
     Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
   -- the honest top window `d = α.val / 8^84 < 8`, used in `α1`, `α2`, `α0'`
   rw [hz84v] at ha1 ha2 hap0
-  simp only [Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp] at ha1 ha2
   rw [ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
   refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_⟩
   · -- IsAlpha1 α1

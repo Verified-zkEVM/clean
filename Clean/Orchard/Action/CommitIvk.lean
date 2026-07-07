@@ -248,36 +248,100 @@ private theorem val_decomp (v k : ℕ) :
   rw [Nat.cast_add, Nat.cast_mul] at hc
   exact hc.symm
 
+/-- The pure-field bit facts feeding `completeness`: the canonical top bits `b1`/`d1` are
+boolean, and once set they force the shifted decompositions `a' = a + 2^130 - t_P` and
+`b2c' = b2 + c·2^5 + 2^140 - t_P` to have vanishing high parts. Split out of
+`completeness` so that no single declaration exhausts its heartbeat budget (4.30 bump). -/
+private theorem completeness_bit_facts {ak nk a b2 c b1 d1 : Fp}
+    (ha_val : a.val = bitrange ak.val 0 250)
+    (hb1_val : b1.val = bitrange ak.val 254 1)
+    (hb2_val : b2.val = bitrange nk.val 0 5)
+    (hc_val : c.val = bitrange nk.val 5 240)
+    (hd1_val : d1.val = bitrange nk.val 254 1) :
+    (b1 = 0 ∨ b1 = 1) ∧ (d1 = 0 ∨ d1 = 1) ∧
+      (b1 = 1 → ((a.val / 2 ^ 130 : ℕ) : Fp) = 0 ∧
+        (((a + ((2 ^ 130 : ℕ) : Fp) - tP).val / 2 ^ 130 : ℕ) : Fp) = 0) ∧
+      (d1 = 1 →
+        (((b2 + ((2 ^ 5 : ℕ) : Fp) * c + ((2 ^ 140 : ℕ) : Fp) - tP).val / 2 ^ 140 : ℕ) : Fp)
+          = 0) := by
+  have hak : ak.val < PALLAS_BASE_CARD := ZMod.val_lt _
+  have hnk : nk.val < PALLAS_BASE_CARD := ZMod.val_lt _
+  -- Fp-cast forms of the `.val` slice facts, needed for reconstruction/recombination
+  have hb1_eq : b1 = ((bitrange ak.val 254 1 : ℕ) : Fp) := by
+    rw [← hb1_val]; exact (ZMod.natCast_rightInverse b1).symm
+  have hb2_eq : b2 = ((bitrange nk.val 0 5 : ℕ) : Fp) := by
+    rw [← hb2_val]; exact (ZMod.natCast_rightInverse b2).symm
+  have hc_eq : c = ((bitrange nk.val 5 240 : ℕ) : Fp) := by
+    rw [← hc_val]; exact (ZMod.natCast_rightInverse c).symm
+  have hd1_eq : d1 = ((bitrange nk.val 254 1 : ℕ) : Fp) := by
+    rw [← hd1_val]; exact (ZMod.natCast_rightInverse d1).symm
+  -- the low 245-bit `nk` part `b2 + c·2^5` equals `bitrange nk 0 245`
+  have hb2c_val : (b2 + ((2 ^ 5 : ℕ) : Fp) * c).val = bitrange nk.val 0 245 := by
+    have hcast : b2 + ((2 ^ 5 : ℕ) : Fp) * c
+        = ((bitrange nk.val 0 245 : ℕ) : Fp) := by
+      rw [hb2_eq, hc_eq, Orchard.Specs.bitrange_add nk.val 0 5 240]; push_cast; ring
+    rw [hcast, ZMod.val_natCast_of_lt
+      (lt_trans (bitrange_lt _ 0 245) (by norm_num [PALLAS_BASE_CARD]))]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · -- `b_1` is `0` or `1`
+    have hlt := bitrange_lt ak.val 254 1
+    rcases (by omega : bitrange ak.val 254 1 = 0 ∨ bitrange ak.val 254 1 = 1) with h | h
+    · left; rw [hb1_eq, h]; simp
+    · right; rw [hb1_eq, h]; simp
+  · -- `d_1` is `0` or `1`
+    have hlt := bitrange_lt nk.val 254 1
+    rcases (by omega : bitrange nk.val 254 1 = 0 ∨ bitrange nk.val 254 1 = 1) with h | h
+    · left; rw [hd1_eq, h]; simp
+    · right; rw [hd1_eq, h]; simp
+  · -- `b_1 = 1 → a'.val / 2^130 = 0`
+    intro h1
+    have hbr : bitrange ak.val 254 1 = 1 := by
+      have hlt := bitrange_lt ak.val 254 1
+      rcases (by omega : bitrange ak.val 254 1 = 0 ∨ bitrange ak.val 254 1 = 1) with h | h
+      · rw [hb1_eq, h] at h1; norm_num at h1
+      · exact h
+    obtain ⟨_, hlo, _⟩ := high_bit_canonical hak hbr
+    refine ⟨?_, ?_⟩
+    · rw [ha_val]
+      rw [Orchard.Action.NoteCommit.bitrange_low_div ak.val 130 120,
+        Orchard.Action.NoteCommit.high_bit_high_zero hak hbr (by norm_num) (by norm_num)]
+      simp
+    · rw [shifted_high_zero (by norm_num) (by norm_num) (ha_val ▸ hlo)]; simp
+  · -- `d_1 = 1 → b2c'.val / 2^140 = 0`
+    intro h1
+    have hbr : bitrange nk.val 254 1 = 1 := by
+      have hlt := bitrange_lt nk.val 254 1
+      rcases (by omega : bitrange nk.val 254 1 = 0 ∨ bitrange nk.val 254 1 = 1) with h | h
+      · rw [hd1_eq, h] at h1; norm_num at h1
+      · exact h
+    obtain ⟨_, hlo, _⟩ := high_bit_canonical hnk hbr
+    have hlo245 : bitrange nk.val 0 245 < tPNat := by
+      have hle : bitrange nk.val 0 245 ≤ bitrange nk.val 0 250 := by
+        simp only [bitrange, pow_zero, Nat.div_one]
+        calc nk.val % 2 ^ 245 = nk.val % 2 ^ 250 % 2 ^ 245 := by
+              rw [Nat.mod_mod_of_dvd _ (by norm_num [pow_dvd_pow])]
+          _ ≤ nk.val % 2 ^ 250 := Nat.mod_le _ _
+      omega
+    rw [shifted_high_zero (by norm_num) (by norm_num) (hb2c_val ▸ hlo245)]; simp
+
 theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
   circuit_proof_start [main, Assumptions, Spec,
     Utilities.LookupRangeCheck.CopyCheck.circuit,
     Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit, Gate.Assumptions, Gate.Spec]
   obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, hz13A, hz13C⟩ := h_assumptions
   obtain ⟨ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbWs, hdWs⟩ := h_spec
-  obtain ⟨⟨-, hCopyA⟩, ⟨-, hCopyB⟩⟩ := h_env
-  have hak : input_ak.val < PALLAS_BASE_CARD := ZMod.val_lt _
-  have hnk : input_nk.val < PALLAS_BASE_CARD := ZMod.val_lt _
-  -- Fp-cast forms of the `.val` slice facts, needed for reconstruction/recombination
-  have hb1_eq : input_b1 = ((bitrange input_ak.val 254 1 : ℕ) : Fp) := by
-    rw [← hb1_val]; exact (ZMod.natCast_rightInverse input_b1).symm
-  have hb2_eq : input_b2 = ((bitrange input_nk.val 0 5 : ℕ) : Fp) := by
-    rw [← hb2_val]; exact (ZMod.natCast_rightInverse input_b2).symm
-  have hc_eq : input_c = ((bitrange input_nk.val 5 240 : ℕ) : Fp) := by
-    rw [← hc_val]; exact (ZMod.natCast_rightInverse input_c).symm
-  have hd1_eq : input_d1 = ((bitrange input_nk.val 254 1 : ℕ) : Fp) := by
-    rw [← hd1_val]; exact (ZMod.natCast_rightInverse input_d1).symm
-  -- canonical low parts
-  have hav : input_a.val = bitrange input_ak.val 0 250 := ha_val
-  -- the low 245-bit `nk` part `b2 + c·2^5` equals `bitrange nk 0 245`
-  have hb2c_val : (input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c).val = bitrange input_nk.val 0 245 := by
-    have hcast : input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c
-        = ((bitrange input_nk.val 0 245 : ℕ) : Fp) := by
-      rw [hb2_eq, hc_eq, Orchard.Specs.bitrange_add input_nk.val 0 5 240]; push_cast; ring
-    rw [hcast, ZMod.val_natCast_of_lt
-      (lt_trans (bitrange_lt _ 0 245) (by norm_num [PALLAS_BASE_CARD]))]
-  -- `aPrime`/`b2cPrime` values, and the running-sum tail cells (13th of `a'`, 14th of `b2c'`)
-  set aP : Fp := input_a + ((2 ^ 130 : ℕ) : Fp) - tP with haP_def
-  set bP : Fp := input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP with hbP_def
+  -- 4.30 bump: plain projections instead of `obtain` on the big `h_env` conjunction
+  -- (rcases motive abstraction is a whnf storm)
+  have hCopyA := h_env.1.2
+  have hCopyB := h_env.2.2
+  clear h_env
+  -- the pure-field bit facts, split out into `completeness_bit_facts` (4.30 bump)
+  obtain ⟨hb1cases, hd1cases, hImplA, hImplB⟩ :=
+    completeness_bit_facts ha_val hb1_val hb2_val hc_val hd1_val
+  -- `aPrime`/`b2cPrime` values, and the running-sum tail cells (13th of `a'`, 14th of `b2c'`).
+  -- 4.30 bump: no `set aP/bP` here — abstracting the shifted values over the big goal and
+  -- context was a ~270k-heartbeat kabstract/defeq storm; the bullets below use the explicit
+  -- `input_a + 2^130 - tP` / `input_b2 + 2^5·c + 2^140 - tP` spellings instead
   have hcellA0 := hCopyA ⟨0, by norm_num⟩
   have hcellA13 := hCopyA ⟨13, by norm_num⟩
   have hcellB0 := hCopyB ⟨0, by norm_num⟩
@@ -285,51 +349,6 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   simp only [show (K : ℕ) * 0 = 0 from by norm_num, show (K : ℕ) * 13 = 130 from by norm_num [K],
     show (K : ℕ) * 14 = 140 from by norm_num [K], pow_zero, Nat.div_one]
     at hcellA0 hcellA13 hcellB0 hcellB14
-  -- `b_1 = 1 → a'.val / 2^130 = 0`
-  have hImplA : input_b1 = 1 → ((input_a.val / 2 ^ 130 : ℕ) : Fp) = 0 ∧
-      ((aP.val / 2 ^ 130 : ℕ) : Fp) = 0 := by
-    intro h1
-    have hbr : bitrange input_ak.val 254 1 = 1 := by
-      have hlt := bitrange_lt input_ak.val 254 1
-      rcases (by omega : bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1) with h | h
-      · rw [hb1_eq, h] at h1; norm_num at h1
-      · exact h
-    obtain ⟨_, hlo, _⟩ := high_bit_canonical hak hbr
-    refine ⟨?_, ?_⟩
-    · rw [hav]
-      rw [Orchard.Action.NoteCommit.bitrange_low_div input_ak.val 130 120,
-        Orchard.Action.NoteCommit.high_bit_high_zero hak hbr (by norm_num) (by norm_num)]
-      simp
-    · rw [haP_def, shifted_high_zero (by norm_num) (by norm_num) (hav ▸ hlo)]; simp
-  -- `d_1 = 1 → b2c'.val / 2^140 = 0`
-  have hImplB : input_d1 = 1 → ((bP.val / 2 ^ 140 : ℕ) : Fp) = 0 := by
-    intro h1
-    have hbr : bitrange input_nk.val 254 1 = 1 := by
-      have hlt := bitrange_lt input_nk.val 254 1
-      rcases (by omega : bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1) with h | h
-      · rw [hd1_eq, h] at h1; norm_num at h1
-      · exact h
-    obtain ⟨_, hlo, _⟩ := high_bit_canonical hnk hbr
-    have hlo245 : bitrange input_nk.val 0 245 < tPNat := by
-      have hle : bitrange input_nk.val 0 245 ≤ bitrange input_nk.val 0 250 := by
-        simp only [bitrange, pow_zero, Nat.div_one]
-        calc input_nk.val % 2 ^ 245 = input_nk.val % 2 ^ 250 % 2 ^ 245 := by
-              rw [Nat.mod_mod_of_dvd _ (by norm_num [pow_dvd_pow])]
-          _ ≤ input_nk.val % 2 ^ 250 := Nat.mod_le _ _
-      omega
-    rw [hbP_def]
-    rw [shifted_high_zero (by norm_num) (by norm_num) (hb2c_val ▸ hlo245)]; simp
-  -- the canonical single bits `b_1`, `d_1` are `0` or `1`
-  have hb1cases : input_b1 = 0 ∨ input_b1 = 1 := by
-    have hlt := bitrange_lt input_ak.val 254 1
-    rcases (by omega : bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1) with h | h
-    · left; rw [hb1_eq, h]; simp
-    · right; rw [hb1_eq, h]; simp
-  have hd1cases : input_d1 = 0 ∨ input_d1 = 1 := by
-    have hlt := bitrange_lt input_nk.val 254 1
-    rcases (by omega : bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1) with h | h
-    · left; rw [hd1_eq, h]; simp
-    · right; rw [hd1_eq, h]; simp
   -- assemble: discharge each gate-assumption / guard conjunct, rewriting cells as needed
   refine ⟨?_, ?_, ?_⟩
   · -- b1 · (a'[13]) = 0
@@ -345,18 +364,24 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   -- the gate prover-assumption is `Gate.Assumptions ∧ Gate.Spec`; the spec part is `h_spec`
   refine ⟨⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, ?_, hz13A, ?_, ?_, ?_, hz13C, ?_, ?_⟩,
     ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbWs, hdWs⟩
-  · -- aPrime = aP  (a + 2^130 - t_P)
-    rw [hcellA0]; exact ZMod.natCast_rightInverse aP
-  · -- ∃ lo < 2^130, aP = lo + 2^130 · (aP.val/2^130)
+  · -- aPrime = a + 2^130 - t_P
+    rw [hcellA0]; exact ZMod.natCast_rightInverse _
+  · -- ∃ lo < 2^130, a' = lo + 2^130 · (a'.val/2^130)
     rw [hcellA0, hcellA13]
-    refine ⟨aP.val % 2 ^ 130, Nat.mod_lt _ (Nat.two_pow_pos 130), ?_⟩; exact val_decomp aP.val 130
+    refine ⟨(input_a + ((2 ^ 130 : ℕ) : Fp) - tP).val % 2 ^ 130,
+      Nat.mod_lt _ (Nat.two_pow_pos 130), ?_⟩
+    exact val_decomp (input_a + ((2 ^ 130 : ℕ) : Fp) - tP).val 130
   · -- b1 = 1 → a'[13] = 0
     intro h1; rw [hcellA13, (hImplA h1).2]
   · -- b2cPrime = b2 + c·2^5 + 2^140 - t_P
-    rw [hcellB0, ZMod.natCast_rightInverse bP, hbP_def]; ring
-  · -- ∃ lo < 2^140, bP = lo + 2^140 · (bP.val/2^140)
+    rw [hcellB0, ZMod.natCast_rightInverse
+      (input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP)]
+    ring
+  · -- ∃ lo < 2^140, b2c' = lo + 2^140 · (b2c'.val/2^140)
     rw [hcellB0, hcellB14]
-    refine ⟨bP.val % 2 ^ 140, Nat.mod_lt _ (Nat.two_pow_pos 140), ?_⟩; exact val_decomp bP.val 140
+    refine ⟨(input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP).val % 2 ^ 140,
+      Nat.mod_lt _ (Nat.two_pow_pos 140), ?_⟩
+    exact val_decomp (input_b2 + ((2 ^ 5 : ℕ) : Fp) * input_c + ((2 ^ 140 : ℕ) : Fp) - tP).val 140
   · -- d1 = 1 → b2c'[14] = 0
     intro h1; rw [hcellB14, hImplB h1]
 
@@ -567,6 +592,16 @@ instance (ns : List ℕ) : ProvableStruct (OutputGen ns) where
   components := [Cells, HVec (Orchard.Sinsemilla.Chain.zLengths ns)]
   toComponents := fun { cells, zs } => .cons cells (.cons zs .nil)
   fromComponents := fun (.cons cells (.cons zs .nil)) => { cells, zs }
+
+/-- Hand-written analogue of the `deriving ProvableStruct` handler's generated
+`fromComponents_cons` simp lemma (the instance above is hand-written, so none is
+generated): lets `simp` reduce `fromComponents` applications without going through the
+private match auxiliary, which no longer reduces at reducible transparency (4.30 bump). -/
+@[circuit_norm]
+theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
+    (cells : Cells F) (zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) F) :
+    fromComponents (α := OutputGen ns) (F := F)
+      (.cons cells (.cons zs .nil)) = { cells, zs } := rfl
 
 theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).cells = eval env out.cells := by
@@ -841,7 +876,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   replace hB0 := (hB0 trivial).2
   replace hB2 := (hB2 trivial).2
   replace hD0 := (hD0 trivial).2
-  simp only [Utilities.LookupRangeCheck.WitnessShort.circuit,
+  simp +instances only [Utilities.LookupRangeCheck.WitnessShort.circuit,
     Utilities.LookupRangeCheck.WitnessShort.ProverSpec, circuit_norm] at hB0 hB2 hD0
   replace hEb1 := hEb1 ⟨0, by norm_num⟩
   replace hEd1 := hEd1 ⟨0, by norm_num⟩
@@ -849,7 +884,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   replace hEb := hEb ⟨0, by norm_num⟩
   replace hEc := hEc ⟨0, by norm_num⟩
   replace hEd := hEd ⟨0, by norm_num⟩
-  simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm]
+  simp +instances only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm]
     at hEa hEb1 hEc hEd1 hEb hEd
   -- `WitnessShort.ProverSpec` now yields `.val = bitrange`; lift these to the `Fp`-cast form.
   replace hB0 : _ = ((bitrange _ 250 4 : ℕ) : Fp) := (ZMod.natCast_zmod_val _).symm.trans (by rw [hB0])
@@ -865,8 +900,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     rw [← h_input]; simp only [circuit_norm]
   -- apply the `WithZs` honest spec: feed it the `ProverAssumptions` (pieces in range, hash exists)
   have hWZspec := (hWZ (by
-    simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
-      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
+    simp +instances only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_, ?_⟩
     · rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
@@ -883,8 +918,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     ?_, trivial⟩, ?_⟩
   · -- WithZs.ProverAssumptions
     rw [GeneralFormalCircuit.WithHint.toSubcircuit_completeness]
-    simp only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
-      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
+    simp +instances only [CommitDomain.circuit, CommitDomain.ProverAssumptions,
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm, hEa, hEb, hEc, hEd]
     refine ⟨(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
         (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).1, ?_, ?_⟩
     · rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
@@ -961,8 +996,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
         exact Orchard.Sinsemilla.Chain.pieceChunks_honestChunks _ _ hOpf.1
       · intro B hB
         have hpt := hHash B (by
-          simp only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm,
-            hEa, hEb, hEc, hEd, Orchard.Specs.fromNat_Fp, Orchard.Specs.val_Fp]
+          simp +instances only [Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm,
+            hEa, hEb, hEc, hEd]
           rw [(honest_pieces_facts (Expression.eval env.toEnvironment input_var.ak)
               (Expression.eval env.toEnvironment input_var.nk) _ _ _ _ rfl rfl rfl rfl).2]
           exact hB)

@@ -167,7 +167,9 @@ def circuit (params : Gate.Params Fp) : FormalCircuit Fp Permute.State Permute.S
     exact ⟨h0, h1, h2⟩
   completeness := by
     circuit_proof_start [main, value, Gate.circuit, Gate.Spec, pow5]
-    simp_all [circuit_norm, Permute.State.mk.injEq]
+    change env.ExtendsVector ((Witgen.M.toIRLiteral (value := Permute.State) _).eval env) i₀ at h_env
+    rw [ProverEnvironment.extendsVector_toIRLiteral] at h_env
+    simp_all [circuit_norm]
 
 end FullRound
 
@@ -479,6 +481,10 @@ def circuitP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
       rw [h0, h1, h2] at happ
       simpa [hmid] using happ.symm
   completeness := by
+    -- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
+    -- (`extendsVector_ofFExprs` etc.) keep matching through stuck `size`/`localLength`
+    -- indices (lean4#12179).
+    set_option backward.isDefEq.respectTransparency false in
     circuit_proof_start [mainP128, PartialRounds.main, Gate.circuit,
       Gate.Spec]
     rcases h_env with ⟨hmid, hnext⟩

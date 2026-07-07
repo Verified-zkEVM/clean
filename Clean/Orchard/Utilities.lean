@@ -967,7 +967,7 @@ theorem completeness (start numBits : ℕ) (hNumBits : numBits ≤ K) :
   circuit_proof_start [main, ProverSpec, shortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grw [hNumBits, K]; norm_num
   have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
-  simp [h_env, hval, Specs.fromNat_Fp, Specs.val_Fp]
+  simp [h_env, hval]
 
 theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBits = 5) :
     GeneralFormalCircuit.WithHint.Completeness (Input:=Unconstrained field) (Output:=field)
@@ -975,7 +975,7 @@ theorem taggedCompleteness (start numBits : ℕ) (hBits : numBits = 4 ∨ numBit
   circuit_proof_start [taggedMain, ProverSpec, taggedShortRangeCircuit, shortRangeSpec]
   have numBits_le : numBits ≤ 254 := by grind
   have hval := Specs.cast_bitrange_val (start:=start) numBits_le input
-  simp [h_env, hval, Specs.fromNat_Fp, Specs.val_Fp]
+  simp [h_env, hval]
 
 def circuit (start numBits : ℕ) (hNumBits : numBits ≤ K) :
     GeneralFormalCircuit.WithHint Fp (Unconstrained field) field where

@@ -192,6 +192,8 @@ def main (B : FixedBase) (scalar : Var UnconstrainedNat Fp) :
   Gate.circuit (B.params 84) row₈₄
   Add.circuit { p := { x := row₈₄.xP, y := row₈₄.yP }, q := acc }
 
+-- TODO(4.30 bump): whnf recursion depth grew on the 85-window unrolled circuit
+set_option maxRecDepth 4096 in
 instance elaborated (B : FixedBase) :
     ElaboratedCircuit Fp UnconstrainedNat Point (main B) := by
   elaborate_circuit_with {
@@ -246,8 +248,9 @@ theorem soundness (B : FixedBase) :
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨⟨h_coords0, h_win0⟩, h_loop, ⟨h_coords84, h_win84⟩, h_add⟩ := h_holds
-  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-    Fin.foldl_const, Fin.val_last] at h_coords84 h_win84 h_add ⊢
+  simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+    Fin.foldl_const, Fin.val_last, circuit_norm,
+    ] at h_coords84 h_win84 h_add ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_coords84 h_win84 h_add
   -- clean up the per-iteration loop hypothesis: the accumulator entering iteration `j`
   -- is `accPt env i₀ j`
@@ -265,8 +268,9 @@ theorem soundness (B : FixedBase) :
             winPt env i₀ j + accPt env i₀ j) := by
     intro j hj
     have h := h_loop ⟨j, hj⟩
-    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
-      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm] at h
+    simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
+      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm,
+      ] at h
     rcases j with _ | j'
     · simp only [Fin.foldl_zero] at h
       exact h
@@ -438,6 +442,10 @@ private theorem coordsRow_eq {r : CoordsRow Fp} {a b c d : Fp}
   subst hw hx hy hu
   rfl
 
+-- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
+-- (`extendsVector_toIRLiteral` etc.) keep matching through stuck `size`/`localLength`
+-- indices (lean4#12179).
+set_option backward.isDefEq.respectTransparency false in
 theorem completeness (B : FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main B) ProverAssumptions
       (ProverSpec B) := by
@@ -445,8 +453,9 @@ theorem completeness (B : FixedBase) :
     AddIncomplete.circuit, AddIncomplete.Spec, AddIncomplete.Assumptions,
     Add.circuit, Add.Spec, Add.Assumptions]
   obtain ⟨h_w0, h_loop_env, h_w84, h_add_env⟩ := h_env
-  simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
-    Fin.foldl_const, Fin.val_last] at h_add_env ⊢
+  simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceMul,
+    Fin.foldl_const, Fin.val_last, circuit_norm,
+    ] at h_add_env ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_add_env ⊢
   -- witnessed row values
   obtain ⟨h0w, h0x, h0y, h0u⟩ := env_get_row (h_w0.trans (rowProgram_value B input 0))
@@ -481,8 +490,9 @@ theorem completeness (B : FixedBase) :
           winPt env.toEnvironment i₀ j + accPt env.toEnvironment i₀ j := by
     intro j hj
     have h := (h_loop_env ⟨j, hj⟩).2
-    simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
-      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm] at h
+    simp +instances only [List.sum_cons, List.sum_nil, Nat.reduceAdd,
+      Circuit.FoldlM.foldlAcc, Vector.getElem_finRange, Fin.val_mk, circuit_norm,
+      ] at h
     rcases j with _ | j'
     · simp only [Fin.foldl_zero] at h
       exact h
@@ -640,7 +650,7 @@ theorem completeness (B : FixedBase) :
     exact (rowValue_spec B input (by norm_num)).2
   · intro i
     obtain ⟨j, hj⟩ := i
-    simp only [Nat.reduceAdd, Circuit.FoldlM.foldlAcc, Vector.getElem_finRange,
+    simp +instances only [Nat.reduceAdd, Circuit.FoldlM.foldlAcc, Vector.getElem_finRange,
       Fin.val_mk, circuit_norm]
     rcases j with _ | j'
     · simp only [Fin.foldl_zero]

@@ -99,7 +99,7 @@ lemma soundess_def_field {F : Type} [FiniteField F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Soundness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
+  simp only [Soundness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
     List.map_nil]
   rfl
 
@@ -116,7 +116,7 @@ lemma completeness_def_field {F : Type} [FiniteField F]
   (table : Table F field) (env : Environment F) (entry : Expression F) :
     let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
     lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Completeness, Table.toRaw, id_eq, Vector.map_mk, List.map_toArray, List.map_cons,
+  simp only [Completeness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
     List.map_nil]
   rfl
 end Lookup

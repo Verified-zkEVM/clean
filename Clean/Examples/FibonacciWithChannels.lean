@@ -190,7 +190,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     · simp
     simp_all
     intro hx hy
-    rw [ZMod.val_natCast_of_lt (by grind), ZMod.val_add_of_lt]
+    rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
 example (input : Var Fib8Input (F p)) :
@@ -245,11 +245,11 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨ add8 ⟩
-    (by simp [circuit_norm, add8]) (by simp [circuit_norm, add8])
+    (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
+    (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])

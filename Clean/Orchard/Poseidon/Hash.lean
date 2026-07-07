@@ -198,7 +198,7 @@ def circuit (L : ℕ) [NeZero L] : FormalCircuit Fp (fields L) field where
       Sponge.InitialState.Spec, AbsorbPermute.Spec, Sponge.GetOutput.Spec,
       Permute.State.mk.injEq, value
     ]
-    simp only [id_eq, Nat.isValue, List.sum_cons, List.sum_nil, add_zero, Nat.reduceAdd,
+    simp only [Nat.isValue, List.sum_cons, List.sum_nil, add_zero, Nat.reduceAdd,
       Nat.reduceMul] at h_holds ⊢
     obtain ⟨ initial_state, ⟨h_init, h_fold⟩, h_final ⟩ := h_holds
     simp only [initial_state] at h_init
