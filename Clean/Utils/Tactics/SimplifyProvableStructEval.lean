@@ -2,6 +2,7 @@ import Lean
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
 import Lean.PrettyPrinter.Delaborator.Basic
+import Clean.Circuit.StructEvalSimprocs
 
 open Lean Meta Elab Tactic
 
@@ -171,11 +172,14 @@ elab "simplify_provable_struct_eval" : tactic => do
       if let some fromComponentsConsName ← fromComponentsConsNameFromType? structType then
         simpArgs ← addIdentLemmaIfMissing simpArgs fromComponentsConsName
 
-    -- Add the other simp lemmas
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval))
+    -- Struct evaluation is handled by the simprocs (literal decomposition + projection
+    -- lift), not by unfolding `ProvableStruct.eval`: unfolding on an opaque struct leaves
+    -- an un-keyable `fromComponents (eval.go … (match x with …))` term, since matchers no
+    -- longer eta-expand structure variables.
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.structEvalLiteralProc))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.structEvalProjectionProc))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.structEvalProjectionExpr))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.components))
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.toComponents))
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval.go))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableType.eval_field))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_var_prover_to_verifier))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_var_field))

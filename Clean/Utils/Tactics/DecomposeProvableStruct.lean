@@ -27,6 +27,14 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
       let args := e.getAppArgs
       match f with
       | .const name _ =>
+        -- A variable under a folded `ProvableStruct.eval` should also be decomposed:
+        -- the struct-eval simprocs only compute on constructor literals, so hypotheses
+        -- like `ProvableStruct.eval env input_var = ⟨…⟩` need the variable in
+        -- constructor form before they split into field equations.
+        if name == ``ProvableStruct.eval || name == ``Eval.eval || name == ``ProvableType.eval then
+          if let some (.fvar fvarId) := args.back? then
+            let acc' ← args.foldlM (fun acc arg => go arg acc) acc
+            return fvarId :: acc'
         -- Check if it's a structure field accessor
         let env ← getEnv
         if let some projInfo := env.getProjectionFnInfo? name then

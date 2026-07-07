@@ -330,8 +330,11 @@ class ProvableStruct (α : TypeMap) where
 
 export ProvableStruct (components toComponents fromComponents)
 
-attribute [circuit_norm] components toComponents
+attribute [circuit_norm] components
   ProvableStruct.combinedSize ProvableStruct.combinedSize'
+-- `toComponents` is deliberately NOT in `circuit_norm`: unfolding it on an opaque struct
+-- leaves a stuck, un-keyable `match`. Struct evaluation is handled by the simprocs in
+-- `Clean.Circuit.StructEvalSimprocs` (literal decomposition + projection lift).
 
 namespace ProvableStruct
 -- convert between `ProvableTypeList` and a single flat `Vector` of field elements
@@ -392,11 +395,9 @@ variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 /--
 Alternative `eval` which evaluates each component separately.
 -/
-@[circuit_norm]
 def eval (env : Environment F) (var : α (Expression F)) : α F :=
   toComponents var |> go (components α) |> fromComponents
 where
-  @[circuit_norm]
   go: (cs : List WithProvableType) → ProvableTypeList (Expression F) cs → ProvableTypeList F cs
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Eval.eval env a) (go cs as)

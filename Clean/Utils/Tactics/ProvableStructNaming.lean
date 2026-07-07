@@ -32,13 +32,13 @@ def generateStructFieldNames (fvarId : FVarId) : MetaM AltVarNames := do
   let localDecl ← fvarId.getDecl
   let userName := localDecl.userName
 
-  -- Get the type of the variable to extract structure name
+  -- Get the type of the variable to extract structure name.
+  -- `.instances`: the type is often spelled through the `Var`/`Value` class projections.
   let varType ← inferType (.fvar fvarId)
-  let varType' ← whnf varType
+  let varType' ← withTransparency .instances (whnf varType)
 
-  -- Extract the structure name
-  let structName ← match varType' with
-  | .app (.const name _) _ => pure name
+  -- Extract the structure name (head constant, so parametric structs like `Inputs M F` work)
+  let structName ← match varType'.getAppFn with
   | .const name _ => pure name
   | _ => throwError "Cannot extract structure name from type: {varType'}"
 
