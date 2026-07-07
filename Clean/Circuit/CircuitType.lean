@@ -59,14 +59,18 @@ abbrev evalProver {F Var Value} [ProverEval F Var Value]
   (env : ProverEnvironment F) (v : Var) : Value := eval env v
 
 /--
-`CircuitType M` bundles three derived types (`Var`, `Value`, `ProverValue`)
+`CircuitTypeOver Env PEnv M` bundles three derived types (`Var`, `Value`, `ProverValue`)
 and two eval functions that map the variable form to the two value forms
-(verifier-view, prover-view).
+(verifier-view, prover-view), for a given pair of environment types.
+
+Main Clean instantiates the environments with `Environment`/`ProverEnvironment` (see the
+`CircuitType` abbreviation); Halo2-Clean instantiates them with its placed cell
+environments.
 
 For fully provable schemas (no hint fields), the verifier- and prover-value forms
 coincide; see the default instance in `Provable.lean`.
 -/
-class CircuitType (M : TypeMap) where
+class CircuitTypeOver (Env PEnv : Type → Type) (M : TypeMap) where
   /--
   An element of `Var M F` represents a `M F` that's polynomially dependent
   on the environment. More concretely, an element of `Var M F` is a value of `M F`
@@ -78,8 +82,28 @@ class CircuitType (M : TypeMap) where
   Value : TypeMap
   /-- Prover value: hint fields carry their underlying type. -/
   ProverValue : TypeMap
-  evalVerifier : ∀ {F : Type} [FiniteField F], Environment F → Var F → Value F
-  evalProver   : ∀ {F : Type} [FiniteField F], ProverEnvironment F → Var F → ProverValue F
+  evalVerifier : ∀ {F : Type} [FiniteField F], Env F → Var F → Value F
+  evalProver   : ∀ {F : Type} [FiniteField F], PEnv F → Var F → ProverValue F
+
+/-- Main Clean's `CircuitType`: `CircuitTypeOver` at the tape-indexed
+`Environment`/`ProverEnvironment`. -/
+abbrev CircuitType (M : TypeMap) := CircuitTypeOver Environment ProverEnvironment M
+
+/- Main-specialized views of the bundled types. These keep the established names
+`Var M F`/`Value M F`/`ProverValue M F` deterministic: the raw generic projections would
+leave `Env`/`PEnv` to instance search, which becomes ambiguous once several environment
+instantiations are in scope. Frameworks over other environments define their own views
+(e.g. `Halo2.Var`). -/
+@[reducible] def CircuitType.Var (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.Var (Env := Environment) (PEnv := ProverEnvironment) (M := M)
+@[reducible] def CircuitType.Value (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.Value (Env := Environment) (PEnv := ProverEnvironment) (M := M)
+@[reducible] def CircuitType.ProverValue (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.ProverValue (Env := Environment) (PEnv := ProverEnvironment) (M := M)
+
+namespace CircuitType
+export CircuitTypeOver (evalVerifier evalProver)
+end CircuitType
 
 export CircuitType (Var Value ProverValue)
 
@@ -140,8 +164,9 @@ structure UnconstrainedNative (Hint : Type) (F : Type) where
 
 variable {Hint : Type}
 
-@[reducible] instance UnconstrainedNative.toCircuitType : CircuitType (UnconstrainedNative Hint) where
-  Var F := ProverEnvironment F → Hint
+@[reducible] instance UnconstrainedNative.toCircuitType {Env PEnv : Type → Type} :
+    CircuitTypeOver Env PEnv (UnconstrainedNative Hint) where
+  Var F := PEnv F → Hint
   ProverValue _ := Hint
   Value _ := Unit
   evalVerifier _ _ := ()
@@ -181,8 +206,9 @@ structure UnconstrainedDepNative (Hint : TypeMap) (F : Type) where
 
 variable {HintMap : TypeMap}
 
-@[reducible] instance UnconstrainedDepNative.toCircuitType : CircuitType (UnconstrainedDepNative HintMap) where
-  Var F := ProverEnvironment F → HintMap F
+@[reducible] instance UnconstrainedDepNative.toCircuitType {Env PEnv : Type → Type} :
+    CircuitTypeOver Env PEnv (UnconstrainedDepNative HintMap) where
+  Var F := PEnv F → HintMap F
   ProverValue F := HintMap F
   Value _ := Unit
   evalVerifier _ _ := ()

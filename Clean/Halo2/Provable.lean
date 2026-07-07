@@ -9,12 +9,19 @@ Halo2 counterpart of the evaluation layer of `Clean/Circuit/Provable.lean`.
 The `ProvableType` class itself — `size`/`toElements`/`fromElements`, all its instances
 (`field`, `fields n`, `ProvablePair`, `ProvableVector`, …) and the `ProvableStruct`
 deriving machinery — is fully generic over the element type and is **shared** with main
-Clean, not ported. This file only supplies what is element-specific:
+Clean, not ported. Likewise, the `CircuitTypeOver` machinery (and with it the
+`Unconstrained*Native` hint types) is generic over the environment pair; halo2
+instantiates it at `Placed Environment`/`Placed ProverEnvironment`, so circuit inputs
+can mix cell references with prover hints exactly as in main Clean.
 
-- `Var M F` is `M (AssignedCell F)` (main Clean: `M (Expression F)`): structured circuit
-  values are structs of cell references, halo2's composition currency (Rust gadgets do
-  the same: `EccPoint` is a struct of `AssignedCell`s).
-- `eval place env` evaluates them to values `M F`, given the region placement.
+This file only supplies what is element-specific:
+
+- `Halo2.Var M F` is `M (AssignedCell F)` for provable `M` (main Clean:
+  `M (Expression F)`): structured circuit values are structs of cell references, halo2's
+  composition currency (Rust gadgets do the same: `EccPoint` is a struct of
+  `AssignedCell`s).
+- `ProvableType.eval place env` evaluates them to values `M F`, given the region
+  placement.
 
 Deliberately absent, with no halo2 analogue:
 
@@ -23,20 +30,11 @@ Deliberately absent, with no halo2 analogue:
   cells copy-constrained to fixed cells.
 - `varFromOffset` — cells are not allocated in blocks from a linear tape; each cell is
   created by an assignment operation at a specific (region, column, row offset).
-
-Not yet decided: sharing of the `CircuitType` (`Var`/`Value`/`ProverValue`) machinery and
-the `Unconstrained*` hint types. Those bake in main Clean's `Environment` types; making
-them environment-generic is a candidate core reorganization, to be decided when the
-halo2 formal-circuit layer is ported. Until then, halo2 uses plain functions.
 -/
 
 namespace Halo2
 
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
-
-/-- Structured circuit variables: a `M F`-shaped collection of cell references.
-Halo2 counterpart of main Clean's `Var M F = M (Expression F)`. -/
-abbrev Var (M : TypeMap) (F : Type) := M (AssignedCell F)
 
 instance : Inhabited Cell where
   default := ⟨0, 0, ⟨.advice, 0⟩⟩
@@ -44,8 +42,34 @@ instance : Inhabited Cell where
 instance : Inhabited (AssignedCell F) where
   default := ⟨default⟩
 
-instance (priority := low) : Inhabited (Var M F) where
-  default := (fromElements default : M (AssignedCell F))
+instance (priority := low) : Inhabited (M (AssignedCell F)) where
+  default := fromElements default
+
+/--
+Pair a region placement with an environment. This is the environment form used by
+halo2's typed evaluation interface (`CircuitTypeOver`): evaluating a cell reference
+needs both the cell assignment and the placement of regions.
+
+In the circuit semantics themselves, `place` remains a separate parameter (the analogue
+of main Clean's `offset`) — `Placed` is plumbing for the `Eval`/`CircuitTypeOver`
+typeclasses, which take a single environment type.
+-/
+structure Placed (E : Type → Type) (F : Type) where
+  place : RegionIndex → ℕ
+  env : E F
+
+/-- Halo2's `CircuitType`: `CircuitTypeOver` at the placed cell environments. -/
+abbrev CircuitType (M : TypeMap) :=
+  CircuitTypeOver (Placed Environment) (Placed ProverEnvironment) M
+
+/- Halo2-specialized views of the bundled types, mirroring main Clean's
+`Var`/`Value`/`ProverValue`. -/
+@[reducible] def Var (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.Var (Env := Placed Environment) (PEnv := Placed ProverEnvironment) (M := M)
+@[reducible] def Value (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.Value (Env := Placed Environment) (PEnv := Placed ProverEnvironment) (M := M)
+@[reducible] def ProverValue (M : TypeMap) [CircuitType M] : TypeMap :=
+  CircuitTypeOver.ProverValue (Env := Placed Environment) (PEnv := Placed ProverEnvironment) (M := M)
 
 namespace ProvableType
 
@@ -71,6 +95,18 @@ def eval (place : RegionIndex → ℕ) (env : Environment F) (x : M (AssignedCel
 lemma eval_field (place : RegionIndex → ℕ) (env : Environment F) (x : AssignedCell F) :
     eval (M := field) place env x = AssignedCell.eval place env x := by
   with_unfolding_all rfl
+
+/--
+`ProvableType`s are halo2 `CircuitType`s: verifier- and prover-value coincide with the
+input type, and `Var` is `M (AssignedCell ·)`. Halo2 counterpart of main Clean's
+`ProvableType.toCircuitType`.
+-/
+@[reducible] instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
+  Var F := M (AssignedCell F)
+  Value := M
+  ProverValue := M
+  evalVerifier pe v := eval pe.place pe.env v
+  evalProver pe v := eval pe.place pe.env.toEnvironment v
 
 end ProvableType
 
