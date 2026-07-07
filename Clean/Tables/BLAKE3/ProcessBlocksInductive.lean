@@ -74,17 +74,11 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp_all [← h_input, eval_vector]
+    simp_all [← h_input, eval_vector] -- provable_vector_simp wanted
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
-    simp only [ProcessBlocksState.Normalized] at h_spec
-    constructor
-    · rintro ⟨i, h_i⟩
-      rcases h_spec with ⟨h_spec, _⟩
-      specialize h_spec ⟨ i, h_i ⟩
-      convert h_spec
-    simp_all
+    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized,
+      getElem_eval_vector] -- provable_vector_simp wanted
 
 end BLAKE3ProcessBlocksStateNormalized
 

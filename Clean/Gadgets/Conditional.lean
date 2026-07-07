@@ -60,10 +60,7 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := b
 
 theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
   circuit_proof_start
-  rcases input
-  simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp only at h_assumptions
 
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
