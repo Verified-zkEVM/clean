@@ -227,11 +227,17 @@ def structEqSplitProc : Simproc := fun e => do
   unless (← getEnv).contains injEqName do return .continue
   unless ← isProvableStructLike args[0]! do return .continue
   try
-    -- `mk.injEq` binders are the structure params followed by the fields of both sides
+    -- `mk.injEq` binders are the structure params followed by the fields of both sides.
+    -- `.default` transparency: for a `CircuitType.Value`/`ProverValue` struct (the mixed,
+    -- hint-carrying case), a field's argument type is stated as `Value <component> F`, which
+    -- unfolds to the field's own evaluated type only through the (reducible)
+    -- `ProvableType`-derived `CircuitType` instance — `mkAppOptM`'s default elaboration
+    -- transparency does not see through that far, so the implicit unification silently fails
+    -- and the whole `try` falls through to `.continue` without this.
     let params := lhs.getAppArgs[:info.numParams].toArray.map some
     let lhsFields := lhs.getAppArgs[info.numParams:].toArray.map some
     let rhsFields := rhs.getAppArgs[info.numParams:].toArray.map some
-    let proof ← mkAppOptM injEqName (params ++ lhsFields ++ rhsFields)
+    let proof ← withTransparency .default <| mkAppOptM injEqName (params ++ lhsFields ++ rhsFields)
     let some (_, _, conj) := (← inferType proof).eq? | return .continue
     return .visit { expr := conj, proof? := some proof }
   catch _ => return .continue
