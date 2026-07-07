@@ -74,17 +74,11 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp_all [← h_input, eval_vector]
+    simp_all [← h_input, eval_vector] -- provable_vector_simp wanted
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
-    simp only [ProcessBlocksState.Normalized] at h_spec
-    constructor
-    · rintro ⟨i, h_i⟩
-      rcases h_spec with ⟨h_spec, _⟩
-      specialize h_spec ⟨ i, h_i ⟩
-      convert h_spec
-    simp_all
+    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized,
+      getElem_eval_vector] -- provable_vector_simp wanted
 
 end BLAKE3ProcessBlocksStateNormalized
 
@@ -212,8 +206,8 @@ private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
-  simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, step, Conditional.Inputs.fromComponents_cons] at inputs_short spec_previous h_holds ⊢
+  simp only [circuit_norm, fromComponents, ProvableStruct.eval.go] at h_input
   specialize spec_previous (by omega)
   have input_normalized : x.Normalized := by
     simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
