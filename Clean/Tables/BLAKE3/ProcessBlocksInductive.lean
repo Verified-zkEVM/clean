@@ -305,7 +305,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · exact takeShort8_normalized step._proof_2 h_compress_norm
+    · exact takeShort8_normalized (by norm_num) h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
@@ -319,8 +319,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
     simp only [circuit_norm] at h_holds ⊢
-    have h_cv_eq : _ = acc_chaining_value := h_holds.2.2.2.2.2.1
-    simp only [circuit_norm, h_holds, h_cv_eq, ProcessBlocksState.toChunkState] at ⊢ spec_previous
+    simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
