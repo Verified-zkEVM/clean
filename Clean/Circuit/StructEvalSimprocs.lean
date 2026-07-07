@@ -253,9 +253,11 @@ run_cmd Command.liftTermElabM do
   let structEvalKeys ← mkKeys ``ProvableStruct.eval
   registerSimproc ``ProvableStruct.structEvalProjectionProc structEvalKeys
   registerSimproc ``ProvableStruct.structEvalLiteralProc structEvalKeys
+  -- `Eval.eval` is a hot head (every `eval env x` anywhere): this proc is registered so
+  -- the `provable_struct_simp` set can use it, but deliberately NOT tagged `circuit_norm`
   registerSimproc ``ProvableStruct.structEvalProjectionEvalProc (← mkKeys ``Eval.eval)
 
 attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
-  ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
+  ProvableStruct.structEvalLiteralProc
 
 end ProvableStruct

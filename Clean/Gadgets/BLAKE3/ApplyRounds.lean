@@ -440,7 +440,6 @@ lemma initial_state_and_messages_are_normalized
     ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩
   simp only [Assumptions] at h_normalized
   simp only [circuit_norm] at *
-  provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env (cv_var[i]'(by omega))).Normalized := by
@@ -488,8 +487,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
     apply initial_state_and_messages_are_normalized env
-    · simp only [circuit_norm, h_input]
-      rfl
+      ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+       input_var_counter_low, input_var_block_len, input_var_flags⟩
+    · simp only [circuit_norm]
+      -- the block_words conjunct is discharged by simp; the rest is h_input
+      exact ⟨h_input.1, h_input.2.2⟩
     · simp only [Assumptions]
       aesop
   )
@@ -528,8 +530,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized (p := p) env
-  · simp only [h_input, circuit_norm]
-    rfl
+    ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+     input_var_counter_low, input_var_block_len, input_var_flags⟩
+  · simp only [circuit_norm]
+    -- the block_words conjunct is discharged by simp; the rest is h_input
+    exact ⟨h_input.1, h_input.2.2⟩
   · simp only [Assumptions]
     aesop
 
