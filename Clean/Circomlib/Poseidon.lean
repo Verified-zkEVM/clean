@@ -18,9 +18,6 @@ namespace Circomlib.Poseidon
 open Specs.Poseidon (F BN254_PRIME C_t2 M_t2)
 open Specs.PoseidonOptimized (P_t2 S_t2)
 
--- BN254 scalar field prime, proven via CompPoly Pratt certificate (see Specs.Poseidon)
-instance : Fact (Nat.Prime BN254_PRIME) := inferInstance
-
 /-
 ============================================================================
 SIGMA (S-box): x^5
