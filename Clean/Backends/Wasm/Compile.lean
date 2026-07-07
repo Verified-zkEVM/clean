@@ -737,7 +737,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
-  -- Build witness output stores: write each 64-bit limb to signal memory
+  -- Build witness output stores: write each 64-bit limb to signal memory.
+  -- Witness i is stored at local (numInputs*nw + i*nw) since witnesses are
+  -- allocated sequentially starting from numInputs*nw via vm.alloc.
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
