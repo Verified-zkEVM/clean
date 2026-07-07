@@ -52,6 +52,23 @@ lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F 
     c1.localLength inp + c2.localLength (c1.output inp 0) := by
   simp +instances only [concat, circuit_norm, explicit_circuit_norm]
 
+@[circuit_norm]
+lemma concat_localLength' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
+  ElaboratedCircuit.localLength (c1.concat c2 p0 p1).main inp =
+    c1.localLength inp + c2.localLength (c1.output inp 0) := by
+  simp +instances only [concat, circuit_norm, explicit_circuit_norm]
+
+@[circuit_norm]
+lemma concat_channelsWithGuarantees (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
+    (c1.concat c2 p0 p1).channelsWithGuarantees = c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
+  simp +instances only [explicit_circuit_norm, concat]
+
+@[circuit_norm]
+lemma concat_channelsWithGuarantees' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
+    ElaboratedCircuit.channelsWithGuarantees (c1.concat c2 p0 p1).main =
+      c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
+  simp +instances only [explicit_circuit_norm, concat]
+
 /--
 Weaken the specification of a FormalCircuit.
 
@@ -89,24 +106,47 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
     -- and the same assumptions
     exact circuit.completeness
 
-@[circuit_norm]
-lemma weakenSpec_assumptions
+@[circuit_norm] lemma weakenSpec_assumptions
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [weakenSpec]
 
-@[circuit_norm]
-lemma weakenSpec_channelsWithRequirements
-    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
-    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  simp only [weakenSpec]
-
-@[circuit_norm]
-lemma weakenSpec_localLength
+@[circuit_norm] lemma weakenSpec_localLength
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
     (input : Var Input F) :
     (c.weakenSpec WeakerSpec h_spec_implication).localLength input = c.localLength input := by
   rfl
+
+@[circuit_norm] lemma weakenSpec_localLength'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) :
+    ElaboratedCircuit.localLength (c.weakenSpec WeakerSpec h_spec_implication).main input = c.localLength input := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_output
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) (offset : Nat) :
+    (c.weakenSpec WeakerSpec h_spec_implication).output input offset = c.output input offset := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_output'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) (offset : Nat) :
+    ElaboratedCircuit.output (c.weakenSpec WeakerSpec h_spec_implication).main input offset = c.output input offset := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithGuarantees
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithGuarantees = c.channelsWithGuarantees := rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithGuarantees'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    ElaboratedCircuit.channelsWithGuarantees (c.weakenSpec WeakerSpec h_spec_implication).main = c.channelsWithGuarantees := rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithRequirements
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
+  simp only [weakenSpec]
 end FormalCircuit
 
 namespace GeneralFormalCircuit

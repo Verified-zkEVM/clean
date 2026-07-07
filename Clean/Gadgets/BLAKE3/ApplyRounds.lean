@@ -19,6 +19,11 @@ Lemma to handle the notational difference between BLAKE3State.value and Vector.m
 lemma blake3_value_eq_map_value {p : ℕ} (msg : Vector (U32 (F p)) 16) :
   BLAKE3State.value msg = Vector.map U32.value msg := rfl
 
+open Specs.BLAKE3 (msgPermutation) in
+def output (input : Var Round.Inputs (F p)) (offset : ℕ) : Var Round.Inputs (F p) :=
+  { state := Round.circuit.output input offset,
+    message := Vector.ofFn fun i ↦ input.message[msgPermutation[i]] }
+
 /--
 A FormalCircuit that performs one round followed by permuting the message.
 Both input and output are Round.Inputs (state and message).
@@ -33,13 +38,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
 
-  -- TODO default causes proof churn, fix locally
   elaborated := by elaborate_circuit_with {
-    localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
-    output input offset :=
-      let state_out := Round.circuit.output input offset
-      let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
-      ⟨state_out, msg_out⟩
+    output input offset := output input offset
   }
 
   Assumptions := Round.Assumptions
@@ -408,10 +408,12 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
     output input i₀ := main input |>.output i₀
     channelsWithGuarantees := []
   } using by
-    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
-    simp +instances only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
+    -- get rid of output with less unfolding
+    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle]
+    -- localLength and channelsWithGuarantees need full unfolding down to `roundWithPermute` / `Round.circuit`
+    simp +instances only [circuit_norm, sevenRoundsFinal, sixRoundsApplyStyle,
       sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
-      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
+      Round.circuit]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
