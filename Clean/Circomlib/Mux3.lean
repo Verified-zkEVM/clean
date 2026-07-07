@@ -117,17 +117,15 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Extract boolean assumptions
     obtain ⟨h_s0, h_s1, h_s2⟩ := h_assumptions
 
-    simp only [Vector.getElem_map] at h_s0 h_s1 h_s2
-    simp only [Vector.getElem_map]
-
     -- Case analysis on s[0], s[1] and s[2]
     cases h_s0 <;> cases h_s1 <;> cases h_s2 <;>
       (rename_i h_s0 h_s1 h_s2
        simp only [h_s0, h_s1, h_s2, h_s10, circuit_norm]
        norm_num
-       rw [ProvableType.getElem_eval_fields, getElem_eval_vector])
-
-    all_goals ring_nf
+       rw [ProvableType.getElem_eval_fields, getElem_eval_vector]
+       first
+       | with_unfolding_all rfl
+       | (ring_nf; with_unfolding_all rfl))
 
   completeness := by
     circuit_proof_start

@@ -90,20 +90,19 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
     -- Now we can work with the components
     rw [← h_input] at h_assumptions ⊢
-    -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
-    simp only at h_assumptions
-
     cases h_assumptions with
       | inl h0 =>
         -- When s = 0
         rw [h0]
         simp only [mul_zero, circuit_norm]
+        with_unfolding_all exact congrArg Prod.fst (getElem_eval_vector env input_var.c i hi)
       | inr h1 =>
         -- When s = 1
         rw [h1]
         simp only [mul_one, circuit_norm]
         norm_num
+        with_unfolding_all exact congrArg Prod.snd (getElem_eval_vector env input_var.c i hi)
 
   completeness := by
     circuit_proof_start
@@ -115,7 +114,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [circuit_norm]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    rw [h_env_i]
+    rw [h_env_i, h_input.2]
 
 end MultiMux1
 
