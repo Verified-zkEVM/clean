@@ -131,7 +131,8 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
     constructor <;> aesop
-  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
+  ) (by simp +instances [circuit_norm, twoRoundsWithPermute, roundWithPermute,
+    Round.circuit, Permute.circuit])
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -202,7 +203,8 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
     constructor <;> aesop
-  ) (by simp [circuit_norm, twoRoundsWithPermute, roundWithPermute, Round.circuit, Permute.circuit])
+  ) (by simp +instances [circuit_norm, twoRoundsWithPermute, roundWithPermute,
+    Round.circuit, Permute.circuit])
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -400,8 +402,8 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
     output input i₀ := main input |>.output i₀
     channelsWithGuarantees := []
   } using by
-    simp only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
-    simp only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
+    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
+    simp +instances only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
       sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
       Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
 
@@ -422,6 +424,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.Normalized
 
 -- Helper lemma that proves the initial state and messages are normalized
+omit p_large_enough in
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
     (input_var : Var Inputs (F p))

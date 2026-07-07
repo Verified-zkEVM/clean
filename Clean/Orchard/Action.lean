@@ -230,8 +230,8 @@ def IntermediateSpec (P : Params) (input : Value Input Fp) (_ : Unit)
       { leaf := leaf, path := (), pos := () } root pd ∧
     vOld = vNew + vNetMagnitude * vNetSign ∧
     (vOld = 0 ∨ root = input.anchor) ∧
-    (vOld = 0 ∨ input.enableSpends = 1) ∧
-    (vNew = 0 ∨ input.enableOutputs = 1)
+    (vOld = 0 ∨ input.enableSpends = (1 : Fp)) ∧
+    (vNew = 0 ∨ input.enableOutputs = (1 : Fp))
 
 theorem intermediateSpec_of_constraints (P : Params) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main P)
@@ -394,8 +394,8 @@ def IntermediateProverAssumptions (P : Params) (input : ProverValue Input Fp)
       (show Fp from input.vNew) +
         (show Fp from input.vNetMagnitude) * (show Fp from input.vNetSign) ∧
     (input.vOld = (0 : Fp) ∨ root = input.anchor) ∧
-    (input.vOld = (0 : Fp) ∨ input.enableSpends = 1) ∧
-    (input.vNew = (0 : Fp) ∨ input.enableOutputs = 1))
+    (input.vOld = (0 : Fp) ∨ input.enableSpends = (1 : Fp)) ∧
+    (input.vNew = (0 : Fp) ∨ input.enableOutputs = (1 : Fp)))
 
 theorem constraints_of_intermediateProverAssumptions (P : Params) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main P)

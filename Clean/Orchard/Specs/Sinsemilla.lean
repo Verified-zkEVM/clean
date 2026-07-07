@@ -115,7 +115,7 @@ theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
   · rw [Point.incompleteAdd_def, if_pos hc₂] at h
     simp at h
   rw [Point.incompleteAdd_def, if_neg hc₂] at h
-  push_neg at hc₂
+  push Not at hc₂
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   intro h0
   replace h0 : A.toSW a_valid + (G.S m).toSW (G.valid hm) + A.toSW a_valid = 0 := by

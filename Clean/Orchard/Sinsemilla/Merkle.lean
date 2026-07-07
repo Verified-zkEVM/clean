@@ -729,7 +729,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     Utilities.LookupRangeCheck.shortRangeSpec, Chain.PieceBounds,
     Chain.honestChunks, Chain.Z1sHonest,
     Vector.tail_eq_cast_extract, Vector.extract_mk, List.extract_toArray,
-    List.extract_eq_drop_take, List.size_toArray, Vector.cast_rfl,
+    List.extract_eq_take_drop, List.size_toArray, Vector.cast_rfl,
     Vector.getElem_map, Vector.getElem_extract, Nat.min_self, Vector.getElem_mk,
     List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ,
     List.length_cons, List.length_nil, List.drop_succ_cons, List.drop_zero,
@@ -751,10 +751,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       = some B' := ⟨B, by rw [hp.2]; exact hchain⟩
   have hps := (h_entry_env ⟨hp.1, hex⟩).2
   have hBfun := hps.2
-  have hzh1 := hps.1.1
-  have hzh2' := (Vector.getElem_extract (by simp)).symm.trans hps.1.2.1
+  have hzh1 := (Vector.getElem_map (Expression.eval env.toEnvironment)
+    (by simp)).symm.trans hps.1.1
   have hzh2 := (Vector.getElem_map (Expression.eval env.toEnvironment)
-    (by simp)).symm.trans hzh2'
+    (by simp)).symm.trans hps.1.2.1
   have hg := honest_gate (l := l) (lv := ZMod.val input_left)
     (rv := ZMod.val input_right) (aCell := env.get i₀)
     (bCell := env.get (i₀ + 1 + 1 + 1)) (b1Cell := env.get (i₀ + 1))
@@ -763,10 +763,10 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     hl hlv hrv ha_w hb1_w hb2_w hb_w hc_w hzh1 hzh2
     (ZMod.natCast_zmod_val input_left) (ZMod.natCast_zmod_val input_right)
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
-  · rw [hb1_w, FiniteField.fromNat_F, FiniteField.val_F,
+  · rw [hb1_w,
       ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 250 5) (by norm_num [PALLAS_BASE_CARD]))]
     exact bitrange_lt _ 250 5
-  · rw [hb2_w, FiniteField.fromNat_F, FiniteField.val_F,
+  · rw [hb2_w,
       ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ 0 5) (by norm_num [PALLAS_BASE_CARD]))]
     exact bitrange_lt _ 0 5
   · exact ⟨hp.1, hex⟩

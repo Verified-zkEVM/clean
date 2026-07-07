@@ -118,20 +118,27 @@ elab_rules : tactic
   | `(tactic| circuit_proof_start $[[$terms:term,*]]?) => do
   -- intro all hypotheses
   circuitProofStartCore
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `input_var):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `input):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_input):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm] at $(mkIdent `input_var):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm] at $(mkIdent `input):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm] at $(mkIdent `h_input):ident))) catch _ => pure ()
 
   -- try to unfold main, Assumptions and Spec as local definitions
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `Assumptions):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `Spec):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `ProverAssumptions):ident] at *))
   evalTactic (← `(tactic| try dsimp only [$(mkIdent `ProverSpec):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
+  evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
+  evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `main):ident] at *))
 
   -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
+
+  -- collapse the `field`/`id` type synonym everywhere, so that hypotheses and goals
+  -- are stated at the underlying field type with canonical instances.
+  -- Since Lean 4.29, automation (simp matching, grind e-matching/ring) no longer
+  -- identifies `field F`-instance applications with canonical `F` ones up to defeq.
+  try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
+    CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
 
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
@@ -143,12 +150,17 @@ elab_rules : tactic
     | none => #[]
   let lemmasArray ← extraLemmas.mapM id
 
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
+
+  -- collapse the field/id synonym again: the simp passes above can reintroduce
+  -- `field F`-typed statements (e.g. from unfolded Specs)
+  try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
+    CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do

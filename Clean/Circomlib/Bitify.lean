@@ -93,7 +93,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   completeness := by
     circuit_proof_start
-    simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero] at h_env ⊢
+    simp only [lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
     · intro i hi

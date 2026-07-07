@@ -58,7 +58,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     ext i hi
     simp only [Vector.getElem_map]
 
-    rw [←Vector.forall_getElem] at h_holds
+    rw [Vector.forall_mem_iff_forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
     simp only [Expression.eval] at h_holds
@@ -81,7 +81,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
       ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 
-    rw [←Vector.forall_getElem]
+    rw [Vector.forall_mem_iff_forall_getElem]
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec
@@ -134,7 +134,7 @@ def assertEquals (x y : M (Expression F)) : Circuit F Unit :=
 
 @[circuit_norm, reducible]
 def Expression.assertEquals (x y : Expression F) : Circuit F Unit :=
-  Gadgets.Equality.circuit id (x, y)
+  Gadgets.Equality.circuit field (x, y)
 
 class HasAssertEq (β : Type) (F : outParam Type) [FiniteField F] where
   assert_eq : β → β → Circuit F Unit

@@ -77,7 +77,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp +instances only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
     obtain ⟨h_s10, h_out_vec⟩ := h_output
     -- We need to show the spec holds for all i < n

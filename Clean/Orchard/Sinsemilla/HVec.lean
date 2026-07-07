@@ -51,12 +51,12 @@ def tail {n : ℕ} {ns : List ℕ} (f : HVec (n :: ns) F) : HVec ns F :=
 @[simp] theorem head_cons {n : ℕ} {ns : List ℕ} (v : Vector F n) (rest : HVec ns F) :
     head (cons v rest) = v := by
   simp only [head, cons]
-  rw [Vector.cast_take_append_of_eq_length]
+  exact Vector.cast_take_append_of_eq_length
 
 @[simp] theorem tail_cons {n : ℕ} {ns : List ℕ} (v : Vector F n) (rest : HVec ns F) :
     tail (cons v rest) = rest := by
   simp only [tail, cons]
-  rw [Vector.cast_drop_append_of_eq_length]
+  exact congrArg HVec.mk Vector.cast_drop_append_of_eq_length
 
 @[simp] theorem cons_head_tail {n : ℕ} {ns : List ℕ} (f : HVec (n :: ns) F) :
     cons (head f) (tail f) = f := by
@@ -64,7 +64,7 @@ def tail {n : ℕ} {ns : List ℕ} (f : HVec (n :: ns) F) : HVec ns F :=
   | mk elems =>
       simp only [cons, head, tail]
       congr
-      rw [Vector.append_take_drop]
+      exact Vector.append_take_drop
 
 theorem eq_nil (f : HVec [] F) : f = nil := by
   cases f with
@@ -102,7 +102,7 @@ theorem eval_tail [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ
     eval env (tail v) = tail (eval env v) := by
   rw [CircuitType.eval_expression (M := HVec ns)]
   rw [CircuitType.eval_expression (M := HVec (n :: ns))]
-  simp only [tail, ProvableType.eval, instProvableType]
+  simp +instances only [tail, ProvableType.eval, instProvableType]
   congr
   ext i hi
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
@@ -132,7 +132,8 @@ theorem eval_cons [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ
       = HVec.cons (eval env a) (eval env b) := by
   rw [CircuitType.eval_expression (M := HVec (n :: ns))]
   rw [CircuitType.eval_expression (M := HVec ns)]
-  simp only [ProvableType.eval, instProvableType, cons, CircuitType.eval_var_fields, Vector.map_append]
+  simp +instances only [ProvableType.eval, instProvableType, cons, CircuitType.eval_var_fields]
+  exact congrArg HVec.mk (Vector.map_append ..)
 
 end HVec
 

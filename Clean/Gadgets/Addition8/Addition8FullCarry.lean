@@ -127,8 +127,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq,
-      Witgen.WitgenIR.eval_ofFExpr, Witgen.WitgenIR.eval_ofFExprs_singleton]
+      Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
 end Gadgets.Addition8FullCarry

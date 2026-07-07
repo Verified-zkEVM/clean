@@ -64,7 +64,7 @@ lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ 
     · simp only [hk, ite_true]
       have ih' := ih (f ∘ Fin.castSucc) (fun i => hf _) ⟨k.val, hk⟩
       simp only [Function.comp] at ih'; rw [ih']; congr 1
-    · push_neg at hk
+    · push Not at hk
       have hkeq : k.val = m := Nat.le_antisymm (Nat.lt_succ_iff.mp k.isLt) hk
       simp only [hkeq, lt_irrefl, ite_false, Nat.sub_self]
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
@@ -81,7 +81,7 @@ lemma bool_finsum_xor_eq (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 �
     rw [testBit_binary_sum n _ hfg ⟨j, hj⟩, Nat.testBit_xor,
         testBit_binary_sum n f hf ⟨j, hj⟩, testBit_binary_sum n g hg ⟨j, hj⟩]
     rcases hf ⟨j, hj⟩ with hfi | hfi <;> rcases hg ⟨j, hj⟩ with hgi | hgi <;> simp [hfi, hgi]
-  · push_neg at hj
+  · push Not at hj
     have pow_le : 2^n ≤ 2^j := Nat.pow_le_pow_right (by norm_num) hj
     have hfS := sum_bool_lt_two_pow n f (fun i => by rcases hf i with h|h <;> simp [h])
     have hgS := sum_bool_lt_two_pow n g (fun i => by rcases hg i with h|h <;> simp [h])
@@ -116,7 +116,7 @@ lemma sum_mod_two_pow (j : ℕ) {n : ℕ} (f : Fin n → ℕ)
   · rw [testBit_binary_sum n f hf ⟨k, hk⟩,
         testBit_binary_sum n (fun i => if i.val < j then f i else 0) hg_bool ⟨k, hk⟩]
     by_cases hkj : k < j <;> simp [hkj]
-  · push_neg at hk
+  · push Not at hk
     have pow_le : 2^n ≤ 2^k := Nat.pow_le_pow_right (by norm_num) hk
     have hsum_lt : (∑ i : Fin n, f i * 2^i.val) < 2^n :=
       sum_bool_lt_two_pow n f (fun i => by rcases hf i with h | h <;> simp [h])
@@ -141,7 +141,7 @@ lemma valueBits_rotate (x : fields 32 (F p)) (hx : Normalized x) (k : ℕ) :
     intro i hi
     have h_eq : bits[i] = ZMod.val (x[i]'hi) := by
       show (Vector.map ZMod.val x)[i] = _
-      rw [Vector.getElem_map]; rfl
+      rw [Vector.getElem_map]
     rw [h_eq]
     have h := hx ⟨i, hi⟩
     rcases h with h | h
@@ -219,7 +219,7 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
       have : valueBits x < 2 ^ (j + k.val) :=
         lt_of_lt_of_le hval_lt (Nat.pow_le_pow_right (by norm_num) (by omega))
       simp [Nat.testBit_eq_false_of_lt this]
-  · push_neg at hj
+  · push Not at hj
     have pow_le : 2^32 ≤ 2^j := Nat.pow_le_pow_right (by norm_num) hj
     have hval_lt : valueBits x < 2^32 := valueBits_lt_two_pow x hx
     have lhs_lt : ∑ i : Fin 32,

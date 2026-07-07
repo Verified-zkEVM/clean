@@ -75,7 +75,7 @@ lemma orderedChannel_cons (table : Component F) (tables : List (Component F)) (c
   simp only [lt_self_iff_false, imp_false, lt_add_iff_pos_left, Order.lt_add_one_iff, zero_le,
     implies_true, and_true, not_lt_zero, Order.add_one_le_iff]
   rw [forall₂_and, List.forall_mem_iff_getElem, or_iff_not_imp_left, or_iff_not_imp_left]
-  push_neg
+  push Not
   simp only [exists_imp]
   tauto
 
@@ -101,7 +101,7 @@ lemma orderedChannel_iff (tables : List (Component F)) (channel : RawChannel F) 
     subst h_append
     simp only [List.length_append] at ordered_channel
     simp only [List.forall_mem_iff_getElem, or_iff_not_imp_left]
-    push_neg
+    push Not
     rintro ⟨ i, hi, grts ⟩ j hj reqs
     specialize ordered_channel (ts.length + i) (by linarith) j (by linarith)
     rw [List.getElem_append_right (by omega), List.getElem_append_left (by omega)] at ordered_channel
