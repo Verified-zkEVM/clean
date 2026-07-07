@@ -39,7 +39,9 @@ Verbatim-port counterparts of Rust `meta.query_*` inside `create_gate` closures.
 -/
 
 @[circuit_norm] def querySelector (s : Selector) : Expression F Query := var (.selector s)
-@[circuit_norm] def queryFixed (c : Column .fixed) (rot : Rotation) : Expression F Query := var (.fixed c rot)
+/-- Rust `query_fixed` takes no rotation in this halo2 version (always the current row);
+the `Query.fixed` constructor keeps a rotation for generality of the compiled CS. -/
+@[circuit_norm] def queryFixed (c : Column .fixed) : Expression F Query := var (.fixed c 0)
 @[circuit_norm] def queryAdvice (c : Column .advice) (rot : Rotation) : Expression F Query := var (.advice c rot)
 @[circuit_norm] def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.«instance» c rot)
 
@@ -50,22 +52,26 @@ structure Constraint (F : Type) where
 
 /-- A custom gate.
 
-The `guard` is what Rust's `Constraints::with_selector` multiplies every constraint by —
-usually `querySelector s`, but composite guards exist (e.g. Sinsemilla). `constraints`
-are stored *without* the guard factor:
-
-- the compiled CS (VK side) stores `guard * poly` for each constraint;
-- the synthesize-layer semantics of enabling the gate at a row is `poly = 0` there
-  (see `RegionOperation.Holds`). The bridge between the two views is the
-  once-per-circuit lemma "`∀ rows, guard·poly = 0` ⟺ `poly = 0` at activated rows".
-
-TODO: revisit for gates whose guard is not a single simple selector (Sinsemilla's
-`q_s1`-family) when porting those chips.
+`constraints` are the **compiled** polynomials, verbatim as the Rust source builds them
+— usually `Constraints.withSelector` shapes `q * poly`, but e.g. `witness_point` builds
+`(q * x) * curve_eqn` manually for pinned-VK AST reasons. `selector` is the gate's
+activation handle: per the selector survey (`halo2-selector-survey.md`), every gate in
+scope is activated by exactly one simple `Selector`, and genuine selectors never occur
+in a foreign gate's polynomials — so the semantics of enabling the gate at a row is
+"all compiled polys vanish there under the valuation `selector ↦ 1`"
+(see `RegionOperation.Holds`). The bridge to the CS view "`∀` rows, poly = 0 with the
+actual 0/1 activation table" is a once-per-circuit lemma at the VK boundary.
 -/
 structure Gate (F : Type) where
   name : String
-  guard : Expression F Query
+  selector : Selector
   constraints : List (Constraint F)
+
+/-- Rust: `Constraints::with_selector(q, [(name, poly), …])` — multiplies every
+constraint by the selector, building exactly the Rust AST `q * poly`. -/
+def Constraints.withSelector (s : Selector) (constraints : List (String × Expression F Query)) :
+    List (Constraint F) :=
+  constraints.map fun (name, poly) => { name, poly := querySelector s * poly }
 
 /-- A lookup argument: per row, the input expressions must be a row of the table.
 Rust: `lookup::Argument`. SKETCH — semantics and table loading TBD with the lookup port. -/

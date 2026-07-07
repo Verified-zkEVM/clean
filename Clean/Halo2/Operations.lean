@@ -56,7 +56,7 @@ inductive RegionOperation (F : Type) where
   the VK's fixed columns). -/
   | assignFixed : Column .fixed → ℕ → F → RegionOperation F
   /-- Enable a gate at a local row. Rust: `selector.enable(region, offset)`. Records the
-  activation of `gate.guard`'s selector and carries `gate.constraints` for semantics. -/
+  activation of `gate.selector` and carries `gate.constraints` for semantics. -/
   | enableGate : Gate F → ℕ → RegionOperation F
   /-- Copy constraint between two (possibly cross-region) cells.
   Rust: `region.constrain_equal`. -/
@@ -91,7 +91,10 @@ def RegionOperation.Holds (place : RegionIndex → ℕ) (self : RegionIndex)
   | .assignAdvice _ _ _ => True
   | .assignFixed c row v => env.get c.toAny ((place self + row : ℕ) : ℤ) = v
   | .enableGate gate row => ∀ c ∈ gate.constraints,
-      c.poly.eval (Query.eval env (fun _ => 1) ((place self + row : ℕ) : ℤ)) = 0
+      -- compiled polys vanish under `own selector ↦ 1`; sound because genuine selectors
+      -- never occur in a foreign gate's polynomials (see halo2-selector-survey.md)
+      c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
+        ((place self + row : ℕ) : ℤ)) = 0
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
 
