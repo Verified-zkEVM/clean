@@ -500,7 +500,15 @@ partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → CodeBuilder
   | .expr (.const c), cb => pushConst c vm cb
   | .expr (.add a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fadd")
   | .expr (.mul a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fmul")
-  | .ite _ _ _, cb => cb  -- stub for MW
+  | .ite c t e, cb =>
+    if vm.numWords = 1 then
+      let cb := compileBExpr vm c cb
+      let thenCB := compileFExpr vm t {}
+      let elseCB := compileFExpr vm e {}
+      -- compileBExpr pushes i64; ifElse expects i32 condition
+      cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse (some .i64) thenCB.build elseCB.build)
+    else
+      cb  -- multi-word ite not yet supported
   | .ofNat n, cb => compileNExpr vm n cb
   | .localVar i, cb => pushVar (vm.letBase + i) vm cb
   | .envGet _, cb => cb.push (i64.const 0)
@@ -522,7 +530,11 @@ partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
   | .lxor a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push (.binop .i64 .xor)
   | .shiftL a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.shl
   | .shiftR a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.shr_u
-  | .ite _ _ _, cb => cb  -- stub
+  | .ite c t e, cb =>
+    let cb := compileBExpr vm c cb
+    let thenCB := compileNExpr vm t {}
+    let elseCB := compileNExpr vm e {}
+    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse (some .i64) thenCB.build elseCB.build)
 
 partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → CodeBuilder
   | .true, cb => cb.push (i64.const 1)
