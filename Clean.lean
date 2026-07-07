@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Orchard
 import Clean.Examples.WitnessExport
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
