@@ -122,4 +122,77 @@ theorem operations_constrainInstance (cell : AssignedCell F) (col : Column .inst
     (row : ℕ) (i : RegionIndex) :
     (constrainInstance cell col row).operations i = [.constrainInstance cell.cell col row] := rfl
 
+/-! ## Constraints of region-operation lists
+
+Decomposition lemmas so `circuit_norm` reduces a `RegionOperations.Constraints` over a
+concrete operation list into a conjunction of per-operation facts (issue-#358 style:
+subcircuits stay folded as one `RegionOperations.Constraints` chunk over the child's
+named ops). -/
+
+section Constraints
+variable [FiniteField F]
+
+@[circuit_norm]
+theorem RegionOperations.constraints_nil (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) :
+    RegionOperations.Constraints place self env ([] : RegionOperations F) = True := rfl
+
+@[circuit_norm]
+theorem RegionOperations.constraints_cons (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (op : RegionOperation F) (ops : RegionOperations F) :
+    RegionOperations.Constraints place self env (op :: ops)
+      = (op.Constraints place self env ∧ RegionOperations.Constraints place self env ops) := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_assignAdvice (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (col : Column .advice) (row : ℕ) (w : WitgenIR F 1) :
+    (RegionOperation.assignAdvice col row w).Constraints place self env = True := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_enableGate (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (gate : Gate F) (row : ℕ) :
+    (RegionOperation.enableGate gate row).Constraints place self env
+      = ∀ c ∈ gate.constraints,
+          c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
+            (place self + row : ℕ)) = 0 := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_constrainEqual (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (a b : Cell) :
+    (RegionOperation.constrainEqual a b).Constraints place self env
+      = (a.eval place env = b.eval place env) := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_subcircuit (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (ops : RegionOperations F) :
+    (RegionOperation.subcircuit ops).Constraints place self env
+      = RegionOperations.Constraints place self env ops := rfl
+
+-- `∀ c ∈ (a :: l), …` — unfold membership over a concrete constraint list
+attribute [circuit_norm] List.forall_mem_cons List.forall_mem_nil
+
+@[circuit_norm]
+theorem RegionOperations.extendsWitnesses_nil (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) :
+    RegionOperations.ExtendsWitnesses place self env ([] : RegionOperations F) = True := rfl
+
+@[circuit_norm]
+theorem RegionOperations.extendsWitnesses_cons (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) (op : RegionOperation F) (ops : RegionOperations F) :
+    RegionOperations.ExtendsWitnesses place self env (op :: ops)
+      = (op.ExtendsWitness place self env ∧ RegionOperations.ExtendsWitnesses place self env ops) := rfl
+
+@[circuit_norm]
+theorem RegionOperation.extendsWitness_assignAdvice (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) (col : Column .advice) (row : ℕ) (w : WitgenIR F 1) :
+    (RegionOperation.assignAdvice col row w).ExtendsWitness place self env
+      = (env.get col (place self + row : ℕ) = (w.eval ⟨place, env⟩)[0]) := rfl
+
+@[circuit_norm]
+theorem RegionOperation.extendsWitness_enableGate (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) (gate : Gate F) (row : ℕ) :
+    (RegionOperation.enableGate gate row).ExtendsWitness place self env = True := rfl
+
+end Constraints
+
 end Halo2

@@ -37,6 +37,13 @@ abbrev BExpr (F : Type) := Witgen.BExprOver F (AssignedCell F)
 abbrev WitgenIR (F : Type) :=
   Witgen.WitgenIROver F (Placed ProverEnvironment F) (AssignedCell F)
 
+/-- A single-scalar `ofFExpr` witness program evaluates to its expression. -/
+@[circuit_norm]
+lemma eval_ofFExpr_zero [FiniteField F] (e : FExpr F) (env : Placed ProverEnvironment F) :
+    ((Witgen.WitgenIROver.ofFExpr e).eval env)[0]'(by norm_num)
+      = Witgen.FExprOver.eval { env := env } e := by
+  with_unfolding_all rfl
+
 /-!
 ## Prover-only inputs
 

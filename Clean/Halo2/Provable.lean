@@ -125,6 +125,12 @@ lemma eval_field (env : Placed Environment F) (x : AssignedCell F) :
     Eval.eval env x = AssignedCell.eval env.place env.env x := by
   with_unfolding_all rfl
 
+/-- Prover-view single-cell evaluation. -/
+@[circuit_norm]
+lemma eval_field_prover (env : Placed ProverEnvironment F) (x : AssignedCell F) :
+    Eval.eval env x = AssignedCell.eval env.place env.env.toEnvironment x := by
+  with_unfolding_all rfl
+
 end ProvableType
 
 end Halo2

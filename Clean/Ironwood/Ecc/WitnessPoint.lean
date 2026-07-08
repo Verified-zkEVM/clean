@@ -48,6 +48,38 @@ def configure (x y : Column .advice) : Configure Fp Config := do
   createGate (pointNonIdGate qPointNonId x y)
   return { qPoint, qPointNonId, x, y }
 
+/-- The curve gate's two product constraints imply the point is a valid Pallas point
+(on-curve, or the `(0,0)` identity). The algebraic core of witness_point soundness. -/
+theorem point_valid {xv yv : Fp}
+    (hx : xv * (yv * yv - xv * xv * xv - 5) = 0)
+    (hy : yv * (yv * yv - xv * xv * xv - 5) = 0) :
+    ({ x := xv, y := yv } : Point Fp).Valid := by
+  by_cases hxz : xv = 0
+  · by_cases hyz : yv = 0
+    · exact Or.inr (by simp [Orchard.Point.zero_def, hxz, hyz])
+    · refine Or.inl ?_
+      have h := (mul_eq_zero.mp hy).resolve_left hyz
+      show yv ^ 2 = xv ^ 3 + 5
+      linear_combination h
+  · refine Or.inl ?_
+    have h := (mul_eq_zero.mp hx).resolve_left hxz
+    show yv ^ 2 = xv ^ 3 + 5
+    linear_combination h
+
+/-- Converse of `point_valid`: a valid point satisfies the gate's product constraints.
+The algebraic core of witness_point completeness. -/
+theorem point_products_of_valid {xv yv : Fp}
+    (h : ({ x := xv, y := yv } : Point Fp).Valid) :
+    xv * (yv * yv - xv * xv * xv - 5) = 0 ∧ yv * (yv * yv - xv * xv * xv - 5) = 0 := by
+  rcases h with hoc | hz
+  · have heq : yv * yv - xv * xv * xv - 5 = 0 := by
+      have h2 : yv ^ 2 = xv ^ 3 + 5 := hoc
+      linear_combination h2
+    rw [heq]; exact ⟨by ring, by ring⟩
+  · rw [Orchard.Point.zero_def, Orchard.Point.mk.injEq] at hz
+    obtain ⟨hx0, hy0⟩ := hz
+    subst hx0; subst hy0; exact ⟨by ring, by ring⟩
+
 def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrained Point) Point where
   main (point : Point (FExpr Fp)) := do
     -- enable "witness point" gate
@@ -61,8 +93,36 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
   ProverAssumptions input _ := input.Valid
   ProverSpec input output _ := output = input
 
-  soundness := by sorry
-  completeness := by sorry
+  soundness := by
+    intro self env input _ hc
+    simp only [circuit_norm, pointGate, curveEqn] at hc
+    have hx := hc _ (Or.inl rfl)
+    have hy := hc _ (Or.inr rfl)
+    simp only [circuit_norm, querySelector, queryAdvice, Query.eval, AssignedCell.eval,
+      add_zero, pallasB, Orchard.pallasB] at hx hy
+    rw [Point.eval_eq]
+    simp only [circuit_norm, AssignedCell.eval, add_zero]
+    exact point_valid hx hy
+
+  completeness := by
+    intro self env input hwit hpa
+    obtain ⟨place, penv⟩ := env
+    simp only [circuit_norm, Nat.cast_add] at hwit
+    obtain ⟨hwx, hwy⟩ := hwit
+    rw [Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq] at hpa
+    obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
+    refine ⟨?_, ?_⟩
+    · simp only [circuit_norm, pointGate, curveEqn]
+      intro c hc
+      rcases hc with rfl | rfl <;>
+        simp only [circuit_norm, querySelector, queryAdvice, Query.eval, AssignedCell.eval,
+          add_zero, Nat.cast_add, pallasB, Orchard.pallasB]
+      · rw [hwx, hwy]; linear_combination hpx
+      · rw [hwx, hwy]; linear_combination hpy
+    · rw [Point.eval_eq_prover, Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq]
+      simp only [circuit_norm, ProvableType.eval_field_prover, AssignedCell.eval, add_zero,
+        Nat.cast_add]
+      rw [hwx, hwy]
 
 end WitnessPoint
 

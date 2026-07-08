@@ -42,8 +42,8 @@ functions of the input variable and starting region index, so parent circuits si
 without unfolding `main`. -/
 class ElaboratedCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
     [CircuitType Input] [CircuitType Output] (main : Var Input F → Circuit F (Var Output F)) where
-  output : Var Input F → RegionIndex → Var Output F
-  regionCount : Var Input F → ℕ
+  output : Var Input F → RegionIndex → Var Output F := fun input i => (main input).output i
+  regionCount : Var Input F → ℕ := fun input => ((main input).operations 0).regionCount
   output_eq : ∀ input i, output input i = (main input).output i := by intro _ _; rfl
   regionCount_eq : ∀ input i,
     regionCount input = ((main input).operations i).regionCount := by intro _ _; rfl
@@ -92,8 +92,7 @@ structure FormalCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
     [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
   main : Var Input F → Circuit F (Var Output F)
-  elaborated : ElaboratedCircuit F Input Output main := by
-    first | infer_instance | (constructor <;> intro _ _ <;> rfl)
+  elaborated : ElaboratedCircuit F Input Output main := by first | infer_instance | exact {}
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
