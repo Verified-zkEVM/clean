@@ -40,8 +40,7 @@ abbrev WitgenIR (F : Type) :=
 /-- A single-scalar `ofFExpr` witness program evaluates to its expression. -/
 @[circuit_norm]
 lemma eval_ofFExpr_zero [FiniteField F] (e : FExpr F) (env : Placed ProverEnvironment F) :
-    ((Witgen.WitgenIROver.ofFExpr e).eval env)[0]'(by norm_num)
-      = Witgen.FExprOver.eval { env := env } e := by
+    ((Witgen.WitgenIROver.ofFExpr e).eval env)[0] = Witgen.FExprOver.eval { env } e := by
   with_unfolding_all rfl
 
 /-!
