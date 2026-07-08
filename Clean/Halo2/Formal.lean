@@ -36,15 +36,6 @@ namespace Halo2
 
 variable {F : Type} [FiniteField F] {Input Output Witness : TypeMap}
 
-/-- Verifier-view evaluation of a halo2 circuit variable, given a placement + env. -/
-abbrev evalCells [CircuitType Input] (pe : Placed Environment F) (v : Var Input F) : Value Input F :=
-  CircuitTypeOver.evalVerifier pe v
-
-/-- Prover-view evaluation (hints visible). -/
-abbrev evalCellsProver [CircuitType Input] (pe : Placed ProverEnvironment F) (v : Var Input F) :
-    ProverValue Input F :=
-  CircuitTypeOver.evalProver pe v
-
 /-- Bundles the circuit metadata exposed in reduced form (main Clean's
 `ElaboratedCircuit`): the output cells and the number of region indices consumed, as
 functions of the input variable and starting region index, so parent circuits simplify
@@ -68,13 +59,11 @@ def FormalCircuit.Soundness
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (Assumptions : Value Input F → Prop)
     (Spec : Value Input F → Witness F → Value Output F → Prop) : Prop :=
-  ∀ (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment F)
-    (input_var : Var Input F) (input : Value Input F),
-  evalCells ⟨place, env⟩ input_var = input →
-  Assumptions input →
-  Constraints place env ((main input_var).operations i₀) i₀ →
-  Spec input (extract input_var i₀ ⟨place, env⟩)
-    (evalCells ⟨place, env⟩ (ElaboratedCircuit.output main input_var i₀))
+  ∀ (i₀ : RegionIndex) (env : Placed Environment F)
+    (input : Var Input F),
+  Assumptions (eval env input) →
+  Constraints env.place env.env ((main input).operations i₀) i₀ →
+  Spec (eval env input) (extract input i₀ env) (eval env (ElaboratedCircuit.output main input i₀))
 
 /-- Completeness (prover view — hints visible). Under the honest prover's witness
 generators, `ProverAssumptions` imply the constraints and the `ProverSpec`. -/
@@ -82,15 +71,12 @@ def FormalCircuit.Completeness
     (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
     (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
-  ∀ (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment F)
-    (input_var : Var Input F),
-  ExtendsWitnesses place env ((main input_var).operations i₀) i₀ →
-  ∀ (input : ProverValue Input F),
-  evalCellsProver ⟨place, env⟩ input_var = input →
-  ProverAssumptions input env.hint →
-  Constraints place env.toEnvironment ((main input_var).operations i₀) i₀ ∧
-  ProverSpec input
-    (evalCellsProver ⟨place, env⟩ (ElaboratedCircuit.output main input_var i₀)) env.hint
+  ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F)
+    (input : Var Input F),
+  ExtendsWitnesses env.place env.env ((main input).operations i₀) i₀ →
+  ProverAssumptions (eval env input) env.env.hint →
+  Constraints env.place env.env ((main input).operations i₀) i₀ ∧
+  ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) env.env.hint
 
 end Statements
 
@@ -173,5 +159,99 @@ TODO (with the first slice consumer — `witness_point` → `add_incomplete`):
 -/
 
 end FormalCircuit
+
+/-! ## Region-level formal circuits
+
+The region-level analogue of `FormalCircuit`, for `assign_region` fragments composed
+*inside* a parent region at region-local rows (e.g. `add_incomplete.assign_region`
+called inside variable-base mul's big region). It lives in the ambient region `self` and
+creates no new regions — so, unlike `FormalCircuit`, there is no `i₀`/`regionCount`; the
+constraints are `RegionOperations.Constraints` at the ambient `self`.
+-/
+
+/-- Region-level metadata exposed in reduced form: the output cells as a function of the
+input variable and the ambient region index. -/
+class ElaboratedRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
+    [CircuitType Input] [CircuitType Output]
+    (main : Var Input F → RegionCircuit F (Var Output F)) where
+  output : Var Input F → RegionIndex → Var Output F
+  output_eq : ∀ input self, output input self = (main input).output self := by intro _ _; rfl
+
+section RegionStatements
+variable [CircuitType Input] [CircuitType Output]
+
+/-- Soundness of a region-level circuit (verifier view). If the constraints of `main`
+hold in the ambient region `self`, then `Spec` holds on the input, extracted witness,
+and output. -/
+def FormalRegionCircuit.Soundness
+    (main : Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
+    (Assumptions : Value Input F → Prop)
+    (Spec : Value Input F → Witness F → Value Output F → Prop) : Prop :=
+  ∀ (self : RegionIndex) (env : Placed Environment F) (input : Var Input F),
+  Assumptions (eval env input) →
+  RegionOperations.Constraints env.place self env.env ((main input).operations self) →
+  Spec (eval env input) (extract input self env)
+    (eval env (ElaboratedRegionCircuit.output main input self))
+
+/-- Completeness of a region-level circuit (prover view). -/
+def FormalRegionCircuit.Completeness
+    (main : Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F Input Output main]
+    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
+  ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F),
+  RegionOperations.ExtendsWitnesses env.place self env.env ((main input).operations self) →
+  ProverAssumptions (eval env input) env.env.hint →
+  RegionOperations.Constraints env.place self env.env ((main input).operations self) ∧
+  ProverSpec (eval env input)
+    (eval env (ElaboratedRegionCircuit.output main input self)) env.env.hint
+
+end RegionStatements
+
+/--
+A region-level formal circuit: an `assign_region`-fragment packaged with its contract.
+Same shape as `FormalCircuit` (single hint-aware structure, `Witness` extractor), but
+inside the ambient region rather than creating regions.
+-/
+structure FormalRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
+    [CircuitType Input] [CircuitType Output] where
+  name : String := "anonymous"
+  main : Var Input F → RegionCircuit F (Var Output F)
+  elaborated : ElaboratedRegionCircuit F Input Output main := by
+    first | infer_instance | (constructor <;> intro _ _ <;> rfl)
+
+  Witness : TypeMap := unit
+  inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
+  extract : Var Input F → RegionIndex → Placed Environment F → Witness F :=
+    fun _ _ _ => inhabitedWitness.default
+
+  Assumptions : Value Input F → Prop := fun _ => True
+  Spec : Value Input F → Witness F → Value Output F → Prop
+  ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
+  ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
+
+  soundness : FormalRegionCircuit.Soundness main extract Assumptions Spec
+  completeness : FormalRegionCircuit.Completeness main ProverAssumptions ProverSpec
+
+namespace FormalRegionCircuit
+variable [CircuitType Input] [CircuitType Output]
+
+/-- The output variable of the region circuit, in the ambient region. -/
+def output (self : FormalRegionCircuit F Input Output) (input : Var Input F) (region : RegionIndex) :
+    Var Output F :=
+  self.elaborated.output input region
+
+/-- Call this region circuit as a subcircuit from a parent region circuit: emit a single
+region-level `.subcircuit` operation carrying the child's operations (in the *same*
+ambient region), returning the child's output. Rust: calling an `assign_region` helper
+with the parent's `region`/`offset`. -/
+def call (self : FormalRegionCircuit F Input Output) (input : Var Input F) :
+    RegionCircuit F (Var Output F) :=
+  fun region =>
+    (self.output input region, [.subcircuit ((self.main input).operations region)])
+
+end FormalRegionCircuit
 
 end Halo2
