@@ -146,11 +146,10 @@ def constrainInstance (cell : AssignedCell F) (col : Column .instance) (row : �
     Circuit F Unit :=
   fun i => ((), [.constrainInstance cell.cell col row], i)
 
-/-- Top-level, ground-truth satisfaction of a circuit, for a given placement of its
-regions (including all subcircuit constraints, via flattening). Gadget proofs use the
-`Constraints.Soundness`/`Constraints.Completeness` views and are generic over `place`
-(and the initial region index); the final statement instantiates `place` with the floor
-planner's output. -/
+/-- Satisfaction of a circuit, for a given placement of its regions
+(including all subcircuit constraints, via flattening). Gadget proofs are generic
+over `place` (and the initial region index); the final statement instantiates `place`
+with the floor planner's output. -/
 def Circuit.Constraints (place : RegionIndex → ℕ) (env : Environment F)
     (circuit : Circuit F α) : Prop :=
   Halo2.Constraints place env (circuit.operations) 0
