@@ -133,6 +133,29 @@ permutation/lookup soundness effort) to ironwood's polynomial-level `circuitSatV
   Soundness/completeness of a gadget never depends on where the floor planner puts its
   regions.
 
+### Knowledge soundness: constructive high-level witnesses
+
+Plain input/output soundness is insufficient for some Zcash specs: when a spec must
+talk about internal witnesses that are not circuit I/O (halo2's fixed-base scalar mul:
+the scalar exists only as window cells), an existential spec (`∃ s, output = s • B`)
+says nothing — the interesting property is that the prover *knows* `s`. Therefore
+(tried here first, destined for main Clean):
+
+- `FormalCircuit` gains a `Witness` type slot (default `unit`) and a **constructive
+  extractor** — a computable function from the low-level witness (placement +
+  environment) to `Witness F`. `Spec` receives the extracted witness as an additional
+  argument; soundness concludes `Spec input (extract …) output`.
+- Extractors compose through the subcircuit tree by construction (parents call child
+  extractors), so knowledge soundness composes constructively — which is what the
+  ironwood integration needs end-to-end (their SNARK extractor yields the low-level
+  witness; the circuit extractor chain lifts it to the high-level one).
+- No polytime/complexity formalism at the framework level: constructivity is the
+  requirement (soft-enforced — `FormalCircuit`s must be computable anyway for VK
+  compilation, so `Classical.choice` in an extractor forces a visible `noncomputable`).
+  Practical speed, if needed, is argued once about the top-level circuit's extractor.
+- Phase-one specs with existential internal witnesses (the fixed-base mul family) are
+  upgraded to extractor form during the port.
+
 ### Proof UX
 
 Target the phase-one proof experience: analogues of `circuit_proof_start`,
