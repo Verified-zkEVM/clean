@@ -54,8 +54,6 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
     let yVar ← assignAdvice config.y offset (.ofFExpr point.y)
     return ⟨ xVar, yVar ⟩
 
-  elaborated := {}
-
   Spec _ output _ := output.Valid
   ProverAssumptions input _ := input.Valid
   ProverSpec input output _ := output = input
