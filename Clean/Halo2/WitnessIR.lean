@@ -41,9 +41,9 @@ abbrev WitgenIR (F : Type) :=
 ## Prover-only inputs
 
 `Unconstrained value` is a prover-only circuit input (halo2's `Value<T>`): the verifier
-view is erased to `Unit`, the prover view is a witness program producing `value F`. Port
-of main Clean's `Unconstrained`; the caller's program typically reads from the prover
-hints (`hintGet`). Used for `Value<Affine>`-style inputs that the gadget witnesses
+view is erased to `Unit`, the prover view is a witness program producing `value F`,
+supplied by the caller for the honest prover to evaluate. Port of main Clean's
+`Unconstrained`. Used for `Value<Affine>`-style inputs that the gadget witnesses
 internally.
 
 Minimal version: the program is a plain `value (FExpr F)` (a provable value of witness
