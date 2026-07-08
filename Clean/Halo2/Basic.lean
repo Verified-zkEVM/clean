@@ -73,19 +73,19 @@ served here by later programs reading earlier cells (`.expr cellRef`). Multi-cel
 assignment, if ever wanted, is DSL sugar over this op, not a new primitive. -/
 def assignAdvice (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) :
     RegionCircuit F (AssignedCell F) :=
-  fun self => (⟨⟨self, row, col.toAny⟩⟩, [.assignAdvice col row compute])
+  fun self => (⟨⟨self, row, col⟩⟩, [.assignAdvice col row compute])
 
 /-- Rust: `region.assign_fixed(col, offset, value)`. -/
 def assignFixed (col : Column .fixed) (row : ℕ) (value : F) :
     RegionCircuit F (AssignedCell F) :=
-  fun self => (⟨⟨self, row, col.toAny⟩⟩, [.assignFixed col row value])
+  fun self => (⟨⟨self, row, col⟩⟩, [.assignFixed col row value])
 
 /-- Copy an existing cell into this region: assign + copy constraint.
 Rust: `assigned_cell.copy_advice(region, col, offset)`. -/
 def copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ) :
     RegionCircuit F (AssignedCell F) :=
   fun self =>
-    let cell : Cell := ⟨self, row, col.toAny⟩
+    let cell : Cell := ⟨self, row, col⟩
     (⟨cell⟩, [
       .assignAdvice col row (.ofFExpr (.expr src)),
       .constrainEqual cell src.cell])

@@ -41,7 +41,7 @@ layouters; a matching order function comes with the floor-planner port. -/
 inductive ColumnKind where
   | advice
   | fixed
-  | «instance»
+  | instance
 deriving DecidableEq, Repr
 
 /-- A column with an index, of a statically known kind.
@@ -94,7 +94,7 @@ inductive Query where
   | selector : Selector → Query
   | fixed : Column .fixed → Rotation → Query
   | advice : Column .advice → Rotation → Query
-  | «instance» : Column .instance → Rotation → Query
+  | instance : Column .instance → Rotation → Query
 deriving DecidableEq, Repr
 
 /-- Main Clean's `Expression`, generalized over the variable type `L`.
@@ -162,9 +162,9 @@ at the VK bridge it is the activation table computed from the layout. -/
 @[circuit_norm]
 def Query.eval [Field F] (env : Environment F) (selectors : ℕ → F) (row : ℤ) : Query → F
   | .selector s => selectors s.index
-  | .fixed c rot => env.get c.toAny (row + rot)
-  | .advice c rot => env.get c.toAny (row + rot)
-  | .«instance» c rot => env.get c.toAny (row + rot)
+  | .fixed col rot => env.get col (row + rot)
+  | .advice col rot => env.get col (row + rot)
+  | .instance col rot => env.get col (row + rot)
 
 namespace Expression
 variable [Field F]

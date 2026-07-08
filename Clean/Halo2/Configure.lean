@@ -127,11 +127,11 @@ def enableEquality (c : AnyColumn) : Configure F Unit :=
 
 /-- Rust: `meta.enable_constant(column)`: registers the constants column and enables
 equality on it (constants are enforced via copies into this column). -/
-def enableConstant (c : Column .fixed) : Configure F Unit :=
+def enableConstant (col : Column .fixed) : Configure F Unit :=
   fun cs => ((),
     { cs with
-      constants := cs.constants ++ [c]
-      permutationColumns := cs.permutationColumns ++ [c.toAny] })
+      constants := cs.constants ++ [col]
+      permutationColumns := cs.permutationColumns ++ [col.toAny] })
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
