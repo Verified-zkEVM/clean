@@ -170,13 +170,16 @@ structure RegionSubcircuit (F : Type) where
 A layouter-level subcircuit: a whole multi-region gadget (e.g. ECC mul). Thin data
 (issue #358); `regionCount` (the `localLength` analogue) is how many region indices the
 ops consume, recorded separately for fast simplification.
+
+No baked consistency proof: `regionCount` matching the operations is guaranteed by the
+concrete subcircuit-producing constructors (`toSubcircuit`, formal-circuit layer) and
+discharged by `rfl`/`decide` there; lemmas that need it (e.g. the flattening
+equivalence) take it as a hypothesis. Note the semantics and the floor planner agree
+with each other regardless, since both read the recorded field.
 -/
 structure Subcircuit (F : Type) where
   ops : List (FlatOperation F)
   regionCount : ℕ
-  /-- `regionCount` must be consistent with the operations. -/
-  regionCount_eq : regionCount = (ops.filter fun op => match op with
-    | .region _ _ => true | _ => false).length
 
 end Subcircuits
 
