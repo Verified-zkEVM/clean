@@ -1,0 +1,125 @@
+import Clean.Halo2.Basic
+
+/-!
+# Composition lemmas: the deliberate simp set — DESIGN SKETCH
+
+Unlike main Clean, where nearly every circuit definition carries `@[circuit_norm]` and
+proofs unfold to low-level normal forms, the halo2 framework chooses its normal forms
+deliberately:
+
+- **Normal forms** (never unfolded): monadic composition (`>>=`/`do`), the DSL atoms
+  (`assignAdvice`, `copyAdvice`, `Gate.enable`, `assignRegion`, …), and the circuit
+  accessors `operations`/`output`/`nextRegionIndex`.
+- **The simp set** (this file) consists of *composition lemmas*: how the accessors
+  distribute over monadic composition and the DSL atoms, and how the `Constraints`
+  predicates decompose over the resulting operation lists. Goals stay at the abstraction
+  level of the circuit source.
+
+SKETCH: this file grows with the vertical slice — lemmas are added when a proof needs
+them, never speculatively. Next known additions: `Constraints.Soundness` over `++`
+(with `Operation.regionCount` bookkeeping), per-atom `Constraints` characterizations,
+`RegionCircuit` variants.
+-/
+
+namespace Halo2
+
+variable {F : Type} [Field F] {α β : Type}
+
+/-! ## Accessor algebra over the `Circuit` monad -/
+
+@[circuit_norm]
+theorem Circuit.operations_bind (x : Circuit F α) (f : α → Circuit F β) (i : RegionIndex) :
+    (x >>= f).operations i
+      = x.operations i ++ (f (x.output i)).operations (x.nextRegionIndex i) := rfl
+
+@[circuit_norm]
+theorem Circuit.output_bind (x : Circuit F α) (f : α → Circuit F β) (i : RegionIndex) :
+    (x >>= f).output i = (f (x.output i)).output (x.nextRegionIndex i) := rfl
+
+@[circuit_norm]
+theorem Circuit.nextRegionIndex_bind (x : Circuit F α) (f : α → Circuit F β) (i : RegionIndex) :
+    (x >>= f).nextRegionIndex i = (f (x.output i)).nextRegionIndex (x.nextRegionIndex i) := rfl
+
+@[circuit_norm]
+theorem Circuit.operations_pure (a : α) (i : RegionIndex) :
+    (pure a : Circuit F α).operations i = [] := rfl
+
+@[circuit_norm]
+theorem Circuit.output_pure (a : α) (i : RegionIndex) :
+    (pure a : Circuit F α).output i = a := rfl
+
+@[circuit_norm]
+theorem Circuit.nextRegionIndex_pure (a : α) (i : RegionIndex) :
+    (pure a : Circuit F α).nextRegionIndex i = i := rfl
+
+/-! ## Accessor algebra over the `RegionCircuit` monad -/
+
+@[circuit_norm]
+theorem RegionCircuit.operations_bind (x : RegionCircuit F α) (f : α → RegionCircuit F β)
+    (self : RegionIndex) :
+    (x >>= f).operations self = x.operations self ++ (f (x.output self)).operations self := rfl
+
+@[circuit_norm]
+theorem RegionCircuit.output_bind (x : RegionCircuit F α) (f : α → RegionCircuit F β)
+    (self : RegionIndex) :
+    (x >>= f).output self = (f (x.output self)).output self := rfl
+
+@[circuit_norm]
+theorem RegionCircuit.operations_pure (a : α) (self : RegionIndex) :
+    (pure a : RegionCircuit F α).operations self = [] := rfl
+
+@[circuit_norm]
+theorem RegionCircuit.output_pure (a : α) (self : RegionIndex) :
+    (pure a : RegionCircuit F α).output self = a := rfl
+
+/-! ## Accessors of the DSL atoms -/
+
+@[circuit_norm]
+theorem operations_assignRegion (name : String) (body : RegionCircuit F α) (i : RegionIndex) :
+    (assignRegion name body).operations i = [.region name (body.operations i)] := rfl
+
+@[circuit_norm]
+theorem output_assignRegion (name : String) (body : RegionCircuit F α) (i : RegionIndex) :
+    (assignRegion name body).output i = body.output i := rfl
+
+@[circuit_norm]
+theorem nextRegionIndex_assignRegion (name : String) (body : RegionCircuit F α)
+    (i : RegionIndex) :
+    (assignRegion name body).nextRegionIndex i = i + 1 := rfl
+
+@[circuit_norm]
+theorem operations_assignAdvice (col : Column .advice) (row : ℕ)
+    (compute : Placed ProverEnvironment F → F) (self : RegionIndex) :
+    (assignAdvice col row compute).operations self = [.assignAdvice col row compute] := rfl
+
+@[circuit_norm]
+theorem output_assignAdvice (col : Column .advice) (row : ℕ)
+    (compute : Placed ProverEnvironment F → F) (self : RegionIndex) :
+    (assignAdvice col row compute).output self = ⟨⟨self, row, col.toAny⟩⟩ := rfl
+
+@[circuit_norm]
+theorem operations_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
+    (self : RegionIndex) :
+    (copyAdvice src col row).operations self
+      = [.assignAdvice col row fun pe => src.eval pe.place pe.env.toEnvironment,
+         .constrainEqual ⟨self, row, col.toAny⟩ src.cell] := rfl
+
+@[circuit_norm]
+theorem output_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
+    (self : RegionIndex) :
+    (copyAdvice src col row).output self = ⟨⟨self, row, col.toAny⟩⟩ := rfl
+
+@[circuit_norm]
+theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
+    (gate.enable row).operations self = [.enableGate gate row] := rfl
+
+@[circuit_norm]
+theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :
+    (constrainEqual a b).operations self = [.constrainEqual a.cell b.cell] := rfl
+
+@[circuit_norm]
+theorem operations_constrainInstance (cell : AssignedCell F) (col : Column .instance)
+    (row : ℕ) (i : RegionIndex) :
+    (constrainInstance cell col row).operations i = [.constrainInstance cell.cell col row] := rfl
+
+end Halo2

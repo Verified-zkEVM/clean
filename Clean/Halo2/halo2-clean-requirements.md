@@ -140,6 +140,14 @@ Target the phase-one proof experience: analogues of `circuit_proof_start`,
 proofs consume child specs opaquely. User-land proofs must not unfold framework
 internals.
 
+**Deliberate simp normal forms** (a lesson from main Clean, where blanket
+`@[circuit_norm]` tagging of every circuit definition made proofs unfold to unwieldy
+low-level statements): monadic composition, DSL atoms (`assignAdvice`, …), and circuit
+accessors (`Circuit.output`, `operations`) are themselves the normal forms and never
+unfold. The simp set is a dedicated file of *composition lemmas* (accessors over
+binds/atoms, `Constraints` over operation lists), added on demand, never
+speculatively.
+
 ### Reuse from phase one
 
 The Orchard-in-Clean tree is the reference implementation and proof-content donor:

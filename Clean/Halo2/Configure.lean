@@ -43,7 +43,7 @@ Verbatim-port counterparts of Rust `meta.query_*` inside `create_gate` closures.
 the `Query.fixed` constructor keeps a rotation for generality of the compiled CS. -/
 @[circuit_norm] def queryFixed (c : Column .fixed) : Expression F Query := var (.fixed c 0)
 @[circuit_norm] def queryAdvice (c : Column .advice) (rot : Rotation) : Expression F Query := var (.advice c rot)
-@[circuit_norm] def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.«instance» c rot)
+@[circuit_norm] def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.instance c rot)
 
 /-- One named constraint of a custom gate. Rust: `Constraint<F>`. -/
 structure Constraint (F : Type) where
@@ -59,7 +59,7 @@ activation handle: per the selector survey (`halo2-selector-survey.md`), every g
 scope is activated by exactly one simple `Selector`, and genuine selectors never occur
 in a foreign gate's polynomials — so the semantics of enabling the gate at a row is
 "all compiled polys vanish there under the valuation `selector ↦ 1`"
-(see `RegionOperation.Holds`). The bridge to the CS view "`∀` rows, poly = 0 with the
+(see `FlatRegionOperation.Constraints`). The bridge to the CS view "`∀` rows, poly = 0 with the
 actual 0/1 activation table" is a once-per-circuit lemma at the VK boundary.
 -/
 structure Gate (F : Type) where
