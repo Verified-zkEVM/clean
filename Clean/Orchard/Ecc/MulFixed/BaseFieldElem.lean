@@ -1347,7 +1347,7 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
   let alpha0Prime ← witness <|
-    (Witgen.FExpr.expr alpha - Witgen.FExpr.expr m.z84 * Witgen.FExpr.const (2 ^ 252 : Fp))
+    ((Witgen.FExpr.expr alpha : Witgen.FExpr Fp) - Witgen.FExpr.expr m.z84 * Witgen.FExpr.const (2 ^ 252 : Fp))
       + Witgen.FExpr.const (2 ^ 130 : Fp) - Witgen.FExpr.const (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]

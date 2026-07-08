@@ -45,6 +45,17 @@ instance : Inv (FExpr F) := ⟨.inv⟩
 instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
 instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
+/- Heterogeneous arithmetic between circuit expressions and witness expressions: the
+`Coe (Expression F) (FExpr F)` route stopped covering `binop%` elaboration after the
+`FExprOver` generalization (the abbrev obscures the max-type computation), so the mixed
+operations get explicit instances. -/
+instance : HAdd (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => .add (.expr e) x⟩
+instance : HAdd (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => .add x (.expr e)⟩
+instance : HMul (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => .mul (.expr e) x⟩
+instance : HMul (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => .mul x (.expr e)⟩
+instance [Field F] : HSub (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => FExprOver.sub (.expr e) x⟩
+instance [Field F] : HSub (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => FExprOver.sub x (.expr e)⟩
+
 instance : Coe ℕ (NExpr F) := ⟨.const⟩
 instance {n : ℕ} : OfNat (NExpr F) n := ⟨.const n⟩
 instance : Inhabited (NExpr F) where
@@ -74,16 +85,16 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-! ## Bridges as dot notation -/
 
 /-- The `ℕ` value of an IR field expression: `e.val`. -/
-abbrev FExpr.val (e : FExpr F) : NExpr F := .val e
+abbrev FExprOver.val (e : FExpr F) : NExpr F := .val e
 
 /-- The `ℕ` value of a circuit expression, as a witness-IR expression: `x.val`. -/
 abbrev _root_.Expression.val (e : Expression F) : NExpr F := .val (.expr e)
 
 /-- Cast a Nat-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
-abbrev NExpr.toField (n : NExpr F) : FExpr F := .ofNat n
+abbrev NExprOver.toField (n : NExpr F) : FExpr F := .ofNat n
 
 /-- Cast a boolean expression to a field element that is 0 or 1. -/
-abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
+abbrev BExprOver.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 
 /-! ## Conditions -/
 
@@ -134,24 +145,24 @@ instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (NExpr F) (FExpr F)
 
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
-    FExpr.evalList ctx i (v.toList.map FExpr.const) = if hi : i < n then v[i] else 0 := by
+    FExprOver.evalList (V := Expression F) ctx i (v.toList.map FExpr.const) = if hi : i < n then v[i] else 0 := by
   induction v using Vector.induct generalizing i with
-  | nil => simp [FExpr.evalList]
-  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+  | nil => simp [FExprOver.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExprOver.evalList, FExprOver.eval]
 
 @[circuit_norm]
 lemma evalList_map_vector_expr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (Expression F) n) (i : ℕ) :
-    FExpr.evalList ctx i (v.toList.map FExpr.expr) = if hi : i < n then v[i].eval ctx.env else 0 := by
+    FExprOver.evalList ctx i (v.toList.map FExpr.expr) = if hi : i < n then v[i].eval ctx.env else 0 := by
   induction v using Vector.induct generalizing i with
-  | nil => simp [FExpr.evalList]
-  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+  | nil => simp [FExprOver.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExprOver.evalList, FExprOver.eval, WitgenEnv.readVar_main]
 
 @[circuit_norm]
 lemma evalList_map_vector_fexpr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (FExpr F) n) (i : ℕ) :
-    FExpr.evalList ctx i v.toList = if hi : i < n then v[i].eval ctx else 0 := by
+    FExprOver.evalList ctx i v.toList = if hi : i < n then v[i].eval ctx else 0 := by
   induction v using Vector.induct generalizing i with
-  | nil => simp [FExpr.evalList]
-  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList]
+  | nil => simp [FExprOver.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExprOver.evalList]
 
 /-! ## Loop former -/
 
@@ -258,7 +269,7 @@ def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
 
 theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
     program.toIRLiteral.eval env = toElements (program.eval env) := by
-  simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
+  simp [toIRLiteral, eval, WitgenIROver.eval, Witgen.eval, ProvableType.toElements_fromElements, VExprOver.eval]
 
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default

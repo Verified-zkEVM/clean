@@ -26,7 +26,7 @@ def pow5 {K : Type} [Mul K] (x : K) : K :=
 
 /-- `pow5` commutes with witness-IR evaluation, since it is built purely from `*`. -/
 theorem pow5_FExpr_eval (ctx : Witgen.Ctx Fp) (x : Witgen.FExpr Fp) :
-    Witgen.FExpr.eval ctx (pow5 x) = pow5 (Witgen.FExpr.eval ctx x) := by
+    Witgen.FExprOver.eval ctx (pow5 x) = pow5 (Witgen.FExprOver.eval ctx x) := by
   simp [pow5, circuit_norm]
 
 namespace FullRound

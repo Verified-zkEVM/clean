@@ -170,7 +170,7 @@ lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.NExpr F) 
       ((ctx.env.data.getTable table)[row.eval ctx]?.getD default) := by
   simp only [Witgen.eval, dataGet, ProverData.getTable]
   rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
-  simp only [Witgen.FExpr.eval]
+  simp only [Witgen.FExprOver.eval, Witgen.WitgenEnv.data_main]
   by_cases h : row.eval ctx < (ctx.env.data table.name (size Row)).size
   · simp [h]
     rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
@@ -183,7 +183,7 @@ lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.NExpr F) 
       fromElements (((ctx.env.hint table.name (size Row))[row.eval ctx]?).getD default) := by
   simp only [Witgen.eval, hintGet]
   rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
-  simp only [Witgen.FExpr.eval]
+  simp only [Witgen.FExprOver.eval, Witgen.WitgenEnv.hint_main]
   by_cases h : row.eval ctx < (ctx.env.hint table.name (size Row)).size
   · simp [h]
     rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
