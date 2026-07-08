@@ -65,7 +65,12 @@ end RegionCircuit
 
 /-- Witness a value into an advice cell. Rust: `region.assign_advice(col, offset, to)`
 (`to` is a reserved token in Lean, hence `compute`). Returns the assigned cell; adds no
-constraint. -/
+constraint.
+
+Deliberately single-cell, unlike main Clean's vector-valued `witness`: halo2's Region
+API has no vector primitive, and the sharing that vector programs provide on the tape is
+served here by later programs reading earlier cells (`.expr cellRef`). Multi-cell
+assignment, if ever wanted, is DSL sugar over this op, not a new primitive. -/
 def assignAdvice (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) :
     RegionCircuit F (AssignedCell F) :=
   fun self => (⟨⟨self, row, col.toAny⟩⟩, [.assignAdvice col row compute])

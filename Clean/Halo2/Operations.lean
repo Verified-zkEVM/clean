@@ -18,21 +18,27 @@ operations, mirroring Rust's two synthesize APIs:
   their *placement* `place : RegionIndex → ℕ` is a semantics parameter, computed at top
   level by the floor planner.
 
-**The subcircuit mechanism** is ported from main Clean at *both* levels — it is what
-makes parent proofs scale by isolating them from child circuit internals:
+**The subcircuit mechanism** exists at *both* levels — it is what makes parent proofs
+scale by isolating them from child circuit internals. Unlike main Clean's `Subcircuit`
+(and per issue Verified-zkEVM/clean#358), the packages are **thin data**: flattened
+child ops plus size metadata, with no `Spec`/`Assumptions` fields and no stored proofs:
 
 - `Flat*Operation` are the raw operations; `*Operation` additionally have a
-  `subcircuit` constructor carrying a proof package (`RegionSubcircuit` / `Subcircuit`)
-  whose `ops` are *flattened* child operations (as in main Clean, this is what avoids
-  recursion between the op type and the package).
-- The ground-truth predicate `Constraints` recurses through subcircuits (via
-  flattening); the `Constraints.Soundness` variant replaces a subcircuit by
-  `Assumptions → Spec`, and `Constraints.Completeness` by `ProverAssumptions` — parents
-  never see child internals.
+  `subcircuit` constructor carrying `RegionSubcircuit` / `Subcircuit` (flattened child
+  ops — as in main Clean, flatness avoids recursion between op type and package).
+- There is a single ground-truth `Constraints` predicate. A subcircuit's constraints
+  appear in parent hypotheses as one *opaque chunk* over the child's named `ops`
+  (`∀ op ∈ C.subcircuit(…).ops, …`), never spilled into the parent's conjunction.
+- The contracts (`Spec`/`Assumptions`/prover variants) live on the formal-circuit
+  packages, which provide per-circuit *forward lemmas*
+  (`Constraints chunk → (Assumptions → Spec)` for soundness; the reverse direction for
+  completeness). A custom tactic applies them — rewriting hypotheses to the weaker but
+  higher-level spec form, which simp fundamentally cannot do. This replaces main
+  Clean's `ConstraintsHold.Soundness`/`.Completeness` predicate variants.
 - Layouter-level subcircuits advance the region counter by their `regionCount` (the
   `localLength` analogue); region-level subcircuits live in the ambient region.
-  TODO: the `SubcircuitsConsistent` discipline (stored index = ambient index, by
-  construction of the monad) ports with the formal-circuit layer.
+  TODO: the `SubcircuitsConsistent` discipline (cells in child ops reference the
+  ambient region, by construction of the monad) ports with the formal-circuit layer.
 
 Other key design points:
 
@@ -147,68 +153,27 @@ variable [FiniteField F]
 
 /--
 A region-level subcircuit: a fragment used *inside* a region (e.g. `add_incomplete`'s
-`assign_region` method called at an offset inside variable-base mul's big region),
-packaged with its contract. Port of main Clean's `Subcircuit` at row granularity.
+`assign_region` method called at an offset inside variable-base mul's big region).
 
-Like main Clean, `ops` are the flattened child operations, and the statements are
-env-level `Prop`s (the input/output-typed view is layered on by the formal-circuit
-package, which instantiates them at concrete cells).
-
-`self` is the region this fragment lives in (the analogue of main Clean's `offset`
-index): the fragment shares its caller's region.
+Thin data (issue #358): flattened child operations plus shape metadata — the contract
+and its proofs live on the formal-circuit package, connected by per-circuit forward
+lemmas. The fragment shares its caller's region; cells in `ops` referencing the ambient
+region is a wellformedness condition maintained by the circuit monad.
 -/
-structure RegionSubcircuit (F : Type) [FiniteField F] (self : RegionIndex) where
+structure RegionSubcircuit (F : Type) where
   ops : List (FlatRegionOperation F)
-
-  Assumptions : (RegionIndex → ℕ) → Environment F → Prop
-  Spec : (RegionIndex → ℕ) → Environment F → Prop
-  ProverAssumptions : (RegionIndex → ℕ) → ProverEnvironment F → Prop
-  ProverSpec : (RegionIndex → ℕ) → ProverEnvironment F → Prop
-
   /-- Rows this fragment uses within the region, from its base offset (part of the
   region's shape for the floor planner). TODO consistency field, like `localLength_eq`. -/
   usedRows : ℕ
 
-  soundness : ∀ place env,
-    Assumptions place env →
-    (∀ op ∈ ops, op.Constraints place self env) →
-    Spec place env
-
-  completeness : ∀ place (env : ProverEnvironment F),
-    (∀ op ∈ ops, op.ExtendsWitness place self env) →
-    (ProverAssumptions place env →
-      ∀ op ∈ ops, op.Constraints place self env.toEnvironment) ∧
-    ProverSpec place env
-
 /--
-A layouter-level subcircuit: a whole multi-region gadget (e.g. ECC mul), packaged with
-its contract. Port of main Clean's `Subcircuit`; `i₀` is the region index it is
-instantiated at, and `regionCount` (the `localLength` analogue) is how many region
-indices it consumes.
+A layouter-level subcircuit: a whole multi-region gadget (e.g. ECC mul). Thin data
+(issue #358); `regionCount` (the `localLength` analogue) is how many region indices the
+ops consume, recorded separately for fast simplification.
 -/
-structure Subcircuit (F : Type) [FiniteField F] (i₀ : RegionIndex) where
+structure Subcircuit (F : Type) where
   ops : List (FlatOperation F)
-
-  Assumptions : (RegionIndex → ℕ) → Environment F → Prop
-  Spec : (RegionIndex → ℕ) → Environment F → Prop
-  ProverAssumptions : (RegionIndex → ℕ) → ProverEnvironment F → Prop
-  ProverSpec : (RegionIndex → ℕ) → ProverEnvironment F → Prop
-
-  /-- Number of regions created by `ops` — recorded separately for fast simplification,
-  like main Clean's `localLength`. -/
   regionCount : ℕ
-
-  soundness : ∀ place env,
-    Assumptions place env →
-    ConstraintsFlat place env ops i₀ →
-    Spec place env
-
-  completeness : ∀ place (env : ProverEnvironment F),
-    ExtendsWitnessesFlat place env ops i₀ →
-    (ProverAssumptions place env →
-      ConstraintsFlat place env.toEnvironment ops i₀) ∧
-    ProverSpec place env
-
   /-- `regionCount` must be consistent with the operations. -/
   regionCount_eq : regionCount = (ops.filter fun op => match op with
     | .region _ _ => true | _ => false).length
@@ -218,23 +183,23 @@ end Subcircuits
 /-! ## Structured operations -/
 
 /-- An operation inside a region: the raw operations plus region-level subcircuit
-calls. The subcircuit's region index is its type index; consistency with the ambient
-region (`SubcircuitsConsistent` in main Clean) is maintained by the circuit monad and
-ported with the formal-circuit layer. -/
-inductive RegionOperation (F : Type) [FiniteField F] where
+calls. Consistency of subcircuit cells with the ambient region (`SubcircuitsConsistent`
+in main Clean) is maintained by the circuit monad and ported with the formal-circuit
+layer. -/
+inductive RegionOperation (F : Type) where
   | assignAdvice : Column .advice → ℕ → WitgenIR F 1 → RegionOperation F
   | assignFixed : Column .fixed → ℕ → F → RegionOperation F
   | enableGate : Gate F → ℕ → RegionOperation F
   | constrainEqual : Cell → Cell → RegionOperation F
   | constrainConstant : Cell → F → RegionOperation F
-  | subcircuit : {self : RegionIndex} → RegionSubcircuit F self → RegionOperation F
+  | subcircuit : RegionSubcircuit F → RegionOperation F
 
 /-- A layouter-level operation: regions (with structured bodies), instance copies, and
 layouter-level subcircuit calls. -/
-inductive Operation (F : Type) [FiniteField F] where
+inductive Operation (F : Type) where
   | region : String → List (RegionOperation F) → Operation F
   | constrainInstance : Cell → Column .instance → ℕ → Operation F
-  | subcircuit : {i₀ : RegionIndex} → Subcircuit F i₀ → Operation F
+  | subcircuit : Subcircuit F → Operation F
 
 section StructuredSemantics
 variable [FiniteField F]
@@ -246,8 +211,7 @@ def RegionOperation.toFlat : RegionOperation F → List (FlatRegionOperation F)
   | .enableGate g r => [.enableGate g r]
   | .constrainEqual a b => [.constrainEqual a b]
   | .constrainConstant a v => [.constrainConstant a v]
-  -- explicit projection: dot notation misresolves on the dependent pattern here
-  | .subcircuit s => RegionSubcircuit.ops s
+  | .subcircuit s => s.ops
 
 /-- Flatten a layouter operation. -/
 def Operation.toFlat : Operation F → List (FlatOperation F)
@@ -255,55 +219,33 @@ def Operation.toFlat : Operation F → List (FlatOperation F)
   | .constrainInstance c col row => [.constrainInstance c col row]
   | .subcircuit s => s.ops
 
+/-- Constraints of one region operation. For a subcircuit call this is the *opaque
+chunk* `∀ f ∈ s.ops, …` over the child's named op list — the proof boundary: parent
+hypotheses keep the chunk folded, and the per-circuit forward lemmas (formal-circuit
+layer) rewrite it to the child's `Assumptions → Spec`. -/
+def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (op : RegionOperation F) : Prop :=
+  ∀ flat ∈ op.toFlat, flat.Constraints place self env
+
 /--
 Ground truth: what it means that "constraints hold" on a sequence of operations,
-*including* all constraints inside subcircuits (via flattening). Region-index
-bookkeeping is preserved by flattening because a subcircuit's `regionCount` matches the
-regions its ops create.
+*including* all constraints inside subcircuits. The single satisfaction predicate
+(issue #358 — no separate `Soundness`/`Completeness` views): layouter-level subcircuits
+contribute their constraints as one opaque `ConstraintsFlat … s.ops` chunk, advancing
+the region counter by `regionCount`.
+
+TODO (formal-circuit layer): the flattening equivalence
+`Constraints place env ops i ↔ ConstraintsFlat place env (ops.flatMap Operation.toFlat) i`.
 -/
-def Constraints (place : RegionIndex → ℕ) (env : Environment F)
-    (ops : List (Operation F)) (i : RegionIndex := 0) : Prop :=
-  ConstraintsFlat place env (ops.flatMap Operation.toFlat) i
-
-/-- Soundness view of one region operation: subcircuits contribute `Assumptions → Spec`
-instead of their constraints — this is the isolation that keeps parent proofs
-independent of child internals. -/
-def RegionOperation.Soundness (place : RegionIndex → ℕ) (self : RegionIndex)
-    (env : Environment F) : RegionOperation F → Prop
-  | .subcircuit s => RegionSubcircuit.Assumptions s place env → RegionSubcircuit.Spec s place env
-  | op => ∀ flat ∈ op.toFlat, flat.Constraints place self env
-
-/-- Soundness view of layouter operations (main Clean: `ConstraintsHold.Soundness`). -/
-def Constraints.Soundness (place : RegionIndex → ℕ) (env : Environment F) :
+def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
     List (Operation F) → (i : RegionIndex) → Prop
   | [], _ => True
   | .region _ ops :: rest, i =>
-      (∀ op ∈ ops, op.Soundness place i env) ∧ Constraints.Soundness place env rest (i + 1)
+      (∀ op ∈ ops, op.Constraints place i env) ∧ Constraints place env rest (i + 1)
   | .constrainInstance c col row :: rest, i =>
-      c.eval place env = env.get col.toAny row ∧ Constraints.Soundness place env rest i
+      c.eval place env = env.get col.toAny row ∧ Constraints place env rest i
   | .subcircuit s :: rest, i =>
-      (s.Assumptions place env → s.Spec place env) ∧
-        Constraints.Soundness place env rest (i + s.regionCount)
-
-/-- Completeness view of one region operation: subcircuits contribute their
-`ProverAssumptions` (which the parent must establish; the child's completeness proof
-turns them into satisfied constraints). -/
-def RegionOperation.Completeness (place : RegionIndex → ℕ) (self : RegionIndex)
-    (env : ProverEnvironment F) : RegionOperation F → Prop
-  | .subcircuit s => RegionSubcircuit.ProverAssumptions s place env
-  | op => ∀ flat ∈ op.toFlat, flat.Constraints place self env.toEnvironment
-
-/-- Completeness view of layouter operations (main Clean: `ConstraintsHold.Completeness`). -/
-def Constraints.Completeness (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
-    List (Operation F) → (i : RegionIndex) → Prop
-  | [], _ => True
-  | .region _ ops :: rest, i =>
-      (∀ op ∈ ops, op.Completeness place i env) ∧ Constraints.Completeness place env rest (i + 1)
-  | .constrainInstance c col row :: rest, i =>
-      c.eval place env.toEnvironment = env.toEnvironment.get col.toAny row ∧
-        Constraints.Completeness place env rest i
-  | .subcircuit s :: rest, i =>
-      s.ProverAssumptions place env ∧ Constraints.Completeness place env rest (i + s.regionCount)
+      ConstraintsFlat place env s.ops i ∧ Constraints place env rest (i + s.regionCount)
 
 end StructuredSemantics
 
