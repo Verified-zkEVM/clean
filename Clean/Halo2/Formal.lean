@@ -58,12 +58,12 @@ def FormalCircuit.Soundness
     (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (Assumptions : Value Input F → Prop)
-    (Spec : Value Input F → Witness F → Value Output F → Prop) : Prop :=
+    (Spec : Value Input F → Value Output F → Witness F → Prop) : Prop :=
   ∀ (i₀ : RegionIndex) (env : Placed Environment F)
     (input : Var Input F),
   Assumptions (eval env input) →
   Constraints env.place env.env ((main input).operations i₀) i₀ →
-  Spec (eval env input) (extract input i₀ env) (eval env (ElaboratedCircuit.output main input i₀))
+  Spec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) (extract input i₀ env)
 
 /-- Completeness (prover view — hints visible). Under the honest prover's witness
 generators, `ProverAssumptions` imply the constraints and the `ProverSpec`. -/
@@ -107,7 +107,7 @@ structure FormalCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
   /-- Verifier-view precondition (hints erased). -/
   Assumptions : Value Input F → Prop := fun _ => True
   /-- Verifier-view postcondition: relates input, extracted witness, and output. -/
-  Spec : Value Input F → Witness F → Value Output F → Prop
+  Spec : Value Input F → Value Output F → Witness F → Prop
 
   /-- Prover-view precondition (hints visible). -/
   ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
@@ -174,7 +174,7 @@ input variable and the ambient region index. -/
 class ElaboratedRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
     [CircuitType Input] [CircuitType Output]
     (main : Var Input F → RegionCircuit F (Var Output F)) where
-  output : Var Input F → RegionIndex → Var Output F
+  output : Var Input F → RegionIndex → Var Output F := fun input self => (main input).output self
   output_eq : ∀ input self, output input self = (main input).output self := by intro _ _; rfl
 
 section RegionStatements
@@ -188,12 +188,12 @@ def FormalRegionCircuit.Soundness
     [ElaboratedRegionCircuit F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (Assumptions : Value Input F → Prop)
-    (Spec : Value Input F → Witness F → Value Output F → Prop) : Prop :=
+    (Spec : Value Input F → Value Output F → Witness F → Prop) : Prop :=
   ∀ (self : RegionIndex) (env : Placed Environment F) (input : Var Input F),
   Assumptions (eval env input) →
   RegionOperations.Constraints env.place self env.env ((main input).operations self) →
-  Spec (eval env input) (extract input self env)
-    (eval env (ElaboratedRegionCircuit.output main input self))
+  Spec (eval env input) (eval env (ElaboratedRegionCircuit.output main input self))
+    (extract input self env)
 
 /-- Completeness of a region-level circuit (prover view). -/
 def FormalRegionCircuit.Completeness
@@ -219,8 +219,7 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap
     [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
   main : Var Input F → RegionCircuit F (Var Output F)
-  elaborated : ElaboratedRegionCircuit F Input Output main := by
-    first | infer_instance | (constructor <;> intro _ _ <;> rfl)
+  elaborated : ElaboratedRegionCircuit F Input Output main := {}
 
   Witness : TypeMap := unit
   inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
@@ -228,7 +227,7 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap
     fun _ _ _ => inhabitedWitness.default
 
   Assumptions : Value Input F → Prop := fun _ => True
-  Spec : Value Input F → Witness F → Value Output F → Prop
+  Spec : Value Input F → Value Output F → Witness F → Prop
   ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
   ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
 

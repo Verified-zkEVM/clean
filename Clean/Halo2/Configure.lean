@@ -142,8 +142,10 @@ The gate is registered in creation order; its body is pure data (see module docs
 
 TODO surface syntax: decide when porting the first chip whether to mirror
 `Constraints::with_selector` more literally. -/
-def createGate (gate : Gate F) : Configure F Unit :=
-  fun cs => ((), { cs with gates := cs.gates ++ [gate] })
+def createGate (name : String) (selector : Selector) (constraints : List (Constraint F)) : Configure F (Gate F) :=
+  fun cs =>
+    let gate : Gate F := { name, selector, constraints }
+    (gate, { cs with gates := cs.gates ++ [gate] })
 
 /-- Rust: `meta.lookup(|meta| ...)`. SKETCH. -/
 def lookup (arg : LookupArgument F) : Configure F Unit :=

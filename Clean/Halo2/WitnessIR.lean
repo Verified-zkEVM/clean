@@ -73,20 +73,20 @@ variable {value : TypeMap} [ProvableType value]
 @[circuit_norm] lemma proverValue_of_unconstrained :
     Halo2.ProverValue (Unconstrained value) F = value F := rfl
 
-instance [Field F] : Inhabited (Halo2.Var (Unconstrained value) F) :=
+instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
   ⟨(fromElements default : value (FExpr F))⟩
 
 @[circuit_norm] lemma eval_unconstrained [FiniteField F]
-    (pe : Placed Environment F) (v : Halo2.Var (Unconstrained value) F) :
+    (pe : Placed Environment F) (v : Var (Unconstrained value) F) :
     eval pe v = () := rfl
 
 @[circuit_norm] lemma eval_unconstrained_prover [FiniteField F]
-    (pe : Placed ProverEnvironment F) (v : Halo2.Var (Unconstrained value) F) :
+    (pe : Placed ProverEnvironment F) (v : Var (Unconstrained value) F) :
     eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
 
 /-- Construct a prover-only input from its witness program. -/
 @[circuit_norm]
-def unconstrained (program : value (FExpr F)) : Halo2.Var (Unconstrained value) F := program
+def unconstrained (program : value (FExpr F)) : Var (Unconstrained value) F := program
 
 end Unconstrained
 

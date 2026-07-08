@@ -71,6 +71,18 @@ abbrev CircuitType (M : TypeMap) :=
 @[reducible] def ProverValue (M : TypeMap) [CircuitType M] : TypeMap :=
   CircuitTypeOver.ProverValue (Env := Placed Environment) (PEnv := Placed ProverEnvironment) (M := M)
 
+namespace CircuitType
+
+/-- Verifier-view evaluation of a halo2 circuit variable, given a placement + env. -/
+instance verifierEval M [CircuitType M] : Eval (Placed Environment F) (Var M F) (Value M F) where
+  eval := CircuitType.evalVerifier
+
+/-- Prover-view evaluation (hints visible). -/
+instance proverEval M [CircuitType M] : Eval (Placed ProverEnvironment F) (Var M F) (ProverValue M F) where
+  eval := CircuitType.evalProver
+
+end CircuitType
+
 namespace ProvableType
 
 /--
@@ -90,12 +102,6 @@ def eval (place : RegionIndex → ℕ) (env : Environment F) (x : M (AssignedCel
   let values := cells.map (AssignedCell.eval place env)
   fromElements values
 
-/-- Evaluating a single-cell variable reads that cell. -/
-@[circuit_norm]
-lemma eval_field (place : RegionIndex → ℕ) (env : Environment F) (x : AssignedCell F) :
-    eval (M := field) place env x = AssignedCell.eval place env x := by
-  with_unfolding_all rfl
-
 /--
 `ProvableType`s are halo2 `CircuitType`s: verifier- and prover-value coincide with the
 input type, and `Var` is `M (AssignedCell ·)`. Halo2 counterpart of main Clean's
@@ -105,8 +111,19 @@ input type, and `Var` is `M (AssignedCell ·)`. Halo2 counterpart of main Clean'
   Var F := M (AssignedCell F)
   Value := M
   ProverValue := M
-  evalVerifier pe v := eval pe.place pe.env v
-  evalProver pe v := eval pe.place pe.env.toEnvironment v
+  evalVerifier pe v := ProvableType.eval pe.place pe.env v
+  evalProver pe v := ProvableType.eval pe.place pe.env.toEnvironment v
+
+instance : Eval (Placed Environment F) (AssignedCell F) F := CircuitType.verifierEval field
+instance : Eval (Placed ProverEnvironment F) (AssignedCell F) F := CircuitType.proverEval field
+instance : Eval (Placed Environment F) (M (AssignedCell F)) (M F) := CircuitType.verifierEval M
+instance : Eval (Placed ProverEnvironment F) (M (AssignedCell F)) (M F) := CircuitType.proverEval M
+
+/-- Evaluating a single-cell variable reads that cell. -/
+@[circuit_norm]
+lemma eval_field (env : Placed Environment F) (x : AssignedCell F) :
+    Eval.eval env x = AssignedCell.eval env.place env.env x := by
+  with_unfolding_all rfl
 
 end ProvableType
 
