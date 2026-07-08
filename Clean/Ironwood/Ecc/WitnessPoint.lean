@@ -98,10 +98,9 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
     simp only [circuit_norm, pointGate, curveEqn] at hc
     have hx := hc _ (Or.inl rfl)
     have hy := hc _ (Or.inr rfl)
-    simp only [circuit_norm, querySelector, queryAdvice, Query.eval, AssignedCell.eval,
-      add_zero, pallasB, Orchard.pallasB] at hx hy
+    simp only [circuit_norm, Query.eval, add_zero] at hx hy
     rw [Point.eval_eq]
-    simp only [circuit_norm, AssignedCell.eval, add_zero]
+    simp only [circuit_norm, AssignedCell.eval]
     exact point_valid hx hy
 
   completeness := by
@@ -115,13 +114,12 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
     · simp only [circuit_norm, pointGate, curveEqn]
       intro c hc
       rcases hc with rfl | rfl <;>
-        simp only [circuit_norm, querySelector, queryAdvice, Query.eval, AssignedCell.eval,
+        simp only [circuit_norm, Query.eval,
           add_zero, Nat.cast_add, pallasB, Orchard.pallasB]
       · rw [hwx, hwy]; linear_combination hpx
       · rw [hwx, hwy]; linear_combination hpy
     · rw [Point.eval_eq_prover, Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq]
-      simp only [circuit_norm, ProvableType.eval_field_prover, AssignedCell.eval, add_zero,
-        Nat.cast_add]
+      simp only [circuit_norm, ProvableType.eval_field_prover, AssignedCell.eval]
       rw [hwx, hwy]
 
 end WitnessPoint
