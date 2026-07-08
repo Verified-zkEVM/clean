@@ -23,7 +23,7 @@ them, never speculatively. Next known additions: `Constraints.Soundness` over `+
 
 namespace Halo2
 
-variable {F : Type} [Field F] {α β : Type}
+variable {F : Type} [FiniteField F] {α β : Type}
 
 /-! ## Accessor algebra over the `Circuit` monad -/
 
@@ -89,19 +89,19 @@ theorem nextRegionIndex_assignRegion (name : String) (body : RegionCircuit F α)
 
 @[circuit_norm]
 theorem operations_assignAdvice (col : Column .advice) (row : ℕ)
-    (compute : Placed ProverEnvironment F → F) (self : RegionIndex) :
+    (compute : WitgenIR F 1) (self : RegionIndex) :
     (assignAdvice col row compute).operations self = [.assignAdvice col row compute] := rfl
 
 @[circuit_norm]
 theorem output_assignAdvice (col : Column .advice) (row : ℕ)
-    (compute : Placed ProverEnvironment F → F) (self : RegionIndex) :
+    (compute : WitgenIR F 1) (self : RegionIndex) :
     (assignAdvice col row compute).output self = ⟨⟨self, row, col.toAny⟩⟩ := rfl
 
 @[circuit_norm]
 theorem operations_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
     (self : RegionIndex) :
     (copyAdvice src col row).operations self
-      = [.assignAdvice col row fun pe => src.eval pe.place pe.env.toEnvironment,
+      = [.assignAdvice col row (.ofFExpr (.expr src)),
          .constrainEqual ⟨self, row, col.toAny⟩ src.cell] := rfl
 
 @[circuit_norm]

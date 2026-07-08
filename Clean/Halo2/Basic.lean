@@ -35,13 +35,13 @@ Rust reference: `halo2_proofs/src/circuit.rs` (`Region`, `Layouter` APIs).
 
 namespace Halo2
 
-variable {F : Type} [Field F] {α β : Type}
+variable {F : Type} [FiniteField F] {α β : Type}
 
 /-! ## Region-level circuits -/
 
 /-- A circuit fragment inside one region: knows its region's index, accumulates
 region-level operations. -/
-def RegionCircuit (F : Type) [Field F] (α : Type) :=
+def RegionCircuit (F : Type) [FiniteField F] (α : Type) :=
   RegionIndex → α × List (RegionOperation F)
 
 namespace RegionCircuit
@@ -66,7 +66,7 @@ end RegionCircuit
 /-- Witness a value into an advice cell. Rust: `region.assign_advice(col, offset, to)`
 (`to` is a reserved token in Lean, hence `compute`). Returns the assigned cell; adds no
 constraint. -/
-def assignAdvice (col : Column .advice) (row : ℕ) (compute : Placed ProverEnvironment F → F) :
+def assignAdvice (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) :
     RegionCircuit F (AssignedCell F) :=
   fun self => (⟨⟨self, row, col.toAny⟩⟩, [.assignAdvice col row compute])
 
@@ -82,7 +82,7 @@ def copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ) :
   fun self =>
     let cell : Cell := ⟨self, row, col.toAny⟩
     (⟨cell⟩, [
-      .assignAdvice col row fun pe => src.eval pe.place pe.env.toEnvironment,
+      .assignAdvice col row (.ofFExpr (.expr src)),
       .constrainEqual cell src.cell])
 
 /-- Rust: `region.constrain_equal(a, b)`. -/
@@ -102,7 +102,7 @@ def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=
 
 /-- A layouter-level circuit: threads the next region index (like Clean's `offset`) and
 accumulates layouter operations. -/
-def Circuit (F : Type) [Field F] (α : Type) :=
+def Circuit (F : Type) [FiniteField F] (α : Type) :=
   RegionIndex → α × List (Operation F) × RegionIndex
 
 namespace Circuit

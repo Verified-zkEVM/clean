@@ -1,5 +1,6 @@
 import Clean.Halo2.Configure
 import Clean.Halo2.Provable
+import Clean.Halo2.WitnessIR
 
 /-!
 # Halo2 synthesize-layer operations — DESIGN SKETCH
@@ -59,12 +60,13 @@ variable {F : Type}
 
 /-- A raw operation inside a region, at region-local rows.
 
-Witness computations take a `Placed ProverEnvironment` (they may read other cells, which
-requires the placement). SKETCH: plain functions until the witgen IR hookup. -/
+Witness values are witgen-IR programs over cell atoms (`Halo2.WitgenIR F 1`), the same
+exportable mechanism as main Clean; `.native` remains the non-serializable escape
+hatch. -/
 inductive FlatRegionOperation (F : Type) where
   /-- Witness a value into an advice cell at a local row. Rust: `region.assign_advice`.
   Adds no constraint. -/
-  | assignAdvice : Column .advice → ℕ → (Placed ProverEnvironment F → F) → FlatRegionOperation F
+  | assignAdvice : Column .advice → ℕ → WitgenIR F 1 → FlatRegionOperation F
   /-- Assign a fixed cell. Rust: `region.assign_fixed`. Pins the fixed column's value
   (fixed values are circuit data; the assignment is checked by the semantics and feeds
   the VK's fixed columns). -/
@@ -90,7 +92,7 @@ inductive FlatOperation (F : Type) where
 /-! ## Ground-truth semantics of flat operations -/
 
 section FlatSemantics
-variable [Field F]
+variable [FiniteField F]
 
 /-- Read a (possibly foreign) cell. -/
 def Cell.eval (place : RegionIndex → ℕ) (env : Environment F) (c : Cell) : F :=
@@ -125,7 +127,7 @@ the value computed by its witness program (main Clean: `ExtendsVector`). -/
 def FlatRegionOperation.ExtendsWitness (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) : FlatRegionOperation F → Prop
   | .assignAdvice c row compute =>
-      env.get c.toAny ((place self + row : ℕ) : ℤ) = compute ⟨place, env⟩
+      env.get c.toAny ((place self + row : ℕ) : ℤ) = (compute.eval ⟨place, env⟩)[0]
   | _ => True
 
 /-- All-regions witness condition for raw layouter operations. -/
@@ -141,7 +143,7 @@ end FlatSemantics
 /-! ## Subcircuits: the proof boundary -/
 
 section Subcircuits
-variable [Field F]
+variable [FiniteField F]
 
 /--
 A region-level subcircuit: a fragment used *inside* a region (e.g. `add_incomplete`'s
@@ -155,7 +157,7 @@ package, which instantiates them at concrete cells).
 `self` is the region this fragment lives in (the analogue of main Clean's `offset`
 index): the fragment shares its caller's region.
 -/
-structure RegionSubcircuit (F : Type) [Field F] (self : RegionIndex) where
+structure RegionSubcircuit (F : Type) [FiniteField F] (self : RegionIndex) where
   ops : List (FlatRegionOperation F)
 
   Assumptions : (RegionIndex → ℕ) → Environment F → Prop
@@ -184,7 +186,7 @@ its contract. Port of main Clean's `Subcircuit`; `i₀` is the region index it i
 instantiated at, and `regionCount` (the `localLength` analogue) is how many region
 indices it consumes.
 -/
-structure Subcircuit (F : Type) [Field F] (i₀ : RegionIndex) where
+structure Subcircuit (F : Type) [FiniteField F] (i₀ : RegionIndex) where
   ops : List (FlatOperation F)
 
   Assumptions : (RegionIndex → ℕ) → Environment F → Prop
@@ -219,8 +221,8 @@ end Subcircuits
 calls. The subcircuit's region index is its type index; consistency with the ambient
 region (`SubcircuitsConsistent` in main Clean) is maintained by the circuit monad and
 ported with the formal-circuit layer. -/
-inductive RegionOperation (F : Type) [Field F] where
-  | assignAdvice : Column .advice → ℕ → (Placed ProverEnvironment F → F) → RegionOperation F
+inductive RegionOperation (F : Type) [FiniteField F] where
+  | assignAdvice : Column .advice → ℕ → WitgenIR F 1 → RegionOperation F
   | assignFixed : Column .fixed → ℕ → F → RegionOperation F
   | enableGate : Gate F → ℕ → RegionOperation F
   | constrainEqual : Cell → Cell → RegionOperation F
@@ -229,13 +231,13 @@ inductive RegionOperation (F : Type) [Field F] where
 
 /-- A layouter-level operation: regions (with structured bodies), instance copies, and
 layouter-level subcircuit calls. -/
-inductive Operation (F : Type) [Field F] where
+inductive Operation (F : Type) [FiniteField F] where
   | region : String → List (RegionOperation F) → Operation F
   | constrainInstance : Cell → Column .instance → ℕ → Operation F
   | subcircuit : {i₀ : RegionIndex} → Subcircuit F i₀ → Operation F
 
 section StructuredSemantics
-variable [Field F]
+variable [FiniteField F]
 
 /-- Flatten a region operation (subcircuits contribute their flattened ops). -/
 def RegionOperation.toFlat : RegionOperation F → List (FlatRegionOperation F)
