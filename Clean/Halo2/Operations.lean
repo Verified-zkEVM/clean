@@ -111,9 +111,9 @@ analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal.
 Counts through nested subcircuits. -/
 def Operations.regionCount : Operations F → ℕ
   | [] => 0
-  | .region _ _ :: rest => 1 + Operations.regionCount rest
-  | .subcircuit s :: rest => Operations.regionCount s + Operations.regionCount rest
-  | .constrainInstance _ _ _ :: rest => Operations.regionCount rest
+  | .region _ _ :: ops => 1 + Operations.regionCount ops
+  | .subcircuit ops' :: ops => Operations.regionCount ops' + Operations.regionCount ops
+  | .constrainInstance _ _ _ :: ops => Operations.regionCount ops
 
 section Semantics
 variable [FiniteField F]
@@ -131,22 +131,22 @@ boundary: parent hypotheses keep the chunk folded, and the per-circuit forward l
 def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) : RegionOperation F → Prop
   | .assignAdvice _ _ _ => True
-  | .assignFixed c row v => env.get c.toAny ((place self + row : ℕ) : ℤ) = v
+  | .assignFixed col row v => env.get col (place self + row : ℕ) = v
   | .enableGate gate row => ∀ c ∈ gate.constraints,
       -- compiled polys vanish under `own selector ↦ 1`; sound because genuine selectors
       -- never occur in a foreign gate's polynomials (see halo2-selector-survey.md)
       c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
-        ((place self + row : ℕ) : ℤ)) = 0
+        (place self + row : ℕ)) = 0
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
-  | .subcircuit s => RegionOperations.Constraints place self env s
+  | .subcircuit ops => RegionOperations.Constraints place self env ops
 
 /-- Constraints of a list of region operations. -/
 def RegionOperations.Constraints (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) : RegionOperations F → Prop
   | [] => True
-  | op :: rest =>
-      op.Constraints place self env ∧ RegionOperations.Constraints place self env rest
+  | op :: ops =>
+      op.Constraints place self env ∧ RegionOperations.Constraints place self env ops
 
 end
 
@@ -162,12 +162,12 @@ region counter by their `regionCount`.
 def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
     Operations F → (i : RegionIndex) → Prop
   | [], _ => True
-  | .region _ ops :: rest, i =>
-      RegionOperations.Constraints place i env ops ∧ Constraints place env rest (i + 1)
-  | .constrainInstance c col row :: rest, i =>
-      c.eval place env = env.get col.toAny row ∧ Constraints place env rest i
-  | .subcircuit s :: rest, i =>
-      Constraints place env s i ∧ Constraints place env rest (i + Operations.regionCount s)
+  | .region _ ops' :: ops, i =>
+      ops'.Constraints place i env ∧ Constraints place env ops (i + 1)
+  | .constrainInstance cell col row :: ops, i =>
+      cell.eval place env = env.get col row ∧ Constraints place env ops i
+  | .subcircuit ops' :: ops, i =>
+      Constraints place env ops' i ∧ Constraints place env ops (i + Operations.regionCount ops')
 
 mutual
 
@@ -175,17 +175,17 @@ mutual
 the value computed by its witness program (main Clean: `ExtendsVector`). -/
 def RegionOperation.ExtendsWitness (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) : RegionOperation F → Prop
-  | .assignAdvice c row compute =>
-      env.get c.toAny ((place self + row : ℕ) : ℤ) = (compute.eval ⟨place, env⟩)[0]
-  | .subcircuit s => RegionOperations.ExtendsWitnesses place self env s
+  | .assignAdvice col row compute =>
+      env.get col (place self + row : ℕ) = (compute.eval ⟨place, env⟩)[0]
+  | .subcircuit ops => RegionOperations.ExtendsWitnesses place self env ops
   | _ => True
 
 /-- Witness condition for a list of region operations. -/
 def RegionOperations.ExtendsWitnesses (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) : RegionOperations F → Prop
   | [] => True
-  | op :: rest =>
-      op.ExtendsWitness place self env ∧ RegionOperations.ExtendsWitnesses place self env rest
+  | op :: ops =>
+      op.ExtendsWitness place self env ∧ RegionOperations.ExtendsWitnesses place self env ops
 
 end
 
@@ -193,12 +193,11 @@ end
 def ExtendsWitnesses (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
     Operations F → (i : RegionIndex) → Prop
   | [], _ => True
-  | .region _ ops :: rest, i =>
-      RegionOperations.ExtendsWitnesses place i env ops ∧ ExtendsWitnesses place env rest (i + 1)
-  | .constrainInstance _ _ _ :: rest, i => ExtendsWitnesses place env rest i
-  | .subcircuit s :: rest, i =>
-      ExtendsWitnesses place env s i ∧ ExtendsWitnesses place env rest (i + Operations.regionCount s)
-
+  | .region _ ops' :: ops, i =>
+      ops'.ExtendsWitnesses place i env ∧ ExtendsWitnesses place env ops (i + 1)
+  | .constrainInstance _ _ _ :: ops, i => ExtendsWitnesses place env ops i
+  | .subcircuit ops' :: ops, i =>
+      ExtendsWitnesses place env ops' i ∧ ExtendsWitnesses place env ops (i + Operations.regionCount ops')
 end Semantics
 
 end Halo2
