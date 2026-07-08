@@ -48,7 +48,8 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     -- prover-only hint is connected to the generated witness by `h_env`.
     fail_if_success (exact input)
     guard_hyp h_input :
-      input_var.x.eval env.toEnvironment = input_x ∧ (Witgen.FExpr.eval _ _ : F) = input_inverse
+      input_var.x.eval env.toEnvironment = input_x ∧
+        (Witgen.FExprOver.eval (Env := ProverEnvironment F) (V := Expression F) _ _ : F) = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
