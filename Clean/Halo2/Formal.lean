@@ -55,7 +55,7 @@ class ElaboratedCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
   regionCount : Var Input F → ℕ
   output_eq : ∀ input i, output input i = (main input).output i := by intro _ _; rfl
   regionCount_eq : ∀ input i,
-    regionCount input = Operations.regionCount ((main input).operations i) := by intro _ _; rfl
+    regionCount input = ((main input).operations i).regionCount := by intro _ _; rfl
 
 section Statements
 variable [CircuitType Input] [CircuitType Output]
@@ -111,9 +111,12 @@ structure FormalCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
+  inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
+
   /-- Constructive extractor: the high-level witness from the low-level one
   (placement + environment), given the input variable and starting region index. -/
-  extract : Var Input F → RegionIndex → Placed Environment F → Witness F
+  extract : Var Input F → RegionIndex → Placed Environment F → Witness F :=
+    fun _ _ _ => inhabitedWitness.default
 
   /-- Verifier-view precondition (hints erased). -/
   Assumptions : Value Input F → Prop := fun _ => True

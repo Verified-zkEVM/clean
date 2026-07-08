@@ -42,7 +42,7 @@ variable {F : Type} [FiniteField F] {α β : Type}
 /-- A circuit fragment inside one region: knows its region's index, accumulates
 region-level operations. -/
 def RegionCircuit (F : Type) [FiniteField F] (α : Type) :=
-  RegionIndex → α × List (RegionOperation F)
+  RegionIndex → α × RegionOperations F
 
 namespace RegionCircuit
 
@@ -54,7 +54,7 @@ instance : Monad (RegionCircuit F) where
     (b, ops ++ ops')
 
 /-- The operations of a region circuit, given its region's index. -/
-def operations (body : RegionCircuit F α) (self : RegionIndex) : List (RegionOperation F) :=
+def operations (body : RegionCircuit F α) (self : RegionIndex) : RegionOperations F :=
   (body self).2
 
 /-- The output of a region circuit, given its region's index. -/
@@ -108,7 +108,7 @@ def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=
 /-- A layouter-level circuit: threads the next region index (like Clean's `offset`) and
 accumulates layouter operations. -/
 def Circuit (F : Type) [FiniteField F] (α : Type) :=
-  RegionIndex → α × List (Operation F) × RegionIndex
+  RegionIndex → α × Operations F × RegionIndex
 
 namespace Circuit
 
@@ -120,7 +120,7 @@ instance : Monad (Circuit F) where
     (b, ops ++ ops', i'')
 
 /-- The operations of a circuit, from a given initial region index. -/
-def operations (circuit : Circuit F α) (i : RegionIndex := 0) : List (Operation F) :=
+def operations (circuit : Circuit F α) (i : RegionIndex := 0) : Operations F :=
   (circuit i).2.1
 
 /-- The output of a circuit, from a given initial region index. -/
@@ -152,6 +152,6 @@ over `place` (and the initial region index); the final statement instantiates `p
 with the floor planner's output. -/
 def Circuit.Constraints (place : RegionIndex → ℕ) (env : Environment F)
     (circuit : Circuit F α) : Prop :=
-  Halo2.Constraints place env (circuit.operations) 0
+  Halo2.Constraints place env circuit.operations 0
 
 end Halo2
