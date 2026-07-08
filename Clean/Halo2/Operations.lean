@@ -162,24 +162,21 @@ region is a wellformedness condition maintained by the circuit monad.
 -/
 structure RegionSubcircuit (F : Type) where
   ops : List (FlatRegionOperation F)
-  /-- Rows this fragment uses within the region, from its base offset (part of the
-  region's shape for the floor planner). TODO consistency field, like `localLength_eq`. -/
-  usedRows : ℕ
 
 /--
 A layouter-level subcircuit: a whole multi-region gadget (e.g. ECC mul). Thin data
-(issue #358); `regionCount` (the `localLength` analogue) is how many region indices the
-ops consume, recorded separately for fast simplification.
-
-No baked consistency proof: `regionCount` matching the operations is guaranteed by the
-concrete subcircuit-producing constructors (`toSubcircuit`, formal-circuit layer) and
-discharged by `rfl`/`decide` there; lemmas that need it (e.g. the flattening
-equivalence) take it as a hypothesis. Note the semantics and the floor planner agree
-with each other regardless, since both read the recorded field.
+(issue #358): just the flattened child operations — everything else (`regionCount`,
+region shapes, the contract) is computed from them or lives on the formal-circuit
+package. In proofs, subcircuits appear as `(C …).toSubcircuit` and per-circuit lemmas
+give `regionCount` etc. as literals, so no cached fields are needed.
 -/
 structure Subcircuit (F : Type) where
   ops : List (FlatOperation F)
-  regionCount : ℕ
+
+/-- Number of region indices the subcircuit's ops consume (the `localLength`
+analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal. -/
+def Subcircuit.regionCount (s : Subcircuit F) : ℕ :=
+  (s.ops.filter fun op => match op with | .region _ _ => true | _ => false).length
 
 end Subcircuits
 
