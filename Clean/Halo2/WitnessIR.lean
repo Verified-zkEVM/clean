@@ -27,6 +27,8 @@ instance [Field F] : Witgen.WitgenEnv F (Placed ProverEnvironment F) (AssignedCe
 
 /-- Halo2 field-sorted witness expressions: variables are cell references. -/
 abbrev FExpr (F : Type) := Witgen.FExprOver F (AssignedCell F)
+
+instance [Field F] : Inhabited (FExpr F) := ⟨.const 0⟩
 /-- Halo2 Nat-sorted witness expressions. -/
 abbrev NExpr (F : Type) := Witgen.NExprOver F (AssignedCell F)
 /-- Halo2 witness conditions. -/
@@ -34,5 +36,60 @@ abbrev BExpr (F : Type) := Witgen.BExprOver F (AssignedCell F)
 /-- Halo2 witness-generation programs. -/
 abbrev WitgenIR (F : Type) :=
   Witgen.WitgenIROver F (Placed ProverEnvironment F) (AssignedCell F)
+
+/-!
+## Prover-only inputs
+
+`Unconstrained value` is a prover-only circuit input (halo2's `Value<T>`): the verifier
+view is erased to `Unit`, the prover view is a witness program producing `value F`. Port
+of main Clean's `Unconstrained`; the caller's program typically reads from the prover
+hints (`hintGet`). Used for `Value<Affine>`-style inputs that the gadget witnesses
+internally.
+
+Minimal version: the program is a plain `value (FExpr F)` (a provable value of witness
+expressions). The `let`-step builder monad (`Witgen.M`, for shared intermediate values)
+is not yet ported — a follow-up when complex witness programs land; for a `Value<Affine>`
+input the plain form suffices.
+-/
+
+/-- Marker `TypeMap` for a prover-only input carrying a `value`. -/
+structure Unconstrained (value : TypeMap) (F : Type) where
+  program : value (FExpr F)
+
+namespace Unconstrained
+variable {value : TypeMap} [ProvableType value]
+
+@[reducible] instance : CircuitType (Unconstrained value) where
+  Var F := value (FExpr F)
+  Value := unit
+  ProverValue := value
+  evalVerifier _ _ := ()
+  evalProver pe program := Witgen.eval { env := pe } program
+
+@[circuit_norm] lemma var_of_unconstrained :
+    Halo2.Var (Unconstrained value) F = value (FExpr F) := rfl
+@[circuit_norm] lemma value_of_unconstrained :
+    Halo2.Value (Unconstrained value) F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrained :
+    Halo2.ProverValue (Unconstrained value) F = value F := rfl
+
+instance [Field F] : Inhabited (Halo2.Var (Unconstrained value) F) :=
+  ⟨(fromElements default : value (FExpr F))⟩
+
+@[circuit_norm] lemma eval_unconstrained [FiniteField F]
+    (pe : Placed Environment F) (v : Halo2.Var (Unconstrained value) F) :
+    eval pe v = () := rfl
+
+@[circuit_norm] lemma eval_unconstrained_prover [FiniteField F]
+    (pe : Placed ProverEnvironment F) (v : Halo2.Var (Unconstrained value) F) :
+    eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
+
+/-- Construct a prover-only input from its witness program. -/
+@[circuit_norm]
+def unconstrained (program : value (FExpr F)) : Halo2.Var (Unconstrained value) F := program
+
+end Unconstrained
+
+export Unconstrained (unconstrained)
 
 end Halo2
