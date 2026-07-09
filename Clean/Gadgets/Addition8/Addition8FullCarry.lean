@@ -127,12 +127,12 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, Operations.forAll, Inputs.mk.injEq]
-    intro env env' h_agrees
+    intros
     -- this needs to somehow be done automatically by a tactic
     apply FormalAssertion.toSubcircuit_computableWitnesses
     simp only [circuit_norm]
     constructor
-    · -- this is a simple, user-facing proof obligation
+    · -- this is a simple proof obligation that can be automated
       linarith
     -- this branch can be dispatched by `circuit_norm` once computable witnesses is wired in
     simp only [circuit_norm, FormalCircuitBase.ComputableWitnesses]
