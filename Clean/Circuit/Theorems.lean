@@ -399,6 +399,16 @@ theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOp
 end FlatOperation
 
 namespace Operations
+theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
+    (forAll n (c.implies c') ops) → (forAll n c ops → forAll n c' ops) := by
+  simp only [Condition.implies]
+  intro h
+  induction ops generalizing n with
+  | nil => simp [forAll_empty]
+  | cons op ops ih =>
+    specialize ih (op.localLength + n)
+    cases op <;> simp_all [forAll_cons, Condition.apply]
+
 lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F) :
     FlatOperation.forAll n condition ops.toFlat ↔ ops.forAllFlat n condition := by
   induction ops using Operations.induct generalizing n with
@@ -512,7 +522,9 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (h
   intro h_computable
   simp_all only [proverEnvironment, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
     ←Operations.forAll_toFlat_iff, ProverEnvironment.UsesLocalWitnesses]
-  exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
+  apply FlatOperation.proverEnvironment_usesLocalWitnesses init
+  simp_rw [Operations.forAll_toFlat_iff]
+  exact h_computable
 
 lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvironment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=

@@ -429,10 +429,14 @@ because we have all necessary assumptions at each circuit operation step.
  -/
 def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
-  circuit.main input |>.operations n |>.forAllFlat n {
+  circuit.main input |>.operations n |>.forAll n {
     witness n _ compute :=
       env.AgreesBelow n env' → env.hint = env'.hint → env.data = env'.data →
-      eval env input = eval env' input → compute.eval env = compute.eval env' }
+      eval env input = eval env' input → compute.eval env = compute.eval env'
+    subcircuit n _ subcircuit :=
+      eval env input = eval env' input →
+      subcircuit.ComputableWitnesses n env env'
+    }
 
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
@@ -443,17 +447,37 @@ lemma computableWitnesses_implies {circuit : FormalCircuitBase F β α} :
   intro h_computable n input input_only_accesses_n env env'
   specialize h_computable n input env env'
   specialize input_only_accesses_n env env'
-  simp only [Operations.ComputableWitnesses, ←Operations.forAll_toFlat_iff] at *
-  generalize ((circuit.main input).operations n).toFlat = ops at *
+  simp only [Operations.ComputableWitnesses] at *
+  generalize ((circuit.main input).operations n) = ops at *
   revert h_computable
-  apply FlatOperation.forAll_implies
-  simp only [Condition.implies, Condition.ignoreSubcircuit, imp_self]
-  induction ops using FlatOperation.induct generalizing n with
+  apply Operations.forAll_implies
+  simp only [Condition.implies, imp_self]
+  induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | assert | lookup | interact => simp_all [FlatOperation.forAll]
+  | assert | lookup | interact => simp_all [Operations.forAll]
   | witness m c ops ih =>
-    simp_all only [FlatOperation.forAll, forall_const, implies_true, true_and]
+    simp_all only [Operations.forAll, forall_const, implies_true, true_and]
     apply ih (m + n)
+    intro h_agrees
+    apply input_only_accesses_n
+    exact ProverEnvironment.agreesBelow_of_le h_agrees (by linarith)
+  | subcircuit s ops ih =>
+    simp only [Operations.forAll]
+    constructor
+    · clear ih
+      simp only [Subcircuit.ComputableWitnesses]
+      generalize s.ops.toFlat = ops at *
+      induction ops using FlatOperation.induct generalizing n with
+      | empty => tauto
+      | assert | lookup | interact => simp_all [FlatOperation.forAll]
+      | witness m c ops ih =>
+        specialize ih (m + n)
+        have : (ProverEnvironment.AgreesBelow (m + n) env env' → eval env input = eval env' input) := by
+          intro h_agrees
+          apply input_only_accesses_n
+          exact ProverEnvironment.agreesBelow_of_le h_agrees (by linarith)
+        simp_all only [FlatOperation.forAll, implies_true, true_and]
+    apply ih (s.localLength + n)
     intro h_agrees
     apply input_only_accesses_n
     exact ProverEnvironment.agreesBelow_of_le h_agrees (by linarith)
@@ -476,9 +500,9 @@ end FormalCircuitBase
 theorem FormalCircuit.toSubcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (input : Var β F) (n : ℕ) :
   ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
-    (subcircuit circuit input).ComputableWitnesses n := by
+    ∀ env env', (circuit.toSubcircuit n input).ComputableWitnesses n env env' := by
   intro h env env'
-  simp only [circuit_norm, FormalCircuit.toSubcircuit, Operations.ComputableWitnesses,
+  simp only [circuit_norm, FormalCircuit.toSubcircuit, Subcircuit.ComputableWitnesses,
     Operations.forAllFlat, Operations.forAll_toFlat_iff]
   exact circuit.compose_computableWitnesses input n h env env'
 

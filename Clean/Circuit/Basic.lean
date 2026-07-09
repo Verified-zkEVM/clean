@@ -381,14 +381,22 @@ def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
   ∀ env env', env.AgreesBelow n env' → f env = f env'
 
+def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
+  FlatOperation.forAll n { witness n _ compute := env.AgreesBelow n env' →
+    env.hint = env'.hint → env.data = env'.data → compute.eval env = compute.eval env' } s.ops.toFlat
+
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset,
 plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' →
-    env.hint = env'.hint → env.data = env'.data → compute.eval env = compute.eval env' }
+  ops.forAll n {
+    witness n _ compute :=
+      env.AgreesBelow n env' → env.hint = env'.hint → env.data = env'.data →
+      compute.eval env = compute.eval env'
+    subcircuit n _ s := s.ComputableWitnesses n env env'
+  }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
