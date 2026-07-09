@@ -132,11 +132,13 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
     (env : Environment F) : RegionOperation F → Prop
   | .assignAdvice _ _ _ => True
   | .assignFixed col row v => env.get col (place self + row : ℕ) = v
-  | .enableGate gate row => ∀ c ∈ gate.constraints,
+  | .enableGate gate row =>
       -- compiled polys vanish under `own selector ↦ 1`; sound because genuine selectors
-      -- never occur in a foreign gate's polynomials (see halo2-selector-survey.md)
-      c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
-        (place self + row : ℕ)) = 0
+      -- never occur in a foreign gate's polynomials (see halo2-selector-survey.md).
+      -- `List.Forall` (not `∀ c ∈ …`) so `circuit_norm` reduces it to a clean conjunction.
+      gate.constraints.Forall fun c =>
+        c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
+          (place self + row : ℕ)) = 0
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
   | .subcircuit ops => RegionOperations.Constraints place self env ops

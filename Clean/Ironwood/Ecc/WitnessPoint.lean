@@ -95,29 +95,23 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
 
   soundness := by
     intro self env input _ hc
-    simp only [circuit_norm, pointGate, curveEqn] at hc
-    have hx := hc _ (Or.inl rfl)
-    have hy := hc _ (Or.inr rfl)
-    simp only [circuit_norm, Query.eval, add_zero] at hx hy
+    simp only [circuit_norm, pointGate, curveEqn, pallasB, Orchard.pallasB] at hc
+    obtain ⟨hx, hy⟩ := hc
     rw [Point.eval_eq]
-    simp only [circuit_norm, AssignedCell.eval]
+    simp only [circuit_norm]
     exact point_valid hx hy
 
   completeness := by
     intro self env input hwit hpa
     obtain ⟨place, penv⟩ := env
-    simp only [circuit_norm, Nat.cast_add] at hwit
+    simp only [circuit_norm] at hwit
     obtain ⟨hwx, hwy⟩ := hwit
     rw [Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq] at hpa
     obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
     refine ⟨?_, ?_⟩
-    · simp only [circuit_norm, pointGate, curveEqn]
-      intro c hc
-      rcases hc with rfl | rfl <;>
-        simp only [circuit_norm, Query.eval,
-          add_zero, Nat.cast_add, pallasB, Orchard.pallasB]
-      · rw [hwx, hwy]; linear_combination hpx
-      · rw [hwx, hwy]; linear_combination hpy
+    · simp only [circuit_norm, pointGate, curveEqn, pallasB, Orchard.pallasB]
+      exact ⟨by rw [hwx, hwy]; linear_combination hpx,
+             by rw [hwx, hwy]; linear_combination hpy⟩
     · rw [Point.eval_eq_prover, Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq]
       simp only [circuit_norm, ProvableType.eval_field_prover, AssignedCell.eval]
       rw [hwx, hwy]

@@ -152,7 +152,7 @@ theorem RegionOperation.constraints_assignAdvice (place : RegionIndex → ℕ) (
 theorem RegionOperation.constraints_enableGate (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) (gate : Gate F) (row : ℕ) :
     (RegionOperation.enableGate gate row).Constraints place self env
-      = ∀ c ∈ gate.constraints,
+      = gate.constraints.Forall fun c =>
           c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
             (place self + row : ℕ)) = 0 := rfl
 
@@ -168,8 +168,9 @@ theorem RegionOperation.constraints_subcircuit (place : RegionIndex → ℕ) (se
     (RegionOperation.subcircuit ops).Constraints place self env
       = RegionOperations.Constraints place self env ops := rfl
 
--- `∀ c ∈ (a :: l), …` — unfold membership over a concrete constraint list
-attribute [circuit_norm] List.forall_mem_cons List.forall_mem_nil
+-- `List.Forall` over a concrete list decomposes into a conjunction; `add_zero` clears
+-- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.
+attribute [circuit_norm] List.forall_cons add_zero
 
 @[circuit_norm]
 theorem RegionOperations.extendsWitnesses_nil (place : RegionIndex → ℕ) (self : RegionIndex)

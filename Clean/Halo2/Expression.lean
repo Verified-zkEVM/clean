@@ -255,7 +255,9 @@ floor planner's output. -/
 @[circuit_norm]
 def AssignedCell.eval [Field F] (place : RegionIndex → ℕ) (env : Environment F)
     (c : AssignedCell F) : F :=
-  env.get c.cell.column (place c.cell.regionIndex + c.cell.rowOffset)
+  -- cast the ℕ row sum as a whole (not `↑a + ↑b`), so cell reads share the row form
+  -- `↑(place self + rowOffset)` with the query/witness paths (avoids cast-shape mismatch).
+  env.get c.cell.column ((place c.cell.regionIndex + c.cell.rowOffset : ℕ) : ℤ)
 
 /-! ## Lemmas about Expression evaluation -/
 
