@@ -530,6 +530,18 @@ lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvi
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
   fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
 
+@[circuit_norm]
+lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
+    ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) ↔ m < n := by
+  simp only [OnlyAccessedBelow, AgreesBelow]
+  constructor; swap
+  · grind
+  contrapose!
+  intro lt
+  use { get _ := 0, data := default, hint := default }
+  use { get i := if (i = m) then 1 else 0, data := default, hint := default }
+  grind
+
 namespace FlatOperation
 /--
 If all witness generators only access the environment below the current offset, then

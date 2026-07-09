@@ -126,8 +126,16 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAll, Subcircuit.ComputableWitnesses, FlatOperation.forAll, Inputs.mk.injEq]
+    simp_all only [circuit_norm, circuit, main, Operations.forAll, Inputs.mk.injEq]
+    intro env env' h_agrees
+    -- this needs to somehow be done automatically by a tactic
+    apply FormalAssertion.toSubcircuit_computableWitnesses
+    simp only [circuit_norm]
+    constructor
+    · -- this is a simple, user-facing proof obligation
+      linarith
+    -- this branch can be dispatched by `circuit_norm` once computable witnesses is wired in
+    simp only [circuit_norm, FormalCircuitBase.ComputableWitnesses]
 }
 
 end Gadgets.Addition8FullCarry

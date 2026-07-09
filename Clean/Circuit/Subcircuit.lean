@@ -414,12 +414,14 @@ instance [CircuitType α] [CircuitType β] :
 -- subcircuit composability for `ComputableWitnesses`
 
 namespace FormalCircuitBase
+variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+
 /--
 For formal circuits, to prove `ComputableWitnesses`, we assume that the input
 only contains variables below the current offset `n`.
  -/
-def ComputableWitnesses' (circuit : FormalCircuitBase F β α) : Prop :=
-  ∀ (n : ℕ) (input : Var β F),
+def ComputableWitnesses' (circuit : FormalCircuitBase F Input Output) : Prop :=
+  ∀ (n : ℕ) (input : Var Input F),
     ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) →
       (circuit.main input).ComputableWitnesses n
 
@@ -427,8 +429,8 @@ def ComputableWitnesses' (circuit : FormalCircuitBase F β α) : Prop :=
 This reformulation of `ComputableWitnesses'` is easier to prove in a formal circuit,
 because we have all necessary assumptions at each circuit operation step.
  -/
-def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
-  ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
+def ComputableWitnesses (circuit : FormalCircuitBase F Input Output) : Prop :=
+  ∀ (n : ℕ) (input : Var Input F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAll n {
     witness n _ compute :=
       env.AgreesBelow n env' → env.hint = env'.hint → env.data = env'.data →
@@ -441,7 +443,7 @@ def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
 -/
-lemma computableWitnesses_implies {circuit : FormalCircuitBase F β α} :
+lemma computableWitnesses_implies {circuit : FormalCircuitBase F Input Output} :
     circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
   simp only [ComputableWitnesses, ComputableWitnesses']
   intro h_computable n input input_only_accesses_n env env'
@@ -489,22 +491,13 @@ Composability for `ComputableWitnesses`: If
 then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `ComputableWitnesses` in the original sense.
 -/
-theorem compose_computableWitnesses (circuit : FormalCircuitBase F β α) (input : Var β F) (n : ℕ) :
+theorem compose_computableWitnesses (circuit : FormalCircuitBase F Input Output) (input : Var Input F) (n : ℕ) :
   ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
     (circuit.main input).ComputableWitnesses n := by
   intro ⟨ h_input, h_computable ⟩
   apply FormalCircuitBase.computableWitnesses_implies h_computable
   exact h_input
 end FormalCircuitBase
-
-theorem FormalCircuit.toSubcircuit_computableWitnesses (circuit : FormalCircuit F β α)
-    (input : Var β F) (n : ℕ) :
-  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
-    ∀ env env', (circuit.toSubcircuit n input).ComputableWitnesses n env env' := by
-  intro h env env'
-  simp only [circuit_norm, FormalCircuit.toSubcircuit, Subcircuit.ComputableWitnesses,
-    Operations.forAllFlat, Operations.forAll_toFlat_iff]
-  exact circuit.compose_computableWitnesses input n h env env'
 
 -- simplification of subcircuits in `circuit_norm`
 
@@ -522,12 +515,9 @@ theorem FormalCircuit.toSubcircuit_localLength (circuit : FormalCircuit F Input 
 theorem GeneralFormalCircuit.toSubcircuit_localLength (circuit : GeneralFormalCircuit F Input Output) :
   (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := rfl
 
-/--
-Simplifies localLength for GeneralFormalCircuit.WithHint.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_localLength
-    {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (n : ℕ)
     (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
@@ -577,9 +567,6 @@ theorem GeneralFormalCircuit.toSubcircuit_soundness (circuit : GeneralFormalCirc
   simp [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit]
 
-/--
-Simplifies Soundness for GeneralFormalCircuit.WithHint.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_soundness
     {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -608,9 +595,6 @@ theorem GeneralFormalCircuit.toSubcircuit_completeness (circuit : GeneralFormalC
   simp [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit]
 
-/--
-Simplifies Completeness for GeneralFormalCircuit.WithHint.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_completeness
     {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -644,9 +628,6 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses (circuit : GeneralF
   simp [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
     GeneralFormalCircuit.WithHint.toSubcircuit]
 
-/--
-Simplifies ProverSpec for GeneralFormalCircuit.WithHint.toSubcircuit to avoid unfolding the entire subcircuit structure.
--/
 @[circuit_norm]
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses
     {F : Type} [FiniteField F] {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -663,6 +644,39 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_usesLocalWitnesses
 @[circuit_norm]
 theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAssertion F Input) :
   (circuit.toSubcircuit n input_var).ProverSpec env_p = True := rfl
+
+-- (One-directional) simplification lemmas for toSubcircuit.ComputableWitnesses
+
+theorem FormalCircuit.toSubcircuit_computableWitnesses (circuit : FormalCircuit F Input Output) :
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input_var) ∧ circuit.ComputableWitnesses →
+    ∀ env env', (circuit.toSubcircuit n input_var).ComputableWitnesses n env env' := by
+  intro h env env'
+  simp only [circuit_norm, FormalCircuit.toSubcircuit, Subcircuit.ComputableWitnesses,
+    Operations.forAll_toFlat_iff, Operations.forAllFlat]
+  exact circuit.compose_computableWitnesses input_var n h env env'
+
+theorem FormalAssertion.toSubcircuit_computableWitnesses (circuit : FormalAssertion F Input) :
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input_var) ∧ circuit.ComputableWitnesses →
+    ∀ env env', (circuit.toSubcircuit n input_var).ComputableWitnesses n env env' := by
+  intro h env env'
+  simp only [circuit_norm, FormalAssertion.toSubcircuit, Subcircuit.ComputableWitnesses,
+    Operations.forAllFlat, Operations.forAll_toFlat_iff]
+  exact circuit.compose_computableWitnesses input_var n h env env'
+
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F) :
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input_var) ∧ circuit.ComputableWitnesses →
+    ∀ env env', (circuit.toSubcircuit n input_var).ComputableWitnesses n env env' := by
+  intro h env env'
+  simp only [circuit_norm, GeneralFormalCircuit.WithHint.toSubcircuit, Subcircuit.ComputableWitnesses,
+    Operations.forAllFlat, Operations.forAll_toFlat_iff]
+  exact circuit.compose_computableWitnesses input_var n h env env'
+
+theorem GeneralFormalCircuit.toSubcircuit_computableWitnesses (circuit : GeneralFormalCircuit F Input Output) :
+  ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input_var) ∧ circuit.ComputableWitnesses →
+    ∀ env env', (circuit.toSubcircuit n input_var).ComputableWitnesses n env env' :=
+  GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses circuit.toWithHint input_var
 
 -- Simplification lemmas for toSubcircuit channelsWithGuarantees and channelsWithRequirements
 

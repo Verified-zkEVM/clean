@@ -21,6 +21,12 @@ export Expression (var)
 def ProverData (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
+/-- Placeholder `ProverData` that returns an empty array for every key. -/
+def ProverData.empty (F : Type) : ProverData F := fun _ _ => #[]
+
+instance : Inhabited (ProverData F) where
+  default := ProverData.empty F
+
 /-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
