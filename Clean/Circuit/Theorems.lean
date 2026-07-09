@@ -467,7 +467,8 @@ Flat version of the final theorem in this section, `Circuit.proverEnvironment_us
 -/
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
   (∀ (env env' : ProverEnvironment F),
-    forAll init.length { witness n _ c := env.AgreesBelow n env' → c.eval env = c.eval env' } ops) →
+    forAll init.length { witness n _ c := env.AgreesBelow n env' →
+      env.hint = env'.hint → env.data = env'.data → c.eval env = c.eval env' } ops) →
     (proverEnvironment ops hint init).UsesLocalWitnessesFlat init.length ops := by
   simp only [proverEnvironment, ProverEnvironment.UsesLocalWitnessesFlat, ProverEnvironment.ExtendsVector]
   intro h_computable
@@ -494,9 +495,11 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
-      intro j hj
-      simp [ProverEnvironment.fromList, hj,
-        getElem?_dynamicWitnesses_of_lt]
+      · intro j hj
+        simp [ProverEnvironment.fromList, hj,
+          getElem?_dynamicWitnesses_of_lt]
+      · rfl
+      · rfl
 end FlatOperation
 
 /--

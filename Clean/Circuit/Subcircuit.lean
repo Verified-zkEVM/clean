@@ -431,7 +431,8 @@ def ComputableWitnesses (circuit : FormalCircuitBase F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) (env env' : ProverEnvironment F),
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
-      env.AgreesBelow n env' → eval env input = eval env' input → compute.eval env = compute.eval env' }
+      env.AgreesBelow n env' → env.hint = env'.hint → env.data = env'.data →
+      eval env input = eval env' input → compute.eval env = compute.eval env' }
 
 /--
 `ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
@@ -460,7 +461,7 @@ lemma computableWitnesses_implies {circuit : FormalCircuitBase F β α} :
 /--
 Composability for `ComputableWitnesses`: If
 - in the parent circuit, we prove that input variables are < `n`,
-- and the child circuit provides `ElaboratedCircuit.ComputableWitnesses`,
+- and the child circuit provides `FormalCircuitBase.ComputableWitnesses`,
 then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `ComputableWitnesses` in the original sense.
 -/
@@ -472,7 +473,7 @@ theorem compose_computableWitnesses (circuit : FormalCircuitBase F β α) (input
   exact h_input
 end FormalCircuitBase
 
-theorem Circuit.subcircuit_computableWitnesses (circuit : FormalCircuit F β α)
+theorem FormalCircuit.toSubcircuit_computableWitnesses (circuit : FormalCircuit F β α)
     (input : Var β F) (n : ℕ) :
   ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input) ∧ circuit.ComputableWitnesses →
     (subcircuit circuit input).ComputableWitnesses n := by
