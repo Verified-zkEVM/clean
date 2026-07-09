@@ -51,29 +51,29 @@ def configure (x y : Column .advice) : Configure Fp Config := do
 /-- The curve gate's two product constraints imply the point is a valid Pallas point
 (on-curve, or the `(0,0)` identity). The algebraic core of witness_point soundness. -/
 theorem point_valid {xv yv : Fp}
-    (hx : xv * (yv * yv - xv * xv * xv - 5) = 0)
-    (hy : yv * (yv * yv - xv * xv * xv - 5) = 0) :
+    (hx : xv * (yv * yv - xv * xv * xv - pallasB) = 0)
+    (hy : yv * (yv * yv - xv * xv * xv - pallasB) = 0) :
     ({ x := xv, y := yv } : Point Fp).Valid := by
   by_cases hxz : xv = 0
   · by_cases hyz : yv = 0
     · exact Or.inr (by simp [Orchard.Point.zero_def, hxz, hyz])
     · refine Or.inl ?_
       have h := (mul_eq_zero.mp hy).resolve_left hyz
-      show yv ^ 2 = xv ^ 3 + 5
+      show yv ^ 2 = xv ^ 3 + pallasB
       linear_combination h
   · refine Or.inl ?_
     have h := (mul_eq_zero.mp hx).resolve_left hxz
-    show yv ^ 2 = xv ^ 3 + 5
+    show yv ^ 2 = xv ^ 3 + pallasB
     linear_combination h
 
 /-- Converse of `point_valid`: a valid point satisfies the gate's product constraints.
 The algebraic core of witness_point completeness. -/
 theorem point_products_of_valid {xv yv : Fp}
     (h : ({ x := xv, y := yv } : Point Fp).Valid) :
-    xv * (yv * yv - xv * xv * xv - 5) = 0 ∧ yv * (yv * yv - xv * xv * xv - 5) = 0 := by
+    xv * (yv * yv - xv * xv * xv - pallasB) = 0 ∧ yv * (yv * yv - xv * xv * xv - pallasB) = 0 := by
   rcases h with hoc | hz
-  · have heq : yv * yv - xv * xv * xv - 5 = 0 := by
-      have h2 : yv ^ 2 = xv ^ 3 + 5 := hoc
+  · have heq : yv * yv - xv * xv * xv - pallasB = 0 := by
+      have h2 : yv ^ 2 = xv ^ 3 + pallasB := hoc
       linear_combination h2
     rw [heq]; exact ⟨by ring, by ring⟩
   · rw [Orchard.Point.zero_def, Orchard.Point.mk.injEq] at hz
@@ -95,7 +95,7 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
 
   soundness := by
     intro self env input _ hc
-    simp only [circuit_norm, pointGate, curveEqn, pallasB, Orchard.pallasB] at hc
+    simp only [circuit_norm, pointGate, curveEqn] at hc
     obtain ⟨hx, hy⟩ := hc
     rw [Point.eval_eq]
     simp only [circuit_norm]
@@ -109,7 +109,7 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
     rw [Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq] at hpa
     obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
     refine ⟨?_, ?_⟩
-    · simp only [circuit_norm, pointGate, curveEqn, pallasB, Orchard.pallasB]
+    · simp only [circuit_norm, pointGate, curveEqn]
       exact ⟨by rw [hwx, hwy]; linear_combination hpx,
              by rw [hwx, hwy]; linear_combination hpy⟩
     · rw [Point.eval_eq_prover, Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq]
