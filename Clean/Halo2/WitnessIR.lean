@@ -82,12 +82,30 @@ variable {value : TypeMap} [ProvableType value]
 instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
   ⟨(fromElements default : value (FExpr F))⟩
 
-@[circuit_norm] lemma eval_unconstrained [FiniteField F]
+variable [FiniteField F]
+
+-- TODO LHS is not the normal form due to Var rewrite
+@[circuit_norm] lemma eval_unconstrained
     (pe : Placed Environment F) (v : Var (Unconstrained value) F) :
     eval pe v = () := rfl
 
-@[circuit_norm] lemma eval_unconstrained_prover [FiniteField F]
+instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
+  CircuitType.verifierEval (Unconstrained value)
+
+@[circuit_norm] lemma eval_unconstrained'
+    (pe : Placed Environment F) (v : value (FExpr F)) :
+    eval pe v = () := rfl
+
+-- TODO LHS is not the normal form due to Var rewrite
+@[circuit_norm] lemma eval_unconstrained_prover
     (pe : Placed ProverEnvironment F) (v : Var (Unconstrained value) F) :
+    eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
+
+instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
+  CircuitType.proverEval (Unconstrained value)
+
+@[circuit_norm] lemma eval_unconstrained_prover'
+    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
     eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
 
 /-- Construct a prover-only input from its witness program. -/

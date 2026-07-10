@@ -95,26 +95,16 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
 
   soundness := by
     intro self env input _ hc
-    simp only [circuit_norm, pointGate, curveEqn] at hc
+    simp only [circuit_norm, pointGate, curveEqn, Point.eval_eq] at hc ⊢
     obtain ⟨hx, hy⟩ := hc
-    rw [Point.eval_eq]
-    simp only [circuit_norm]
     exact point_valid hx hy
 
   completeness := by
-    intro self env input hwit hpa
-    obtain ⟨place, penv⟩ := env
-    simp only [circuit_norm] at hwit
-    obtain ⟨hwx, hwy⟩ := hwit
-    rw [Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq] at hpa
+    rintro self ⟨place, penv⟩ input hwit hpa
+    simp only [circuit_norm, pointGate, curveEqn,
+      Point.eval_eq_prover, Point.witgen_eval_eq] at hwit hpa ⊢
     obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
-    refine ⟨?_, ?_⟩
-    · simp only [circuit_norm, pointGate, curveEqn]
-      exact ⟨by rw [hwx, hwy]; linear_combination hpx,
-             by rw [hwx, hwy]; linear_combination hpy⟩
-    · rw [Point.eval_eq_prover, Unconstrained.eval_unconstrained_prover, Point.witgen_eval_eq]
-      simp only [circuit_norm, ProvableType.eval_field_prover, AssignedCell.eval]
-      rw [hwx, hwy]
+    simp_all
 
 end WitnessPoint
 

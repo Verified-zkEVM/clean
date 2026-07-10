@@ -130,7 +130,6 @@ subcircuits stay folded as one `RegionOperations.Constraints` chunk over the chi
 named ops). -/
 
 section Constraints
-variable [FiniteField F]
 
 @[circuit_norm]
 theorem RegionOperations.constraints_nil (place : RegionIndex → ℕ) (self : RegionIndex)
