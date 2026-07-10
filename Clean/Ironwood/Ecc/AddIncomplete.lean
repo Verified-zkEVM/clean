@@ -175,11 +175,13 @@ def add : FormalRegionCircuit Fp
     simp only [circuit_norm, gate] at hc h_output
     -- destructure input/output; split the input/output eval equations into coordinates
     provable_type_simp
+    simp only [h_input, h_output] at hc ⊢
+    clear h_input h_output
     -- ══ user-facing half: pure field values + curve math ══
     obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
     -- eval → value: gate cell = copy source (`hc…`) = input coord (`h_input`), R row = output
     -- coord (`h_output`)
-    simp only [hcpx, hcpy, hcqx, hcqy, h_input, h_output] at hpoly1 hpoly2
+    simp only [hcpx, hcpy, hcqx, hcqy] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
     have hsum := eq_nondegenerateAdd_of_polys_zero hxne hpoly1 hpoly2
     rw [hsum]
@@ -197,6 +199,7 @@ def add : FormalRegionCircuit Fp
     provable_type_simp
     simp only [circuit_norm, h_input] at hwit
     simp only [circuit_norm, h_input, hwit] at ⊢ hA
+    clear h_input h_output
     -- ══ user-facing half ══
     -- land the `Assumptions` facts on the input coordinates
     obtain ⟨-, -, hxne⟩ := hA
