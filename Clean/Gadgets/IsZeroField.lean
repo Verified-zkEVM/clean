@@ -26,8 +26,8 @@ def circuit : FormalCircuit F field field where
   completeness := by circuit_proof_all
 
   computableWitnesses := by
-    intro n input env env'
     simp only [circuit_norm]
+    intros
     constructor
     · and_intros
       · grind
