@@ -72,6 +72,12 @@ variable {value : TypeMap} [ProvableType value]
   evalVerifier _ _ := ()
   evalProver pe program := Witgen.eval { env := pe } program
 
+/-- Construct a prover-only input from its witness program. -/
+@[circuit_norm]
+def unconstrained (program : value (FExpr F)) : Var (Unconstrained value) F := program
+
+-- note: these being in `circuit_norm` mean that we often have to target the
+-- simplified way of writing the Var/Value/ProverValue types
 @[circuit_norm] lemma var_of_unconstrained :
     Halo2.Var (Unconstrained value) F = value (FExpr F) := rfl
 @[circuit_norm] lemma value_of_unconstrained :
@@ -84,33 +90,18 @@ instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
 
 variable [FiniteField F]
 
--- TODO LHS is not the normal form due to Var rewrite
-@[circuit_norm] lemma eval_unconstrained
-    (pe : Placed Environment F) (v : Var (Unconstrained value) F) :
-    eval pe v = () := rfl
-
 instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
   CircuitType.verifierEval (Unconstrained value)
-
-@[circuit_norm] lemma eval_unconstrained'
-    (pe : Placed Environment F) (v : value (FExpr F)) :
-    eval pe v = () := rfl
-
--- TODO LHS is not the normal form due to Var rewrite
-@[circuit_norm] lemma eval_unconstrained_prover
-    (pe : Placed ProverEnvironment F) (v : Var (Unconstrained value) F) :
-    eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
-
 instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
   CircuitType.proverEval (Unconstrained value)
 
-@[circuit_norm] lemma eval_unconstrained_prover'
+@[circuit_norm] lemma eval_unconstrained
+    (pe : Placed Environment F) (v : value (FExpr F)) :
+    eval pe v = () := rfl
+
+@[circuit_norm] lemma eval_unconstrained_prover
     (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
     eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
-
-/-- Construct a prover-only input from its witness program. -/
-@[circuit_norm]
-def unconstrained (program : value (FExpr F)) : Var (Unconstrained value) F := program
 
 end Unconstrained
 
