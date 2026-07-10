@@ -25,4 +25,18 @@ def circuit : FormalCircuit F field field where
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
 
+  computableWitnesses := by
+    intro n input env env'
+    -- TODO(gregor): we need facts about `ProverEnvironment.AgreesBelow` all over the place,
+    -- so we should either just unfold it in circuit_norm, or add grind lemmas about it.
+    simp only [circuit_norm, ProverEnvironment.AgreesBelow]
+    constructor
+    · -- witness cases `z`, `b` (the Equality subcircuit cases close in the top `simp` via the
+      -- decoupled `Equality.toSubcircuit_computableWitnesses`)
+      and_intros
+      · grind
+      · grind
+    · -- output — witness-based (`var`), `grind` closes via the `AgreesBelow` facts
+      grind
+
 end Gadgets.IsZeroField

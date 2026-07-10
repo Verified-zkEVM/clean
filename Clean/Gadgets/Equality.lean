@@ -106,6 +106,26 @@ lemma channelsWithGuarantees_eq :
 lemma channelsWithRequirements_eq :
   (circuit M (F:=F)).channelsWithRequirements = [] := by simp only [circuit_norm, circuit]
 
+/-- `Equality` is assert-only (no witnesses), so its subcircuit is trivially computable — for
+*any* pair of offsets. Decoupling the `toSubcircuit` offset `m` (the `Subcircuit F m` type index)
+from the `ComputableWitnesses` offset `n` matters: a parent's `circuit_norm` can reduce the free
+`n` while the offset inside the type index stays unreduced (dependent motive), so a same-offset
+statement stops matching. -/
+@[circuit_norm]
+theorem toSubcircuit_computableWitnesses {m n : ℕ} (input : Var (ProvablePair M M) F)
+    {env env' : ProverEnvironment F} :
+    ((circuit M).toSubcircuit m input).ComputableWitnesses n env env' := by
+  have h_n : ((circuit M).toSubcircuit n input).ComputableWitnesses n env env' := by
+    simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit, main,
+      Operations.forAll_toFlat_iff, Operations.forAllFlat, circuit_norm]
+  have h_ops : ((circuit M).main input).operations m = ((circuit M).main input).operations n := by
+    simp only [circuit, main]
+    rw [Circuit.forEach.operations_eq, Circuit.forEach.operations_eq]
+    rfl
+  simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit] at h_n ⊢
+  rw [h_ops]
+  exact h_n
+
 -- rewrite spec/proverAssumptions/proverSpec directly
 
 @[circuit_norm]

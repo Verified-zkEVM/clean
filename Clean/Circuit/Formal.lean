@@ -83,7 +83,13 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   computableWitnesses : FormalCircuitBase.ComputableWitnesses main := by
     -- TODO proper auto-tactic that systematically applies toSubcircuit_computableWitnesses lemmas
     try dsimp only [main]
-    simp only [circuit_norm]
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · simp only [circuit_norm]
+      try (unfold_formal_circuit_consts; simp only [circuit_norm])
+    · intro _ _
+      simp_all only [circuit_norm]
+      try (unfold_formal_circuit_consts; simp_all only [circuit_norm])
 
 attribute [circuit_norm] FormalCircuitBase.elaborated FormalCircuitBase.exposedChannels
   FormalCircuitBase.channelsWithRequirements
