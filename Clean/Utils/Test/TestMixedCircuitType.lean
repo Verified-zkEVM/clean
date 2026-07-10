@@ -52,6 +52,19 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- forAll: the sole witness is the hint program, whose value is fixed by the input
+      simp only [circuit_norm]
+      intro h_input _
+      simp only [circuit_norm, Witgen.M.eval_toIRLiteral]
+      exact congrArg toElements (congrArg (·.inverse) h_input)
+    · -- output is the freshly-witnessed variable, fixed by environment agreement
+      intro _ h_agrees
+      simp only [circuit_norm] at h_agrees ⊢
+      grind
+
 def parent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do
     circuit { x := input, inverse := unconstrained (do return input⁻¹) }
@@ -74,6 +87,19 @@ def parent : GeneralFormalCircuit F field field where
     -- inline inverse hint.
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
+
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- forAll: single WithHint subcircuit; computable once the child input agrees
+      simp only [circuit_norm]
+      intro h_input
+      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
+      simp only [circuit_norm, h_input]
+    · -- output: the subcircuit's freshly-witnessed output, fixed by environment agreement
+      intro _ h_agrees
+      simp only [circuit_norm] at h_agrees ⊢
+      grind
 
 structure BoolNatInput (F : Type) where
   x : F
@@ -101,6 +127,16 @@ def boolNatCircuit : GeneralFormalCircuit.WithHint F BoolNatInput field where
   completeness := by
     circuit_proof_start
 
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- main is `return input.x`: no witnesses/subcircuits
+      simp only [circuit_norm]
+    · -- output is `input.x`, fixed by the input agreement
+      intro h_input _
+      simp only [circuit_norm] at h_input ⊢
+      exact congrArg (·.x) h_input
+
 def boolNatParent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do
     boolNatCircuit {
@@ -117,5 +153,20 @@ def boolNatParent : GeneralFormalCircuit F field field where
 
   completeness := by
     circuit_proof_start [boolNatCircuit]
+
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- forAll: single WithHint subcircuit; computable once the child input agrees
+      simp only [circuit_norm]
+      intro h_input
+      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
+      -- rewriting the parent input under `decide` leaves a defeq-but-not-syntactic
+      -- `Decidable` instance, so close the residual reflexivity goal explicitly
+      simp only [circuit_norm, h_input]
+      rfl
+    · -- output is the parent input itself, fixed by the input agreement
+      intro h_input _
+      simpa only [circuit_norm, CircuitType.eval_var_prover_to_verifier] using h_input
 
 end TestMixedCircuitType
