@@ -212,17 +212,6 @@ def circuit : FormalAssertion (F p) U64 where
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
-/-- `AssertNormalized` is lookup-only, so its subcircuit is trivially computable for any offsets.
-The `toSubcircuit` offset `m` (a type index) is decoupled from the `ComputableWitnesses` offset `k`,
-so this still fires inside a `forEach` where the accumulated offset stays unreduced
-(cf. `Gadgets.Equality.toSubcircuit_computableWitnesses`). -/
-@[circuit_norm]
-theorem toSubcircuit_computableWitnesses {m k : ℕ}
-    (input : Var U64 (F p)) {env env' : ProverEnvironment (F p)} :
-    ((circuit (p := p)).toSubcircuit m input).ComputableWitnesses k env env' := by
-  simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit, main,
-    circuit_norm, FlatOperation.forAll_cons, FlatOperation.forAll_empty, Condition.applyFlat]
-
 end U64.AssertNormalized
 
 /--

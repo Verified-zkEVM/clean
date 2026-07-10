@@ -84,8 +84,12 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   computableWitnesses := by
     intro n input env env'
     refine ⟨?_, ?_⟩
-    · -- each `U64.AssertNormalized` subcircuit closes via the `@[circuit_norm]` lemma above
+    · -- each loop body is an ordinary subcircuit: discharge via the general composition lemma
       simp only [circuit_norm]
+      intro i h_input
+      apply FormalAssertion.toSubcircuit_computableWitnesses
+      -- the loop body's input `input[i]` agrees because the whole input does
+      rw [getElem_eval_vector, getElem_eval_vector, h_input]
     · -- output is unit
       intro _ _
       simp only [circuit_norm]
