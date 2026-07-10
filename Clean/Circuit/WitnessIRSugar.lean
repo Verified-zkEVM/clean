@@ -63,26 +63,27 @@ instance : HMul (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => .mul x (.exp
 instance [Field F] : HSub (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => FExprOver.sub (.expr e) x⟩
 instance [Field F] : HSub (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => FExprOver.sub x (.expr e)⟩
 
-instance : Coe ℕ (NExpr F) := ⟨.const⟩
-instance {n : ℕ} : OfNat (NExpr F) n := ⟨.const n⟩
-instance : Inhabited (NExpr F) where
+/- The Nat-sorted instances are atom-generic like the field-sorted ones above. -/
+instance {V : Type} : Coe ℕ (NExprOver F V) := ⟨.const⟩
+instance {V : Type} {n : ℕ} : OfNat (NExprOver F V) n := ⟨.const n⟩
+instance {V : Type} : Inhabited (NExprOver F V) where
   default := .const 0
-instance : Add (NExpr F) := ⟨.add⟩
-instance : Mul (NExpr F) := ⟨.mul⟩
-instance : Div (NExpr F) := ⟨.div⟩
-instance : HDiv (NExpr F) ℕ (NExpr F) where
+instance {V : Type} : Add (NExprOver F V) := ⟨.add⟩
+instance {V : Type} : Mul (NExprOver F V) := ⟨.mul⟩
+instance {V : Type} : Div (NExprOver F V) := ⟨.div⟩
+instance {V : Type} : HDiv (NExprOver F V) ℕ (NExprOver F V) where
   hDiv n m := .div n m
-instance : Mod (NExpr F) := ⟨.mod⟩
-instance : HMod (NExpr F) ℕ (NExpr F) where
+instance {V : Type} : Mod (NExprOver F V) := ⟨.mod⟩
+instance {V : Type} : HMod (NExprOver F V) ℕ (NExprOver F V) where
   hMod n m := .mod n m
-instance : AndOp (NExpr F) := ⟨.land⟩
-instance : OrOp (NExpr F) := ⟨.lor⟩
-instance : XorOp (NExpr F) := ⟨.lxor⟩
-instance : ShiftLeft (NExpr F) := ⟨.shiftL⟩
-instance : ShiftRight (NExpr F) := ⟨.shiftR⟩
-instance : HShiftLeft (NExpr F) ℕ (NExpr F) where
+instance {V : Type} : AndOp (NExprOver F V) := ⟨.land⟩
+instance {V : Type} : OrOp (NExprOver F V) := ⟨.lor⟩
+instance {V : Type} : XorOp (NExprOver F V) := ⟨.lxor⟩
+instance {V : Type} : ShiftLeft (NExprOver F V) := ⟨.shiftL⟩
+instance {V : Type} : ShiftRight (NExprOver F V) := ⟨.shiftR⟩
+instance {V : Type} : HShiftLeft (NExprOver F V) ℕ (NExprOver F V) where
   hShiftLeft n m := .shiftL n m
-instance : HShiftRight (NExpr F) ℕ (NExpr F) where
+instance {V : Type} : HShiftRight (NExprOver F V) ℕ (NExprOver F V) where
   hShiftRight n m := .shiftR n m
 
 /-- A single field-sorted expression is a length-1 witness program, so scalar
@@ -92,16 +93,16 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-! ## Bridges as dot notation -/
 
 /-- The `ℕ` value of an IR field expression: `e.val`. -/
-abbrev FExprOver.val (e : FExpr F) : NExpr F := .val e
+abbrev FExprOver.val {V : Type} (e : FExprOver F V) : NExprOver F V := .val e
 
 /-- The `ℕ` value of a circuit expression, as a witness-IR expression: `x.val`. -/
 abbrev _root_.Expression.val (e : Expression F) : NExpr F := .val (.expr e)
 
 /-- Cast a Nat-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
-abbrev NExprOver.toField (n : NExpr F) : FExpr F := .ofNat n
+abbrev NExprOver.toField {V : Type} (n : NExprOver F V) : FExprOver F V := .ofNat n
 
 /-- Cast a boolean expression to a field element that is 0 or 1. -/
-abbrev BExprOver.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
+abbrev BExprOver.toField {V : Type} [Field F] (b : BExprOver F V) : FExprOver F V := .ite b 1 0
 
 /-! ## Conditions -/
 
@@ -109,32 +110,36 @@ abbrev BExprOver.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 `=?`. Field-sorted operands become `BExpr.feq`; Nat-sorted operands become
 `BExpr.neq` (Nat equality).  The operand types are heterogeneous so
 `x =? 0` can keep `x` as an `Expression` while interpreting `0` as an IR
-constant, preserving the exported witness shape. -/
-class EqCond (α β : Type) (F : outParam Type) where
+constant, preserving the exported witness shape. The output is generic over the
+variable atom `V` (an `outParam`, determined by the operands), so conditions build
+over any atom — main Clean's `Expression F` or Halo2-Clean's `AssignedCell F`. -/
+class EqCond (α β : Type) (F : outParam Type) (V : outParam Type) where
   /-- Build a witness-IR equality condition for these operand sorts. -/
-  eqCond : α → β → BExpr F
+  eqCond : α → β → BExprOver F V
 
 @[inherit_doc EqCond.eqCond] infix:50 " =? " => EqCond.eqCond
 
-instance : EqCond (FExpr F) (FExpr F) F := ⟨.feq⟩
-instance : EqCond (Expression F) (FExpr F) F where eqCond x y := .feq x y
-instance : EqCond (FExpr F) (Expression F) F where eqCond x y := .feq x y
-instance : EqCond (FExpr F) F F where eqCond x y := .feq x y
-instance : EqCond F (FExpr F) F where eqCond x y := .feq y x
-instance : EqCond (Expression F) F F where eqCond x y := .feq x y
-instance : EqCond F (Expression F) F where eqCond x y := .feq x y
-instance [NatCast F] : EqCond (Expression F) ℕ F where eqCond x n := .feq x (n : F)
-instance [NatCast F] : EqCond ℕ (Expression F) F where eqCond n x := .feq (n : F) x
-instance [NatCast F] : EqCond (FExpr F) ℕ F where eqCond x n := .feq x (n : F)
-instance [NatCast F] : EqCond ℕ (FExpr F) F where eqCond n x := .feq (n : F) x
-instance : EqCond (NExpr F) (NExpr F) F := ⟨.neq⟩
-instance : EqCond (NExpr F) ℕ F where eqCond x n := .neq x (.const n)
-instance : EqCond ℕ (NExpr F) F where eqCond n x := .neq (.const n) x
+instance {V : Type} : EqCond (FExprOver F V) (FExprOver F V) F V := ⟨.feq⟩
+instance : EqCond (Expression F) (FExpr F) F (Expression F) where eqCond x y := .feq x y
+instance : EqCond (FExpr F) (Expression F) F (Expression F) where eqCond x y := .feq x y
+instance {V : Type} : EqCond (FExprOver F V) F F V where eqCond x y := .feq x (.const y)
+instance {V : Type} : EqCond F (FExprOver F V) F V where eqCond x y := .feq (.const x) y
+instance : EqCond (Expression F) F F (Expression F) where eqCond x y := .feq x y
+instance : EqCond F (Expression F) F (Expression F) where eqCond x y := .feq x y
+instance [NatCast F] : EqCond (Expression F) ℕ F (Expression F) where eqCond x n := .feq x (n : F)
+instance [NatCast F] : EqCond ℕ (Expression F) F (Expression F) where eqCond n x := .feq (n : F) x
+instance {V : Type} [NatCast F] : EqCond (FExprOver F V) ℕ F V where
+  eqCond x n := .feq x (.const (n : F))
+instance {V : Type} [NatCast F] : EqCond ℕ (FExprOver F V) F V where
+  eqCond n x := .feq (.const (n : F)) x
+instance {V : Type} : EqCond (NExprOver F V) (NExprOver F V) F V := ⟨.neq⟩
+instance {V : Type} : EqCond (NExprOver F V) ℕ F V where eqCond x n := .neq x (.const n)
+instance {V : Type} : EqCond ℕ (NExprOver F V) F V where eqCond n x := .neq (.const n) x
 
 @[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
 
-instance : Inhabited (BExpr F) := ⟨.false⟩
-instance : AndOp (BExpr F) := ⟨.and⟩
+instance {V : Type} : Inhabited (BExprOver F V) := ⟨.false⟩
+instance {V : Type} : AndOp (BExprOver F V) := ⟨.and⟩
 
 /-! ## Index access notation for .listGet -/
 

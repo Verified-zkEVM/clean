@@ -107,18 +107,20 @@ end Orchard.Specs
 
 /-! ## The witness-IR counterpart of `bitrange`
 
-`Witgen.NExpr.bitrange n start len` is the witness-generation-IR expression for the same
-bit slice `Orchard.Specs.bitrange` computes on concrete naturals — write `n.bitrange start
-len` inside a witness generator (via dot notation) instead of spelling out
-`n / 2 ^ start % 2 ^ len`. It's kept as an opaque named definition (not unfolded by
-`circuit_norm`) specifically so that `circuit_proof_start`'s normalization produces
-`Orchard.Specs.bitrange (n.eval ctx) start len` directly, in the exact shape the rest of
-the canonicity proofs already expect — no manual re-folding needed. -/
+`Witgen.NExprOver.bitrange n start len` is the witness-generation-IR expression for the
+same bit slice `Orchard.Specs.bitrange` computes on concrete naturals — write
+`n.bitrange start len` inside a witness generator (via dot notation) instead of spelling
+out `n / 2 ^ start % 2 ^ len`. Generic over the variable atom `V`, matching the
+atom-generic authoring sugar (`Clean/Circuit/WitnessIRSugar.lean`). It's kept as an
+opaque named definition (not unfolded by `circuit_norm`) specifically so that
+`circuit_proof_start`'s normalization produces `Orchard.Specs.bitrange (n.eval ctx) start
+len` directly, in the exact shape the rest of the canonicity proofs already expect — no
+manual re-folding needed. -/
 
 namespace Witgen
 
 /-- The `NExpr` (witness-IR) counterpart of `Orchard.Specs.bitrange`. -/
-def NExpr.bitrange {F : Type} (n : NExpr F) (start len : ℕ) : NExpr F :=
+def NExprOver.bitrange {F V : Type} (n : NExprOver F V) (start len : ℕ) : NExprOver F V :=
   n / (2 ^ start : ℕ) % (2 ^ len : ℕ)
 
 variable {F : Type} [FiniteField F]

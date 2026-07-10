@@ -86,22 +86,10 @@ theorem eq_nondegenerateAdd_of_polys_zero {xP yP xQ yQ xR yR : Fp}
     (h2 : (yR + yQ) * (xP - xQ) - (yP - yQ) * (xQ - xR) = 0) :
     ({ x := xR, y := yR } : Point Fp)
       = ({ x := xP, y := yP } : Point Fp).nondegenerateAdd { x := xQ, y := yQ } := by
-  unfold Orchard.Point.nondegenerateAdd
   have hden : xQ - xP ≠ 0 := fun h => hx (sub_eq_zero.mp h).symm
-  have hden' : xP - xQ ≠ 0 := fun h => hx (sub_eq_zero.mp h)
+  unfold Orchard.Point.nondegenerateAdd
   rw [Orchard.Point.mk.injEq]
-  have hxout :
-      xR = (yQ - yP) * (xQ - xP)⁻¹ * ((yQ - yP) * (xQ - xP)⁻¹) - xP - xQ := by
-    apply sub_eq_zero.mp
-    field_simp [hden, hden']
-    ring_nf at h1 ⊢
-    linear_combination h1
-  refine ⟨hxout, ?_⟩
-  rw [← hxout]
-  apply sub_eq_zero.mp
-  field_simp [hden, hden']
-  ring_nf at h2 ⊢
-  linear_combination -h2
+  and_intros <;> (field_simp; grind)
 
 /-- Completeness core: the incomplete sum `R = P +ᵢ Q` satisfies both gate polynomials
 (given `x_p ≠ x_q`). Mirrors the phase-one

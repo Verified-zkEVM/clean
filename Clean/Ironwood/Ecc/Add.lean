@@ -168,55 +168,15 @@ theorem spec_of_polysZero {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (h6a : (1 - (qx - px) * alpha - (qy + py) * delta) * rx = 0)
     (h6b : (1 - (qx - px) * alpha - (qy + py) * delta) * ry = 0) :
     Spec px py qx qy rx ry lambda alpha beta gamma delta := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro hne
-    rcases mul_eq_zero.mp h1 with hzero | hline
-    · exact absurd hzero hne
-    · linear_combination hline
-  · intro hne
-    rcases mul_eq_zero.mp h2 with hflag | htangent
-    · exact absurd (by linear_combination -hflag) hne
-    · linear_combination htangent
-  · intro hprod
-    refine ⟨?_, ?_⟩
-    · rcases mul_eq_zero.mp h3a with hzero | hx
-      · exact absurd hzero hprod
-      · linear_combination -hx
-    · rcases mul_eq_zero.mp h3b with hzero | hy
-      · exact absurd hzero hprod
-      · linear_combination -hy
-  · intro hprod
-    refine ⟨?_, ?_⟩
-    · rcases mul_eq_zero.mp h3c with hzero | hx
-      · exact absurd hzero hprod
-      · linear_combination -hx
-    · rcases mul_eq_zero.mp h3d with hzero | hy
-      · exact absurd hzero hprod
-      · linear_combination -hy
-  · intro hne
-    refine ⟨?_, ?_⟩
-    · rcases mul_eq_zero.mp h4a with hflag | hx
-      · exact absurd (by linear_combination -hflag) hne
-      · linear_combination hx
-    · rcases mul_eq_zero.mp h4b with hflag | hy
-      · exact absurd (by linear_combination -hflag) hne
-      · linear_combination hy
-  · intro hne
-    refine ⟨?_, ?_⟩
-    · rcases mul_eq_zero.mp h5a with hflag | hx
-      · exact absurd (by linear_combination -hflag) hne
-      · linear_combination hx
-    · rcases mul_eq_zero.mp h5b with hflag | hy
-      · exact absurd (by linear_combination -hflag) hne
-      · linear_combination hy
-  · intro hne
-    refine ⟨?_, ?_⟩
-    · rcases mul_eq_zero.mp h6a with hflag | hx
-      · exact absurd (by linear_combination -hflag) hne
-      · exact hx
-    · rcases mul_eq_zero.mp h6b with hflag | hy
-      · exact absurd (by linear_combination -hflag) hne
-      · exact hy
+  simp only [Spec]
+  and_intros
+  · grind
+  · grind
+  · intros; and_intros <;> grind
+  · intros; and_intros <;> grind
+  · intros; and_intros <;> grind
+  · intros; and_intros <;> grind
+  · intros; and_intros <;> grind
 
 /-- Completeness half of the gate: `Spec` implies each of the twelve polynomials vanishes.
 Ported from the completeness half of `Orchard.Ecc.Add.Gate.circuit`. Returns the twelve
@@ -236,65 +196,19 @@ theorem polysZero_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (1 - (qx - px) * alpha - (qy + py) * delta) * rx = 0 ∧
     (1 - (qx - px) * alpha - (qy + py) * delta) * ry = 0 := by
   obtain ⟨h1, h2, h3, h3', h4, h5, h6⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · by_cases hzero : qx - px = 0
-    · rw [hzero]; ring
-    · have hline := h1 hzero; linear_combination (qx - px) * hline
-  · by_cases hflag : (qx - px) * alpha = 1
-    · rw [hflag]; ring
-    · have htangent := h2 hflag; linear_combination (1 - (qx - px) * alpha) * htangent
-  · by_cases hpx : px = 0
-    · rw [hpx]; ring
-    · by_cases hqx : qx = 0
-      · rw [hqx]; ring
-      · by_cases hxdiff : qx - px = 0
-        · rw [hxdiff]; ring
-        · have hx := (h3 (by
-            exact mul_ne_zero (mul_ne_zero hpx hqx) hxdiff)).1
-          linear_combination (-(px * qx * (qx - px))) * hx
-  · by_cases hpx : px = 0
-    · rw [hpx]; ring
-    · by_cases hqx : qx = 0
-      · rw [hqx]; ring
-      · by_cases hxdiff : qx - px = 0
-        · rw [hxdiff]; ring
-        · have hy := (h3 (mul_ne_zero (mul_ne_zero hpx hqx) hxdiff)).2
-          linear_combination (-(px * qx * (qx - px))) * hy
-  · by_cases hpx : px = 0
-    · rw [hpx]; ring
-    · by_cases hqx : qx = 0
-      · rw [hqx]; ring
-      · by_cases hysum : qy + py = 0
-        · rw [hysum]; ring
-        · have hx := (h3' (mul_ne_zero (mul_ne_zero hpx hqx) hysum)).1
-          linear_combination (-(px * qx * (qy + py))) * hx
-  · by_cases hpx : px = 0
-    · rw [hpx]; ring
-    · by_cases hqx : qx = 0
-      · rw [hqx]; ring
-      · by_cases hysum : qy + py = 0
-        · rw [hysum]; ring
-        · have hy := (h3' (mul_ne_zero (mul_ne_zero hpx hqx) hysum)).2
-          linear_combination (-(px * qx * (qy + py))) * hy
-  · by_cases hflag : px * beta = 1
-    · rw [hflag]; ring
-    · have hx := (h4 hflag).1; linear_combination (1 - px * beta) * hx
-  · by_cases hflag : px * beta = 1
-    · rw [hflag]; ring
-    · have hy := (h4 hflag).2; linear_combination (1 - px * beta) * hy
-  · by_cases hflag : qx * gamma = 1
-    · rw [hflag]; ring
-    · have hx := (h5 hflag).1; linear_combination (1 - qx * gamma) * hx
-  · by_cases hflag : qx * gamma = 1
-    · rw [hflag]; ring
-    · have hy := (h5 hflag).2; linear_combination (1 - qx * gamma) * hy
-  · by_cases hflag : (qx - px) * alpha + (qy + py) * delta = 1
-    · linear_combination (-rx) * hflag
-    · have hx := (h6 hflag).1; rw [hx]; ring
-  · by_cases hflag : (qx - px) * alpha + (qy + py) * delta = 1
-    · linear_combination (-ry) * hflag
-    · have hy := (h6 hflag).2; rw [hy]; ring
-
+  and_intros
+  · by_cases hz : qx - px = 0 <;> grind
+  · by_cases hz : (qx - px) * alpha = 1 <;> grind
+  · by_cases hz : px * qx * (qx - px) = 0 <;> grind
+  · by_cases hz : px * qx * (qx - px) = 0 <;> grind
+  · by_cases hz : px * qx * (qy + py) = 0 <;> grind
+  · by_cases hz : px * qx * (qy + py) = 0 <;> grind
+  · by_cases hz : px * beta = 1 <;> grind
+  · by_cases hz : px * beta = 1 <;> grind
+  · by_cases hz : qx * gamma = 1 <;> grind
+  · by_cases hz : qx * gamma = 1 <;> grind
+  · by_cases hz : (qx - px) * alpha + (qy + py) * delta = 1 <;> grind
+  · by_cases hz : (qx - px) * alpha + (qy + py) * delta = 1 <;> grind
 
 /-- Bridge: our plain-coordinate `Spec` is exactly the donor's `Gate.Spec` on the
 corresponding `Gate.Input`. Both are the same seven-way case split; only the field
@@ -384,17 +298,7 @@ theorem ite_rXProgram_eq (px py qx qy : Fp)
     = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).x := by
   simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
     Prod.mk.injEq, pallasA]
-  by_cases h1 : px = 0 ∧ py = 0
-  · simp only [eq_true h1, reduceIte]
-  · by_cases h2 : qx = 0 ∧ qy = 0
-    · simp only [eq_false h1, eq_true h2, reduceIte]
-    · by_cases h3 : px = qx
-      · by_cases h4 : py + qy = 0
-        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
-        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
-          ring
-      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
-        ring
+  split_ifs <;> ring
 
 theorem ite_rYProgram_eq (px py qx qy : Fp)
     {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
@@ -410,17 +314,7 @@ theorem ite_rYProgram_eq (px py qx qy : Fp)
     = ({ x := px, y := py } + { x := qx, y := qy } : Point Fp).y := by
   simp only [Point.add_def, ShortWeierstrass.add, Point.ofCoords, Point.coords,
     Prod.mk.injEq, pallasA]
-  by_cases h1 : px = 0 ∧ py = 0
-  · simp only [eq_true h1, reduceIte]
-  · by_cases h2 : qx = 0 ∧ qy = 0
-    · simp only [eq_false h1, eq_true h2, reduceIte]
-    · by_cases h3 : px = qx
-      · by_cases h4 : py + qy = 0
-        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_true h4, reduceIte]
-        · simp only [eq_false h1, eq_false h2, eq_true h3, eq_false h4, reduceIte]
-          ring
-      · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
-        ring
+  split_ifs <;> ring
 
 /-!
 ## The gadget
@@ -438,38 +332,33 @@ deriving ProvableStruct
 
 /-!
 The three witness programs spell the Rust `assign_region` closures over Halo2-Clean's
-`FExpr Fp = Witgen.FExprOver Fp (AssignedCell Fp)`. The field arithmetic and numeric
-literals come from the generic `FExprOver` sugar; the Boolean conditions are written with
-the explicit `Witgen.BExprOver` constructors (`.feq`, `.and`) — see the "authoring sugar"
-TACTIC GAP note in the report: the `=?`/`&&&` notation is currently pinned to main Clean's
-`BExpr F` output type, so it cannot build a Halo2 `BExpr`. -/
-
-/-- Field-equality condition between two Halo2 witness expressions. -/
-private def feqC (x y : FExpr Fp) : BExpr Fp := .feq x y
+`FExpr Fp = Witgen.FExprOver Fp (AssignedCell Fp)`. The field arithmetic, numeric
+literals and the Boolean conditions (`=?`, `&&&`) all come from the atom-generic
+authoring sugar in `Clean/Circuit/WitnessIRSugar.lean`. -/
 
 /-- The witness-IR value of the `λ` slope, spelled exactly as the Rust `lambda` closure
 (`inv0` = `.inv`; the `if x_q = x_p` split is the `.ite` on `x_q = x_p`). -/
 def lambdaProgram (px py qx qy : FExpr Fp) : FExpr Fp :=
-  .ite (feqC qx px)
-    (.ite (feqC py 0) 0 ((3 * px * px) * (2 * py)⁻¹))
+  .ite (qx =? px)
+    (.ite (py =? 0) 0 ((3 * px * px) * (2 * py)⁻¹))
     ((qy - py) * (qx - px)⁻¹)
 
 /-- The witness-IR value of R.x, spelled as the Rust `r` closure: `0 + Q`, `P + 0`,
 `P + (−P) ↦ (0,0)`, else the non-exceptional `λ`-line. -/
 def rXProgram (px py qx qy : FExpr Fp) : FExpr Fp :=
-  .ite (.and (feqC px 0) (feqC py 0)) qx <|
-  .ite (.and (feqC qx 0) (feqC qy 0)) px <|
-  .ite (feqC px qx)
-    (.ite (feqC (py + qy) 0) 0
+  .ite ((px =? 0) &&& (py =? 0)) qx <|
+  .ite ((qx =? 0) &&& (qy =? 0)) px <|
+  .ite (px =? qx)
+    (.ite (py + qy =? 0) 0
       ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx))
     ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)
 
 /-- The witness-IR value of R.y, spelled as the Rust `r` closure. -/
 def rYProgram (px py qx qy : FExpr Fp) : FExpr Fp :=
-  .ite (.and (feqC px 0) (feqC py 0)) qy <|
-  .ite (.and (feqC qx 0) (feqC qy 0)) py <|
-  .ite (feqC px qx)
-    (.ite (feqC (py + qy) 0) 0
+  .ite ((px =? 0) &&& (py =? 0)) qy <|
+  .ite ((qx =? 0) &&& (qy =? 0)) py <|
+  .ite (px =? qx)
+    (.ite (py + qy =? 0) 0
       ((3 * px * px) * (2 * py)⁻¹ *
         (px - ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx)) - py))
     ((qy - py) * (qx - px)⁻¹ *
@@ -502,7 +391,7 @@ def add : FormalRegionCircuit Fp
     let _beta ← assignAdvice config.beta offset (.ofFExpr (px⁻¹))
     let _gamma ← assignAdvice config.gamma offset (.ofFExpr (qx⁻¹))
     let _delta ← assignAdvice config.delta offset
-      (.ofFExpr (.ite (feqC qx px) ((qy + py)⁻¹) 0))
+      (.ofFExpr (.ite (qx =? px) ((qy + py)⁻¹) 0))
     let _lambda ← assignAdvice config.lambda offset (.ofFExpr (lambdaProgram px py qx qy))
     -- witness the result R at `offset + 1` on `(x_qr, y_qr)`
     let xR ← assignAdvice config.xQR (offset + 1) (.ofFExpr (rXProgram px py qx qy))
@@ -541,7 +430,7 @@ def add : FormalRegionCircuit Fp
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit hA hlast
-    simp only [circuit_norm, gate, lambdaProgram, rXProgram, rYProgram, feqC] at hwit hA h_input h_output ⊢
+    simp only [circuit_norm, gate, lambdaProgram, rXProgram, rYProgram] at hwit hA h_input h_output ⊢
     provable_type_simp
     -- land the copied input-cell reads on the input coordinates, then the gate/witness
     -- cells on their witness programs (over the input coordinates)
