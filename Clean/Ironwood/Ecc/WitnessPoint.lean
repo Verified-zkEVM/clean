@@ -94,7 +94,9 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
   ProverSpec input output _ := output = input
 
   soundness := by
-    -- easily automatable tactic layer
+    -- easily automatable tactic layer.
+    -- TODO(tactic): the input/output eval-split lemmas (here `Point.eval_eq`) still have
+    -- to be chosen by hand; `circuit_proof_start` should derive them from the I/O types.
     intro self env input _ hc
     simp only [circuit_norm, pointGate, curveEqn, Point.eval_eq] at hc ⊢
     -- normal user-facing proof
@@ -102,7 +104,9 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
     exact point_valid hx hy
 
   completeness := by
-    -- easily automatable tactic layer
+    -- easily automatable tactic layer.
+    -- TODO(tactic): the eval-split lemmas (`Point.eval_eq_prover`, `Point.witgen_eval_eq`)
+    -- still have to be chosen by hand; the tactic should derive them from the I/O types.
     rintro self ⟨place, penv⟩ input hwit hpa
     simp only [circuit_norm, pointGate, curveEqn,
       Point.eval_eq_prover, Point.witgen_eval_eq] at hwit hpa ⊢
