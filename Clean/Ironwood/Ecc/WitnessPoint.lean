@@ -116,24 +116,17 @@ def point :
     -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    -- (verifier-side input value + its equation + `Assumptions` are all trivial here:
-    -- the input is `Unconstrained`, so its verifier value is `()`)
-    rintro self ⟨place, penv⟩ input_var _ ⟨ix, iy⟩ ⟨ox, oy⟩ - h_input h_output hwit - hpa
-    -- reduce constraints; split every struct equation (`hwit`/`h_input`/`h_output`/goal)
-    -- into coordinates
-    simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type,
-      Point.witgen_eval_eq, Orchard.Point.mk.injEq] at hwit hpa h_input h_output ⊢
-    -- eval → value (completeness form): `hwit` expresses each constraint cell via its
-    -- witness expression, `h_input` that witness via the input value. Using them together
-    -- as a simp set rewrites the goal's cells to the input coords `ix`/`iy` — the same
-    -- "hypothesis-as-simp-set" primitive as soundness's `simp only [h_output]`.
+    intro self env input_var _vinput input output _h_vinput h_input h_output hwit _hassum hpa
+    -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
+    simp only [circuit_norm, pointGate, curveEqn] at hwit hpa h_input h_output ⊢
+    -- destructure input/output/input_var; split every struct equation into coordinates
+    -- (verifier + witgen evals)
+    provable_type_simp
+    -- eval → value: cell = witness (`hwit`) = input coord (`h_input`); state the goal over
+    -- the input coords, and the output = input relation via `h_output`
     simp only [hwit, h_input] at h_output ⊢
-    clear hwit h_input input_var penv place self config offset
     -- ══ user-facing half: pure field values + curve math ══
-    -- hpa : { x := ix, y := iy }.Valid     h_output : ix = ox ∧ iy = oy
-    -- ⊢ (ix * (…) = 0 ∧ iy * (…) = 0) ∧ ox = ix ∧ oy = iy
-    use point_products_of_valid hpa
-    simp_all
+    exact ⟨point_products_of_valid hpa, h_output.1.symm, h_output.2.symm⟩
 
 end WitnessPoint
 

@@ -1,5 +1,6 @@
 import Lean.Elab.Tactic
 import Clean.Halo2.StructEvalSimprocs
+import Clean.Halo2.WitnessIR
 import Clean.Utils.Tactics.ProvableTacticUtils
 import Clean.Utils.Tactics.ProvableStructNaming
 
@@ -44,10 +45,13 @@ def structEvalSimpLemmas : Array Name := #[
   -- so the assigned-cell path agrees with the query path in the constraints)
   ``Halo2.ProvableType.eval_field, ``Halo2.ProvableType.eval_field_prover,
   ``Halo2.AssignedCell.eval,
-  -- the struct-eval simprocs
+  -- the (verifier-side) struct-eval simprocs
   ``Halo2.StructEval.structEvalLiteralStructProc, ``Halo2.StructEval.structEvalLiteralTypeProc,
   ``Halo2.StructEval.evalProjectionLiftStructProc, ``Halo2.StructEval.evalProjectionLiftTypeProc,
-  ``Halo2.StructEval.evalProjectionLiftEvalProc, ``Halo2.StructEval.structEqSplit
+  ``Halo2.StructEval.evalProjectionLiftEvalProc, ``Halo2.StructEval.structEqSplit,
+  -- witgen (prover-side) evaluation: the shared simprocs decompose `Witgen.eval` of a
+  -- struct/point literal and lift `FExprOver.eval` of a projection (completeness proofs)
+  ``Witgen.evalStructLiteral, ``Witgen.evalProjection
 ]
 
 /-- Whether a variable should be destructured: its type is a `ProvableType` (behind
@@ -57,9 +61,10 @@ private def isDestructurableVar (fvarId : FVarId) : MetaM Bool := do
   let type ← instantiateMVars (← inferType (.fvar fvarId))
   Halo2.StructEval.isProvableTypeLike type
 
-/-- Evaluation heads whose equations/arguments drive destructuring. -/
+/-- Evaluation heads whose equations/arguments drive destructuring (verifier + witgen). -/
 private def evalHeads : Array Name :=
-  #[``Eval.eval, ``Halo2.ProvableStruct.eval, ``Halo2.ProvableType.eval]
+  #[``Eval.eval, ``Halo2.ProvableStruct.eval, ``Halo2.ProvableType.eval,
+    ``Witgen.eval, ``Witgen.FExprOver.eval]
 
 private def isEvalApp (e : Expr) : Bool :=
   if let .const name _ := e.getAppFn then evalHeads.contains name else false
