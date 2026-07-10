@@ -76,10 +76,21 @@ def Constraints.withSelector (s : Selector) (constraints : List (String × Expre
     List (Constraint F) :=
   constraints.map fun (name, poly) => { name, poly := querySelector s * poly }
 
-/-- A lookup argument: per row, the input expressions must be a row of the table.
-Rust: `lookup::Argument`. SKETCH — semantics and table loading TBD with the lookup port. -/
+/-- A lookup argument. Rust: `lookup::Argument<F>`
+(`halo2_proofs/src/plonk/lookup.rs:7-11`): a tuple of input expressions and a tuple of
+table expressions; the enforced relation is per-row membership of the input tuple in the
+multiset of table rows (`lookup/prover.rs:565-628`; see `lookup-design.md` §1.2).
+
+Both sides are `Expression F Query`. Rust registers `(Expression, TableColumn)` pairs but
+immediately wraps each `TableColumn` with `query_fixed` (rotation 0)
+(`circuit.rs:1068`), so the stored table side is always a rotation-0 fixed query — hence
+`tables` is a `List (Expression F Query)`, matching ironwood's
+`lookupTableExprs : Fin numLookups → List (Expr F)`. This is the pinned-CS form used for
+VK comparison. SKETCH: the satisfaction *semantics* (an `enableLookup` region op + table
+loading) is TBD with the lookup port — see `lookup-design.md`. -/
 structure LookupArgument (F : Type) where
-  tableMap : List (Expression F Query × TableColumn)
+  inputs : List (Expression F Query)
+  tables : List (Expression F Query)
 
 /--
 The constraint system under construction: the state of the `Configure` monad, mirroring
@@ -148,8 +159,17 @@ TODO surface syntax: decide when porting the first chip whether to mirror
 def createGate (gate : Gate F) : Configure F Unit :=
   fun cs => ((), { cs with gates := cs.gates ++ [gate] })
 
-/-- Rust: `meta.lookup(|meta| ...)`. SKETCH. -/
-def lookup (arg : LookupArgument F) : Configure F Unit :=
-  fun cs => ((), { cs with lookups := cs.lookups ++ [arg] })
+/-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
+of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
+(`cells.query_fixed(table.inner())`) and the pairs are unzipped into the argument's
+`inputs`/`tables`. Registered in call order (VK-relevant).
+
+Rust also `panic!`s if any input contains a *simple* selector (`circuit.rs:1064`); that is
+a well-formedness condition checked at the VK boundary, not enforced here (proofs never
+depend on it). SKETCH: semantics (satisfaction) TBD with the lookup port. -/
+def lookup (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
+  let inputs := tableMap.map Prod.fst
+  let tables := tableMap.map fun (_, tbl) => queryFixed tbl.inner
+  fun cs => ((), { cs with lookups := cs.lookups ++ [{ inputs, tables }] })
 
 end Halo2
