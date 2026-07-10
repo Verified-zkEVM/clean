@@ -585,11 +585,11 @@ The function expects the initial offset as an argument.
  @[circuit_norm]
 def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | [] => True
-  | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
+  | .witness m c :: ops => condition.witness offset m c ∧ forAll (offset + m) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .interact i :: ops => condition.interact offset i ∧ forAll offset condition ops
-  | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.localLength + offset) condition ops
+  | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (offset + s.localLength) condition ops
 
 /--
 Given a `ConditionNoOffset`, `forAllNoOffset` is true iff all operations in the list satisfy the condition.
@@ -649,7 +649,7 @@ The differences to `induct` are:
 def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.SubcircuitsConsistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
-    motive (.witness m c :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+    motive (.witness m c :: ops) n (by simp_all +arith [SubcircuitsConsistent, forAll]))
   (assert : ∀ n e ops {h}, motive ops n h →
     motive (.assert e :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
@@ -657,7 +657,7 @@ def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.Subcir
   (interact : ∀ n i ops {h}, motive ops n h →
     motive (.interact i :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (subcircuit : ∀ n (s : Subcircuit F n) ops {h}, motive ops (s.localLength + n) h →
-    motive (.subcircuit s :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+    motive (.subcircuit s :: ops) n (by simp_all +arith [SubcircuitsConsistent, forAll]))
     (ops : Operations F) (n : ℕ) (h : ops.SubcircuitsConsistent n) : motive ops n h :=
   motive' ops n h
 where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsistent n) → motive ops n h
@@ -665,6 +665,7 @@ where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsi
   | .witness m c :: ops, n, h | .assert e :: ops, n, h
   | .lookup e :: ops, n, h | .interact i :: ops, n, h => by
     rw [SubcircuitsConsistent, forAll] at h
+    try rw [add_comm n m] at h
     first
     | exact witness _ _ _ _ (motive' ops _ h.right)
     | exact assert _ _ _ (motive' ops _ h.right)
@@ -672,7 +673,7 @@ where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsi
     | exact interact _ _ _ (motive' ops _ h.right)
   | .subcircuit s :: ops, n', h => by
     rename_i n
-    rw [SubcircuitsConsistent, forAll] at h
+    rw [SubcircuitsConsistent, forAll, add_comm] at h
     have n_eq : n = n' := h.left
     subst n_eq
     exact subcircuit n s ops (motive' ops _ h.right)
@@ -758,7 +759,7 @@ def singleLocalLength : FlatOperation F → ℕ
 
 def forAll (offset : ℕ) (condition : _root_.Condition F) : List (FlatOperation F) → Prop
   | [] => True
-  | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
+  | .witness m c :: ops => condition.witness offset m c ∧ forAll (offset + m) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .interact i :: ops => condition.interact offset i ∧ forAll offset condition ops
@@ -1307,7 +1308,7 @@ theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : Prove
 @[circuit_norm]
 theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
   forAll offset condition (op :: ops) ↔
-    condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
-  cases op <;> simp [forAll, Operation.localLength, Condition.apply]
+    condition.apply offset op ∧ forAll (offset + op.localLength) condition ops := by
+  cases op <;> simp +arith [forAll, Operation.localLength, Condition.apply]
 
 end Operations

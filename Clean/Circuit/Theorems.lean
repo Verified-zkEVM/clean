@@ -142,7 +142,7 @@ theorem forAll_empty {condition : _root_.Condition F} {n : ℕ} : forAll n condi
 
 theorem forAll_cons {condition : _root_.Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
   forAll offset condition (op :: ops) ↔
-    condition.applyFlat offset op ∧ forAll (op.singleLocalLength + offset) condition ops := by
+    condition.applyFlat offset op ∧ forAll (offset + op.singleLocalLength) condition ops := by
   cases op <;> simp [forAll, Condition.applyFlat, singleLocalLength]
 
 lemma forAll_append {condition : _root_.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
@@ -232,7 +232,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : ProverEnvironment F} (n : ℕ)
   induction ops using FlatOperation.induct generalizing n with
   | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ExtendsVector, localLength]
   | witness m _ _ ih =>
-    rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
+    rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n), add_comm m n]
     trivial
   | assert | lookup | interact =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
@@ -247,7 +247,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : ProverEnvironment F} {
   | subcircuit n circuit ops ih =>
     simp only [UsesLocalWitnesses, UsesLocalWitnessesCompleteness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
     intro h
-    rw [add_comm]
+    rw [add_comm] at h ⊢
     apply And.intro ?_ (ih h.right)
     apply (circuit.completeness _ _).2
     rw [← usesLocalWitnessesFlat_iff_extends]
@@ -276,7 +276,7 @@ lemma usesLocalWitnesses_to_subcircuit {env : ProverEnvironment F} {ops : Operat
     ∀ s ∈ ops.subcircuits, env.UsesLocalWitnessesFlat s.1 s.2.ops.toFlat := by
   intro h_env
   induction ops, n, h_consistent using Operations.inductConsistent <;>
-    simp_all [circuit_norm, ProverEnvironment.UsesLocalWitnesses, ProverEnvironment.UsesLocalWitnessesFlat,
+    simp_all +arith [circuit_norm, ProverEnvironment.UsesLocalWitnesses, ProverEnvironment.UsesLocalWitnessesFlat,
       Operations.forAllFlat]
 end ProverEnvironment
 
@@ -394,7 +394,7 @@ theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOp
   induction ops generalizing n with
   | nil => simp [forAll_empty]
   | cons op ops ih =>
-    specialize ih (op.singleLocalLength + n)
+    specialize ih (n + op.singleLocalLength)
     cases op <;> simp_all [forAll_cons, Condition.applyFlat]
 end FlatOperation
 
@@ -406,7 +406,7 @@ theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
   induction ops generalizing n with
   | nil => simp [forAll_empty]
   | cons op ops ih =>
-    specialize ih (op.localLength + n)
+    specialize ih (n + op.localLength)
     cases op <;> simp_all [forAll_cons, Condition.apply]
 
 lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F) :
@@ -414,11 +414,11 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
   induction ops using Operations.induct generalizing n with
   | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | witness | assert | lookup | interact =>
-    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll]
+    simp_all +arith [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | subcircuit s ops ih =>
     simp_all only [forAllFlat, forAll, toFlat]
     rw [FlatOperation.forAll_append, s.localLength_eq]
-    simp_all
+    simp_all +arith
 end Operations
 
 lemma FlatOperation.forAll_toFlat_iff (condition : Condition F) (ops : Operations F) :
@@ -477,8 +477,7 @@ Flat version of the final theorem in this section, `Circuit.proverEnvironment_us
 -/
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
   (∀ (env env' : ProverEnvironment F),
-    forAll init.length { witness n _ c := env.AgreesBelow n env' →
-      env.hint = env'.hint → env.data = env'.data → c.eval env = c.eval env' } ops) →
+    forAll init.length { witness n _ c := env.AgreesBelow n env' → c.eval env = c.eval env' } ops) →
     (proverEnvironment ops hint init).UsesLocalWitnessesFlat init.length ops := by
   simp only [proverEnvironment, ProverEnvironment.UsesLocalWitnessesFlat, ProverEnvironment.ExtendsVector]
   intro h_computable
@@ -505,11 +504,9 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
-      · intro j hj
-        simp [ProverEnvironment.fromList, hj,
-          getElem?_dynamicWitnesses_of_lt]
-      · rfl
-      · rfl
+      refine ⟨fun j hj => ?_, rfl, rfl⟩
+      simp [ProverEnvironment.fromList, hj,
+        getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
 
 /--
@@ -517,22 +514,22 @@ If a circuit satisfies `computableWitnesses`, then the `proverEnvironment` agree
 circuit's witness generators.
 -/
 theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F) (init : List F) :
-  circuit.ComputableWitnesses init.length →
+  (∀ env env', circuit.ComputableWitnesses init.length env env') →
     (circuit.proverEnvironment hint init).UsesLocalWitnesses init.length (circuit.operations init.length) := by
   intro h_computable
-  simp_all only [proverEnvironment, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
-    ←Operations.forAll_toFlat_iff, ProverEnvironment.UsesLocalWitnesses]
-  apply FlatOperation.proverEnvironment_usesLocalWitnesses init
-  simp_rw [Operations.forAll_toFlat_iff]
-  exact h_computable
+  rw [ProverEnvironment.usesLocalWitnesses_iff_flat]
+  apply FlatOperation.proverEnvironment_usesLocalWitnesses
+  intro env env'
+  rw [Operations.forAll_toFlat_iff]
+  exact h_computable env env'
 
 lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvironment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
-  fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
+  fun h_same hi => ⟨fun i hi' => h_same.1 i (Nat.lt_of_lt_of_le hi' hi), h_same.2.1, h_same.2.2⟩
 
 @[circuit_norm]
 lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
-    ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) ↔ m < n := by
+    (∀ env env', ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) env env') ↔ m < n := by
   simp only [OnlyAccessedBelow, AgreesBelow]
   constructor; swap
   · grind
@@ -549,10 +546,10 @@ the entire circuit only accesses the environment below `n + localLength`.
 
 This is not currently used, but seemed like a nice result to have.
 -/
-theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
-  forAll n { witness n _ c := ProverEnvironment.OnlyAccessedBelow n c.eval } ops →
-    ProverEnvironment.OnlyAccessedBelow (n + localLength ops) (localWitnesses · ops) := by
-  intro h_comp env env' h_env
+theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) (env env' : ProverEnvironment F) :
+  forAll n { witness n _ c := ProverEnvironment.OnlyAccessedBelow n c.eval env env' } ops →
+    ProverEnvironment.OnlyAccessedBelow (n + localLength ops) (localWitnesses · ops) env env' := by
+  intro h_comp h_env
   simp only
   induction ops generalizing n with
   | nil => simp [localWitnesses]
@@ -560,7 +557,7 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
     simp_all only [forAll_cons, localLength_cons]
     have h_ih := h_comp.right
     replace h_comp := h_comp.left
-    replace h_ih := ih (op.singleLocalLength + n) h_ih
+    replace h_ih := ih (n + op.singleLocalLength) h_ih
     ring_nf at *
     specialize h_ih h_env
     clear ih
@@ -571,9 +568,8 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
       simp_all only [Condition.applyFlat, localWitnesses,
         ProverEnvironment.OnlyAccessedBelow, ProverEnvironment.AgreesBelow]
       congr 1
-      apply h_comp env env'
-      intro i hi
-      exact h_env i (by linarith)
+      apply h_comp
+      exact ⟨fun i hi => h_env.1 i (by linarith), trivial, trivial⟩
 end FlatOperation
 
 section
