@@ -76,22 +76,31 @@ through the `Eval.eval` class head, so struct fields recurse via the `↓ high` 
 scalar fields normalize to `AssignedCell.eval` in the same pass. Validated by definitional
 equality at `.all` (matches the witgen struct-literal simproc). -/
 def structEvalLiteralProc : Simproc := fun e => do
-  let head := e.getAppFn
-  unless head.isConstOf ``Halo2.ProvableStruct.eval || head.isConstOf ``Halo2.ProvableType.eval do
-    return .continue
+  let .const hname _ := e.getAppFn | return .continue
   let args := e.getAppArgs
-  unless args.size ≥ 3 do return .continue
-  let place := args[args.size - 3]!
-  let env := args[args.size - 2]!
-  let x := args[args.size - 1]!
+  -- Recover the `Placed` env for the per-field `Eval.eval` calls, plus the value:
+  --   `Eval.eval env x`                          — env is already `Placed`
+  --   `Halo2.Provable{Struct,Type}.eval place env x` — reconstruct `⟨place, env⟩`
+  let (placedEnv?, x) ← (do
+    match hname with
+    | ``Eval.eval =>
+      unless args.size ≥ 2 do return (none, default)
+      -- only a *provable-type* literal (avoid firing on `Eval.eval` of a scalar cell etc.)
+      unless ← isProvableTypeLike (← inferType args[args.size - 1]!) do return (none, default)
+      pure (some args[args.size - 2]!, args[args.size - 1]!)
+    | ``Halo2.ProvableStruct.eval | ``Halo2.ProvableType.eval =>
+      unless args.size ≥ 3 do return (none, default)
+      let placed ← withTransparency .default <|
+        mkAppM ``Halo2.Placed.mk #[args[args.size - 3]!, args[args.size - 2]!]
+      pure (some placed, args[args.size - 1]!)
+    | _ => pure (none, default) : MetaM (Option Expr × Expr))
+  let some placedEnv := placedEnv? | return .continue
   let .const fn _ := x.getAppFn | return .continue
   let some (.ctorInfo info) := (← getEnv).find? fn | return .continue
   unless info.numFields > 0 do return .continue
   try
     let ctorArgs := x.getAppArgs
     if ctorArgs.size != info.numParams + info.numFields then return .continue
-    -- `Placed` env for the per-field `Eval.eval` calls
-    let placedEnv ← withTransparency .default <| mkAppM ``Halo2.Placed.mk #[place, env]
     let mut newArgs : Array (Option Expr) := #[]
     for _ in [0:info.numParams] do
       newArgs := newArgs.push none
@@ -174,6 +183,7 @@ attribute [circuit_norm] structEqSplit
 delegating to the two cores above. -/
 def structEvalLiteralStructProc : Simproc := structEvalLiteralProc
 def structEvalLiteralTypeProc : Simproc := structEvalLiteralProc
+def structEvalLiteralEvalProc : Simproc := structEvalLiteralProc
 def evalProjectionLiftStructProc : Simproc := evalProjectionLiftProc
 def evalProjectionLiftTypeProc : Simproc := evalProjectionLiftProc
 def evalProjectionLiftEvalProc : Simproc := evalProjectionLiftProc
@@ -194,11 +204,13 @@ run_cmd Command.liftTermElabM do
   let evalKeys ← mkKeys ``Eval.eval
   registerSimproc ``structEvalLiteralStructProc structKeys
   registerSimproc ``structEvalLiteralTypeProc typeKeys
+  registerSimproc ``structEvalLiteralEvalProc evalKeys
   registerSimproc ``evalProjectionLiftStructProc structKeys
   registerSimproc ``evalProjectionLiftTypeProc typeKeys
   registerSimproc ``evalProjectionLiftEvalProc evalKeys
 
 attribute [circuit_norm] structEvalLiteralStructProc structEvalLiteralTypeProc
+  structEvalLiteralEvalProc
   evalProjectionLiftStructProc evalProjectionLiftTypeProc evalProjectionLiftEvalProc
 
 end Halo2.StructEval

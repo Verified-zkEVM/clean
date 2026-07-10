@@ -159,23 +159,23 @@ then unfolds componentwise for *any* provable type. Provided at BOTH the abstrac
 which spelling a goal carries — this replaces per-gadget eval-split lemmas.
 -/
 
--- Also `circuit_norm`, so a *plain* `ProvableType` (e.g. `Point`) reduces `Eval.eval →
--- ProvableType.eval` under `circuit_norm` alone — this keeps `provable_type_simp`'s simp set
--- a subset of `circuit_norm` (they agree on the normal form). For a `ProvableStruct` the
--- `↓ high` struct bridge fires first and wins, so components stay whole.
-@[circuit_norm, explicit_provable_type] lemma eval_var (env : Placed Environment F) (v : Var M F) :
+-- Deliberately `explicit_provable_type` only, NOT `circuit_norm`: `Eval.eval` is the normal
+-- form (nicer to state facts against), so `circuit_norm` must not flatten plain
+-- `ProvableType`s to `ProvableType.eval`. `provable_type_simp` decomposes plain-type
+-- *literals* directly on the `Eval.eval` head instead (see `StructEvalSimprocs`).
+@[explicit_provable_type] lemma eval_var (env : Placed Environment F) (v : Var M F) :
     Eval.eval env v = ProvableType.eval env.place env.env (v : M (AssignedCell F)) := by
   with_unfolding_all rfl
 
-@[circuit_norm, explicit_provable_type] lemma eval_var_prover (env : Placed ProverEnvironment F) (v : Var M F) :
+@[explicit_provable_type] lemma eval_var_prover (env : Placed ProverEnvironment F) (v : Var M F) :
     Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment (v : M (AssignedCell F)) := by
   with_unfolding_all rfl
 
-@[circuit_norm, explicit_provable_type] lemma eval_cells (env : Placed Environment F) (v : M (AssignedCell F)) :
+@[explicit_provable_type] lemma eval_cells (env : Placed Environment F) (v : M (AssignedCell F)) :
     Eval.eval env v = ProvableType.eval env.place env.env v := by
   with_unfolding_all rfl
 
-@[circuit_norm, explicit_provable_type] lemma eval_cells_prover (env : Placed ProverEnvironment F) (v : M (AssignedCell F)) :
+@[explicit_provable_type] lemma eval_cells_prover (env : Placed ProverEnvironment F) (v : M (AssignedCell F)) :
     Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment v := by
   with_unfolding_all rfl
 

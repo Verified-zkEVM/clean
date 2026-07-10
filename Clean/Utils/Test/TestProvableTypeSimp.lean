@@ -40,7 +40,10 @@ example (env : Placed Environment Fp) (v : Point (AssignedCell Fp)) (out : Point
   provable_type_simp
   exact h.1
 
--- 4. Opaque `eval = eval` between two structs is a row-level fact: left folded (used whole).
+-- 4. Opaque `eval = eval` between two structs is a row-level fact: left folded, as `eval`
+-- (NOT flattened to `ProvableType.eval`). `provable_type_simp` is intentionally a no-op here
+-- — that no-op is the assertion that the opaque value keeps the `eval` normal form.
+set_option linter.unusedTactic false in
 example (env : Placed Environment Fp) (u v : Point (AssignedCell Fp))
     (h : eval env u = eval env v) :
     eval env u = eval env v := by

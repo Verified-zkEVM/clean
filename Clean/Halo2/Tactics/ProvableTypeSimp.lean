@@ -35,18 +35,18 @@ namespace Halo2.ProvableTypeSimp
 
 /-- The struct-eval simp set (all members are also `circuit_norm`). -/
 def structEvalSimpLemmas : Array Name := #[
-  -- `ProvableStruct` bridges: component-preserving, applied first (`↓ high`)
+  -- `ProvableStruct` bridges: component-preserving, applied first (`↓ high`). Plain
+  -- `ProvableType`s are NOT bridged to `ProvableType.eval` — `Eval.eval` stays the normal
+  -- form; the literal simproc below decomposes plain-type *literals* on the `Eval.eval` head.
   ``Halo2.ProvableStruct.eval_var_eq_eval, ``Halo2.ProvableStruct.eval_var_eq_eval_prover,
   ``Halo2.ProvableStruct.eval_cells_eq_eval, ``Halo2.ProvableStruct.eval_cells_eq_eval_prover,
-  -- flat `ProvableType` bridges: fallback for leaf types (`Eval.eval → ProvableType.eval`)
-  ``Halo2.ProvableType.eval_var, ``Halo2.ProvableType.eval_var_prover,
-  ``Halo2.ProvableType.eval_cells, ``Halo2.ProvableType.eval_cells_prover,
   -- scalar single-cell evaluation, down to the `env.get` normal form (matches `circuit_norm`,
   -- so the assigned-cell path agrees with the query path in the constraints)
   ``Halo2.ProvableType.eval_field, ``Halo2.ProvableType.eval_field_prover,
   ``Halo2.AssignedCell.eval,
   -- the (verifier-side) struct-eval simprocs
   ``Halo2.StructEval.structEvalLiteralStructProc, ``Halo2.StructEval.structEvalLiteralTypeProc,
+  ``Halo2.StructEval.structEvalLiteralEvalProc,
   ``Halo2.StructEval.evalProjectionLiftStructProc, ``Halo2.StructEval.evalProjectionLiftTypeProc,
   ``Halo2.StructEval.evalProjectionLiftEvalProc, ``Halo2.StructEval.structEqSplit,
   -- witgen (prover-side) evaluation: the shared simprocs decompose `Witgen.eval` of a
