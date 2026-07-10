@@ -205,8 +205,10 @@ def add : FormalRegionCircuit Fp
 
   ProverAssumptions input _ :=
     input.p.OnCurve ∧ input.q.OnCurve ∧ input.p.x ≠ input.q.x
-  ProverSpec input output _ :=
-    output.OnCurve ∧ output = input.p + input.q
+  -- no ProverSpec (default True): `Assumptions → Spec` already ties output to input,
+  -- which is all downstream completeness proofs need. Rule of thumb: only introduce a
+  -- (minimal) ProverSpec once a parent gadget's completeness actually requires it —
+  -- typically for hint-consuming gadgets (cf. WitnessPoint's `output = input`).
 
   soundness := by
     intro config offset
@@ -253,8 +255,8 @@ def add : FormalRegionCircuit Fp
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    rintro self ⟨place, penv⟩ input_var input ⟨ox, oy⟩ h_input h_output hwit hpa
-    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hpa h_input h_output ⊢
+    rintro self ⟨place, penv⟩ input_var input _output h_input _h_output hwit hpa
+    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hpa h_input ⊢
     -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
     obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
     -- input coordinates equal the copied cell reads (via `h_input`)
@@ -265,14 +267,7 @@ def add : FormalRegionCircuit Fp
     have hiqx := congrArg (fun r => r.q.x) h_input
     have hiqy := congrArg (fun r => r.q.y) h_input
     simp only at hipx hipy hiqx hiqy
-    -- output coordinates equal the assigned R-row cells (via `h_output`)
-    rw [Point.eval_eq_prover, Orchard.Point.mk.injEq] at h_output
-    simp only [ProvableType.eval_field_prover, AssignedCell.eval] at h_output
-    obtain ⟨hox, hoy⟩ := h_output
     obtain ⟨hpCurve, hqCurve, hxne⟩ := hpa
-    -- normalize the R-row index spelling
-    have hrow : ((place self + offset : ℕ) : ℤ) + 1 = ((place self + (offset + 1) : ℕ) : ℤ) := by
-      push_cast; ring
     -- reduce `readVar` cell reads to the same `penv.get` form as `hipx`, then chain
     simp only [Witgen.WitgenEnv.readVar, AssignedCell.eval] at hwpx hwpy hwqx hwqy
     have hpx_eq := hwpx.trans hipx
@@ -283,29 +278,15 @@ def add : FormalRegionCircuit Fp
     simp only [Orchard.Point.nondegenerateAdd, Witgen.FExprOver.eval, Witgen.WitgenEnv.readVar,
       AssignedCell.eval, hipx, hipy, hiqx, hiqy] at hwrx hwry
     have hxne' : input.p.x ≠ input.q.x := hxne
-    -- `ox`/`oy` are exactly the `nondegenerateAdd` coordinates
-    have hox' : ox = (input.p.nondegenerateAdd input.q).x := by
-      rw [← hox, hwrx]; simp only [Orchard.Point.nondegenerateAdd]; ring
-    have hoy' : oy = (input.p.nondegenerateAdd input.q).y := by
-      rw [← hoy, hwry]; simp only [Orchard.Point.nondegenerateAdd]; ring
-    have hR : ({ x := ox, y := oy } : Point Fp) = input.p.nondegenerateAdd input.q := by
-      rw [hox', hoy']
-    -- ProverSpec: the output is a valid on-curve point equal to `input.p + input.q`
-    have hspec : ({ x := ox, y := oy } : Point Fp).OnCurve ∧
-        ({ x := ox, y := oy } : Point Fp) = input.p + input.q := by
-      rw [hR]
-      exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpCurve hqCurve hxne',
-        Orchard.Point.nondegenerateAdd_eq_add
-          (Orchard.Point.ne_zero_of_onCurve hpCurve) (Orchard.Point.ne_zero_of_onCurve hqCurve) hxne'⟩
     -- gate polynomials vanish at the `nondegenerateAdd` result
     have hpolys := polys_zero_of_nondegenerateAdd (xP := input.p.x) (yP := input.p.y)
       (xQ := input.q.x) (yQ := input.q.y) hxne'
     simp only at hpolys
     obtain ⟨hp1, hp2⟩ := hpolys
-    -- normalize the R-row index spelling in the goal so `hox`/`hoy` apply
+    -- normalize the R-row index spelling in the goal so the witness equations apply
     have hgrow : ((place self + offset : ℕ) : ℤ) + 1 = ((place self + (offset + 1) : ℕ) : ℤ) := by
       push_cast; ring
-    refine ⟨⟨⟨?_, ?_⟩, ?_⟩, hspec⟩
+    refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- poly1
       simp only [poly1, Orchard.Point.nondegenerateAdd] at hp1
       simp only [hgrow, hwrx, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
