@@ -37,9 +37,9 @@ def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [Elabo
       eval env input = eval env' input →
       subcircuit.ComputableWitnesses n env env'
     }) ∧
-  -- the output only refers to the input and previous witnesses (lower offsets)
+  -- the output only refers to the input and this circuit's witnesses (below `n + localLength`)
   (eval env input = eval env' input →
-  env.AgreesBelow n env' →
+  env.AgreesBelow (n + ElaboratedCircuit.localLength main input) env' →
   eval env (ElaboratedCircuit.output main input n) = eval env' (ElaboratedCircuit.output main input n))
 end FormalCircuitBase
 
