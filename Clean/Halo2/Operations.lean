@@ -118,7 +118,10 @@ def Operations.regionCount : Operations F → ℕ
 section Semantics
 variable [FiniteField F]
 
-/-- Read a (possibly foreign) cell. -/
+/-- Read a (possibly foreign) cell. `@[circuit_norm]` (mirroring `AssignedCell.eval`): copy
+constraints carry `Cell.eval`, so this reduces them to the shared `env.get` row form and
+they line up with the query/assigned-cell paths without a manual unfold. -/
+@[circuit_norm]
 def Cell.eval (place : RegionIndex → ℕ) (env : Environment F) (c : Cell) : F :=
   env.get c.column ((place c.regionIndex + c.rowOffset : ℕ) : ℤ)
 

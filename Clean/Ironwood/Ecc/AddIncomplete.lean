@@ -180,21 +180,20 @@ def add : FormalRegionCircuit Fp
   soundness := by
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
-    rintro self env input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ ⟨ox, oy⟩ h_input h_output h_assumptions hc
-    -- reduce circuit structure (gate polys at the gate row — `cast_row_succ` matches the
-    -- next-row spelling — plus the copy equalities), running the eval simprocs
+    intro self env input_var input output h_input h_output h_assumptions hc
+    -- reduce circuit structure (gate polys + copy equalities), running the eval simprocs
     simp only [circuit_norm, gate, Constraints.withSelector] at hc h_output
-    -- destructure input_var; split the input/output eval equations into coordinates
+    -- destructure input/output; split the input/output eval equations into coordinates
     provable_type_simp
+    -- ══ user-facing half: pure field values + curve math ══
     obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
-    simp only [Cell.eval] at hcpx hcpy hcqx hcqy
-    -- eval → value: gate cell = copy cell (`hc…`) = input coord (`h_input`), R row = output
+    -- eval → value: gate cell = copy source (`hc…`) = input coord (`h_input`), R row = output
     -- coord (`h_output`)
     simp only [hcpx, hcpy, hcqx, hcqy, h_input, h_output] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
-    have hp1 : poly1 ipx ipy iqx iqy ox oy = 0 := by
+    have hp1 : poly1 input_p_x input_p_y input_q_x input_q_y output_x output_y = 0 := by
       simp only [poly1]; linear_combination hpoly1
-    have hp2 : poly2 ipx ipy iqx iqy ox oy = 0 := by
+    have hp2 : poly2 input_p_x input_p_y input_q_x input_q_y output_x output_y = 0 := by
       simp only [poly2]; linear_combination hpoly2
     have hsum := eq_nondegenerateAdd_of_polys_zero hxne hp1 hp2
     rw [hsum]
@@ -205,25 +204,24 @@ def add : FormalRegionCircuit Fp
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _output h_input _h_output hwit hA -
-    -- reduce circuit structure, running the eval simprocs; `cast_row_succ` (in
-    -- `circuit_norm`) matches the goal's next-row spelling to the assignment's
-    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hA h_input ⊢
-    -- destructure input_var; split the input eval equation into coordinates (the raw
-    -- `Assumptions` eval decomposes onto the same cell reads)
+    intro self env input_var input output h_input h_output hwit hA hlast
+    -- reduce circuit structure, running the eval simprocs
+    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hA h_input h_output ⊢
+    -- destructure input/output/input_var; split every struct equation into coordinates
     provable_type_simp
+    -- ══ user-facing half ══
     -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
     obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
-    -- unfold the witness cell reads to the shared `env.get` row form, then rewrite them to
-    -- the input coordinates via `h_input`
+    -- reduce the witness cell reads to input coords: `readVar` (copies) / `FExprOver.eval`
+    -- (the R row, a `nondegenerateAdd` witness) → `env.get` → input coord via `h_input`
     simp only [Witgen.WitgenEnv.readVar, Orchard.Point.nondegenerateAdd,
       Witgen.FExprOver.eval, AssignedCell.eval, h_input] at hwpx hwpy hwqx hwqy hwrx hwry
     -- land the `Assumptions` facts on the input coordinates
     simp only [h_input] at hA
     obtain ⟨hpCurve, hqCurve, hxne⟩ := hA
     -- gate polynomials vanish at the `nondegenerateAdd` result
-    have hpolys := polys_zero_of_nondegenerateAdd (xP := ipx) (yP := ipy)
-      (xQ := iqx) (yQ := iqy) hxne
+    have hpolys := polys_zero_of_nondegenerateAdd (xP := input_p_x) (yP := input_p_y)
+      (xQ := input_q_x) (yQ := input_q_y) hxne
     simp only at hpolys
     obtain ⟨hp1, hp2⟩ := hpolys
     refine ⟨⟨?_, ?_⟩, ?_⟩
@@ -237,7 +235,7 @@ def add : FormalRegionCircuit Fp
       linear_combination hp2
     · -- copy equalities
       refine ⟨?_, ?_, ?_, ?_⟩ <;>
-        simp only [Cell.eval, hwpx, hwpy, hwqx, hwqy, h_input]
+        simp only [hwpx, hwpy, hwqx, hwqy, h_input]
 
 end AddIncomplete
 
