@@ -70,10 +70,13 @@ code, plus the (in-flux) ironwood Lean interfaces.
 The guiding design rule: **every deviation from main Clean must be justified by a halo2
 incompatibility; everything else is copied from Clean verbatim.** Same core concepts,
 names, file organization, and proof experience: a `Circuit` monad, `ProvableType`/
-`ProvableStruct`, `FormalCircuit`/`FormalAssertion`/`GeneralFormalCircuit` with
-`Assumptions`/`Spec`/`soundness`/`completeness`, `ElaboratedCircuit`, the subcircuit
-mechanism as the proof boundary, witgen IR for witness values, `circuit_norm`/
-`circuit_proof_start` as the automation entry points. The expected deviations are
+`ProvableStruct`, a `FormalCircuit` bundle with `Assumptions`/`Spec`/`soundness`/
+`completeness`, `ElaboratedCircuit`, the subcircuit mechanism as the proof boundary,
+witgen IR for witness values, `circuit_norm`/`circuit_proof_start` as the automation
+entry points. One simplification versus main Clean: `FormalCircuit`/`FormalAssertion`/
+`GeneralFormalCircuit` collapse into the single hint-aware structure (main Clean's
+`GeneralFormalCircuit.WithHint`, under the shorter name) — the three-way split was a UX
+nicety that phase-one's Orchard port didn't lean on. The expected deviations are
 confined to: variables are cells rather than tape indices (with region-relative
 addressing replacing the linear offset), the operation set is halo2's (assign, copy,
 selector enable, region) rather than witness/assert, and the compiled artifact is a
@@ -98,6 +101,21 @@ file so the reusable part has no dependency on Clean's tape-indexed layer).
    `assignAdvice`, `assignAdviceFromConstant`, `assignAdviceFromInstance`, `assignFixed`,
    `copyAdvice`, `constrainEqual`, `constrainConstant`, selector `enable`;
    `assignRegion` as the composition unit.
+
+Both layers are bundled in one gadget contract, `FormalCircuit F ConfigInput Config Input
+Output` (layouter-level) and `FormalRegionCircuit F ConfigInput Config Input Output`
+(region-level, for `assign_region` fragments composed inside a parent region): `configure
+: ConfigInput → Configure F Config` and `synthesize : Config → Var Input F → Circuit F
+(Var Output F)` (region-level `synthesize` additionally takes the row `offset` inside the
+ambient region). `ConfigInput` and `Config` are **type parameters** of the gadget, not
+existentials — parents interact with both, so they're part of the gadget's visible
+signature — and bundles (`witness_point`, `add_incomplete`, `add`, …) are consequently
+*parameterless* defs, not functions of a config. Soundness and completeness each quantify
+over an arbitrary `config` (and, region-level, `offset`), never fixing one; phase
+consistency between `configure` and `synthesize` is not proved but holds by construction,
+because the gate — the columns and selector a custom constraint refers to — is a
+standalone pure def referenced identically by both phases (see `AddIncomplete.gate` for
+the pattern).
 
 ### Composition currency: cell references
 
@@ -163,6 +181,19 @@ Target the phase-one proof experience: analogues of `circuit_proof_start`,
 proofs consume child specs opaquely. User-land proofs must not unfold framework
 internals.
 
+**Completeness assumes `Assumptions ∧ ProverAssumptions`.** Completeness carries the same
+`Assumptions (eval env.toEnvironment input)` hypothesis as soundness — the verifier-visible
+value, evaluated through `Placed.toEnvironment` — *plus* `ProverAssumptions` on the
+prover-side value and hints. `ProverAssumptions` is strictly additional: gadgets never
+repeat a fact already implied by `Assumptions`, only hint-side facts the verifier value
+erases. Symmetrically, `completeness_iff` intros only the prover-side input value (with its
+defining equation); the `Assumptions` hypothesis is left as a raw verifier-side `eval`, which
+the eval machinery decomposes like any other row-level fact. Gadget contract rules of thumb:
+leave `ProverSpec`/`ProverAssumptions` at their defaults (`True`) unless the gadget actually
+needs more — `ProverSpec` only once a *parent's* completeness needs something beyond
+`Assumptions → Spec` (typically hint-consuming gadgets, e.g. `witness_point`'s
+`output = input`), `ProverAssumptions` only for genuinely hint-side facts.
+
 **Deliberate simp normal forms** (a lesson from main Clean, where blanket
 `@[circuit_norm]` tagging of every circuit definition made proofs unfold to unwieldy
 low-level statements): monadic composition, DSL atoms (`assignAdvice`, …), and circuit
@@ -170,6 +201,28 @@ accessors (`Circuit.output`, `operations`) are themselves the normal forms and n
 unfold. The simp set is a dedicated file of *composition lemmas* (accessors over
 binds/atoms, `Constraints` over operation lists), added on demand, never
 speculatively.
+
+**`provable_type_simp`** is the halo2 counterpart of main Clean's `provable_struct_simp`:
+one tactic that normalizes provable-type values along semantic component boundaries via a
+dedicated set of struct-eval simprocs — decomposing literals and lifting projections at
+`ProvableStruct`/`ProvableType` component boundaries, gated so it only fires where a fact
+in context makes a value's shape relevant. Opaque evals not tied to such a fact stay
+folded as `Eval.eval` — never eagerly unfolded. The companion "pretty" normal form pins how
+circuit-created cells and environment reads print: named cells (`AssignedCell.of`, never an
+anonymous record literal) and typed reads on the `Environment.advice`-family accessors
+(`Column.toAny` folded away). This is pinned syntactically by `guard_hyp :ₛ` regression
+tests (`Clean/Utils/Test/TestProvableTypeSimp.lean`), not just checked up to defeq.
+
+**Proof style contract, enforced by convention**: every gadget proof splits into a
+framework/tactic half — nothing gadget-specific beyond the gadget's own defs passed as simp
+args, chaining row-level facts down from the constraints — and a user half of pure value
+math with zero framework vocabulary (field/curve algebra closed by whatever's simplest,
+`grind`/`simp_all` preferred over manual case chains). `AddIncomplete.add`'s soundness and
+completeness proofs are the reference shape for the split. Spots where the framework half
+still needs a manual assist are to be marked `-- TACTIC GAP:` in the gadget source as they
+come up; these feed the design of a single starting tactic (subsuming
+`circuit_proof_start`) that also does the row-fact chaining the forward-lemma mechanism
+will need.
 
 ### Reuse from phase one
 
@@ -192,5 +245,16 @@ The Orchard-in-Clean tree is the reference implementation and proof-content dono
 1. **Vertical slice**: core types + one gadget chain (`witness_point` →
    `add_incomplete`) end to end — configure, synthesize, region-relative proof, CS data
    extraction matched against the corresponding fixture fragment. De-risks every layer.
+   Done: `witness_point`, `add_incomplete`, and `add` (complete addition) are all ported
+   with soundness and completeness proved.
+2. **Forward-lemma subcircuit machinery** (the `#358` mechanism sketched in
+   `Clean/Halo2/Formal.lean`, `FormalCircuit`'s TODO): lets a parent's proof consume a
+   child's `soundness`/`completeness` opaquely instead of unfolding its `.subcircuit`
+   operations by hand. First real consumer: `mul` (variable-base scalar multiplication,
+   `halo2_gadgets/src/ecc/chip/mul/complete.rs`), whose complete-addition step calls `add`
+   as a child. Expected to be where `ConfigWF` first bites — `mul`'s `configure` composes
+   several sub-configs and needs their columns proved non-overlapping.
+3. **Lookup axis**, designed in parallel: fixed-column lookup arguments, needed for
+   `mul`'s overflow checks (`mul/overflow.rs`) and Sinsemilla.
 
 (More concrete milestones will be added as we progress.)
