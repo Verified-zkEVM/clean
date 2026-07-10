@@ -107,16 +107,17 @@ def point :
     -- reduce the gate constraints, and split the output-value equation into coordinates
     simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type, Orchard.Point.mk.injEq]
       at hc h_output
-    -- rewrite eval → value: the constraints get stated over the abstract coords `ox`/`oy`
-    -- (NOT `subst`, which would splat eval back into the goal — the wrong direction)
-    rw [h_output.1, h_output.2] at hc
-    obtain ⟨hx, hy⟩ := hc
+    -- eval → value: use the (split) output equation as a simp set to rewrite the
+    -- constraint cells to the abstract coords `ox`/`oy`. `simp only [h_output]` generalizes
+    -- to the tactic (any field count/order); `rw [h_output.1, h_output.2]` would not.
+    simp only [h_output] at hc
     -- clear the framework plumbing: nothing below mentions cells, envs, or vars
     clear h_output h_input _hA input_var input env self config offset
     -- ══ user-facing half: pure field values + curve math ══
-    -- hx : ox * (oy * oy - ox * ox * ox - pallasB) = 0
-    -- hy : oy * (oy * oy - ox * ox * ox - pallasB) = 0
-    -- ⊢ ({ x := ox, y := oy } : Point Fp).Valid
+    -- destructuring `hc` is gadget-specific (it depends on the constraint shape), so it
+    -- lives here, not in the framework half.
+    -- hc : ox * (…) = 0 ∧ oy * (…) = 0     ⊢ ({ x := ox, y := oy } : Point Fp).Valid
+    obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
   completeness := by
@@ -128,21 +129,16 @@ def point :
     -- into coordinates
     simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type,
       Point.witgen_eval_eq, Orchard.Point.mk.injEq] at hwit hpa h_input h_output ⊢
-    -- the honest prover assigns the input's coordinates, so `output = input`. Chain the
-    -- three coordinate equations to eliminate the output vars in favor of `ix`/`iy`:
-    --   cell = ox  (h_output),  cell = witness  (hwit),  witness = ix  (h_input)
-    obtain ⟨hox, hoy⟩ := h_output
-    obtain ⟨hwx, hwy⟩ := hwit
-    obtain ⟨hix, hiy⟩ := h_input
-    rw [hox, hoy]                                    -- constraint cells → ox, oy
-    have hoxix : ox = ix := hox.symm.trans (hwx.trans hix)
-    have hoyiy : oy = iy := hoy.symm.trans (hwy.trans hiy)
-    subst hoxix hoyiy                                -- identify input/output coords; goal now pure
-    clear hox hoy hwx hwy hix hiy input_var penv place self config offset
+    -- eval → value (completeness form): `hwit` expresses each constraint cell via its
+    -- witness expression, `h_input` that witness via the input value. Using them together
+    -- as a simp set rewrites the goal's cells to the input coords `ix`/`iy` — the same
+    -- "hypothesis-as-simp-set" primitive as soundness's `simp only [h_output]`.
+    simp only [hwit, h_input] at h_output ⊢
+    clear hwit h_input input_var penv place self config offset
     -- ══ user-facing half: pure field values + curve math ══
-    -- hpa : ({ x := ox, y := oy } : Point Fp).Valid
-    -- ⊢ (ox * (…) = 0 ∧ oy * (…) = 0) ∧ ox = ox ∧ oy = oy
-    exact ⟨point_products_of_valid hpa, rfl, rfl⟩
+    -- hpa : { x := ix, y := iy }.Valid     h_output : ix = ox ∧ iy = oy
+    -- ⊢ (ix * (…) = 0 ∧ iy * (…) = 0) ∧ ox = ix ∧ oy = iy
+    exact ⟨point_products_of_valid hpa, h_output.1.symm, h_output.2.symm⟩
 
 end WitnessPoint
 
