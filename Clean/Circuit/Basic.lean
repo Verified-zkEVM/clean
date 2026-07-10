@@ -375,7 +375,9 @@ def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : Prover
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
-def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
+-- unfold `AgreesBelow` under `circuit_norm` so its `∀ i < n` / hint / data facts are directly
+-- available to `simp`/`grind` in `computableWitnesses` proofs (no manual unfolding needed)
+@[circuit_norm] def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=

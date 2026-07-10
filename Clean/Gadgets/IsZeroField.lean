@@ -27,9 +27,7 @@ def circuit : FormalCircuit F field field where
 
   computableWitnesses := by
     intro n input env env'
-    -- TODO(gregor): we need facts about `ProverEnvironment.AgreesBelow` all over the place,
-    -- so we should either just unfold it in circuit_norm, or add grind lemmas about it.
-    simp only [circuit_norm, ProverEnvironment.AgreesBelow]
+    simp only [circuit_norm]
     constructor
     · -- witness cases `z`, `b` (the Equality subcircuit cases close in the top `simp` via the
       -- decoupled `Equality.toSubcircuit_computableWitnesses`)
