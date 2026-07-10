@@ -114,6 +114,14 @@ input type, and `Var` is `M (AssignedCell ·)`. Halo2 counterpart of main Clean'
   evalVerifier pe v := ProvableType.eval pe.place pe.env v
   evalProver pe v := ProvableType.eval pe.place pe.env.toEnvironment v
 
+/- Normalize `Var`/`Value`/`ProverValue` of a provable type to their concrete forms, so
+the *concrete* form is the single simp normal form (matching main Clean, and symmetric
+with `Unconstrained`'s `var_of_unconstrained`). Without these, `Var M` stays abstract in
+goals while `Unconstrained` reduces — the eval-lemma normal-form asymmetry. -/
+@[circuit_norm] lemma var_of_provableType (F) : Var M F = M (AssignedCell F) := rfl
+@[circuit_norm] lemma value_of_provableType (F) : Value M F = M F := rfl
+@[circuit_norm] lemma proverValue_of_provableType (F) : ProverValue M F = M F := rfl
+
 instance : Eval (Placed Environment F) (AssignedCell F) F := CircuitType.verifierEval field
 instance : Eval (Placed ProverEnvironment F) (AssignedCell F) F := CircuitType.proverEval field
 instance : Eval (Placed Environment F) (M (AssignedCell F)) (M F) := CircuitType.verifierEval M
