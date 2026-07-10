@@ -62,6 +62,28 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     show input = env (fieldFromBitsExpr bit_vars)
     rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
 
+  computableWitnesses := by
+    intro offset input env env'
+    refine ⟨?_, ?_⟩
+    · simp only [main, circuit_norm]
+      refine ⟨?_, ?_⟩
+      · -- Part A: the witnessed bit vector depends only on `input.val`
+        intro h_input _
+        apply Vector.ext
+        intro i hi
+        simp only [circuit_norm, Witgen.VExpr.getElem_eval_mapRange, h_input]
+      · -- Part B: each `assertBool` is assert-only ⇒ trivially computable
+        intro i h_input
+        simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit_norm,
+          FlatOperation.forAll_cons, FlatOperation.forAll_empty, Condition.applyFlat]
+    · -- output is the witnessed bit vector; environment agreement below `offset + n` gives equality
+      intro _ h_agrees
+      simp only [main, circuit_norm] at h_agrees ⊢
+      apply Vector.ext
+      intro i hi
+      simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+      exact h_agrees.1 (offset + i) (by omega)
+
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
 def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
@@ -73,6 +95,18 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
 
   soundness := by circuit_proof_all [toBits]
   completeness := by circuit_proof_all [toBits]
+
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- forAll: single `toBits` subcircuit, computable from the (identical) input
+      simp only [circuit_norm]
+      intro h_input
+      exact GeneralFormalCircuit.toSubcircuit_computableWitnesses _
+        (by simpa only [circuit_norm] using h_input)
+    · -- output is unit
+      intro _ _
+      simp only [circuit_norm]
 
 end ToBits
 export ToBits (toBits)
