@@ -53,10 +53,10 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
     (z : Column .advice) (tbl : TableColumn) (row : ℕ) :
     (RegionOperation.enableLookup (rcArg z tbl) [qLookup, qRunning] row).Constraints
         place self env
-      ↔ ∃ tableRow : ℤ,
+      ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
           env.advice z ((place self + row : ℕ) : ℤ)
               - 2 ^ 4 * env.advice z ((place self + (row + 1) : ℕ) : ℤ)
-            = env.fixed tbl.inner tableRow := by
+            = env.fixed tbl.inner (tableRow : ℤ) := by
   simp only [circuit_norm, rcArg, qLookup, qRunning, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, List.mem_cons, List.not_mem_nil, or_false]
   norm_num
@@ -68,8 +68,8 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
 example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
     (z : Column .advice) (tbl : TableColumn) (row : ℕ) :
     (RegionOperation.enableLookup (rcArg z tbl) [qLookup] row).Constraints place self env
-      ↔ ∃ tableRow : ℤ,
-          env.advice z ((place self + row : ℕ) : ℤ) = env.fixed tbl.inner tableRow := by
+      ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
+          env.advice z ((place self + row : ℕ) : ℤ) = env.fixed tbl.inner (tableRow : ℤ) := by
   simp only [circuit_norm, rcArg, qLookup, qRunning, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, List.mem_cons, List.not_mem_nil, or_false]
   norm_num
@@ -80,8 +80,8 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
     (z : Column .advice) (tbl : TableColumn) (row : ℕ) :
     RegionOperations.Constraints place self env
       ((rcArg z tbl |>.enable [qLookup] row).operations self)
-      ↔ ∃ tableRow : ℤ,
-          env.advice z ((place self + row : ℕ) : ℤ) = env.fixed tbl.inner tableRow := by
+      ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
+          env.advice z ((place self + row : ℕ) : ℤ) = env.fixed tbl.inner (tableRow : ℤ) := by
   simp only [circuit_norm, rcArg, qLookup, qRunning, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, List.mem_cons, List.not_mem_nil, or_false]
   norm_num

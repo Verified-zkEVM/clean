@@ -163,15 +163,20 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
           (place self + row : ℕ)) = 0
   | .enableLookup arg enabled row =>
       -- membership (not permutation): the input tuple at this row equals the table tuple
-      -- at *some* table row (`lookup-design.md` §2.2). Inputs are evaluated under the local
-      -- activation valuation `enabled ↦ 1, rest ↦ 0` — which selectors are on at this row
-      -- decides *which* word the gated input expression reduces to (running-sum vs short
-      -- row, §1.4); the table side is a rotation-0 fixed query, unaffected by the valuation.
-      ∃ tableRow : ℤ,
+      -- at *some* usable table row (`lookup-design.md` §2.2). The witness is bounded by
+      -- `env.usableRows` for faithfulness: the prover truncates the input expression and
+      -- builds the table multiset over `usable_rows = n − (blinding + 1)` only
+      -- (`lookup/prover.rs:573-585`), so blinding rows never participate on either side.
+      -- ℕ-with-cast spelling: table rows share the `(↑(n : ℕ) : ℤ)` row normal form of
+      -- all other reads. Inputs are evaluated under the local activation valuation
+      -- `enabled ↦ 1, rest ↦ 0` — which selectors are on at this row decides *which* word
+      -- the gated input expression reduces to (running-sum vs short row, §1.4); the table
+      -- side is a rotation-0 fixed query, unaffected by the valuation.
+      ∃ tableRow : ℕ, tableRow < env.usableRows ∧
         arg.inputs.map (Expression.eval (Query.eval env
           (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (place self + row : ℕ)))
         = arg.tables.map (Expression.eval (Query.eval env
-          (fun i => if i ∈ enabled.map Selector.index then 1 else 0) tableRow))
+          (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (tableRow : ℤ)))
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
   | .subcircuit ops => RegionOperations.Constraints place self env ops

@@ -206,7 +206,25 @@ selector arithmetic lives in lookup inputs over complex selectors.
 > backed by a new `Environment.usableRows` field (§B, §D6); and `circuit_norm`
 > computation lemmas for both in `Lemmas.lean`. The D4 open hole (where table-contents
 > facts live) is resolved by an `EnvAssumptions` slot on both `FormalCircuit` and
-> `FormalRegionCircuit` — see the note at the end of §D4.
+> `FormalRegionCircuit` — see the note at the end of §D4 (on `FormalRegionCircuit` the
+> slot is config-aware, `Config → Placed Environment F → Prop`: table facts name config
+> columns, which the arbitrary-config soundness quantifier binds; the same slot carries
+> the `ConfigWF`-style facts the `FormalRegionCircuit` docstring anticipated).
+>
+> **Revision (first consumer, `short_range_check`): the membership witness is bounded by
+> `usableRows`.** §2.2's existential was originally `∃ tableRow : ℤ` over the whole
+> column; the landed semantics is `∃ tableRow : ℕ, tableRow < env.usableRows ∧ …`
+> (ℕ-with-cast, matching the `(↑(n : ℕ) : ℤ)` row normal form). Adopted for
+> *faithfulness*: the prover truncates the input expression and builds the table multiset
+> over `usable_rows = n − (blinding + 1)` only (`lookup/prover.rs:573-585`), so blinding
+> rows participate on neither side. This is distinct from §2.3's *rejected*
+> bound-by-table-`len` option — `usableRows` is domain layout (already an `Environment`
+> field, §D6), not the table's row layout, so the floor-planner ownership objection does
+> not apply. Consequence: a table-contents fact over usable rows now suffices for
+> soundness, and is provable from `loadTable`'s constraints alone (explicit block +
+> default-fill); completeness supplies the bound with its witness, needing the layout
+> fact `tableLen ≤ usableRows` — an env fact carried in the consumer's `EnvAssumptions`
+> (`TableLoaded`, `Ironwood/Utilities/LookupRangeCheck.lean`).
 
 The guiding tension, already flagged in `halo2-selector-survey.md:61-65` and
 `Operations.lean:57`: **gate constraints are region-local and enter `Constraints` from
@@ -263,12 +281,15 @@ gadget's `synthesize` emits alongside the `enable` of `q_lookup`). Its local sem
 
 ```lean
 | .enableLookup arg row =>
-    ∃ tableRow : ℤ,
+    ∃ tableRow : ℕ, tableRow < env.usableRows ∧
       arg.inputs.map (·.eval (Query.eval env sel (place self + row))) =
-      arg.tables.map (·.eval (Query.eval env sel tableRow))
+      arg.tables.map (·.eval (Query.eval env sel (tableRow : ℤ)))
 ```
 
-read: "the input tuple at this row equals the table tuple at *some* table row". Here
+read: "the input tuple at this row equals the table tuple at *some usable* table row"
+(as-landed shape — the original proposal had an unbounded `∃ tableRow : ℤ`; see the §2
+status note: bounded-by-`usableRows` was adopted with the first consumer for faithfulness
+to `lookup/prover.rs:573-585`). Here
 `sel` is the local activation valuation `fun i => if i ∈ enabledSelectorsHere then 1 else
 0` — the same device `enableGate` uses (`Operations.lean:143`, `own selector ↦ 1`), so
 that `q_lookup = 1` at the enabled row and the input reduces to the participating word.
@@ -314,16 +335,22 @@ needed — the requirements doc's "no analogue of `data`: halo2 lookup tables ar
 columns, already covered by `get`" (`Expression.lean:136-137`) holds. The table's
 *contents* are facts about `env.fixed table_col r` for `r` in the table's row range.
 
-The membership existential in §2.2 quantifies `tableRow : ℤ` over the whole column. That is
-faithful (any table row is a legal witness) but usually a gadget wants membership in the
-*meaningful* range `[0, len)`. Two ways to get there, both fine:
+The membership existential in §2.2 quantifies `tableRow` over the **usable rows**
+`[0, env.usableRows)` (as-landed; see the §2 status note). A gadget usually wants
+membership in the *meaningful* range `[0, len)`. Two ways to close the remaining gap,
+both fine:
 
-- Let the table-contents fact (§2.4) characterize `env.fixed table_col r` for **all** `r`
-  (participating rows = their intended value; default-filled rows = the row-0 value). Then
-  `∃ tableRow, …` directly yields a value in the intended set, because every row of the
-  column — filled or default — is in it (for range-check, `0` is in `[0,2^K)` too).
+- Let the table-contents fact (§2.4) characterize `env.fixed table_col r` for all usable
+  `r` (participating rows = their intended value; default-filled rows = the row-0 value).
+  Then `∃ tableRow, …` directly yields a value in the intended set, because every usable
+  row of the column — filled or default — is in it (for range-check, `0` is in `[0,2^K)`
+  too). This is what the first consumer does (`TableLoaded`), and it is provable from
+  `loadTable`'s constraints alone.
 - Or bound `tableRow` to `[0, len)` in the enable semantics. Rejected: it hard-codes the
-  table's row layout into the per-op semantics, which the floor planner owns.
+  table's row layout into the per-op semantics, which the floor planner owns. (Note the
+  distinction from the adopted `usableRows` bound: that is *domain* layout — a global
+  `Environment` field, §D6 — not any table's row layout, and it is what the polynomial
+  argument itself enforces.)
 
 ### 2.4 Table loading and what completeness must supply
 

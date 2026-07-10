@@ -359,8 +359,14 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   loaded" — a table-contents fact about `env.fixed table_col r` that lives at the
   environment level and cannot be carried by `Assumptions` (which sees only the input
   value). Discharged by callers (an in-scope `loadTable` subcircuit, or an ambient VK
-  guarantee). Defaults to `True`. See `lookup-design.md` §2.4/§D4. -/
-  EnvAssumptions : Placed Environment F → Prop := fun _ => True
+  guarantee). Defaults to `fun _ => True`.
+
+  Takes the `Config` (unlike `Assumptions`): the env-fact usually names a *config* column
+  — e.g. "`env.fixed cfg.tableIdx r < 2^K`" for the range table — which the arbitrary-config
+  soundness quantifier binds. `Soundness`/`Completeness` still take a plain
+  `Placed Environment F → Prop`; the `soundness`/`completeness` fields feed
+  `EnvAssumptions config`. See `lookup-design.md` §2.4/§D4. -/
+  EnvAssumptions : Config → Placed Environment F → Prop := fun _ _ => True
   Assumptions : Value Input F → Prop := fun _ => True
   Spec : Value Input F → Value Output F → Witness F → Prop
   ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
@@ -368,9 +374,9 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
 
   soundness : ∀ (config : Config) (offset : ℕ),
     FormalRegionCircuit.Soundness (synthesize config offset) (extract config offset)
-      EnvAssumptions Assumptions Spec
+      (EnvAssumptions config) Assumptions Spec
   completeness : ∀ (config : Config) (offset : ℕ),
-    FormalRegionCircuit.Completeness (synthesize config offset) EnvAssumptions Assumptions
+    FormalRegionCircuit.Completeness (synthesize config offset) (EnvAssumptions config) Assumptions
       ProverAssumptions ProverSpec
 
 namespace FormalRegionCircuit
