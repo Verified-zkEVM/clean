@@ -139,6 +139,30 @@ lemma eval_field_prover (env : Placed ProverEnvironment F) (x : AssignedCell F) 
     Eval.eval env x = AssignedCell.eval env.place env.env.toEnvironment x := by
   with_unfolding_all rfl
 
+/-!
+General struct-eval bridges (main Clean's `eval_var`/`eval_expression`): rewrite the
+`Eval.eval` of a provable variable to `ProvableType.eval`, which `explicit_provable_type`
+then unfolds componentwise for *any* provable type. Provided at BOTH the abstract
+`Var M F` form and the concrete `M (AssignedCell F)` form, so they fire regardless of
+which spelling a goal carries — this replaces per-gadget eval-split lemmas.
+-/
+
+@[explicit_provable_type] lemma eval_var (env : Placed Environment F) (v : Var M F) :
+    Eval.eval env v = ProvableType.eval env.place env.env (v : M (AssignedCell F)) := by
+  with_unfolding_all rfl
+
+@[explicit_provable_type] lemma eval_var_prover (env : Placed ProverEnvironment F) (v : Var M F) :
+    Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment (v : M (AssignedCell F)) := by
+  with_unfolding_all rfl
+
+@[explicit_provable_type] lemma eval_cells (env : Placed Environment F) (v : M (AssignedCell F)) :
+    Eval.eval env v = ProvableType.eval env.place env.env v := by
+  with_unfolding_all rfl
+
+@[explicit_provable_type] lemma eval_cells_prover (env : Placed ProverEnvironment F) (v : M (AssignedCell F)) :
+    Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment v := by
+  with_unfolding_all rfl
+
 end ProvableType
 
 end Halo2
