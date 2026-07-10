@@ -138,7 +138,8 @@ def point :
     -- ══ user-facing half: pure field values + curve math ══
     -- hpa : { x := ix, y := iy }.Valid     h_output : ix = ox ∧ iy = oy
     -- ⊢ (ix * (…) = 0 ∧ iy * (…) = 0) ∧ ox = ix ∧ oy = iy
-    exact ⟨point_products_of_valid hpa, h_output.1.symm, h_output.2.symm⟩
+    use point_products_of_valid hpa
+    simp_all
 
 end WitnessPoint
 
