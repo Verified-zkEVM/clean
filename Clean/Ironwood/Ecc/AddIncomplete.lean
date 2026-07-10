@@ -170,8 +170,8 @@ def add : FormalRegionCircuit Fp
   Spec input output _ :=
     output.OnCurve ∧ output = input.p + input.q
 
-  ProverAssumptions input _ :=
-    input.p.OnCurve ∧ input.q.OnCurve ∧ input.p.x ≠ input.q.x
+  -- no ProverAssumptions (default True): completeness already assumes `Assumptions` on
+  -- the input's verifier-visible value, and this gadget needs no hint-side facts.
   -- no ProverSpec (default True): `Assumptions → Spec` already ties output to input,
   -- which is all downstream completeness proofs need. Rule of thumb: only introduce a
   -- (minimal) ProverSpec once a parent gadget's completeness actually requires it —
@@ -208,17 +208,21 @@ def add : FormalRegionCircuit Fp
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _output h_input _h_output hwit hpa
+    -- bind the *verifier-side* input value (it carries the `Assumptions` facts); the
+    -- prover-side value is unused (ProverAssumptions/ProverSpec are default True)
+    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _input _output
+      h_input - _h_output hwit hA -
     -- `cast_row_succ` (in `circuit_norm`) matches the goal's next-row spelling to the
     -- assignment's here
-    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hpa h_input ⊢
+    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hA h_input ⊢
     -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
     obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
-    -- input coordinates equal the copied cell reads (via the componentwise `h_input`)
+    -- input coordinates equal the copied cell reads (via the componentwise `h_input`;
+    -- the verifier view reads the same underlying environment as the prover eval)
     simp only [circuit_norm, explicit_provable_type, AssignedCell.eval,
       Orchard.Point.mk.injEq, Inputs.mk.injEq] at h_input
     obtain ⟨⟨hipx, hipy⟩, hiqx, hiqy⟩ := h_input
-    obtain ⟨hpCurve, hqCurve, hxne⟩ := hpa
+    obtain ⟨hpCurve, hqCurve, hxne⟩ := hA
     -- reduce `readVar` cell reads to the same `penv.get` form as `hipx`, then chain
     simp only [Witgen.WitgenEnv.readVar, AssignedCell.eval] at hwpx hwpy hwqx hwqy
     have hpx_eq := hwpx.trans hipx

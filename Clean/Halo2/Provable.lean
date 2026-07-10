@@ -58,6 +58,18 @@ structure Placed (E : Type → Type) (F : Type) where
   place : RegionIndex → ℕ
   env : E F
 
+/-- The verifier view of a placed prover environment: same placement, hints erased
+(via `ProverEnvironment.toEnvironment`). This is how completeness statements evaluate
+verifier-side values under the honest prover's environment. -/
+def Placed.toEnvironment {F : Type} (env : Placed ProverEnvironment F) : Placed Environment F :=
+  { place := env.place, env := env.env.toEnvironment }
+
+@[circuit_norm] lemma Placed.toEnvironment_place {F : Type} (env : Placed ProverEnvironment F) :
+    env.toEnvironment.place = env.place := rfl
+
+@[circuit_norm] lemma Placed.toEnvironment_env {F : Type} (env : Placed ProverEnvironment F) :
+    env.toEnvironment.env = env.env.toEnvironment := rfl
+
 /-- Halo2's `CircuitType`: `CircuitTypeOver` at the placed cell environments. -/
 abbrev CircuitType (M : TypeMap) :=
   CircuitTypeOver (Placed Environment) (Placed ProverEnvironment) M

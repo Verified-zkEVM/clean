@@ -73,14 +73,21 @@ def FormalCircuit.Soundness
   Spec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) (extract input i₀ env)
 
 /-- Completeness (prover view — hints visible). Under the honest prover's witness
-generators, `ProverAssumptions` imply the constraints and the `ProverSpec`. -/
+generators, the soundness `Assumptions` (on the input's verifier-visible value) together
+with `ProverAssumptions` imply the constraints and the `ProverSpec`.
+
+`Assumptions` is assumed here as well as in soundness, so gadgets never repeat it inside
+`ProverAssumptions`: the prover side is strictly *additional*, for hint-side facts that
+the verifier value erases. -/
 def FormalCircuit.Completeness
     (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (Assumptions : Value Input F → Prop)
     (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
   ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F)
     (input : Var Input F),
   ExtendsWitnesses env.place env.env ((main input).operations i₀) i₀ →
+  Assumptions (eval env.toEnvironment input) →
   ProverAssumptions (eval env input) env.env.hint →
   Constraints env.place env.env ((main input).operations i₀) i₀ ∧
   ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) env.env.hint
@@ -129,7 +136,9 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   /-- Verifier-view postcondition: relates input, extracted witness, and output. -/
   Spec : Value Input F → Value Output F → Witness F → Prop
 
-  /-- Prover-view precondition (hints visible). -/
+  /-- Prover-view precondition (hints visible), strictly *additional* to `Assumptions`
+  (completeness assumes both) — only hint-side facts that the verifier value erases
+  belong here. -/
   ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
   /-- Prover-view postcondition, proved alongside the constraints. -/
   ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
@@ -137,7 +146,7 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   soundness : ∀ (config : Config),
     FormalCircuit.Soundness (synthesize config) (extract config) Assumptions Spec
   completeness : ∀ (config : Config),
-    FormalCircuit.Completeness (synthesize config) ProverAssumptions ProverSpec
+    FormalCircuit.Completeness (synthesize config) Assumptions ProverAssumptions ProverSpec
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -219,14 +228,18 @@ def FormalRegionCircuit.Soundness
   Spec (eval env input) (eval env (ElaboratedRegionCircuit.output main input self))
     (extract input self env)
 
-/-- Completeness of a region-level circuit (prover view). -/
+/-- Completeness of a region-level circuit (prover view). As at the layouter level, the
+soundness `Assumptions` (on the input's verifier-visible value) are assumed alongside
+`ProverAssumptions`, so the prover side is strictly additional (hint-side facts only). -/
 def FormalRegionCircuit.Completeness
     (main : Var Input F → RegionCircuit F (Var Output F))
     [ElaboratedRegionCircuit F Input Output main]
+    (Assumptions : Value Input F → Prop)
     (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
   ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F),
   RegionOperations.ExtendsWitnesses env.place self env.env ((main input).operations self) →
+  Assumptions (eval env.toEnvironment input) →
   ProverAssumptions (eval env input) env.env.hint →
   RegionOperations.Constraints env.place self env.env ((main input).operations self) ∧
   ProverSpec (eval env input)
@@ -255,26 +268,31 @@ theorem FormalRegionCircuit.soundness_iff
   · intro h self env iv hA hC
     exact h self env iv _ _ rfl rfl hA hC
 
-/-- Completeness counterpart of `soundness_iff`. -/
+/-- Completeness counterpart of `soundness_iff`. Both the verifier-side and the
+prover-side input values are intro'd (with their defining equations): `Assumptions` is
+stated on the former, `ProverAssumptions`/`ProverSpec` on the latter. -/
 theorem FormalRegionCircuit.completeness_iff
     (main : Var Input F → RegionCircuit F (Var Output F))
     [ElaboratedRegionCircuit F Input Output main]
+    (Assumptions : Value Input F → Prop)
     (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
-    FormalRegionCircuit.Completeness main ProverAssumptions ProverSpec ↔
+    FormalRegionCircuit.Completeness main Assumptions ProverAssumptions ProverSpec ↔
     ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
-      (input : ProverValue Input F) (output : ProverValue Output F),
+      (input_value : Value Input F) (input : ProverValue Input F) (output : ProverValue Output F),
+    eval env.toEnvironment input_var = input_value →
     eval env input_var = input →
     eval env (ElaboratedRegionCircuit.output main input_var self) = output →
     RegionOperations.ExtendsWitnesses env.place self env.env ((main input_var).operations self) →
+    Assumptions input_value →
     ProverAssumptions input env.env.hint →
     RegionOperations.Constraints env.place self env.env ((main input_var).operations self) ∧
     ProverSpec input output env.env.hint := by
   constructor
-  · intro h self env iv input output h_in h_out hW hA
-    subst h_in h_out; exact h self env iv hW hA
-  · intro h self env iv hW hA
-    exact h self env iv _ _ rfl rfl hW hA
+  · intro h self env iv input_value input output h_in_v h_in h_out hW hA hPA
+    subst h_in_v h_in h_out; exact h self env iv hW hA hPA
+  · intro h self env iv hW hA hPA
+    exact h self env iv _ _ _ rfl rfl rfl hW hA hPA
 
 end RegionStatements
 
@@ -323,7 +341,8 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
     FormalRegionCircuit.Soundness (synthesize config offset) (extract config offset)
       Assumptions Spec
   completeness : ∀ (config : Config) (offset : ℕ),
-    FormalRegionCircuit.Completeness (synthesize config offset) ProverAssumptions ProverSpec
+    FormalRegionCircuit.Completeness (synthesize config offset) Assumptions
+      ProverAssumptions ProverSpec
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}

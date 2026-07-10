@@ -124,7 +124,9 @@ def point :
     -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    rintro self ⟨place, penv⟩ input_var ⟨ix, iy⟩ ⟨ox, oy⟩ h_input h_output hwit hpa
+    -- (verifier-side input value + its equation + `Assumptions` are all trivial here:
+    -- the input is `Unconstrained`, so its verifier value is `()`)
+    rintro self ⟨place, penv⟩ input_var _ ⟨ix, iy⟩ ⟨ox, oy⟩ - h_input h_output hwit - hpa
     -- reduce constraints; split every struct equation (`hwit`/`h_input`/`h_output`/goal)
     -- into coordinates
     simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type,
