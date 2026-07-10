@@ -102,6 +102,17 @@ selector activation and carries the gate's constraints. See `Operations.lean`. -
 def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=
   fun _ => ((), [.enableGate gate row])
 
+/-- Enable a lookup argument at a local row: the dual of `Gate.enable`. Emits a single
+`enableLookup` op carrying the registered `LookupArgument` and `enabled` — the complex
+selector(s) the gadget turns on at this row (`arg.enable [qLookup, qRunning] row` at a
+running-sum row, `arg.enable [qLookup] row` at a short row); this mirrors the Rust, where
+enabling those selectors IS how a gadget "enables the lookup" (there is no single Rust
+method). The argument, like a gate, is a standalone `configure`-registered def the gadget
+references from both phases. See `Operations.lean` / `lookup-design.md`. -/
+def LookupArgument.enable (arg : LookupArgument F) (enabled : List Selector) (row : ℕ) :
+    RegionCircuit F Unit :=
+  fun _ => ((), [.enableLookup arg enabled row])
+
 /-! ## Layouter-level circuits -/
 
 /-- A layouter-level circuit: threads the next region index (like Clean's `offset`) and
@@ -144,6 +155,12 @@ def assignRegion (name : String) (body : RegionCircuit F α) : Circuit F α :=
 def constrainInstance (cell : AssignedCell F) (col : Column .instance) (row : ℕ) :
     Circuit F Unit :=
   fun i => ((), [.constrainInstance cell.cell col row], i)
+
+/-- Load a lookup table's fixed column with `values` (rows `[0, values.length)`), the rest
+of the domain default-filled with the row-0 value. Rust: `layouter.assign_table(…)`.
+Consumes no region index. See `Operations.lean` / `lookup-design.md` §2.4. -/
+def loadTable (tbl : TableColumn) (values : List F) : Circuit F Unit :=
+  fun i => ((), [.loadTable tbl values], i)
 
 /-- Satisfaction of a circuit, for a given placement of its regions
 (including all subcircuit constraints, via flattening). Gadget proofs are generic

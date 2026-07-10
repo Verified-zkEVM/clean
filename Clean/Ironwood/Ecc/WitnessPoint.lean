@@ -101,7 +101,7 @@ def point :
     -- The steps here are exactly what the smart eval-split tactic will do mechanically.
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hA hc
+    intro self env input_var input output h_input h_output _hE _hA hc
     -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
     simp only [circuit_norm, pointGate, curveEqn] at hc h_output
     -- destructure `output` and split its (now-literal) eval equation into coordinates
@@ -116,7 +116,7 @@ def point :
     -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hassum hpa
+    intro self env input_var input output h_input h_output hwit _hE _hassum hpa
     -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
     simp only [circuit_norm, pointGate, curveEqn] at hwit hpa h_input h_output ⊢
     -- destructure input/output/input_var; split every struct equation into coordinates

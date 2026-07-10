@@ -8,3 +8,4 @@ import Clean.Utils.Test.TestElaborateCircuit
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestProvableTypeSimp
+import Clean.Utils.Test.TestLookup

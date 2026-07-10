@@ -114,6 +114,11 @@ theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
     (gate.enable row).operations self = [.enableGate gate row] := rfl
 
 @[circuit_norm]
+theorem operations_enableLookup (arg : LookupArgument F) (enabled : List Selector)
+    (row : ℕ) (self : RegionIndex) :
+    (arg.enable enabled row).operations self = [.enableLookup arg enabled row] := rfl
+
+@[circuit_norm]
 theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :
     (constrainEqual a b).operations self = [.constrainEqual a.cell b.cell] := rfl
 
@@ -121,6 +126,14 @@ theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :
 theorem operations_constrainInstance (cell : AssignedCell F) (col : Column .instance)
     (row : ℕ) (i : RegionIndex) :
     (constrainInstance cell col row).operations i = [.constrainInstance cell.cell col row] := rfl
+
+@[circuit_norm]
+theorem operations_loadTable (tbl : TableColumn) (values : List F) (i : RegionIndex) :
+    (loadTable tbl values).operations i = [.loadTable tbl values] := rfl
+
+@[circuit_norm]
+theorem nextRegionIndex_loadTable (tbl : TableColumn) (values : List F) (i : RegionIndex) :
+    (loadTable tbl values).nextRegionIndex i = i := rfl
 
 /-! ## Constraints of region-operation lists
 
@@ -154,6 +167,16 @@ theorem RegionOperation.constraints_enableGate (place : RegionIndex → ℕ) (se
       = gate.constraints.Forall fun c =>
           c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
             (place self + row : ℕ)) = 0 := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_enableLookup (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (arg : LookupArgument F) (enabled : List Selector) (row : ℕ) :
+    (RegionOperation.enableLookup arg enabled row).Constraints place self env
+      = ∃ tableRow : ℤ,
+          arg.inputs.map (Expression.eval (Query.eval env
+            (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (place self + row : ℕ)))
+          = arg.tables.map (Expression.eval (Query.eval env
+            (fun i => if i ∈ enabled.map Selector.index then 1 else 0) tableRow)) := rfl
 
 @[circuit_norm]
 theorem RegionOperation.constraints_constrainEqual (place : RegionIndex → ℕ) (self : RegionIndex)
@@ -205,6 +228,11 @@ theorem RegionOperation.extendsWitness_enableGate (place : RegionIndex → ℕ) 
     (RegionOperation.enableGate gate row).ExtendsWitness place self env = True := rfl
 
 @[circuit_norm]
+theorem RegionOperation.extendsWitness_enableLookup (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) (arg : LookupArgument F) (enabled : List Selector) (row : ℕ) :
+    (RegionOperation.enableLookup arg enabled row).ExtendsWitness place self env = True := rfl
+
+@[circuit_norm]
 theorem RegionOperation.extendsWitness_constrainEqual (place : RegionIndex → ℕ)
     (self : RegionIndex) (env : ProverEnvironment F) (a b : Cell) :
     (RegionOperation.constrainEqual a b).ExtendsWitness place self env = True := rfl
@@ -218,6 +246,44 @@ theorem RegionOperation.extendsWitness_constrainConstant (place : RegionIndex �
 theorem RegionOperation.extendsWitness_assignFixed (place : RegionIndex → ℕ)
     (self : RegionIndex) (env : ProverEnvironment F) (col : Column .fixed) (row : ℕ) (v : F) :
     (RegionOperation.assignFixed col row v).ExtendsWitness place self env = True := rfl
+
+/-! ### Layouter-level `Constraints`/`ExtendsWitnesses` computation lemmas
+
+Decomposition lemmas for the top-level `Halo2.Constraints`/`ExtendsWitnesses` over an
+`Operations` list, so `circuit_norm` peels a concrete op list into per-op facts. The
+`loadTable` case exposes its two `∀`-conjuncts (explicit block + conditional default-fill)
+directly on the typed `env.fixed` accessor, no record literals. -/
+
+@[circuit_norm]
+theorem constraints_nil (place : RegionIndex → ℕ) (env : Environment F) (i : RegionIndex) :
+    Halo2.Constraints place env ([] : Operations F) i = True := by
+  simp only [Halo2.Constraints]
+
+@[circuit_norm]
+theorem constraints_loadTable (place : RegionIndex → ℕ) (env : Environment F)
+    (tbl : TableColumn) (values : List F) (ops : Operations F) (i : RegionIndex) :
+    Halo2.Constraints place env (.loadTable tbl values :: ops) i
+      = ((∀ r : ℕ, r < values.length → env.fixed tbl.inner (r : ℤ) = values[r]!) ∧
+         (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
+           env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
+         Halo2.Constraints place env ops i) := by
+  simp only [Halo2.Constraints]
+
+@[circuit_norm]
+theorem extendsWitnesses_nil (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env ([] : Operations F) i = True := by
+  simp only [Halo2.ExtendsWitnesses]
+
+@[circuit_norm]
+theorem extendsWitnesses_loadTable (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (tbl : TableColumn) (values : List F) (ops : Operations F) (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env (.loadTable tbl values :: ops) i
+      = ((∀ r : ℕ, r < values.length → env.fixed tbl.inner (r : ℤ) = values[r]!) ∧
+         (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
+           env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
+         Halo2.ExtendsWitnesses place env ops i) := by
+  simp only [Halo2.ExtendsWitnesses]
 
 end Constraints
 

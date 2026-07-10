@@ -195,6 +195,19 @@ selector arithmetic lives in lookup inputs over complex selectors.
 
 ## 2. Proposed Lean model
 
+> **Status: implemented** (branch `halo2-clean-2`, following this design). Landed:
+> `RegionOperation.enableLookup` + `LookupArgument.enable` with the §2.2 membership
+> semantics (§A) — with one signature refinement: the op carries the list of selectors
+> enabled at that row (`enableLookup : LookupArgument F → List Selector → ℕ → …`,
+> atom `arg.enable [qLookup, qRunning] row`), realizing §2.2's `enabledSelectorsHere`
+> valuation explicitly, since lookup-input selectors genuinely vary per enabled row
+> (§1.4's running-sum vs short rows select *different* words); the `Operation.loadTable`
+> layouter op + `loadTable` atom with the §2.4 explicit-block/default-fill semantics,
+> backed by a new `Environment.usableRows` field (§B, §D6); and `circuit_norm`
+> computation lemmas for both in `Lemmas.lean`. The D4 open hole (where table-contents
+> facts live) is resolved by an `EnvAssumptions` slot on both `FormalCircuit` and
+> `FormalRegionCircuit` — see the note at the end of §D4.
+
 The guiding tension, already flagged in `halo2-selector-survey.md:61-65` and
 `Operations.lean:57`: **gate constraints are region-local and enter `Constraints` from
 the ops list, but a lookup argument is CS-global and holds at every absolute row.** The
@@ -462,6 +475,22 @@ Recommendation as stated: membership in `Constraints`; table-contents as an assu
 (or an in-scope load's constraints). This mirrors how `assignFixed` (a constraint) and
 "the VK loaded these fixed columns" (an ambient guarantee) already split.
 
+**Resolution of "table-contents as an assumption" (implemented).** The design left open
+*where* a user gadget carries the table-contents fact, and observed the tension: it is an
+*environment-level* fact (about `env.fixed table_col r`), so the gadget's `Assumptions`
+— which sees only the input *value* — cannot express it. The resolution is a new
+`EnvAssumptions : Placed Environment F → Prop := fun _ => True` field on both
+`FormalCircuit` and `FormalRegionCircuit`. It threads into `Soundness` (as a hypothesis
+before `Assumptions`) and `Completeness` (as `EnvAssumptions env.toEnvironment`, the
+verifier view, before the `Assumptions` hypothesis), and into `soundness_iff`/
+`completeness_iff` as a raw, un-intro'd hypothesis. A range-check *user* gadget sets
+`EnvAssumptions env := ∀ r < env.usableRows, (env.fixed tableIdx r).val < 2^K` (the table
+is loaded); the membership existential (§2.2) plus this fact discharge the range `Spec`.
+Callers who *do* load the table in scope discharge `EnvAssumptions` from the in-scope
+`loadTable` subcircuit's `Constraints`; the default `fun _ => True` keeps every
+non-lookup gadget unchanged. This is env-level `Assumptions` — exactly the missing slot,
+without disturbing the input-value `Assumptions`.
+
 ### D5. Multi-input tuple lookups and the θ-compression  *(recommend: model the raw tuple, ignore θ)*
 
 The proof system compresses tuples with a random challenge θ (§1.2). At the framework's
@@ -633,6 +662,11 @@ Not VK-relevant: the membership *semantics* (§2.2), `loadTable`'s default-fill,
 ---
 
 ## 6. Uncontested data fix (may land as code)
+
+> **Status: implemented** (branch `halo2-clean-2`). The `LookupArgument { inputs, tables }`
+> data fix and the `lookup`/`lookupTableColumn` plumbing landed earlier (HEAD before this
+> work); the semantic core described in §2–§3 (D1–D6) has now landed too, with the D4 hole
+> resolved via `EnvAssumptions` (see §D4). VK-bridge items (§5) remain future work.
 
 Only the `LookupArgument` data definition and the `lookup`/`lookupTableColumn` plumbing
 are uncontested (they mirror Rust directly and carry no semantics). Everything else in

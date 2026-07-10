@@ -141,6 +141,13 @@ Soundness theorems have the form `∀ env : Environment F, ...`.
 structure Environment (F : Type) where
   /-- Assignment of all cells: column, absolute row ↦ field element. -/
   get : AnyColumn → ℤ → F
+  /-- Layout data: the domain's usable-row bound (`n − (blinding_factors + 1)`, the rows
+  a lookup argument ranges over — `lookup/prover.rs:573-574`). A field, not a threaded
+  semantics parameter (maintainer-adjudicated: zero signature churn, `ProverEnvironment`
+  inherits it). Used only by `loadTable`'s default-fill semantics and the future VK
+  bridge; it never appears in region-relative gadget statements. See `lookup-design.md`
+  §2.4/§D6. -/
+  usableRows : ℕ
 
 /--
 `ProverEnvironment` is `Environment` plus the prover's runtime `ProverHint`.

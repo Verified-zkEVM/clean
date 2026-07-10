@@ -80,6 +80,18 @@ inductive RegionOperation (F : Type) where
   /-- Enable a gate at a local row. Rust: `selector.enable(region, offset)`. Records the
   activation of `gate.selector` and carries `gate.constraints` for semantics. -/
   | enableGate : Gate F → ℕ → RegionOperation F
+  /-- Enable a lookup argument at a local row (the dual of `enableGate`). There is no
+  single Rust method: a gadget "enables a lookup at a row" by enabling the complex
+  selector(s) its input expressions are gated on; in the port
+  `enableLookup arg enabled row` is the sugar the gadget's `synthesize` emits alongside
+  those `enable`s. Carries the registered `LookupArgument` (its input/table tuples) for
+  semantics plus `enabled`, the selectors turned on at *this* row. Unlike a gate — whose
+  polynomials only ever contain its own single selector — a lookup input's gating
+  selectors genuinely vary per enabled row (range-check: `q_lookup = 1` at every
+  participating row, but `q_running` is 1 only at running-sum rows and 0 at short rows,
+  selecting *which* word is looked up — `lookup-design.md` §1.4). So the activation
+  valuation is the per-row `enabled ↦ 1, rest ↦ 0`, not a fixed own-selector device. -/
+  | enableLookup : LookupArgument F → List Selector → ℕ → RegionOperation F
   /-- Copy constraint between two (possibly cross-region) cells.
   Rust: `region.constrain_equal`. -/
   | constrainEqual : Cell → Cell → RegionOperation F
@@ -100,6 +112,12 @@ inductive Operation (F : Type) where
   /-- Copy constraint between a cell and an instance-column row.
   Rust: `layouter.constrain_instance`. -/
   | constrainInstance : Cell → Column .instance → ℕ → Operation F
+  /-- Load a lookup table: fill a `TableColumn` (a fixed column) with `values` at absolute
+  rows `[0, values.length)`, then default-fill every remaining usable row with the row-0
+  value. Rust: `layouter.assign_table` (`table_layouter.rs`) + the floor planner's
+  `fill_from_row` default-fill (`single_pass.rs:176-182`). Addresses absolute rows, so it
+  is a layouter-level op, not a region op. See `lookup-design.md` §2.4. -/
+  | loadTable : TableColumn → List F → Operation F
   /-- A layouter-level subcircuit call: a whole multi-region gadget's operations.
   The proof boundary at gadget granularity. -/
   | subcircuit : List (Operation F) → Operation F
@@ -114,6 +132,7 @@ def Operations.regionCount : Operations F → ℕ
   | .region _ _ :: ops => 1 + Operations.regionCount ops
   | .subcircuit ops' :: ops => Operations.regionCount ops' + Operations.regionCount ops
   | .constrainInstance _ _ _ :: ops => Operations.regionCount ops
+  | .loadTable _ _ :: ops => Operations.regionCount ops
 
 section Semantics
 variable [FiniteField F]
@@ -142,6 +161,17 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
       gate.constraints.Forall fun c =>
         c.poly.eval (Query.eval env (fun i => if i = gate.selector.index then 1 else 0)
           (place self + row : ℕ)) = 0
+  | .enableLookup arg enabled row =>
+      -- membership (not permutation): the input tuple at this row equals the table tuple
+      -- at *some* table row (`lookup-design.md` §2.2). Inputs are evaluated under the local
+      -- activation valuation `enabled ↦ 1, rest ↦ 0` — which selectors are on at this row
+      -- decides *which* word the gated input expression reduces to (running-sum vs short
+      -- row, §1.4); the table side is a rotation-0 fixed query, unaffected by the valuation.
+      ∃ tableRow : ℤ,
+        arg.inputs.map (Expression.eval (Query.eval env
+          (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (place self + row : ℕ)))
+        = arg.tables.map (Expression.eval (Query.eval env
+          (fun i => if i ∈ enabled.map Selector.index then 1 else 0) tableRow))
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
   | .subcircuit ops => RegionOperations.Constraints place self env ops
@@ -171,6 +201,14 @@ def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
       ops'.Constraints place i env ∧ Constraints place env ops (i + 1)
   | .constrainInstance cell col row :: ops, i =>
       cell.eval place env = env.get col row ∧ Constraints place env ops i
+  | .loadTable tbl values :: ops, i =>
+      -- explicit block: rows `[0, values.length)` hold the loaded values
+      (∀ r : ℕ, r < values.length → env.fixed tbl.inner (r : ℤ) = values[r]!) ∧
+      -- default-fill (`lookup-design.md` §1.3.1): unused usable rows carry the row-0 value.
+      -- Conditional on `values ≠ []` so an empty load imposes no bogus default.
+      (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
+        env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
+      Constraints place env ops i
   | .subcircuit ops' :: ops, i =>
       Constraints place env ops' i ∧ Constraints place env ops (i + Operations.regionCount ops')
 
@@ -201,6 +239,14 @@ def ExtendsWitnesses (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
   | .region _ ops' :: ops, i =>
       ops'.ExtendsWitnesses place i env ∧ ExtendsWitnesses place env ops (i + 1)
   | .constrainInstance _ _ _ :: ops, i => ExtendsWitnesses place env ops i
+  | .loadTable tbl values :: ops, i =>
+      -- The honest prover's environment holds exactly that column content: the explicit
+      -- block plus the row-0 default-fill over the usable rows. Discharges the `loadTable`
+      -- `Constraints` in the completeness proof of a table loader. See `lookup-design.md` §2.4.
+      (∀ r : ℕ, r < values.length → env.fixed tbl.inner (r : ℤ) = values[r]!) ∧
+      (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
+        env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
+      ExtendsWitnesses place env ops i
   | .subcircuit ops' :: ops, i =>
       ExtendsWitnesses place env ops' i ∧ ExtendsWitnesses place env ops (i + Operations.regionCount ops')
 end Semantics

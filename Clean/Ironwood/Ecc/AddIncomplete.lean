@@ -158,7 +158,7 @@ def add : FormalRegionCircuit Fp
   soundness := by
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output h_assumptions hc
+    intro self env input_var input output h_input h_output _hE h_assumptions hc
     -- reduce circuit structure (gate polys + copy equalities), running the eval simprocs
     simp only [circuit_norm, gate] at hc h_output
     -- destructure input/output; split the input/output eval equations into coordinates
@@ -180,7 +180,7 @@ def add : FormalRegionCircuit Fp
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hA hlast
+    intro self env input_var input output h_input h_output hwit _hE hA hlast
     -- reduce circuit structure, running the eval simprocs
     simp only [circuit_norm, gate, Orchard.Point.nondegenerateAdd] at hwit hA h_input h_output ⊢
     -- destructure input/output/input_var; split every struct equation into coordinates
