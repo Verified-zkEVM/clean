@@ -81,4 +81,13 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]
 
+  computableWitnesses := by
+    intro n input env env'
+    refine ⟨?_, ?_⟩
+    · -- each `U64.AssertNormalized` subcircuit closes via the `@[circuit_norm]` lemma above
+      simp only [circuit_norm]
+    · -- output is unit
+      intro _ _
+      simp only [circuit_norm]
+
 end Gadgets.Keccak256
