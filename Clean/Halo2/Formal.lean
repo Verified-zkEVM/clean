@@ -268,9 +268,12 @@ theorem FormalRegionCircuit.soundness_iff
   · intro h self env iv hA hC
     exact h self env iv _ _ rfl rfl hA hC
 
-/-- Completeness counterpart of `soundness_iff`. Both the verifier-side and the
-prover-side input values are intro'd (with their defining equations): `Assumptions` is
-stated on the former, `ProverAssumptions`/`ProverSpec` on the latter. -/
+/-- Completeness counterpart of `soundness_iff`. Only the *prover-side* input value is
+intro'd (with its defining equation): the verifier value carries strictly less
+information (hint components erase to unit; cell components read the same environment as
+the prover eval), so the `Assumptions` hypothesis keeps the raw verifier eval — the eval
+machinery decomposes it in gadget proofs, and `h_input`'s component equations rewrite it
+to value-level facts. -/
 theorem FormalRegionCircuit.completeness_iff
     (main : Var Input F → RegionCircuit F (Var Output F))
     [ElaboratedRegionCircuit F Input Output main]
@@ -279,20 +282,19 @@ theorem FormalRegionCircuit.completeness_iff
     (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
     FormalRegionCircuit.Completeness main Assumptions ProverAssumptions ProverSpec ↔
     ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
-      (input_value : Value Input F) (input : ProverValue Input F) (output : ProverValue Output F),
-    eval env.toEnvironment input_var = input_value →
+      (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
     eval env (ElaboratedRegionCircuit.output main input_var self) = output →
     RegionOperations.ExtendsWitnesses env.place self env.env ((main input_var).operations self) →
-    Assumptions input_value →
+    Assumptions (eval env.toEnvironment input_var) →
     ProverAssumptions input env.env.hint →
     RegionOperations.Constraints env.place self env.env ((main input_var).operations self) ∧
     ProverSpec input output env.env.hint := by
   constructor
-  · intro h self env iv input_value input output h_in_v h_in h_out hW hA hPA
-    subst h_in_v h_in h_out; exact h self env iv hW hA hPA
+  · intro h self env iv input output h_in h_out hW hA hPA
+    subst h_in h_out; exact h self env iv hW hA hPA
   · intro h self env iv hW hA hPA
-    exact h self env iv _ _ _ rfl rfl rfl hW hA hPA
+    exact h self env iv _ _ rfl rfl hW hA hPA
 
 end RegionStatements
 

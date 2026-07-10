@@ -181,19 +181,16 @@ def add : FormalRegionCircuit Fp
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
     rintro self env input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ ⟨ox, oy⟩ h_input h_output h_assumptions hc
-    -- reduce the constraints: enableGate produces the two polynomials at the gate row
-    -- (with `cast_row_succ` matching the next-row spelling), copyAdvice the copy equalities.
+    -- reduce circuit structure (gate polys at the gate row — `cast_row_succ` matches the
+    -- next-row spelling — plus the copy equalities), running the eval simprocs
     simp only [circuit_norm, gate, Constraints.withSelector] at hc h_output
-    -- decompose the input/output equations componentwise (framework struct-eval bridges +
-    -- `mk.injEq`), landing on the plain cell reads that appear in the gate polynomials
-    simp only [circuit_norm, explicit_provable_type, AssignedCell.eval,
-      Orchard.Point.mk.injEq, Inputs.mk.injEq] at h_input h_output
-    obtain ⟨⟨hipx, hipy⟩, hiqx, hiqy⟩ := h_input
-    obtain ⟨hox, hoy⟩ := h_output
+    -- destructure input_var; split the input/output eval equations into coordinates
+    provable_type_simp
     obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
     simp only [Cell.eval] at hcpx hcpy hcqx hcqy
-    -- rewrite the gate polys into the input/output coordinates
-    simp only [hox, hoy, hcpx, hcpy, hcqx, hcqy, hipx, hipy, hiqx, hiqy] at hpoly1 hpoly2
+    -- eval → value: gate cell = copy cell (`hc…`) = input coord (`h_input`), R row = output
+    -- coord (`h_output`)
+    simp only [hcpx, hcpy, hcqx, hcqy, h_input, h_output] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
     have hp1 : poly1 ipx ipy iqx iqy ox oy = 0 := by
       simp only [poly1]; linear_combination hpoly1
@@ -208,30 +205,22 @@ def add : FormalRegionCircuit Fp
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    -- bind the *verifier-side* input value (it carries the `Assumptions` facts); the
-    -- prover-side value is unused (ProverAssumptions/ProverSpec are default True)
-    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _input _output
-      h_input - _h_output hwit hA -
-    -- `cast_row_succ` (in `circuit_norm`) matches the goal's next-row spelling to the
-    -- assignment's here
+    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _output h_input _h_output hwit hA -
+    -- reduce circuit structure, running the eval simprocs; `cast_row_succ` (in
+    -- `circuit_norm`) matches the goal's next-row spelling to the assignment's
     simp only [circuit_norm, gate, Constraints.withSelector] at hwit hA h_input ⊢
+    -- destructure input_var; split the input eval equation into coordinates (the raw
+    -- `Assumptions` eval decomposes onto the same cell reads)
+    provable_type_simp
     -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
     obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
-    -- input coordinates equal the copied cell reads (via the componentwise `h_input`;
-    -- the verifier view reads the same underlying environment as the prover eval)
-    simp only [circuit_norm, explicit_provable_type, AssignedCell.eval,
-      Orchard.Point.mk.injEq, Inputs.mk.injEq] at h_input
-    obtain ⟨⟨hipx, hipy⟩, hiqx, hiqy⟩ := h_input
+    -- unfold the witness cell reads to the shared `env.get` row form, then rewrite them to
+    -- the input coordinates via `h_input`
+    simp only [Witgen.WitgenEnv.readVar, Orchard.Point.nondegenerateAdd,
+      Witgen.FExprOver.eval, AssignedCell.eval, h_input] at hwpx hwpy hwqx hwqy hwrx hwry
+    -- land the `Assumptions` facts on the input coordinates
+    simp only [h_input] at hA
     obtain ⟨hpCurve, hqCurve, hxne⟩ := hA
-    -- reduce `readVar` cell reads to the same `penv.get` form as `hipx`, then chain
-    simp only [Witgen.WitgenEnv.readVar, AssignedCell.eval] at hwpx hwpy hwqx hwqy
-    have hpx_eq := hwpx.trans hipx
-    have hpy_eq := hwpy.trans hipy
-    have hqx_eq := hwqx.trans hiqx
-    have hqy_eq := hwqy.trans hiqy
-    -- the assigned R-row values are the `nondegenerateAdd` coordinates over the input coords
-    simp only [Orchard.Point.nondegenerateAdd, Witgen.FExprOver.eval, Witgen.WitgenEnv.readVar,
-      AssignedCell.eval, hipx, hipy, hiqx, hiqy] at hwrx hwry
     -- gate polynomials vanish at the `nondegenerateAdd` result
     have hpolys := polys_zero_of_nondegenerateAdd (xP := ipx) (yP := ipy)
       (xQ := iqx) (yQ := iqy) hxne
@@ -240,16 +229,15 @@ def add : FormalRegionCircuit Fp
     refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- poly1
       simp only [poly1, Orchard.Point.nondegenerateAdd] at hp1
-      simp only [hwrx, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
+      simp only [hwrx, hwpx, hwpy, hwqx, hwqy]
       linear_combination hp1
     · -- poly2
       simp only [poly2, Orchard.Point.nondegenerateAdd] at hp2
-      simp only [hwrx, hwry, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
+      simp only [hwrx, hwry, hwpx, hwpy, hwqx, hwqy]
       linear_combination hp2
     · -- copy equalities
       refine ⟨?_, ?_, ?_, ?_⟩ <;>
-        simp only [Cell.eval, hpx_eq, hpy_eq, hqx_eq, hqy_eq,
-          hipx, hipy, hiqx, hiqy]
+        simp only [Cell.eval, hwpx, hwpy, hwqx, hwqy, h_input]
 
 end AddIncomplete
 
