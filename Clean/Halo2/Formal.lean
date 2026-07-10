@@ -23,10 +23,17 @@ design discussion:
 - **Region-relative**: soundness/completeness quantify over the starting region index
   `i₀` and the placement `place` (the analogues of main Clean's `offset`).
 
-This file sketches the **layouter-level** `FormalCircuit` (over `Circuit`). A
+- **`configure` + `synthesize` bundled**: both halo2 phases live in the same structure
+  (with `ConfigInput`/`Config` as type parameters, since parents interact with both —
+  they are part of the gadget's visible signature), so bundles are parameterless defs.
+  Soundness/completeness quantify over an *arbitrary* config; consistency between the
+  phases holds because gates are standalone defs of the config's columns/selectors,
+  referenced by both.
+
+This file has the **layouter-level** `FormalCircuit` (over `Circuit`) and the
 region-level `FormalRegionCircuit` (over `RegionCircuit`, for `assign_region` fragments
-composed inside a parent region like `add_incomplete` inside variable-base mul) mirrors
-it and is added with the first region-level consumer.
+composed inside a parent region like `add_incomplete` inside variable-base mul), which
+additionally takes the row `offset` at which the gadget is placed.
 
 The forward lemmas and the hypothesis-rewriting tactic (`circuit_proof_start` analogue)
 live in a companion tactic file; here we provide the data + statements they consume.
@@ -85,23 +92,37 @@ A formal circuit: a layouter-level circuit packaged with its contract. Single
 structure (the hint-aware variant), general `CircuitType` I/O, constructive high-level
 `Witness` extractor. The proof boundary — parents consume `Spec` opaquely.
 
+Bundles both halo2 phases: `configure` (register selectors/gates into the constraint
+system, given `ConfigInput` — what the parent hands down) and `synthesize` (the
+layouter-level circuit, given the resulting `Config`). Bundles are *parameterless*
+defs; soundness/completeness quantify over an **arbitrary** config — see
+`FormalRegionCircuit` for the rationale. Unlike the region level there is no `offset`:
+layouter circuits create their own regions and are placed via the region index `i₀`.
+
 Circuits with a trivial witness leave `Witness := unit` (default) and set
-`extract := fun _ _ _ => ()`.
+`extract := fun _ _ _ _ => ()`.
 -/
-structure FormalCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
-    [CircuitType Input] [CircuitType Output] where
+structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
+    (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
-  main : Var Input F → Circuit F (Var Output F)
-  elaborated : ElaboratedCircuit F Input Output main := by first | infer_instance | exact {}
+
+  /-- Configuration phase: allocate selectors and register gates into the constraint
+  system, from what the parent hands down (`ConfigInput`) to the configuration consumed
+  by `synthesize` (`Config`). Rust: `Config::configure(meta, …)`. -/
+  configure : ConfigInput → Configure F Config
+  /-- Synthesis phase: the layouter-level circuit. Rust: the chip method body. -/
+  synthesize : Config → Var Input F → Circuit F (Var Output F)
+  elaborated : ∀ config, ElaboratedCircuit F Input Output (synthesize config) := by
+    intro config; first | infer_instance | exact {}
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
   inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
 
   /-- Constructive extractor: the high-level witness from the low-level one
-  (placement + environment), given the input variable and starting region index. -/
-  extract : Var Input F → RegionIndex → Placed Environment F → Witness F :=
-    fun _ _ _ => inhabitedWitness.default
+  (placement + environment), given the config, input variable and starting region index. -/
+  extract : Config → Var Input F → RegionIndex → Placed Environment F → Witness F :=
+    fun _ _ _ _ => inhabitedWitness.default
 
   /-- Verifier-view precondition (hints erased). -/
   Assumptions : Value Input F → Prop := fun _ => True
@@ -113,28 +134,32 @@ structure FormalCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
   /-- Prover-view postcondition, proved alongside the constraints. -/
   ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
 
-  soundness : FormalCircuit.Soundness main extract Assumptions Spec
-  completeness : FormalCircuit.Completeness main ProverAssumptions ProverSpec
+  soundness : ∀ (config : Config),
+    FormalCircuit.Soundness (synthesize config) (extract config) Assumptions Spec
+  completeness : ∀ (config : Config),
+    FormalCircuit.Completeness (synthesize config) ProverAssumptions ProverSpec
 
 namespace FormalCircuit
-variable [CircuitType Input] [CircuitType Output]
+variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 
 /-- The output variable of the circuit (via the elaborated metadata). -/
-def output (self : FormalCircuit F Input Output) (input : Var Input F) (i₀ : RegionIndex) :
-    Var Output F :=
-  self.elaborated.output input i₀
+def output (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
+    (input : Var Input F) (i₀ : RegionIndex) : Var Output F :=
+  (self.elaborated config).output input i₀
 
 /-- Number of region indices the circuit consumes. -/
-def regionCount (self : FormalCircuit F Input Output) (input : Var Input F) : ℕ :=
-  self.elaborated.regionCount input
+def regionCount (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
+    (input : Var Input F) : ℕ :=
+  (self.elaborated config).regionCount input
 
 /-- Call this circuit as a subcircuit from a parent layouter circuit: emit a single
 `.subcircuit` operation carrying the child's operations, return the child's output,
 advance the region counter by `regionCount`. Rust: calling a chip method. -/
-def call (self : FormalCircuit F Input Output) (input : Var Input F) :
-    Circuit F (Var Output F) :=
+def call (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
+    (input : Var Input F) : Circuit F (Var Output F) :=
   fun i =>
-    (self.output input i, [.subcircuit ((self.main input).operations i)], i + self.regionCount input)
+    (self.output config input i, [.subcircuit ((self.synthesize config input).operations i)],
+      i + self.regionCount config input)
 
 /-!
 TODO (with the first slice consumer — `witness_point` → `add_incomplete`):
@@ -257,42 +282,66 @@ end RegionStatements
 A region-level formal circuit: an `assign_region`-fragment packaged with its contract.
 Same shape as `FormalCircuit` (single hint-aware structure, `Witness` extractor), but
 inside the ambient region rather than creating regions.
+
+Bundles both halo2 phases: `configure` (register selectors/gates into the constraint
+system, given the columns handed down by the parent — `ConfigInput`) and `synthesize`
+(the region-level circuit, given the resulting `Config` and the row `offset` at which
+the gadget is placed inside the ambient region). Bundles are therefore *parameterless*
+defs; soundness/completeness quantify over an **arbitrary** config and offset — proofs
+stay decoupled from `configure`'s monadic allocation, and consistency between the two
+phases holds because gates are standalone defs of the config's columns/selectors,
+referenced by both. (If a gadget's soundness ever needs config well-formedness, add an
+explicit `ConfigWF config` hypothesis discharged from `configure` at instantiation.)
 -/
-structure FormalRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
-    [CircuitType Input] [CircuitType Output] where
+structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
+    (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] where
   name : String := "anonymous"
-  main : Var Input F → RegionCircuit F (Var Output F)
-  elaborated : ElaboratedRegionCircuit F Input Output main := {}
+
+  /-- Configuration phase: allocate selectors and register gates into the constraint
+  system, from what the parent chip hands down (`ConfigInput`, typically columns) to
+  the configuration consumed by `synthesize` (`Config`, halo2's meaning: selectors +
+  columns, e.g. `witness_point::Config`). Rust: `Config::configure(meta, …)`. -/
+  configure : ConfigInput → Configure F Config
+  /-- Synthesis phase: the region-level circuit, at row `offset` inside the ambient
+  region. Rust: the `assign_region`-helper body at `offset`. -/
+  synthesize : Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)
+  elaborated : ∀ config offset,
+    ElaboratedRegionCircuit F Input Output (synthesize config offset) := fun _ _ => {}
 
   Witness : TypeMap := unit
   inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
-  extract : Var Input F → RegionIndex → Placed Environment F → Witness F :=
-    fun _ _ _ => inhabitedWitness.default
+  extract : Config → (offset : ℕ) → Var Input F → RegionIndex → Placed Environment F →
+      Witness F :=
+    fun _ _ _ _ _ => inhabitedWitness.default
 
   Assumptions : Value Input F → Prop := fun _ => True
   Spec : Value Input F → Value Output F → Witness F → Prop
   ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
   ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
 
-  soundness : FormalRegionCircuit.Soundness main extract Assumptions Spec
-  completeness : FormalRegionCircuit.Completeness main ProverAssumptions ProverSpec
+  soundness : ∀ (config : Config) (offset : ℕ),
+    FormalRegionCircuit.Soundness (synthesize config offset) (extract config offset)
+      Assumptions Spec
+  completeness : ∀ (config : Config) (offset : ℕ),
+    FormalRegionCircuit.Completeness (synthesize config offset) ProverAssumptions ProverSpec
 
 namespace FormalRegionCircuit
-variable [CircuitType Input] [CircuitType Output]
+variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 
 /-- The output variable of the region circuit, in the ambient region. -/
-def output (self : FormalRegionCircuit F Input Output) (input : Var Input F) (region : RegionIndex) :
-    Var Output F :=
-  self.elaborated.output input region
+def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) : Var Output F :=
+  (self.elaborated config offset).output input region
 
 /-- Call this region circuit as a subcircuit from a parent region circuit: emit a single
 region-level `.subcircuit` operation carrying the child's operations (in the *same*
 ambient region), returning the child's output. Rust: calling an `assign_region` helper
 with the parent's `region`/`offset`. -/
-def call (self : FormalRegionCircuit F Input Output) (input : Var Input F) :
-    RegionCircuit F (Var Output F) :=
+def call (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
+    (offset : ℕ) (input : Var Input F) : RegionCircuit F (Var Output F) :=
   fun region =>
-    (self.output input region, [.subcircuit ((self.main input).operations region)])
+    (self.output config offset input region,
+      [.subcircuit ((self.synthesize config offset input).operations region)])
 
 end FormalRegionCircuit
 
