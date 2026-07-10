@@ -67,18 +67,19 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     refine ⟨?_, ?_⟩
     · simp only [main, circuit_norm]
       refine ⟨?_, ?_⟩
-      · -- Part A: the witnessed bit vector depends only on `input.val`
+      · -- the witnessed bit vector depends only on `input.val`
         intro h_input _
         apply Vector.ext
         intro i hi
         simp only [circuit_norm, Witgen.VExpr.getElem_eval_mapRange, h_input]
-      · -- Part B: each `assertBool` is assert-only ⇒ trivially computable
+      · -- each `assertBool` in the `forEach` is assert-only ⇒ trivially computable
+        -- (`forEach` inlines `assertBool`, so we discharge the flat assert directly)
         intro i h_input
         simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit_norm,
           FlatOperation.forAll_cons, FlatOperation.forAll_empty, Condition.applyFlat]
     · -- output is the witnessed bit vector; environment agreement below `offset + n` gives equality
       intro _ h_agrees
-      simp only [main, circuit_norm] at h_agrees ⊢
+      simp only [circuit_norm] at h_agrees ⊢
       apply Vector.ext
       intro i hi
       simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
