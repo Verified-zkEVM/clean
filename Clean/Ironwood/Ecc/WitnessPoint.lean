@@ -94,15 +94,19 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
   ProverSpec input output _ := output = input
 
   soundness := by
+    -- easily automatable tactic layer
     intro self env input _ hc
     simp only [circuit_norm, pointGate, curveEqn, Point.eval_eq] at hc ⊢
+    -- normal user-facing proof
     obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
   completeness := by
+    -- easily automatable tactic layer
     rintro self ⟨place, penv⟩ input hwit hpa
     simp only [circuit_norm, pointGate, curveEqn,
       Point.eval_eq_prover, Point.witgen_eval_eq] at hwit hpa ⊢
+    -- normal user-facing proof
     obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
     simp_all
 
