@@ -252,6 +252,20 @@ theorem RegionOperations.extendsWitnesses_nil (place : RegionIndex → ℕ) (sel
     (env : ProverEnvironment F) :
     RegionOperations.ExtendsWitnesses place self env ([] : RegionOperations F) = True := rfl
 
+-- `ExtendsWitnesses` distributes over `++` (the completeness counterpart of
+-- `constraints_append`) — needed so a looped/appended region circuit's witness condition
+-- decomposes into its per-fragment witness conditions.
+@[circuit_norm]
+theorem RegionOperations.extendsWitnesses_append (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : ProverEnvironment F) (ops₁ ops₂ : RegionOperations F) :
+    RegionOperations.ExtendsWitnesses place self env (ops₁ ++ ops₂)
+      = (RegionOperations.ExtendsWitnesses place self env ops₁
+          ∧ RegionOperations.ExtendsWitnesses place self env ops₂) := by
+  induction ops₁ with
+  | nil => simp [RegionOperations.ExtendsWitnesses]
+  | cons op ops ih =>
+    simp only [List.cons_append, RegionOperations.ExtendsWitnesses, ih, and_assoc]
+
 @[circuit_norm]
 theorem RegionOperations.extendsWitnesses_cons (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) (op : RegionOperation F) (ops : RegionOperations F) :

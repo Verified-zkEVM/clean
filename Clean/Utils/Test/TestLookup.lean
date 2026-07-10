@@ -1,5 +1,6 @@
 import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
+import Clean.Ironwood.Utilities.LookupRangeCheck
 
 /-!
 Shape / composition regression tests for the lookup axis (`lookup-design.md` §2.2/§2.4).
@@ -128,5 +129,47 @@ example (place : RegionIndex → ℕ) (env : Environment Fp) (tbl : TableColumn)
   interval_cases r <;>
     simp_all <;>
     decide
+
+/-! ## `range_check` loop normal-form pins (`Ironwood/Utilities/LookupRangeCheck.lean`)
+
+The running-sum gadget is the first with a LOOP in `synthesize`. These pin the operations
+normal form the loop induction depends on: the per-round `++` decomposition of the loop's
+op list, and the running-word membership a single round's `Constraints` reduces to. -/
+
+namespace RangeCheckLoop
+open Halo2.Ironwood.LookupRangeCheck
+
+-- (d-1) Per-round operations decomposition: `(loop (n+1)).operations` is the append of the
+-- `n`-loop's ops and round `n`'s ops. This `rfl`-shape (from the monad's append-bind) is
+-- exactly what makes the z-chain invariant inductable over `numWords`.
+example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset n : ℕ)
+    (self : RegionIndex) :
+    (rangeCheckLoop K cfg element offset (n + 1)).operations self
+      = (rangeCheckLoop K cfg element offset n).operations self
+        ++ (rangeCheckRound K cfg element offset n).operations self := rfl
+
+-- (d-2) A single round's ops: `enableLookup [qLookup, qRunning]` (running-sum row) then the
+-- `assignAdvice` of `z_{idx+1}`. Pins that a round is exactly those two ops in that order.
+example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset idx : ℕ)
+    (self : RegionIndex) :
+    (rangeCheckRound K cfg element offset idx).operations self
+      = [.enableLookup (rangeCheckLookup K cfg) [cfg.qLookup, cfg.qRunning] (offset + idx),
+         .assignAdvice cfg.runningSum (offset + idx + 1) (zWitness K (idx + 1) element)] := rfl
+
+-- (d-3) A round's `Constraints` reduce to the running-word membership: both `q_lookup` and
+-- `q_running` on ⇒ the gated input is `z_cur − 2^K·z_next` (the running word, §1.4), NOT
+-- `z_cur` (which would be the short-row reduction). The `assignAdvice` adds no constraint.
+example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : Environment Fp) (offset idx : ℕ) :
+    RegionOperations.Constraints place self env
+        ((rangeCheckRound K cfg element offset idx).operations self)
+      ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
+          env.advice cfg.runningSum ((place self + (offset + idx) : ℕ) : ℤ)
+              - 2 ^ K * env.advice cfg.runningSum ((place self + (offset + idx + 1) : ℕ) : ℤ)
+            = env.fixed cfg.tableIdx.inner (tableRow : ℤ) := by
+  simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, List.map_cons, List.map_nil,
+    List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self]
+
+end RangeCheckLoop
 
 end Halo2.Lookup.Test

@@ -442,4 +442,404 @@ def shortRangeCheck (K numBits : ℕ) :
         rw [← pow_add]; congr 1; omega
       rw [hPowSplitFp]; field_simp; ring
 
+/-! ## The pure telescoping algebra for `range_check`
+
+Lifted `K`-generically from the phase-one donor `Clean/Orchard/Utilities.lean`,
+`LookupRangeCheck.CopyCheck.{chain_telescope, element_lt}` (there `K` is fixed at `10`; here
+it is a parameter). Zero framework vocabulary — a running-sum chain `f : ℕ → Fp` with each
+step a `K`-bit word telescopes to `f 0 = lo + 2^{K·k}·f k` with `lo < 2^{K·k}`. -/
+
+/-- Telescoping a `K`-bit running-sum chain (donor `CopyCheck.chain_telescope`, `K`-generic):
+`f 0` splits into `K·k` low bits and `2^{K·k}·f k`. -/
+theorem chain_telescope (K : ℕ) (f : ℕ → Fp) :
+    ∀ k : ℕ,
+    (∀ i, i < k → ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Fp)) →
+    ∃ lo : ℕ, lo < 2 ^ (K * k) ∧ f 0 = (lo : Fp) + 2 ^ (K * k) * f k
+  | 0, _ => ⟨0, by norm_num, by norm_num⟩
+  | k + 1, h => by
+    obtain ⟨lo, hlt, heq⟩ := chain_telescope K f k fun i hi => h i (by omega)
+    obtain ⟨w, hw, hstep⟩ := h k (by omega)
+    refine ⟨lo + w * 2 ^ (K * k), ?_, ?_⟩
+    · have hsplit : (2 : ℕ) ^ (K * (k + 1)) = 2 ^ K * 2 ^ (K * k) := by
+        rw [← pow_add]; ring_nf
+      have hbound : lo + w * 2 ^ (K * k) < (w + 1) * 2 ^ (K * k) := by
+        have := Nat.two_pow_pos (K * k); nlinarith
+      have : (w + 1) * 2 ^ (K * k) ≤ 2 ^ K * 2 ^ (K * k) :=
+        Nat.mul_le_mul_right _ (by omega)
+      omega
+    · rw [heq, hstep]
+      push_cast
+      rw [show K * (k + 1) = K * k + K from by ring, pow_add]
+      ring
+
+/-- A fully-decomposed chain (`f numWords = 0`) bounds `f 0` below `2^{K·numWords}`
+(donor `CopyCheck.element_lt`, `K`-generic). The card bound `2^{K·numWords} ≤ |Fp|` reads
+the low part off the field element. -/
+theorem chain_element_lt (K numWords : ℕ) (hCard : 2 ^ (K * numWords) ≤ PALLAS_BASE_CARD)
+    (f : ℕ → Fp)
+    (hchain : ∀ i, i < numWords → ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Fp))
+    (htop : f numWords = 0) :
+    (f 0).val < 2 ^ (K * numWords) := by
+  obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hchain
+  rw [htop, mul_zero, _root_.add_zero] at htel
+  rw [htel, ZMod.val_natCast_of_lt (lt_of_lt_of_le hlo hCard)]
+  exact hlo
+
+/-- The honest running word `z_idx − 2^K·z_{idx+1}` with `z_idx = ↑(b)`,
+`z_{idx+1} = ↑(b / 2^K)` is the low `K`-bit chunk of `b`, hence `< 2^K`.
+Donor `CopyCheck.word_val_lt`, `K`-generic (needs `2^K ≤ |Fp|`). -/
+theorem honest_word_val_lt (K : ℕ) (hCard : 2 ^ K ≤ PALLAS_BASE_CARD) (b : ℕ) :
+    ZMod.val ((b : Fp) - 2 ^ K * ((b / 2 ^ K : ℕ) : Fp)) < 2 ^ K := by
+  have hsub : (b : Fp) - 2 ^ K * ((b / 2 ^ K : ℕ) : Fp) = ((b % 2 ^ K : ℕ) : Fp) := by
+    have h := congrArg (Nat.cast (R := Fp)) (Nat.mod_add_div b (2 ^ K))
+    push_cast at h; linear_combination -h
+  rw [hsub, ZMod.val_natCast_of_lt (lt_of_lt_of_le (Nat.mod_lt _ (pow_two_pos K)) hCard)]
+  exact Nat.mod_lt _ (pow_two_pos K)
+
+/-! ## `range_check` — the running-sum decomposition gadget (the loop)
+
+Rust `LookupRangeCheckConfig::range_check` (`lookup_range_check.rs:171-241`), reached via
+`copy_check`/`witness_check` (lines 124-162). Given `element` (already assigned at
+`running_sum` offset 0), decompose it into `numWords` `K`-bit words by a running sum:
+
+  `z_0 = element`,  `z_{i+1} = (z_i − a_i)/2^K`,  word `a_i = z_i − 2^K·z_{i+1}`,
+
+enabling BOTH `q_lookup` and `q_running` at each word row `i` (`lookup_range_check.rs:213-215`),
+so the lookup input reduces to the running word `a_i` (`lookup-design.md` §1.4), forcing
+`a_i ∈ [0, 2^K)`. With `strict = true` the final `z_{numWords}` is constrained to `0`
+(`lines 235-238`), so `element < 2^{K·numWords}`; with `strict = false` (what the Orchard
+action circuit uses at both call sites — `ecc/chip/mul/overflow.rs:200`,
+`mul_fixed/base_field_elem.rs:278`) the tail is unconstrained and carries the high bits.
+
+**This is the first gadget with a LOOP in `synthesize`.** The loop is a structurally
+recursive `RegionCircuit` def over `numWords` whose `operations` is, by `rfl` (from the
+monad's append-bind, `Lemmas.lean`), the concatenation of per-round op lists:
+`(loop (n+1)).operations self = (loop n).operations self ++ (round n).operations self`.
+That append shape is what lets the z-chain invariant be proven by induction over rounds
+(`rangeCheck_loop_word_bounds` below), and the telescoping algebra (lifted `K`-generically
+from the donor `Clean/Orchard/Utilities.lean`, `CopyCheck.chain_telescope`) then reads the
+decomposition off the chain. -/
+
+/-- The output of `range_check`: the first (`z_0 = element`) and last (`z_{numWords}`)
+running sums, as assigned cells. Rust returns the whole `RunningSum<F>` vector; the two
+callers use only `zs.last()` (the high tail) — plus `z_0` here to state `z_0 = element`. -/
+structure Output (F : Type) where
+  z0 : F
+  zLast : F
+deriving ProvableStruct
+
+/-- The honest running-sum witness value at word `idx`: `z_idx = element ≫ (K·idx)`
+(donor `CopyCheck.main`). As a witgen program over the `element` cell: cast to ℕ (`.val`),
+shift right by `K·idx` bits (`.div` by `2^(K·idx)`), cast back to the field (`.ofNat`). -/
+def zWitness (K idx : ℕ) (element : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .ofFExpr (.ofNat (.div (.val (.expr element)) (.const (2 ^ (K * idx)))))
+
+/-- One round of the running sum (Rust loop body, `lookup_range_check.rs:211-233`), at
+word `idx` inside the ambient region starting at `offset`: enable `q_lookup` AND
+`q_running` at row `offset+idx` — so the lookup input is the running word
+`z_idx − 2^K·z_{idx+1}` — and assign `z_{idx+1}` at row `offset+idx+1`.
+
+Cells are addressed by their absolute row (`offset+idx`), not threaded through the monad:
+the running sum lives at fixed rows `offset, offset+1, …`, so round `idx` is independent of
+the other rounds. That independence is exactly what makes `(loop n).operations` a clean
+concatenation of `(round idx).operations`, hence inductable. -/
+def rangeCheckRound (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset idx : ℕ) :
+    RegionCircuit Fp Unit := do
+  -- running-sum row: both q_lookup and q_running on (§1.4 → input = running word a_idx)
+  (rangeCheckLookup K cfg).enable [cfg.qLookup, cfg.qRunning] (offset + idx)
+  -- assign z_{idx+1} = element ≫ (K·(idx+1)) at row offset+idx+1
+  let _z ← assignAdvice cfg.runningSum (offset + idx + 1) (zWitness K (idx + 1) element)
+  return ()
+
+/-- The running-sum loop: `numWords` rounds, structurally recursive. By the append-bind of
+`RegionCircuit`, `(rangeCheckLoop … (n+1)).operations self`
+`= (rangeCheckLoop … n).operations self ++ (rangeCheckRound … n).operations self` — the
+per-round decomposition the induction consumes (`rangeCheckLoop_operations_succ`). -/
+def rangeCheckLoop (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset : ℕ) :
+    ℕ → RegionCircuit Fp Unit
+  | 0 => pure ()
+  | n + 1 => do
+    rangeCheckLoop K cfg element offset n
+    rangeCheckRound K cfg element offset n
+
+/-- Per-round operations decomposition (holds by `rfl` via `operations_bind`): the crux
+that makes the loop inductable. -/
+theorem rangeCheckLoop_operations_succ (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (offset n : ℕ) (self : RegionIndex) :
+    (rangeCheckLoop K cfg element offset (n + 1)).operations self
+      = (rangeCheckLoop K cfg element offset n).operations self
+        ++ (rangeCheckRound K cfg element offset n).operations self := rfl
+
+/-- The running sum read off the environment: `z_j = env.advice runningSum` at absolute
+row `place self + (offset + j)`. The chain the telescoping algebra runs over. -/
+def zChain (K : ℕ) (cfg : Config K) (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment Fp) (offset : ℕ) (j : ℕ) : Fp :=
+  env.advice cfg.runningSum ((place self + (offset + j) : ℕ) : ℤ)
+
+/-- **The round-invariant / z-chain lemma (soundness), proven by induction over rounds.**
+If the loop's constraints hold and the table is loaded, then every word `z_i − 2^K·z_{i+1}`
+(`i < numWords`) is a `K`-bit value — the hypothesis `chain_telescope`/`chain_element_lt`
+consume. This is the loop-shaped proof: the induction is over `numWords`, using the
+per-round operations decomposition (`rangeCheckLoop_operations_succ`) and the append
+splitting of `RegionOperations.Constraints`.
+
+The membership existential at round `i` (both `q_lookup`, `q_running` on) delivers a usable
+table row holding the word `z_i − 2^K·z_{i+1}`; `TableLoaded`'s usable-rows bound makes that
+value `< 2^K`. -/
+theorem rangeCheck_loop_word_bounds (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ)
+    (hTableLt : ∀ r : ℕ, r < env.usableRows → (env.fixed cfg.tableIdx.inner (r : ℤ)).val < 2 ^ K) :
+    ∀ numWords : ℕ,
+    RegionOperations.Constraints place self env
+      ((rangeCheckLoop K cfg element offset numWords).operations self) →
+    ∀ i, i < numWords → ∃ w : ℕ, w < 2 ^ K ∧
+      zChain K cfg place self env offset i
+        = 2 ^ K * zChain K cfg place self env offset (i + 1) + (w : Fp) := by
+  intro numWords
+  induction numWords with
+  | zero => intro _ i hi; omega
+  | succ n ih =>
+    rw [rangeCheckLoop_operations_succ, RegionOperations.constraints_append]
+    rintro ⟨hLoop, hRound⟩ i hi
+    -- last round `n` is new; earlier rounds `i < n` come from the induction hypothesis
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hi' | rfl
+    · exact ih hLoop i hi'
+    · -- the fresh round `n`: peel its membership existential. Both q_lookup and q_running
+      -- are on, so the gated input reduces to the running word `z_i − 2^K·z_{i+1}`.
+      simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, List.map_cons, List.map_nil,
+        List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self] at hRound
+      obtain ⟨rW, hrWlt, hrW⟩ := hRound
+      -- word = env.fixed tableIdx rW, whose val < 2^K (TableLoaded)
+      refine ⟨(env.fixed cfg.tableIdx.inner (rW : ℤ)).val, hTableLt rW hrWlt, ?_⟩
+      rw [ZMod.natCast_zmod_val]
+      simp only [zChain]
+      rw [show offset + (i + 1) = offset + i + 1 from by omega]
+      linear_combination hrW
+
+/-- **Completeness z-value lemma (loop-shaped, by induction over rounds).** The honest
+prover's `ExtendsWitnesses` of the loop pins each interior running sum to the canonical
+shift `z_j = ↑(element.val ≫ (K·j))` for `1 ≤ j ≤ numWords` (`zWitness` = that shift). The
+`j = 0` sum is `element`, pinned by the copy outside the loop. -/
+theorem rangeCheck_loop_zvalues (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset : ℕ) :
+    ∀ numWords : ℕ,
+    RegionOperations.ExtendsWitnesses place self env
+      ((rangeCheckLoop K cfg element offset numWords).operations self) →
+    ∀ j, 1 ≤ j → j ≤ numWords →
+      zChain K cfg place self env.toEnvironment offset j
+        = ((element.eval place env.toEnvironment).val / 2 ^ (K * j) : ℕ) := by
+  intro numWords
+  induction numWords with
+  | zero => intro _ j hj1 hj2; omega
+  | succ n ih =>
+    rw [rangeCheckLoop_operations_succ, RegionOperations.extendsWitnesses_append]
+    rintro ⟨hLoop, hRound⟩ j hj1 hj2
+    rcases Nat.lt_succ_iff_lt_or_eq.mp (Nat.lt_succ_of_le hj2) with hj' | rfl
+    · -- j ≤ n: from the induction hypothesis
+      exact ih hLoop j hj1 (by omega)
+    · -- j = n + 1: this round's own assignAdvice pins z_{n+1}
+      simp only [rangeCheckRound, circuit_norm, zWitness] at hRound
+      -- hRound: env.advice runningSum (offset + n + 1) = eval of the z-witness program
+      simp only [zChain]
+      rw [show offset + (n + 1) = offset + n + 1 from by omega]
+      -- the witgen program evaluates to ↑(element.val / 2^(K·(n+1)))
+      convert hRound using 2
+
+/-- **Completeness loop-constraints lemma (loop-shaped, by induction over rounds).** Given
+the honest running-sum values `z_j = ↑(a ≫ (K·j))` (`hz`, for `a := element.val`) and the
+loaded table (block contents `hTableEq`, domain bound `hUsable`), the loop's `Constraints`
+hold: the membership at each round `i` is witnessed by the honest word `a_i`'s value
+(`< 2^K ≤ usableRows`, holding `↑a_i = a_i` in the table). -/
+theorem rangeCheck_loop_constraints_complete (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ) (a : ℕ)
+    (hKcard : 2 ^ K ≤ PALLAS_BASE_CARD)
+    (hUsable : 2 ^ K ≤ env.usableRows)
+    (hTableEq : ∀ r : ℕ, r < 2 ^ K → env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp)) :
+    ∀ numWords : ℕ,
+    (∀ j, j ≤ numWords → zChain K cfg place self env offset j = ((a / 2 ^ (K * j) : ℕ) : Fp)) →
+    RegionOperations.Constraints place self env
+      ((rangeCheckLoop K cfg element offset numWords).operations self) := by
+  intro numWords
+  induction numWords with
+  | zero => intro _; exact trivial
+  | succ n ih =>
+    intro hz
+    rw [rangeCheckLoop_operations_succ, RegionOperations.constraints_append]
+    refine ⟨ih (fun j hj => hz j (by omega)), ?_⟩
+    -- round `n` uses `hz n` and `hz (n+1)` (both ≤ n+1)
+    have hzn := hz n (by omega)
+    have hzn1 := hz (n + 1) (by omega)
+    -- round `n`: membership witnessed by the honest word `a_n = z_n − 2^K·z_{n+1}`
+    simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, List.map_cons, List.map_nil,
+      List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self]
+    -- the honest word, rewritten to `↑b − 2^K·↑(b/2^K)` with `b = a ≫ (K·n)`
+    have hword : zChain K cfg place self env offset n
+          - 2 ^ K * zChain K cfg place self env offset (n + 1)
+        = ((a / 2 ^ (K * n) : ℕ) : Fp) - 2 ^ K * (((a / 2 ^ (K * n) / 2 ^ K : ℕ)) : Fp) := by
+      rw [hzn, hzn1]
+      congr 3
+      rw [Nat.div_div_eq_div_mul, ← pow_add]; ring_nf
+    have hwordval :
+        (zChain K cfg place self env offset n
+          - 2 ^ K * zChain K cfg place self env offset (n + 1)).val < 2 ^ K := by
+      rw [hword]; exact honest_word_val_lt K hKcard (a / 2 ^ (K * n))
+    refine ⟨(zChain K cfg place self env offset n
+        - 2 ^ K * zChain K cfg place self env offset (n + 1)).val,
+      lt_of_lt_of_le hwordval hUsable, ?_⟩
+    -- the running word equals the table cell at row `word.val`
+    rw [hTableEq _ hwordval, ZMod.natCast_zmod_val]
+    simp only [zChain, show offset + n + 1 = offset + (n + 1) from by omega]
+
+/-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
+`synthesize` name the running-sum cells `z_0` and `z_{numWords}` for the `Output`, which
+live at fixed rows rather than being threaded through the loop's return value. -/
+def cellAt (col : Column .advice) (row : ℕ) : RegionCircuit Fp (AssignedCell Fp) :=
+  fun self => (.of self row col, [])
+
+@[circuit_norm]
+theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt col row).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt col row).output self = .of self row col := rfl
+
+/-- The `range_check` gadget (`lookup_range_check.rs:171-241`), region-level, parameterized
+by `numWords` and `strict`. Copies `element` into `running_sum` at `offset` (`z_0`), runs the
+`numWords`-round running-sum loop, and — when `strict` — constrains the final `z_{numWords}`
+to `0` (`lines 235-238`).
+
+`strict = false` (the Orchard action-circuit variant): `Spec` is the telescoping
+decomposition `element = lo + 2^{K·numWords}·z_last`, `lo < 2^{K·numWords}` — the only fact
+soundly available (the tail is unconstrained). `strict = true`: additionally
+`element.val < 2^{K·numWords}` (`z_last = 0`). -/
+def rangeCheck (K numWords : ℕ) (strict : Bool) :
+    FormalRegionCircuit Fp (Config K) (Config K) Inputs Output where
+  configure := fun cfg => pure cfg
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    -- copy `element` into `running_sum` at `offset` as `z_0` (Rust `copy_check`/`witness_check`)
+    let _z0 ← copyAdvice input.element cfg.runningSum offset
+    -- the running-sum loop: `numWords` rounds
+    rangeCheckLoop K cfg input.element offset numWords
+    let zLast ← cellAt cfg.runningSum (offset + numWords)
+    -- strict mode: constrain the final running sum to 0
+    if strict then constrainConstant zLast (0 : Fp)
+    let z0 ← cellAt cfg.runningSum offset
+    return { z0, zLast }
+
+  -- Same env-level preconditions as `shortRangeCheck`: the table is loaded (`TableLoaded`),
+  -- and `q_lookup`/`q_running` are distinct selectors (they are allocated separately in
+  -- `configure`). The running-sum rows here have BOTH selectors on, so the distinctness is
+  -- not consumed by the word-bound induction; it is kept for uniformity with the two-variant
+  -- lookup semantics (a short-row consumer would need it).
+  EnvAssumptions cfg env :=
+    TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
+  -- Field-capacity bound: `num_words · K` must fit the field (Rust `assert!`,
+  -- `lookup_range_check.rs:179`). We carry `2^{K·numWords} ≤ |Fp|` (reads the low part of the
+  -- decomposition off the field element) and the per-word `2^K ≤ |Fp|` (each `K`-bit lookup;
+  -- for `numWords ≥ 1` the former implies it, but `numWords = 0` needs it separately).
+  Assumptions _ := 2 ^ (K * numWords) ≤ PALLAS_BASE_CARD ∧ 2 ^ K ≤ PALLAS_BASE_CARD
+
+  Spec input output _ :=
+    output.z0 = input.element ∧
+    (∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
+      input.element = (lo : Fp) + ((2 ^ (K * numWords) : ℕ) : Fp) * output.zLast) ∧
+    -- strict: the final running sum is 0, so element fits in K·numWords bits
+    (strict = true → output.zLast = 0 ∧ input.element.val < 2 ^ (K * numWords))
+
+  -- honest-prover precondition: in `strict` mode the element genuinely fits in `K·numWords`
+  -- bits (the assertion precondition — the honest prover can only satisfy `z_last = 0` then).
+  -- Non-strict imposes nothing. Established assertion-gadget pattern (cf. donor `Decomposed`).
+  ProverAssumptions input _ := strict = true → input.element.val < 2 ^ (K * numWords)
+
+  soundness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output hE hA hc
+    obtain ⟨hTable, _hDistinct⟩ := hE
+    obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
+    -- peel the circuit structure: copy (z_0 = element) ++ loop ++ [zLast strict] output.
+    -- keep the loop's `Constraints` chunk FOLDED (do not unfold `rangeCheckLoop`); the
+    -- word-bound induction consumes it as-is.
+    simp only [circuit_norm,
+      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+      operations_copyAdvice, output_cellAt,
+      operations_cellAt, RegionOperations.constraints_append] at hc h_output ⊢
+    obtain ⟨hCopy, hLoop, _hTailC⟩ := hc
+    -- land `h_input`/copy on the element cell value (destructures to `input_element` /
+    -- `output_z0` / `output_zLast`)
+    provable_type_simp
+    -- the running-sum chain read off the env; the word-bound induction over the loop chunk
+    set f := zChain K cfg env.place self env.env offset with hf_def
+    have hwords := rangeCheck_loop_word_bounds K cfg input_var_element env.place self env.env
+      offset hTableLt numWords hLoop
+    -- z_0 = element (copy)
+    have hz0 : f 0 = input_element := by
+      simp only [hf_def, zChain, add_zero]; rw [hCopy]; exact h_input
+    -- the telescoping decomposition (soundly available regardless of `strict`)
+    obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
+    -- resolve the output cells (case on `strict` to compute the tail ops)
+    rcases hbstrict : strict with _ | _ <;>
+      simp only [hbstrict, circuit_norm, output_cellAt, operations_cellAt,
+        operations_constrainConstant, RegionOperations.constraints_append,
+        Bool.false_eq_true, if_true, if_false, reduceCtorEq] at _hTailC h_output ⊢ <;>
+      obtain ⟨hOz0, hOzLast⟩ := h_output <;>
+      -- output_z0 = advice runningSum offset = f 0 ; output_zLast = advice … = f numWords
+      rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
+          show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain]]
+    · -- strict = false: telescoped decomposition, strict conjunct already discharged by simp
+      exact ⟨hz0, lo, hlo, by rw [← hz0]; push_cast; exact htel⟩
+    · -- strict = true: the tail's `constrainConstant` gives f numWords = 0
+      have hzLast0 : f numWords = 0 := by simp only [hf_def, zChain]; exact _hTailC
+      refine ⟨hz0, ⟨lo, hlo, ?_⟩, hzLast0, ?_⟩
+      · rw [← hz0]; push_cast; exact htel
+      · rw [← hz0]; exact chain_element_lt K numWords hA.1 f hwords hzLast0
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit hE hA hpa
+    obtain ⟨hTable, hDistinct⟩ := hE
+    obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
+    simp only [Placed.toEnvironment_env] at hTableEq hUsable
+    -- peel the circuit into: copy witness ++ loop witness ++ tail; keep the loop chunk folded
+    simp only [circuit_norm, RegionCircuit.operations_bind, operations_copyAdvice,
+      operations_cellAt, RegionOperations.extendsWitnesses_append,
+      RegionOperations.constraints_append] at hwit ⊢
+    obtain ⟨hCopyWit, hLoopWit, hTailWit⟩ := hwit
+    obtain ⟨hCardN, hKcard⟩ := hA
+    -- the honest z_0 = the element cell value; `eCell.val` is the decomposed nat `a`
+    set eCell := input_var.element.eval env.place env.env.toEnvironment with heCell
+    -- z_0 = element cell (from the copy's assignAdvice witness)
+    have hz0 : zChain K cfg env.place self env.env.toEnvironment offset 0 = eCell := by
+      simp only [zChain, add_zero, heCell, AssignedCell.eval, hCopyWit]
+    -- the honest z-chain up to numWords: `z_j = ↑(eCell.val ≫ (K·j))`
+    have hz : ∀ j, j ≤ numWords → zChain K cfg env.place self env.env.toEnvironment offset j
+        = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
+      intro j hj
+      rcases Nat.eq_zero_or_pos j with rfl | hjpos
+      · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
+      · exact rangeCheck_loop_zvalues K cfg input_var.element env.place self env.env offset
+          numWords hLoopWit j hjpos hj
+    refine ⟨hCopyWit, ?_, ?_⟩
+    · -- the loop's Constraints (membership at each round), via the completeness loop lemma
+      exact rangeCheck_loop_constraints_complete K cfg input_var.element env.place self
+        env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
+    · -- the tail: strict ⇒ `constrainConstant zLast 0` (⇒ z_last = 0); else nothing
+      rcases hbstrict : strict with _ | _
+      · -- strict = false: no tail constraint
+        simp only [circuit_norm, operations_cellAt, RegionOperations.constraints_append]
+      · -- strict = true: prove `zLast = 0` from the honest value (element < 2^{K·numWords})
+        simp only [circuit_norm, operations_cellAt, operations_constrainConstant,
+          RegionOperations.constraints_append, AssignedCell.of_cell, Cell.of, Cell.eval,
+          Cell.of_column, Cell.of_regionIndex, Cell.of_rowOffset]
+        have hzn := hz numWords le_rfl
+        simp only [zChain] at hzn
+        have heInput : eCell.val < 2 ^ (K * numWords) := by
+          have hie : input.element = eCell := by
+            rw [heCell, ← h_input]; provable_type_simp
+          rw [← hie]; exact hpa hbstrict
+        rw [hzn, Nat.div_eq_of_lt heInput, Nat.cast_zero]
+
 end Halo2.Ironwood.LookupRangeCheck
