@@ -80,8 +80,11 @@ theorem point_products_of_valid {xv yv : Fp}
     obtain ⟨hx0, hy0⟩ := hz
     subst hx0; subst hy0; exact ⟨by ring, by ring⟩
 
-def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrained Point) Point where
-  main (point : Point (FExpr Fp)) := do
+def point :
+    FormalRegionCircuit Fp (Column .advice × Column .advice) Config
+      (Unconstrained Point) Point where
+  configure := fun (x, y) => configure x y
+  synthesize config offset (point : Point (FExpr Fp)) := do
     -- enable "witness point" gate
     (pointGate config.qPoint config.x config.y).enable offset
     -- assign the x and y values
@@ -94,19 +97,23 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
   ProverSpec input output _ := output = input
 
   soundness := by
-    -- tactic layer: rewrite to the intro'd-values form, then name input/output values
+    intro config offset
+    -- tactic layer: rewrite to the intro'd-values form, name + destructure input/output
     rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _ hc
-    -- tactic layer: reduce constraints and split the output-value equation to field coords
-    -- (the `explicit_provable_type` split is a placeholder for the smart eval-split tactic)
-    simp only [circuit_norm, pointGate, curveEqn] at hc
-    simp only [circuit_norm, explicit_provable_type] at h_output
-    subst h_output
+    rintro self env input_var input ⟨ox, oy⟩ h_input h_output _ hc
+    -- tactic layer: reduce constraints and split the output-value equation to field coords.
+    -- The eval-split (`explicit_provable_type`) is a placeholder for the smart tactic.
+    simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type, Orchard.Point.mk.injEq]
+      at hc h_output
+    -- tactic layer: rewrite eval → named value, so the constraints are stated over the
+    -- abstract output coordinates `ox`/`oy` (NOT `subst`, which would splat eval back in).
+    rw [h_output.1, h_output.2] at hc
     -- normal user-facing proof: output lies on the curve (or is the identity)
     obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
   completeness := by
+    intro config offset
     -- tactic layer: rewrite to the intro'd-values form, name + destructure input/output
     rw [FormalRegionCircuit.completeness_iff]
     rintro self ⟨place, penv⟩ input_var ⟨ix, iy⟩ ⟨ox, oy⟩ h_input h_output hwit hpa
