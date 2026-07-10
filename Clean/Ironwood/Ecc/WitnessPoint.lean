@@ -97,31 +97,52 @@ def point :
   ProverSpec input output _ := output = input
 
   soundness := by
+    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
+    -- The steps here are exactly what the smart eval-split tactic will do mechanically.
     intro config offset
-    -- tactic layer: rewrite to the intro'd-values form, name + destructure input/output
+    -- rewrite to the intro'd-values form (input/output become plain values)
     rw [FormalRegionCircuit.soundness_iff]
-    rintro self env input_var input ⟨ox, oy⟩ h_input h_output _ hc
-    -- tactic layer: reduce constraints and split the output-value equation to field coords.
-    -- The eval-split (`explicit_provable_type`) is a placeholder for the smart tactic.
+    -- name + destructure input/output; `input` is `Unit` here (Unconstrained input)
+    rintro self env input_var input ⟨ox, oy⟩ h_input h_output _hA hc
+    -- reduce the gate constraints, and split the output-value equation into coordinates
     simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type, Orchard.Point.mk.injEq]
       at hc h_output
-    -- tactic layer: rewrite eval → named value, so the constraints are stated over the
-    -- abstract output coordinates `ox`/`oy` (NOT `subst`, which would splat eval back in).
+    -- rewrite eval → value: the constraints get stated over the abstract coords `ox`/`oy`
+    -- (NOT `subst`, which would splat eval back into the goal — the wrong direction)
     rw [h_output.1, h_output.2] at hc
-    -- normal user-facing proof: output lies on the curve (or is the identity)
     obtain ⟨hx, hy⟩ := hc
+    -- clear the framework plumbing: nothing below mentions cells, envs, or vars
+    clear h_output h_input _hA input_var input env self config offset
+    -- ══ user-facing half: pure field values + curve math ══
+    -- hx : ox * (oy * oy - ox * ox * ox - pallasB) = 0
+    -- hy : oy * (oy * oy - ox * ox * ox - pallasB) = 0
+    -- ⊢ ({ x := ox, y := oy } : Point Fp).Valid
     exact point_valid hx hy
 
   completeness := by
+    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     intro config offset
-    -- tactic layer: rewrite to the intro'd-values form, name + destructure input/output
     rw [FormalRegionCircuit.completeness_iff]
     rintro self ⟨place, penv⟩ input_var ⟨ix, iy⟩ ⟨ox, oy⟩ h_input h_output hwit hpa
+    -- reduce constraints; split every struct equation (`hwit`/`h_input`/`h_output`/goal)
+    -- into coordinates
     simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type,
-      Point.witgen_eval_eq] at hwit hpa h_input h_output ⊢
-    -- normal user-facing proof
-    obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
-    simp_all
+      Point.witgen_eval_eq, Orchard.Point.mk.injEq] at hwit hpa h_input h_output ⊢
+    -- the honest prover assigns the input's coordinates, so `output = input`. Chain the
+    -- three coordinate equations to eliminate the output vars in favor of `ix`/`iy`:
+    --   cell = ox  (h_output),  cell = witness  (hwit),  witness = ix  (h_input)
+    obtain ⟨hox, hoy⟩ := h_output
+    obtain ⟨hwx, hwy⟩ := hwit
+    obtain ⟨hix, hiy⟩ := h_input
+    rw [hox, hoy]                                    -- constraint cells → ox, oy
+    have hoxix : ox = ix := hox.symm.trans (hwx.trans hix)
+    have hoyiy : oy = iy := hoy.symm.trans (hwy.trans hiy)
+    subst hoxix hoyiy                                -- identify input/output coords; goal now pure
+    clear hox hoy hwx hwy hix hiy input_var penv place self config offset
+    -- ══ user-facing half: pure field values + curve math ══
+    -- hpa : ({ x := ox, y := oy } : Point Fp).Valid
+    -- ⊢ (ox * (…) = 0 ∧ oy * (…) = 0) ∧ ox = ox ∧ oy = oy
+    exact ⟨point_products_of_valid hpa, rfl, rfl⟩
 
 end WitnessPoint
 
