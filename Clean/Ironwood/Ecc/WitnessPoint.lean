@@ -94,20 +94,24 @@ def point (config : Config) (offset : ℕ) : FormalRegionCircuit Fp (Unconstrain
   ProverSpec input output _ := output = input
 
   soundness := by
-    -- easily automatable tactic layer.
-    -- TODO(tactic): the eval-split lemmas here have to be chosen by hand; tactic should derive them
-    intro self env input _ hc
-    simp only [circuit_norm, pointGate, curveEqn, Point.eval_eq] at hc ⊢
-    -- normal user-facing proof
+    -- tactic layer: rewrite to the intro'd-values form, then name input/output values
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output _ hc
+    -- tactic layer: reduce constraints and split the output-value equation to field coords
+    -- (the `explicit_provable_type` split is a placeholder for the smart eval-split tactic)
+    simp only [circuit_norm, pointGate, curveEqn] at hc
+    simp only [circuit_norm, explicit_provable_type] at h_output
+    subst h_output
+    -- normal user-facing proof: output lies on the curve (or is the identity)
     obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
   completeness := by
-    -- easily automatable tactic layer.
-    -- TODO(tactic): the eval-split lemmas here have to be chosen by hand; tactic should derive them
-    rintro self ⟨place, penv⟩ input hwit hpa
-    simp only [circuit_norm, pointGate, curveEqn,
-      Point.eval_eq_prover, Point.witgen_eval_eq] at hwit hpa ⊢
+    -- tactic layer: rewrite to the intro'd-values form, name + destructure input/output
+    rw [FormalRegionCircuit.completeness_iff]
+    rintro self ⟨place, penv⟩ input_var ⟨ix, iy⟩ ⟨ox, oy⟩ h_input h_output hwit hpa
+    simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type,
+      Point.witgen_eval_eq] at hwit hpa h_input h_output ⊢
     -- normal user-facing proof
     obtain ⟨hpx, hpy⟩ := point_products_of_valid hpa
     simp_all

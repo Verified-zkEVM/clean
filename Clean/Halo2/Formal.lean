@@ -207,6 +207,50 @@ def FormalRegionCircuit.Completeness
   ProverSpec (eval env input)
     (eval env (ElaboratedRegionCircuit.output main input self)) env.env.hint
 
+/-- Equivalence rewriting `Soundness` into a form with the input/output *values* intro'd
+as variables (with their defining equations). A proof tactic `rw`s this at the very start,
+so the user works with `input`/`output` (finite-field values) instead of `eval env …`. -/
+theorem FormalRegionCircuit.soundness_iff
+    (main : Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
+    (Assumptions : Value Input F → Prop)
+    (Spec : Value Input F → Value Output F → Witness F → Prop) :
+    FormalRegionCircuit.Soundness main extract Assumptions Spec ↔
+    ∀ (self : RegionIndex) (env : Placed Environment F) (input_var : Var Input F)
+      (input : Value Input F) (output : Value Output F),
+    eval env input_var = input →
+    eval env (ElaboratedRegionCircuit.output main input_var self) = output →
+    Assumptions input →
+    RegionOperations.Constraints env.place self env.env ((main input_var).operations self) →
+    Spec input output (extract input_var self env) := by
+  constructor
+  · intro h self env iv input output h_in h_out hA hC
+    subst h_in h_out; exact h self env iv hA hC
+  · intro h self env iv hA hC
+    exact h self env iv _ _ rfl rfl hA hC
+
+/-- Completeness counterpart of `soundness_iff`. -/
+theorem FormalRegionCircuit.completeness_iff
+    (main : Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F Input Output main]
+    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
+    FormalRegionCircuit.Completeness main ProverAssumptions ProverSpec ↔
+    ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
+      (input : ProverValue Input F) (output : ProverValue Output F),
+    eval env input_var = input →
+    eval env (ElaboratedRegionCircuit.output main input_var self) = output →
+    RegionOperations.ExtendsWitnesses env.place self env.env ((main input_var).operations self) →
+    ProverAssumptions input env.env.hint →
+    RegionOperations.Constraints env.place self env.env ((main input_var).operations self) ∧
+    ProverSpec input output env.env.hint := by
+  constructor
+  · intro h self env iv input output h_in h_out hW hA
+    subst h_in h_out; exact h self env iv hW hA
+  · intro h self env iv hW hA
+    exact h self env iv _ _ rfl rfl hW hA
+
 end RegionStatements
 
 /--
