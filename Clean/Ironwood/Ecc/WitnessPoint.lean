@@ -116,7 +116,7 @@ def point :
     -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var _vinput input output _h_vinput h_input h_output hwit _hassum hpa
+    intro self env input_var input output h_input h_output hwit _hassum hpa
     -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
     simp only [circuit_norm, pointGate, curveEqn] at hwit hpa h_input h_output ⊢
     -- destructure input/output/input_var; split every struct equation into coordinates
