@@ -376,14 +376,15 @@ def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : Prove
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
-  ∀ i < n, env.get i = env'.get i
+  (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
-def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
-  ∀ env env', env.AgreesBelow n env' → f env = f env'
+def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
+  env.AgreesBelow n env' → f env = f env'
 
 def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.AgreesBelow n env' →
-    env.hint = env'.hint → env.data = env'.data → compute.eval env = compute.eval env' } s.ops.toFlat
+  FlatOperation.forAll n {
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+  } s.ops.toFlat
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset,
@@ -392,14 +393,12 @@ This allows us to compute a concrete environment from witnesses, by successively
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   ops.forAll n {
-    witness n _ compute :=
-      env.AgreesBelow n env' → env.hint = env'.hint → env.data = env'.data →
-      compute.eval env = compute.eval env'
-    subcircuit n _ s := s.ComputableWitnesses n env env'
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+    subcircuit n' _ s := s.ComputableWitnesses n' env env'
   }
 
-def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
-  ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
+def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : ProverEnvironment F) :=
+  (circuit.operations n).ComputableWitnesses n env env'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
