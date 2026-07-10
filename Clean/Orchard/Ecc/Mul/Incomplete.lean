@@ -454,7 +454,7 @@ value of row `r` (with `YAD (n+1)` the witnessed doubled final `y`), and `bits` 
 values. Splitting this from `soundness` keeps each declaration within the elaboration
 budget.
 -/
-private theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
+theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
     (XA XP YP L1 L2 YAD : ℕ → Fp) (bits : ℕ → Bool)
     (hxA0 : XA 0 = (m • P).x)
@@ -543,7 +543,7 @@ private theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
 The honest row at a small positive multiple of the base: the gate equations hold for
 `lambdaCellsValue`'s cells, and they step the accumulator to `[2m + 2k - 1] P`.
 -/
-private theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
+theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
     {m : ℕ} (h2 : 2 ≤ m) (hBound : 2 * m + 1 < PALLAS_SCALAR_CARD) (b : ℕ) :
     2 * (m • P).y - 2 * (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 *
         ((m • P).x - P.x)
@@ -916,7 +916,7 @@ theorem soundness (n : ℕ) :
 
 /-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
 over `honest_step`'s output conclusions. -/
-private theorem accVal_eq_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
+theorem accVal_eq_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
     {m : ℕ} (h2 : 2 ≤ m) (n : ℕ) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
     ∀ r, r ≤ n + 1 →
       accVal P.x P.y (m • P).x (m • P).y bits r

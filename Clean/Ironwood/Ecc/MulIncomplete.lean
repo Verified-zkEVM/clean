@@ -285,7 +285,7 @@ AnchoredBase` variant (`incomplete.rs:317-337`); the `q_mul_2` constancy then pr
 anchor. Cells are at fixed absolute rows so round `r` is independent of the others — the
 concatenation property the loop induction consumes. -/
 def round (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
-    (offset r : ℕ) : RegionCircuit Fp Unit := do
+    (offset n r : ℕ) : RegionCircuit Fp Unit := do
   let row := offset + 1 + r
   let _z ← assignAdvice cfg.z row (zWit input bits r)
   -- x_p / y_p: anchored copy of `base` on the first loop row, plain assignment otherwise
@@ -298,25 +298,32 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
   let _l1 ← assignAdvice cfg.lambda1 row (l1Wit input bits r)
   let _l2 ← assignAdvice cfg.lambda2 row (l2Wit input bits r)
   let _xANext ← assignAdvice cfg.xA (row + 1) (xANextWit input bits r)
+  -- the round's selector: `q_mul_2` on interior rows (`r < n`), `q_mul_3` on the last (`r = n`).
+  -- Enabling inside the round is what lands each round's gate constraints in the loop's
+  -- `Constraints`, so the loop lemmas can consume them by the same induction as range_check.
+  if r = n then
+    (qMul3Gate cfg).enable row
+  else
+    (qMul2Gate cfg).enable row
   return ()
 
 /-- The double-and-add loop: `numRounds` rounds, structurally recursive. By the append-bind of
 `RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
 (round … k).operations self` — the per-round decomposition the induction consumes. -/
-def loop (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (offset : ℕ) :
+def loop (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (offset n : ℕ) :
     ℕ → RegionCircuit Fp Unit
   | 0 => pure ()
   | k + 1 => do
-    loop cfg input bits offset k
-    round cfg input bits offset k
+    loop cfg input bits offset n k
+    round cfg input bits offset n k
 
 /-- Per-round operations decomposition (holds by `rfl` via the monad's `operations_bind`): the
 crux that makes the loop inductable. Mirrors `rangeCheckLoop_operations_succ`. -/
 theorem loop_operations_succ (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
-    (offset k : ℕ) (self : RegionIndex) :
-    (loop cfg input bits offset (k + 1)).operations self
-      = (loop cfg input bits offset k).operations self
-        ++ (round cfg input bits offset k).operations self := rfl
+    (offset n k : ℕ) (self : RegionIndex) :
+    (loop cfg input bits offset n (k + 1)).operations self
+      = (loop cfg input bits offset n k).operations self
+        ++ (round cfg input bits offset n k).operations self := rfl
 
 /-- Read the assigned cell at a known region-local row/column (no op emitted) — lets `synthesize`
 name the running-sum and accumulator cells for the `Output`, which live at fixed rows rather
@@ -359,6 +366,159 @@ def adv (cfg_col : Column .advice) (place : RegionIndex → ℕ) (self : RegionI
     (env : Environment Fp) (row : ℕ) : Fp :=
   env.advice cfg_col ((place self + row : ℕ) : ℤ)
 
+section LoopFacts
+
+variable (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+  (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ)
+
+/-- The per-row cell readers, as abbreviations over `adv` at the round's absolute row. -/
+private def XAr (r : ℕ) : Fp := adv cfg.xA place self env (offset + 1 + r)
+private def XPr (r : ℕ) : Fp := adv cfg.xP place self env (offset + 1 + r)
+private def YPr (r : ℕ) : Fp := adv cfg.yP place self env (offset + 1 + r)
+private def L1r (r : ℕ) : Fp := adv cfg.lambda1 place self env (offset + 1 + r)
+private def L2r (r : ℕ) : Fp := adv cfg.lambda2 place self env (offset + 1 + r)
+/-- The `z` running-sum reader at the round's row, and its predecessor (the `z` cell one
+row earlier: for `r = 0` the start-copy at `offset`, otherwise the previous round's `z`). -/
+private def Zr (r : ℕ) : Fp := adv cfg.z place self env (offset + 1 + r)
+private def Zpr (r : ℕ) : Fp := adv cfg.z place self env (offset + r)
+/-- The bit read off the running sum at round `r`: `k_r = z_r − 2·z_{r−1}`. -/
+private def Kr (r : ℕ) : Fp := Zr cfg place self env offset r - Zpr cfg place self env offset r * 2
+/-- The derived `Y_A` of row `r` (`(λ₁+λ₂)(x_A − x_R)`); at `r = n+1` we instead read the
+witnessed doubled final `y` from the `λ₁` column at `offset+1+(n+1)`. -/
+private def YADr (n r : ℕ) : Fp :=
+  if r = n + 1 then 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
+  else (L1r cfg place self env offset r + L2r cfg place self env offset r) *
+    (XAr cfg place self env offset r -
+      (L1r cfg place self env offset r * L1r cfg place self env offset r
+        - XAr cfg place self env offset r - XPr cfg place self env offset r))
+
+/-- **Extraction of the cleaned per-round gate facts.** From the loop's `Constraints`
+(gate enables are inside `round`, so the round constraints live here), each round
+`r < numRounds` yields the four shared `forLoopPolys` facts (booleanity, gradient_1,
+secant_line, gradient_2), and — for interior rounds (`r ≠ n`) — the `x_p`/`y_p`
+constancy. Proven by induction over `numRounds`, mirroring
+`rangeCheck_loop_word_bounds`. -/
+private theorem loop_gate_facts (n : ℕ) :
+    ∀ numRounds : ℕ, numRounds ≤ n + 1 →
+    RegionOperations.Constraints place self env
+      ((loop cfg input bits offset n numRounds).operations self) →
+    ∀ r, r < numRounds →
+      -- booleanity of the bit
+      (IsBool (Kr cfg place self env offset r)) ∧
+      -- gradient_1 (×2 form)
+      (2 * L1r cfg place self env offset r *
+          (XAr cfg place self env offset r - XPr cfg place self env offset r)
+        + 2 * ((Kr cfg place self env offset r * 2 - 1) * YPr cfg place self env offset r)
+        = YADr cfg place self env offset n r) ∧
+      -- secant_line
+      (L2r cfg place self env offset r * L2r cfg place self env offset r
+        = XAr cfg place self env offset (r + 1)
+          + (L1r cfg place self env offset r * L1r cfg place self env offset r
+              - XAr cfg place self env offset r - XPr cfg place self env offset r)
+          + XAr cfg place self env offset r) ∧
+      -- gradient_2
+      (2 * L2r cfg place self env offset r *
+          (XAr cfg place self env offset r - XAr cfg place self env offset (r + 1))
+        = YADr cfg place self env offset n r + YADr cfg place self env offset n (r + 1)) ∧
+      -- x_p / y_p constancy on interior rounds
+      (r ≠ n → XPr cfg place self env offset r = XPr cfg place self env offset (r + 1)
+        ∧ YPr cfg place self env offset r = YPr cfg place self env offset (r + 1)) := by
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _ r hr; omega
+  | succ k ih =>
+    intro hkb
+    rw [loop_operations_succ, RegionOperations.constraints_append]
+    rintro ⟨hLoop, hRound⟩ r hr
+    have hrle : r ≤ n := by omega
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
+    · exact ih (by omega) hLoop r hr'
+    · -- the fresh round `r = k`. Reduce its gate constraints to the value-level facts.
+      -- The `z`-prev cell reads at `↑(place self + (offset+1+r)) - 1`; normalize it to the
+      -- `Zpr` spelling `↑(place self + (offset+r))` (the single `offset+(k+1)` boundary quirk).
+      have hzp : ((place self + (offset + 1 + r) : ℕ) : ℤ) - 1
+          = ((place self + (offset + r) : ℕ) : ℤ) := by push_cast; ring
+      -- YADr at `r` is always the derived form (since `r ≤ n < n+1`)
+      have hYADr : YADr cfg place self env offset n r
+          = (L1r cfg place self env offset r + L2r cfg place self env offset r) *
+            (XAr cfg place self env offset r -
+              (L1r cfg place self env offset r * L1r cfg place self env offset r
+                - XAr cfg place self env offset r - XPr cfg place self env offset r)) := by
+        rw [YADr, if_neg (by omega)]
+      -- YADr at `r+1`: derived when `r ≠ n`, the witnessed doubled final `y` when `r = n`.
+      have hYADr1n : YADr cfg place self env offset n (n + 1)
+          = 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1)) := by rw [YADr, if_pos rfl]
+      have hYADr1i : r ≠ n → YADr cfg place self env offset n (r + 1)
+          = (L1r cfg place self env offset (r + 1) + L2r cfg place self env offset (r + 1)) *
+            (XAr cfg place self env offset (r + 1) -
+              (L1r cfg place self env offset (r + 1) * L1r cfg place self env offset (r + 1)
+                - XAr cfg place self env offset (r + 1) - XPr cfg place self env offset (r + 1))) :=
+        fun h => by rw [YADr, if_neg (by omega)]
+      simp only [XAr, XPr, YPr, L1r, L2r, Zr, Zpr, Kr, adv] at hYADr hYADr1n hYADr1i ⊢
+      -- resolve the round's `if r = 0` (anchored copy) split first, so its ops reduce
+      by_cases hr0 : r = 0
+      · -- first loop row: `x_p`/`y_p` are copies of `base`
+        subst hr0
+        by_cases hrn : (0 : ℕ) = n
+        · -- single-round circuit: `q_mul_3` on row 0
+          subst hrn
+          rw [hYADr, hYADr1n]
+          simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+            Constraints.withSelector, if_pos rfl] at hRound
+          obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
+          refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
+          · rcases mul_eq_zero.mp hbool with h | h
+            · exact Or.inl (by linear_combination h)
+            · exact Or.inr (by linear_combination h)
+          · linear_combination hg1
+          · linear_combination hsec
+          · linear_combination hg2
+        · -- interior first row: `q_mul_2` on row 0
+          rw [hYADr, hYADr1i hrn]
+          simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+            Constraints.withSelector, if_pos rfl, if_neg hrn] at hRound
+          obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
+          refine ⟨?_, ?_, ?_, ?_,
+            fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
+          · rcases mul_eq_zero.mp hbool with h | h
+            · exact Or.inl (by linear_combination h)
+            · exact Or.inr (by linear_combination h)
+          · linear_combination hg1
+          · linear_combination hsec
+          · linear_combination hg2
+      · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
+        by_cases hrn : r = n
+        · -- last round: `q_mul_3`
+          subst hrn
+          rw [hYADr, hYADr1n]
+          simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+            Constraints.withSelector, if_pos rfl, if_neg hr0] at hRound
+          simp only [hzp] at hRound
+          obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
+          refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
+          · rcases mul_eq_zero.mp hbool with h | h
+            · exact Or.inl (by linear_combination h)
+            · exact Or.inr (by linear_combination h)
+          · linear_combination hg1
+          · linear_combination hsec
+          · linear_combination hg2
+        · -- interior round: `q_mul_2`
+          rw [hYADr, hYADr1i hrn]
+          simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+            Constraints.withSelector, if_neg hr0, if_neg hrn] at hRound
+          simp only [hzp] at hRound
+          obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
+          refine ⟨?_, ?_, ?_, ?_,
+            fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
+          · rcases mul_eq_zero.mp hbool with h | h
+            · exact Or.inl (by linear_combination h)
+            · exact Or.inr (by linear_combination h)
+          · linear_combination hg1
+          · linear_combination hsec
+          · linear_combination hg2
+
+end LoopFacts
+
 /-- **Round-invariant / accumulator lemma (soundness).** If the loop's constraints hold in the
 ambient region, the base `P` is on-curve, and the starting accumulator reads `[m]P` at the
 `x_a`/`λ₁` starting cells (`hxA0`/`hyA0`) with `m` in the exceptional-case-free range, then after
@@ -376,7 +536,7 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits :
     (hxPBase : adv cfg.xP place self env (offset + 1) = P.x)
     (hyPBase : adv cfg.yP place self env (offset + 1) = P.y)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input bits offset (n + 1)).operations self)) :
+      ((loop cfg input bits offset n (n + 1)).operations self)) :
     adv cfg.xA place self env (offset + 1 + n + 1)
       = ((accScalar m bits (n + 1)) • P).x := by
   sorry
@@ -389,14 +549,41 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bit
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset n : ℕ)
     (hz0 : adv cfg.z place self env offset = input.z.eval place env)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input bits offset (n + 1)).operations self)) :
+      ((loop cfg input bits offset n (n + 1)).operations self)) :
     ∃ bits' : BitsHint,
       adv cfg.z place self env (offset + 1)
         = 2 * input.z.eval place env + (if bits' 0 then 1 else 0) ∧
       ∀ r : Fin n, adv cfg.z place self env (offset + 1 + (r.val + 1))
         = 2 * adv cfg.z place self env (offset + 1 + r.val)
           + (if bits' (r.val + 1) then 1 else 0) := by
-  sorry
+  have hfacts := loop_gate_facts cfg input bits place self env offset n (n + 1) le_rfl hLoop
+  -- the bit read off the running sum at each round, decided into a `BitsHint`
+  refine ⟨fun j => decide (adv cfg.z place self env (offset + 1 + j)
+      = 2 * adv cfg.z place self env (offset + j) + 1), ?_, ?_⟩
+  · -- round 0: `z`-prev is the start-copy `adv z offset = input.z.eval`
+    have hb := (hfacts 0 (by omega)).1
+    simp only [Kr, Zr, Zpr, Nat.add_zero] at hb ⊢
+    split_ifs with hd
+    · rw [decide_eq_true_eq] at hd
+      rcases hb with h | h
+      · exact absurd hd (fun hc => one_ne_zero (α := Fp) (by linear_combination h - hc))
+      · linear_combination h + 2 * hz0
+    · rcases hb with h | h
+      · linear_combination h + 2 * hz0
+      · exact absurd (by rw [decide_eq_true_eq]; linear_combination h) hd
+  · intro r
+    have hb := (hfacts (r.val + 1) (by omega)).1
+    simp only [Kr, Zr, Zpr] at hb ⊢
+    -- the round's `z`-prev cell is at `offset + (r+1)`; the goal spells it `offset + 1 + r`
+    rw [show offset + 1 + r.val = offset + (r.val + 1) from by omega]
+    split_ifs with hd
+    · rw [decide_eq_true_eq] at hd
+      rcases hb with h | h
+      · exact absurd hd (by intro hc; exact one_ne_zero (α := Fp) (by linear_combination h - hc))
+      · linear_combination h
+    · rcases hb with h | h
+      · linear_combination h
+      · exact absurd (by rw [decide_eq_true_eq]; linear_combination h) hd
 
 /-- **Completeness loop lemma.** The honest prover's `ExtendsWitnesses` of the loop pins every
 cell to the donor's honest value (`zRunValue`/`rowLambdaValue`/`accVal`), and the loaded round
@@ -411,9 +598,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     (hxPBase : input.base.x.eval place env.toEnvironment = P.x)
     (hyPBase : input.base.y.eval place env.toEnvironment = P.y)
     (hWit : RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input bits offset (n + 1)).operations self)) :
+      ((loop cfg input bits offset n (n + 1)).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
-      ((loop cfg input bits offset (n + 1)).operations self) := by
+      ((loop cfg input bits offset n (n + 1)).operations self) := by
   sorry
 
 /-! ## The bundle contract
@@ -468,14 +655,12 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     -- starting copies
     startCopies cfg input offset
-    -- q_mul_1 at `offset`, q_mul_2 at `offset+1 .. offset+n`, q_mul_3 at `offset+1+n`
+    -- q_mul_1 at `offset` (outside the loop rows). The per-round selectors q_mul_2 (interior)
+    -- and q_mul_3 (last row) are enabled inside `round`, so each round's gate constraints land
+    -- in the loop's `Constraints` — the shape the loop lemmas consume by induction.
     (qMul1Gate cfg).enable offset
     -- the per-bit round loop, in the `rangeCheckLoop` shape
-    loop cfg input bits offset (n + 1)
-    -- selectors for the interior rounds and the last round
-    -- (enabled after the loop; enable order carries no semantic content)
-    let _ ← (Vector.range n).mapM (fun i => (qMul2Gate cfg).enable (offset + 1 + i))
-    (qMul3Gate cfg).enable (offset + 1 + n)
+    loop cfg input bits offset n (n + 1)
     -- the witnessed final y_a
     let _yAFinal ← assignAdvice cfg.lambda1 (offset + 1 + (n + 1)) (yAFinalWit n input bits)
     -- name the output cells (at fixed absolute rows). `cellAt` emits no op, it just names a
