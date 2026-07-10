@@ -57,4 +57,51 @@ example (a b c d : AssignedCell Fp) (env : Placed Environment Fp)
   provable_type_simp
   exact h.1
 
+/-! ### Named-cell / typed-read normal form ("pretty cells")
+
+The `circuit_norm` normal form for circuit-created cells and environment reads: assign/copy
+outputs are the *named* `AssignedCell.of` (never an anonymous record literal), and every
+typed read — gate query, assigned-cell eval, witness read — lands on the
+`Environment.advice`-family accessors with the `↑(place self + row)` row form. The
+`guard_hyp … :ₛ` assertions are syntactic: they fail if record literals
+(`{ kind := … }`, `{ regionIndex := … }`) ever leak back into the normal form. -/
+
+-- 6. The assign/copy output is the named cell, kept folded.
+example (col : Column .advice) (self : RegionIndex) (row : ℕ) (compute : WitgenIR Fp 1) :
+    (assignAdvice (F := Fp) col row compute).output self = .of self row col := by
+  simp only [circuit_norm]
+
+-- 7. An `assignAdvice` output under `eval` normalizes to a typed `env.advice` read —
+-- syntactically (`guard_hyp :ₛ`): no cell/column record literals, row spelled
+-- `↑(place self + row)`. (`provable_type_simp` doing nothing on top asserts the terminal
+-- form is stable under it.)
+set_option linter.unusedTactic false in
+example (env : Placed Environment Fp) (col : Column .advice) (self : RegionIndex)
+    (row : ℕ) (compute : WitgenIR Fp 1) (out : Fp)
+    (h : eval env ((assignAdvice col row compute).output self) = out) :
+    env.env.advice col ((env.place self + row : ℕ) : ℤ) = out := by
+  simp only [circuit_norm] at h
+  provable_type_simp
+  guard_hyp h :ₛ env.env.advice col ((env.place self + row : ℕ) : ℤ) = out
+  exact h
+
+-- 8. The gate-query path meets the assigned-cell path on the same `env.advice` spelling:
+-- after `circuit_norm` (rotation 0 cleared by `add_zero`) both sides are the SAME atom,
+-- so simp closes the equality by rfl.
+example (env : Environment Fp) (col : Column .advice) (sel : ℕ → Fp)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (row : ℕ) :
+    Query.eval env sel ((place self + row : ℕ) : ℤ) (.advice col 0)
+      = AssignedCell.eval place env (.of self row col) := by
+  simp only [circuit_norm]
+
+-- 9. The witness-read path (witgen `readVar`) also lands on `env.advice` for named cells.
+set_option linter.unusedVariables false in
+example (pe : Placed ProverEnvironment Fp) (col : Column .advice) (self : RegionIndex)
+    (row : ℕ) (out : Fp)
+    (h : Witgen.WitgenEnv.readVar pe (AssignedCell.of self row col : AssignedCell Fp) = out) :
+    True := by
+  simp only [circuit_norm] at h
+  guard_hyp h :ₛ pe.env.toEnvironment.advice col ((pe.place self + row : ℕ) : ℤ) = out
+  trivial
+
 end Halo2.ProvableTypeSimp.Test

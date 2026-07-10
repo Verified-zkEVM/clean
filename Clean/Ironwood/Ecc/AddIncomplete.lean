@@ -210,12 +210,12 @@ def add : FormalRegionCircuit Fp
     -- destructure input/output/input_var; split every struct equation into coordinates
     provable_type_simp
     -- ══ user-facing half ══
-    -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
-    obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
-    -- reduce the witness cell reads to input coords: `readVar` (copies) / `FExprOver.eval`
-    -- (the R row, a `nondegenerateAdd` witness) → `env.get` → input coord via `h_input`
-    simp only [Witgen.WitgenEnv.readVar, Orchard.Point.nondegenerateAdd,
-      Witgen.FExprOver.eval, AssignedCell.eval, h_input] at hwpx hwpy hwqx hwqy hwrx hwry
+    -- unpack the witness-assignment equalities
+    obtain ⟨hwpx, hwpy, hwqx, hwqy, hwrx, hwry⟩ := hwit
+    -- reduce the witness cell reads to input coords via `h_input`; the R row (a
+    -- `nondegenerateAdd` witness program) unfolds to field arithmetic over them
+    simp only [circuit_norm, Orchard.Point.nondegenerateAdd, h_input]
+      at hwpx hwpy hwqx hwqy hwrx hwry
     -- land the `Assumptions` facts on the input coordinates
     simp only [h_input] at hA
     obtain ⟨hpCurve, hqCurve, hxne⟩ := hA

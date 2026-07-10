@@ -95,19 +95,19 @@ theorem operations_assignAdvice (col : Column .advice) (row : ℕ)
 @[circuit_norm]
 theorem output_assignAdvice (col : Column .advice) (row : ℕ)
     (compute : WitgenIR F 1) (self : RegionIndex) :
-    (assignAdvice col row compute).output self = ⟨⟨self, row, col.toAny⟩⟩ := rfl
+    (assignAdvice col row compute).output self = .of self row col := rfl
 
 @[circuit_norm]
 theorem operations_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
     (self : RegionIndex) :
     (copyAdvice src col row).operations self
       = [.assignAdvice col row (.ofFExpr (.expr src)),
-         .constrainEqual ⟨self, row, col.toAny⟩ src.cell] := rfl
+         .constrainEqual (.of self row col) src.cell] := rfl
 
 @[circuit_norm]
 theorem output_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
     (self : RegionIndex) :
-    (copyAdvice src col row).output self = ⟨⟨self, row, col.toAny⟩⟩ := rfl
+    (copyAdvice src col row).output self = .of self row col := rfl
 
 @[circuit_norm]
 theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
@@ -203,6 +203,21 @@ theorem RegionOperation.extendsWitness_assignAdvice (place : RegionIndex → ℕ
 theorem RegionOperation.extendsWitness_enableGate (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) (gate : Gate F) (row : ℕ) :
     (RegionOperation.enableGate gate row).ExtendsWitness place self env = True := rfl
+
+@[circuit_norm]
+theorem RegionOperation.extendsWitness_constrainEqual (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : ProverEnvironment F) (a b : Cell) :
+    (RegionOperation.constrainEqual a b).ExtendsWitness place self env = True := rfl
+
+@[circuit_norm]
+theorem RegionOperation.extendsWitness_constrainConstant (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : ProverEnvironment F) (a : Cell) (v : F) :
+    (RegionOperation.constrainConstant a v).ExtendsWitness place self env = True := rfl
+
+@[circuit_norm]
+theorem RegionOperation.extendsWitness_assignFixed (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : ProverEnvironment F) (col : Column .fixed) (row : ℕ) (v : F) :
+    (RegionOperation.assignFixed col row v).ExtendsWitness place self env = True := rfl
 
 end Constraints
 

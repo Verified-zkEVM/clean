@@ -56,8 +56,12 @@ structure AnyColumn where
   index : ℕ
 deriving DecidableEq, Repr
 
-/-- Forget a column's statically known kind. Rust: `impl From<Column<Advice>> for Column<Any>` etc. -/
-@[circuit_norm]
+/-- Forget a column's statically known kind. Rust: `impl From<Column<Advice>> for Column<Any>` etc.
+
+Deliberately NOT `@[circuit_norm]`: `col.toAny` stays folded in proof states (no
+`{ kind := …, index := … }` record literals); reads through it normalize to the typed
+`Environment` accessors (`env.advice`/`env.fixed`/`env.inst`) via the `get_advice`-family
+bridge lemmas below. -/
 def Column.toAny {kind : ColumnKind} (c : Column kind) : AnyColumn := ⟨kind, c.index⟩
 
 instance {kind : ColumnKind} : CoeOut (Column kind) AnyColumn := ⟨Column.toAny⟩
@@ -152,6 +156,42 @@ instance : CoeOut (ProverEnvironment F) (Environment F) := ⟨ProverEnvironment.
 instance {α} : Coe (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := ⟨fun f env => f env⟩
 
+/-! ## Typed environment reads — the terminal normal form
+
+`Environment.get` is kind-agnostic (`AnyColumn`), so every typed read goes through the
+`Column.toAny` coercion; unfolded, that used to leave `{ kind := …, index := … }` record
+literals all over proof states. The named accessors below are the single terminal normal
+form for typed reads: the `get_advice`-family `circuit_norm` bridges rewrite
+`env.get col.toAny row` to them, so gate-query atoms (`Query.eval`), assigned-cell evals
+and witness reads all meet on the same `env.advice col row` spelling. Reads of cells with
+a statically *unknown* column kind (foreign cells in copy constraints) stay on `env.get`
+with a projected column — also record-free. -/
+
+/-- Read an advice cell: column + absolute integer row. -/
+def Environment.advice (env : Environment F) (col : Column .advice) (row : ℤ) : F :=
+  env.get col.toAny row
+
+/-- Read a fixed cell. -/
+def Environment.fixed (env : Environment F) (col : Column .fixed) (row : ℤ) : F :=
+  env.get col.toAny row
+
+/-- Read an instance cell (a public input). Named `inst` because `instance` is a
+reserved word. -/
+def Environment.inst (env : Environment F) (col : Column .instance) (row : ℤ) : F :=
+  env.get col.toAny row
+
+@[circuit_norm]
+lemma Environment.get_advice (env : Environment F) (col : Column .advice) (row : ℤ) :
+    env.get col.toAny row = env.advice col row := rfl
+
+@[circuit_norm]
+lemma Environment.get_fixed (env : Environment F) (col : Column .fixed) (row : ℤ) :
+    env.get col.toAny row = env.fixed col row := rfl
+
+@[circuit_norm]
+lemma Environment.get_inst (env : Environment F) (col : Column .instance) (row : ℤ) :
+    env.get col.toAny row = env.inst col row := rfl
+
 /-- Evaluate a query in an environment, at a `row`, given a valuation of the selectors:
 column queries read their column at `row + rotation` (selector queries are not rotated —
 halo2's `query_selector` takes no rotation).
@@ -162,9 +202,9 @@ at the VK bridge it is the activation table computed from the layout. -/
 @[circuit_norm]
 def Query.eval [Field F] (env : Environment F) (selectors : ℕ → F) (row : ℤ) : Query → F
   | .selector s => selectors s.index
-  | .fixed col rot => env.get col (row + rot)
-  | .advice col rot => env.get col (row + rot)
-  | .instance col rot => env.get col (row + rot)
+  | .fixed col rot => env.fixed col (row + rot)
+  | .advice col rot => env.advice col (row + rot)
+  | .instance col rot => env.inst col (row + rot)
 
 namespace Expression
 variable [Field F]
@@ -247,6 +287,40 @@ the Rust original it carries no value — values are determined by the `Environm
 structure AssignedCell (F : Type) where
   cell : Cell
 deriving DecidableEq, Repr
+
+/-! ### Named cell constructors
+
+The `varFromOffset` analogue at halo2's per-cell granularity: cells the circuit itself
+creates (assign/copy operations) are spelled `Cell.of self row col` instead of an
+anonymous record literal, keeping the typed column folded. NOT unfolded by
+`circuit_norm` — the projection lemmas below expose exactly what the semantics need, and
+evals land on the typed `Environment` accessors via the `get_advice`-family bridges. -/
+
+/-- The cell at region `self`, region-local row `row`, column `col`. -/
+def Cell.of (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) : Cell :=
+  ⟨self, row, col.toAny⟩
+
+/-- The assigned cell at region `self`, region-local row `row`, column `col` — what the
+assign/copy operations return. -/
+def AssignedCell.of (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    AssignedCell F :=
+  ⟨.of self row col⟩
+
+@[circuit_norm]
+lemma Cell.of_regionIndex (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    (Cell.of self row col).regionIndex = self := rfl
+
+@[circuit_norm]
+lemma Cell.of_rowOffset (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    (Cell.of self row col).rowOffset = row := rfl
+
+@[circuit_norm]
+lemma Cell.of_column (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    (Cell.of self row col).column = col.toAny := rfl
+
+@[circuit_norm]
+lemma AssignedCell.of_cell (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    (AssignedCell.of self row col : AssignedCell F).cell = Cell.of self row col := rfl
 
 /-- Evaluate an assigned cell: read its column at the region's placement plus the
 cell's offset. `place` is the region-placement parameter of the semantics (the analogue

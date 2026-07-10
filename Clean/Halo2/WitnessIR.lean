@@ -25,6 +25,14 @@ instance [Field F] : Witgen.WitgenEnv F (Placed ProverEnvironment F) (AssignedCe
   data _ := fun _ _ => #[]
   hint pe := pe.env.hint
 
+/-- Halo2-instance witness reads normalize to the assigned-cell eval (the counterpart of
+main Clean's `WitgenEnv.readVar_main`), so witness-program reads meet the query and
+assigned-cell eval paths on the same row form without a per-proof unfold. -/
+@[circuit_norm]
+lemma WitgenEnv.readVar_halo2 [Field F] (pe : Placed ProverEnvironment F)
+    (c : AssignedCell F) :
+    Witgen.WitgenEnv.readVar pe c = c.eval pe.place pe.env.toEnvironment := rfl
+
 /-- Halo2 field-sorted witness expressions: variables are cell references. -/
 abbrev FExpr (F : Type) := Witgen.FExprOver F (AssignedCell F)
 
