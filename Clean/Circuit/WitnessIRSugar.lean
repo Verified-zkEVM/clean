@@ -38,12 +38,16 @@ instance : Coe F (field (FExpr F)) := ⟨.const⟩
 instance {M : TypeMap} [ProvableType M] : Coe (M (Expression F)) (M (FExpr F)) where
   coe v := fromElements (toElements v |>.map .expr)
 instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)⟩
-instance : Add (FExpr F) := ⟨.add⟩
-instance : Mul (FExpr F) := ⟨.mul⟩
-instance : Inv (FExpr F) := ⟨.inv⟩
+/- The field arithmetic instances are generic over the variable atom `V`, so they cover
+both main Clean's `FExpr F = FExprOver F (Expression F)` and Halo2-Clean's
+`FExprOver F (AssignedCell F)` — a witness program builds the same arithmetic tree
+regardless of how it reads circuit variables. -/
+instance {V : Type} : Add (FExprOver F V) := ⟨.add⟩
+instance {V : Type} : Mul (FExprOver F V) := ⟨.mul⟩
+instance {V : Type} : Inv (FExprOver F V) := ⟨.inv⟩
 @[reducible] instance : Inv (field (Witgen.FExpr F)) := (inferInstance : Inv (Witgen.FExpr F))
-instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
-instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
+instance {V : Type} [Field F] : Neg (FExprOver F V) := ⟨.neg⟩
+instance {V : Type} [Field F] : Sub (FExprOver F V) := ⟨.sub⟩
 
 /- Heterogeneous arithmetic between circuit expressions and witness expressions: the
 `Coe (Expression F) (FExpr F)` route stopped covering `binop%` elaboration after the

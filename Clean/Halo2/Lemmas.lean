@@ -171,6 +171,17 @@ theorem RegionOperation.constraints_subcircuit (place : RegionIndex → ℕ) (se
 -- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.
 attribute [circuit_norm] List.forall_cons add_zero
 
+/-- Row-index normal form for `Rotation::next()` queries. A gate reads a next-row cell as
+`Query.eval … (↑(place self + row) : ℤ) + 1` (the rotation `+1` lands *outside* the
+`ℕ`-cast), while the assignment producing that cell reads it as
+`↑(place self + (row + 1))` (`assignAdvice … (row + 1)`, cast *after* the sum). This
+lemma makes both meet on the assignment's spelling, so next-row gate polynomials line up
+with their assigned cells without a per-gadget cast bridge — the rotation-1 companion of
+`add_zero`'s rotation-0 normalization. -/
+@[circuit_norm]
+theorem cast_row_succ (a b : ℕ) : ((a + b : ℕ) : ℤ) + 1 = ((a + (b + 1) : ℕ) : ℤ) := by
+  push_cast; ring
+
 @[circuit_norm]
 theorem RegionOperations.extendsWitnesses_nil (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) :

@@ -165,4 +165,80 @@ which spelling a goal carries — this replaces per-gadget eval-split lemmas.
 
 end ProvableType
 
+/-!
+## Struct-preserving evaluation
+
+Halo2 counterpart of main Clean's `ProvableStruct.eval` (`Clean/Circuit/Provable.lean`):
+evaluate a struct of cell references component-by-component, keeping the high-level
+`ProvableStruct` shape instead of flattening to a field vector. The `@[circuit_norm ↓ high]`
+bridges rewrite `Eval.eval env x` (verifier and prover views) to this form for *any*
+derived `ProvableStruct`, so a derived-struct input decomposes into its components without
+a per-gadget `eval_eq` lemma — matching main Clean, and symmetric with the witgen-side
+`Witgen.StructEval.eval` (`Clean/Circuit/WitnessIR.lean`).
+-/
+
+namespace ProvableStruct
+open _root_.ProvableStruct (WithProvableType ProvableTypeList componentsToElements componentsFromElements combinedSize')
+variable {α : TypeMap} [ProvableStruct α]
+
+/-- Evaluate each component of a struct of cell references separately, given the region
+placement + verifier environment. -/
+@[circuit_norm]
+def eval (place : RegionIndex → ℕ) (env : Environment F) (var : α (AssignedCell F)) : α F :=
+  toComponents var |> go (components α) |> fromComponents
+where
+  @[circuit_norm]
+  go : (cs : List WithProvableType) → ProvableTypeList (AssignedCell F) cs → ProvableTypeList F cs
+    | [], .nil => .nil
+    | _ :: cs, .cons a as => .cons (ProvableType.eval place env a) (go cs as)
+
+/-- `ProvableStruct.eval` agrees with the flat `ProvableType.eval`. -/
+theorem eval_eq_eval (place : RegionIndex → ℕ) (env : Environment F) (x : α (AssignedCell F)) :
+    ProvableType.eval place env x = ProvableStruct.eval place env x := by
+  symm
+  simp only [eval, ProvableType.eval, fromElements, toElements, size]
+  congr 1
+  apply eval_eq_eval_aux
+where
+  eval_eq_eval_aux (place : RegionIndex → ℕ) (env : Environment F) :
+      (cs : List WithProvableType) → (as : ProvableTypeList (AssignedCell F) cs) →
+      eval.go place env cs as
+        = (componentsToElements cs as |> Vector.map (AssignedCell.eval place env)
+            |> componentsFromElements cs)
+    | [], .nil => rfl
+    | c :: cs, .cons a as => by
+      simp only [componentsToElements, componentsFromElements, eval.go,
+        combinedSize', List.map_cons, List.sum_cons]
+      simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
+        Vector.cast_drop_append_of_eq_length]
+      congr 1
+      apply eval_eq_eval_aux
+
+/-- Verifier `Eval.eval` of a derived struct variable is componentwise. Preferred over the
+flat unfold (`↓ high`), so goals keep the struct shape. -/
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval (env : Placed Environment F) (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env.place env.env (x : α (AssignedCell F)) := by
+  rw [ProvableType.eval_var]; exact eval_eq_eval env.place env.env (x : α (AssignedCell F))
+
+/-- Prover-view componentwise `Eval.eval` of a derived struct variable. -/
+@[circuit_norm ↓ high]
+theorem eval_var_eq_eval_prover (env : Placed ProverEnvironment F) (x : Var α F) :
+    Eval.eval env x = ProvableStruct.eval env.place env.env.toEnvironment (x : α (AssignedCell F)) := by
+  rw [ProvableType.eval_var_prover]; exact eval_eq_eval env.place _ (x : α (AssignedCell F))
+
+/-- Verifier componentwise `Eval.eval`, concrete `α (AssignedCell F)` spelling. -/
+@[circuit_norm ↓ high]
+theorem eval_cells_eq_eval (env : Placed Environment F) (x : α (AssignedCell F)) :
+    Eval.eval env x = ProvableStruct.eval env.place env.env x := by
+  rw [ProvableType.eval_cells]; exact eval_eq_eval env.place env.env x
+
+/-- Prover componentwise `Eval.eval`, concrete `α (AssignedCell F)` spelling. -/
+@[circuit_norm ↓ high]
+theorem eval_cells_eq_eval_prover (env : Placed ProverEnvironment F) (x : α (AssignedCell F)) :
+    Eval.eval env x = ProvableStruct.eval env.place env.env.toEnvironment x := by
+  rw [ProvableType.eval_cells_prover]; exact eval_eq_eval env.place _ x
+
+end ProvableStruct
+
 end Halo2

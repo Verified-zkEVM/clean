@@ -1,7 +1,6 @@
 import Clean.Halo2
 import Clean.Orchard.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.WitnessPoint
 
 namespace Halo2.Ironwood.Ecc
 /-!
@@ -66,23 +65,6 @@ def configure (xP yP xQR yQR : Column .advice) : Configure Fp Config := do
   let qAddIncomplete ← selector
   createGate (gate qAddIncomplete xP yP xQR yQR)
   return { qAddIncomplete, xP, yP, xQR, yQR }
-
-/-!
-## Arithmetic on halo2 witness expressions
-
-The arithmetic instances for witness expressions (`Sub`/`Mul`/`Inv`/`Add`/`Neg`) in
-`Clean/Circuit/WitnessIRSugar.lean` are stated only for main Clean's `FExpr F`
-(variable atom `Expression F`). Halo2's `FExpr F` uses `AssignedCell F` atoms, so we
-provide the same instances here at the halo2 atom — this lets us reuse
-`Point.nondegenerateAdd` to build the witness program for R.
--/
-namespace FExprInst
-scoped instance : Add (FExpr Fp) := ⟨.add⟩
-scoped instance : Mul (FExpr Fp) := ⟨.mul⟩
-scoped instance : Inv (FExpr Fp) := ⟨.inv⟩
-scoped instance : Neg (FExpr Fp) := ⟨.neg⟩
-scoped instance : Sub (FExpr Fp) := ⟨.sub⟩
-end FExprInst
 
 /-!
 ## Algebraic core lemmas
@@ -159,21 +141,6 @@ structure Inputs (F : Type) where
   q : Point F
 deriving ProvableStruct
 
-/-- Componentwise verifier evaluation of `Inputs`. -/
-theorem Inputs.eval_eq (env : Placed Environment Fp) (input : Inputs (AssignedCell Fp)) :
-    eval env input = { p := eval env input.p, q := eval env input.q } := by
-  simp_all [circuit_norm, explicit_provable_type, fromComponents, toComponents, components,
-    ProvableStruct.componentsFromElements, ProvableStruct.componentsToElements]
-  and_intros <;> ((try rw [Vector.getElem_extract]); (try simp); rfl)
-
-/-- Componentwise prover evaluation of `Inputs`. -/
-theorem Inputs.eval_eq_prover (env : Placed ProverEnvironment Fp) (input : Inputs (AssignedCell Fp)) :
-    eval env input = { p := eval env input.p, q := eval env input.q } := by
-  simp_all [circuit_norm, explicit_provable_type, fromComponents, toComponents, components,
-    ProvableStruct.componentsFromElements, ProvableStruct.componentsToElements]
-  and_intros <;> ((try rw [Vector.getElem_extract]); (try simp); rfl)
-
-open scoped FExprInst in
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config
     Inputs Point where
@@ -213,60 +180,44 @@ def add : FormalRegionCircuit Fp
   soundness := by
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
-    rintro self env input_var input ⟨ox, oy⟩ h_input h_output h_assumptions hc
-    -- reduce the constraints: enableGate produces the two polynomials at the gate row,
-    -- copyAdvice produces the copy equalities.
+    rintro self env input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ ⟨ox, oy⟩ h_input h_output h_assumptions hc
+    -- reduce the constraints: enableGate produces the two polynomials at the gate row
+    -- (with `cast_row_succ` matching the next-row spelling), copyAdvice the copy equalities.
     simp only [circuit_norm, gate, Constraints.withSelector] at hc h_output
-    -- decompose the input equation: cell reads (as they appear in the gate polys after the
-    -- copy rewrites) equal the input coordinates
-    rw [Inputs.eval_eq, Point.eval_eq, Point.eval_eq] at h_input
-    simp only [ProvableType.eval_field, AssignedCell.eval] at h_input
-    have hipx := congrArg (fun r => r.p.x) h_input
-    have hipy := congrArg (fun r => r.p.y) h_input
-    have hiqx := congrArg (fun r => r.q.x) h_input
-    have hiqy := congrArg (fun r => r.q.y) h_input
-    simp only at hipx hipy hiqx hiqy
-    clear h_input
-    -- decompose the output equation into `ox`/`oy` equalities
-    rw [Point.eval_eq, Orchard.Point.mk.injEq] at h_output
-    simp only [ProvableType.eval_field, AssignedCell.eval] at h_output
+    -- decompose the input/output equations componentwise (framework struct-eval bridges +
+    -- `mk.injEq`), landing on the plain cell reads that appear in the gate polynomials
+    simp only [circuit_norm, explicit_provable_type, AssignedCell.eval,
+      Orchard.Point.mk.injEq, Inputs.mk.injEq] at h_input h_output
+    obtain ⟨⟨hipx, hipy⟩, hiqx, hiqy⟩ := h_input
     obtain ⟨hox, hoy⟩ := h_output
     obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
     simp only [Cell.eval] at hcpx hcpy hcqx hcqy
-    -- normalize the R-row index spelling (`↑(a+offset)+1` → `↑(a+(offset+1))`) to match `hox`/`hoy`
-    have hrow : ((env.place self + offset : ℕ) : ℤ) + 1 = ((env.place self + (offset + 1) : ℕ) : ℤ) := by
-      push_cast; ring
     -- rewrite the gate polys into the input/output coordinates
-    simp only [hrow, hox, hoy, hcpx, hcpy, hcqx, hcqy, hipx, hipy, hiqx, hiqy] at hpoly1 hpoly2
+    simp only [hox, hoy, hcpx, hcpy, hcqx, hcqy, hipx, hipy, hiqx, hiqy] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
-    have hp1 : poly1 input.p.x input.p.y input.q.x input.q.y ox oy = 0 := by
+    have hp1 : poly1 ipx ipy iqx iqy ox oy = 0 := by
       simp only [poly1]; linear_combination hpoly1
-    have hp2 : poly2 input.p.x input.p.y input.q.x input.q.y ox oy = 0 := by
+    have hp2 : poly2 ipx ipy iqx iqy ox oy = 0 := by
       simp only [poly2]; linear_combination hpoly2
-    -- `hsum` is stated over rebuilt records `{x:=input.p.x,..}`, defeq to `input.p`/`input.q`
-    have hxne' : input.p.x ≠ input.q.x := hxne
-    have hsum := eq_nondegenerateAdd_of_polys_zero hxne' hp1 hp2
-    have hsum' : ({ x := ox, y := oy } : Point Fp) = input.p.nondegenerateAdd input.q := hsum
-    rw [hsum']
-    exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne',
+    have hsum := eq_nondegenerateAdd_of_polys_zero hxne hp1 hp2
+    rw [hsum]
+    exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne,
       Orchard.Point.nondegenerateAdd_eq_add
-        (Orchard.Point.ne_zero_of_onCurve hpx_curve) (Orchard.Point.ne_zero_of_onCurve hqx_curve) hxne'⟩
+        (Orchard.Point.ne_zero_of_onCurve hpx_curve) (Orchard.Point.ne_zero_of_onCurve hqx_curve) hxne⟩
 
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
-    rintro self ⟨place, penv⟩ input_var input _output h_input _h_output hwit hpa
+    rintro self ⟨place, penv⟩ input_var ⟨⟨ipx, ipy⟩, ⟨iqx, iqy⟩⟩ _output h_input _h_output hwit hpa
+    -- `cast_row_succ` (in `circuit_norm`) matches the goal's next-row spelling to the
+    -- assignment's here
     simp only [circuit_norm, gate, Constraints.withSelector] at hwit hpa h_input ⊢
     -- unpack the witness-assignment equalities (copy `ExtendsWitness`es are trivially `True`)
     obtain ⟨hwpx, -, hwpy, -, hwqx, -, hwqy, -, hwrx, hwry⟩ := hwit
-    -- input coordinates equal the copied cell reads (via `h_input`)
-    rw [Inputs.eval_eq_prover, Point.eval_eq_prover, Point.eval_eq_prover] at h_input
-    simp only [ProvableType.eval_field_prover, AssignedCell.eval] at h_input
-    have hipx := congrArg (fun r => r.p.x) h_input
-    have hipy := congrArg (fun r => r.p.y) h_input
-    have hiqx := congrArg (fun r => r.q.x) h_input
-    have hiqy := congrArg (fun r => r.q.y) h_input
-    simp only at hipx hipy hiqx hiqy
+    -- input coordinates equal the copied cell reads (via the componentwise `h_input`)
+    simp only [circuit_norm, explicit_provable_type, AssignedCell.eval,
+      Orchard.Point.mk.injEq, Inputs.mk.injEq] at h_input
+    obtain ⟨⟨hipx, hipy⟩, hiqx, hiqy⟩ := h_input
     obtain ⟨hpCurve, hqCurve, hxne⟩ := hpa
     -- reduce `readVar` cell reads to the same `penv.get` form as `hipx`, then chain
     simp only [Witgen.WitgenEnv.readVar, AssignedCell.eval] at hwpx hwpy hwqx hwqy
@@ -277,23 +228,19 @@ def add : FormalRegionCircuit Fp
     -- the assigned R-row values are the `nondegenerateAdd` coordinates over the input coords
     simp only [Orchard.Point.nondegenerateAdd, Witgen.FExprOver.eval, Witgen.WitgenEnv.readVar,
       AssignedCell.eval, hipx, hipy, hiqx, hiqy] at hwrx hwry
-    have hxne' : input.p.x ≠ input.q.x := hxne
     -- gate polynomials vanish at the `nondegenerateAdd` result
-    have hpolys := polys_zero_of_nondegenerateAdd (xP := input.p.x) (yP := input.p.y)
-      (xQ := input.q.x) (yQ := input.q.y) hxne'
+    have hpolys := polys_zero_of_nondegenerateAdd (xP := ipx) (yP := ipy)
+      (xQ := iqx) (yQ := iqy) hxne
     simp only at hpolys
     obtain ⟨hp1, hp2⟩ := hpolys
-    -- normalize the R-row index spelling in the goal so the witness equations apply
-    have hgrow : ((place self + offset : ℕ) : ℤ) + 1 = ((place self + (offset + 1) : ℕ) : ℤ) := by
-      push_cast; ring
     refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- poly1
       simp only [poly1, Orchard.Point.nondegenerateAdd] at hp1
-      simp only [hgrow, hwrx, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
+      simp only [hwrx, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
       linear_combination hp1
     · -- poly2
       simp only [poly2, Orchard.Point.nondegenerateAdd] at hp2
-      simp only [hgrow, hwrx, hwry, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
+      simp only [hwrx, hwry, hpx_eq, hpy_eq, hqx_eq, hqy_eq]
       linear_combination hp2
     · -- copy equalities
       refine ⟨?_, ?_, ?_, ?_⟩ <;>
