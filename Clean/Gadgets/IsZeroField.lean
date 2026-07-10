@@ -29,12 +29,9 @@ def circuit : FormalCircuit F field field where
     intro n input env env'
     simp only [circuit_norm]
     constructor
-    · -- witness cases `z`, `b` (the Equality subcircuit cases close in the top `simp` via the
-      -- decoupled `Equality.toSubcircuit_computableWitnesses`)
-      and_intros
+    · and_intros
       · grind
       · grind
-    · -- output — witness-based (`var`), `grind` closes via the `AgreesBelow` facts
-      grind
+    · grind
 
 end Gadgets.IsZeroField
