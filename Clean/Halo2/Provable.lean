@@ -194,12 +194,15 @@ open _root_.ProvableStruct (WithProvableType ProvableTypeList componentsToElemen
 variable {α : TypeMap} [ProvableStruct α]
 
 /-- Evaluate each component of a struct of cell references separately, given the region
-placement + verifier environment. -/
-@[circuit_norm]
+placement + verifier environment.
+
+Deliberately *not* `@[circuit_norm]` (nor `.go`): the def stays folded so opaque structs
+remain row-level atoms (consumable by `h_input`-style facts); the `structEvalLiteral`
+simproc owns literal decomposition. This matches main Clean's PR #424 design and is what
+lets the same normal form survive the 4.31 matcher-eta change. -/
 def eval (place : RegionIndex → ℕ) (env : Environment F) (var : α (AssignedCell F)) : α F :=
   toComponents var |> go (components α) |> fromComponents
 where
-  @[circuit_norm]
   go : (cs : List WithProvableType) → ProvableTypeList (AssignedCell F) cs → ProvableTypeList F cs
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (ProvableType.eval place env a) (go cs as)
