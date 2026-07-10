@@ -100,23 +100,15 @@ def point :
     -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
     -- The steps here are exactly what the smart eval-split tactic will do mechanically.
     intro config offset
-    -- rewrite to the intro'd-values form (input/output become plain values)
     rw [FormalRegionCircuit.soundness_iff]
-    -- name + destructure input/output; `input` is `Unit` here (Unconstrained input)
-    rintro self env input_var input ⟨ox, oy⟩ h_input h_output _hA hc
-    -- reduce the gate constraints, and split the output-value equation into coordinates
-    simp only [circuit_norm, pointGate, curveEqn, explicit_provable_type, Orchard.Point.mk.injEq]
-      at hc h_output
-    -- eval → value: use the (split) output equation as a simp set to rewrite the
-    -- constraint cells to the abstract coords `ox`/`oy`. `simp only [h_output]` generalizes
-    -- to the tactic (any field count/order); `rw [h_output.1, h_output.2]` would not.
+    intro self env input_var input output h_input h_output _hA hc
+    -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
+    simp only [circuit_norm, pointGate, curveEqn] at hc h_output
+    -- destructure `output` and split its (now-literal) eval equation into coordinates
+    provable_type_simp
+    -- eval → value: state the constraints over the abstract output coords
     simp only [h_output] at hc
-    -- clear the framework plumbing: nothing below mentions cells, envs, or vars
-    clear h_output h_input _hA input_var input env self config offset
     -- ══ user-facing half: pure field values + curve math ══
-    -- destructuring `hc` is gadget-specific (it depends on the constraint shape), so it
-    -- lives here, not in the framework half.
-    -- hc : ox * (…) = 0 ∧ oy * (…) = 0     ⊢ ({ x := ox, y := oy } : Point Fp).Valid
     obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
