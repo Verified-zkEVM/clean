@@ -68,7 +68,10 @@ structure Gate (F : Type) where
   constraints : List (Constraint F)
 
 /-- Rust: `Constraints::with_selector(q, [(name, poly), …])` — multiplies every
-constraint by the selector, building exactly the Rust AST `q * poly`. -/
+constraint by the selector, building exactly the Rust AST `q * poly`.
+`@[circuit_norm]`: part of the gate-reduction normal form, so proofs need not list this
+combinator to reduce an enabled gate's constraint list. -/
+@[circuit_norm]
 def Constraints.withSelector (s : Selector) (constraints : List (String × Expression F Query)) :
     List (Constraint F) :=
   constraints.map fun (name, poly) => { name, poly := querySelector s * poly }

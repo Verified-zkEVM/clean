@@ -72,31 +72,20 @@ def configure (xP yP xQR yQR : Column .advice) : Configure Fp Config := do
 These are the `WitnessPoint`-style separated cores: the soundness direction shows the two
 gate polynomials imply the output is the incomplete sum, and the completeness direction
 shows a valid incomplete sum satisfies the two polynomials. Both are stated over concrete
-field values (the coordinates of P, Q, R), and reuse the phase-one point-addition
-definition `Point.nondegenerateAdd` (via the Orchard specs).
-
-We restate the two polynomials over concrete `Fp` coordinates so the lemmas do not depend
-on the gate's `Query`/`Expression` machinery.
+field values (the coordinates of P, Q, R) with the gate polynomials written out literally
+— so the lemmas do not depend on the gate's `Query`/`Expression` machinery — and reuse the
+phase-one point-addition definition `Point.nondegenerateAdd` (via the Orchard specs).
 -/
-
-/-- poly1 at concrete coordinates. -/
-def poly1 (xP yP xQ yQ xR _yR : Fp) : Fp :=
-  (xR + xQ + xP) * (xP - xQ) * (xP - xQ) - (yP - yQ) * (yP - yQ)
-
-/-- poly2 at concrete coordinates. -/
-def poly2 (xP yP xQ yQ xR yR : Fp) : Fp :=
-  (yR + yQ) * (xP - xQ) - (yP - yQ) * (xQ - xR)
 
 /-- Soundness core: if both gate polynomials vanish at concrete coordinates and
 `x_p ≠ x_q`, then `R = P +ᵢ Q` (the incomplete sum). Mirrors the phase-one
 `Orchard.Ecc.AddIncomplete.Gate.eq_nondegenerateAdd_of_polys_zero`. -/
 theorem eq_nondegenerateAdd_of_polys_zero {xP yP xQ yQ xR yR : Fp}
     (hx : xP ≠ xQ)
-    (h1 : poly1 xP yP xQ yQ xR yR = 0)
-    (h2 : poly2 xP yP xQ yQ xR yR = 0) :
+    (h1 : (xR + xQ + xP) * (xP - xQ) * (xP - xQ) - (yP - yQ) * (yP - yQ) = 0)
+    (h2 : (yR + yQ) * (xP - xQ) - (yP - yQ) * (xQ - xR) = 0) :
     ({ x := xR, y := yR } : Point Fp)
       = ({ x := xP, y := yP } : Point Fp).nondegenerateAdd { x := xQ, y := yQ } := by
-  simp only [poly1, poly2] at h1 h2
   unfold Orchard.Point.nondegenerateAdd
   have hden : xQ - xP ≠ 0 := fun h => hx (sub_eq_zero.mp h).symm
   have hden' : xP - xQ ≠ 0 := fun h => hx (sub_eq_zero.mp h)
@@ -120,8 +109,9 @@ theorem eq_nondegenerateAdd_of_polys_zero {xP yP xQ yQ xR yR : Fp}
 theorem polys_zero_of_nondegenerateAdd {xP yP xQ yQ : Fp}
     (hx : xP ≠ xQ) :
     let r := ({ x := xP, y := yP } : Point Fp).nondegenerateAdd { x := xQ, y := yQ }
-    poly1 xP yP xQ yQ r.x r.y = 0 ∧ poly2 xP yP xQ yQ r.x r.y = 0 := by
-  simp only [poly1, poly2, Orchard.Point.nondegenerateAdd]
+    (r.x + xQ + xP) * (xP - xQ) * (xP - xQ) - (yP - yQ) * (yP - yQ) = 0 ∧
+      (r.y + yQ) * (xP - xQ) - (yP - yQ) * (xQ - r.x) = 0 := by
+  simp only [Orchard.Point.nondegenerateAdd]
   have hden : xQ - xP ≠ 0 := fun h => hx (sub_eq_zero.mp h).symm
   constructor <;> field_simp [hden] <;> ring
 
@@ -182,7 +172,7 @@ def add : FormalRegionCircuit Fp
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output h_assumptions hc
     -- reduce circuit structure (gate polys + copy equalities), running the eval simprocs
-    simp only [circuit_norm, gate, Constraints.withSelector] at hc h_output
+    simp only [circuit_norm, gate] at hc h_output
     -- destructure input/output; split the input/output eval equations into coordinates
     provable_type_simp
     -- ══ user-facing half: pure field values + curve math ══
@@ -191,11 +181,7 @@ def add : FormalRegionCircuit Fp
     -- coord (`h_output`)
     simp only [hcpx, hcpy, hcqx, hcqy, h_input, h_output] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
-    have hp1 : poly1 input_p_x input_p_y input_q_x input_q_y output_x output_y = 0 := by
-      simp only [poly1]; linear_combination hpoly1
-    have hp2 : poly2 input_p_x input_p_y input_q_x input_q_y output_x output_y = 0 := by
-      simp only [poly2]; linear_combination hpoly2
-    have hsum := eq_nondegenerateAdd_of_polys_zero hxne hp1 hp2
+    have hsum := eq_nondegenerateAdd_of_polys_zero hxne hpoly1 hpoly2
     rw [hsum]
     exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne,
       Orchard.Point.nondegenerateAdd_eq_add
@@ -206,7 +192,7 @@ def add : FormalRegionCircuit Fp
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit hA hlast
     -- reduce circuit structure, running the eval simprocs
-    simp only [circuit_norm, gate, Orchard.Point.nondegenerateAdd, Constraints.withSelector] at hwit hA h_input h_output ⊢
+    simp only [circuit_norm, gate, Orchard.Point.nondegenerateAdd] at hwit hA h_input h_output ⊢
     -- destructure input/output/input_var; split every struct equation into coordinates
     provable_type_simp
     simp only [circuit_norm, h_input] at hwit
@@ -217,7 +203,7 @@ def add : FormalRegionCircuit Fp
     -- gate polynomials vanish at the `nondegenerateAdd` result
     have hpolys := polys_zero_of_nondegenerateAdd (xP := input_p_x) (yP := input_p_y)
       (xQ := input_q_x) (yQ := input_q_y) hxne
-    simp_all [poly1, poly2, Orchard.Point.nondegenerateAdd]
+    simp_all [Orchard.Point.nondegenerateAdd]
 
 end AddIncomplete
 
