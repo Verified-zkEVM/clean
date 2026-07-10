@@ -37,7 +37,10 @@ instance : Coe F (FExpr F) := ⟨.const⟩
 instance : Coe F (field (FExpr F)) := ⟨.const⟩
 instance {M : TypeMap} [ProvableType M] : Coe (M (Expression F)) (M (FExpr F)) where
   coe v := fromElements (toElements v |>.map .expr)
-instance {n : ℕ} [OfNat F n] : OfNat (FExpr F) n := ⟨.const (OfNat.ofNat n)⟩
+/- Numeric literals are generic over the variable atom `V` (like the arithmetic
+instances below), so `3`, `2`, … build the same `.const` regardless of whether variables
+are main Clean's `Expression F` or Halo2-Clean's `AssignedCell F`. -/
+instance {V : Type} {n : ℕ} [OfNat F n] : OfNat (FExprOver F V) n := ⟨.const (OfNat.ofNat n)⟩
 /- The field arithmetic instances are generic over the variable atom `V`, so they cover
 both main Clean's `FExpr F = FExprOver F (Expression F)` and Halo2-Clean's
 `FExprOver F (AssignedCell F)` — a witness program builds the same arithmetic tree
