@@ -206,36 +206,18 @@ def add : FormalRegionCircuit Fp
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit hA hlast
     -- reduce circuit structure, running the eval simprocs
-    simp only [circuit_norm, gate, Constraints.withSelector] at hwit hA h_input h_output ⊢
+    simp only [circuit_norm, gate, Orchard.Point.nondegenerateAdd, Constraints.withSelector] at hwit hA h_input h_output ⊢
     -- destructure input/output/input_var; split every struct equation into coordinates
     provable_type_simp
+    simp only [circuit_norm, h_input] at hwit
+    simp only [circuit_norm, h_input, hwit] at ⊢ hA
     -- ══ user-facing half ══
-    -- unpack the witness-assignment equalities
-    obtain ⟨hwpx, hwpy, hwqx, hwqy, hwrx, hwry⟩ := hwit
-    -- reduce the witness cell reads to input coords via `h_input`; the R row (a
-    -- `nondegenerateAdd` witness program) unfolds to field arithmetic over them
-    simp only [circuit_norm, Orchard.Point.nondegenerateAdd, h_input]
-      at hwpx hwpy hwqx hwqy hwrx hwry
     -- land the `Assumptions` facts on the input coordinates
-    simp only [h_input] at hA
-    obtain ⟨hpCurve, hqCurve, hxne⟩ := hA
+    obtain ⟨-, -, hxne⟩ := hA
     -- gate polynomials vanish at the `nondegenerateAdd` result
     have hpolys := polys_zero_of_nondegenerateAdd (xP := input_p_x) (yP := input_p_y)
       (xQ := input_q_x) (yQ := input_q_y) hxne
-    simp only at hpolys
-    obtain ⟨hp1, hp2⟩ := hpolys
-    refine ⟨⟨?_, ?_⟩, ?_⟩
-    · -- poly1
-      simp only [poly1, Orchard.Point.nondegenerateAdd] at hp1
-      simp only [hwrx, hwpx, hwpy, hwqx, hwqy]
-      linear_combination hp1
-    · -- poly2
-      simp only [poly2, Orchard.Point.nondegenerateAdd] at hp2
-      simp only [hwrx, hwry, hwpx, hwpy, hwqx, hwqy]
-      linear_combination hp2
-    · -- copy equalities
-      refine ⟨?_, ?_, ?_, ?_⟩ <;>
-        simp only [hwpx, hwpy, hwqx, hwqy, h_input]
+    simp_all [poly1, poly2, Orchard.Point.nondegenerateAdd]
 
 end AddIncomplete
 
