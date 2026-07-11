@@ -523,9 +523,10 @@ private theorem loop_gate_facts (n : ℕ) :
           · linear_combination hg2
         · -- interior round: `q_mul_2`
           rw [hYADr, hYADr1i hrn]
-          simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_neg hr0, if_neg hrn] at hRound
-          simp only [hzp] at hRound
+          -- ACCEPTANCE (C2a #1): `round_norm` bundles the gate `circuit_norm` reduction with the
+          -- gate/def args AND the rotation-row cast (the hand `simp only [hzp]`, mechanized).
+          round_norm [round, qMul2Gate, forLoopPolys, yAExpr, xRExpr, if_neg hr0, if_neg hrn]
+            at hRound
           obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_,
             fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩

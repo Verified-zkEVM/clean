@@ -229,12 +229,12 @@ The MulComplete/MulOverflow pattern: expose each child's contract fields as `rfl
 so the composition consumes them without unfolding the child bundle literal. FRAMEWORK
 CANDIDATE: a deriving-style projection mechanism. -/
 
-private theorem add_spec_eq :
-    Add.add.Spec = fun input output _ => output.Valid ∧ output = input.p + input.q := rfl
-private theorem add_assumptions_eq :
-    Add.add.Assumptions = fun input => input.p.Valid ∧ input.q.Valid := rfl
-private theorem add_envAssumptions_eq :
-    Add.add.EnvAssumptions = fun _ _ => True := rfl
+-- ACCEPTANCE (C2a #2): the six contract-projection `rfl`-bridges for the `Add.add` child,
+-- generated mechanically by `derive_contract_bridges` (produces `add_spec_eq`,
+-- `add_assumptions_eq`, `add_envAssumptions_eq`, `add_proverAssumptions_eq`, `add_proverSpec_eq`)
+-- in place of the hand-written stack. The consumers below (`simp only [add_spec_eq, …]`) are
+-- unchanged.
+derive_contract_bridges add := Add.add
 
 private theorem hi_spec_eq (bits : BitsHint) :
     (MulIncomplete.double_and_add 124 bits).Spec

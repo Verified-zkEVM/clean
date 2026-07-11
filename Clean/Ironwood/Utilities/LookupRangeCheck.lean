@@ -138,6 +138,20 @@ def TableLoaded (K : ℕ) (cfg : Config K) (env : Environment Fp) : Prop :=
   (∀ r : ℕ, r < env.usableRows → (env.fixed cfg.tableIdx.inner (r : ℤ)).val < 2 ^ K) ∧
   (∀ r : ℕ, r < 2 ^ K → env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp))
 
+/-- **Membership-consumption helper** (C2a #5). Turn a lookup-membership existential (the
+`enableLookup` constraint's `∃ tableRow < usableRows, value = env.fixed tableIdx tableRow`) plus
+the `TableLoaded` usable-rows bound (`TableLoaded`'s second conjunct — `hTableLt`) into the value
+bound `value.val < 2^K`, in one application. This is the "two `obtain`s + application, same shape
+everywhere" pattern (`hMemWord`/`hMemShift` in `short_range_check` soundness, mirrored in every
+lookup consumer) collapsed to a single `exact`. -/
+theorem mem_usableRows_val_lt {K : ℕ} {cfg : Config K} {env : Environment Fp} {v : Fp}
+    (hTableLt : ∀ r : ℕ, r < env.usableRows → (env.fixed cfg.tableIdx.inner (r : ℤ)).val < 2 ^ K)
+    (hMem : ∃ tableRow : ℕ, tableRow < env.usableRows
+      ∧ v = env.fixed cfg.tableIdx.inner (tableRow : ℤ)) :
+    v.val < 2 ^ K := by
+  obtain ⟨r, hr, hrv⟩ := hMem
+  rw [hrv]; exact hTableLt r hr
+
 /-- Exact table-contents theorem: from the `loadTable`'s `Constraints`, every row in the
 explicit block `[0, 2^K)` holds the field element `↑r`. Proven from the explicit-block
 conjunct only, so it holds regardless of `usableRows`. `hK : 2^K ≤ |Fp|` is needed to
@@ -338,21 +352,16 @@ def shortRangeCheck (K numBits : ℕ) :
     rw [if_neg (fun h => hDistinct h.symm)] at hc
     -- destructure: copy (element ↦ runningSum@offset), two memberships, bitshift gate
     obtain ⟨hCopy, hMemWord, hMemShift, hBitshift⟩ := hc
-    -- TACTIC GAP (tactic-layer, mechanizable): consume each membership existential +
-    -- `TableLoaded`'s usable-rows bound into a value bound. The witness `tableRow` comes
-    -- bounded by `env.usableRows` (the semantics is faithful to `lookup/prover.rs:573-585`),
-    -- exactly the range `TableLoaded` characterizes — here it is an `obtain` + one
-    -- application per membership; a future tactic should do this mechanically.
+    -- ACCEPTANCE (C2a #5): consume each membership existential + `TableLoaded`'s usable-rows
+    -- bound into a value bound via `mem_usableRows_val_lt` — the mechanized "two obtains + apply"
+    -- pattern, collapsed to one `exact` per membership.
     simp only [List.cons.injEq, and_true, one_mul, zero_mul, sub_zero,
       zero_add] at hMemWord hMemShift
-    obtain ⟨rW, hrWlt, hrW⟩ := hMemWord
-    obtain ⟨rS, hrSlt, hrS⟩ := hMemShift
-    -- word = advice runningSum @offset (short row) ; shifted = advice runningSum @(offset+1)
-    have hWordLt : (env.env.advice cfg.runningSum ↑(env.place self + offset)).val < 2 ^ K := by
-      rw [hrW]; exact hTableLt rW hrWlt
+    have hWordLt : (env.env.advice cfg.runningSum ↑(env.place self + offset)).val < 2 ^ K :=
+      mem_usableRows_val_lt hTableLt hMemWord
     have hShiftLt :
-        (env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))).val < 2 ^ K := by
-      rw [hrS]; exact hTableLt rS hrSlt
+        (env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))).val < 2 ^ K :=
+      mem_usableRows_val_lt hTableLt hMemShift
     -- the copy constraint: input_element = advice runningSum @offset
     rw [← h_input, ← hCopy]
     -- bitshift gate: shifted = word · 2^K · 2^(−num_bits) = word · 2^(K−num_bits)

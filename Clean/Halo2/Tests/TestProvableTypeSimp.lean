@@ -157,4 +157,22 @@ example (pe : Placed ProverEnvironment Fp) (col : Column .advice) (self : Region
   guard_hyp h :ₛ pe.env.toEnvironment.advice col ((pe.place self + row : ℕ) : ℤ) = out
   trivial
 
+/-! ### Record-eval decomposition under an opaque predicate (C2a #3 root-cause pin)
+
+The `rw`-vs-`simp` finding (`Mul.lean` "Composition ergonomics" #2): whole-record eval bridges
+(`hiInputs_eval_eq : eval env ⟨…⟩ = {…}`) fire under `rw` (defeq unification) but NOT under
+`simp only [that_lemma]` on an iff-produced term, because the discr-tree key includes the
+`Eval`/`CircuitType` instance, whose spelling differs between the locally-elaborated lemma LHS
+and the instance threaded through `FormalRegionCircuit.Spec`. The `structEvalLiteral` simproc
+sidesteps this: it keys only on the `eval` HEAD and recomputes each field's instance, validating
+by `.all` defeq — so `provable_type_simp` decomposes the record-eval regardless of the instance
+spelling, even when the result must feed an opaque predicate (the iff-produced consumption site).
+This pin asserts the simproc fires there; it is the mechanized replacement for the hand `rw`. -/
+example (env : Placed Environment Fp) (a b : AssignedCell Fp)
+    (P : Value Point Fp → Prop)
+    (h : P { x := eval env a, y := eval env b }) :
+    P (eval env (⟨a, b⟩ : Point (AssignedCell Fp))) := by
+  provable_type_simp
+  exact h
+
 end Halo2.ProvableTypeSimp.Test
