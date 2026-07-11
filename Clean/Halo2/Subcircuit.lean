@@ -42,8 +42,63 @@ def SubcircuitConstraints (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) (ops : RegionOperations F) : Prop :=
   RegionOperations.Constraints place self env ops
 
+/-- Layouter-level counterpart of `SubcircuitConstraints`: opaque marker wrapping a raw
+layouter `Halo2.Constraints` chunk (definitionally equal, distinct head), so the layouter
+absorption iffs never re-fire on the surviving RHS copy. Not tagged `@[circuit_norm]`. -/
+def SubcircuitConstraintsL (place : RegionIndex → ℕ) (env : Environment F)
+    (ops : Operations F) (i : RegionIndex) : Prop :=
+  Halo2.Constraints place env ops i
+
 section
 variable [CircuitType Input] [CircuitType Output]
+
+/-- `output` of a layouter `call` (the child's output) — a `circuit_norm` accessor lemma. -/
+@[circuit_norm]
+theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (input : Var Input F) (i : RegionIndex) :
+    (self.call config input).output i = self.output config input i := rfl
+
+/-- `nextRegionIndex` of a layouter `call`, spelled as the append offset
+`Operations.regionCount ((self.call …).operations i)` — so that when a parent's
+`operations_bind` splits into `++` and `constraints_append` threads its offset, a *second*
+subcircuit call's index matches the append form and the absorption iff still fires on it.
+Keeping `call.operations` folded (the iff key), this bridges the two spellings of "how many
+regions the first call consumed". `@[circuit_norm]`. -/
+@[circuit_norm]
+theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input Output)
+    (config : Cfg) (input : Var Input F) (i : RegionIndex) :
+    (self.call config input).nextRegionIndex i
+      = i + Operations.regionCount ((self.call config input).operations i) := by
+  show i + self.regionCount config input
+    = i + Operations.regionCount ((self.call config input).operations i)
+  congr 1
+  -- `regionCount = ((synthesize …).operations i).regionCount` (elaborated metadata), and the
+  -- `call`'s single `.subcircuit` op has exactly that `Operations.regionCount`.
+  rw [FormalCircuit.regionCount, (self.elaborated config).regionCount_eq input i]
+  simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount, Nat.add_zero]
+
+/-- Concrete-`α` restatement of `output_call` (the `Circuit.output`/`operations` element type
+is rewritten to the concrete `Output (AssignedCell F)` by `var_of_provableType`; the generic
+lemma's discr-tree key then misses under `simp`, as with the iffs). -/
+@[circuit_norm]
+theorem FormalCircuit.output_call' {Output : TypeMap} [ProvableType Output]
+    (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (input : Var Input F) (i : RegionIndex) :
+    (@Circuit.output F _ (Output (AssignedCell F)) (self.call config input) i)
+      = self.output config input i := rfl
+
+/-- Concrete-`α` restatement of `nextRegionIndex_call`, needed for the same reason: inside a
+parent's `operations_bind`-produced chunk the `Circuit.nextRegionIndex` element type is the
+concrete `Output (AssignedCell F)`, so the generic lemma's key misses under `simp`. This is
+the layouter analogue of the concrete-`α` iff finding, at the *index* rather than the chunk. -/
+@[circuit_norm]
+theorem FormalCircuit.nextRegionIndex_call' {Output : TypeMap} [ProvableType Output]
+    (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (input : Var Input F) (i : RegionIndex) :
+    (@Circuit.nextRegionIndex F _ (Output (AssignedCell F)) (self.call config input) i)
+      = i + Operations.regionCount
+          (@Circuit.operations F _ (Output (AssignedCell F)) (self.call config input) i) :=
+  FormalCircuit.nextRegionIndex_call self config input i
 
 /-- `ExtendsWitness` of a region-level subcircuit op is the child's `ExtendsWitnesses`.
 The completeness dual of `RegionOperation.constraints_subcircuit`; used inside the
@@ -127,6 +182,75 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness
       obtain ⟨hw, hE, hA, hpa⟩ := h
       exact (child.completeness config offset self env input hw hE hA hpa).1
 
+/-! ## Layouter-level absorption iffs
+
+The layouter mirror of the region-level iffs above, keyed on the opaque
+`(child.call config input).operations i₀` boundary. `child.call` emits a single layouter
+`.subcircuit` op carrying the child's `synthesize` ops and advances the region counter by
+`regionCount`; the iff's proof unfolds `call` to that single op (defeq) to reach the child's
+contract, while the statement keeps `call` folded. Because the trailing `Operations` is empty
+after the one subcircuit op, the `regionCount` bookkeeping contributes only a `∧ True` that
+the proof discharges. -/
+
+/-- Layouter soundness forward iff (absorption). Rewrites a child's folded layouter
+call-constraint chunk into that chunk conjoined with the child's `EnvAssumptions →
+Assumptions → Spec`. -/
+theorem FormalCircuit.subcircuit_constraints_iff_soundness
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (env : Placed Environment F) (input : Var Input F) :
+    Halo2.Constraints env.place env.env ((child.call config input).operations i₀) i₀
+    ↔ SubcircuitConstraintsL env.place env.env
+          ((child.call config input).operations i₀) i₀
+      ∧ (child.EnvAssumptions config env → child.Assumptions (eval env input) →
+          child.Spec (eval env input)
+            (eval env (child.output config input i₀))
+            (child.extract config input i₀ env)) := by
+  unfold SubcircuitConstraintsL
+  have hcall : Halo2.Constraints env.place env.env
+      ((child.call config input).operations i₀) i₀
+      = Halo2.Constraints env.place env.env
+          ((child.synthesize config input).operations i₀) i₀ := by
+    simp only [FormalCircuit.call, Circuit.operations, Halo2.Constraints, and_true]
+  rw [hcall]
+  constructor
+  · intro hc
+    exact ⟨hc, fun hE hA => child.soundness config i₀ env input hE hA hc⟩
+  · intro ⟨hc, _⟩
+    exact hc
+
+/-- Layouter completeness forward iff (OR-shaped). Same shape as the region version. -/
+theorem FormalCircuit.subcircuit_constraints_iff_completeness
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F) :
+    Halo2.Constraints env.place env.env ((child.call config input).operations i₀) i₀
+    ↔ SubcircuitConstraintsL env.place env.env
+          ((child.call config input).operations i₀) i₀
+      ∨ (Halo2.ExtendsWitnesses env.place env.env
+              ((child.call config input).operations i₀) i₀
+          ∧ child.EnvAssumptions config env.toEnvironment
+          ∧ child.Assumptions (eval env.toEnvironment input)
+          ∧ child.ProverAssumptions (eval env input) env.env.hint) := by
+  unfold SubcircuitConstraintsL
+  have hcall : Halo2.Constraints env.place env.env
+      ((child.call config input).operations i₀) i₀
+      = Halo2.Constraints env.place env.env
+          ((child.synthesize config input).operations i₀) i₀ := by
+    simp only [FormalCircuit.call, Circuit.operations, Halo2.Constraints, and_true]
+  have hwit : Halo2.ExtendsWitnesses env.place env.env
+      ((child.call config input).operations i₀) i₀
+      = Halo2.ExtendsWitnesses env.place env.env
+          ((child.synthesize config input).operations i₀) i₀ := by
+    simp only [FormalCircuit.call, Circuit.operations, Halo2.ExtendsWitnesses, and_true]
+  rw [hcall, hwit]
+  constructor
+  · intro hc; exact Or.inl hc
+  · intro h
+    cases h with
+    | inl hc => exact hc
+    | inr h =>
+      obtain ⟨hw, hE, hA, hpa⟩ := h
+      exact (child.completeness config i₀ env input hw hE hA hpa).1
+
 end
 
 /-! ## Concrete-`α` variants (the `simp`-firing form for `ProvableType` outputs)
@@ -179,6 +303,110 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness'
           ∧ child.Assumptions (eval env.toEnvironment input)
           ∧ child.ProverAssumptions (eval env input) env.env.hint) :=
   FormalRegionCircuit.subcircuit_constraints_iff_completeness child config offset self env input
+
+/-- Concrete-`α` restatement of the *layouter* `subcircuit_constraints_iff_soundness`. -/
+theorem FormalCircuit.subcircuit_constraints_iff_soundness'
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (env : Placed Environment F) (input : Var Input F) :
+    Halo2.Constraints env.place env.env
+        (@Circuit.operations F _ (Output (AssignedCell F))
+          (child.call config input) i₀) i₀
+    ↔ SubcircuitConstraintsL env.place env.env
+          (@Circuit.operations F _ (Output (AssignedCell F))
+            (child.call config input) i₀) i₀
+      ∧ (child.EnvAssumptions config env → child.Assumptions (eval env input) →
+          child.Spec (eval env input)
+            (eval env (child.output config input i₀))
+            (child.extract config input i₀ env)) :=
+  FormalCircuit.subcircuit_constraints_iff_soundness child config i₀ env input
+
+/-- Concrete-`α` restatement of the *layouter* `subcircuit_constraints_iff_completeness`. -/
+theorem FormalCircuit.subcircuit_constraints_iff_completeness'
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F) :
+    Halo2.Constraints env.place env.env
+        (@Circuit.operations F _ (Output (AssignedCell F))
+          (child.call config input) i₀) i₀
+    ↔ SubcircuitConstraintsL env.place env.env
+          (@Circuit.operations F _ (Output (AssignedCell F))
+            (child.call config input) i₀) i₀
+      ∨ (Halo2.ExtendsWitnesses env.place env.env
+              (@Circuit.operations F _ (Output (AssignedCell F))
+                (child.call config input) i₀) i₀
+          ∧ child.EnvAssumptions config env.toEnvironment
+          ∧ child.Assumptions (eval env.toEnvironment input)
+          ∧ child.ProverAssumptions (eval env input) env.env.hint) :=
+  FormalCircuit.subcircuit_constraints_iff_completeness child config i₀ env input
+
+end
+
+/-! ## Bare-`place`/`env` variants (fire inside loop lemmas)
+
+The primed variants key on `Placed` projections (`env.place`, `env.env`), so inside a loop
+lemma phrased over a bare `place : RegionIndex → ℕ` and `env : Environment F` (the
+`Mul.lean` headline finding) `simp only [circuit_norm, <iff>]` never fires — the
+discrimination-tree key sees a raw `place`/`env`, not a projection of a `Placed` record.
+These restate all four absorption iffs over bare `place`/`env` (and `ProverEnvironment` for
+completeness), reconstructing the `Placed` record as `⟨place, env⟩` under the hood; the
+proofs delegate to the generic (`Placed`) versions, on which `⟨place, env⟩.place`/`.env`
+reduce definitionally. Suffix: `_bare`. -/
+
+section
+variable [CircuitType Input] [CircuitType Output]
+
+/-- Region soundness iff over bare `place`/`env`. -/
+theorem FormalRegionCircuit.subcircuit_constraints_iff_soundness_bare
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (place : RegionIndex → ℕ) (env : Environment F) (input : Var Input F) :
+    RegionOperations.Constraints place self env
+        ((child.call config offset input).operations self)
+    ↔ SubcircuitConstraints place self env
+          ((child.call config offset input).operations self)
+      ∧ (child.EnvAssumptions config (⟨place, env⟩ : Placed Environment F) → child.Assumptions (eval (⟨place, env⟩ : Placed Environment F) input) →
+          child.Spec (eval (⟨place, env⟩ : Placed Environment F) input)
+            (eval (⟨place, env⟩ : Placed Environment F) (child.output config offset input self))
+            (child.extract config offset input self (⟨place, env⟩ : Placed Environment F))) :=
+  FormalRegionCircuit.subcircuit_constraints_iff_soundness child config offset self ⟨place, env⟩ input
+
+/-- Region completeness iff over bare `place`/`env`. -/
+theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness_bare
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (input : Var Input F) :
+    RegionOperations.Constraints place self env
+        ((child.call config offset input).operations self)
+    ↔ SubcircuitConstraints place self env
+          ((child.call config offset input).operations self)
+      ∨ (RegionOperations.ExtendsWitnesses place self env
+              ((child.call config offset input).operations self)
+          ∧ child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F)
+          ∧ child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
+          ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint) :=
+  FormalRegionCircuit.subcircuit_constraints_iff_completeness child config offset self ⟨place, env⟩ input
+
+/-- Layouter soundness iff over bare `place`/`env`. -/
+theorem FormalCircuit.subcircuit_constraints_iff_soundness_bare
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment F) (input : Var Input F) :
+    Halo2.Constraints place env ((child.call config input).operations i₀) i₀
+    ↔ SubcircuitConstraintsL place env ((child.call config input).operations i₀) i₀
+      ∧ (child.EnvAssumptions config (⟨place, env⟩ : Placed Environment F) → child.Assumptions (eval (⟨place, env⟩ : Placed Environment F) input) →
+          child.Spec (eval (⟨place, env⟩ : Placed Environment F) input)
+            (eval (⟨place, env⟩ : Placed Environment F) (child.output config input i₀))
+            (child.extract config input i₀ (⟨place, env⟩ : Placed Environment F))) :=
+  FormalCircuit.subcircuit_constraints_iff_soundness child config i₀ ⟨place, env⟩ input
+
+/-- Layouter completeness iff over bare `place`/`env`. -/
+theorem FormalCircuit.subcircuit_constraints_iff_completeness_bare
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment F) (input : Var Input F) :
+    Halo2.Constraints place env ((child.call config input).operations i₀) i₀
+    ↔ SubcircuitConstraintsL place env ((child.call config input).operations i₀) i₀
+      ∨ (Halo2.ExtendsWitnesses place env ((child.call config input).operations i₀) i₀
+          ∧ child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F)
+          ∧ child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
+          ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint) :=
+  FormalCircuit.subcircuit_constraints_iff_completeness child config i₀ ⟨place, env⟩ input
 
 end
 

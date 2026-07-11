@@ -96,6 +96,58 @@ def FormalCircuit.Completeness
   Constraints env.place env.env ((main input).operations i₀) i₀ ∧
   ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) env.env.hint
 
+/-- Equivalence rewriting the layouter-level `Soundness` into a form with the input/output
+*values* intro'd as variables (with their defining equations), the layouter-level mirror of
+`FormalRegionCircuit.soundness_iff`. A proof tactic `rw`s this at the very start, so the user
+works with `input`/`output` (finite-field values) instead of `eval env …`. -/
+theorem FormalCircuit.soundness_iff
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
+    (EnvAssumptions : Placed Environment F → Prop)
+    (Assumptions : Value Input F → Prop)
+    (Spec : Value Input F → Value Output F → Witness F → Prop) :
+    FormalCircuit.Soundness main extract EnvAssumptions Assumptions Spec ↔
+    ∀ (i₀ : RegionIndex) (env : Placed Environment F) (input_var : Var Input F)
+      (input : Value Input F) (output : Value Output F),
+    eval env input_var = input →
+    eval env (ElaboratedCircuit.output main input_var i₀) = output →
+    EnvAssumptions env →
+    Assumptions input →
+    Constraints env.place env.env ((main input_var).operations i₀) i₀ →
+    Spec input output (extract input_var i₀ env) := by
+  constructor
+  · intro h i₀ env iv input output h_in h_out hE hA hC
+    subst h_in h_out; exact h i₀ env iv hE hA hC
+  · intro h i₀ env iv hE hA hC
+    exact h i₀ env iv _ _ rfl rfl hE hA hC
+
+/-- Completeness counterpart of the layouter-level `soundness_iff`, the mirror of
+`FormalRegionCircuit.completeness_iff`. Only the *prover-side* input value is intro'd (with
+its defining equation): the `Assumptions` and `EnvAssumptions` hypotheses stay raw (see the
+region-level docstring for the rationale). -/
+theorem FormalCircuit.completeness_iff
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (EnvAssumptions : Placed Environment F → Prop)
+    (Assumptions : Value Input F → Prop)
+    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
+    FormalCircuit.Completeness main EnvAssumptions Assumptions ProverAssumptions ProverSpec ↔
+    ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
+      (input : ProverValue Input F) (output : ProverValue Output F),
+    eval env input_var = input →
+    eval env (ElaboratedCircuit.output main input_var i₀) = output →
+    ExtendsWitnesses env.place env.env ((main input_var).operations i₀) i₀ →
+    EnvAssumptions env.toEnvironment →
+    Assumptions (eval env.toEnvironment input_var) →
+    ProverAssumptions input env.env.hint →
+    Constraints env.place env.env ((main input_var).operations i₀) i₀ ∧
+    ProverSpec input output env.env.hint := by
+  constructor
+  · intro h i₀ env iv input output h_in h_out hW hE hA hPA
+    subst h_in h_out; exact h i₀ env iv hW hE hA hPA
+  · intro h i₀ env iv hW hE hA hPA
+    exact h i₀ env iv _ _ rfl rfl hW hE hA hPA
+
 end Statements
 
 /--
@@ -140,8 +192,14 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   loaded" — a table-contents fact about `env.fixed table_col r` that lives at the
   environment level and cannot be carried by `Assumptions` (which sees only the input
   value). Discharged by callers (an in-scope `loadTable` subcircuit, or an ambient VK
-  guarantee). Defaults to `True`. See `lookup-design.md` §2.4/§D4. -/
-  EnvAssumptions : Placed Environment F → Prop := fun _ => True
+  guarantee). Defaults to `fun _ _ => True`.
+
+  Takes the `Config` (mirroring the region level): the env-fact usually names a *config*
+  column — e.g. "`env.fixed cfg.tableIdx r < 2^K`" for the range table — which the
+  arbitrary-config soundness quantifier binds. `Soundness`/`Completeness` still take a
+  plain `Placed Environment F → Prop`; the `soundness`/`completeness` fields feed
+  `EnvAssumptions config`. See `lookup-design.md` §2.4/§D4. -/
+  EnvAssumptions : Config → Placed Environment F → Prop := fun _ _ => True
   /-- Verifier-view precondition (hints erased). -/
   Assumptions : Value Input F → Prop := fun _ => True
   /-- Verifier-view postcondition: relates input, extracted witness, and output. -/
@@ -155,9 +213,10 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
 
   soundness : ∀ (config : Config),
-    FormalCircuit.Soundness (synthesize config) (extract config) EnvAssumptions Assumptions Spec
+    FormalCircuit.Soundness (synthesize config) (extract config) (EnvAssumptions config)
+      Assumptions Spec
   completeness : ∀ (config : Config),
-    FormalCircuit.Completeness (synthesize config) EnvAssumptions Assumptions
+    FormalCircuit.Completeness (synthesize config) (EnvAssumptions config) Assumptions
       ProverAssumptions ProverSpec
 
 namespace FormalCircuit
@@ -396,6 +455,82 @@ def call (self : FormalRegionCircuit F ConfigInput Config Input Output) (config 
   fun region =>
     (self.output config offset input region,
       [.subcircuit ((self.synthesize config offset input).operations region)])
+
+end FormalRegionCircuit
+
+/-! ## The region-boundary bridge: `FormalRegionCircuit.toFormal`
+
+Lifts a region-level gadget to a layouter-level `FormalCircuit` by wrapping its body in a
+fresh `assignRegion` (halo2 helpers wrapped in their own region start at row offset 0). This
+is the *single* mechanism that makes every region-level gadget consumable at layouter level;
+the layouter absorption iffs then cover it with zero extra machinery.
+
+**Contract transfer.** All contracts move over verbatim (the two levels' contract fields
+mirror each other, including the config-aware `EnvAssumptions`), with one adapter forced by
+the level difference: the region `extract` takes an `offset`, the layouter one does not (the
+wrapping region fixes offset `0`), so the layouter `extract` is `child.extract config 0 …`. -/
+
+namespace FormalRegionCircuit
+variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
+
+/-- Lift a region-level formal circuit to the layouter level by wrapping its body in a fresh
+region. See the section docstring for the contract-transfer details. -/
+def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String := child.name) :
+    FormalCircuit F ConfigInput Config Input Output where
+  name := name
+  configure := child.configure
+  synthesize config input := assignRegion name (child.synthesize config 0 input)
+  elaborated config :=
+    { output := fun input i => (child.synthesize config 0 input).output i
+      regionCount := fun _ => 1
+      output_eq := by intro _ _; rfl
+      regionCount_eq := by
+        intro _ _
+        simp only [assignRegion, Circuit.operations, Operations.regionCount] }
+  Witness := child.Witness
+  inhabitedWitness := child.inhabitedWitness
+  extract config input i₀ env := child.extract config 0 input i₀ env
+  EnvAssumptions := child.EnvAssumptions
+  Assumptions := child.Assumptions
+  Spec := child.Spec
+  ProverAssumptions := child.ProverAssumptions
+  ProverSpec := child.ProverSpec
+
+  soundness := by
+    intro config
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_in h_out hE hA hC
+    -- the wrapping region's layouter `Constraints` peels to the child's region `Constraints`
+    -- at the freshly-allocated region index `i₀` (offset 0)
+    simp only [Circuit.operations, assignRegion, Halo2.Constraints] at hC
+    subst h_in h_out
+    -- instantiate the child's region-level soundness at `self := i₀`
+    have hsound := child.soundness config 0 i₀ env input_var hE hA hC.1
+    have hout := (child.elaborated config 0).output_eq input_var i₀
+    rw [hout] at hsound
+    show child.Spec (eval env input_var)
+      (eval env ((child.synthesize config 0 input_var).output i₀))
+      (child.extract config 0 input_var i₀ env)
+    exact hsound
+
+  completeness := by
+    intro config
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_in h_out hW hE hA hpa
+    simp only [Circuit.operations, assignRegion,
+      Halo2.ExtendsWitnesses, Halo2.Constraints] at hW ⊢
+    subst h_in h_out
+    -- instantiate the child's region-level completeness at `self := i₀`
+    have hcompl := child.completeness config 0 i₀ env input_var hW.1 hE hA hpa
+    -- the two `output` spellings (layouter vs region elaborated metadata) are defeq;
+    -- pin both to the raw `.output` via the region instance's `output_eq`
+    refine ⟨⟨hcompl.1, trivial⟩, ?_⟩
+    have hout := (child.elaborated config 0).output_eq input_var i₀
+    show child.ProverSpec (eval env input_var)
+      (eval env ((child.synthesize config 0 input_var).output i₀)) env.env.hint
+    rw [hout] at hcompl
+    exact hcompl.2
 
 end FormalRegionCircuit
 

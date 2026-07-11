@@ -10,3 +10,4 @@ import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestLookup
 import Clean.Halo2.Tests.TestProvableTypeSimp
 import Clean.Halo2.Tests.TestSubcircuit
+import Clean.Halo2.Tests.TestLayouterSubcircuit

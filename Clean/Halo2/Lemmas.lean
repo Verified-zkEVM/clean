@@ -340,10 +340,99 @@ theorem constraints_loadTable (place : RegionIndex → ℕ) (env : Environment F
          Halo2.Constraints place env ops i) := by
   simp only [Halo2.Constraints]
 
+omit [FiniteField F] in
+/-- `regionCount` of an appended op list splits additively — the bookkeeping the layouter
+`Constraints`/`ExtendsWitnesses` append lemmas thread when a parent's binds decompose. -/
+@[circuit_norm]
+theorem Operations.regionCount_append (ops₁ ops₂ : Operations F) :
+    Operations.regionCount (ops₁ ++ ops₂)
+      = Operations.regionCount ops₁ + Operations.regionCount ops₂ := by
+  induction ops₁ with
+  | nil => simp [Operations.regionCount]
+  | cons op ops ih =>
+    cases op <;> simp only [List.cons_append, Operations.regionCount, ih, Nat.add_assoc]
+
+/-- Layouter `Constraints` distributes over `++`, advancing the region counter by the first
+list's `regionCount` — the layouter analogue of `RegionOperations.constraints_append`
+(with the region-count offset the layouter level threads). Needed so a parent's
+`operations_bind`-produced `++` decomposes and each folded subcircuit chunk is isolated. -/
+@[circuit_norm]
+theorem constraints_append (place : RegionIndex → ℕ) (env : Environment F)
+    (ops₁ ops₂ : Operations F) (i : RegionIndex) :
+    Halo2.Constraints place env (ops₁ ++ ops₂) i
+      = (Halo2.Constraints place env ops₁ i ∧
+         Halo2.Constraints place env ops₂ (i + Operations.regionCount ops₁)) := by
+  induction ops₁ generalizing i with
+  | nil => simp [Halo2.Constraints, Operations.regionCount]
+  | cons op ops ih =>
+    cases op <;>
+      simp only [List.cons_append, Halo2.Constraints, Operations.regionCount, ih,
+        and_assoc, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+
+/-- Layouter `ExtendsWitnesses` distributes over `++` (completeness counterpart of
+`constraints_append`). -/
+@[circuit_norm]
+theorem extendsWitnesses_append (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (ops₁ ops₂ : Operations F) (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env (ops₁ ++ ops₂) i
+      = (Halo2.ExtendsWitnesses place env ops₁ i ∧
+         Halo2.ExtendsWitnesses place env ops₂ (i + Operations.regionCount ops₁)) := by
+  induction ops₁ generalizing i with
+  | nil => simp [Halo2.ExtendsWitnesses, Operations.regionCount]
+  | cons op ops ih =>
+    cases op <;>
+      simp only [List.cons_append, Halo2.ExtendsWitnesses, Operations.regionCount, ih,
+        and_assoc, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+
+@[circuit_norm]
+theorem constraints_region (place : RegionIndex → ℕ) (env : Environment F)
+    (name : String) (ops' : RegionOperations F) (ops : Operations F) (i : RegionIndex) :
+    Halo2.Constraints place env (.region name ops' :: ops) i
+      = (RegionOperations.Constraints place i env ops' ∧ Halo2.Constraints place env ops (i + 1)) := by
+  simp only [Halo2.Constraints]
+
+@[circuit_norm]
+theorem constraints_subcircuit (place : RegionIndex → ℕ) (env : Environment F)
+    (ops' ops : Operations F) (i : RegionIndex) :
+    Halo2.Constraints place env (.subcircuit ops' :: ops) i
+      = (Halo2.Constraints place env ops' i ∧
+         Halo2.Constraints place env ops (i + Operations.regionCount ops')) := by
+  simp only [Halo2.Constraints]
+
+@[circuit_norm]
+theorem constraints_constrainInstance (place : RegionIndex → ℕ) (env : Environment F)
+    (cell : Cell) (col : Column .instance) (row : ℕ) (ops : Operations F) (i : RegionIndex) :
+    Halo2.Constraints place env (.constrainInstance cell col row :: ops) i
+      = (cell.eval place env = env.get col row ∧ Halo2.Constraints place env ops i) := by
+  simp only [Halo2.Constraints]
+
 @[circuit_norm]
 theorem extendsWitnesses_nil (place : RegionIndex → ℕ) (env : ProverEnvironment F)
     (i : RegionIndex) :
     Halo2.ExtendsWitnesses place env ([] : Operations F) i = True := by
+  simp only [Halo2.ExtendsWitnesses]
+
+@[circuit_norm]
+theorem extendsWitnesses_region (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (name : String) (ops' : RegionOperations F) (ops : Operations F) (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env (.region name ops' :: ops) i
+      = (RegionOperations.ExtendsWitnesses place i env ops'
+          ∧ Halo2.ExtendsWitnesses place env ops (i + 1)) := by
+  simp only [Halo2.ExtendsWitnesses]
+
+@[circuit_norm]
+theorem extendsWitnesses_subcircuit (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (ops' ops : Operations F) (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env (.subcircuit ops' :: ops) i
+      = (Halo2.ExtendsWitnesses place env ops' i ∧
+         Halo2.ExtendsWitnesses place env ops (i + Operations.regionCount ops')) := by
+  simp only [Halo2.ExtendsWitnesses]
+
+@[circuit_norm]
+theorem extendsWitnesses_constrainInstance (place : RegionIndex → ℕ) (env : ProverEnvironment F)
+    (cell : Cell) (col : Column .instance) (row : ℕ) (ops : Operations F) (i : RegionIndex) :
+    Halo2.ExtendsWitnesses place env (.constrainInstance cell col row :: ops) i
+      = Halo2.ExtendsWitnesses place env ops i := by
   simp only [Halo2.ExtendsWitnesses]
 
 @[circuit_norm]
