@@ -9,3 +9,4 @@ import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestProvableTypeSimp
 import Clean.Utils.Test.TestLookup
+import Clean.Utils.Test.TestSubcircuit

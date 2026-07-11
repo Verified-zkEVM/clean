@@ -25,14 +25,22 @@ lemmas reach and shred the child's `synthesize` ops). The iff's *proof* unfolds 
 internally (defeq to `[.subcircuit ((child.synthesize …).operations self)]`) to reach the
 child's contract; the *statement* keeps `call` folded.
 
-No `SubcircuitConstraints` marker is needed: the LHS is `(call).operations`-keyed and the
-RHS raw chunk is `(synthesize).operations`-keyed — different heads once the proof unfolds —
-so simp does not loop.
+The surviving raw chunk on the RHS is `(call).operations`-keyed too (same as the LHS), so
+without a guard `simp` would re-fire the iff on it forever. We hide it behind the opaque
+`SubcircuitConstraints` marker (a distinct head `circuit_norm`/this iff never match), so the
+rewrite happens exactly once.
 -/
 
 namespace Halo2
 
 variable {F : Type} [FiniteField F] {CI Cfg : Type} {Input Output Witness : TypeMap}
+
+/-- Opaque marker wrapping a raw `RegionOperations.Constraints` chunk — definitionally equal
+to it, but with a *distinct head* so the absorption iffs below (and `circuit_norm`) never
+re-fire on the surviving RHS copy. Not tagged `@[circuit_norm]`. -/
+def SubcircuitConstraints (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (ops : RegionOperations F) : Prop :=
+  RegionOperations.Constraints place self env ops
 
 section
 variable [CircuitType Input] [CircuitType Output]
@@ -55,7 +63,7 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_soundness
     (self : RegionIndex) (env : Placed Environment F) (input : Var Input F) :
     RegionOperations.Constraints env.place self env.env
         ((child.call config offset input).operations self)
-    ↔ RegionOperations.Constraints env.place self env.env
+    ↔ SubcircuitConstraints env.place self env.env
           ((child.call config offset input).operations self)
       ∧ (child.EnvAssumptions config env → child.Assumptions (eval env input) →
           child.Spec (eval env input)
@@ -63,6 +71,7 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_soundness
             (child.extract config offset input self env)) := by
   -- the call term is defeq to a single `.subcircuit` op over the child's synthesize ops,
   -- whose `Constraints` is exactly the child's `RegionOperations.Constraints`
+  unfold SubcircuitConstraints
   have hcall : RegionOperations.Constraints env.place self env.env
       ((child.call config offset input).operations self)
       = RegionOperations.Constraints env.place self env.env
@@ -86,13 +95,14 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness
     (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F) :
     RegionOperations.Constraints env.place self env.env
         ((child.call config offset input).operations self)
-    ↔ RegionOperations.Constraints env.place self env.env
+    ↔ SubcircuitConstraints env.place self env.env
           ((child.call config offset input).operations self)
       ∨ (RegionOperations.ExtendsWitnesses env.place self env.env
               ((child.call config offset input).operations self)
           ∧ child.EnvAssumptions config env.toEnvironment
           ∧ child.Assumptions (eval env.toEnvironment input)
           ∧ child.ProverAssumptions (eval env input) env.env.hint) := by
+  unfold SubcircuitConstraints
   have hcall : RegionOperations.Constraints env.place self env.env
       ((child.call config offset input).operations self)
       = RegionOperations.Constraints env.place self env.env
