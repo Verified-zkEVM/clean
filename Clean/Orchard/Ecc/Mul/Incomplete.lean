@@ -395,7 +395,7 @@ def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1)
     2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
     Point.ofCoords (output.xA, output.yA) = (accScalar m input.bits (n + 1)) • base
 
-private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
+theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
     ∀ b, 2 ≤ accScalar m bits b
   | 0 => h2
   | b + 1 => by
@@ -403,7 +403,7 @@ private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) 
     simp only [accScalar]
     rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
 
-private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
+theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
     ∀ b, accScalar m bits b ≤ 2 ^ b * (m + 1) - 1
   | 0 => by simp [accScalar]
   | b + 1 => by
@@ -413,7 +413,7 @@ private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
     simp only [accScalar]
     rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
 
-private theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
+theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
   norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 /-- The witnessed `z` cell of loop row `r`. -/

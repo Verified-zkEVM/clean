@@ -58,36 +58,9 @@ namespace Halo2.Ironwood.Ecc.MulIncomplete
 open Orchard (Point)
 open Orchard.Ecc (DoubleAndAddRow)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd
-  (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue)
+  (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
+   accScalar_two_le accScalar_le pow254_lt_card)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
-
-/-! ### Accumulated-scalar bounds (donor helpers, re-proven locally — the donor's are private).
-
-`accScalar` grows by `m_{b+1} = 2 m_b + 2 k_b − 1`, so it stays `≥ 2` and `≤ 2^b·(m+1) − 1`;
-combined with `2^254 < |scalar field|` these give the per-row exceptional-case-free bounds that
-`honest_step`/`accVal_eq_nsmul` consume. Copies of `Incomplete.lean`'s `accScalar_two_le` /
-`accScalar_le` / `pow254_lt_card` (which are `private` there). -/
-
-private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
-    ∀ b, 2 ≤ accScalar m bits b
-  | 0 => h2
-  | b + 1 => by
-    have ih := accScalar_two_le h2 bits b
-    simp only [accScalar]
-    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
-
-private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
-    ∀ b, accScalar m bits b ≤ 2 ^ b * (m + 1) - 1
-  | 0 => by simp [accScalar]
-  | b + 1 => by
-    have ih := accScalar_le (m := m) bits b
-    have hpos : 0 < 2 ^ b * (m + 1) := by positivity
-    have hsplit : 2 ^ (b + 1) * (m + 1) = 2 * (2 ^ b * (m + 1)) := by ring
-    simp only [accScalar]
-    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
-
-private theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
-  norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 /-! ## Config
 
@@ -752,10 +725,67 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bit
       · linear_combination h
       · exact absurd (by rw [decide_eq_true_eq]; linear_combination h) hd
 
+/-- **Honest row values (completeness).** The honest prover's `ExtendsWitnesses` of the loop pins
+every row's `z`/`x_p`/`y_p`/`λ₁`/`λ₂`/`x_a(next)` cell to the donor's honest value
+(`zRunValue`/`rowLambdaValue`/`accVal`), by induction over rounds. Standalone (in the raw
+`input.*.eval` spelling) because a round's gate reads cells witnessed by *other* rounds
+(`z`-predecessor, next-row constancy cells), and because the bundle completeness re-reads row 0
+(for the `q_mul_1` gate) and the output rows off the same witnesses. -/
+private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ) :
+    ∀ numRounds : ℕ, numRounds ≤ n + 1 →
+    RegionOperations.ExtendsWitnesses place self env
+      ((loop cfg input bits offset n numRounds).operations self) →
+    ∀ r, r < numRounds →
+      adv cfg.z place self env.toEnvironment (offset + 1 + r)
+          = zRunValue (input.z.eval place env.toEnvironment) bits r ∧
+      adv cfg.xP place self env.toEnvironment (offset + 1 + r)
+          = input.base.x.eval place env.toEnvironment ∧
+      adv cfg.yP place self env.toEnvironment (offset + 1 + r)
+          = input.base.y.eval place env.toEnvironment ∧
+      adv cfg.lambda1 place self env.toEnvironment (offset + 1 + r)
+          = (rowLambdaValue (input.base.x.eval place env.toEnvironment)
+              (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
+              (input.yA.eval place env.toEnvironment) bits r).lambda1 ∧
+      adv cfg.lambda2 place self env.toEnvironment (offset + 1 + r)
+          = (rowLambdaValue (input.base.x.eval place env.toEnvironment)
+              (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
+              (input.yA.eval place env.toEnvironment) bits r).lambda2 ∧
+      adv cfg.xA place self env.toEnvironment (offset + 1 + (r + 1))
+          = (accVal (input.base.x.eval place env.toEnvironment)
+              (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
+              (input.yA.eval place env.toEnvironment) bits (r + 1)).1 := by
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _ r hr; omega
+  | succ k ih =>
+    intro hkb hW r hr
+    rw [loop_operations_succ, RegionOperations.extendsWitnesses_append] at hW
+    obtain ⟨hWloop, hWround⟩ := hW
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
+    · exact ih (by omega) hWloop r hr'
+    · -- the fresh round `r`'s own assignAdvice/copyAdvice witnesses (`r = 0`'s anchor copy and
+      -- the interior assignment both reduce to the same honest value equations)
+      simp only [adv, show offset + 1 + (r + 1) = offset + 1 + r + 1 from by omega]
+      by_cases hr0 : r = 0 <;>
+        [ simp only [round, hr0, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+            AssignedCell.eval, Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr,
+            Witgen.VExprOver.eval, Witgen.evalSteps, reduceIte] at hWround ⊢;
+          simp only [round, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+            AssignedCell.eval, Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr,
+            Witgen.VExprOver.eval, Witgen.evalSteps, if_neg hr0] at hWround ⊢ ] <;>
+        exact ⟨hWround.1, hWround.2.1, hWround.2.2.1, hWround.2.2.2.1,
+          hWround.2.2.2.2.1, hWround.2.2.2.2.2.1⟩
+
 /-- **Completeness loop lemma.** The honest prover's `ExtendsWitnesses` of the loop pins every
 cell to the donor's honest value (`zRunValue`/`rowLambdaValue`/`accVal`), and the loaded round
 gates then hold — the `Constraints` half of completeness. Routes into the donor's `honest_step`
-/`accVal_eq_nsmul` (imported). Stated fully; proof deferred (see the TACTIC GAP above). -/
+/`accVal_eq_nsmul` (imported).
+
+Three cells a round's gate reads live *outside* the loop's own ops, so their honest values are
+hypotheses discharged by the bundle from the `startCopies`/final-`y_a` witnesses: the start-`z`
+copy (`hz0`, round 0's `bool_check` predecessor), the start-`x_a` copy (`hxA0cell`, row 0's
+current accumulator), and the witnessed final `y_a` (`hyAF`, the last round's `Y_A(next)`). -/
 theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ)
     (P : Point Fp) (hP : P.OnCurve)
@@ -764,28 +794,220 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     (hyA0 : input.yA.eval place env.toEnvironment = (m • P).y)
     (hxPBase : input.base.x.eval place env.toEnvironment = P.x)
     (hyPBase : input.base.y.eval place env.toEnvironment = P.y)
-    -- the start-`z` copy value (from `startCopies`, discharged by the bundle completeness), needed
-    -- by round 0's `bool_check` (its `z`-predecessor is the start copy at `offset`)
     (hz0 : adv cfg.z place self env.toEnvironment offset = input.z.eval place env.toEnvironment)
+    (hxA0cell : adv cfg.xA place self env.toEnvironment (offset + 1)
+      = input.xA.eval place env.toEnvironment)
+    (hyAF : adv cfg.lambda1 place self env.toEnvironment (offset + 1 + (n + 1))
+      = (accVal (input.base.x.eval place env.toEnvironment)
+          (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
+          (input.yA.eval place env.toEnvironment) bits (n + 1)).2)
     (hWit : RegionOperations.ExtendsWitnesses place self env
       ((loop cfg input bits offset n (n + 1)).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
       ((loop cfg input bits offset n (n + 1)).operations self) := by
-  -- NOTE (surviving sorry): the completeness gate-discharge. The full infrastructure is in place
-  -- and verified below up to this point (see git history of this file / the sibling proofs): the
-  -- honest cell values are extracted globally from `hWit` (`hRowVals`: every row's z/x_p/y_p/λ₁/λ₂/
-  -- x_a-next equals the donor's `zRunValue`/`rowLambdaValue`/`accVal`), the accumulator is pinned
-  -- in point coordinates via `accVal_eq_nsmul` (`hAV`), and each round's gate `Constraints` reduce
-  -- (via the same `circuit_norm`+`qMul{2,3}Gate`+`forLoopPolys` normalization as `loop_gate_facts`)
-  -- to the four value-level polynomials `bool_check`/`gradient_1`/`secant_line`/`gradient_2`.
-  -- What remains is the *closing* of each per-round polynomial from `honest_step` (imported): the
-  -- `linear_combination` coefficients matching honest_step's four outputs (+ the `stepPoint.y`
-  -- bridge `hSy`) to the gate polys, plus (a) each interior round's `gradient_2` needs the NEXT
-  -- row's λ-cells (`hRowVals … (k+1)`, in-loop, available) and (b) the LAST round's `gradient_2`
-  -- reads the witnessed final `y_a` cell at `offset+1+(n+1)` — OUTSIDE the loop — so it needs one
-  -- extra hypothesis (`adv λ₁ (offset+1+(n+1)) = (accScalar m bits (n+1) • P).y`, the final-y
-  -- witness) threaded from the bundle. Mirrors the donor `Incomplete.lean` completeness (~150 lines).
-  sorry
+  -- honest accumulator in point coordinates: `accVal … r = (accScalar r • P)`
+  have hAV : ∀ r, r ≤ n + 1 →
+      accVal P.x P.y (input.xA.eval place env.toEnvironment)
+          (input.yA.eval place env.toEnvironment) bits r
+        = ((accScalar m bits r • P).x, (accScalar m bits r • P).y) := by
+    rw [hxA0, hyA0]
+    exact Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.accVal_eq_nsmul hP bits h2 n hbound
+  -- per-row `honest_step` bound (the accumulator's scalar stays in the scalar-field range)
+  have hMbound : ∀ r, r ≤ n → 2 * accScalar m bits r + 1 < PALLAS_SCALAR_CARD := by
+    intro r hr
+    have hMle := accScalar_le (m := m) bits r
+    have hpow : 2 ^ r * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have h254 := pow254_lt_card
+    have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+    have hpos : 0 < 2 ^ r * (m + 1) := by positivity
+    omega
+  -- the honest row lambda cells in point coordinates
+  have hRL : ∀ r, r ≤ n + 1 →
+      rowLambdaValue P.x P.y (input.xA.eval place env.toEnvironment)
+          (input.yA.eval place env.toEnvironment) bits r
+        = lambdaCellsValue P.x P.y (accScalar m bits r • P).x (accScalar m bits r • P).y (bits r) := by
+    intro r hr; simp only [rowLambdaValue, hAV r hr]
+  -- the honest running-sum step in subtraction form
+  have hZB : ∀ (z : Fp) (r : ℕ), zRunValue z bits r
+      - (if r = 0 then z else zRunValue z bits (r - 1)) * 2 = (if bits r then 1 else 0) := by
+    intro z r
+    rcases r with _ | r'
+    · rw [if_pos rfl]
+      show 2 * z + (if bits 0 then 1 else 0) - z * 2 = _
+      rcases Bool.dichotomy (bits 0) with hb | hb <;> rw [hb] <;> norm_num <;> ring
+    · rw [if_neg (Nat.succ_ne_zero r'), Nat.add_sub_cancel]
+      show 2 * zRunValue z bits r' + (if bits (r' + 1) then 1 else 0)
+        - zRunValue z bits r' * 2 = _
+      rcases Bool.dichotomy (bits (r' + 1)) with hb | hb <;> rw [hb] <;> norm_num <;> ring
+  -- the witnessed final `y_a`, in point coordinates
+  have hyAF' : adv cfg.lambda1 place self env.toEnvironment (offset + 1 + (n + 1))
+      = (accScalar m bits (n + 1) • P).y := by
+    rw [hyAF, hxPBase, hyPBase, hAV (n + 1) le_rfl]
+  -- **global** honest cell values (`loop_row_values`), rewritten to `P`-coordinates. Needed
+  -- because a round's gate reads cells (`z`-predecessor, next-row `x_p`/`y_p`/`x_a`) witnessed
+  -- by *other* rounds.
+  have hRowVals : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
+      RegionOperations.ExtendsWitnesses place self env
+        ((loop cfg input bits offset n numRounds).operations self) →
+      ∀ r, r < numRounds →
+        adv cfg.z place self env.toEnvironment (offset + 1 + r)
+            = zRunValue (input.z.eval place env.toEnvironment) bits r ∧
+        adv cfg.xP place self env.toEnvironment (offset + 1 + r) = P.x ∧
+        adv cfg.yP place self env.toEnvironment (offset + 1 + r) = P.y ∧
+        adv cfg.lambda1 place self env.toEnvironment (offset + 1 + r)
+            = (rowLambdaValue P.x P.y (input.xA.eval place env.toEnvironment)
+                (input.yA.eval place env.toEnvironment) bits r).lambda1 ∧
+        adv cfg.lambda2 place self env.toEnvironment (offset + 1 + r)
+            = (rowLambdaValue P.x P.y (input.xA.eval place env.toEnvironment)
+                (input.yA.eval place env.toEnvironment) bits r).lambda2 ∧
+        adv cfg.xA place self env.toEnvironment (offset + 1 + (r + 1))
+            = (accVal P.x P.y (input.xA.eval place env.toEnvironment)
+                (input.yA.eval place env.toEnvironment) bits (r + 1)).1 := by
+    intro numRounds h1 hW r hr
+    obtain ⟨h1', h2', h3', h4', h5', h6'⟩ :=
+      loop_row_values cfg input bits place self env offset n numRounds h1 hW r hr
+    rw [hxPBase] at h2'; rw [hyPBase] at h3'
+    rw [hxPBase, hyPBase] at h4' h5' h6'
+    exact ⟨h1', h2', h3', h4', h5', h6'⟩
+  -- the per-round induction, discharging each round's gate constraints
+  suffices h : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
+      RegionOperations.ExtendsWitnesses place self env
+        ((loop cfg input bits offset n numRounds).operations self) →
+      RegionOperations.Constraints place self env.toEnvironment
+        ((loop cfg input bits offset n numRounds).operations self) from h (n + 1) le_rfl hWit
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _; exact trivial
+  | succ k ih =>
+    intro hkb hW
+    rw [loop_operations_succ, RegionOperations.extendsWitnesses_append] at hW
+    rw [loop_operations_succ, RegionOperations.constraints_append]
+    obtain ⟨hWloop, _⟩ := hW
+    refine ⟨ih (by omega) hWloop, ?_⟩
+    -- ══ discharge round `k`'s gate constraints from the honest cells + `honest_step` ══
+    have hkn : k ≤ n := by omega
+    -- honest_step at row `k` (accumulator scalar `M := accScalar m bits k`)
+    obtain ⟨hHSg1, hHSyad, hHSxnext, hHSg2⟩ :=
+      Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.honest_step hP bits
+        (accScalar_two_le h2 bits k) (hMbound k hkn) k
+    -- fold honest_step's raw `2M + 2k − 1` scalar into `accScalar m bits (k+1)` (definitional)
+    rw [show (2 * accScalar m bits k + (if bits k then 1 else 0) * 2 - 1)
+        = accScalar m bits (k + 1) from rfl] at hHSxnext hHSg2
+    -- the conditionally-negated per-bit `y` (donor `hSy`)
+    have hSy : (stepPoint P (bits k)).y = ((if bits k then 1 else 0) * 2 - 1) * P.y := by
+      unfold stepPoint
+      rcases Bool.dichotomy (bits k) with hb | hb <;> rw [hb]
+      · show (-P).y = _; rw [Orchard.Point.neg_y]; norm_num
+      · show P.y = _; norm_num
+    -- honest cell values of row `k`, in point coordinates
+    obtain ⟨hVz, hVxp, hVyp, hVl1, hVl2, hVxa⟩ := hRowVals (n + 1) le_rfl hWit k (by omega)
+    rw [hRL k (by omega)] at hVl1 hVl2
+    simp only [accVal, hAV k (by omega)] at hVxa
+    rw [hHSxnext] at hVxa
+    -- `xANext`'s defining identity (the row engine's `x_R` form), donor `hXdef`
+    have hXnext' : (accScalar m bits (k + 1) • P).x
+        = (lambdaCellsValue P.x P.y (accScalar m bits k • P).x (accScalar m bits k • P).y
+            (bits k)).lambda2
+          * (lambdaCellsValue P.x P.y (accScalar m bits k • P).x (accScalar m bits k • P).y
+              (bits k)).lambda2
+          - (accScalar m bits k • P).x
+          - ((lambdaCellsValue P.x P.y (accScalar m bits k • P).x (accScalar m bits k • P).y
+                (bits k)).lambda1
+              * (lambdaCellsValue P.x P.y (accScalar m bits k • P).x (accScalar m bits k • P).y
+                  (bits k)).lambda1
+              - (accScalar m bits k • P).x - P.x) := hHSxnext.symm.trans rfl
+    -- `hHSg2` with `xANext` in point form
+    rw [show (lambdaCellsValue P.x P.y (accScalar m bits k • P).x (accScalar m bits k • P).y
+        (bits k)).xANext = (accScalar m bits (k + 1) • P).x from hHSxnext] at hHSg2
+    -- current-row `x_a` (row 0: the start copy; row `k ≥ 1`: round `k−1`'s next-`x_a` witness)
+    have hVXcur : adv cfg.xA place self env.toEnvironment (offset + 1 + k)
+        = (accScalar m bits k • P).x := by
+      rcases Nat.eq_zero_or_pos k with rfl | hkpos
+      · simpa [accScalar] using hxA0cell.trans hxA0
+      · have h := (hRowVals (n + 1) le_rfl hWit (k - 1) (by omega)).2.2.2.2.2
+        rw [show k - 1 + 1 = k from by omega] at h
+        rw [h, hAV k (by omega)]
+    -- the honest `z`-step at row `k` (`z_k − 2·z_{k−1} = bit k`)
+    have hZprev : adv cfg.z place self env.toEnvironment (offset + k)
+        = (if k = 0 then input.z.eval place env.toEnvironment
+            else zRunValue (input.z.eval place env.toEnvironment) bits (k - 1)) := by
+      rcases Nat.eq_zero_or_pos k with rfl | hkpos
+      · simpa using hz0
+      · rw [if_neg (by omega), show offset + k = offset + 1 + (k - 1) from by omega]
+        exact (hRowVals (n + 1) le_rfl hWit (k - 1) (by omega)).1
+    have hZstep : adv cfg.z place self env.toEnvironment (offset + 1 + k)
+        - adv cfg.z place self env.toEnvironment (offset + k) * 2 = (if bits k then 1 else 0) := by
+      rw [hVz, hZprev]
+      have := hZB (input.z.eval place env.toEnvironment) k
+      rcases Nat.eq_zero_or_pos k with rfl | hkpos <;> simpa using this
+    -- expose the raw `env.advice` spellings the reduced gate polys use
+    simp only [adv] at hVxp hVyp hVl1 hVl2 hVxa hVXcur hZstep hyAF'
+    have hzp : ((place self + (offset + 1 + k) : ℕ) : ℤ) - 1
+        = ((place self + (offset + k) : ℕ) : ℤ) := by push_cast; ring
+    by_cases hrn : k = n
+    · -- ── last round: `q_mul_3` (`Y_A(next)` = 2·witnessed final `y_a`; no constancy checks) ──
+      subst hrn
+      by_cases hr0 : k = 0
+      · -- single-round circuit: anchor copies + `q_mul_3` at row 0
+        subst hr0
+        simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
+        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+          Constraints.withSelector]
+        rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+          show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa, hyAF']
+        refine ⟨hxPBase.symm, hyPBase.symm, ?_, ?_, ?_, ?_⟩
+        · split_ifs <;> ring
+        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · linear_combination -hXnext'
+        · linear_combination 2 * hHSg2 + hHSyad
+      · -- last row of a longer run: `q_mul_3` only
+        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+          Constraints.withSelector, if_neg hr0]
+        rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+          show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa, hyAF']
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · split_ifs <;> ring
+        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · linear_combination -hXnext'
+        · linear_combination 2 * hHSg2 + hHSyad
+    · -- ── interior round: `q_mul_2` (constancy checks; `Y_A(next)` derived at row `k+1`) ──
+      -- next row's honest cells (in-loop, from `hRowVals (k+1)`), in point coordinates
+      obtain ⟨_, hVxp1, hVyp1, hVl1', hVl2', _⟩ :=
+        hRowVals (n + 1) le_rfl hWit (k + 1) (by omega)
+      rw [hRL (k + 1) (by omega)] at hVl1' hVl2'
+      -- honest_step at row `k+1` — its `Y_A` identity pins the next row's derived `Y_A`
+      obtain ⟨_, hHSyad1, _, _⟩ :=
+        Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.honest_step hP bits
+          (accScalar_two_le h2 bits (k + 1)) (hMbound (k + 1) (by omega)) (k + 1)
+      simp only [adv] at hVxp1 hVyp1 hVl1' hVl2'
+      by_cases hr0 : k = 0
+      · subst hr0
+        simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
+        simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+          Constraints.withSelector, if_neg hrn]
+        rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+          show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa,
+          hVxp1, hVyp1, hVl1', hVl2']
+        refine ⟨hxPBase.symm, hyPBase.symm, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · ring
+        · ring
+        · split_ifs <;> ring
+        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · linear_combination -hXnext'
+        · linear_combination 2 * hHSg2 + hHSyad + hHSyad1
+      · simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+          Constraints.withSelector, if_neg hrn, if_neg hr0]
+        rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+          show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa,
+          hVxp1, hVyp1, hVl1', hVl2']
+        refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+        · ring
+        · ring
+        · split_ifs <;> ring
+        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · linear_combination -hXnext'
+        · linear_combination 2 * hHSg2 + hHSyad + hHSyad1
 
 /-! ## The bundle contract
 
@@ -971,17 +1193,126 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       -- `ofCoords (p.x, p.y) = p`
       rfl
 
-  -- ══ Completeness ══ (surviving sorry)
-  -- Wiring mirrors `soundness` above (`completeness_iff`; split the synthesize witness/constraint
-  -- op list `startCopies ++ [q_mul_1] ++ loop ++ [final y_a] ++ output` via
-  -- `RegionOperations.extendsWitnesses_append`/`constraints_append`; `startCopies` witnesses pin
-  -- `z_0`/`y_a_0`/`x_a_0`; `output_eval_fields` reads the output cells). The two obligations are the
-  -- loop's `Constraints` — discharged by `loop_constraints_complete` (itself sorried; see its note)
-  -- fed the honest start values — and `ProverSpec = RoundInvariant`, whose z-chain conjunct follows
-  -- from the honest `zRunValue` recursion and whose accumulator conjunct is `accVal_eq_nsmul`
-  -- (imported), exactly as the donor `Incomplete.lean` completeness assembles them. Deferred with
-  -- `loop_constraints_complete`.
+  -- ══ Completeness ══
+  -- Mirrors `soundness`: split the synthesize witness/constraint op list, pin the start copies
+  -- and the final `y_a` from their witnesses, discharge the loop via `loop_constraints_complete`
+  -- and the `q_mul_1` gate via `honest_step`'s row-0 `Y_A` identity, and read `RoundInvariant`
+  -- off the honest row values (`loop_row_values`) + `accVal_eq_nsmul`.
   completeness := by
-    sorry
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE _hA hPA
+    simp only [circuit_norm,
+      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
+      output_cellVec, operations_enable, operations_assignAdvice,
+      RegionOperations.extendsWitnesses_append, RegionOperations.constraints_append,
+      startCopies, yAFinalWit, readCell,
+      Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
+      Witgen.evalSteps] at hwit h_output ⊢
+    obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
+    -- destructure input into coordinates; read the output cells off the env
+    provable_type_simp
+    obtain ⟨hOutXA, hOutYA, hOutZs⟩ :=
+      output_eval_fields env.place env.env.toEnvironment self offset n cfg.xA cfg.lambda1 cfg.z
+    rw [← h_output]
+    clear h_output
+    -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
+    -- `input` argument matches `hWloop`'s spelling
+    set inp : Inputs (AssignedCell Fp) :=
+      { base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
+    obtain ⟨⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
+    obtain ⟨hPbase, m, hm, h2m, hbnd⟩ := hPA
+    have hAccX : input_xA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x :=
+      congrArg Point.x hm
+    have hAccY : input_yA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
+      congrArg Point.y hm
+    -- the honest row values (the loop witnesses), with the input reads resolved
+    have hRows := loop_row_values cfg inp bits env.place self env.env offset n (n + 1) le_rfl hWloop
+    -- expose the raw `env.advice` spellings everywhere
+    simp only [adv] at hOutXA hOutYA hOutZs
+    -- the scalar-field bound at row 0 (`2m + 1 < |scalar field|`), from the range assumption
+    have hMb0 : 2 * m + 1 < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+      have hpow : m + 1 ≤ 2 ^ (n + 1) * (m + 1) :=
+        Nat.le_mul_of_pos_left _ (by positivity)
+      omega
+    -- `honest_step` at row 0: its `Y_A` identity is exactly the `q_mul_1` gate (ascribed with the
+    -- base coordinates spelled as the destructured values; definitional)
+    have hHS0yad : 2 * (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y
+        = ((lambdaCellsValue input_base_x input_base_y
+              (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+              (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y (bits 0)).lambda1
+            + (lambdaCellsValue input_base_x input_base_y
+                (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+                (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y (bits 0)).lambda2)
+          * ((m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+            - ((lambdaCellsValue input_base_x input_base_y
+                  (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+                  (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y (bits 0)).lambda1
+                * (lambdaCellsValue input_base_x input_base_y
+                    (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+                    (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y (bits 0)).lambda1
+                - (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x - input_base_x)) :=
+      (Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.honest_step hPbase bits h2m hMb0 0).2.1
+    -- row-0 honest cells, resolved to the destructured input values and point coordinates
+    obtain ⟨_, hR0xp, _, hR0l1, hR0l2, _⟩ := hRows 0 (by omega)
+    simp only [hinp, adv, AssignedCell.eval, hBx, hBy, hIxA, hIyA, Nat.add_zero,
+      rowLambdaValue, accVal] at hR0xp hR0l1 hR0l2
+    rw [hAccX, hAccY] at hR0l1 hR0l2
+    refine ⟨⟨hWz, hWyA, hWxA, ?_, ?_⟩, ⟨?_, ?_⟩, ?_⟩
+    · -- ── the `q_mul_1` gate: `2·y_a(copied) = Y_A(row 0)`, the honest-row `Y_A` identity ──
+      simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yAExpr, xRExpr]
+      rw [hWyA, hIyA, hAccY, hR0l1, hR0l2, hWxA, hIxA, hAccX, hR0xp]
+      linear_combination hHS0yad
+    · -- ── the loop's `Constraints`: `loop_constraints_complete` on the honest start values ──
+      exact loop_constraints_complete cfg inp bits env.place self env.env offset n
+        { x := input_base_x, y := input_base_y } hPbase m h2m hbnd
+        (by simp only [hinp, AssignedCell.eval, hIxA]; exact hAccX)
+        (by simp only [hinp, AssignedCell.eval, hIyA]; exact hAccY)
+        (by simp only [hinp, AssignedCell.eval, hBx])
+        (by simp only [hinp, AssignedCell.eval, hBy])
+        (by simp only [adv, hinp, AssignedCell.eval]; exact hWz)
+        (by simp only [adv, hinp, AssignedCell.eval]; exact hWxA)
+        (by simp only [adv, hinp, AssignedCell.eval]; exact hWyF)
+        hWloop
+    · -- ── `RoundInvariant`, z-chain conjunct, round 0 ──
+      rw [hOutZs 0 (by omega)]
+      have h := (hRows 0 (by omega)).1
+      simp only [hinp, adv, AssignedCell.eval, hIz] at h
+      rw [h]
+      rfl
+    · -- ── z-chain conjunct, interior rounds ──
+      intro b
+      rw [hOutZs (b.val + 1) (by omega), hOutZs b.val (by omega)]
+      have h1 := (hRows (b.val + 1) (by omega)).1
+      have h0 := (hRows b.val (by omega)).1
+      simp only [hinp, adv, AssignedCell.eval, hIz] at h1 h0
+      rw [h1, h0]
+      rfl
+    · -- ── `RoundInvariant`, accumulator conjunct: `accVal_eq_nsmul` on the output cells ──
+      intro m' hm' h2' hbnd'
+      have hAccX' : input_xA = (m' • ({ x := input_base_x, y := input_base_y } : Point Fp)).x :=
+        congrArg Point.x hm'
+      have hAccY' : input_yA = (m' • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
+        congrArg Point.y hm'
+      -- the honest accumulator after `n + 1` rounds, in point coordinates (ascribed; definitional)
+      have hAV' : accVal input_base_x input_base_y
+            (m' • ({ x := input_base_x, y := input_base_y } : Point Fp)).x
+            (m' • ({ x := input_base_x, y := input_base_y } : Point Fp)).y bits (n + 1)
+          = ((accScalar m' bits (n + 1) • ({ x := input_base_x, y := input_base_y } : Point Fp)).x,
+             (accScalar m' bits (n + 1) • ({ x := input_base_x, y := input_base_y } : Point Fp)).y) :=
+        Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.accVal_eq_nsmul hPbase bits h2' n hbnd'
+          (n + 1) le_rfl
+      -- output `x_a`: the last round's next-`x_a` witness
+      have hx := (hRows n (by omega)).2.2.2.2.2
+      simp only [hinp, adv, AssignedCell.eval, hBx, hBy, hIxA, hIyA] at hx
+      rw [hAccX', hAccY', hAV'] at hx
+      -- output `y_a`: the witnessed final `y_a`
+      rw [hBx, hBy, hIxA, hIyA, hAccX', hAccY', hAV'] at hWyF
+      rw [hOutXA, hOutYA, show offset + 1 + n + 1 = offset + 1 + (n + 1) from by omega, hx, hWyF]
+      rfl
 
 end Halo2.Ironwood.Ecc.MulIncomplete
