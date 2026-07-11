@@ -82,7 +82,9 @@ namespace Halo2.Ironwood.Ecc.Mul
 
 open Orchard (Point)
 open Orchard.Ecc (tQ)
-open Orchard.Ecc.Mul (tQNat kNat kBits chainNat)
+open Orchard.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
+  chain_cast accScalar_closed k_canonical cells_kNat z0_cell_value)
+open Orchard.Ecc.Mul.Decompose (m_bounds)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell)
@@ -402,385 +404,23 @@ identity encoded as `(0, 0)` coordinates. Lifted verbatim from the donor
 def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
   output = input.alpha.val • input.base
 
-/-! ## Donor value algebra (lifted from `Clean/Orchard/Ecc/Mul/Assign.lean`)
+/-! ## Donor value algebra
 
-The running-sum/canonicity machinery is `private` in the donor, so it is copied here verbatim
-(same statements, same proofs) rather than imported. The one adaptation: `overflow_spec_honest`
-targets the Ironwood `MulOverflow.Spec` record (identical body to the donor's
-`Overflow.OverflowCheck.Spec`). -/
+The running-sum/canonicity machinery (`chainNat_*`, `chain_cast`, `accScalar_closed`,
+`k_canonical`, `m_bounds`, `cells_kNat`, `z0_cell_value`, `nsmul_step`, `neg_add_nsmul`) is
+consumed directly from the donor `Clean/Orchard/Ecc/Mul/Assign.lean` (made public there for
+this port). The one adaptation kept here: `overflow_spec_honest` retargeted at the Ironwood
+`MulOverflow.Spec` record — definitionally the donor's `Overflow.OverflowCheck.Spec`, so the
+wrapper is a delegation. -/
 
-section DonorAlgebra
-open CompElliptic.CurveForms
-open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
-
-private theorem chainNat_lt (zin : ℕ) (bits : ℕ → Bool) :
-    ∀ b, chainNat zin bits b < 2 ^ b * (zin + 1)
-  | 0 => by simp [chainNat]
-  | b + 1 => by
-    have ih := chainNat_lt zin bits b
-    have hpow : 2 ^ (b + 1) * (zin + 1) = 2 * (2 ^ b * (zin + 1)) := by ring
-    simp only [chainNat, hpow]
-    cases bits b <;> simp <;> omega
-
-private theorem chainNat_offset (zin : ℕ) (bits : ℕ → Bool) :
-    ∀ b, chainNat zin bits b = 2 ^ b * zin + chainNat 0 bits b
-  | 0 => by simp [chainNat]
-  | b + 1 => by
-    have ih := chainNat_offset zin bits b
-    have hpow : 2 ^ (b + 1) * zin = 2 * (2 ^ b * zin) := by ring
-    simp only [chainNat, hpow]
-    omega
-
-/-- Splitting off the first (most significant) bit of a zero-started chain. -/
-private theorem chainNat_msb (bits : ℕ → Bool) :
-    ∀ b, chainNat 0 bits (b + 1)
-      = 2 ^ b * (if bits 0 then 1 else 0) + chainNat 0 (fun i => bits (i + 1)) b
-  | 0 => by simp [chainNat]
-  | b + 1 => by
-    have ih := chainNat_msb bits b
-    rw [show chainNat 0 bits (b + 1 + 1)
-        = 2 * chainNat 0 bits (b + 1) + (if bits (b + 1) then 1 else 0) from rfl,
-      show chainNat 0 (fun i => bits (i + 1)) (b + 1)
-        = 2 * chainNat 0 (fun i => bits (i + 1)) b + (if bits (b + 1) then 1 else 0)
-        from rfl,
-      ih]
-    ring
-
-/-- The field-level running-sum chain delivered by a child's `RoundInvariant` is the cast of
-`chainNat` (donor `chain_cast`). -/
-private theorem chain_cast {n : ℕ} (zs : Vector Fp (n + 1)) (zin : Fp) (Zin : ℕ)
-    (bits : ℕ → Bool) (hin : zin = (Zin : Fp))
-    (h0 : zs[0] = 2 * zin + (if bits 0 then 1 else 0))
-    (hstep : ∀ b : Fin n, zs[b.val + 1]'(by omega) =
-      2 * zs[b.val]'(by omega) + (if bits (b.val + 1) then 1 else 0)) :
-    ∀ j, (hj : j < n + 1) → zs[j]'hj = (chainNat Zin bits (j + 1) : Fp) := by
-  intro j
-  induction j with
-  | zero =>
-    intro _
-    rw [h0, hin]
-    simp only [chainNat]
-    cases bits 0 <;> simp
-  | succ i ih =>
-    intro hj
-    rw [hstep ⟨i, by omega⟩, ih (by omega)]
-    simp only [chainNat]
-    cases bits (i + 1) <;> simp
-
-private theorem accScalar_closed (m : ℕ) (hm : 1 ≤ m) (bits : ℕ → Bool) :
-    ∀ b, accScalar m bits b = 2 ^ b * (m - 1) + 2 * chainNat 0 bits b + 1
-  | 0 => by simp [accScalar, chainNat]; omega
-  | b + 1 => by
-    have ih := accScalar_closed m hm bits b
-    have hpow : 2 ^ (b + 1) * (m - 1) = 2 * (2 ^ b * (m - 1)) := by ring
-    simp only [accScalar, chainNat, hpow]
-    cases bits b <;> simp <;> omega
-
-/-- Chains compose: continuing for `b` more steps from the `a`-step value. -/
-private theorem chainNat_append (zin : ℕ) (bits : ℕ → Bool) (a : ℕ) :
-    ∀ b, chainNat zin bits (a + b)
-      = chainNat (chainNat zin bits a) (fun i => bits (a + i)) b
-  | 0 => rfl
-  | b + 1 => by
-    have ih := chainNat_append zin bits a b
-    show 2 * chainNat zin bits (a + b) + (if bits (a + b) then 1 else 0) = _
-    rw [ih]
-    rfl
-
-private theorem chainNat_testBit (K n : ℕ) (hK : K < 2 ^ n) :
-    ∀ j, j ≤ n → chainNat 0 (fun i => K.testBit (n - 1 - i)) j = K / 2 ^ (n - j)
-  | 0, _ => by
-    simp only [chainNat]
-    rw [Nat.sub_zero]
-    exact (Nat.div_eq_of_lt hK).symm
-  | j + 1, hj => by
-    have ih := chainNat_testBit K n hK j (by omega)
-    have hsplit : K / 2 ^ (n - j) = K / 2 ^ (n - (j + 1)) / 2 := by
-      rw [Nat.div_div_eq_div_mul, ← pow_succ]
-      congr 2
-      omega
-    have hbit : (if K.testBit (n - 1 - j) then 1 else 0) = K / 2 ^ (n - (j + 1)) % 2 := by
-      rw [show n - 1 - j = n - (j + 1) from by omega, Nat.testBit_eq_decide_div_mod_eq]
-      rcases Nat.mod_two_eq_zero_or_one (K / 2 ^ (n - (j + 1))) with h | h <;> simp [h]
-    show 2 * chainNat 0 (fun i => K.testBit (n - 1 - i)) j + _ = _
-    rw [ih, hsplit, hbit]
-    omega
-
-private theorem kNat_lt (alpha : Fp) : kNat alpha < 2 ^ 255 := by
-  have h := ZMod.val_lt alpha
-  norm_num [PALLAS_BASE_CARD] at h
-  norm_num [kNat, tQNat]
-  omega
-
-/-- The honest running sum after `j` of the 255 steps is the high `j` bits of `k`. -/
-private theorem chainNat_kBits (alpha : Fp) (j : ℕ) (hj : j ≤ 255) :
-    chainNat 0 (kBits alpha) j = kNat alpha / 2 ^ (255 - j) := by
-  have h := chainNat_testBit (kNat alpha) 255 (kNat_lt alpha) j hj
-  have hf : (fun i => (kNat alpha).testBit (255 - 1 - i)) = kBits alpha := by
-    funext i
-    show (kNat alpha).testBit (255 - 1 - i) = (kNat alpha).testBit (254 - i)
-    congr 1
-  rw [← hf]
-  exact h
-
-/-- Bounds on the hi/lo accumulator scalars, for arbitrary bit assignments (donor `m_bounds`,
-extended with the lo half's range bound for the complete-phase threading). -/
-private theorem m_bounds (bits1 bits2 : ℕ → Bool) :
-    2 ≤ accScalar 2 bits1 125 ∧
-    2 ^ (125 + 2) * (accScalar 2 bits1 125 + 1) ≤ 2 ^ 254 ∧
-    1 ≤ accScalar (accScalar 2 bits1 125) bits2 126 ∧
-    accScalar (accScalar 2 bits1 125) bits2 126 < PALLAS_SCALAR_CARD ∧
-    2 ≤ accScalar (accScalar 2 bits1 125) bits2 126 := by
-  have hc1 : chainNat 0 bits1 125 < 2 ^ 125 :=
-    lt_of_lt_of_le (chainNat_lt 0 bits1 125) (by norm_num)
-  have hc2 : chainNat 0 bits2 126 < 2 ^ 126 :=
-    lt_of_lt_of_le (chainNat_lt 0 bits2 126) (by norm_num)
-  have hm1 := accScalar_closed 2 (by norm_num) bits1 125
-  have hp125 := Nat.two_pow_pos 125
-  have h2le : 2 ≤ accScalar 2 bits1 125 := by rw [hm1]; omega
-  have hm2 := accScalar_closed (accScalar 2 bits1 125) (by omega) bits2 126
-  refine ⟨h2le, ?_, by omega, ?_, ?_⟩
-  · rw [hm1]
-    norm_num at hc1 ⊢
-    omega
-  · rw [hm2, hm1]
-    norm_num [PALLAS_SCALAR_CARD] at hc1 hc2 ⊢
-    omega
-  · rw [hm2, hm1]
-    have := Nat.two_pow_pos 251
-    norm_num at hc1 hc2 ⊢
-    omega
-
-/-! ### The overflow-check canonicity argument (donor `k_canonical`) -/
-
-private theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
-    (hk254 : k254 = if b254 then 1 else 0)
-    (hz130 : z130 = (Zhi : Fp))
-    (hZhiLt : Zhi < 2 ^ 125)
-    (hmsbF : b254 = false → Zhi < 2 ^ 124)
-    (hRlt : R < 2 ^ 130)
-    (hsplit : K = 2 ^ 130 * Zhi + R)
-    (hcong : (K : Fp) = alpha + tQ)
-    (hdisj2 : k254 = 0 ∨ z130 = (2 ^ 124 : Fp))
-    (hex : ∃ (sHi : Fp) (sLo : ℕ), sLo < 2 ^ 130 ∧
-      alpha + k254 * (2 ^ 130 : Fp) = (sLo : Fp) + (2 ^ 130 : Fp) * sHi ∧
-      (k254 = 0 ∨ sHi = 0) ∧ (k254 = 1 ∨ z130 ≠ 0 ∨ sHi = 0)) :
-    K = alpha.val + tQNat := by
-  obtain ⟨sHi, sLo, hsLoLt, hsEq, hd1, hd2⟩ := hex
-  have hp : PALLAS_BASE_CARD
-      = 28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
-    norm_num [PALLAS_BASE_CARD]
-  have halpha : alpha.val
-      < 28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
-    rw [← hp]; exact ZMod.val_lt alpha
-  have hav : ((alpha.val : ℕ) : Fp) = alpha := ZMod.natCast_rightInverse alpha
-  have htQ : tQNat = 45560315531506369815346746415080538113 := rfl
-  have hcong' : K %
-        28948022309329048855892746252171976963363056481941560715954676764349967630337
-      = (alpha.val + tQNat) %
-        28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
-    have h : ((K : ℕ) : Fp) = ((alpha.val + tQNat : ℕ) : Fp) := by
-      push_cast
-      rw [hav, hcong]
-      congr 1
-    have h2 := (ZMod.natCast_eq_natCast_iff _ _ _).mp h
-    unfold Nat.ModEq at h2
-    rw [← hp]
-    exact h2
-  cases hb : b254 with
-  | true =>
-    rw [hb, if_pos rfl] at hk254
-    have hz : z130 = (2 ^ 124 : Fp) := by
-      rcases hdisj2 with h | h
-      · rw [hk254] at h; exact absurd h one_ne_zero
-      · exact h
-    have hZhi : Zhi = 2 ^ 124 := by
-      have h : ((Zhi : ℕ) : Fp) = ((2 ^ 124 : ℕ) : Fp) := by
-        rw [← hz130, hz]; push_cast; ring
-      have h' := (ZMod.natCast_eq_natCast_iff _ _ _).mp h
-      unfold Nat.ModEq at h'
-      rw [hp] at h'
-      norm_num at h'
-      norm_num at hZhiLt
-      omega
-    have hsHi0 : sHi = 0 := by
-      rcases hd1 with h | h
-      · rw [hk254] at h; exact absurd h one_ne_zero
-      · exact h
-    have hs' : (alpha.val + 2 ^ 130) %
-          28948022309329048855892746252171976963363056481941560715954676764349967630337
-        = sLo %
-          28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
-      have h : ((alpha.val + 2 ^ 130 : ℕ) : Fp) = ((sLo : ℕ) : Fp) := by
-        push_cast
-        rw [hav]
-        rw [hk254, hsHi0] at hsEq
-        linear_combination hsEq
-      have h2 := (ZMod.natCast_eq_natCast_iff _ _ _).mp h
-      unfold Nat.ModEq at h2
-      rw [← hp]
-      exact h2
-    norm_num at hs' hsLoLt hRlt hsplit hZhi
-    omega
-  | false =>
-    rw [hb, if_neg (by simp)] at hk254
-    have hKlt : K < 2 ^ 254 := by
-      have h := hmsbF hb
-      norm_num at h hRlt hsplit ⊢
-      omega
-    rcases hd2 with h | h | h
-    · rw [hk254] at h; exact absurd h.symm one_ne_zero
-    · have hZhi0 : Zhi ≠ 0 := by
-        intro h0
-        rw [h0] at hz130
-        exact h (by rw [hz130]; norm_num)
-      norm_num at hKlt hsplit
-      omega
-    · have hval : alpha.val = sLo := by
-        rw [hk254] at hsEq
-        rw [h] at hsEq
-        have h' : alpha = (sLo : Fp) := by linear_combination hsEq
-        rw [h', ZMod.val_natCast, hp]
-        norm_num at hsLoLt
-        omega
-      norm_num at hKlt hsLoLt
-      omega
-
-/-! ### Honest-witness helpers (donor `cells_kNat`, `z0_cell_value`, `overflow_spec_honest`) -/
-
-/-- The honest running-sum chains of `kBits` are the shifted values of `k`. -/
-private theorem cells_kNat (alpha : Fp) :
-    chainNat 0 (kBits alpha) 1 = kNat alpha / 2 ^ 254 ∧
-    chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 ∧
-    chainNat (chainNat (chainNat 0 (kBits alpha) 125) (fun i => kBits alpha (125 + i)) 126)
-      (fun i => kBits alpha (251 + i)) 3 = kNat alpha / 2 := by
-  have hC130 : chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 := by
-    rw [chainNat_kBits alpha 125 (by omega)]
-  have hC4 : chainNat (kNat alpha / 2 ^ 130) (fun i => kBits alpha (125 + i)) 126
-      = kNat alpha / 2 ^ 4 := by
-    rw [← hC130, ← chainNat_append 0 (kBits alpha) 125 126,
-      show (125 : ℕ) + 126 = 251 from by norm_num,
-      chainNat_kBits alpha 251 (by omega)]
-  have hC2 : chainNat (kNat alpha / 2 ^ 4) (fun i => kBits alpha (251 + i)) 3
-      = kNat alpha / 2 := by
-    rw [show kNat alpha / 2 ^ 4 = chainNat 0 (kBits alpha) 251 from by
-        rw [chainNat_kBits alpha 251 (by omega)],
-      ← chainNat_append 0 (kBits alpha) 251 3,
-      show (251 : ℕ) + 3 = 254 from by norm_num,
-      chainNat_kBits alpha 254 (by omega)]
-    norm_num
-  exact ⟨by rw [chainNat_kBits alpha 1 (by omega)], hC130,
-    by rw [hC130, hC4]; exact hC2⟩
-
-/-- The honest `z₀` cell reconstructs the working scalar `k`. -/
-private theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
-    (hz1v : z1v = ((kNat alpha / 2 : ℕ) : Fp))
-    (hz0w : z0v = 2 * z1v + (if kBits alpha 254 then 1 else 0)) :
-    z0v = ((kNat alpha : ℕ) : Fp) := by
-  have hbit : (if kBits alpha 254 then (1 : Fp) else 0)
-      = ((kNat alpha % 2 : ℕ) : Fp) := by
-    rw [show kBits alpha 254 = decide (kNat alpha % 2 = 1) from by unfold kBits; norm_num]
-    rcases Nat.mod_two_eq_zero_or_one (kNat alpha) with h | h <;> rw [h] <;> simp
-  rw [hz0w, hz1v, hbit, show ((kNat alpha : ℕ) : Fp)
-    = ((2 * (kNat alpha / 2) + kNat alpha % 2 : ℕ) : Fp) from by congr 1; omega]
-  push_cast
-  ring
-
-/-- The honest running-sum cells satisfy the overflow-check contract (donor
-`overflow_spec_honest`, retargeted at the Ironwood `MulOverflow.Spec` record). -/
+/-- The honest running-sum cells satisfy the overflow-check contract (the donor
+`overflow_spec_honest`, at the Ironwood `MulOverflow.Spec` record — same formula, defeq). -/
 private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
     (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
     (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
-    MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } := by
-  have hKlt := kNat_lt alpha
-  have hvallt : ZMod.val alpha
-      < 28948022309329048855892746252171976963363056481941560715954676764349967630337 := by
-    have h' := ZMod.val_lt alpha
-    norm_num [PALLAS_BASE_CARD] at h'
-    exact h'
-  have hkdef : kNat alpha = ZMod.val alpha + tQNat := rfl
-  have htq : tQNat = 45560315531506369815346746415080538113 := rfl
-  have hav : ((ZMod.val alpha : ℕ) : Fp) = alpha := ZMod.natCast_rightInverse alpha
-  have h2254 : kNat alpha / 2 ^ 254 = 0 ∨ kNat alpha / 2 ^ 254 = 1 := by
-    have h := hKlt
-    norm_num at h ⊢
-    omega
-  refine ⟨?_, ?_, ?_⟩
-  · rw [hz0v, hkdef]
-    push_cast
-    rw [hav]
-    congr 1
-  · rw [h254, h130]
-    rcases h2254 with h | h
-    · left; rw [h]; norm_num
-    · right
-      have hval : kNat alpha / 2 ^ 130 = 2 ^ 124 := by
-        have h1 := hKlt
-        norm_num at h h1 ⊢
-        omega
-      rw [hval]
-      push_cast
-      norm_num
-  · rw [h254]
-    rcases h2254 with h | h
-    · rw [h]
-      by_cases hsm : ZMod.val alpha < 2 ^ 130
-      · exact ⟨0, ZMod.val alpha, hsm,
-          by push_cast; rw [hav]; ring, Or.inr rfl, Or.inr (Or.inr rfl)⟩
-      · refine ⟨((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp), ZMod.val alpha % 2 ^ 130,
-          Nat.mod_lt _ (by norm_num), ?_, Or.inl (by push_cast; ring), ?_⟩
-        · have hsc : ((ZMod.val alpha : ℕ) : Fp)
-              = ((ZMod.val alpha % 2 ^ 130 : ℕ) : Fp)
-                + 2 ^ 130 * ((ZMod.val alpha / 2 ^ 130 : ℕ) : Fp) := by
-            rw [show ((ZMod.val alpha : ℕ) : Fp)
-              = ((ZMod.val alpha % 2 ^ 130
-                  + 2 ^ 130 * (ZMod.val alpha / 2 ^ 130) : ℕ) : Fp) from by
-                congr 1
-                omega]
-            push_cast
-            ring
-          push_cast
-          linear_combination hsc - hav
-        · right; left
-          rw [h130]
-          intro h0
-          have hlt : kNat alpha / 2 ^ 130 < 2 ^ 125 := by
-            have h1 := hKlt
-            norm_num at h1 ⊢
-            omega
-          have hge : 1 ≤ kNat alpha / 2 ^ 130 := by
-            norm_num at hsm hlt ⊢
-            omega
-          have hdvd := (ZMod.natCast_eq_zero_iff _ _).mp h0
-          have hle := Nat.le_of_dvd (by omega) hdvd
-          norm_num [PALLAS_BASE_CARD] at hle hlt
-          omega
-    · rw [h]
-      refine ⟨0, ZMod.val alpha + 2 ^ 130
-          - 28948022309329048855892746252171976963363056481941560715954676764349967630337,
-        ?_, ?_, Or.inr rfl, Or.inl (by push_cast; norm_num)⟩
-      · norm_num at h ⊢
-        omega
-      · have hge : 28948022309329048855892746252171976963363056481941560715954676764349967630337
-            ≤ ZMod.val alpha + 2 ^ 130 := by
-          norm_num at h ⊢
-          omega
-        rw [show ((ZMod.val alpha + 2 ^ 130
-            - 28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
-          = ((ZMod.val alpha + 2 ^ 130 : ℕ) : Fp)
-            - ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
-          from by rw [Nat.cast_sub hge],
-          show ((28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ) : Fp)
-            = 0 from by
-            rw [show (28948022309329048855892746252171976963363056481941560715954676764349967630337 : ℕ)
-              = PALLAS_BASE_CARD from by norm_num [PALLAS_BASE_CARD]]
-            exact ZMod.natCast_self PALLAS_BASE_CARD]
-        push_cast
-        rw [hav]
-        ring
-
-end DonorAlgebra
+    MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } :=
+  Orchard.Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
 
 /-! ## Point-level scalar-multiple algebra
 
@@ -793,30 +433,6 @@ open CompElliptic.CurveForms.ShortWeierstrass (SWPoint)
 open CompElliptic.Curves.Pasta
 open Orchard.Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
   valid_add valid_neg valid_zero valid_nsmul nsmul_add_nsmul nsmul_eq_zero_iff)
-
-/-- One double-and-add group step at the `SWPoint` level (donor `nsmul_step`, copied). -/
-private theorem sw_nsmul_step (B : SWPoint Pallas.curve) (A : ℕ) (hA : 1 ≤ A)
-    (bit : Bool) :
-    A • B + ((if bit then B else -B) + A • B)
-      = (2 * A + (if bit then 1 else 0) * 2 - 1) • B := by
-  cases bit
-  · simp only [Bool.false_eq_true, if_false]
-    have h2 : (2 * A + 0 * 2 - 1) • B + B = A • B + A • B := by
-      rw [← succ_nsmul, show 2 * A + 0 * 2 - 1 + 1 = A + A from by omega, add_nsmul]
-    calc A • B + (-B + A • B) = (A • B + A • B) + -B := by abel
-      _ = ((2 * A + 0 * 2 - 1) • B + B) + -B := by rw [h2]
-      _ = (2 * A + 0 * 2 - 1) • B := by abel
-  · simp only [if_true]
-    rw [show 2 * A + 1 * 2 - 1 = A + (A + 1) from by omega, add_nsmul, add_nsmul,
-      one_nsmul]
-    abel
-
-/-- Subtracting the base once at the `SWPoint` level (donor `neg_add_nsmul`, copied). -/
-private theorem sw_neg_add_nsmul (B : SWPoint Pallas.curve) {m : ℕ} (hm : 1 ≤ m) :
-    -B + m • B = (m - 1) • B := by
-  conv_lhs => rw [show m = (m - 1) + 1 from by omega]
-  rw [succ_nsmul]
-  abel
 
 /-- `P + P = 2 • P` at the `Point` level. -/
 private theorem point_two_nsmul {P : Point Fp} (hP : P.OnCurve) : P + P = 2 • P := by
@@ -839,7 +455,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)),
       toSW_add (valid_neg hPv) (valid_nsmul hPv a), toSW_neg hPv,
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using sw_nsmul_step (P.toSW hPv) a ha false
+    simpa using Orchard.Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
     simp only [if_true]
     apply (ext_toSW_iff
@@ -848,7 +464,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)),
       toSW_add hPv (valid_nsmul hPv a),
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using sw_nsmul_step (P.toSW hPv) a ha true
+    simpa using Orchard.Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
 
 /-- `-P + m•P = (m−1)•P` at the `Point` level. -/
 private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (hm : 1 ≤ m) :
@@ -858,7 +474,7 @@ private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h
     (valid_nsmul hPv _)).mpr
   rw [toSW_add (valid_neg hPv) (valid_nsmul hPv m), toSW_neg hPv, toSW_nsmul hPv m,
     toSW_nsmul hPv]
-  exact sw_neg_add_nsmul (P.toSW hPv) hm
+  exact Orchard.Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
 
 /-- `0 + Q = Q` at the `Point` level, for valid `Q`. -/
 private theorem point_zero_add {Q : Point Fp} (hQ : Q.Valid) : (0 : Point Fp) + Q = Q := by

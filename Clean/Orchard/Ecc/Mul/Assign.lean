@@ -44,14 +44,19 @@ def kBits (alpha : Fp) : BitsHint := fun i => (kNat alpha).testBit (254 - i)
 /-! ### Running-sum chains as natural numbers
 
 The circuit's running sum lives in `Fp`; the canonicity argument needs its exact
-natural-number value. `chainNat` mirrors `z ↦ 2z + bit` over `ℕ`. -/
+natural-number value. `chainNat` mirrors `z ↦ 2z + bit` over `ℕ`.
+
+The chain/canonicity lemmas of this file (`chainNat_*`, `chain_cast`, `accScalar_closed`,
+`nsmul_step`, `neg_add_nsmul`, `k_canonical`, `m_bounds`, `cells_kNat`, `z0_cell_value`,
+`overflow_spec_honest`) are public: the Ironwood region-level port
+(`Clean/Ironwood/Ecc/Mul.lean`) consumes them directly. -/
 
 /-- The running sum continued from `zin` by `b` steps of `z ↦ 2z + bit`. -/
 def chainNat (zin : ℕ) (bits : ℕ → Bool) : ℕ → ℕ
   | 0 => zin
   | b + 1 => 2 * chainNat zin bits b + (if bits b then 1 else 0)
 
-private theorem chainNat_lt (zin : ℕ) (bits : ℕ → Bool) :
+theorem chainNat_lt (zin : ℕ) (bits : ℕ → Bool) :
     ∀ b, chainNat zin bits b < 2 ^ b * (zin + 1)
   | 0 => by simp [chainNat]
   | b + 1 => by
@@ -60,7 +65,7 @@ private theorem chainNat_lt (zin : ℕ) (bits : ℕ → Bool) :
     simp only [chainNat, hpow]
     cases bits b <;> simp <;> omega
 
-private theorem chainNat_offset (zin : ℕ) (bits : ℕ → Bool) :
+theorem chainNat_offset (zin : ℕ) (bits : ℕ → Bool) :
     ∀ b, chainNat zin bits b = 2 ^ b * zin + chainNat 0 bits b
   | 0 => by simp [chainNat]
   | b + 1 => by
@@ -70,7 +75,7 @@ private theorem chainNat_offset (zin : ℕ) (bits : ℕ → Bool) :
     omega
 
 /-- Splitting off the first (most significant) bit of a zero-started chain. -/
-private theorem chainNat_msb (bits : ℕ → Bool) :
+theorem chainNat_msb (bits : ℕ → Bool) :
     ∀ b, chainNat 0 bits (b + 1)
       = 2 ^ b * (if bits 0 then 1 else 0) + chainNat 0 (fun i => bits (i + 1)) b
   | 0 => by simp [chainNat]
@@ -86,7 +91,7 @@ private theorem chainNat_msb (bits : ℕ → Bool) :
 
 /-- The field-level running-sum chain delivered by a sub-circuit `Spec` is the cast of
 `chainNat`. -/
-private theorem chain_cast {n : ℕ} (zs : Vector Fp (n + 1)) (zin : Fp) (Zin : ℕ)
+theorem chain_cast {n : ℕ} (zs : Vector Fp (n + 1)) (zin : Fp) (Zin : ℕ)
     (bits : ℕ → Bool) (hin : zin = (Zin : Fp))
     (h0 : zs[0] = 2 * zin + (if bits 0 then 1 else 0))
     (hstep : ∀ b : Fin n, zs[b.val + 1]'(by omega) =
@@ -107,7 +112,7 @@ private theorem chain_cast {n : ℕ} (zs : Vector Fp (n + 1)) (zin : Fp) (Zin : 
 
 /-! ### The double-and-add scalar in closed form -/
 
-private theorem accScalar_closed (m : ℕ) (hm : 1 ≤ m) (bits : ℕ → Bool) :
+theorem accScalar_closed (m : ℕ) (hm : 1 ≤ m) (bits : ℕ → Bool) :
     ∀ b, accScalar m bits b = 2 ^ b * (m - 1) + 2 * chainNat 0 bits b + 1
   | 0 => by simp [accScalar, chainNat]; omega
   | b + 1 => by
@@ -119,7 +124,7 @@ private theorem accScalar_closed (m : ℕ) (hm : 1 ≤ m) (bits : ℕ → Bool) 
 /-! ### Complete-addition steps as scalar multiples -/
 
 /-- One double-and-add group step: `A•B + (±B + A•B) = (2A ± 1)•B`. -/
-private theorem nsmul_step (B : SWPoint Pallas.curve) (A : ℕ) (hA : 1 ≤ A)
+theorem nsmul_step (B : SWPoint Pallas.curve) (A : ℕ) (hA : 1 ≤ A)
     (bit : Bool) :
     A • B + ((if bit then B else -B) + A • B)
       = (2 * A + (if bit then 1 else 0) * 2 - 1) • B := by
@@ -136,7 +141,7 @@ private theorem nsmul_step (B : SWPoint Pallas.curve) (A : ℕ) (hA : 1 ≤ A)
     abel
 
 /-- Subtracting the base once: `-B + m•B = (m − 1)•B` for `m ≥ 1`. -/
-private theorem neg_add_nsmul (B : SWPoint Pallas.curve) {m : ℕ} (hm : 1 ≤ m) :
+theorem neg_add_nsmul (B : SWPoint Pallas.curve) {m : ℕ} (hm : 1 ≤ m) :
     -B + m • B = (m - 1) • B := by
   conv_lhs => rw [show m = (m - 1) + 1 from by omega]
   rw [succ_nsmul]
@@ -177,7 +182,7 @@ The book argument (halo2 book, "variable-base scalar multiplication", overflow c
 the witnessed 255-bit running sum `K` satisfies `K ≡ α + t_q (mod p)`; the auxiliary
 constraints exclude both wraparounds, so `K = α + t_q` over `ℕ`. -/
 
-private theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
+theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
     (hk254 : k254 = if b254 then 1 else 0)
     (hz130 : z130 = (Zhi : Fp))
     (hZhiLt : Zhi < 2 ^ 125)
@@ -277,7 +282,7 @@ private theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
 
 /-! ### Honest-witness helpers: the chain of `kBits` reconstructs `kNat` -/
 
-private theorem chainNat_testBit (K n : ℕ) (hK : K < 2 ^ n) :
+theorem chainNat_testBit (K n : ℕ) (hK : K < 2 ^ n) :
     ∀ j, j ≤ n → chainNat 0 (fun i => K.testBit (n - 1 - i)) j = K / 2 ^ (n - j)
   | 0, _ => by
     simp only [chainNat]
@@ -297,7 +302,7 @@ private theorem chainNat_testBit (K n : ℕ) (hK : K < 2 ^ n) :
     omega
 
 /-- Chains compose: continuing for `b` more steps from the `a`-step value. -/
-private theorem chainNat_append (zin : ℕ) (bits : ℕ → Bool) (a : ℕ) :
+theorem chainNat_append (zin : ℕ) (bits : ℕ → Bool) (a : ℕ) :
     ∀ b, chainNat zin bits (a + b)
       = chainNat (chainNat zin bits a) (fun i => bits (a + i)) b
   | 0 => rfl
@@ -307,14 +312,14 @@ private theorem chainNat_append (zin : ℕ) (bits : ℕ → Bool) (a : ℕ) :
     rw [ih]
     rfl
 
-private theorem kNat_lt (alpha : Fp) : kNat alpha < 2 ^ 255 := by
+theorem kNat_lt (alpha : Fp) : kNat alpha < 2 ^ 255 := by
   have h := ZMod.val_lt alpha
   norm_num [PALLAS_BASE_CARD] at h
   norm_num [kNat, tQNat]
   omega
 
 /-- The honest running sum after `j` of the 255 steps is the high `j` bits of `k`. -/
-private theorem chainNat_kBits (alpha : Fp) (j : ℕ) (hj : j ≤ 255) :
+theorem chainNat_kBits (alpha : Fp) (j : ℕ) (hj : j ≤ 255) :
     chainNat 0 (kBits alpha) j = kNat alpha / 2 ^ (255 - j) := by
   have h := chainNat_testBit (kNat alpha) 255 (kNat_lt alpha) j hj
   have hf : (fun i => (kNat alpha).testBit (255 - 1 - i)) = kBits alpha := by
@@ -429,7 +434,7 @@ def ProverSpec (input : ProverValue Input Fp) (output : Output Fp)
   output.acc.Valid
 
 /-- Bounds on the hi/lo accumulator scalars, for arbitrary bit assignments. -/
-private theorem m_bounds (bits1 bits2 : ℕ → Bool) :
+theorem m_bounds (bits1 bits2 : ℕ → Bool) :
     2 ≤ accScalar 2 bits1 125 ∧
     2 ^ (125 + 2) * (accScalar 2 bits1 125 + 1) ≤ 2 ^ 254 ∧
     1 ≤ accScalar (accScalar 2 bits1 125) bits2 126 ∧
@@ -969,7 +974,7 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
     exact hBaseNsmul _
 
 /-- The honest running-sum chains of `kBits` are the shifted values of `k`. -/
-private theorem cells_kNat (alpha : Fp) :
+theorem cells_kNat (alpha : Fp) :
     chainNat 0 (kBits alpha) 1 = kNat alpha / 2 ^ 254 ∧
     chainNat 0 (kBits alpha) 125 = kNat alpha / 2 ^ 130 ∧
     chainNat (chainNat (chainNat 0 (kBits alpha) 125) (fun i => kBits alpha (125 + i)) 126)
@@ -994,7 +999,7 @@ private theorem cells_kNat (alpha : Fp) :
 
 /-- The honest `z₀` cell reconstructs the working scalar `k`. Stated over opaque cell
 values so the heavy cast reasoning is kernel-checked here, not in `completeness`. -/
-private theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
+theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
     (hz1v : z1v = ((kNat alpha / 2 : ℕ) : Fp))
     (hz0w : z0v = 2 * z1v + (if kBits alpha 254 then 1 else 0)) :
     z0v = ((kNat alpha : ℕ) : Fp) := by
@@ -1008,7 +1013,7 @@ private theorem z0_cell_value (alpha : Fp) {z1v z0v : Fp}
   ring
 
 /-- The honest running-sum cells satisfy the overflow-check contract. -/
-private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
+theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
     (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
     (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
