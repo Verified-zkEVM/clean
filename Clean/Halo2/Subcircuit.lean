@@ -129,6 +129,59 @@ theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness
 
 end
 
+/-! ## Concrete-`α` variants (the `simp`-firing form for `ProvableType` outputs)
+
+`circuit_norm` contains `var_of_provableType : Var Output F = Output (AssignedCell F)`, which
+(for a `ProvableType Output`) rewrites the implicit element type `α` of `RegionCircuit.operations`
+from the `Var Output F`-spelling to the concrete `Output (AssignedCell F)` head. After
+`simp only [circuit_norm] …` the folded call chunk therefore carries a *concrete-headed* `α`,
+which the generic iffs above (whose discrimination-tree key is `Var …`-headed) miss — `rw` still
+matches by full `isDefEq`, but `simp` does not fire. These variants restate the same iff with the
+`.operations` element type pinned to `Output (AssignedCell F)`, so the discr-tree key head matches
+the post-`circuit_norm` chunk and `simp only [circuit_norm, this]` fires. Definitionally equal to
+the generic iffs (`Var Output F` reduces to `Output (AssignedCell F)` under `toCircuitType`), so
+each proof is just the generic lemma. -/
+
+section
+variable [CircuitType Input] {Output : TypeMap} [ProvableType Output]
+
+/-- Concrete-`α` restatement of `subcircuit_constraints_iff_soundness`, tagged so plain
+`simp only [circuit_norm, this]` fires it on a post-`circuit_norm` (concrete-`α`) chunk. -/
+theorem FormalRegionCircuit.subcircuit_constraints_iff_soundness'
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (env : Placed Environment F) (input : Var Input F) :
+    RegionOperations.Constraints env.place self env.env
+        (@RegionCircuit.operations F _ (Output (AssignedCell F))
+          (child.call config offset input) self)
+    ↔ SubcircuitConstraints env.place self env.env
+          (@RegionCircuit.operations F _ (Output (AssignedCell F))
+            (child.call config offset input) self)
+      ∧ (child.EnvAssumptions config env → child.Assumptions (eval env input) →
+          child.Spec (eval env input)
+            (eval env (child.output config offset input self))
+            (child.extract config offset input self env)) :=
+  FormalRegionCircuit.subcircuit_constraints_iff_soundness child config offset self env input
+
+/-- Concrete-`α` restatement of `subcircuit_constraints_iff_completeness`. -/
+theorem FormalRegionCircuit.subcircuit_constraints_iff_completeness'
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F) :
+    RegionOperations.Constraints env.place self env.env
+        (@RegionCircuit.operations F _ (Output (AssignedCell F))
+          (child.call config offset input) self)
+    ↔ SubcircuitConstraints env.place self env.env
+          (@RegionCircuit.operations F _ (Output (AssignedCell F))
+            (child.call config offset input) self)
+      ∨ (RegionOperations.ExtendsWitnesses env.place self env.env
+              (@RegionCircuit.operations F _ (Output (AssignedCell F))
+                (child.call config offset input) self)
+          ∧ child.EnvAssumptions config env.toEnvironment
+          ∧ child.Assumptions (eval env.toEnvironment input)
+          ∧ child.ProverAssumptions (eval env input) env.env.hint) :=
+  FormalRegionCircuit.subcircuit_constraints_iff_completeness child config offset self env input
+
+end
+
 /-! ## `CoeFun` — subcircuits look like function calls -/
 
 section
