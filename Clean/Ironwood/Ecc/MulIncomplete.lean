@@ -1019,28 +1019,6 @@ bit sequence as a *hint* read from the prover environment (`env.env.hint`) — t
 witnesses `zWit`/`l1Wit`/… close over a fixed `BitsHint`; the bundle is parameterized by that
 hint. This matches how the donor threads `input.bits` as an `UnconstrainedNative`. -/
 
-/-- Read the `Output` cells off the environment (the `ProvableStruct.eval` of the fixed-row
-output-cell literal `synthesize` returns): `x_a` at `offset+1+n+1`, `y_a` at `offset+1+(n+1)`,
-and the running sums `z_r` at `offset+1+r`. Proven by unfolding the derived `ProvableStruct`
-evaluation (the struct-literal simproc does not fire through the `Vector` field of `Output`, so
-we reduce it explicitly once here). -/
-theorem output_eval_fields (place : RegionIndex → ℕ) (env : Environment Fp) (self : RegionIndex)
-    (offset n : ℕ) (cxA cl1 cz : Column .advice) :
-    let out := ProvableStruct.eval place env
-      ({ xA := AssignedCell.of self (offset + 1 + n + 1) cxA,
-         yA := AssignedCell.of self (offset + 1 + (n + 1)) cl1,
-         zs := Vector.ofFn fun i => AssignedCell.of self (offset + 1 + (i : ℕ)) cz }
-        : Output (n + 1) (AssignedCell Fp))
-    out.xA = adv cxA place self env (offset + 1 + n + 1)
-    ∧ out.yA = adv cl1 place self env (offset + 1 + (n + 1))
-    ∧ ∀ (i : ℕ) (hi : i < n + 1), out.zs[i] = adv cz place self env (offset + 1 + i) := by
-  simp only [adv]
-  refine ⟨?_, ?_, ?_⟩ <;> intros <;>
-    simp only [ProvableStruct.eval, ProvableStruct.eval.go, ProvableStruct.toComponents,
-      ProvableStruct.fromComponents, ProvableType.eval, ProvableType.toElements,
-      ProvableType.fromElements, AssignedCell.of, Cell.of, AssignedCell.eval,
-      Vector.getElem_ofFn, circuit_norm]
-
 /-- The scalar-mul incomplete-phase round predicate: the running-sum chain and, for any
 `A = [m]P` in range, the output accumulator is the double-and-add result. -/
 def RoundInvariant (n : ℕ) (input : Inputs Fp) (output : Output (n + 1) Fp)
@@ -1137,12 +1115,23 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
     -- q_mul_1 gate ⇒ `hInit` (derived `Y_A` of loop row 0 = `2·(λ₁ at offset)`)
     simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yAExpr, xRExpr] at hQMul1
-    -- destructure input into coordinates; read the output cells off the env
+    -- destructure input into coordinates; the struct-literal simproc now decomposes the output
+    -- eval (incl. the `zs` vector field) inside `h_output`, so the output cells read straight off
+    -- the env. Recover the `adv`-spelled per-field reads (previously the `output_eval_fields`
+    -- hand-lemma, redundant since the simproc decomposes the `Vector` field).
     provable_type_simp
-    -- the output cells, read off the env (`output = eval {fixed-row cell literal}`)
-    obtain ⟨hOutXA, hOutYA, hOutZs⟩ :=
-      output_eval_fields env.place env.env self offset n cfg.xA cfg.lambda1 cfg.z
-    rw [← h_output]
+    have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
+      rw [← h_output]; rfl
+    have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
+      rw [← h_output]; rfl
+    have hOutZs : ∀ (i : ℕ) (hi : i < n + 1),
+        output.zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
+      intro i hi
+      rw [← h_output,
+        ProvableType.eval_cells (M := fields (n + 1)) { place := env.place, env := env.env } _]
+      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
+        adv, circuit_norm]
     clear h_output
     -- fold `env.advice cfg.col ↑(place self + row)` into `adv` (the loop lemmas' spelling)
     have hadv : ∀ (col : Column .advice) (row : ℕ),
@@ -1211,11 +1200,24 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
       Witgen.evalSteps] at hwit h_output ⊢
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
-    -- destructure input into coordinates; read the output cells off the env
+    -- destructure input into coordinates; the struct-literal simproc now decomposes the output
+    -- eval (incl. the `zs` vector field) inside `h_output`, so the output cells read straight off
+    -- the env. Recover the `adv`-spelled per-field reads (previously the `output_eval_fields`
+    -- hand-lemma, redundant since the simproc decomposes the `Vector` field).
     provable_type_simp
-    obtain ⟨hOutXA, hOutYA, hOutZs⟩ :=
-      output_eval_fields env.place env.env.toEnvironment self offset n cfg.xA cfg.lambda1 cfg.z
-    rw [← h_output]
+    have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
+      rw [← h_output]; rfl
+    have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
+      rw [← h_output]; rfl
+    have hOutZs : ∀ (i : ℕ) (hi : i < n + 1),
+        output.zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
+      intro i hi
+      rw [← h_output,
+        ProvableType.eval_cells (M := fields (n + 1))
+          { place := env.place, env := env.env.toEnvironment } _]
+      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
+        adv, circuit_norm]
     clear h_output
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hWloop`'s spelling

@@ -16,6 +16,15 @@ structure TwoPoints (F : Type) where
   q : Point F
 deriving ProvableStruct
 
+/-- Struct with a `Vector`-valued field — the `MulIncomplete.Output {xA, yA, zs}` analogue
+(and the shape any vector-valued Output, e.g. Sinsemilla, will hit). Its derived
+`ProvableStruct.components` spells the vector field's `M` as `fields n`, which the literal
+simproc reads to decompose through the field for which a raw `Eval` synthesis has no `M`. -/
+structure VecStruct (n : ℕ) (F : Type) where
+  head : F
+  rest : Vector F n
+deriving ProvableStruct
+
 -- 1. Plain `ProvableType` (`Point`) literal decomposition, consumed by a row fact:
 -- the whole-struct eval equation splits field-wise and discharges the projected goal.
 example (env : Placed Environment Fp) (a b : AssignedCell Fp) (out : Point Fp)
@@ -56,6 +65,50 @@ example (a b c d : AssignedCell Fp) (env : Placed Environment Fp)
     eval env a = eval env c := by
   provable_type_simp
   exact h.1
+
+/-! ### Vector-valued struct fields (`Output.zs` analogue)
+
+A `ProvableStruct` literal with a `Vector (AssignedCell F) n` field decomposes through the
+vector field: the plain `Eval` synthesis cannot recover `M = fields n` from the raw `Vector`
+type, so the literal simproc reads the component's `M` off the derived `components` list. Before
+the fix the whole literal stayed folded as `ProvableStruct.eval …` (the `MulIncomplete`
+`output_eval_fields` hand-lemma existed only to work around that). -/
+
+-- 5a. The vector-field literal decomposes to the record of per-field evals; the vector field
+-- becomes a folded per-field `Eval.eval` (`Value (fields n)`, i.e. `Vector F n`), never a bailed
+-- whole-struct `ProvableStruct.eval` atom.
+example (env : Placed Environment Fp) (a : AssignedCell Fp) (v : Vector (AssignedCell Fp) 3) :
+    eval env (⟨a, v⟩ : VecStruct 3 (AssignedCell Fp))
+      = ⟨eval env a, Eval.eval (Var := (fields 3) (AssignedCell Fp)) env v⟩ := by
+  provable_type_simp
+
+-- 5b. The decomposition makes the non-vector field consumable through the record split (both
+-- sides literals so the constructor equality splits field-wise, incl. across the vector field).
+example (env : Placed Environment Fp) (a a' : AssignedCell Fp) (v v' : Vector (AssignedCell Fp) 3)
+    (h : eval env (⟨a, v⟩ : VecStruct 3 (AssignedCell Fp))
+        = eval env (⟨a', v'⟩ : VecStruct 3 (AssignedCell Fp))) :
+    eval env a = eval env a' := by
+  provable_type_simp
+  exact h.1
+
+-- 5c. Prover-view (`Placed ProverEnvironment`) literal decomposes too.
+example (env : Placed ProverEnvironment Fp) (a a' : AssignedCell Fp)
+    (v v' : Vector (AssignedCell Fp) 3)
+    (h : eval env (⟨a, v⟩ : VecStruct 3 (AssignedCell Fp))
+        = eval env (⟨a', v'⟩ : VecStruct 3 (AssignedCell Fp))) :
+    eval env a = eval env a' := by
+  provable_type_simp
+  exact h.1
+
+-- 5d. An *opaque* struct eval (an `eval` of a variable, not a literal) with a vector field stays
+-- folded — `provable_type_simp` is a no-op, the assertion that the confluence restriction
+-- (literal-only decomposition) still holds through the vector-field path.
+set_option linter.unusedTactic false in
+example (env : Placed Environment Fp) (u w : VecStruct 3 (AssignedCell Fp))
+    (h : eval env u = eval env w) :
+    eval env u = eval env w := by
+  provable_type_simp
+  exact h
 
 /-! ### Named-cell / typed-read normal form ("pretty cells")
 

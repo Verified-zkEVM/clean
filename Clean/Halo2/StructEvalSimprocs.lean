@@ -64,6 +64,50 @@ def projectionView? (e : Expr) : MetaM (Option (Expr × (Expr → MetaM Expr))) 
 private def evalHeads : Array Name :=
   #[``Eval.eval, ``Halo2.ProvableStruct.eval, ``Halo2.ProvableType.eval]
 
+/-- Unfold a `List` literal expression into its element expressions. -/
+private partial def listLitElems (e : Expr) : MetaM (Array Expr) := do
+  match (← whnf e).getAppFnArgs with
+  | (``List.cons, #[_, h, t]) => return #[h] ++ (← listLitElems t)
+  | (``List.nil, _) => return #[]
+  | _ => throwError "structEvalLiteral: components is not a list literal: {← ppExpr e}"
+
+/--
+Per-field evaluation term `Eval.eval placedEnv field`.
+
+The plain route (`mkAppM ``Eval.eval #[placedEnv, field]`) synthesizes the `Eval` instance
+from the *field's syntactic type*. That works for scalar fields (`AssignedCell F`) and
+higher-level struct/point fields (`M (AssignedCell F)` with `M` a visible head), but *fails*
+on a `Vector (AssignedCell F) n` field: the `Eval` instance is stated over `M (AssignedCell F)`
+and `M = fields n` cannot be recovered by higher-order unification from a bare `Vector`.
+
+When a fallback component `M`/`ProvableType`-instance is supplied (from the enclosing
+`ProvableStruct`'s `components` list, where the vector field's `M = fields n` is spelled out
+explicitly), we build the `Eval` instance directly — `CircuitType.verifierEval`/`proverEval M`
+under the provable-type `CircuitType` — picking the verifier/prover view from the placed env's
+constructor. This mirrors the witgen struct-literal simproc, which likewise routes each
+component through its `ProvableStruct.components` entry rather than re-synthesizing from the raw
+field type; here we keep halo2's record-literal normal form (`⟨eval a, eval v, …⟩`). -/
+private def buildFieldEval (placedEnv field : Expr)
+    (fallback? : Option (Expr × Expr)) : MetaM Expr := do
+  try
+    return ← withTransparency .default <| mkAppM ``Eval.eval #[placedEnv, field]
+  catch _ => pure ()
+  let some (compTy, compInst) := fallback? |
+    throwError "structEvalLiteral: no Eval instance for field {← ppExpr field} and no fallback"
+  let placedTy ← whnf (← inferType placedEnv)
+  let (``Halo2.Placed, #[envCtor, fF]) := placedTy.getAppFnArgs |
+    throwError "structEvalLiteral: env is not `Placed …`: {← ppExpr placedTy}"
+  withTransparency .default do
+    let ctInst ← mkAppOptM ``ProvableType.toCircuitType #[some compTy, some compInst]
+    let evalInst ←
+      if envCtor.isConstOf ``Halo2.Environment then
+        mkAppOptM ``Halo2.CircuitType.verifierEval #[some fF, none, some compTy, some ctInst]
+      else
+        mkAppOptM ``Halo2.CircuitType.proverEval #[some fF, none, some compTy, some ctInst]
+    -- `Var M F` (the instance's declared `Var` slot) is reducibly `M (AssignedCell F)`, i.e. the
+    -- raw `Vector (AssignedCell F) n` field type; check the app at `.default` so it is accepted.
+    mkAppOptM ``Eval.eval #[none, none, none, some evalInst, some placedEnv, some field]
+
 /--
 Decompose evaluation of a struct/point **literal** component-wise:
 ```
@@ -74,26 +118,57 @@ Fires only on constructor literals (opaque values stay folded atoms — the rest
 makes the pair {literal-decompose, projection-lift} confluent). Each field is re-evaluated
 through the `Eval.eval` class head, so struct fields recurse via the `↓ high` bridge and
 scalar fields normalize to `AssignedCell.eval` in the same pass. Validated by definitional
-equality at `.all` (matches the witgen struct-literal simproc). -/
+equality at `.all` (matches the witgen struct-literal simproc).
+
+A `Vector (AssignedCell F) n` field (e.g. an `Output.zs`, or any future bundle with a
+vector-valued Output such as Sinsemilla) is handled via the enclosing `ProvableStruct`'s
+`components` list: the plain `Eval.eval` synthesis cannot recover `M = fields n` from the raw
+`Vector` field type, so on the `ProvableStruct.eval` route we thread the component's spelled-out
+`M`/instance into `buildFieldEval` as a fallback. The vector field decomposes to
+`Eval.eval placedEnv v` (a `Value (fields n) F`, i.e. `Vector F n`), which `circuit_norm`
+further reduces to `Vector.map (AssignedCell.eval …)`. -/
 def structEvalLiteralProc : Simproc := fun e => do
   let .const hname _ := e.getAppFn | return .continue
   let args := e.getAppArgs
   -- Recover the `Placed` env for the per-field `Eval.eval` calls, plus the value:
   --   `Eval.eval env x`                          — env is already `Placed`
   --   `Halo2.Provable{Struct,Type}.eval place env x` — reconstruct `⟨place, env⟩`
-  let (placedEnv?, x) ← (do
+  -- On the `ProvableStruct.eval` route the type map `α` and its `ProvableStruct` instance are
+  -- explicit args, giving a per-field fallback `M`/instance list from `components α` (the vector
+  -- field's `M = fields n`, unrecoverable from the raw `Vector` field type). The other routes are
+  -- plain `ProvableType` literals (scalar-only fields), where the plain `Eval.eval` synthesis
+  -- always succeeds, so no fallback is needed.
+  let (placedEnv?, x, fallbacks?) ← (do
     match hname with
     | ``Eval.eval =>
-      unless args.size ≥ 2 do return (none, default)
+      unless args.size ≥ 2 do return (none, default, none)
       -- only a *provable-type* literal (avoid firing on `Eval.eval` of a scalar cell etc.)
-      unless ← isProvableTypeLike (← inferType args[args.size - 1]!) do return (none, default)
-      pure (some args[args.size - 2]!, args[args.size - 1]!)
-    | ``Halo2.ProvableStruct.eval | ``Halo2.ProvableType.eval =>
-      unless args.size ≥ 3 do return (none, default)
+      unless ← isProvableTypeLike (← inferType args[args.size - 1]!) do return (none, default, none)
+      pure (some args[args.size - 2]!, args[args.size - 1]!, none)
+    | ``Halo2.ProvableType.eval =>
+      unless args.size ≥ 3 do return (none, default, none)
       let placed ← withTransparency .default <|
         mkAppM ``Halo2.Placed.mk #[args[args.size - 3]!, args[args.size - 2]!]
-      pure (some placed, args[args.size - 1]!)
-    | _ => pure (none, default) : MetaM (Option Expr × Expr))
+      pure (some placed, args[args.size - 1]!, none)
+    | ``Halo2.ProvableStruct.eval =>
+      unless args.size ≥ 7 do return (none, default, none)
+      let placed ← withTransparency .default <|
+        mkAppM ``Halo2.Placed.mk #[args[args.size - 3]!, args[args.size - 2]!]
+      -- args: F, FiniteField, α, ProvableStruct α, place, env, value
+      -- `.default` transparency so the `components` instance projection unfolds to its list
+      -- literal (the simproc runs at `.reducible` by default, where it stays folded).
+      let fallbacks? ← withTransparency .default <| (do
+        try
+          let comps ← mkAppOptM ``_root_.ProvableStruct.components #[args[args.size - 5]!, args[args.size - 4]!]
+          let compExprs ← listLitElems comps
+          let pairs ← compExprs.mapM fun c => do
+            let ty ← whnf (← mkAppM ``_root_.ProvableStruct.WithProvableType.type #[c])
+            let inst ← mkAppM ``_root_.ProvableStruct.WithProvableType.provableType #[c]
+            pure (ty, inst)
+          pure (some pairs)
+        catch _ => pure none)
+      pure (some placed, args[args.size - 1]!, fallbacks?)
+    | _ => pure (none, default, none) : MetaM (Option Expr × Expr × Option (Array (Expr × Expr))))
   let some placedEnv := placedEnv? | return .continue
   let .const fn _ := x.getAppFn | return .continue
   let some (.ctorInfo info) := (← getEnv).find? fn | return .continue
@@ -101,11 +176,16 @@ def structEvalLiteralProc : Simproc := fun e => do
   try
     let ctorArgs := x.getAppArgs
     if ctorArgs.size != info.numParams + info.numFields then return .continue
+    -- fallbacks (when present) are aligned with the constructor's fields (in order)
+    if let some fbs := fallbacks? then
+      unless fbs.size == info.numFields do return .continue
     let mut newArgs : Array (Option Expr) := #[]
     for _ in [0:info.numParams] do
       newArgs := newArgs.push none
-    for a in ctorArgs[info.numParams:] do
-      newArgs := newArgs.push (some (← withTransparency .default <| mkAppM ``Eval.eval #[placedEnv, a]))
+    for i in [0:info.numFields] do
+      let a := ctorArgs[info.numParams + i]!
+      let fallback? := fallbacks?.map (·[i]!)
+      newArgs := newArgs.push (some (← buildFieldEval placedEnv a fallback?))
     -- `.default` transparency to see through the reducible `CircuitType` instance behind
     -- `Value M F`-spelled field types (cf. the witgen simproc)
     let rhs ← withTransparency .default <| mkAppOptM fn newArgs
