@@ -7,6 +7,6 @@ import Clean.Utils.Test.TestWitgenEvalProjection
 import Clean.Utils.Test.TestElaborateCircuit
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
-import Clean.Utils.Test.TestProvableTypeSimp
 import Clean.Utils.Test.TestLookup
-import Clean.Utils.Test.TestSubcircuit
+import Clean.Halo2.Tests.TestProvableTypeSimp
+import Clean.Halo2.Tests.TestSubcircuit
