@@ -117,6 +117,16 @@ because the gate — the columns and selector a custom constraint refers to — 
 standalone pure def referenced identically by both phases (see `AddIncomplete.gate` for
 the pattern).
 
+### ConfigWF is retired (closed design decision)
+
+Across all ported gadgets, the only configuration fact any soundness proof needed is
+lookup selector-index distinctness, carried by the config-aware `EnvAssumptions` slot.
+Rust's cross-sub-config column non-overlap assertions (`mul.rs` `configure`) are
+model-vacuous here: `cell` reads key on `(column, row)`, and the synthesize offset
+discipline provides row-disjointness where Rust's single region needs
+column-disjointness. The "consistent-by-design" fallback (config storing gates,
+soundness proved at `configure`'s output) is retired.
+
 ### Composition currency: cell references
 
 The Rust survey settled this: halo2's synthesize API has no expression inputs
@@ -136,6 +146,13 @@ structs of `AssignedCell`s). Therefore:
   against fixed cells that participate in the permutation argument (this is visible in
   the pinned CS: `constants: [Column 3 Fixed]`, permutation over 15 columns). Modeling
   them as gate-level `.const` would break VK matching.
+- **No prover information at synthesis time (hard rule)**: `synthesize` functions must
+  never take or depend on prover-side witness values — no `BitsHint`-style parameters, no
+  `Value<>`-like data. All witness computation goes through the witness IR callbacks. Where
+  the Rust computes a value from a witnessed cell (e.g. `decompose_for_scalar_mul` from
+  `alpha.value()`), the port derives it from that cell via IR programs (`NExpr`/`BExpr`),
+  not via a bundle parameter. Genuinely external hints use the `Unconstrained` mechanisms
+  above, not ad hoc parameters.
 
 ### Semantics: trace satisfaction
 
@@ -150,6 +167,17 @@ permutation/lookup soundness effort) to ironwood's polynomial-level `circuitSatV
 - Cells in proofs are region-relative; absolute rows exist only after placement.
   Soundness/completeness of a gadget never depends on where the floor planner puts its
   regions.
+
+### Region-faithfulness (hard porting rule)
+
+Region boundaries in a port must mirror the Rust source exactly: which
+`layouter.assign_region` calls exist, and what each one contains. "Same constraints,
+different layout" is a VK bug — the verifying key's permutation commitments are built
+from copy constraints over absolute floor-planned positions, so flattening sibling
+regions into one region (or splitting one region into several) silently breaks VK
+matching even when the soundness/completeness proofs go through unchanged. (`mul.rs`
+runs its overflow check at layouter level in three sibling regions; an early port
+flattened them into the main region — caught in review, being fixed.)
 
 ### Knowledge soundness: constructive high-level witnesses
 
@@ -223,6 +251,12 @@ still needs a manual assist are to be marked `-- TACTIC GAP:` in the gadget sour
 come up; these feed the design of a single starting tactic (subsuming
 `circuit_proof_start`) that also does the row-fact chaining the forward-lemma mechanism
 will need.
+
+**Friction-twice rule (agent working rule)**: when the same manual proof plumbing appears
+in a second gadget, stop porting and build the generic tool (tactic, simproc, framework
+lemma, deriving mechanism) before continuing. Collecting friction findings without
+spending them is how helper-lemma bloat accumulated in the first composite ports; the
+tactic layer is a primary goal of the vertical slice, not a follow-up.
 
 ### Reuse from phase one
 
