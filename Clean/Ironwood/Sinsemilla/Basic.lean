@@ -78,13 +78,25 @@ def load (G : Generators) (cfg : GeneratorTableConfig) : Circuit Fp Unit := do
   loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y))
 
 /-- The generator-table-contents predicate a Sinsemilla consumer's `EnvAssumptions`
-references — the three-column analogue of `LookupRangeCheck.TableLoaded`. For each column,
-two facts (domain-size + exact block contents at a shared row `r`), plus the
-generator-spec connection (`row r ↔ (r, S(r).x, S(r).y)`) that the donor's
-`generatorTable.Spec` encodes. -/
+references — the three-column analogue of `LookupRangeCheck.TableLoaded`. Three conjuncts
+(mirroring `TableLoaded`'s design; discharged by `load_generatorTableLoaded`):
+
+1. **Domain-size fact** — `2^K ≤ env.usableRows` (layout data; completeness bounds its
+   membership witnesses with it).
+2. **Usable-rows spec** — *every* usable row holds a generator triple `(m, S(m).x, S(m).y)`
+   for some `m < 2^K`. Soundness consumes this: the membership existential's witness row is
+   bounded only by `env.usableRows`, and rows in `[2^K, usableRows)` carry the default-fill
+   (row 0's `(0, S(0).x, S(0).y)` — still a generator triple). This is the donor
+   `generatorTable.Spec` (`∃ m < 2^K, row = (m, S(m).x, S(m).y)`), over the whole domain.
+3. **Block exact contents** — row `r ∈ [0, 2^K)` holds exactly `(r, S(r).x, S(r).y)`.
+   Completeness consumes this to witness the membership at the honest word's own row. -/
 def GeneratorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
     (env : Environment Fp) : Prop :=
   2 ^ K ≤ env.usableRows ∧
+  (∀ t : ℕ, t < env.usableRows → ∃ m : ℕ, m < 2 ^ K ∧
+    env.fixed cfg.tableIdx.inner (t : ℤ) = (m : Fp) ∧
+    env.fixed cfg.tableX.inner (t : ℤ) = (G.S m).x ∧
+    env.fixed cfg.tableY.inner (t : ℤ) = (G.S m).y) ∧
   (∀ r : ℕ, r < 2 ^ K →
     env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp) ∧
     env.fixed cfg.tableX.inner (r : ℤ) = (G.S r).x ∧
@@ -154,20 +166,62 @@ theorem load_tableY_eq (G : Generators) (cfg : GeneratorTableConfig)
     rw [getElem!_pos _ r hlen, List.getElem_map, List.getElem_range]
   rw [hexplicit r hlen, hval]
 
+/-- Default-fill contents: rows in `[2^K, usableRows)` of all three columns hold the row-0
+values `(0, S(0).x, S(0).y)` (the floor planner's `fill_from_row`; `lookup-design.md` §1.3.1).
+Extracted from the three `loadTable`s' fill conjuncts. -/
+theorem load_fill_eq (G : Generators) (cfg : GeneratorTableConfig)
+    (place : RegionIndex → ℕ) (env : Environment Fp) (i : RegionIndex)
+    (h : Halo2.Constraints place env ((load G cfg).operations i) i) :
+    ∀ t : ℕ, 2 ^ K ≤ t → t < env.usableRows →
+      env.fixed cfg.tableIdx.inner (t : ℤ) = ((0 : ℕ) : Fp) ∧
+      env.fixed cfg.tableX.inner (t : ℤ) = (G.S 0).x ∧
+      env.fixed cfg.tableY.inner (t : ℤ) = (G.S 0).y := by
+  rw [load_operations] at h
+  simp only [Halo2.Constraints] at h
+  obtain ⟨_, hIdxF, _, hXF, _, hYF, -⟩ := h
+  intro t hKt ht
+  set N := 2 ^ K with hN
+  have hNpos : 0 < N := by rw [hN]; exact pow_two_pos K
+  clear_value N
+  -- non-emptiness and lengths of the three loaded lists
+  have hne : ∀ {α : Type} (f : ℕ → α), (List.range N).map f ≠ [] := by
+    intro α f hnil
+    simp only [List.map_eq_nil_iff, List.range_eq_nil] at hnil
+    omega
+  have hlen : ∀ {α : Type} (f : ℕ → α), ((List.range N).map f).length ≤ t := by
+    intro α f; rw [List.length_map, List.length_range]; exact hKt
+  have hlen0 : ∀ {α : Type} (f : ℕ → α), 0 < ((List.range N).map f).length := by
+    intro α f; rw [List.length_map, List.length_range]; exact hNpos
+  have hget0 : ∀ {α : Type} [Inhabited α] (f : ℕ → α), ((List.range N).map f)[0]! = f 0 := by
+    intro α _ f
+    rw [getElem!_pos _ 0 (hlen0 f), List.getElem_map, List.getElem_range]
+  exact ⟨by rw [hIdxF (hne _) t (hlen _) ht, hget0],
+         by rw [hXF (hne _) t (hlen _) ht, hget0],
+         by rw [hYF (hne _) t (hlen _) ht, hget0]⟩
+
 /-- **`load` ⇒ `GeneratorTableLoaded`**: the three loaders' `Constraints` discharge the
 whole predicate. The domain-size fact `2^K ≤ env.usableRows` is layout data the load
-constraints cannot force (as in `LookupRangeCheck.load_tableLoaded`), so it is a hypothesis;
-the block contents come from the three per-column contents theorems. -/
+constraints cannot force (as in `LookupRangeCheck.load_tableLoaded`), so it is a hypothesis.
+The usable-rows spec (conjunct 2): block rows are their own generator triple; fill rows
+carry row 0's triple `(0, S(0).x, S(0).y)`. -/
 theorem load_generatorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
     (place : RegionIndex → ℕ) (env : Environment Fp) (i : RegionIndex)
     (hUsable : 2 ^ K ≤ env.usableRows)
     (h : Halo2.Constraints place env ((load G cfg).operations i) i) :
     GeneratorTableLoaded G cfg env := by
-  refine ⟨hUsable, ?_⟩
-  intro r hr
-  exact ⟨load_tableIdx_eq G cfg place env i h r hr,
-         load_tableX_eq G cfg place env i h r hr,
-         load_tableY_eq G cfg place env i h r hr⟩
+  have hblock : ∀ r : ℕ, r < 2 ^ K →
+      env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp) ∧
+      env.fixed cfg.tableX.inner (r : ℤ) = (G.S r).x ∧
+      env.fixed cfg.tableY.inner (r : ℤ) = (G.S r).y := fun r hr =>
+    ⟨load_tableIdx_eq G cfg place env i h r hr,
+     load_tableX_eq G cfg place env i h r hr,
+     load_tableY_eq G cfg place env i h r hr⟩
+  refine ⟨hUsable, ?_, hblock⟩
+  intro t ht
+  by_cases hb : t < 2 ^ K
+  · exact ⟨t, hb, hblock t hb⟩
+  · obtain ⟨hIdx0, hX0, hY0⟩ := load_fill_eq G cfg place env i h t (by omega) ht
+    exact ⟨0, pow_two_pos K, hIdx0, hX0, hY0⟩
 
 /-! ## Pure piece value-algebra (lifted from the donor `Clean/Orchard/Sinsemilla/HashToPoint.lean`)
 

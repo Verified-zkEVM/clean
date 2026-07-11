@@ -220,11 +220,17 @@ def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
 mutual
 
 /-- The witness condition for completeness: the environment assigns each advice cell
-the value computed by its witness program (main Clean: `ExtendsVector`). -/
+the value computed by its witness program (main Clean: `ExtendsVector`), and each fixed
+cell the value the circuit assigns. The `assignFixed` clause mirrors its `Constraints`
+equation — like `loadTable`'s witness clause (`ExtendsWitnesses` below): fixed-column
+contents are circuit data the honest environment carries, so a completeness proof can
+discharge the corresponding constraint (they are keygen-time assignments, not prover
+witness choices). -/
 def RegionOperation.ExtendsWitness (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) : RegionOperation F → Prop
   | .assignAdvice col row compute =>
       env.get col (place self + row : ℕ) = (compute.eval ⟨place, env⟩)[0]
+  | .assignFixed col row v => env.get col (place self + row : ℕ) = v
   | .subcircuit ops => RegionOperations.ExtendsWitnesses place self env ops
   | _ => True
 

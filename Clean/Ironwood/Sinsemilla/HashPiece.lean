@@ -302,6 +302,11 @@ def round (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
     (offset w r : ℕ) : RegionCircuit Fp Unit := do
   let row := offset + r
   let _z ← assignAdvice cfg.bits (row + 1) (zWit input (r + 1))
+  -- the `q_sinsemilla2` fixed value at this row (Rust `hash_piece`'s per-row
+  -- `region.assign_fixed(q_sinsemilla2, …)`): `1` on interior word rows (the running word is
+  -- `z_r − 2^K·z_{r+1}` and the gate's `q_s3 = 0`), `0` on the last word row (the word is
+  -- `z_w` itself; the generic non-final piece — the final piece's `2` is slice-2 territory).
+  let _qs2 ← assignFixed cfg.qS2 row (if r = w then 0 else 1)
   let _xP ← assignAdvice cfg.xP row (xPWit G input r)
   let _l1 ← assignAdvice cfg.lambda1 row (l1Wit G input r)
   let _l2 ← assignAdvice cfg.lambda2 row (l2Wit G input r)
@@ -488,6 +493,66 @@ theorem soundness_aux (G : Generators) (w : ℕ) (dR : ℕ → DoubleAndAddRow F
         exact ⟨hpin.1, hpin.2.symm⟩
   exact hinv w (by omega) B hchain
 
+/-- A defined chain restricts to every prefix. Donor `HashPiece.range_prefix_some`. -/
+theorem range_prefix_some (S : ℕ → Point Fp) (Q : Point Fp) (f : ℕ → ℕ) {n : ℕ} {B : Point Fp}
+    (hn : hashToPoint S Q ((List.range n).map f) = some B)
+    {r : ℕ} (hr : r ≤ n) :
+    ∃ C, hashToPoint S Q ((List.range r).map f) = some C := by
+  obtain ⟨k, rfl⟩ : ∃ k, n = r + k := ⟨n - r, by omega⟩
+  rw [List.range_add, List.map_append, Orchard.Specs.Sinsemilla.hashToPoint_append] at hn
+  cases hc : hashToPoint S Q ((List.range r).map f) with
+  | none => rw [hc] at hn; simp at hn
+  | some C => exact ⟨C, rfl⟩
+
+/-- **The chain facts of one honest piece (completeness).** At every word `r ≤ w` the honest
+row values satisfy the `Y_A` invariant (`(λ₁+λ₂)(x − x_R) = 2·acc.y`) and the `y_p` derivation
+lands on the generator (`acc.y − λ₁(x − x_p) = S(m).y`); the piece exits at the spec-level
+chain point. Donor `HashPiece.completeness_aux`, lifted verbatim (pure). -/
+theorem completeness_aux (G : Generators) (w : ℕ) (p xA yA : Fp)
+    {A B : Point Fp} (hAx : A.x = xA) (hAy : A.y = yA)
+    (hchain : hashToPoint G.S A ((List.range (w + 1)).map (pieceWord p)) = some B) :
+    (∀ r, r ≤ w →
+      ((rowValue (accAfter G (xA, yA) p r)
+            ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1
+          + (rowValue (accAfter G (xA, yA) p r)
+            ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.1)
+        * ((accAfter G (xA, yA) p r).1
+          - ((rowValue (accAfter G (xA, yA) p r)
+                ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1
+              * (rowValue (accAfter G (xA, yA) p r)
+                ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1
+            - (accAfter G (xA, yA) p r).1 - (G.S (pieceWord p r)).x))
+        = 2 * (accAfter G (xA, yA) p r).2 ∧
+      (accAfter G (xA, yA) p r).2
+          - (rowValue (accAfter G (xA, yA) p r)
+              ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1
+            * ((accAfter G (xA, yA) p r).1 - (G.S (pieceWord p r)).x)
+        = (G.S (pieceWord p r)).y) ∧
+    accAfter G (xA, yA) p (w + 1) = (B.x, B.y) := by
+  subst hAx hAy
+  refine ⟨?_, accAfter_eq_chain G p hchain⟩
+  intro r hr
+  obtain ⟨Ar, hAr⟩ := range_prefix_some _ _ _ hchain (show r ≤ w + 1 by omega)
+  obtain ⟨Ar1, hAr1⟩ := range_prefix_some _ _ _ hchain (show r + 1 ≤ w + 1 by omega)
+  have hstep : step G.S (pieceWord p r) Ar = some Ar1 := by
+    rw [List.range_succ] at hAr1
+    simp only [List.map_append, List.map_cons, List.map_nil] at hAr1
+    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
+    exact hAr1
+  have hacc := accAfter_eq_chain G p hAr
+  have hh := step_honest G.S hstep
+    (l1 := (rowValue (Ar.x, Ar.y)
+      ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1)
+    (l2 := (rowValue (Ar.x, Ar.y)
+      ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.1)
+    (xa' := (rowValue (Ar.x, Ar.y)
+      ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.2.1)
+    (ya' := (rowValue (Ar.x, Ar.y)
+      ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.2.2)
+    rfl rfl rfl rfl
+  rw [hacc]
+  exact ⟨hh.2.1.symm, hh.1⟩
+
 /-! ## The per-row cell readers off the environment
 
 The double-and-add row and the running sum read at absolute region-local rows, in the
@@ -514,33 +579,27 @@ def zRow (cfg : Config) (place : RegionIndex → ℕ) (self : RegionIndex) (env 
     (offset r : ℕ) : Fp :=
   adv cfg.bits place self env (offset + r)
 
-/-! ## Loop-fact extraction (soundness) — structure-complete
+/-! ## Loop-fact extraction (soundness)
 
 Each round's `enableLookup`/`enableGate` constraint, cleaned to the value-level `hL`/`hG`
 row equations `soundness_aux` consumes. Proven by induction over the word count using
 `loop_operations_succ` + the append splitting of `RegionOperations.Constraints` — the
-`MulIncomplete.loop_gate_facts` structure.
-
-TACTIC GAP (proofs sorried — the framework half): reducing each round's
-`enableLookup arg [q_s1] row` constraint (a 3-tuple membership existential over the
-`GeneratorTableLoaded` columns) to the `hL` fact, and each `enableGate (sinsemillaGate cfg) row`
-constraint to the `hG` secant/y-check, is mechanical `circuit_norm` + `List.map_cons`
-/`cons.injEq` membership splitting + `cast_row_pred`/`row_succ_succ` row normalization, but is
-not yet distilled into a reusable tactic. The 3-tuple membership reduction is the NEW shape
-(pinned in `Clean/Halo2/Tests/`): the input list `[q_s1·word, …]` and table list
-`[tableIdx, tableX, tableY]` map-equality at a shared usable row `m`, splitting into the three
-per-column equalities; `GeneratorTableLoaded`'s block contents then give `m < 2^K`,
-`tableX@m = S(m).x`, `tableY@m = S(m).y`. Statements final; only the proofs are deferred. -/
+`MulIncomplete.loop_gate_facts` structure. The 3-tuple membership reduction (the NEW shape,
+pinned in `Clean/Halo2/Tests/TestTupleLookup.lean`): the input list `[q_s1·word, …]` and
+table list `[tableIdx, tableX, tableY]` map-equality at a shared usable row `t` splits into
+three per-column equalities; `GeneratorTableLoaded`'s usable-rows spec then delivers the
+generator triple `(m, S(m).x, S(m).y)` at `t`. -/
 
 /-- **Per-word lookup facts (soundness).** From the loop's `Constraints` and the loaded
 generator table, each word `r` yields a generator index `m < 2^K` with `x_p = S(m).x` and the
 `y_p` derivation landing on `S(m).y`; the running word is `z_r − 2^K·z_{r+1}` on interior rows
-and `z_r` on the last (the `q_run` case split). This is the `soundness_aux.hL` shape. -/
+and `z_r` on the last (the `q_s2` fixed-value case split). This is the `soundness_aux.hL`
+shape. -/
 theorem loop_lookup_facts (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset w : ℕ)
     (hTable : GeneratorTableLoaded G cfg.generatorTable env)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop G cfg input offset (w + 1) (w + 1)).operations self)) :
+      ((loop G cfg input offset w (w + 1)).operations self)) :
     ∀ r, r < w + 1 → ∃ m : ℕ, m < 2 ^ K ∧
       (if r = w then zRow cfg place self env offset r
         else zRow cfg place self env offset r - 2 ^ K * zRow cfg place self env offset (r + 1))
@@ -550,15 +609,81 @@ theorem loop_lookup_facts (G : Generators) (cfg : Config) (input : Inputs (Assig
         - (dRow cfg place self env offset r).lambda1
           * ((dRow cfg place self env offset r).xA - (dRow cfg place self env offset r).xP)
         = (G.S m).y := by
-  sorry
+  obtain ⟨-, hSpec, -⟩ := hTable
+  suffices h : ∀ numRounds : ℕ, numRounds ≤ w + 1 →
+      RegionOperations.Constraints place self env
+        ((loop G cfg input offset w numRounds).operations self) →
+      ∀ r, r < numRounds → ∃ m : ℕ, m < 2 ^ K ∧
+        (if r = w then zRow cfg place self env offset r
+          else zRow cfg place self env offset r
+            - 2 ^ K * zRow cfg place self env offset (r + 1)) = (m : Fp) ∧
+        (dRow cfg place self env offset r).xP = (G.S m).x ∧
+        yA (dRow cfg place self env offset r) * (2 : Fp)⁻¹
+          - (dRow cfg place self env offset r).lambda1
+            * ((dRow cfg place self env offset r).xA - (dRow cfg place self env offset r).xP)
+          = (G.S m).y from h (w + 1) le_rfl hLoop
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _ r hr; omega
+  | succ k ih =>
+    intro hkb
+    rw [loop_operations_succ, RegionOperations.constraints_append]
+    rintro ⟨hLoopC, hRound⟩ r hr
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
+    · exact ih (by omega) hLoopC r hr'
+    · -- the fresh round `r`. Normalize the rotation-(+1) row spelling to `offset + (r + 1)`.
+      have hz1 : ((place self + (offset + r) : ℕ) : ℤ) + 1
+          = ((place self + (offset + (r + 1)) : ℕ) : ℤ) := by push_cast; ring
+      by_cases hrw : r = w
+      · -- last word row: `q_s2 = 0`, no gate; the word is `z_r` itself
+        subst hrw
+        simp only [round, circuit_norm, generatorLookup, yPExpr, yAExpr, xRExpr, qS3Expr,
+          List.mem_singleton, lt_irrefl, if_true, if_false, List.map_cons,
+          List.map_nil, List.cons.injEq, and_true, one_mul, zero_mul, sub_self,
+          add_zero, hz1] at hRound
+        obtain ⟨hQ, t, ht, h0, h1, h2⟩ := hRound
+        obtain ⟨m, hm, hIdx, hX, hY⟩ := hSpec t ht
+        rw [hQ] at h0
+        rw [hIdx] at h0
+        rw [hX] at h1
+        rw [hY] at h2
+        refine ⟨m, hm, ?_, ?_, ?_⟩
+        · rw [if_pos rfl]
+          simp only [zRow, adv]
+          linear_combination h0
+        · simp only [dRow, adv]
+          linear_combination h1
+        · simp only [dRow, adv, yA, xR]
+          linear_combination h2
+      · -- interior word row: `q_s2 = 1`, gate present (discarded); the word is the running one
+        have hltw : r < w := by omega
+        simp only [round, circuit_norm, generatorLookup, yPExpr, yAExpr, xRExpr, qS3Expr,
+          List.mem_singleton, if_pos hltw, if_neg hrw, reduceIte, List.map_cons,
+          List.map_nil, List.cons.injEq, and_true, one_mul, zero_mul, sub_self,
+          add_zero, hz1] at hRound
+        obtain ⟨hQ, ⟨t, ht, h0, h1, h2⟩, -⟩ := hRound
+        obtain ⟨m, hm, hIdx, hX, hY⟩ := hSpec t ht
+        rw [hQ] at h0
+        rw [hIdx] at h0
+        rw [hX] at h1
+        rw [hY] at h2
+        refine ⟨m, hm, ?_, ?_, ?_⟩
+        · rw [if_neg hrw]
+          simp only [zRow, adv]
+          linear_combination h0
+        · simp only [dRow, adv]
+          linear_combination h1
+        · simp only [dRow, adv, yA, xR]
+          linear_combination h2
 
 /-- **Per-pair gate facts (soundness).** From the loop's `Constraints`, each interior word
 pair `(r, r+1)` (`r < w`) yields the Sinsemilla gate's secant + y-check equations — the
-`soundness_aux.hG` shape. -/
+`soundness_aux.hG` shape. The `q_s3` term vanishes on interior rows (`q_s2 = 1` there by the
+round's own `assignFixed`). -/
 theorem loop_gate_facts (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset w : ℕ)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop G cfg input offset (w + 1) (w + 1)).operations self)) :
+      ((loop G cfg input offset w (w + 1)).operations self)) :
     ∀ r, r < w →
       ((dRow cfg place self env offset r).lambda2 * (dRow cfg place self env offset r).lambda2
         = (dRow cfg place self env offset (r + 1)).xA
@@ -570,7 +695,242 @@ theorem loop_gate_facts (G : Generators) (cfg : Config) (input : Inputs (Assigne
           * ((dRow cfg place self env offset r).xA - (dRow cfg place self env offset (r + 1)).xA)
         = 2 * yA (dRow cfg place self env offset r)
           + 2 * yA (dRow cfg place self env offset (r + 1)) := by
-  sorry
+  suffices h : ∀ numRounds : ℕ, numRounds ≤ w + 1 →
+      RegionOperations.Constraints place self env
+        ((loop G cfg input offset w numRounds).operations self) →
+      ∀ r, r < numRounds → r < w →
+        ((dRow cfg place self env offset r).lambda2 * (dRow cfg place self env offset r).lambda2
+          = (dRow cfg place self env offset (r + 1)).xA
+            + ((dRow cfg place self env offset r).lambda1
+                * (dRow cfg place self env offset r).lambda1
+                - (dRow cfg place self env offset r).xA
+                - (dRow cfg place self env offset r).xP)
+            + (dRow cfg place self env offset r).xA) ∧
+        4 * (dRow cfg place self env offset r).lambda2
+            * ((dRow cfg place self env offset r).xA
+              - (dRow cfg place self env offset (r + 1)).xA)
+          = 2 * yA (dRow cfg place self env offset r)
+            + 2 * yA (dRow cfg place self env offset (r + 1)) from
+    fun r hr => h (w + 1) le_rfl hLoop r (by omega) hr
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _ r hr _; omega
+  | succ k ih =>
+    intro hkb
+    rw [loop_operations_succ, RegionOperations.constraints_append]
+    rintro ⟨hLoopC, hRound⟩ r hr hrw
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
+    · exact ih (by omega) hLoopC r hr' hrw
+    · -- the fresh round `r` (`r < w`, so its gate is enabled and its `q_s2 = 1`)
+      have hz1 : ((place self + (offset + r) : ℕ) : ℤ) + 1
+          = ((place self + (offset + (r + 1)) : ℕ) : ℤ) := by push_cast; ring
+      simp only [round, circuit_norm, sinsemillaGate, yAExpr, xRExpr, qS3Expr,
+        Constraints.withSelector, if_pos hrw, if_neg (show ¬ r = w by omega), reduceIte,
+        List.map_cons, List.map_nil, and_true, one_mul,
+        add_zero, hz1] at hRound
+      obtain ⟨hQ, -, hsec, hyck⟩ := hRound
+      rw [hQ] at hyck
+      constructor
+      · simp only [dRow, adv]
+        linear_combination hsec
+      · simp only [dRow, adv, yA, xR]
+        linear_combination hyck
+
+/-! ## Honest row values and loop constraints (completeness) -/
+
+/-- **Honest row values (completeness).** The honest prover's `ExtendsWitnesses` of the loop
+pins every round's cells to the donor's honest values: the running sum to `pieceZ`, the
+`q_s2` fixed cell to its per-row value, `x_p` to the word's generator, `λ₁`/`λ₂` to the
+`rowValue` slopes, and the next-row `x_a` to the chained accumulator. Standalone (raw
+`input.*.eval` spelling) because a round's constraints read cells witnessed by *other*
+rounds (the `z`/`x_a` predecessors) — the `MulIncomplete.loop_row_values` pattern. -/
+theorem loop_row_values (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset w : ℕ) :
+    ∀ numRounds : ℕ, numRounds ≤ w + 1 →
+    RegionOperations.ExtendsWitnesses place self env
+      ((loop G cfg input offset w numRounds).operations self) →
+    ∀ r, r < numRounds →
+      adv cfg.bits place self env.toEnvironment (offset + (r + 1))
+          = pieceZ (input.piece.eval place env.toEnvironment) (r + 1) ∧
+      env.toEnvironment.fixed cfg.qS2 ((place self + (offset + r) : ℕ) : ℤ)
+          = (if r = w then 0 else 1) ∧
+      adv cfg.xP place self env.toEnvironment (offset + r)
+          = (G.S (pieceWord (input.piece.eval place env.toEnvironment) r)).x ∧
+      adv cfg.lambda1 place self env.toEnvironment (offset + r)
+          = (rowValue (accAfter G (input.xA.eval place env.toEnvironment,
+                input.yA.eval place env.toEnvironment)
+                (input.piece.eval place env.toEnvironment) r)
+              ((G.S (pieceWord (input.piece.eval place env.toEnvironment) r)).x,
+               (G.S (pieceWord (input.piece.eval place env.toEnvironment) r)).y)).1 ∧
+      adv cfg.lambda2 place self env.toEnvironment (offset + r)
+          = (rowValue (accAfter G (input.xA.eval place env.toEnvironment,
+                input.yA.eval place env.toEnvironment)
+                (input.piece.eval place env.toEnvironment) r)
+              ((G.S (pieceWord (input.piece.eval place env.toEnvironment) r)).x,
+               (G.S (pieceWord (input.piece.eval place env.toEnvironment) r)).y)).2.1 ∧
+      adv cfg.xA place self env.toEnvironment (offset + (r + 1))
+          = (accAfter G (input.xA.eval place env.toEnvironment,
+                input.yA.eval place env.toEnvironment)
+              (input.piece.eval place env.toEnvironment) (r + 1)).1 := by
+  intro numRounds
+  induction numRounds with
+  | zero => intro _ _ r hr; omega
+  | succ k ih =>
+    intro hkb hW r hr
+    rw [loop_operations_succ, RegionOperations.extendsWitnesses_append] at hW
+    obtain ⟨hWloop, hWround⟩ := hW
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
+    · exact ih (by omega) hWloop r hr'
+    · -- the fresh round `r`'s own witnesses
+      simp only [round, circuit_norm, zWit, xPWit, l1Wit, l2Wit, xANextWit, readCell, yAIn,
+        AssignedCell.eval] at hWround
+      obtain ⟨hWz, hWq, hWxp, hWl1, hWl2, hWxa, -⟩ := hWround
+      simp only [adv, show offset + (r + 1) = offset + r + 1 from by omega]
+      refine ⟨?_, hWq, hWxp, hWl1, hWl2, hWxa⟩
+      -- the z-witness program evaluates to `↑(piece.val / 2^{K(r+1)})` = `pieceZ piece (r+1)`
+      simp only [pieceZ]
+      convert hWz using 2
+
+/-- **Completeness loop-constraints lemma.** Given the honest row values (the loop's own
+witnesses), the entering copies (`hz0`: the `z_0` piece copy; `hxA0cell`: the `x_a` copy —
+both emitted *outside* the loop, discharged by the bundle), the loaded generator table, and
+the honest-prover chain preconditions, the loop's `Constraints` hold: each round's
+`assignFixed` is its witness, each membership is witnessed at the honest word's own table row,
+and each gate holds by the honest-value algebra (`completeness_aux` + `rowValue` identities). -/
+theorem loop_constraints_complete (G : Generators) (cfg : Config)
+    (input : Inputs (AssignedCell Fp))
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset w : ℕ)
+    (A B : Point Fp)
+    (hAx : A.x = input.xA.eval place env.toEnvironment)
+    (hAy : A.y = input.yA.eval place env.toEnvironment)
+    (hchain : hashToPoint G.S A
+      ((List.range (w + 1)).map (pieceWord (input.piece.eval place env.toEnvironment)))
+      = some B)
+    (hPieceLt : (input.piece.eval place env.toEnvironment).val < 2 ^ (K * (w + 1)))
+    (hTable : GeneratorTableLoaded G cfg.generatorTable env.toEnvironment)
+    (hz0 : adv cfg.bits place self env.toEnvironment offset
+      = input.piece.eval place env.toEnvironment)
+    (hxA0cell : adv cfg.xA place self env.toEnvironment offset
+      = input.xA.eval place env.toEnvironment)
+    (hWit : RegionOperations.ExtendsWitnesses place self env
+      ((loop G cfg input offset w (w + 1)).operations self)) :
+    RegionOperations.Constraints place self env.toEnvironment
+      ((loop G cfg input offset w (w + 1)).operations self) := by
+  obtain ⟨hUsable, -, hBlock⟩ := hTable
+  -- shorthands for the honest values
+  set P := input.piece.eval place env.toEnvironment with hP
+  set XA := input.xA.eval place env.toEnvironment with hXA
+  set YA := input.yA.eval place env.toEnvironment with hYA
+  -- the chain facts of the honest piece (`Y_A` invariant + `y_p` derivation per word)
+  obtain ⟨hAux, -⟩ := completeness_aux G w P XA YA hAx hAy hchain
+  -- global honest row values (a round's constraints read neighbor rows' witnesses)
+  have hRows := loop_row_values G cfg input place self env offset w (w + 1) le_rfl hWit
+  -- current-row `x_a` (row 0: the entering copy; row `r ≥ 1`: round `r−1`'s next-`x_a`)
+  have hXcur : ∀ r, r ≤ w → adv cfg.xA place self env.toEnvironment (offset + r)
+      = (accAfter G (XA, YA) P r).1 := by
+    intro r hrw
+    rcases Nat.eq_zero_or_pos r with rfl | hrpos
+    · simpa only [accAfter, Nat.add_zero] using hxA0cell
+    · have h := (hRows (r - 1) (by omega)).2.2.2.2.2
+      rw [show r - 1 + 1 = r from by omega] at h
+      exact h
+  -- current-row `z` (row 0: the piece copy; row `r ≥ 1`: round `r−1`'s z-witness)
+  have hZcur : ∀ r, r ≤ w → adv cfg.bits place self env.toEnvironment (offset + r)
+      = pieceZ P r := by
+    intro r hrw
+    rcases Nat.eq_zero_or_pos r with rfl | hrpos
+    · rw [Nat.add_zero, hz0, pieceZ_zero]
+    · have h := (hRows (r - 1) (by omega)).1
+      rw [show r - 1 + 1 = r from by omega] at h
+      exact h
+  -- ⟨2⁻¹·2 = 1⟩, for halving the `Y_A` invariant in the `y_p` membership component
+  have h2inv : (2 : Fp)⁻¹ * 2 = 1 := inv_mul_cancel₀ (by decide)
+  -- the per-round induction
+  suffices h : ∀ numRounds : ℕ, numRounds ≤ w + 1 →
+      RegionOperations.Constraints place self env.toEnvironment
+        ((loop G cfg input offset w numRounds).operations self) from h (w + 1) le_rfl
+  intro numRounds
+  induction numRounds with
+  | zero => intro _; exact trivial
+  | succ k ih =>
+    intro hkb
+    rw [loop_operations_succ, RegionOperations.constraints_append]
+    refine ⟨ih (by omega), ?_⟩
+    have hkw : k ≤ w := by omega
+    -- the fresh round `k`'s honest cells
+    obtain ⟨hVz, hVq, hVxp, hVl1, hVl2, hVxa⟩ := hRows k (by omega)
+    have hVxcur := hXcur k hkw
+    have hVzcur := hZcur k hkw
+    -- the chain facts at word `k`
+    obtain ⟨hYAinv, hYPder⟩ := hAux k hkw
+    -- row normalizer for rotation-(+1) reads
+    have hz1 : ((place self + (offset + k) : ℕ) : ℤ) + 1
+        = ((place self + (offset + (k + 1)) : ℕ) : ℤ) := by push_cast; ring
+    -- expose the raw env spellings
+    simp only [adv] at hVz hVxp hVl1 hVl2 hVxa hVxcur hVzcur
+    by_cases hkweq : k = w
+    · -- ── last word row: `q_s2 = 0`, word = `z_w`, no gate ──
+      subst hkweq
+      simp only [round, circuit_norm, generatorLookup, yPExpr, yAExpr, xRExpr, qS3Expr,
+        List.mem_singleton, lt_irrefl, if_true, if_false, List.map_cons,
+        List.map_nil, List.cons.injEq, and_true, one_mul, zero_mul, sub_self,
+        add_zero, hz1]
+      rw [if_pos rfl] at hVq
+      refine ⟨hVq, ?_⟩
+      -- membership witnessed at the honest word's own table row (`w` was substituted to `k`)
+      refine ⟨pieceWord P k, lt_of_lt_of_le (pieceWord_lt P k) hUsable, ?_, ?_, ?_⟩
+      · -- word component: `z_k − 0·… = ↑(pieceWord P k)` (pieceZ_last)
+        rw [hVq, hVzcur, (hBlock _ (pieceWord_lt P k)).1]
+        rw [pieceZ_last hPieceLt]
+        ring
+      · -- x component
+        rw [hVxp, (hBlock _ (pieceWord_lt P k)).2.1]
+      · -- y component: halve the `Y_A` invariant, then the `y_p` derivation
+        rw [hVl1, hVl2, hVxcur, hVxp, (hBlock _ (pieceWord_lt P k)).2.2]
+        linear_combination (2 : Fp)⁻¹ * hYAinv + hYPder
+          + (accAfter G (XA, YA) P k).2 * h2inv
+    · -- ── interior word row: `q_s2 = 1`, word = running word, gate on ──
+      have hklt : k < w := by omega
+      simp only [round, circuit_norm, generatorLookup, sinsemillaGate, yPExpr, yAExpr,
+        xRExpr, qS3Expr, Constraints.withSelector, List.mem_singleton, if_pos hklt,
+        if_neg hkweq, reduceIte, List.map_cons, List.map_nil, List.cons.injEq, and_true,
+        one_mul, zero_mul, sub_self, add_zero, hz1]
+      rw [if_neg hkweq] at hVq
+      -- next word's honest cells and chain facts (for the gate's rotation-(+1) reads)
+      obtain ⟨-, -, hVxp1, hVl1', hVl2', -⟩ := hRows (k + 1) (by omega)
+      obtain ⟨hYAinv1, -⟩ := hAux (k + 1) (by omega)
+      simp only [adv] at hVxp1 hVl1' hVl2'
+      refine ⟨hVq, ⟨pieceWord P k, lt_of_lt_of_le (pieceWord_lt P k) hUsable, ?_, ?_, ?_⟩,
+        ?_, ?_⟩
+      · -- word component: `z_k − 1·z_{k+1}·2^K = ↑(pieceWord P k)` (pieceZ_succ)
+        rw [hVq, hVzcur, hVz, (hBlock _ (pieceWord_lt P k)).1]
+        have h := pieceZ_succ P k
+        linear_combination h
+      · rw [hVxp, (hBlock _ (pieceWord_lt P k)).2.1]
+      · rw [hVl1, hVl2, hVxcur, hVxp, (hBlock _ (pieceWord_lt P k)).2.2]
+        linear_combination (2 : Fp)⁻¹ * hYAinv + hYPder
+          + (accAfter G (XA, YA) P k).2 * h2inv
+      · -- gate, secant line: `rowValue`'s `xANext` identity, by `ring` after unfolding
+        rw [hVl1, hVl2, hVxcur, hVxp, hVxa]
+        simp only [rowValue, accAfter]
+        ring
+      · -- gate, y check (`q_s3 = 0`): the two `Y_A` invariants + `rowValue`'s `yANext`
+        rw [hVq, hVl1, hVl2, hVxcur, hVxp, hVxa, hVl1', hVl2', hVxp1]
+        -- `Y_A(k) = 2·acc_k.y`, `Y_A(k+1) = 2·acc_{k+1}.y`, and
+        -- `λ₂·(acc_k.x − acc_{k+1}.x) = acc_{k+1}.y + acc_k.y` (the `yANext` definition)
+        have hyd : (rowValue (accAfter G (XA, YA) P k)
+              ((G.S (pieceWord P k)).x, (G.S (pieceWord P k)).y)).2.1
+              * ((accAfter G (XA, YA) P k).1 - (accAfter G (XA, YA) P (k + 1)).1)
+            = (accAfter G (XA, YA) P (k + 1)).2 + (accAfter G (XA, YA) P k).2 := by
+          conv_lhs => rw [show accAfter G (XA, YA) P (k + 1)
+            = (rowValue (accAfter G (XA, YA) P k)
+                ((G.S (pieceWord P k)).x, (G.S (pieceWord P k)).y)).2.2 from rfl]
+          conv_rhs => rw [show accAfter G (XA, YA) P (k + 1)
+            = (rowValue (accAfter G (XA, YA) P k)
+                ((G.S (pieceWord P k)).x, (G.S (pieceWord P k)).y)).2.2 from rfl]
+          simp only [rowValue]
+          ring
+        linear_combination 4 * hyd - 2 * hYAinv - 2 * hYAinv1
 
 /-! ## Contract
 
@@ -605,8 +965,10 @@ def synthesize (G : Generators) (w : ℕ) (cfg : Config) (offset : ℕ)
   let _z0 ← copyAdvice input.piece cfg.bits offset
   -- x_a at `offset` = copy of the entering accumulator x
   let _xA0 ← copyAdvice input.xA cfg.xA offset
-  -- the hash-word loop: `w + 1` rounds
-  loop G cfg input offset (w + 1) (w + 1)
+  -- the hash-word loop: `w + 1` rounds, gate bound `w` (in-piece gates on adjacent pairs
+  -- only — the piece-linking gate at the last word row belongs to the composing circuit,
+  -- the donor's boundary choice)
+  loop G cfg input offset w (w + 1)
   -- name the output cells (fixed rows)
   let first0 ← cellAt cfg.xA offset
   let firstXP ← cellAt cfg.xP offset
@@ -660,11 +1022,11 @@ instance elaborated (G : Generators) (w : ℕ) (cfg : Config) (offset : ℕ) :
 `Spec` is `Spec` above. `configure` is the identity on the handed-down `Config` (the columns
 are allocated by the parent chip's `configure`).
 
-The soundness routing (documented in the proof) peels `synthesize`'s op list into the two
-start-copies ++ loop ++ output-cell reads, extracts the per-row `hL`/`hG` facts via
-`loop_lookup_facts`/`loop_gate_facts`, and hands them to `soundness_aux`. The framework-half
-op-list peeling + the two extraction lemmas are the deferred work (TACTIC GAP; see those
-lemmas). Statements final. -/
+Soundness peels `synthesize`'s op list into the two start-copies ++ the (folded) loop ++
+output-cell reads, extracts the per-row `hL`/`hG` facts via `loop_lookup_facts`/
+`loop_gate_facts`, and hands them to `soundness_aux` — the donor `HashPiece.soundness`
+restated over `dRow`/`zRow`. Completeness discharges the two copies from their witnesses
+and the loop via `loop_constraints_complete` on the honest-prover chain preconditions. -/
 def circuit (G : Generators) (w : ℕ) :
     FormalRegionCircuit Fp Config Config Inputs (Output (w + 1)) where
   name := "sinsemilla hash_piece"
@@ -675,21 +1037,102 @@ def circuit (G : Generators) (w : ℕ) :
   Spec := Spec G w
   ProverAssumptions input _ := ProverAssumptions G w input
   soundness := by
-    -- TACTIC GAP (framework half): `rw [FormalRegionCircuit.soundness_iff]`, split the
-    -- synthesize op list (two `copyAdvice` start-copies ++ the loop ++ output `cellAt`/`cellVec`
-    -- reads, all `circuit_norm`), keeping the loop chunk FOLDED; extract the per-row facts with
-    -- `loop_lookup_facts` (soundness, needs `EnvAssumptions`) and `loop_gate_facts`; the
-    -- start-copies pin `(dRow … 0).xA = input.xA` and `zRow … 0 = input.piece`; then apply
-    -- `soundness_aux`. All statements are final; the routing is exactly the donor
-    -- `HashPiece.soundness` (`HashToPoint.lean:976`) restated over `dRow`/`zRow`.
-    sorry
+    intro cfg offset
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output hE hA hc
+    -- peel the synthesize op list: two copies ++ loop (kept folded) ++ output reads (no ops)
+    simp only [HashPiece.synthesize, circuit_norm,
+      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
+      output_cellVec] at hc h_output
+    obtain ⟨hZ0, hXA0, hLoop⟩ := hc
+    provable_type_simp
+    -- reconstruct the input record so the loop lemmas' `input` argument matches `hLoop`
+    set inp : Inputs (AssignedCell Fp) :=
+      { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp
+    obtain ⟨hIpiece, hIxA, hIyA⟩ := h_input
+    -- output cells (fixed rows) read off the env as `dRow`/`zRow`
+    have hOfirst : output.first = dRow cfg env.place self env.env offset 0 := by
+      rw [← h_output]; rfl
+    have hOlast : output.last = dRow cfg env.place self env.env offset w := by
+      rw [← h_output]; rfl
+    have hOzs : ∀ (i : ℕ) (hi : i < w + 1),
+        output.zs[i] = zRow cfg env.place self env.env offset i := by
+      intro i hi
+      rw [← h_output,
+        ProvableType.eval_cells (M := fields (w + 1)) { place := env.place, env := env.env } _]
+      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
+        zRow, adv, circuit_norm]
+    clear h_output
+    -- start copies: `zRow 0 = input.piece`, `(dRow 0).xA = input.xA`
+    have hz0 : zRow cfg env.place self env.env offset 0 = input_piece := by
+      simp only [zRow, adv, Nat.add_zero]
+      rw [hZ0]
+      exact hIpiece
+    have hxA0 : (dRow cfg env.place self env.env offset 0).xA = input_xA := by
+      simp only [dRow, adv, Nat.add_zero]
+      rw [hXA0]
+      exact hIxA
+    -- the extraction lemmas + the pure bridge
+    have hL := loop_lookup_facts G cfg inp env.place self env.env offset w hE hLoop
+    have hG := loop_gate_facts G cfg inp env.place self env.env offset w hLoop
+    obtain ⟨ms, hms_lt, hpiece, hzs, hfxA, hlxP, hlyP, hchain⟩ :=
+      soundness_aux G w (dRow cfg env.place self env.env offset)
+        (zRow cfg env.place self env.env offset) input_piece input_xA hxA0 hz0 hL hG
+    -- pointwise running-sum values from the vector equation
+    have hzs' : ∀ (i : ℕ) (hi : i < w + 1),
+        zRow cfg env.place self env.env offset i
+          = ((∑ j ∈ Finset.range (w + 1 - i), ms (i + j) * 2 ^ (K * j) : ℕ) : Fp) := by
+      intro i hi
+      have h := congrArg (fun v : Vector Fp (w + 1) => v[i]'hi) hzs
+      simpa only [Vector.getElem_ofFn] using h
+    refine ⟨ms, hms_lt, hpiece, ?_, ?_, ?_, ?_, ?_⟩
+    · -- the running sums are the suffix recombinations
+      apply Vector.ext
+      intro i hi
+      rw [Vector.getElem_ofFn, hOzs i hi, hzs' i hi]
+    · rw [hOfirst]; exact hfxA
+    · rw [hOlast]; exact hlxP
+    · rw [hOlast]; exact hlyP
+    · rw [hOfirst, hOlast]; exact hchain
   completeness := by
-    -- TACTIC GAP (framework half): `rw [FormalRegionCircuit.completeness_iff]`, split the
-    -- witness/constraint op lists, pin each row to its honest `rowValue`/`pieceZ` value (the
-    -- `zWit`/`xPWit`/`l1Wit`/`l2Wit`/`xANextWit` programs), and discharge the loop `Constraints`
-    -- by witnessing each generator lookup at the honest word's table row (via `GeneratorTableLoaded`)
-    -- and each gate by `step_honest`. The donor `HashPiece.completeness` (`HashToPoint.lean:587`)
-    -- and `completeness_aux` are the lifted route.
-    sorry
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit hE hA hpa
+    simp only [HashPiece.synthesize, circuit_norm,
+      RegionCircuit.operations_bind,
+      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
+      output_cellVec] at hwit ⊢
+    obtain ⟨hWz0, hWxA0, hWloop⟩ := hwit
+    provable_type_simp
+    set inp : Inputs (AssignedCell Fp) :=
+      { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp
+    obtain ⟨hIpiece, hIxA, hIyA⟩ := h_input
+    obtain ⟨hPieceLt, A, B, hAon, hAx, hAy, hchain⟩ := hpa
+    -- normalize the env-assumption spelling to the prover env
+    simp only [Placed.toEnvironment_env] at hE
+    refine ⟨?_, ?_, ?_⟩
+    · -- the piece copy's `constrainEqual`, from its `assignAdvice` witness
+      rw [hWz0]
+    · -- the `x_a` copy's `constrainEqual`
+      rw [hWxA0]
+    · -- the loop's constraints, from the honest witnesses + the chain preconditions
+      refine loop_constraints_complete G cfg inp env.place self env.env offset w A B ?_ ?_ ?_
+        ?_ hE ?_ ?_ hWloop
+      · rw [hAx]; exact hIxA.symm
+      · rw [hAy]; exact hIyA.symm
+      · rw [show inp.piece.eval env.place env.env.toEnvironment = input_piece from hIpiece]
+        exact hchain
+      · rw [show inp.piece.eval env.place env.env.toEnvironment = input_piece from hIpiece]
+        exact hPieceLt
+      · -- `z_0` copy witness pins the entering running sum
+        simp only [adv]
+        rw [hWz0]
+        rfl
+      · -- `x_a` copy witness pins the entering accumulator cell
+        simp only [adv]
+        rw [hWxA0]
+        rfl
 
 end Halo2.Ironwood.Sinsemilla.HashPiece

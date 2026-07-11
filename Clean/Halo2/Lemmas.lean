@@ -98,6 +98,14 @@ theorem output_assignAdvice (col : Column .advice) (row : ℕ)
     (assignAdvice col row compute).output self = .of self row col := rfl
 
 @[circuit_norm]
+theorem operations_assignFixed (col : Column .fixed) (row : ℕ) (v : F) (self : RegionIndex) :
+    (assignFixed col row v).operations self = [.assignFixed col row v] := rfl
+
+@[circuit_norm]
+theorem output_assignFixed (col : Column .fixed) (row : ℕ) (v : F) (self : RegionIndex) :
+    (assignFixed col row v).output self = .of self row col := rfl
+
+@[circuit_norm]
 theorem operations_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
     (self : RegionIndex) :
     (copyAdvice src col row).operations self
@@ -159,6 +167,12 @@ theorem RegionOperations.constraints_cons (place : RegionIndex → ℕ) (self : 
 theorem RegionOperation.constraints_assignAdvice (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) (col : Column .advice) (row : ℕ) (w : WitgenIR F 1) :
     (RegionOperation.assignAdvice col row w).Constraints place self env = True := rfl
+
+@[circuit_norm]
+theorem RegionOperation.constraints_assignFixed (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment F) (col : Column .fixed) (row : ℕ) (v : F) :
+    (RegionOperation.assignFixed col row v).Constraints place self env
+      = (env.fixed col ((place self + row : ℕ) : ℤ) = v) := rfl
 
 @[circuit_norm]
 theorem RegionOperation.constraints_enableGate (place : RegionIndex → ℕ) (self : RegionIndex)
@@ -301,7 +315,8 @@ theorem RegionOperation.extendsWitness_constrainConstant (place : RegionIndex �
 @[circuit_norm]
 theorem RegionOperation.extendsWitness_assignFixed (place : RegionIndex → ℕ)
     (self : RegionIndex) (env : ProverEnvironment F) (col : Column .fixed) (row : ℕ) (v : F) :
-    (RegionOperation.assignFixed col row v).ExtendsWitness place self env = True := rfl
+    (RegionOperation.assignFixed col row v).ExtendsWitness place self env
+      = (env.fixed col ((place self + row : ℕ) : ℤ) = v) := rfl
 
 /-! ### Layouter-level `Constraints`/`ExtendsWitnesses` computation lemmas
 
