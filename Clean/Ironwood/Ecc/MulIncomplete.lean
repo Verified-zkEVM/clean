@@ -59,6 +59,35 @@ open Orchard (Point)
 open Orchard.Ecc (DoubleAndAddRow)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue)
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
+
+/-! ### Accumulated-scalar bounds (donor helpers, re-proven locally — the donor's are private).
+
+`accScalar` grows by `m_{b+1} = 2 m_b + 2 k_b − 1`, so it stays `≥ 2` and `≤ 2^b·(m+1) − 1`;
+combined with `2^254 < |scalar field|` these give the per-row exceptional-case-free bounds that
+`honest_step`/`accVal_eq_nsmul` consume. Copies of `Incomplete.lean`'s `accScalar_two_le` /
+`accScalar_le` / `pow254_lt_card` (which are `private` there). -/
+
+private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
+    ∀ b, 2 ≤ accScalar m bits b
+  | 0 => h2
+  | b + 1 => by
+    have ih := accScalar_two_le h2 bits b
+    simp only [accScalar]
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
+
+private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
+    ∀ b, accScalar m bits b ≤ 2 ^ b * (m + 1) - 1
+  | 0 => by simp [accScalar]
+  | b + 1 => by
+    have ih := accScalar_le (m := m) bits b
+    have hpos : 0 < 2 ^ b * (m + 1) := by positivity
+    have hsplit : 2 ^ (b + 1) * (m + 1) = 2 * (2 ^ b * (m + 1)) := by ring
+    simp only [accScalar]
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
+
+private theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
+  norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 /-! ## Config
 
@@ -339,6 +368,23 @@ theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex
 theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
     (cellAt col row).output self = .of self row col := rfl
 
+/-- Name a whole vector of cells at fixed region-local rows (`rows i` for `i < len`), emitting
+no op — the vector-valued analogue of `cellAt`, for the `Output.zs` running-sum cells. Returns
+`Vector.ofFn` directly so its `output` is `rfl` and indexes by `Vector.getElem_ofFn` (avoiding a
+`Vector.mapM`-over-`RegionCircuit` characterization). -/
+def cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) :
+    RegionCircuit Fp (Vector (AssignedCell Fp) len) :=
+  fun self => (Vector.ofFn (fun i => AssignedCell.of self (rows i) col), [])
+
+@[circuit_norm]
+theorem operations_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
+    (cellVec col rows len).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
+    (cellVec col rows len).output self
+      = Vector.ofFn (fun i => AssignedCell.of self (rows i) col) := rfl
+
 /-! ## Loop-shaped standalone lemmas
 
 The z-chain and accumulator invariants, proven by induction over rounds using the per-round
@@ -464,7 +510,7 @@ private theorem loop_gate_facts (n : ℕ) :
           subst hrn
           rw [hYADr, hYADr1n]
           simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_pos rfl] at hRound
+            Constraints.withSelector] at hRound
           obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
           · rcases mul_eq_zero.mp hbool with h | h
@@ -476,7 +522,7 @@ private theorem loop_gate_facts (n : ℕ) :
         · -- interior first row: `q_mul_2` on row 0
           rw [hYADr, hYADr1i hrn]
           simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_pos rfl, if_neg hrn] at hRound
+            Constraints.withSelector, if_neg hrn] at hRound
           obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_,
             fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
@@ -492,7 +538,7 @@ private theorem loop_gate_facts (n : ℕ) :
           subst hrn
           rw [hYADr, hYADr1n]
           simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_pos rfl, if_neg hr0] at hRound
+            Constraints.withSelector, if_neg hr0] at hRound
           simp only [hzp] at hRound
           obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
@@ -517,17 +563,41 @@ private theorem loop_gate_facts (n : ℕ) :
           · linear_combination hsec
           · linear_combination hg2
 
+/-- **Extraction of the round-0 anchor copies.** Round 0 anchors `x_p`/`y_p` at `offset + 1`
+to the base point by copy (`CircuitVersion::AnchoredBase`). For any `numRounds ≥ 1` the loop's
+`Constraints` therefore pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`. Proven by
+induction over `numRounds`, peeling round 0 (the innermost round). -/
+private theorem loop_anchor (n : ℕ) :
+    ∀ numRounds : ℕ, 1 ≤ numRounds →
+    RegionOperations.Constraints place self env
+      ((loop cfg input bits offset n numRounds).operations self) →
+    adv cfg.xP place self env (offset + 1) = input.base.x.eval place env ∧
+    adv cfg.yP place self env (offset + 1) = input.base.y.eval place env := by
+  intro numRounds
+  induction numRounds with
+  | zero => intro h; omega
+  | succ k ih =>
+    intro _ hC
+    rw [loop_operations_succ, RegionOperations.constraints_append] at hC
+    obtain ⟨hLoop, hRound⟩ := hC
+    rcases Nat.eq_zero_or_pos k with rfl | hk
+    · -- `numRounds = 1`: round 0 is the fresh round; read its anchor copies directly
+      simp only [round, circuit_norm, adv] at hRound ⊢
+      exact ⟨hRound.1, hRound.2.1⟩
+    · exact ih hk hLoop
+
 end LoopFacts
 
 /-- **Round-invariant / accumulator lemma (soundness).** If the loop's constraints hold in the
 ambient region, the base `P` is on-curve, and the starting accumulator reads `[m]P` at the
 `x_a`/`λ₁` starting cells (`hxA0`/`hyA0`) with `m` in the exceptional-case-free range, then after
-`n + 1` rounds the final `x_a` cell (row `offset + 1 + (n+1)`) is `([accScalar m bits (n+1)]•P).x`
-and the witnessed doubled final `y` is `2·([…]•P).y`.
+`n + 1` rounds the final `x_a` cell (row `offset + 1 + (n+1)`) is `([accScalar m bits' (n+1)]•P).x`,
+for the bit sequence `bits'` read off the running sum by the `bool_check` gates (`hbit`).
 
-This routes the cleaned round facts into the donor's `soundness_aux` (imported). Stated fully;
-proof deferred (see the TACTIC GAP above). -/
-theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+This routes the cleaned round facts (from `loop_gate_facts`) into the donor's `soundness_aux`
+(imported). `bits'` is the constraint-forced bit sequence (the same one `loop_zchain_sound`
+exposes), so soundness does not depend on the prover's honesty about the witness bits `bits`. -/
+theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits bits' : BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset n : ℕ)
     (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
@@ -535,11 +605,93 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits :
     (hyA0 : adv cfg.lambda1 place self env offset = (m • P).y)
     (hxPBase : adv cfg.xP place self env (offset + 1) = P.x)
     (hyPBase : adv cfg.yP place self env (offset + 1) = P.y)
+    (hbit : ∀ r, r ≤ n →
+      adv cfg.z place self env (offset + 1 + r) - adv cfg.z place self env (offset + r) * 2
+        = (if bits' r then 1 else 0))
+    -- the `q_mul_1` gate (enabled at `offset` outside the loop, discharged by the bundle
+    -- soundness): the derived `Y_A` of loop row 0 equals twice the copied starting `y_a`.
+    (hInit :
+      (adv cfg.lambda1 place self env (offset + 1) + adv cfg.lambda2 place self env (offset + 1)) *
+        (adv cfg.xA place self env (offset + 1) -
+          (adv cfg.lambda1 place self env (offset + 1) * adv cfg.lambda1 place self env (offset + 1)
+            - adv cfg.xA place self env (offset + 1) - adv cfg.xP place self env (offset + 1)))
+        = 2 * adv cfg.lambda1 place self env offset)
     (hLoop : RegionOperations.Constraints place self env
       ((loop cfg input bits offset n (n + 1)).operations self)) :
     adv cfg.xA place self env (offset + 1 + n + 1)
-      = ((accScalar m bits (n + 1)) • P).x := by
-  sorry
+      = ((accScalar m bits' (n + 1)) • P).x
+    ∧ 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
+      = 2 * ((accScalar m bits' (n + 1)) • P).y := by
+  have hfacts := loop_gate_facts cfg input bits place self env offset n (n + 1) le_rfl hLoop
+  -- the per-row cell readers as `ℕ → Fp` functions, in `soundness_aux`'s shape
+  set XA := fun r => adv cfg.xA place self env (offset + 1 + r) with hXA
+  set XP := fun r => adv cfg.xP place self env (offset + 1 + r) with hXP
+  set YP := fun r => adv cfg.yP place self env (offset + 1 + r) with hYP
+  set L1 := fun r => adv cfg.lambda1 place self env (offset + 1 + r) with hL1
+  set L2 := fun r => adv cfg.lambda2 place self env (offset + 1 + r) with hL2
+  -- `YAD r` is the derived `Y_A` for `r ≤ n`, and `2·(witnessed final y)` at `r = n+1`
+  set YAD := fun r => if r = n + 1 then 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
+    else (L1 r + L2 r) * (XA r - (L1 r * L1 r - XA r - XP r)) with hYAD
+  -- base-point constancy along the rows (from the `q_mul_2` constancy checks + the anchor)
+  have hconst : ∀ r, r ≤ n → XP r = P.x ∧ YP r = P.y := by
+    intro r
+    induction r with
+    | zero => intro _; exact ⟨by rw [hXP]; simpa using hxPBase, by rw [hYP]; simpa using hyPBase⟩
+    | succ v ih =>
+      intro hv
+      obtain ⟨hx, hy⟩ := ih (by omega)
+      obtain ⟨_, _, _, _, hconstv⟩ := hfacts v (by omega)
+      obtain ⟨hcx, hcy⟩ := hconstv (by omega)
+      simp only [XPr, YPr] at hcx hcy
+      refine ⟨?_, ?_⟩
+      · simp only [hXP] at hx ⊢; rw [← hcx]; exact hx
+      · simp only [hYP] at hy ⊢; rw [← hcy]; exact hy
+  have haux := Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.soundness_aux n P hP m h2 hbound
+    XA XP YP L1 L2 YAD bits' ?hxA0 ?hYAD0 ?hyad ?hxp ?hyp ?hg1 ?hsec ?hg2
+  case hxA0 => rw [hXA]; simpa using hxA0
+  case hYAD0 =>
+    -- `YAD 0 = (L1 0 + L2 0)(XA 0 - x_R 0)`; the `q_mul_1` gate (`hInit`) forces it to
+    -- `2·(λ₁ at offset)`, and the starting-cell copy `hyA0` reads that as `(m•P).y`.
+    simp only [hYAD, if_neg (show ¬(0 = n + 1) by omega), hXA, hL1, hL2, hXP, Nat.add_zero]
+    rw [hInit, hyA0]
+  case hyad =>
+    intro r hr; simp only [hYAD, if_neg (show ¬(r = n + 1) by omega)]
+  case hxp => exact fun r hr => (hconst r hr).1
+  case hyp => exact fun r hr => (hconst r hr).2
+  case hg1 =>
+    intro r hr
+    obtain ⟨_, hg1, _, _, _⟩ := hfacts r (by omega)
+    have hk := hbit r hr
+    -- `hg1 : 2·L1·(XA−XP) + 2·((Kr·2−1)·YP) = YADr r`; `Kr r = if bits' r then 1 else 0` by `hbit`.
+    simp only [XAr, XPr, YPr, L1r, L2r, Kr, Zr, Zpr, YADr, if_neg (by omega : ¬(r = n + 1))] at hg1
+    simp only [hYAD, if_neg (show ¬(r = n + 1) by omega), hXA, hXP, hYP, hL1, hL2]
+    rw [show adv cfg.z place self env (offset + 1 + r)
+          - adv cfg.z place self env (offset + r) * 2 = (if bits' r then 1 else 0) from hk] at hg1
+    linear_combination hg1
+  case hsec =>
+    intro r hr
+    obtain ⟨_, _, hsec, _, _⟩ := hfacts r (by omega)
+    simp only [XAr, XPr, L1r, L2r] at hsec
+    simp only [hXA, hXP, hL1, hL2]
+    linear_combination hsec
+  case hg2 =>
+    intro r hr
+    obtain ⟨_, _, _, hg2, _⟩ := hfacts r (by omega)
+    simp only [XAr, XPr, L1r, L2r, YADr] at hg2
+    -- `hg2`'s RHS is `YADr r + YADr (r+1)`; the `r+1` branch is derived when `r < n+1`,
+    -- the witnessed-final form when `r+1 = n+1`. `linear_combination` after matching the ifs.
+    by_cases hrn : r + 1 = n + 1
+    · simp only [hYAD, if_pos hrn, if_neg (show ¬(r = n + 1) by omega), hXA, hXP, hL1, hL2]
+      simp only [if_pos hrn, if_neg (show ¬(r = n + 1) by omega)] at hg2
+      linear_combination hg2
+    · simp only [hYAD, if_neg hrn, if_neg (show ¬(r = n + 1) by omega), hXA, hXP, hL1, hL2]
+      simp only [if_neg hrn, if_neg (show ¬(r = n + 1) by omega)] at hg2
+      linear_combination hg2
+  refine ⟨?_, ?_⟩
+  · have h := haux.1; rw [hXA] at h; simpa using h
+  · have h := haux.2
+    simp only [hYAD, if_pos rfl] at h
+    linear_combination h
 
 /-- **z-chain lemma (soundness).** Under the loop constraints and the starting `z` copy, each
 running-sum cell satisfies `z_{r} = 2·z_{r-1} + k_r` with `k_r ∈ {0,1}` — the chain the `Spec`'s
@@ -551,6 +703,9 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bit
     (hLoop : RegionOperations.Constraints place self env
       ((loop cfg input bits offset n (n + 1)).operations self)) :
     ∃ bits' : BitsHint,
+      -- per-round bit-match (the shape `loop_acc_sound.hbit` consumes)
+      (∀ r, r ≤ n → adv cfg.z place self env (offset + 1 + r)
+        - adv cfg.z place self env (offset + r) * 2 = (if bits' r then 1 else 0)) ∧
       adv cfg.z place self env (offset + 1)
         = 2 * input.z.eval place env + (if bits' 0 then 1 else 0) ∧
       ∀ r : Fin n, adv cfg.z place self env (offset + 1 + (r.val + 1))
@@ -559,7 +714,19 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bit
   have hfacts := loop_gate_facts cfg input bits place self env offset n (n + 1) le_rfl hLoop
   -- the bit read off the running sum at each round, decided into a `BitsHint`
   refine ⟨fun j => decide (adv cfg.z place self env (offset + 1 + j)
-      = 2 * adv cfg.z place self env (offset + j) + 1), ?_, ?_⟩
+      = 2 * adv cfg.z place self env (offset + j) + 1), ?_, ?_, ?_⟩
+  · -- the `hbit` per-round match: from each round's `bool_check` (`IsBool (Kr …)`).
+    intro r hr
+    have hb := (hfacts r (by omega)).1
+    simp only [Kr, Zr, Zpr] at hb ⊢
+    split_ifs with hd
+    · rw [decide_eq_true_eq] at hd
+      rcases hb with h | h
+      · exact absurd hd (fun hc => one_ne_zero (α := Fp) (by linear_combination h - hc))
+      · linear_combination h
+    · rcases hb with h | h
+      · linear_combination h
+      · exact absurd (by rw [decide_eq_true_eq]; linear_combination h) hd
   · -- round 0: `z`-prev is the start-copy `adv z offset = input.z.eval`
     have hb := (hfacts 0 (by omega)).1
     simp only [Kr, Zr, Zpr, Nat.add_zero] at hb ⊢
@@ -593,14 +760,31 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ)
     (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
-    (hxA0 : adv cfg.xA place self env.toEnvironment (offset + 1) = (m • P).x)
-    (hyA0 : adv cfg.lambda1 place self env.toEnvironment offset = (m • P).y)
+    (hxA0 : input.xA.eval place env.toEnvironment = (m • P).x)
+    (hyA0 : input.yA.eval place env.toEnvironment = (m • P).y)
     (hxPBase : input.base.x.eval place env.toEnvironment = P.x)
     (hyPBase : input.base.y.eval place env.toEnvironment = P.y)
+    -- the start-`z` copy value (from `startCopies`, discharged by the bundle completeness), needed
+    -- by round 0's `bool_check` (its `z`-predecessor is the start copy at `offset`)
+    (hz0 : adv cfg.z place self env.toEnvironment offset = input.z.eval place env.toEnvironment)
     (hWit : RegionOperations.ExtendsWitnesses place self env
       ((loop cfg input bits offset n (n + 1)).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
       ((loop cfg input bits offset n (n + 1)).operations self) := by
+  -- NOTE (surviving sorry): the completeness gate-discharge. The full infrastructure is in place
+  -- and verified below up to this point (see git history of this file / the sibling proofs): the
+  -- honest cell values are extracted globally from `hWit` (`hRowVals`: every row's z/x_p/y_p/λ₁/λ₂/
+  -- x_a-next equals the donor's `zRunValue`/`rowLambdaValue`/`accVal`), the accumulator is pinned
+  -- in point coordinates via `accVal_eq_nsmul` (`hAV`), and each round's gate `Constraints` reduce
+  -- (via the same `circuit_norm`+`qMul{2,3}Gate`+`forLoopPolys` normalization as `loop_gate_facts`)
+  -- to the four value-level polynomials `bool_check`/`gradient_1`/`secant_line`/`gradient_2`.
+  -- What remains is the *closing* of each per-round polynomial from `honest_step` (imported): the
+  -- `linear_combination` coefficients matching honest_step's four outputs (+ the `stepPoint.y`
+  -- bridge `hSy`) to the gate polys, plus (a) each interior round's `gradient_2` needs the NEXT
+  -- row's λ-cells (`hRowVals … (k+1)`, in-loop, available) and (b) the LAST round's `gradient_2`
+  -- reads the witnessed final `y_a` cell at `offset+1+(n+1)` — OUTSIDE the loop — so it needs one
+  -- extra hypothesis (`adv λ₁ (offset+1+(n+1)) = (accScalar m bits (n+1) • P).y`, the final-y
+  -- witness) threaded from the bundle. Mirrors the donor `Incomplete.lean` completeness (~150 lines).
   sorry
 
 /-! ## The bundle contract
@@ -612,6 +796,28 @@ The bits are a prover hint. To keep the region-level bundle's I/O verifier-visib
 bit sequence as a *hint* read from the prover environment (`env.env.hint`) — the honest
 witnesses `zWit`/`l1Wit`/… close over a fixed `BitsHint`; the bundle is parameterized by that
 hint. This matches how the donor threads `input.bits` as an `UnconstrainedNative`. -/
+
+/-- Read the `Output` cells off the environment (the `ProvableStruct.eval` of the fixed-row
+output-cell literal `synthesize` returns): `x_a` at `offset+1+n+1`, `y_a` at `offset+1+(n+1)`,
+and the running sums `z_r` at `offset+1+r`. Proven by unfolding the derived `ProvableStruct`
+evaluation (the struct-literal simproc does not fire through the `Vector` field of `Output`, so
+we reduce it explicitly once here). -/
+theorem output_eval_fields (place : RegionIndex → ℕ) (env : Environment Fp) (self : RegionIndex)
+    (offset n : ℕ) (cxA cl1 cz : Column .advice) :
+    let out := ProvableStruct.eval place env
+      ({ xA := AssignedCell.of self (offset + 1 + n + 1) cxA,
+         yA := AssignedCell.of self (offset + 1 + (n + 1)) cl1,
+         zs := Vector.ofFn fun i => AssignedCell.of self (offset + 1 + (i : ℕ)) cz }
+        : Output (n + 1) (AssignedCell Fp))
+    out.xA = adv cxA place self env (offset + 1 + n + 1)
+    ∧ out.yA = adv cl1 place self env (offset + 1 + (n + 1))
+    ∧ ∀ (i : ℕ) (hi : i < n + 1), out.zs[i] = adv cz place self env (offset + 1 + i) := by
+  simp only [adv]
+  refine ⟨?_, ?_, ?_⟩ <;> intros <;>
+    simp only [ProvableStruct.eval, ProvableStruct.eval.go, ProvableStruct.toComponents,
+      ProvableStruct.fromComponents, ProvableType.eval, ProvableType.toElements,
+      ProvableType.fromElements, AssignedCell.of, Cell.of, AssignedCell.eval,
+      Vector.getElem_ofFn, circuit_norm]
 
 /-- The scalar-mul incomplete-phase round predicate: the running-sum chain and, for any
 `A = [m]P` in range, the output accumulator is the double-and-add result. -/
@@ -667,7 +873,7 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     -- cell reference at a known region-local row, so the region index is threaded implicitly.
     let xAOut ← cellAt cfg.xA (offset + 1 + n + 1)
     let yAOut ← cellAt cfg.lambda1 (offset + 1 + (n + 1))
-    let zsOut ← (Vector.range (n + 1)).mapM (fun r => cellAt cfg.z (offset + 1 + r))
+    let zsOut ← cellVec cfg.z (fun r => offset + 1 + r) (n + 1)
     return { xA := xAOut, yA := yAOut, zs := zsOut }
 
   -- base is a non-identity on-curve point (Rust exceptional-case check: A/Q not identity,
@@ -697,13 +903,84 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
   -- into `loop_zchain_sound` (running-sum chain) and `loop_acc_sound` (accumulator = `accScalar`),
   -- both of which route into the imported donor algebra. Deferred pending the split/eval tactic.
   soundness := by
-    sorry
+    intro cfg offset
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output _hE hA hc
+    -- peel the synthesize op list: startCopies (3) ++ q_mul_1 ++ loop ++ (output cells, no ops).
+    simp only [circuit_norm,
+      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
+      operations_enable, operations_assignAdvice,
+      RegionOperations.constraints_append, startCopies] at hc h_output
+    obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
+    -- q_mul_1 gate ⇒ `hInit` (derived `Y_A` of loop row 0 = `2·(λ₁ at offset)`)
+    simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yAExpr, xRExpr] at hQMul1
+    -- destructure input into coordinates; read the output cells off the env
+    provable_type_simp
+    -- the output cells, read off the env (`output = eval {fixed-row cell literal}`)
+    obtain ⟨hOutXA, hOutYA, hOutZs⟩ :=
+      output_eval_fields env.place env.env self offset n cfg.xA cfg.lambda1 cfg.z
+    rw [← h_output]
+    clear h_output
+    -- fold `env.advice cfg.col ↑(place self + row)` into `adv` (the loop lemmas' spelling)
+    have hadv : ∀ (col : Column .advice) (row : ℕ),
+        env.env.advice col ((env.place self + row : ℕ) : ℤ) = adv col env.place self env.env row :=
+      fun _ _ => rfl
+    simp only [hadv] at hCopyZ hCopyYA hCopyXA hQMul1
+    -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
+    -- `input` argument matches `hLoop`'s spelling
+    set inp : Inputs (AssignedCell Fp) :=
+      { base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
+    -- the `input.*.eval` cell reads, resolved to the input values via `h_input`
+    obtain ⟨⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
+    -- z-chain + per-round bit match from `loop_zchain_sound` (its `bits'` is the witness)
+    obtain ⟨bits', hbit, hz0chain, hzchain⟩ :=
+      loop_zchain_sound cfg inp bits env.place self env.env offset n hCopyZ hLoop
+    refine ⟨bits', ?_, ?_⟩
+    · -- running-sum chain conjunct of `RoundInvariant`
+      refine ⟨?_, ?_⟩
+      · -- z_0 = 2·input.z + bit 0
+        rw [hOutZs 0 (by omega)]
+        simpa only [Nat.add_zero, hinp, AssignedCell.eval, hIz] using hz0chain
+      · intro b
+        rw [hOutZs (b.val + 1) (by omega), hOutZs b.val (by omega)]
+        exact hzchain b
+    · -- accumulator conjunct: route `loop_acc_sound` into `Point.ofCoords`
+      intro m hm h2 hbound
+      -- the anchor copies pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`
+      obtain ⟨hAnchorX, hAnchorY⟩ := loop_anchor cfg inp bits env.place self env.env offset n
+        (n + 1) (by omega) hLoop
+      simp only [hinp, AssignedCell.eval, hBx, hBy] at hAnchorX hAnchorY
+      -- the accumulator hypothesis `ofCoords (xA, yA) = m • base` ⇒ coordinate equalities
+      have hAccX : input_xA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x :=
+        congrArg Point.x hm
+      have hAccY : input_yA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
+        congrArg Point.y hm
+      have hacc := loop_acc_sound cfg inp bits bits' env.place self env.env offset n
+        { x := input_base_x, y := input_base_y } hA m h2 hbound
+        (by rw [hCopyXA]; simp only [hIxA]; exact hAccX)
+        (by rw [hCopyYA]; simp only [hIyA]; exact hAccY)
+        hAnchorX hAnchorY hbit (by linear_combination -hQMul1) hLoop
+      obtain ⟨hx, hy2⟩ := hacc
+      -- reconstruct the output point from its coordinates
+      have hy : adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1))
+          = (accScalar m bits' (n + 1) • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
+        mul_left_cancel₀ Orchard.two_ne_zero hy2
+      rw [hOutXA, hOutYA, hx, hy]
+      -- `ofCoords (p.x, p.y) = p`
+      rfl
 
-  -- ══ Completeness ══
-  -- Framework half (mechanical, TACTIC GAP): `completeness_iff`, split the witness/constraint op
-  -- lists the same way; the honest starting copies pin `z_0`/`y_a_0`/`x_a_0`, `loop_constraints_
-  -- complete` discharges the loop's `Constraints`, the starting-copy + gate witnesses discharge
-  -- the rest, and `ProverSpec` follows from the same donor algebra as soundness. Deferred.
+  -- ══ Completeness ══ (surviving sorry)
+  -- Wiring mirrors `soundness` above (`completeness_iff`; split the synthesize witness/constraint
+  -- op list `startCopies ++ [q_mul_1] ++ loop ++ [final y_a] ++ output` via
+  -- `RegionOperations.extendsWitnesses_append`/`constraints_append`; `startCopies` witnesses pin
+  -- `z_0`/`y_a_0`/`x_a_0`; `output_eval_fields` reads the output cells). The two obligations are the
+  -- loop's `Constraints` — discharged by `loop_constraints_complete` (itself sorried; see its note)
+  -- fed the honest start values — and `ProverSpec = RoundInvariant`, whose z-chain conjunct follows
+  -- from the honest `zRunValue` recursion and whose accumulator conjunct is `accVal_eq_nsmul`
+  -- (imported), exactly as the donor `Incomplete.lean` completeness assembles them. Deferred with
+  -- `loop_constraints_complete`.
   completeness := by
     sorry
 
