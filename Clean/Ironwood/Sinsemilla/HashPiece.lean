@@ -1,0 +1,695 @@
+import Clean.Halo2
+import Clean.Orchard.Specs.Pallas
+import Clean.Orchard.Specs.Sinsemilla
+import Clean.Orchard.Ecc.DoubleAndAdd
+import Clean.Ironwood.Ecc.Basic
+import Clean.Ironwood.Sinsemilla.Basic
+
+/-!
+Reference (ported from actual Rust, not memory):
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/`
+- `chip.rs` — `SinsemillaConfig` (all columns/selectors) and `configure` (ALL gates + the
+  3-tuple lookup registration). Read in full via `chip.rs:37-288`, `generator_table.rs:46-82`.
+- `chip/hash_to_point.rs` — the per-piece hash round layout (`hash_piece`, lines 295-493):
+  every row of a piece has `q_sinsemilla1` on; `q_sinsemilla2 = 1` on rows `0 .. num_words−2`,
+  and `0` (or `2` on the final piece) on the last row. Per row: assign `x_p, λ₁, λ₂` and the
+  next-row `x_a`, run the generator lookup, and enable the Sinsemilla gate on adjacent pairs.
+
+Orchard `feat/ironwood` uses **vanilla** halo2_gadgets 0.5.0 Sinsemilla unchanged, so this
+ports the vanilla chip. `K = 10`.
+
+## Slice-1 scope (this file)
+
+The per-piece hash round loop of `hash_to_point::hash_piece`, in the established Ironwood
+loop shape (`Clean/Ironwood/Ecc/MulIncomplete.lean` — the closest structural relative):
+
+- **Config + configure**: the flattened `SinsemillaConfig`, the two gates
+  (`Initial y_Q`, `Sinsemilla gate`) and the 3-tuple generator lookup, all as standalone
+  `configure`-registered defs (the established gate/argument pattern).
+- **The round loop**: a structurally recursive `RegionCircuit` over the word count with
+  absolute-row addressing, so `(loop (k+1)).operations = (loop k).operations ++
+  (round k).operations` by `rfl` — the per-round decomposition the loop inductions consume.
+- **`soundness_aux`**: the pure per-row-facts → `Spec` bridge, lifted from the donor
+  (framework-agnostic, over `dR : ℕ → DoubleAndAddRow Fp`, `zV : ℕ → Fp`), fully proven.
+- **The `FormalRegionCircuit` contract**: statements final; the framework-half of
+  soundness/completeness (reducing each round's `enableGate`/`enableLookup` constraint to
+  the value-level row equations `dR`/`zV`, then routing into `soundness_aux`) is left as
+  fully-stated sorries — the MulIncomplete pattern (structure-complete; threaded hypotheses
+  worked out, donor lemmas identified). See the TACTIC GAP notes.
+
+## Multi-column table resolution (recorded in `Basic.lean`)
+
+Three `loadTable` ops (idx, x, y), each a single `TableColumn`, bundled by
+`Sinsemilla.GeneratorTableLoaded`. No new multi-column op; the framework's per-column
+`loadTable` already models one dense-block + default-fill column, exactly one S-table column.
+-/
+
+namespace Halo2.Ironwood.Sinsemilla.HashPiece
+
+open Orchard (Point)
+open Orchard.Ecc (DoubleAndAddRow)
+open Orchard.Ecc.DoubleAndAdd (xR yA)
+open Orchard.Specs.Sinsemilla (Generators step hashToPoint)
+open Orchard.Specs (K)
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
+open Halo2.Ironwood.Sinsemilla
+  (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
+   pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
+   chain_eq_suffix_sum step_coordinates_of_constraints step_honest accAfter_eq_chain)
+
+/-! ## Config
+
+Rust `SinsemillaConfig` (`chip.rs:37-72`), flattened. `q_sinsemilla1`, `q_sinsemilla4` are
+`Selector`s; `q_sinsemilla2` is a `Column .fixed` (it takes values `0/1/2`, queried inside
+gate polynomials and the lookup input). `fixed_y_q` loads `y_Q` for the init gate. The
+`double_and_add` columns are `x_a, x_p, λ₁, λ₂`; `bits` is the running-sum `z` column. The
+generator table columns are held in `generatorTable`. -/
+structure Config where
+  qS1 : Selector
+  qS2 : Column .fixed
+  qS4 : Selector
+  fixedYQ : Column .fixed
+  xA : Column .advice
+  xP : Column .advice
+  lambda1 : Column .advice
+  lambda2 : Column .advice
+  bits : Column .advice
+  generatorTable : GeneratorTableConfig
+
+/-! ## Gate expression builders (verbatim at the Rust rotations)
+
+`x_r`, `Y_A` are pure functions of the double-and-add columns at a rotation
+(`chip.rs:214-221`). We inline them as `Expression` builders over the config columns. -/
+
+/-- `x_r = λ₁² − x_a − x_p` at `rot` (Rust `DoubleAndAdd::x_r`). -/
+def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
+  let xA : Expression Fp Query := queryAdvice cfg.xA rot
+  let xP : Expression Fp Query := queryAdvice cfg.xP rot
+  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
+  l1 * l1 - xA - xP
+
+/-- `Y_A = (λ₁ + λ₂)(x_a − x_r)` at `rot` (Rust `DoubleAndAdd::Y_A`). -/
+def yAExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
+  let xA : Expression Fp Query := queryAdvice cfg.xA rot
+  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
+  let l2 : Expression Fp Query := queryAdvice cfg.lambda2 rot
+  (l1 + l2) * (xA - xRExpr cfg rot)
+
+/-- The `y_p` derivation used in the lookup input (`generator_table.rs:64-70`):
+`y_p = Y_A/2 − λ₁·(x_a − x_p)`, at rotation 0. -/
+def yPExpr (cfg : Config) : Expression Fp Query :=
+  let xA : Expression Fp Query := queryAdvice cfg.xA 0
+  let xP : Expression Fp Query := queryAdvice cfg.xP 0
+  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 0
+  yAExpr cfg 0 * (.const ((2 : Fp)⁻¹)) - l1 * (xA - xP)
+
+/-! ## The two gates as standalone defs
+
+`Initial y_Q` (`chip.rs:225-240`) and the `Sinsemilla gate` (`chip.rs:243-285`). The
+donor `Clean/Orchard/Sinsemilla/Chip.lean` proves these at value level; here they are the
+`configure`-registered `Gate` data with polynomials verbatim at the Rust rotations. -/
+
+/-- Rust `"Initial y_Q"` gate (`chip.rs:225-240`), gated by `q_sinsemilla4`: initializes the
+accumulator `y` to `y_Q` via `2·y_Q − Y_{A,cur} = 0`. Here `y_Q` is the `fixed_y_q` column at
+rotation 0 (the non-`allow_init_from_private_point` branch, which the action circuit uses). -/
+def initialYQGate (cfg : Config) : Gate Fp where
+  name := "Initial y_Q"
+  selector := cfg.qS4
+  constraints :=
+    let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
+    Constraints.withSelector cfg.qS4
+      [("init y_q", (2 : Fp) * yQ - yAExpr cfg 0)]
+
+/-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)` (`chip.rs:49`, `98-102`): `0` when
+`q_s2 ∈ {0,1}`, `2` when `q_s2 = 2` (final piece). -/
+def qS3Expr (cfg : Config) : Expression Fp Query :=
+  let qS2 : Expression Fp Query := queryFixed cfg.qS2
+  qS2 * (qS2 - (1 : Fp))
+
+/-- Rust `"Sinsemilla gate"` (`chip.rs:243-285`), gated by `q_sinsemilla1`. Two constraints:
+
+- **secant line** (`chip.rs:262-263`): `λ₂² − (x_{a,next} + x_r + x_{a,cur}) = 0`.
+- **y check** (`chip.rs:268-282`):
+  `4·λ₂·(x_{a,cur} − x_{a,next}) − [2·Y_{A,cur} + (2 − q_s3)·Y_{A,next} + 2·q_s3·λ₁_next] = 0`.
+
+Matches the donor `Chip.Gate` (`yLhs = 4·λ₂·(x_a − x_a')`, `yRhs = 2·Y_A(cur) + (2−q_s3)·Y_A(next)
++ q_s3·2·λ₁_next`). -/
+def sinsemillaGate (cfg : Config) : Gate Fp where
+  name := "Sinsemilla gate"
+  selector := cfg.qS1
+  constraints :=
+    let l2Cur : Expression Fp Query := queryAdvice cfg.lambda2 0
+    let xACur : Expression Fp Query := queryAdvice cfg.xA 0
+    let xANext : Expression Fp Query := queryAdvice cfg.xA 1
+    let l1Next : Expression Fp Query := queryAdvice cfg.lambda1 1
+    let secant := l2Cur * l2Cur - (xANext + xRExpr cfg 0 + xACur)
+    let yCheck :=
+      (4 : Fp) * l2Cur * (xACur - xANext)
+        - ((2 : Fp) * yAExpr cfg 0
+            + ((2 : Fp) - qS3Expr cfg) * yAExpr cfg 1
+            + qS3Expr cfg * (2 : Fp) * l1Next)
+    Constraints.withSelector cfg.qS1
+      [("secant line", secant), ("y check", yCheck)]
+
+/-! ## The 3-tuple generator lookup
+
+Rust `generator_table.rs:46-82`. The FIRST real 3-tuple lookup consumer in Halo2-Clean. The
+input tuple (gated by `q_s1` and `q_run = q_s2 − q_s3`):
+
+  `[ q_s1·word,                       ↦ table_idx
+     q_s1·x_p + (1 − q_s1)·init_x,    ↦ table_x
+     q_s1·y_p + (1 − q_s1)·init_y ]   ↦ table_y`
+
+with `word = z_cur − q_run·z_next·2^K` (`z` = the `bits` column), `y_p = Y_A/2 − λ₁·(x_a − x_p)`
+(`yPExpr`), and `(init_x, init_y) = S(0)`. On a used row `q_s1 = 1`, `q_run = 1`, so the input
+is `(word, x_p, y_p)`; on an unused row it defaults to `S(0)` — exactly the disabled-row
+convention. `tables` are the three table columns' rotation-0 fixed queries (via `lookup`).
+
+The framework's `enableLookup` semantics compares the input LIST to the table LIST pointwise
+(`Operations.lean:164-179`), so a 3-tuple membership reduces — via `List.map_cons`/`cons.injEq`
+— to three per-column equalities at a *shared* usable table row. This is the "3-tuple
+membership reduction" new shape pinned in `Clean/Halo2/Tests/`. -/
+def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
+  inputs :=
+    let qS1 : Expression Fp Query := querySelector cfg.qS1
+    let qRun : Expression Fp Query := queryFixed cfg.qS2 - qS3Expr cfg
+    let zCur : Expression Fp Query := queryAdvice cfg.bits 0
+    let zNext : Expression Fp Query := queryAdvice cfg.bits 1
+    let word : Expression Fp Query := zCur - qRun * zNext * (.const ((2 : Fp) ^ K))
+    let xP : Expression Fp Query := queryAdvice cfg.xP 0
+    let initX : Expression Fp Query := .const (G.S 0).x
+    let initY : Expression Fp Query := .const (G.S 0).y
+    [ qS1 * word,
+      qS1 * xP + ((1 : Fp) - qS1) * initX,
+      qS1 * yPExpr cfg + ((1 : Fp) - qS1) * initY ]
+  tables :=
+    [ queryFixed cfg.generatorTable.tableIdx.inner,
+      queryFixed cfg.generatorTable.tableX.inner,
+      queryFixed cfg.generatorTable.tableY.inner ]
+
+/-! ## Configure
+
+Rust `SinsemillaConfig::configure` (`chip.rs`): allocate the selectors, take the handed-down
+columns, register the two gates and the 3-tuple lookup. The generator-table columns are
+handed down (loaded separately by `Basic.load`). -/
+def configure (G : Generators) (fixedYQ : Column .fixed) (qS2 : Column .fixed)
+    (xA xP lambda1 lambda2 bits : Column .advice) (genTable : GeneratorTableConfig) :
+    Configure Fp Config := do
+  enableEquality xA.toAny
+  enableEquality lambda1.toAny
+  enableEquality bits.toAny
+  let qS1 ← complexSelector
+  let qS4 ← selector
+  let cfg : Config :=
+    { qS1, qS2, qS4, fixedYQ, xA, xP, lambda1, lambda2, bits, generatorTable := genTable }
+  createGate (initialYQGate cfg)
+  createGate (sinsemillaGate cfg)
+  -- register the 3-tuple lookup: three (input, tableColumn) pairs
+  lookup [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
+          ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
+          ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
+  return cfg
+
+/-! ## Inputs / Output
+
+Mirrors the donor `HashPiece.Input`/`Output`, region-level. The piece value and entering
+accumulator `x_a` are already-assigned cells; the entering `y` is a prover hint (halo2's
+`Y<Value>` wrapper). The output exposes the first/last rows, the exit `x_a`, and the running
+sums `z_0 .. z_w`. -/
+
+/-- Verifier-visible inputs: the piece value, the entering accumulator `x_a`, and the entering
+accumulator `y`, as already-assigned cells / values. In Rust the entering `y` is threaded as
+a `Y<Value>` prover hint (halo2's `Value` wrapper); slice-1 carries it as a plain `Inputs`
+field (the honest witness programs read it; soundness never does), deferring the native-hint
+wiring to slice 2. -/
+structure Inputs (F : Type) where
+  piece : F
+  xA : F
+  yA : F
+deriving ProvableStruct
+
+/-- Output: the first and last double-and-add rows, the exit `x_a` cell, and the piece's
+`w + 1` running sums. -/
+structure Output (numWords : ℕ) (F : Type) where
+  first : DoubleAndAddRow F
+  last : DoubleAndAddRow F
+  xANext : F
+  zs : Vector F numWords
+deriving ProvableStruct
+
+/-! ## Honest witness programs
+
+The honest cell values chain through the recursive `accAfter`; they read the entering `y`
+hint. Expressed via the witgen `native` escape hatch (`WitgenIROver.native`), as in
+MulIncomplete's `zWit`/`l1Wit`/… . `readCell env c` reads an already-assigned input cell. -/
+
+/-- Read an input cell's value in a placed prover environment. -/
+def readCell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) : Fp :=
+  c.eval env.place env.env.toEnvironment
+
+/-- The entering accumulator `y` value, read off the (already-assigned) input cell. -/
+def yAIn (env : Placed ProverEnvironment Fp) (input : Inputs (AssignedCell Fp)) : Fp :=
+  readCell env input.yA
+
+/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r`. Donor `pieceZ` as a witgen
+program: cast to ℕ, shift right by `K·r` bits, cast back. -/
+def zWit (input : Inputs (AssignedCell Fp)) (r : ℕ) : WitgenIR Fp 1 :=
+  .ofFExpr (.ofNat (.div (.val (.expr input.piece)) (.const (2 ^ (K * r)))))
+
+/-- Honest `x_p` at word `r`: the generator x-column read `S(pieceWord piece r).x`. Native
+(reads the entering piece cell). -/
+def xPWit (G : Generators) (input : Inputs (AssignedCell Fp)) (r : ℕ) : WitgenIR Fp 1 :=
+  .native fun env => #v[(G.S (pieceWord (readCell env input.piece) r)).x]
+
+/-- Honest `λ₁` at word `r` (`rowValue.1` of the `accAfter`-chained accumulator). Native. -/
+def l1Wit (G : Generators) (input : Inputs (AssignedCell Fp)) (r : ℕ) : WitgenIR Fp 1 :=
+  .native fun env =>
+    let p := readCell env input.piece
+    let acc := accAfter G (readCell env input.xA, yAIn env input) p r
+    #v[(rowValue acc ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1]
+
+/-- Honest `λ₂` at word `r` (`rowValue.2.1`). Native. -/
+def l2Wit (G : Generators) (input : Inputs (AssignedCell Fp)) (r : ℕ) : WitgenIR Fp 1 :=
+  .native fun env =>
+    let p := readCell env input.piece
+    let acc := accAfter G (readCell env input.xA, yAIn env input) p r
+    #v[(rowValue acc ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.1]
+
+/-- Honest next-row `x_a` after word `r` (`accAfter … (r+1)).1`). Native. -/
+def xANextWit (G : Generators) (input : Inputs (AssignedCell Fp)) (r : ℕ) : WitgenIR Fp 1 :=
+  .native fun env =>
+    let p := readCell env input.piece
+    #v[(accAfter G (readCell env input.xA, yAIn env input) p (r + 1)).1]
+
+/-! ## The per-word round loop, in the MulIncomplete shape
+
+A structurally recursive `RegionCircuit` over the word count, addressing cells by absolute
+region-local rows (`offset + r`), so `(loop (k+1)).operations = (loop k).operations ++
+(round k).operations` by `rfl`. Selectors: `q_s1` (in `sinsemillaGate.enable`) fires at each
+row via the gate on adjacent pairs; the generator lookup fires at each word row.
+
+Row layout (relative to `offset`, faithful to `hash_to_point.rs::hash_piece`):
+- row `offset`     : `z_0` copy of the piece; loop word 0 begins here.
+- word `r` at absolute row `offset + r`: assign `z_{r+1}` (at `offset + r + 1`), `x_p, λ₁, λ₂`,
+  and the next-row `x_a` (at `offset + r + 1`); enable the generator lookup at `offset + r`.
+- the Sinsemilla gate fires on adjacent word pairs `(r, r+1)` for `r < w`. -/
+
+/-- One hash-word round at word index `r`, at absolute rows relative to `offset`. Assigns the
+row cells, runs the generator lookup at row `offset + r`, and — for `r < w` — enables the
+Sinsemilla gate at `offset + r` (adjacent pair `(r, r+1)`). Cells at fixed absolute rows so
+round `r` is independent of the others. -/
+def round (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (offset w r : ℕ) : RegionCircuit Fp Unit := do
+  let row := offset + r
+  let _z ← assignAdvice cfg.bits (row + 1) (zWit input (r + 1))
+  let _xP ← assignAdvice cfg.xP row (xPWit G input r)
+  let _l1 ← assignAdvice cfg.lambda1 row (l1Wit G input r)
+  let _l2 ← assignAdvice cfg.lambda2 row (l2Wit G input r)
+  let _xANext ← assignAdvice cfg.xA (row + 1) (xANextWit G input r)
+  -- the generator lookup at this word row (q_s1 on; the disabled-row convention handled
+  -- by the input's `(1 − q_s1)·init` fallback at unused rows)
+  (generatorLookup G cfg).enable [cfg.qS1] row
+  -- the Sinsemilla gate on adjacent pairs (interior words only)
+  if r < w then (sinsemillaGate cfg).enable row
+  return ()
+
+/-- The hash-word loop: `numWords` rounds, structurally recursive. By the append-bind of
+`RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
+(round … k).operations self`. -/
+def loop (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp)) (offset w : ℕ) :
+    ℕ → RegionCircuit Fp Unit
+  | 0 => pure ()
+  | k + 1 => do
+    loop G cfg input offset w k
+    round G cfg input offset w k
+
+/-- Per-round operations decomposition (holds by `rfl` via `operations_bind`) — the crux that
+makes the loop inductable. Mirrors `MulIncomplete.loop_operations_succ`. -/
+theorem loop_operations_succ (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (offset w k : ℕ) (self : RegionIndex) :
+    (loop G cfg input offset w (k + 1)).operations self
+      = (loop G cfg input offset w k).operations self
+        ++ (round G cfg input offset w k).operations self := rfl
+
+/-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
+`synthesize` name the running-sum / accumulator cells for the `Output`. (`MulIncomplete.cellAt`.) -/
+def cellAt (col : Column .advice) (row : ℕ) : RegionCircuit Fp (AssignedCell Fp) :=
+  fun self => (.of self row col, [])
+
+@[circuit_norm]
+theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt col row).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt col row).output self = .of self row col := rfl
+
+/-! ## The pure per-row-facts → `Spec` bridge (`soundness_aux`, donor-proven, lifted)
+
+Given the per-row lookup facts (`hL`: at each word the running word is a `< 2^K` generator
+index `m` with `x_p = S(m).x` and the `y_p` derivation landing on `S(m).y`) and the per-pair
+gate facts (`hG`: secant + y-check), plus the z-chain start (`hz0`) — produce the piece
+`Spec`. Framework-agnostic: over `dR : ℕ → DoubleAndAddRow Fp`, `zV : ℕ → Fp`. Lifted from the
+donor `HashPiece.soundness_aux`; this is the value-level heart the framework-half routes into. -/
+theorem soundness_aux (G : Generators) (w : ℕ) (dR : ℕ → DoubleAndAddRow Fp) (zV : ℕ → Fp)
+    (piece xA : Fp)
+    (hxA0 : (dR 0).xA = xA)
+    (hz0 : zV 0 = piece)
+    (hL : ∀ r, r < w + 1 → ∃ m : ℕ, m < 2 ^ K ∧
+      (if r = w then zV r else zV r - 2 ^ K * zV (r + 1)) = (m : Fp) ∧
+      (dR r).xP = (G.S m).x ∧
+      yA (dR r) * (2 : Fp)⁻¹ - (dR r).lambda1 * ((dR r).xA - (dR r).xP) = (G.S m).y)
+    (hG : ∀ r, r < w →
+      ((dR r).lambda2 * (dR r).lambda2
+        = (dR (r + 1)).xA + ((dR r).lambda1 * (dR r).lambda1 - (dR r).xA - (dR r).xP)
+          + (dR r).xA) ∧
+      4 * (dR r).lambda2 * ((dR r).xA - (dR (r + 1)).xA)
+        = 2 * yA (dR r) + 2 * yA (dR (r + 1))) :
+    ∃ ms : ℕ → ℕ,
+      (∀ r, ms r < 2 ^ K) ∧
+      piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
+      Vector.ofFn (fun r : Fin (w + 1) => zV r.val) =
+        Vector.ofFn (fun r : Fin (w + 1) =>
+          ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
+      (dR 0).xA = xA ∧
+      (dR w).xP = (G.S (ms w)).x ∧
+      yA (dR w) * (2 : Fp)⁻¹ - (dR w).lambda1 * ((dR w).xA - (dR w).xP) = (G.S (ms w)).y ∧
+      ∀ A : Point Fp, A.OnCurve → A.x = xA →
+        2 * A.y = yA (dR 0) →
+        ∀ B, hashToPoint G.S A ((List.range w).map ms) = some B →
+          (dR w).xA = B.x ∧ 2 * B.y = yA (dR w) := by
+  -- choose the word values
+  have hLE : ∀ r : Fin (w + 1), ∃ m : ℕ, m < 2 ^ K ∧
+      (if r.val = w then zV r.val else zV r.val - 2 ^ K * zV (r.val + 1)) = (m : Fp) ∧
+      (dR r.val).xP = (G.S m).x ∧
+      yA (dR r.val) * (2 : Fp)⁻¹
+        - (dR r.val).lambda1 * ((dR r.val).xA - (dR r.val).xP) = (G.S m).y :=
+    fun r => hL r.val r.isLt
+  choose mf hmf_lt hmf_word hmf_x hmf_y using hLE
+  obtain ⟨ms, hms⟩ : ∃ ms : ℕ → ℕ, ms = fun r =>
+      if h : r < w + 1 then mf ⟨r, h⟩ else 0 := ⟨_, rfl⟩
+  have hms_lt : ∀ r, ms r < 2 ^ K := by
+    intro r; simp only [hms]; split_ifs
+    · exact hmf_lt _
+    · norm_num [K]
+  have hms_at : ∀ r (hr : r < w + 1), ms r = mf ⟨r, hr⟩ := by
+    intro r hr; simp only [hms]; rw [dif_pos hr]
+  -- recombination of the piece from its words
+  have hpiece : piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) := by
+    rw [← hz0]
+    have key : ∀ r, r ≤ w →
+        zV 0 = ((∑ j ∈ Finset.range r, ms j * 2 ^ (K * j) : ℕ) : Fp)
+          + zV r * ((2 ^ (K * r) : ℕ) : Fp) := by
+      intro r hr
+      induction r with
+      | zero => simp
+      | succ v ih =>
+        have h := hmf_word ⟨v, by omega⟩
+        rw [if_neg (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
+        rw [ih (by omega), Finset.sum_range_succ]
+        rw [← hms_at v (by omega)] at h
+        push_cast
+        rw [show K * (v + 1) = K * v + K by ring]
+        push_cast [pow_add]
+        linear_combination ((2 : Fp) ^ (K * v)) * h
+    have hlast : zV w = ((ms w : ℕ) : Fp) := by
+      have h := hmf_word ⟨w, by omega⟩
+      rw [if_pos rfl] at h
+      rw [hms_at w (by omega)]; exact h
+    rw [key w (by omega), hlast, Finset.sum_range_succ]
+    push_cast; ring
+  refine ⟨ms, hms_lt, hpiece, ?_, hxA0, ?_, ?_, ?_⟩
+  · -- the running sums equal the suffix recombinations
+    have hword : ∀ s, s < w → zV s = (ms s : Fp) + 2 ^ K * zV (s + 1) := by
+      intro s hs
+      have h := hmf_word ⟨s, by omega⟩
+      rw [if_neg (show ¬ (⟨s, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
+      rw [← hms_at s (by omega)] at h
+      linear_combination h
+    have hlast : zV w = (ms w : Fp) := by
+      have h := hmf_word ⟨w, by omega⟩
+      rw [if_pos rfl] at h
+      rw [hms_at w (by omega)]; exact h
+    apply Vector.ext
+    intro i hi
+    simp only [Vector.getElem_ofFn]
+    have h := chain_eq_suffix_sum zV ms hword hlast (w - i) i (by omega)
+    rw [show w - i + 1 = w + 1 - i from by omega] at h
+    exact h
+  · rw [hms_at w (by omega)]; exact hmf_x ⟨w, by omega⟩
+  · rw [hms_at w (by omega)]; exact hmf_y ⟨w, by omega⟩
+  -- the chain invariant over message prefixes
+  intro A hAon hAx hAyA B hchain
+  have hinv : ∀ r, r ≤ w → ∀ Ar : Point Fp,
+      hashToPoint G.S A ((List.range r).map ms) = some Ar →
+      (dR r).xA = Ar.x ∧ 2 * Ar.y = yA (dR r) := by
+    intro r
+    induction r with
+    | zero =>
+      intro _ Ar hAr
+      rw [show ((List.range 0).map ms) = ([] : List ℕ) from rfl,
+        Orchard.Specs.Sinsemilla.hashToPoint_nil] at hAr
+      obtain rfl : A = Ar := Option.some.inj hAr
+      exact ⟨hxA0.trans hAx.symm, hAyA⟩
+    | succ r ih =>
+      intro hr Ar hAr
+      rw [List.range_succ] at hAr
+      simp only [List.map_append, List.map_cons, List.map_nil] at hAr
+      rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hAr
+      cases hpre : hashToPoint G.S A ((List.range r).map ms) with
+      | none => rw [hpre] at hAr; simp at hAr
+      | some Ap =>
+        rw [hpre] at hAr
+        replace hAr : step G.S (ms r) Ap = some Ar := hAr
+        obtain ⟨hxAr, hyAr⟩ := ih (by omega) Ap hpre
+        have hxw := hmf_x ⟨r, by omega⟩
+        have hyw := hmf_y ⟨r, by omega⟩
+        rw [← hms_at r (by omega)] at hxw hyw
+        obtain ⟨hsec, hyck⟩ := hG r (by omega)
+        have hyAr' := hyAr
+        simp only [yA, xR] at hyAr'
+        -- `hyw : yA (dR r)/2 − λ₁·(x_a − x_p) = S(m).y`; clear the halving
+        have hyw2 : yA (dR r) - 2 * ((dR r).lambda1 * ((dR r).xA - (dR r).xP))
+            = 2 * (G.S (ms r)).y := by
+          have h2 := congrArg (fun t => 2 * t) hyw
+          simp only [mul_sub] at h2
+          rw [show (2 : Fp) * (yA (dR r) * (2 : Fp)⁻¹) = yA (dR r) from by
+            rw [mul_comm (yA (dR r)), ← mul_assoc,
+              mul_inv_cancel₀ (by decide : (2 : Fp) ≠ 0), one_mul]] at h2
+          linear_combination h2
+        have hpin := step_coordinates_of_constraints G.S hAr
+          (xp := (dR r).xP) (lambda1 := (dR r).lambda1) (lambda2 := (dR r).lambda2)
+          (xa' := (dR (r + 1)).xA) (YA' := yA (dR (r + 1)))
+          (by linear_combination hyw2 + hyAr + 2 * (dR r).lambda1 * hxAr)
+          hxw
+          (by linear_combination hyAr' + 2 * ((dR r).lambda1 + (dR r).lambda2) * hxAr)
+          (by linear_combination hsec)
+          (by linear_combination hyck - 4 * (dR r).lambda2 * hxAr - 2 * hyAr)
+        exact ⟨hpin.1, hpin.2.symm⟩
+  exact hinv w (by omega) B hchain
+
+/-! ## The per-row cell readers off the environment
+
+The double-and-add row and the running sum read at absolute region-local rows, in the
+`soundness_aux` shape. Mirrors `MulIncomplete.adv`/`XAr`/… . -/
+
+/-- Advice value of column `col` at region-local row `row`. -/
+def adv (col : Column .advice) (place : RegionIndex → ℕ) (self : RegionIndex)
+    (env : Environment Fp) (row : ℕ) : Fp :=
+  env.advice col ((place self + row : ℕ) : ℤ)
+
+/-- The double-and-add row read at word `r` (absolute row `offset + r`). The `x_a` of word `r`
+is the entering accumulator cell for `r = 0` and the previous round's next-`x_a` otherwise;
+here both live in the `x_a` column at row `offset + r`, written by round `r−1`'s
+`xANextWit` (or the copy at `offset`). -/
+def dRow (cfg : Config) (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
+    (offset r : ℕ) : DoubleAndAddRow Fp :=
+  { xA := adv cfg.xA place self env (offset + r),
+    xP := adv cfg.xP place self env (offset + r),
+    lambda1 := adv cfg.lambda1 place self env (offset + r),
+    lambda2 := adv cfg.lambda2 place self env (offset + r) }
+
+/-- The running sum read at word `r` (absolute row `offset + r`, the `bits`/`z` column). -/
+def zRow (cfg : Config) (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
+    (offset r : ℕ) : Fp :=
+  adv cfg.bits place self env (offset + r)
+
+/-! ## Loop-fact extraction (soundness) — structure-complete
+
+Each round's `enableLookup`/`enableGate` constraint, cleaned to the value-level `hL`/`hG`
+row equations `soundness_aux` consumes. Proven by induction over the word count using
+`loop_operations_succ` + the append splitting of `RegionOperations.Constraints` — the
+`MulIncomplete.loop_gate_facts` structure.
+
+TACTIC GAP (proofs sorried — the framework half): reducing each round's
+`enableLookup arg [q_s1] row` constraint (a 3-tuple membership existential over the
+`GeneratorTableLoaded` columns) to the `hL` fact, and each `enableGate (sinsemillaGate cfg) row`
+constraint to the `hG` secant/y-check, is mechanical `circuit_norm` + `List.map_cons`
+/`cons.injEq` membership splitting + `cast_row_pred`/`row_succ_succ` row normalization, but is
+not yet distilled into a reusable tactic. The 3-tuple membership reduction is the NEW shape
+(pinned in `Clean/Halo2/Tests/`): the input list `[q_s1·word, …]` and table list
+`[tableIdx, tableX, tableY]` map-equality at a shared usable row `m`, splitting into the three
+per-column equalities; `GeneratorTableLoaded`'s block contents then give `m < 2^K`,
+`tableX@m = S(m).x`, `tableY@m = S(m).y`. Statements final; only the proofs are deferred. -/
+
+/-- **Per-word lookup facts (soundness).** From the loop's `Constraints` and the loaded
+generator table, each word `r` yields a generator index `m < 2^K` with `x_p = S(m).x` and the
+`y_p` derivation landing on `S(m).y`; the running word is `z_r − 2^K·z_{r+1}` on interior rows
+and `z_r` on the last (the `q_run` case split). This is the `soundness_aux.hL` shape. -/
+theorem loop_lookup_facts (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset w : ℕ)
+    (hTable : GeneratorTableLoaded G cfg.generatorTable env)
+    (hLoop : RegionOperations.Constraints place self env
+      ((loop G cfg input offset (w + 1) (w + 1)).operations self)) :
+    ∀ r, r < w + 1 → ∃ m : ℕ, m < 2 ^ K ∧
+      (if r = w then zRow cfg place self env offset r
+        else zRow cfg place self env offset r - 2 ^ K * zRow cfg place self env offset (r + 1))
+        = (m : Fp) ∧
+      (dRow cfg place self env offset r).xP = (G.S m).x ∧
+      yA (dRow cfg place self env offset r) * (2 : Fp)⁻¹
+        - (dRow cfg place self env offset r).lambda1
+          * ((dRow cfg place self env offset r).xA - (dRow cfg place self env offset r).xP)
+        = (G.S m).y := by
+  sorry
+
+/-- **Per-pair gate facts (soundness).** From the loop's `Constraints`, each interior word
+pair `(r, r+1)` (`r < w`) yields the Sinsemilla gate's secant + y-check equations — the
+`soundness_aux.hG` shape. -/
+theorem loop_gate_facts (G : Generators) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset w : ℕ)
+    (hLoop : RegionOperations.Constraints place self env
+      ((loop G cfg input offset (w + 1) (w + 1)).operations self)) :
+    ∀ r, r < w →
+      ((dRow cfg place self env offset r).lambda2 * (dRow cfg place self env offset r).lambda2
+        = (dRow cfg place self env offset (r + 1)).xA
+          + ((dRow cfg place self env offset r).lambda1
+              * (dRow cfg place self env offset r).lambda1
+              - (dRow cfg place self env offset r).xA - (dRow cfg place self env offset r).xP)
+          + (dRow cfg place self env offset r).xA) ∧
+      4 * (dRow cfg place self env offset r).lambda2
+          * ((dRow cfg place self env offset r).xA - (dRow cfg place self env offset (r + 1)).xA)
+        = 2 * yA (dRow cfg place self env offset r)
+          + 2 * yA (dRow cfg place self env offset (r + 1)) := by
+  sorry
+
+/-! ## Contract
+
+The `FormalRegionCircuit` bundle for one hash piece with `w + 1` words. `EnvAssumptions` is
+the loaded generator table (`GeneratorTableLoaded`; discharged by `Basic.load_generatorTableLoaded`).
+`Spec` is the donor `HashPiece.Spec`: the piece is the base-`2^K` recombination of its `< 2^K`
+words, the running sums are the suffix recombinations, and — for any on-curve entering
+accumulator `A` matching the first row's `x_a`/`Y_A` — the exit `x_a`/`Y_A` are the spec-level
+`hashToPoint` chain point over the first `w` words. -/
+
+/-- Name a whole vector of cells at fixed region-local rows (no op emitted) — the vector-valued
+`cellAt`, for `Output.zs`. (`MulIncomplete.cellVec`.) -/
+def cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) :
+    RegionCircuit Fp (Vector (AssignedCell Fp) len) :=
+  fun self => (Vector.ofFn (fun i => AssignedCell.of self (rows i) col), [])
+
+@[circuit_norm]
+theorem operations_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
+    (cellVec col rows len).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
+    (cellVec col rows len).output self
+      = Vector.ofFn (fun i => AssignedCell.of self (rows i) col) := rfl
+
+/-- Entering `x_a` copy + running-sum `z_0` copy, then the loop, then the output cells. The
+`synthesize` body. The output rows and running sums live at fixed absolute rows and are named
+by `cellAt`/`cellVec` (no ops). -/
+def synthesize (G : Generators) (w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) : RegionCircuit Fp (Var (Output (w + 1)) Fp) := do
+  -- z_0 = copy of the piece into the `bits`/`z` column at `offset`
+  let _z0 ← copyAdvice input.piece cfg.bits offset
+  -- x_a at `offset` = copy of the entering accumulator x
+  let _xA0 ← copyAdvice input.xA cfg.xA offset
+  -- the hash-word loop: `w + 1` rounds
+  loop G cfg input offset (w + 1) (w + 1)
+  -- name the output cells (fixed rows)
+  let first0 ← cellAt cfg.xA offset
+  let firstXP ← cellAt cfg.xP offset
+  let firstL1 ← cellAt cfg.lambda1 offset
+  let firstL2 ← cellAt cfg.lambda2 offset
+  let last0 ← cellAt cfg.xA (offset + w)
+  let lastXP ← cellAt cfg.xP (offset + w)
+  let lastL1 ← cellAt cfg.lambda1 (offset + w)
+  let lastL2 ← cellAt cfg.lambda2 (offset + w)
+  let xANext ← cellAt cfg.xA (offset + (w + 1))
+  let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
+  return {
+    first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
+    last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
+    xANext := xANext,
+    zs := zsCells }
+
+/-- The piece `Spec` (donor `HashPiece.Spec`), verifier view. The piece is the base-`2^K`
+recombination of its `< 2^K` words, the running sums are the suffix recombinations, the first
+row starts at the entering `x_a`, the last row's `x_p`/`y_p` land on `S(m_w)`, and — for any
+on-curve entering accumulator `A` matching the first row's `x_a`/`Y_A` — the exit `x_a`/`Y_A`
+are the spec-level `hashToPoint` chain point over the first `w` words. -/
+def Spec (G : Generators) (w : ℕ) (input : Value Inputs Fp)
+    (output : Value (Output (w + 1)) Fp) (_ : Unit) : Prop :=
+  ∃ ms : ℕ → ℕ,
+    (∀ r, ms r < 2 ^ K) ∧
+    input.piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
+    output.zs = Vector.ofFn (fun r : Fin (w + 1) =>
+      ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
+    output.first.xA = input.xA ∧
+    output.last.xP = (G.S (ms w)).x ∧
+    yA output.last * (2 : Fp)⁻¹
+      - output.last.lambda1 * (output.last.xA - output.last.xP) = (G.S (ms w)).y ∧
+    ∀ A : Point Fp, A.OnCurve → A.x = input.xA →
+      2 * A.y = yA output.first →
+      ∀ B, hashToPoint G.S A ((List.range w).map ms) = some B →
+        output.last.xA = B.x ∧ 2 * B.y = yA output.last
+
+/-- The entering-accumulator honest precondition (donor `HashPiece.ProverAssumptions`): the
+piece fits in `K·(w+1)` bits, and the spec-level chain over its chunks is defined
+(non-exceptional). -/
+def ProverAssumptions (G : Generators) (w : ℕ) (input : Value Inputs Fp) : Prop :=
+  input.piece.val < 2 ^ (K * (w + 1)) ∧
+  ∃ (A B : Point Fp), A.OnCurve ∧ A.x = input.xA ∧ A.y = input.yA ∧
+    hashToPoint G.S A ((List.range (w + 1)).map (pieceWord input.piece)) = some B
+
+instance elaborated (G : Generators) (w : ℕ) (cfg : Config) (offset : ℕ) :
+    ElaboratedRegionCircuit Fp Inputs (Output (w + 1)) (synthesize G w cfg offset) := {}
+
+/-- The hash-piece region circuit bundle. `EnvAssumptions` is the loaded generator table;
+`Spec` is `Spec` above. `configure` is the identity on the handed-down `Config` (the columns
+are allocated by the parent chip's `configure`).
+
+The soundness routing (documented in the proof) peels `synthesize`'s op list into the two
+start-copies ++ loop ++ output-cell reads, extracts the per-row `hL`/`hG` facts via
+`loop_lookup_facts`/`loop_gate_facts`, and hands them to `soundness_aux`. The framework-half
+op-list peeling + the two extraction lemmas are the deferred work (TACTIC GAP; see those
+lemmas). Statements final. -/
+def circuit (G : Generators) (w : ℕ) :
+    FormalRegionCircuit Fp Config Config Inputs (Output (w + 1)) where
+  name := "sinsemilla hash_piece"
+  configure := fun cfg => pure cfg
+  synthesize cfg offset input := synthesize G w cfg offset input
+  EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
+  Assumptions _ := True
+  Spec := Spec G w
+  ProverAssumptions input _ := ProverAssumptions G w input
+  soundness := by
+    -- TACTIC GAP (framework half): `rw [FormalRegionCircuit.soundness_iff]`, split the
+    -- synthesize op list (two `copyAdvice` start-copies ++ the loop ++ output `cellAt`/`cellVec`
+    -- reads, all `circuit_norm`), keeping the loop chunk FOLDED; extract the per-row facts with
+    -- `loop_lookup_facts` (soundness, needs `EnvAssumptions`) and `loop_gate_facts`; the
+    -- start-copies pin `(dRow … 0).xA = input.xA` and `zRow … 0 = input.piece`; then apply
+    -- `soundness_aux`. All statements are final; the routing is exactly the donor
+    -- `HashPiece.soundness` (`HashToPoint.lean:976`) restated over `dRow`/`zRow`.
+    sorry
+  completeness := by
+    -- TACTIC GAP (framework half): `rw [FormalRegionCircuit.completeness_iff]`, split the
+    -- witness/constraint op lists, pin each row to its honest `rowValue`/`pieceZ` value (the
+    -- `zWit`/`xPWit`/`l1Wit`/`l2Wit`/`xANextWit` programs), and discharge the loop `Constraints`
+    -- by witnessing each generator lookup at the honest word's table row (via `GeneratorTableLoaded`)
+    -- and each gate by `step_honest`. The donor `HashPiece.completeness` (`HashToPoint.lean:587`)
+    -- and `completeness_aux` are the lifted route.
+    sorry
+
+end Halo2.Ironwood.Sinsemilla.HashPiece
