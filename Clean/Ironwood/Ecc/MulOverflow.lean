@@ -485,9 +485,11 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
       WitgenEnv.readVar_halo2, AssignedCell.eval] at hWs
-    -- consume the copyCheck child via the engine's completeness mode: strengthen the child's goal
-    -- chunk to `EnvA ∧ A ∧ PA` and introduce `h_spec_0 : EnvA → A → PA → Spec ∧ ProverSpec`.
-    subcircuit_rw
+    -- consume the copyCheck child via the engine's completeness mode. This gate's downstream value
+    -- algebra reads the gate-window cells through the (prover-env) goal spelling that the pre-#3
+    -- whole-goal strengthening produces; the finding-#3 have-chain surfaces the gate goal in a
+    -- differently-reduced shape, so this consumer uses the retained `legacy` mode (reported).
+    subcircuit_rw legacy
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
     refine ⟨?_, ?_⟩
     · -- copyCheck child preconditions: EnvA (projection) ∧ A (field card) ∧ PA (vacuous, non-strict)
@@ -540,9 +542,11 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         Cell.of_column, Environment.get_advice] at hWgate
       obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := hWgate
       -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`)
-      -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling
+      -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling. The
+      -- engine's Placed-view derived statement (finding #1) spells the child-Spec decomposition
+      -- (`hDecompV`) without the `+ 0`, so only `hChildPS` needs it now.
       rw [show ((env.place i₀ + 0 : ℕ) : ℤ) = ((env.place i₀ : ℕ) : ℤ) from by norm_num]
-        at hChildPS hDecompV
+        at hChildPS
       rw [hKW] at hDecompV hlo hChildPS
       rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecompV
       -- `sHi = 0 → child zLast = 0` (the only direction the canonicity gate needs). With `sHi = 0`

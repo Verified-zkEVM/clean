@@ -241,66 +241,12 @@ CANDIDATE: a deriving-style projection mechanism. -/
 -- unchanged.
 derive_contract_bridges add := Add.add
 
--- TOOLING GAP (R1b finding, for `derive_contract_bridges`): the hi/lo/comp bundles are
--- *parametrized* (`double_and_add 124 bits` — a function of the `BitsHint`), and the command's
--- `liftTermElabM` does not see section variables, so it cannot generate bridges generalized over
--- a bundle parameter. The `ov` bundle below is a closed term and IS derived; the hi/lo/comp
--- bridges stay hand-written until the command learns binders.
-private theorem hi_spec_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 124 bits).Spec
-      = fun input output _ => ∃ bits' : BitsHint,
-          MulIncomplete.RoundInvariant 124 input output bits' := rfl
-private theorem hi_assumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 124 bits).Assumptions
-      = fun input => (input.base : Point Fp).OnCurve := rfl
-private theorem hi_envAssumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 124 bits).EnvAssumptions = fun _ _ => True := rfl
-private theorem hi_proverAssumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 124 bits).ProverAssumptions
-      = fun input _ => (input.base : Point Fp).OnCurve ∧ ∃ m : ℕ,
-          Point.ofCoords (input.xA, input.yA) = m • (input.base : Point Fp) ∧
-          2 ≤ m ∧ 2 ^ (124 + 2) * (m + 1) ≤ 2 ^ 254 := rfl
-private theorem hi_proverSpec_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 124 bits).ProverSpec
-      = fun input output _ => MulIncomplete.RoundInvariant 124 input output bits := rfl
-
-private theorem lo_spec_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 125 bits).Spec
-      = fun input output _ => ∃ bits' : BitsHint,
-          MulIncomplete.RoundInvariant 125 input output bits' := rfl
-private theorem lo_assumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 125 bits).Assumptions
-      = fun input => (input.base : Point Fp).OnCurve := rfl
-private theorem lo_envAssumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 125 bits).EnvAssumptions = fun _ _ => True := rfl
-private theorem lo_proverAssumptions_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 125 bits).ProverAssumptions
-      = fun input _ => (input.base : Point Fp).OnCurve ∧ ∃ m : ℕ,
-          Point.ofCoords (input.xA, input.yA) = m • (input.base : Point Fp) ∧
-          2 ≤ m ∧ 2 ^ (125 + 2) * (m + 1) ≤ 2 ^ 254 := rfl
-private theorem lo_proverSpec_eq (bits : BitsHint) :
-    (MulIncomplete.double_and_add 125 bits).ProverSpec
-      = fun input output _ => MulIncomplete.RoundInvariant 125 input output bits := rfl
-
-private theorem comp_spec_eq (bits : BitsHint) :
-    (MulComplete.assign_region 3 bits).Spec
-      = fun input output _ => ∃ bits' : BitsHint,
-          MulComplete.RoundInvariant 3 input output bits' := rfl
-private theorem comp_assumptions_eq (bits : BitsHint) :
-    (MulComplete.assign_region 3 bits).Assumptions
-      = fun input =>
-          ({ x := input.xA, y := input.yA } : Point Fp).Valid ∧ (input.base : Point Fp).Valid :=
-  rfl
-private theorem comp_envAssumptions_eq (bits : BitsHint) :
-    (MulComplete.assign_region 3 bits).EnvAssumptions = fun _ _ => True := rfl
-private theorem comp_proverAssumptions_eq (bits : BitsHint) :
-    (MulComplete.assign_region 3 bits).ProverAssumptions
-      = fun input _ =>
-          ({ x := input.xA, y := input.yA } : Point Fp).Valid ∧ (input.base : Point Fp).Valid :=
-  rfl
-private theorem comp_proverSpec_eq (bits : BitsHint) :
-    (MulComplete.assign_region 3 bits).ProverSpec
-      = fun input output _ => MulComplete.RoundInvariant 3 input output bits := rfl
+-- ACCEPTANCE (finding #4): the hi/lo/comp bundles are *parametrized* (`double_and_add 124 bits` —
+-- a function of the `BitsHint`); `derive_contract_bridges` now takes explicit binders for those
+-- parameters and generalizes the emitted bridges over them, replacing the hand-written stacks.
+derive_contract_bridges hi (bits : BitsHint) := MulIncomplete.double_and_add 124 bits
+derive_contract_bridges lo (bits : BitsHint) := MulIncomplete.double_and_add 125 bits
+derive_contract_bridges comp (bits : BitsHint) := MulComplete.assign_region 3 bits
 
 /-- `K · numWords K = 130` at `K = 10` (`10 · 13 = 130`). Discharges the MulOverflow bridge. -/
 theorem hKW10 : (10 : ℕ) * MulOverflow.numWords 10 = 130 := by
@@ -1406,15 +1352,15 @@ def mul (bits : BitsHint) :
       RegionOperations.constraints_cons, RegionOperations.constraints_nil,
       RegionOperation.constraints_assignAdvice, RegionOperation.constraints_constrainConstant,
       RegionOperation.constraints_constrainEqual, and_true, true_and]
-    subcircuit_rw
-    -- ENGINE FINDING: the derived statements/strengthened goal spell the verifier view as the
-    -- reconstructed record `⟨env.place, env.env.toEnvironment⟩`; `Placed.toEnvironment` does not
-    -- delta-unfold at reducible transparency, so `env.toEnvironment`-spelled bridges (the whole
-    -- old proof text) miss under `rw`/`simp` (structure ETA saved the soundness side, where the
-    -- record is `⟨env.place, env.env⟩ ≡η env`). Normalize the spelling once, everywhere.
-    have hPl : ({ place := env.place, env := env.env.toEnvironment } : Placed Environment Fp)
-        = env.toEnvironment := rfl
-    simp only [hPl] at h_spec_0 h_spec_1 h_spec_2 h_spec_3 h_spec_4 h_spec_5 ⊢
+    -- Engine `legacy` mode: strengthen the whole main-region goal to the AND of the six children's
+    -- `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
+    -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow). The
+    -- have-chain (finding #3) mode surfaces per-chunk precondition subgoals + bare `h_spec_i`;
+    -- Mul's value bookkeeping (chains feeding BOTH child preconditions and the parent LSB gate)
+    -- is threaded most compactly through the single strengthened goal, so this consumer keeps the
+    -- retained `legacy` shape (reported). Finding #1 (`env.toEnvironment` spelling) means the old
+    -- `hPl` record-normalization workaround is no longer needed.
+    subcircuit_rw legacy
     -- ── the base point: cells and value, both eval views ──
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hOnC0
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC

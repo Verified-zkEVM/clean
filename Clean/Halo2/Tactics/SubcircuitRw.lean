@@ -267,6 +267,74 @@ theorem layouter_completeness_leaf
   exact (child.completeness config i₀ (⟨place, env⟩ : Placed ProverEnvironment F)
     input hw' hE hA hpa).1
 
+/-! ### Placed-view completeness leaves (finding #1: verifier-view spelling)
+
+When the matched goal chunk sits over the projections `penv.place`/`penv.env` of a common
+`penv : Placed ProverEnvironment F` (the shape produced by `FormalRegionCircuit.completeness_iff`
+/ `FormalCircuit.completeness_iff`, which intro a single `env : Placed ProverEnvironment` and
+constrain over `env.place`/`env.env`), the bare leaves above would spell the child's verifier
+view as the *reconstructed* record `⟨penv.place, penv.env.toEnvironment⟩`. That record is
+definitionally — but not reducibly — `penv.toEnvironment`, so `env.toEnvironment`-spelled
+downstream bridges miss it under `rw`/`simp`. These variants take the `Placed ProverEnvironment`
+directly and spell the verifier view as `penv.toEnvironment`, matching how consumer proofs write
+their bridges. They are the leaves the engine instantiates whenever it detects the projection
+shape; otherwise it falls back to the bare leaves above. -/
+
+/-- Placed-view region completeness derived statement. Verifier parts spelled `penv.toEnvironment`. -/
+theorem region_completeness_derived_placed
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (penv : Placed ProverEnvironment F) (input : Var Input F)
+    (hw : RegionOperations.ExtendsWitnesses penv.place self penv.env
+      ((child.call config offset input).operations self)) :
+    child.EnvAssumptions config penv.toEnvironment →
+    child.Assumptions (eval penv.toEnvironment input) →
+    child.ProverAssumptions (eval penv input) penv.env.hint →
+    child.Spec (eval penv.toEnvironment input)
+        (eval penv.toEnvironment (child.output config offset input self))
+        (child.extract config offset input self penv.toEnvironment)
+      ∧ child.ProverSpec (eval penv input)
+          (eval penv (child.output config offset input self)) penv.env.hint :=
+  region_completeness_derived child config offset self penv.place penv.env input hw
+
+/-- Placed-view region completeness strengthening leaf. -/
+theorem region_completeness_leaf_placed
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (self : RegionIndex) (penv : Placed ProverEnvironment F) (input : Var Input F)
+    (hw : RegionOperations.ExtendsWitnesses penv.place self penv.env
+      ((child.call config offset input).operations self)) :
+    (child.EnvAssumptions config penv.toEnvironment
+      ∧ child.Assumptions (eval penv.toEnvironment input)
+      ∧ child.ProverAssumptions (eval penv input) penv.env.hint)
+    → RegionOperations.Constraints penv.place self penv.env
+        ((child.call config offset input).operations self) :=
+  region_completeness_leaf child config offset self penv.place penv.env input hw
+
+/-- Placed-view layouter completeness derived statement. -/
+theorem layouter_completeness_derived_placed
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (penv : Placed ProverEnvironment F) (input : Var Input F)
+    (hw : Halo2.ExtendsWitnesses penv.place penv.env ((child.call config input).operations i₀) i₀) :
+    child.EnvAssumptions config penv.toEnvironment →
+    child.Assumptions (eval penv.toEnvironment input) →
+    child.ProverAssumptions (eval penv input) penv.env.hint →
+    child.Spec (eval penv.toEnvironment input)
+        (eval penv.toEnvironment (child.output config input i₀))
+        (child.extract config input i₀ penv.toEnvironment)
+      ∧ child.ProverSpec (eval penv input)
+          (eval penv (child.output config input i₀)) penv.env.hint :=
+  layouter_completeness_derived child config i₀ penv.place penv.env input hw
+
+/-- Placed-view layouter completeness strengthening leaf. -/
+theorem layouter_completeness_leaf_placed
+    (child : FormalCircuit F CI Cfg Input Output) (config : Cfg)
+    (i₀ : RegionIndex) (penv : Placed ProverEnvironment F) (input : Var Input F)
+    (hw : Halo2.ExtendsWitnesses penv.place penv.env ((child.call config input).operations i₀) i₀) :
+    (child.EnvAssumptions config penv.toEnvironment
+      ∧ child.Assumptions (eval penv.toEnvironment input)
+      ∧ child.ProverAssumptions (eval penv input) penv.env.hint)
+    → Halo2.Constraints penv.place penv.env ((child.call config input).operations i₀) i₀ :=
+  layouter_completeness_leaf child config i₀ penv.place penv.env input hw
+
 end SubcircuitRw
 
 /-! ## The engine
@@ -386,6 +454,48 @@ def mkLeaf (c : ChunkMatch) (leafName : Name) (env : Expr) (extraArgs : Array Ex
     | some off => #[off, c.regionIdx, c.place, env, c.input]
     | none => #[c.regionIdx, c.place, env, c.input]
   return mkAppN (← mkConstWithFreshMVarLevels leafName) (common ++ mid ++ extraArgs)
+
+/-- Build a fully-applied **Placed-view** leaf term (`*_placed` completeness leaves): the same
+common prefix, but the `place`/`env` pair is replaced by a single `penv : Placed ProverEnvironment`
+argument. Used when the chunk's `place`/`env` are `penv.place`/`penv.env` of a common `penv`. -/
+def mkLeafPlaced (c : ChunkMatch) (leafName : Name) (penv : Expr) (extraArgs : Array Expr) :
+    MetaM Expr := do
+  let common := #[c.F, c.finiteField, c.CI, c.Cfg, c.Input, c.Output, c.ctInput, c.ctOutput,
+    c.child, c.config]
+  let mid := match c.offset? with
+    | some off => #[off, c.regionIdx, penv, c.input]
+    | none => #[c.regionIdx, penv, c.input]
+  return mkAppN (← mkConstWithFreshMVarLevels leafName) (common ++ mid ++ extraArgs)
+
+/-- If the chunk's `place`/`env` are the `.place`/`.env` projections of one common
+`penv : Placed ProverEnvironment F`, return that `penv`. This is the shape
+`FormalRegionCircuit.completeness_iff`/`FormalCircuit.completeness_iff` produce (they intro a
+single `env : Placed ProverEnvironment` and constrain over `env.place`/`env.env`). When present,
+the engine uses the `*_placed` leaves so the verifier view is spelled `penv.toEnvironment` rather
+than the non-reducible reconstructed record `⟨penv.place, penv.env.toEnvironment⟩` (finding #1). -/
+def placedEnv? (place env : Expr) : Option Expr := do
+  -- A completeness GOAL chunk is `Constraints X.place self (X.env).toEnvironment ops` for a common
+  -- `X : Placed ProverEnvironment F` (the verifier view of the honest prover env): `place` is
+  -- field 0 (`Placed.place`) of `X`, and `env` is `ProverEnvironment.toEnvironment` applied to
+  -- field 1 (`Placed.env`) of `X`. Accept both the application and primitive-projection forms of
+  -- each projection. When present, return that `X` so the engine uses the `*_placed` leaves, which
+  -- spell the verifier view as `X.toEnvironment` (= `⟨X.place, X.env.toEnvironment⟩`) — matching how
+  -- consumer proofs write their bridges (finding #1). -/
+  let placeProj (e : Expr) : Option Expr :=
+    match e with
+    | .proj ``Placed 0 s => some s
+    | _ => if e.isAppOfArity ``Placed.place 3 then some e.appArg! else none
+  let envProj (e : Expr) : Option Expr :=
+    match e with
+    | .proj ``Placed 1 s => some s
+    | _ => if e.isAppOfArity ``Placed.env 3 then some e.appArg! else none
+  -- strip the outer `ProverEnvironment.toEnvironment` on the env slot
+  let env ← if env.isAppOfArity ``ProverEnvironment.toEnvironment 2 then some env.appArg!
+            else if env.isAppOfArity ``ProverEnvironment.toEnvironment 1 then some env.appArg!
+            else none
+  let p ← placeProj place
+  let v ← envProj env
+  if p == v then some p else none
 
 /-- Soundness-side leaf: for a matched chunk, produce `(replacementProp, proof : chunk → repl)`.
 Instantiates `region_soundness_leaf`/`layouter_soundness_leaf`, confirms its hypothesis is
@@ -586,13 +696,26 @@ def witnessEnv? (isRegion : Bool) (witTy : Expr) : Option Expr :=
   else none
 
 /-- Completeness strengthening leaf: `(strengthened, proof : strengthened → chunk)` where
-`strengthened = EnvA ∧ A ∧ PA`. `witProof/witTy` is the located `ExtendsWitnesses` fact. -/
+`strengthened = EnvA ∧ A ∧ PA`. `witProof/witTy` is the located `ExtendsWitnesses` fact.
+Prefers the Placed-view leaf (finding #1) when the chunk's `place`/`env` are projections of a
+common `penv : Placed ProverEnvironment`; falls back to the bare leaf otherwise. -/
 def completenessLeaf? (c : ChunkMatch) (chunk witProof witTy : Expr) :
     MetaM (Option (Expr × Expr)) := do
-  let some penv := witnessEnv? c.isRegion witTy |
-    (do trace[Halo2.subcircuit_rw] "could not recover prover env from witness fact"; return none)
-  let leafName := if c.isRegion then ``region_completeness_leaf else ``layouter_completeness_leaf
-  let leaf ← mkLeaf c leafName penv #[witProof]
+  let leaf? ← match placedEnv? c.place c.env with
+    | some penv =>
+      let leafName := if c.isRegion then ``region_completeness_leaf_placed
+        else ``layouter_completeness_leaf_placed
+      pure (some (← mkLeafPlaced c leafName penv #[witProof]))
+    | none =>
+      match witnessEnv? c.isRegion witTy with
+      | none =>
+        trace[Halo2.subcircuit_rw] "could not recover prover env from witness fact"
+        pure none
+      | some penv =>
+        let leafName := if c.isRegion then ``region_completeness_leaf
+          else ``layouter_completeness_leaf
+        pure (some (← mkLeaf c leafName penv #[witProof]))
+  let some leaf := leaf? | return none
   let leafTy ← inferType leaf
   let some (strengthened, concl) := (← instantiateMVars leafTy).arrow? |
     (do trace[Halo2.subcircuit_rw] "completeness leaf not an arrow"; return none)
@@ -601,57 +724,110 @@ def completenessLeaf? (c : ChunkMatch) (chunk witProof witTy : Expr) :
     return none
   return some (strengthened, ← instantiateMVars leaf)
 
-/-- Derived contract statement `EnvA → A → PA → Spec ∧ ProverSpec` from the located witness. -/
+/-- Derived contract statement `EnvA → A → PA → Spec ∧ ProverSpec` from the located witness.
+Placed-view (finding #1) when the projection shape is present, else bare. -/
 def derivedStatement (c : ChunkMatch) (witProof witTy : Expr) : MetaM (Option (Expr × Expr)) := do
-  let some penv := witnessEnv? c.isRegion witTy | return none
-  let leafName := if c.isRegion then ``region_completeness_derived else ``layouter_completeness_derived
-  let leaf ← mkLeaf c leafName penv #[witProof]
+  let leaf? ← match placedEnv? c.place c.env with
+    | some penv =>
+      let leafName := if c.isRegion then ``region_completeness_derived_placed
+        else ``layouter_completeness_derived_placed
+      pure (some (← mkLeafPlaced c leafName penv #[witProof]))
+    | none =>
+      match witnessEnv? c.isRegion witTy with
+      | none => pure none
+      | some penv =>
+        let leafName := if c.isRegion then ``region_completeness_derived
+          else ``layouter_completeness_derived
+        pure (some (← mkLeaf c leafName penv #[witProof]))
+  let some leaf := leaf? | return none
   let leafTy ← inferType leaf
   return some (← instantiateMVars leafTy, ← instantiateMVars leaf)
 
-/-! ### The completeness walker
+/-! ### The completeness walker (finding #3: per-chunk precondition subgoals in op order)
 
-Mirrors `walkPos`, but goals are **strengthened**: `walkGoal P` returns `some (Q, proof : Q → P)`
-with positive chunks replaced by their strengthened preconditions. Side output: the list of
-derived statements (name-suffixed per child) to introduce. -/
+Mirrors `walkPos`, but goals are **discharged in op order via a have-chain**. Each positive
+call-keyed goal chunk becomes a separate PRECONDITION SUBGOAL `pre_i : EnvA ∧ A ∧ PA`
+(sequenced in walk = op order); a fresh metavar `pre_i` stands for it. The chunk position in the
+residual goal is closed by the strengthening leaf applied to `pre_i` (so the residual goal is the
+parent's own constraints only — chunk conjuncts collapse to `True`). Simultaneously the derived
+contract `h_spec_i := derived_i pre_i` — a **bare** `Spec ∧ ProverSpec` with the preconditions
+already consumed — is introduced into the context of all later subgoals and the residual goal.
 
-/-- Fresh-name suffix for a chunk's derived statement. The scheme is the **positional index**
-of the chunk within the goal (in walk order, 0-based): the introduced hypotheses are
-`h_spec_0`, `h_spec_1`, …, one per positive goal chunk. Positional (not name-derived) because
-child bundle names may be long, contain spaces, or repeat when a parent composes two instances
-of the same child (the `TestLayouterSubcircuit` parent does exactly that) — the index is always
-unique and predictable. -/
-def chunkSuffix (_c : ChunkMatch) (idx : Nat) : MetaM String := do
-  return s!"{idx}"
+Consequence (the finding #3 fix): each precondition `EnvA ∧ A ∧ PA` is written exactly ONCE (in
+its `pre_i` subgoal), instead of once to feed a premised `h_spec_i` and once to discharge the
+strengthened goal. Chained bookkeeping (e.g. output threading) reads `h_spec_i` as a bare Spec. -/
 
-/-- Accumulator entry for a derived statement to introduce: user-facing name, type, proof. -/
-structure Derived where
+/-- A located completeness chunk: the `pre_i` metavar (its type is the `EnvA ∧ A ∧ PA` bundle),
+the name/type/proof of the bare derived statement `h_spec_i` (proof references `pre_i`). -/
+structure CompChunk where
+  /-- The precondition metavar `pre_i : EnvA ∧ A ∧ PA`, surfaced as a subgoal in op order. -/
+  preMVar : MVarId
+  /-- The bundle type `EnvA ∧ A ∧ PA` (the `pre_i` subgoal's goal). -/
+  preType : Expr
+  /-- The derived statement's user name `h_spec_i`. -/
   name : Name
-  type : Expr
-  proof : Expr
+  /-- The derived statement's type (`Spec ∧ ProverSpec`, bare — no premises). -/
+  derivedType : Expr
+  /-- The derived statement's proof term (references `preMVar`). -/
+  derivedProof : Expr
 
-/-- Completeness walker state: located derived statements + a running chunk index. -/
+/-- Completeness walker state: located chunks (in op order) + a running chunk index.
+`legacy` selects the pre-finding-#3 behavior (strengthen the whole goal to the AND of `EnvA ∧ A ∧
+PA` bundles + up-front PREMISED `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`), kept available
+per finding #3's "keep old behavior when the new one can't cover a pattern" clause. When `legacy`
+is set the leaf replaces the chunk with the bundle (not `True`) and records the derived statement
+in its arrow form. -/
 structure WalkState where
-  derived : Array Derived := #[]
+  chunks : Array CompChunk := #[]
   idx : Nat := 0
+  legacy : Bool := false
 
-/-- Walk goal proposition `p` in positive polarity, strengthening call-keyed chunks. Returns
-`some (p', proof : p' → p)` or `none` (no change). Accumulates derived statements in the state.
-Runs in `TacticM` (needs the local context to locate witness facts). -/
+/-- Walk goal proposition `p` in positive polarity, discharging call-keyed chunks against fresh
+precondition metavars. Returns `some (p', proof : p' → p)` or `none` (no change); in `p'` each
+chunk position is `True`. Accumulates `CompChunk`s in op order. Runs in `TacticM` (needs the
+local context to locate witness facts). -/
 partial def walkGoal (p : Expr) : StateRefT WalkState TacticM (Option (Expr × Expr)) := do
   let p ← instantiateMVars p
   -- Leaf: a call-keyed chunk with a locatable witness fact.
   if let some c ← matchChunk? p then
     if let some (witProof, witTy) ← findWitness? c then
-      if let some (strengthened, proof) ← completenessLeaf? c p witProof witTy then
-        let idx := (← get).idx
-        let suffix ← chunkSuffix c idx
-        modify fun s => { s with idx := s.idx + 1 }
+      if let some (bundle, strengthenProof) ← completenessLeaf? c p witProof witTy then
         if let some (dTy, dProof) ← derivedStatement c witProof witTy then
-          let nm := Name.mkSimple s!"h_spec_{suffix}"
-          modify fun s => { s with derived := s.derived.push ⟨nm, dTy, dProof⟩ }
-        trace[Halo2.subcircuit_rw] "strengthened positive goal chunk (region={c.isRegion})"
-        return some (strengthened, proof)
+          let idx := (← get).idx
+          let legacy := (← get).legacy
+          modify fun s => { s with idx := s.idx + 1 }
+          let nm := Name.mkSimple s!"h_spec_{idx}"
+          if legacy then
+            -- LEGACY: strengthen the chunk to the bundle in place (no separate subgoal), record the
+            -- derived statement in its PREMISED arrow form; the runner introduces it up front.
+            let derivedTy ← instantiateMVars dTy
+            let entry : CompChunk :=
+              { preMVar := ← mkFreshMVarId, preType := bundle, name := nm,
+                derivedType := derivedTy, derivedProof := ← instantiateMVars dProof }
+            modify fun s => { s with chunks := s.chunks.push entry }
+            trace[Halo2.subcircuit_rw] "strengthened positive goal chunk (legacy, region={c.isRegion})"
+            return some (bundle, strengthenProof)
+          -- fresh precondition metavar `pre_i : bundle` (= `EnvA ∧ A ∧ PA`), a subgoal in op order
+          let preMVar ← mkFreshExprSyntheticOpaqueMVar bundle (tag := Name.mkSimple s!"pre_{idx}")
+          -- close the chunk position: `strengthenProof pre_i : chunk`; residual sees `True` here
+          let chunkProof := mkApp strengthenProof preMVar
+          let toChunk ← withLocalDeclD `h (mkConst ``True) fun h => mkLambdaFVars #[h] chunkProof
+          -- the bare derived statement `h_spec_i := dProof pre.1 pre.2.1 pre.2.2 : Spec ∧ ProverSpec`
+          -- (`dProof : EnvA → A → PA → Spec ∧ ProverSpec`, so feed the three bundle projections)
+          let hE ← mkAppM ``And.left #[preMVar]
+          let hAPA ← mkAppM ``And.right #[preMVar]
+          let hA ← mkAppM ``And.left #[hAPA]
+          let hPA ← mkAppM ``And.right #[hAPA]
+          let derivedApplied := mkAppN dProof #[hE, hA, hPA]
+          let derivedTy ← instantiateMVars (← inferType derivedApplied)
+          let entry : CompChunk :=
+            { preMVar := preMVar.mvarId!, preType := bundle, name := nm,
+              derivedType := derivedTy, derivedProof := derivedApplied }
+          modify fun s => { s with chunks := s.chunks.push entry }
+          trace[Halo2.subcircuit_rw] "discharged positive goal chunk (region={c.isRegion})"
+          return some (mkConst ``True, toChunk)
+        else
+          trace[Halo2.subcircuit_rw] "chunk matched but derived statement failed; leaving untouched"
       else
         trace[Halo2.subcircuit_rw] "chunk matched but completeness leaf failed; leaving untouched"
     else
@@ -716,9 +892,17 @@ where
   identProof (p : Expr) : MetaM Expr := do
     withLocalDeclD `h p fun h => mkLambdaFVars #[h] h
 
+/-- The engine's internal recursion-depth floor. Goal-mode `isDefEq` on deep composed chunks
+(the nested-bind main-region term) exceeds the ambient 512; the engine raises its own matching /
+instantiation depth so consumers don't set `maxRecDepth` for the tactic's sake (finding #2). Term-
+depth value bookkeeping in the consumer (output projections through the deep term) is a separate
+concern and keeps its own allowance where needed. -/
+def recDepthFloor : Nat := 4096
+
 /-- Soundness mode: rewrite positive call-keyed chunks in hypothesis `h` to the child's
 `EnvAssumptions → Assumptions → Spec`, then `replace h`. No-op (silent) if nothing matched. -/
-def runSoundness (fvarId : FVarId) : TacticM Unit := withMainContext do
+def runSoundness (fvarId : FVarId) : TacticM Unit := withAtLeastMaxRecDepth recDepthFloor <|
+    withMainContext do
   let hyp ← instantiateMVars (← fvarId.getType)
   match ← walkPos hyp with
   | none =>
@@ -731,34 +915,66 @@ def runSoundness (fvarId : FVarId) : TacticM Unit := withMainContext do
     let goal' ← goal'.tryClearMany #[fvarId]
     replaceMainGoal [goal']
 
-/-- Completeness mode: co-process the goal and the `ExtendsWitnesses` context. Strengthen every
-positive goal chunk to `EnvA ∧ A ∧ ProverA` (discharging `ExtendsWitnesses` from a located
-context fact), and introduce the derived contract statement `h_spec_<child> : EnvA → A → PA →
-Spec ∧ ProverSpec` for each. Silent no-op if nothing matched. -/
-def runCompleteness : TacticM Unit := withMainContext do
+/-- Completeness mode (finding #3 have-chain): co-process the goal and the `ExtendsWitnesses`
+context. For each positive goal chunk, in op order, emit a PRECONDITION SUBGOAL
+`pre_i : EnvA ∧ A ∧ ProverA` (the chunk is discharged from `pre_i` via the strengthening leaf, so
+the residual goal keeps only the parent's own constraints); simultaneously introduce the BARE
+derived statement `h_spec_i : Spec ∧ ProverSpec` (preconditions already consumed) into the context
+of every LATER subgoal and the residual goal. The surfaced goals are ordered `pre_0, …, pre_{n-1},
+<residual>`. Silent no-op if nothing matched. -/
+def runCompleteness (legacy : Bool := false) : TacticM Unit :=
+    withAtLeastMaxRecDepth recDepthFloor <| withMainContext do
   let goalMVar ← getMainGoal
   let target ← instantiateMVars (← goalMVar.getType)
-  let (res, st) ← (walkGoal target).run {}
+  let (res, st) ← (walkGoal target).run { legacy }
   match res with
   | none =>
     trace[Halo2.subcircuit_rw] "no strengthenable positive chunk found in goal"
   | some (newGoal, proof) =>
-    -- `proof : newGoal → target`. Replace the goal by `newGoal` via `proof ?_`.
-    let newMVar ← mkFreshExprSyntheticOpaqueMVar newGoal
+    -- `proof : newGoal → target`. Replace the main goal by `newGoal` via `proof ?_`.
+    let newMVar ← mkFreshExprSyntheticOpaqueMVar newGoal (tag := if legacy then `strengthened else `residual)
     goalMVar.assign (mkApp proof newMVar)
-    let mut g := newMVar.mvarId!
-    -- Introduce the derived statements as fresh hypotheses (before the user continues).
-    for d in st.derived do
-      let g' ← g.assert d.name d.type d.proof
-      let (_, g'') ← g'.intro1P
-      g := g''
-    replaceMainGoal [g]
+    if legacy then
+      -- LEGACY: `newGoal` is the whole goal strengthened to the AND of `EnvA ∧ A ∧ PA` bundles;
+      -- introduce all `h_spec_i` (premised `EnvA → A → PA → Spec ∧ ProverSpec`) up front, then hand
+      -- the single strengthened goal to the user (the pre-finding-#3 behavior).
+      let mut g := newMVar.mvarId!
+      for ch in st.chunks do
+        let g' ← g.assert ch.name ch.derivedType ch.derivedProof
+        let (_, g'') ← g'.intro1P
+        g := g''
+      replaceMainGoal [g]
+      return
+    -- NEW (finding #3 have-chain): `newGoal` is the residual (chunk positions are `True`).
+    -- Assert `h_spec_0 … h_spec_{k-1}` (the earlier bare derived statements) into a goal `g`, in
+    -- order, so each is in scope. Returns the extended goal.
+    let assertSpecsUpTo (g : MVarId) (k : Nat) : TacticM MVarId := do
+      let mut g := g
+      for ch in st.chunks[0:k] do
+        let g' ← g.assert ch.name ch.derivedType ch.derivedProof
+        let (_, g'') ← g'.intro1P
+        g := g''
+      return g
+    -- The precondition subgoals, in op order; `pre_i` sees `h_spec_0 … h_spec_{i-1}`.
+    let mut goals : Array MVarId := #[]
+    let mut i := 0
+    for ch in st.chunks do
+      let g ← assertSpecsUpTo ch.preMVar i
+      goals := goals.push g
+      i := i + 1
+    -- The residual goal sees all `h_spec_i`.
+    let residual ← assertSpecsUpTo newMVar.mvarId! st.chunks.size
+    goals := goals.push residual
+    replaceMainGoal goals.toList
 
 end SubcircuitRw
 
-/-- `subcircuit_rw at h` (soundness) / `subcircuit_rw` (completeness). See the module docstring.
-Silent on shapes it doesn't target; `set_option trace.Halo2.subcircuit_rw true` to debug. -/
-syntax (name := subcircuitRw) "subcircuit_rw" (" at " ident)? : tactic
+/-- `subcircuit_rw at h` (soundness) / `subcircuit_rw` (completeness, finding #3 have-chain) /
+`subcircuit_rw legacy` (completeness, pre-finding-#3 whole-goal strengthening + premised `h_spec_i`,
+kept for the few consumers whose goal shape the have-chain doesn't cleanly cover). See the module
+docstring. Silent on shapes it doesn't target; `set_option trace.Halo2.subcircuit_rw true` to
+debug. -/
+syntax (name := subcircuitRw) "subcircuit_rw" (" at " ident)? (&" legacy")? : tactic
 
 @[tactic subcircuitRw]
 def evalSubcircuitRw : Tactic := fun stx => do
@@ -766,6 +982,8 @@ def evalSubcircuitRw : Tactic := fun stx => do
   | `(tactic| subcircuit_rw at $h:ident) =>
     let fvarId ← withMainContext <| getFVarId h
     SubcircuitRw.runSoundness fvarId
+  | `(tactic| subcircuit_rw legacy) =>
+    SubcircuitRw.runCompleteness (legacy := true)
   | `(tactic| subcircuit_rw) =>
     SubcircuitRw.runCompleteness
   | _ => throwUnsupportedSyntax

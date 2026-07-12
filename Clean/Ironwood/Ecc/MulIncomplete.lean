@@ -482,8 +482,7 @@ private theorem loop_gate_facts (n : ℕ) :
         · -- single-round circuit: `q_mul_3` on row 0
           subst hrn
           rw [hYADr, hYADr1n]
-          simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector] at hRound
+          round_norm [round, qMul3Gate, forLoopPolys, yAExpr, xRExpr] at hRound
           obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
           · rcases mul_eq_zero.mp hbool with h | h
@@ -494,8 +493,7 @@ private theorem loop_gate_facts (n : ℕ) :
           · linear_combination hg2
         · -- interior first row: `q_mul_2` on row 0
           rw [hYADr, hYADr1i hrn]
-          simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_neg hrn] at hRound
+          round_norm [round, qMul2Gate, forLoopPolys, yAExpr, xRExpr, if_neg hrn] at hRound
           obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_,
             fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
@@ -510,9 +508,7 @@ private theorem loop_gate_facts (n : ℕ) :
         · -- last round: `q_mul_3`
           subst hrn
           rw [hYADr, hYADr1n]
-          simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
-            Constraints.withSelector, if_neg hr0] at hRound
-          simp only [hzp] at hRound
+          round_norm [round, qMul3Gate, forLoopPolys, yAExpr, xRExpr, if_neg hr0] at hRound
           obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
           · rcases mul_eq_zero.mp hbool with h | h

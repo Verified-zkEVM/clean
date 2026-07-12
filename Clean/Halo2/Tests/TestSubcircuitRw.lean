@@ -77,11 +77,14 @@ def regionParent :
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
-    -- the goal chunk is strengthened to `EnvA ∧ A ∧ PA`; `h_spec_0` introduced from hwit
+    -- the goal chunk becomes a precondition subgoal `pre_0 : EnvA ∧ A ∧ PA`; `h_spec_0` (bare
+    -- `Spec ∧ ProverSpec`) enters the residual context. The chunk itself is discharged.
     simp only [circuit_norm] at h_input hpa ⊢
     subcircuit_rw
-    -- discharge `EnvA ∧ A ∧ PA` (default `True`s + the parent's `ProverAssumptions`)
-    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    -- pre_0: `EnvA ∧ A ∧ PA` (default `True`s + the parent's `ProverAssumptions`)
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    -- residual: the chunk is discharged, only `True` remains
+    · trivial
 
 /-! ## Region parent with its OWN op + subcircuit call -/
 
@@ -114,7 +117,8 @@ def regionParentWithOp :
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
     subcircuit_rw
-    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · trivial
 
 /-! ## Layouter parent: native child + `toFormal`-lifted region child -/
 
@@ -159,10 +163,12 @@ def layouterParent :
     intro i₀ env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
-    -- both goal chunks are strengthened; h_spec_0, h_spec_1 introduced (one per child)
+    -- both goal chunks become precondition subgoals pre_0, pre_1 (op order); h_spec_0, h_spec_1
+    -- enter the later contexts. The chunks are discharged; residual is `True ∧ True`.
     subcircuit_rw
-    exact ⟨⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩,
-           ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩⟩
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · exact ⟨trivial, trivial⟩
 
 /-! ## Chained children (second input = first output), consuming the derived statement
 
@@ -235,16 +241,20 @@ def chainedParent :
     -- engine introduces h_spec_0 (first child) and h_spec_1 (second child) from hwit's conjuncts,
     -- and strengthens both goal chunks to `EnvA ∧ A ∧ PA`
     subcircuit_rw
-    -- h_spec_0's ProverSpec (`first_output = first_input`) bookkeeps the SECOND child's
-    -- chained ProverAssumption (its input IS the first's output — output bookkeeping)
-    have hps0 := (h_spec_0 trivial trivial (h_input ▸ hpa)).2
-    refine ⟨⟨trivial, trivial, h_input ▸ hpa⟩, trivial, trivial, ?_⟩
-    -- second child's ProverAssumption = (its input).Valid = (first output).Valid; the `(call …)`
-    -- vs `.output` spelling is defeq (rfl); then hps0 rewrites first_output ↦ first_input
-    have hout : (passthrough.call config offset input_var).output self
-        = passthrough.output config offset input_var self := rfl
-    rw [hout] at *
-    rw [hps0]; exact h_input ▸ hpa
+    -- pre_0: the first child's `EnvA ∧ A ∧ PA` (writes the precondition exactly ONCE — the
+    -- finding #3 fix: no separate feeding of a premised h_spec_0).
+    · exact ⟨trivial, trivial, h_input ▸ hpa⟩
+    -- pre_1: the second child's `EnvA ∧ A ∧ PA`. Its chained ProverAssumption (its input IS the
+    -- first's output) is discharged from `h_spec_0` (now a BARE `Spec ∧ ProverSpec` in context):
+    -- `h_spec_0.2` is the first child's ProverSpec (`first_output = first_input`).
+    · refine ⟨trivial, trivial, ?_⟩
+      have hps0 := h_spec_0.2
+      have hout : (passthrough.call config offset input_var).output self
+          = passthrough.output config offset input_var self := rfl
+      rw [hout] at *
+      rw [hps0]; exact h_input ▸ hpa
+    -- residual: both chunks discharged
+    · trivial
 
 /-! ## Bare-`place`/`env` loop-lemma context
 
