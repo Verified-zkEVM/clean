@@ -11,6 +11,7 @@ import Clean.Utils.Test.TestLookup
 import Clean.Halo2.Tests.TestProvableTypeSimp
 import Clean.Halo2.Tests.TestSubcircuit
 import Clean.Halo2.Tests.TestLayouterSubcircuit
+import Clean.Halo2.Tests.TestSubcircuitRw
 import Clean.Halo2.Tests.TestRoundNorm
 import Clean.Halo2.Tests.TestContractBridges
 import Clean.Halo2.Tests.TestLookupMembership
