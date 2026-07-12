@@ -1,5 +1,6 @@
 import Clean.Halo2.Expression
 import Clean.Halo2.Provable
+import Clean.Halo2.UnconstrainedNative
 import Clean.Halo2.StructEvalSimprocs
 import Clean.Halo2.WitnessIR
 import Clean.Halo2.Configure

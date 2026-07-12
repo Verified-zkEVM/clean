@@ -96,7 +96,8 @@ open Orchard.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chai
 open Orchard.Ecc.Mul.Decompose (m_bounds)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell)
+open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell kBitsWindow kBitsWindow_eq_kBits
+  kBitsWindow_as_kBits kBitsWindow_zero)
 
 /-! ## Config
 
@@ -244,12 +245,12 @@ CANDIDATE: a deriving-style projection mechanism. -/
 -- unchanged.
 derive_contract_bridges add := Add.add
 
--- ACCEPTANCE (finding #4): the hi/lo/comp bundles are *parametrized* (`double_and_add 124 bits` —
--- a function of the `BitsHint`); `derive_contract_bridges` now takes explicit binders for those
--- parameters and generalizes the emitted bridges over them, replacing the hand-written stacks.
-derive_contract_bridges hi (bits : BitsHint) := MulIncomplete.double_and_add 124 bits
-derive_contract_bridges lo (bits : BitsHint) := MulIncomplete.double_and_add 125 bits
-derive_contract_bridges comp (bits : BitsHint) := MulComplete.assign_region 3 bits
+-- ACCEPTANCE (finding #4): the hi/lo/comp bundles are *parametrized* (`double_and_add 124 w` —
+-- a function of the bit-window offset); `derive_contract_bridges` takes explicit binders for
+-- those parameters and generalizes the emitted bridges over them.
+derive_contract_bridges hi (w : ℕ) := MulIncomplete.double_and_add 124 w
+derive_contract_bridges lo (w : ℕ) := MulIncomplete.double_and_add 125 w
+derive_contract_bridges comp (w : ℕ) := MulComplete.assign_region 3 w
 
 /-- `K · numWords K = 130` at `K = 10` (`10 · 13 = 130`). Discharges the MulOverflow bridge. -/
 theorem hKW10 : (10 : ℕ) * MulOverflow.numWords 10 = 130 := by
@@ -257,11 +258,15 @@ theorem hKW10 : (10 : ℕ) * MulOverflow.numWords 10 = 130 := by
 
 derive_contract_bridges ov := MulOverflow.circuit 10 hKW10
 
-/-! ## The scalar-bit hint
+/-! ## The scalar bits — derived from the alpha cell, no prover hint
 
-The working scalar `k = alpha.val + t_q`, MSB-first, exactly the donor `kBits`. The children
-take a `BitsHint` prover hint; the top-level `main` supplies `kBits (env alpha)`, and the
-verifier `Spec` existentially recovers a matching sequence per child. -/
+The working scalar `k = alpha.val + t_q`, MSB-first, exactly the donor `kBits` (Rust
+`decompose_for_scalar_mul(alpha.value())`). There is NO `BitsHint` parameter anywhere: the
+children receive the `alpha` cell in their `Inputs` plus a window offset (`hi` = 0, `lo` = 125,
+`complete` = 251 — the global index of each phase's first bit), and derive their bits from the
+cell inside their witness closures (`MulIncomplete.bitsOf`/`kBitsWindow`, kernel-safe spelling).
+The LSB step below derives `k_0 = kBits alpha 254` the same way. The verifier `Spec`
+existentially recovers a matching sequence per child. -/
 
 /-! ## Synthesize (`mul.rs::Config::assign`, one region)
 
@@ -274,9 +279,8 @@ genuinely region-relative helpers, faithful to Rust's single `assign_region`. Re
 point together with the three running-sum cells the overflow check copies across into its own
 region: `z0` (the LSB row full sum), `hi.zs[124]` (= z_130), `hi.zs[0]` (= k_254 = z_254 top bit).
 Placed at row offset 0 of its own region (Rust's single `assign_region`). -/
-def mainRegion (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
+def mainRegion (cfg : Config) (input : Var Inputs Fp) :
     RegionCircuit Fp (Var Point Fp × AssignedCell Fp × AssignedCell Fp × AssignedCell Fp) := do
-  let bitsOf : MulIncomplete.BitsHint := bits
   -- 1. acc = [2]base  (init complete addition, mul.rs:188-190)
   let acc ← Add.add.call cfg.addConfig offInit
     ⟨input.base, input.base⟩
@@ -287,29 +291,33 @@ def mainRegion (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
   let zInit ← assignAdvice cfg.hiConfig.z offHi
     (.native fun _ => #v[(0 : Fp)])
   constrainConstant zInit 0
-  -- 3. hi half: 125 double-and-add bits k_254..k_130  (mul.rs:209-216)
-  let hi ← (MulIncomplete.double_and_add 124 bitsOf).call cfg.hiConfig offHi
-    ⟨input.base, acc.x, acc.y, zInit⟩
-  -- 4. lo half: 126 double-and-add bits k_129..k_4 (the bit window shifted by 125, as the
-  --    donor's `input.bits env (125 + i)`), running sum chained  (mul.rs:220-227)
-  let lo ← (MulIncomplete.double_and_add 125 (fun i => bitsOf (125 + i))).call cfg.loConfig
-    offLo ⟨input.base, hi.xA, hi.yA, hi.zs[124]⟩
-  -- 5. complete rounds: k_3..k_1 (window shifted by 251)  (mul.rs:239-253)
-  let comp ← (MulComplete.assign_region 3 (fun i => bitsOf (251 + i))).call cfg.completeConfig
-    offComp ⟨input.base, lo.xA, lo.yA, lo.zs[125]⟩
-  -- 6. the LSB step k_0  (mul.rs:258-260, process_lsb, mul.rs:324-385)
+  -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0  (mul.rs:209-216)
+  let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
+    ⟨input.alpha, input.base, acc.x, acc.y, zInit⟩
+  -- 4. lo half: 126 double-and-add bits k_129..k_4, bit window 125 (the donor's
+  --    `input.bits env (125 + i)` shift), running sum chained  (mul.rs:220-227)
+  let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig
+    offLo ⟨input.alpha, input.base, hi.xA, hi.yA, hi.zs[124]⟩
+  -- 5. complete rounds: k_3..k_1, bit window 251  (mul.rs:239-253)
+  let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig
+    offComp ⟨input.alpha, input.base, lo.xA, lo.yA, lo.zs[125]⟩
+  -- 6. the LSB step k_0 = kBits alpha 254, derived from the scalar cell
+  --    (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
   -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row
   let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
-    (.native fun env => #v[2 * readCell env z1 + (if bitsOf 254 then 1 else 0)])
+    (.native fun env => #v[2 * readCell env z1
+      + (if kBitsWindow (readCell env input.alpha) 254 0 then 1 else 0)])
   -- copy base_x, base_y into the LSB gate window (next row)
   let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
   let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
   -- the correction point (base_x, ±base_y) or identity, witnessed on add.xP/add.yP (cur row)
   let corrX ← assignAdvice cfg.addConfig.xP offLsb
-    (.native fun env => #v[if bitsOf 254 then 0 else readCell env input.base.x])
+    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
+      else readCell env input.base.x])
   let corrY ← assignAdvice cfg.addConfig.yP offLsb
-    (.native fun env => #v[if bitsOf 254 then 0 else -(readCell env input.base.y)])
+    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
+      else -(readCell env input.base.y)])
   -- the q_mul_lsb gate at the LSB base row
   (lsbGate cfg).enable offLsb
   -- the final complete addition: result = corr + acc
@@ -322,11 +330,11 @@ def mainRegion (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
 (`main`), and the overflow check runs AFTER that region closes (`mul.rs:299`) as a SEPARATE
 layouter-level `overflow_check` — three of its own sibling regions. The `z_0`/`z_130`/`k_254`
 cells cross into the overflow regions as copies (Rust copies them across region boundaries).
-Parameterized by the working-scalar bit sequence `bits`. Returns the result point `[alpha] base`. -/
-def synthesize (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
+Returns the result point `[alpha] base`. -/
+def synthesize (cfg : Config) (input : Var Inputs Fp) :
     Circuit Fp (Var Point Fp) := do
   -- the main double-and-add region (mul.rs:171-296)
-  let ⟨result, z0, z130, k254⟩ ← assignRegion "variable-base scalar mul" (mainRegion bits cfg input)
+  let ⟨result, z0, z130, k254⟩ ← assignRegion "variable-base scalar mul" (mainRegion cfg input)
   -- the overflow check AFTER the main region closes (mul.rs:299), at layouter level
   let _ov ← (MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
     ⟨input.alpha, z0, z130, k254⟩
@@ -491,19 +499,19 @@ pattern: `ProvableStruct.eval` on a literal, `with_unfolding_all rfl`). -/
 
 /-- The `MulIncomplete` bundle's output record, reduced (`cellAt`/`cellVec` cells at their
 fixed region-local rows). -/
-private theorem incomplete_call_output (n : ℕ) (bits : BitsHint)
+private theorem incomplete_call_output (n : ℕ) (w : ℕ)
     (cfg : MulIncomplete.Config) (off : ℕ) (inp : Var MulIncomplete.Inputs Fp)
     (self : RegionIndex) :
-    ((MulIncomplete.double_and_add n bits).call cfg off inp).output self
+    ((MulIncomplete.double_and_add n w).call cfg off inp).output self
       = { xA := .of self (off + 1 + n + 1) cfg.xA,
           yA := .of self (off + 1 + (n + 1)) cfg.lambda1,
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := rfl
 
 /-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
 never reduced, per the whnf discipline). -/
-private theorem complete_call_output_zs (bits : BitsHint) (cfg : MulComplete.Config)
+private theorem complete_call_output_zs (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    (((MulComplete.assign_region 3 bits).call cfg off inp).output self).zs
+    (((MulComplete.assign_region 3 w).call cfg off inp).output self).zs
       = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := rfl
 
 /-- The `Add` bundle's output point cells (`x_qr`/`y_qr` at `offset + 1`). -/
@@ -568,33 +576,33 @@ private theorem assignedCell_eval_of (place : RegionIndex → ℕ) (env : Enviro
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
 
 /-- Plain-`.output` spelling of `incomplete_call_output` (the composition iff's form). -/
-private theorem incomplete_output_eq (n : ℕ) (bits : BitsHint)
+private theorem incomplete_output_eq (n : ℕ) (w : ℕ)
     (cfg : MulIncomplete.Config) (off : ℕ) (inp : Var MulIncomplete.Inputs Fp)
     (self : RegionIndex) :
-    (MulIncomplete.double_and_add n bits).output cfg off inp self
+    (MulIncomplete.double_and_add n w).output cfg off inp self
       = { xA := .of self (off + 1 + n + 1) cfg.xA,
           yA := .of self (off + 1 + (n + 1)) cfg.lambda1,
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := rfl
 
 /-- The `MulComplete` bundle's output record, full form: the `acc` field is the (symbolic,
 never-reduced) loop output, the `zs` are the fixed-row cells. -/
-private theorem complete_output_eq (bits : BitsHint) (cfg : MulComplete.Config)
+private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    (MulComplete.assign_region 3 bits).output cfg off inp self
-      = { acc := (MulComplete.loop cfg inp bits off 3).output self,
+    (MulComplete.assign_region 3 w).output cfg off inp self
+      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- `.call` spelling of `complete_output_eq`. -/
-private theorem complete_call_output_eq (bits : BitsHint) (cfg : MulComplete.Config)
+private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    ((MulComplete.assign_region 3 bits).call cfg off inp).output self
-      = { acc := (MulComplete.loop cfg inp bits off 3).output self,
+    ((MulComplete.assign_region 3 w).call cfg off inp).output self
+      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
-private theorem complete_output_zs_eq (bits : BitsHint) (cfg : MulComplete.Config)
+private theorem complete_output_zs_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    ((MulComplete.assign_region 3 bits).output cfg off inp self).zs
+    ((MulComplete.assign_region 3 w).output cfg off inp self).zs
       = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := rfl
 
 /-- Plain-`.output` spelling of `add_call_output`. -/
@@ -611,9 +619,9 @@ named cells so `ovInputs_eval_eq`-style decomposition proceeds as before. -/
 
 /-- The main region's `z0` output cell: the LSB-row full-sum assign
 (`zComplete @ offLsb + 1`). -/
-private theorem mainRegion_output_z0 (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp)
+private theorem mainRegion_output_z0 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
-    ((mainRegion bits cfg input).output i).2.1
+    ((mainRegion cfg input).output i).2.1
       = AssignedCell.of i (offLsb + 1) cfg.completeConfig.zComplete := rfl
 
 -- `maxRecDepth` (documented allowance, term DEPTH not compute): forcing the `.2.2.*` projection
@@ -623,9 +631,9 @@ private theorem mainRegion_output_z0 (bits : BitsHint) (cfg : Config) (input : V
 -- exactly the projection bridges that force the deep term.
 set_option maxRecDepth 4096 in
 /-- The main region's `z_130` output cell: the hi half's `zs[124]` (`z @ offHi + 1 + 124`). -/
-private theorem mainRegion_output_z130 (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp)
+private theorem mainRegion_output_z130 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
-    ((mainRegion bits cfg input).output i).2.2.1
+    ((mainRegion cfg input).output i).2.2.1
       = AssignedCell.of i (offHi + 1 + 124) cfg.hiConfig.z := by
   show (Vector.ofFn (fun j : Fin 125 => AssignedCell.of i (offHi + 1 + j.val) cfg.hiConfig.z))[124]
     = _
@@ -634,9 +642,9 @@ private theorem mainRegion_output_z130 (bits : BitsHint) (cfg : Config) (input :
 set_option maxRecDepth 4096 in
 /-- The main region's `k_254` output cell: the hi half's `zs[0]` (the top bit,
 `z @ offHi + 1 + 0`). -/
-private theorem mainRegion_output_k254 (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp)
+private theorem mainRegion_output_k254 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
-    ((mainRegion bits cfg input).output i).2.2.2
+    ((mainRegion cfg input).output i).2.2.2
       = AssignedCell.of i (offHi + 1 + 0) cfg.hiConfig.z := by
   show (Vector.ofFn (fun j : Fin 125 => AssignedCell.of i (offHi + 1 + j.val) cfg.hiConfig.z))[0]
     = _
@@ -699,9 +707,10 @@ private theorem completeOutput_zs_getElem (env : Placed Environment Fp)
 
 /-- Componentwise eval of a `MulComplete.Inputs` record literal. -/
 private theorem compInputs_eval_eq (env : Placed Environment Fp)
-    (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { base := eval env base, xA := eval env xA, yA := eval env yA, z := eval env z } := by
+    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
+      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
+          yA := eval env yA, z := eval env z } := by
   simp only [circuit_norm, ProvableType.eval_cells]
 
 /-- Componentwise eval of a `MulOverflow.Inputs` record literal. -/
@@ -730,17 +739,34 @@ private theorem eval_of_prover (env : Placed ProverEnvironment Fp) (self : Regio
 
 /-- Prover-side componentwise eval of `MulIncomplete.Inputs`. -/
 private theorem hiInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨base, xA, yA, z⟩ : Var MulIncomplete.Inputs Fp)
-      = { base := eval env base, xA := eval env xA, yA := eval env yA, z := eval env z } := by
+    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulIncomplete.Inputs Fp)
+      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
+          yA := eval env yA, z := eval env z } := by
   simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
 
 /-- Prover-side componentwise eval of `MulComplete.Inputs`. -/
 private theorem compInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { base := eval env base, xA := eval env xA, yA := eval env yA, z := eval env z } := by
+    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
+      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
+          yA := eval env yA, z := eval env z } := by
   simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+
+/-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the landing
+for the children's derived-bit facts (`kBitsWindow (…).alpha w` → `kBitsWindow (alpha value) w`). -/
+private theorem hiInputs_alpha_prover (env : Placed ProverEnvironment Fp)
+    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    (eval env (⟨alpha, base, xA, yA, z⟩ : Var MulIncomplete.Inputs Fp)).alpha
+      = eval env alpha := by
+  rw [hiInputs_eval_eq_prover]
+
+/-- Prover-side `alpha`-projection of an evaluated `MulComplete.Inputs` record. -/
+private theorem compInputs_alpha_prover (env : Placed ProverEnvironment Fp)
+    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    (eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)).alpha
+      = eval env alpha := by
+  rw [compInputs_eval_eq_prover]
 
 /-- Prover-side componentwise eval of `MulOverflow.Inputs`. -/
 private theorem ovInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
@@ -835,35 +861,36 @@ theorem addInputs_eval_eq (env : Placed Environment Fp) (p q : Point (AssignedCe
   simp only [circuit_norm, ProvableType.eval_cells]
 
 /-- Eval of a `MulIncomplete.Inputs` record (componentwise). -/
-theorem hiInputs_eval_eq (env : Placed Environment Fp) (base : Point (AssignedCell Fp))
-    (xA yA z : AssignedCell Fp) :
-    eval env (⟨base, xA, yA, z⟩ : Var MulIncomplete.Inputs Fp)
-      = { base := eval env base, xA := eval env xA, yA := eval env yA, z := eval env z } := by
+theorem hiInputs_eval_eq (env : Placed Environment Fp) (alpha : AssignedCell Fp)
+    (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
+    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulIncomplete.Inputs Fp)
+      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
+          yA := eval env yA, z := eval env z } := by
   simp only [circuit_norm, ProvableType.eval_cells]
 
 /-! ## The gadget bundle
 
-`mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`), one region. Parameterized by the
-working-scalar bit sequence `bits` (the children's convention); the honest prover supplies
-`kBits input.alpha.val` (see `ProverAssumptions`), the verifier `Spec` recovers a matching
-sequence via the children's existential specs + the donor canonicity argument. -/
+`mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`). The working-scalar bits are derived
+from the `alpha` cell (`kBitsWindow`, windows 0/125/251 for hi/lo/complete and the LSB read);
+the verifier `Spec` recovers a matching sequence via the children's existential specs + the
+donor canonicity argument. -/
 
 -- `maxRecDepth`: the composed chunk terms nest ~4 children deep (each carrying its inputs);
 -- simp/elab traversal of these *deep* (not slow) terms exceeds the default 512 recursion
 -- depth. This is a term-depth allowance, not a compute-budget override.
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
-private theorem synthesize_regionCount (bits : BitsHint) (cfg : Config)
+private theorem synthesize_regionCount (cfg : Config)
     (input : Var Inputs Fp) (i : RegionIndex) :
-    Operations.regionCount ((synthesize bits cfg input).operations i) = 4 := by
+    Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
   -- the MulOverflow layouter child contributes 3 regions (its three sibling regions)
   rw [show ∀ (j : RegionIndex), Operations.regionCount
       (((MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
-        ⟨input.alpha, (mainRegion bits cfg input).output i |>.2.1,
-          (mainRegion bits cfg input).output i |>.2.2.1,
-          (mainRegion bits cfg input).output i |>.2.2.2⟩).operations j) = 3
+        ⟨input.alpha, (mainRegion cfg input).output i |>.2.1,
+          (mainRegion cfg input).output i |>.2.2.1,
+          (mainRegion cfg input).output i |>.2.2.2⟩).operations j) = 3
     from fun j => by
       simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
@@ -876,10 +903,12 @@ private theorem synthesize_regionCount (bits : BitsHint) (cfg : Config)
 -- or a simp traversal: `subcircuit_rw`'s own matching is depth-safe, but the value bookkeeping
 -- still touches the deep term at output-projection sites.
 set_option maxRecDepth 4096 in
-/-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. Now a
+/-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
-overflow check's three sibling regions after it (`mul.rs:299`). -/
-def mul (bits : BitsHint) :
+overflow check's three sibling regions after it (`mul.rs:299`). No `BitsHint` parameter: the
+working-scalar bits are derived from the `alpha` cell inside the witness IR (the "no prover
+information at synthesis time" rule). -/
+def mul :
     FormalCircuit Fp
       (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
       Config Inputs Point where
@@ -888,13 +917,13 @@ def mul (bits : BitsHint) :
   configure := fun (addConfig, lookupConfig, advices) =>
     configure addConfig lookupConfig advices
 
-  synthesize cfg input := synthesize bits cfg input
+  synthesize cfg input := synthesize cfg input
 
   elaborated cfg :=
-    { output := fun input i => (synthesize bits cfg input).output i
+    { output := fun input i => (synthesize cfg input).output i
       regionCount := fun _ => 4
       output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i => (synthesize_regionCount bits cfg input i).symm }
+      regionCount_eq := fun input i => (synthesize_regionCount cfg input i).symm }
 
   EnvAssumptions cfg env := EnvAssumptions cfg env
 
@@ -902,9 +931,10 @@ def mul (bits : BitsHint) :
 
   Spec input output _ := Spec input output
 
-  -- honest-prover precondition: base on-curve and the working-scalar bits are `kBits alpha.val`.
+  -- honest-prover precondition: base on-curve (the working-scalar bits are DERIVED from the
+  -- alpha cell — nothing to assume about them).
   ProverAssumptions input _ :=
-    (input.base : Point Fp).OnCurve ∧ bits = kBits input.alpha
+    (input.base : Point Fp).OnCurve
 
   -- The honest-side output-value guarantee is deliberately `True`: the verifier-facing
   -- `Spec` (proven in `soundness`) is the correctness carrier, and no parent consumes `mul`
@@ -1304,7 +1334,7 @@ def mul (bits : BitsHint) :
     intro cfg
     rw [FormalCircuit.completeness_iff]
     intro i₀ env input_var input output h_input h_output hwit hE hA hPA
-    obtain ⟨hOnC0, hbits⟩ := hPA
+    have hOnC0 := hPA
     -- ── peel the faithful layouter structure (witnesses AND goal): the MAIN REGION at i₀ and
     -- the layouter-level MulOverflow chunk at i₀+1 ──
     simp only [synthesize, circuit_norm] at hwit ⊢
@@ -1353,6 +1383,17 @@ def mul (bits : BitsHint) :
       rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hByIn
     have halphap : eval env input_var_alpha = input_alpha := by
       rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hIalpha
+    -- the honest working-scalar bits, derived from the scalar value (the old bundle parameter
+    -- + `hbits` hypothesis, now a local OPAQUE constant — `obtain`, not `set`: a delta-accessible
+    -- `kBits` body would let elaborator defeq unfold into the `tQNat` numeral landmine)
+    obtain ⟨bits, hbits⟩ : ∃ b : BitsHint, b = kBits input_alpha := ⟨_, rfl⟩
+    -- window landings: the children's derived families in `bits` vocabulary
+    have hW0 : kBitsWindow input_alpha 0 = bits := by
+      rw [kBitsWindow_zero, hbits]
+    have hW125 : kBitsWindow input_alpha 125 = fun i => bits (125 + i) := by
+      rw [kBitsWindow_as_kBits, hbits]
+    have hW251 : kBitsWindow input_alpha 251 = fun i => bits (251 + i) := by
+      rw [kBitsWindow_as_kBits, hbits]
     have hbaseEvalV : eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
         : Point (AssignedCell Fp)) = { x := input_base_x, y := input_base_y } := by
       rw [Point.eval_eq, hbXv, hbYv]
@@ -1400,6 +1441,7 @@ def mul (bits : BitsHint) :
           rw [hbaseEvalP]
           exact hAcc2)).2
     simp only [hi_proverSpec_eq, MulIncomplete.RoundInvariant] at hHiPS
+    rw [hiInputs_alpha_prover, halphap, hW0] at hHiPS
     obtain ⟨⟨hHiZ0, hHiZstep⟩, hHiAccCl⟩ := hHiPS
     -- the honest hi chain, as chainNat casts
     have hHiCells := chain_cast (n := 124) _ _ 0 bits
@@ -1450,6 +1492,7 @@ def mul (bits : BitsHint) :
           rw [hbaseEvalP]
           exact hHiOut)).2
     simp only [lo_proverSpec_eq, MulIncomplete.RoundInvariant] at hLoPS
+    rw [hiInputs_alpha_prover, halphap, hW125] at hLoPS
     obtain ⟨⟨hLoZ0, hLoZstep⟩, hLoAccCl⟩ := hLoPS
     -- the honest lo chain, continued from the hi chain
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
@@ -1500,6 +1543,7 @@ def mul (bits : BitsHint) :
         exact ⟨hLoOutV, hbaseV⟩)
     have hCompPS := hCompBoth.2
     simp only [comp_proverSpec_eq, MulComplete.RoundInvariant] at hCompPS
+    rw [compInputs_alpha_prover, halphap, hW251] at hCompPS
     obtain ⟨hCompChain, hCompAccCl⟩ := hCompPS
     -- the honest complete-phase accumulator validity
     obtain ⟨hCompAccV, -⟩ := hCompAccCl
@@ -1540,6 +1584,13 @@ def mul (bits : BitsHint) :
       RegionOperation.extendsWitness_assignAdvice, and_true,
       Witgen.WitgenIROver.eval, readCell,
       complete_call_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
+    -- the LSB bit landing: rewrite the closure's scalar-cell read to `input_alpha`, then the
+    -- derived bit to `bits 254`
+    have haevalv : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha
+        = input_alpha := hIalpha
+    have hlsb0 : kBitsWindow input_alpha 254 0 = bits 254 := by
+      rw [kBitsWindow_eq_kBits, hbits]
+    simp only [haevalv, hlsb0] at hWZ0
     -- restate defeq-clean (the `#v[·][0]`/`Placed` residues collapse)
     have hWZ0' : env.env.toEnvironment.advice cfg.completeConfig.zComplete
         ((env.place i₀ + (offLsb + 1) : ℕ) : ℤ)
@@ -1558,18 +1609,19 @@ def mul (bits : BitsHint) :
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
       Witgen.WitgenIROver.eval, readCell, AssignedCell.eval] at hWCx hWCy
+    simp only [hIalpha, hlsb0] at hWCx hWCy
     have hCxv : env.env.toEnvironment.advice cfg.addConfig.xP
         ((env.place i₀ + (offLsb) : ℕ) : ℤ)
         = (if bits 254 then 0 else input_base_x) := by
       refine Eq.trans hWCx ?_
-      rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
+      rcases Bool.dichotomy (bits 254) with h | h <;> simp only [h]
       · exact hBxIn
       · rfl
     have hCyv : env.env.toEnvironment.advice cfg.addConfig.yP
         ((env.place i₀ + (offLsb) : ℕ) : ℤ)
         = (if bits 254 then 0 else -input_base_y) := by
       refine Eq.trans hWCy ?_
-      rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
+      rcases Bool.dichotomy (bits 254) with h | h <;> simp only [h]
       · exact congrArg Neg.neg hByIn
       · rfl
     -- ── the copied base coordinates (witness values) ──

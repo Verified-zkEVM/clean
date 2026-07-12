@@ -3,6 +3,7 @@ import Clean.Orchard.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
 import Clean.Orchard.Ecc.DoubleAndAdd
 import Clean.Orchard.Ecc.Mul.Incomplete
+import Clean.Orchard.Ecc.Mul.Assign
 
 /-!
 Reference:
@@ -57,6 +58,7 @@ namespace Halo2.Ironwood.Ecc.MulIncomplete
 
 open Orchard (Point)
 open Orchard.Ecc (DoubleAndAddRow)
+open Orchard.Ecc.Mul (kBits kNat tQNat)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
    accScalar_two_le accScalar_le pow254_lt_card)
@@ -202,9 +204,10 @@ def configure (z xA xP yP lambda1 lambda2 : Column .advice) : Configure Fp Confi
 
 /-! ## Inputs / Output
 
-Mirrors the donor `DoubleAndAdd.Input`/`Output`. The base point and the accumulator cells are
-verifier-visible; the scalar bits are a prover-side `Value<bool>` sequence (`Unconstrained`
-native hint). The output is the final accumulator cells and all interstitial running sums. -/
+Mirrors the donor `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits are
+derived from (in the donor the bits were an `UnconstrainedNative` hint; here they are computed
+from the cell — see `bitsOf`). The output is the final accumulator cells and all interstitial
+running sums. -/
 
 /-- Prover-side scalar bits, MSB-first, indexed from the first processed bit — the Ironwood
 alias of the donor's `BitsHint`. -/
@@ -212,11 +215,14 @@ def BitsHint : Type := ℕ → Bool
 
 instance : Inhabited BitsHint := ⟨fun _ => false⟩
 
-/-- The verifier-visible inputs: the (non-identity, on-curve) base point and the accumulator
-`(x_a, y_a)` and running sum `z` entering the phase, as already-assigned cells. The scalar bits
-are supplied separately as a prover hint (see the bundle's `ProverAssumptions`/`ProverSpec`,
-which quantify over a bit sequence). -/
+/-- The verifier-visible inputs: the scalar cell `alpha` (the bit source — the working scalar's
+bits are derived from it as `kBits alpha`, faithful to Rust `decompose_for_scalar_mul(alpha.value())`),
+the (non-identity, on-curve) base point, and the accumulator `(x_a, y_a)` and running sum `z`
+entering the phase, as already-assigned cells. There is NO prover-side `bits` parameter: the
+per-round bit at global index `w + r` is `kBits alpha (w + r)`, computed inside the witness
+closures via `readCell env alpha` (`w` is the bundle's window offset). -/
 structure Inputs (F : Type) where
+  alpha : F
   base : Point F
   xA : F
   yA : F
@@ -233,45 +239,93 @@ deriving ProvableStruct
 
 /-! ## Honest witness programs
 
-The honest cell values are complex functions of the base/accumulator cells and the prover bits,
-so — like the donor's `witnessNative` — we express them via the witgen `native` escape hatch
-(`WitgenIROver.native`), reading the placed prover environment. Each returns a length-1 vector.
+The honest cell values are complex functions of the base/accumulator cells and the working
+scalar's bits, so — like the donor's `witnessNative` — we express them via the witgen `native`
+escape hatch (`WitgenIROver.native`), reading the placed prover environment. Each returns a
+length-1 vector. The bits are NOT a prover-supplied `BitsHint`: they are derived from the
+witnessed scalar cell `input.alpha` as `kBits (readCell env input.alpha)` (faithful to Rust
+`decompose_for_scalar_mul(alpha.value())`), windowed by the bundle's window offset `w` (so the
+per-round bit at loop index `r` is `kBits (alpha value) (w + r)`).
 
 `readCell env c` reads the value of an already-assigned input cell `c` in the placed prover
-environment `env` — the base coordinates and starting accumulator that the honest values depend
-on. -/
+environment `env` — the base coordinates, starting accumulator, and scalar cell the honest
+values depend on. -/
 
 /-- Read an input cell's value in a placed prover environment. -/
 def readCell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) : Fp :=
   c.eval env.place env.env.toEnvironment
 
+/-- The `w`-shifted window of the working scalar's bits, as a function of the scalar value:
+`kBitsWindow a w i = kBits a (w + i)` (see `kBitsWindow_eq_kBits`), i.e. bit `k_{254-(w+i)}` of
+the unreduced working scalar `k = a.val + t_q` (Rust `decompose_for_scalar_mul`).
+
+KERNEL-SAFETY (load-bearing spelling): the `t_q` addition is FLIPPED relative to the donor's
+`kNat` (`tQNat + a.val`, not `a.val + tQNat`). `Nat.add` recurses on its SECOND argument, so a
+kernel whnf reaching the donor spelling unfolds the ~2^125 literal unarily — "(kernel) deep
+recursion detected". With the literal on the left, whnf is stuck immediately on the abstract
+`a.val`, so this def is safe to have anywhere in kernel-checked proof terms. Bridge to the
+donor's `kBits` (for the donor chain lemmas) via `kBitsWindow_eq_kBits` — a rewrite, never a
+defeq. -/
+def kBitsWindow (a : Fp) (w : ℕ) : BitsHint :=
+  fun i => (tQNat + a.val).testBit (254 - (w + i))
+
+/-- `kBitsWindow` is the `w`-shifted window of the donor's `kBits`. -/
+theorem kBitsWindow_eq_kBits (a : Fp) (w i : ℕ) :
+    kBitsWindow a w i = kBits a (w + i) := by
+  unfold kBitsWindow kBits kNat
+  rw [Nat.add_comm]
+
+/-- `kBitsWindow` as a donor-`kBits` lambda — the shape the donor chain lemmas
+(`chainNat_kBits`, `cells_kNat`, …) consume. -/
+theorem kBitsWindow_as_kBits (a : Fp) (w : ℕ) :
+    kBitsWindow a w = fun i => kBits a (w + i) :=
+  funext fun i => kBitsWindow_eq_kBits a w i
+
+/-- The zero-offset window is exactly the donor's `kBits`. -/
+theorem kBitsWindow_zero (a : Fp) : kBitsWindow a 0 = kBits a :=
+  funext fun i => by rw [kBitsWindow_eq_kBits, Nat.zero_add]
+
+/-- The working-scalar bit family for this phase, derived from the scalar CELL in a placed
+prover environment: `bitsOf input w env = kBitsWindow (alpha value) w` (Rust
+`decompose_for_scalar_mul(alpha.value())`, then the `w`-shifted window). This is the ONLY
+place the bits are computed; the loop plumbing below is abstract in an env-indexed bit
+family `ebits`, and the bundle instantiates `ebits := bitsOf input w`. -/
+def bitsOf (input : Inputs (AssignedCell Fp)) (w : ℕ) :
+    Placed ProverEnvironment Fp → BitsHint :=
+  fun env => kBitsWindow (readCell env input.alpha) w
+
 /-- Honest `z` running-sum value at loop row `r` (`incomplete.rs:302-306`). -/
-def zWit (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[zRunValue (readCell env input.z) bits r]
+def zWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
+    (r : ℕ) : WitgenIR Fp 1 :=
+  .native fun env => #v[zRunValue (readCell env input.z) (ebits env) r]
 
 /-- Honest `λ₁` value at loop row `r`. -/
-def l1Wit (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (r : ℕ) : WitgenIR Fp 1 :=
+def l1Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
+    (r : ℕ) : WitgenIR Fp 1 :=
   .native fun env => #v[
     (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) bits r).lambda1]
+      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda1]
 
 /-- Honest `λ₂` value at loop row `r`. -/
-def l2Wit (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (r : ℕ) : WitgenIR Fp 1 :=
+def l2Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
+    (r : ℕ) : WitgenIR Fp 1 :=
   .native fun env => #v[
     (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) bits r).lambda2]
+      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda2]
 
 /-- Honest next-row `x_a` value after loop row `r` (`accVal … (r+1)`). -/
-def xANextWit (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (r : ℕ) : WitgenIR Fp 1 :=
+def xANextWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
+    (r : ℕ) : WitgenIR Fp 1 :=
   .native fun env => #v[
     (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) bits (r + 1)).1]
+      (readCell env input.xA) (readCell env input.yA) (ebits env) (r + 1)).1]
 
 /-- Honest final `y_a` value after `n + 1` rounds (`accVal … (n+1)`). -/
-def yAFinalWit (n : ℕ) (input : Inputs (AssignedCell Fp)) (bits : BitsHint) : WitgenIR Fp 1 :=
+def yAFinalWit (n : ℕ) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint) : WitgenIR Fp 1 :=
   .native fun env => #v[
     (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) bits (n + 1)).2]
+      (readCell env input.xA) (readCell env input.yA) (ebits env) (n + 1)).2]
 
 /-! ## The per-bit round loop, in the `rangeCheckLoop` shape
 
@@ -298,10 +352,11 @@ row (`r = 0`) additionally anchors `x_p`/`y_p` to `base` by copy — the `Circui
 AnchoredBase` variant (`incomplete.rs:317-337`); the `q_mul_2` constancy then propagates the
 anchor. Cells are at fixed absolute rows so round `r` is independent of the others — the
 concatenation property the loop induction consumes. -/
-def round (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+def round (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint)
     (offset n r : ℕ) : RegionCircuit Fp Unit := do
   let row := offset + 1 + r
-  let _z ← assignAdvice cfg.z row (zWit input bits r)
+  let _z ← assignAdvice cfg.z row (zWit input ebits r)
   -- x_p / y_p: anchored copy of `base` on the first loop row, plain assignment otherwise
   if r = 0 then
     let _xP ← copyAdvice input.base.x cfg.xP row
@@ -309,9 +364,9 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
   else
     let _xP ← assignAdvice cfg.xP row (.ofFExpr (.expr input.base.x))
     let _yP ← assignAdvice cfg.yP row (.ofFExpr (.expr input.base.y))
-  let _l1 ← assignAdvice cfg.lambda1 row (l1Wit input bits r)
-  let _l2 ← assignAdvice cfg.lambda2 row (l2Wit input bits r)
-  let _xANext ← assignAdvice cfg.xA (row + 1) (xANextWit input bits r)
+  let _l1 ← assignAdvice cfg.lambda1 row (l1Wit input ebits r)
+  let _l2 ← assignAdvice cfg.lambda2 row (l2Wit input ebits r)
+  let _xANext ← assignAdvice cfg.xA (row + 1) (xANextWit input ebits r)
   -- the round's selector: `q_mul_2` on interior rows (`r < n`), `q_mul_3` on the last (`r = n`).
   -- Enabling inside the round is what lands each round's gate constraints in the loop's
   -- `Constraints`, so the loop lemmas can consume them by the same induction as range_check.
@@ -324,20 +379,22 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
 /-- The double-and-add loop: `numRounds` rounds, structurally recursive. By the append-bind of
 `RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
 (round … k).operations self` — the per-round decomposition the induction consumes. -/
-def loop (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint) (offset n : ℕ) :
+def loop (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint) (offset n : ℕ) :
     ℕ → RegionCircuit Fp Unit
   | 0 => pure ()
   | k + 1 => do
-    loop cfg input bits offset n k
-    round cfg input bits offset n k
+    loop cfg input ebits offset n k
+    round cfg input ebits offset n k
 
 /-- Per-round operations decomposition (holds by `rfl` via the monad's `operations_bind`): the
 crux that makes the loop inductable. Mirrors `rangeCheckLoop_operations_succ`. -/
-theorem loop_operations_succ (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+theorem loop_operations_succ (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint)
     (offset n k : ℕ) (self : RegionIndex) :
-    (loop cfg input bits offset n (k + 1)).operations self
-      = (loop cfg input bits offset n k).operations self
-        ++ (round cfg input bits offset n k).operations self := rfl
+    (loop cfg input ebits offset n (k + 1)).operations self
+      = (loop cfg input ebits offset n k).operations self
+        ++ (round cfg input ebits offset n k).operations self := rfl
 
 /-- Read the assigned cell at a known region-local row/column (no op emitted) — lets `synthesize`
 name the running-sum and accumulator cells for the `Output`, which live at fixed rows rather
@@ -399,7 +456,8 @@ def adv (cfg_col : Column .advice) (place : RegionIndex → ℕ) (self : RegionI
 
 section LoopFacts
 
-variable (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+variable (cfg : Config) (input : Inputs (AssignedCell Fp))
+  (ebits : Placed ProverEnvironment Fp → BitsHint)
   (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ)
 
 /-- The per-row cell readers, as abbreviations over `adv` at the round's absolute row. -/
@@ -432,7 +490,7 @@ constancy. Proven by induction over `numRounds`, mirroring
 private theorem loop_gate_facts (n : ℕ) :
     ∀ numRounds : ℕ, numRounds ≤ n + 1 →
     RegionOperations.Constraints place self env
-      ((loop cfg input bits offset n numRounds).operations self) →
+      ((loop cfg input ebits offset n numRounds).operations self) →
     ∀ r, r < numRounds →
       -- booleanity of the bit
       (IsBool (Kr cfg place self env offset r)) ∧
@@ -570,7 +628,7 @@ induction over `numRounds`, peeling round 0 (the innermost round). -/
 private theorem loop_anchor (n : ℕ) :
     ∀ numRounds : ℕ, 1 ≤ numRounds →
     RegionOperations.Constraints place self env
-      ((loop cfg input bits offset n numRounds).operations self) →
+      ((loop cfg input ebits offset n numRounds).operations self) →
     adv cfg.xP place self env (offset + 1) = input.base.x.eval place env ∧
     adv cfg.yP place self env (offset + 1) = input.base.y.eval place env := by
   intro numRounds
@@ -596,8 +654,9 @@ for the bit sequence `bits'` read off the running sum by the `bool_check` gates 
 
 This routes the cleaned round facts (from `loop_gate_facts`) into the donor's `soundness_aux`
 (imported). `bits'` is the constraint-forced bit sequence (the same one `loop_zchain_sound`
-exposes), so soundness does not depend on the prover's honesty about the witness bits `bits`. -/
-theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits bits' : BitsHint)
+exposes), so soundness does not depend on the witness bit family `ebits` at all. -/
+theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint) (bits' : BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset n : ℕ)
     (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
@@ -617,12 +676,12 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits b
             - adv cfg.xA place self env (offset + 1) - adv cfg.xP place self env (offset + 1)))
         = 2 * adv cfg.lambda1 place self env offset)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input bits offset n (n + 1)).operations self)) :
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
     adv cfg.xA place self env (offset + 1 + n + 1)
       = ((accScalar m bits' (n + 1)) • P).x
     ∧ 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
       = 2 * ((accScalar m bits' (n + 1)) • P).y := by
-  have hfacts := loop_gate_facts cfg input bits place self env offset n (n + 1) le_rfl hLoop
+  have hfacts := loop_gate_facts cfg input ebits place self env offset n (n + 1) le_rfl hLoop
   -- the per-row cell readers as `ℕ → Fp` functions, in `soundness_aux`'s shape
   set XA := fun r => adv cfg.xA place self env (offset + 1 + r) with hXA
   set XP := fun r => adv cfg.xP place self env (offset + 1 + r) with hXP
@@ -697,11 +756,12 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits b
 running-sum cell satisfies `z_{r} = 2·z_{r-1} + k_r` with `k_r ∈ {0,1}` — the chain the `Spec`'s
 running-sum conjunct exposes. Stated fully; proof deferred (mechanical, from each round's
 `bool_check` gate constraint). -/
-theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset n : ℕ)
     (hz0 : adv cfg.z place self env offset = input.z.eval place env)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input bits offset n (n + 1)).operations self)) :
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
     ∃ bits' : BitsHint,
       -- per-round bit-match (the shape `loop_acc_sound.hbit` consumes)
       (∀ r, r ≤ n → adv cfg.z place self env (offset + 1 + r)
@@ -711,7 +771,7 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bit
       ∀ r : Fin n, adv cfg.z place self env (offset + 1 + (r.val + 1))
         = 2 * adv cfg.z place self env (offset + 1 + r.val)
           + (if bits' (r.val + 1) then 1 else 0) := by
-  have hfacts := loop_gate_facts cfg input bits place self env offset n (n + 1) le_rfl hLoop
+  have hfacts := loop_gate_facts cfg input ebits place self env offset n (n + 1) le_rfl hLoop
   -- the bit read off the running sum at each round, decided into a `BitsHint`
   refine ⟨fun j => decide (adv cfg.z place self env (offset + 1 + j)
       = 2 * adv cfg.z place self env (offset + j) + 1), ?_, ?_, ?_⟩
@@ -758,14 +818,15 @@ every row's `z`/`x_p`/`y_p`/`λ₁`/`λ₂`/`x_a(next)` cell to the donor's hone
 `input.*.eval` spelling) because a round's gate reads cells witnessed by *other* rounds
 (`z`-predecessor, next-row constancy cells), and because the bundle completeness re-reads row 0
 (for the `q_mul_1` gate) and the output rows off the same witnesses. -/
-private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ) :
     ∀ numRounds : ℕ, numRounds ≤ n + 1 →
     RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input bits offset n numRounds).operations self) →
+      ((loop cfg input ebits offset n numRounds).operations self) →
     ∀ r, r < numRounds →
       adv cfg.z place self env.toEnvironment (offset + 1 + r)
-          = zRunValue (input.z.eval place env.toEnvironment) bits r ∧
+          = zRunValue (input.z.eval place env.toEnvironment) (ebits ⟨place, env⟩) r ∧
       adv cfg.xP place self env.toEnvironment (offset + 1 + r)
           = input.base.x.eval place env.toEnvironment ∧
       adv cfg.yP place self env.toEnvironment (offset + 1 + r)
@@ -773,15 +834,15 @@ private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)
       adv cfg.lambda1 place self env.toEnvironment (offset + 1 + r)
           = (rowLambdaValue (input.base.x.eval place env.toEnvironment)
               (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
-              (input.yA.eval place env.toEnvironment) bits r).lambda1 ∧
+              (input.yA.eval place env.toEnvironment) (ebits ⟨place, env⟩) r).lambda1 ∧
       adv cfg.lambda2 place self env.toEnvironment (offset + 1 + r)
           = (rowLambdaValue (input.base.x.eval place env.toEnvironment)
               (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
-              (input.yA.eval place env.toEnvironment) bits r).lambda2 ∧
+              (input.yA.eval place env.toEnvironment) (ebits ⟨place, env⟩) r).lambda2 ∧
       adv cfg.xA place self env.toEnvironment (offset + 1 + (r + 1))
           = (accVal (input.base.x.eval place env.toEnvironment)
               (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
-              (input.yA.eval place env.toEnvironment) bits (r + 1)).1 := by
+              (input.yA.eval place env.toEnvironment) (ebits ⟨place, env⟩) (r + 1)).1 := by
   intro numRounds
   induction numRounds with
   | zero => intro _ _ r hr; omega
@@ -813,8 +874,10 @@ Three cells a round's gate reads live *outside* the loop's own ops, so their hon
 hypotheses discharged by the bundle from the `startCopies`/final-`y_a` witnesses: the start-`z`
 copy (`hz0`, round 0's `bool_check` predecessor), the start-`x_a` copy (`hxA0cell`, row 0's
 current accumulator), and the witnessed final `y_a` (`hyAF`, the last round's `Y_A(next)`). -/
-theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
+theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ)
+    (bits : BitsHint) (hbits : bits = ebits ⟨place, env⟩)
     (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
     (hxA0 : input.xA.eval place env.toEnvironment = (m • P).x)
@@ -829,9 +892,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
           (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
           (input.yA.eval place env.toEnvironment) bits (n + 1)).2)
     (hWit : RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input bits offset n (n + 1)).operations self)) :
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
-      ((loop cfg input bits offset n (n + 1)).operations self) := by
+      ((loop cfg input ebits offset n (n + 1)).operations self) := by
   -- honest accumulator in point coordinates: `accVal … r = (accScalar r • P)`
   have hAV : ∀ r, r ≤ n + 1 →
       accVal P.x P.y (input.xA.eval place env.toEnvironment)
@@ -876,7 +939,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
   -- by *other* rounds.
   have hRowVals : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
       RegionOperations.ExtendsWitnesses place self env
-        ((loop cfg input bits offset n numRounds).operations self) →
+        ((loop cfg input ebits offset n numRounds).operations self) →
       ∀ r, r < numRounds →
         adv cfg.z place self env.toEnvironment (offset + 1 + r)
             = zRunValue (input.z.eval place env.toEnvironment) bits r ∧
@@ -893,16 +956,17 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
                 (input.yA.eval place env.toEnvironment) bits (r + 1)).1 := by
     intro numRounds h1 hW r hr
     obtain ⟨h1', h2', h3', h4', h5', h6'⟩ :=
-      loop_row_values cfg input bits place self env offset n numRounds h1 hW r hr
+      loop_row_values cfg input ebits place self env offset n numRounds h1 hW r hr
+    rw [← hbits] at h1' h4' h5' h6'
     rw [hxPBase] at h2'; rw [hyPBase] at h3'
     rw [hxPBase, hyPBase] at h4' h5' h6'
     exact ⟨h1', h2', h3', h4', h5', h6'⟩
   -- the per-round induction, discharging each round's gate constraints
   suffices h : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
       RegionOperations.ExtendsWitnesses place self env
-        ((loop cfg input bits offset n numRounds).operations self) →
+        ((loop cfg input ebits offset n numRounds).operations self) →
       RegionOperations.Constraints place self env.toEnvironment
-        ((loop cfg input bits offset n numRounds).operations self) from h (n + 1) le_rfl hWit
+        ((loop cfg input ebits offset n numRounds).operations self) from h (n + 1) le_rfl hWit
   intro numRounds
   induction numRounds with
   | zero => intro _ _; exact trivial
@@ -1043,10 +1107,12 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
 `Spec` exposes the round invariant. `Assumptions`/`ProverAssumptions` are the donor's incomplete-
 addition preconditions (base on-curve; `A = [m]P`, `2 ≤ m`, `2^{n+2}(m+1) ≤ 2^{254}`).
 
-The bits are a prover hint. To keep the region-level bundle's I/O verifier-visible, we take the
-bit sequence as a *hint* read from the prover environment (`env.env.hint`) — the honest
-witnesses `zWit`/`l1Wit`/… close over a fixed `BitsHint`; the bundle is parameterized by that
-hint. This matches how the donor threads `input.bits` as an `UnconstrainedNative`. -/
+There is NO prover-side `bits` parameter (the "no prover information at synthesis" rule). The
+working scalar's bits are DERIVED from the scalar cell `input.alpha` inside the witness closures
+(`kBits (readCell env input.alpha) (w + ·)`, faithful to Rust `decompose_for_scalar_mul(alpha
+.value())`), where `w` is the bundle's window offset (0 for the hi half, 125 for the lo half — the
+global bit index of this phase's first round). The verifier-facing `Spec` existentially quantifies
+a matching bit sequence; `ProverSpec` pins the honest sequence to `kBits alpha (w + ·)`. -/
 
 /-- The scalar-mul incomplete-phase round predicate: the running-sum chain and, for any
 `A = [m]P` in range, the output accumulator is the double-and-add result. -/
@@ -1064,10 +1130,10 @@ def RoundInvariant (n : ℕ) (input : Inputs Fp) (output : Output (n + 1) Fp)
 /-! ## The gadget bundle
 
 `incomplete::Config::<{n+1}>::double_and_add` (`CircuitVersion::AnchoredBase`). Instantiated at
-`n = 124` for the `hi` half and `n = 125` for the `lo` half. Parameterized by the concrete
-prover bit sequence `bits` (Rust hands `double_and_add` a known `&[Value<bool>]` slice); the
-verifier-facing `Spec` still existentially quantifies a matching bit sequence, so soundness does
-not depend on the prover's honesty about `bits`. -/
+`n = 124` for the `hi` half and `n = 125` for the `lo` half. Parameterized by the window offset
+`w : ℕ` (the global index of this phase's first bit); the witness closures derive each round's bit
+from `input.alpha` as `kBits (alpha value) (w + ·)`. The verifier-facing `Spec` existentially
+quantifies a matching bit sequence, so soundness does not depend on the prover. -/
 
 /-- The starting-cell copies emitted before the loop (`incomplete.rs:271-290`): the running sum
 `z` into `cfg.z` at `offset`, and `y_a` into `cfg.λ₁` at `offset`, and `x_a` into `cfg.x_a` at
@@ -1079,7 +1145,7 @@ def startCopies (cfg : Config) (input : Inputs (AssignedCell Fp)) (offset : ℕ)
   let _xA ← copyAdvice input.xA cfg.xA (offset + 1)
   return ()
 
-def double_and_add (n : ℕ) (bits : BitsHint) :
+def double_and_add (n : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice ×
         Column .advice × Column .advice)
@@ -1094,10 +1160,13 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     -- and q_mul_3 (last row) are enabled inside `round`, so each round's gate constraints land
     -- in the loop's `Constraints` — the shape the loop lemmas consume by induction.
     (qMul1Gate cfg).enable offset
-    -- the per-bit round loop, in the `rangeCheckLoop` shape
-    loop cfg input bits offset n (n + 1)
+    -- the per-bit round loop, in the `rangeCheckLoop` shape. The bit family is derived from
+    -- the scalar cell `input.alpha` (`bitsOf input w`, i.e. `kBits (alpha value) (w + ·)`),
+    -- NOT a prover hint.
+    loop cfg input (bitsOf input w) offset n (n + 1)
     -- the witnessed final y_a
-    let _yAFinal ← assignAdvice cfg.lambda1 (offset + 1 + (n + 1)) (yAFinalWit n input bits)
+    let _yAFinal ← assignAdvice cfg.lambda1 (offset + 1 + (n + 1))
+      (yAFinalWit n input (bitsOf input w))
     -- name the output cells (at fixed absolute rows). `cellAt` emits no op, it just names a
     -- cell reference at a known region-local row, so the region index is threaded implicitly.
     let xAOut ← cellAt cfg.xA (offset + 1 + n + 1)
@@ -1122,7 +1191,10 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       Point.ofCoords (input.xA, input.yA) = m • base ∧
       2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
 
-  ProverSpec input output _ := RoundInvariant n input output bits
+  -- honest bits are derived from the scalar cell: `kBits alpha (w + ·)` — the same sequence the
+  -- witness closures compute via `readCell env input.alpha` (no external `bits` hint).
+  ProverSpec input output _ :=
+    RoundInvariant n input output (kBitsWindow input.alpha w)
 
   -- ══ Soundness ══
   -- Framework half (mechanical, TACTIC GAP): `soundness_iff`, then split the synthesize op list
@@ -1170,13 +1242,13 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hLoop`'s spelling
     set inp : Inputs (AssignedCell Fp) :=
-      { base := { x := input_var_base_x, y := input_var_base_y },
+      { alpha := input_var_alpha, base := { x := input_var_base_x, y := input_var_base_y },
         xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
     -- the `input.*.eval` cell reads, resolved to the input values via `h_input`
-    obtain ⟨⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
+    obtain ⟨hIalpha, ⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
     -- z-chain + per-round bit match from `loop_zchain_sound` (its `bits'` is the witness)
     obtain ⟨bits', hbit, hz0chain, hzchain⟩ :=
-      loop_zchain_sound cfg inp bits env.place self env.env offset n hCopyZ hLoop
+      loop_zchain_sound cfg inp (bitsOf inp w) env.place self env.env offset n hCopyZ hLoop
     refine ⟨bits', ?_, ?_⟩
     · -- running-sum chain conjunct of `RoundInvariant`
       refine ⟨?_, ?_⟩
@@ -1189,7 +1261,7 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     · -- accumulator conjunct: route `loop_acc_sound` into `Point.ofCoords`
       intro m hm h2 hbound
       -- the anchor copies pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`
-      obtain ⟨hAnchorX, hAnchorY⟩ := loop_anchor cfg inp bits env.place self env.env offset n
+      obtain ⟨hAnchorX, hAnchorY⟩ := loop_anchor cfg inp (bitsOf inp w) env.place self env.env offset n
         (n + 1) (by omega) hLoop
       simp only [hinp, AssignedCell.eval, hBx, hBy] at hAnchorX hAnchorY
       -- the accumulator hypothesis `ofCoords (xA, yA) = m • base` ⇒ coordinate equalities
@@ -1197,7 +1269,7 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
         congrArg Point.x hm
       have hAccY : input_yA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
         congrArg Point.y hm
-      have hacc := loop_acc_sound cfg inp bits bits' env.place self env.env offset n
+      have hacc := loop_acc_sound cfg inp (bitsOf inp w) bits' env.place self env.env offset n
         { x := input_base_x, y := input_base_y } hA m h2 hbound
         (by rw [hCopyXA]; simp only [hIxA]; exact hAccX)
         (by rw [hCopyYA]; simp only [hIyA]; exact hAccY)
@@ -1264,16 +1336,25 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hWloop`'s spelling
     set inp : Inputs (AssignedCell Fp) :=
-      { base := { x := input_var_base_x, y := input_var_base_y },
+      { alpha := input_var_alpha, base := { x := input_var_base_x, y := input_var_base_y },
         xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
-    obtain ⟨⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
+    obtain ⟨hIalpha, ⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
     obtain ⟨hPbase, m, hm, h2m, hbnd⟩ := hPA
+    -- the honest bit sequence: derived from the scalar cell (`ProverSpec` target), and equal to
+    -- the family the witness closures compute (`bitsOf inp w`, at this placed environment)
+    set bits : BitsHint := kBitsWindow input_alpha w with hbitsdef
+    have hbits : bits = bitsOf inp w ⟨env.place, env.env⟩ :=
+      congrArg (fun a => kBitsWindow a w) hIalpha.symm
+    rw [← hbits] at hWyF
     have hAccX : input_xA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x :=
       congrArg Point.x hm
     have hAccY : input_yA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
       congrArg Point.y hm
-    -- the honest row values (the loop witnesses), with the input reads resolved
-    have hRows := loop_row_values cfg inp bits env.place self env.env offset n (n + 1) le_rfl hWloop
+    -- the honest row values (the loop witnesses), with the input reads resolved, folded onto
+    -- the honest `bits` (the opaque-family occurrences rewritten via `hbits`)
+    have hRows := loop_row_values cfg inp (bitsOf inp w) env.place self env.env offset n (n + 1)
+      le_rfl hWloop
+    simp only [← hbits] at hRows
     -- expose the raw `env.advice` spellings everywhere
     simp only [adv] at hOutXA hOutYA hOutZs
     -- the scalar-field bound at row 0 (`2m + 1 < |scalar field|`), from the range assumption
@@ -1315,8 +1396,8 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       field_simp
       linear_combination hHS0yad
     · -- ── the loop's `Constraints`: `loop_constraints_complete` on the honest start values ──
-      exact loop_constraints_complete cfg inp bits env.place self env.env offset n
-        { x := input_base_x, y := input_base_y } hPbase m h2m hbnd
+      exact loop_constraints_complete cfg inp (bitsOf inp w) env.place self env.env offset n
+        bits hbits { x := input_base_x, y := input_base_y } hPbase m h2m hbnd
         (by simp only [hinp, AssignedCell.eval, hIxA]; exact hAccX)
         (by simp only [hinp, AssignedCell.eval, hIyA]; exact hAccY)
         (by simp only [hinp, AssignedCell.eval, hBx])
