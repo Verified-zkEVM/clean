@@ -7,11 +7,11 @@ open Halo2.Fixtures
 
 def mulPre : CsFixture :=
   { numAdviceColumns := 10,
-    numFixedColumns := 1,
+    numFixedColumns := 2,
     numInstanceColumns := 0,
     numSelectors := 13,
     adviceQueryLayout := [(9, 0), (9, 1), (9, -1), (0, 0), (1, 0), (2, 0), (3, 0), (2, 1), (3, 1), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (4, 1), (5, 1), (0, 1), (1, 1), (7, 1), (8, 1), (6, -1), (1, -1), (6, 1), (7, -1)],
-    fixedQueryLayout := [(0, 0)],
+    fixedQueryLayout := [(1, 0), (0, 0)],
     instanceQueryLayout := [],
     gates := [(.product (.selector 2) (.sum (.product (.scaled (.advice 2) (mkFp 1024 0 0 0)) (.advice 1)) (.negated (.advice 0)))),
       (.product (.selector 3) (.product (.sum (.advice 5) (.negated (.advice 3))) (.sum (.product (.sum (.advice 5) (.negated (.advice 3))) (.advice 9)) (.negated (.sum (.advice 6) (.negated (.advice 4))))))),
@@ -58,6 +58,6 @@ def mulPre : CsFixture :=
       (.product (.selector 12) (.product (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))) (.sum (.constant (mkFp 1 0 0 0)) (.negated (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))))))),
       (.product (.selector 12) (.sum (.product (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))) (.advice 3)) (.product (.sum (.constant (mkFp 1 0 0 0)) (.negated (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))))) (.sum (.advice 3) (.negated (.advice 16)))))),
       (.product (.selector 12) (.sum (.product (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))) (.advice 4)) (.product (.sum (.constant (mkFp 1 0 0 0)) (.negated (.sum (.advice 1) (.negated (.scaled (.advice 0) (mkFp 2 0 0 0)))))) (.sum (.advice 4) (.advice 17)))))],
-    lookups := [({ inputs := [(.product (.selector 0) (.sum (.product (.selector 1) (.sum (.advice 0) (.negated (.scaled (.advice 1) (mkFp 1024 0 0 0))))) (.product (.sum (.constant (mkFp 1 0 0 0)) (.negated (.selector 1))) (.advice 0))))], tables := [(.fixed 0)] } : LookupFixture)] }
+    lookups := [({ inputs := [(.product (.selector 0) (.sum (.product (.selector 1) (.sum (.advice 0) (.negated (.scaled (.advice 1) (mkFp 1024 0 0 0))))) (.product (.sum (.constant (mkFp 1 0 0 0)) (.negated (.selector 1))) (.advice 0))))], tables := [(.fixed 1)] } : LookupFixture)] }
 
 end Halo2.Fixtures

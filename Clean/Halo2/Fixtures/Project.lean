@@ -230,44 +230,31 @@ def projectCSPost (seed : List Query) (cs : _root_.Halo2.ConstraintSystem Fp) : 
     instanceQueryLayout := s.inst.toList
     gates := gates }
 
-/-! ## Post-compression projection (general, multi-selector) — SCAFFOLDING
+/-! ## Post-compression projection (general, multi-selector, map-driven)
 
 `compress_selectors` (`circuit.rs:1232-1338`, `compress_selectors.rs`) is a **whole-circuit,
 layout-dependent** step (design doc §2.4): which selectors pack into a shared fixed column
 is decided by the *exclusion matrix* over the full per-selector activation table (two
-selectors may share a column iff never co-enabled on a row), and each selector's replacement
-is the root-finding polynomial `q·∏_{i≠root}(i − q)` over its packed column's fixed query.
+selectors may share a column iff never co-enabled on a row, subject to the degree budget),
+and each selector's replacement is the root-finding polynomial `q·∏_{i≠root}(i − q)` over
+its packed column's fixed query.
 
-Per the design's trust boundary (task §Lean-side 9): **the map's derivation stays Rust-side**
-(the dumper's `dump_prepost_acts` runs the real `compress_selectors` and emits the
-`(selectorIdx, packedColumnIndex)` association plus the new-fixed-column count), and Lean
-applies it **mechanically** via `substSelectorMap`, then checks the resulting CS equal to the
-dumped `…Post` fixture. This keeps compression's global combinatorics out of Lean while still
-proving the substituted CS matches byte-for-byte.
-
-**The activation table is the remaining cut for mul.** A faithful map needs the real
-per-selector activation rows, gathered from a `synthesize` run of the mul chip (mul of a
-witnessed point by a witnessed scalar at the smallest workable `k`). Until that lands, the
-mul `dump_prepost` uses a single-row placeholder table under which every selector is
-mutually co-enabled, so NONE pack — each selector folds into its own column (`MulPost.lean`'s
-`numFixedColumns = 14`). That is a **shape placeholder**, not the faithful post-compression
-VK; do not `#guard` it as authoritative. For the single-selector Add gadget the single-row
-table IS faithful (`projectCSPost` + `AddPost` are green).
-
-The general replacement polynomial, as data-driven substitution: -/
-
-/-- One selector's compression datum, from the Rust map: the packed fixed-column index, the
-combination length (how many selectors share the column), and this selector's assigned root
-(`1..=combinationLen`). The replacement is `q·∏_{i∈[1,len], i≠root}(i − q)` over the packed
-column's rotation-0 fixed query `q`. -/
-structure SelCompress where
-  packedCol : ℕ
-  combinationLen : ℕ
-  assignedRoot : ℕ
+**Trust boundary** (task §Lean-side 9): the map's derivation stays RUST-side. The dumper's
+harness circuit (`MulDumpCircuit`, `ecc/chip/dump.rs`) runs a REAL mul synthesize through
+the floor planner with `Value::unknown()` witnesses — exactly keygen's view (keygen ignores
+advice values; the lookup TABLE contents affect only fixed commitments, never the compressed
+CS structure, so the table is not loaded) — gathering the TRUE activation table, and
+`dump_prepost_acts` runs the real `compress_selectors` on it, emitting `MulSelMap.lean`
+(per selector: packed column, combination length, assigned root). Lean applies the map
+MECHANICALLY (`substSelectorMap` below) and the resulting CS is checked EQUAL to the dumped
+post-compression fixture — any error in the reconstruction conventions (root order, factor
+shape, query registration) surfaces as a gate mismatch in that equality. -/
 
 /-- Build the root-finding replacement polynomial `q·∏_{i≠root}((i : Fp) − q)` for a selector,
-`q` being the packed column's fixed query (`compress_selectors.rs:184-201`). For
-`combinationLen = 1` this is the bare `q` (empty product), matching the single-selector case. -/
+`q` being the packed column's fixed query (`compress_selectors.rs:184-208`; left-assoc fold,
+matching Rust's `expression = expression * (Constant(root) − query)` accumulation). For
+`combinationLen = 1` this is the bare `q` (empty product) — the single-selector and
+degree-0 (complex/lookup-only selector) cases. -/
 def selReplacement (d : SelCompress) : _root_.Halo2.Expression Fp Query :=
   let q : _root_.Halo2.Expression Fp Query := var (.fixed ⟨d.packedCol⟩ 0)
   let factors := (List.range d.combinationLen).filterMap (fun j =>
@@ -278,7 +265,8 @@ def selReplacement (d : SelCompress) : _root_.Halo2.Expression Fp Query :=
 
 /-- Substitute each `Query.selector k` by its root-finding replacement from the map `m`
 (`k ↦ SelCompress`). Selectors not in the map are left as-is (should not happen for a
-complete map). -/
+complete map). Rust substitutes in gates AND lookups (`circuit.rs:1321-1335` — lookup
+expressions carry the complex selectors). -/
 def substSelectorMap (m : ℕ → Option SelCompress) :
     _root_.Halo2.Expression Fp Query → _root_.Halo2.Expression Fp Query
   | .var (.selector s) => match m s.index with
@@ -288,5 +276,35 @@ def substSelectorMap (m : ℕ → Option SelCompress) :
   | .const c => .const c
   | .add a b => .add (substSelectorMap m a) (substSelectorMap m b)
   | .mul a b => .mul (substSelectorMap m a) (substSelectorMap m b)
+
+/-- Project the post-compression CS with a Rust-dumped selector-compression map: substitute
+every selector (in gates and lookups) by its root-finding replacement, grow
+`numFixedColumns` by the new packed columns, and run the same seeded query walk.
+
+Halo2's post-compression query order: the packed columns' fixed queries are registered at
+column-ALLOCATION time inside `compress_selectors` (`circuit.rs:1267-1274`, via
+`query_fixed_index` in the allocate closure), i.e. all new fixed queries append to the
+pre-compression fixed layout in packing order, BEFORE the substituted gates are walked. The
+`seed` (built from the dumped post fixture's layouts, or equivalently pre-layout ++ packed
+columns) reproduces this. `numSelectors` is NOT reset by compression (halo2 keeps the count;
+the pinned VK doesn't carry it — design doc §2.3). -/
+def projectCSPostMap (seed : List Query) (map : SelCompressMap)
+    (cs : _root_.Halo2.ConstraintSystem Fp) : CsFixture :=
+  let m : ℕ → Option SelCompress := fun s => (map.entries.find? (fun e => e.1 = s)).map (·.2)
+  let polys := (flatGates cs).map (substSelectorMap m)
+  let lookups' : List (_root_.Halo2.LookupArgument Fp) := cs.lookups.map (fun a =>
+    { inputs := a.inputs.map (substSelectorMap m)
+      tables := a.tables.map (substSelectorMap m) })
+  let (gates, s) := eraseGates polys (seedQueries seed {})
+  let (lookups, s) := eraseLookups lookups' s
+  { numAdviceColumns := cs.numAdviceColumns
+    numFixedColumns := cs.numFixedColumns + map.newFixedCols
+    numInstanceColumns := cs.numInstanceColumns
+    numSelectors := cs.numSelectors
+    adviceQueryLayout := s.advice.toList
+    fixedQueryLayout := s.fixed.toList
+    instanceQueryLayout := s.inst.toList
+    gates := gates
+    lookups := lookups }
 
 end Halo2.Fixtures

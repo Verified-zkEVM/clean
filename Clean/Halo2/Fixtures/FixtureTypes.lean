@@ -68,4 +68,27 @@ structure CsFixture where
   lookups : List LookupFixture := []
 deriving DecidableEq, Repr
 
+/-- One selector's compression datum, from the Rust `compress_selectors` run: the packed
+fixed-column index, the combination length (how many selectors share the column), and this
+selector's assigned root (`1..=combinationLen`). The replacement expression is
+`q·∏_{i∈[1,len], i≠root}((i : Fp) − q)` over the packed column's rotation-0 fixed query `q`
+(`compress_selectors.rs:184-208`); degree-0 (complex/lookup-only) selectors are alone in
+their column with the bare-query replacement (`len = 1, root = 1`). -/
+structure SelCompress where
+  packedCol : ℕ
+  combinationLen : ℕ
+  assignedRoot : ℕ
+deriving DecidableEq, Repr
+
+/-- The whole selector-compression map, dumped by the Rust `dump_prepost_acts`: how many NEW
+fixed columns compression appended, and per selector index its `SelCompress`. **Trust
+boundary**: the map's *derivation* (exclusion matrix over the real synthesize's activation
+table, greedy packing, root assignment) happens Rust-side; Lean applies it mechanically and
+the resulting CS is still checked EQUAL to the dumped post-compression fixture, so any
+divergence in the reconstruction conventions surfaces as a gate mismatch. -/
+structure SelCompressMap where
+  newFixedCols : ℕ
+  entries : List (ℕ × SelCompress)
+deriving DecidableEq, Repr
+
 end Halo2.Fixtures
