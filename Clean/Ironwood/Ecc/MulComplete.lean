@@ -1,5 +1,6 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
+import Clean.Halo2.Tactics.SubcircuitRw
 import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Ecc.Mul.Complete
 import Clean.Ironwood.Ecc.Basic
@@ -46,12 +47,13 @@ here. The `q_mul_lsb` "LSB check" gate (`mul.rs:129-160`) handles the *least-sig
 ## Proof status
 
 Fully proven, no sorries. Soundness: per-round `round_acc_sound` consumes the two folded
-`add.call` chunks via the generic absorption iff (`rw`-instantiated — see the KEY FINDING note
-at the lemma) and the decomposition gate; `loop_sound` inducts over rounds threading each
-round's output validity into the next round's entering-accumulator assumption. Completeness:
-`call_constraints_and_spec` (FRAMEWORK CANDIDATE — the completeness iff does not expose the
-child's output value) combines `child.completeness` + `child.soundness`; `round_complete`/
-`loop_complete` mirror the soundness ladder on the honest witnesses.
+`add.call` chunks via the `subcircuit_rw` engine (`subcircuit_rw at h`, weakening each chunk to
+the child's `EnvA → A → Spec`) and the decomposition gate; `loop_sound` inducts over rounds
+threading each round's output validity into the next round's entering-accumulator assumption.
+Completeness: `round_complete` consumes the two chunks via the engine in `legacy` mode (the goal
+chunks strengthen to their preconditions and the engine introduces `h_spec_0`/`h_spec_1`, exposing
+each add's Spec at the prover's verifier view — what the honest output-value bookkeeping needs);
+`round_complete`/`loop_complete` mirror the soundness ladder on the honest witnesses.
 -/
 
 namespace Halo2.Ironwood.Ecc.MulComplete
@@ -192,8 +194,7 @@ shape): a structurally recursive `RegionCircuit` over the round count, addressin
 *absolute* region-local rows. The loop's `operations` is — by `rfl` from the monad's append-bind —
 the concatenation of per-round op lists, and each round's op list contains the round's own ops
 plus the TWO folded `add.call` chunks. That concatenation is what the loop induction consumes,
-and the composition iffs (`FormalRegionCircuit.subcircuit_constraints_iff_soundness'/…'`) fire on
-each round's two child chunks.
+and the `subcircuit_rw` engine fires on each round's two child chunks.
 
 Row layout (relative to the ambient `offset`, faithful to Rust `assign_region`):
 - row `offset`               : the `z` copy from incomplete addition (`complete.rs:115-123`).
@@ -292,18 +293,12 @@ theorem loop_output_succ (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits
 
 The parent consumes the child by its *contract projections* (`Add.add.Spec` etc.). These are
 structure-literal projections, `rfl`-reducible — but `simp only [Add.add]` would unfold the whole
-literal (synthesize body and all) into the proof state. The `rfl`-bridges below expose exactly
-the contract fields, keeping the child folded. FRAMEWORK CANDIDATE: a deriving-style mechanism
-(or simproc) exposing a `FormalRegionCircuit` literal's contract projections without unfolding. -/
+literal (synthesize body and all) into the proof state. The bridges below expose exactly the
+contract fields, keeping the child folded, generated mechanically by `derive_contract_bridges`
+(emits `add_spec_eq`, `add_assumptions_eq`, `add_envAssumptions_eq`,
+`add_proverAssumptions_eq`, `add_proverSpec_eq`). -/
 
-private theorem add_spec_eq :
-    Add.add.Spec = fun input output _ => output.Valid ∧ output = input.p + input.q := rfl
-
-private theorem add_assumptions_eq :
-    Add.add.Assumptions = fun input => input.p.Valid ∧ input.q.Valid := rfl
-
-private theorem add_envAssumptions_eq :
-    Add.add.EnvAssumptions = fun _ _ => True := rfl
+derive_contract_bridges add := Add.add
 
 /-- Componentwise eval of the child's input struct. Note: this does NOT fire (by `simp` or `rw`)
 on eval terms produced by instantiating the *generic* composition iffs — their `Eval` instance
@@ -317,7 +312,7 @@ private theorem addInputs_eval_eq (env : Placed Environment Fp)
 
 /-! ## Per-round composition lemma (the research artifact)
 
-`round_acc_sound` is the concrete demonstration that the absorption-iff pattern works inside a
+`round_acc_sound` is the concrete demonstration that the `subcircuit_rw` engine works inside a
 round that makes TWO chained child calls with the output→next-precondition threading. It is the
 per-round core the loop induction invokes.
 
@@ -325,15 +320,11 @@ Soundness produces the round's *constraint-forced* bit `b` (read off the running
 the decomposition gate), the z-chain step, and the accumulator step — so bundle soundness does
 not depend on the prover's honesty about the hint bits.
 
-KEY FINDING (composition ergonomics): the *primed* iff `…_soundness'` does NOT fire under
-`simp only [circuit_norm, …']` in a loop lemma stated over bare `place, env` — its discr-tree
-key is `env.place`/`env.env` (a `Placed` projection), unmatched by bare `place`/`env`. Only the
-*generic* iff via explicit `rw [subcircuit_constraints_iff_soundness Add.add cfg.addConfig off
-self ⟨place,env⟩ input]` matches (full `isDefEq`, repackaging `⟨place, env⟩`). The straight-line
-PoC (`TestSubcircuit`) has a genuine `Placed` env so its primed simp-form fires; a loop consumer
-must `rw` the generic iff with ALL arguments spelled per call — the composition friction this
-consumer exists to surface. The rw sites below are clearly delimited for a future mechanical
-simplification once bare-place/env iff variants (or the custom engine) exist. -/
+The engine handles the bare-`place`/`env` loop spelling natively: `subcircuit_rw at hC1`/`hC2`
+weakens each folded `add.call` chunk to the child's `EnvA → A → Spec` implication via `isDefEq`
+matching on the opaque `call` boundary (no `Placed`-projection discr-tree dependence — that was
+the friction the historical absorption iffs had in loop lemmas, which the engine's own matching
+retires). -/
 
 /-- One round's soundness. If the round's constraints hold, the entering accumulator `acc` reads
 a valid point `A`, and the base is valid, then there is a bit `b` (forced by the decomposition
@@ -361,19 +352,14 @@ theorem round_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits 
     operations_assignAdvice, operations_copyAdvice, operations_enable,
     RegionOperations.constraints_append] at hC ⊢
   obtain ⟨hz, hdec, hC1, hC2⟩ := hC
-  -- ▸▸ composition-iff rw site 1 (first add: `tmp = U + acc` at row r) ◂◂
-  rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-        Add.add cfg.addConfig (offset + 2 * iter) self ⟨place, env⟩
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP }, acc⟩] at hC1
-  -- ▸▸ composition-iff rw site 2 (second add: `acc' = acc + tmp` at row r+1) ◂◂
-  rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-        Add.add cfg.addConfig (offset + 2 * iter + 1) self ⟨place, env⟩
-        ⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
-          ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP }, acc⟩).output self⟩] at hC2
-  obtain ⟨_, hSpec1⟩ := hC1
-  obtain ⟨_, hSpec2⟩ := hC2
+  -- ▸▸ engine site 1 (first add: `tmp = U + acc` at row r): weakens the folded chunk to
+  --    the child's `EnvA → A → Spec` implication ◂◂
+  subcircuit_rw at hC1
+  -- ▸▸ engine site 2 (second add: `acc' = acc + tmp` at row r+1) ◂◂
+  subcircuit_rw at hC2
   -- expose the child's contract projections (the child stays folded)
-  simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hSpec1 hSpec2
+  simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hC1 hC2
+  rename' hC1 => hSpec1, hC2 => hSpec2
   -- ── the decomposition gate: reduce to the two value-level polynomials ──
   -- (`circuit_norm` folds the ±1 rotations into the ℕ-sum row spelling directly)
   simp only [decomposeGate, Constraints.withSelector, circuit_norm] at hdec
@@ -495,40 +481,13 @@ theorem loop_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : Bit
 
 /-! ## Completeness ladder
 
-The honest-prover side. One structural finding this consumer surfaces:
-
-FRAMEWORK CANDIDATE (for `Clean/Halo2/Subcircuit.lean`): the absorption *completeness* iff only
-lets a parent DISCHARGE a child chunk (pick `Or.inr` with the preconditions). But a parent whose
-own honest-value bookkeeping needs the child's output VALUE (here: the accumulator chain — round
-`k+1`'s honest values are defined in terms of round `k`'s add outputs) must additionally LEARN
-the child's contract. The child's `ProverSpec` would be the natural carrier, but the iff does not
-expose it (and `Add`'s defaults to `True`). `call_constraints_and_spec` below fills the gap
-generically: run `child.completeness` (→ the chunk's constraints) and then `child.soundness` on
-those constraints at the prover env's verifier view (→ the `Spec`, hence the output value). -/
-
-/-- Completeness-side consumption of a child call, with the child's verifier-view `Spec` exposed:
-from the chunk's `ExtendsWitnesses` and the child's preconditions, both the chunk's `Constraints`
-(what the parent's completeness goal needs) and the child's `Spec` at the prover env's verifier
-view (what the parent's honest-value bookkeeping needs). -/
-theorem call_constraints_and_spec {CI Cfg : Type} {Input Output : TypeMap}
-    [CircuitType Input] [CircuitType Output]
-    (child : FormalRegionCircuit Fp CI Cfg Input Output) (config : Cfg) (offset : ℕ)
-    (self : RegionIndex) (env : Placed ProverEnvironment Fp) (input : Var Input Fp)
-    (hw : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.call config offset input).operations self))
-    (hE : child.EnvAssumptions config env.toEnvironment)
-    (hA : child.Assumptions (eval env.toEnvironment input))
-    (hpa : child.ProverAssumptions (eval env input) env.env.hint) :
-    RegionOperations.Constraints env.place self env.env
-      ((child.call config offset input).operations self)
-    ∧ child.Spec (eval env.toEnvironment input)
-        (eval env.toEnvironment (child.output config offset input self))
-        (child.extract config offset input self env.toEnvironment) := by
-  have hw' : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.synthesize config offset input).operations self) := hw.1
-  obtain ⟨hcons, _⟩ := child.completeness config offset self env input hw' hE hA hpa
-  exact ⟨⟨hcons, trivial⟩,
-    child.soundness config offset self env.toEnvironment input hE hA hcons⟩
+The honest-prover side. Each round's two `add` chunks are consumed by the `subcircuit_rw` engine
+in completeness `legacy` mode: it strengthens the goal's folded chunk positions to their
+`EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from the peeled witness context) and
+introduces the derived contract statements `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`. The
+round's honest-value bookkeeping — round `k`'s add outputs feed round `k+1`'s honest values, and
+add 1's output validity feeds add 2's precondition — reads those Specs off `h_spec_0`/`h_spec_1`
+(the old `call_constraints_and_spec` composition, now the engine's internal derived leaf). -/
 
 /-- The honest running-sum step, in the `RoundInvariant` shape (donor `zRunValue` algebra). -/
 private theorem zRunValue_step (z : Fp) (bits : BitsHint) (j : ℕ) :
@@ -539,10 +498,10 @@ private theorem zRunValue_step (z : Fp) (bits : BitsHint) (j : ℕ) :
   · simp [zRunValue]
 
 /-- **Round completeness.** The honest witnesses of one round satisfy its constraints (its own
-decomposition gate from the honest `z`/`y_p` values; the two add chunks via
-`call_constraints_and_spec`), and pin the round's output to the complete `stepPoint` and the
-round's `z` cell to the honest running sum. `hzPrev` threads the previous `z` cell's honest value
-(the start copy for round 0, the previous round's cell otherwise). -/
+decomposition gate from the honest `z`/`y_p` values; the two add chunks via the `subcircuit_rw`
+engine in `legacy` mode), and pin the round's output to the complete `stepPoint` and the round's
+`z` cell to the honest running sum. `hzPrev` threads the previous `z` cell's honest value (the
+start copy for round 0, the previous round's cell otherwise). -/
 theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits : BitsHint)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp) (offset iter : ℕ)
     (acc : Point (AssignedCell Fp)) (A base : Point Fp)
@@ -594,10 +553,6 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits :
         acc⟩ : Var Add.Inputs Fp)) := by
     simp only [add_assumptions_eq, hIn1]
     exact ⟨stepBasePoint_valid hbase (bits iter), hAvalid⟩
-  -- ── first add (`tmp = U + acc`): constraints + Spec via `call_constraints_and_spec` ──
-  obtain ⟨hC1, hSpec1⟩ := call_constraints_and_spec Add.add cfg.addConfig (offset + 2 * iter)
-    self env _ hWc1 trivial hA1 trivial
-  simp only [add_spec_eq, hIn1] at hSpec1
   -- `call.output = output` (rfl bridge)
   have hout1 : (Add.add.call cfg.addConfig (offset + 2 * iter)
         ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
@@ -605,6 +560,16 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits :
       = Add.add.output cfg.addConfig (offset + 2 * iter)
         ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
           acc⟩ self := rfl
+  -- ▸▸ engine (completeness `legacy`): strengthen the goal's two folded add chunks to their
+  --    `EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from `hWc1`/`hWc2`), and introduce
+  --    the premised derived statements `h_spec_0`/`h_spec_1 : EnvA → A → PA → Spec ∧ ProverSpec`.
+  --    The `legacy` (whole-goal) mode is the right one here: the round's honest-value bookkeeping
+  --    (add 1's Spec feeds add 2's precondition AND the round output value) reads both Specs, and
+  --    the strengthened chunk conjuncts sit inside the round's own `Constraints` bundle. ◂◂
+  subcircuit_rw legacy
+  -- derive add 1's Spec from `h_spec_0` (Add's `ProverSpec` is `True`, so `.1` is the Spec)
+  have hSpec1 := (h_spec_0 trivial hA1 trivial).1
+  simp only [add_spec_eq, hIn1] at hSpec1
   have hIn2 : eval env.toEnvironment
       (⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
         ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
@@ -620,12 +585,12 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits :
           acc⟩).output self⟩ : Var Add.Inputs Fp)) := by
     simp only [add_assumptions_eq, hIn2]
     exact ⟨hAvalid, hSpec1.1⟩
-  -- ── second add (`acc' = acc + tmp`), its `q.Valid` threaded from the first's Spec ──
-  obtain ⟨hC2, hSpec2⟩ := call_constraints_and_spec Add.add cfg.addConfig (offset + 2 * iter + 1)
-    self env _ hWc2 trivial hA2 trivial
+  -- add 2's Spec from `h_spec_1`, its `q.Valid` threaded from the first's Spec
+  have hSpec2 := (h_spec_1 trivial hA2 trivial).1
   simp only [add_spec_eq, hIn2] at hSpec2
-  -- ── assemble: copy constraint, gate polys, two chunks; output value; z value ──
-  refine ⟨⟨hWby, ?_, hC1, hC2⟩, ?_, ?_⟩
+  -- ── assemble: copy constraint, gate polys, the two strengthened chunk preconditions; output
+  --    value; z value. The engine turned the chunk positions into `EnvA ∧ A ∧ PA` bundles. ──
+  refine ⟨⟨hWby, ?_, ⟨trivial, hA1, trivial⟩, ⟨trivial, hA2, trivial⟩⟩, ?_, ?_⟩
   · -- the decomposition gate holds on the honest values
     simp only [decomposeGate, Constraints.withSelector, circuit_norm]
     rw [hWz, hzPrev, hWby, hWyP]
@@ -831,7 +796,8 @@ def assign_region (numBits : ℕ) (bits : BitsHint) :
 
   -- ══ Completeness ══
   -- Peel the witness list, then route the loop witnesses into `loop_complete` (whose induction
-  -- consumes each round's two child chunks via `round_complete`/`call_constraints_and_spec`).
+  -- consumes each round's two child chunks via `round_complete`, which uses the `subcircuit_rw`
+  -- engine in `legacy` mode).
   completeness := by
     intro cfg offset
     rw [FormalRegionCircuit.completeness_iff]

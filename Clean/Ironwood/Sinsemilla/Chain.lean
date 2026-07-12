@@ -516,8 +516,8 @@ private theorem qS3_yRhs (b : Bool) (row : DoubleAndAddRow Fp) :
     norm_num
     ring
 
-/-- The child's output var in the `FormalRegionCircuit.output` spelling (the composition iff's
-form) — same record as `hashPiece_call_output`. -/
+/-- The child's output var in the `FormalRegionCircuit.output` spelling (the form the engine's
+soundness leaf produces) — same record as `hashPiece_call_output`. -/
 private theorem hashPiece_output (G : Generators) (n : ℕ) (b : Bool) (cfg : Config)
     (offset : ℕ) (inp : Var HashPiece.Inputs Fp) (self : RegionIndex) :
     (HashPiece.circuit G n b).output cfg offset inp self
@@ -643,9 +643,10 @@ private theorem eval_inputs_yA (place : RegionIndex → ℕ) (env : Environment 
 /-! ## The soundness induction
 
 The composition-of-loop-children core: induction over the piece list, consuming each folded
-`HashPiece.circuit.call` chunk via the composition iff (`rw`-instantiated, MulComplete's
-delimited-site convention), the parent-pinned link-row `q_s2` and the linking gate, and the
-tail via the induction hypothesis, glued by `soundness_aux`. -/
+`HashPiece.circuit.call` chunk via the `subcircuit_rw` engine (`subcircuit_rw at hChild`, weakening
+the chunk to the child's `EnvA → A → Spec` over the bare-`place`/`env` cons spelling), the
+parent-pinned link-row `q_s2` and the linking gate, and the tail via the induction hypothesis,
+glued by `soundness_aux`. -/
 
 theorem chainBody_sound (G : Generators) (cfg : Config)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
@@ -700,12 +701,12 @@ theorem chainBody_sound (G : Generators) (cfg : Config)
     rw [chainBody_operations_cons] at hc
     simp only [RegionOperations.constraints_append] at hc
     obtain ⟨⟨⟨⟨hChild, hQdup⟩, hYAw⟩, hTail⟩, hGate⟩ := hc
-    -- ▸▸ composition-iff rw site (the piece child; delimited per MulComplete) ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          (HashPiece.circuit G n rest.isEmpty) cfg offset self ⟨place, env⟩
-          ⟨pieces[0], xACell, yACell⟩] at hChild
-    obtain ⟨-, hSpecFn⟩ := hChild
-    have hSpec := hSpecFn hTable trivial
+    -- ▸▸ engine site (the piece child): `subcircuit_rw at hChild` weakens the folded
+    --    `HashPiece.circuit.call` chunk to the child's `EnvA → A → Spec` implication, over the
+    --    bare-`place`/`env` cons-induction spelling (the engine's own `isDefEq` matching handles
+    --    it natively — no per-call iff instantiation). ◂◂
+    subcircuit_rw at hChild
+    have hSpec := hChild hTable trivial
     -- expose the child's contract over env reads (the child stays folded)
     rw [hashPiece_spec_eq] at hSpec
     rw [hashPiece_output] at hSpec
@@ -826,36 +827,14 @@ theorem chainBody_sound (G : Generators) (cfg : Config)
 
 /-! ## The completeness ladder
 
-Honest-prover side. Each child chunk is consumed by `call_constraints_and_specs` (MulComplete's
-`call_constraints_and_spec`, extended with the child's `ProverSpec` — the honest-cell facts the
-parent needs to discharge the linking gate; copied per the no-cross-gadget-import convention).
-FRAMEWORK CANDIDATE (see `MulComplete`): the absorption completeness iff neither exposes the
-child's Spec at the honest env nor its ProverSpec; this lemma fills both gaps generically. -/
-
-/-- Completeness-side consumption of a child call: from the chunk's `ExtendsWitnesses` and the
-child's preconditions, the chunk's `Constraints`, the child's verifier `Spec` at the prover env's
-verifier view, AND the child's honest-prover `ProverSpec`. -/
-theorem call_constraints_and_specs {CI Cfg : Type} {Input Output : TypeMap}
-    [CircuitType Input] [CircuitType Output]
-    (child : FormalRegionCircuit Fp CI Cfg Input Output) (config : Cfg) (offset : ℕ)
-    (self : RegionIndex) (env : Placed ProverEnvironment Fp) (input : Var Input Fp)
-    (hw : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.call config offset input).operations self))
-    (hE : child.EnvAssumptions config env.toEnvironment)
-    (hA : child.Assumptions (eval env.toEnvironment input))
-    (hpa : child.ProverAssumptions (eval env input) env.env.hint) :
-    RegionOperations.Constraints env.place self env.env
-      ((child.call config offset input).operations self)
-    ∧ child.Spec (eval env.toEnvironment input)
-        (eval env.toEnvironment (child.output config offset input self))
-        (child.extract config offset input self env.toEnvironment)
-    ∧ child.ProverSpec (eval env input)
-        (eval env (child.output config offset input self)) env.env.hint := by
-  have hw' : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.synthesize config offset input).operations self) := hw.1
-  obtain ⟨hcons, hps⟩ := child.completeness config offset self env input hw' hE hA hpa
-  exact ⟨⟨hcons, trivial⟩,
-    child.soundness config offset self env.toEnvironment input hE hA hcons, hps⟩
+Honest-prover side. Each piece's folded `HashPiece.circuit.call` chunk is consumed by the
+`subcircuit_rw` engine in completeness `legacy` mode: after peeling the goal's `Constraints` into
+the cons shape (exposing the chunk in positive position), the engine strengthens it to its
+`EnvA ∧ A ∧ PA` precondition bundle and introduces the premised derived statement
+`h_spec_0 : EnvA → A → PA → Spec ∧ ProverSpec`. The child's `ProverSpec` (`.2` of `h_spec_0`
+applied to the honest preconditions) supplies the honest-cell facts the parent needs to discharge
+the linking gate — the role the old `call_constraints_and_specs` helper filled, now internal to the
+engine. -/
 
 /-- Literal-eval bridge for the child's `Output` record. -/
 private theorem hp_output_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
@@ -930,20 +909,31 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
     obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToPoint_append_some hchain
     simp only [PieceBounds, Vector.getElem_map] at hbounds
     obtain ⟨hb0, hbrest⟩ := hbounds
-    -- ── the head piece, via `call_constraints_and_specs` ──
+    -- ── the head piece, via the `subcircuit_rw` engine (completeness `legacy`) ──
     have hinp : (eval env (⟨pieces[0], xACell, yACell⟩ : Var HashPiece.Inputs Fp)
         : HashPiece.Inputs Fp)
         = { piece := AssignedCell.eval env.place env.env.toEnvironment pieces[0],
             xA := AssignedCell.eval env.place env.env.toEnvironment xACell,
             yA := AssignedCell.eval env.place env.env.toEnvironment yACell } := by
       rw [ProvableStruct.eval_cells_eq_eval_prover, hp_inputs_eval_literal]
-    obtain ⟨hCchild, hSpecChild, hPSchild⟩ := call_constraints_and_specs
-      (HashPiece.circuit G n rest.isEmpty) cfg offset self env
-      ⟨pieces[0], xACell, yACell⟩ hWchild hTable trivial
-      (by rw [hashPiece_proverAssumptions_eq, hinp]
-          simp only [AssignedCell.eval]
-          exact ⟨hb0, A, B₁, hAon, hAx, hAy, hpre⟩)
-    -- the child's honest-cell facts (ProverSpec) at the honest entering point
+    -- the child's honest-prover precondition (piece in range + defined chain through this piece)
+    have hChildPA : (HashPiece.circuit G n rest.isEmpty).ProverAssumptions
+        (eval env (⟨pieces[0], xACell, yACell⟩ : Var HashPiece.Inputs Fp)) env.env.hint := by
+      rw [hashPiece_proverAssumptions_eq, hinp]
+      simp only [AssignedCell.eval]
+      exact ⟨hb0, A, B₁, hAon, hAx, hAy, hpre⟩
+    -- Peel the goal's `Constraints` conjunct into the cons shape (child chunk ++ q_s2 ++
+    -- boundary-y ++ tail ++ linking gate), exposing the folded `HashPiece.circuit.call` chunk in
+    -- POSITIVE position, then strengthen it via the engine. `legacy` mode is the right choice for
+    -- this cons-induction site: the child's `ProverSpec`/`Spec` (via the premised `h_spec_0`) is
+    -- needed EARLY — before the tail recursion and shared across both output subgoals — which the
+    -- up-front premised derived statement supplies, whereas the have-chain mode would surface the
+    -- child precondition as a separate subgoal decoupled from where the ProverSpec is consumed. ◂◂
+    rw [chainBody_operations_cons]
+    simp only [RegionOperations.constraints_append]
+    subcircuit_rw legacy
+    -- the child's honest-cell facts (ProverSpec) at the honest entering point, off `h_spec_0`
+    have hPSchild := (h_spec_0 hTable trivial hChildPA).2
     rw [hashPiece_proverSpec_eq, hashPiece_output] at hPSchild
     simp only [ProvableStruct.eval_cells_eq_eval_prover, hp_inputs_eval_literal,
       hp_output_eval_literal, HashPiece.ProverSpec, row_eval_literal,
@@ -1008,13 +998,14 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
     simp only [ProvableType.eval_field, AssignedCell.eval, AssignedCell.of_cell,
       Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
       Environment.get_advice] at hEnterTail
-    -- ── assemble ──
+    -- ── assemble the strengthened goal (its `Constraints` conjunct already peeled + the child
+    --    chunk strengthened to its `EnvA ∧ A ∧ PA` precondition bundle by the engine) ──
     refine ⟨?_, ?_⟩
-    · -- the constraints: child ++ q_s2 re-pin ++ boundary-y ++ tail ++ linking gate
-      rw [chainBody_operations_cons]
-      simp only [RegionOperations.constraints_append]
+    · -- the constraints: child precondition bundle ++ q_s2 re-pin ++ boundary-y ++ tail ++ gate
       simp only [circuit_norm] at hWq
-      refine ⟨⟨⟨⟨hCchild, ?_⟩, ?_⟩, hCtail⟩, ?_⟩
+      -- the child chunk position is the engine's strengthened `EnvA ∧ A ∧ PA` bundle: EnvA is the
+      -- parent's `hTable`, A trivial, PA the honest `hChildPA` (piece in range + defined chain)
+      refine ⟨⟨⟨⟨⟨hTable, trivial, hChildPA⟩, ?_⟩, ?_⟩, hCtail⟩, ?_⟩
       · -- the re-pinned fixed cell: constraint = its own witness pin
         simp only [circuit_norm]
         exact hWq
@@ -1081,11 +1072,11 @@ parent discharges every child's env-assumption from its own by `id` (the EnvAssu
 exercise; verdict: trivial identity thread, since parent and children share `cfg.generatorTable`).
 
 Soundness inducts over `ns`: each piece is a folded `HashPiece.circuit.call` chunk consumed via
-the composition iff (`subcircuit_constraints_iff_soundness`, `rw`-instantiated per call — the
-MulComplete route, as the primed simp form does not fire on the bare-place/env loop spelling), the
-linking `sinsemillaGate` reduces to the value-level secant/y-check, and `soundness_aux` glues the
-piece + gate + tail chain contracts. Completeness mirrors the ladder on the honest witnesses via
-`call_constraints_and_spec` (the FRAMEWORK CANDIDATE from MulComplete — reused here). -/
+the `subcircuit_rw` engine (`subcircuit_rw at hChild`, which handles the bare-`place`/`env` loop
+spelling natively via its own `isDefEq` matching), the linking `sinsemillaGate` reduces to the
+value-level secant/y-check, and `soundness_aux` glues the piece + gate + tail chain contracts.
+Completeness mirrors the ladder on the honest witnesses via the engine in `legacy` mode (the goal
+chunk strengthens to its preconditions, the premised `h_spec_0` exposes the child's ProverSpec). -/
 def circuit (G : Generators) (ns : List ℕ) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) (Output ns) where
   name := "sinsemilla hash_all_pieces"

@@ -1,32 +1,27 @@
 import Clean.Halo2.Subcircuit
+import Clean.Halo2.Tactics.SubcircuitRw
 import Clean.Ironwood.Ecc.WitnessPoint
 
 /-!
-# Test: parent circuits composing a subcircuit via the absorption-iff mechanism
+# Test: parent circuits composing a subcircuit via the `subcircuit_rw` engine
 
 Two PARENT `FormalRegionCircuit`s call the real child `Halo2.Ironwood.Ecc.WitnessPoint.point`
-and are proven sound + complete by rewriting the child's constraint chunk to its contract:
+and are proven sound + complete by consuming the child's constraint chunk with the
+`subcircuit_rw` engine (the mechanism that replaced the historical absorption iffs):
 
-- `parent` — the bare call. The chunk `Constraints ((point.call …).operations self)` is
-  already the iff's LHS.
+- `parent` — the bare call. The chunk `Constraints ((point.call …).operations self)` is the
+  engine's leaf target directly.
 - `parentWithOp` — a parent with its OWN op (an `assignAdvice`) *and* the call. The real
-  scaling test: `circuit_norm` decomposes the parent's binds via `operations_bind` → `++`
-  and `RegionOperations.constraints_append`, dropping the `assignAdvice`'s `True` constraint
-  and isolating the *folded* `(point.call …).operations self` chunk. The child is never
-  unfolded — the iff keys on the opaque `call` boundary, not the child's `synthesize` ops.
+  scaling test: `circuit_norm` decomposes the parent's binds via `operations_bind` → `++` and
+  `RegionOperations.constraints_append`, dropping the `assignAdvice`'s `True` constraint and
+  isolating the *folded* `(point.call …).operations self` chunk. The child is never unfolded —
+  the engine keys on the opaque `call` boundary (its own `isDefEq` matching), not the child's
+  `synthesize` ops.
 
-Both parents, both directions, fire the iff **as part of `simp`**:
-`simp only [circuit_norm, subcircuit_constraints_iff_soundness'/…_completeness']`.
-`circuit_norm` normalizes the folded chunk's element type to the concrete
-`Point (AssignedCell Fp)` (via `var_of_provableType`); the *primed* concrete-`α` iffs (in
-`Subcircuit.lean`) are stated over exactly that spelling, so their discrimination-tree key
-matches and the iff fires in the same `simp` pass. (The generic `Var`-`α` iffs miss the
-post-`circuit_norm` chunk under simp — only `rw`'s full `isDefEq` catches them.)
-
-The iff's surviving RHS chunk is wrapped in the opaque `SubcircuitConstraints` marker so the
-rewrite happens exactly once (without it the iff re-fires on its own output). (This whole
-hypothesis-rewriting step is what the eventual custom one-directional engine will subsume,
-dropping the leftover marker/OR terms.)
+Both parents, both directions, go through the engine:
+`subcircuit_rw at hc` (soundness) weakens the folded chunk to the child's `EnvA → A → Spec`;
+`subcircuit_rw` (completeness) strengthens the goal chunk to `EnvA ∧ A ∧ PA` and introduces the
+derived statement `h_spec_0` — no marker/OR leftovers to discard.
 -/
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuit
@@ -50,21 +45,22 @@ def parent :
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output _hE _hA hc
     -- `circuit_norm` normalizes the chunk's element type to concrete `Point (AssignedCell Fp)`;
-    -- the concrete-`α` iff then fires *as part of the same simp* to expose the child's contract
-    simp only [circuit_norm, FormalRegionCircuit.subcircuit_constraints_iff_soundness'] at hc
-    obtain ⟨_, hspec⟩ := hc
-    have hvalid := hspec trivial trivial
-    rw [← h_output]; exact hvalid
+    -- the engine then weakens the folded chunk to the child's `EnvA → A → Spec`.
+    simp only [circuit_norm] at hc
+    subcircuit_rw at hc
+    exact h_output ▸ hc trivial trivial
 
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
-    simp only [circuit_norm, FormalRegionCircuit.subcircuit_constraints_iff_completeness']
-    -- simp normalized the eval spelling on both the goal and h_input to `Witgen.eval …`
-    simp only [circuit_norm] at h_input
-    exact Or.inr ⟨hwit, trivial, trivial, h_input ▸ hpa⟩
+    -- the goal chunk becomes a precondition subgoal `pre_0 : EnvA ∧ A ∧ PA`; the chunk position
+    -- is discharged (residual `True`).
+    simp only [circuit_norm] at h_input hpa ⊢
+    subcircuit_rw
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · trivial
 
 /-! ## Realistic parent: own op + subcircuit call -/
 
@@ -84,24 +80,23 @@ def parentWithOp :
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output _hE _hA hc
-    -- circuit_norm decomposes the parent's `++` (the assignAdvice conjunct is `True`), isolates
-    -- the folded call chunk, normalizes its element type, and — in the SAME simp — the concrete-`α`
-    -- iff fires on it to expose the child's contract. The child is never unfolded.
-    simp only [circuit_norm, FormalRegionCircuit.subcircuit_constraints_iff_soundness'] at hc
-    obtain ⟨_, hspec⟩ := hc
-    have hvalid := hspec trivial trivial
-    rw [← h_output]; exact hvalid
+    -- circuit_norm decomposes the parent's `++` (the assignAdvice conjunct is `True`) and isolates
+    -- the folded call chunk; the engine walks the `True ∧ chunk` shape and weakens it. The child is
+    -- never unfolded.
+    simp only [circuit_norm] at hc
+    subcircuit_rw at hc
+    exact h_output ▸ hc trivial trivial
 
   completeness := by
     intro config offset
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
-    -- decompose the parent's own `ExtendsWitness`/`Constraints`; the call chunks stay folded,
-    -- and the concrete-`α` iff fires on the goal chunk as part of the same simp
-    simp only [circuit_norm, FormalRegionCircuit.subcircuit_constraints_iff_completeness'] at hwit ⊢
-    simp only [circuit_norm] at h_input
-    obtain ⟨_, hwit_call⟩ := hwit
-    exact Or.inr ⟨hwit_call, trivial, trivial, h_input ▸ hpa⟩
+    -- decompose the parent's own `ExtendsWitness`/`Constraints`; the call chunk stays folded and
+    -- the engine strengthens the goal chunk (locating the witness from `hwit`).
+    simp only [circuit_norm] at hwit h_input hpa ⊢
+    subcircuit_rw
+    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    · trivial
 
 end Halo2.Ironwood.Ecc.TestSubcircuit

@@ -4,10 +4,9 @@ import Clean.Ironwood.Ecc.WitnessPoint
 /-!
 # Test: parent circuits composing subcircuits via the `subcircuit_rw` engine
 
-The marker-free redo of `TestSubcircuit` + `TestLayouterSubcircuit`: every consumption pattern
-those files prove through the absorption iffs, reproven here through the `subcircuit_rw` engine.
-These are the acceptance gate for the engine AND the migration templates the C1 refactor pass
-copies from.
+The full engine coverage for `TestSubcircuit` + `TestLayouterSubcircuit`'s fixtures: every
+consumption pattern, proven through the `subcircuit_rw` engine. These are the acceptance gate for
+the engine AND the migration templates the composition consumers follow.
 
 Patterns covered, each with both directions:
 - **region parent, bare call** (`regionParent`);
@@ -16,35 +15,18 @@ Patterns covered, each with both directions:
   (`layouterParent`) — covers the layouter level AND the `toFormal` bridge in one;
 - **chained children**, second input = first output (`chainedParent`) — the completeness
   direction here *consumes* the derived statement `h_spec_0` for output bookkeeping;
-- **bare-`place`/`env` loop-lemma context** (`loopLemmaSoundness`) — the tactic's own
-  unification, no discrimination tree (the scenario the `Placed`-keyed iffs miss).
+- **bare-`place`/`env` loop-lemma context** — the tactic's own `isDefEq` unification, no
+  discrimination tree (the loop-lemma scenario the engine handles natively).
 
-## iff → engine, side by side
+## The two engine idioms
 
-Soundness. iff:
-```
-simp only [circuit_norm, subcircuit_constraints_iff_soundness'] at hc
-obtain ⟨_, hspec⟩ := hc          -- discard the leftover SubcircuitConstraints marker
-have hvalid := hspec trivial trivial
-```
-engine:
-```
-simp only [circuit_norm] at hc
-subcircuit_rw at hc              -- hc : EnvA → A → Spec, no marker conjunct
-have hvalid := hc trivial trivial
-```
+Soundness: `simp only [circuit_norm] at hc; subcircuit_rw at hc` weakens the folded chunk to
+`hc : EnvA → A → Spec` (no marker/conjunct leftover); feed the preconditions to expose the child
+`Spec`.
 
-Completeness. iff:
-```
-simp only [circuit_norm, subcircuit_constraints_iff_completeness'] at hwit ⊢
-exact Or.inr ⟨hwit_call, trivial, trivial, h_input ▸ hpa⟩   -- pick the OR side
-```
-engine:
-```
-simp only [circuit_norm] at h_input ⊢
-subcircuit_rw                    -- goal chunk → EnvA ∧ A ∧ PA (no ∨); h_spec_0 introduced
-exact ⟨trivial, trivial, …⟩
-```
+Completeness: `subcircuit_rw` strengthens the goal chunk to `EnvA ∧ A ∧ PA` (discharged as a
+`pre_i` subgoal) and introduces the bare derived statement `h_spec_i : Spec ∧ ProverSpec` — no
+`∨`-side to pick.
 -/
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuitRw

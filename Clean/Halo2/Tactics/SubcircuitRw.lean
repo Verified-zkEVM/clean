@@ -523,7 +523,8 @@ identity, handled by returning `none`. The proof is assembled from the congruenc
 /-- Walk `p` in positive polarity, rewriting call-keyed chunks to their soundness consequence.
 Returns `some (p', proof : p → p')` or `none` (no change). `depth` guards runaway recursion. -/
 partial def walkPos (p : Expr) : MetaM (Option (Expr × Expr)) := do
-  let p ← instantiateMVars p
+  -- Strip `mdata` wrappers (see `walkGoal`): the recognizers key on the bare head.
+  let p := (← instantiateMVars p).consumeMData
   -- Leaf: is `p` itself a call-keyed chunk?
   if let some c ← matchChunk? p then
     if let some (concl, proof) ← soundnessLeaf? c p then
@@ -787,7 +788,11 @@ precondition metavars. Returns `some (p', proof : p' → p)` or `none` (no chang
 chunk position is `True`. Accumulates `CompChunk`s in op order. Runs in `TacticM` (needs the
 local context to locate witness facts). -/
 partial def walkGoal (p : Expr) : StateRefT WalkState TacticM (Option (Expr × Expr)) := do
-  let p ← instantiateMVars p
+  -- Strip `mdata` wrappers (e.g. left by a prior `simp only … at ⊢`): the connective/chunk
+  -- recognizers below all key on the bare head, and `mdata` is definitionally transparent so the
+  -- monotone-implication proof we build against the stripped form still types against the wrapped
+  -- goal. Without this the walker sees an `.mdata` node, matches nothing, and silently no-ops.
+  let p := (← instantiateMVars p).consumeMData
   -- Leaf: a call-keyed chunk with a locatable witness fact.
   if let some c ← matchChunk? p then
     if let some (witProof, witTy) ← findWitness? c then

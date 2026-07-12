@@ -225,8 +225,8 @@ constrained-constants pin the chain's entering accumulator to `A = Q`; the chain
 delivers `hashToPoint(Q, chunks)`; the addition contract delivers the sum.
 
 STRUCTURE-COMPLETE-WITH-STATED-SORRIES (per the sanctioned fallback). The statement is final; the
-donor glue (`pieceChunks_bound`, `hashToPoint_valid`, the seed-pinning, the three composition iffs
-via `subcircuit_constraints_iff_soundness`) is identified inline. The one genuine cut is the
+donor glue (`pieceChunks_bound`, `hashToPoint_valid`, the seed-pinning, the three child
+consumptions via the `subcircuit_rw` engine) is identified inline. The one genuine cut is the
 `[r]R` boundary, discharged by `hBlindSpec` (`BlindSpecPinned`). -/
 theorem commitBody_sound (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n₀ : ℕ) (ns : List ℕ)
     (blind : FormalRegionCircuit Fp BCI BCfg (Input (ns.length + 1)) Point) (R : FixedBase)
@@ -248,24 +248,26 @@ theorem commitBody_sound (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n₀ 
   --     (`RegionCircuit.operations_bind` + `constraints_append`, as in `chainBody_sound`).
   --  2. seed: `constrainConstant` pins `eval xACell = Q.x`, `eval yACell = Q.y`, so the chain's
   --     entering `A` (any on-curve `A` with `A.x = Q.x`, `2·A.y = enterYA`) is `A = Q`.
-  --  3. chain: `subcircuit_constraints_iff_soundness (Chain.circuit G (n₀::ns)) …`, then
-  --     `chain_spec_eq` exposes `Chain.Spec`, giving `chunks`, `PieceChunks`, `ZsFacts`, and the
-  --     chain contract `∀ A …, output.point = hashToPoint(Q,chunks)` (instantiated at `A = Q`).
-  --  4. blind: `subcircuit_constraints_iff_soundness blind …`, `hBlindSpec` gives
-  --     `blindPt.Valid ∧ blindPt = r • R`  (the [r]R BOUNDARY — pinned interface).
-  --  5. add: `subcircuit_constraints_iff_soundness Ecc.Add.add …`, `add_spec_eq` gives
-  --     `commitment = hashPoint + blindPt`, discharging `Add`'s `Assumptions` from the chain
-  --     point's validity (`hashToPoint_valid (Or.inl hQ) (pieceChunks_bound hPC)`) and
-  --     `R.smul_valid`.
+  --  3. chain: `subcircuit_rw at hChain` weakens the chunk to `EnvA → A → Chain.Spec`; feed the
+  --     table `hTable` and apply, then `chain_spec_eq` exposes `Chain.Spec`, giving `chunks`,
+  --     `PieceChunks`, `ZsFacts`, and the chain contract `∀ A …, output.point =
+  --     hashToPoint(Q,chunks)` (instantiated at `A = Q`).
+  --  4. blind: `subcircuit_rw at hBlind`, `hBlindSpec` gives `blindPt.Valid ∧ blindPt = r • R`
+  --     (the [r]R BOUNDARY — pinned interface).
+  --  5. add: `subcircuit_rw at hAdd`, `add_spec_eq` gives `commitment = hashPoint + blindPt`,
+  --     discharging `Add`'s `Assumptions` from the chain point's validity
+  --     (`hashToPoint_valid (Or.inl hQ) (pieceChunks_bound hPC)`) and `R.smul_valid`.
   --  6. assemble: `output.point = B + r • R`; `output.zs = hashOut.zs`; `PieceChunks`/`ZsFacts`.
   sorry
 
 /-! ## Completeness
 
-Honest-prover mirror: the three child calls consumed via `call_constraints_and_specs` (the
-MulComplete/Chain FRAMEWORK CANDIDATE). The chain's `ProverSpec` gives the honest commitment; the
-blinding child's `ProverSpec` gives `blindPt = r • R`; the addition's completeness closes on the
-two valid summands. -/
+Honest-prover mirror: the three child chunks consumed via the `subcircuit_rw` engine in `legacy`
+mode (peel the goal's `Constraints` into the seed ++ chain ++ blind ++ add shape, then
+`subcircuit_rw legacy` strengthens each chunk to its precondition bundle and introduces the
+premised `h_spec_0`/`h_spec_1`/`h_spec_2 : EnvA → A → PA → Spec ∧ ProverSpec`). The chain's
+`ProverSpec` (off `h_spec_0`) gives the honest commitment; the blinding child's `ProverSpec` gives
+`blindPt = r • R`; the addition's `Spec` closes on the two valid summands. -/
 theorem commitBody_complete (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n₀ : ℕ) (ns : List ℕ)
     (blind : FormalRegionCircuit Fp BCI BCfg (Input (ns.length + 1)) Point) (R : FixedBase)
     (hBlindEnv : BlindEnvPinned blind)
@@ -281,11 +283,12 @@ theorem commitBody_complete (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n�
   -- Cut lines (all final in statement):
   --  1. peel `commitBody.operations` (as soundness), `extendsWitnesses_append`.
   --  2. seed cells honest-fill to `Q.x`/`Q.y` (their `constrainConstant` is idempotent).
-  --  3. chain: `call_constraints_and_specs (Chain.circuit …)`, discharging its `ProverAssumptions`
-  --     from `hpa` (`PieceBounds` + defined honest chain at `A = Q`), yielding the chain chunk's
-  --     `Constraints` + `Chain.ProverSpec` (honest hash point `B`).
-  --  4. blind: `call_constraints_and_specs blind` (the [r]R BOUNDARY — the child discharges its
-  --     own `ProverAssumptions`; `blind`'s honest witnesses give `blindPt = r • R`).
+  --  3. chain: `h_spec_0` (from `subcircuit_rw legacy`) applied to the chain's `ProverAssumptions`
+  --     — discharged from `hpa` (`PieceBounds` + defined honest chain at `A = Q`) — yields
+  --     `Chain.Spec ∧ Chain.ProverSpec` (the honest hash point `B`); its precondition bundle
+  --     discharges the chain chunk in the strengthened goal.
+  --  4. blind: `h_spec_1` (the [r]R BOUNDARY — the child discharges its own `ProverAssumptions`;
+  --     `blind`'s honest `ProverSpec` gives `blindPt = r • R`).
   --  5. add: `Ecc.Add.add` completeness on the two valid summands (`hashToPoint_valid`,
   --     `R.smul_valid`).  6. reassemble via `constraints_append`.
   sorry

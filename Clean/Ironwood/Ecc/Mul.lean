@@ -801,31 +801,6 @@ private theorem completeOutput_zs_getElem_prover (env : Placed ProverEnvironment
   rw [fieldsEval_getElem env.place env.env.toEnvironment zs i hi,
     ProvableType.eval_field_prover]
 
-/-- Completeness-side consumption of a child call, with BOTH the child's verifier `Spec` and
-its honest-prover `ProverSpec` exposed (the Chain `call_constraints_and_specs`, copied per the
-no-cross-gadget-import convention). FRAMEWORK CANDIDATE. -/
-theorem call_constraints_and_specs {CI Cfg : Type} {Input Output : TypeMap}
-    [CircuitType Input] [CircuitType Output]
-    (child : FormalRegionCircuit Fp CI Cfg Input Output) (config : Cfg) (offset : ℕ)
-    (self : RegionIndex) (env : Placed ProverEnvironment Fp) (input : Var Input Fp)
-    (hw : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.call config offset input).operations self))
-    (hE : child.EnvAssumptions config env.toEnvironment)
-    (hA : child.Assumptions (eval env.toEnvironment input))
-    (hpa : child.ProverAssumptions (eval env input) env.env.hint) :
-    RegionOperations.Constraints env.place self env.env
-      ((child.call config offset input).operations self)
-    ∧ child.Spec (eval env.toEnvironment input)
-        (eval env.toEnvironment (child.output config offset input self))
-        (child.extract config offset input self env.toEnvironment)
-    ∧ child.ProverSpec (eval env input)
-        (eval env (child.output config offset input self)) env.env.hint := by
-  have hw' : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((child.synthesize config offset input).operations self) := hw.1
-  obtain ⟨hcons, hps⟩ := child.completeness config offset self env input hw' hE hA hpa
-  exact ⟨⟨hcons, trivial⟩,
-    child.soundness config offset self env.toEnvironment input hE hA hcons, hps⟩
-
 /-! ## Composition ergonomics (the research artifacts)
 
 Both directions are FULLY PROVEN in the bundle below; the load-bearing findings:
@@ -834,19 +809,19 @@ Both directions are FULLY PROVEN in the bundle below; the load-bearing findings:
    lemmas: writing `(double_and_add 124 bits).call … .operations self` in a lemma *statement*
    forces whnf of the 125-round `synthesize` loop during elaboration (the documented
    ZsFacts-style-unfolding trap). Inside the bundle proofs the chunks arrive already-opaque
-   from `soundness_iff`/`completeness_iff`, and the composition iffs consume them on the
+   from `soundness_iff`/`completeness_iff`, and the `subcircuit_rw` engine consumes them on the
    opaque `.operations` boundary without re-elaboration.
 2. Input-record eval decompositions (`hiInputs_eval_eq` &c.) fire under `rw` (full
-   unification) but NOT under `simp only` on iff-produced eval terms — the instance spelling
+   unification) but NOT under `simp only` on engine-produced eval terms — the instance spelling
    differs from a locally-elaborated one, so the discr-tree key misses. Every decomposition
    site below is a `rw`; value-record projections then reduce by simp/defeq.
 3. Output records reduce to cell literals *lazily* by plain `rfl` (`incomplete_call_output`
    &c.) — structure projections never force the loop bodies, even at generic bit counts.
-4. On the honest side, `call_constraints_and_specs` (the Chain helper) exposes constraints +
-   verifier `Spec` + honest `ProverSpec` per chunk; for the DEEPEST chunk (the overflow
-   check, whose input nests the entire preceding chain) the helper's metavariable
-   unification exceeds the heartbeat budget while the keyed `subcircuit_constraints_iff_
-   completeness` rw does not — that chunk is consumed via the OR-shaped iff at the goal.
+4. On the honest side, the engine's completeness `legacy` mode introduces one premised
+   `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` per child chunk (the derived leaf that replaced
+   the hand-rolled `call_constraints_and_specs` helper), exposing constraints + verifier `Spec` +
+   honest `ProverSpec`; the six chunks (init/hi/lo/comp/fin/overflow) are all consumed this way in
+   one `subcircuit_rw legacy` pass, the deepest (overflow) included.
 5. The honest side is what catches bit-indexing bugs: the lo/complete windows must be the
    SHIFTED `fun i => bits (125 + i)`/`fun i => bits (251 + i)` (donor `Decompose.main`);
    soundness alone was satisfied by the existential per-child bit sequences. -/

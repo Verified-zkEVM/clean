@@ -69,13 +69,12 @@ and `OverflowCheck.soundness`.
 ## Proof status
 
 Fully proven, no sorries (`#print axioms circuit` = `propext, Classical.choice, Quot.sound`).
-Soundness peels the copies + the folded rangeCheck child chunk (consumed via the composition iff
-— `rw`-instantiated at the delimited site, the MulComplete route, since the primed simp form does
-not fire on the bare-place/env spelling), discharges the child's derived-sub-config
+Soundness peels the copies + the folded rangeCheck child chunk (consumed via `subcircuit_rw at
+hChild`, weakening it to the child's `EnvA → A → Spec`), discharges the child's derived-sub-config
 `EnvAssumptions` BY PROJECTION from the parent's, reduces the overflow gate to its five value-level
 polynomials, and assembles the donor `Spec`. Completeness mirrors it on the honest witnesses via
-`call_constraints_and_spec` (the MulComplete FRAMEWORK CANDIDATE, copied per the
-no-cross-gadget-import convention).
+`subcircuit_rw legacy` (the goal chunk strengthens to its precondition bundle and the engine
+introduces the premised `h_spec_0`, exposing the child's verifier `Spec` + honest `ProverSpec`).
 
 One genuine composition finding surfaced (see the `hzLast_zero` note in `completeness`): the
 canonicity gate needs the child's honest NATURAL-NUMBER decomposition `zLast = ↑(s.val / 2^130)`,
