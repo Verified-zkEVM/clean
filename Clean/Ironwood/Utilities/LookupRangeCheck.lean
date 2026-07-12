@@ -762,6 +762,15 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
   -- Non-strict imposes nothing. Established assertion-gadget pattern (cf. donor `Decomposed`).
   ProverAssumptions input _ := strict = true → input.element.val < 2 ^ (K * numWords)
 
+  -- honest-prover postcondition (C6): the high-tail cell `zLast` holds the honest NATURAL-NUMBER
+  -- decomposition `↑(element.val / 2^{K·numWords})` — the shift-right of `element` past the
+  -- decomposed low bits. This is the fact a decomposition consumer needs but the verifier `Spec`
+  -- (a field equation) does not expose (e.g. `MulOverflow`, which concludes `zLast = 0` when the
+  -- high half vanishes). It now flows through the engine's `h_spec_i` derived statement like any
+  -- other contract field — replacing the retired boundary-leaking `rangeCheck_call_zLast_value`.
+  ProverSpec input output _ :=
+    output.zLast = ((input.element.val / 2 ^ (K * numWords) : ℕ) : Fp)
+
   soundness := by
     intro cfg offset
     rw [FormalRegionCircuit.soundness_iff]
@@ -831,7 +840,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
       · exact rangeCheck_loop_zvalues K cfg input_var.element env.place self env.env offset
           numWords hLoopWit j hjpos hj
-    refine ⟨hCopyWit, ?_, ?_⟩
+    refine ⟨⟨hCopyWit, ?_, ?_⟩, ?_⟩
     · -- the loop's Constraints (membership at each round), via the completeness loop lemma
       exact rangeCheck_loop_constraints_complete K cfg input_var.element env.place self
         env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
@@ -850,37 +859,47 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
             rw [heCell, ← h_input]; provable_type_simp
           rw [← hie]; exact hpa hbstrict
         rw [hzn, Nat.div_eq_of_lt heInput, Nat.cast_zero]
+    · -- ProverSpec (C6): `output.zLast = ↑(element.val / 2^{K·numWords})`. The output `zLast`
+      -- cell sits at `offset + numWords`, so its prover eval is the honest chain value `hz numWords`;
+      -- `element.val = eCell.val` by `h_input`. Reduce the elaborated output to its cell literal,
+      -- then decompose `output` into its components (`provable_type_simp`, as in soundness).
+      -- rewrite `input`/`output` back to their evals, reduce the elaborated output to its cell
+      -- literal, and project `.zLast`/`.element` componentwise
+      have hzn := hz numWords le_rfl
+      simp only [zChain] at hzn
+      -- `input.element` = eCell (the element cell value)
+      rw [← h_input]
+      have hInEl : (ProvableStruct.eval env.place env.env.toEnvironment input_var).element = eCell := by
+        rw [heCell, ← ProvableStruct.eval_var_eq_eval_prover]
+        provable_type_simp
+      -- case on `strict` to reduce the output (the `if` blocks the `.output` reduction, but the
+      -- output literal `{ z0, zLast }` is identical in both branches; `zLast` sits at
+      -- `offset + numWords`)
+      rw [← h_output]
+      cases strict <;>
+        · simp only [circuit_norm, RegionCircuit.output_bind, output_cellAt, operations_cellAt,
+            RegionCircuit.operations_bind, operations_copyAdvice, operations_constrainConstant,
+            Bool.false_eq_true, if_false, if_true, ProvableStruct.eval_var_eq_eval_prover,
+            ProvableType.eval_field_prover, AssignedCell.eval, AssignedCell.of_cell,
+            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice, hInEl]
+          exact hzn
 
-/-- **Honest `zLast` value (composition helper).** From the honest `ExtendsWitnesses` of a
-`rangeCheck … false` *call*, the exposed high-tail cell `zLast` (at `offset + numWords`) holds
-the canonical shift `↑(element.val ≫ (K·numWords))`. This is the child's honest NATURAL-NUMBER
-decomposition, which the verifier `Spec` (a field equation) does not expose — a lookup-child
-consumer whose own bookkeeping needs the tail value (e.g. `Ecc.MulOverflow`, which must conclude
-`zLast = 0` when the high half vanishes) reads it here. Additive, no change to the bundle.
+/-! ## `copy_check` — the layouter-level range-check wrapper
 
-Peels the `.subcircuit`-wrapped `synthesize` witnesses (copy ++ loop ++ `cellAt`s) and applies
-`rangeCheck_loop_zvalues` at `j = numWords`. -/
-theorem rangeCheck_call_zLast_value (K numWords : ℕ) (hnw : 0 < numWords) (cfg : Config K)
-    (offset : ℕ) (self : RegionIndex) (env : Placed ProverEnvironment Fp)
-    (inp : Var Inputs Fp)
-    (hW : RegionOperations.ExtendsWitnesses env.place self env.env
-      (((rangeCheck K numWords false).call cfg offset inp).operations self)) :
-    env.env.advice cfg.runningSum ((env.place self + (offset + numWords) : ℕ) : ℤ)
-      = (((inp.element.eval env.place env.env.toEnvironment).val / 2 ^ (K * numWords) : ℕ) : Fp) := by
-  -- the call's ops are `[.subcircuit (synthesize.operations self)]`; its `ExtendsWitnesses`
-  -- reduces (definitionally) to the child's `ExtendsWitnesses` of the synthesize ops
-  have hW' : RegionOperations.ExtendsWitnesses env.place self env.env
-      ((rangeCheck K numWords false).synthesize cfg offset inp |>.operations self) := hW.1
-  clear hW
-  rename' hW' => hW
-  -- peel synthesize: copy ++ loop (the `cellAt`s and the `strict=false` branch emit no ops);
-  -- keep the loop chunk folded
-  simp only [rangeCheck, Bool.false_eq_true, if_false, circuit_norm,
-    RegionCircuit.operations_bind, operations_copyAdvice, operations_cellAt] at hW
-  obtain ⟨-, hLoopWit⟩ := hW
-  -- `rangeCheck_loop_zvalues` at `j = numWords` (needs `1 ≤ numWords`)
-  have := rangeCheck_loop_zvalues K cfg inp.element env.place self env.env offset numWords
-    hLoopWit numWords hnw le_rfl
-  simpa only [zChain, AssignedCell.eval] using this
+Rust `LookupRangeCheck::copy_check` (`lookup_range_check.rs:124-140`): a
+`layouter.assign_region` around `range_check`, with `element` copied into the running-sum
+column at offset 0 (via `range_check`'s own `copyAdvice`). It is the layouter-level entry
+that `mul/overflow.rs`'s `s_minus_lo_130` (`overflow.rs:200-205`) actually calls. We realize
+it as the `toFormal` lift of `rangeCheck` — the wrapping region starts the body at offset 0,
+matching `copy_check`'s single `assign_region`; all contracts (including the C6 `ProverSpec`)
+transfer verbatim through `toFormal`. -/
+
+/-- Rust `copy_check` (`lookup_range_check.rs:124-140`): the layouter-level range-check that
+wraps `range_check` in its own region (element copied in at offset 0). The `toFormal` lift of
+`rangeCheck`. -/
+def copyCheck (K numWords : ℕ) (strict : Bool) :
+    FormalCircuit Fp (Config K) (Config K) Inputs Output :=
+  (rangeCheck K numWords strict).toFormal
+    s!"{numWords} words range check"
 
 end Halo2.Ironwood.LookupRangeCheck

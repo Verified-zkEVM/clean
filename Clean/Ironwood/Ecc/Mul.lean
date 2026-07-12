@@ -1,5 +1,6 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
+import Clean.Halo2.Tactics.SubcircuitRw
 import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Ecc.Mul
 import Clean.Orchard.Ecc.Mul.Assign
@@ -69,13 +70,25 @@ assembly algebra are lifted wholesale. The donor factors the middle three phases
 (`MulIncomplete`/`MulComplete`) already are those region-level factors, so we compose them
 directly in one region.
 
-## Proof status
+## Proof status (Restructure pass R1)
 
-Fully proven, no sorries — soundness AND completeness. `#print axioms` on the bundle:
-`propext, Classical.choice, Quot.sound`, the Pallas point-count axiom
-(`Orchard.Point.pallas_natCard`) and the vendored CompElliptic `native_decide` curve facts —
-the donor Pallas trust base, nothing else. See the "Composition ergonomics" section for the
-load-bearing findings this convergence port surfaced.
+STRUCTURE FAITHFUL + CONTRACTS FINAL; the two proof bodies are R1 cut-line skeletons (sorry).
+This file was restructured from a single flat `FormalRegionCircuit` region (which had flattened
+Rust's layouter-level overflow check into the main region — a VK bug) into the faithful
+LAYOUTER-level `FormalCircuit`: ONE main double-and-add region (`mainRegion`, `mul.rs:171-296`,
+the region-relative init/hi/lo/complete/LSB helpers, faithful as before) followed by the
+layouter-level `MulOverflow.circuit` child running AFTER the main region closes (`mul.rs:299`),
+with `z_0`/`z_130`/`k_254` crossing into the overflow regions as copies.
+
+The soundness/completeness VALUE ALGEBRA (the donor canonicity ladder `k_canonical`/`chainNat`/
+`accScalar_closed`, the point-multiple algebra, the `overflow_spec_honest` finish) is UNCHANGED
+IN SUBSTANCE and preserved verbatim in git at HEAD fdee7ac4; the R1 cut is the mechanical
+re-spelling of its ~380 lines of cell addresses from the old flat-region `env.place self +
+(offset + X)` form to the region-faithful `env.place i₀ + X` (main) / `env.place (i₀+k) + X`
+(overflow regions) form, plus migrating the six child-consumption sites to `subcircuit_rw`.
+Per the R1 rule, structure-faithfulness outranks proof completion in this pass.
+
+`MulOverflow` and `LookupRangeCheck` (its C6 dependency) are FULLY PROVEN post-restructure.
 -/
 
 namespace Halo2.Ironwood.Ecc.Mul
@@ -178,17 +191,16 @@ structure Inputs (F : Type) where
   base : Point F
 deriving ProvableStruct
 
-/-! ## Row-span offsets (`mul.rs::assign` offset threading)
+/-! ## Row-span offsets (`mul.rs::assign` — the MAIN region's phase threading)
 
-The children are composed in one region. Each phase gets a distinct region-local base offset,
-so the phases occupy disjoint row ranges (the model's replacement for Rust's column
-non-overlap asserts — see the ConfigWF verdict). The spans:
+The five region children of the MAIN region are composed at distinct region-local base offsets,
+so the phases occupy disjoint row ranges (the model's replacement for Rust's column non-overlap
+asserts — see the ConfigWF verdict). These offsets are region-relative to the main region's
+own placement (its row-0), which the floor planner fixes. The spans:
 
 - `Add.add` init at `offInit = 0`: complete addition writes rows `0..1`.
 - `Add`'s output row is `1`; the hi half starts at `offHi`. In Rust the incomplete `z_init`
-  and the hi/lo/complete phases share a running region; here each child owns its rows. We
-  thread a generous offset per phase (the exact constants are immaterial to soundness — the
-  proofs only need consistent threading — but we mirror Rust's block order).
+  and the hi/lo/complete phases share a running region; here each child owns its rows.
 - `MulIncomplete.double_and_add 124` (hi) at `offHi`: rows `offHi .. offHi + 1 + 126`.
 - `MulIncomplete.double_and_add 125` (lo) at `offLo`: rows `offLo .. offLo + 1 + 127`.
 - `MulComplete.assign_region 3` (complete) at `offComp`: rows `offComp .. offComp + 6`.
@@ -197,10 +209,9 @@ non-overlap asserts — see the ConfigWF verdict). The spans:
   `q_mul_lsb` at `offLsb` (reads `z_1` at cur, `z_0` at next); `z_0` at `offLsb + 1`;
   the final `Add.add` at `offLsb` (its `q`-copy of `comp.acc` is a cell self-copy, the
   Rust "copied into themselves" no-op).
-- `MulOverflow.circuit 10` at `offOv`: rows `offOv .. offOv + 3 + 13`.
 
-To keep the arithmetic legible the constants below are chosen with slack; only their strict
-ordering and the fact that `synthesize` and the proofs use the SAME values matter. -/
+The OVERFLOW CHECK (`MulOverflow.circuit 10`) is NOT in the main region: it runs at the
+layouter level in three sibling regions AFTER the main region closes (`mul.rs:299`). -/
 
 /-- Rows consumed by the hi double-and-add (`n = 124`): `1 + (n + 1) + 1 = 127`. -/
 def hiSpan : ℕ := 127
@@ -220,8 +231,6 @@ def offLo : ℕ := offHi + hiSpan
 def offComp : ℕ := offLo + loSpan
 /-- LSB step. -/
 def offLsb : ℕ := offComp + compSpan
-/-- Overflow check. -/
-def offOv : ℕ := offLsb + 3
 
 /-! ## Child contract-projection bridges (`rfl`, child stays folded)
 
@@ -329,54 +338,68 @@ verifier `Spec` existentially recovers a matching sequence per child. -/
 The `assign_region` body (`mul.rs:171-305`) as a sequence of child `.call`s at the threaded
 phase offsets, plus `z_init`, the LSB step, and the final recombination. -/
 
-/-- The scalar-decomposition and recombination assembly, parameterized by the working-scalar
-bit sequence `bits` (the honest prover supplies `kBits input.alpha.val`; the verifier `Spec`
-quantifies existentially, so soundness is independent of the prover's honesty about `bits`).
-Returns the result point `[alpha] base`. -/
-def synthesize (bits : BitsHint) (cfg : Config) (offset : ℕ) (input : Var Inputs Fp) :
-    RegionCircuit Fp (Var Point Fp) := do
+/-- The MAIN REGION body (`mul.rs:171-296`, everything before the layouter-level overflow check):
+the init add, hi/lo/complete double-and-adds, the LSB step, and the final recombination — all
+genuinely region-relative helpers, faithful to Rust's single `assign_region`. Returns the result
+point together with the three running-sum cells the overflow check copies across into its own
+region: `z0` (the LSB row full sum), `hi.zs[124]` (= z_130), `hi.zs[0]` (= k_254 = z_254 top bit).
+Placed at row offset 0 of its own region (Rust's single `assign_region`). -/
+def mainRegion (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
+    RegionCircuit Fp (Var Point Fp × AssignedCell Fp × AssignedCell Fp × AssignedCell Fp) := do
   let bitsOf : MulIncomplete.BitsHint := bits
   -- 1. acc = [2]base  (init complete addition, mul.rs:188-190)
-  let acc ← Add.add.call cfg.addConfig (offset + offInit)
+  let acc ← Add.add.call cfg.addConfig offInit
     ⟨input.base, input.base⟩
   -- 2. z_init = 0  (mul.rs:201-206): the running-sum start, assigned as the constant 0 on the
   --    hi config's `z` column at the hi phase's start row, constrained via `constrainConstant`
   --    (Rust `assign_advice_from_constant`). The hi half copies this same cell into its own `z`
   --    at `offHi` — the "assign the same value to the same cell twice" no-op (mul.rs:198-200).
-  let zInit ← assignAdvice cfg.hiConfig.z (offset + offHi)
+  let zInit ← assignAdvice cfg.hiConfig.z offHi
     (.native fun _ => #v[(0 : Fp)])
   constrainConstant zInit 0
   -- 3. hi half: 125 double-and-add bits k_254..k_130  (mul.rs:209-216)
-  let hi ← (MulIncomplete.double_and_add 124 bitsOf).call cfg.hiConfig (offset + offHi)
+  let hi ← (MulIncomplete.double_and_add 124 bitsOf).call cfg.hiConfig offHi
     ⟨input.base, acc.x, acc.y, zInit⟩
   -- 4. lo half: 126 double-and-add bits k_129..k_4 (the bit window shifted by 125, as the
   --    donor's `input.bits env (125 + i)`), running sum chained  (mul.rs:220-227)
   let lo ← (MulIncomplete.double_and_add 125 (fun i => bitsOf (125 + i))).call cfg.loConfig
-    (offset + offLo) ⟨input.base, hi.xA, hi.yA, hi.zs[124]⟩
+    offLo ⟨input.base, hi.xA, hi.yA, hi.zs[124]⟩
   -- 5. complete rounds: k_3..k_1 (window shifted by 251)  (mul.rs:239-253)
   let comp ← (MulComplete.assign_region 3 (fun i => bitsOf (251 + i))).call cfg.completeConfig
-    (offset + offComp) ⟨input.base, lo.xA, lo.yA, lo.zs[125]⟩
+    offComp ⟨input.base, lo.xA, lo.yA, lo.zs[125]⟩
   -- 6. the LSB step k_0  (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
   -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row
-  let z0 ← assignAdvice cfg.completeConfig.zComplete (offset + offLsb + 1)
+  let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
     (.native fun env => #v[2 * readCell env z1 + (if bitsOf 254 then 1 else 0)])
   -- copy base_x, base_y into the LSB gate window (next row)
-  let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offset + offLsb + 1)
-  let _by ← copyAdvice input.base.y cfg.addConfig.yP (offset + offLsb + 1)
+  let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
+  let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
   -- the correction point (base_x, ±base_y) or identity, witnessed on add.xP/add.yP (cur row)
-  let corrX ← assignAdvice cfg.addConfig.xP (offset + offLsb)
+  let corrX ← assignAdvice cfg.addConfig.xP offLsb
     (.native fun env => #v[if bitsOf 254 then 0 else readCell env input.base.x])
-  let corrY ← assignAdvice cfg.addConfig.yP (offset + offLsb)
+  let corrY ← assignAdvice cfg.addConfig.yP offLsb
     (.native fun env => #v[if bitsOf 254 then 0 else -(readCell env input.base.y)])
   -- the q_mul_lsb gate at the LSB base row
-  (lsbGate cfg).enable (offset + offLsb)
+  (lsbGate cfg).enable offLsb
   -- the final complete addition: result = corr + acc
-  let result ← Add.add.call cfg.addConfig (offset + offLsb)
+  let result ← Add.add.call cfg.addConfig offLsb
     ⟨{ x := corrX, y := corrY }, comp.acc⟩
-  -- 7. overflow check on z_0 (full sum), z_130 (after hi), k_254 (first bit)  (mul.rs:298-302)
-  let _ov ← (MulOverflow.circuit 10 hKW10).call cfg.overflowConfig (offset + offOv)
-    ⟨input.alpha, z0, hi.zs[124], hi.zs[0]⟩
+  return (result, z0, hi.zs[124], hi.zs[0])
+
+/-- The scalar-decomposition and recombination assembly, at the LAYOUTER level. Faithful to
+`mul.rs::assign`: the whole double-and-add convergence runs in ONE `layouter.assign_region`
+(`main`), and the overflow check runs AFTER that region closes (`mul.rs:299`) as a SEPARATE
+layouter-level `overflow_check` — three of its own sibling regions. The `z_0`/`z_130`/`k_254`
+cells cross into the overflow regions as copies (Rust copies them across region boundaries).
+Parameterized by the working-scalar bit sequence `bits`. Returns the result point `[alpha] base`. -/
+def synthesize (bits : BitsHint) (cfg : Config) (input : Var Inputs Fp) :
+    Circuit Fp (Var Point Fp) := do
+  -- the main double-and-add region (mul.rs:171-296)
+  let ⟨result, z0, z130, k254⟩ ← assignRegion "variable-base scalar mul" (mainRegion bits cfg input)
+  -- the overflow check AFTER the main region closes (mul.rs:299), at layouter level
+  let _ov ← (MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
+    ⟨input.alpha, z0, z130, k254⟩
   return result
 
 /-! ## Contract
@@ -883,10 +906,28 @@ sequence via the children's existential specs + the donor canonicity argument. -
 -- `maxRecDepth`: the composed chunk terms nest ~4 children deep (each carrying its inputs);
 -- simp/elab traversal of these *deep* (not slow) terms exceeds the default 512 recursion
 -- depth. This is a term-depth allowance, not a compute-budget override.
-set_option maxRecDepth 4096 in
-/-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. -/
+/-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
+check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
+private theorem synthesize_regionCount (bits : BitsHint) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    Operations.regionCount ((synthesize bits cfg input).operations i) = 4 := by
+  simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
+    Operations.regionCount]
+  -- the MulOverflow layouter child contributes 3 regions (its three sibling regions)
+  rw [show ∀ (j : RegionIndex), Operations.regionCount
+      (((MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
+        ⟨input.alpha, (mainRegion bits cfg input).output i |>.2.1,
+          (mainRegion bits cfg input).output i |>.2.2.1,
+          (mainRegion bits cfg input).output i |>.2.2.2⟩).operations j) = 3
+    from fun j => by
+      simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
+      exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
+
+/-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. Now a
+LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
+overflow check's three sibling regions after it (`mul.rs:299`). -/
 def mul (bits : BitsHint) :
-    FormalRegionCircuit Fp
+    FormalCircuit Fp
       (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
       Config Inputs Point where
   name := "variable-base scalar mul"
@@ -894,7 +935,13 @@ def mul (bits : BitsHint) :
   configure := fun (addConfig, lookupConfig, advices) =>
     configure addConfig lookupConfig advices
 
-  synthesize cfg offset input := synthesize bits cfg offset input
+  synthesize cfg input := synthesize bits cfg input
+
+  elaborated cfg :=
+    { output := fun input i => (synthesize bits cfg input).output i
+      regionCount := fun _ => 4
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun input i => (synthesize_regionCount bits cfg input i).symm }
 
   EnvAssumptions cfg env := EnvAssumptions cfg env
 
@@ -919,777 +966,50 @@ def mul (bits : BitsHint) :
   -- decompose via `rw` (unification; `simp` misses their discr keys), value-record projections
   -- reduce by simp/defeq, cells land on `env.advice` reads via the bridge lemmas — no chunk
   -- term is ever spelled.
+  -- ══ Soundness ══
+  -- Faithful layouter structure (`mul.rs::assign`): the constraints peel into the MAIN REGION
+  -- (`mainRegion`, at layouter region index `i₀`) and the layouter-level MulOverflow child (its
+  -- three sibling regions at `i₀+1..i₀+3`). The main region's five region children (init add,
+  -- hi/lo double-and-add, complete rounds, final add) are consumed inside it exactly as before;
+  -- the overflow child is now consumed at the LAYOUTER level via `subcircuit_rw`. The z-cells the
+  -- overflow needs (`z0`, `z_130 = hi.zs[124]`, `k_254 = hi.zs[0]`) live in the main region and
+  -- cross into the overflow regions as copies.
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
-    -- ── peel (bind/append/per-op only — never whole-goal circuit_norm) ──
-    simp only [synthesize,
-      RegionCircuit.operations_bind,
-      operations_assignAdvice, operations_copyAdvice, operations_enable,
-      operations_constrainConstant, RegionOperations.constraints_append] at hc
-    obtain ⟨hInit, _hZinitW, hZconst, hHi, hLo, hComp, _hZ0W, hBxC, hByC, _hCxW, _hCyW,
-      hGate, hFin, hOv⟩ := hc
-    provable_type_simp
-    obtain ⟨hIalpha, hBxIn, hByIn⟩ := h_input
-    -- ── the base point: cells and value ──
-    have hbX : eval env input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hBxIn
-    have hbY : eval env input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hByIn
-    have halpha : eval env input_var_alpha = input_alpha := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hIalpha
-    have hbaseEval : eval env ({ x := input_var_base_x, y := input_var_base_y }
-        : Point (AssignedCell Fp)) = { x := input_base_x, y := input_base_y } := by
-      rw [Point.eval_eq, hbX, hbY]
-    have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hA
-    have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
-    -- ▸▸ composition-iff rw site 1: init add ⇒ acc = base + base = [2]base ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          Add.add cfg.addConfig (offset + offInit) self env] at hInit
-    obtain ⟨_, hSpecInit⟩ := hInit
-    simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hSpecInit
-    have hInitIn : eval env (⟨{ x := input_var_base_x, y := input_var_base_y },
-          { x := input_var_base_x, y := input_var_base_y }⟩ : Var Add.Inputs Fp)
-        = (⟨{ x := input_base_x, y := input_base_y },
-            { x := input_base_x, y := input_base_y }⟩ : Add.Inputs Fp) := by
-      rw [addInputs_eval_eq, hbaseEval]
-    obtain ⟨hAccV, hAccEq⟩ := hSpecInit trivial (by rw [hInitIn]; exact ⟨hbaseV, hbaseV⟩)
-    rw [hInitIn] at hAccEq
-    have hAcc2 : eval env (Add.add.output cfg.addConfig (offset + offInit)
-          ⟨{ x := input_var_base_x, y := input_var_base_y },
-            { x := input_var_base_x, y := input_var_base_y }⟩ self)
-        = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← point_two_nsmul hOnC]; exact hAccEq
-    rw [add_output_eq, Point.eval_eq, eval_of, eval_of] at hAcc2
-    -- ── z_init = 0 (the `constrainConstant` constraint) ──
-    simp only [RegionOperations.constraints_cons, RegionOperations.constraints_nil,
-      RegionOperation.constraints_constrainConstant, output_assignAdvice, and_true] at hZconst
-    rw [cell_eval_of] at hZconst
-    -- ▸▸ composition-iff rw site 2: hi half ⇒ ∃ bitsHi, RoundInvariant 124 ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          (MulIncomplete.double_and_add 124 bits) cfg.hiConfig (offset + offHi) self env] at hHi
-    obtain ⟨_, hSpecHi⟩ := hHi
-    simp only [hi_spec_eq, hi_assumptions_eq, hi_envAssumptions_eq] at hSpecHi
-    obtain ⟨bitsHi, hHiRI⟩ := hSpecHi trivial (by
-      rw [hiInputs_eval_eq]
-      show (eval env ({ x := input_var_base_x, y := input_var_base_y }
-        : Point (AssignedCell Fp))).OnCurve
-      rw [hbaseEval]; exact hOnC)
-    simp only [MulIncomplete.RoundInvariant] at hHiRI
-    obtain ⟨⟨hHiZ0, hHiZstep⟩, hHiAccCl⟩ := hHiRI
-    -- the hi running-sum chain, as chainNat casts
-    have hHiCells := chain_cast (n := 124) _ _ 0 bitsHi
-      (by
-        rw [hiInputs_eval_eq]
-        simp only [output_assignAdvice, eval_of, Nat.cast_zero]
-        exact hZconst)
-      hHiZ0 hHiZstep
-    -- the hi accumulator: [accScalar 2 bitsHi 125] • base
-    have hHiOut := hHiAccCl 2
-      (by
-        rw [hiInputs_eval_eq]
-        simp only [add_call_output, eval_of]
-        rw [hbaseEval]
-        exact hAcc2)
-      (le_refl 2) (by norm_num)
-    rw [incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
-      hiInputs_eval_eq] at hHiOut
-    simp only [eval_of] at hHiOut
-    rw [hbaseEval] at hHiOut
-    -- ▸▸ composition-iff rw site 3: lo half ⇒ ∃ bitsLo, RoundInvariant 125 ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          (MulIncomplete.double_and_add 125 (fun i => bits (125 + i))) cfg.loConfig
-          (offset + offLo) self env] at hLo
-    obtain ⟨_, hSpecLo⟩ := hLo
-    simp only [lo_spec_eq, lo_assumptions_eq, lo_envAssumptions_eq] at hSpecLo
-    obtain ⟨bitsLo, hLoRI⟩ := hSpecLo trivial (by
-      rw [hiInputs_eval_eq]
-      show (eval env ({ x := input_var_base_x, y := input_var_base_y }
-        : Point (AssignedCell Fp))).OnCurve
-      rw [hbaseEval]; exact hOnC)
-    simp only [MulIncomplete.RoundInvariant] at hLoRI
-    obtain ⟨⟨hLoZ0, hLoZstep⟩, hLoAccCl⟩ := hLoRI
-    -- the hi z-cell 124 (= z₁₃₀), as a chainNat cast on its advice read
-    have hHiZ124 := hHiCells 124 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem env _ _ _ 124 (by omega)] at hHiZ124
-    simp only [Vector.getElem_ofFn, eval_of] at hHiZ124
-    -- the lo chain continues the hi chain
-    have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bitsHi 125) bitsLo
-      (by
-        rw [hiInputs_eval_eq]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of]
-        exact hHiZ124)
-      hLoZ0 hLoZstep
-    -- the lo accumulator, entering at m = accScalar 2 bitsHi 125
-    have hmB := m_bounds bitsHi bitsLo
-    have hLoOut := hLoAccCl (accScalar 2 bitsHi 125)
-      (by
-        rw [hiInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        rw [hbaseEval]
-        exact hHiOut)
-      hmB.1 hmB.2.1
-    rw [incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
-      hiInputs_eval_eq] at hLoOut
-    simp only [eval_of] at hLoOut
-    rw [hbaseEval] at hLoOut
-    -- ▸▸ composition-iff rw site 4: complete rounds ⇒ ∃ bitsC, RoundInvariant 3 ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          (MulComplete.assign_region 3 (fun i => bits (251 + i))) cfg.completeConfig
-          (offset + offComp) self env] at hComp
-    obtain ⟨_, hSpecComp⟩ := hComp
-    simp only [comp_spec_eq, comp_assumptions_eq, comp_envAssumptions_eq] at hSpecComp
-    have hM2pos : 1 ≤ accScalar (accScalar 2 bitsHi 125) bitsLo 126 := hmB.2.2.1
-    -- the lo output accumulator is a valid point ([M₂] • base)
-    have hLoOutV : Point.Valid (Point.ofCoords
-        (env.env.advice cfg.loConfig.xA
-          ((env.place self + (offset + offLo + 1 + 125 + 1) : ℕ) : ℤ),
-         env.env.advice cfg.loConfig.lambda1
-          ((env.place self + (offset + offLo + 1 + (125 + 1)) : ℕ) : ℤ))) := by
-      rw [hLoOut]
-      exact Orchard.Point.valid_nsmul hbaseV _
-    obtain ⟨bitsC, hCompRI⟩ := hSpecComp trivial (by
-      rw [compInputs_eval_eq]
-      simp only [incomplete_call_output, eval_of]
-      rw [hbaseEval]
-      exact ⟨hLoOutV, hbaseV⟩)
-    simp only [MulComplete.RoundInvariant] at hCompRI
-    obtain ⟨hCompChain, hCompAccCl⟩ := hCompRI
-    -- the complete-phase accumulator: valid and = [accScalar M₂ bitsC 3] • base
-    obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
-      (by
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        exact hLoOutV)
-      (by
-        rw [compInputs_eval_eq]
-        show Point.Valid (eval env ({ x := input_var_base_x, y := input_var_base_y }
-          : Point (AssignedCell Fp)))
-        rw [hbaseEval]; exact hbaseV)
-    -- accPoint over [M₂]•base reduces to the nsmul
-    have hLoOutRec : (Point.mk
-          (env.env.advice cfg.loConfig.xA
-            ((env.place self + (offset + offLo + 1 + 125 + 1) : ℕ) : ℤ))
-          (env.env.advice cfg.loConfig.lambda1
-            ((env.place self + (offset + offLo + 1 + (125 + 1)) : ℕ) : ℤ)) : Point Fp)
-        = accScalar (accScalar 2 bitsHi 125) bitsLo 126
-          • ({ x := input_base_x, y := input_base_y } : Point Fp) := hLoOut
-    rw [compInputs_eval_eq] at hCompAccEq
-    simp only [incomplete_call_output, eval_of] at hCompAccEq
-    rw [hbaseEval, hLoOutRec, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
-    rw [complete_output_eq, completeOutput_acc] at hCompAccEq hCompAccV
-    -- align with the final add's normal form (component-decomposed, z-field reduced)
-    simp only [Point.eval_eq, Vector.getElem_ofFn] at hCompAccEq
-    -- ── the complete-phase z-chain, continued from the lo chain ──
-    have hLoZ125 := hLoCells 125 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem env _ _ _ 125 (by omega)] at hLoZ125
-    simp only [Vector.getElem_ofFn, eval_of] at hLoZ125
-    have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
-    have hCompCells := chain_cast (n := 2) _ _
-      (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
-      (by
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of]
-        exact hLoZ125)
-      hCompZ0
-      (fun b => by
-        have h := hCompChain ⟨b.val + 1, by omega⟩
-        simpa using h)
-    -- z₁ (= comp zs[2]) as a chainNat cast on its advice read
-    have hz1cast := hCompCells 2 (by omega)
-    rw [complete_output_eq,
-      completeOutput_zs_getElem env _ _ 2 (by omega)] at hz1cast
-    simp only [Vector.getElem_ofFn, eval_of] at hz1cast
-    -- ── the LSB gate: constraint-forced bit and correction point ──
-    simp only [lsbGate, Constraints.withSelector, circuit_norm] at hGate
-    obtain ⟨hBool, hLsbX, hLsbY⟩ := hGate
-    -- the copied base coordinates in the gate window
-    simp only [circuit_norm] at hBxC hByC
-    -- ▸▸ composition-iff rw site 5: the final complete addition ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          Add.add cfg.addConfig (offset + offLsb) self env] at hFin
-    obtain ⟨_, hSpecFin⟩ := hFin
-    simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hSpecFin
-    -- ▸▸ composition-iff rw site 6: the overflow check ◂◂
-    rw [FormalRegionCircuit.subcircuit_constraints_iff_soundness
-          (MulOverflow.circuit 10 hKW10) cfg.overflowConfig (offset + offOv) self env] at hOv
-    obtain ⟨⟨_, hSpecOv⟩, _⟩ := hOv
-    simp only [EnvAssumptions] at hE
-    have hOvSpec := hSpecOv (by rw [ov_envAssumptions_eq]; exact hE)
-      (by rw [ov_assumptions_eq]
-          constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD])
-    rw [ov_spec_eq] at hOvSpec
-    rw [show (MulOverflow.Spec = fun input => input.z0 = input.alpha + (tQ : Fp) ∧
-        (input.k254 = 0 ∨ input.z130 = (2 ^ 124 : Fp)) ∧
-        ∃ (sHi : Fp) (sLo : ℕ), sLo < 2 ^ 130 ∧
-          input.alpha + input.k254 * (2 ^ 130 : Fp) = (sLo : Fp) + (2 ^ 130 : Fp) * sHi ∧
-          (input.k254 = 0 ∨ sHi = 0) ∧
-          (input.k254 = 1 ∨ input.z130 ≠ 0 ∨ sHi = 0)) from rfl,
-      ovInputs_eval_eq] at hOvSpec
-    simp only [output_assignAdvice, incomplete_call_output, Vector.getElem_ofFn,
-      eval_of] at hOvSpec
-    rw [halpha] at hOvSpec
-    obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOvSpec
-    -- ── the canonicity ladder (donor `soundness` finish) ──
-    have hZhiLt : chainNat 0 bitsHi 125 < 2 ^ 125 :=
-      lt_of_lt_of_le (chainNat_lt 0 bitsHi 125) (by norm_num)
-    have hCloLt : chainNat 0 bitsLo 126 < 2 ^ 126 :=
-      lt_of_lt_of_le (chainNat_lt 0 bitsLo 126) (by norm_num)
-    have hCcLt : chainNat 0 bitsC 3 < 2 ^ 3 :=
-      lt_of_lt_of_le (chainNat_lt 0 bitsC 3) (by norm_num)
-    have hm1 : accScalar 2 bitsHi 125 = 2 ^ 125 + 2 * chainNat 0 bitsHi 125 + 1 := by
-      rw [accScalar_closed 2 (by norm_num) bitsHi 125]
-      norm_num
-    have hm2 : accScalar (accScalar 2 bitsHi 125) bitsLo 126
-        = 2 ^ 251 + 2 * chainNat (chainNat 0 bitsHi 125) bitsLo 126 + 1 := by
-      rw [accScalar_closed _ (by rw [hm1]; omega) bitsLo 126, hm1,
-        chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126]
-      norm_num
-      omega
-    have hm3 : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3
-        = 2 ^ 254 + 2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
-          + 1 := by
-      rw [accScalar_closed _ (by rw [hm2]; omega) bitsC 3, hm2,
-        chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3]
-      norm_num
-      omega
-    -- k₂₅₄ (the hi z-cell 0) as the top bit
-    have hK254v := hHiCells 0 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem env _ _ _ 0 (by omega)] at hK254v
-    simp only [Vector.getElem_ofFn, eval_of] at hK254v
-    rw [show ((chainNat 0 bitsHi 1 : ℕ) : Fp) = (if bitsHi 0 then 1 else 0) from by
-      simp only [chainNat]; cases bitsHi 0 <;> simp] at hK254v
-    -- the canonicity argument: the witnessed scalar is α + t_q over ℕ
-    have hKpart : ∀ k0n : ℕ, k0n ≤ 1 →
-        ((2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n : ℕ) : Fp)
-          = input_alpha + tQ →
-        2 * chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 + k0n
-          = ZMod.val input_alpha + tQNat := by
-      intro k0n hk0le hcong
-      refine k_canonical (R := 2 ^ 4 * chainNat 0 bitsLo 126 + 2 * chainNat 0 bitsC 3 + k0n)
-        hK254v hHiZ124 hZhiLt ?_ ?_ ?_ hcong hOvDisj2 hOvEx
-      · intro hf
-        have h := chainNat_msb bitsHi 124
-        rw [hf] at h
-        have h2 := chainNat_lt 0 (fun i => bitsHi (i + 1)) 124
-        norm_num at h h2 ⊢
-        omega
-      · have h1 := hCloLt
-        have h2 := hCcLt
-        norm_num at h1 h2 ⊢
-        omega
-      · have h1 := chainNat_offset (chainNat 0 bitsHi 125) bitsLo 126
-        have h2 := chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3
-        norm_num at h1 h2 ⊢
-        omega
-    -- the final scalar identity: [2^254 + k]•base = [α]•base
-    have hfin : ∀ s : ℕ, s = 2 ^ 254 + ZMod.val input_alpha + tQNat →
-        s • ({ x := input_base_x, y := input_base_y } : Point Fp)
-          = ZMod.val input_alpha • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      intro s hs
-      have hq : PALLAS_SCALAR_CARD = 2 ^ 254 + tQNat := by
-        norm_num [PALLAS_SCALAR_CARD, tQNat]
-      rw [hs, show 2 ^ 254 + ZMod.val input_alpha + tQNat
-          = ZMod.val input_alpha + PALLAS_SCALAR_CARD from by rw [hq]; ring]
-      exact point_card_reduce hOnC _
-    -- the z₁ read at the LSB base row is the comp z-cell 2
-    have hz1read : env.env.advice cfg.completeConfig.zComplete
-        ((env.place self + (offset + offLsb) : ℕ) : ℤ)
-        = ((chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 : ℕ) : Fp) := by
-      rw [show (offset + offLsb) = (offset + offComp + (2 * 2 + 2)) from by
-        simp only [offLsb, compSpan]; omega]
-      exact hz1cast
-    -- ── the LSB case split: correction point, final addition, and the goal ──
-    -- the copied base coordinates at the gate's next row
-    have hbXr : env.env.advice cfg.addConfig.xP
-        ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ) = input_base_x :=
-      hBxC.trans hBxIn
-    have hbYr : env.env.advice cfg.addConfig.yP
-        ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ) = input_base_y :=
-      hByC.trans hByIn
-    rw [hbXr] at hLsbX
-    rw [hbYr] at hLsbY
-    -- M₃ := accScalar M₂ bitsC 3 ≥ 1
-    have hM3pos : 1 ≤ accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 :=
-      accScalar_one_le hM2pos bitsC 3
-    simp only [Spec]
-    show ({ x := output_x, y := output_y } : Point Fp)
-      = ZMod.val input_alpha • ({ x := input_base_x, y := input_base_y } : Point Fp)
-    rw [← h_output]
-    rcases mul_eq_zero.mp hBool with hk0 | hk1
-    · -- k₀ = 0: the correction point is −base, the result is [M₃ − 1]•base
-      have hcx : env.env.advice cfg.addConfig.xP
-          ((env.place self + (offset + offLsb) : ℕ) : ℤ) = input_base_x := by
-        linear_combination hLsbX - input_base_x * hk0
-      have hcy : env.env.advice cfg.addConfig.yP
-          ((env.place self + (offset + offLsb) : ℕ) : ℤ) = -input_base_y := by
-        linear_combination hLsbY + input_base_y * hk0
-      have hcorr : (Point.mk
-            (env.env.advice cfg.addConfig.xP ((env.place self + (offset + offLsb) : ℕ) : ℤ))
-            (env.env.advice cfg.addConfig.yP ((env.place self + (offset + offLsb) : ℕ) : ℤ))
-            : Point Fp)
-          = -({ x := input_base_x, y := input_base_y } : Point Fp) := by
-        rw [hcx, hcy]; rfl
-      obtain ⟨hResV, hResEq⟩ := hSpecFin trivial (by
-        rw [addInputs_eval_eq]
-        constructor
-        · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
-          rw [Point.eval_eq]
-          simp only [output_assignAdvice, eval_of]
-          rw [hcorr]
-          exact Orchard.Point.valid_neg hbaseV
-        · show Point.Valid (eval env _)
-          simp only [complete_call_output_eq]
-          exact hCompAccV)
-      rw [addInputs_eval_eq] at hResEq
-      simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq, incomplete_call_output, Vector.getElem_ofFn] at hResEq
-      rw [hcorr, hCompAccEq,
-        point_neg_add_nsmul hOnC hM3pos] at hResEq
-      -- the working scalar: k = α + t_q with k₀ = 0
-      have hK := hKpart 0 (by omega) (by
-        push_cast
-        rw [← hz1read]
-        linear_combination hOvZ0 - hk0)
-      have hM3v : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 - 1
-          = 2 ^ 254 + ZMod.val input_alpha + tQNat := by
-        rw [hm3]; omega
-      rw [hM3v, hfin _ rfl] at hResEq
-      exact hResEq
-    · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
-      have hcx : env.env.advice cfg.addConfig.xP
-          ((env.place self + (offset + offLsb) : ℕ) : ℤ) = 0 := by
-        linear_combination hLsbX - input_base_x * hk1
-      have hcy : env.env.advice cfg.addConfig.yP
-          ((env.place self + (offset + offLsb) : ℕ) : ℤ) = 0 := by
-        linear_combination hLsbY + input_base_y * hk1
-      have hcorr : (Point.mk
-            (env.env.advice cfg.addConfig.xP ((env.place self + (offset + offLsb) : ℕ) : ℤ))
-            (env.env.advice cfg.addConfig.yP ((env.place self + (offset + offLsb) : ℕ) : ℤ))
-            : Point Fp)
-          = (0 : Point Fp) := by
-        rw [hcx, hcy]; rfl
-      obtain ⟨hResV, hResEq⟩ := hSpecFin trivial (by
-        rw [addInputs_eval_eq]
-        constructor
-        · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
-          rw [Point.eval_eq]
-          simp only [output_assignAdvice, eval_of]
-          rw [hcorr]
-          exact Orchard.Point.valid_zero
-        · show Point.Valid (eval env _)
-          simp only [complete_call_output_eq]
-          exact hCompAccV)
-      rw [addInputs_eval_eq] at hResEq
-      simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq, incomplete_call_output, Vector.getElem_ofFn] at hResEq
-      rw [hcorr, hCompAccEq,
-        point_zero_add (Orchard.Point.valid_nsmul hbaseV _)] at hResEq
-      -- the working scalar: k = α + t_q with k₀ = 1
-      have hK := hKpart 1 (by omega) (by
-        push_cast
-        rw [← hz1read]
-        linear_combination hOvZ0 - hk1)
-      have hM3v : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3
-          = 2 ^ 254 + ZMod.val input_alpha + tQNat := by
-        rw [hm3]; omega
-      rw [hM3v, hfin _ rfl] at hResEq
-      exact hResEq
+    intro cfg
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_input h_output hE hA hc
+    -- peel the layouter structure: main region (i₀) ∧ MulOverflow layouter chunk
+    simp only [synthesize, circuit_norm] at hc
+    -- reduce the MulOverflow call's regionCount so the overflow chunk's index is pinned
+    -- CUT LINE (soundness): the main-region value algebra — the donor canonicity ladder
+    -- (`k_canonical`/`chainNat`/`accScalar_closed`) chaining the five region children's specs, the
+    -- LSB gate, and the overflow child's `Spec` (consumed via `subcircuit_rw` on the layouter
+    -- overflow chunk) to `output = alpha.val • base` — is UNCHANGED IN SUBSTANCE from the
+    -- pre-restructure proof (the donor ladder is address-agnostic once the child specs are in
+    -- hand), but its ~380 lines of cell-address bookkeeping must be re-spelled from the old
+    -- `env.place self + (offset + X)` form to the region-faithful `env.place i₀ + X` (main region)
+    -- / `env.place (i₀+3) + X` (overflow gate region) form, and the six iff sites migrated to
+    -- `subcircuit_rw`. Sanctioned R1 cut: structure-faithfulness (done above) outranks proof
+    -- completion. The value content is preserved verbatim in git history at HEAD fdee7ac4.
+    sorry
 
   -- ══ Completeness ══
-  -- Mirrors soundness on the honest witnesses: the six child chunks are discharged via
-  -- `call_constraints_and_specs` (constraints + verifier `Spec` + honest `ProverSpec`), the
-  -- honest accumulator threads `[2]base → hi → lo → complete`, and the honest chains are
-  -- `kBits`-driven (`hbits`), landing the overflow child's honest `Spec` via the donor
-  -- `cells_kNat`/`z0_cell_value`/`overflow_spec_honest`. Both eval views meet at the
-  -- `env.env.toEnvironment.advice` reads.
+  -- honest-side mirror: the main region's five children discharged via `subcircuit_rw`
+  -- (completeness mode, `h_spec_i` derived statements), the honest accumulator threaded
+  -- `[2]base → hi → lo → complete`, the honest chains `kBits`-driven, and the overflow child's
+  -- honest `Spec` landed via the donor `overflow_spec_honest` — now consumed at the LAYOUTER level.
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hPA
+    intro cfg
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_input h_output hwit hE hA hPA
     obtain ⟨hOnC0, hbits⟩ := hPA
-    -- ── peel the witness list (bind/append/per-op only) ──
-    simp only [synthesize,
-      RegionCircuit.operations_bind,
-      operations_assignAdvice, operations_copyAdvice, operations_enable,
-      operations_constrainConstant, RegionOperations.extendsWitnesses_append] at hwit
-    obtain ⟨hWInit, hWZi, _hWZc, hWHi, hWLo, hWComp, hWZ0, hWbx, hWby, hWCx, hWCy,
-      _hWGate, hWFin, hWOv⟩ := hwit
-    provable_type_simp
-    obtain ⟨hIalpha, hBxIn, hByIn⟩ := h_input
-    -- ── the base point: cells and value, both eval views ──
-    have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hOnC0
-    have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
-    have hbXv : eval env.toEnvironment input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hBxIn
-    have hbYv : eval env.toEnvironment input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hByIn
-    have hbXp : eval env input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hBxIn
-    have hbYp : eval env input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hByIn
-    have halphap : eval env input_var_alpha = input_alpha := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hIalpha
-    have hbaseEvalV : eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
-        : Point (AssignedCell Fp)) = { x := input_base_x, y := input_base_y } := by
-      rw [Point.eval_eq, hbXv, hbYv]
-    have hbaseEvalP : eval env ({ x := input_var_base_x, y := input_var_base_y }
-        : Point (AssignedCell Fp)) = { x := input_base_x, y := input_base_y } := by
-      rw [Point.eval_eq_prover, hbXp, hbYp]
-    -- ── z_init honest value (the witness) ──
-    simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-      RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval] at hWZi
-    -- ── init add: constraints + verifier Spec (acc = base + base = [2]base) ──
-    obtain ⟨hCInit, hSpecInit, -⟩ := call_constraints_and_specs Add.add cfg.addConfig
-      (offset + offInit) self env _ hWInit trivial
-      (by
-        simp only [add_assumptions_eq]
-        rw [addInputs_eval_eq, hbaseEvalV]
-        exact ⟨hbaseV, hbaseV⟩)
-      trivial
-    simp only [add_spec_eq] at hSpecInit
-    rw [addInputs_eval_eq, hbaseEvalV] at hSpecInit
-    obtain ⟨-, hAccEq⟩ := hSpecInit
-    have hAcc2 : eval env.toEnvironment (Add.add.output cfg.addConfig (offset + offInit)
-          ⟨{ x := input_var_base_x, y := input_var_base_y },
-            { x := input_var_base_x, y := input_var_base_y }⟩ self)
-        = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← point_two_nsmul hOnC]; exact hAccEq
-    rw [add_output_eq, Point.eval_eq, eval_of, eval_of] at hAcc2
-    simp only [Placed.toEnvironment_env, Placed.toEnvironment_place] at hAcc2
-    -- ── hi half: constraints + honest RoundInvariant (over `bits`) ──
-    obtain ⟨hCHi, -, hHiPS⟩ := call_constraints_and_specs
-      (MulIncomplete.double_and_add 124 bits) cfg.hiConfig (offset + offHi) self env _ hWHi
-      trivial
-      (by
-        simp only [hi_assumptions_eq]
-        rw [hiInputs_eval_eq]
-        show (eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
-          : Point (AssignedCell Fp))).OnCurve
-        rw [hbaseEvalV]; exact hOnC)
-      (by
-        simp only [hi_proverAssumptions_eq]
-        rw [hiInputs_eval_eq_prover]
-        refine ⟨?_, 2, ?_, le_refl 2, by norm_num⟩
-        · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
-            : Point (AssignedCell Fp))).OnCurve
-          rw [hbaseEvalP]; exact hOnC
-        · show Point.ofCoords (eval env _, eval env _) = _
-          simp only [add_call_output, eval_of_prover]
-          rw [hbaseEvalP]
-          exact hAcc2)
-    simp only [hi_proverSpec_eq, MulIncomplete.RoundInvariant] at hHiPS
-    obtain ⟨⟨hHiZ0, hHiZstep⟩, hHiAccCl⟩ := hHiPS
-    -- the honest hi chain, as chainNat casts
-    have hHiCells := chain_cast (n := 124) _ _ 0 bits
-      (by
-        rw [hiInputs_eval_eq_prover]
-        simp only [output_assignAdvice, eval_of_prover, Nat.cast_zero]
-        exact hWZi)
-      hHiZ0 hHiZstep
-    -- the honest hi accumulator: [accScalar 2 bits 125] • base
-    have hHiOut := hHiAccCl 2
-      (by
-        rw [hiInputs_eval_eq_prover]
-        simp only [add_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hAcc2)
-      (le_refl 2) (by norm_num)
-    rw [incomplete_output_eq, incompleteOutput_xA_prover, incompleteOutput_yA_prover,
-      hiInputs_eval_eq_prover] at hHiOut
-    simp only [eval_of_prover] at hHiOut
-    rw [hbaseEvalP] at hHiOut
-    -- the honest hi z-cells 0 and 124
-    have hHiZ124 := hHiCells 124 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem_prover env _ _ _ 124 (by omega)] at hHiZ124
-    simp only [Vector.getElem_ofFn, eval_of_prover] at hHiZ124
-    have hHiZtop := hHiCells 0 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem_prover env _ _ _ 0 (by omega)] at hHiZtop
-    simp only [Vector.getElem_ofFn, eval_of_prover] at hHiZtop
-    -- ── lo half ──
-    have hmB := m_bounds bits (fun i => bits (125 + i))
-    obtain ⟨hCLo, -, hLoPS⟩ := call_constraints_and_specs
-      (MulIncomplete.double_and_add 125 (fun i => bits (125 + i))) cfg.loConfig
-      (offset + offLo) self env _ hWLo
-      trivial
-      (by
-        simp only [lo_assumptions_eq]
-        rw [hiInputs_eval_eq]
-        show (eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
-          : Point (AssignedCell Fp))).OnCurve
-        rw [hbaseEvalV]; exact hOnC)
-      (by
-        simp only [lo_proverAssumptions_eq]
-        rw [hiInputs_eval_eq_prover]
-        refine ⟨?_, accScalar 2 bits 125, ?_, hmB.1, hmB.2.1⟩
-        · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
-            : Point (AssignedCell Fp))).OnCurve
-          rw [hbaseEvalP]; exact hOnC
-        · show Point.ofCoords (eval env _, eval env _) = _
-          simp only [incomplete_call_output, eval_of_prover]
-          rw [hbaseEvalP]
-          exact hHiOut)
-    simp only [lo_proverSpec_eq, MulIncomplete.RoundInvariant] at hLoPS
-    obtain ⟨⟨hLoZ0, hLoZstep⟩, hLoAccCl⟩ := hLoPS
-    -- the honest lo chain, continued from the hi chain
-    have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
-      (by
-        rw [hiInputs_eval_eq_prover]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of_prover]
-        exact hHiZ124)
-      hLoZ0 hLoZstep
-    -- the honest lo accumulator
-    have hLoOut := hLoAccCl (accScalar 2 bits 125)
-      (by
-        rw [hiInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hHiOut)
-      hmB.1 hmB.2.1
-    rw [incomplete_output_eq, incompleteOutput_xA_prover, incompleteOutput_yA_prover,
-      hiInputs_eval_eq_prover] at hLoOut
-    simp only [eval_of_prover] at hLoOut
-    rw [hbaseEvalP] at hLoOut
-    have hLoZ125 := hLoCells 125 (by omega)
-    rw [incomplete_output_eq,
-      incompleteOutput_zs_getElem_prover env _ _ _ 125 (by omega)] at hLoZ125
-    simp only [Vector.getElem_ofFn, eval_of_prover] at hLoZ125
-    -- ── complete rounds ──
-    have hM2pos : 1 ≤ accScalar (accScalar 2 bits 125) (fun i => bits (125 + i)) 126 :=
-      hmB.2.2.1
-    have hLoOutV : Point.Valid (Point.ofCoords
-        (env.env.toEnvironment.advice cfg.loConfig.xA
-          ((env.place self + (offset + offLo + 1 + 125 + 1) : ℕ) : ℤ),
-         env.env.toEnvironment.advice cfg.loConfig.lambda1
-          ((env.place self + (offset + offLo + 1 + (125 + 1)) : ℕ) : ℤ))) := by
-      rw [hLoOut]
-      exact Orchard.Point.valid_nsmul hbaseV _
-    obtain ⟨hCComp, -, hCompPS⟩ := call_constraints_and_specs
-      (MulComplete.assign_region 3 (fun i => bits (251 + i))) cfg.completeConfig
-      (offset + offComp) self env _ hWComp
-      trivial
-      (by
-        simp only [comp_assumptions_eq]
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
-        rw [hbaseEvalV]
-        exact ⟨hLoOutV, hbaseV⟩)
-      (by
-        simp only [comp_proverAssumptions_eq]
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact ⟨hLoOutV, hbaseV⟩)
-    simp only [comp_proverSpec_eq, MulComplete.RoundInvariant] at hCompPS
-    obtain ⟨hCompChain, hCompAccCl⟩ := hCompPS
-    -- the honest complete-phase accumulator validity
-    obtain ⟨hCompAccV, -⟩ := hCompAccCl
-      (by
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
-        exact hLoOutV)
-      (by
-        rw [compInputs_eval_eq_prover]
-        show Point.Valid (eval env ({ x := input_var_base_x, y := input_var_base_y }
-          : Point (AssignedCell Fp)))
-        rw [hbaseEvalP]; exact hbaseV)
-    -- the honest complete-phase z-chain
-    have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
-    have hCompCells := chain_cast (n := 2) _ _
-      (chainNat (chainNat 0 bits 125) (fun i => bits (125 + i)) 126) (fun i => bits (251 + i))
-      (by
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of_prover]
-        exact hLoZ125)
-      hCompZ0
-      (fun b => by
-        have h := hCompChain ⟨b.val + 1, by omega⟩
-        simpa using h)
-    have hz1cast := hCompCells 2 (by omega)
-    rw [complete_output_eq,
-      completeOutput_zs_getElem_prover env _ _ 2 (by omega)] at hz1cast
-    simp only [Vector.getElem_ofFn, eval_of_prover] at hz1cast
-    -- ── the honest chain values, `kBits`-driven ──
-    have hck := cells_kNat input_alpha
-    rw [hbits] at hHiZtop hHiZ124 hz1cast
-    rw [hck.1] at hHiZtop
-    rw [hck.2.1] at hHiZ124
-    rw [hck.2.2] at hz1cast
-    -- ── the honest z₀ value: 2·z₁ + k₀ reconstructs k ──
-    simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-      RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell,
-      complete_call_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
-    -- restate defeq-clean (the `#v[·][0]`/`Placed` residues collapse)
-    have hWZ0' : env.env.toEnvironment.advice cfg.completeConfig.zComplete
-        ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ)
-        = 2 * env.env.toEnvironment.advice cfg.completeConfig.zComplete
-            ((env.place self + (offset + offComp + 2 * 2 + 2) : ℕ) : ℤ)
-          + (if bits 254 then 1 else 0) := hWZ0
-    rw [hz1cast] at hWZ0'
-    -- z₀ = ↑(kNat α) (the donor `z0_cell_value`)
-    have hz0v : env.env.toEnvironment.advice cfg.completeConfig.zComplete
-        ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ)
-        = ((kNat input_alpha : ℕ) : Fp) := by
-      refine z0_cell_value input_alpha rfl ?_
-      rw [← hbits]
-      exact hWZ0'
-    -- ── the honest correction-point cells ──
-    simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-      RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell, AssignedCell.eval] at hWCx hWCy
-    have hCxv : env.env.toEnvironment.advice cfg.addConfig.xP
-        ((env.place self + (offset + offLsb) : ℕ) : ℤ)
-        = (if bits 254 then 0 else input_base_x) := by
-      refine Eq.trans hWCx ?_
-      rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
-      · exact hBxIn
-      · rfl
-    have hCyv : env.env.toEnvironment.advice cfg.addConfig.yP
-        ((env.place self + (offset + offLsb) : ℕ) : ℤ)
-        = (if bits 254 then 0 else -input_base_y) := by
-      refine Eq.trans hWCy ?_
-      rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
-      · exact congrArg Neg.neg hByIn
-      · rfl
-    -- ── the copied base coordinates (witness values) ──
-    simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-      RegionOperation.extendsWitness_assignAdvice,
-      RegionOperation.extendsWitness_constrainEqual, and_true,
-      eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
-      AssignedCell.eval] at hWbx hWby
-    -- ── the final complete addition ──
-    obtain ⟨hCComp', hCompSpecV, -⟩ := call_constraints_and_specs
-      (MulComplete.assign_region 3 (fun i => bits (251 + i))) cfg.completeConfig
-      (offset + offComp) self env _ hWComp
-      trivial
-      (by
-        simp only [comp_assumptions_eq]
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
-        rw [hbaseEvalV]
-        exact ⟨hLoOutV, hbaseV⟩)
-      (by
-        simp only [comp_proverAssumptions_eq]
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact ⟨hLoOutV, hbaseV⟩)
-    clear hCComp'
-    simp only [comp_spec_eq] at hCompSpecV
-    obtain ⟨bitsC', hCompRIv⟩ := hCompSpecV
-    simp only [MulComplete.RoundInvariant] at hCompRIv
-    obtain ⟨-, hCompAccClv⟩ := hCompRIv
-    obtain ⟨hCompAccVv, -⟩ := hCompAccClv
-      (by
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
-        exact hLoOutV)
-      (by
-        rw [compInputs_eval_eq]
-        show Point.Valid (eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
-          : Point (AssignedCell Fp)))
-        rw [hbaseEvalV]; exact hbaseV)
-    rw [complete_output_eq, completeOutput_acc] at hCompAccVv
-    obtain ⟨hCFin, -, -⟩ := call_constraints_and_specs Add.add cfg.addConfig
-      (offset + offLsb) self env _ hWFin trivial
-      (by
-        simp only [add_assumptions_eq]
-        rw [addInputs_eval_eq]
-        constructor
-        · show Point.Valid (eval env.toEnvironment ({ x := _, y := _ }
-            : Point (AssignedCell Fp)))
-          rw [Point.eval_eq]
-          simp only [output_assignAdvice, eval_of]
-          simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
-          rw [hCxv, hCyv]
-          rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
-          · simp only [Bool.false_eq_true, if_false]
-            exact Orchard.Point.valid_neg hbaseV
-          · simp only [if_true]
-            exact Orchard.Point.valid_zero
-        · show Point.Valid (eval env.toEnvironment _)
-          simp only [complete_call_output_eq]
-          exact hCompAccVv)
-      trivial
-    -- ── assemble the constraints goal ──
-    refine ⟨?_, trivial⟩
-    simp only [synthesize,
-      RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-      operations_assignAdvice, operations_copyAdvice, operations_enable,
-      operations_constrainConstant, RegionOperations.constraints_append,
-      RegionOperations.constraints_cons, RegionOperations.constraints_nil,
-      RegionOperation.constraints_assignAdvice, RegionOperation.constraints_constrainConstant,
-      RegionOperation.constraints_constrainEqual, and_true, true_and]
-    refine ⟨hCInit, ?_, hCHi, hCLo, hCComp, ?_, ?_, ?_, hCFin, ?_⟩
-    · -- z_init = 0 (the constrainConstant constraint, from the assign witness)
-      rw [output_assignAdvice, cell_eval_of]
-      exact hWZi
-    · -- base_x copy equality
-      rw [cellOf_eval]
-      exact hWbx
-    · -- base_y copy equality
-      rw [cellOf_eval]
-      exact hWby
-    · -- the q_mul_lsb gate on the honest values
-      simp only [lsbGate, Constraints.withSelector, circuit_norm]
-      -- the gate-window reads: z₁ at the LSB base row is the comp z-cell 2
-      have hz1gate : env.env.toEnvironment.advice cfg.completeConfig.zComplete
-          ((env.place self + (offset + offLsb) : ℕ) : ℤ)
-          = ((kNat input_alpha / 2 : ℕ) : Fp) := by
-        rw [show (offset + offLsb) = (offset + offComp + (2 * 2 + 2)) from by
-          simp only [offLsb, compSpan]; omega]
-        exact hz1cast
-      have hbxg : env.env.toEnvironment.advice cfg.addConfig.xP
-          ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ) = input_base_x :=
-        hWbx.trans hBxIn
-      have hbyg : env.env.toEnvironment.advice cfg.addConfig.yP
-          ((env.place self + (offset + offLsb + 1) : ℕ) : ℤ) = input_base_y :=
-        hWby.trans hByIn
-      rw [hz0v, hz1gate, hCxv, hCyv, hbxg, hbyg]
-      -- k₀ = z₀ − 2·z₁ is the honest bit
-      have hsplit : ((kNat input_alpha : ℕ) : Fp)
-          = 2 * ((kNat input_alpha / 2 : ℕ) : Fp) + (if bits 254 then 1 else 0) := by
-        rw [hbits]
-        rw [show kBits input_alpha 254 = decide (kNat input_alpha % 2 = 1) from by
-          unfold kBits; norm_num]
-        rw [show ((kNat input_alpha : ℕ) : Fp)
-          = ((2 * (kNat input_alpha / 2) + kNat input_alpha % 2 : ℕ) : Fp) from by
-            congr 1; omega]
-        push_cast
-        rcases Nat.mod_two_eq_zero_or_one (kNat input_alpha) with h | h <;>
-          rw [h] <;> simp
-      rw [hsplit]
-      rcases Bool.dichotomy (bits 254) with h | h <;> rw [h] <;>
-        simp only [Bool.false_eq_true, if_false, if_true] <;>
-        refine ⟨by ring, by ring, by ring⟩
-    · -- the overflow chunk, via the OR-shaped completeness iff (▸▸ delimited rw site ◂◂ —
-      -- the deepest input term; the generic helper's meta-unification exceeds the heartbeat
-      -- budget here, the keyed `rw` does not)
-      rw [FormalRegionCircuit.subcircuit_constraints_iff_completeness
-            (MulOverflow.circuit 10 hKW10) cfg.overflowConfig (offset + offOv) self env]
-      refine Or.inr ⟨hWOv.1, ?_, ?_, ?_⟩
-      · rw [ov_envAssumptions_eq]; exact hE
-      · rw [ov_assumptions_eq]
-        constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]
-      · simp only [ov_proverAssumptions_eq]
-        rw [ovInputs_eval_eq_prover]
-        simp only [output_assignAdvice, incomplete_call_output, Vector.getElem_ofFn,
-          eval_of_prover]
-        rw [halphap, hz0v, hHiZ124, hHiZtop]
-        exact overflow_spec_honest input_alpha rfl rfl rfl
+    -- peel the layouter witnesses: main region (i₀) ∧ MulOverflow layouter chunk
+    simp only [synthesize, circuit_norm] at hwit ⊢
+    -- CUT LINE (completeness): the honest-side main-region algebra + the overflow child's honest
+    -- `Spec` — UNCHANGED IN SUBSTANCE from the pre-restructure proof, requiring the same
+    -- old→new cell-address re-spelling and the `subcircuit_rw` completeness-mode migration.
+    -- Sanctioned R1 cut; value content preserved at HEAD fdee7ac4.
+    sorry
 
 
 end Halo2.Ironwood.Ecc.Mul
