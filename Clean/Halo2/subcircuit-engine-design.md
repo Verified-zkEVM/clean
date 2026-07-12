@@ -39,11 +39,24 @@ one-directional rewriting under polarity, and it is a small, well-understood eng
   (`and_mono`, `or_mono`, `imp_mono` with contravariant left, `forall_mono`,
   `exists_mono`) with `child.soundness … : chunk → consequence` at the leaves, then
   `replace h`.
-- `subcircuit_rw` (completeness side, goal): the exact dual. Chunks in the **goal's**
-  positive positions are replaced by the child's precondition conjunction
-  `ExtendsWitnesses … ∧ EnvAssumptions … ∧ Assumptions … ∧ ProverAssumptions …`;
-  justification `precondition → chunk` comes from `child.completeness` (projected to
-  the constraints half). Proving the strengthened goal suffices. No `∨` to pick.
+- `subcircuit_rw` (completeness side): processes the **goal and the ExtendsWitnesses
+  context simultaneously** (maintainer decision, 2026-07-11 — mirroring main Clean,
+  where ExtendsWitnesses is part of each subcircuit's premises and discharged
+  generically, never surfacing to the user). For each chunk in the goal's positive
+  positions:
+  1. locate the matching call-keyed `ExtendsWitnesses` fact in the context (in `hwit`
+     or its already-destructured components);
+  2. replace the goal chunk by the *parent-facing* preconditions only —
+     `EnvAssumptions … ∧ Assumptions … ∧ ProverAssumptions …` — with ExtendsWitnesses
+     discharged from the located fact via `child.completeness`. Subcircuit internals
+     never appear in the goal.
+  3. simultaneously introduce, per chunk, the derived contract statement
+     `EnvAssumptions → Assumptions → ProverAssumptions → Spec ∧ ProverSpec`
+     (from the located ExtendsWitnesses via `child.completeness` then
+     `child.soundness` at the prover env's verifier view) — the main-Clean-style
+     "subcircuit statement available from hwit for every subcircuit". This subsumes
+     `call_constraints_and_specs` entirely, with read-off-the-term instantiation
+     fixing its depth fragility.
 
 ### Leaf matching: read the arguments off the term
 
@@ -74,16 +87,6 @@ instantiates the child's contract itself. Consequences:
   constraint proposition, so consuming the chunk entirely loses nothing an extractor
   needs.
 
-### Completeness-side Spec learning
-
-`call_constraints_and_specs` (learn constraints AND the child's verifier Spec +
-ProverSpec from honest witnesses) remains a distinct need — after `subcircuit_rw`
-strengthens the goal to the precondition conjunction, parents that need the child's
-output VALUE for bookkeeping still invoke the child's contracts. Fold it into the
-engine as a second mode: `subcircuit_rw (learn := true)` additionally introduces the
-learned `Spec`/`ProverSpec` facts as named hypotheses when it consumes a goal chunk,
-using the same read-off-the-term instantiation (fixing its depth fragility for free).
-
 ## Migration and retirement
 
 1. Engine lands with its own test file mirroring TestSubcircuit/TestLayouterSubcircuit
@@ -94,11 +97,15 @@ using the same read-off-the-term instantiation (fixing its depth fragility for f
    families, and `call_constraints_and_specs` copies retire from `Subcircuit.lean`;
    the file shrinks to `call`/`toFormal`/`CoeFun` + the engine's congruence lemmas.
 
-## Decision points
+## Decisions (maintainer, 2026-07-11)
 
-- **D1 — keep the generic iffs as a proof-term fallback?** Recommendation: delete after
-  migration; the engine's congruence set is the maintained surface. (Cheap to revisit.)
-- **D2 — `learn` mode naming/shape**: flag on `subcircuit_rw` vs separate
-  `subcircuit_learn` tactic. Recommendation: separate tactic, single responsibility.
-- **D3 — failure verbosity**: silent skip vs warning on negative-position chunks.
-  Recommendation: info message with counts (`consumed 2 chunks, skipped 0`).
+- **D1 — iff lemmas retire fully** after migration; nothing stays in `circuit_norm`
+  (they would act against the tactic).
+- **D2 — ONE tactic** doing goal + hwit processing simultaneously (hwit is needed both
+  to discharge ExtendsWitnesses on goal chunks and to introduce the derived contract
+  statements — two tactics can't split that). Exact mechanics are free as long as the
+  reduction matches main Clean's (its subcircuit-type props + modified soundness/
+  completeness statements).
+- **D3 — silent on shapes it doesn't target.** No info messages; a debug flag for
+  development is fine. The statement shapes are known and the tactic targets exactly
+  those.
