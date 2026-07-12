@@ -98,7 +98,11 @@ def decomposeGate (cfg : Config) : Gate Fp where
     let baseY : Expression Fp Query := queryAdvice cfg.zComplete 0      -- base_y (cur)
     let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP (-1)   -- y_p (prev)
     let k := zNext - (2 : Fp) * zPrev
-    let boolCheck := k * (k - (1 : Fp))
+    -- `bool_check(k) = k · (1 − k)` verbatim (Rust `bool_check`/`range_check(·,2)`,
+    -- `utilities.rs:133`): the constant `1` on the LEFT of the subtraction, so the AST is
+    -- `product(k, sum(const 1, negated k))` — matching the VK fixture. (`k·(k−1)` is
+    -- algebraically equal but a different AST.)
+    let boolCheck := k * ((1 : Fp) - k)
     -- ternary(k, base_y − y_p, base_y + y_p) = k·(base_y − y_p) + (1 − k)·(base_y + y_p)
     let ySwitch := k * (baseY - yP) + ((1 : Fp) - k) * (baseY + yP)
     Constraints.withSelector cfg.qDecompose
@@ -401,8 +405,9 @@ theorem round_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp)) (bits 
     rcases mul_eq_zero.mp hbool with hk | hk
     · exact Or.inl ⟨by linear_combination hk,
         by linear_combination hswitch + 2 * yPv * hk⟩
-    · exact Or.inr ⟨by linear_combination hk,
-        by linear_combination -hswitch - 2 * yPv * hk⟩
+    · -- `bool_check = k·(1−k)`, so the second factor is now `1 − k` (was `k − 1`): flip signs.
+      exact Or.inr ⟨by linear_combination -hk,
+        by linear_combination -hswitch + 2 * yPv * hk⟩
   -- ── consume the two child Specs, threading tmp.Valid into add 2's precondition ──
   rcases hb with ⟨hzeq, hyeq⟩ | ⟨hzeq, hyeq⟩
   · -- bit 0: U = (base.x, −base.y)

@@ -20,11 +20,11 @@ The comparison is `#guard` on `DecidableEq CsFixture`, so CI fails on any drift 
 Lean Add port and the Rust constraint system.
 -/
 
-namespace Clean.Halo2.Fixtures.Test
+namespace Halo2.Fixtures.Test
 
 open _root_.Halo2
 open _root_.Halo2.Ironwood (Fp)
-open Clean.Halo2.Fixtures
+open Halo2.Fixtures
 
 /-- Allocate the 9 advice columns (mirroring the Rust harness's `EccConfig`-minimal column
 allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.configure` on them.
@@ -53,4 +53,4 @@ def addSeed : List Query :=
 -- Post-compression: projected CS equals the dumped fixture.
 #guard projectCSPost addSeed addCS == addPost
 
-end Clean.Halo2.Fixtures.Test
+end Halo2.Fixtures.Test

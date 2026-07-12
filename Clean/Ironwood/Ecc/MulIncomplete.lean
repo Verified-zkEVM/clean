@@ -97,20 +97,28 @@ def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
   l1 * l1 - xA - xP
 
-/-- `Y_A = (λ₁ + λ₂)(x_A − x_R)` at `rotation`, *without* the `1/2` (Rust `Y_A`). The compiled
-gate multiplies this by `TWO_INV`; the round gate below clears the halving by scaling the whole
-gradient constraint by `2`, so `y_a` appears as this expression. -/
+/-- `Y_A = (λ₁ + λ₂)(x_A − x_R)` at `rotation`, *without* the `1/2` (Rust `Y_A`,
+`incomplete.rs:52-55`). The compiled gate multiplies this by `TWO_INV` (see `yA`). -/
 def yAExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
   let l2 : Expression Fp Query := queryAdvice cfg.lambda2 rot
   (l1 + l2) * (xA - xRExpr cfg rot)
 
-/-- The shared "for-loop" body of the `q_mul_{2,3}` gates (`incomplete.rs:121-169`), scaled to
-clear the `1/2` in `y_a`: booleanity of the bit `k = z_cur − 2·z_prev`, `gradient_1`,
-`secant_line`, `gradient_2`. `yANext` is the caller-supplied next-row `Y_A` (for `q_mul_2` it is
-`y_a(next)`; for `q_mul_3` it is the witnessed doubled final `y`). Written as a list of
-`(name, poly)` with each polynomial in the `2·(…)` normal form of the donor. -/
+/-- `y_a = Y_A · TWO_INV` at `rotation` — the actual per-row `y_a` the Rust gate uses (Rust
+`y_a` closure, `incomplete.rs:114-116`: `Y_A(meta,rot) * TWO_INV`). `TWO_INV = (2 : Fp)⁻¹`,
+placed on the RIGHT of `Y_A` as a field scalar, so the erasure is `.scaled Y_A TWO_INV` —
+matching the VK fixture (which pins the raw `TWO_INV` scalar, `14474…169 = 1/2 mod p`). This
+is the VK-faithful spelling; the earlier ×2-normalised form (which cleared the halving to stay
+`ring`-friendly) does NOT match the pinned constraint system. -/
+def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
+  yAExpr cfg rot * ((2 : Fp)⁻¹)
+
+/-- The shared "for-loop" body of the `q_mul_{2,3}` gates (`incomplete.rs:121-169`),
+VK-faithful (each `y_a` carries `.scaled … TWO_INV`, no ×2 clearing): booleanity of the bit
+`k = z_cur − z_prev·2`, `gradient_1`, `secant_line`, `gradient_2`. `yANext` is the
+caller-supplied next-row `y_a` (for `q_mul_2` it is `y_a(next) = Y_A(next)·TWO_INV`; for
+`q_mul_3` it is the witnessed final `y` in the `λ₁` column at `next`, a bare query). -/
 def forLoopPolys (cfg : Config) (yANextDouble : Expression Fp Query) :
     List (String × Expression Fp Query) :=
   let zCur : Expression Fp Query := queryAdvice cfg.z 0
@@ -121,35 +129,38 @@ def forLoopPolys (cfg : Config) (yANextDouble : Expression Fp Query) :
   let yPCur : Expression Fp Query := queryAdvice cfg.yP 0
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 0
   let l2 : Expression Fp Query := queryAdvice cfg.lambda2 0
-  -- k = z_cur − 2·z_prev
+  -- k = z_cur − z_prev·2  (Rust `z_cur - z_prev * Base::from(2)`, `.scaled z_prev 2`)
   let k : Expression Fp Query := zCur - zPrev * (2 : Fp)
-  let boolCheck := k * (k - (1 : Fp))
-  -- 2·λ₁·(x_A − x_P) − 2·y_A + 2·(2k−1)·y_P  (donor `gradient1`, ×2 form)
+  -- `bool_check(k) = k·(1 − k)` (Rust `bool_check`), constant 1 on the LEFT.
+  let boolCheck := k * ((1 : Fp) - k)
+  -- λ₁·(x_A − x_P) − y_a + (k·2 − 1)·y_P   (Rust `gradient_1`, `incomplete.rs:152-153`),
+  -- with `y_a = Y_A·TWO_INV` (`.scaled`) and `k·2 = .scaled k 2`; NO ×2 normalisation.
   let gradient1 :=
-    (2 : Fp) * l1 * (xACur - xPCur) - yAExpr cfg 0
-      + (2 : Fp) * ((k * (2 : Fp) - (1 : Fp)) * yPCur)
-  -- λ₂² − x_{A,next} − x_R − x_A  (donor `secantLine`)
+    l1 * (xACur - xPCur) - yA cfg 0
+      + (k * (2 : Fp) - (1 : Fp)) * yPCur
+  -- λ₂² − x_{A,next} − x_R − x_A  (Rust `secant_line`, `incomplete.rs:156-159`)
   let secantLine := l2 * l2 - xANext - xRExpr cfg 0 - xACur
-  -- 2·λ₂·(x_A − x_{A,next}) − 2·y_A − yANextDouble  (donor `gradient2`, ×2 form)
-  let gradient2 := (2 : Fp) * l2 * (xACur - xANext) - yAExpr cfg 0 - yANextDouble
+  -- λ₂·(x_A − x_{A,next}) − y_a − y_a_next  (Rust `gradient_2`, `incomplete.rs:162`);
+  -- `y_a_next` is the caller-supplied next-row `y_a` (scaled for q_mul_2, witnessed for q_mul_3).
+  let gradient2 := l2 * (xACur - xANext) - yA cfg 0 - yANextDouble
   [ ("bool_check", boolCheck),
     ("gradient_1", gradient1),
     ("secant_line", secantLine),
     ("gradient_2", gradient2) ]
 
-/-- The `q_mul_1 == 1` gate (`incomplete.rs:173-179`): the copied `y_a` (in the `λ₁` column at
-the current row) equals the derived `y_a` of the next row. In `2·` form: `2·y_a_witnessed =
-Y_A(next)`. -/
+/-- The `q_mul_1 == 1` gate (`incomplete.rs:173-179`): the witnessed `y_a` (in the `λ₁` column
+at the current row) equals the derived next-row `y_a`. VK-faithful: `y_a_witnessed − y_a(next)`
+with `y_a(next) = Y_A(next)·TWO_INV` (`.scaled`); no ×2. -/
 def qMul1Gate (cfg : Config) : Gate Fp where
   name := "q_mul_1 == 1 checks"
   selector := cfg.qMul1
   constraints :=
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     Constraints.withSelector cfg.qMul1
-      [("init y_a", (2 : Fp) * yAWitnessed - yAExpr cfg 1)]
+      [("init y_a", yAWitnessed - yA cfg 1)]
 
 /-- The `q_mul_2 == 1` gate (`incomplete.rs:183-209`): base-constancy checks `x_p`/`y_p` are the
-same on the next row, plus the shared for-loop body with `yANextDouble = Y_A(next)`. -/
+same on the next row, plus the shared for-loop body with `y_a_next = y_a(next) = Y_A(next)·TWO_INV`. -/
 def qMul2Gate (cfg : Config) : Gate Fp where
   name := "q_mul_2 == 1 checks"
   selector := cfg.qMul2
@@ -161,17 +172,18 @@ def qMul2Gate (cfg : Config) : Gate Fp where
     Constraints.withSelector cfg.qMul2
       ([ ("x_p_check", xPCur - xPNext),
          ("y_p_check", yPCur - yPNext) ]
-        ++ forLoopPolys cfg (yAExpr cfg 1))
+        ++ forLoopPolys cfg (yA cfg 1))
 
 /-- The `q_mul_3 == 1` gate (`incomplete.rs:213-217`): the for-loop body on the last row, with
-`yANextDouble = 2·y_a_final` (the witnessed final `y` in the `λ₁` column at the next row). -/
+`y_a_next = y_a_final` the WITNESSED final `y` in the `λ₁` column at `next` (a bare query, NOT a
+derived `Y_A` — Rust `y_a_final = meta.query_advice(lambda_1, Rotation::next())`). -/
 def qMul3Gate (cfg : Config) : Gate Fp where
   name := "q_mul_3 == 1 checks"
   selector := cfg.qMul3
   constraints :=
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
     Constraints.withSelector cfg.qMul3
-      (forLoopPolys cfg ((2 : Fp) * yAFinal))
+      (forLoopPolys cfg yAFinal)
 
 /-- Rust `Config::configure` (`incomplete.rs:75-104`): enable equality on `z` and `λ₁`, allocate
 the three simple selectors, register the three gates. The columns are handed down by `mul.rs`
@@ -453,6 +465,8 @@ private theorem loop_gate_facts (n : ℕ) :
     rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
     · exact ih (by omega) hLoop r hr'
     · -- the fresh round `r = k`. Reduce its gate constraints to the value-level facts.
+      -- `2 ≠ 0` lets the gradient closers clear the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
+      have h2 : (2 : Fp) ≠ 0 := by decide
       -- The `z`-prev cell reads at `↑(place self + (offset+1+r)) - 1`; normalize it to the
       -- `Zpr` spelling `↑(place self + (offset+r))` (the single `offset+(k+1)` boundary quirk).
       have hzp : ((place self + (offset + 1 + r) : ℕ) : ℤ) - 1
@@ -482,56 +496,72 @@ private theorem loop_gate_facts (n : ℕ) :
         · -- single-round circuit: `q_mul_3` on row 0
           subst hrn
           rw [hYADr, hYADr1n]
-          round_norm [round, qMul3Gate, forLoopPolys, yAExpr, xRExpr] at hRound
+          round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr] at hRound
           obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
           · rcases mul_eq_zero.mp hbool with h | h
             · exact Or.inl (by linear_combination h)
-            · exact Or.inr (by linear_combination h)
-          · linear_combination hg1
+            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+            · exact Or.inr (by linear_combination -h)
+          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+          · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination hg2
+          · linear_combination (norm := (field_simp; ring)) 2 * hg2
         · -- interior first row: `q_mul_2` on row 0
           rw [hYADr, hYADr1i hrn]
-          round_norm [round, qMul2Gate, forLoopPolys, yAExpr, xRExpr, if_neg hrn] at hRound
+          round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hrn] at hRound
           obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_,
             fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
           · rcases mul_eq_zero.mp hbool with h | h
             · exact Or.inl (by linear_combination h)
-            · exact Or.inr (by linear_combination h)
-          · linear_combination hg1
+            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+            · exact Or.inr (by linear_combination -h)
+          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+          · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination hg2
+          · linear_combination (norm := (field_simp; ring)) 2 * hg2
       · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
         by_cases hrn : r = n
         · -- last round: `q_mul_3`
           subst hrn
           rw [hYADr, hYADr1n]
-          round_norm [round, qMul3Gate, forLoopPolys, yAExpr, xRExpr, if_neg hr0] at hRound
+          round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0] at hRound
           obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
           · rcases mul_eq_zero.mp hbool with h | h
             · exact Or.inl (by linear_combination h)
-            · exact Or.inr (by linear_combination h)
-          · linear_combination hg1
+            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+            · exact Or.inr (by linear_combination -h)
+          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+          · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination hg2
+          · linear_combination (norm := (field_simp; ring)) 2 * hg2
         · -- interior round: `q_mul_2`
           rw [hYADr, hYADr1i hrn]
           -- ACCEPTANCE (C2a #1): `round_norm` bundles the gate `circuit_norm` reduction with the
           -- gate/def args AND the rotation-row cast (the hand `simp only [hzp]`, mechanized).
-          round_norm [round, qMul2Gate, forLoopPolys, yAExpr, xRExpr, if_neg hr0, if_neg hrn]
+          round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0, if_neg hrn]
             at hRound
           obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
           refine ⟨?_, ?_, ?_, ?_,
             fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
           · rcases mul_eq_zero.mp hbool with h | h
             · exact Or.inl (by linear_combination h)
-            · exact Or.inr (by linear_combination h)
-          · linear_combination hg1
+            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+            · exact Or.inr (by linear_combination -h)
+          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+          · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination hg2
+          · linear_combination (norm := (field_simp; ring)) 2 * hg2
 
 /-- **Extraction of the round-0 anchor copies.** Round 0 anchors `x_p`/`y_p` at `offset + 1`
 to the base point by copy (`CircuitVersion::AnchoredBase`). For any `numRounds ≥ 1` the loop's
@@ -883,6 +913,8 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     obtain ⟨hWloop, _⟩ := hW
     refine ⟨ih (by omega) hWloop, ?_⟩
     -- ══ discharge round `k`'s gate constraints from the honest cells + `honest_step` ══
+    -- `2 ≠ 0` lets the gradient closers clear the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
+    have hp2 : (2 : Fp) ≠ 0 := by decide
     have hkn : k ≤ n := by omega
     -- honest_step at row `k` (accumulator scalar `M := accScalar m bits k`)
     obtain ⟨hHSg1, hHSyad, hHSxnext, hHSg2⟩ :=
@@ -949,25 +981,25 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       · -- single-round circuit: anchor copies + `q_mul_3` at row 0
         subst hr0
         simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
-        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr,
           Constraints.withSelector]
         rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa, hyAF']
         refine ⟨hxPBase.symm, hyPBase.symm, ?_, ?_, ?_, ?_⟩
         · split_ifs <;> ring
-        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · field_simp; linear_combination -hHSg1 + hHSyad - 2 * hSy
         · linear_combination -hXnext'
-        · linear_combination 2 * hHSg2 + hHSyad
+        · field_simp; linear_combination 2 * hHSg2 + hHSyad
       · -- last row of a longer run: `q_mul_3` only
-        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yAExpr, xRExpr,
+        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr,
           Constraints.withSelector, if_neg hr0]
         rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa, hyAF']
         refine ⟨?_, ?_, ?_, ?_⟩
         · split_ifs <;> ring
-        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · field_simp; linear_combination -hHSg1 + hHSyad - 2 * hSy
         · linear_combination -hXnext'
-        · linear_combination 2 * hHSg2 + hHSyad
+        · field_simp; linear_combination 2 * hHSg2 + hHSyad
     · -- ── interior round: `q_mul_2` (constancy checks; `Y_A(next)` derived at row `k+1`) ──
       -- next row's honest cells (in-loop, from `hRowVals (k+1)`), in point coordinates
       obtain ⟨_, hVxp1, hVyp1, hVl1', hVl2', _⟩ :=
@@ -981,7 +1013,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       by_cases hr0 : k = 0
       · subst hr0
         simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
-        simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+        simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr,
           Constraints.withSelector, if_neg hrn]
         rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa,
@@ -990,10 +1022,10 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         · ring
         · ring
         · split_ifs <;> ring
-        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · field_simp; linear_combination -hHSg1 + hHSyad - 2 * hSy
         · linear_combination -hXnext'
-        · linear_combination 2 * hHSg2 + hHSyad + hHSyad1
-      · simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yAExpr, xRExpr,
+        · field_simp; linear_combination 2 * hHSg2 + hHSyad + hHSyad1
+      · simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr,
           Constraints.withSelector, if_neg hrn, if_neg hr0]
         rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa,
@@ -1002,9 +1034,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         · ring
         · ring
         · split_ifs <;> ring
-        · linear_combination -hHSg1 + hHSyad - 2 * hSy
+        · field_simp; linear_combination -hHSg1 + hHSyad - 2 * hSy
         · linear_combination -hXnext'
-        · linear_combination 2 * hHSg2 + hHSyad + hHSyad1
+        · field_simp; linear_combination 2 * hHSg2 + hHSyad + hHSyad1
 
 /-! ## The bundle contract
 
@@ -1111,7 +1143,7 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       RegionOperations.constraints_append, startCopies] at hc h_output
     obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
     -- q_mul_1 gate ⇒ `hInit` (derived `Y_A` of loop row 0 = `2·(λ₁ at offset)`)
-    simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yAExpr, xRExpr] at hQMul1
+    simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr] at hQMul1
     -- destructure input into coordinates; the struct-literal simproc now decomposes the output
     -- eval (incl. the `zs` vector field) inside `h_output`, so the output cells read straight off
     -- the env. Recover the `adv`-spelled per-field reads (previously the `output_eval_fields`
@@ -1169,7 +1201,20 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
         { x := input_base_x, y := input_base_y } hA m h2 hbound
         (by rw [hCopyXA]; simp only [hIxA]; exact hAccX)
         (by rw [hCopyYA]; simp only [hIyA]; exact hAccY)
-        hAnchorX hAnchorY hbit (by linear_combination -hQMul1) hLoop
+        hAnchorX hAnchorY hbit
+        -- q_mul_1 is now `y_a_witnessed − Y_A(next)·TWO_INV = 0` (VK-faithful, `.scaled 2⁻¹`);
+        -- clear the `2⁻¹` (via `2·2⁻¹ = 1`) to recover `Y_A(next) = 2·y_a_witnessed` (`hInit`).
+        (by
+          have hinv : (2 : Fp) * (2 : Fp)⁻¹ = 1 := mul_inv_cancel₀ (by decide : (2 : Fp) ≠ 0)
+          linear_combination (-2 : Fp) * hQMul1
+            - (adv cfg.lambda1 env.place self env.env (offset + 1) +
+                adv cfg.lambda2 env.place self env.env (offset + 1)) *
+              (adv cfg.xA env.place self env.env (offset + 1) -
+                (adv cfg.lambda1 env.place self env.env (offset + 1) *
+                    adv cfg.lambda1 env.place self env.env (offset + 1)
+                  - adv cfg.xA env.place self env.env (offset + 1)
+                  - adv cfg.xP env.place self env.env (offset + 1))) * hinv)
+        hLoop
       obtain ⟨hx, hy2⟩ := hacc
       -- reconstruct the output point from its coordinates
       have hy : adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1))
@@ -1262,9 +1307,12 @@ def double_and_add (n : ℕ) (bits : BitsHint) :
       rowLambdaValue, accVal] at hR0xp hR0l1 hR0l2
     rw [hAccX, hAccY] at hR0l1 hR0l2
     refine ⟨⟨hWz, hWyA, hWxA, ?_, ?_⟩, ⟨?_, ?_⟩, ?_⟩
-    · -- ── the `q_mul_1` gate: `2·y_a(copied) = Y_A(row 0)`, the honest-row `Y_A` identity ──
-      simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yAExpr, xRExpr]
+    · -- ── the `q_mul_1` gate: `y_a(copied) = Y_A(row 0)·TWO_INV`, the honest-row `Y_A` identity ──
+      simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr]
       rw [hWyA, hIyA, hAccY, hR0l1, hR0l2, hWxA, hIxA, hAccX, hR0xp]
+      -- VK-faithful gate carries `.scaled … TWO_INV`; clear it (needs `2 ≠ 0`).
+      have hp2 : (2 : Fp) ≠ 0 := by decide
+      field_simp
       linear_combination hHS0yad
     · -- ── the loop's `Constraints`: `loop_constraints_complete` on the honest start values ──
       exact loop_constraints_complete cfg inp bits env.place self env.env offset n

@@ -157,7 +157,8 @@ example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset idx : ℕ
          .assignAdvice cfg.runningSum (offset + idx + 1) (zWitness K (idx + 1) element)] := rfl
 
 -- (d-3) A round's `Constraints` reduce to the running-word membership: both `q_lookup` and
--- `q_running` on ⇒ the gated input is `z_cur − 2^K·z_next` (the running word, §1.4), NOT
+-- `q_running` on ⇒ the gated input is `z_cur − z_next·2^K` (the running word, §1.4; the
+-- `2^K` is a `.scaled` field factor on the right of `z_next`, VK-faithful), NOT
 -- `z_cur` (which would be the short-row reduction). The `assignAdvice` adds no constraint.
 example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (place : RegionIndex → ℕ)
     (self : RegionIndex) (env : Environment Fp) (offset idx : ℕ) :
@@ -165,7 +166,7 @@ example (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (place : RegionIn
         ((rangeCheckRound K cfg element offset idx).operations self)
       ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
           env.advice cfg.runningSum ((place self + (offset + idx) : ℕ) : ℤ)
-              - 2 ^ K * env.advice cfg.runningSum ((place self + (offset + idx + 1) : ℕ) : ℤ)
+              - env.advice cfg.runningSum ((place self + (offset + idx + 1) : ℕ) : ℤ) * 2 ^ K
             = env.fixed cfg.tableIdx.inner (tableRow : ℤ) := by
   simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self]

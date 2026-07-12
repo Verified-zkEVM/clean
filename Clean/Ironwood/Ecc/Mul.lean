@@ -139,7 +139,10 @@ def lsbGate (cfg : Config) : Gate Fp where
     let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x (next)
     let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y (next)
     let lsb := z0 - z1 * (2 : Fp)
-    let boolCheck := lsb * (lsb - (1 : Fp))
+    -- `bool_check(lsb) = lsb · (1 − lsb)` verbatim (Rust `bool_check`, `mul.rs:150`): the
+    -- constant `1` on the LEFT (AST `product(lsb, sum(const 1, negated lsb))`), matching the
+    -- VK fixture. (`lsb·(lsb−1)` is algebraically equal but a different AST.)
+    let boolCheck := lsb * ((1 : Fp) - lsb)
     -- ternary(lsb, x_p, x_p − base_x) = lsb·x_p + (1 − lsb)·(x_p − base_x)
     let lsbX := lsb * xP + ((1 : Fp) - lsb) * (xP - baseX)
     -- ternary(lsb, y_p, y_p + base_y) = lsb·y_p + (1 − lsb)·(y_p + base_y)
@@ -1252,10 +1255,11 @@ def mul (bits : BitsHint) :
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       have hcx : env.env.advice cfg.addConfig.xP
           ((env.place i₀ + (offLsb) : ℕ) : ℤ) = 0 := by
-        linear_combination hLsbX - input_base_x * hk1
+        -- `bool_check = lsb·(1−lsb)`: the `hk1` branch is now `1 − lsb = 0` (sign flip).
+        linear_combination hLsbX + input_base_x * hk1
       have hcy : env.env.advice cfg.addConfig.yP
           ((env.place i₀ + (offLsb) : ℕ) : ℤ) = 0 := by
-        linear_combination hLsbY + input_base_y * hk1
+        linear_combination hLsbY - input_base_y * hk1
       have hcorr : (Point.mk
             (env.env.advice cfg.addConfig.xP ((env.place i₀ + (offLsb) : ℕ) : ℤ))
             (env.env.advice cfg.addConfig.yP ((env.place i₀ + (offLsb) : ℕ) : ℤ))
@@ -1282,7 +1286,7 @@ def mul (bits : BitsHint) :
       have hK := hKpart 1 (by omega) (by
         push_cast
         rw [← hz1read]
-        linear_combination hOvZ0 - hk1)
+        linear_combination hOvZ0 + hk1)
       have hM3v : accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3
           = 2 ^ 254 + ZMod.val input_alpha + tQNat := by
         rw [hm3]; omega

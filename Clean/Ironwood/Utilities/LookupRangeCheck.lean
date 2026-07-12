@@ -64,7 +64,10 @@ def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp where
     let qR : Expression Fp Query := querySelector cfg.qRunning
     let zCur : Expression Fp Query := queryAdvice cfg.runningSum 0
     let zNext : Expression Fp Query := queryAdvice cfg.runningSum 1
-    [qL * (qR * (zCur - (2 ^ K : Fp) * zNext) + (1 - qR) * zCur)]
+    -- Rust builds `z_cur - z_next * F::from(1 << K)` (`lookup_range_check.rs:347`): the
+    -- `2^K` is a FIELD scalar on the RIGHT of `z_next` (`impl Mul<F>`), so the AST is
+    -- `.scaled z_next 2^K`, NOT `product(const, z_next)`. Spell it `zNext * (2^K : Fp)`.
+    [qL * (qR * (zCur - zNext * (2 ^ K : Fp)) + (1 - qR) * zCur)]
   tables := [queryFixed cfg.tableIdx.inner]
 
 /-- The "Short lookup bitshift" gate, ported verbatim from `configure`
@@ -681,19 +684,22 @@ theorem rangeCheck_loop_constraints_complete (K : ℕ) (cfg : Config K) (element
     -- round `n`: membership witnessed by the honest word `a_n = z_n − 2^K·z_{n+1}`
     simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, List.map_cons, List.map_nil,
       List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self]
-    -- the honest word, rewritten to `↑b − 2^K·↑(b/2^K)` with `b = a ≫ (K·n)`
+    -- The gate now builds `z_next * 2^K` (field scalar on the RIGHT, `.scaled` — VK-faithful),
+    -- so the membership word is `z_cur − z_next · 2^K` (the `2^K` on the right of `z_{n+1}`).
+    -- the honest word, rewritten to `↑b − ↑(b/2^K)·2^K` with `b = a ≫ (K·n)`
     have hword : zChain K cfg place self env offset n
-          - 2 ^ K * zChain K cfg place self env offset (n + 1)
-        = ((a / 2 ^ (K * n) : ℕ) : Fp) - 2 ^ K * (((a / 2 ^ (K * n) / 2 ^ K : ℕ)) : Fp) := by
+          - zChain K cfg place self env offset (n + 1) * 2 ^ K
+        = ((a / 2 ^ (K * n) : ℕ) : Fp) - (((a / 2 ^ (K * n) / 2 ^ K : ℕ)) : Fp) * 2 ^ K := by
       rw [hzn, hzn1]
-      congr 3
+      congr 2
       rw [Nat.div_div_eq_div_mul, ← pow_add]; ring_nf
     have hwordval :
         (zChain K cfg place self env offset n
-          - 2 ^ K * zChain K cfg place self env offset (n + 1)).val < 2 ^ K := by
-      rw [hword]; exact honest_word_val_lt K hKcard (a / 2 ^ (K * n))
+          - zChain K cfg place self env offset (n + 1) * 2 ^ K).val < 2 ^ K := by
+      rw [hword, mul_comm (((a / 2 ^ (K * n) / 2 ^ K : ℕ)) : Fp) ((2 : Fp) ^ K)]
+      exact honest_word_val_lt K hKcard (a / 2 ^ (K * n))
     refine ⟨(zChain K cfg place self env offset n
-        - 2 ^ K * zChain K cfg place self env offset (n + 1)).val,
+        - zChain K cfg place self env offset (n + 1) * 2 ^ K).val,
       lt_of_lt_of_le hwordval hUsable, ?_⟩
     -- the running word equals the table cell at row `word.val`
     rw [hTableEq _ hwordval, ZMod.natCast_zmod_val]

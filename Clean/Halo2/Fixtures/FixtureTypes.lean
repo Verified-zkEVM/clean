@@ -16,7 +16,7 @@ The dumper (`halo2_proofs::plonk::dump_lean`) emits `CsFixture` literals into
 `AddPre.lean` / `AddPost.lean` in this namespace.
 -/
 
-namespace Clean.Halo2.Fixtures
+namespace Halo2.Fixtures
 
 open _root_.Halo2.Ironwood (Fp)
 
@@ -42,10 +42,20 @@ and the Rust dumper's `to_repr()` limb encoding. -/
 def mkFp (a b c d : ℕ) : Fp :=
   (a : Fp) + (b : Fp) * (2 : Fp) ^ 64 + (c : Fp) * (2 : Fp) ^ 128 + (d : Fp) * (2 : Fp) ^ 192
 
+/-- One projected lookup argument, in the ironwood `(lookupInputExprs, lookupTableExprs)`
+per-lookup shape (`Verifier/Assemble.lean:68-69`). Both sides are index-based `Expr`s (the
+table side is a rotation-0 fixed query on the table column). The Rust dumper emits these
+from `cs.lookups[i].{input,table}_expressions`. -/
+structure LookupFixture where
+  inputs : List (Expr Fp)
+  tables : List (Expr Fp)
+deriving DecidableEq, Repr
+
 /-- The constraint-system data a Halo2-Clean projection must reproduce, in the ironwood
 `VerifyingKey` CS-field shape (`Verifier/Assemble.lean:64-79`), specialised to a single
 circuit's dump. Query layouts are `(column, rotation)` lists; `gates` is the flat
-index-based polynomial list. -/
+index-based polynomial list; `lookups` is the per-lookup input/table expression lists in
+registration order. -/
 structure CsFixture where
   numAdviceColumns : ℕ
   numFixedColumns : ℕ
@@ -55,6 +65,7 @@ structure CsFixture where
   fixedQueryLayout : List (ℕ × ℤ)
   instanceQueryLayout : List (ℕ × ℤ)
   gates : List (Expr Fp)
+  lookups : List LookupFixture := []
 deriving DecidableEq, Repr
 
-end Clean.Halo2.Fixtures
+end Halo2.Fixtures

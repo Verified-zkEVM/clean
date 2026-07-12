@@ -142,7 +142,13 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp where
     let sMinusLo130 : Expression Fp Query := queryAdvice cfg.adv1 1  -- s_minus_lo_130 (next)
     let s : Expression Fp Query := queryAdvice cfg.adv2 0        -- s (cur)
     let twoPow124 : Expression Fp Query := (2 ^ 124 : Fp)
-    let twoPow130 : Expression Fp Query := (2 ^ 130 : Fp)
+    -- Rust builds `two_pow_130 = two_pow_124 * Constant(1 << 6)` (`overflow.rs:57-58`): a
+    -- PRODUCT of two `Constant` expressions, NOT a single `2^130` constant. We reproduce that
+    -- AST exactly (`k_254 * two_pow_130` is then `product(k_254, product(2^124, 64))`), so the
+    -- VK fixture matches. Both factors are `Expression.const`, so the `*` is an
+    -- expression product (`mul`), erasing to `.product` — not `.scaled`.
+    let twoPow130 : Expression Fp Query :=
+      twoPow124 * (Expression.const (2 ^ 6 : Fp) : Expression Fp Query)
     let sCheck := s - (alpha + k254 * twoPow130)
     let recovery := z0 - alpha - (tQ : Fp)
     let loZero := k254 * (z130 - twoPow124)

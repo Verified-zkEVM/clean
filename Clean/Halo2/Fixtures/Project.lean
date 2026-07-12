@@ -22,16 +22,17 @@ Two pieces (design doc `vk-matching-design.md` §3):
   `Expression` (`var/const/add/mul`) is lowered to ironwood's `Expr` matching how Rust's
   `std::ops` build `Expression<F>`: `Neg`/`Sub` produce `mul (const (-1)) e ↦ .negated e`,
   `add ↦ .sum`, `mul ↦ .product`, `const ↦ .constant`, and `var ↦ .advice/.fixed/.instance/
-  .selector`. (`.scaled` — Rust `expr * field` — is not produced by the ported gates, which
-  only use `-`, `+`, `*`, so it never arises here; if a future gate uses `HMul expr F` we
-  extend the `mul e (const c)` case.)
+  .selector`. `.scaled` — Rust `expr * field` (`impl Mul<F>`) — DOES arise in the mul chain
+  (its lookup, bitshift, incomplete `TWO_INV` and LSB gates use it): it is the `mul e (const c)`
+  case, constant on the RIGHT, spelled in ports via the `HMul (Expression F L) F` instance as
+  `e * (c : Fp)`. A genuine `Constant * e` product is `mul (const c) e` (constant on the LEFT).
 
 Pre-compression keeps `.selector`; post-compression is handled by `projectCSPost` which
 substitutes each simple selector by its packed fixed column (for a single-selector gadget:
 one new fixed column, replacement = the bare fixed query — see `compress_selectors.rs`).
 -/
 
-namespace Clean.Halo2.Fixtures
+namespace Halo2.Fixtures
 
 open _root_.Halo2
 open _root_.Halo2.Ironwood (Fp)
@@ -80,7 +81,9 @@ def eraseExpr : _root_.Halo2.Expression Fp Query → QueryState → Expr Fp × Q
   | .var (.instance col rot), s =>
       let (i, s) := s.instIdx col.index rot
       (.instance i, s)
-  -- Neg/Sub lower to `mul (const (-1)) e`; recognise it as `.negated`.
+  -- Neg/Sub lower to `mul (const (-1)) e`; recognise it as `.negated`. A left constant
+  -- otherwise is a genuine `Expression::Constant * e` product (const-on-left is how the
+  -- ports spell Rust `Constant(c) * e`).
   | .mul (.const c) e, s =>
       if c = (-1 : Fp) then
         let (e', s) := eraseExpr e s
@@ -88,6 +91,15 @@ def eraseExpr : _root_.Halo2.Expression Fp Query → QueryState → Expr Fp × Q
       else
         let (e', s) := eraseExpr e s
         (.product (.constant c) e', s)
+  -- A RIGHT constant is Rust's `Expression * F` (`impl Mul<F>`), which builds
+  -- `Expression::Scaled(e, c)` — NOT a `Product` with a `Constant` node. The Halo2-Clean
+  -- `HMul (Expression F L) F` instance (`Expression.lean:266`) spells exactly this as
+  -- `mul e (const c)`, and the erasure target is `.scaled` (`Expression.lean:104-109`).
+  -- Ports must therefore write field scalings as `e * (c : Fp)` (constant on the right),
+  -- matching Rust's `e * F`; a genuine constant product is `(c : Fp) * e` (constant left).
+  | .mul e (.const c), s =>
+      let (e', s) := eraseExpr e s
+      (.scaled e' c, s)
   | .add a b, s =>
       let (a', s) := eraseExpr a s
       let (b', s) := eraseExpr b s
@@ -109,6 +121,22 @@ def eraseGates : List (_root_.Halo2.Expression Fp Query) → QueryState → List
 (mirrors halo2 `PinnedGates`' `flat_map(polynomials)`). -/
 def flatGates (cs : _root_.Halo2.ConstraintSystem Fp) : List (_root_.Halo2.Expression Fp Query) :=
   cs.gates.flatMap (fun g => g.constraints.map (·.poly))
+
+/-- Erase a whole `LookupArgument` (its input and table expression lists), threading the
+query walk. Mirrors `eraseGates` but returns a `LookupFixture`. -/
+def eraseLookup (arg : _root_.Halo2.LookupArgument Fp) (s : QueryState) :
+    LookupFixture × QueryState :=
+  let (inputs, s) := eraseGates arg.inputs s
+  let (tables, s) := eraseGates arg.tables s
+  ({ inputs, tables }, s)
+
+/-- Erase a list of lookups in registration order, threading the walk. -/
+def eraseLookups : List (_root_.Halo2.LookupArgument Fp) → QueryState → List LookupFixture × QueryState
+  | [], s => ([], s)
+  | a :: as, s =>
+      let (l, s) := eraseLookup a s
+      let (ls, s) := eraseLookups as s
+      (l :: ls, s)
 
 /-! ### The query-registration seed (halo2 `queried_cells`)
 
@@ -136,10 +164,20 @@ def seedQueries : List Query → QueryState → QueryState
   | .instance col rot :: qs, s => seedQueries qs (s.instIdx col.index rot).2
 
 /-- Project a Halo2-Clean `ConstraintSystem` (pre-compression) into the ironwood
-`CsFixture`: flatten gates, run the query walk + erasure (seeded with the gadget's
-declaration-order queries), read the counts. -/
+`CsFixture`: flatten gates, run the query walk + erasure (seeded with the whole chain's
+registration-order queries), erase the lookups, read the counts.
+
+**Seed = whole-circuit registration order** (design doc D6 generalised to multiple gadgets):
+halo2 assigns query indices in the order `query_{advice,fixed,instance}` are *called*
+across all `create_gate`/`lookup` closures, in configure-call order. So `seed` is the
+concatenation, in configure order, of each gate's/lookup's declaration-order queries. Once
+the seed pre-registers every query, both `eraseGates` and `eraseLookups` only *look up*
+indices (never append), so gates and lookups can be erased in their own list order over the
+shared, fully-seeded state — the query layout is fixed by the seed alone. -/
 def projectCS (seed : List Query) (cs : _root_.Halo2.ConstraintSystem Fp) : CsFixture :=
-  let (gates, s) := eraseGates (flatGates cs) (seedQueries seed {})
+  let s0 := seedQueries seed {}
+  let (gates, s) := eraseGates (flatGates cs) s0
+  let (lookups, s) := eraseLookups cs.lookups s
   { numAdviceColumns := cs.numAdviceColumns
     numFixedColumns := cs.numFixedColumns
     numInstanceColumns := cs.numInstanceColumns
@@ -147,7 +185,8 @@ def projectCS (seed : List Query) (cs : _root_.Halo2.ConstraintSystem Fp) : CsFi
     adviceQueryLayout := s.advice.toList
     fixedQueryLayout := s.fixed.toList
     instanceQueryLayout := s.inst.toList
-    gates := gates }
+    gates := gates
+    lookups := lookups }
 
 /-! ## Post-compression projection (single-selector gadget)
 
@@ -191,4 +230,63 @@ def projectCSPost (seed : List Query) (cs : _root_.Halo2.ConstraintSystem Fp) : 
     instanceQueryLayout := s.inst.toList
     gates := gates }
 
-end Clean.Halo2.Fixtures
+/-! ## Post-compression projection (general, multi-selector) — SCAFFOLDING
+
+`compress_selectors` (`circuit.rs:1232-1338`, `compress_selectors.rs`) is a **whole-circuit,
+layout-dependent** step (design doc §2.4): which selectors pack into a shared fixed column
+is decided by the *exclusion matrix* over the full per-selector activation table (two
+selectors may share a column iff never co-enabled on a row), and each selector's replacement
+is the root-finding polynomial `q·∏_{i≠root}(i − q)` over its packed column's fixed query.
+
+Per the design's trust boundary (task §Lean-side 9): **the map's derivation stays Rust-side**
+(the dumper's `dump_prepost_acts` runs the real `compress_selectors` and emits the
+`(selectorIdx, packedColumnIndex)` association plus the new-fixed-column count), and Lean
+applies it **mechanically** via `substSelectorMap`, then checks the resulting CS equal to the
+dumped `…Post` fixture. This keeps compression's global combinatorics out of Lean while still
+proving the substituted CS matches byte-for-byte.
+
+**The activation table is the remaining cut for mul.** A faithful map needs the real
+per-selector activation rows, gathered from a `synthesize` run of the mul chip (mul of a
+witnessed point by a witnessed scalar at the smallest workable `k`). Until that lands, the
+mul `dump_prepost` uses a single-row placeholder table under which every selector is
+mutually co-enabled, so NONE pack — each selector folds into its own column (`MulPost.lean`'s
+`numFixedColumns = 14`). That is a **shape placeholder**, not the faithful post-compression
+VK; do not `#guard` it as authoritative. For the single-selector Add gadget the single-row
+table IS faithful (`projectCSPost` + `AddPost` are green).
+
+The general replacement polynomial, as data-driven substitution: -/
+
+/-- One selector's compression datum, from the Rust map: the packed fixed-column index, the
+combination length (how many selectors share the column), and this selector's assigned root
+(`1..=combinationLen`). The replacement is `q·∏_{i∈[1,len], i≠root}(i − q)` over the packed
+column's rotation-0 fixed query `q`. -/
+structure SelCompress where
+  packedCol : ℕ
+  combinationLen : ℕ
+  assignedRoot : ℕ
+
+/-- Build the root-finding replacement polynomial `q·∏_{i≠root}((i : Fp) − q)` for a selector,
+`q` being the packed column's fixed query (`compress_selectors.rs:184-201`). For
+`combinationLen = 1` this is the bare `q` (empty product), matching the single-selector case. -/
+def selReplacement (d : SelCompress) : _root_.Halo2.Expression Fp Query :=
+  let q : _root_.Halo2.Expression Fp Query := var (.fixed ⟨d.packedCol⟩ 0)
+  let factors := (List.range d.combinationLen).filterMap (fun j =>
+    let i := j + 1
+    if i = d.assignedRoot then none
+    else some (((i : Fp) : _root_.Halo2.Expression Fp Query) - q))
+  factors.foldl (· * ·) q
+
+/-- Substitute each `Query.selector k` by its root-finding replacement from the map `m`
+(`k ↦ SelCompress`). Selectors not in the map are left as-is (should not happen for a
+complete map). -/
+def substSelectorMap (m : ℕ → Option SelCompress) :
+    _root_.Halo2.Expression Fp Query → _root_.Halo2.Expression Fp Query
+  | .var (.selector s) => match m s.index with
+      | some d => selReplacement d
+      | none => .var (.selector s)
+  | .var q => .var q
+  | .const c => .const c
+  | .add a b => .add (substSelectorMap m a) (substSelectorMap m b)
+  | .mul a b => .mul (substSelectorMap m a) (substSelectorMap m b)
+
+end Halo2.Fixtures
