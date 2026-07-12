@@ -80,7 +80,10 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
     let if_gamma := x_q * gamma
     let if_delta := y_q_plus_y_p * delta
     let poly1 := x_q_minus_x_p * (x_q_minus_x_p * lambda - (y_q - y_p))
-    let poly2 := (1 - if_alpha) * (2 * y_p * lambda - 3 * x_p * x_p)
+    -- `3 * (x_p * x_p)`: matches Rust `three * x_p.square()` = `Product(3, Product(x_p, x_p))`
+    -- (right-associated). Writing `3 * x_p * x_p` would left-associate and diverge from the
+    -- pinned VK AST; the field value is identical, so soundness proofs are unaffected.
+    let poly2 := (1 - if_alpha) * (2 * y_p * lambda - 3 * (x_p * x_p))
     let nonexceptional_x_r := lambda * lambda - x_p - x_q - x_r
     let nonexceptional_y_r := lambda * x_p_minus_x_r - y_p - y_r
     let poly3a := x_p * x_q * x_q_minus_x_p * nonexceptional_x_r
@@ -156,7 +159,7 @@ def lambdaValueRaw (px py qx qy : Fp) : Fp :=
 case-split. Ported from the soundness half of `Orchard.Ecc.Add.Gate.circuit`. -/
 theorem spec_of_polysZero {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (h1 : (qx - px) * ((qx - px) * lambda - (qy - py)) = 0)
-    (h2 : (1 - (qx - px) * alpha) * (2 * py * lambda - 3 * px * px) = 0)
+    (h2 : (1 - (qx - px) * alpha) * (2 * py * lambda - 3 * (px * px)) = 0)
     (h3a : px * qx * (qx - px) * (lambda * lambda - px - qx - rx) = 0)
     (h3b : px * qx * (qx - px) * (lambda * (px - rx) - py - ry) = 0)
     (h3c : px * qx * (qy + py) * (lambda * lambda - px - qx - rx) = 0)
@@ -184,7 +187,7 @@ equations as a conjunction (in the gate's constraint order). -/
 theorem polysZero_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (h : Spec px py qx qy rx ry lambda alpha beta gamma delta) :
     (qx - px) * ((qx - px) * lambda - (qy - py)) = 0 ∧
-    (1 - (qx - px) * alpha) * (2 * py * lambda - 3 * px * px) = 0 ∧
+    (1 - (qx - px) * alpha) * (2 * py * lambda - 3 * (px * px)) = 0 ∧
     px * qx * (qx - px) * (lambda * lambda - px - qx - rx) = 0 ∧
     px * qx * (qx - px) * (lambda * (px - rx) - py - ry) = 0 ∧
     px * qx * (qy + py) * (lambda * lambda - px - qx - rx) = 0 ∧
