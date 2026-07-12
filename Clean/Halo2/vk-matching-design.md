@@ -1,5 +1,21 @@
 # Halo2-Clean: The VK-Matching Axis — Design
 
+> **MAINTAINER RULINGS (2026-07-11) — these supersede the decision points below.**
+> The document's framing of the ironwood action-circuit fixture as a fixed external
+> artifact is WRONG: the orchard/halo2 repos are sibling checkouts and generating a CS
+> fixture is a small Rust script we write ourselves. Consequently:
+> - **We generate our own per-circuit fixtures** for the vertical-slice targets
+>   (varbase scalar mul is the primary; Sinsemilla Merkle also of interest), reusing
+>   only the ironwood fixture FORMAT.
+> - **Matching is EQUALITY, both pre- and post-compression**, per circuit. All
+>   subset/granularity trade-offs (D2, and D3's "ask") are moot — rejected.
+> - **Comparison mechanism (D1)**: whatever works; `#eval` equality is fine for now, a
+>   theorem can come later. A `native_decide` theorem is not inherently more trusted
+>   than byte-equal dumps.
+> - First end-to-end target: the Add gadget, then mul.
+> The survey content (fixture format, compression semantics, query-walk, file:line
+> cites) below remains the reference; read the decision points as historical.
+
 Design document for the VK-matching machinery: mechanically re-deriving the ironwood
 `VerifyingKey` constraint-system data from a Halo2-Clean `ConstraintSystem` and proving it
 equal to the pinned fixture. This discharges the **VK-correctness** seam the requirements
