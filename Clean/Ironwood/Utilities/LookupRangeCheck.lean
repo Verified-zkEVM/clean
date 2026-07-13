@@ -806,8 +806,8 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- resolve the output cells (case on `strict` to compute the tail ops)
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm, output_cellAt, operations_cellAt,
-        operations_constrainConstant, RegionOperations.constraints_append,
-        Bool.false_eq_true, if_true, if_false, reduceCtorEq] at _hTailC h_output ⊢ <;>
+        operations_constrainConstant,
+        Bool.false_eq_true, if_true, if_false] at _hTailC h_output ⊢ <;>
       obtain ⟨hOz0, hOzLast⟩ := h_output <;>
       -- output_z0 = advice runningSum offset = f 0 ; output_zLast = advice … = f numWords
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
@@ -853,11 +853,10 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     · -- the tail: strict ⇒ `constrainConstant zLast 0` (⇒ z_last = 0); else nothing
       rcases hbstrict : strict with _ | _
       · -- strict = false: no tail constraint
-        simp only [circuit_norm, operations_cellAt, RegionOperations.constraints_append]
+        simp only [circuit_norm, operations_cellAt]
       · -- strict = true: prove `zLast = 0` from the honest value (element < 2^{K·numWords})
         simp only [circuit_norm, operations_cellAt, operations_constrainConstant,
-          RegionOperations.constraints_append, AssignedCell.of_cell, Cell.of, Cell.eval,
-          Cell.of_column, Cell.of_regionIndex, Cell.of_rowOffset]
+          AssignedCell.of_cell, Cell.of, Cell.eval]
         have hzn := hz numWords le_rfl
         simp only [zChain] at hzn
         have heInput : eCell.val < 2 ^ (K * numWords) := by
@@ -883,10 +882,9 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       -- `offset + numWords`)
       rw [← h_output]
       cases strict <;>
-        · simp only [circuit_norm, RegionCircuit.output_bind, output_cellAt, operations_cellAt,
-            RegionCircuit.operations_bind, operations_copyAdvice, operations_constrainConstant,
-            Bool.false_eq_true, if_false, if_true, ProvableStruct.eval_var_eq_eval_prover,
-            ProvableType.eval_field_prover, AssignedCell.eval, AssignedCell.of_cell,
+        · simp only [circuit_norm, RegionCircuit.output_bind, output_cellAt,
+            Bool.false_eq_true, if_false, if_true,
+            AssignedCell.eval, AssignedCell.of_cell,
             Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice, hInEl]
           exact hzn
 

@@ -204,7 +204,6 @@ invert()`, i.e. the `0⁻¹ = 0` field inverse). -/
 def etaWit (input : Inputs (AssignedCell Fp)) : WitgenIR Fp 1 :=
   .ofFExpr (.inv (.expr input.z130))
 
-
 /-! ## Faithful region structure (`overflow_check`, `overflow.rs:101-208`)
 
 Rust `overflow_check` runs at the LAYOUTER level in THREE sibling regions
@@ -327,8 +326,7 @@ private theorem copyCheck_output (K : ℕ) (cfg : LookupRangeCheck.Config K)
           zLast := .of i (numWords K) cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheck K (numWords K) false).synthesize cfg 0 inp).output i = _
   simp only [LookupRangeCheck.rangeCheck, circuit_norm, RegionCircuit.output_bind,
-    LookupRangeCheck.output_cellAt, LookupRangeCheck.operations_cellAt,
-    RegionCircuit.operations_bind, Halo2.operations_copyAdvice,
+    LookupRangeCheck.output_cellAt,
     Bool.false_eq_true, if_false, Nat.zero_add]
 
 /-- Eval of the child's single-field input struct `{ element := c }`. -/
@@ -523,20 +521,18 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       rw [copyCheck_spec_eq, copyCheck_output, copyCheckInputs_eval_eq] at hChildSpec
       rw [copyCheck_proverSpec_eq, copyCheck_output, copyCheckInputs_eval_eq_prover] at hChildPS
       obtain ⟨-, ⟨lo, hlo, hDecompV⟩, -⟩ := hChildSpec
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, AssignedCell.eval] at hChildPS hDecompV hWs
       -- reduce the gate region constraints to the 6 copies + 5 gate polys
       simp only [gateRegion, circuit_norm, overflowGate, Constraints.withSelector]
       rw [copyCheck_output]
       simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, AssignedCell.eval]
+        Cell.of_column, Environment.get_advice]
       -- honest Spec facts from `hpa` (the honest-caller precondition = the overflow `Spec`)
       simp only [Spec] at hpa
       provable_type_simp
       obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := hpa
       -- peel the gate region witnesses: the 6 copy assignAdvice witnesses + η + s copy
       simp only [gateRegion, circuit_norm, Halo2.operations_copyAdvice, operations_assignAdvice,
-        RegionOperations.extendsWitnesses_append, RegionOperations.extendsWitnesses_cons,
+        RegionOperations.extendsWitnesses_cons,
         RegionOperations.extendsWitnesses_nil, RegionOperation.extendsWitness_assignAdvice,
         RegionOperation.extendsWitness_constrainEqual] at hWgate
       -- reduce the copyCheck child output cell in the s_minus_lo_130 copy witness

@@ -650,7 +650,6 @@ private theorem mainRegion_output_k254 (cfg : Config) (input : Var Inputs Fp)
     = _
   simp only [Vector.getElem_ofFn]
 
-
 /-- Eval of an `AssignedCell.of` cell (`Eval` level): the advice read at its row. -/
 private theorem eval_of (env : Placed Environment Fp) (self : RegionIndex) (row : ℕ)
     (col : Column .advice) :
@@ -720,8 +719,6 @@ private theorem ovInputs_eval_eq (env : Placed Environment Fp)
       = { alpha := eval env alpha, z0 := eval env z0, z130 := eval env z130,
           k254 := eval env k254 } := by
   simp only [circuit_norm]
-
-
 
 /-! ## Prover-side bridge duplicates (completeness)
 
@@ -883,7 +880,7 @@ check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
 private theorem synthesize_regionCount (cfg : Config)
     (input : Var Inputs Fp) (i : RegionIndex) :
     Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
-  simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
+  simp only [synthesize, circuit_norm, operations_assignRegion,
     Operations.regionCount]
   -- the MulOverflow layouter child contributes 3 regions (its three sibling regions)
   rw [show ∀ (j : RegionIndex), Operations.regionCount
@@ -1789,14 +1786,11 @@ def mul :
       -- loop bodies), then land the cells on env reads.
       simp only [ov_proverAssumptions_eq]
       rw [ovInputs_eval_eq_prover]
-      simp only [circuit_norm, Vector.getElem_ofFn, eval_of_prover]
+      simp only [circuit_norm, eval_of_prover]
       rw [incomplete_call_output]
       simp only [Vector.getElem_ofFn, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
       rw [hIalpha, hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest input_alpha rfl rfl rfl
-
-
-
 
 end Halo2.Ironwood.Ecc.Mul
