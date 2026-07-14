@@ -73,14 +73,15 @@ construction.
 
 ## Engine cooperation (Phase 2/3)
 
-`subcircuit_rw`'s completeness mode emits `h_spec_i` statements that mention the child's own output
-in **call form** (guise 1) inside chained inputs and in **output form** (guise 2) as the own
-output. Run order matters: if `abstract_outputs` runs BEFORE `subcircuit_rw`, the engine re-emits
-concrete outputs into `h_spec_i` and undoes the abstraction. Cooperation contract: the engine, when
-building a chunk's contract statement, first checks for an existing `h_out : <output> = o`
-abstraction equation in context and, if present, emits over `o`. This tactic leaves those equations
-in context (named `h_out_<i>`) precisely so the engine can find them. See
-`SubcircuitRw.findOutputAbstraction?`.
+`subcircuit_rw`'s completeness mode emits `h_spec_i` statements — and its soundness mode the
+weakened `EnvA → A → Spec` consequence — that mention the child's own output. Run order:
+`abstract_outputs` runs BEFORE `subcircuit_rw`. The cooperation contract is that the engine, when
+building a chunk's contract statement, first checks for an existing `h_gen_out_i : <output> = x`
+abstraction equation in context and, if present, emits the statement OVER `x` at the source rather
+than materializing the concrete output term. So the abstraction is never undone and no post-hoc
+reuse pass is needed — `abstract_outputs` mints fresh locals + equations once, and the engine
+consults them. This tactic leaves those equations in context (named `h_gen_out_<i>`) precisely so
+the engine can find them. See `SubcircuitRw.findOutputLocal?` / `SubcircuitRw.abstractOutputsIn`.
 -/
 
 open Lean Elab Tactic Meta
@@ -205,7 +206,13 @@ partial def collectOutputs (e : Expr) : StateRefT (Array Expr) MetaM Unit := do
   | .mdata _ b => collectOutputs b
   | _ => pure ()
 
-/-- All canonical outputs across goal + non-implementation hyps, innermost-first, deduped. -/
+/-- All canonical outputs across goal + non-implementation hyps, innermost-first, deduped. Two
+occurrences of the SAME child output can be collected in different implicit-instance spellings (the
+goal's vs a hypothesis's), which are `==`-distinct but reducibly defeq; a second `reducible`-defeq
+dedup pass merges them (keeping the first, innermost-first spelling) so we mint ONE local per output
+rather than an aliased chain `x_gen_out_i = x_gen_out_j`. `.reducible` never unfolds a composed
+`.output`, and distinct children (different child/offset) are not defeq, so genuinely distinct
+outputs stay separate. -/
 def collectAllOutputs : TacticM (Array Expr) := withMainContext do
   let mut acc : Array Expr := #[]
   let (_, acc1) ← (collectOutputs (← instantiateMVars (← getMainTarget))).run acc
@@ -214,7 +221,14 @@ def collectAllOutputs : TacticM (Array Expr) := withMainContext do
     if decl.isImplementationDetail then continue
     let (_, acc2) ← (collectOutputs (← instantiateMVars decl.type)).run acc
     acc := acc2
-  return acc
+  -- reducible-defeq dedup (preserves innermost-first order)
+  let mut deduped : Array Expr := #[]
+  for e in acc do
+    let mut dup := false
+    for k in deduped do
+      if ← withTransparency .reducible <| isDefEq k e then dup := true; break
+    unless dup do deduped := deduped.push e
+  return deduped
 
 /-! ## The abstraction
 
@@ -296,85 +310,7 @@ where
     let fvs := (Lean.collectFVars {} e).fvarIds
     return fvs
 
-/-! ## The runner (with engine cooperation) -/
-
-/-- Engine-cooperation lookup: if some hypothesis is `h : lhs = x` with `x` a free variable and
-`lhs` **reducibly defeq** to output `e`, return `(x, proof : e = x)` (the existing opaque local for
-`e`, with a proof rewriting `e` to it). Used so a re-run of `abstract_outputs` after
-`subcircuit_rw` reuses the local minted before the engine ran, instead of minting a second one for
-the engine's freshly-emitted concrete output. -/
-def findExistingAbstraction? (e : Expr) : TacticM (Option (Expr × Expr)) := withMainContext do
-  for decl in ← getLCtx do
-    if decl.isImplementationDetail then continue
-    let ty ← instantiateMVars decl.type
-    match ty.eq? with
-    | some (_, lhs, rhs) =>
-      if rhs.isFVar then
-        if ← withTransparency .instances <| isDefEq lhs e then
-          -- `decl.toExpr : lhs = x`; coerce to `e = x` (defeq LHS) via a type hint.
-          let pf ← mkExpectedTypeHint (.fvar decl.fvarId) (← mkEq e rhs)
-          return some (rhs, pf)
-    | none => pure ()
-  return none
-
-/-- Abstract every canonical-output occurrence of `ty` that is reducibly defeq to `e` into a single
-motive bvar, returning the motive body (`ty` with those occurrences ↦ bvar 0) and whether any were
-found. The motive abstracts the OCCURRENCES' own spellings (each `kabstract`-matches `ty`
-syntactically), so engine-emitted spellings that are defeq-but-not-reducibly-equal to `e` are still
-caught — a single `kabstract ty e` keyed on `e` would miss them. -/
-def motiveBodyForOutputs (ty e : Expr) : MetaM (Expr × Bool) := do
-  let mut occs : Array Expr := #[]
-  let (_, os) ← (collectOutputs ty).run occs
-  occs := os
-  let mut body := ty
-  let mut changed := false
-  for occ in occs do
-    -- `.default` defeq for the reuse match: engine-emitted and goal spellings of the SAME output can
-    -- differ in hidden implicit instances (they print identically yet fail `.instances` defeq). This
-    -- match runs only in the reuse path, on outputs already abstracted in pass 1 — the deep-composed
-    -- outputs are shallow locals here, so `.default` does not re-force a composed `.output`. The
-    -- kabstract that actually rewrites stays at `.reducible` (it keys on `occ`'s own spelling).
-    unless ← withTransparency .default <| isDefEq occ e do continue
-    let abs ← withTransparency .reducible <| kabstract body occ
-    if abs.hasLooseBVars then
-      body := abs
-      changed := true
-  return (body, changed)
-
-/-- Substitute output `e` by `repl` in the goal and every non-implementation hypothesis, non-forcing,
-justified by `heq : e = repl`. For each target `ty` we build a motive `M := fun x => ty[occ ↦ x]`
-abstracting every occurrence (of `e`'s own or an engine spelling, all defeq to `e`), then
-`congrArg M heq : M e = M repl`, i.e. `ty = ty[occ ↦ repl]` (up to defeq). Skips `heq`'s own decl. -/
-def substOutputEverywhere (e repl heq : Expr) : TacticM Unit := withMainContext do
-  let ety ← inferType e
-  -- `rewriteTy ty` = `some (ty', proof : ty = ty')` if any occurrence changed, else `none`.
-  let rewriteTy (ty : Expr) : MetaM (Option (Expr × Expr)) := do
-    let (body, changed) ← motiveBodyForOutputs ty e
-    if !changed then return none
-    let motive := Expr.lam `x ety body .default
-    -- `M e ≡ ty` (occurrences defeq e), `M repl = ty'`.
-    let ty' := body.instantiate1 repl
-    let pf ← mkAppM ``congrArg #[motive, heq]
-    let pf ← mkExpectedTypeHint pf (← mkEq ty ty')
-    return some (ty', pf)
-  -- goal
-  match ← rewriteTy (← instantiateMVars (← (← getMainGoal).getType)) with
-  | some (gTy', pf) => replaceMainGoal [← (← getMainGoal).replaceTargetEq gTy' pf]
-  | none => pure ()
-  -- hyps
-  let fvarIds := (← getLCtx).foldl (init := #[]) fun acc decl =>
-    if decl.isImplementationDetail then acc else acc.push decl.fvarId
-  for fvarId in fvarIds do
-    discard <| withMainContext do
-      let some decl := (← getLCtx).find? fvarId | return
-      let hty ← instantiateMVars decl.type
-      if let some (_, _, r) := hty.eq? then
-        if r == repl then return
-      match ← rewriteTy hty with
-      | some (hty', pf) =>
-        let r ← (← getMainGoal).replaceLocalDecl fvarId hty' pf
-        replaceMainGoal [r.mvarId]
-      | none => pure ()
+/-! ## The runner -/
 
 /-- Abstract each collected output to a fresh `x_gen_out_<i>` local with an equation
 `h_gen_out_<i> : eᵢ = x_gen_out_<i>` in context, replacing every occurrence in the goal AND every
@@ -386,8 +322,13 @@ Whole-goal design: revert every non-implementation hypothesis EXCEPT those the o
 kabstract at `.reducible`, no `isTypeCorrect` re-check ⇒ a deep composed `.output` never unfolds),
 then re-intro the abstraction binders + equations + the reverted hyps. Outputs are innermost-first,
 so a nested output is abstracted before the enclosing one (whose input is then already the opaque
-local). Engine-cooperation reuse (step 1a) substitutes any output that already has an abstraction
-equation to its existing local, so re-running after `subcircuit_rw` does not double-mint. -/
+local).
+
+Engine cooperation is now one-directional: `abstract_outputs` runs FIRST, leaving the `h_gen_out_i`
+equations, and `subcircuit_rw` emits its `h_spec_i`/soundness consequences OVER those locals (via
+`SubcircuitRw.abstractOutputsIn`, keyed on the same equations). So the engine never re-materializes
+a concrete output, and no post-hoc reuse/re-substitution pass is needed here — a single fresh-mint
+pass suffices. -/
 def runAbstractOutputs : TacticM Unit := withMainContext do
   -- 0. canonicalize call forms to output form (to a fixpoint — nested forms need repeats)
   let mut guard := 0
@@ -395,34 +336,10 @@ def runAbstractOutputs : TacticM Unit := withMainContext do
     guard := guard + 1
   withMainContext do
   -- 1. collect the outputs to abstract (innermost-first, canonical form)
-  let outsAll ← collectAllOutputs
-  -- 1a. engine cooperation: an output that already has an `h_gen_out : output = x` equation (minted
-  --     by an earlier `abstract_outputs`, then re-emitted concretely by `subcircuit_rw`) is
-  --     substituted back to its existing local `x` in place — no new binder. The remainder get
-  --     fresh locals below.
-  -- Partition into fresh vs reuse (lookup done against the CURRENT context — before any subst).
-  -- Reuse subst is applied one output at a time, re-looking-up the equation fvar each time (the
-  -- goal's fvar ids are remapped by each `replaceLocalDecl`, so a batch of captured proofs would go
-  -- stale — hence the per-output re-lookup here).
-  let mut freshOuts : Array Expr := #[]
-  let mut reuseOuts : Array Expr := #[]
-  for e in outsAll do
-    if (← findExistingAbstraction? e).isSome then reuseOuts := reuseOuts.push e
-    else freshOuts := freshOuts.push e
-  let numReuse := reuseOuts.size
-  for e in reuseOuts do
-    withMainContext do
-      let e ← instantiateMVars e
-      match ← findExistingAbstraction? e with
-      | some (x, pf) =>
-        trace[Halo2.abstract_outputs] "reuse-subst: {e} ↦ {x}"
-        substOutputEverywhere e x pf
-      | none => pure ()
-  withMainContext do
-  let outs := freshOuts
-  trace[Halo2.abstract_outputs] "collected {outsAll.size} output(s): {numReuse} reused, {outs.size} fresh"
+  let outs ← collectAllOutputs
+  trace[Halo2.abstract_outputs] "collected {outs.size} output(s) to abstract"
   if outs.isEmpty then
-    if numReuse == 0 then trace[Halo2.abstract_outputs] "no subcircuit-call outputs found — no-op"
+    trace[Halo2.abstract_outputs] "no subcircuit-call outputs found — no-op"
     return
   -- 2. revert every non-implementation hyp EXCEPT the outputs' dependencies (circuit params).
   let deps ← outputDeps outs

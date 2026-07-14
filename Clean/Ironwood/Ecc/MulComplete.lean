@@ -572,10 +572,9 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
   -- ▸▸ make every child-add output opaque BEFORE the engine runs: the goal's output equation and
   --    the first add's output threaded into the second add's chunk input become `x_gen_out_0`
   --    (first) / `x_gen_out_1` (second) opaque locals, with `h_gen_out_i : <output> = x_gen_out_i`.
-  --    Replaces the hand-rolled `hout1`/`hout2` rfl bridges. The engine's `h_spec_i` still spell
-  --    their OWN outputs concretely (an independently-built spelling not defeq to the goal's — see
-  --    AbstractOutputs' report), so we bridge those to the locals via `h_gen_out_i` when threading
-  --    the honest output VALUES. ◂◂
+  --    Replaces the hand-rolled `hout1`/`hout2` rfl bridges. The engine then EMITS `h_spec_i` OVER
+  --    these locals (it consults the `h_gen_out_i` equations before materializing each output), so
+  --    `hSpec1.2`/`hSpec2.2` speak `x_gen_out_i` directly — no post-hoc bridging needed. ◂◂
   abstract_outputs
   -- ▸▸ engine (completeness): strengthen the goal's two folded add chunks to their
   --    `EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from `hWc1`/`hWc2`), and introduce
@@ -584,9 +583,11 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
   -- derive add 1's Spec from `h_spec_0` (Add's `ProverSpec` is `True`, so `.1` is the Spec)
   have hSpec1 := (h_spec_0 trivial hA1 trivial).1
   simp only [add_spec_eq, hIn1] at hSpec1
-  -- the first add's output value, on the opaque local (via `h_gen_out_0` + `hSpec1.2`)
+  -- the first add's output value, on the opaque local — the engine emitted `h_spec_0` OVER
+  -- `x_gen_out_0` (it found the `h_gen_out_0` abstraction equation before re-materializing the
+  -- concrete output), so `hSpec1.2` already speaks the local directly.
   have hxout0 : eval env.toEnvironment x_gen_out_0
-      = stepBasePoint base (ebits env iter) + A := by rw [← h_gen_out_0]; exact hSpec1.2
+      = stepBasePoint base (ebits env iter) + A := hSpec1.2
   have hIn2 : eval env.toEnvironment (⟨acc, x_gen_out_0⟩ : Var Add.Inputs Fp)
       = (⟨A, stepBasePoint base (ebits env iter) + A⟩ : Add.Inputs Fp) := by
     simp only [addInputs_eval_eq]; rw [hAcc, hxout0]
@@ -596,9 +597,9 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
   -- add 2's Spec from `h_spec_1`, its `q.Valid` threaded from the first's Spec
   have hSpec2 := (h_spec_1 trivial hA2 trivial).1
   simp only [add_spec_eq, hIn2] at hSpec2
-  -- the second add's output value, on the opaque local (via `h_gen_out_1` + `hSpec2.2`)
+  -- the second add's output value, on the opaque local — `h_spec_1` emitted over `x_gen_out_1`.
   have hxout1 : eval env.toEnvironment x_gen_out_1
-      = A + (stepBasePoint base (ebits env iter) + A) := by rw [← h_gen_out_1]; exact hSpec2.2
+      = A + (stepBasePoint base (ebits env iter) + A) := hSpec2.2
   -- ── assemble: copy constraint, gate polys, the two strengthened chunk preconditions; output
   --    value; z value. The engine turned the chunk positions into `EnvA ∧ A ∧ PA` bundles. ──
   refine ⟨⟨hWby, ?_, ⟨trivial, hA1, trivial⟩, ⟨trivial, hA2, trivial⟩⟩, ?_, ?_⟩

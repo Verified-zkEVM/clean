@@ -274,45 +274,13 @@ example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex
   subcircuit_rw at h  -- chunk sits under one `→`-left (net negative in `h`'s prop): untouched
   exact h
 
-/-! ## Deep-argument generalization pin (the depth fix)
+/-! ## Deep-input handling: now owned by `abstract_outputs`
 
-`subcircuit_rw` abstracts a chunk `input` to a fresh `x_gen_*` local (+ `h_gen_*` equation) exactly
-when the input's structural depth passes `generalizeThreshold` — the chained-composed-output inputs
-of Mul's complete/final-add chunks (whose `.output` *reduction* would otherwise explode the unifier)
-clear it; small-gadget inputs stay inline. These pins fix that decision so it can't silently drift.
-
-**Deep case gets named / shallow case does not.** The behavioral end-to-end evidence is the two
-existing consumers: every gadget in *this* file has a shallow input (a record of a handful of cells,
-depth ≤ ~15 — e.g. `chainedParent`'s second call whose input is a lone passthrough output), and none
-of their proofs mention an `x_gen`/`h_gen` local — the tactic left them inline. Mul's `mul`
-(`Clean/Ironwood/Ecc/Mul.lean`), by contrast, has the complete chunk (hi→lo chained input, depth
-≈ 39) and the final-add chunk (carries the complete output, depth ≈ 44) named — its soundness proof
-consumes `h_gen_hComp_0`/`h_gen_hFin_0` — and builds with ZERO `set_option maxRecDepth`.
-
-The decision-function pins below fix the boundary directly (no heavy elaboration): -/
-
-section GeneralizationThresholdPin
-open Halo2.SubcircuitRw
-
-/-- A right-nested application `f (f (f … a))` of structural depth `n` (each `.app` adds one level),
-for exercising `boundedDepth`/`inputIsDeep` at and around the threshold. -/
-private def nestedApp (n : Nat) : Lean.Expr :=
-  let base := Lean.Expr.const `Nat.zero []
-  let f := Lean.Expr.const `Nat.succ []
-  Nat.rec base (fun _ acc => Lean.Expr.app f acc) n
-
--- the threshold is what separates "abstract" (Mul's chained chunks) from "inline" (small gadgets)
-#guard generalizeThreshold == 38
-
--- `boundedDepth` is capped: it never reports more than `cap`, so it is safe on deep terms …
-#guard boundedDepth (nestedApp 100) 40 == 40
--- … and it reports the true depth below the cap.
-#guard boundedDepth (nestedApp 10) 100 == 11   -- 10 `succ` apps + the `zero` leaf
-
--- a SHALLOW input (below threshold) is left inline; a DEEP input (past threshold) is abstracted.
-#guard inputIsDeep (nestedApp 10) == false
-#guard inputIsDeep (nestedApp 200) == true
-
-end GeneralizationThresholdPin
+The engine's former depth-threshold machinery (`generalizeThreshold`/`inputIsDeep`/… abstracting a
+deep chunk `input` to an `x_gen_*` local) is retired. Its concern — a chunk input embedding a
+composed child `.output` — is subsumed by `abstract_outputs`, run before the engine: once every child
+output is an opaque local, the inputs that used to be deep are shallow by construction. The real-load
+evidence is `Clean/Ironwood/Ecc/Mul.lean` (`mul`, both directions) and `MulComplete.lean`, which run
+`abstract_outputs` before `subcircuit_rw` and build with ZERO `set_option maxRecDepth`. -/
 
 end Halo2.Ironwood.Ecc.TestSubcircuitRw

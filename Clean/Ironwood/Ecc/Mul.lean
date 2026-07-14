@@ -865,6 +865,19 @@ theorem hiInputs_eval_eq (env : Placed Environment Fp) (alpha : AssignedCell Fp)
           yA := eval env yA, z := eval env z } := by
   simp only [circuit_norm, ProvableType.eval_cells]
 
+/-- Verifier: an abstract point-output var's coordinate-evals reassemble to its whole-point eval
+(`Point.ofCoords (eval env o.x, eval env o.y) ≡ eval env o`), so an entering accumulator threaded
+through the opaque local `o` lands on the whole-point value equation. `rfl` by `ProvableType`-eval
+unfolding (`Point` is a two-field `Var`). -/
+theorem point_var_eval_eq (env : Placed Environment Fp) (o : Var Point Fp) :
+    eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
+  with_unfolding_all rfl
+
+/-- Prover view of `point_var_eval_eq`. -/
+theorem point_var_eval_eq_prover (env : Placed ProverEnvironment Fp) (o : Var Point Fp) :
+    eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
+  with_unfolding_all rfl
+
 /-! ## The gadget bundle
 
 `mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`). The working-scalar bits are derived
@@ -889,13 +902,16 @@ private theorem synthesize_regionCount (cfg : Config)
       simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
--- Depth note (no rec-depth allowance needed): the main region's composed do-block is one
--- nested-bind term ~5 children deep, and its `.output` reduction is what used to explode the
--- default-512 unifier at the complete-phase/final-add value-bookkeeping sites. `subcircuit_rw` now
--- abstracts those chained chunk inputs (the complete chunk's hi→lo input, the final add's input
--- carrying the complete output) to shallow `x_gen_*` locals before rewriting, so every downstream
--- `rw`/`simp` sees the shallow local and the deep term is recovered (via the `h_gen_*` equations)
--- only where a single child `.output` is forced — never the whole composed chain at once.
+-- Depth note: the main region's composed do-block is one nested-bind term ~5 children deep, and its
+-- child `.output` reductions used to explode the default-512 unifier at the complete-phase/final-add
+-- value-bookkeeping sites. Both bundle proofs now run `abstract_outputs` (after `provable_type_simp`,
+-- before `subcircuit_rw`): every child output becomes an opaque `x_gen_out_j` local, so each chained
+-- chunk input (the complete chunk's hi→lo input, the final add's complete-output input) is shallow by
+-- construction. Downstream `rw`/`simp` sees the shallow local; the concrete child output is recovered
+-- via the `h_gen_out_j` equations only where a SINGLE child `.output` must be reduced. No `maxRecDepth`
+-- allowance is needed in either bundle proof; the one residual raise lives inside `subcircuit_rw`'s
+-- completeness runner (the overflow chunk's `(mainRegion …).output` input — a deep PARENT output that
+-- `abstract_outputs` does not abstract).
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
 overflow check's three sibling regions after it (`mul.rs:299`). No `BitsHint` parameter: the
@@ -957,6 +973,11 @@ def mul :
     obtain ⟨hInit, _hZinitW, hZconst, hHi, hLo, hComp, _hZ0W, hBxC, hByC, _hCxW, _hCyW,
       hGate, hFin, -⟩ := hMain
     provable_type_simp
+    -- ▸▸ make every child output opaque: the chained chunk INPUTS (comp's hi→lo entering, the final
+    --    add's comp-acc entering) become shallow locals `x_gen_out_j`, and each weakened chunk's
+    --    Spec (emitted by `subcircuit_rw at h` via Stage-1 cooperation) speaks the local. This
+    --    replaces the engine's threshold-gated deep-input abstraction. ◂◂
+    abstract_outputs
     obtain ⟨hIalpha, hBxIn, hByIn⟩ := h_input
     -- ── the base point: cells and value ──
     have hbX : eval env input_var_base_x = input_base_x := by
@@ -980,11 +1001,17 @@ def mul :
       rw [addInputs_eval_eq, hbaseEval]
     obtain ⟨hAccV, hAccEq⟩ := hInit trivial (by rw [hInitIn]; exact ⟨hbaseV, hbaseV⟩)
     rw [hInitIn] at hAccEq
+    -- init output on the local: `hAccEq : eval env x_gen_out_0 = base + base` (engine emitted the
+    -- weakened `hInit` Spec over `x_gen_out_0`). Keep both a whole-point form (`hAcc2Pt`, for
+    -- entering-accumulator collapse) and the raw-cell form (`hAcc2`).
+    have hAcc2Pt : eval env x_gen_out_0
+        = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
+      rw [← point_two_nsmul hOnC]; exact hAccEq
     have hAcc2 : eval env (Add.add.output cfg.addConfig offInit
           ⟨{ x := input_var_base_x, y := input_var_base_y },
             { x := input_var_base_x, y := input_var_base_y }⟩ i₀)
         = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← point_two_nsmul hOnC]; exact hAccEq
+      rw [← h_gen_out_0] at hAcc2Pt; exact hAcc2Pt
     rw [add_output_eq, Point.eval_eq, eval_of, eval_of] at hAcc2
     -- ── z_init = 0 (the `constrainConstant` constraint) ──
     simp only [RegionOperations.constraints_cons, RegionOperations.constraints_nil,
@@ -1011,11 +1038,12 @@ def mul :
     have hHiOut := hHiAccCl 2
       (by
         rw [hiInputs_eval_eq]
-        simp only [add_call_output, eval_of]
-        rw [hbaseEval]
-        exact hAcc2)
+        show Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) = _
+        rw [show (Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) : Point Fp)
+              = eval env x_gen_out_0 from (point_var_eval_eq env x_gen_out_0).symm, hbaseEval]
+        exact hAcc2Pt)
       (le_refl 2) (by norm_num)
-    rw [incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
+    rw [← h_gen_out_1, incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
       hiInputs_eval_eq] at hHiOut
     simp only [eval_of] at hHiOut
     rw [hbaseEval] at hHiOut
@@ -1029,28 +1057,31 @@ def mul :
       rw [hbaseEval]; exact hOnC)
     simp only [MulIncomplete.RoundInvariant] at hLoRI
     obtain ⟨⟨hLoZ0, hLoZstep⟩, hLoAccCl⟩ := hLoRI
-    -- the hi z-cell 124 (= z₁₃₀), as a chainNat cast on its advice read
+    -- the hi z-cell 124 (= z₁₃₀), as a chainNat cast on its advice read (hi output local; recover)
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_1, incomplete_output_eq,
       incompleteOutput_zs_getElem env _ _ _ 124 (by omega)] at hHiZ124
     simp only [Vector.getElem_ofFn, eval_of] at hHiZ124
-    -- the lo chain continues the hi chain
+    -- the lo chain continues the hi chain (hi z-cell 124 entering, via `← h_gen_out_1`)
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bitsHi 125) bitsLo
       (by
         rw [hiInputs_eval_eq]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of]
+        show eval env x_gen_out_1.zs[124] = _
+        rw [← h_gen_out_1, incomplete_output_eq]
+        simp only [Vector.getElem_ofFn, eval_of]
         exact hHiZ124)
       hLoZ0 hLoZstep
-    -- the lo accumulator, entering at m = accScalar 2 bitsHi 125
+    -- the lo accumulator, entering at m = accScalar 2 bitsHi 125 (hi output, via `← h_gen_out_1`)
     have hmB := m_bounds bitsHi bitsLo
     have hLoOut := hLoAccCl (accScalar 2 bitsHi 125)
       (by
         rw [hiInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        rw [hbaseEval]
-        exact hHiOut)
+        show Point.ofCoords (eval env x_gen_out_1.xA, eval env x_gen_out_1.yA) = _
+        rw [← h_gen_out_1, incomplete_output_eq]
+        simp only [eval_of]
+        rw [hbaseEval]; exact hHiOut)
       hmB.1 hmB.2.1
-    rw [incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
+    rw [← h_gen_out_2, incomplete_output_eq, incompleteOutput_xA, incompleteOutput_yA,
       hiInputs_eval_eq] at hLoOut
     simp only [eval_of] at hLoOut
     rw [hbaseEval] at hLoOut
@@ -1066,15 +1097,13 @@ def mul :
           ((env.place i₀ + (offLo + 1 + (125 + 1)) : ℕ) : ℤ))) := by
       rw [hLoOut]
       exact Orchard.Point.valid_nsmul hbaseV _
-    -- `subcircuit_rw` abstracted the complete chunk's (chained hi→lo) input to a shallow local
-    -- `x_gen_hComp_0` with `h_gen_hComp_0 : <the input record> = x_gen_hComp_0`; `rw [← h_gen_hComp_0]`
-    -- recovers the concrete record for the componentwise `compInputs_eval_eq` (which stays shallow —
-    -- it never forces the embedded `lo.zs[125]`). Everything derived from `hComp` (`hCompAccEq`,
-    -- `hCompAccV`, `hCompChain`) now carries the shallow `x_gen_hComp_0`, so the downstream
-    -- `complete_output_eq` reduction of the complete output no longer explodes.
+    -- `abstract_outputs` replaced the complete chunk's chained hi→lo INPUT projections by the lo
+    -- output local `x_gen_out_2` (making the input shallow) and the complete OUTPUT by `x_gen_out_3`.
+    -- Comp entering: recover the concrete lo output (`← h_gen_out_2`) to reduce its coords to cells;
+    -- comp output: recover the concrete complete output (`← h_gen_out_3`) for `complete_output_eq`.
     obtain ⟨bitsC, hCompRI⟩ := hComp trivial (by
-      rw [← h_gen_hComp_0, compInputs_eval_eq]
-      simp only [incomplete_call_output, eval_of]
+      rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+      simp only [eval_of]
       rw [hbaseEval]
       exact ⟨hLoOutV, hbaseV⟩)
     simp only [MulComplete.RoundInvariant] at hCompRI
@@ -1082,15 +1111,15 @@ def mul :
     -- the complete-phase accumulator: valid and = [accScalar M₂ bitsC 3] • base
     obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
       (by
-        rw [← h_gen_hComp_0, compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
+        rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+        simp only [eval_of]
         exact hLoOutV)
       (by
-        rw [← h_gen_hComp_0, compInputs_eval_eq]
+        rw [compInputs_eval_eq]
         show Point.Valid (eval env ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp)))
         rw [hbaseEval]; exact hbaseV)
-    -- accPoint over [M₂]•base reduces to the nsmul
+    -- the complete input's `base` and entering-`acc` components (concrete, via `← h_gen_out_2`)
     have hLoOutRec : (Point.mk
           (env.env.advice cfg.loConfig.xA
             ((env.place i₀ + (offLo + 1 + 125 + 1) : ℕ) : ℤ))
@@ -1098,26 +1127,19 @@ def mul :
             ((env.place i₀ + (offLo + 1 + (125 + 1)) : ℕ) : ℤ)) : Point Fp)
         = accScalar (accScalar 2 bitsHi 125) bitsLo 126
           • ({ x := input_base_x, y := input_base_y } : Point Fp) := hLoOut
-    -- `hCompAccEq`'s eval'd complete input components (recovered through `h_gen_hComp_0`; each touches
-    -- only a SINGLE child `.output`, shallow) — while its LHS complete output stays over the shallow
-    -- `x_gen_hComp_0`, so `complete_output_eq` reduces it without exploding. `hCompAccV` is kept in its
-    -- `.acc` (unreduced) form: the final-add block consumes it there, directly against its own chunk.
-    have hxgBase : (eval env x_gen_hComp_0).base = ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← h_gen_hComp_0, compInputs_eval_eq]; exact hbaseEval
-    have hxgAcc : ({ x := (eval env x_gen_hComp_0).xA, y := (eval env x_gen_hComp_0).yA } : Point Fp)
-        = accScalar (accScalar 2 bitsHi 125) bitsLo 126
-          • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← h_gen_hComp_0, compInputs_eval_eq]
-      simp only [incomplete_call_output, eval_of]
-      exact hLoOutRec
-    rw [hxgBase] at hCompAccEq
-    rw [complete_output_eq, completeOutput_acc] at hCompAccEq hCompAccV
-    rw [hxgAcc, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
+    -- `hCompAccEq : output.acc = accPoint input.base ⟨input.xA,input.yA⟩ bitsC 3`, over the comp
+    -- output/input. Recover the concrete comp output (`← h_gen_out_3`) for `complete_output_eq`;
+    -- reduce the comp input eval (`compInputs_eval_eq`) — its base is `input.base` (→ `hbaseEval`),
+    -- its entering acc is the lo output `x_gen_out_2` (→ `hLoOutRec` via `← h_gen_out_2`).
+    rw [← h_gen_out_3, complete_output_eq, completeOutput_acc] at hCompAccEq hCompAccV
+    rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq] at hCompAccEq
+    simp only [eval_of] at hCompAccEq
+    rw [hbaseEval, hLoOutRec, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
     -- align with the final add's normal form (component-decomposed, z-field reduced)
     simp only [Point.eval_eq] at hCompAccEq
-    -- ── the complete-phase z-chain, continued from the lo chain ──
+    -- ── the complete-phase z-chain, continued from the lo chain (lo output, via `← h_gen_out_2`) ──
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_2, incomplete_output_eq,
       incompleteOutput_zs_getElem env _ _ _ 125 (by omega)] at hLoZ125
     simp only [Vector.getElem_ofFn, eval_of] at hLoZ125
     have hCompZ0 := hCompChain ⟨0, by omega⟩
@@ -1125,16 +1147,16 @@ def mul :
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
       (by
-        rw [← h_gen_hComp_0, compInputs_eval_eq]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of]
+        rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+        simp only [Vector.getElem_ofFn, eval_of]
         exact hLoZ125)
       hCompZ0
       (fun b => by
         have h := hCompChain ⟨b.val + 1, by omega⟩
         simpa using h)
-    -- z₁ (= comp zs[2]) as a chainNat cast on its advice read
+    -- z₁ (= comp zs[2]) as a chainNat cast on its advice read (comp output, via `← h_gen_out_3`)
     have hz1cast := hCompCells 2 (by omega)
-    rw [complete_output_eq,
+    rw [← h_gen_out_3, complete_output_eq,
       completeOutput_zs_getElem env _ _ 2 (by omega)] at hz1cast
     simp only [Vector.getElem_ofFn, eval_of] at hz1cast
     -- ── the LSB gate: constraint-forced bit and correction point ──
@@ -1188,9 +1210,9 @@ def mul :
         chainNat_offset (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3]
       norm_num
       omega
-    -- k₂₅₄ (the hi z-cell 0) as the top bit
+    -- k₂₅₄ (the hi z-cell 0) as the top bit (hi output, via `← h_gen_out_1`)
     have hK254v := hHiCells 0 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_1, incomplete_output_eq,
       incompleteOutput_zs_getElem env _ _ _ 0 (by omega)] at hK254v
     simp only [Vector.getElem_ofFn, eval_of] at hK254v
     rw [show ((chainNat 0 bitsHi 1 : ℕ) : Fp) = (if bitsHi 0 then 1 else 0) from by
@@ -1266,13 +1288,12 @@ def mul :
             : Point Fp)
           = -({ x := input_base_x, y := input_base_y } : Point Fp) := by
         rw [hcx, hcy]; rfl
-      -- `subcircuit_rw` also abstracted the final add's input `⟨corr, comp.acc⟩` (it carries the deep
-      -- complete output `comp.acc`) to `x_gen_hFin_0`; `← h_gen_hFin_0` recovers it, and
-      -- `rw [h_gen_hComp_0]` aligns `comp.acc`'s complete input with the (shallow) `x_gen_hComp_0`
-      -- established above, so the `complete_call_output_eq` reduction and `hCompAccV`/`hCompAccEq`
-      -- (both over `x_gen_hComp_0`) land without forcing the deep composed output.
+      -- `abstract_outputs` replaced the final add's `q` summand (`comp.acc`) by `x_gen_out_3.acc`
+      -- (the complete output local); recover the concrete complete output (`← h_gen_out_3`) to reduce
+      -- it to `.acc`, landing on `hCompAccV`/`hCompAccEq`. The final add's own output is NOT abstracted
+      -- (it flows to `h_output`), so it stays concrete.
       obtain ⟨hResV, hResEq⟩ := hFin trivial (by
-        rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq]
+        rw [addInputs_eval_eq]
         constructor
         · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
           rw [Point.eval_eq]
@@ -1280,11 +1301,12 @@ def mul :
           rw [hcorr]
           exact Orchard.Point.valid_neg hbaseV
         · show Point.Valid (eval env _)
-          simp only [complete_call_output_eq]
+          rw [← h_gen_out_3]
+          simp only [complete_output_eq]
           exact hCompAccV)
-      rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq] at hResEq
+      rw [addInputs_eval_eq, ← h_gen_out_3] at hResEq
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq] at hResEq
+        complete_output_eq, ← h_gen_out_2, incomplete_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
         point_neg_add_nsmul hOnC hM3pos] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 0
@@ -1311,9 +1333,9 @@ def mul :
             : Point Fp)
           = (0 : Point Fp) := by
         rw [hcx, hcy]; rfl
-      -- same final-add input recovery as the `k₀ = 0` branch (`← h_gen_hFin_0` + `h_gen_hComp_0`).
+      -- same final-add recovery as the `k₀ = 0` branch (`← h_gen_out_3` on the `comp.acc` summand).
       obtain ⟨hResV, hResEq⟩ := hFin trivial (by
-        rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq]
+        rw [addInputs_eval_eq]
         constructor
         · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
           rw [Point.eval_eq]
@@ -1321,11 +1343,12 @@ def mul :
           rw [hcorr]
           exact Orchard.Point.valid_zero
         · show Point.Valid (eval env _)
-          simp only [complete_call_output_eq]
+          rw [← h_gen_out_3]
+          simp only [complete_output_eq]
           exact hCompAccV)
-      rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq] at hResEq
+      rw [addInputs_eval_eq, ← h_gen_out_3] at hResEq
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq] at hResEq
+        complete_output_eq, ← h_gen_out_2, incomplete_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
         point_zero_add (Orchard.Point.valid_nsmul hbaseV _)] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 1
@@ -1377,12 +1400,17 @@ def mul :
       RegionOperations.constraints_cons, RegionOperations.constraints_nil,
       RegionOperation.constraints_assignAdvice, RegionOperation.constraints_constrainConstant,
       RegionOperation.constraints_constrainEqual, and_true, true_and]
+    -- ▸▸ make every child output opaque before the engine runs: the chained chunk inputs (hi's
+    --    entering [2]base, lo's/comp's entering accumulators) all speak `x_gen_out_j` locals
+    --    (0=init, 1=hi, 2=lo, 3=comp), with `h_gen_out_j : <output> = x_gen_out_j`. The engine then
+    --    EMITS `h_spec_j` over those locals (Stage-1 cooperation), so no concrete composed output
+    --    is re-materialized — the deep goal is shallow by construction. ◂◂
+    abstract_outputs
     -- Engine completeness mode: strengthen the whole main-region goal to the AND of the six
     -- children's `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
     -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow).
     -- Mul's value bookkeeping (chains feeding BOTH child preconditions and the parent LSB gate)
-    -- is threaded through the single strengthened goal. Finding #1 (`env.toEnvironment` spelling)
-    -- means the old `hPl` record-normalization workaround is no longer needed.
+    -- is threaded through the single strengthened goal; `h_spec_j`'s outputs land on `x_gen_out_j`.
     subcircuit_rw
     -- ── the base point: cells and value, both eval views ──
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hOnC0
@@ -1428,13 +1456,21 @@ def mul :
     simp only [add_spec_eq] at hSpecInit
     rw [addInputs_eval_eq, hbaseEvalV] at hSpecInit
     obtain ⟨-, hAccEq⟩ := hSpecInit
-    have hAcc2 : eval env.toEnvironment (Add.add.output cfg.addConfig offInit
-          ⟨{ x := input_var_base_x, y := input_var_base_y },
-            { x := input_var_base_x, y := input_var_base_y }⟩ i₀)
+    -- init output on the local (verifier view). `hAccEq : eval env.toEnvironment x_gen_out_0 = …`
+    -- (the engine emitted `h_spec_0` over `x_gen_out_0`); recover the concrete init output and
+    -- reduce it to the add's output cells (env reads), as before.
+    have hAcc2 : eval env.toEnvironment x_gen_out_0
         = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
       rw [← point_two_nsmul hOnC]; exact hAccEq
-    rw [add_output_eq, Point.eval_eq, eval_of, eval_of] at hAcc2
+    rw [← h_gen_out_0, add_output_eq, Point.eval_eq, eval_of, eval_of] at hAcc2
     simp only [Placed.toEnvironment_env, Placed.toEnvironment_place] at hAcc2
+    -- prover view: the same output cells, prover env reads (which agree with verifier reads on
+    -- advice — `env.env.advice ≡ env.env.toEnvironment.advice`)
+    have hAcc2P : eval env x_gen_out_0
+        = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
+      rw [← point_two_nsmul hOnC, ← h_gen_out_0, add_output_eq, Point.eval_eq_prover,
+        eval_of_prover, eval_of_prover]
+      rw [← point_two_nsmul hOnC] at hAcc2; exact hAcc2
     -- ── hi half: constraints + honest RoundInvariant (over `bits`) ──
     have hHiPS := (h_spec_1 trivial
       (by
@@ -1450,10 +1486,11 @@ def mul :
         · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
             : Point (AssignedCell Fp))).OnCurve
           rw [hbaseEvalP]; exact hOnC
-        · show Point.ofCoords (eval env _, eval env _) = _
-          simp only [add_call_output, eval_of_prover]
-          rw [hbaseEvalP]
-          exact hAcc2)).2
+        · -- hi's entering accumulator = init output `x_gen_out_0` (a Point) = [2]base
+          show Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) = _
+          rw [show (Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) : Point Fp)
+                = eval env x_gen_out_0 from (point_var_eval_eq_prover env x_gen_out_0).symm, hbaseEvalP]
+          exact hAcc2P)).2
     simp only [hi_proverSpec_eq, MulIncomplete.RoundInvariant] at hHiPS
     rw [hiInputs_alpha_prover, halphap, hW0] at hHiPS
     obtain ⟨⟨hHiZ0, hHiZstep⟩, hHiAccCl⟩ := hHiPS
@@ -1464,25 +1501,29 @@ def mul :
         simp only [output_assignAdvice, eval_of_prover, Nat.cast_zero]
         exact hWZi)
       hHiZ0 hHiZstep
-    -- the honest hi accumulator: [accScalar 2 bits 125] • base
+    -- the honest hi accumulator: [accScalar 2 bits 125] • base. Entering acc = init output
+    -- `x_gen_out_0` (a Point); its coords collapse to the whole local via `point_var_eval_eq_prover`,
+    -- landing on `hAcc2P`. The hi output is `x_gen_out_1`; recover the concrete hi output to reduce
+    -- its `.xA`/`.yA` fields to cells.
     have hHiOut := hHiAccCl 2
       (by
         rw [hiInputs_eval_eq_prover]
-        simp only [add_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hAcc2)
+        show Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) = _
+        rw [show (Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) : Point Fp)
+              = eval env x_gen_out_0 from (point_var_eval_eq_prover env x_gen_out_0).symm, hbaseEvalP]
+        exact hAcc2P)
       (le_refl 2) (by norm_num)
-    rw [incomplete_output_eq, incompleteOutput_xA_prover, incompleteOutput_yA_prover,
-      hiInputs_eval_eq_prover] at hHiOut
+    rw [← h_gen_out_1, incomplete_output_eq, incompleteOutput_xA_prover,
+      incompleteOutput_yA_prover, hiInputs_eval_eq_prover] at hHiOut
     simp only [eval_of_prover] at hHiOut
     rw [hbaseEvalP] at hHiOut
-    -- the honest hi z-cells 0 and 124
+    -- the honest hi z-cells 0 and 124 (over the hi output local; recover concrete)
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_1, incomplete_output_eq,
       incompleteOutput_zs_getElem_prover env _ _ _ 124 (by omega)] at hHiZ124
     simp only [Vector.getElem_ofFn, eval_of_prover] at hHiZ124
     have hHiZtop := hHiCells 0 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_1, incomplete_output_eq,
       incompleteOutput_zs_getElem_prover env _ _ _ 0 (by omega)] at hHiZtop
     simp only [Vector.getElem_ofFn, eval_of_prover] at hHiZtop
     -- ── lo half ──
@@ -1501,34 +1542,38 @@ def mul :
         · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
             : Point (AssignedCell Fp))).OnCurve
           rw [hbaseEvalP]; exact hOnC
-        · show Point.ofCoords (eval env _, eval env _) = _
-          simp only [incomplete_call_output, eval_of_prover]
-          rw [hbaseEvalP]
-          exact hHiOut)).2
+        · -- lo's entering accumulator = hi output `x_gen_out_1`; recover concrete, reduce `.xA`/`.yA`
+          show Point.ofCoords (eval env x_gen_out_1.xA, eval env x_gen_out_1.yA) = _
+          rw [← h_gen_out_1, incomplete_output_eq]
+          simp only [eval_of_prover]
+          rw [hbaseEvalP]; exact hHiOut)).2
     simp only [lo_proverSpec_eq, MulIncomplete.RoundInvariant] at hLoPS
     rw [hiInputs_alpha_prover, halphap, hW125] at hLoPS
     obtain ⟨⟨hLoZ0, hLoZstep⟩, hLoAccCl⟩ := hLoPS
-    -- the honest lo chain, continued from the hi chain
+    -- the honest lo chain, continued from the hi chain (hi z-cell 124, via `← h_gen_out_1`)
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
       (by
         rw [hiInputs_eval_eq_prover]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of_prover]
+        show eval env x_gen_out_1.zs[124] = _
+        rw [← h_gen_out_1, incomplete_output_eq]
+        simp only [Vector.getElem_ofFn, eval_of_prover]
         exact hHiZ124)
       hLoZ0 hLoZstep
-    -- the honest lo accumulator
+    -- the honest lo accumulator (lo output is `x_gen_out_2`)
     have hLoOut := hLoAccCl (accScalar 2 bits 125)
       (by
         rw [hiInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hHiOut)
+        show Point.ofCoords (eval env x_gen_out_1.xA, eval env x_gen_out_1.yA) = _
+        rw [← h_gen_out_1, incomplete_output_eq]
+        simp only [eval_of_prover]
+        rw [hbaseEvalP]; exact hHiOut)
       hmB.1 hmB.2.1
-    rw [incomplete_output_eq, incompleteOutput_xA_prover, incompleteOutput_yA_prover,
-      hiInputs_eval_eq_prover] at hLoOut
+    rw [← h_gen_out_2, incomplete_output_eq, incompleteOutput_xA_prover,
+      incompleteOutput_yA_prover, hiInputs_eval_eq_prover] at hLoOut
     simp only [eval_of_prover] at hLoOut
     rw [hbaseEvalP] at hLoOut
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [incomplete_output_eq,
+    rw [← h_gen_out_2, incomplete_output_eq,
       incompleteOutput_zs_getElem_prover env _ _ _ 125 (by omega)] at hLoZ125
     simp only [Vector.getElem_ofFn, eval_of_prover] at hLoZ125
     -- ── complete rounds ──
@@ -1541,18 +1586,19 @@ def mul :
           ((env.place i₀ + (offLo + 1 + (125 + 1)) : ℕ) : ℤ))) := by
       rw [hLoOut]
       exact Orchard.Point.valid_nsmul hbaseV _
+    -- comp's entering accumulator = lo output `x_gen_out_2`; recover concrete (`← h_gen_out_2`) to
+    -- reduce its `.xA`/`.yA` to the lo output cells (matching `hLoOutV`).
     have hCompBoth := h_spec_3 trivial
       (by
         simp only [comp_assumptions_eq]
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
+        rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+        simp only [eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
         rw [hbaseEvalV]
         exact ⟨hLoOutV, hbaseV⟩)
       (by
         simp only [comp_proverAssumptions_eq]
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
+        rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
+        simp only [eval_of_prover]
         rw [hbaseEvalP]
         exact ⟨hLoOutV, hbaseV⟩)
     have hCompPS := hCompBoth.2
@@ -1562,29 +1608,30 @@ def mul :
     -- the honest complete-phase accumulator validity
     obtain ⟨hCompAccV, -⟩ := hCompAccCl
       (by
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, eval_of_prover]
+        rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
+        simp only [eval_of_prover]
         exact hLoOutV)
       (by
         rw [compInputs_eval_eq_prover]
         show Point.Valid (eval env ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp)))
         rw [hbaseEvalP]; exact hbaseV)
-    -- the honest complete-phase z-chain
+    -- the honest complete-phase z-chain (lo z-cell 125 entering, via `← h_gen_out_2`)
     have hCompZ0 := hCompChain ⟨0, by omega⟩
     simp only [if_pos] at hCompZ0
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bits 125) (fun i => bits (125 + i)) 126) (fun i => bits (251 + i))
       (by
-        rw [compInputs_eval_eq_prover]
-        simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of_prover]
+        rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
+        simp only [Vector.getElem_ofFn, eval_of_prover]
         exact hLoZ125)
       hCompZ0
       (fun b => by
         have h := hCompChain ⟨b.val + 1, by omega⟩
         simpa using h)
+    -- comp output is `x_gen_out_3`; recover concrete to reduce its `.zs[2]`
     have hz1cast := hCompCells 2 (by omega)
-    rw [complete_output_eq,
+    rw [← h_gen_out_3, complete_output_eq,
       completeOutput_zs_getElem_prover env _ _ 2 (by omega)] at hz1cast
     simp only [Vector.getElem_ofFn, eval_of_prover] at hz1cast
     -- ── the honest chain values, `kBits`-driven ──
@@ -1593,11 +1640,13 @@ def mul :
     rw [hck.1] at hHiZtop
     rw [hck.2.1] at hHiZ124
     rw [hck.2.2] at hz1cast
-    -- ── the honest z₀ value: 2·z₁ + k₀ reconstructs k ──
+    -- ── the honest z₀ value: 2·z₁ + k₀ reconstructs k. The witness's z₁ read is comp's zs[2],
+    --    abstracted to `x_gen_out_3.zs[2]`; recover the concrete comp output (`← h_gen_out_3`). ──
+    simp only [← h_gen_out_3] at hWZ0
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
       Witgen.WitgenIROver.eval, readCell,
-      complete_call_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
+      complete_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
     -- the LSB bit landing: rewrite the closure's scalar-cell read to `input_alpha`, then the
     -- derived bit to `bits 254`
     have haevalv : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha
@@ -1653,16 +1702,15 @@ def mul :
     obtain ⟨-, hCompAccClv⟩ := hCompRIv
     obtain ⟨hCompAccVv, -⟩ := hCompAccClv
       (by
-        rw [compInputs_eval_eq]
-        simp only [incomplete_call_output, eval_of]
-        simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
+        rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+        simp only [eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
         exact hLoOutV)
       (by
         rw [compInputs_eval_eq]
         show Point.Valid (eval env.toEnvironment ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp)))
         rw [hbaseEvalV]; exact hbaseV)
-    rw [complete_output_eq, completeOutput_acc] at hCompAccVv
+    rw [← h_gen_out_3, complete_output_eq, completeOutput_acc] at hCompAccVv
     -- ── assemble the strengthened goal: per-child `EnvA ∧ A ∧ PA` triples for the six chunks
     -- (init/hi/lo/comp/fin/overflow) + the parent's own constraints (z_init, the two base
     -- copies, the LSB gate) ──
@@ -1694,10 +1742,11 @@ def mul :
       · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp))).OnCurve
         rw [hbaseEvalP]; exact hOnC
-      · show Point.ofCoords (eval env _, eval env _) = _
-        simp only [add_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hAcc2
+      · -- init output entering: collapse `x_gen_out_0` coords to the whole local, land on `hAcc2P`
+        show Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) = _
+        rw [show (Point.ofCoords (eval env x_gen_out_0.x, eval env x_gen_out_0.y) : Point Fp)
+              = eval env x_gen_out_0 from (point_var_eval_eq_prover env x_gen_out_0).symm, hbaseEvalP]
+        exact hAcc2P
     · -- lo EnvAssumptions (trivial)
       exact trivial
     · -- lo Assumptions
@@ -1713,23 +1762,23 @@ def mul :
       · show (eval env ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp))).OnCurve
         rw [hbaseEvalP]; exact hOnC
-      · show Point.ofCoords (eval env _, eval env _) = _
-        simp only [incomplete_call_output, eval_of_prover]
-        rw [hbaseEvalP]
-        exact hHiOut
+      · -- hi output entering: recover concrete (`← h_gen_out_1`), reduce `.xA`/`.yA`, land on `hHiOut`
+        show Point.ofCoords (eval env x_gen_out_1.xA, eval env x_gen_out_1.yA) = _
+        rw [← h_gen_out_1, incomplete_output_eq]
+        simp only [eval_of_prover]
+        rw [hbaseEvalP]; exact hHiOut
     · -- comp EnvAssumptions (trivial)
       exact trivial
-    · -- comp Assumptions
+    · -- comp Assumptions (lo output entering, via `← h_gen_out_2`)
       simp only [comp_assumptions_eq]
-      rw [compInputs_eval_eq]
-      simp only [incomplete_call_output, eval_of]
-      simp only [Placed.toEnvironment_env, Placed.toEnvironment_place]
+      rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
+      simp only [eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
       rw [hbaseEvalV]
       exact ⟨hLoOutV, hbaseV⟩
-    · -- comp ProverAssumptions
+    · -- comp ProverAssumptions (lo output entering, via `← h_gen_out_2`)
       simp only [comp_proverAssumptions_eq]
-      rw [compInputs_eval_eq_prover]
-      simp only [incomplete_call_output, eval_of_prover]
+      rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
+      simp only [eval_of_prover]
       rw [hbaseEvalP]
       exact ⟨hLoOutV, hbaseV⟩
     · -- base_x copy equality
@@ -1787,8 +1836,10 @@ def mul :
           exact Orchard.Point.valid_neg hbaseV
         · simp only [if_true]
           exact Orchard.Point.valid_zero
-      · show Point.Valid (eval env.toEnvironment _)
-        simp only [complete_call_output_eq]
+      · -- comp acc validity: recover the concrete comp output (`← h_gen_out_3`), land on `hCompAccVv`
+        show Point.Valid (eval env.toEnvironment _)
+        rw [← h_gen_out_3]
+        simp only [complete_output_eq]
         exact hCompAccVv
     · -- final add ProverAssumptions (trivial)
       exact trivial

@@ -516,9 +516,96 @@ def placedEnv? (place env : Expr) : Option Expr := do
   let v ← envProj env
   if p == v then some p else none
 
+/-! ### Abstract-output cooperation (the `abstract_outputs` contract)
+
+`abstract_outputs`, run BEFORE the engine, replaces every child output by an opaque local `x`,
+leaving an equation `h_gen_out_i : <child output> = x` in context (the canonical output form
+`FormalRegionCircuit.output …`/`FormalCircuit.output …`). The engine must not undo that work:
+when it emits a statement mentioning a child's own output (the soundness consequence's `Spec`, the
+completeness derived statement's `Spec ∧ ProverSpec`), it emits **over the local** rather than
+re-materializing the concrete output term.
+
+`findOutputLocal?` looks up such an equation for a given (canonical) output; `abstractOutputsIn`
+rewrites a `(ty, proof)` pair so every canonical-output occurrence that has a local is replaced by
+it, threading the rewrite through the proof by `Eq.mpr` (soundness consequence: the conclusion is a
+`Prop`; completeness derived: likewise). The rewrite keys on the abstraction equation itself
+(`ty[out ↦ x]` via `congrArg` on a motive), so the emitted statement lands on the SAME local
+`abstract_outputs` minted — no second local, no re-emission of the concrete output. -/
+
+/-- Is `e` a canonical output-form application (`FormalRegionCircuit.output …` /
+`FormalCircuit.output …`)? Same recognizer as `AbstractOutputs.isCanonicalOutput`, duplicated here
+because `AbstractOutputs` imports this file (import direction forbids the reverse call). -/
+def isOutputApp (e : Expr) : Bool :=
+  e.isAppOf ``FormalRegionCircuit.output || e.isAppOf ``FormalCircuit.output
+
+/-- Collect every canonical output-form subterm of `e`, innermost-first, deduped. Skips subterms
+with loose bvars. Mirrors `AbstractOutputs.collectOutputs`. -/
+partial def collectOutputApps (e : Expr) : StateRefT (Array Expr) MetaM Unit := do
+  let e := e.consumeMData
+  match e with
+  | .app .. =>
+    for a in e.getAppArgs do collectOutputApps a
+    collectOutputApps e.getAppFn
+    if isOutputApp e && !e.hasLooseBVars then
+      modify fun acc => if acc.any (· == e) then acc else acc.push e
+  | .lam _ t b _ | .forallE _ t b _ => collectOutputApps t; collectOutputApps b
+  | .letE _ t v b _ => collectOutputApps t; collectOutputApps v; collectOutputApps b
+  | .proj _ _ b => collectOutputApps b
+  | .mdata _ b => collectOutputApps b
+  | _ => pure ()
+
+/-- Find an existing abstraction equation for output `e`: a hypothesis `h : lhs = x` with `x` a
+free variable and `lhs` reducibly defeq to `e`. Returns `(x, heq : e = x)`. The `abstract_outputs`
+locals (`h_gen_out_i : <output> = x_gen_out_i`) are exactly this shape. Runs in `MetaM` (reads the
+ambient local context via `getLCtx`), so the `MetaM` walkers can call it. -/
+def findOutputLocal? (e : Expr) : MetaM (Option (Expr × Expr)) := do
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    let ty ← instantiateMVars decl.type
+    match ty.eq? with
+    | some (_, lhs, rhs) =>
+      if rhs.isFVar then
+        if ← withTransparency .reducible <| isDefEq lhs e then
+          let pf ← mkExpectedTypeHint (.fvar decl.fvarId) (← mkEq e rhs)
+          return some (rhs, pf)
+    | none => pure ()
+  return none
+
+/-- Rewrite a `(ty, proof)` pair (`proof : ty`, `ty : Prop`) so every canonical child-output
+occurrence that has an `abstract_outputs` local is replaced by that local. For each such output `e`
+with `heq : e = x` (`findOutputLocal?`), build the motive `M := fun z => ty[e ↦ z]` (abstracting `e`'s
+occurrences) and rewrite `ty`/`proof` by `heq` via `M x`/`heq ▸ proof`. Returns the pair unchanged
+if no output has a local. The rewrite is non-forcing (`kabstract` at `.reducible`), so a deep
+composed output never unfolds. -/
+def abstractOutputsIn (ty proof : Expr) : MetaM (Expr × Expr) := do
+  let mut occs : Array Expr := #[]
+  let (_, os) ← (collectOutputApps (← instantiateMVars ty)).run occs
+  occs := os
+  let mut ty := ty
+  let mut proof := proof
+  for e in occs do
+    match ← findOutputLocal? e with
+    | none => pure ()
+    | some (x, heq) =>
+      -- motive `M := fun z => ty[e ↦ z]`; `M e ≡ ty`, `M x = ty'`.
+      let ety ← inferType e
+      let abs ← withTransparency .reducible <| kabstract ty e
+      unless abs.hasLooseBVars do continue
+      let motive := Expr.lam `z ety abs .default
+      let ty' := abs.instantiate1 x
+      -- `proof : ty ≡ M e`; transport along `heq : e = x` to `M x = ty'`.
+      let proof' ← mkEqMPR (← mkEqSymm (← mkAppM ``congrArg #[motive, heq])) proof
+      trace[Halo2.subcircuit_rw] "engine emitted over abstract local for output"
+      ty := ty'
+      proof := proof'
+  return (ty, proof)
+
 /-- Soundness-side leaf: for a matched chunk, produce `(replacementProp, proof : chunk → repl)`.
 Instantiates `region_soundness_leaf`/`layouter_soundness_leaf`, confirms its hypothesis is
-defeq to the matched chunk, and returns its conclusion as the replacement. -/
+defeq to the matched chunk, and returns its conclusion as the replacement. When `abstract_outputs`
+has already minted a local for the child's output, the conclusion is emitted over that local (via
+`abstractOutputsIn` on the leaf's `chunk → concl` implication, whose codomain mentions the
+output). -/
 def soundnessLeaf? (c : ChunkMatch) (chunk : Expr) : MetaM (Option (Expr × Expr)) := do
   let leafName := if c.isRegion then ``region_soundness_leaf else ``layouter_soundness_leaf
   let leaf ← mkLeaf c leafName c.env #[]
@@ -528,7 +615,11 @@ def soundnessLeaf? (c : ChunkMatch) (chunk : Expr) : MetaM (Option (Expr × Expr
   unless ← withTransparency .default <| isDefEq hyp chunk do
     trace[Halo2.subcircuit_rw] "soundness leaf hyp not defeq to chunk"
     return none
-  return some (concl, ← instantiateMVars leaf)
+  -- emit the consequence over any abstract-output local `abstract_outputs` already minted
+  let (_, leaf') ← abstractOutputsIn leafTy (← instantiateMVars leaf)
+  let leafTy' ← inferType leaf'
+  let some (_, concl') := (← instantiateMVars leafTy').arrow? | return some (concl, ← instantiateMVars leaf)
+  return some (concl', leaf')
 
 /-! ### The polarity walker (soundness mode)
 
@@ -761,7 +852,12 @@ def derivedStatement (c : ChunkMatch) (witProof witTy : Expr) : MetaM (Option (E
         pure (some (← mkLeaf c leafName penv #[witProof]))
   let some leaf := leaf? | return none
   let leafTy ← inferType leaf
-  return some (← instantiateMVars leafTy, ← instantiateMVars leaf)
+  -- emit the derived statement (its `Spec ∧ ProverSpec` mentions the child output under `eval`)
+  -- over any abstract-output local `abstract_outputs` already minted, instead of the concrete
+  -- output term — so the honest bookkeeping downstream sees `x_gen_out_i`, not a re-materialized
+  -- composed `.output`.
+  let (leafTy', leaf') ← abstractOutputsIn (← instantiateMVars leafTy) (← instantiateMVars leaf)
+  return some (leafTy', leaf')
 
 /-! ### The completeness walker
 
@@ -881,152 +977,35 @@ where
   identProof (p : Expr) : MetaM Expr := do
     withLocalDeclD `h p fun h => mkLambdaFVars #[h] h
 
-/-! ### Deep-argument generalization (the soundness-side depth fix)
+/-! ### Soundness/completeness runners
 
-Some chunk `input` arguments chain a prior child's composed output — Mul's complete chunk carries
-`lo.zs[125]` (the whole hi→lo running-sum term) inside its input record. Left inline, everything the
-engine emits from that chunk in soundness mode (the weakened hypothesis, and every fact `obtain`ed
-from it) carries the term, so downstream `rw`/`simp` re-reduce the composed `.output` and the
-consumer must raise `maxRecDepth`.
+The engine's former soundness-side deep-argument machinery (`boundedDepth`/`generalizeThreshold`/
+`inputIsDeep`/`collectDeepInputs`/`abstractInExpr`) is retired: `abstract_outputs` (run before the
+engine) makes every child output an opaque local, so a chunk input that used to embed a composed
+child `.output` is shallow by construction — soundness no longer needs any input abstraction.
 
-In **soundness** mode the rewritten hypothesis `h` is, at entry, the folded call chunk
-`Constraints … ((child.call cfg off input).operations self)` — `input` is a shallow syntactic
-argument here (the composed `.output`s inside it are not yet forced). The engine **abstracts** each
-deep chunk `input` to a fresh local + equation `h_gen_<id> : input = x_gen_<id>` (custom
-`abstractInExpr`: `kabstract` at `.reducible` so the composed `.output` never unfolds during
-matching, and no `isTypeCorrect` re-check — the stock `generalize` would re-reduce the term and
-defeat the point). The weakened hypothesis and everything derived from it then reference the shallow
-`x_gen`; the consumer connects it back with `rw [← h_gen_<id>]` at the value-bookkeeping sites. Names
-are made unique per abstraction so multiple generalized chunks in one proof don't shadow. A depth
-threshold leaves shallow inputs (the small-gadget common case, and Mul's own shallow init/hi/lo
-chunks) inline. -/
+`recDepthFloor` survives, gating **completeness** only, because it guards a term `abstract_outputs`
+cannot reach: the completeness goal-peel unfolds the whole composed main region into the goal
+constraints, and the layouter-level overflow chunk's input carries `(mainRegion …).output` — the
+5-child composed *main-region* output, not a child subcircuit output. `abstract_outputs` abstracts
+child (`FormalCircuit`/`FormalRegionCircuit`) outputs, not the parent's own `mainRegion` output, so
+this term stays deep when the walker's leaf `isDefEq` fires on the overflow chunk. The raise is
+isolated to the engine (no consumer sets `maxRecDepth`). -/
 
-/-- Bounded structural depth: returns `min (actualDepth e) cap` (every call passes `threshold + 1`),
-so it is safe on deep terms — we only need whether a term *exceeds* the threshold. -/
-partial def boundedDepth (e : Expr) (cap : Nat) : Nat :=
-  if cap == 0 then 0
-  else match e with
-    | .app f a => 1 + max (boundedDepth f (cap - 1)) (boundedDepth a (cap - 1))
-    | .lam _ t b _ => 1 + max (boundedDepth t (cap - 1)) (boundedDepth b (cap - 1))
-    | .forallE _ t b _ => 1 + max (boundedDepth t (cap - 1)) (boundedDepth b (cap - 1))
-    | .letE _ t v b _ =>
-      1 + max (boundedDepth t (cap - 1)) (max (boundedDepth v (cap - 1)) (boundedDepth b (cap - 1)))
-    | .mdata _ b => boundedDepth b cap
-    | .proj _ _ b => 1 + boundedDepth b (cap - 1)
-    | _ => 1
-
-/-- A chunk `input` is worth abstracting when its structural depth passes this threshold. Mul's
-complete chunk chains hi→lo child outputs (depth ≈ 39) and its final add chunk carries the complete
-output (depth ≈ 44); both clear it. The init/hi/lo chunks (depth ≤ 31) and every small-gadget input
-(a record of a handful of cells, depth ≤ ~15) stay below and are left inline. -/
-def generalizeThreshold : Nat := 38
-
-/-- Whether the chunk input `e` should be abstracted (structural depth past the threshold). -/
-def inputIsDeep (e : Expr) : Bool :=
-  boundedDepth e (generalizeThreshold + 1) > generalizeThreshold
-
-/-- Collect the deep `input` terms of every call-keyed chunk in proposition `p` (dedup by structural
-`Expr` equality; op order preserved). Walks the `∧ ∨ → ∀ ∃` skeleton plus bare chunk leaves. -/
-partial def collectDeepInputs (p : Expr) : MetaM (Array Expr) := go p #[]
-where
-  push (acc : Array Expr) (e : Expr) : Array Expr :=
-    if acc.any (· == e) then acc else acc.push e
-  go (p : Expr) (acc : Array Expr) : MetaM (Array Expr) := do
-    let p := (← instantiateMVars p).consumeMData
-    let mut acc := acc
-    if let some c ← matchChunk? p then
-      let inp ← instantiateMVars c.input
-      if inputIsDeep inp then acc := push acc inp
-    match p.and? with
-    | some (a, b) => go b (← go a acc)
-    | none =>
-    match or? p with
-    | some (a, b) => go b (← go a acc)
-    | none =>
-    if p.isArrow then go p.bindingBody! (← go p.bindingDomain! acc)
-    else if p.isForall then forallBoundedTelescope p (some 1) fun _ body => go body acc
-    else if p.isAppOf ``Exists then
-      let args := p.getAppArgs
-      if args.size == 2 then lambdaBoundedTelescope args[1]! 1 fun _ body => go body acc
-      else pure acc
-    else pure acc
-
-/-- Abstract the exprs `es` in `target`, returning `(target', wrap, names)`: `target'` is
-`∀ x_gen_<id> (h_gen_<id> : e = x_gen_<id>) …, target[eᵢ := x_gen_<id>]`, `wrap : target' → target`
-instantiates each `x_gen := eᵢ`, `h_gen := rfl`, and `names` is the `h_gen` equation names (so the
-caller can report them). `uid` seeds unique names (avoids shadowing across abstractions in one proof).
-
-Custom (not `Lean.MVarId.generalize`) precisely to avoid its `isTypeCorrect` re-check, which would
-re-reduce the deep terms. Abstraction is `kabstract` at `.reducible` (the composed `.output` never
-unfolds; occurrences are syntactically identical, so matching short-circuits); `target'`'s type
-correctness holds by construction (`x_gen` shares `eᵢ`'s type). -/
-def abstractInExpr (target : Expr) (es : Array Expr) (tag : String) :
-    MetaM (Expr × (Expr → Expr) × Array Name) := do
-  let n := es.size
-  let body ← instantiateMVars target
-  let mut tys : Array Expr := #[]
-  let mut lvls : Array Level := #[]
-  for e in es do
-    let ty ← inferType e
-    tys := tys.push ty
-    lvls := lvls.push (← getLevel ty)
-  let xNames := (Array.range n).map fun i => Name.mkSimple s!"x_gen_{tag}_{i}"
-  let hNames := (Array.range n).map fun i => Name.mkSimple s!"h_gen_{tag}_{i}"
-  withLocalDeclsD (xNames.mapIdx fun i nm => (nm, fun _ => pure tys[i]!)) fun xs => do
-    let mut b := body
-    for i in [0:n] do
-      let abs ← withTransparency .reducible <| kabstract b es[i]!
-      b := abs.instantiate1 xs[i]!
-    let mut result := b
-    for i in (List.range n).reverse do
-      let eqTy ← mkEq es[i]! xs[i]!
-      result ← mkForallFVars #[xs[i]!] (Expr.forallE hNames[i]! eqTy result .default)
-    let esC := es; let tysC := tys; let lvlsC := lvls
-    let wrap := fun (f : Expr) =>
-      Id.run do
-        let mut acc := f
-        for i in [0:n] do
-          acc := mkApp acc esC[i]!
-          acc := mkApp acc (mkApp2 (.const ``Eq.refl [lvlsC[i]!]) tysC[i]! esC[i]!)
-        pure acc
-    return (result, wrap, hNames)
-
-/-- The engine's internal recursion-depth floor. Kept only for **completeness** mode, and it is the
-one *genuinely irreducible* residual raise: there the consumer's peel `simp only [mainRegion,
-circuit_norm] at ⊢` unfolds the composed region into the GOAL CONSTRAINTS *before* `subcircuit_rw`
-runs — so the whole goal (not merely a chunk input) is already deep when the walker traverses it and
-its leaf `isDefEq` fires. Input-abstraction (which fixes soundness, where the hypothesis is a single
-folded chunk with a shallow-at-entry input) cannot help here: naming the overflow chunk's
-`(mainRegion …).output` input leaves the rest of the unfolded main-region goal deep. The raise is
-isolated to the engine (no consumer sets `maxRecDepth` for it); soundness mode no longer needs it. -/
+/-- The engine's completeness-only recursion-depth floor: the overflow chunk's `(mainRegion …).output`
+input is a deep composed *parent* output that `abstract_outputs` does not abstract, so the walker's
+leaf traversal over it needs the raised limit. Soundness no longer needs any raise. -/
 def recDepthFloor : Nat := 4096
 
 /-- Soundness mode: rewrite positive call-keyed chunks in hypothesis `h` to the child's
 `EnvAssumptions → Assumptions → Spec`, then `replace h`. No-op (silent) if nothing matched.
 
-Deep chunk inputs are abstracted first (`abstractInExpr` over `h`'s type; the `h_gen` equations enter
-the context), so the weakened hypothesis and every fact derived from it stay shallow — no ambient
-`maxRecDepth` raise is needed on the soundness side. -/
+Deep chunk inputs no longer need special handling here: `abstract_outputs`, run before the engine,
+has already replaced every child output by an opaque local, so a chunk input that used to embed a
+composed `.output` is shallow by construction. When the weakened hypothesis mentions the child's own
+output, `walkPos`'s soundness leaf emits it over the existing abstract local (Stage-1 cooperation),
+so nothing derived from the hypothesis re-materializes a deep composed output. -/
 def runSoundness (fvarId : FVarId) : TacticM Unit := withMainContext do
-  let hyp ← instantiateMVars (← fvarId.getType)
-  let deep ← collectDeepInputs hyp
-  trace[Halo2.subcircuit_rw] "runSoundness: {deep.size} deep input(s)"
-  let fvarId ← if deep.isEmpty then pure fvarId else do
-    -- revert `h`, abstract the deep inputs in the resulting goal, re-intro the abstraction binders
-    -- and equations, then re-intro `h` (now referencing the shallow locals). Names carry `h`'s user
-    -- name (`h_gen_<hname>_<i>`) so multiple generalized chunks in one proof don't shadow and the
-    -- consumer can reference each equation stably.
-    let tag := (← fvarId.getUserName).toString
-    let (reverted, g) ← (← getMainGoal).revert #[fvarId] true
-    let gTy ← instantiateMVars (← g.getType)
-    let (gTy', wrap, _) ← abstractInExpr gTy deep tag
-    let m ← mkFreshExprSyntheticOpaqueMVar gTy' (tag := ← g.getTag)
-    g.assign (wrap m)
-    let (_absVars, g2) ← m.mvarId!.introNP (2 * deep.size)
-    let (reIntros, g3) ← g2.introNP reverted.size
-    replaceMainGoal [g3]
-    pure reIntros.back!
-  withMainContext do
   let hyp ← instantiateMVars (← fvarId.getType)
   match ← walkPos hyp with
   | none =>
