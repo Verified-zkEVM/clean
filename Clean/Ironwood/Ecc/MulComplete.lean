@@ -1,6 +1,7 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Halo2.Tactics.SubcircuitRw
+import Clean.Halo2.Tactics.AbstractOutputs
 import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Ecc.Mul.Complete
 import Clean.Ironwood.Ecc.Basic
@@ -389,27 +390,14 @@ theorem round_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
   -- (`circuit_norm` folds the ±1 rotations into the ℕ-sum row spelling directly)
   simp only [decomposeGate, Constraints.withSelector, circuit_norm] at hdec
   obtain ⟨hbool, hswitch⟩ := hdec
-  -- `call.output = output` (rfl bridges): thread the first add's output cells into add 2's input
-  -- and align the goal's output spelling with the Specs' (stated BEFORE destructuring, while the
-  -- input/acc spellings are simple)
-  have hout1 : (Add.add.call cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩).output self
-      = Add.add.output cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩ self := rfl
-  rw [hout1] at hSpec2 ⊢
-  rw [show (Add.add.call cfg.addConfig (offset + 2 * iter + 1)
-        ⟨acc, Add.add.output cfg.addConfig (offset + 2 * iter)
-          ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-            acc⟩ self⟩).output self
-      = Add.add.output cfg.addConfig (offset + 2 * iter + 1)
-        ⟨acc, Add.add.output cfg.addConfig (offset + 2 * iter)
-          ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-            acc⟩ self⟩ self from rfl]
   -- normalize every provable-type eval to the shared normal form (destructures input/acc/A/base
   -- into coordinates; the folded `Add.add.output` evals stay atoms)
   provable_type_simp
+  -- ▸▸ make every child-add output opaque: the goal's output, both Specs' outputs, and the FIRST
+  --    add's output threaded into the SECOND's input all become `x_gen_out_0`/`x_gen_out_1` locals
+  --    (with `h_gen_out_0`/`h_gen_out_1 : <output> = x_gen_out_i`). Replaces the hand-rolled
+  --    `hout1`/`hout2` rfl bridges + the `call.output → output` alignments. ◂◂
+  abstract_outputs
   obtain ⟨hAx, hAy⟩ := hAcc
   -- the copied base_y cell: copy constraint + input eval (now in the same normal form)
   have hzy : env.advice cfg.zComplete ((place self + (offset + 2 * iter + 1) : ℕ) : ℤ)
@@ -581,41 +569,36 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
         acc⟩ : Var Add.Inputs Fp)) := by
     simp only [add_assumptions_eq, hIn1]
     exact ⟨stepBasePoint_valid hbase (ebits env iter), hAvalid⟩
-  -- `call.output = output` (rfl bridge)
-  have hout1 : (Add.add.call cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩).output self
-      = Add.add.output cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩ self := rfl
+  -- ▸▸ make every child-add output opaque BEFORE the engine runs: the goal's output equation and
+  --    the first add's output threaded into the second add's chunk input become `x_gen_out_0`
+  --    (first) / `x_gen_out_1` (second) opaque locals, with `h_gen_out_i : <output> = x_gen_out_i`.
+  --    Replaces the hand-rolled `hout1`/`hout2` rfl bridges. The engine's `h_spec_i` still spell
+  --    their OWN outputs concretely (an independently-built spelling not defeq to the goal's — see
+  --    AbstractOutputs' report), so we bridge those to the locals via `h_gen_out_i` when threading
+  --    the honest output VALUES. ◂◂
+  abstract_outputs
   -- ▸▸ engine (completeness): strengthen the goal's two folded add chunks to their
   --    `EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from `hWc1`/`hWc2`), and introduce
-  --    the premised derived statements `h_spec_0`/`h_spec_1 : EnvA → A → PA → Spec ∧ ProverSpec`.
-  --    The whole-goal shape carries the round's honest-value bookkeeping (add 1's Spec feeds
-  --    add 2's precondition AND the round output value) in one goal context, and the strengthened
-  --    chunk conjuncts sit inside the round's own `Constraints` bundle. ◂◂
+  --    the premised derived statements `h_spec_0`/`h_spec_1 : EnvA → A → PA → Spec ∧ ProverSpec`. ◂◂
   subcircuit_rw
   -- derive add 1's Spec from `h_spec_0` (Add's `ProverSpec` is `True`, so `.1` is the Spec)
   have hSpec1 := (h_spec_0 trivial hA1 trivial).1
   simp only [add_spec_eq, hIn1] at hSpec1
-  have hIn2 : eval env.toEnvironment
-      (⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩).output self⟩ : Var Add.Inputs Fp)
-      = (⟨A, eval env.toEnvironment (Add.add.output cfg.addConfig (offset + 2 * iter)
-          ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-            acc⟩ self)⟩ : Add.Inputs Fp) := by
-    simp only [addInputs_eval_eq]
-    rw [hAcc, hout1]
-  have hA2 : Add.add.Assumptions (eval env.toEnvironment
-      (⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
-        ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-          acc⟩).output self⟩ : Var Add.Inputs Fp)) := by
+  -- the first add's output value, on the opaque local (via `h_gen_out_0` + `hSpec1.2`)
+  have hxout0 : eval env.toEnvironment x_gen_out_0
+      = stepBasePoint base (ebits env iter) + A := by rw [← h_gen_out_0]; exact hSpec1.2
+  have hIn2 : eval env.toEnvironment (⟨acc, x_gen_out_0⟩ : Var Add.Inputs Fp)
+      = (⟨A, stepBasePoint base (ebits env iter) + A⟩ : Add.Inputs Fp) := by
+    simp only [addInputs_eval_eq]; rw [hAcc, hxout0]
+  have hA2 : Add.add.Assumptions (eval env.toEnvironment (⟨acc, x_gen_out_0⟩ : Var Add.Inputs Fp)) := by
     simp only [add_assumptions_eq, hIn2]
-    exact ⟨hAvalid, hSpec1.1⟩
+    exact ⟨hAvalid, hSpec1.2 ▸ hSpec1.1⟩
   -- add 2's Spec from `h_spec_1`, its `q.Valid` threaded from the first's Spec
   have hSpec2 := (h_spec_1 trivial hA2 trivial).1
   simp only [add_spec_eq, hIn2] at hSpec2
+  -- the second add's output value, on the opaque local (via `h_gen_out_1` + `hSpec2.2`)
+  have hxout1 : eval env.toEnvironment x_gen_out_1
+      = A + (stepBasePoint base (ebits env iter) + A) := by rw [← h_gen_out_1]; exact hSpec2.2
   -- ── assemble: copy constraint, gate polys, the two strengthened chunk preconditions; output
   --    value; z value. The engine turned the chunk positions into `EnvA ∧ A ∧ PA` bundles. ──
   refine ⟨⟨hWby, ?_, ⟨trivial, hA1, trivial⟩, ⟨trivial, hA2, trivial⟩⟩, ?_, ?_⟩
@@ -631,17 +614,9 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
       rcases Bool.dichotomy (ebits env iter) with hb | hb <;> rw [hb] <;> simp
     · -- y_switch: `k = 1 ⇒ y_p = base_y`, `k = 0 ⇒ y_p = −base_y`, on the honest value
       rcases Bool.dichotomy (ebits env iter) with hb | hb <;> rw [hb] <;> simp
-  · -- output value: `acc + (U + acc) = stepPoint`
-    have hout2 : (Add.add.call cfg.addConfig (offset + 2 * iter + 1)
-          ⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
-            ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-              acc⟩).output self⟩).output self
-        = Add.add.output cfg.addConfig (offset + 2 * iter + 1)
-          ⟨acc, (Add.add.call cfg.addConfig (offset + 2 * iter)
-            ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
-              acc⟩).output self⟩ self := rfl
-    rw [hout2, hSpec2.2, hSpec1.2]
-    rfl
+  · -- output value: the goal's output is now the opaque `x_gen_out_1`
+    rw [hxout1]
+    simp [stepPoint, stepBasePoint]
   · -- z cell value: the honest running sum
     exact hWz
 
