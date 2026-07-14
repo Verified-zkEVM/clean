@@ -122,4 +122,25 @@ example (config : Unit) (self : RegionIndex) (place : RegionIndex → ℕ) (env 
   -- and RHS input) is `x_gen_out_0`, so `h_gen_out_1 : passthrough.output … x_gen_out_0 … = x_gen_out_1`.
   rfl
 
+/-! ## Guise 8: raw composed output (`Bind.bind`-bodied `RegionCircuit.output`)
+
+A parent's OWN composed do-block output — not a child bundle output, so no child `Spec` exists for
+it — in the unfolded-bind spelling (the shape Mul's overflow-chunk input carries after the
+completeness goal peel unfolds `mainRegion`). Abstracted WHOLE to one opaque local: the child calls
+inside sit under the bind-continuation lambdas (loose bvars), unreachable-but-irrelevant inside the
+local. The `show` only typechecks if the raw output was actually abstracted. A FOLDED spelling
+(`(someDef cfg inp).output i₀`) is gated out — the def name is already the abstraction. -/
+example (config : Unit) (self : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (input : Var Point Fp) :
+    eval (⟨place, env⟩ : Placed Environment Fp)
+        ((passthrough.call config 0 input >>= fun mid =>
+          passthrough.call config 0 mid).output self)
+      = eval (⟨place, env⟩ : Placed Environment Fp)
+        ((passthrough.call config 0 input >>= fun mid =>
+          passthrough.call config 0 mid).output self) := by
+  abstract_outputs
+  show eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
+      = eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
+  rfl
+
 end Halo2.Ironwood.Ecc.TestAbstractOutputs

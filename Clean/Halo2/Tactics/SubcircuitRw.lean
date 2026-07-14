@@ -732,8 +732,14 @@ the same region index, up to the prover-vs-verifier `env` (the witnesses fact li
 `ProverEnvironment`; the goal chunk over its `toEnvironment`, but the *ops* are identical). -/
 
 /-- Is `cand` a call-keyed `ExtendsWitnesses` fact whose call matches chunk `c`? Compares
-child/config/input/regionIdx (`.default` `isDefEq`); the env differs (prover vs verifier), so
-we do not compare it. Returns the located fact (`cand`) on success. -/
+child/config/(offset)/input/regionIdx, entirely at `.reducible` `isDefEq` (fail-fast): a genuine
+match is spelled identically on both sides — the goal chunk and the witness fact originate from the
+same `synthesize` unfolding, and `abstract_outputs` rewrote both sides' embedded outputs to the same
+locals — so a match never needs unfolding. A `.default` comparison would δ-unfold MISMATCHED
+candidates (e.g. `Add.add` vs `double_and_add 124 0` bundle literals, recursive loop `synthesize`
+bodies included) and was the engine's residual `maxRecDepth` consumer. A genuinely-missed witness
+surfaces as a loud "no ExtendsWitnesses fact located" skip. The env differs (prover vs verifier),
+so we do not compare it. Returns the located fact (`cand`) on success. -/
 def witnessMatches? (c : ChunkMatch) (cand : Expr) : MetaM Bool := do
   let cand ← instantiateMVars cand
   let fn := cand.getAppFn
@@ -758,12 +764,12 @@ def witnessMatches? (c : ChunkMatch) (cand : Expr) : MetaM Bool := do
   let callFn := callTerm.getAppFn
   let .const callName _ := callFn | return false
   if isRegion && callName == ``FormalRegionCircuit.call && callArgs.size == 12 then
-    withTransparency .default do
+    withTransparency .reducible do
       return (← isDefEq callArgs[8]! c.child) && (← isDefEq callArgs[9]! c.config)
         && (← isDefEq callArgs[10]! c.offset?.get!) && (← isDefEq callArgs[11]! c.input)
         && (← isDefEq regionIdxCand c.regionIdx)
   else if !isRegion && callName == ``FormalCircuit.call && callArgs.size == 11 then
-    withTransparency .default do
+    withTransparency .reducible do
       return (← isDefEq callArgs[8]! c.child) && (← isDefEq callArgs[9]! c.config)
         && (← isDefEq callArgs[10]! c.input) && (← isDefEq regionIdxCand c.regionIdx)
   else
@@ -896,9 +902,13 @@ partial def walkGoal (p : Expr) : StateRefT WalkState TacticM (Option (Expr × E
   let p := (← instantiateMVars p).consumeMData
   -- Leaf: a call-keyed chunk with a locatable witness fact.
   if let some c ← matchChunk? p then
+    trace[Halo2.subcircuit_rw] "leaf: chunk matched"
     if let some (witProof, witTy) ← findWitness? c then
+      trace[Halo2.subcircuit_rw] "leaf: witness located"
       if let some (bundle, strengthenProof) ← completenessLeaf? c p witProof witTy then
+        trace[Halo2.subcircuit_rw] "leaf: strengthening leaf built"
         if let some (dTy, dProof) ← derivedStatement c witProof witTy then
+          trace[Halo2.subcircuit_rw] "leaf: derived statement built"
           let idx := (← get).idx
           modify fun s => { s with idx := s.idx + 1 }
           let nm := Name.mkSimple s!"h_spec_{idx}"
@@ -979,23 +989,23 @@ where
 
 /-! ### Soundness/completeness runners
 
-The engine's former soundness-side deep-argument machinery (`boundedDepth`/`generalizeThreshold`/
-`inputIsDeep`/`collectDeepInputs`/`abstractInExpr`) is retired: `abstract_outputs` (run before the
-engine) makes every child output an opaque local, so a chunk input that used to embed a composed
-child `.output` is shallow by construction — soundness no longer needs any input abstraction.
+The engine's former deep-argument machinery is FULLY retired — the soundness-side depth threshold
+(`boundedDepth`/`generalizeThreshold`/`inputIsDeep`/`collectDeepInputs`/`abstractInExpr`) AND the
+completeness-side `recDepthFloor`/`withAtLeastMaxRecDepth` raise. Two mechanisms replaced it:
 
-`recDepthFloor` survives, gating **completeness** only, because it guards a term `abstract_outputs`
-cannot reach: the completeness goal-peel unfolds the whole composed main region into the goal
-constraints, and the layouter-level overflow chunk's input carries `(mainRegion …).output` — the
-5-child composed *main-region* output, not a child subcircuit output. `abstract_outputs` abstracts
-child (`FormalCircuit`/`FormalRegionCircuit`) outputs, not the parent's own `mainRegion` output, so
-this term stays deep when the walker's leaf `isDefEq` fires on the overflow chunk. The raise is
-isolated to the engine (no consumer sets `maxRecDepth`). -/
+* `abstract_outputs` (run before the engine) makes every output expression an opaque local — child
+  bundle outputs AND (guise 8) a parent's own unfolded composed region output (`(do …).output i₀`,
+  e.g. Mul's `(mainRegion …).output` feeding the overflow chunk's input) — so no deep term is left
+  in any chunk the walker or its leaf `isDefEq`s traverse;
+* `witnessMatches?` compares entirely at `.reducible`: a genuine goal-chunk/witness-fact pair is
+  spelled identically (both originate from the same `synthesize` unfolding, and abstraction rewrote
+  both sides to the same locals), so a match never needs unfolding — while a MISMATCH (e.g.
+  `Add.add` vs `double_and_add 124 0` when scanning the context) would δ-unfold both bundle
+  structure literals (including recursive loop `synthesize` bodies) at `.default` and blow the
+  recursion budget. Fail-fast means a genuinely-missed witness surfaces as a loud
+  "no ExtendsWitnesses fact located" skip, not a silent deep unfold.
 
-/-- The engine's completeness-only recursion-depth floor: the overflow chunk's `(mainRegion …).output`
-input is a deep composed *parent* output that `abstract_outputs` does not abstract, so the walker's
-leaf traversal over it needs the raised limit. Soundness no longer needs any raise. -/
-def recDepthFloor : Nat := 4096
+The engine therefore runs at the ambient recursion limit; no consumer sets `maxRecDepth`. -/
 
 /-- Soundness mode: rewrite positive call-keyed chunks in hypothesis `h` to the child's
 `EnvAssumptions → Assumptions → Spec`, then `replace h`. No-op (silent) if nothing matched.
@@ -1024,11 +1034,12 @@ For every positive goal chunk, in op order, strengthen it **in place** to its pr
 strengthening leaf), and introduce the PREMISED derived statement
 `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` up front, before handing back the single
 strengthened goal. Silent no-op if nothing matched. -/
-def runCompleteness : TacticM Unit :=
-    withAtLeastMaxRecDepth recDepthFloor <| withMainContext do
+def runCompleteness : TacticM Unit := withMainContext do
   let goalMVar ← getMainGoal
   let target ← instantiateMVars (← goalMVar.getType)
+  trace[Halo2.subcircuit_rw] "completeness: walking goal"
   let (res, st) ← (walkGoal target).run {}
+  trace[Halo2.subcircuit_rw] "completeness: walk done ({st.chunks.size} chunk(s))"
   match res with
   | none =>
     trace[Halo2.subcircuit_rw] "no strengthenable positive chunk found in goal"
@@ -1040,10 +1051,12 @@ def runCompleteness : TacticM Unit :=
     -- all `h_spec_i` (premised `EnvA → A → PA → Spec ∧ ProverSpec`) up front, then hand the
     -- single strengthened goal to the user.
     let mut g := newMVar.mvarId!
+    trace[Halo2.subcircuit_rw] "completeness: goal strengthened"
     for ch in st.chunks do
       let g' ← g.assert ch.name ch.derivedType ch.derivedProof
       let (_, g'') ← g'.intro1P
       g := g''
+      trace[Halo2.subcircuit_rw] "completeness: asserted {ch.name}"
     replaceMainGoal [g]
 
 end SubcircuitRw

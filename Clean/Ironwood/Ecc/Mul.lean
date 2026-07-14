@@ -908,10 +908,10 @@ private theorem synthesize_regionCount (cfg : Config)
 -- before `subcircuit_rw`): every child output becomes an opaque `x_gen_out_j` local, so each chained
 -- chunk input (the complete chunk's hi→lo input, the final add's complete-output input) is shallow by
 -- construction. Downstream `rw`/`simp` sees the shallow local; the concrete child output is recovered
--- via the `h_gen_out_j` equations only where a SINGLE child `.output` must be reduced. No `maxRecDepth`
--- allowance is needed in either bundle proof; the one residual raise lives inside `subcircuit_rw`'s
--- completeness runner (the overflow chunk's `(mainRegion …).output` input — a deep PARENT output that
--- `abstract_outputs` does not abstract).
+-- via the `h_gen_out_j` equations only where a SINGLE child `.output` must be reduced. The raw
+-- main-region output feeding the overflow chunk (`(mainRegion …).output`, unfolded by the goal peel)
+-- is abstracted too (guise 8, `x_gen_out_4` in completeness), so NO `maxRecDepth` allowance exists
+-- anywhere — neither in these proofs nor inside the engine.
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
 overflow check's three sibling regions after it (`mul.rs:299`). No `BitsHint` parameter: the
@@ -1066,7 +1066,6 @@ def mul :
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bitsHi 125) bitsLo
       (by
         rw [hiInputs_eval_eq]
-        show eval env x_gen_out_1.zs[124] = _
         rw [← h_gen_out_1, incomplete_output_eq]
         simp only [Vector.getElem_ofFn, eval_of]
         exact hHiZ124)
@@ -1400,11 +1399,18 @@ def mul :
       RegionOperations.constraints_cons, RegionOperations.constraints_nil,
       RegionOperation.constraints_assignAdvice, RegionOperation.constraints_constrainConstant,
       RegionOperation.constraints_constrainEqual, and_true, true_and]
-    -- ▸▸ make every child output opaque before the engine runs: the chained chunk inputs (hi's
-    --    entering [2]base, lo's/comp's entering accumulators) all speak `x_gen_out_j` locals
-    --    (0=init, 1=hi, 2=lo, 3=comp), with `h_gen_out_j : <output> = x_gen_out_j`. The engine then
-    --    EMITS `h_spec_j` over those locals (Stage-1 cooperation), so no concrete composed output
-    --    is re-materialized — the deep goal is shallow by construction. ◂◂
+    -- unify the overflow chunk's raw main-region output spelling: the goal peel above unfolded
+    -- `mainRegion` into the bind chain inside the overflow chunk's input, while `hWOv` still
+    -- carries the folded `(mainRegion …).output`. Unfold it in `hWOv` too, so `abstract_outputs`
+    -- mints ONE local (guise 8) for the raw output and the engine's witness lookup matches the two
+    -- chunk inputs on that shared local.
+    simp only [mainRegion] at hWOv
+    -- ▸▸ make every output opaque before the engine runs: the chained chunk inputs (hi's
+    --    entering [2]base, lo's/comp's entering accumulators) speak the child locals `x_gen_out_j`
+    --    (0=init, 1=hi, 2=lo, 3=comp), and the raw main-region output feeding the overflow chunk
+    --    becomes `x_gen_out_4` (guise 8) — each with `h_gen_out_j : <output> = x_gen_out_j`. The
+    --    engine then EMITS `h_spec_j` over those locals (Stage-1 cooperation) — nothing deep ever
+    --    reaches the walker, and no rec-depth raise is needed anywhere. ◂◂
     abstract_outputs
     -- Engine completeness mode: strengthen the whole main-region goal to the AND of the six
     -- children's `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
@@ -1554,7 +1560,6 @@ def mul :
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
       (by
         rw [hiInputs_eval_eq_prover]
-        show eval env x_gen_out_1.zs[124] = _
         rw [← h_gen_out_1, incomplete_output_eq]
         simp only [Vector.getElem_ofFn, eval_of_prover]
         exact hHiZ124)
@@ -1833,6 +1838,11 @@ def mul :
         rw [hCxv, hCyv]
         rcases Bool.dichotomy (bits 254) with h | h <;> rw [h]
         · simp only [Bool.false_eq_true, if_false]
+          -- land `valid_neg` via a cheap POINT-level `rfl` step: unifying at the `Valid` level
+          -- (`{x, -y}.Valid =?= (-{x,y}).Valid`) sends the unifier down the OnCurve polynomial
+          -- equations (~1.5s failing path) before it recovers
+          rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
+                = -{ x := input_base_x, y := input_base_y } from rfl]
           exact Orchard.Point.valid_neg hbaseV
         · simp only [if_true]
           exact Orchard.Point.valid_zero
@@ -1849,11 +1859,12 @@ def mul :
       rw [ov_assumptions_eq]
       constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]
     · -- overflow ProverAssumptions: the honest running-sum cells satisfy the overflow Spec.
-      -- The goal peel unfolded `mainRegion` here, so the z-cell projections are raw do-block
-      -- output projections — reduce them lazily via `circuit_norm` (outputs never force the
-      -- loop bodies), then land the cells on env reads.
+      -- The input's z-cells are projections of the raw main-region output local (`x_gen_out_4`,
+      -- guise 8); recover the concrete bind-chain output (`← h_gen_out_4`), then reduce the
+      -- projections lazily via `circuit_norm` (outputs never force the loop bodies) and land the
+      -- cells on env reads, as before.
       simp only [ov_proverAssumptions_eq]
-      rw [ovInputs_eval_eq_prover]
+      rw [ovInputs_eval_eq_prover, ← h_gen_out_4]
       simp only [circuit_norm, eval_of_prover]
       rw [incomplete_call_output]
       simp only [Vector.getElem_ofFn, AssignedCell.of_cell, Cell.of_regionIndex,

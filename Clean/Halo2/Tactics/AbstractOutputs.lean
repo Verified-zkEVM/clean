@@ -35,6 +35,7 @@ child-call output takes at the point abstraction runs, and how this tactic handl
 | 5 | `eval env <output>` whole | child `Spec` facts, goal output equation | the `<output>` subterm inside the `eval` is abstracted; the `eval` wraps the fresh local (`eval env o`) |
 | 6 | projections `output.x`/`.acc`/`.xANext`/`.zs`/`.zs[i]` | Chain/Mul threading + parent output record | the WHOLE `output` under the projection is abstracted; the projection then reads the opaque local (`o.xANext` etc.) |
 | 7 | post-`provable_type_simp` per-cell atoms `env.advice col row` | leaf gadgets, own-cell reads | **not an output** — these are the parent's own cells, never abstracted (opacity of guise 2 keeps the child output from ever decomposing into these) |
+| 8 | raw composed output `(do …).output i₀` (`Bind.bind`-bodied `RegionCircuit.output`/`Circuit.output`) | a parent's OWN region output feeding a later chunk's input (Mul: `(mainRegion …).output`'s components in the overflow input) | abstracted whole, same as a bundle output — no child `Spec`, but its value facts flow through the parent's own `h_output`/witness equations, reconnected via `← h_gen_out_i` (see `isRawComposedOutput` for the `Bind.bind` gate rationale) |
 
 Guise 7 is the ordering constraint's whole point: once a child output is an opaque local,
 `provable_type_simp` *cannot* scatter it into `env.advice` atoms (there is nothing to
@@ -98,6 +99,28 @@ namespace AbstractOutputs
 `FormalCircuit.output …`? -/
 def isCanonicalOutput (e : Expr) : Bool :=
   e.isAppOf ``FormalRegionCircuit.output || e.isAppOf ``FormalCircuit.output
+
+/-- Is `e` a **raw composed** output — `RegionCircuit.output body self` / `Circuit.output body i₀`
+with a `Bind.bind`-headed `body` (an unfolded do-block, e.g. a parent's own composed main region)?
+
+These are abstracted alongside child-bundle outputs: the opacity thesis applies uniformly to ALL
+output expressions. A raw region output has no child `Spec`, but that doesn't matter for opacity —
+its value facts flow through the parent's own `h_output`/witness/constraint equations, which the
+abstraction equation reconnects (`rw [← h_gen_out_i]`) at componentwise sites exactly like a bundle
+output.
+
+The `Bind.bind` gate is the design choice (vs abstracting all `.output` applications uniformly): a
+FOLDED def application (`(mainRegion cfg inp).output i₀`) is already opaque — the def name *is* the
+abstraction, and consumers own `rfl` projection lemmas for it — and single-op primitives
+(`(assignAdvice …).output`, cell handles) are the shallow atoms proofs consume via their `output_*`
+lemmas. Only the composed bind chain has lost its name and goes deep, so only it is abstracted.
+(Call-form child outputs share these heads but are canonicalized to bundle form before collection;
+their body is a folded `call`, never a bind.) Consumers whose witness facts still carry the FOLDED
+spelling of the same output must unfold it to the goal's bind spelling first (Mul completeness:
+`simp only [mainRegion] at hWOv`), so one local serves both sides. -/
+def isRawComposedOutput (e : Expr) : Bool :=
+  (e.isAppOfArity ``RegionCircuit.output 5 || e.isAppOfArity ``Circuit.output 5)
+    && (e.getAppArgs[3]!).isAppOf ``Bind.bind
 
 /-- If `e` is a **call-form** output `RegionCircuit.output (child.call …) self` /
 `Circuit.output (child.call …) i₀`, return the equivalent **canonical output-form** term. `none`
@@ -188,17 +211,21 @@ def canonicalizePass : TacticM Nat := withMainContext do
     if didChange then changed := changed + 1
   return changed
 
-/-! ## Collecting the outputs (canonical form only, innermost-first) -/
+/-! ## Collecting the outputs (canonical + raw-composed form, innermost-first) -/
 
-/-- Collect every canonical output-form subterm of `e`, innermost first, deduped by `Expr`
-equality. Skips subterms with loose bvars (never a closed child output). -/
+/-- Collect every canonical output-form subterm of `e` (child bundle outputs) AND every
+raw-composed output (`Bind.bind`-bodied, guise 8 — a parent's own unfolded composed region),
+innermost first, deduped by `Expr` equality. Skips subterms with loose bvars — in particular, the
+child calls inside a raw output's bind continuations sit under the continuation lambdas, so a raw
+output abstracts as ONE whole opaque local; the child outputs proofs consume appear as separate
+closed occurrences in chunk inputs and get their own locals first (innermost-first). -/
 partial def collectOutputs (e : Expr) : StateRefT (Array Expr) MetaM Unit := do
   let e := e.consumeMData
   match e with
   | .app .. =>
     for a in e.getAppArgs do collectOutputs a
     collectOutputs e.getAppFn
-    if isCanonicalOutput e && !e.hasLooseBVars then
+    if (isCanonicalOutput e || isRawComposedOutput e) && !e.hasLooseBVars then
       modify fun acc => if acc.any (· == e) then acc else acc.push e
   | .lam _ t b _ | .forallE _ t b _ => collectOutputs t; collectOutputs b
   | .letE _ t v b _ => collectOutputs t; collectOutputs v; collectOutputs b
@@ -275,6 +302,7 @@ def abstractOutputsInExpr (target : Expr) (es : Array Expr) :
       eqLHS := eqLHS.push ei
       -- abstract `ei` in the body
       let abs ← withTransparency .reducible <| kabstract b ei
+      trace[Halo2.abstract_outputs] "kabstract target {i}: matched={abs.hasLooseBVars}"
       b := abs.instantiate1 xs[i]!
       -- thread the substitution into the remaining targets so nested outputs still match
       for j in [i+1:n] do
