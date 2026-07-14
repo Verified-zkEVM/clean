@@ -624,30 +624,30 @@ private theorem mainRegion_output_z0 (cfg : Config) (input : Var Inputs Fp)
     ((mainRegion cfg input).output i).2.1
       = AssignedCell.of i (offLsb + 1) cfg.completeConfig.zComplete := rfl
 
--- `maxRecDepth` (documented allowance, term DEPTH not compute): forcing the `.2.2.*` projection
--- through the main region's composed do-block (the whole 5-child chain is one nested-bind term,
--- each bind closure carrying the previous children's inputs) exceeds the default 512 unifier
--- recursion depth. Same root cause as the pre-restructure bundle-level allowance, now scoped to
--- exactly the projection bridges that force the deep term.
-set_option maxRecDepth 4096 in
-/-- The main region's `z_130` output cell: the hi half's `zs[124]` (`z @ offHi + 1 + 124`). -/
+/-- The main region's `z_130` output cell: the hi half's `zs[124]` (`z @ offHi + 1 + 124`).
+
+Reduced LAZILY: `simp only [mainRegion, circuit_norm]` walks the composed do-block bind-by-bind
+via the `output_bind`/`output_pure` `circuit_norm` rfl-lemmas (a controlled simp rewrite, not a
+whole-term kernel defeq), landing on the `hi` child's `.output`; `incomplete_call_output` reduces
+that to the cell vector, then the `zs[124]` index. This never forces the whole nested-bind term at
+once, so no unifier-recursion-depth allowance is needed (was the old `show`-then-`simp` route's
+cost). -/
 private theorem mainRegion_output_z130 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     ((mainRegion cfg input).output i).2.2.1
       = AssignedCell.of i (offHi + 1 + 124) cfg.hiConfig.z := by
-  show (Vector.ofFn (fun j : Fin 125 => AssignedCell.of i (offHi + 1 + j.val) cfg.hiConfig.z))[124]
-    = _
+  simp only [mainRegion, circuit_norm]
+  rw [incomplete_call_output]
   simp only [Vector.getElem_ofFn]
 
-set_option maxRecDepth 4096 in
 /-- The main region's `k_254` output cell: the hi half's `zs[0]` (the top bit,
-`z @ offHi + 1 + 0`). -/
+`z @ offHi + 1 + 0`). Same lazy bind-by-bind route as `mainRegion_output_z130`. -/
 private theorem mainRegion_output_k254 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     ((mainRegion cfg input).output i).2.2.2
       = AssignedCell.of i (offHi + 1 + 0) cfg.hiConfig.z := by
-  show (Vector.ofFn (fun j : Fin 125 => AssignedCell.of i (offHi + 1 + j.val) cfg.hiConfig.z))[0]
-    = _
+  simp only [mainRegion, circuit_norm]
+  rw [incomplete_call_output]
   simp only [Vector.getElem_ofFn]
 
 /-- Eval of an `AssignedCell.of` cell (`Eval` level): the advice read at its row. -/
@@ -872,9 +872,6 @@ from the `alpha` cell (`kBitsWindow`, windows 0/125/251 for hi/lo/complete and t
 the verifier `Spec` recovers a matching sequence via the children's existential specs + the
 donor canonicity argument. -/
 
--- `maxRecDepth`: the composed chunk terms nest ~4 children deep (each carrying its inputs);
--- simp/elab traversal of these *deep* (not slow) terms exceeds the default 512 recursion
--- depth. This is a term-depth allowance, not a compute-budget override.
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
 private theorem synthesize_regionCount (cfg : Config)
@@ -892,14 +889,13 @@ private theorem synthesize_regionCount (cfg : Config)
       simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
--- `maxRecDepth` (documented allowance, term DEPTH not compute — C7): the main region's composed
--- do-block is one nested-bind term ~5 children deep, each bind closure carrying the previous
--- children's inputs; `rw`'s kabstract and eval-decomposition on terms containing it (e.g. the
--- complete-phase `acc` output, `complete_output_eq`/`completeOutput_acc` sites) exceed the
--- default 512 recursion depth. This is intrinsic to the composed TERM depth, not to the engine
--- or a simp traversal: `subcircuit_rw`'s own matching is depth-safe, but the value bookkeeping
--- still touches the deep term at output-projection sites.
-set_option maxRecDepth 4096 in
+-- Depth note (no rec-depth allowance needed): the main region's composed do-block is one
+-- nested-bind term ~5 children deep, and its `.output` reduction is what used to explode the
+-- default-512 unifier at the complete-phase/final-add value-bookkeeping sites. `subcircuit_rw` now
+-- abstracts those chained chunk inputs (the complete chunk's hi→lo input, the final add's input
+-- carrying the complete output) to shallow `x_gen_*` locals before rewriting, so every downstream
+-- `rw`/`simp` sees the shallow local and the deep term is recovered (via the `h_gen_*` equations)
+-- only where a single child `.output` is forced — never the whole composed chain at once.
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
 overflow check's three sibling regions after it (`mul.rs:299`). No `BitsHint` parameter: the
@@ -1070,8 +1066,14 @@ def mul :
           ((env.place i₀ + (offLo + 1 + (125 + 1)) : ℕ) : ℤ))) := by
       rw [hLoOut]
       exact Orchard.Point.valid_nsmul hbaseV _
+    -- `subcircuit_rw` abstracted the complete chunk's (chained hi→lo) input to a shallow local
+    -- `x_gen_hComp_0` with `h_gen_hComp_0 : <the input record> = x_gen_hComp_0`; `rw [← h_gen_hComp_0]`
+    -- recovers the concrete record for the componentwise `compInputs_eval_eq` (which stays shallow —
+    -- it never forces the embedded `lo.zs[125]`). Everything derived from `hComp` (`hCompAccEq`,
+    -- `hCompAccV`, `hCompChain`) now carries the shallow `x_gen_hComp_0`, so the downstream
+    -- `complete_output_eq` reduction of the complete output no longer explodes.
     obtain ⟨bitsC, hCompRI⟩ := hComp trivial (by
-      rw [compInputs_eval_eq]
+      rw [← h_gen_hComp_0, compInputs_eval_eq]
       simp only [incomplete_call_output, eval_of]
       rw [hbaseEval]
       exact ⟨hLoOutV, hbaseV⟩)
@@ -1080,11 +1082,11 @@ def mul :
     -- the complete-phase accumulator: valid and = [accScalar M₂ bitsC 3] • base
     obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
       (by
-        rw [compInputs_eval_eq]
+        rw [← h_gen_hComp_0, compInputs_eval_eq]
         simp only [incomplete_call_output, eval_of]
         exact hLoOutV)
       (by
-        rw [compInputs_eval_eq]
+        rw [← h_gen_hComp_0, compInputs_eval_eq]
         show Point.Valid (eval env ({ x := input_var_base_x, y := input_var_base_y }
           : Point (AssignedCell Fp)))
         rw [hbaseEval]; exact hbaseV)
@@ -1096,12 +1098,23 @@ def mul :
             ((env.place i₀ + (offLo + 1 + (125 + 1)) : ℕ) : ℤ)) : Point Fp)
         = accScalar (accScalar 2 bitsHi 125) bitsLo 126
           • ({ x := input_base_x, y := input_base_y } : Point Fp) := hLoOut
-    rw [compInputs_eval_eq] at hCompAccEq
-    simp only [incomplete_call_output, eval_of] at hCompAccEq
-    rw [hbaseEval, hLoOutRec, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
+    -- `hCompAccEq`'s eval'd complete input components (recovered through `h_gen_hComp_0`; each touches
+    -- only a SINGLE child `.output`, shallow) — while its LHS complete output stays over the shallow
+    -- `x_gen_hComp_0`, so `complete_output_eq` reduces it without exploding. `hCompAccV` is kept in its
+    -- `.acc` (unreduced) form: the final-add block consumes it there, directly against its own chunk.
+    have hxgBase : (eval env x_gen_hComp_0).base = ({ x := input_base_x, y := input_base_y } : Point Fp) := by
+      rw [← h_gen_hComp_0, compInputs_eval_eq]; exact hbaseEval
+    have hxgAcc : ({ x := (eval env x_gen_hComp_0).xA, y := (eval env x_gen_hComp_0).yA } : Point Fp)
+        = accScalar (accScalar 2 bitsHi 125) bitsLo 126
+          • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
+      rw [← h_gen_hComp_0, compInputs_eval_eq]
+      simp only [incomplete_call_output, eval_of]
+      exact hLoOutRec
+    rw [hxgBase] at hCompAccEq
     rw [complete_output_eq, completeOutput_acc] at hCompAccEq hCompAccV
+    rw [hxgAcc, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
     -- align with the final add's normal form (component-decomposed, z-field reduced)
-    simp only [Point.eval_eq, Vector.getElem_ofFn] at hCompAccEq
+    simp only [Point.eval_eq] at hCompAccEq
     -- ── the complete-phase z-chain, continued from the lo chain ──
     have hLoZ125 := hLoCells 125 (by omega)
     rw [incomplete_output_eq,
@@ -1112,7 +1125,7 @@ def mul :
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
       (by
-        rw [compInputs_eval_eq]
+        rw [← h_gen_hComp_0, compInputs_eval_eq]
         simp only [incomplete_call_output, Vector.getElem_ofFn, eval_of]
         exact hLoZ125)
       hCompZ0
@@ -1253,8 +1266,13 @@ def mul :
             : Point Fp)
           = -({ x := input_base_x, y := input_base_y } : Point Fp) := by
         rw [hcx, hcy]; rfl
+      -- `subcircuit_rw` also abstracted the final add's input `⟨corr, comp.acc⟩` (it carries the deep
+      -- complete output `comp.acc`) to `x_gen_hFin_0`; `← h_gen_hFin_0` recovers it, and
+      -- `rw [h_gen_hComp_0]` aligns `comp.acc`'s complete input with the (shallow) `x_gen_hComp_0`
+      -- established above, so the `complete_call_output_eq` reduction and `hCompAccV`/`hCompAccEq`
+      -- (both over `x_gen_hComp_0`) land without forcing the deep composed output.
       obtain ⟨hResV, hResEq⟩ := hFin trivial (by
-        rw [addInputs_eval_eq]
+        rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq]
         constructor
         · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
           rw [Point.eval_eq]
@@ -1264,9 +1282,9 @@ def mul :
         · show Point.Valid (eval env _)
           simp only [complete_call_output_eq]
           exact hCompAccV)
-      rw [addInputs_eval_eq] at hResEq
+      rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq] at hResEq
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq, incomplete_call_output, Vector.getElem_ofFn] at hResEq
+        complete_call_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
         point_neg_add_nsmul hOnC hM3pos] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 0
@@ -1293,8 +1311,9 @@ def mul :
             : Point Fp)
           = (0 : Point Fp) := by
         rw [hcx, hcy]; rfl
+      -- same final-add input recovery as the `k₀ = 0` branch (`← h_gen_hFin_0` + `h_gen_hComp_0`).
       obtain ⟨hResV, hResEq⟩ := hFin trivial (by
-        rw [addInputs_eval_eq]
+        rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq]
         constructor
         · show Point.Valid (eval env ({ x := _, y := _ } : Point (AssignedCell Fp)))
           rw [Point.eval_eq]
@@ -1304,9 +1323,9 @@ def mul :
         · show Point.Valid (eval env _)
           simp only [complete_call_output_eq]
           exact hCompAccV)
-      rw [addInputs_eval_eq] at hResEq
+      rw [← h_gen_hFin_0, h_gen_hComp_0, addInputs_eval_eq] at hResEq
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
-        complete_call_output_eq, incomplete_call_output, Vector.getElem_ofFn] at hResEq
+        complete_call_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
         point_zero_add (Orchard.Point.valid_nsmul hbaseV _)] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 1

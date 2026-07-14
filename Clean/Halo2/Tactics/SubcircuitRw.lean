@@ -881,17 +881,152 @@ where
   identProof (p : Expr) : MetaM Expr := do
     withLocalDeclD `h p fun h => mkLambdaFVars #[h] h
 
-/-- The engine's internal recursion-depth floor. Goal-mode `isDefEq` on deep composed chunks
-(the nested-bind main-region term) exceeds the ambient 512; the engine raises its own matching /
-instantiation depth so consumers don't set `maxRecDepth` for the tactic's sake (finding #2). Term-
-depth value bookkeeping in the consumer (output projections through the deep term) is a separate
-concern and keeps its own allowance where needed. -/
+/-! ### Deep-argument generalization (the soundness-side depth fix)
+
+Some chunk `input` arguments chain a prior child's composed output — Mul's complete chunk carries
+`lo.zs[125]` (the whole hi→lo running-sum term) inside its input record. Left inline, everything the
+engine emits from that chunk in soundness mode (the weakened hypothesis, and every fact `obtain`ed
+from it) carries the term, so downstream `rw`/`simp` re-reduce the composed `.output` and the
+consumer must raise `maxRecDepth`.
+
+In **soundness** mode the rewritten hypothesis `h` is, at entry, the folded call chunk
+`Constraints … ((child.call cfg off input).operations self)` — `input` is a shallow syntactic
+argument here (the composed `.output`s inside it are not yet forced). The engine **abstracts** each
+deep chunk `input` to a fresh local + equation `h_gen_<id> : input = x_gen_<id>` (custom
+`abstractInExpr`: `kabstract` at `.reducible` so the composed `.output` never unfolds during
+matching, and no `isTypeCorrect` re-check — the stock `generalize` would re-reduce the term and
+defeat the point). The weakened hypothesis and everything derived from it then reference the shallow
+`x_gen`; the consumer connects it back with `rw [← h_gen_<id>]` at the value-bookkeeping sites. Names
+are made unique per abstraction so multiple generalized chunks in one proof don't shadow. A depth
+threshold leaves shallow inputs (the small-gadget common case, and Mul's own shallow init/hi/lo
+chunks) inline. -/
+
+/-- Bounded structural depth: returns `min (actualDepth e) cap` (every call passes `threshold + 1`),
+so it is safe on deep terms — we only need whether a term *exceeds* the threshold. -/
+partial def boundedDepth (e : Expr) (cap : Nat) : Nat :=
+  if cap == 0 then 0
+  else match e with
+    | .app f a => 1 + max (boundedDepth f (cap - 1)) (boundedDepth a (cap - 1))
+    | .lam _ t b _ => 1 + max (boundedDepth t (cap - 1)) (boundedDepth b (cap - 1))
+    | .forallE _ t b _ => 1 + max (boundedDepth t (cap - 1)) (boundedDepth b (cap - 1))
+    | .letE _ t v b _ =>
+      1 + max (boundedDepth t (cap - 1)) (max (boundedDepth v (cap - 1)) (boundedDepth b (cap - 1)))
+    | .mdata _ b => boundedDepth b cap
+    | .proj _ _ b => 1 + boundedDepth b (cap - 1)
+    | _ => 1
+
+/-- A chunk `input` is worth abstracting when its structural depth passes this threshold. Mul's
+complete chunk chains hi→lo child outputs (depth ≈ 39) and its final add chunk carries the complete
+output (depth ≈ 44); both clear it. The init/hi/lo chunks (depth ≤ 31) and every small-gadget input
+(a record of a handful of cells, depth ≤ ~15) stay below and are left inline. -/
+def generalizeThreshold : Nat := 38
+
+/-- Whether the chunk input `e` should be abstracted (structural depth past the threshold). -/
+def inputIsDeep (e : Expr) : Bool :=
+  boundedDepth e (generalizeThreshold + 1) > generalizeThreshold
+
+/-- Collect the deep `input` terms of every call-keyed chunk in proposition `p` (dedup by structural
+`Expr` equality; op order preserved). Walks the `∧ ∨ → ∀ ∃` skeleton plus bare chunk leaves. -/
+partial def collectDeepInputs (p : Expr) : MetaM (Array Expr) := go p #[]
+where
+  push (acc : Array Expr) (e : Expr) : Array Expr :=
+    if acc.any (· == e) then acc else acc.push e
+  go (p : Expr) (acc : Array Expr) : MetaM (Array Expr) := do
+    let p := (← instantiateMVars p).consumeMData
+    let mut acc := acc
+    if let some c ← matchChunk? p then
+      let inp ← instantiateMVars c.input
+      if inputIsDeep inp then acc := push acc inp
+    match p.and? with
+    | some (a, b) => go b (← go a acc)
+    | none =>
+    match or? p with
+    | some (a, b) => go b (← go a acc)
+    | none =>
+    if p.isArrow then go p.bindingBody! (← go p.bindingDomain! acc)
+    else if p.isForall then forallBoundedTelescope p (some 1) fun _ body => go body acc
+    else if p.isAppOf ``Exists then
+      let args := p.getAppArgs
+      if args.size == 2 then lambdaBoundedTelescope args[1]! 1 fun _ body => go body acc
+      else pure acc
+    else pure acc
+
+/-- Abstract the exprs `es` in `target`, returning `(target', wrap, names)`: `target'` is
+`∀ x_gen_<id> (h_gen_<id> : e = x_gen_<id>) …, target[eᵢ := x_gen_<id>]`, `wrap : target' → target`
+instantiates each `x_gen := eᵢ`, `h_gen := rfl`, and `names` is the `h_gen` equation names (so the
+caller can report them). `uid` seeds unique names (avoids shadowing across abstractions in one proof).
+
+Custom (not `Lean.MVarId.generalize`) precisely to avoid its `isTypeCorrect` re-check, which would
+re-reduce the deep terms. Abstraction is `kabstract` at `.reducible` (the composed `.output` never
+unfolds; occurrences are syntactically identical, so matching short-circuits); `target'`'s type
+correctness holds by construction (`x_gen` shares `eᵢ`'s type). -/
+def abstractInExpr (target : Expr) (es : Array Expr) (tag : String) :
+    MetaM (Expr × (Expr → Expr) × Array Name) := do
+  let n := es.size
+  let body ← instantiateMVars target
+  let mut tys : Array Expr := #[]
+  let mut lvls : Array Level := #[]
+  for e in es do
+    let ty ← inferType e
+    tys := tys.push ty
+    lvls := lvls.push (← getLevel ty)
+  let xNames := (Array.range n).map fun i => Name.mkSimple s!"x_gen_{tag}_{i}"
+  let hNames := (Array.range n).map fun i => Name.mkSimple s!"h_gen_{tag}_{i}"
+  withLocalDeclsD (xNames.mapIdx fun i nm => (nm, fun _ => pure tys[i]!)) fun xs => do
+    let mut b := body
+    for i in [0:n] do
+      let abs ← withTransparency .reducible <| kabstract b es[i]!
+      b := abs.instantiate1 xs[i]!
+    let mut result := b
+    for i in (List.range n).reverse do
+      let eqTy ← mkEq es[i]! xs[i]!
+      result ← mkForallFVars #[xs[i]!] (Expr.forallE hNames[i]! eqTy result .default)
+    let esC := es; let tysC := tys; let lvlsC := lvls
+    let wrap := fun (f : Expr) =>
+      Id.run do
+        let mut acc := f
+        for i in [0:n] do
+          acc := mkApp acc esC[i]!
+          acc := mkApp acc (mkApp2 (.const ``Eq.refl [lvlsC[i]!]) tysC[i]! esC[i]!)
+        pure acc
+    return (result, wrap, hNames)
+
+/-- The engine's internal recursion-depth floor. Kept only for **completeness** mode, and it is the
+one *genuinely irreducible* residual raise: there the consumer's peel `simp only [mainRegion,
+circuit_norm] at ⊢` unfolds the composed region into the GOAL CONSTRAINTS *before* `subcircuit_rw`
+runs — so the whole goal (not merely a chunk input) is already deep when the walker traverses it and
+its leaf `isDefEq` fires. Input-abstraction (which fixes soundness, where the hypothesis is a single
+folded chunk with a shallow-at-entry input) cannot help here: naming the overflow chunk's
+`(mainRegion …).output` input leaves the rest of the unfolded main-region goal deep. The raise is
+isolated to the engine (no consumer sets `maxRecDepth` for it); soundness mode no longer needs it. -/
 def recDepthFloor : Nat := 4096
 
 /-- Soundness mode: rewrite positive call-keyed chunks in hypothesis `h` to the child's
-`EnvAssumptions → Assumptions → Spec`, then `replace h`. No-op (silent) if nothing matched. -/
-def runSoundness (fvarId : FVarId) : TacticM Unit := withAtLeastMaxRecDepth recDepthFloor <|
-    withMainContext do
+`EnvAssumptions → Assumptions → Spec`, then `replace h`. No-op (silent) if nothing matched.
+
+Deep chunk inputs are abstracted first (`abstractInExpr` over `h`'s type; the `h_gen` equations enter
+the context), so the weakened hypothesis and every fact derived from it stay shallow — no ambient
+`maxRecDepth` raise is needed on the soundness side. -/
+def runSoundness (fvarId : FVarId) : TacticM Unit := withMainContext do
+  let hyp ← instantiateMVars (← fvarId.getType)
+  let deep ← collectDeepInputs hyp
+  trace[Halo2.subcircuit_rw] "runSoundness: {deep.size} deep input(s)"
+  let fvarId ← if deep.isEmpty then pure fvarId else do
+    -- revert `h`, abstract the deep inputs in the resulting goal, re-intro the abstraction binders
+    -- and equations, then re-intro `h` (now referencing the shallow locals). Names carry `h`'s user
+    -- name (`h_gen_<hname>_<i>`) so multiple generalized chunks in one proof don't shadow and the
+    -- consumer can reference each equation stably.
+    let tag := (← fvarId.getUserName).toString
+    let (reverted, g) ← (← getMainGoal).revert #[fvarId] true
+    let gTy ← instantiateMVars (← g.getType)
+    let (gTy', wrap, _) ← abstractInExpr gTy deep tag
+    let m ← mkFreshExprSyntheticOpaqueMVar gTy' (tag := ← g.getTag)
+    g.assign (wrap m)
+    let (_absVars, g2) ← m.mvarId!.introNP (2 * deep.size)
+    let (reIntros, g3) ← g2.introNP reverted.size
+    replaceMainGoal [g3]
+    pure reIntros.back!
+  withMainContext do
   let hyp ← instantiateMVars (← fvarId.getType)
   match ← walkPos hyp with
   | none =>
