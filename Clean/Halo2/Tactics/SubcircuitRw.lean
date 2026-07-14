@@ -19,7 +19,7 @@ implication `h_old → h_new` (soundness, `at h`) or `goal_new → goal_old` (co
 from a fixed, hand-rolled congruence-lemma set (`∧ ∨ → ∀ ∃` monotonicity) with the child's
 contract at the leaves.
 
-## Two modes
+## The two directions
 
 * `subcircuit_rw at h` (**soundness**): walk `h`; every positive call-keyed chunk
   `RegionOperations.Constraints place self env ((child.call cfg off inp).operations self)`
@@ -28,13 +28,32 @@ contract at the leaves.
   soundness consequence). `replace h` with the weakened proposition.
 
 * `subcircuit_rw` (**completeness**, no location): co-processes the goal and the
-  `ExtendsWitnesses` context (maintainer decision D2 — the two can't be split). For each
-  positive goal chunk it (a) locates the matching call-keyed `ExtendsWitnesses` fact in the
-  local context (direct hypothesis or a conjunct inside one), (b) strengthens the goal chunk
-  to `EnvAssumptions ∧ Assumptions ∧ ProverAssumptions` (ExtendsWitnesses discharged from the
-  located fact via the leaf lemma), and (c) introduces the derived contract statement
-  `h_spec_<child> : EnvA → A → PA → Spec ∧ ProverSpec` (completeness then soundness — the old
+  `ExtendsWitnesses` context in a single goal (maintainer decision D2 — the two can't be split;
+  reverted to this shape 2026-07-12 after a per-chunk-subgoal redesign proved unable to carry
+  shared honest-value bookkeeping across chained/composed subcircuits — see "Decisions" in
+  `subcircuit-engine-design.md`). This is the main-Clean-faithful reduction: subcircuit
+  statements are premises available in one goal context, exactly as in main Clean. For every
+  positive-position chunk (in op order) it (a) locates the matching call-keyed
+  `ExtendsWitnesses` fact in the local context (direct hypothesis or a conjunct inside one),
+  (b) strengthens the goal chunk **in place** to `EnvAssumptions ∧ Assumptions ∧
+  ProverAssumptions` (ExtendsWitnesses discharged from the located fact via the leaf lemma), and
+  (c) introduces, up front, the **premised** derived contract statement
+  `h_spec_<i> : EnvA → A → PA → Spec ∧ ProverSpec` (completeness then soundness — the old
   `call_constraints_and_specs` composition, now internal and read-off-the-term instantiated).
+  The result is a single goal: the original goal with every positive chunk replaced by its
+  precondition bundle, plus one premised `h_spec_i` per chunk already in context.
+
+  **Dedup idiom (house style).** Both the goal's `EnvA ∧ A ∧ PA` bundle position AND each
+  `h_spec_i`'s premises need the same `EnvA`/`A`/`PA` facts — proving them twice by hand is
+  wasteful. Prove the bundle ONCE as a `have`, then feed its components to both the goal and
+  `h_spec_i`:
+  ```
+  have pre₀ : child.EnvAssumptions … ∧ child.Assumptions … ∧ child.ProverAssumptions … :=
+    ⟨…, …, …⟩
+  refine ⟨pre₀, ?_⟩          -- or however the bundle closes the strengthened goal position
+  have hspec := h_spec_0 pre₀.1 pre₀.2.1 pre₀.2.2   -- : Spec ∧ ProverSpec
+  ```
+  See `Clean/Halo2/Tests/TestSubcircuitRw.lean` (`chainedParent`) for a worked example.
 
 Negative-position chunks and non-targeted shapes are left silently untouched. `set_option
 trace.Halo2.subcircuit_rw true` traces matches/skips for development.
@@ -744,49 +763,35 @@ def derivedStatement (c : ChunkMatch) (witProof witTy : Expr) : MetaM (Option (E
   let leafTy ← inferType leaf
   return some (← instantiateMVars leafTy, ← instantiateMVars leaf)
 
-/-! ### The completeness walker (finding #3: per-chunk precondition subgoals in op order)
+/-! ### The completeness walker
 
-Mirrors `walkPos`, but goals are **discharged in op order via a have-chain**. Each positive
-call-keyed goal chunk becomes a separate PRECONDITION SUBGOAL `pre_i : EnvA ∧ A ∧ PA`
-(sequenced in walk = op order); a fresh metavar `pre_i` stands for it. The chunk position in the
-residual goal is closed by the strengthening leaf applied to `pre_i` (so the residual goal is the
-parent's own constraints only — chunk conjuncts collapse to `True`). Simultaneously the derived
-contract `h_spec_i := derived_i pre_i` — a **bare** `Spec ∧ ProverSpec` with the preconditions
-already consumed — is introduced into the context of all later subgoals and the residual goal.
+Walks the goal in positive polarity. Each positive call-keyed chunk is strengthened **in place**
+to its precondition bundle `EnvA ∧ A ∧ PA` (ExtendsWitnesses discharged from the located witness
+fact via the strengthening leaf), so the walk produces a single new goal proposition — the
+original with every positive chunk replaced by its bundle. Simultaneously, per chunk, the walker
+records the **premised** derived contract statement `h_spec_i : EnvA → A → PA → Spec ∧
+ProverSpec`; the runner asserts all of these into the context up front, before handing back the
+one strengthened goal. -/
 
-Consequence (the finding #3 fix): each precondition `EnvA ∧ A ∧ PA` is written exactly ONCE (in
-its `pre_i` subgoal), instead of once to feed a premised `h_spec_i` and once to discharge the
-strengthened goal. Chained bookkeeping (e.g. output threading) reads `h_spec_i` as a bare Spec. -/
-
-/-- A located completeness chunk: the `pre_i` metavar (its type is the `EnvA ∧ A ∧ PA` bundle),
-the name/type/proof of the bare derived statement `h_spec_i` (proof references `pre_i`). -/
+/-- A located completeness chunk: the name/type/proof of the premised derived statement
+`h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` that the runner asserts into context. -/
 structure CompChunk where
-  /-- The precondition metavar `pre_i : EnvA ∧ A ∧ PA`, surfaced as a subgoal in op order. -/
-  preMVar : MVarId
-  /-- The bundle type `EnvA ∧ A ∧ PA` (the `pre_i` subgoal's goal). -/
-  preType : Expr
   /-- The derived statement's user name `h_spec_i`. -/
   name : Name
-  /-- The derived statement's type (`Spec ∧ ProverSpec`, bare — no premises). -/
+  /-- The derived statement's type (`EnvA → A → PA → Spec ∧ ProverSpec`, premised). -/
   derivedType : Expr
-  /-- The derived statement's proof term (references `preMVar`). -/
+  /-- The derived statement's proof term. -/
   derivedProof : Expr
 
-/-- Completeness walker state: located chunks (in op order) + a running chunk index.
-`legacy` selects the pre-finding-#3 behavior (strengthen the whole goal to the AND of `EnvA ∧ A ∧
-PA` bundles + up-front PREMISED `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`), kept available
-per finding #3's "keep old behavior when the new one can't cover a pattern" clause. When `legacy`
-is set the leaf replaces the chunk with the bundle (not `True`) and records the derived statement
-in its arrow form. -/
+/-- Completeness walker state: located chunks (in op order). -/
 structure WalkState where
   chunks : Array CompChunk := #[]
   idx : Nat := 0
-  legacy : Bool := false
 
-/-- Walk goal proposition `p` in positive polarity, discharging call-keyed chunks against fresh
-precondition metavars. Returns `some (p', proof : p' → p)` or `none` (no change); in `p'` each
-chunk position is `True`. Accumulates `CompChunk`s in op order. Runs in `TacticM` (needs the
-local context to locate witness facts). -/
+/-- Walk goal proposition `p` in positive polarity, strengthening call-keyed chunks in place to
+their precondition bundle. Returns `some (p', proof : p' → p)` or `none` (no change); in `p'`
+each chunk position is its `EnvA ∧ A ∧ PA` bundle. Accumulates `CompChunk`s (the premised derived
+statements) in op order. Runs in `TacticM` (needs the local context to locate witness facts). -/
 partial def walkGoal (p : Expr) : StateRefT WalkState TacticM (Option (Expr × Expr)) := do
   -- Strip `mdata` wrappers (e.g. left by a prior `simp only … at ⊢`): the connective/chunk
   -- recognizers below all key on the bare head, and `mdata` is definitionally transparent so the
@@ -799,38 +804,17 @@ partial def walkGoal (p : Expr) : StateRefT WalkState TacticM (Option (Expr × E
       if let some (bundle, strengthenProof) ← completenessLeaf? c p witProof witTy then
         if let some (dTy, dProof) ← derivedStatement c witProof witTy then
           let idx := (← get).idx
-          let legacy := (← get).legacy
           modify fun s => { s with idx := s.idx + 1 }
           let nm := Name.mkSimple s!"h_spec_{idx}"
-          if legacy then
-            -- LEGACY: strengthen the chunk to the bundle in place (no separate subgoal), record the
-            -- derived statement in its PREMISED arrow form; the runner introduces it up front.
-            let derivedTy ← instantiateMVars dTy
-            let entry : CompChunk :=
-              { preMVar := ← mkFreshMVarId, preType := bundle, name := nm,
-                derivedType := derivedTy, derivedProof := ← instantiateMVars dProof }
-            modify fun s => { s with chunks := s.chunks.push entry }
-            trace[Halo2.subcircuit_rw] "strengthened positive goal chunk (legacy, region={c.isRegion})"
-            return some (bundle, strengthenProof)
-          -- fresh precondition metavar `pre_i : bundle` (= `EnvA ∧ A ∧ PA`), a subgoal in op order
-          let preMVar ← mkFreshExprSyntheticOpaqueMVar bundle (tag := Name.mkSimple s!"pre_{idx}")
-          -- close the chunk position: `strengthenProof pre_i : chunk`; residual sees `True` here
-          let chunkProof := mkApp strengthenProof preMVar
-          let toChunk ← withLocalDeclD `h (mkConst ``True) fun h => mkLambdaFVars #[h] chunkProof
-          -- the bare derived statement `h_spec_i := dProof pre.1 pre.2.1 pre.2.2 : Spec ∧ ProverSpec`
-          -- (`dProof : EnvA → A → PA → Spec ∧ ProverSpec`, so feed the three bundle projections)
-          let hE ← mkAppM ``And.left #[preMVar]
-          let hAPA ← mkAppM ``And.right #[preMVar]
-          let hA ← mkAppM ``And.left #[hAPA]
-          let hPA ← mkAppM ``And.right #[hAPA]
-          let derivedApplied := mkAppN dProof #[hE, hA, hPA]
-          let derivedTy ← instantiateMVars (← inferType derivedApplied)
+          -- strengthen the chunk to the bundle in place; record the derived statement in its
+          -- PREMISED arrow form `EnvA → A → PA → Spec ∧ ProverSpec` — the runner introduces it
+          -- up front, before handing back this strengthened goal.
+          let derivedTy ← instantiateMVars dTy
           let entry : CompChunk :=
-            { preMVar := preMVar.mvarId!, preType := bundle, name := nm,
-              derivedType := derivedTy, derivedProof := derivedApplied }
+            { name := nm, derivedType := derivedTy, derivedProof := ← instantiateMVars dProof }
           modify fun s => { s with chunks := s.chunks.push entry }
-          trace[Halo2.subcircuit_rw] "discharged positive goal chunk (region={c.isRegion})"
-          return some (mkConst ``True, toChunk)
+          trace[Halo2.subcircuit_rw] "strengthened positive goal chunk (region={c.isRegion})"
+          return some (bundle, strengthenProof)
         else
           trace[Halo2.subcircuit_rw] "chunk matched but derived statement failed; leaving untouched"
       else
@@ -920,66 +904,42 @@ def runSoundness (fvarId : FVarId) : TacticM Unit := withAtLeastMaxRecDepth recD
     let goal' ← goal'.tryClearMany #[fvarId]
     replaceMainGoal [goal']
 
-/-- Completeness mode (finding #3 have-chain): co-process the goal and the `ExtendsWitnesses`
-context. For each positive goal chunk, in op order, emit a PRECONDITION SUBGOAL
-`pre_i : EnvA ∧ A ∧ ProverA` (the chunk is discharged from `pre_i` via the strengthening leaf, so
-the residual goal keeps only the parent's own constraints); simultaneously introduce the BARE
-derived statement `h_spec_i : Spec ∧ ProverSpec` (preconditions already consumed) into the context
-of every LATER subgoal and the residual goal. The surfaced goals are ordered `pre_0, …, pre_{n-1},
-<residual>`. Silent no-op if nothing matched. -/
-def runCompleteness (legacy : Bool := false) : TacticM Unit :=
+/-- Completeness mode: co-process the goal and the `ExtendsWitnesses` context in a single goal.
+For every positive goal chunk, in op order, strengthen it **in place** to its precondition bundle
+`EnvA ∧ A ∧ ProverA` (ExtendsWitnesses discharged from the located witness fact via the
+strengthening leaf), and introduce the PREMISED derived statement
+`h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` up front, before handing back the single
+strengthened goal. Silent no-op if nothing matched. -/
+def runCompleteness : TacticM Unit :=
     withAtLeastMaxRecDepth recDepthFloor <| withMainContext do
   let goalMVar ← getMainGoal
   let target ← instantiateMVars (← goalMVar.getType)
-  let (res, st) ← (walkGoal target).run { legacy }
+  let (res, st) ← (walkGoal target).run {}
   match res with
   | none =>
     trace[Halo2.subcircuit_rw] "no strengthenable positive chunk found in goal"
   | some (newGoal, proof) =>
     -- `proof : newGoal → target`. Replace the main goal by `newGoal` via `proof ?_`.
-    let newMVar ← mkFreshExprSyntheticOpaqueMVar newGoal (tag := if legacy then `strengthened else `residual)
+    let newMVar ← mkFreshExprSyntheticOpaqueMVar newGoal (tag := `strengthened)
     goalMVar.assign (mkApp proof newMVar)
-    if legacy then
-      -- LEGACY: `newGoal` is the whole goal strengthened to the AND of `EnvA ∧ A ∧ PA` bundles;
-      -- introduce all `h_spec_i` (premised `EnvA → A → PA → Spec ∧ ProverSpec`) up front, then hand
-      -- the single strengthened goal to the user (the pre-finding-#3 behavior).
-      let mut g := newMVar.mvarId!
-      for ch in st.chunks do
-        let g' ← g.assert ch.name ch.derivedType ch.derivedProof
-        let (_, g'') ← g'.intro1P
-        g := g''
-      replaceMainGoal [g]
-      return
-    -- NEW (finding #3 have-chain): `newGoal` is the residual (chunk positions are `True`).
-    -- Assert `h_spec_0 … h_spec_{k-1}` (the earlier bare derived statements) into a goal `g`, in
-    -- order, so each is in scope. Returns the extended goal.
-    let assertSpecsUpTo (g : MVarId) (k : Nat) : TacticM MVarId := do
-      let mut g := g
-      for ch in st.chunks[0:k] do
-        let g' ← g.assert ch.name ch.derivedType ch.derivedProof
-        let (_, g'') ← g'.intro1P
-        g := g''
-      return g
-    -- The precondition subgoals, in op order; `pre_i` sees `h_spec_0 … h_spec_{i-1}`.
-    let mut goals : Array MVarId := #[]
-    let mut i := 0
+    -- `newGoal` is the whole goal strengthened to the AND of `EnvA ∧ A ∧ PA` bundles; introduce
+    -- all `h_spec_i` (premised `EnvA → A → PA → Spec ∧ ProverSpec`) up front, then hand the
+    -- single strengthened goal to the user.
+    let mut g := newMVar.mvarId!
     for ch in st.chunks do
-      let g ← assertSpecsUpTo ch.preMVar i
-      goals := goals.push g
-      i := i + 1
-    -- The residual goal sees all `h_spec_i`.
-    let residual ← assertSpecsUpTo newMVar.mvarId! st.chunks.size
-    goals := goals.push residual
-    replaceMainGoal goals.toList
+      let g' ← g.assert ch.name ch.derivedType ch.derivedProof
+      let (_, g'') ← g'.intro1P
+      g := g''
+    replaceMainGoal [g]
 
 end SubcircuitRw
 
-/-- `subcircuit_rw at h` (soundness) / `subcircuit_rw` (completeness, finding #3 have-chain) /
-`subcircuit_rw legacy` (completeness, pre-finding-#3 whole-goal strengthening + premised `h_spec_i`,
-kept for the few consumers whose goal shape the have-chain doesn't cleanly cover). See the module
+/-- `subcircuit_rw at h` (soundness) / `subcircuit_rw` (completeness — the goal is strengthened
+in place to the AND of each chunk's `EnvA ∧ A ∧ PA` precondition bundle, and a premised
+`h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` is introduced up front per chunk). See the module
 docstring. Silent on shapes it doesn't target; `set_option trace.Halo2.subcircuit_rw true` to
 debug. -/
-syntax (name := subcircuitRw) "subcircuit_rw" (" at " ident)? (&" legacy")? : tactic
+syntax (name := subcircuitRw) "subcircuit_rw" (" at " ident)? : tactic
 
 @[tactic subcircuitRw]
 def evalSubcircuitRw : Tactic := fun stx => do
@@ -987,8 +947,6 @@ def evalSubcircuitRw : Tactic := fun stx => do
   | `(tactic| subcircuit_rw at $h:ident) =>
     let fvarId ← withMainContext <| getFVarId h
     SubcircuitRw.runSoundness fvarId
-  | `(tactic| subcircuit_rw legacy) =>
-    SubcircuitRw.runCompleteness (legacy := true)
   | `(tactic| subcircuit_rw) =>
     SubcircuitRw.runCompleteness
   | _ => throwUnsupportedSyntax

@@ -58,6 +58,13 @@ one-directional rewriting under polarity, and it is a small, well-understood eng
      `call_constraints_and_specs` entirely, with read-off-the-term instantiation
      fixing its depth fragility.
 
+  The result is a **single strengthened goal** — the original goal with every positive
+  chunk replaced in place by its precondition bundle — plus one premised `h_spec_i` per
+  chunk already in context. Since the goal's bundle position and `h_spec_i`'s premises
+  need the same facts, house style is to prove each bundle once
+  (`have pre₀ := ⟨…⟩`) and feed it to both — the goal position directly, and
+  `h_spec_i pre₀.1 pre₀.2.1 pre₀.2.2` for the child's `Spec ∧ ProverSpec`.
+
 ### Leaf matching: read the arguments off the term
 
 The matched chunk *contains* every argument the child contract needs — `child`, `cfg`,
@@ -109,3 +116,25 @@ instantiates the child's contract itself. Consequences:
 - **D3 — silent on shapes it doesn't target.** No info messages; a debug flag for
   development is fine. The statement shapes are known and the tactic targets exactly
   those.
+
+## Completeness mode redesign reverted (maintainer, 2026-07-12)
+
+A per-chunk-subgoal completeness redesign was tried and reverted. That variant surfaced each
+positive goal chunk as a separate precondition subgoal `pre_i : EnvA ∧ A ∧ PA` (in op order),
+collapsed the chunk position in the residual goal to `True`, and threaded a *bare* derived
+statement `h_spec_i : Spec ∧ ProverSpec` (preconditions already consumed) into later contexts.
+Its aim — writing each precondition bundle exactly once — is met instead by the house-style
+dedup `have` described above.
+
+Verdict: the premised single-goal shape described above (D2) **is** the main-Clean-faithful
+reduction — subcircuit statements as premises in one goal context, matching how main Clean
+states its subcircuit-composition obligations. The per-chunk-subgoal variant was designed
+against a simplified model of what real circuit proofs need; real proofs need shared
+honest-value bookkeeping across chained/composed subcircuits (e.g. one child's derived
+`ProverSpec` feeding the next child's precondition, or both a precondition and a parent-level
+gate) in a SINGLE goal context, which splitting into separate subgoals breaks — each subgoal
+sees only its own local context, not the sibling facts the bookkeeping needs to flow through.
+
+It is removed. There is exactly one completeness behavior now: bare `subcircuit_rw` always does
+the single-goal premised-`h_spec_i` strengthening (no `legacy` token — there is nothing to
+distinguish it from anymore).

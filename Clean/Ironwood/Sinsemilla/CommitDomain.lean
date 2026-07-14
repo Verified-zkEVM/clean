@@ -262,9 +262,9 @@ theorem commitBody_sound (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n₀ 
 
 /-! ## Completeness
 
-Honest-prover mirror: the three child chunks consumed via the `subcircuit_rw` engine in `legacy`
-mode (peel the goal's `Constraints` into the seed ++ chain ++ blind ++ add shape, then
-`subcircuit_rw legacy` strengthens each chunk to its precondition bundle and introduces the
+Honest-prover mirror: the three child chunks consumed via the `subcircuit_rw` engine's
+completeness mode (peel the goal's `Constraints` into the seed ++ chain ++ blind ++ add shape, then
+`subcircuit_rw` strengthens each chunk to its precondition bundle and introduces the
 premised `h_spec_0`/`h_spec_1`/`h_spec_2 : EnvA → A → PA → Spec ∧ ProverSpec`). The chain's
 `ProverSpec` (off `h_spec_0`) gives the honest commitment; the blinding child's `ProverSpec` gives
 `blindPt = r • R`; the addition's `Spec` closes on the two valid summands. -/
@@ -283,7 +283,7 @@ theorem commitBody_complete (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n�
   -- Cut lines (all final in statement):
   --  1. peel `commitBody.operations` (as soundness), `extendsWitnesses_append`.
   --  2. seed cells honest-fill to `Q.x`/`Q.y` (their `constrainConstant` is idempotent).
-  --  3. chain: `h_spec_0` (from `subcircuit_rw legacy`) applied to the chain's `ProverAssumptions`
+  --  3. chain: `h_spec_0` (from `subcircuit_rw`) applied to the chain's `ProverAssumptions`
   --     — discharged from `hpa` (`PieceBounds` + defined honest chain at `A = Q`) — yields
   --     `Chain.Spec ∧ Chain.ProverSpec` (the honest hash point `B`); its precondition bundle
   --     discharges the chain chunk in the strengthened goal.

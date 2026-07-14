@@ -28,7 +28,7 @@ a polarity-aware monotone rewriter that, keying on this same opaque `call` bound
 `isDefEq` matching, not a discrimination tree), weakens a positive-position chunk in a hypothesis
 to the child's `EnvAssumptions → Assumptions → Spec` (soundness, `subcircuit_rw at h`) or
 strengthens a positive-position goal chunk to the child's precondition bundle while introducing the
-derived `Spec ∧ ProverSpec` statement (completeness, `subcircuit_rw` / `subcircuit_rw legacy`). See
+derived `Spec ∧ ProverSpec` statement (completeness, `subcircuit_rw`). See
 that file and `Clean/Halo2/subcircuit-engine-design.md` for the full design.
 
 ### History (v1: the absorption iffs)

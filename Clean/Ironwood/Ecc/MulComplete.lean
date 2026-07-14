@@ -50,10 +50,10 @@ Fully proven, no sorries. Soundness: per-round `round_acc_sound` consumes the tw
 `add.call` chunks via the `subcircuit_rw` engine (`subcircuit_rw at h`, weakening each chunk to
 the child's `EnvA → A → Spec`) and the decomposition gate; `loop_sound` inducts over rounds
 threading each round's output validity into the next round's entering-accumulator assumption.
-Completeness: `round_complete` consumes the two chunks via the engine in `legacy` mode (the goal
-chunks strengthen to their preconditions and the engine introduces `h_spec_0`/`h_spec_1`, exposing
-each add's Spec at the prover's verifier view — what the honest output-value bookkeeping needs);
-`round_complete`/`loop_complete` mirror the soundness ladder on the honest witnesses.
+Completeness: `round_complete` consumes the two chunks via the engine's completeness mode (the
+goal chunks strengthen to their preconditions and the engine introduces `h_spec_0`/`h_spec_1`,
+exposing each add's Spec at the prover's verifier view — what the honest output-value bookkeeping
+needs); `round_complete`/`loop_complete` mirror the soundness ladder on the honest witnesses.
 -/
 
 namespace Halo2.Ironwood.Ecc.MulComplete
@@ -508,8 +508,8 @@ theorem loop_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
 
 /-! ## Completeness ladder
 
-The honest-prover side. Each round's two `add` chunks are consumed by the `subcircuit_rw` engine
-in completeness `legacy` mode: it strengthens the goal's folded chunk positions to their
+The honest-prover side. Each round's two `add` chunks are consumed by the `subcircuit_rw`
+engine's completeness mode: it strengthens the goal's folded chunk positions to their
 `EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from the peeled witness context) and
 introduces the derived contract statements `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`. The
 round's honest-value bookkeeping — round `k`'s add outputs feed round `k+1`'s honest values, and
@@ -526,7 +526,7 @@ private theorem zRunValue_step (z : Fp) (bits : BitsHint) (j : ℕ) :
 
 /-- **Round completeness.** The honest witnesses of one round satisfy its constraints (its own
 decomposition gate from the honest `z`/`y_p` values; the two add chunks via the `subcircuit_rw`
-engine in `legacy` mode), and pin the round's output to the complete `stepPoint` and the round's
+engine's completeness mode), and pin the round's output to the complete `stepPoint` and the round's
 `z` cell to the honest running sum. `hzPrev` threads the previous `z` cell's honest value (the
 start copy for round 0, the previous round's cell otherwise). -/
 theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
@@ -588,13 +588,13 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
       = Add.add.output cfg.addConfig (offset + 2 * iter)
         ⟨{ x := input.base.x, y := AssignedCell.of self (offset + 2 * iter) cfg.addConfig.yP },
           acc⟩ self := rfl
-  -- ▸▸ engine (completeness `legacy`): strengthen the goal's two folded add chunks to their
+  -- ▸▸ engine (completeness): strengthen the goal's two folded add chunks to their
   --    `EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from `hWc1`/`hWc2`), and introduce
   --    the premised derived statements `h_spec_0`/`h_spec_1 : EnvA → A → PA → Spec ∧ ProverSpec`.
-  --    The `legacy` (whole-goal) mode is the right one here: the round's honest-value bookkeeping
-  --    (add 1's Spec feeds add 2's precondition AND the round output value) reads both Specs, and
-  --    the strengthened chunk conjuncts sit inside the round's own `Constraints` bundle. ◂◂
-  subcircuit_rw legacy
+  --    The whole-goal shape carries the round's honest-value bookkeeping (add 1's Spec feeds
+  --    add 2's precondition AND the round output value) in one goal context, and the strengthened
+  --    chunk conjuncts sit inside the round's own `Constraints` bundle. ◂◂
+  subcircuit_rw
   -- derive add 1's Spec from `h_spec_0` (Add's `ProverSpec` is `True`, so `.1` is the Spec)
   have hSpec1 := (h_spec_0 trivial hA1 trivial).1
   simp only [add_spec_eq, hIn1] at hSpec1
@@ -831,7 +831,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- ══ Completeness ══
   -- Peel the witness list, then route the loop witnesses into `loop_complete` (whose induction
   -- consumes each round's two child chunks via `round_complete`, which uses the `subcircuit_rw`
-  -- engine in `legacy` mode).
+  -- engine's completeness mode).
   completeness := by
     intro cfg offset
     rw [FormalRegionCircuit.completeness_iff]

@@ -20,8 +20,9 @@ and are proven sound + complete by consuming the child's constraint chunk with t
 
 Both parents, both directions, go through the engine:
 `subcircuit_rw at hc` (soundness) weakens the folded chunk to the child's `EnvA → A → Spec`;
-`subcircuit_rw` (completeness) strengthens the goal chunk to `EnvA ∧ A ∧ PA` and introduces the
-derived statement `h_spec_0` — no marker/OR leftovers to discard.
+`subcircuit_rw` (completeness) strengthens the goal chunk in place to `EnvA ∧ A ∧ PA` and
+introduces the premised derived statement `h_spec_0 : EnvA → A → PA → Spec ∧ ProverSpec` — no
+marker/OR leftovers to discard.
 -/
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuit
@@ -55,12 +56,11 @@ def parent :
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
-    -- the goal chunk becomes a precondition subgoal `pre_0 : EnvA ∧ A ∧ PA`; the chunk position
-    -- is discharged (residual `True`).
+    -- the goal chunk strengthens in place to its precondition bundle `EnvA ∧ A ∧ PA` (the
+    -- premised `h_spec_0` enters the context, unused here).
     simp only [circuit_norm] at h_input hpa ⊢
     subcircuit_rw
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · trivial
+    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
 
 /-! ## Realistic parent: own op + subcircuit call -/
 
@@ -93,10 +93,9 @@ def parentWithOp :
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
     -- decompose the parent's own `ExtendsWitness`/`Constraints`; the call chunk stays folded and
-    -- the engine strengthens the goal chunk (locating the witness from `hwit`).
+    -- the engine strengthens the goal chunk in place (locating the witness from `hwit`).
     simp only [circuit_norm] at hwit h_input hpa ⊢
     subcircuit_rw
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · trivial
+    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
 
 end Halo2.Ironwood.Ecc.TestSubcircuit

@@ -24,9 +24,13 @@ Soundness: `simp only [circuit_norm] at hc; subcircuit_rw at hc` weakens the fol
 `hc : EnvA → A → Spec` (no marker/conjunct leftover); feed the preconditions to expose the child
 `Spec`.
 
-Completeness: `subcircuit_rw` strengthens the goal chunk to `EnvA ∧ A ∧ PA` (discharged as a
-`pre_i` subgoal) and introduces the bare derived statement `h_spec_i : Spec ∧ ProverSpec` — no
-`∨`-side to pick.
+Completeness: `subcircuit_rw` strengthens every positive goal chunk **in place** to its
+`EnvA ∧ A ∧ PA` precondition bundle (a single goal — the AND of the bundles when there are
+several chunks) and introduces, up front, a **premised** derived statement per chunk
+`h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`. Since both the goal's own bundle position and
+each `h_spec_i`'s premises need the same `EnvA`/`A`/`PA` facts, the house-style dedup idiom is to
+prove the bundle once (`have pre₀ := ⟨…⟩`) and feed its components to both places — see
+`chainedParent` below.
 -/
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuitRw
@@ -59,14 +63,12 @@ def regionParent :
     rw [FormalRegionCircuit.completeness_iff]
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
-    -- the goal chunk becomes a precondition subgoal `pre_0 : EnvA ∧ A ∧ PA`; `h_spec_0` (bare
-    -- `Spec ∧ ProverSpec`) enters the residual context. The chunk itself is discharged.
+    -- the goal chunk strengthens in place to `EnvA ∧ A ∧ PA`; `h_spec_0` (premised
+    -- `EnvA → A → PA → Spec ∧ ProverSpec`) enters the context up front.
     simp only [circuit_norm] at h_input hpa ⊢
     subcircuit_rw
-    -- pre_0: `EnvA ∧ A ∧ PA` (default `True`s + the parent's `ProverAssumptions`)
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    -- residual: the chunk is discharged, only `True` remains
-    · trivial
+    -- one goal: `EnvA ∧ A ∧ PA` (default `True`s + the parent's `ProverAssumptions`)
+    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
 
 /-! ## Region parent with its OWN op + subcircuit call -/
 
@@ -99,8 +101,7 @@ def regionParentWithOp :
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
     subcircuit_rw
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · trivial
+    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
 
 /-! ## Layouter parent: native child + `toFormal`-lifted region child -/
 
@@ -145,12 +146,11 @@ def layouterParent :
     intro i₀ env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
-    -- both goal chunks become precondition subgoals pre_0, pre_1 (op order); h_spec_0, h_spec_1
-    -- enter the later contexts. The chunks are discharged; residual is `True ∧ True`.
+    -- both goal chunks strengthen in place to their `EnvA ∧ A ∧ PA` bundles (one goal, the AND
+    -- of the two); `h_spec_0`/`h_spec_1` (premised) enter the context up front.
     subcircuit_rw
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · exact ⟨trivial, trivial⟩
+    exact ⟨⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩,
+      trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
 
 /-! ## Chained children (second input = first output), consuming the derived statement
 
@@ -220,23 +220,21 @@ def chainedParent :
     intro self env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input h_output hpa ⊢
-    -- engine introduces h_spec_0 (first child) and h_spec_1 (second child) from hwit's conjuncts,
-    -- and strengthens both goal chunks to `EnvA ∧ A ∧ PA`
+    -- engine strengthens both goal chunks in place to `EnvA ∧ A ∧ PA`, and introduces the
+    -- premised `h_spec_0`/`h_spec_1 : EnvA → A → PA → Spec ∧ ProverSpec` up front.
     subcircuit_rw
-    -- pre_0: the first child's `EnvA ∧ A ∧ PA` (writes the precondition exactly ONCE — the
-    -- finding #3 fix: no separate feeding of a premised h_spec_0).
-    · exact ⟨trivial, trivial, h_input ▸ hpa⟩
-    -- pre_1: the second child's `EnvA ∧ A ∧ PA`. Its chained ProverAssumption (its input IS the
-    -- first's output) is discharged from `h_spec_0` (now a BARE `Spec ∧ ProverSpec` in context):
-    -- `h_spec_0.2` is the first child's ProverSpec (`first_output = first_input`).
-    · refine ⟨trivial, trivial, ?_⟩
-      have hps0 := h_spec_0.2
-      have hout : (passthrough.call config offset input_var).output self
-          = passthrough.output config offset input_var self := rfl
-      rw [hout] at *
-      rw [hps0]; exact h_input ▸ hpa
-    -- residual: both chunks discharged
-    · trivial
+    -- the dedup idiom: prove the FIRST child's precondition bundle once as `pre₀`, then feed its
+    -- components to both the goal's own bundle position and `h_spec_0` (instead of writing the
+    -- `EnvA ∧ A ∧ PA` facts twice by hand).
+    have pre₀ := (⟨trivial, trivial, h_input ▸ hpa⟩ : True ∧ True ∧ _)
+    refine ⟨pre₀, trivial, trivial, ?_⟩
+    -- the second child's chained ProverAssumption (its input IS the first's output) is
+    -- discharged from `h_spec_0`'s ProverSpec (`first_output = first_input`), fed by `pre₀`.
+    have hps0 := (h_spec_0 pre₀.1 pre₀.2.1 pre₀.2.2).2
+    have hout : (passthrough.call config offset input_var).output self
+        = passthrough.output config offset input_var self := rfl
+    rw [hout] at *
+    rw [hps0]; exact h_input ▸ hpa
 
 /-! ## Bare-`place`/`env` loop-lemma context
 

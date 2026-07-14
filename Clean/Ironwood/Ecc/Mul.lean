@@ -843,11 +843,11 @@ Both directions are FULLY PROVEN in the bundle below; the load-bearing findings:
    site below is a `rw`; value-record projections then reduce by simp/defeq.
 3. Output records reduce to cell literals *lazily* by plain `rfl` (`incomplete_call_output`
    &c.) — structure projections never force the loop bodies, even at generic bit counts.
-4. On the honest side, the engine's completeness `legacy` mode introduces one premised
+4. On the honest side, the engine's completeness mode introduces one premised
    `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` per child chunk (the derived leaf that replaced
    the hand-rolled `call_constraints_and_specs` helper), exposing constraints + verifier `Spec` +
    honest `ProverSpec`; the six chunks (init/hi/lo/comp/fin/overflow) are all consumed this way in
-   one `subcircuit_rw legacy` pass, the deepest (overflow) included.
+   one `subcircuit_rw` pass, the deepest (overflow) included.
 5. The honest side is what catches bit-indexing bugs: the lo/complete windows must be the
    SHIFTED `fun i => bits (125 + i)`/`fun i => bits (251 + i)` (donor `Decompose.main`);
    soundness alone was satisfied by the existential per-child bit sequences. -/
@@ -1358,15 +1358,13 @@ def mul :
       RegionOperations.constraints_cons, RegionOperations.constraints_nil,
       RegionOperation.constraints_assignAdvice, RegionOperation.constraints_constrainConstant,
       RegionOperation.constraints_constrainEqual, and_true, true_and]
-    -- Engine `legacy` mode: strengthen the whole main-region goal to the AND of the six children's
-    -- `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
-    -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow). The
-    -- have-chain (finding #3) mode surfaces per-chunk precondition subgoals + bare `h_spec_i`;
+    -- Engine completeness mode: strengthen the whole main-region goal to the AND of the six
+    -- children's `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
+    -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow).
     -- Mul's value bookkeeping (chains feeding BOTH child preconditions and the parent LSB gate)
-    -- is threaded most compactly through the single strengthened goal, so this consumer keeps the
-    -- retained `legacy` shape (reported). Finding #1 (`env.toEnvironment` spelling) means the old
-    -- `hPl` record-normalization workaround is no longer needed.
-    subcircuit_rw legacy
+    -- is threaded through the single strengthened goal. Finding #1 (`env.toEnvironment` spelling)
+    -- means the old `hPl` record-normalization workaround is no longer needed.
+    subcircuit_rw
     -- ── the base point: cells and value, both eval views ──
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hOnC0
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC

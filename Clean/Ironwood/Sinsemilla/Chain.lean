@@ -828,7 +828,7 @@ theorem chainBody_sound (G : Generators) (cfg : Config)
 /-! ## The completeness ladder
 
 Honest-prover side. Each piece's folded `HashPiece.circuit.call` chunk is consumed by the
-`subcircuit_rw` engine in completeness `legacy` mode: after peeling the goal's `Constraints` into
+`subcircuit_rw` engine's completeness mode: after peeling the goal's `Constraints` into
 the cons shape (exposing the chunk in positive position), the engine strengthens it to its
 `EnvA ∧ A ∧ PA` precondition bundle and introduces the premised derived statement
 `h_spec_0 : EnvA → A → PA → Spec ∧ ProverSpec`. The child's `ProverSpec` (`.2` of `h_spec_0`
@@ -909,7 +909,7 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
     obtain ⟨B₁, hpre, hsuffix⟩ := Orchard.Specs.Sinsemilla.hashToPoint_append_some hchain
     simp only [PieceBounds, Vector.getElem_map] at hbounds
     obtain ⟨hb0, hbrest⟩ := hbounds
-    -- ── the head piece, via the `subcircuit_rw` engine (completeness `legacy`) ──
+    -- ── the head piece, via the `subcircuit_rw` engine (completeness) ──
     have hinp : (eval env (⟨pieces[0], xACell, yACell⟩ : Var HashPiece.Inputs Fp)
         : HashPiece.Inputs Fp)
         = { piece := AssignedCell.eval env.place env.env.toEnvironment pieces[0],
@@ -924,14 +924,12 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
       exact ⟨hb0, A, B₁, hAon, hAx, hAy, hpre⟩
     -- Peel the goal's `Constraints` conjunct into the cons shape (child chunk ++ q_s2 ++
     -- boundary-y ++ tail ++ linking gate), exposing the folded `HashPiece.circuit.call` chunk in
-    -- POSITIVE position, then strengthen it via the engine. `legacy` mode is the right choice for
-    -- this cons-induction site: the child's `ProverSpec`/`Spec` (via the premised `h_spec_0`) is
-    -- needed EARLY — before the tail recursion and shared across both output subgoals — which the
-    -- up-front premised derived statement supplies, whereas the have-chain mode would surface the
-    -- child precondition as a separate subgoal decoupled from where the ProverSpec is consumed. ◂◂
+    -- POSITIVE position, then strengthen it via the engine. The child's `ProverSpec`/`Spec` (via
+    -- the premised `h_spec_0`) is needed EARLY — before the tail recursion and shared across both
+    -- output subgoals — which the up-front premised derived statement supplies. ◂◂
     rw [chainBody_operations_cons]
     simp only [RegionOperations.constraints_append]
-    subcircuit_rw legacy
+    subcircuit_rw
     -- the child's honest-cell facts (ProverSpec) at the honest entering point, off `h_spec_0`
     have hPSchild := (h_spec_0 hTable trivial hChildPA).2
     rw [hashPiece_proverSpec_eq, hashPiece_output] at hPSchild
@@ -1075,8 +1073,9 @@ Soundness inducts over `ns`: each piece is a folded `HashPiece.circuit.call` chu
 the `subcircuit_rw` engine (`subcircuit_rw at hChild`, which handles the bare-`place`/`env` loop
 spelling natively via its own `isDefEq` matching), the linking `sinsemillaGate` reduces to the
 value-level secant/y-check, and `soundness_aux` glues the piece + gate + tail chain contracts.
-Completeness mirrors the ladder on the honest witnesses via the engine in `legacy` mode (the goal
-chunk strengthens to its preconditions, the premised `h_spec_0` exposes the child's ProverSpec). -/
+Completeness mirrors the ladder on the honest witnesses via the engine's completeness mode (the
+goal chunk strengthens to its preconditions, the premised `h_spec_0` exposes the child's
+ProverSpec). -/
 def circuit (G : Generators) (ns : List ℕ) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) (Output ns) where
   name := "sinsemilla hash_all_pieces"

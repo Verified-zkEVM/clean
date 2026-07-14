@@ -73,7 +73,7 @@ Soundness peels the copies + the folded rangeCheck child chunk (consumed via `su
 hChild`, weakening it to the child's `EnvA → A → Spec`), discharges the child's derived-sub-config
 `EnvAssumptions` BY PROJECTION from the parent's, reduces the overflow gate to its five value-level
 polynomials, and assembles the donor `Spec`. Completeness mirrors it on the honest witnesses via
-`subcircuit_rw legacy` (the goal chunk strengthens to its precondition bundle and the engine
+`subcircuit_rw` (the goal chunk strengthens to its precondition bundle and the engine
 introduces the premised `h_spec_0`, exposing the child's verifier `Spec` + honest `ProverSpec`).
 
 One genuine composition finding surfaced (see the `hzLast_zero` note in `completeness`): the
@@ -489,10 +489,9 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
       WitgenEnv.readVar_halo2, AssignedCell.eval] at hWs
     -- consume the copyCheck child via the engine's completeness mode. This gate's downstream value
-    -- algebra reads the gate-window cells through the (prover-env) goal spelling that the pre-#3
-    -- whole-goal strengthening produces; the finding-#3 have-chain surfaces the gate goal in a
-    -- differently-reduced shape, so this consumer uses the retained `legacy` mode (reported).
-    subcircuit_rw legacy
+    -- algebra reads the gate-window cells through the (prover-env) goal spelling that the
+    -- whole-goal strengthening produces.
+    subcircuit_rw
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
     refine ⟨?_, ?_⟩
     · -- copyCheck child preconditions: EnvA (projection) ∧ A (field card) ∧ PA (vacuous, non-strict)

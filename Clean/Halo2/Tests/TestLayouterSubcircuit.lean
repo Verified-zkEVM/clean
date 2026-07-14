@@ -78,12 +78,11 @@ def parent :
     intro i₀ env input_var input output h_input h_output hwit _hE _hA hpa
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
-    -- both goal chunks become precondition subgoals pre_0, pre_1 (op order); the chunks are
-    -- discharged (residual `True ∧ True`).
+    -- both goal chunks strengthen in place (op order): the goal becomes the AND of the two
+    -- `EnvA ∧ A ∧ PA` bundles, with premised `h_spec_0`/`h_spec_1` in context.
     subcircuit_rw
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
-    · exact ⟨trivial, trivial⟩
+    exact ⟨⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩,
+      ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩⟩
 
 /-! ## Bare-`place`/`env` engine firing
 
