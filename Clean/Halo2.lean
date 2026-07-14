@@ -12,3 +12,5 @@ import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.RoundNorm
 import Clean.Halo2.Tactics.ContractBridges
 import Clean.Halo2.Tactics.SubcircuitRw
+import Clean.Halo2.Tactics.AbstractOutputs
+import Clean.Halo2.Tactics.CircuitProofStart
