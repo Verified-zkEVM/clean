@@ -6,7 +6,7 @@ import Clean.Ironwood.Ecc.Add
 /-!
 # VK-match test: the complete-addition (`add::Config`) gadget
 
-The first end-to-end VK match for Halo2-Clean. Runs the ported `Add.configure` on the same
+The first end-to-end VK match for Halo2-Clean. Runs the ported `Add.add.configure` on the same
 columns the Rust harness used (`advices[0..8]` in the roles
 `x_p, y_p, x_qr, y_qr, lambda, alpha, beta, gamma, delta`), projects the resulting
 `ConstraintSystem` to the ironwood `CsFixture` shape, and checks it **equal** to the fixture
@@ -27,14 +27,14 @@ open _root_.Halo2.Ironwood (Fp)
 open Halo2.Fixtures
 
 /-- Allocate the 9 advice columns (mirroring the Rust harness's `EccConfig`-minimal column
-allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.configure` on them.
+allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.add.configure` on them.
 Allocating in the monad — rather than passing bare `⟨0⟩..⟨8⟩` — is what advances the CS's
 `numAdviceColumns` counter to 9, matching the harness. -/
 def addProgram : Configure Fp Halo2.Ironwood.Ecc.Add.Config := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
-  Halo2.Ironwood.Ecc.Add.configure a0 a1 a2 a3 a4 a5 a6 a7 a8
+  Halo2.Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
 
 def addCS : _root_.Halo2.ConstraintSystem Fp := (addProgram {}).2
 

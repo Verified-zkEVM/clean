@@ -36,7 +36,7 @@ mul consumes) is, in registration order:
 2. `LookupRangeCheck.configure 10 (advices 9) tableIdx` — the range-check lookup argument
    + the "Short lookup bitshift" gate + 3 selectors (q_lookup, q_running complex;
    q_bitshift simple);
-3. `Add.configure (advices 0..8)` — the complete-addition gate + `q_add`;
+3. `Add.add.configure (advices 0..8)` — the complete-addition gate + `q_add`;
 4. `Mul.configure add lookup advices` — hi/lo incomplete gates, complete-decompose gate,
    overflow gate, LSB gate + their selectors.
 
@@ -70,7 +70,7 @@ def mulProgram : Configure Fp Mul.Config := do
   -- range_check first (ecc.rs:836), on advices[9]
   let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
   -- add before mul (EccChip::configure order), on advices[0..8]
-  let addConfig ← Add.configure a0 a1 a2 a3 a4 a5 a6 a7 a8
+  let addConfig ← Halo2.Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
   -- the mul chain
   Mul.configure addConfig lookupConfig advices
 

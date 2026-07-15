@@ -8,6 +8,7 @@ import Clean.Utils.Test.TestElaborateCircuit
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestLookup
+import Clean.Utils.Test.SimpMatchRegression
 import Clean.Halo2.Tests.TestProvableTypeSimp
 import Clean.Halo2.Tests.TestSubcircuit
 import Clean.Halo2.Tests.TestLayouterSubcircuit
@@ -18,3 +19,6 @@ import Clean.Halo2.Tests.TestLoops
 import Clean.Halo2.Tests.TestContractBridges
 import Clean.Halo2.Tests.TestLookupMembership
 import Clean.Halo2.Tests.TestProofStart
+import Clean.Halo2.Tests.TestTupleLookup
+import Clean.Halo2.Tests.TestVkMatchAdd
+import Clean.Halo2.Tests.TestVkMatchMul
