@@ -7,6 +7,7 @@ import Clean.Halo2.Configure
 import Clean.Halo2.Operations
 import Clean.Halo2.Basic
 import Clean.Halo2.Lemmas
+import Clean.Halo2.Loops
 import Clean.Halo2.Formal
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.RoundNorm

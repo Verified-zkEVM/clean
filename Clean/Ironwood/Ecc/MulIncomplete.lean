@@ -373,28 +373,20 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp))
     (qMul2Gate cfg).enable row
   return ()
 
--- TACTIC FEATURE(loops): this is a simple forEach loop; users shouldn't have to write recursive
--- functions to implement them. Needs framework-level Circuit loops like main Clean's
--- `Circuit.forEach` (the separate loop-support workstream, not this fix).
-/-- The double-and-add loop: `numRounds` rounds, structurally recursive. By the append-bind of
-`RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
-(round … k).operations self` — the per-round decomposition the induction consumes. -/
-def loop (cfg : Config) (input : Inputs (AssignedCell Fp))
-    (ebits : Placed ProverEnvironment Fp → BitsHint) (offset n : ℕ) :
-    ℕ → RegionCircuit Fp Unit
-  | 0 => pure ()
-  | k + 1 => do
-    loop cfg input ebits offset n k
-    round cfg input ebits offset n k
+/-- The double-and-add loop: `numRounds` independent rounds via `RegionCircuit.forRange'` (base
+row `offset + 1`, stride 1 — round `r` at `offset + 1 + r`). Resolves the `TACTIC FEATURE(loops)`
+marker: no hand-written recursion. Its `RegionOperations.Constraints`/`ExtendsWitnesses` split,
+under `circuit_norm`, into `∀ r : Fin numRounds, <round r's predicate>` (the framework
+`forRange'_constraints`/`forRange'_extendsWitnesses`) — the per-round decomposition the loop
+lemmas below consume, replacing the deleted `loop_operations_succ` recursion.
 
-/-- Per-round operations decomposition (holds by `rfl` via the monad's `operations_bind`): the
-crux that makes the loop inductable. Mirrors `rangeCheckLoop_operations_succ`. -/
-theorem loop_operations_succ (cfg : Config) (input : Inputs (AssignedCell Fp))
-    (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (offset n k : ℕ) (self : RegionIndex) :
-    (loop cfg input ebits offset n (k + 1)).operations self
-      = (loop cfg input ebits offset n k).operations self
-        ++ (round cfg input ebits offset n k).operations self := rfl
+(The `forRange'` base row `offset + 1 + r` passed to the body is unused: `round` recomputes it
+from `offset`/`r`, keeping every loop lemma's `offset + 1 + r` row spelling verbatim.) -/
+def loop (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (ebits : Placed ProverEnvironment Fp → BitsHint) (offset n numRounds : ℕ) :
+    RegionCircuit Fp Unit :=
+  RegionCircuit.forRange' (offset + 1) 1 numRounds
+    (fun r _row => round cfg input ebits offset n r)
 
 /-- Read the assigned cell at a known region-local row/column (no op emitted) — lets `synthesize`
 name the running-sum and accumulator cells for the `Output`, which live at fixed rows rather
@@ -429,11 +421,13 @@ theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (
 
 /-! ## Loop-shaped standalone lemmas
 
-The z-chain and accumulator invariants, proven by induction over rounds using the per-round
-operations decomposition (`loop_operations_succ`) and the append splitting of
-`RegionOperations.Constraints`/`ExtendsWitnesses`. This is the loop-shaped proof structure of
-`LookupRangeCheck.rangeCheck_loop_word_bounds` / `rangeCheck_loop_zvalues` /
-`rangeCheck_loop_constraints_complete`, adapted to the double-and-add round.
+The z-chain and accumulator invariants, extracted per round from the framework
+`RegionCircuit.forRange'_constraints` / `forRange'_extendsWitnesses` split (the loop's
+`Constraints`/`ExtendsWitnesses` become `∀ r : Fin (n+1), <round r's predicate>` under
+`circuit_norm`), then folded by a genuine VALUE induction over rounds — no loop-structure
+recursion. This is the migrated proof structure of `LookupRangeCheck.rangeCheck_loop_word_bounds`
+/ `rangeCheck_loop_zvalues` / `rangeCheck_loop_constraints_complete`, adapted to the
+double-and-add round.
 
 The per-row cell values read off the environment. The double-and-add region packs six cells per
 loop row (`z, x_p, y_p, λ₁, λ₂, x_a'`) after three starting-copy rows, exactly the donor's
@@ -481,20 +475,22 @@ private def YADr (n r : ℕ) : Fp :=
       (L1r cfg place self env offset r * L1r cfg place self env offset r
         - XAr cfg place self env offset r - XPr cfg place self env offset r))
 
--- TACTIC FEATURE(loops): this per-round extraction could be handled more cleanly by defining a
--- circuit bundle for `round` (the loop body) and per-iteration composition lemmas — part of the
--- separate loop-support workstream, not this fix.
+-- (Was `TACTIC FEATURE(loops)`, now resolved: the per-round extraction is the framework
+-- `RegionCircuit.forRange'_constraints` split — `Constraints (loop) ↔ ∀ r : Fin (n+1), <round r>`
+-- — so this lemma just applies it at `⟨r, _⟩` and reduces round `r` with `round_norm`.)
 /-- **Extraction of the cleaned per-round gate facts.** From the loop's `Constraints`
 (gate enables are inside `round`, so the round constraints live here), each round
-`r < numRounds` yields the four shared `forLoopPolys` facts (booleanity, gradient_1,
-secant_line, gradient_2), and — for interior rounds (`r ≠ n`) — the `x_p`/`y_p`
-constancy. Proven by induction over `numRounds`, mirroring
-`rangeCheck_loop_word_bounds`. -/
-private theorem loop_gate_facts (n : ℕ) :
-    ∀ numRounds : ℕ, numRounds ≤ n + 1 →
-    RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n numRounds).operations self) →
-    ∀ r, r < numRounds →
+`r ≤ n` (i.e. `r < n + 1`) yields the four shared `forLoopPolys` facts (booleanity, gradient_1,
+secant_line, gradient_2), and — for interior rounds (`r ≠ n`) — the `x_p`/`y_p` constancy.
+
+No loop-structure induction: the framework `forRange'_constraints` split (via `circuit_norm`)
+turns the loop's `Constraints` straight into `∀ r : Fin (n + 1), <round r's constraints>`; each
+round then reduces to its value-level gate facts by `round_norm`. Mirrors
+`LookupRangeCheck.rangeCheck_loop_word_bounds`. -/
+private theorem loop_gate_facts (n : ℕ)
+    (hLoop : RegionOperations.Constraints place self env
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+    ∀ r, r < n + 1 →
       -- booleanity of the bit
       (IsBool (Kr cfg place self env offset r)) ∧
       -- gradient_1 (×2 form)
@@ -515,137 +511,127 @@ private theorem loop_gate_facts (n : ℕ) :
       -- x_p / y_p constancy on interior rounds
       (r ≠ n → XPr cfg place self env offset r = XPr cfg place self env offset (r + 1)
         ∧ YPr cfg place self env offset r = YPr cfg place self env offset (r + 1)) := by
-  intro numRounds
-  induction numRounds with
-  | zero => intro _ _ r hr; omega
-  | succ k ih =>
-    intro hkb
-    rw [loop_operations_succ, RegionOperations.constraints_append]
-    rintro ⟨hLoop, hRound⟩ r hr
-    have hrle : r ≤ n := by omega
-    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
-    · exact ih (by omega) hLoop r hr'
-    · -- the fresh round `r = k`. Reduce its gate constraints to the value-level facts.
-      -- `2 ≠ 0` lets the gradient closers clear the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
-      have h2 : (2 : Fp) ≠ 0 := by decide
-      -- The `z`-prev cell reads at `↑(place self + (offset+1+r)) - 1`; normalize it to the
-      -- `Zpr` spelling `↑(place self + (offset+r))` (the single `offset+(k+1)` boundary quirk).
-      have hzp : ((place self + (offset + 1 + r) : ℕ) : ℤ) - 1
-          = ((place self + (offset + r) : ℕ) : ℤ) := by push_cast; ring
-      -- YADr at `r` is always the derived form (since `r ≤ n < n+1`)
-      have hYADr : YADr cfg place self env offset n r
-          = (L1r cfg place self env offset r + L2r cfg place self env offset r) *
-            (XAr cfg place self env offset r -
-              (L1r cfg place self env offset r * L1r cfg place self env offset r
-                - XAr cfg place self env offset r - XPr cfg place self env offset r)) := by
-        rw [YADr, if_neg (by omega)]
-      -- YADr at `r+1`: derived when `r ≠ n`, the witnessed doubled final `y` when `r = n`.
-      have hYADr1n : YADr cfg place self env offset n (n + 1)
-          = 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1)) := by rw [YADr, if_pos rfl]
-      have hYADr1i : r ≠ n → YADr cfg place self env offset n (r + 1)
-          = (L1r cfg place self env offset (r + 1) + L2r cfg place self env offset (r + 1)) *
-            (XAr cfg place self env offset (r + 1) -
-              (L1r cfg place self env offset (r + 1) * L1r cfg place self env offset (r + 1)
-                - XAr cfg place self env offset (r + 1) - XPr cfg place self env offset (r + 1))) :=
-        fun h => by rw [YADr, if_neg (by omega)]
-      simp only [XAr, XPr, YPr, L1r, L2r, Zr, Zpr, Kr, adv] at hYADr hYADr1n hYADr1i ⊢
-      -- resolve the round's `if r = 0` (anchored copy) split first, so its ops reduce
-      by_cases hr0 : r = 0
-      · -- first loop row: `x_p`/`y_p` are copies of `base`
-        subst hr0
-        by_cases hrn : (0 : ℕ) = n
-        · -- single-round circuit: `q_mul_3` on row 0
-          subst hrn
-          rw [hYADr, hYADr1n]
-          round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr] at hRound
-          obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
-          refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
-          · rcases mul_eq_zero.mp hbool with h | h
-            · exact Or.inl (by linear_combination h)
-            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
-            · exact Or.inr (by linear_combination -h)
-          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
-          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
-          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
-          · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring)) 2 * hg2
-        · -- interior first row: `q_mul_2` on row 0
-          rw [hYADr, hYADr1i hrn]
-          round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hrn] at hRound
-          obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
-          refine ⟨?_, ?_, ?_, ?_,
-            fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
-          · rcases mul_eq_zero.mp hbool with h | h
-            · exact Or.inl (by linear_combination h)
-            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
-            · exact Or.inr (by linear_combination -h)
-          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
-          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
-          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
-          · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring)) 2 * hg2
-      · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
-        by_cases hrn : r = n
-        · -- last round: `q_mul_3`
-          subst hrn
-          rw [hYADr, hYADr1n]
-          round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0] at hRound
-          obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
-          refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
-          · rcases mul_eq_zero.mp hbool with h | h
-            · exact Or.inl (by linear_combination h)
-            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
-            · exact Or.inr (by linear_combination -h)
-          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
-          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
-          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring)) 2 * hg1
-          · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
-        · -- interior round: `q_mul_2`
-          rw [hYADr, hYADr1i hrn]
-          -- ACCEPTANCE (C2a #1): `round_norm` bundles the gate `circuit_norm` reduction with the
-          -- gate/def args AND the rotation-row cast (the hand `simp only [hzp]`, mechanized).
-          round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0, if_neg hrn]
-            at hRound
-          obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
-          refine ⟨?_, ?_, ?_, ?_,
-            fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
-          · rcases mul_eq_zero.mp hbool with h | h
-            · exact Or.inl (by linear_combination h)
-            -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
-            · exact Or.inr (by linear_combination -h)
-          -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
-          -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
-          -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring)) 2 * hg1
-          · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
+  -- the framework split: `Constraints (loop) ↔ ∀ r : Fin (n+1), <round r's constraints>`
+  simp only [loop, circuit_norm] at hLoop
+  intro r hr
+  have hrle : r ≤ n := by omega
+  -- round `r`'s own constraints (the `forRange'` body ignores its base-row arg; `round` recomputes)
+  have hRound := hLoop ⟨r, hr⟩
+  -- reduce round `r`'s gate constraints to the value-level facts.
+  -- `2 ≠ 0` lets the gradient closers clear the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
+  have h2 : (2 : Fp) ≠ 0 := by decide
+  -- The `z`-prev cell reads at `↑(place self + (offset+1+r)) - 1`; normalize it to the
+  -- `Zpr` spelling `↑(place self + (offset+r))` (the single `offset+(k+1)` boundary quirk).
+  have hzp : ((place self + (offset + 1 + r) : ℕ) : ℤ) - 1
+      = ((place self + (offset + r) : ℕ) : ℤ) := by push_cast; ring
+  -- YADr at `r` is always the derived form (since `r ≤ n < n+1`)
+  have hYADr : YADr cfg place self env offset n r
+      = (L1r cfg place self env offset r + L2r cfg place self env offset r) *
+        (XAr cfg place self env offset r -
+          (L1r cfg place self env offset r * L1r cfg place self env offset r
+            - XAr cfg place self env offset r - XPr cfg place self env offset r)) := by
+    rw [YADr, if_neg (by omega)]
+  -- YADr at `r+1`: derived when `r ≠ n`, the witnessed doubled final `y` when `r = n`.
+  have hYADr1n : YADr cfg place self env offset n (n + 1)
+      = 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1)) := by rw [YADr, if_pos rfl]
+  have hYADr1i : r ≠ n → YADr cfg place self env offset n (r + 1)
+      = (L1r cfg place self env offset (r + 1) + L2r cfg place self env offset (r + 1)) *
+        (XAr cfg place self env offset (r + 1) -
+          (L1r cfg place self env offset (r + 1) * L1r cfg place self env offset (r + 1)
+            - XAr cfg place self env offset (r + 1) - XPr cfg place self env offset (r + 1))) :=
+    fun h => by rw [YADr, if_neg (by omega)]
+  simp only [XAr, XPr, YPr, L1r, L2r, Zr, Zpr, Kr, adv] at hYADr hYADr1n hYADr1i ⊢
+  -- resolve the round's `if r = 0` (anchored copy) split first, so its ops reduce
+  by_cases hr0 : r = 0
+  · -- first loop row: `x_p`/`y_p` are copies of `base`
+    subst hr0
+    by_cases hrn : (0 : ℕ) = n
+    · -- single-round circuit: `q_mul_3` on row 0
+      subst hrn
+      rw [hYADr, hYADr1n]
+      round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr] at hRound
+      obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
+      refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
+      · rcases mul_eq_zero.mp hbool with h | h
+        · exact Or.inl (by linear_combination h)
+        -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+        · exact Or.inr (by linear_combination -h)
+      -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+      -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+      -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+      · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
+      · linear_combination hsec
+      · linear_combination (norm := (field_simp; ring)) 2 * hg2
+    · -- interior first row: `q_mul_2` on row 0
+      rw [hYADr, hYADr1i hrn]
+      round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hrn] at hRound
+      obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
+      refine ⟨?_, ?_, ?_, ?_,
+        fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
+      · rcases mul_eq_zero.mp hbool with h | h
+        · exact Or.inl (by linear_combination h)
+        -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+        · exact Or.inr (by linear_combination -h)
+      -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+      -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+      -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+      · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
+      · linear_combination hsec
+      · linear_combination (norm := (field_simp; ring)) 2 * hg2
+  · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
+    by_cases hrn : r = n
+    · -- last round: `q_mul_3`
+      subst hrn
+      rw [hYADr, hYADr1n]
+      round_norm [round, qMul3Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0] at hRound
+      obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
+      refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
+      · rcases mul_eq_zero.mp hbool with h | h
+        · exact Or.inl (by linear_combination h)
+        -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+        · exact Or.inr (by linear_combination -h)
+      -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+      -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+      -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+      · linear_combination (norm := (field_simp; ring)) 2 * hg1
+      · linear_combination hsec
+      · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
+    · -- interior round: `q_mul_2`
+      rw [hYADr, hYADr1i hrn]
+      -- ACCEPTANCE (C2a #1): `round_norm` bundles the gate `circuit_norm` reduction with the
+      -- gate/def args AND the rotation-row cast (the hand `simp only [hzp]`, mechanized).
+      round_norm [round, qMul2Gate, forLoopPolys, yA, yAExpr, xRExpr, if_neg hr0, if_neg hrn]
+        at hRound
+      obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
+      refine ⟨?_, ?_, ?_, ?_,
+        fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
+      · rcases mul_eq_zero.mp hbool with h | h
+        · exact Or.inl (by linear_combination h)
+        -- `bool_check = k·(1−k)`: the second factor is `1 − k` (sign flip vs `k − 1`).
+        · exact Or.inr (by linear_combination -h)
+      -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
+      -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
+      -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
+      · linear_combination (norm := (field_simp; ring)) 2 * hg1
+      · linear_combination hsec
+      · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
 
 /-- **Extraction of the round-0 anchor copies.** Round 0 anchors `x_p`/`y_p` at `offset + 1`
-to the base point by copy (`CircuitVersion::AnchoredBase`). For any `numRounds ≥ 1` the loop's
-`Constraints` therefore pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`. Proven by
-induction over `numRounds`, peeling round 0 (the innermost round). -/
-private theorem loop_anchor (n : ℕ) :
-    ∀ numRounds : ℕ, 1 ≤ numRounds →
-    RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n numRounds).operations self) →
+to the base point by copy (`CircuitVersion::AnchoredBase`), so the `n + 1`-round loop's
+`Constraints` pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`.
+
+The framework `forRange'_constraints` split exposes round 0's constraints as `hLoop ⟨0, _⟩`;
+its anchor copies read off directly. -/
+private theorem loop_anchor (n : ℕ)
+    (hLoop : RegionOperations.Constraints place self env
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
     adv cfg.xP place self env (offset + 1) = input.base.x.eval place env ∧
     adv cfg.yP place self env (offset + 1) = input.base.y.eval place env := by
-  intro numRounds
-  induction numRounds with
-  | zero => intro h; omega
-  | succ k ih =>
-    intro _ hC
-    rw [loop_operations_succ, RegionOperations.constraints_append] at hC
-    obtain ⟨hLoop, hRound⟩ := hC
-    rcases Nat.eq_zero_or_pos k with rfl | hk
-    · -- `numRounds = 1`: round 0 is the fresh round; read its anchor copies directly
-      simp only [round, circuit_norm, adv] at hRound ⊢
-      exact ⟨hRound.1, hRound.2.1⟩
-    · exact ih hk hLoop
+  simp only [loop, circuit_norm] at hLoop
+  -- round 0's anchor copies (r = 0 branch of `round`)
+  have hRound := hLoop ⟨0, by omega⟩
+  simp only [round, circuit_norm, adv] at hRound ⊢
+  exact ⟨hRound.1, hRound.2.1⟩
 
 end LoopFacts
 
@@ -684,7 +670,7 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
       = ((accScalar m bits' (n + 1)) • P).x
     ∧ 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
       = 2 * ((accScalar m bits' (n + 1)) • P).y := by
-  have hfacts := loop_gate_facts cfg input ebits place self env offset n (n + 1) le_rfl hLoop
+  have hfacts := loop_gate_facts cfg input ebits place self env offset n hLoop
   -- the per-row cell readers as `ℕ → Fp` functions, in `soundness_aux`'s shape
   set XA := fun r => adv cfg.xA place self env (offset + 1 + r) with hXA
   set XP := fun r => adv cfg.xP place self env (offset + 1 + r) with hXP
@@ -774,7 +760,7 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
       ∀ r : Fin n, adv cfg.z place self env (offset + 1 + (r.val + 1))
         = 2 * adv cfg.z place self env (offset + 1 + r.val)
           + (if bits' (r.val + 1) then 1 else 0) := by
-  have hfacts := loop_gate_facts cfg input ebits place self env offset n (n + 1) le_rfl hLoop
+  have hfacts := loop_gate_facts cfg input ebits place self env offset n hLoop
   -- the bit read off the running sum at each round, decided into a `BitsHint`
   refine ⟨fun j => decide (adv cfg.z place self env (offset + 1 + j)
       = 2 * adv cfg.z place self env (offset + j) + 1), ?_, ?_, ?_⟩
@@ -823,11 +809,10 @@ every row's `z`/`x_p`/`y_p`/`λ₁`/`λ₂`/`x_a(next)` cell to the donor's hone
 (for the `q_mul_1` gate) and the output rows off the same witnesses. -/
 private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp))
     (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ) :
-    ∀ numRounds : ℕ, numRounds ≤ n + 1 →
-    RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input ebits offset n numRounds).operations self) →
-    ∀ r, r < numRounds →
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ)
+    (hW : RegionOperations.ExtendsWitnesses place self env
+      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+    ∀ r, r < n + 1 →
       adv cfg.z place self env.toEnvironment (offset + 1 + r)
           = zRunValue (input.z.eval place env.toEnvironment) (ebits ⟨place, env⟩) r ∧
       adv cfg.xP place self env.toEnvironment (offset + 1 + r)
@@ -846,27 +831,20 @@ private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)
           = (accVal (input.base.x.eval place env.toEnvironment)
               (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
               (input.yA.eval place env.toEnvironment) (ebits ⟨place, env⟩) (r + 1)).1 := by
-  intro numRounds
-  induction numRounds with
-  | zero => intro _ _ r hr; omega
-  | succ k ih =>
-    intro hkb hW r hr
-    rw [loop_operations_succ, RegionOperations.extendsWitnesses_append] at hW
-    obtain ⟨hWloop, hWround⟩ := hW
-    rcases Nat.lt_succ_iff_lt_or_eq.mp hr with hr' | rfl
-    · exact ih (by omega) hWloop r hr'
-    · -- the fresh round `r`'s own assignAdvice/copyAdvice witnesses (`r = 0`'s anchor copy and
-      -- the interior assignment both reduce to the same honest value equations)
-      simp only [adv, show offset + 1 + (r + 1) = offset + 1 + r + 1 from by omega]
-      by_cases hr0 : r = 0 <;>
-        [ simp only [round, hr0, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
-            AssignedCell.eval, Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr,
-            Witgen.VExprOver.eval, Witgen.evalSteps, reduceIte] at hWround ⊢;
-          simp only [round, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
-            AssignedCell.eval, Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr,
-            Witgen.VExprOver.eval, Witgen.evalSteps, if_neg hr0] at hWround ⊢ ] <;>
-        exact ⟨hWround.1, hWround.2.1, hWround.2.2.1, hWround.2.2.2.1,
-          hWround.2.2.2.2.1, hWround.2.2.2.2.2.1⟩
+  -- the framework `forRange'_extendsWitnesses` split: `∀ r : Fin (n+1), <round r's witness>`
+  simp only [loop, circuit_norm] at hW
+  intro r hr
+  -- round `r`'s own assignAdvice/copyAdvice witnesses (`r = 0`'s anchor copy and the interior
+  -- assignment both reduce to the same honest value equations)
+  have hWround := hW ⟨r, hr⟩
+  simp only [adv, show offset + 1 + (r + 1) = offset + 1 + r + 1 from by omega]
+  by_cases hr0 : r = 0 <;>
+    [ simp only [round, hr0, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+        reduceIte] at hWround ⊢;
+      simp only [round, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+        if_neg hr0] at hWround ⊢ ] <;>
+    exact ⟨hWround.1, hWround.2.1, hWround.2.2.1, hWround.2.2.2.1,
+      hWround.2.2.2.2.1, hWround.2.2.2.2.2.1⟩
 
 /-- **Completeness loop lemma.** The honest prover's `ExtendsWitnesses` of the loop pins every
 cell to the donor's honest value (`zRunValue`/`rowLambdaValue`/`accVal`), and the loaded round
@@ -940,10 +918,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
   -- **global** honest cell values (`loop_row_values`), rewritten to `P`-coordinates. Needed
   -- because a round's gate reads cells (`z`-predecessor, next-row `x_p`/`y_p`/`x_a`) witnessed
   -- by *other* rounds.
-  have hRowVals : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
-      RegionOperations.ExtendsWitnesses place self env
-        ((loop cfg input ebits offset n numRounds).operations self) →
-      ∀ r, r < numRounds →
+  have hRowVals : ∀ r, r < n + 1 →
         adv cfg.z place self env.toEnvironment (offset + 1 + r)
             = zRunValue (input.z.eval place env.toEnvironment) bits r ∧
         adv cfg.xP place self env.toEnvironment (offset + 1 + r) = P.x ∧
@@ -957,29 +932,21 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         adv cfg.xA place self env.toEnvironment (offset + 1 + (r + 1))
             = (accVal P.x P.y (input.xA.eval place env.toEnvironment)
                 (input.yA.eval place env.toEnvironment) bits (r + 1)).1 := by
-    intro numRounds h1 hW r hr
+    intro r hr
     obtain ⟨h1', h2', h3', h4', h5', h6'⟩ :=
-      loop_row_values cfg input ebits place self env offset n numRounds h1 hW r hr
+      loop_row_values cfg input ebits place self env offset n hWit r hr
     rw [← hbits] at h1' h4' h5' h6'
     rw [hxPBase] at h2'; rw [hyPBase] at h3'
     rw [hxPBase, hyPBase] at h4' h5' h6'
     exact ⟨h1', h2', h3', h4', h5', h6'⟩
-  -- the per-round induction, discharging each round's gate constraints
-  suffices h : ∀ numRounds : ℕ, numRounds ≤ n + 1 →
-      RegionOperations.ExtendsWitnesses place self env
-        ((loop cfg input ebits offset n numRounds).operations self) →
-      RegionOperations.Constraints place self env.toEnvironment
-        ((loop cfg input ebits offset n numRounds).operations self) from h (n + 1) le_rfl hWit
-  intro numRounds
-  induction numRounds with
-  | zero => intro _ _; exact trivial
-  | succ k ih =>
-    intro hkb hW
-    rw [loop_operations_succ, RegionOperations.extendsWitnesses_append] at hW
-    rw [loop_operations_succ, RegionOperations.constraints_append]
-    obtain ⟨hWloop, _⟩ := hW
-    refine ⟨ih (by omega) hWloop, ?_⟩
-    -- ══ discharge round `k`'s gate constraints from the honest cells + `honest_step` ══
+  -- discharge each round's gate constraints. The framework `forRange'_constraints` split reduces
+  -- the goal to `∀ r : Fin (n+1), <round r's membership/gate>`; each round `k` is discharged from
+  -- the GLOBAL honest cell values (`hRowVals`) + `honest_step` — no loop-structure induction (the
+  -- `hRowVals` already pins every row, so earlier rounds are just other `∀ r` instances).
+  simp only [loop, circuit_norm]
+  intro rr
+  obtain ⟨k, hkb⟩ := rr
+  · -- ══ discharge round `k`'s gate constraints from the honest cells + `honest_step` ══
     -- `2 ≠ 0` lets the gradient closers clear the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
     have hp2 : (2 : Fp) ≠ 0 := by decide
     have hkn : k ≤ n := by omega
@@ -997,7 +964,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       · show (-P).y = _; rw [Orchard.Point.neg_y]; norm_num
       · show P.y = _; norm_num
     -- honest cell values of row `k`, in point coordinates
-    obtain ⟨hVz, hVxp, hVyp, hVl1, hVl2, hVxa⟩ := hRowVals (n + 1) le_rfl hWit k (by omega)
+    obtain ⟨hVz, hVxp, hVyp, hVl1, hVl2, hVxa⟩ := hRowVals k (by omega)
     rw [hRL k (by omega)] at hVl1 hVl2
     simp only [accVal, hAV k (by omega)] at hVxa
     rw [hHSxnext] at hVxa
@@ -1021,7 +988,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         = (accScalar m bits k • P).x := by
       rcases Nat.eq_zero_or_pos k with rfl | hkpos
       · simpa [accScalar] using hxA0cell.trans hxA0
-      · have h := (hRowVals (n + 1) le_rfl hWit (k - 1) (by omega)).2.2.2.2.2
+      · have h := (hRowVals (k - 1) (by omega)).2.2.2.2.2
         rw [show k - 1 + 1 = k from by omega] at h
         rw [h, hAV k (by omega)]
     -- the honest `z`-step at row `k` (`z_k − 2·z_{k−1} = bit k`)
@@ -1031,7 +998,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       rcases Nat.eq_zero_or_pos k with rfl | hkpos
       · simpa using hz0
       · rw [if_neg (by omega), show offset + k = offset + 1 + (k - 1) from by omega]
-        exact (hRowVals (n + 1) le_rfl hWit (k - 1) (by omega)).1
+        exact (hRowVals (k - 1) (by omega)).1
     have hZstep : adv cfg.z place self env.toEnvironment (offset + 1 + k)
         - adv cfg.z place self env.toEnvironment (offset + k) * 2 = (if bits k then 1 else 0) := by
       rw [hVz, hZprev]
@@ -1070,7 +1037,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     · -- ── interior round: `q_mul_2` (constancy checks; `Y_A(next)` derived at row `k+1`) ──
       -- next row's honest cells (in-loop, from `hRowVals (k+1)`), in point coordinates
       obtain ⟨_, hVxp1, hVyp1, hVl1', hVl2', _⟩ :=
-        hRowVals (n + 1) le_rfl hWit (k + 1) (by omega)
+        hRowVals (k + 1) (by omega)
       rw [hRL (k + 1) (by omega)] at hVl1' hVl2'
       -- honest_step at row `k+1` — its `Y_A` identity pins the next row's derived `Y_A`
       obtain ⟨_, hHSyad1, _, _⟩ :=
@@ -1242,7 +1209,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       intro m hm h2 hbound
       -- the anchor copies pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`
       obtain ⟨hAnchorX, hAnchorY⟩ := loop_anchor cfg inp (bitsOf inp w) env.place self env.env offset n
-        (n + 1) (by omega) hLoop
+        hLoop
       simp only [hinp, AssignedCell.eval, hBx, hBy] at hAnchorX hAnchorY
       -- the accumulator hypothesis `ofCoords (xA, yA) = m • base` ⇒ coordinate equalities
       have hAccX : input_xA = (m • ({ x := input_base_x, y := input_base_y } : Point Fp)).x :=
@@ -1294,10 +1261,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
     circuit_proof_start
       [yAFinalWit, readCell,
        Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-       Witgen.evalSteps,
        -- gate defs, so step (b) normalizes the `q_mul_1` gate constraint at the goal (the same
        -- unfold soundness passes) — the honest-row `Y_A` identity is then closed directly below.
-       qMul1Gate, Constraints.withSelector, yA, yAExpr, xRExpr]
+       qMul1Gate, yA, yAExpr, xRExpr]
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hWloop`'s spelling
@@ -1318,8 +1284,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       congrArg Point.y hm
     -- the honest row values (the loop witnesses), with the input reads resolved, folded onto
     -- the honest `bits` (the opaque-family occurrences rewritten via `hbits`)
-    have hRows := loop_row_values cfg inp (bitsOf inp w) env.place self env.env offset n (n + 1)
-      le_rfl hWloop
+    have hRows := loop_row_values cfg inp (bitsOf inp w) env.place self env.env offset n hWloop
     simp only [← hbits] at hRows
     -- (`h_output_*` are already in the raw `env.advice` cell form the induction consumes)
     -- the scalar-field bound at row 0 (`2m + 1 < |scalar field|`), from the range assumption
