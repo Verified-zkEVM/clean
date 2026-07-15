@@ -746,8 +746,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- Peel `startCopy ++ loop ++ zsCells`, then route the loop constraints into `loop_sound`
   -- (whose induction consumes each round's two child chunks via `round_acc_sound`).
   soundness := by
-    circuit_proof_start [startCopy, RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, operations_zsCells, output_zsCells]
+    circuit_proof_start [startCopy]
     -- composite gadget: `circuit_proof_start` bundled step (a) (intro + `soundness_iff` + house
     -- names) and the constraints peel; the loop's child chunks keep it composite, so the leaf-only
     -- finish (row-fact chaining + cleanup) is correctly skipped, leaving `hc`/`h_input` intact.
@@ -807,11 +806,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- consumes each round's two child chunks via `round_complete`, which uses the `subcircuit_rw`
   -- engine's completeness mode).
   completeness := by
-    circuit_proof_start [startCopy,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, operations_zsCells, output_zsCells,
-      Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-      Witgen.evalSteps]
+    circuit_proof_start [startCopy]
     -- composite gadget: the loop's child chunks keep the goal composite, so the leaf-only finish
     -- is skipped and `hwit`/`h_input`/`hPA` survive for the manual continuation below.
     obtain ⟨hWz, hWloop⟩ := hwit

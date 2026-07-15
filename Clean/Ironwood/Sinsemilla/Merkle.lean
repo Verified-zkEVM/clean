@@ -242,7 +242,7 @@ def circuit :
   ProverAssumptions input _ := GateSpec input
   soundness := by
     -- PLAYBOOK (blocked on MulFixed/CondSwap):
-    -- `circuit_proof_start [body, decomposeGate, Constraints.withSelector, …]` runs the universal
+    -- `circuit_proof_start [body, decomposeGate]` runs the universal
     -- prefix — intro + `soundness_iff` + house names, the 10-copies-+-4-poly-gate peel over the
     -- unfold list below, and `provable_type_simp`. This gate is a LEAF (no folded child chunk), so
     -- the leaf-only finish fires: the copy equations land the input coordinates on the gate cells and
@@ -250,21 +250,17 @@ def circuit :
     -- 4 gate polys and closes with `exact spec_of_polysZero hLcheck hLeftCheck hRightCheck hB1B2`
     -- (value math DONE by `spec_of_polysZero`; only the copy-cell/input-cell bookkeeping remains,
     -- as `Add.soundness`/`AddIncomplete.soundness` do it).
-    circuit_proof_start [body, decomposeGate, Constraints.withSelector,
-      RegionCircuit.operations_bind, operations_copyAdvice, operations_enable,
-      RegionOperations.constraints_append]
+    circuit_proof_start [body, decomposeGate]
     sorry
   completeness := by
     -- PLAYBOOK (blocked on MulFixed/CondSwap):
-    -- `circuit_proof_start [body, decomposeGate, Constraints.withSelector, …]` runs the universal
+    -- `circuit_proof_start [body, decomposeGate]` runs the universal
     -- prefix — intro + `completeness_iff` + house names, the copy/gate peel over the unfold list, and
     -- `provable_type_simp`. Leaf gate ⇒ the finish lands `h_input`/`hwit`/`h_output` on the input
     -- coordinates. The user half `obtain … := hPA` (`GateSpec`) and closes the 4 gate polys with
     -- `polysZero_of_spec hPA`; the copy goals are witness-consistent (value math DONE by
     -- `polysZero_of_spec`).
-    circuit_proof_start [body, decomposeGate, Constraints.withSelector,
-      RegionCircuit.operations_bind, operations_copyAdvice, operations_enable,
-      RegionOperations.constraints_append]
+    circuit_proof_start [body, decomposeGate]
     sorry
 
 end Gate

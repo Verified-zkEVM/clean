@@ -1101,10 +1101,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
     -- synthesize op-list peel below, and `provable_type_simp`) runs; the folded loop chunk keeps the
     -- goal composite, so the leaf-only finish is skipped and `hc`/`h_input`/`h_output` survive.
     -- peel the synthesize op list: two copies ++ loop (kept folded) ++ output reads (no ops)
-    circuit_proof_start [HashPiece.synthesize,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      output_cellVec]
+    circuit_proof_start [HashPiece.synthesize]
     obtain ⟨hZ0, hXA0, hLoop⟩ := hc
     -- reconstruct the input record so the loop lemmas' `input` argument matches `hLoop`
     set inp : Inputs (AssignedCell Fp) :=
@@ -1168,10 +1165,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
     -- loop-based composite: the universal prefix (intro + `completeness_iff` + house names, the
     -- witness/op-list peel below, and `provable_type_simp`) runs; the folded loop witness chunk keeps
     -- the goal composite, so the leaf-only finish is skipped and `hwit`/`h_input`/`hPA`/`_hE` survive.
-    circuit_proof_start [HashPiece.synthesize,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      output_cellVec]
+    circuit_proof_start [HashPiece.synthesize]
     obtain ⟨hWz0, hWxA0, hWloop⟩ := hwit
     set inp : Inputs (AssignedCell Fp) :=
       { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp

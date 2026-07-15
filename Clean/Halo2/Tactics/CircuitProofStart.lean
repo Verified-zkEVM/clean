@@ -72,6 +72,31 @@ splits `h_output` into per-component atom-left value facts (`h_output_<field>`),
 `∀ i, <cell i> = output_zs[i]` form for a vector component — see `ProvableTypeSimp`. The composite
 user halves consume those facts directly.
 
+## The unfold list: gadget-file-names only
+
+`circuit_proof_start [<unfold list>]` feeds its arguments into the step-(b) peel, which already runs
+`circuit_norm` (`simp only [circuit_norm, <unfold list>] at …`). So the list must carry ONLY names
+that are **not** already `circuit_norm` members — in practice, **names defined in the gadget's own
+file**: its gate definitions, its witness programs, and its `Spec`. A name that is already a
+`circuit_norm` member (a tagged theorem like `RegionCircuit.operations_bind`, or a tagged `def` like
+`Constraints.withSelector` / `Witgen.evalSteps`) is pure noise — it changes nothing, and left
+unchecked such entries accrete across the corpus.
+
+To keep this from happening, `mkUnfoldLemmas` **lints every argument** (`warnRedundantUnfold`,
+`circuitNormMembers`): if a passed name is already in the `circuit_norm` set (theorem origins ∪
+`toUnfold`), it emits a **warning** at that argument. Under CI's `--wfail` this fails the build, so
+the noise cannot re-accumulate; interactively it is a loud, precisely-located diagnostic. The lazy
+witness-eval reductions (`WitgenIR.getElem_eval_*`, `VExpr.getElem_eval_*`) are already
+`@[circuit_norm ↓]`, so the raw structural recursors (`WitgenIROver.eval`, `VExprOver.eval`,
+`WitgenIROver.ofFExpr`) never belong in a list — they are deliberately untagged to preserve the
+opaque-until-consumed discipline, and the getElem-keyed lemmas do the reduction without them.
+
+A shared **spec** unfold that the gadget's user half genuinely needs (e.g.
+`Orchard.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
+one legitimate non-own-file entry — it is neither `circuit_norm` noise nor another gadget's circuit
+internals, but the same category as the gadget's own `Spec`. It is not linted (it is not a
+`circuit_norm` member).
+
 ## Direction detection
 
 The goal at proof start is `∀ config (offset)?, HEAD …` where `HEAD` is one of the four constants
@@ -224,11 +249,52 @@ def rwIffAndIntro (d : Direction) : TacticM Unit := do
   for nm in d.introNames do
     evalTactic (← `(tactic| intro $(mkIdent nm):ident))
 
-/-- Build the extra-lemma `simpLemma` syntaxes from the user's `[<unfold list>]`. -/
+/-- The set of names that are already `circuit_norm` members — the union of the extension's
+simp-theorem origins (tagged theorems) and its `toUnfold` set (tagged `def`s, e.g.
+`Constraints.withSelector`, `Witgen.evalSteps`). Empty if the extension is somehow absent (never,
+in a build that imported `circuit_norm`). Used to lint the unfold list (see `warnRedundantUnfold`). -/
+def circuitNormMembers : CoreM NameSet := do
+  match ← getSimpExtension? `circuit_norm with
+  | none => return {}
+  | some ext =>
+    let thms ← SimpExtension.getTheorems ext
+    let mut s : NameSet := {}
+    for o in SimpTheorems.lemmaNames thms |>.toList do
+      s := s.insert (Origin.key o)
+    for n in SimpTheorems.toUnfold thms |>.toList do
+      s := s.insert n
+    return s
+
+/-- **Unfold-list lint (the gadget-file-names-only rule).** `circuit_proof_start [<list>]` and the
+peel-step `simp only [circuit_norm, …]` calls it feeds already run `circuit_norm`, so the list must
+carry ONLY names *not* already in that set — in practice, names defined in the gadget's own file
+(its gates, witness programs, `Spec`). A passed name that is already a `circuit_norm` member is pure
+noise: it changes nothing and, left unchecked, accretes across the corpus. We emit a **warning** on
+each such argument. Under CI's `--wfail` this fails the build, so the class of noise cannot
+re-accumulate; interactively it is a loud, precisely-located diagnostic. Non-identifier arguments
+(rare — the list is idents in practice) are left alone. -/
+def warnRedundantUnfold (t : Term) (members : NameSet) : TacticM Unit := do
+  -- resolve the argument to a global constant, if it is a plain (possibly dotted) identifier
+  let names ← try
+      pure (← resolveGlobalConst t.raw)
+    catch _ => pure []
+  for n in names do
+    if members.contains n then
+      logWarningAt t m!"circuit_proof_start: `{n}` is already a `@[circuit_norm]` member, so passing \
+it in the unfold list is redundant (it changes nothing). Remove it — the unfold list should carry \
+only names defined in this gadget's own file (gates, witness programs, `Spec`)."
+      return
+
+/-- Build the extra-lemma `simpLemma` syntaxes from the user's `[<unfold list>]`, warning on any
+argument that is already a `circuit_norm` member (see `warnRedundantUnfold`). -/
 def mkUnfoldLemmas (terms : Option (Array Term)) :
     TacticM (Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
   match terms with
-  | some ts => ts.mapM fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+  | some ts =>
+    let members ← circuitNormMembers
+    ts.mapM fun t => do
+      warnRedundantUnfold t members
+      `(Lean.Parser.Tactic.simpLemma| $t:term)
   | none => pure #[]
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
@@ -331,7 +397,6 @@ def clearConsumed (d : Direction) : TacticM Unit := do
     -- leaves it in its original `eval … = output` form, which the linter treats as used by the
     -- gadget's return, so this does not introduce an unused-hyp lint.
     try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `hwit):ident)) catch _ => pure ()
-
 
 /-- The composite runner: steps (a)–(f) plus the consumed-equation cleanup, each no-op-tolerant.
 
