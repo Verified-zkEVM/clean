@@ -83,8 +83,9 @@ copies. R1b refilled both proofs: the six child-consumption sites go through `su
 (soundness `at h` weakening; completeness goal mode with the `h_spec_i` derived statements —
 no absorption iffs, no `call_constraints_and_specs` copies), and the value algebra is the
 fdee7ac4 donor ladder verbatim modulo the region-faithful cell addresses
-(`env.place i₀ + X`). `#print axioms` on the bundle: the standard three plus the donor Pallas
-trust base (`pallas_natCard` + vendored CompElliptic `native_decide` curve facts).
+(`env.place i₀ + X`). `#print axioms` on the bundle: the standard three plus vendored CompElliptic
+`native_decide` facts (`pallas_natCard` is now a theorem, proved from a `native_decide`
+order certificate in `CompElliptic.Curves.Pasta.Pallas.natCard`).
 -/
 
 namespace Halo2.Ironwood.Ecc.Mul

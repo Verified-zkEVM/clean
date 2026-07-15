@@ -1,4 +1,5 @@
 import Clean.Orchard.Specs.CompElliptic.Curves.Pasta
+import Clean.Orchard.Specs.CompElliptic.Curves.PastaOrder
 
 /-!
 # Orchard-facing Pallas vocabulary
@@ -381,15 +382,16 @@ def doubleAndAdd (acc p : Point Fp) : Option (Point Fp) := do
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 
 /--
-**Axiom**: the Pallas curve group has exactly `q = PALLAS_SCALAR_CARD` points.
-
-This is the published point count of the Pallas curve. The vendored CompElliptic
-formalization has no point counting, so this is the one central trust assumption behind
-scalar-multiplication circuit proofs; all consumers needing order facts derive them from
-here (see `addOrderOf_eq`).
+The Pallas curve group has exactly `q = PALLAS_SCALAR_CARD` points (the published point
+count of the Pallas curve). Proved in `CompElliptic.Curves.Pasta.Pallas.natCard`: the prime
+`q` kills the nonzero point `(-1, 2)` (a `native_decide` double-and-add certificate), and
+the trivial count bound `Nat.card ≤ 2p + 1 < 2q` pins the group order to `q` — no Hasse
+bound needed. All consumers needing order facts derive them from here (see
+`addOrderOf_eq`).
 -/
-axiom pallas_natCard :
-  Nat.card (ShortWeierstrass.SWPoint Pallas.curve) = PALLAS_SCALAR_CARD
+theorem pallas_natCard :
+    Nat.card (ShortWeierstrass.SWPoint Pallas.curve) = PALLAS_SCALAR_CARD :=
+  Pallas.natCard
 
 /-- Every non-identity Pallas point generates the full prime-order group. -/
 theorem addOrderOf_eq {P : ShortWeierstrass.SWPoint Pallas.curve} (h : P ≠ 0) :
