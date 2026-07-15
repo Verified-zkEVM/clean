@@ -110,9 +110,7 @@ def yAExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
 /-- `y_a = Y_A · TWO_INV` at `rotation` — the actual per-row `y_a` the Rust gate uses (Rust
 `y_a` closure, `incomplete.rs:114-116`: `Y_A(meta,rot) * TWO_INV`). `TWO_INV = (2 : Fp)⁻¹`,
 placed on the RIGHT of `Y_A` as a field scalar, so the erasure is `.scaled Y_A TWO_INV` —
-matching the VK fixture (which pins the raw `TWO_INV` scalar, `14474…169 = 1/2 mod p`). This
-is the VK-faithful spelling; the earlier ×2-normalised form (which cleared the halving to stay
-`ring`-friendly) does NOT match the pinned constraint system. -/
+matching the VK fixture (which pins the raw `TWO_INV` scalar, `14474…169 = 1/2 mod p`). -/
 def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   yAExpr cfg rot * ((2 : Fp)⁻¹)
 
@@ -184,15 +182,14 @@ def qMul3Gate (cfg : Config) : Gate Fp where
   selector := cfg.qMul3
   constraints :=
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
-    Constraints.withSelector cfg.qMul3
-      (forLoopPolys cfg yAFinal)
+    Constraints.withSelector cfg.qMul3 (forLoopPolys cfg yAFinal)
 
 /-- Rust `Config::configure` (`incomplete.rs:75-104`): enable equality on `z` and `λ₁`, allocate
 the three simple selectors, register the three gates. The columns are handed down by `mul.rs`
 (different for `hi`/`lo`). -/
 def configure (z xA xP yP lambda1 lambda2 : Column .advice) : Configure Fp Config := do
-  enableEquality z.toAny
-  enableEquality lambda1.toAny
+  enableEquality z
+  enableEquality lambda1
   let qMul1 ← selector
   let qMul2 ← selector
   let qMul3 ← selector
@@ -376,6 +373,8 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp))
     (qMul2Gate cfg).enable row
   return ()
 
+-- TODO this is a simple forEach loop. users shouldn't have to write recursive functions ot implement them,
+-- need framework-level Circuit loops like main Clean's Circuit.forEach
 /-- The double-and-add loop: `numRounds` rounds, structurally recursive. By the append-bind of
 `RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
 (round … k).operations self` — the per-round decomposition the induction consumes. -/
@@ -481,6 +480,7 @@ private def YADr (n r : ℕ) : Fp :=
       (L1r cfg place self env offset r * L1r cfg place self env offset r
         - XAr cfg place self env offset r - XPr cfg place self env offset r))
 
+-- TODO this kind of stuff could be handled in a cleaner way by defining a circuit bundle for `round` (the loop body)
 /-- **Extraction of the cleaned per-round gate facts.** From the loop's `Constraints`
 (gate enables are inside `round`, so the round constraints live here), each round
 `r < numRounds` yields the four shared `forLoopPolys` facts (booleanity, gradient_1,
@@ -1123,6 +1123,7 @@ def RoundInvariant (n : ℕ) (input : Inputs Fp) (output : Output (n + 1) Fp)
     ∀ b : Fin n, output.zs[b.val + 1] =
       2 * output.zs[b.val] + (if bits (b.val + 1) then 1 else 0)) ∧
   ∀ (m : ℕ),
+    -- TODO weird to use Point.ofCoords here, input/output should just contain entire points
     Point.ofCoords (input.xA, input.yA) = m • base →
     2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
     Point.ofCoords (output.xA, output.yA) = (accScalar m bits (n + 1)) • base
@@ -1135,16 +1136,6 @@ def RoundInvariant (n : ℕ) (input : Inputs Fp) (output : Output (n + 1) Fp)
 from `input.alpha` as `kBits (alpha value) (w + ·)`. The verifier-facing `Spec` existentially
 quantifies a matching bit sequence, so soundness does not depend on the prover. -/
 
-/-- The starting-cell copies emitted before the loop (`incomplete.rs:271-290`): the running sum
-`z` into `cfg.z` at `offset`, and `y_a` into `cfg.λ₁` at `offset`, and `x_a` into `cfg.x_a` at
-`offset + 1`. Split out so `synthesize`'s operation list decomposes cleanly. -/
-def startCopies (cfg : Config) (input : Inputs (AssignedCell Fp)) (offset : ℕ) :
-    RegionCircuit Fp Unit := do
-  let _z ← copyAdvice input.z cfg.z offset
-  let _yA ← copyAdvice input.yA cfg.lambda1 offset
-  let _xA ← copyAdvice input.xA cfg.xA (offset + 1)
-  return ()
-
 def double_and_add (n : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice ×
@@ -1155,7 +1146,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     -- starting copies
-    startCopies cfg input offset
+    let _z ← copyAdvice input.z cfg.z offset
+    let _yA ← copyAdvice input.yA cfg.lambda1 offset
+    let _xA ← copyAdvice input.xA cfg.xA (offset + 1)
     -- q_mul_1 at `offset` (outside the loop rows). The per-round selectors q_mul_2 (interior)
     -- and q_mul_3 (last row) are enabled inside `round`, so each round's gate constraints land
     -- in the loop's `Constraints` — the shape the loop lemmas consume by induction.
@@ -1176,19 +1169,16 @@ def double_and_add (n : ℕ) (w : ℕ) :
 
   -- base is a non-identity on-curve point (Rust exceptional-case check: A/Q not identity,
   -- x_p ≠ x_a across the run — subsumed by the range condition below on the honest side).
-  Assumptions input :=
-    let base : Point Fp := input.base
-    base.OnCurve
+  Assumptions input := input.base.OnCurve
 
   Spec input output _ :=
-    ∃ bits' : BitsHint, RoundInvariant n input output bits'
+    ∃ bits : BitsHint, RoundInvariant n input output bits
 
   -- honest-prover precondition: base on-curve; accumulator is a small positive multiple of the
   -- base in the range where every incomplete addition is exceptional-case-free.
   ProverAssumptions input _ :=
-    let base : Point Fp := input.base
-    base.OnCurve ∧ ∃ m : ℕ,
-      Point.ofCoords (input.xA, input.yA) = m • base ∧
+    input.base.OnCurve ∧ ∃ m : ℕ,
+      Point.ofCoords (input.xA, input.yA) = m • input.base ∧
       2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
 
   -- honest bits are derived from the scalar cell: `kBits alpha (w + ·)` — the same sequence the
@@ -1197,9 +1187,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
     RoundInvariant n input output (kBitsWindow input.alpha w)
 
   -- ══ Soundness ══
-  -- Framework half (mechanical, TACTIC GAP): `soundness_iff`, then split the synthesize op list
-  --   startCopies ++ [q_mul_1] ++ loop ++ [q_mul_2…] ++ [q_mul_3] ++ [final y_a] ++ (output cells)
-  -- via `RegionOperations.constraints_append`, land the starting-copy equalities on the input
+  -- Framework half (mechanical) via `circuit_proof_start`, land the starting-copy equalities on the input
   -- coords, and read the output cells (fixed rows) off the env. User half: feed the cleaned facts
   -- into `loop_zchain_sound` (running-sum chain) and `loop_acc_sound` (accumulator = `accScalar`),
   -- both of which route into the imported donor algebra. Deferred pending the split/eval tactic.
@@ -1208,28 +1196,36 @@ def double_and_add (n : ℕ) (w : ℕ) :
     -- + house names, the synthesize op-list peel below, and `provable_type_simp`); the folded loop
     -- chunk keeps the goal composite, so the leaf-only finish is skipped and `hc`/`h_input`/
     -- `h_output` survive for the running-sum/accumulator induction below.
-    -- peel the synthesize op list: startCopies (3) ++ q_mul_1 ++ loop ++ (output cells, no ops).
-    circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      operations_enable, operations_assignAdvice,
-      RegionOperations.constraints_append, startCopies]
-    obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
-    -- q_mul_1 gate ⇒ `hInit` (derived `Y_A` of loop row 0 = `2·(λ₁ at offset)`)
-    simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr] at hQMul1
-    have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
-      rw [← h_output]; rfl
-    have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
-      rw [← h_output]; rfl
+    circuit_proof_start [qMul1Gate, yA, yAExpr, xRExpr, RoundInvariant]
+    -- TODO circuit_proof_start does not simplify at the goal????
+    simp only [circuit_norm, RoundInvariant]
+    provable_type_simp
+    -- TODO h_output is still not split into output components. what triggers its split?
+    rcases output with ⟨ output_xA, output_yA, output_zs ⟩
+    simp only [Output.mk.injEq] at h_output
+    obtain ⟨ hOutXA, hOutYA, hOutZs ⟩ := h_output
+    -- TODO: h_output should have been split automatically, doing it manually is plumbing that doesn't belong in the user half
+    -- TODO why the .. are we reversing the direction of h_output here, the user-friendly way is to rewrite everything
+    -- in terms of the output variables
+    have hOutXA : output_xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
+      rw [← hOutXA]; rfl
+    have hOutYA : output_yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
+      rw [← hOutYA]; rfl
+    -- TODO this is vector evaluation plumbing that was supposed to be part of provable_type_simp
     have hOutZs : ∀ (i : ℕ) (hi : i < n + 1),
-        output.zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
+        output_zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
       intro i hi
-      rw [← h_output,
-        ProvableType.eval_cells (M := fields (n + 1)) { place := env.place, env := env.env } _]
+      simp only [← hOutZs, adv]
+      -- TODO an existing lemma should close this, but doesn't
+      -- this section points to a lot of missing lemmas
+      -- simp only [circuit_norm]
+      simp_rw [ProvableType.eval_cells (M := fields (n + 1))]
       simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
         AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        adv, circuit_norm]
-    clear h_output
+        circuit_norm]
+    obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
     -- fold `env.advice cfg.col ↑(place self + row)` into `adv` (the loop lemmas' spelling)
+    -- TODO this is ridiculous. we should have a nice normal form and use it
     have hadv : ∀ (col : Column .advice) (row : ℕ),
         env.env.advice col ((env.place self + row : ℕ) : ℤ) = adv col env.place self env.env row :=
       fun _ _ => rfl
@@ -1301,16 +1297,18 @@ def double_and_add (n : ℕ) (w : ℕ) :
     -- witness/op-list peel below, and `provable_type_simp`) runs; the folded loop witness chunk
     -- keeps the goal composite, so the leaf-only finish is skipped and `hwit`/`h_input`/`h_output`/
     -- `hPA` survive for the honest-row induction below.
+    -- TODO why are we passing circuit_norm lemmas to circuit_proof_start??
     circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
       output_cellVec, operations_enable, operations_assignAdvice,
       RegionOperations.extendsWitnesses_append, RegionOperations.constraints_append,
-      startCopies, yAFinalWit, readCell,
+      yAFinalWit, readCell,
       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
       Witgen.evalSteps]
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
     -- (`input`/`output` are already destructured — incl. the `zs` vector field inside `h_output` —
     -- by the prefix's `provable_type_simp`, so the output cells read straight off the env)
+    -- TODO why reverse direction of h_output?
     have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
       rw [← h_output]; rfl
     have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
@@ -1381,6 +1379,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
     rw [hAccX, hAccY] at hR0l1 hR0l2
     refine ⟨⟨hWz, hWyA, hWxA, ?_, ?_⟩, ⟨?_, ?_⟩, ?_⟩
     · -- ── the `q_mul_1` gate: `y_a(copied) = Y_A(row 0)·TWO_INV`, the honest-row `Y_A` identity ──
+      -- TODO why not in circuit_proof_start???
       simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr]
       rw [hWyA, hIyA, hAccY, hR0l1, hR0l2, hWxA, hIxA, hAccX, hR0xp]
       -- VK-faithful gate carries `.scaled … TWO_INV`; clear it (needs `2 ≠ 0`).

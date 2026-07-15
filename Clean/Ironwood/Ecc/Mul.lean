@@ -958,6 +958,8 @@ def mul :
   -- LSB gate, and the donor canonicity finish — the value algebra is byte-identical to the
   -- pre-restructure proof modulo the region-faithful cell addresses (`env.place i₀ + X`).
   soundness := by
+    -- TODO this is fake. "real" circuit_proof_start leaves huge obsolete hypotheses in the proof state
+    -- circuit_proof_start [synthesize, mainRegion]
     circuit_proof_start
     -- composite layouter gadget: `circuit_proof_start` bundled step (a) (intro `cfg`,
     -- `soundness_iff`, house names) and normalized the provable-type evals; the folded
