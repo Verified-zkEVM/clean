@@ -476,7 +476,6 @@ def VarMap.alloc (vm : VarMap) (m : ℕ) (baseVarIdx : ℕ) : VarMap × List ℕ
   ({ env := newEnv, nextLocal := vm.nextLocal + m * nw, loopIdx := vm.loopIdx,
      letBase := vm.letBase, numWords := nw }, wasmLocals)
 
-
 /-! ## AST-based expression compilers (for CodeBuilder) -/
 
 def pushConst (c : F) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
