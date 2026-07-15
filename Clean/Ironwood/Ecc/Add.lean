@@ -406,21 +406,13 @@ def add : FormalRegionCircuit Fp
   Spec input output _ := output.Valid ∧ output = input.p + input.q
 
   soundness := by
-    intro config offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE h_assumptions hc
-    -- reduce circuit structure (gate polys + copy equalities), running the eval simprocs
-    simp only [circuit_norm, gate] at hc h_output
-    -- destructure input/output; split the input/output eval equations into coordinates
-    provable_type_simp
-    simp only [h_input, h_output] at hc ⊢
-    clear h_input h_output
+    circuit_proof_start [gate]
     -- ══ user-facing half: pure field values + curve math ══
     obtain ⟨⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩,
       hcpx, hcpy, hcqx, hcqy⟩ := hc
     -- the copy equations rewrite the gate's P/Q cells to the input coordinates
     simp only [hcpx, hcpy, hcqx, hcqy] at h1 h2 h3a h3b h3c h3d h4a h4b h5a h5b h6a h6b
-    obtain ⟨hpValid, hqValid⟩ := h_assumptions
+    obtain ⟨hpValid, hqValid⟩ := hA
     -- the five witness cells (λ,α,β,γ,δ) have no copy equation, so they stay as
     -- `env.env.advice config.λ …` terms — but they are only ever passed *positionally* to
     -- the coordinate-generic `spec_of_polysZero`, never reasoned about, so no framework
@@ -430,16 +422,7 @@ def add : FormalRegionCircuit Fp
     rw [hsum]
     exact ⟨Orchard.Point.valid_add hpValid hqValid, rfl⟩
   completeness := by
-    intro config offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hlast
-    simp only [circuit_norm, gate, lambdaProgram, rXProgram, rYProgram] at hwit hA h_input h_output ⊢
-    provable_type_simp
-    -- land the copied input-cell reads on the input coordinates, then the gate/witness
-    -- cells on their witness programs (over the input coordinates)
-    simp only [circuit_norm, h_input] at hwit
-    simp only [circuit_norm, h_input, hwit] at ⊢ hA
-    clear h_input h_output hwit
+    circuit_proof_start [gate, lambdaProgram, rXProgram, rYProgram]
     -- ══ user-facing half ══
     obtain ⟨hpValid, hqValid⟩ := hA
     -- the witness R cells equal the complete sum; λ/δ equal their closed-form values

@@ -21,32 +21,53 @@ that the hand-written gadget proofs (`Add`, `MulComplete`, `Mul`) spell out toda
 Given a bundle-proof goal `∀ config (offset)?, FormalRegionCircuit.Soundness …` (or the
 `Completeness`/`FormalCircuit.*` variants), `circuit_proof_start [<unfold list>]`:
 
-(a) **intro the leading bundle binders** (`config`, and `offset` at the region level), auto-detect
-    the direction from the goal head, `rw` the matching `_iff`, and intro the post-iff binders with
-    the established house names.
+(a) **intro the leading bundle binders** (`cfg`, and `offset` at the region level), auto-detect the
+    direction from the goal head, `rw` the matching `_iff`, and intro the post-iff binders with the
+    established house names.
 (b) `simp only [circuit_norm, <unfold list>]` at the direction's established target set — the
-    **constraints** side (`hc` and `h_output` for soundness; `hwit` and the goal for completeness).
+    **constraints** side: `hc` and `h_output` for soundness; `hwit`, `hA`, `h_input`, `h_output`
+    and the goal for completeness. `try`-guarded (a multi-target `simp … at …` fails only when NO
+    target progresses, so it is a no-op on an already-normal state).
 (c) `provable_type_simp` — normalize provable-type evals to the shared component normal form.
 (d) `abstract_outputs` — make every child-call output opaque (no-op on leaf gadgets).
 (e) `subcircuit_rw at hc` (soundness) / `subcircuit_rw` (completeness) — consume the child chunks
     (silent no-op when there are none, e.g. leaf gadgets).
-(f) **row-fact chaining** — the `simp only [circuit_norm, h_input] …` idiom that lands the copied
-    input cells on the input coordinates (soundness: `at hc ⊢`; completeness: chain `hwit` first,
-    then `at ⊢ hA`).
 
-Each step is its own function and is **total / no-op-tolerant**: a step that finds nothing to do
-leaves the state untouched (e.g. a leaf gadget skips (d)/(e); a gadget with no copy equations skips
-part of (f)). So the composite **stops gracefully** at whatever point a gadget's proof genuinely
-diverges, and the user's manual continuation picks up from there — the "partial prefix + manual
-rest" composability the migration requires.
+Then, **only if the state is not composite** (`stateIsComposite` — see below), the leaf-only finish:
+
+(f) **row-fact chaining** — the copy-equation idiom that lands the copied cells on the input/output
+    coordinates. Soundness: `simp only [h_input, h_output] at hc ⊢` (no `circuit_norm` — the gate
+    simprocs already fired in (b)). Completeness: `simp only [circuit_norm, h_input] at hwit`, then
+    `simp only [circuit_norm, h_input, hwit] at ⊢ hA`.
+(g) **cleanup** — `clear` the spent `h_input`/`h_output` (and `hwit` for completeness), matching the
+    reference proofs.
+
+Each step is its own function and is **total / no-op-tolerant**. The leaf/composite discriminator
+(`stateIsComposite`) is whether the soundness constraints hyp `hc` (or, at completeness, the goal)
+still carries an unpeeled constraint predicate (`RegionOperations.Constraints` / `Constraints` /
+`RegionOperations.ExtendsWitnesses` — checking the *predicate*, not the `.call` marker, catches
+loop-based composites whose chunks are folded inside a recursive def). On a **leaf** (Add,
+WitnessPoint) it is `false`, so (f)/(g) run and close the prefix onto the pure-field user half; on a
+**composite** (MulComplete, Mul) it is `true`, so (f)/(g) are SKIPPED and `hc`/`h_input`/`h_output`/
+`hwit` survive intact for the manual continuation. So the composite **stops gracefully** after the
+universal steps (a)–(e), and the user's manual peel picks up from there — the "partial prefix +
+manual rest" composability the migration requires.
 
 ## Direction detection
 
 The goal at proof start is `∀ config (offset)?, HEAD …` where `HEAD` is one of the four constants
 `FormalRegionCircuit.Soundness`, `FormalRegionCircuit.Completeness`, `FormalCircuit.Soundness`,
-`FormalCircuit.Completeness`. We `whnf`-strip the leading `∀`s (introducing them as the bundle's
+`FormalCircuit.Completeness`. We strip the leading `∀`s (introducing them as the bundle's
 `config`/`offset` binders) until the body's head constant is one of those four, which fixes both
-axes:
+axes.
+
+**Reducible-only weak-head is load-bearing.** `Soundness`/`Completeness` are ordinary
+(semireducible) `def`s, so a *default*-transparency `whnf` UNFOLDS them into their own
+`∀ self env input, … → Spec …` body — the head constant then becomes a `∀`, never one of the
+four, and the peel loop walks straight into the definition's binders and lands on `Spec`
+(unknown head) → no direction. We therefore weak-head-normalize at **reducible** transparency
+(`whnfR`), which leaves the four defs folded so their head constants are visible. (This was the
+skeleton's detection bug: it used `whnf`, so it rejected every real bundle goal.)
 
 * **region vs layouter** — `FormalRegionCircuit.*` (uses `self`, and has an `offset` bundle binder)
   vs `FormalCircuit.*` (uses `i₀`, no `offset`);
@@ -55,19 +76,23 @@ axes:
   step (b)/(e)/(f) target sets.
 
 The number of leading bundle binders is read off the telescope, not hard-coded: we intro `∀`s with
-generated names (`config`, then `offset` if a second binder remains before the head) until the head
+generated names (`cfg`, then `offset` if a second binder remains before the head) until the head
 matches. If the goal is already past the leading binders (head is a `Soundness`/`Completeness`
 application directly), no bundle binder is introduced.
 
 ## House names (the one unavoidable naming choice)
 
-The post-`_iff` binders are introduced as:
+The post-`_iff` binders are introduced as (matching the region/layouter `_iff` RHS binder order):
 
-* soundness:  `self`/`i₀`, `env`, `input_var`, `input`, `output`, `h_input`, `h_output`, `hE`, `hA`, `hc`
-* completeness: `self`/`i₀`, `env`, `input_var`, `input`, `output`, `h_input`, `h_output`, `hwit`, `hE`, `hA`, `hPA`
+* soundness:  `self`/`i₀`, `env`, `input_var`, `input`, `output`, `h_input`, `h_output`, `_hE`, `hA`, `hc`
+* completeness: `self`/`i₀`, `env`, `input_var`, `input`, `output`, `h_input`, `h_output`, `hwit`, `_hE`, `hA`, `hPA`
 
-matching the region/layouter `_iff` RHS binder order. Downstream user halves refer to these names;
-the migrated gadgets were aligned to them (the only edit their user halves needed).
+`_hE` (the `EnvAssumptions` hypothesis) is underscore-prefixed: no leaf gadget's user half touches
+it, and the linter would flag it otherwise. The verifier/prover assumptions land on `hA` in BOTH
+directions (soundness's `Assumptions input`, completeness's `Assumptions ∧ ProverAssumptions` view),
+so user halves say `obtain … := hA` uniformly. Downstream user halves refer to these names; the
+migrated gadgets were aligned to them (the only edit their user halves needed — e.g. Add's
+soundness `h_assumptions` → `hA`, completeness `hlast` → `hPA`).
 -/
 
 open Lean Elab Tactic Meta
@@ -122,23 +147,26 @@ def ofHead? (e : Expr) : Option Direction :=
 def regionIdxName (d : Direction) : Name := if d.isRegion then `self else `i₀
 
 /-- The post-`_iff` binder names, in the `_iff` RHS order. Soundness has no `hwit`; completeness
-does and ends with `hPA` (its ProverAssumptions) rather than soundness's constraints hyp `hc`. -/
+does and ends with `hPA` (its ProverAssumptions) rather than soundness's constraints hyp `hc`. The
+`EnvAssumptions` hypothesis is `_hE` (unused by leaf user halves; underscore avoids the linter). -/
 def introNames (d : Direction) : List Name :=
   let idx := d.regionIdxName
   if d.isSoundness then
-    [idx, `env, `input_var, `input, `output, `h_input, `h_output, `hE, `hA, `hc]
+    [idx, `env, `input_var, `input, `output, `h_input, `h_output, `_hE, `hA, `hc]
   else
-    [idx, `env, `input_var, `input, `output, `h_input, `h_output, `hwit, `hE, `hA, `hPA]
+    [idx, `env, `input_var, `input, `output, `h_input, `h_output, `hwit, `_hE, `hA, `hPA]
 
 end Direction
 
 /-- Whether the goal (or any prefix of its leading `∀` telescope) is a halo2 bundle-proof head.
 `forallTelescopeReducing` would peel past the leading bundle binders AND into the `Soundness`
 definition's own `∀`s, so we instead peel binders one at a time and stop at the first recognized
-head. Non-mutating. -/
+head. We weak-head-normalize at **reducible** transparency (`whnfR`): a default `whnf` would
+unfold the semireducible `Soundness`/`Completeness` defs and hide their head constant (see the
+module docstring — this was the skeleton's detection bug). Non-mutating. -/
 def detectDirection? : TacticM (Option Direction) := withMainContext do
   let rec go (ty : Expr) (fuel : Nat) : MetaM (Option Direction) := do
-    let ty ← whnf ty
+    let ty ← whnfR ty
     if let some d := Direction.ofHead? ty then
       return some d
     match fuel, ty with
@@ -152,8 +180,9 @@ returning the detected `Direction`. Introduces `∀`-binders with generated name
 head constant is one of the four bundle-proof heads. Fails loudly if no such head is ever reached
 (the goal is not a bundle proof). -/
 def introBundleBindersAndDetect : TacticM Direction := do
-  -- fixed generated names for the leading bundle binders, in order
-  let bundleNames : Array Name := #[`config, `offset]
+  -- fixed generated names for the leading bundle binders, in order (`cfg` matches the migrated
+  -- gadgets' user halves, which refer to the config as `cfg`)
+  let bundleNames : Array Name := #[`cfg, `offset]
   let mut i := 0
   -- guard against runaway (bundle prefixes are at most `config offset`)
   for _ in [0:8] do
@@ -184,15 +213,17 @@ def mkUnfoldLemmas (terms : Option (Array Term)) :
   | none => pure #[]
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
-target set. Soundness targets `hc` and `h_output`; completeness targets `hwit` and the goal. Every
-target is guarded by `try`, so a gadget whose constraints hyp needs no such peel (or lacks
-`h_output` in scope) is tolerated. -/
+target set. Soundness peels `hc` and `h_output` (the constraints hyp and the output-value
+equation). Completeness peels `hwit`, `hA`, `h_input`, `h_output` and the goal — the witness hyp,
+the assumptions, the input/output equations, and the goal constraints (matching the reference
+completeness prefix). The whole call is `try`-guarded: a multi-target `simp only … at …` fails only
+when NO target makes progress, so this is a no-op on a gadget already in normal form. -/
 def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do
   if d.isSoundness then
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident)) catch _ => pure ()
   else
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident ⊢)) catch _ => pure ()
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
 
 /-- Step (c): `provable_type_simp` (never fails; runs to a fixpoint). -/
 def normalizeProvable : TacticM Unit := do
@@ -210,22 +241,71 @@ def consumeChunks (d : Direction) : TacticM Unit := do
   else
     try evalTactic (← `(tactic| subcircuit_rw)) catch _ => pure ()
 
+/-- Whether an expression still carries **unpeeled circuit structure** — an application of one of
+the constraint predicates `RegionOperations.Constraints` / `Constraints` (layouter) /
+`RegionOperations.ExtendsWitnesses`. This is the leaf/composite discriminator that survives the
+loop case: a **leaf** gadget (Add), once its constraints hyp is fully peeled by step (b), holds
+only pure field equations — no constraint-predicate application remains; a **composite** gadget
+(MulComplete, Mul) still carries `Constraints … ((loop/…).operations …)` (its child chunks, whether
+directly exposed or hidden behind a recursive loop def), which its manual continuation peels and
+routes into the child lemmas. Checking for the *predicate* rather than the `.call` marker is what
+catches loop-based composites, whose chunks are folded inside the recursion. -/
+def exprHasCircuitStructure (e : Expr) : Bool :=
+  e.find? (fun sub =>
+    match sub.getAppFn.constName? with
+    | some ``RegionOperations.Constraints => true
+    | some ``Halo2.Constraints => true
+    | some ``RegionOperations.ExtendsWitnesses => true
+    | _ => false) |>.isSome
+
+/-- `true` when the state is still composite: the soundness constraints hyp `hc` (or, at
+completeness, the goal) still carries an unpeeled constraint predicate. The leaf-only finish
+(step (f) + cleanup) is skipped when this holds, leaving `hc`/`h_input`/`h_output`/`hwit` intact
+for the manual continuation. A missing target hyp counts as leaf (nothing to protect). -/
+def stateIsComposite (d : Direction) : TacticM Bool := withMainContext do
+  if d.isSoundness then
+    match (← getLCtx).findFromUserName? `hc with
+    | some decl => return exprHasCircuitStructure (← instantiateMVars decl.type)
+    | none => return false
+  else
+    return exprHasCircuitStructure (← instantiateMVars (← getMainTarget))
+
 /-- Step (f): the row-fact chaining idiom, per the established shapes. Soundness lands the copied
-input cells on the input coordinates in the constraints hyp and the goal (`simp only [circuit_norm,
-h_input] at hc ⊢`). Completeness first lands `hwit` on the input coordinates, then propagates it
-into the goal and `hA` (`simp only [circuit_norm, h_input] at hwit`; then
-`simp only [circuit_norm, h_input, hwit] at ⊢ hA`). Each is `try`-guarded: a leaf/no-copy gadget
+input/output cells on the input coordinates in the constraints hyp and the goal
+(`simp only [h_input, h_output] at hc ⊢`). Completeness first lands `hwit` on the input coordinates
+(`simp only [circuit_norm, h_input] at hwit`), then propagates it into the goal and `hA`
+(`simp only [circuit_norm, h_input, hwit] at ⊢ hA`). Each is `try`-guarded: a leaf/no-copy gadget
 whose hyps are already in normal form is a no-op. -/
 def rowFactChaining (d : Direction) : TacticM Unit := do
   if d.isSoundness then
-    -- soundness analogue of the completeness idiom: `h_output` plays `hwit`'s role, landing the
-    -- copied output cells alongside the input cells in the constraints hyp and the goal.
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
+    -- `h_output` plays `hwit`'s role, landing the copied output cells alongside the input cells
+    -- in the constraints hyp and the goal. (No `circuit_norm` here: the gate simprocs already
+    -- fired in step (b); re-running them is wasted work and risks re-folding the split conjuncts.)
+    try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
   else
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident)) catch _ => pure ()
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident)) catch _ => pure ()
 
-/-- The composite runner: steps (a)–(f), each no-op-tolerant. -/
+/-- Cleanup: drop the input/output (and, for completeness, witness) equations that steps (b)/(f)
+have already fully consumed — matching the reference proofs' `clear` after row-fact chaining. Kept
+`try`-guarded and total: if a hypothesis is still referenced (a diverging gadget's manual half may
+need it), `clear` fails and is silently skipped, leaving it in scope. -/
+def clearConsumed (d : Direction) : TacticM Unit := do
+  if d.isSoundness then
+    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident)) catch _ => pure ()
+  else
+    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident $(mkIdent `hwit):ident)) catch _ => pure ()
+
+/-- The composite runner: steps (a)–(f) plus the consumed-equation cleanup, each no-op-tolerant.
+
+Steps (a)–(e) are universal (intro / peel / `provable_type_simp` / `abstract_outputs` /
+`subcircuit_rw`); they are idempotent or no-op-tolerant and never mangle a composite gadget's
+constraints. The leaf-only finish — row-fact chaining (f) and the consumed-equation cleanup — runs
+ONLY when the state is not composite (`stateIsComposite` is `false`, i.e. the constraints hyp/goal
+holds no unpeeled constraint predicate): on a **leaf** (Add) it lands the copied cells and drops
+the spent equations, closing the prefix; on a **composite** (MulComplete, Mul) it is skipped so
+`hc`/`h_input`/`h_output`/`hwit` survive for the manual continuation (the graceful partial-prefix
+the migration requires). -/
 def run (terms : Option (Array Term)) : TacticM Unit := do
   let d ← introBundleBindersAndDetect
   rwIffAndIntro d
@@ -234,7 +314,9 @@ def run (terms : Option (Array Term)) : TacticM Unit := do
   normalizeProvable
   abstractOutputs
   consumeChunks d
-  rowFactChaining d
+  unless (← stateIsComposite d) do
+    rowFactChaining d
+    clearConsumed d
 
 end CircuitProofStart
 

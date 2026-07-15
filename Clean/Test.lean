@@ -16,3 +16,4 @@ import Clean.Halo2.Tests.TestAbstractOutputs
 import Clean.Halo2.Tests.TestRoundNorm
 import Clean.Halo2.Tests.TestContractBridges
 import Clean.Halo2.Tests.TestLookupMembership
+import Clean.Halo2.Tests.TestProofStart

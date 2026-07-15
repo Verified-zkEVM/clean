@@ -746,15 +746,12 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- Peel `startCopy ++ loop ++ zsCells`, then route the loop constraints into `loop_sound`
   -- (whose induction consumes each round's two child chunks via `round_acc_sound`).
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE hA hc
-    -- peel: startCopy (one copy op) ++ loop ++ zsCells (no ops)
-    simp only [circuit_norm, startCopy,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, operations_zsCells, output_zsCells] at hc h_output
+    circuit_proof_start [startCopy, RegionCircuit.operations_bind, RegionCircuit.output_bind,
+      operations_copyAdvice, operations_zsCells, output_zsCells]
+    -- composite gadget: `circuit_proof_start` bundled step (a) (intro + `soundness_iff` + house
+    -- names) and the constraints peel; the loop's child chunks keep it composite, so the leaf-only
+    -- finish (row-fact chaining + cleanup) is correctly skipped, leaving `hc`/`h_input` intact.
     obtain ⟨hCopyZ, hLoop⟩ := hc
-    provable_type_simp
     obtain ⟨hIalpha, ⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
     obtain ⟨hAcc0V, hBaseV⟩ := hA
     -- the destructured input cells, reassembled (the spelling `hLoop` carries post-destructuring)
@@ -809,16 +806,14 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- consumes each round's two child chunks via `round_complete`, which uses the `subcircuit_rw`
   -- engine's completeness mode).
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, startCopy,
+    circuit_proof_start [startCopy,
       RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, operations_zsCells, output_zsCells,
       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-      Witgen.evalSteps] at hwit h_output ⊢
+      Witgen.evalSteps]
+    -- composite gadget: the loop's child chunks keep the goal composite, so the leaf-only finish
+    -- is skipped and `hwit`/`h_input`/`hPA` survive for the manual continuation below.
     obtain ⟨hWz, hWloop⟩ := hwit
-    provable_type_simp
     obtain ⟨hIalpha, ⟨hBx, hBy⟩, hIxA, hIyA, hIz⟩ := h_input
     obtain ⟨hAcc0V, hBaseV⟩ := hPA
     set inp : Inputs (AssignedCell Fp) :=

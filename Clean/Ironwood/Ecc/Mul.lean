@@ -958,9 +958,11 @@ def mul :
   -- LSB gate, and the donor canonicity finish — the value algebra is byte-identical to the
   -- pre-restructure proof modulo the region-faithful cell addresses (`env.place i₀ + X`).
   soundness := by
-    intro cfg
-    rw [FormalCircuit.soundness_iff]
-    intro i₀ env input_var input output h_input h_output hE hA hc
+    circuit_proof_start
+    -- composite layouter gadget: `circuit_proof_start` bundled step (a) (intro `cfg`,
+    -- `soundness_iff`, house names) and normalized the provable-type evals; the folded
+    -- `synthesize` keeps the goal composite, so the leaf-only finish is skipped and
+    -- `hc`/`h_input` survive for the manual layouter peel below.
     -- ── peel the faithful layouter structure: the MAIN REGION (index i₀) and the layouter-level
     -- MulOverflow chunk (its three sibling regions at i₀+1..i₀+3) ──
     simp only [synthesize, circuit_norm] at hc
@@ -972,7 +974,7 @@ def mul :
       operations_constrainConstant, RegionOperations.constraints_append] at hMain
     obtain ⟨hInit, _hZinitW, hZconst, hHi, hLo, hComp, _hZ0W, hBxC, hByC, _hCxW, _hCyW,
       hGate, hFin, -⟩ := hMain
-    provable_type_simp
+    -- (provable-type eval normalization already ran inside `circuit_proof_start`, step (c))
     -- ▸▸ make every child output opaque: the chained chunk INPUTS (comp's hi→lo entering, the final
     --    add's comp-acc entering) become shallow locals `x_gen_out_j`, and each weakened chunk's
     --    Spec (emitted by `subcircuit_rw at h` via Stage-1 cooperation) speaks the local. This
@@ -1168,8 +1170,8 @@ def mul :
     simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hFin
     -- ▸▸ engine site 6: the overflow check (the LAYOUTER child, mul.rs:299) ◂◂
     subcircuit_rw at hOv
-    simp only [EnvAssumptions] at hE
-    have hOvSpec := hOv (by rw [ov_envAssumptions_eq]; exact hE)
+    simp only [EnvAssumptions] at _hE
+    have hOvSpec := hOv (by rw [ov_envAssumptions_eq]; exact _hE)
       (by rw [ov_assumptions_eq]
           constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD])
     rw [ov_spec_eq] at hOvSpec
@@ -1369,9 +1371,10 @@ def mul :
   -- `kBits`-driven, and the overflow child's honest `Spec` landed via `overflow_spec_honest` —
   -- consumed at the LAYOUTER level.
   completeness := by
-    intro cfg
-    rw [FormalCircuit.completeness_iff]
-    intro i₀ env input_var input output h_input h_output hwit hE hA hPA
+    circuit_proof_start
+    -- composite layouter gadget: step (a) + provable-eval normalization bundled; the folded
+    -- `synthesize` keeps the goal composite, so the leaf-only finish is skipped and
+    -- `hwit`/`h_input`/`⊢` survive for the manual layouter peel below.
     have hOnC0 := hPA
     -- ── peel the faithful layouter structure (witnesses AND goal): the MAIN REGION at i₀ and
     -- the layouter-level MulOverflow chunk at i₀+1 ──
@@ -1854,7 +1857,7 @@ def mul :
     · -- final add ProverAssumptions (trivial)
       exact trivial
     · -- overflow EnvAssumptions (the parent's, by projection)
-      rw [ov_envAssumptions_eq]; exact hE
+      rw [ov_envAssumptions_eq]; exact _hE
     · -- overflow Assumptions (field-capacity bounds at K = 10)
       rw [ov_assumptions_eq]
       constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]
