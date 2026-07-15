@@ -20,6 +20,22 @@ Coverage (the acceptance matrix):
 * **Composite fixture** — the leaf/composite discriminator (`exprHasCircuitStructure`) flags a
   constraint-predicate head and passes a pure one; and a hand-built composite state shows the
   leaf-only finish is skipped so `hc`/`h_input` survive for a manual continuation.
+* **Fix 3 (soundness step (b) touches the goal)** — the soundness constraints peel now includes `⊢`,
+  so a passed `Spec`-unfold lemma fires at the goal (no manual `simp [circuit_norm, Spec]` after the
+  call). Exercised by `MulIncomplete`'s soundness: its `RoundInvariant` (in the unfold list) is
+  normalized at the goal, which let the former manual `simp only [circuit_norm, RoundInvariant]`
+  line be dropped.
+
+Coverage of the mul-stack review fixes, by where each is pinned:
+* Fixes 1/2 (composite output split — the `h_output` component split, the value-toward **atom-left**
+  orientation, and the vector-component `∀ i, <cell i> = output_zs[i]` forming with the lazy
+  `getElem` bridge) live in `provable_type_simp` and are pinned in `TestProvableTypeSimp` (the
+  `structEqSplit` field split, the vector-equation-forming pins, the lazy `getElem_eval_fields_cells`
+  bridge), and exercised end-to-end by the `MulIncomplete`/`MulComplete`/`HashPiece` bundle proofs.
+* Fix 3 (goal-side peel) — the pin below.
+* Fix 6 (no obsolete-hypothesis bloat on the composite path) — exercised by the `Mul.lean` layouter
+  bundle, whose bare `circuit_proof_start` leaves a clean state (no unused-hyp lint, no deep-term
+  inflation), since the `synthesize`/`mainRegion` unfold defs are peeled manually at `hc` only.
 
 (The layouter-level end-to-end pipeline is exercised for real by the migrated `Mul.lean` bundle,
 `FormalCircuit` soundness AND completeness; region-level composite by `MulComplete.lean`.)

@@ -1110,20 +1110,29 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
     set inp : Inputs (AssignedCell Fp) :=
       { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp
     obtain ⟨hIpiece, hIxA, hIyA⟩ := h_input
-    -- output cells (fixed rows) read off the env as `dRow`/`zRow`
-    have hOfirst : output.first = dRow cfg env.place self env.env offset 0 := by
-      rw [← h_output]; rfl
-    have hOlast : output.last = dRow cfg env.place self env.env offset w := by
-      rw [← h_output]; rfl
+    -- `circuit_proof_start` (via `provable_type_simp`) destructured `output` and split `h_output`
+    -- component-wise into the atom-left cell equations (the struct-row fields flat, the running-sum
+    -- `zs` vector as `eval ⟨cells⟩ = output_zs`). Fold to `dRow`/`zRow` and reassemble the whole-row
+    -- and per-index facts the induction consumes.
+    have hadv : ∀ (col : Column .advice) (row : ℕ),
+        env.env.advice col ((env.place self + row : ℕ) : ℤ) = adv col env.place self env.env row :=
+      fun _ _ => rfl
+    obtain ⟨⟨hOf_xA, hOf_xP, hOf_l1, hOf_l2⟩, ⟨hOl_xA, hOl_xP, hOl_l1, hOl_l2⟩, _hOxANext, hOzsEval⟩ :=
+      h_output
+    simp only [hadv] at hOf_xA hOf_xP hOf_l1 hOf_l2 hOl_xA hOl_xP hOl_l1 hOl_l2
+    -- the reconstructed output rows (the destructured field variables, as the goal's `Spec` spells them)
+    have hOfirst : (⟨output_first_xA, output_first_xP, output_first_lambda1, output_first_lambda2⟩
+        : DoubleAndAddRow Fp) = dRow cfg env.place self env.env offset 0 := by
+      simp only [dRow, Nat.add_zero, ← hOf_xA, ← hOf_xP, ← hOf_l1, ← hOf_l2]
+    have hOlast : (⟨output_last_xA, output_last_xP, output_last_lambda1, output_last_lambda2⟩
+        : DoubleAndAddRow Fp) = dRow cfg env.place self env.env offset w := by
+      simp only [dRow, ← hOl_xA, ← hOl_xP, ← hOl_l1, ← hOl_l2]
+    -- the vector component: `eval ⟨cells⟩ = output_zs`, reduced per-index to `zRow`
     have hOzs : ∀ (i : ℕ) (hi : i < w + 1),
-        output.zs[i] = zRow cfg env.place self env.env offset i := by
+        output_zs[i] = zRow cfg env.place self env.env offset i := by
       intro i hi
-      rw [← h_output,
-        ProvableType.eval_cells (M := fields (w + 1)) { place := env.place, env := env.env } _]
-      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
-        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        zRow, adv, circuit_norm]
-    clear h_output
+      have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
+      simpa only [zRow, adv, circuit_norm] using this
     -- start copies: `zRow 0 = input.piece`, `(dRow 0).xA = input.xA`
     have hz0 : zRow cfg env.place self env.env offset 0 = input_piece := by
       simp only [zRow, adv, Nat.add_zero]
@@ -1170,14 +1179,22 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
     obtain ⟨hPieceLt, A, B, hAon, hAx, hAy, hchain⟩ := hPA
     -- normalize the env-assumption spelling to the prover env
     simp only [Placed.toEnvironment_env] at _hE
-    -- output cells (fixed rows) read off the prover env, as in soundness
-    have hOfirst : output.first = dRow cfg env.place self env.env.toEnvironment offset 0 := by
-      rw [← h_output]; rfl
-    have hOlast : output.last = dRow cfg env.place self env.env.toEnvironment offset w := by
-      rw [← h_output]; rfl
-    have hOxANext : output.xANext
-        = adv cfg.xA env.place self env.env.toEnvironment (offset + (w + 1)) := by
-      rw [← h_output]; rfl
+    -- `provable_type_simp` (in `circuit_proof_start`) destructured `output` and split `h_output`
+    -- component-wise (prover view); read the struct-row/scalar/vector components off the conjunction.
+    have hadv : ∀ (col : Column .advice) (row : ℕ),
+        env.env.toEnvironment.advice col ((env.place self + row : ℕ) : ℤ)
+          = adv col env.place self env.env.toEnvironment row := fun _ _ => rfl
+    obtain ⟨⟨hOf_xA, hOf_xP, hOf_l1, hOf_l2⟩, ⟨hOl_xA, hOl_xP, hOl_l1, hOl_l2⟩, hOxN, _hOzsEval⟩ :=
+      h_output
+    simp only [hadv] at hOf_xA hOf_xP hOf_l1 hOf_l2 hOl_xA hOl_xP hOl_l1 hOl_l2 hOxN
+    have hOfirst : (⟨output_first_xA, output_first_xP, output_first_lambda1, output_first_lambda2⟩
+        : DoubleAndAddRow Fp) = dRow cfg env.place self env.env.toEnvironment offset 0 := by
+      simp only [dRow, Nat.add_zero, ← hOf_xA, ← hOf_xP, ← hOf_l1, ← hOf_l2]
+    have hOlast : (⟨output_last_xA, output_last_xP, output_last_lambda1, output_last_lambda2⟩
+        : DoubleAndAddRow Fp) = dRow cfg env.place self env.env.toEnvironment offset w := by
+      simp only [dRow, ← hOl_xA, ← hOl_xP, ← hOl_l1, ← hOl_l2]
+    have hOxANext : output_xANext
+        = adv cfg.xA env.place self env.env.toEnvironment (offset + (w + 1)) := hOxN.symm
     refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · -- the piece copy's `constrainEqual`, from its `assignAdvice` witness
       rw [hWz0]
@@ -1252,14 +1269,14 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
         simp only [adv]
         rw [hVxaw, hAccB]
       · -- the last step's secant against the exit `x_a` (`rowValue` algebra)
-        rw [hOlast, hOxANext]
-        simp only [dRow, adv, xR]
+        rw [hOxANext]
+        simp only [xR, ← hOl_xA, ← hOl_xP, ← hOl_l1, ← hOl_l2, adv]
         rw [hVl2w, hVl1w, hXcurw, hVxpw, hVxaw]
         simp only [rowValue, accAfter]
         ring
       · -- the `nextYA` derivation lands on `2·B.y` (the `yANext` identity + `Y_A` invariant)
-        rw [hOlast, hOxANext]
-        simp only [dRow, adv, yA, xR]
+        rw [hOxANext]
+        simp only [yA, xR, ← hOl_xA, ← hOl_xP, ← hOl_l1, ← hOl_l2, adv]
         rw [hVl2w, hVl1w, hXcurw, hVxpw, hVxaw]
         set P := inp.piece.eval env.place env.env.toEnvironment
         set XA := inp.xA.eval env.place env.env.toEnvironment

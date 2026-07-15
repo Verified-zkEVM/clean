@@ -110,6 +110,51 @@ example (env : Placed Environment Fp) (u w : VecStruct 3 (AssignedCell Fp))
   provable_type_simp
   exact h
 
+/-! ### Vector-component equation forming (the split's vector case)
+
+When `structEqSplit` splits a provable-struct value equation, a vector (`fields n`) component
+bottoms out at a whole-vector equation `Eval.eval env ⟨cells⟩ = output_vec`. `provable_type_simp`'s
+vector-equation pass forms the per-index fact, in the **atom-left** orientation
+`∀ i hi, <cell i> = output_vec[i]`, its per-index LHS resolved to a single cell read via the lazy
+`getElem_eval_fields_cells` bridge. (The end-to-end auto-forming inside a full split is exercised by
+the `MulIncomplete`/`HashPiece`/`MulComplete` bundle proofs; these pins fix the two load-bearing
+pieces in isolation: the lazy getElem bridge and the atom-left orientation, both input orientations.)
+
+The lazy `getElem` bridge: `(eval env v)[i]` on a `fields n` vector of cells reduces to the single
+cell read, on demand — the vector counterpart of `evalProjectionLift`. The whole-vector map form
+stays folded (never a `circuit_norm` member). -/
+
+open Halo2.ProvableType in
+-- 6a. The lazy getElem bridge fires under `circuit_norm`: `(eval env vec)[i]` resolves to one
+-- `Environment.advice` cell read (verifier view). No eager whole-vector map.
+example (self : RegionIndex) (env : Placed Environment Fp) (col : Column .advice) (i : ℕ) (hi : i < 3) :
+    (Eval.eval (Var := (fields 3) (AssignedCell Fp)) env
+        (Vector.ofFn (fun j : Fin 3 => AssignedCell.of self (7 + j.val) col)))[i]'hi
+      = env.env.advice col ((env.place self + (7 + i) : ℕ) : ℤ) := by
+  simp only [circuit_norm]
+
+-- 6b. Prover view of the lazy getElem bridge, landing on the `.toEnvironment` read.
+example (self : RegionIndex) (env : Placed ProverEnvironment Fp) (col : Column .advice)
+    (i : ℕ) (hi : i < 3) :
+    (Eval.eval (Var := (fields 3) (AssignedCell Fp)) env
+        (Vector.ofFn (fun j : Fin 3 => AssignedCell.of self (7 + j.val) col)))[i]'hi
+      = env.env.toEnvironment.advice col ((env.place self + (7 + i) : ℕ) : ℤ) := by
+  simp only [circuit_norm]
+
+-- 6c. Atom-left orientation of the formed fact: from a whole-vector equation `eval ⟨cells⟩ = v`
+-- (either orientation), the per-index fact reads `<cell i> = v[i]` (cell atom on the LEFT), so a
+-- consuming `simp only [·]` rewrites cell reads toward the value variable.
+example (self : RegionIndex) (env : Placed Environment Fp) (col : Column .advice)
+    (output_vec : Vector Fp 3)
+    (h : Eval.eval (Var := (fields 3) (AssignedCell Fp)) env
+        (Vector.ofFn (fun j : Fin 3 => AssignedCell.of self (7 + j.val) col)) = output_vec) :
+    ∀ (i : ℕ) (hi : i < 3),
+      env.env.advice col ((env.place self + (7 + i) : ℕ) : ℤ) = output_vec[i] := by
+  intro i hi
+  -- the atom-left per-index fact: `<cell i> = output_vec[i]`, LHS reduced via the lazy bridge
+  have := congrArg (fun w => w[i]'hi) h
+  simpa only [circuit_norm] using this
+
 /-! ### Named-cell / typed-read normal form ("pretty cells")
 
 The `circuit_norm` normal form for circuit-created cells and environment reads: assign/copy

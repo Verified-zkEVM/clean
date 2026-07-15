@@ -958,13 +958,15 @@ def mul :
   -- LSB gate, and the donor canonicity finish — the value algebra is byte-identical to the
   -- pre-restructure proof modulo the region-faithful cell addresses (`env.place i₀ + X`).
   soundness := by
-    -- TODO this is fake. "real" circuit_proof_start leaves huge obsolete hypotheses in the proof state
-    -- circuit_proof_start [synthesize, mainRegion]
+    -- `circuit_proof_start` (no unfold list): intro + `soundness_iff` + house names, then
+    -- `provable_type_simp` (destructures `output`, and — since this layouter's own output is the
+    -- opaque composed `synthesize.output`, not a cell literal — leaves `h_output` as the whole-point
+    -- equation the manual peel below consumes). The `synthesize`/`mainRegion` defs are deliberately
+    -- NOT passed as unfold lemmas: step (b) would unfold them at `h_output`/the goal, inflating the
+    -- state into the deep composed term (and tangling with the abstracted child outputs); we unfold
+    -- `synthesize` manually at `hc` only, below. The folded `synthesize` keeps the goal composite, so
+    -- the leaf-only finish is skipped and `hc`/`h_input` survive for the manual layouter peel.
     circuit_proof_start
-    -- composite layouter gadget: `circuit_proof_start` bundled step (a) (intro `cfg`,
-    -- `soundness_iff`, house names) and normalized the provable-type evals; the folded
-    -- `synthesize` keeps the goal composite, so the leaf-only finish is skipped and
-    -- `hc`/`h_input` survive for the manual layouter peel below.
     -- ── peel the faithful layouter structure: the MAIN REGION (index i₀) and the layouter-level
     -- MulOverflow chunk (its three sibling regions at i₀+1..i₀+3) ──
     simp only [synthesize, circuit_norm] at hc

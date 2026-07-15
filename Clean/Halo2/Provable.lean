@@ -179,6 +179,59 @@ which spelling a goal carries — this replaces per-gadget eval-split lemmas.
     Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment v := by
   with_unfolding_all rfl
 
+/-!
+### Vector-of-cells evaluation
+
+A `fields n` component of a provable struct (e.g. an `Output.zs` running-sum vector) evaluates
+to the `Vector.map` of the per-cell read. Only the **lazy** `getElem` bridges are `circuit_norm`
+members: they resolve `(eval env v)[i]` to a single cell read **on demand** — the vector analogue
+of `evalProjectionLift`, so a length-`n` `zs` eval stays a folded row atom until an index projects
+it, never re-inflating to a mapped vector nobody uses. The whole-vector `map` equations
+(`eval_fields_cells`/`_prover`) are the *stated* facts the `getElem` proofs are built on; they are
+deliberately **NOT** `circuit_norm` (an eager map form would fight the `getElem` bridges — the
+PR-424 getElem/map loop hazard — and eagerly decompose vectors nobody projects). -/
+
+/-- Evaluating a `fields n` vector of cells is the elementwise cell read. Stated with the
+explicit `fields n` `Eval` instance: the plain `Eval` synthesis cannot recover `M = fields n`
+from a raw `Vector (AssignedCell F) n` field type (the reason the struct-eval simproc threads
+the component instance in via `buildFieldEval`); this is the same instance that simproc builds.
+Deliberately **not** `@[circuit_norm]` — see the section note (the eager map form is a loop hazard
+against the `getElem` bridge and re-inflates unprojected vectors). -/
+lemma eval_fields_cells {n : ℕ} (env : Placed Environment F) (v : fields n (AssignedCell F)) :
+    (Eval.eval env v : fields n F) = v.map (AssignedCell.eval env.place env.env) := by
+  with_unfolding_all rfl
+
+/-- Prover-view `fields n` vector-of-cells evaluation. Not `@[circuit_norm]` (see `eval_fields_cells`). -/
+lemma eval_fields_cells_prover {n : ℕ} (env : Placed ProverEnvironment F)
+    (v : fields n (AssignedCell F)) :
+    (Eval.eval env v : fields n F) = v.map (AssignedCell.eval env.place env.env.toEnvironment) := by
+  with_unfolding_all rfl
+
+/-- Indexing into an evaluated `fields n` vector of cells reads that cell — the LAZY bridge that
+fires when a goal carries `(eval env v)[i]` (e.g. `output.zs[i]` for a vector-valued `Output`).
+`circuit_norm`, so projections resolve on demand without eagerly mapping the whole vector.
+
+The evaluated value `v` is typed `fields n (AssignedCell F)` (not a bare `Vector`), so the
+`Eval.eval` instance elaborates to the `fields n` circuit-type evaluator — the SAME instance the
+struct-eval simproc's `buildFieldEval` threads in — and the `circuit_norm` discrimination key
+matches the vector-component eval the splitter produces. -/
+@[circuit_norm]
+lemma getElem_eval_fields_cells {n : ℕ} (env : Placed Environment F)
+    (v : fields n (AssignedCell F)) (i : ℕ) (hi : i < n) :
+    (Eval.eval env v : fields n F)[i] = AssignedCell.eval env.place env.env v[i] := by
+  rw [show (Eval.eval env v : fields n F) = v.map (AssignedCell.eval env.place env.env) from
+    eval_fields_cells env v]
+  rw [Vector.getElem_map]
+
+/-- Prover-view lazy `getElem` bridge for a `fields n` vector of cells. -/
+@[circuit_norm]
+lemma getElem_eval_fields_cells_prover {n : ℕ} (env : Placed ProverEnvironment F)
+    (v : fields n (AssignedCell F)) (i : ℕ) (hi : i < n) :
+    (Eval.eval env v : fields n F)[i] = AssignedCell.eval env.place env.env.toEnvironment v[i] := by
+  rw [show (Eval.eval env v : fields n F) = v.map (AssignedCell.eval env.place env.env.toEnvironment)
+    from eval_fields_cells_prover env v]
+  rw [Vector.getElem_map]
+
 end ProvableType
 
 /-!

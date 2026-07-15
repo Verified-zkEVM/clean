@@ -9,14 +9,24 @@ import Clean.Utils.Tactics.CircuitProofStart
 # `circuit_proof_start` — the composite prefix for halo2 bundle proofs
 
 This is the halo2 counterpart of main Clean's `circuit_proof_start`
-(`Clean/Utils/Tactics/CircuitProofStart.lean`), but it is a **composition of already-proven
-parts**, not new machinery. Every step it runs is a tactic that already carries the migration's
-soundness/completeness burden (`FormalRegionCircuit.soundness_iff`/`completeness_iff` and the
-layouter mirrors; `provable_type_simp`; `abstract_outputs`; `subcircuit_rw`). This file only
-sequences them behind one call, with the house-style intro names and the row-fact chaining shape
-that the hand-written gadget proofs (`Add`, `MulComplete`, `Mul`) spell out today.
+(`Clean/Utils/Tactics/CircuitProofStart.lean`). It **sequences** already-proven parts —
+`FormalRegionCircuit.soundness_iff`/`completeness_iff` and the layouter mirrors;
+`provable_type_simp`; `abstract_outputs`; `subcircuit_rw` — behind one call, with the house-style
+intro names and the row-fact chaining shape the hand-written gadget proofs (`Add`, `MulComplete`,
+`Mul`) spell out. **Status: under construction.** The tactic layer is still being exercised across
+the corpus; the step set and their ordering are chosen empirically for the gadgets built so far and
+may be revisited (see the ordering caveat below).
 
-## What it does (the settled pipeline)
+## Step ordering (empirical)
+
+The ordering below is what works for the current corpus, not a proven-optimal pipeline. In
+particular, `abstract_outputs` (d) runs **after** `provable_type_simp` (c); this rests on the
+empirical invariant that `provable_type_simp` does not scatter a gadget's own output term before
+abstraction. An **abstract-early** alternative (run `abstract_outputs` right after the
+`circuit_norm` peel, where child-output spellings are uniform `(….call …).output self` forms) was
+also viable at design time — it trades more canonicalization guises for maximal opacity, and would
+make the "`provable_type_simp` does not scatter outputs" invariant non-load-bearing. The current
+order is not a settled decision.
 
 Given a bundle-proof goal `∀ config (offset)?, FormalRegionCircuit.Soundness …` (or the
 `Completeness`/`FormalCircuit.*` variants), `circuit_proof_start [<unfold list>]`:
@@ -54,9 +64,13 @@ still carries an unpeeled constraint predicate (`RegionOperations.Constraints` /
 loop-based composites whose chunks are folded inside a recursive def). On a **leaf** (Add,
 WitnessPoint) it is `false`, so (f)/(g) run and close the prefix onto the pure-field user half; on a
 **composite** (MulComplete, Mul) it is `true`, so (f)/(g) are SKIPPED and `hc`/`h_input`/`h_output`/
-`hwit` survive intact for the manual continuation. So the composite **stops gracefully** after the
-universal steps (a)–(e), and the user's manual peel picks up from there — the "partial prefix +
-manual rest" composability the migration requires.
+`hwit` survive for the manual continuation. The composite thus stops after the universal steps
+(a)–(e) and the user's manual peel picks up from there ("partial prefix + manual rest").
+
+Note: on the composite path, `provable_type_simp` (c) also destructures the gadget's `output` and
+splits `h_output` into per-component atom-left value facts (`h_output_<field>`), including the
+`∀ i, <cell i> = output_zs[i]` form for a vector component — see `ProvableTypeSimp`. The composite
+user halves consume those facts directly.
 
 ## Direction detection
 
@@ -226,7 +240,11 @@ when NO target makes progress, so this is a no-op on a gadget already in normal 
 def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do
   if d.isSoundness then
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident)) catch _ => pure ()
+    -- Peel the constraints hyp and the output-value equation, AND the goal (the `Spec`): the
+    -- unfold list carries the gadget's `Spec` def (e.g. `RoundInvariant`), which must fire at the
+    -- goal too — otherwise a composite gadget's user half has to re-run `simp [circuit_norm, Spec]`
+    -- by hand. `try`-guarded, so it stays a no-op on a leaf whose `Spec` is already atomic.
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
   else
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
 
@@ -314,6 +332,7 @@ def clearConsumed (d : Direction) : TacticM Unit := do
     -- gadget's return, so this does not introduce an unused-hyp lint.
     try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `hwit):ident)) catch _ => pure ()
 
+
 /-- The composite runner: steps (a)–(f) plus the consumed-equation cleanup, each no-op-tolerant.
 
 Steps (a)–(e) are universal (intro / peel / `provable_type_simp` / `abstract_outputs` /
@@ -322,8 +341,8 @@ constraints. The leaf-only finish — row-fact chaining (f) and the consumed-equ
 ONLY when the state is not composite (`stateIsComposite` is `false`, i.e. the constraints hyp/goal
 holds no unpeeled constraint predicate): on a **leaf** (Add) it lands the copied cells and drops
 the spent equations, closing the prefix; on a **composite** (MulComplete, Mul) it is skipped so
-`hc`/`h_input`/`h_output`/`hwit` survive for the manual continuation (the graceful partial-prefix
-the migration requires). -/
+`hc`/`h_input`/`h_output`/`hwit` survive for the manual continuation (the partial-prefix +
+manual-rest shape). -/
 def run (terms : Option (Array Term)) : TacticM Unit := do
   let d ← introBundleBindersAndDetect
   rwIffAndIntro d

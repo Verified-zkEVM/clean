@@ -373,8 +373,9 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp))
     (qMul2Gate cfg).enable row
   return ()
 
--- TODO this is a simple forEach loop. users shouldn't have to write recursive functions ot implement them,
--- need framework-level Circuit loops like main Clean's Circuit.forEach
+-- TACTIC FEATURE(loops): this is a simple forEach loop; users shouldn't have to write recursive
+-- functions to implement them. Needs framework-level Circuit loops like main Clean's
+-- `Circuit.forEach` (the separate loop-support workstream, not this fix).
 /-- The double-and-add loop: `numRounds` rounds, structurally recursive. By the append-bind of
 `RegionCircuit`, `(loop … (k+1)).operations self = (loop … k).operations self ++
 (round … k).operations self` — the per-round decomposition the induction consumes. -/
@@ -480,7 +481,9 @@ private def YADr (n r : ℕ) : Fp :=
       (L1r cfg place self env offset r * L1r cfg place self env offset r
         - XAr cfg place self env offset r - XPr cfg place self env offset r))
 
--- TODO this kind of stuff could be handled in a cleaner way by defining a circuit bundle for `round` (the loop body)
+-- TACTIC FEATURE(loops): this per-round extraction could be handled more cleanly by defining a
+-- circuit bundle for `round` (the loop body) and per-iteration composition lemmas — part of the
+-- separate loop-support workstream, not this fix.
 /-- **Extraction of the cleaned per-round gate facts.** From the loop's `Constraints`
 (gate enables are inside `round`, so the round constraints live here), each round
 `r < numRounds` yields the four shared `forLoopPolys` facts (booleanity, gradient_1,
@@ -1123,7 +1126,10 @@ def RoundInvariant (n : ℕ) (input : Inputs Fp) (output : Output (n + 1) Fp)
     ∀ b : Fin n, output.zs[b.val + 1] =
       2 * output.zs[b.val] + (if bits (b.val + 1) then 1 else 0)) ∧
   ∀ (m : ℕ),
-    -- TODO weird to use Point.ofCoords here, input/output should just contain entire points
+    -- NOTE(spec shape): the `Inputs`/`Output` carry the accumulator as separate `xA`/`yA`
+    -- coordinates (mirroring the donor `DoubleAndAdd.Input`/`Output`), so the contract wraps them
+    -- with `Point.ofCoords`. A cleaner contract would carry whole `Point`s; that is a type-shape
+    -- refactor of the ported donor bundle, orthogonal to the tactic-layer work.
     Point.ofCoords (input.xA, input.yA) = m • base →
     2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
     Point.ofCoords (output.xA, output.yA) = (accScalar m bits (n + 1)) • base
@@ -1196,40 +1202,23 @@ def double_and_add (n : ℕ) (w : ℕ) :
     -- + house names, the synthesize op-list peel below, and `provable_type_simp`); the folded loop
     -- chunk keeps the goal composite, so the leaf-only finish is skipped and `hc`/`h_input`/
     -- `h_output` survive for the running-sum/accumulator induction below.
+    -- `circuit_proof_start` now normalizes the goal's `Spec` (`RoundInvariant`, in the unfold list)
+    -- too, so no manual `simp [circuit_norm, RoundInvariant]` is needed. `split_circuit_output`
+    -- destructures `output`, splits `h_output` component-wise, and emits the value-toward facts
+    -- `h_output_xA`/`h_output_yA`/`h_output_zs` (the last a `∀ i hi, output_zs[i] = <cell i>`) in the
+    -- framework cell normal form. `hc`/`h_input`/the loop chunk survive for the induction below.
+    -- `adv`-fold the framework cell form (`env.advice col ↑(place self + row)`) to the loop lemmas'
+    -- `adv` spelling (definitionally equal, but the loop-lemma interface is stated in `adv`).
     circuit_proof_start [qMul1Gate, yA, yAExpr, xRExpr, RoundInvariant]
-    -- TODO circuit_proof_start does not simplify at the goal????
-    simp only [circuit_norm, RoundInvariant]
-    provable_type_simp
-    -- TODO h_output is still not split into output components. what triggers its split?
-    rcases output with ⟨ output_xA, output_yA, output_zs ⟩
-    simp only [Output.mk.injEq] at h_output
-    obtain ⟨ hOutXA, hOutYA, hOutZs ⟩ := h_output
-    -- TODO: h_output should have been split automatically, doing it manually is plumbing that doesn't belong in the user half
-    -- TODO why the .. are we reversing the direction of h_output here, the user-friendly way is to rewrite everything
-    -- in terms of the output variables
-    have hOutXA : output_xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
-      rw [← hOutXA]; rfl
-    have hOutYA : output_yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
-      rw [← hOutYA]; rfl
-    -- TODO this is vector evaluation plumbing that was supposed to be part of provable_type_simp
-    have hOutZs : ∀ (i : ℕ) (hi : i < n + 1),
-        output_zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
-      intro i hi
-      simp only [← hOutZs, adv]
-      -- TODO an existing lemma should close this, but doesn't
-      -- this section points to a lot of missing lemmas
-      -- simp only [circuit_norm]
-      simp_rw [ProvableType.eval_cells (M := fields (n + 1))]
-      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
-        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        circuit_norm]
-    obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
-    -- fold `env.advice cfg.col ↑(place self + row)` into `adv` (the loop lemmas' spelling)
-    -- TODO this is ridiculous. we should have a nice normal form and use it
+    -- `circuit_proof_start` (via `provable_type_simp`) has destructured `output`, split `h_output`
+    -- component-wise, and emitted the atom-left value facts `h_output_xA`/`h_output_yA` (scalars)
+    -- and `h_output_zs : ∀ i hi, <cell i> = output_zs[i]` (the vector). Fold the framework cell
+    -- form (`env.advice col ↑(place self + row)`) to the loop lemmas' `adv` spelling.
     have hadv : ∀ (col : Column .advice) (row : ℕ),
         env.env.advice col ((env.place self + row : ℕ) : ℤ) = adv col env.place self env.env row :=
       fun _ _ => rfl
-    simp only [hadv] at hCopyZ hCopyYA hCopyXA hQMul1
+    simp only [hadv] at h_output_xA h_output_yA h_output_zs hc
+    obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hLoop`'s spelling
     set inp : Inputs (AssignedCell Fp) :=
@@ -1244,10 +1233,10 @@ def double_and_add (n : ℕ) (w : ℕ) :
     · -- running-sum chain conjunct of `RoundInvariant`
       refine ⟨?_, ?_⟩
       · -- z_0 = 2·input.z + bit 0
-        rw [hOutZs 0 (by omega)]
+        rw [← h_output_zs 0 (by omega)]
         simpa only [Nat.add_zero, hinp, AssignedCell.eval, hIz] using hz0chain
       · intro b
-        rw [hOutZs (b.val + 1) (by omega), hOutZs b.val (by omega)]
+        rw [← h_output_zs (b.val + 1) (by omega), ← h_output_zs b.val (by omega)]
         exact hzchain b
     · -- accumulator conjunct: route `loop_acc_sound` into `Point.ofCoords`
       intro m hm h2 hbound
@@ -1283,7 +1272,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       have hy : adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1))
           = (accScalar m bits' (n + 1) • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
         mul_left_cancel₀ Orchard.two_ne_zero hy2
-      rw [hOutXA, hOutYA, hx, hy]
+      rw [← h_output_xA, ← h_output_yA, hx, hy]
       -- `ofCoords (p.x, p.y) = p`
       rfl
 
@@ -1297,32 +1286,19 @@ def double_and_add (n : ℕ) (w : ℕ) :
     -- witness/op-list peel below, and `provable_type_simp`) runs; the folded loop witness chunk
     -- keeps the goal composite, so the leaf-only finish is skipped and `hwit`/`h_input`/`h_output`/
     -- `hPA` survive for the honest-row induction below.
-    -- TODO why are we passing circuit_norm lemmas to circuit_proof_start??
-    circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
-      operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      output_cellVec, operations_enable, operations_assignAdvice,
-      RegionOperations.extendsWitnesses_append, RegionOperations.constraints_append,
-      yAFinalWit, readCell,
-      Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-      Witgen.evalSteps]
+    -- the unfold list carries ONLY the per-gadget defs that are NOT `@[circuit_norm]` (the honest
+    -- witness IR: `yAFinalWit`/`readCell` and the `Witgen.*` evaluators) — the bind/append/op lemmas
+    -- are already in `circuit_norm`, so passing them was redundant. `split_circuit_output` then emits
+    -- the value-toward output facts `h_output_xA`/`h_output_yA`/`h_output_zs` (prover view) directly
+    -- in the `env.advice` cell form the honest-row induction below consumes.
+    circuit_proof_start
+      [yAFinalWit, readCell,
+       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
+       Witgen.evalSteps,
+       -- gate defs, so step (b) normalizes the `q_mul_1` gate constraint at the goal (the same
+       -- unfold soundness passes) — the honest-row `Y_A` identity is then closed directly below.
+       qMul1Gate, Constraints.withSelector, yA, yAExpr, xRExpr]
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
-    -- (`input`/`output` are already destructured — incl. the `zs` vector field inside `h_output` —
-    -- by the prefix's `provable_type_simp`, so the output cells read straight off the env)
-    -- TODO why reverse direction of h_output?
-    have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
-      rw [← h_output]; rfl
-    have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
-      rw [← h_output]; rfl
-    have hOutZs : ∀ (i : ℕ) (hi : i < n + 1),
-        output.zs[i] = adv cfg.z env.place self env.env (offset + 1 + i) := by
-      intro i hi
-      rw [← h_output,
-        ProvableType.eval_cells (M := fields (n + 1))
-          { place := env.place, env := env.env.toEnvironment } _]
-      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
-        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        adv, circuit_norm]
-    clear h_output
     -- reconstruct the input record (as `provable_type_simp` destructured it) so the loop lemmas'
     -- `input` argument matches `hWloop`'s spelling
     set inp : Inputs (AssignedCell Fp) :=
@@ -1345,8 +1321,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
     have hRows := loop_row_values cfg inp (bitsOf inp w) env.place self env.env offset n (n + 1)
       le_rfl hWloop
     simp only [← hbits] at hRows
-    -- expose the raw `env.advice` spellings everywhere
-    simp only [adv] at hOutXA hOutYA hOutZs
+    -- (`h_output_*` are already in the raw `env.advice` cell form the induction consumes)
     -- the scalar-field bound at row 0 (`2m + 1 < |scalar field|`), from the range assumption
     have hMb0 : 2 * m + 1 < PALLAS_SCALAR_CARD := by
       have h254 := pow254_lt_card
@@ -1379,8 +1354,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
     rw [hAccX, hAccY] at hR0l1 hR0l2
     refine ⟨⟨hWz, hWyA, hWxA, ?_, ?_⟩, ⟨?_, ?_⟩, ?_⟩
     · -- ── the `q_mul_1` gate: `y_a(copied) = Y_A(row 0)·TWO_INV`, the honest-row `Y_A` identity ──
-      -- TODO why not in circuit_proof_start???
-      simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr]
+      -- (the gate constraint was already normalized at the goal by `circuit_proof_start`'s step (b),
+      -- since the gate defs are now in its unfold list)
       rw [hWyA, hIyA, hAccY, hR0l1, hR0l2, hWxA, hIxA, hAccX, hR0xp]
       -- VK-faithful gate carries `.scaled … TWO_INV`; clear it (needs `2 ≠ 0`).
       have hp2 : (2 : Fp) ≠ 0 := by decide
@@ -1398,14 +1373,14 @@ def double_and_add (n : ℕ) (w : ℕ) :
         (by simp only [adv, hinp, AssignedCell.eval]; exact hWyF)
         hWloop
     · -- ── `RoundInvariant`, z-chain conjunct, round 0 ──
-      rw [hOutZs 0 (by omega)]
+      rw [← h_output_zs 0 (by omega)]
       have h := (hRows 0 (by omega)).1
       simp only [hinp, adv, AssignedCell.eval, hIz] at h
       rw [h]
       rfl
     · -- ── z-chain conjunct, interior rounds ──
       intro b
-      rw [hOutZs (b.val + 1) (by omega), hOutZs b.val (by omega)]
+      rw [← h_output_zs (b.val + 1) (by omega), ← h_output_zs b.val (by omega)]
       have h1 := (hRows (b.val + 1) (by omega)).1
       have h0 := (hRows b.val (by omega)).1
       simp only [hinp, adv, AssignedCell.eval, hIz] at h1 h0
@@ -1431,7 +1406,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hAccX', hAccY', hAV'] at hx
       -- output `y_a`: the witnessed final `y_a`
       rw [hBx, hBy, hIxA, hIyA, hAccX', hAccY', hAV'] at hWyF
-      rw [hOutXA, hOutYA, show offset + 1 + n + 1 = offset + 1 + (n + 1) from by omega, hx, hWyF]
+      rw [← h_output_xA, ← h_output_yA, show offset + 1 + n + 1 = offset + 1 + (n + 1) from by omega, hx, hWyF]
       rfl
 
 end Halo2.Ironwood.Ecc.MulIncomplete

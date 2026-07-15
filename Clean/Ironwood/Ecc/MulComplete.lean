@@ -768,19 +768,20 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by simp only [hinp, circuit_norm]; exact hBx)
         (by simp only [hinp, circuit_norm]; exact hBy)
         numBits hLoop
-    -- ── the output components, read off `h_output` ──
-    have hOutAcc : output.acc = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
-        ((loop cfg inp (bitsOf inp w) offset numBits).output self) := by
-      rw [← h_output]
+    -- ── the output components: `provable_type_simp` destructured `output` and split `h_output`
+    -- component-wise into `⟨eval loop.output = ⟨acc_x, acc_y⟩, eval ⟨zs cells⟩ = output_zs⟩` (the
+    -- `acc` leaf is opaque-eval-vs-Point-literal, the `zs` leaf a whole-vector eval; the pass keeps
+    -- them as this conjunction). Read each off. ──
+    obtain ⟨hOaccEval, hOzsEval⟩ := h_output
+    have hOutAcc : (⟨output_acc_x, output_acc_y⟩ : Point Fp)
+        = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          ((loop cfg inp (bitsOf inp w) offset numBits).output self) := hOaccEval.symm
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
-        output.zs[i] = env.env.advice cfg.zComplete
+        output_zs[i] = env.env.advice cfg.zComplete
           ((env.place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
       intro i hi
-      rw [← h_output]
-      rw [ProvableType.eval_cells (M := fields numBits) { place := env.place, env := env.env } _]
-      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
-        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        circuit_norm]
+      have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
+      simpa only [circuit_norm] using this
     -- ── assemble `RoundInvariant` ──
     refine ⟨bits', ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain: the loop's per-round steps, re-indexed onto the output cells
@@ -839,22 +840,18 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         numBits hWloop
     rw [← hbits] at hAccOut
     simp only [← hbits] at hZs
-    -- ── the output components, read off `h_output` ──
-    have hOutAcc : output.acc
+    -- ── the output components: `h_output` (prover view) as the `⟨acc-eval, zs-eval⟩` conjunction ──
+    obtain ⟨hOaccEval, hOzsEval⟩ := h_output
+    have hOutAcc : (⟨output_acc_x, output_acc_y⟩ : Point Fp)
         = accPoint { x := input_base_x, y := input_base_y }
-            { x := input_xA, y := input_yA } bits numBits := by
-      rw [← h_output]
-      exact hAccOut
+            { x := input_xA, y := input_yA } bits numBits :=
+      hOaccEval.symm.trans hAccOut
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
-        output.zs[i] = env.env.advice cfg.zComplete
+        output_zs[i] = env.env.advice cfg.zComplete
           ((env.place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
       intro i hi
-      rw [← h_output]
-      rw [ProvableType.eval_cells (M := fields numBits)
-        { place := env.place, env := env.env.toEnvironment } _]
-      simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
-        AssignedCell.of, Cell.of, AssignedCell.eval, Vector.getElem_map, Vector.getElem_ofFn,
-        circuit_norm]
+      have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
+      simpa only [circuit_norm] using this
     -- ── assemble: copy constraint + loop constraints + `RoundInvariant` ──
     refine ⟨⟨hWz, hCloop⟩, ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain on the honest values
