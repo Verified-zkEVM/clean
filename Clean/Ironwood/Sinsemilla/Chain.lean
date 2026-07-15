@@ -1088,16 +1088,19 @@ def circuit (G : Generators) (ns : List ℕ) :
   Spec := Spec G ns
   ProverAssumptions input _ := ProverAssumptions G ns input
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
+    -- list-recursive composite: the universal prefix (intro + `soundness_iff` + house names) runs;
+    -- the folded `chainBody` constraints keep the goal composite, so the leaf-only finish is skipped
+    -- and `hc` survives — fed RAW into the piece-list induction (`chainBody_sound`), which does all
+    -- the work. No unfold list: `hc`/`input_var` must stay folded for the recursive lemma.
+    circuit_proof_start
     -- the piece-list induction does all the work
     obtain ⟨hFirst, chunks, hPC, hZs, hContract⟩ :=
-      chainBody_sound G cfg env.place self env.env hE ns offset (offset + pieceRows ns)
+      chainBody_sound G cfg env.place self env.env _hE ns offset (offset + pieceRows ns)
         input_var.pieces input_var.xA input_var.yA hc
-    -- land the abstract input/output values on the body's eval forms
+    -- land the abstract output value on the body's eval forms (`h_input` was already normalized to
+    -- `ProvableStruct.eval` form by the prefix's `provable_type_simp`; the body facts arrive in
+    -- `Eval.eval` form, so bridge them to match)
     rw [ElaboratedRegionCircuit.output_eq] at h_output
-    rw [ProvableStruct.eval_cells_eq_eval] at h_input h_output
     rw [ProvableStruct.eval_cells_eq_eval] at hFirst hZs
     simp only [ProvableStruct.eval_cells_eq_eval] at hContract
     dsimp only at hFirst hZs hContract
@@ -1127,13 +1130,15 @@ def circuit (G : Generators) (ns : List ℕ) :
       · rw [← h_output] at hAyA
         exact hAyA
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hpa
-    simp only [Placed.toEnvironment_env] at hE
-    -- land the abstract input value on the entering cells
-    rw [ProvableStruct.eval_cells_eq_eval_prover] at h_input
+    -- list-recursive composite: the universal prefix (intro + `completeness_iff` + house names) runs;
+    -- the folded `chainBody` witness chunk keeps the goal composite, so the leaf-only finish is
+    -- skipped and `hwit`/`h_input`/`hPA`/`_hE` survive — `hwit` fed RAW into the piece-list
+    -- induction (`chainBody_complete`). No unfold list: `hwit`/`input_var` must stay folded.
+    circuit_proof_start
+    obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hPA
+    simp only [Placed.toEnvironment_env] at _hE
+    -- (`h_input` was already landed on the entering cells — `ProvableStruct.eval` prover form — by
+    -- the prefix's `provable_type_simp`)
     have hpieces : input.pieces = Vector.map
         (fun c => eval env.toEnvironment c) input_var.pieces := by
       rw [← h_input, eval_inputs_pieces, eval_fields_eq_map]
@@ -1142,8 +1147,10 @@ def circuit (G : Generators) (ns : List ℕ) :
       simp [Vector.getElem_map, AssignedCell.eval, ProvableType.eval_field,
         Placed.toEnvironment_place, Placed.toEnvironment_env]
     rw [hpieces] at hbounds hchain
-    refine ⟨(chainBody_complete G cfg self env hE ns offset (offset + pieceRows ns)
-      input_var.pieces input_var.xA input_var.yA A B hAon ?_ ?_ hbounds hchain hwit).1, trivial⟩
+    -- the prefix's peel already discharged the trivial `ProverSpec` conjunct (`∧ True`), leaving the
+    -- bare `Constraints` goal
+    refine (chainBody_complete G cfg self env _hE ns offset (offset + pieceRows ns)
+      input_var.pieces input_var.xA input_var.yA A B hAon ?_ ?_ hbounds hchain hwit).1
     · rw [hAx, ← h_input, eval_inputs_xA]
       simp only [ProvableType.eval_field, AssignedCell.eval, Placed.toEnvironment_place,
         Placed.toEnvironment_env]

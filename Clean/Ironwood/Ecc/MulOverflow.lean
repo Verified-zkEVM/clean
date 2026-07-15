@@ -387,10 +387,12 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Soundness ══
   soundness := by
-    intro cfg
-    rw [FormalCircuit.soundness_iff]
-    intro i₀ env input_var input output h_input h_output hE hA hc
-    obtain ⟨hTable, hDistinct⟩ := hE
+    -- composite layouter gadget: `circuit_proof_start` runs the universal prefix (intro `cfg`,
+    -- `soundness_iff`, house names, provable-type normalization); the folded `synthesize` keeps the
+    -- goal composite, so the leaf-only finish is skipped and `hc`/`h_input` survive for the manual
+    -- layouter peel below.
+    circuit_proof_start
+    obtain ⟨hTable, hDistinct⟩ := _hE
     -- peel the three-region layouter structure: region 1 (witness s) at i₀, the copyCheck child
     -- at i₀+1, region 3 (gate) at i₀+2. `circuit_norm` splits the binds into the region/subcircuit
     -- chunks with the region counter threaded.
@@ -472,10 +474,11 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Completeness ══
   completeness := by
-    intro cfg
-    rw [FormalCircuit.completeness_iff]
-    intro i₀ env input_var input output h_input h_output hwit hE hA hpa
-    obtain ⟨hTable, hDistinct⟩ := hE
+    -- composite layouter gadget: the universal prefix (intro `cfg`, `completeness_iff`, house names,
+    -- provable-type normalization) runs; the folded `synthesize` keeps the goal composite, so the
+    -- leaf-only finish is skipped and `hwit`/`h_input`/`hPA` survive for the manual peel below.
+    circuit_proof_start
+    obtain ⟨hTable, hDistinct⟩ := _hE
     -- peel the witness list: region 1 (witness s) ++ copyCheck child ++ gate region.
     simp only [synthesize, circuit_norm] at hwit ⊢
     -- reduce the copyCheck call's regionCount to 1, so the gate region is at i₀+2
@@ -526,9 +529,9 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
         Cell.of_column, Environment.get_advice]
       -- honest Spec facts from `hpa` (the honest-caller precondition = the overflow `Spec`)
-      simp only [Spec] at hpa
+      simp only [Spec] at hPA
       provable_type_simp
-      obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := hpa
+      obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := hPA
       -- peel the gate region witnesses: the 6 copy assignAdvice witnesses + η + s copy
       simp only [gateRegion, circuit_norm, Halo2.operations_copyAdvice, operations_assignAdvice,
         RegionOperations.extendsWitnesses_cons,
@@ -541,6 +544,10 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
         Cell.of_column, Environment.get_advice] at hWgate
       obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := hWgate
+      -- the prefix's `provable_type_simp` normalized the honest-`Spec` facts (`hkey`/`hHiZ`/…) to
+      -- the verifier `input_*` value spelling; land the input-copy equations on the witness cells
+      -- (`hWs`/copies) so both sides speak `input_*` for the value algebra below.
+      simp only [hIalpha, hIz0, hIz130, hIk254] at hWs hWz0 hWz130 hWeta hWk254 hWalpha ⊢
       -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`)
       -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling. The
       -- engine's Placed-view derived statement (finding #1) spells the child-Spec decomposition

@@ -322,18 +322,25 @@ def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (n₀ : ℕ) (ns : 
   Spec := Spec G Q R n₀ ns scalarOf
   ProverAssumptions input _ := ProverAssumptions G Q n₀ ns input
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
-    -- the body soundness does the work; land the abstract input/output on the body's eval forms
-    -- (`ElaboratedRegionCircuit.output_eq` + `ProvableStruct.eval_cells_eq_eval`, as in
-    -- `Chain.circuit.soundness`).
+    -- PLAYBOOK (blocked on MulFixed/CondSwap; mirrors `Chain.circuit.soundness`):
+    -- `circuit_proof_start` runs the universal prefix (intro + `soundness_iff` + house names +
+    -- `provable_type_simp`); this is a list-recursive composite, so the folded `commitBody`
+    -- constraints keep the goal composite and the leaf-only finish is skipped, leaving `hc`/`_hE`/
+    -- `h_input`/`h_output` intact. Feed `hc` RAW into the body soundness lemma, then land the
+    -- abstract input/output on the body's eval forms (`ElaboratedRegionCircuit.output_eq` +
+    -- `ProvableStruct.eval_cells_eq_eval`; note `provable_type_simp` will already have moved
+    -- `h_input`/the body facts into `ProvableStruct.eval` form, so only `h_output` needs the bridge).
+    circuit_proof_start
     sorry
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    -- the body completeness does the work; land `hpa` on the body's `ProverAssumptions`.
+    -- PLAYBOOK (blocked on MulFixed/CondSwap; mirrors `Chain.circuit.completeness`):
+    -- `circuit_proof_start` runs the universal prefix (intro + `completeness_iff` + house names +
+    -- `provable_type_simp`); the folded `commitBody` witness chunk keeps the goal composite, so the
+    -- leaf-only finish is skipped and `hwit`/`_hE`/`h_input`/`hPA` survive. `obtain … := hPA` for the
+    -- body's `ProverAssumptions`, feed `hwit` RAW into the body completeness lemma. The prefix's peel
+    -- already discharges the trivial `ProverSpec` (`∧ True`) conjunct, leaving the bare `Constraints`
+    -- goal.
+    circuit_proof_start
     sorry
 
 /-! ## `CommitDomain::blinding_factor`

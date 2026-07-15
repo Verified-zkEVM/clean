@@ -115,36 +115,15 @@ def point :
   ProverSpec input output _ := output = input
 
   soundness := by
-    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
-    -- The steps here are exactly what the smart eval-split tactic will do mechanically.
-    intro config offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE _hA hc
-    -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
-    simp only [circuit_norm, pointGate, curveEqn] at hc h_output
-    -- destructure `output` and split its (now-literal) eval equation into coordinates
-    provable_type_simp
-    -- eval → value: state the constraints over the abstract output coords
-    simp only [h_output] at hc
+    circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
     obtain ⟨hx, hy⟩ := hc
     exact point_valid hx hy
 
   completeness := by
-    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
-    intro config offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE _hassum hpa
-    -- reduce circuit structure (gates, `.output`, monad), running the eval simprocs
-    simp only [circuit_norm, pointGate, curveEqn] at hwit hpa h_input h_output ⊢
-    -- destructure input/output/input_var; split every struct equation into coordinates
-    -- (verifier + witgen evals)
-    provable_type_simp
-    -- eval → value: cell = witness (`hwit`) = input coord (`h_input`); state the goal over
-    -- the input coords, and the output = input relation via `h_output`
-    simp only [hwit, h_input] at h_output ⊢
+    circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    exact ⟨point_products_of_valid hpa, h_output.1.symm, h_output.2.symm⟩
+    exact ⟨point_products_of_valid hPA, h_output.1.symm, h_output.2.symm⟩
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`,
 `witness_point.rs:167-186`). Mirrors `point`: enable the `pointNonId` gate at `offset` and
@@ -173,32 +152,14 @@ def pointNonId :
   ProverSpec input output _ := output = input
 
   soundness := by
-    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
-    intro config offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE _hA hc
-    -- reduce circuit structure (gate, `.output`, monad), running the eval simprocs
-    simp only [circuit_norm, pointNonIdGate, curveEqn] at hc h_output
-    -- destructure `output`, split its (now-literal) eval equation into coordinates
-    provable_type_simp
-    -- eval → value: state the single constraint over the abstract output coords
-    simp only [h_output] at hc
+    circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
     exact point_onCurve hc
 
   completeness := by
-    -- ══ framework/tactic half: strip all `eval`/vars, land on pure field values ══
-    intro config offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE _hassum hpa
-    -- reduce circuit structure, running the eval simprocs
-    simp only [circuit_norm, pointNonIdGate, curveEqn] at hwit hpa h_input h_output ⊢
-    -- destructure input/output/input_var; split every struct equation into coordinates
-    provable_type_simp
-    -- eval → value: cell = witness (`hwit`) = input coord (`h_input`)
-    simp only [hwit, h_input] at h_output ⊢
+    circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    exact ⟨curve_eqn_of_onCurve hpa, h_output.1.symm, h_output.2.symm⟩
+    exact ⟨curve_eqn_of_onCurve hPA, h_output.1.symm, h_output.2.symm⟩
 
 end WitnessPoint
 

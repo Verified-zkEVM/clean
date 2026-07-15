@@ -342,13 +342,8 @@ def shortRangeCheck (K numBits : ℕ) :
   ProverAssumptions input _ := input.element.val < 2 ^ numBits
 
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
-    simp only [circuit_norm, rangeCheckLookup, bitshiftGate, invTwoPowS,
-      Constraints.withSelector] at hc
-    provable_type_simp
-    obtain ⟨⟨_hUsable, hTableLt, _hTableEq⟩, hDistinct⟩ := hE
+    circuit_proof_start [rangeCheckLookup, bitshiftGate, invTwoPowS, Constraints.withSelector]
+    obtain ⟨⟨_hUsable, hTableLt, _hTableEq⟩, hDistinct⟩ := _hE
     obtain ⟨hNumBits, hCard⟩ := hA
     -- the short-row valuation: `q_running ∉ [q_lookup]` (distinct indices), so the gated
     -- input reduces to `z_cur` at both rows
@@ -365,8 +360,9 @@ def shortRangeCheck (K numBits : ℕ) :
     have hShiftLt :
         (env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))).val < 2 ^ K :=
       mem_usableRows_val_lt hTableLt hMemShift
-    -- the copy constraint: input_element = advice runningSum @offset
-    rw [← h_input, ← hCopy]
+    -- the copy constraint lands the input element on the running-sum cell @offset (the prefix's
+    -- row-fact chaining already read `hCopy` as the value equation `word = input_element`)
+    rw [← hCopy]
     -- bitshift gate: shifted = word · 2^K · 2^(−num_bits) = word · 2^(K−num_bits)
     -- (rearranged via the field-inverse split), so the shift lemma applies
     set word := env.env.advice cfg.runningSum ↑(env.place self + offset) with hword_def
@@ -395,54 +391,48 @@ def shortRangeCheck (K numBits : ℕ) :
       hWordLt hShiftLt hEqShift
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    simp only [circuit_norm, rangeCheckLookup, bitshiftGate, invTwoPowS,
-      Constraints.withSelector] at hwit ⊢
-    obtain ⟨⟨hUsable, _hTableLt, hTableEq⟩, hDistinct⟩ := hE
+    circuit_proof_start [rangeCheckLookup, bitshiftGate, invTwoPowS, Constraints.withSelector]
+    -- the prefix's row-fact chaining already baked the honest witnesses (`hwit`) and the input
+    -- copy (`h_input`) into the goal, so the two membership existentials and the bitshift-gate
+    -- equation are stated directly over `input_element` — no cell abstraction to peel.
+    obtain ⟨⟨hUsable, _hTableLt, hTableEq⟩, hDistinct⟩ := _hE
     obtain ⟨hNumBits, hCard⟩ := hA
     -- normalize the table facts to the prover env's `.env` spelling (they arrive over
     -- `env.toEnvironment.env`; `Placed.toEnvironment_env` bridges to `env.env.toEnvironment`,
     -- defeq to the `env.env.fixed` in the goal)
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
+    -- `q_running` OFF (distinct selectors): the gated rows read `z_cur` (the plain element)
     rw [if_neg (fun h => hDistinct h.symm)]
-    -- land `h_input` on the element component (the cell field value = input.element)
-    provable_type_simp
-    obtain ⟨hCopy, hShiftWit, hInvWit⟩ := hwit
-    -- the element cell's field value, and its `.val` bound from the honest-prover assumption
-    set E := env.env.get input_var_element.cell.column
-      ↑(env.place input_var_element.cell.regionIndex + input_var_element.cell.rowOffset) with hE_def
-    have hE_input : E = input_element := by rw [hE_def]; exact h_input
-    have hEltLt : E.val < 2 ^ numBits := by rw [hE_input]; exact hpa
-    have hEltLtK : E.val < 2 ^ K :=
+    -- the element's `.val` bound from the honest-prover assumption
+    have hEltLt : input_element.val < 2 ^ numBits := hPA
+    have hEltLtK : input_element.val < 2 ^ K :=
       lt_of_lt_of_le hEltLt (Nat.pow_le_pow_right (by norm_num) hNumBits)
     have hCardK : 2 ^ K < PALLAS_BASE_CARD :=
       lt_of_le_of_lt (Nat.le_mul_of_pos_right _ (pow_two_pos K)) hCard
-    -- `↑E.val = E` (E < 2^K < |Fp|)
-    have hE_cast : ((E.val : ℕ) : Fp) = E := ZMod.natCast_zmod_val E
+    -- `↑input.val = input` (input < 2^K < |Fp|)
+    have hE_cast : ((input_element.val : ℕ) : Fp) = input_element := ZMod.natCast_zmod_val _
     -- the shifted word value and its `.val` bound (donor completeness lemma)
-    have hShiftedLtK : (E * (2 ^ (K - numBits) : Fp)).val < 2 ^ K :=
-      shortRange_completeness_shifted K numBits hNumBits hCardK E hEltLt
+    have hShiftedLtK : (input_element * (2 ^ (K - numBits) : Fp)).val < 2 ^ K :=
+      shortRange_completeness_shifted K numBits hNumBits hCardK input_element hEltLt
     have hShift_cast :
-        (((E * (2 ^ (K - numBits) : Fp)).val : ℕ) : Fp) = E * (2 ^ (K - numBits) : Fp) :=
+        (((input_element * (2 ^ (K - numBits) : Fp)).val : ℕ) : Fp)
+          = input_element * (2 ^ (K - numBits) : Fp) :=
       ZMod.natCast_zmod_val _
-    refine ⟨hCopy, ?_, ?_, hInvWit, ?_⟩
-    · -- membership @offset: witness row `E.val` (usable: `E.val < 2^K ≤ usableRows`),
-      -- which holds `↑E.val = E = z_cur`
-      refine ⟨E.val, lt_of_lt_of_le hEltLtK hUsable, ?_⟩
+    refine ⟨?_, ?_, ?_⟩
+    · -- membership @offset: witness row `input.val` (usable: `input.val < 2^K ≤ usableRows`),
+      -- holding `↑input.val = input = z_cur`
+      refine ⟨input_element.val, lt_of_lt_of_le hEltLtK hUsable, ?_⟩
       simp only [one_mul, zero_mul, sub_zero, zero_add, List.cons.injEq, and_true]
-      rw [hCopy, hTableEq E.val hEltLtK]
+      rw [hTableEq input_element.val hEltLtK]
       exact hE_cast.symm
-    · -- membership @(offset+1): witness row `shifted.val` (usable), holding
-      -- `↑shifted.val = shifted`
-      refine ⟨(E * (2 ^ (K - numBits) : Fp)).val, lt_of_lt_of_le hShiftedLtK hUsable, ?_⟩
+    · -- membership @(offset+1): witness row `shifted.val` (usable), holding `↑shifted.val = shifted`
+      refine ⟨(input_element * (2 ^ (K - numBits) : Fp)).val,
+        lt_of_lt_of_le hShiftedLtK hUsable, ?_⟩
       simp only [one_mul, zero_mul, sub_zero, zero_add, List.cons.injEq, and_true]
-      rw [hShiftWit, hTableEq _ hShiftedLtK]
+      rw [hTableEq _ hShiftedLtK]
       exact hShift_cast.symm
     · -- bitshift gate: shifted = word · 2^K · 2^(−num_bits). Cell rows arrive normalized
       -- by `cast_row_pred`/`row_succ_succ` (Lemmas.lean).
-      rw [hCopy, hShiftWit, hInvWit]
       have hPowLtCard : 2 ^ numBits < PALLAS_BASE_CARD :=
         lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits) hCardK
       have hPowNe : (2 ^ numBits : Fp) ≠ 0 := by
@@ -778,22 +768,18 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     output.zLast = ((input.element.val / 2 ^ (K * numWords) : ℕ) : Fp)
 
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
-    obtain ⟨hTable, _hDistinct⟩ := hE
-    obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
-    -- peel the circuit structure: copy (z_0 = element) ++ loop ++ [zLast strict] output.
-    -- keep the loop's `Constraints` chunk FOLDED (do not unfold `rangeCheckLoop`); the
-    -- word-bound induction consumes it as-is.
-    simp only [circuit_norm,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+    -- loop-based composite: `circuit_proof_start` runs the universal prefix (intro + `soundness_iff`
+    -- + house names + constraints peel over the peel lemmas below); the loop's folded `Constraints`
+    -- chunk keeps the state composite, so the leaf-only finish is skipped and `hc`/`h_input`/
+    -- `h_output` survive for the word-bound induction that follows.
+    circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt,
-      operations_cellAt, RegionOperations.constraints_append] at hc h_output ⊢
+      operations_cellAt, RegionOperations.constraints_append]
+    obtain ⟨hTable, _hDistinct⟩ := _hE
+    obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
     obtain ⟨hCopy, hLoop, _hTailC⟩ := hc
-    -- land `h_input`/copy on the element cell value (destructures to `input_element` /
-    -- `output_z0` / `output_zLast`)
-    provable_type_simp
+    -- (`input`/`output` are already destructured to `input_element` / `output_z0` /
+    -- `output_zLast` by the prefix's `provable_type_simp`)
     -- the running-sum chain read off the env; the word-bound induction over the loop chunk
     set f := zChain K cfg env.place self env.env offset with hf_def
     have hwords := rangeCheck_loop_word_bounds K cfg input_var_element env.place self env.env
@@ -821,34 +807,37 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       · rw [← hz0]; exact chain_element_lt K numWords hA.1 f hwords hzLast0
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    obtain ⟨hTable, hDistinct⟩ := hE
+    -- loop-based composite: the universal prefix peels the witness list over the peel lemmas below;
+    -- the loop's folded `ExtendsWitnesses` chunk keeps the state composite, so the leaf-only finish
+    -- is skipped and `hwit`/`h_input`/`hPA` survive for the manual continuation.
+    circuit_proof_start [RegionCircuit.operations_bind, operations_copyAdvice,
+      operations_cellAt, RegionOperations.extendsWitnesses_append,
+      RegionOperations.constraints_append]
+    obtain ⟨hTable, hDistinct⟩ := _hE
     obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
-    -- peel the circuit into: copy witness ++ loop witness ++ tail; keep the loop chunk folded
-    simp only [circuit_norm, RegionCircuit.operations_bind, operations_copyAdvice,
-      operations_cellAt, RegionOperations.extendsWitnesses_append,
-      RegionOperations.constraints_append] at hwit ⊢
     obtain ⟨hCopyWit, hLoopWit, hTailWit⟩ := hwit
     obtain ⟨hCardN, hKcard⟩ := hA
-    -- the honest z_0 = the element cell value; `eCell.val` is the decomposed nat `a`
-    set eCell := input_var.element.eval env.place env.env.toEnvironment with heCell
+    -- the element cell value (`input_var_element`'s eval); by `h_input` it is `input_element`, and
+    -- `input_element.val` is the decomposed nat `a`. The prefix's `provable_type_simp` already
+    -- destructured `input_var` to `input_var_element`, so we work with the cell spelling directly.
+    set eCell := env.env.get input_var_element.cell.column
+      ↑(env.place input_var_element.cell.regionIndex + input_var_element.cell.rowOffset) with heCell
+    have heInput : eCell = input_element := h_input
     -- z_0 = element cell (from the copy's assignAdvice witness)
     have hz0 : zChain K cfg env.place self env.env.toEnvironment offset 0 = eCell := by
-      simp only [zChain, add_zero, heCell, AssignedCell.eval, hCopyWit]
+      simp only [zChain, add_zero, heCell, hCopyWit]
     -- the honest z-chain up to numWords: `z_j = ↑(eCell.val ≫ (K·j))`
     have hz : ∀ j, j ≤ numWords → zChain K cfg env.place self env.env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
       intro j hj
       rcases Nat.eq_zero_or_pos j with rfl | hjpos
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
-      · exact rangeCheck_loop_zvalues K cfg input_var.element env.place self env.env offset
+      · exact rangeCheck_loop_zvalues K cfg input_var_element env.place self env.env offset
           numWords hLoopWit j hjpos hj
     refine ⟨⟨hCopyWit, ?_, ?_⟩, ?_⟩
     · -- the loop's Constraints (membership at each round), via the completeness loop lemma
-      exact rangeCheck_loop_constraints_complete K cfg input_var.element env.place self
+      exact rangeCheck_loop_constraints_complete K cfg input_var_element env.place self
         env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
     · -- the tail: strict ⇒ `constrainConstant zLast 0` (⇒ z_last = 0); else nothing
       rcases hbstrict : strict with _ | _
@@ -859,34 +848,26 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
           AssignedCell.of_cell, Cell.of, Cell.eval]
         have hzn := hz numWords le_rfl
         simp only [zChain] at hzn
-        have heInput : eCell.val < 2 ^ (K * numWords) := by
-          have hie : input.element = eCell := by
-            rw [heCell, ← h_input]; provable_type_simp
-          rw [← hie]; exact hpa hbstrict
-        rw [hzn, Nat.div_eq_of_lt heInput, Nat.cast_zero]
-    · -- ProverSpec (C6): `output.zLast = ↑(element.val / 2^{K·numWords})`. The output `zLast`
+        have heInputLt : eCell.val < 2 ^ (K * numWords) := by
+          rw [heInput]; exact hPA hbstrict
+        rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
+    · -- ProverSpec (C6): `output_zLast = ↑(input_element.val / 2^{K·numWords})`. The output `zLast`
       -- cell sits at `offset + numWords`, so its prover eval is the honest chain value `hz numWords`;
-      -- `element.val = eCell.val` by `h_input`. Reduce the elaborated output to its cell literal,
-      -- then decompose `output` into its components (`provable_type_simp`, as in soundness).
-      -- rewrite `input`/`output` back to their evals, reduce the elaborated output to its cell
-      -- literal, and project `.zLast`/`.element` componentwise
+      -- `input_element.val = eCell.val` by `h_input`. Case on `strict` (the `if` blocks the
+      -- `.output` reduction, but the output literal `{ z0, zLast }` is identical in both branches).
       have hzn := hz numWords le_rfl
       simp only [zChain] at hzn
-      -- `input.element` = eCell (the element cell value)
-      rw [← h_input]
-      have hInEl : (ProvableStruct.eval env.place env.env.toEnvironment input_var).element = eCell := by
-        rw [heCell, ← ProvableStruct.eval_var_eq_eval_prover]
-        provable_type_simp
-      -- case on `strict` to reduce the output (the `if` blocks the `.output` reduction, but the
-      -- output literal `{ z0, zLast }` is identical in both branches; `zLast` sits at
-      -- `offset + numWords`)
-      rw [← h_output]
+      -- `input_element.val = eCell.val`; the honest `zLast` cell (`offset + numWords`) is `hzn`
+      rw [← heInput, ← hzn]
+      -- reduce `h_output` to its component equations (the `if` on `strict` blocks `.output`, but the
+      -- output literal `{ z0, zLast }` is identical in both branches) and read off `output_zLast`
       cases strict <;>
         · simp only [circuit_norm, RegionCircuit.output_bind, output_cellAt,
             Bool.false_eq_true, if_false, if_true,
             AssignedCell.eval, AssignedCell.of_cell,
-            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice, hInEl]
-          exact hzn
+            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+            at h_output
+          exact h_output.2.symm
 
 /-! ## `copy_check` — the layouter-level range-check wrapper
 

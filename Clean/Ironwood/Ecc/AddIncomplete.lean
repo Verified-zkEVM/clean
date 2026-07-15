@@ -156,21 +156,13 @@ def add : FormalRegionCircuit Fp
   -- typically for hint-consuming gadgets (cf. WitnessPoint's `output = input`).
 
   soundness := by
-    intro config offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE h_assumptions hc
-    -- reduce circuit structure (gate polys + copy equalities), running the eval simprocs
-    simp only [circuit_norm, gate] at hc h_output
-    -- destructure input/output; split the input/output eval equations into coordinates
-    provable_type_simp
-    simp only [h_input, h_output] at hc ⊢
-    clear h_input h_output
+    circuit_proof_start [gate]
     -- ══ user-facing half: pure field values + curve math ══
     obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
     -- eval → value: gate cell = copy source (`hc…`) = input coord (`h_input`), R row = output
     -- coord (`h_output`)
     simp only [hcpx, hcpy, hcqx, hcqy] at hpoly1 hpoly2
-    obtain ⟨hpx_curve, hqx_curve, hxne⟩ := h_assumptions
+    obtain ⟨hpx_curve, hqx_curve, hxne⟩ := hA
     have hsum := eq_nondegenerateAdd_of_polys_zero hxne hpoly1 hpoly2
     rw [hsum]
     exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne,
@@ -178,16 +170,7 @@ def add : FormalRegionCircuit Fp
         (Orchard.Point.ne_zero_of_onCurve hpx_curve) (Orchard.Point.ne_zero_of_onCurve hqx_curve) hxne⟩
 
   completeness := by
-    intro config offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hlast
-    -- reduce circuit structure, running the eval simprocs
-    simp only [circuit_norm, gate, Orchard.Point.nondegenerateAdd] at hwit hA h_input h_output ⊢
-    -- destructure input/output/input_var; split every struct equation into coordinates
-    provable_type_simp
-    simp only [circuit_norm, h_input] at hwit
-    simp only [circuit_norm, h_input, hwit] at ⊢ hA
-    clear h_input h_output
+    circuit_proof_start [gate, Orchard.Point.nondegenerateAdd]
     -- ══ user-facing half ══
     -- land the `Assumptions` facts on the input coordinates
     obtain ⟨-, -, hxne⟩ := hA

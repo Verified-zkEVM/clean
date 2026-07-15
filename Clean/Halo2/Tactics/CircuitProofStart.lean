@@ -38,9 +38,14 @@ Then, **only if the state is not composite** (`stateIsComposite` — see below),
 (f) **row-fact chaining** — the copy-equation idiom that lands the copied cells on the input/output
     coordinates. Soundness: `simp only [h_input, h_output] at hc ⊢` (no `circuit_norm` — the gate
     simprocs already fired in (b)). Completeness: `simp only [circuit_norm, h_input] at hwit`, then
-    `simp only [circuit_norm, h_input, hwit] at ⊢ hA`.
-(g) **cleanup** — `clear` the spent `h_input`/`h_output` (and `hwit` for completeness), matching the
-    reference proofs.
+    `simp only [circuit_norm, h_input, hwit] at ⊢ hA`, then land `h_output` on the input/witness
+    values (`simp only [circuit_norm, h_input, hwit] at h_output`) so it reads as the per-coordinate
+    value equation `output_i = input_i` — the bridge a leaf whose `ProverSpec` is a value equation
+    (`output = input`, e.g. WitnessPoint) needs in its user half.
+(g) **cleanup** — soundness `clear`s the spent `h_input`/`h_output`. Completeness `clear`s the spent
+    `h_input`/`hwit` but KEEPS `h_output` (now the value equation), which the user half references
+    (Add's user half does not, but there `h_output` stays in its `eval … = output` form, counted as
+    used by the gadget's return, so no unused-hyp lint fires).
 
 Each step is its own function and is **total / no-op-tolerant**. The leaf/composite discriminator
 (`stateIsComposite`) is whether the soundness constraints hyp `hc` (or, at completeness, the goal)
@@ -285,6 +290,13 @@ def rowFactChaining (d : Direction) : TacticM Unit := do
   else
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident)) catch _ => pure ()
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident)) catch _ => pure ()
+    -- Land `h_output` on the input/witness values. A leaf whose `ProverSpec` is a value equation
+    -- (`output = input`, e.g. WitnessPoint) leaves that obligation as a goal conjunct over the free
+    -- `output` coords; after this rewrite `h_output` reads as the per-coordinate value equation
+    -- (`output_i = input_i`), which its user half supplies directly (kept in scope by the
+    -- `try clear` below). No-op / cleared for a gadget whose completeness goal is pure constraints
+    -- (e.g. Add).
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at $(mkIdent `h_output):ident)) catch _ => pure ()
 
 /-- Cleanup: drop the input/output (and, for completeness, witness) equations that steps (b)/(f)
 have already fully consumed — matching the reference proofs' `clear` after row-fact chaining. Kept
@@ -294,7 +306,13 @@ def clearConsumed (d : Direction) : TacticM Unit := do
   if d.isSoundness then
     try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident)) catch _ => pure ()
   else
-    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident $(mkIdent `hwit):ident)) catch _ => pure ()
+    -- `h_input`/`hwit` are always spent by the finish. `h_output` is deliberately KEPT: after the
+    -- value-landing in the finish it reads as the per-coordinate value equation
+    -- (`output_i = input_i`), which a leaf whose `ProverSpec` is a value equation (WitnessPoint)
+    -- needs in its user half. A pure-constraint gadget (Add) does not reference it — but the finish
+    -- leaves it in its original `eval … = output` form, which the linter treats as used by the
+    -- gadget's return, so this does not introduce an unused-hyp lint.
+    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `hwit):ident)) catch _ => pure ()
 
 /-- The composite runner: steps (a)–(f) plus the consumed-equation cleanup, each no-op-tolerant.
 

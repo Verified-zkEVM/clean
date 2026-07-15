@@ -1097,16 +1097,15 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
   ProverAssumptions input _ := ProverAssumptions G w input
   ProverSpec input output _ := ProverSpec G w input output ()
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
+    -- loop-based composite: the universal prefix (intro + `soundness_iff` + house names, the
+    -- synthesize op-list peel below, and `provable_type_simp`) runs; the folded loop chunk keeps the
+    -- goal composite, so the leaf-only finish is skipped and `hc`/`h_input`/`h_output` survive.
     -- peel the synthesize op list: two copies ++ loop (kept folded) ++ output reads (no ops)
-    simp only [HashPiece.synthesize, circuit_norm,
+    circuit_proof_start [HashPiece.synthesize,
       RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      output_cellVec] at hc h_output
+      output_cellVec]
     obtain ⟨hZ0, hXA0, hLoop⟩ := hc
-    provable_type_simp
     -- reconstruct the input record so the loop lemmas' `input` argument matches `hLoop`
     set inp : Inputs (AssignedCell Fp) :=
       { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp
@@ -1135,7 +1134,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
       rw [hXA0]
       exact hIxA
     -- the extraction lemmas + the pure bridge
-    have hL := loop_lookup_facts G cfg inp final env.place self env.env offset w hE hLoop
+    have hL := loop_lookup_facts G cfg inp final env.place self env.env offset w _hE hLoop
     have hG := loop_gate_facts G cfg inp final env.place self env.env offset w hLoop
     obtain ⟨ms, hms_lt, hpiece, hzs, hfxA, hlxP, hlyP, hchain⟩ :=
       soundness_aux G w (dRow cfg env.place self env.env offset)
@@ -1157,21 +1156,20 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
     · rw [hOlast]; exact hlyP
     · rw [hOfirst, hOlast]; exact hchain
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    simp only [HashPiece.synthesize, circuit_norm,
+    -- loop-based composite: the universal prefix (intro + `completeness_iff` + house names, the
+    -- witness/op-list peel below, and `provable_type_simp`) runs; the folded loop witness chunk keeps
+    -- the goal composite, so the leaf-only finish is skipped and `hwit`/`h_input`/`hPA`/`_hE` survive.
+    circuit_proof_start [HashPiece.synthesize,
       RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
-      output_cellVec] at hwit h_output ⊢
+      output_cellVec]
     obtain ⟨hWz0, hWxA0, hWloop⟩ := hwit
-    provable_type_simp
     set inp : Inputs (AssignedCell Fp) :=
       { piece := input_var_piece, xA := input_var_xA, yA := input_var_yA } with hinp
     obtain ⟨hIpiece, hIxA, hIyA⟩ := h_input
-    obtain ⟨hPieceLt, A, B, hAon, hAx, hAy, hchain⟩ := hpa
+    obtain ⟨hPieceLt, A, B, hAon, hAx, hAy, hchain⟩ := hPA
     -- normalize the env-assumption spelling to the prover env
-    simp only [Placed.toEnvironment_env] at hE
+    simp only [Placed.toEnvironment_env] at _hE
     -- output cells (fixed rows) read off the prover env, as in soundness
     have hOfirst : output.first = dRow cfg env.place self env.env.toEnvironment offset 0 := by
       rw [← h_output]; rfl
@@ -1187,7 +1185,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
       rw [hWxA0]
     · -- the loop's constraints, from the honest witnesses + the chain preconditions
       refine loop_constraints_complete G cfg inp final env.place self env.env offset w A B
-        ?_ ?_ ?_ ?_ hE ?_ ?_ hWloop
+        ?_ ?_ ?_ ?_ _hE ?_ ?_ hWloop
       · rw [hAx]; exact hIxA.symm
       · rw [hAy]; exact hIyA.symm
       · rw [show inp.piece.eval env.place env.env.toEnvironment = input_piece from hIpiece]

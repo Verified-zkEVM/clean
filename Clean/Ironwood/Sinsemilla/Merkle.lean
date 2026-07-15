@@ -241,35 +241,30 @@ def circuit :
   Spec input _ _ := GateSpec input
   ProverAssumptions input _ := GateSpec input
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output hE hA hc
-    -- peel: 10 copies + the 4-poly gate; unfold the gate uniformly in the same pass
-    simp only [body, circuit_norm, decomposeGate, Constraints.withSelector,
+    -- PLAYBOOK (blocked on MulFixed/CondSwap):
+    -- `circuit_proof_start [body, decomposeGate, Constraints.withSelector, …]` runs the universal
+    -- prefix — intro + `soundness_iff` + house names, the 10-copies-+-4-poly-gate peel over the
+    -- unfold list below, and `provable_type_simp`. This gate is a LEAF (no folded child chunk), so
+    -- the leaf-only finish fires: the copy equations land the input coordinates on the gate cells and
+    -- `h_input`/`h_output` are cleared. The user half then destructures `hc` into the 10 copies + the
+    -- 4 gate polys and closes with `exact spec_of_polysZero hLcheck hLeftCheck hRightCheck hB1B2`
+    -- (value math DONE by `spec_of_polysZero`; only the copy-cell/input-cell bookkeeping remains,
+    -- as `Add.soundness`/`AddIncomplete.soundness` do it).
+    circuit_proof_start [body, decomposeGate, Constraints.withSelector,
       RegionCircuit.operations_bind, operations_copyAdvice, operations_enable,
-      RegionOperations.constraints_append] at hc
-    obtain ⟨hCa, hCb, hCc, hCleft, hCright, hCz1A, hCz1B, hCb1, hCb2, hCl,
-      hLcheck, hLeftCheck, hRightCheck, hB1B2⟩ := hc
-    simp only [GateSpec, Spec]
-    provable_type_simp
-    -- STRUCTURE-COMPLETE cut: bridge the goal's input components to the gate cells the polys use
-    -- (`h_input`: input → input-cell read; the copies `hC*`: input-cell read → gate cell), then
-    -- `exact spec_of_polysZero hLcheck hLeftCheck hRightCheck hB1B2`. The value math is DONE
-    -- (`spec_of_polysZero`); the remaining step is the copy-cell/input-cell defeq bookkeeping the
-    -- `MulOverflow` soundness performs with its `hIX`/`hCX` chain.
+      RegionOperations.constraints_append]
     sorry
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit hE hA hpa
-    -- peel: the body's copies produce copy-constraint goals + the honest fixed gate
-    simp only [body, circuit_norm, decomposeGate, Constraints.withSelector,
-      RegionCircuit.operations_bind, operations_copyAdvice, operations_enable]
-    simp only [GateSpec, Spec] at hpa
-    provable_type_simp
-    -- STRUCTURE-COMPLETE cut: the 4 gate polys close by `polysZero_of_spec hpa` (after bridging
-    -- `hpa`'s input components to the gate cells via `h_input`); the copy goals are witness-
-    -- consistent (`h_input`). Value math DONE (`polysZero_of_spec`).
+    -- PLAYBOOK (blocked on MulFixed/CondSwap):
+    -- `circuit_proof_start [body, decomposeGate, Constraints.withSelector, …]` runs the universal
+    -- prefix — intro + `completeness_iff` + house names, the copy/gate peel over the unfold list, and
+    -- `provable_type_simp`. Leaf gate ⇒ the finish lands `h_input`/`hwit`/`h_output` on the input
+    -- coordinates. The user half `obtain … := hPA` (`GateSpec`) and closes the 4 gate polys with
+    -- `polysZero_of_spec hPA`; the copy goals are witness-consistent (value math DONE by
+    -- `polysZero_of_spec`).
+    circuit_proof_start [body, decomposeGate, Constraints.withSelector,
+      RegionCircuit.operations_bind, operations_copyAdvice, operations_enable,
+      RegionOperations.constraints_append]
     sorry
 
 end Gate

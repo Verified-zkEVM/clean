@@ -1204,23 +1204,18 @@ def double_and_add (n : ℕ) (w : ℕ) :
   -- into `loop_zchain_sound` (running-sum chain) and `loop_acc_sound` (accumulator = `accScalar`),
   -- both of which route into the imported donor algebra. Deferred pending the split/eval tactic.
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE hA hc
+    -- loop-based composite: `circuit_proof_start` runs the universal prefix (intro + `soundness_iff`
+    -- + house names, the synthesize op-list peel below, and `provable_type_simp`); the folded loop
+    -- chunk keeps the goal composite, so the leaf-only finish is skipped and `hc`/`h_input`/
+    -- `h_output` survive for the running-sum/accumulator induction below.
     -- peel the synthesize op list: startCopies (3) ++ q_mul_1 ++ loop ++ (output cells, no ops).
-    simp only [circuit_norm,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+    circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
       operations_enable, operations_assignAdvice,
-      RegionOperations.constraints_append, startCopies] at hc h_output
+      RegionOperations.constraints_append, startCopies]
     obtain ⟨hCopyZ, hCopyYA, hCopyXA, hQMul1, hLoop⟩ := hc
     -- q_mul_1 gate ⇒ `hInit` (derived `Y_A` of loop row 0 = `2·(λ₁ at offset)`)
     simp only [qMul1Gate, Constraints.withSelector, circuit_norm, yA, yAExpr, xRExpr] at hQMul1
-    -- destructure input into coordinates; the struct-literal simproc now decomposes the output
-    -- eval (incl. the `zs` vector field) inside `h_output`, so the output cells read straight off
-    -- the env. Recover the `adv`-spelled per-field reads (previously the `output_eval_fields`
-    -- hand-lemma, redundant since the simproc decomposes the `Vector` field).
-    provable_type_simp
     have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
       rw [← h_output]; rfl
     have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
@@ -1302,23 +1297,20 @@ def double_and_add (n : ℕ) (w : ℕ) :
   -- and the `q_mul_1` gate via `honest_step`'s row-0 `Y_A` identity, and read `RoundInvariant`
   -- off the honest row values (`loop_row_values`) + `accVal_eq_nsmul`.
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE _hA hPA
-    simp only [circuit_norm,
-      RegionCircuit.operations_bind, RegionCircuit.output_bind,
+    -- loop-based composite: the universal prefix (intro + `completeness_iff` + house names, the
+    -- witness/op-list peel below, and `provable_type_simp`) runs; the folded loop witness chunk
+    -- keeps the goal composite, so the leaf-only finish is skipped and `hwit`/`h_input`/`h_output`/
+    -- `hPA` survive for the honest-row induction below.
+    circuit_proof_start [RegionCircuit.operations_bind, RegionCircuit.output_bind,
       operations_copyAdvice, output_cellAt, operations_cellAt, operations_cellVec,
       output_cellVec, operations_enable, operations_assignAdvice,
       RegionOperations.extendsWitnesses_append, RegionOperations.constraints_append,
       startCopies, yAFinalWit, readCell,
       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-      Witgen.evalSteps] at hwit h_output ⊢
+      Witgen.evalSteps]
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
-    -- destructure input into coordinates; the struct-literal simproc now decomposes the output
-    -- eval (incl. the `zs` vector field) inside `h_output`, so the output cells read straight off
-    -- the env. Recover the `adv`-spelled per-field reads (previously the `output_eval_fields`
-    -- hand-lemma, redundant since the simproc decomposes the `Vector` field).
-    provable_type_simp
+    -- (`input`/`output` are already destructured — incl. the `zs` vector field inside `h_output` —
+    -- by the prefix's `provable_type_simp`, so the output cells read straight off the env)
     have hOutXA : output.xA = adv cfg.xA env.place self env.env (offset + 1 + n + 1) := by
       rw [← h_output]; rfl
     have hOutYA : output.yA = adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1)) := by
