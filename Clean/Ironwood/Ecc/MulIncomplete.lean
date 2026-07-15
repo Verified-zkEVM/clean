@@ -564,7 +564,7 @@ private theorem loop_gate_facts (n : ℕ) :
           -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
           -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
           -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring)) 2 * hg1
+          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
           · linear_combination hsec
           · linear_combination (norm := (field_simp; ring)) 2 * hg2
         · -- interior first row: `q_mul_2` on row 0
@@ -580,7 +580,7 @@ private theorem loop_gate_facts (n : ℕ) :
           -- gate polys are now in VK-faithful (non-×2, `y_a = Y_A·TWO_INV`) form; the round
           -- Spec keeps the ×2 convention, so multiply each gradient constraint by 2 and clear
           -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
-          · linear_combination (norm := (field_simp; ring)) 2 * hg1
+          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
           · linear_combination hsec
           · linear_combination (norm := (field_simp; ring)) 2 * hg2
       · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
@@ -600,7 +600,7 @@ private theorem loop_gate_facts (n : ℕ) :
           -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
           · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring)) 2 * hg2
+          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
         · -- interior round: `q_mul_2`
           rw [hYADr, hYADr1i hrn]
           -- ACCEPTANCE (C2a #1): `round_norm` bundles the gate `circuit_norm` reduction with the
@@ -619,7 +619,7 @@ private theorem loop_gate_facts (n : ℕ) :
           -- the `2⁻¹` via `field_simp` (needs `h2 : 2 ≠ 0`).
           · linear_combination (norm := (field_simp; ring)) 2 * hg1
           · linear_combination hsec
-          · linear_combination (norm := (field_simp; ring)) 2 * hg2
+          · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
 
 /-- **Extraction of the round-0 anchor copies.** Round 0 anchors `x_p`/`y_p` at `offset + 1`
 to the base point by copy (`CircuitVersion::AnchoredBase`). For any `numRounds ≥ 1` the loop's
