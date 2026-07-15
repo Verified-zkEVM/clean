@@ -48,60 +48,10 @@ def configure (x y : Column .advice) : Configure Fp Config := do
   createGate (pointNonIdGate qPointNonId x y)
   return { qPoint, qPointNonId, x, y }
 
-/-- The curve gate's two product constraints imply the point is a valid Pallas point
-(on-curve, or the `(0,0)` identity). The algebraic core of witness_point soundness. -/
-theorem point_valid {xv yv : Fp}
-    (hx : xv * (yv * yv - xv * xv * xv - pallasB) = 0)
-    (hy : yv * (yv * yv - xv * xv * xv - pallasB) = 0) :
-    ({ x := xv, y := yv } : Point Fp).Valid := by
-  by_cases hxz : xv = 0
-  · by_cases hyz : yv = 0
-    · exact Or.inr (by simp [Orchard.Point.zero_def, hxz, hyz])
-    · refine Or.inl ?_
-      have h := (mul_eq_zero.mp hy).resolve_left hyz
-      show yv ^ 2 = xv ^ 3 + pallasB
-      linear_combination h
-  · refine Or.inl ?_
-    have h := (mul_eq_zero.mp hx).resolve_left hxz
-    show yv ^ 2 = xv ^ 3 + pallasB
-    linear_combination h
+def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
+    (Unconstrained Point) Point where
+  configure | (x, y) => configure x y
 
-/-- Converse of `point_valid`: a valid point satisfies the gate's product constraints.
-The algebraic core of witness_point completeness. -/
-theorem point_products_of_valid {xv yv : Fp}
-    (h : ({ x := xv, y := yv } : Point Fp).Valid) :
-    xv * (yv * yv - xv * xv * xv - pallasB) = 0 ∧ yv * (yv * yv - xv * xv * xv - pallasB) = 0 := by
-  rcases h with hoc | hz
-  · have heq : yv * yv - xv * xv * xv - pallasB = 0 := by
-      have h2 : yv ^ 2 = xv ^ 3 + pallasB := hoc
-      linear_combination h2
-    rw [heq]; exact ⟨by ring, by ring⟩
-  · rw [Orchard.Point.zero_def, Orchard.Point.mk.injEq] at hz
-    obtain ⟨hx0, hy0⟩ := hz
-    subst hx0; subst hy0; exact ⟨by ring, by ring⟩
-
-/-- The non-identity gate's single curve constraint is exactly `OnCurve`: the point satisfies
-the short-Weierstrass equation `y² = x³ + b`. Unlike `pointGate`, there is no `(0,0)` identity
-escape hatch — the constraint is `curveEqn` alone, so it forces the point strictly on-curve.
-Algebraic core of `witness_point_non_id` soundness. -/
-theorem point_onCurve {xv yv : Fp}
-    (h : yv * yv - xv * xv * xv - pallasB = 0) :
-    ({ x := xv, y := yv } : Point Fp).OnCurve := by
-  show yv ^ 2 = xv ^ 3 + pallasB
-  linear_combination h
-
-/-- Converse of `point_onCurve`: an on-curve point satisfies the non-identity gate's curve
-constraint. Algebraic core of `witness_point_non_id` completeness. -/
-theorem curve_eqn_of_onCurve {xv yv : Fp}
-    (h : ({ x := xv, y := yv } : Point Fp).OnCurve) :
-    yv * yv - xv * xv * xv - pallasB = 0 := by
-  have h2 : yv ^ 2 = xv ^ 3 + pallasB := h
-  linear_combination h2
-
-def point :
-    FormalRegionCircuit Fp (Column .advice × Column .advice) Config
-      (Unconstrained Point) Point where
-  configure := fun (x, y) => configure x y
   synthesize config offset (point : Point (FExpr Fp)) := do
     -- enable "witness point" gate
     (pointGate config.qPoint config.x config.y).enable offset
@@ -117,13 +67,12 @@ def point :
   soundness := by
     circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    obtain ⟨hx, hy⟩ := hc
-    exact point_valid hx hy
+    grind [Orchard.Point.Valid, Orchard.Point.OnCurve, Orchard.Point.zero_def]
 
   completeness := by
     circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    exact ⟨point_products_of_valid hPA, h_output.1.symm, h_output.2.symm⟩
+    grind [Orchard.Point.Valid, Orchard.Point.OnCurve, Orchard.Point.zero_def]
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`,
 `witness_point.rs:167-186`). Mirrors `point`: enable the `pointNonId` gate at `offset` and
@@ -132,10 +81,10 @@ assign x/y; but the gate has no identity escape hatch, so the `Spec` is *strictl
 valid curve point. The Rust additionally errors when the value is known to be the identity;
 that non-identity precondition is carried on the honest prover as `ProverAssumptions` (the
 input is `Unconstrained`, so — like `point` — the honest-side facts about it live there). -/
-def pointNonId :
-    FormalRegionCircuit Fp (Column .advice × Column .advice) Config
-      (Unconstrained Point) Point where
-  configure := fun (x, y) => configure x y
+def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
+    (Unconstrained Point) Point where
+  configure | (x, y) => configure x y
+
   synthesize config offset (point : Point (FExpr Fp)) := do
     -- enable "witness non-identity point" gate
     (pointNonIdGate config.qPointNonId config.x config.y).enable offset
@@ -154,12 +103,12 @@ def pointNonId :
   soundness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    exact point_onCurve hc
+    grind [Orchard.Point.OnCurve]
 
   completeness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    exact ⟨curve_eqn_of_onCurve hPA, h_output.1.symm, h_output.2.symm⟩
+    grind [Orchard.Point.OnCurve]
 
 end WitnessPoint
 

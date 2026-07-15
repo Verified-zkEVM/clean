@@ -103,19 +103,6 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
         ("5a", poly5a), ("5b", poly5b),
         ("6a", poly6a), ("6b", poly6b) ]
 
-/-- Rust `Config::configure`: enable equality on the four point advice columns, allocate
-the simple selector, register the gate. The five auxiliary hint columns are *not*
-equality-enabled (they carry only prover hints). -/
-def configure (xP yP xQR yQR lambda alpha beta gamma delta : Column .advice) :
-    Configure Fp Config := do
-  enableEquality xP.toAny
-  enableEquality yP.toAny
-  enableEquality xQR.toAny
-  enableEquality yQR.toAny
-  let qAdd ← selector
-  createGate (gate qAdd lambda xP yP xQR yQR alpha beta gamma delta)
-  return { qAdd, lambda, xP, yP, xQR, yQR, alpha, beta, gamma, delta }
-
 /-!
 ## Algebraic core lemmas
 
@@ -284,11 +271,6 @@ theorem ite_lambdaProgram_eq (px py qx qy : Fp)
   unfold lambdaValueRaw
   by_cases h : qx = px <;> by_cases h' : py = 0 <;> simp_all
 
-theorem ite_deltaProgram_eq (px py qx qy : Fp) {d : Decidable (qx = px)} :
-    (@ite _ (qx = px) d ((qy + py)⁻¹) 0)
-    = (if qx = px then (qy + py)⁻¹ else 0 : Fp) := by
-  by_cases h : qx = px <;> simp_all
-
 theorem ite_rXProgram_eq (px py qx qy : Fp)
     {d1 : Decidable (px = 0 ∧ py = 0)} {d2 : Decidable (qx = 0 ∧ qy = 0)}
     {d3 : Decidable (px = qx)} {d4 : Decidable (py + qy = 0)} :
@@ -371,8 +353,17 @@ def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice ×
       Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
     Config Inputs Point where
-  configure := fun (xP, yP, xQR, yQR, lambda, alpha, beta, gamma, delta) =>
-    configure xP yP xQR yQR lambda alpha beta gamma delta
+  /- Rust `Config::configure`: enable equality on the four point advice columns, allocate
+  the simple selector, register the gate. The five auxiliary hint columns are *not*
+  equality-enabled (they carry only prover hints). -/
+  configure | (xP, yP, xQR, yQR, lambda, alpha, beta, gamma, delta) => do
+    enableEquality xP
+    enableEquality yP
+    enableEquality xQR
+    enableEquality yQR
+    let qAdd ← selector
+    createGate (gate qAdd lambda xP yP xQR yQR alpha beta gamma delta)
+    return { qAdd, lambda, xP, yP, xQR, yQR, alpha, beta, gamma, delta }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add` selector at `offset`
@@ -411,25 +402,21 @@ def add : FormalRegionCircuit Fp
     obtain ⟨⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩,
       hcpx, hcpy, hcqx, hcqy⟩ := hc
     -- the copy equations rewrite the gate's P/Q cells to the input coordinates
-    simp only [hcpx, hcpy, hcqx, hcqy] at h1 h2 h3a h3b h3c h3d h4a h4b h5a h5b h6a h6b
+    simp_all only
     obtain ⟨hpValid, hqValid⟩ := hA
     -- the five witness cells (λ,α,β,γ,δ) have no copy equation, so they stay as
     -- `env.env.advice config.λ …` terms — but they are only ever passed *positionally* to
     -- the coordinate-generic `spec_of_polysZero`, never reasoned about, so no framework
     -- object is manipulated in the user half.
     have hspec := spec_of_polysZero h1 h2 h3a h3b h3c h3d h4a h4b h5a h5b h6a h6b
-    have hsum := add_eq_add_of_spec hpValid hqValid hspec
-    rw [hsum]
-    exact ⟨Orchard.Point.valid_add hpValid hqValid, rfl⟩
+    rw [add_eq_add_of_spec hpValid hqValid hspec]
+    use Point.valid_add hpValid hqValid
   completeness := by
     circuit_proof_start [gate, lambdaProgram, rXProgram, rYProgram]
     -- ══ user-facing half ══
     obtain ⟨hpValid, hqValid⟩ := hA
     -- the witness R cells equal the complete sum; λ/δ equal their closed-form values
-    rw [ite_rXProgram_eq input_p_x input_p_y input_q_x input_q_y,
-        ite_rYProgram_eq input_p_x input_p_y input_q_x input_q_y,
-        ite_lambdaProgram_eq input_p_x input_p_y input_q_x input_q_y,
-        ite_deltaProgram_eq input_p_x input_p_y input_q_x input_q_y]
+    rw [ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
 end Add

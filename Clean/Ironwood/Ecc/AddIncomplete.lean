@@ -32,13 +32,6 @@ structure Config where
   xQR : Column .advice
   yQR : Column .advice
 
-/-- The two "incomplete addition" gate polynomials, as a pure function of the columns —
-ported verbatim from the Rust `create_gate` closure. `x_p, y_p` are read at
-`Rotation::cur()` (0); `x_qr, y_qr` are read at `Rotation::cur()` (0, = Q) and
-`Rotation::next()` (1, = R).
-
-- poly1: `(x_r + x_q + x_p)·(x_p − x_q)² − (y_p − y_q)²`
-- poly2: `(y_r + y_q)·(x_p − x_q) − (y_p − y_q)·(x_q − x_r)` -/
 def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp where
   name := "incomplete addition"
   selector := qAddIncomplete
@@ -54,54 +47,6 @@ def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp 
     let poly2 :=
       (y_r + y_q) * (x_p - x_q) - (y_p - y_q) * (x_q - x_r)
     Constraints.withSelector qAddIncomplete [("x_r", poly1), ("y_r", poly2)]
-
-/-- Rust `Config::configure`: enable equality on the four advice columns, allocate the
-simple selector, register the gate. -/
-def configure (xP yP xQR yQR : Column .advice) : Configure Fp Config := do
-  enableEquality xP.toAny
-  enableEquality yP.toAny
-  enableEquality xQR.toAny
-  enableEquality yQR.toAny
-  let qAddIncomplete ← selector
-  createGate (gate qAddIncomplete xP yP xQR yQR)
-  return { qAddIncomplete, xP, yP, xQR, yQR }
-
-/-!
-## Algebraic core lemmas
-
-These are the `WitnessPoint`-style separated cores: the soundness direction shows the two
-gate polynomials imply the output is the incomplete sum, and the completeness direction
-shows a valid incomplete sum satisfies the two polynomials. Both are stated over concrete
-field values (the coordinates of P, Q, R) with the gate polynomials written out literally
-— so the lemmas do not depend on the gate's `Query`/`Expression` machinery — and reuse the
-phase-one point-addition definition `Point.nondegenerateAdd` (via the Orchard specs).
--/
-
-/-- Soundness core: if both gate polynomials vanish at concrete coordinates and
-`x_p ≠ x_q`, then `R = P +ᵢ Q` (the incomplete sum). Mirrors the phase-one
-`Orchard.Ecc.AddIncomplete.Gate.eq_nondegenerateAdd_of_polys_zero`. -/
-theorem eq_nondegenerateAdd_of_polys_zero {xP yP xQ yQ xR yR : Fp}
-    (hx : xP ≠ xQ)
-    (h1 : (xR + xQ + xP) * (xP - xQ) * (xP - xQ) - (yP - yQ) * (yP - yQ) = 0)
-    (h2 : (yR + yQ) * (xP - xQ) - (yP - yQ) * (xQ - xR) = 0) :
-    ({ x := xR, y := yR } : Point Fp)
-      = ({ x := xP, y := yP } : Point Fp).nondegenerateAdd { x := xQ, y := yQ } := by
-  have hden : xQ - xP ≠ 0 := fun h => hx (sub_eq_zero.mp h).symm
-  unfold Orchard.Point.nondegenerateAdd
-  rw [Orchard.Point.mk.injEq]
-  and_intros <;> (field_simp; grind)
-
-/-- Completeness core: the incomplete sum `R = P +ᵢ Q` satisfies both gate polynomials
-(given `x_p ≠ x_q`). Mirrors the phase-one
-`Orchard.Ecc.AddIncomplete.Gate.polys_zero_of_nondegenerateAdd`. -/
-theorem polys_zero_of_nondegenerateAdd {xP yP xQ yQ : Fp}
-    (hx : xP ≠ xQ) :
-    let r := ({ x := xP, y := yP } : Point Fp).nondegenerateAdd { x := xQ, y := yQ }
-    (r.x + xQ + xP) * (xP - xQ) * (xP - xQ) - (yP - yQ) * (yP - yQ) = 0 ∧
-      (r.y + yQ) * (xP - xQ) - (yP - yQ) * (xQ - r.x) = 0 := by
-  simp only [Orchard.Point.nondegenerateAdd]
-  have hden : xQ - xP ≠ 0 := fun h => hx (sub_eq_zero.mp h).symm
-  constructor <;> field_simp [hden] <;> ring
 
 /-!
 ## The gadget
@@ -122,7 +67,16 @@ deriving ProvableStruct
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config
     Inputs Point where
-  configure := fun (xP, yP, xQR, yQR) => configure xP yP xQR yQR
+  /- Rust `Config::configure`: enable equality on the four advice columns, allocate the
+    simple selector, register the gate. -/
+  configure | (xP, yP, xQR, yQR) => do
+    enableEquality xP
+    enableEquality yP
+    enableEquality xQR
+    enableEquality yQR
+    let qAddIncomplete ← selector
+    createGate (gate qAddIncomplete xP yP xQR yQR)
+    return { qAddIncomplete, xP, yP, xQR, yQR }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add_incomplete` selector at `offset`
@@ -163,21 +117,22 @@ def add : FormalRegionCircuit Fp
     -- coord (`h_output`)
     simp only [hcpx, hcpy, hcqx, hcqy] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := hA
-    have hsum := eq_nondegenerateAdd_of_polys_zero hxne hpoly1 hpoly2
+    -- formulate gate polys in terms of `nondegenerateAdd`
+    have hsum : ⟨output_x, output_y⟩ = Orchard.Point.nondegenerateAdd
+        ⟨input_p_x, input_p_y⟩ ⟨input_q_x, input_q_y⟩ := by
+      grind [Orchard.Point.nondegenerateAdd]
     rw [hsum]
-    exact ⟨Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne,
-      Orchard.Point.nondegenerateAdd_eq_add
-        (Orchard.Point.ne_zero_of_onCurve hpx_curve) (Orchard.Point.ne_zero_of_onCurve hqx_curve) hxne⟩
+    use Orchard.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne
+    apply Orchard.Point.nondegenerateAdd_eq_add ?_ ?_ hxne
+    exact Orchard.Point.ne_zero_of_onCurve hpx_curve
+    exact Orchard.Point.ne_zero_of_onCurve hqx_curve
 
   completeness := by
     circuit_proof_start [gate, Orchard.Point.nondegenerateAdd]
     -- ══ user-facing half ══
     -- land the `Assumptions` facts on the input coordinates
     obtain ⟨-, -, hxne⟩ := hA
-    -- gate polynomials vanish at the `nondegenerateAdd` result
-    have hpolys := polys_zero_of_nondegenerateAdd (xP := input_p_x) (yP := input_p_y)
-      (xQ := input_q_x) (yQ := input_q_y) hxne
-    simp_all [Orchard.Point.nondegenerateAdd]
+    grind
 
 end AddIncomplete
 

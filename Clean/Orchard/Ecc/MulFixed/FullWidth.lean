@@ -64,7 +64,7 @@ def circuit (params : CoordsParams Fp) :
   Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
-      rangeCheck, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+      rangeCheck, interpolate]
     constructor
     · simpa [sub_eq_add_neg] using h_holds.1
     · have hRange := h_holds.2
@@ -87,7 +87,7 @@ def circuit (params : CoordsParams Fp) :
           linear_combination -h7)))))))
   completeness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
-      rangeCheck, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+      rangeCheck, interpolate]
     constructor
     · simpa [sub_eq_add_neg] using h_spec.1
     · rcases h_spec.2 with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7
@@ -164,7 +164,7 @@ theorem rowValue_spec (B : FixedBase) (s : ℕ) {w : ℕ} (hw : w < 85) :
     dsimp [Point.OnCurve] at h
     show (windowPoint B.point w (windowVal s w)).y * (windowPoint B.point w (windowVal s w)).y
       = (windowPoint B.point w (windowVal s w)).x * (windowPoint B.point w (windowVal s w)).x
-        * (windowPoint B.point w (windowVal s w)).x + 5
+        * (windowPoint B.point w (windowVal s w)).x + pallasB
     linear_combination h
 
 /-- The witness program of one window row: read the scalar hint, take window `w` of its
@@ -625,7 +625,7 @@ theorem completeness (B : FixedBase) :
   have h84yR : env.get (i₀ + 4 + 830 + 1 + 1) = R84.yP := by
     rw [← hR84_def]
     exact h84y
-  have hcurveR : R84.yP * R84.yP = R84.xP * R84.xP * R84.xP + 5 := by
+  have hcurveR : R84.yP * R84.yP = R84.xP * R84.xP * R84.xP + pallasB := by
     rw [← hR84_def]
     exact (rowValue_spec B input (w := 84) (by norm_num)).1.2.2
   have hValidP :

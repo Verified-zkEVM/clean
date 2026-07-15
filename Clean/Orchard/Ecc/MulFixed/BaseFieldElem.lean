@@ -886,7 +886,7 @@ private theorem coordsRow_spec (B : MulFixed.FixedBase) (α : Fp) {w : ℕ} (hw 
     linear_combination zValue_step α w
   refine ⟨?_, ?_, ?_⟩
   · rw [show (MulFixed.RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx,
-      MulFixed.interpolatedX, hwin, B.interpolate_eq w hw _ (windowVal_lt α w)]
+      hwin, B.interpolate_eq w hw _ (windowVal_lt α w)]
   · rw [show (MulFixed.RunningSumCoords.coordsRow row).u = row.u from rfl,
       show (MulFixed.RunningSumCoords.coordsRow row).yP = row.yP from rfl, hu, hy]
     exact B.u_mul_u w hw _ (windowVal_lt α w)

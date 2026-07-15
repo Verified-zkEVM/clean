@@ -320,7 +320,7 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 22) (hk : k < 8)
     row.xP = (windowPoint B.point w k).x ∧ row.yP = (windowPoint B.point w k).y := by
   obtain ⟨hx, hu, hcurve⟩ := hspec
   have hxP : row.xP = (windowPoint B.point w k).x := by
-    rw [hx, interpolatedX, hwindow, B.interpolate_eq w hw k hk]
+    rw [hx, hwindow, B.interpolate_eq w hw k hk]
   refine ⟨hxP, ?_⟩
   have hrowCurve : ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp).OnCurve := by
     rw [← hxP]
@@ -978,7 +978,7 @@ private theorem coordsRow_spec (B : FixedBase) (m : Fp) {w : ℕ} (hw : w < 22)
     linear_combination zValue_step m w
   refine ⟨?_, ?_, ?_⟩
   · rw [show (RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx,
-      interpolatedX, hwin, B.interpolate_eq w hw _ (windowVal_lt m w)]
+      hwin, B.interpolate_eq w hw _ (windowVal_lt m w)]
   · rw [show (RunningSumCoords.coordsRow row).u = row.u from rfl,
       show (RunningSumCoords.coordsRow row).yP = row.yP from rfl, hu, hy]
     exact B.u_mul_u w hw _ (windowVal_lt m w)
