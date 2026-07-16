@@ -536,23 +536,20 @@ private theorem step_honest {w : State Fp} {m : ℕ} {k : Bool} (k' : Bool)
 /-- The honest step satisfies the gate polynomials: the completeness counterpart of
 `sound_step`, over one row's values. Unfolds `step`/`lambdaCellsValue` exactly once, here —
 witgen defs stay folded everywhere else. -/
-private theorem step_gates {w : State Fp} {m : ℕ} {k k' : Bool}
-    {zN xAN l1N l2N bxN byN : Fp} (hH : w.Honest m k)
-    (hzN : zN = (w.step k k').z) (hxAN : xAN = (w.step k k').xA)
-    (hl1N : l1N = (w.step k k').lambda1) (hl2N : l2N = (w.step k k').lambda2)
-    (hbxN : bxN = (w.step k k').base.x) (hbyN : byN = (w.step k k').base.y) :
-    w.base.x - bxN = 0 ∧
-    w.base.y - byN = 0 ∧
-    (zN - w.z * 2) * (1 - (zN - w.z * 2)) = 0 ∧
+private theorem step_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
+    w.base.x - (w.step k k').base.x = 0 ∧
+    w.base.y - (w.step k k').base.y = 0 ∧
+    ((w.step k k').z - w.z * 2) * (1 - ((w.step k k').z - w.z * 2)) = 0 ∧
     w.lambda1 * (w.xA - w.base.x)
       - (w.lambda1 + w.lambda2) * (w.xA - (w.lambda1 * w.lambda1 - w.xA - w.base.x)) * (2 : Fp)⁻¹
-      + ((zN - w.z * 2) * 2 - 1) * w.base.y = 0 ∧
-    w.lambda2 * w.lambda2 - xAN
+      + (((w.step k k').z - w.z * 2) * 2 - 1) * w.base.y = 0 ∧
+    w.lambda2 * w.lambda2 - (w.step k k').xA
       - (w.lambda1 * w.lambda1 - w.xA - w.base.x) - w.xA = 0 ∧
-    w.lambda2 * (w.xA - xAN)
+    w.lambda2 * (w.xA - (w.step k k').xA)
       - (w.lambda1 + w.lambda2) * (w.xA - (w.lambda1 * w.lambda1 - w.xA - w.base.x)) * (2 : Fp)⁻¹
-      - (l1N + l2N) * (xAN - (l1N * l1N - xAN - bxN)) * (2 : Fp)⁻¹ = 0 := by
-  subst hzN hxAN hl1N hl2N hbxN hbyN
+      - ((w.step k k').lambda1 + (w.step k k').lambda2)
+          * ((w.step k k').xA - ((w.step k k').lambda1 * (w.step k k').lambda1
+              - (w.step k k').xA - (w.step k k').base.x)) * (2 : Fp)⁻¹ = 0 := by
   have hcoords := step_coords k' hH
   obtain ⟨hOn, h2m, hMb, hxA, hl1, hl2⟩ := hH
   have h2 : (2 : Fp) ≠ 0 := by decide
@@ -637,7 +634,7 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
   completeness := by
     circuit_proof_start [qMul2Gate, forLoopPolys, yA, xRExpr, reads]
     obtain ⟨m, hH⟩ := hPA
-    refine ⟨step_gates hH rfl rfl rfl rfl rfl rfl, ?_⟩
+    refine ⟨step_gates hH, ?_⟩
     rw [State.mk.injEq] -- TODO why is this not firing automatically
     simp [← h_output]
 
