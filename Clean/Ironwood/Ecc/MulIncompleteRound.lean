@@ -187,31 +187,19 @@ structure Inputs (F : Type) where
   alpha : F
   -- The (non-identity, on-curve) base point.
   base : Point F
-  -- Accumulator x-coordinate entering the phase.
-  xA : F
-  -- Accumulator y-coordinate entering the phase.
-  yA : F
-  -- Running sum entering the phase.
+  -- The accumulator entering the phase.
+  acc : Point F
+  -- The running sum entering the phase.
   z : F
 deriving ProvableStruct
 
 /-- The final accumulator cells and the `numBits` interstitial running sums. -/
 structure Output (numBits : ℕ) (F : Type) where
-  -- Final accumulator x-coordinate.
-  xA : F
-  -- Final accumulator y-coordinate.
-  yA : F
-  -- The interstitial running sums, one per round.
+  -- The final accumulator.
+  acc : Point F
+  -- The interstitial running sums.
   zs : Vector F numBits
 deriving ProvableStruct
-
-/-! ## Honest witness programs
-
-The honest cell values are functions of the base/accumulator cells and the scalar bits, expressed
-via the witgen `native` escape hatch reading the placed prover environment.
-TODO CHANGE THAT, add `UnconstrainedNat` and vector-level IR hints to WitnessIR.
-The bits are derived from the witnessed scalar cell `input.alpha` (`kBits (readCell env input.alpha)`), windowed by the
-bundle's window offset `w`. -/
 
 /-- Read an input cell's value in a placed prover environment. -/
 def readCell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) : Fp :=
@@ -242,13 +230,6 @@ theorem kBitsWindow_as_kBits (a : Fp) (w : ℕ) :
 /-- The zero-offset window is exactly the donor's `kBits`. -/
 theorem kBitsWindow_zero (a : Fp) : kBitsWindow a 0 = kBits a :=
   funext fun i => by rw [kBitsWindow_eq_kBits, Nat.zero_add]
-
-/-- The working-scalar bit family, derived from the scalar cell in a placed prover environment:
-`bitsOf input w env = kBitsWindow (alpha value) w`. The only place the bits are computed; the loop
-below is abstract in the env-indexed family `ebits`, which the bundle sets to `bitsOf input w`. -/
-def bitsOf (input : Inputs (AssignedCell Fp)) (w : ℕ) :
-    Placed ProverEnvironment Fp → BitsHint :=
-  fun env => kBitsWindow (readCell env input.alpha) w
 
 /-! ## The double-and-add state
 
@@ -364,6 +345,28 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
   lambda1 := readCell env w.lambda1
   lambda2 := readCell env w.lambda2
   base := { x := readCell env w.base.x, y := readCell env w.base.y }
+
+-- TODO make all these witness programs non-native
+-- TODO CHANGE THAT, add `UnconstrainedNat` and vector-level IR hints to WitnessIR.
+
+/-- The y-coordinate the step leaves at the new accumulator (bit-free: the second
+addition's y-law over the current row's cells) — the value the final row witnesses. -/
+def State.stepY (s : State Fp) : Fp :=
+  s.lambda2 * (s.xA - (s.lambda2 * s.lambda2 - (s.lambda1 * s.lambda1 - s.xA - s.base.x)
+    - s.xA)) - s.yA2 * (2 : Fp)⁻¹
+
+/-- Honest witness reading a function of the neighborhood (no step). -/
+def readWit (w : State (AssignedCell Fp)) (f : State Fp → Fp) : WitgenIR Fp 1 :=
+  .native fun env => #v[f (readsValue w env)]
+
+@[circuit_norm]
+theorem readWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
+    (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
+    ((readWit w f).eval env)[j] = f (readsValue w env) := by
+  have hj0 : j = 0 := by omega
+  subst hj0
+  simp only [readWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
 
 /-- Honest witness for one output cell of round `i`: the corresponding field of
 `State.step` over the neighborhood readings. -/
@@ -485,7 +488,7 @@ private theorem step_xA_eq (w : State Fp) (k k' : Bool) :
       = w.lambda2 * w.lambda2 - (w.lambda1 * w.lambda1 - w.xA - w.base.x) - w.xA := rfl
 
 /-- An honest row's derived doubled y is the accumulator's true y. -/
-private theorem honest_yA2 {w : State Fp} {m : ℕ} {k : Bool} (hH : w.Honest m k) :
+theorem honest_yA2 {w : State Fp} {m : ℕ} {k : Bool} (hH : w.Honest m k) :
     w.yA2 = 2 * (m • w.base).y := by
   obtain ⟨hOn, h2m, hMb, hxA, hl1, hl2⟩ := hH
   have hMb1 : 2 * m + 1 < PALLAS_SCALAR_CARD := by omega
@@ -654,40 +657,6 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
 
 -- TODO make all these witness programs non-native
 
-/-- Honest `z` running-sum value at loop row `r`. -/
-def zWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[zRunValue (readCell env input.z) (ebits env) r]
-
-/-- Honest `λ₁` value at loop row `r`. -/
-def l1Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda1]
-
-/-- Honest `λ₂` value at loop row `r`. -/
-def l2Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda2]
-
-/-- Honest next-row `x_a` value after loop row `r` (`accVal … (r+1)`). -/
-def xANextWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) (r + 1)).1]
-
-/-- Honest final `y_a` value after `n + 1` rounds (`accVal … (n+1)`). -/
-def yAFinalWit (n : ℕ) (input : Inputs (AssignedCell Fp))
-    (ebits : Placed ProverEnvironment Fp → BitsHint) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) (n + 1)).2]
-
-
 /-- Witness equations chain into the iterated step. -/
 theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
     (hstep : ∀ i : Fin n, st (i.val + 1) = (st i.val).step (bits i.val) (bits (i.val + 1))) :
@@ -705,7 +674,7 @@ theorem honest_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
     (hstep : ∀ i : Fin n, st (i.val + 1) = (st i.val).step (bits i.val) (bits (i.val + 1)))
     (m : ℕ) (hH0 : (st 0).Honest m (bits 0))
     (hbudget : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
-    ∀ r, r < n → (st r).Honest (accScalar m bits r) (bits r) := by
+    ∀ r, r ≤ n → (st r).Honest (accScalar m bits r) (bits r) := by
   have h2 : 2 ≤ m := hH0.2.1
   intro r hr
   induction r with
@@ -728,6 +697,88 @@ theorem honest_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
     have := step_honest (bits (v + 1)) hprev hBound'
     rw [← hstep ⟨v, hv⟩] at this
     simpa [accScalar] using this
+
+/-- The final row's gate identities force the last double-and-add step, with the witnessed
+y landing directly on the stepped accumulator's y (`q_mul_3`'s shape: no constancy checks,
+`y_a(next)` a bare witnessed cell). -/
+theorem sound_last_step {z xA l1 l2 bx yb oz oxA oy : Fp}
+    (hbool : (oz - z * 2) * (1 - (oz - z * 2)) = 0)
+    (hg1 : l1 * (xA - bx) - (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹
+      + ((oz - z * 2) * 2 - 1) * yb = 0)
+    (hsec : l2 * l2 - oxA - (l1 * l1 - xA - bx) - xA = 0)
+    (hg2 : l2 * (xA - oxA) - (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹ - oy = 0) :
+    ∃ k : Bool, oz = 2 * z + (if k then 1 else 0) ∧
+      ∀ m : ℕ, ({ x := bx, y := yb } : Point Fp).OnCurve →
+        ({ x := xA, y := (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹ } : Point Fp)
+          = m • { x := bx, y := yb } →
+        2 ≤ m → 2 * m + 1 < PALLAS_SCALAR_CARD →
+        ({ x := oxA, y := oy } : Point Fp)
+          = (2 * m + (if k then 1 else 0) * 2 - 1) • { x := bx, y := yb } := by
+  have h2 : (2 : Fp) ≠ 0 := by decide
+  have core : ∀ k : Bool, oz - z * 2 = (if k then 1 else 0) →
+      ∀ m : ℕ, ({ x := bx, y := yb } : Point Fp).OnCurve →
+        ({ x := xA, y := (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹ } : Point Fp)
+          = m • { x := bx, y := yb } →
+        2 ≤ m → 2 * m + 1 < PALLAS_SCALAR_CARD →
+        ({ x := oxA, y := oy } : Point Fp)
+          = (2 * m + (if k then 1 else 0) * 2 - 1) • { x := bx, y := yb } := by
+    intro k hkv m hOn hacc h2m hMb
+    obtain ⟨P, hPx, hPy⟩ : ∃ P : Point Fp, P.x = bx ∧ P.y = yb :=
+      ⟨{ x := bx, y := yb }, rfl, rfl⟩
+    subst hPx hPy
+    rw [show ({ x := P.x, y := P.y } : Point Fp) = P from rfl] at hacc hOn ⊢
+    have hax : xA = (m • P).x := congrArg Point.x hacc
+    have hay : (l1 + l2) * (xA - (l1 * l1 - xA - P.x)) * (2 : Fp)⁻¹ = (m • P).y :=
+      congrArg Point.y hacc
+    have hstep := step_nsmul hOn (fun _ => k) h2m hMb 0
+    have hXP : P.x = (stepPoint P k).x := by
+      unfold stepPoint; rcases k with _ | _ <;> rfl
+    have hYP : 2 * (m • P).y - 2 * l1 * ((m • P).x - P.x) = 2 * (stepPoint P k).y := by
+      unfold stepPoint
+      rcases k with _ | _ <;>
+        simp only [Bool.false_eq_true, if_false, if_true] at hkv ⊢
+      · show _ = 2 * (-P).y
+        rw [Point.neg_y]
+        linear_combination (-2) * hg1 - 2 * hay + 2 * l1 * hax + 4 * P.y * hkv
+      · show _ = 2 * P.y
+        linear_combination (-2) * hg1 - 2 * hay + 2 * l1 * hax + 4 * P.y * hkv
+    have hYA : 2 * (m • P).y = (l1 + l2) * ((m • P).x - (l1 * l1 - (m • P).x - P.x)) := by
+      rw [← hax]
+      linear_combination (norm := (field_simp; ring)) (-2) * hay
+    have hSec : l2 * l2 = oxA + (l1 * l1 - (m • P).x - P.x) + (m • P).x := by
+      rw [← hax]; linear_combination hsec
+    have hYC : 4 * l2 * ((m • P).x - oxA) = 4 * (m • P).y + 2 * (2 * oy) := by
+      linear_combination (norm := (field_simp; ring)) 4 * hg2 + 4 * hay - 4 * l2 * hax
+    have hstep' : Point.doubleAndAdd (m • P) (stepPoint P k)
+        = some ((2 * m + (if k then 1 else 0) * 2 - 1) • P) := hstep
+    obtain ⟨hxB, hYB⟩ := Orchard.Ecc.DoubleAndAdd.coordinates_of_constraints
+      hstep' hYP hXP hYA hSec hYC
+    have hyB : oy = ((2 * m + (if k then 1 else 0) * 2 - 1) • P).y := by
+      field_simp at hYB
+      linear_combination hYB
+    rw [hyB, hxB]
+  rcases mul_eq_zero.mp hbool with hk | hk
+  · exact ⟨false, by simp only [Bool.false_eq_true, if_false]; linear_combination hk,
+      core false (by simp only [Bool.false_eq_true, if_false]; linear_combination hk)⟩
+  · exact ⟨true, by simp only [if_true]; linear_combination -hk,
+      core true (by simp only [if_true]; linear_combination -hk)⟩
+
+/-- The honest final row satisfies `q_mul_3`'s polynomials (completeness counterpart). -/
+theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
+    ((w.step k k').z - w.z * 2) * (1 - ((w.step k k').z - w.z * 2)) = 0 ∧
+    w.lambda1 * (w.xA - w.base.x)
+      - (w.lambda1 + w.lambda2) * (w.xA - (w.lambda1 * w.lambda1 - w.xA - w.base.x)) * (2 : Fp)⁻¹
+      + (((w.step k k').z - w.z * 2) * 2 - 1) * w.base.y = 0 ∧
+    w.lambda2 * w.lambda2 - (w.step k k').xA
+      - (w.lambda1 * w.lambda1 - w.xA - w.base.x) - w.xA = 0 ∧
+    w.lambda2 * (w.xA - (w.step k k').xA)
+      - (w.lambda1 + w.lambda2) * (w.xA - (w.lambda1 * w.lambda1 - w.xA - w.base.x)) * (2 : Fp)⁻¹
+      - w.stepY = 0 := by
+  obtain ⟨h1, h2', h3, h4, -, -⟩ := step_gates (k' := k') hH
+  refine ⟨h3, h4, ?_, ?_⟩
+  · simpa using step_gates (k' := k') hH |>.2.2.2.2.1
+  · simp only [State.stepY, step_xA_eq, State.yA2, State.xR]
+    ring
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
