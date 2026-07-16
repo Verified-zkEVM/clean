@@ -23,17 +23,17 @@ Lean Add port and the Rust constraint system.
 namespace Halo2.Fixtures.Test
 
 open Ironwood (Fp)
-open Ironwood.Ecc
+open Ironwood.Ecc.Add (Config add)
 
 /-- Allocate the 9 advice columns (mirroring the Rust harness's `EccConfig`-minimal column
 allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.add.configure` on them.
 Allocating in the monad — rather than passing bare `⟨0⟩..⟨8⟩` — is what advances the CS's
 `numAdviceColumns` counter to 9, matching the harness. -/
-def addProgram : Configure Fp Add.Config := do
+def addProgram : Configure Fp Config := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
-  Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
+  add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
 
 def addCS : ConstraintSystem Fp := (addProgram {}).2
 

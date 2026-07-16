@@ -45,15 +45,16 @@ The comparison is `#guard` on `DecidableEq CsFixture` (D1: `#eval`-equality is f
 
 namespace Halo2.Fixtures.Test
 
-open Ironwood
-open Ironwood.Ecc
+open Ironwood (Fp)
+open Ironwood.Ecc.Add (add)
+open Ironwood.Ecc.Mul (Config configure)
 
 /-- The mul configure chain on fresh columns, mirroring the Rust `configure_mul` harness:
 allocate 10 advice columns, the lookup table column and the constants column
 (`enableConstant`), then configure range-check, add and mul in that order (the mul-relevant
 subsequence of `EccChip::configure`). Allocating in the monad advances the CS counters
 exactly as the harness does. -/
-def mulProgram : Configure Fp Mul.Config := do
+def mulProgram : Configure Fp Config := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
@@ -65,11 +66,11 @@ def mulProgram : Configure Fp Mul.Config := do
   let advices : Fin 10 → Column .advice :=
     ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
   -- range_check first (ecc.rs:836), on advices[9]
-  let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
+  let lookupConfig ← Ironwood.LookupRangeCheck.configure 10 a9 tableIdx
   -- add before mul (EccChip::configure order), on advices[0..8]
-  let addConfig ← Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
+  let addConfig ← add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
   -- the mul chain
-  Mul.configure addConfig lookupConfig advices
+  configure addConfig lookupConfig advices
 
 def mulCS : ConstraintSystem Fp := (mulProgram {}).2
 
