@@ -44,7 +44,7 @@ def regionParent :
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset
@@ -80,7 +80,7 @@ def regionParentWithOp :
     let _ ← assignAdvice config.x (offset + 1) (.ofFExpr input.x)
     WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset
@@ -125,7 +125,7 @@ def layouterParent :
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config
@@ -171,8 +171,8 @@ def passthrough :
   configure := fun _ => pure ()
   synthesize _ _ input := pure input
   Spec input output _ := input.Valid → output.Valid
-  ProverAssumptions input _ := input.Valid
-  ProverSpec input output _ := output = input
+  ProverAssumptions input _ _ := input.Valid
+  ProverSpec input output _ _ := output = input
   soundness := by
     intro config offset
     rw [FormalRegionCircuit.soundness_iff]
@@ -196,7 +196,7 @@ def chainedParent :
     let mid ← passthrough.call config offset input
     passthrough.call config offset mid
   Spec input output _ := input.Valid → output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset

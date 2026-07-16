@@ -116,3 +116,53 @@ end Unconstrained
 export Unconstrained (unconstrained)
 
 end Halo2
+
+/-! ## Honest-witness IR reduction over an arbitrary `WitgenEnv`
+
+The shared getElem-keyed eval lemmas (`Clean/Circuit/WitnessIR.lean`) are stated at main Clean's
+instantiation (`ProverEnvironment F`, `Expression F`), so they do not fire on halo2's
+(`Placed ProverEnvironment F`, `AssignedCell F`). These restate the same reductions over the
+abstract `WitgenEnv F Env V`, so honest witness IR reduces through `circuit_norm` — and no gadget
+proof names the raw `WitgenIROver.eval`/`VExprOver.eval`/`ofFExpr` recursors. Getelem-keyed (`↓`),
+matching main Clean's, to keep the opaque-until-consumed lazy-vector discipline (the raw recursors
+stay untagged). -/
+
+namespace Witgen
+
+variable {F Env V : Type} [FiniteField F] [WitgenEnv F Env V]
+
+@[circuit_norm]
+theorem WitgenIROver.eval_native_apply {m : ℕ} (f : Env → Vector F m) (env : Env) :
+    (WitgenIROver.native f : WitgenIROver F Env V m).eval env = f env := rfl
+
+@[circuit_norm ↓]
+theorem VExprOver.getElem_eval_mapRange (ctx : CtxOver F Env) (n : ℕ) (body : FExprOver F V)
+    (i : ℕ) (hi : i < n) :
+    (VExprOver.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
+  simp [VExprOver.eval, Vector.getElem_mapRange]
+
+@[circuit_norm ↓]
+theorem VExprOver.getElem_eval_lit {n : ℕ} (ctx : CtxOver F Env) (es : Vector (FExprOver F V) n)
+    (i : ℕ) (hi : i < n) :
+    (VExprOver.eval ctx (.lit es))[i] = es[i].eval ctx := by
+  simp [VExprOver.eval]
+
+@[circuit_norm ↓]
+theorem WitgenIROver.getElem_eval_ir {n : ℕ} (steps : List (StepOver F V)) (out : VExprOver F V n)
+    (env : Env) (i : ℕ) (hi : i < n) :
+    ((WitgenIROver.ir steps out).eval env)[i]
+      = (out.eval { env := env, locals := evalSteps env steps })[i] := rfl
+
+@[circuit_norm ↓]
+theorem WitgenIROver.getElem_eval_ofFExpr (e : FExprOver F V) (env : Env) (i : ℕ) (hi : i < 1) :
+    ((WitgenIROver.ofFExpr e).eval env)[i] = e.eval { env } := by
+  rcases Nat.lt_one_iff.mp hi
+  simp [WitgenIROver.ofFExpr, WitgenIROver.eval, VExprOver.eval, evalSteps]
+
+@[circuit_norm ↓]
+theorem WitgenIROver.getElem_eval_ofFExprs {n : ℕ} (es : Vector (FExprOver F V) n) (env : Env)
+    (i : ℕ) (hi : i < n) :
+    ((WitgenIROver.ofFExprs es).eval env)[i] = es[i].eval { env } := by
+  simp [WitgenIROver.ofFExprs, WitgenIROver.eval, VExprOver.eval, evalSteps]
+
+end Witgen

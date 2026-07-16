@@ -14,7 +14,6 @@ import Clean.Halo2.Tests.TestSubcircuit
 import Clean.Halo2.Tests.TestLayouterSubcircuit
 import Clean.Halo2.Tests.TestSubcircuitRw
 import Clean.Halo2.Tests.TestAbstractOutputs
-import Clean.Halo2.Tests.TestRoundNorm
 import Clean.Halo2.Tests.TestLoops
 import Clean.Halo2.Tests.TestContractBridges
 import Clean.Halo2.Tests.TestLookupMembership

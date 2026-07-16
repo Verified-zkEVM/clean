@@ -21,9 +21,9 @@ example : Ironwood.Ecc.Add.add.Spec
 example : Ironwood.Ecc.Add.add.Assumptions
     = fun input => input.p.Valid ∧ input.q.Valid := addTest_assumptions_eq
 example : Ironwood.Ecc.Add.add.EnvAssumptions = fun _ _ => True := addTest_envAssumptions_eq
-example : Ironwood.Ecc.Add.add.ProverAssumptions = fun _ _ => True :=
+example : Ironwood.Ecc.Add.add.ProverAssumptions = fun _ _ _ => True :=
   addTest_proverAssumptions_eq
-example : Ironwood.Ecc.Add.add.ProverSpec = fun _ _ _ => True := addTest_proverSpec_eq
+example : Ironwood.Ecc.Add.add.ProverSpec = fun _ _ _ _ => True := addTest_proverSpec_eq
 
 -- 2. the generated bridge fires under `simp only`, rewriting the folded projection (the consumer
 -- pattern), exactly like a hand-written `rfl`-bridge.

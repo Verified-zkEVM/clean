@@ -37,7 +37,7 @@ def parent :
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset
@@ -72,7 +72,7 @@ def parentWithOp :
     let _ ← assignAdvice config.x (offset + 1) (.ofFExpr input.x)
     WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset

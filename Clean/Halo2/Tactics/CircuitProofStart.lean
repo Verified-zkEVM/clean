@@ -312,7 +312,7 @@ def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic
     -- by hand. `try`-guarded, so it stays a no-op on a leaf whose `Spec` is already atomic.
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
   else
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `hPA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
 
 /-- Step (c): `provable_type_simp` (never fails; runs to a fixpoint). -/
 def normalizeProvable : TacticM Unit := do

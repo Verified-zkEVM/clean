@@ -161,4 +161,49 @@ example (col : Column .advice) (offset stride m : ℕ) (init : AssignedCell Fp)
   simp only [accFoldLoop, circuit_norm] at h
   exact h
 
+/-! ## 5. Branching round body: `circuit_norm` descends the `ite`
+
+A round body that branches on the index (`double-and-add`'s anchored-first-row / last-row shape).
+`circuit_norm` must push `operations`/`Constraints` through the lifted `ite` so the split hypothesis
+lands as `if c then P₁ else P₂` over value-level content — both branches exposed, ready for a
+`by_cases`/`split` consumer. Covers both the do-elaborator's lifted `if` and the raw bind-of-`ite`
+spelling. -/
+
+/-- Round that stamps a different constant depending on the index (lifted `if`, no trailing bind). -/
+def branchStamp (col : Column .fixed) (i row : ℕ) : RegionCircuit Fp Unit := do
+  if i = 0 then
+    let _ ← assignFixed col row (0 : Fp)
+    pure ()
+  else
+    let _ ← assignFixed col row (1 : Fp)
+    pure ()
+
+def branchLoop (col : Column .fixed) (offset stride m : ℕ) : RegionCircuit Fp Unit :=
+  forRange' offset stride m fun i row => branchStamp col i row
+
+-- `circuit_norm` alone exposes both branches as the per-round `if`-form.
+example (col : Column .fixed) (offset stride m : ℕ)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) :
+    RegionOperations.Constraints place self env ((branchLoop col offset stride m).operations self)
+      ↔ ∀ i : Fin m, if (i.val : ℕ) = 0
+          then env.fixed col ((place self + (offset + i.val * stride) : ℕ) : ℤ) = 0
+          else env.fixed col ((place self + (offset + i.val * stride) : ℕ) : ℤ) = 1 := by
+  simp only [branchLoop, branchStamp, circuit_norm]
+
+/-- Same branch, spelled as a genuine bind-of-`ite` (`let _ ← if …; …`). -/
+def branchBindStamp (col : Column .fixed) (i row : ℕ) : RegionCircuit Fp Unit := do
+  let _ ← if i = 0 then assignFixed col row (0 : Fp) else assignFixed col row (1 : Fp)
+  pure ()
+
+def branchBindLoop (col : Column .fixed) (offset stride m : ℕ) : RegionCircuit Fp Unit :=
+  forRange' offset stride m fun i row => branchBindStamp col i row
+
+example (col : Column .fixed) (offset stride m : ℕ)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) :
+    RegionOperations.Constraints place self env ((branchBindLoop col offset stride m).operations self)
+      ↔ ∀ i : Fin m, if (i.val : ℕ) = 0
+          then env.fixed col ((place self + (offset + i.val * stride) : ℕ) : ℤ) = 0
+          else env.fixed col ((place self + (offset + i.val * stride) : ℕ) : ℤ) = 1 := by
+  simp only [branchBindLoop, branchBindStamp, circuit_norm]
+
 end Halo2.LoopsTest

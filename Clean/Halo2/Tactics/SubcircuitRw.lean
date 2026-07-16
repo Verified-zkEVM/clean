@@ -176,13 +176,17 @@ theorem region_completeness_derived
       ((child.call config offset input).operations self)) :
     child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F) →
     child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input) →
-    child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint →
+    child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
+      (child.extract config offset input self (⟨place, env.toEnvironment⟩ : Placed Environment F))
+      env.hint →
     child.Spec (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment F)
           (child.output config offset input self))
         (child.extract config offset input self (⟨place, env.toEnvironment⟩ : Placed Environment F))
       ∧ child.ProverSpec (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
           (eval (⟨place, env⟩ : Placed ProverEnvironment F) (child.output config offset input self))
+          (child.extract config offset input self
+            (⟨place, env.toEnvironment⟩ : Placed Environment F))
           env.hint := by
   have hw' : RegionOperations.ExtendsWitnesses place self env
       ((child.synthesize config offset input).operations self) := by
@@ -212,7 +216,10 @@ theorem region_completeness_leaf
       ((child.call config offset input).operations self)) :
     (child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F)
       ∧ child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
-      ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint)
+      ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
+          (child.extract config offset input self
+            (⟨place, env.toEnvironment⟩ : Placed Environment F))
+          env.hint)
     → RegionOperations.Constraints place self env
         ((child.call config offset input).operations self) := by
   have hw' : RegionOperations.ExtendsWitnesses place self env
@@ -244,12 +251,15 @@ theorem layouter_completeness_derived
     (hw : Halo2.ExtendsWitnesses place env ((child.call config input).operations i₀) i₀) :
     child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F) →
     child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input) →
-    child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint →
+    child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
+      (child.extract config input i₀ (⟨place, env.toEnvironment⟩ : Placed Environment F))
+      env.hint →
     child.Spec (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) (child.output config input i₀))
         (child.extract config input i₀ (⟨place, env.toEnvironment⟩ : Placed Environment F))
       ∧ child.ProverSpec (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
           (eval (⟨place, env⟩ : Placed ProverEnvironment F) (child.output config input i₀))
+          (child.extract config input i₀ (⟨place, env.toEnvironment⟩ : Placed Environment F))
           env.hint := by
   have hw' : Halo2.ExtendsWitnesses place env
       ((child.synthesize config input).operations i₀) i₀ := by
@@ -270,7 +280,9 @@ theorem layouter_completeness_leaf
     (hw : Halo2.ExtendsWitnesses place env ((child.call config input).operations i₀) i₀) :
     (child.EnvAssumptions config (⟨place, env.toEnvironment⟩ : Placed Environment F)
       ∧ child.Assumptions (eval (⟨place, env.toEnvironment⟩ : Placed Environment F) input)
-      ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input) env.hint)
+      ∧ child.ProverAssumptions (eval (⟨place, env⟩ : Placed ProverEnvironment F) input)
+          (child.extract config input i₀ (⟨place, env.toEnvironment⟩ : Placed Environment F))
+          env.hint)
     → Halo2.Constraints place env ((child.call config input).operations i₀) i₀ := by
   have hw' : Halo2.ExtendsWitnesses place env
       ((child.synthesize config input).operations i₀) i₀ := by
@@ -307,12 +319,14 @@ theorem region_completeness_derived_placed
       ((child.call config offset input).operations self)) :
     child.EnvAssumptions config penv.toEnvironment →
     child.Assumptions (eval penv.toEnvironment input) →
-    child.ProverAssumptions (eval penv input) penv.env.hint →
+    child.ProverAssumptions (eval penv input)
+      (child.extract config offset input self penv.toEnvironment) penv.env.hint →
     child.Spec (eval penv.toEnvironment input)
         (eval penv.toEnvironment (child.output config offset input self))
         (child.extract config offset input self penv.toEnvironment)
       ∧ child.ProverSpec (eval penv input)
-          (eval penv (child.output config offset input self)) penv.env.hint :=
+          (eval penv (child.output config offset input self))
+          (child.extract config offset input self penv.toEnvironment) penv.env.hint :=
   region_completeness_derived child config offset self penv.place penv.env input hw
 
 /-- Placed-view region completeness strengthening leaf. -/
@@ -323,7 +337,8 @@ theorem region_completeness_leaf_placed
       ((child.call config offset input).operations self)) :
     (child.EnvAssumptions config penv.toEnvironment
       ∧ child.Assumptions (eval penv.toEnvironment input)
-      ∧ child.ProverAssumptions (eval penv input) penv.env.hint)
+      ∧ child.ProverAssumptions (eval penv input)
+          (child.extract config offset input self penv.toEnvironment) penv.env.hint)
     → RegionOperations.Constraints penv.place self penv.env
         ((child.call config offset input).operations self) :=
   region_completeness_leaf child config offset self penv.place penv.env input hw
@@ -335,12 +350,14 @@ theorem layouter_completeness_derived_placed
     (hw : Halo2.ExtendsWitnesses penv.place penv.env ((child.call config input).operations i₀) i₀) :
     child.EnvAssumptions config penv.toEnvironment →
     child.Assumptions (eval penv.toEnvironment input) →
-    child.ProverAssumptions (eval penv input) penv.env.hint →
+    child.ProverAssumptions (eval penv input)
+      (child.extract config input i₀ penv.toEnvironment) penv.env.hint →
     child.Spec (eval penv.toEnvironment input)
         (eval penv.toEnvironment (child.output config input i₀))
         (child.extract config input i₀ penv.toEnvironment)
       ∧ child.ProverSpec (eval penv input)
-          (eval penv (child.output config input i₀)) penv.env.hint :=
+          (eval penv (child.output config input i₀))
+          (child.extract config input i₀ penv.toEnvironment) penv.env.hint :=
   layouter_completeness_derived child config i₀ penv.place penv.env input hw
 
 /-- Placed-view layouter completeness strengthening leaf. -/
@@ -350,7 +367,8 @@ theorem layouter_completeness_leaf_placed
     (hw : Halo2.ExtendsWitnesses penv.place penv.env ((child.call config input).operations i₀) i₀) :
     (child.EnvAssumptions config penv.toEnvironment
       ∧ child.Assumptions (eval penv.toEnvironment input)
-      ∧ child.ProverAssumptions (eval penv input) penv.env.hint)
+      ∧ child.ProverAssumptions (eval penv input)
+          (child.extract config input i₀ penv.toEnvironment) penv.env.hint)
     → Halo2.Constraints penv.place penv.env ((child.call config input).operations i₀) i₀ :=
   layouter_completeness_leaf child config i₀ penv.place penv.env input hw
 

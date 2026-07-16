@@ -56,7 +56,7 @@ def parent :
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config

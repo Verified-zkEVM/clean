@@ -72,6 +72,33 @@ theorem RegionCircuit.operations_pure (a : α) (self : RegionIndex) :
 theorem RegionCircuit.output_pure (a : α) (self : RegionIndex) :
     (pure a : RegionCircuit F α).output self = a := rfl
 
+/-! ## Pushing `ite` through the monad
+
+A circuit body may branch mid-do-block (`do … if c then A else B; …`); the do-elaborator lifts the
+branch to an `ite` of `RegionCircuit`s that otherwise blocks `operations`/`output`/`Constraints`
+from descending. These `apply_ite` companions push each eliminator into both branches so
+`circuit_norm` normalizes them, landing the hypothesis as `if c then P₁ else P₂` over value-level
+props (which `by_cases`/`simp [if_pos]` consumers handle). `bind_ite` floats the branch above a
+`>>=` so the bind-of-`ite` spelling reduces too. -/
+
+@[circuit_norm]
+theorem RegionCircuit.operations_ite {c : Prop} [Decidable c] (a b : RegionCircuit F α)
+    (self : RegionIndex) :
+    (if c then a else b).operations self = if c then a.operations self else b.operations self := by
+  split <;> rfl
+
+@[circuit_norm]
+theorem RegionCircuit.output_ite {c : Prop} [Decidable c] (a b : RegionCircuit F α)
+    (self : RegionIndex) :
+    (if c then a else b).output self = if c then a.output self else b.output self := by
+  split <;> rfl
+
+@[circuit_norm]
+theorem RegionCircuit.bind_ite {c : Prop} [Decidable c] (a b : RegionCircuit F α)
+    (f : α → RegionCircuit F β) :
+    (if c then a else b) >>= f = if c then a >>= f else b >>= f := by
+  split <;> rfl
+
 /-! ## Accessors of the DSL atoms -/
 
 @[circuit_norm]
@@ -224,6 +251,16 @@ theorem RegionOperations.constraints_append (place : RegionIndex → ℕ) (self 
   | cons op ops ih =>
     simp only [List.cons_append, RegionOperations.Constraints, ih, and_assoc]
 
+-- Push `Constraints` into both branches of a lifted mid-do-block `if` (paired with
+-- `RegionCircuit.operations_ite`, which first exposes the `ite` of operation lists).
+@[circuit_norm]
+theorem RegionOperations.constraints_ite {c : Prop} [Decidable c] (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : Environment F) (ops₁ ops₂ : RegionOperations F) :
+    RegionOperations.Constraints place self env (if c then ops₁ else ops₂)
+      = if c then RegionOperations.Constraints place self env ops₁
+        else RegionOperations.Constraints place self env ops₂ := by
+  split <;> rfl
+
 @[circuit_norm]
 theorem operations_constrainConstant (a : AssignedCell F) (v : F) (self : RegionIndex) :
     (constrainConstant a v).operations self = [.constrainConstant a.cell v] := rfl
@@ -261,6 +298,16 @@ the RHS contains no `… + 1 + 1` pattern. -/
 @[circuit_norm]
 theorem row_succ_succ (b : ℕ) : b + 1 + 1 = b + 2 := rfl
 
+/-- Loop-row `Rotation::prev()`: a gate enabled at loop row `off + 1 + r` reads a prev-row cell as
+`↑(place self + (off + 1 + r)) − 1`, while the assignment producing it (previous loop row / start
+copy) reads `↑(place self + (off + r))`. The `off + 1 + r` spelling (`+1` *inside*, `+r` outermost)
+is disjoint from `cast_row_pred`'s `_ + 1` inner shape, so it needs its own normal-form step toward
+the assignment spelling. (The loop-row `Rotation::next()` `+1` case is already covered by
+`cast_row_succ`, whose result is defeq to the `off + (r + 1)` source spelling.) -/
+@[circuit_norm]
+theorem cast_loop_row_pred (a b r : ℕ) :
+    ((a + (b + 1 + r) : ℕ) : ℤ) - 1 = ((a + (b + r) : ℕ) : ℤ) := by push_cast; ring
+
 @[circuit_norm]
 theorem RegionOperations.extendsWitnesses_nil (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : ProverEnvironment F) :
@@ -285,6 +332,15 @@ theorem RegionOperations.extendsWitnesses_cons (place : RegionIndex → ℕ) (se
     (env : ProverEnvironment F) (op : RegionOperation F) (ops : RegionOperations F) :
     RegionOperations.ExtendsWitnesses place self env (op :: ops)
       = (op.ExtendsWitness place self env ∧ RegionOperations.ExtendsWitnesses place self env ops) := rfl
+
+-- Completeness counterpart of `constraints_ite`.
+@[circuit_norm]
+theorem RegionOperations.extendsWitnesses_ite {c : Prop} [Decidable c] (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : ProverEnvironment F) (ops₁ ops₂ : RegionOperations F) :
+    RegionOperations.ExtendsWitnesses place self env (if c then ops₁ else ops₂)
+      = if c then RegionOperations.ExtendsWitnesses place self env ops₁
+        else RegionOperations.ExtendsWitnesses place self env ops₂ := by
+  split <;> rfl
 
 @[circuit_norm]
 theorem RegionOperation.extendsWitness_assignAdvice (place : RegionIndex → ℕ) (self : RegionIndex)

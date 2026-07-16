@@ -83,18 +83,21 @@ with `ProverAssumptions` imply the constraints and the `ProverSpec`.
 the verifier value erases. -/
 def FormalCircuit.Completeness
     (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
-    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
-    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
+    (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
+    Prop :=
   ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F)
     (input : Var Input F),
   ExtendsWitnesses env.place env.env ((main input).operations i₀) i₀ →
   EnvAssumptions env.toEnvironment →
   Assumptions (eval env.toEnvironment input) →
-  ProverAssumptions (eval env input) env.env.hint →
+  ProverAssumptions (eval env input) (extract input i₀ env.toEnvironment) env.env.hint →
   Constraints env.place env.env ((main input).operations i₀) i₀ ∧
-  ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) env.env.hint
+  ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀))
+    (extract input i₀ env.toEnvironment) env.env.hint
 
 /-- Equivalence rewriting the layouter-level `Soundness` into a form with the input/output
 *values* intro'd as variables (with their defining equations), the layouter-level mirror of
@@ -127,11 +130,13 @@ its defining equation): the `Assumptions` and `EnvAssumptions` hypotheses stay r
 region-level docstring for the rationale). -/
 theorem FormalCircuit.completeness_iff
     (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
-    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
-    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
-    FormalCircuit.Completeness main EnvAssumptions Assumptions ProverAssumptions ProverSpec ↔
+    (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
+    FormalCircuit.Completeness main extract EnvAssumptions Assumptions ProverAssumptions
+      ProverSpec ↔
     ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
       (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
@@ -139,9 +144,9 @@ theorem FormalCircuit.completeness_iff
     ExtendsWitnesses env.place env.env ((main input_var).operations i₀) i₀ →
     EnvAssumptions env.toEnvironment →
     Assumptions (eval env.toEnvironment input_var) →
-    ProverAssumptions input env.env.hint →
+    ProverAssumptions input (extract input_var i₀ env.toEnvironment) env.env.hint →
     Constraints env.place env.env ((main input_var).operations i₀) i₀ ∧
-    ProverSpec input output env.env.hint := by
+    ProverSpec input output (extract input_var i₀ env.toEnvironment) env.env.hint := by
   constructor
   · intro h i₀ env iv input output h_in h_out hW hE hA hPA
     subst h_in h_out; exact h i₀ env iv hW hE hA hPA
@@ -206,18 +211,20 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   Spec : Value Input F → Value Output F → Witness F → Prop
 
   /-- Prover-view precondition (hints visible), strictly *additional* to `Assumptions`
-  (completeness assumes both) — only hint-side facts that the verifier value erases
-  belong here. -/
-  ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
+  (completeness assumes both) — hint-side facts that the verifier value erases, or (for
+  positional gadgets) honesty conditions on the extracted `Witness` readings. -/
+  ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop :=
+    fun _ _ _ => True
   /-- Prover-view postcondition, proved alongside the constraints. -/
-  ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
+  ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop :=
+    fun _ _ _ _ => True
 
   soundness : ∀ (config : Config),
     FormalCircuit.Soundness (synthesize config) (extract config) (EnvAssumptions config)
       Assumptions Spec
   completeness : ∀ (config : Config),
-    FormalCircuit.Completeness (synthesize config) (EnvAssumptions config) Assumptions
-      ProverAssumptions ProverSpec
+    FormalCircuit.Completeness (synthesize config) (extract config) (EnvAssumptions config)
+      Assumptions ProverAssumptions ProverSpec
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -303,22 +310,29 @@ def FormalRegionCircuit.Soundness
 
 /-- Completeness of a region-level circuit (prover view). As at the layouter level, the
 soundness `Assumptions` (on the input's verifier-visible value) are assumed alongside
-`ProverAssumptions`, so the prover side is strictly additional (hint-side facts only). -/
+`ProverAssumptions`, so the prover side is strictly additional (hint-side facts only).
+
+The prover-side predicates see the extracted `Witness` (the same designated env readings
+`Spec` sees): positional gadgets state "my neighborhood holds honest values" as a
+`ProverAssumptions` on the witness. -/
 def FormalRegionCircuit.Completeness
     (main : Var Input F → RegionCircuit F (Var Output F))
     [ElaboratedRegionCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
-    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
-    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) : Prop :=
+    (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
+    Prop :=
   ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F),
   RegionOperations.ExtendsWitnesses env.place self env.env ((main input).operations self) →
   EnvAssumptions env.toEnvironment →
   Assumptions (eval env.toEnvironment input) →
-  ProverAssumptions (eval env input) env.env.hint →
+  ProverAssumptions (eval env input) (extract input self env.toEnvironment) env.env.hint →
   RegionOperations.Constraints env.place self env.env ((main input).operations self) ∧
   ProverSpec (eval env input)
-    (eval env (ElaboratedRegionCircuit.output main input self)) env.env.hint
+    (eval env (ElaboratedRegionCircuit.output main input self))
+    (extract input self env.toEnvironment) env.env.hint
 
 /-- Equivalence rewriting `Soundness` into a form with the input/output *values* intro'd
 as variables (with their defining equations). A proof tactic `rw`s this at the very start,
@@ -354,11 +368,13 @@ to value-level facts. -/
 theorem FormalRegionCircuit.completeness_iff
     (main : Var Input F → RegionCircuit F (Var Output F))
     [ElaboratedRegionCircuit F Input Output main]
+    (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
-    (ProverAssumptions : ProverValue Input F → ProverHint F → Prop)
-    (ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop) :
-    FormalRegionCircuit.Completeness main EnvAssumptions Assumptions ProverAssumptions ProverSpec ↔
+    (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
+    (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
+    FormalRegionCircuit.Completeness main extract EnvAssumptions Assumptions ProverAssumptions
+      ProverSpec ↔
     ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
       (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
@@ -366,9 +382,9 @@ theorem FormalRegionCircuit.completeness_iff
     RegionOperations.ExtendsWitnesses env.place self env.env ((main input_var).operations self) →
     EnvAssumptions env.toEnvironment →
     Assumptions (eval env.toEnvironment input_var) →
-    ProverAssumptions input env.env.hint →
+    ProverAssumptions input (extract input_var self env.toEnvironment) env.env.hint →
     RegionOperations.Constraints env.place self env.env ((main input_var).operations self) ∧
-    ProverSpec input output env.env.hint := by
+    ProverSpec input output (extract input_var self env.toEnvironment) env.env.hint := by
   constructor
   · intro h self env iv input output h_in h_out hW hE hA hPA
     subst h_in h_out; exact h self env iv hW hE hA hPA
@@ -407,6 +423,12 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   elaborated : ∀ config offset,
     ElaboratedRegionCircuit F Input Output (synthesize config offset) := fun _ _ => {}
 
+  /-- Designated env readings the contract may reference: `Spec` and the prover-side
+  predicates all receive `extract`'s value. Two uses: knowledge-soundness extraction
+  (opaque to parents), and *positional neighborhoods* — a gadget whose gate reads
+  adjacent cells it doesn't own (rows determined by its own offset) publishes them as a
+  `reads` def and sets `extract := fun cfg offset _ _ env => eval env (reads cfg offset)`;
+  parents connect the witness to cells they know by `rfl`. -/
   Witness : TypeMap := unit
   inhabitedWitness [Inhabited F] : Inhabited (Witness F) := by infer_instance
   extract : Config → (offset : ℕ) → Var Input F → RegionIndex → Placed Environment F →
@@ -428,15 +450,17 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   EnvAssumptions : Config → Placed Environment F → Prop := fun _ _ => True
   Assumptions : Value Input F → Prop := fun _ => True
   Spec : Value Input F → Value Output F → Witness F → Prop
-  ProverAssumptions : ProverValue Input F → ProverHint F → Prop := fun _ _ => True
-  ProverSpec : ProverValue Input F → ProverValue Output F → ProverHint F → Prop := fun _ _ _ => True
+  ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop :=
+    fun _ _ _ => True
+  ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop :=
+    fun _ _ _ _ => True
 
   soundness : ∀ (config : Config) (offset : ℕ),
     FormalRegionCircuit.Soundness (synthesize config offset) (extract config offset)
       (EnvAssumptions config) Assumptions Spec
   completeness : ∀ (config : Config) (offset : ℕ),
-    FormalRegionCircuit.Completeness (synthesize config offset) (EnvAssumptions config) Assumptions
-      ProverAssumptions ProverSpec
+    FormalRegionCircuit.Completeness (synthesize config offset) (extract config offset)
+      (EnvAssumptions config) Assumptions ProverAssumptions ProverSpec
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -528,7 +552,8 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     refine ⟨⟨hcompl.1, trivial⟩, ?_⟩
     have hout := (child.elaborated config 0).output_eq input_var i₀
     show child.ProverSpec (eval env input_var)
-      (eval env ((child.synthesize config 0 input_var).output i₀)) env.env.hint
+      (eval env ((child.synthesize config 0 input_var).output i₀))
+      (child.extract config 0 input_var i₀ env.toEnvironment) env.env.hint
     rw [hout] at hcompl
     exact hcompl.2
 
