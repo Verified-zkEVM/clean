@@ -27,8 +27,6 @@ headline finding), now handled by the engine's own `isDefEq` matching.
 
 namespace Halo2.Ironwood.Ecc.TestLayouterSubcircuit
 
-open Halo2 Halo2.Ironwood.Ecc
-
 /-! ## The native layouter child
 
 A `FormalCircuit` whose body creates its own region (via `assignRegion`) and runs the
@@ -104,7 +102,7 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
 -- Layouter bare context: same, at the layouter level.
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
     (env : Environment Fp) (input : Point (FExpr Fp))
-    (h : Halo2.Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
+    (h : Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
         (witnessPointR.output config input i₀)).Valid := by
   subcircuit_rw at h

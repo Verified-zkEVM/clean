@@ -7,7 +7,7 @@ pattern the confluence claims depend on. Companion to main Clean's `TestProvable
 -/
 
 namespace Halo2.ProvableTypeSimp.Test
-open Halo2 Halo2.Ironwood
+open Ironwood
 
 /-- Two-level struct: a `ProvableStruct` whose components are themselves higher-level
 (`Point`) — the Add32 `{x:U32,y:U32}` analogue. -/
@@ -124,7 +124,7 @@ The lazy `getElem` bridge: `(eval env v)[i]` on a `fields n` vector of cells red
 cell read, on demand — the vector counterpart of `evalProjectionLift`. The whole-vector map form
 stays folded (never a `circuit_norm` member). -/
 
-open Halo2.ProvableType in
+open ProvableType in
 -- 6a. The lazy getElem bridge fires under `circuit_norm`: `(eval env vec)[i]` resolves to one
 -- `Environment.advice` cell read (verifier view). No eager whole-vector map.
 example (self : RegionIndex) (env : Placed Environment Fp) (col : Column .advice) (i : ℕ) (hi : i < 3) :

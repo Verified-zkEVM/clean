@@ -26,8 +26,6 @@ The engine-cooperation reuse path (re-running after `subcircuit_rw`) is exercise
 
 namespace Halo2.Ironwood.Ecc.TestAbstractOutputs
 
-open Halo2 Halo2.Ironwood.Ecc
-
 /-! ## Guise 1 + 5: call-form output under `eval`, region level
 
 A bare-context lemma with the child's output in call form inside `eval`. After `abstract_outputs`

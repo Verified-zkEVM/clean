@@ -22,21 +22,20 @@ Lean Add port and the Rust constraint system.
 
 namespace Halo2.Fixtures.Test
 
-open _root_.Halo2
-open _root_.Halo2.Ironwood (Fp)
-open Halo2.Fixtures
+open Ironwood (Fp)
+open Ironwood.Ecc
 
 /-- Allocate the 9 advice columns (mirroring the Rust harness's `EccConfig`-minimal column
 allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.add.configure` on them.
 Allocating in the monad — rather than passing bare `⟨0⟩..⟨8⟩` — is what advances the CS's
 `numAdviceColumns` counter to 9, matching the harness. -/
-def addProgram : Configure Fp Halo2.Ironwood.Ecc.Add.Config := do
+def addProgram : Configure Fp Add.Config := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
-  Halo2.Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
+  Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
 
-def addCS : _root_.Halo2.ConstraintSystem Fp := (addProgram {}).2
+def addCS : ConstraintSystem Fp := (addProgram {}).2
 
 /-- The Add gate's queried cells in halo2 declaration order (the closure's `let` sequence,
 `add.rs`): `x_p, y_p, x_q, y_q, x_r, y_r, λ, α, β, γ, δ` on advice columns `0..8`, with

@@ -20,7 +20,7 @@ reduction so the Sinsemilla soundness proof (which peels each generator lookup i
 
 namespace Halo2.TupleLookup.Test
 
-open Halo2 Halo2.Ironwood
+open Ironwood
 
 /-- The list-map equality of two 3-element lists splits into three componentwise
 equalities — the algebraic core of the 3-tuple membership reduction. -/

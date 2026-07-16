@@ -45,11 +45,8 @@ The comparison is `#guard` on `DecidableEq CsFixture` (D1: `#eval`-equality is f
 
 namespace Halo2.Fixtures.Test
 
-open _root_.Halo2
-open _root_.Halo2.Ironwood (Fp)
-open _root_.Halo2.Ironwood.Ecc
-open _root_.Halo2.Ironwood
-open Halo2.Fixtures
+open Ironwood
+open Ironwood.Ecc
 
 /-- The mul configure chain on fresh columns, mirroring the Rust `configure_mul` harness:
 allocate 10 advice columns, the lookup table column and the constants column
@@ -70,11 +67,11 @@ def mulProgram : Configure Fp Mul.Config := do
   -- range_check first (ecc.rs:836), on advices[9]
   let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
   -- add before mul (EccChip::configure order), on advices[0..8]
-  let addConfig ← Halo2.Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
+  let addConfig ← Ironwood.Ecc.Add.add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
   -- the mul chain
   Mul.configure addConfig lookupConfig advices
 
-def mulCS : _root_.Halo2.ConstraintSystem Fp := (mulProgram {}).2
+def mulCS : ConstraintSystem Fp := (mulProgram {}).2
 
 /-- The whole-chain registration-order query seed (halo2 `queried_cells` across every gate
 and lookup closure — and `enable_equality`/`enable_constant`, which also register rot-0

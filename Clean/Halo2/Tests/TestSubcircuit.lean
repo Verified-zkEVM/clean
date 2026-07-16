@@ -27,8 +27,6 @@ marker/OR leftovers to discard.
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuit
 
-open Halo2 Halo2.Ironwood.Ecc
-
 /-! ## Bare-call parent -/
 
 /-- Parent circuit: run `witness_point` as a subcircuit, return its output point. Same

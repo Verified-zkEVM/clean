@@ -7,7 +7,6 @@ bound in one step. Acceptance-consumed in `LookupRangeCheck.short_range_check` s
 -/
 
 namespace Halo2.Ironwood.LookupRangeCheck.Test
-open Halo2 Halo2.Ironwood Halo2.Ironwood.LookupRangeCheck
 
 -- the "two obtains + apply" pattern collapses to one `exact` on the helper.
 example {K : ℕ} {cfg : Config K} {env : Environment Fp} {v : Fp}

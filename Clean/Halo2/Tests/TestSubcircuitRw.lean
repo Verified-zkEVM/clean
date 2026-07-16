@@ -35,8 +35,6 @@ prove the bundle once (`have pre₀ := ⟨…⟩`) and feed its components to bo
 
 namespace Halo2.Ironwood.Ecc.TestSubcircuitRw
 
-open Halo2 Halo2.Ironwood.Ecc
-
 /-! ## Region parent, bare call -/
 
 /-- Region parent running `witness_point` as a subcircuit. -/
@@ -255,7 +253,7 @@ example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex
 /-- Layouter bare context, same scenario at the layouter level. -/
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
     (env : Environment Fp) (input : Point (FExpr Fp))
-    (h : Halo2.Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
+    (h : Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
         (witnessPointR.output config input i₀)).Valid := by
   subcircuit_rw at h

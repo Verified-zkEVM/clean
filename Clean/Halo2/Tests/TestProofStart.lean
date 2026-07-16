@@ -41,12 +41,10 @@ Coverage of the mul-stack review fixes, by where each is pinned:
 `FormalCircuit` soundness AND completeness; region-level composite by `MulComplete.lean`.)
 -/
 
-open Lean Elab Meta
-open Halo2 Halo2.CircuitProofStart
-open Halo2.Ironwood
-open Halo2.Ironwood.Ecc
-
 namespace Halo2.TestProofStart
+
+open Lean Elab Meta
+open CircuitProofStart Ironwood Ironwood.Ecc
 
 /-! ## Direction detection ×4 (the head-constant discriminator) -/
 
@@ -116,7 +114,7 @@ leaf's peeled, pure-field `hc`). It walks the whole expr tree, so a nested occur
 run_cmd Elab.Command.liftTermElabM do
   let has (n : Name) : Bool := exprHasCircuitStructure (.const n [])
   unless has ``RegionOperations.Constraints do throwError "should flag RegionOperations.Constraints"
-  unless has ``Halo2.Constraints do throwError "should flag Halo2.Constraints"
+  unless has ``Constraints do throwError "should flag Halo2.Constraints"
   unless has ``RegionOperations.ExtendsWitnesses do
     throwError "should flag RegionOperations.ExtendsWitnesses"
   if has ``Eq then throwError "should NOT flag a pure-field `Eq`"
