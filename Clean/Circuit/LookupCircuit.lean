@@ -99,8 +99,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     refine ⟨?_, ?_⟩
     · -- forAll: the sole witness is the native output value; the lookup adds no witness/subcircuit
       simp only [circuit_norm, Witgen.WitgenIR.eval_nativeValue]
-      intro h_input _
-      simp only [h_input]
+      grind
     · -- output: the freshly-witnessed output var only reads offsets `[n, n+size β)`,
       -- so environment agreement below `n + localLength` gives equality
       intro _ h_agrees

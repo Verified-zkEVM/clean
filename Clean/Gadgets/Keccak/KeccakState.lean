@@ -90,8 +90,6 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
       apply FormalAssertion.toSubcircuit_computableWitnesses
       -- the loop body's input `input[i]` agrees because the whole input does
       rw [getElem_eval_vector, getElem_eval_vector, h_input]
-    · -- output is unit
-      intro _ _
-      simp only [circuit_norm]
+    · grind
 
 end Gadgets.Keccak256

@@ -53,17 +53,9 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     rwa [h_env]
 
   computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- forAll: the sole witness is the hint program, whose value is fixed by the input
-      simp only [circuit_norm]
-      intro h_input _
-      simp only [circuit_norm, Witgen.M.eval_toIRLiteral]
-      exact congrArg toElements (congrArg (·.inverse) h_input)
-    · -- output is the freshly-witnessed variable, fixed by environment agreement
-      intro _ h_agrees
-      simp only [circuit_norm] at h_agrees ⊢
-      grind
+    intro n input
+    simp_all only [circuit_norm, Witgen.M.eval_toIRLiteral]
+    grind
 
 def parent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do
@@ -128,14 +120,9 @@ def boolNatCircuit : GeneralFormalCircuit.WithHint F BoolNatInput field where
     circuit_proof_start
 
   computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- main is `return input.x`: no witnesses/subcircuits
-      simp only [circuit_norm]
-    · -- output is `input.x`, fixed by the input agreement
-      intro h_input _
-      simp only [circuit_norm] at h_input ⊢
-      exact congrArg (·.x) h_input
+    intro n input
+    simp_all only [circuit_norm]
+    grind
 
 def boolNatParent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do

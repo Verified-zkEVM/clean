@@ -27,11 +27,6 @@ def circuit : FormalCircuit F field field where
 
   computableWitnesses := by
     simp only [circuit_norm]
-    intros
-    constructor
-    · and_intros
-      · grind
-      · grind
-    · grind
+    grind
 
 end Gadgets.IsZeroField

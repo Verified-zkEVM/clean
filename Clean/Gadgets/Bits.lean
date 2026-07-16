@@ -67,18 +67,12 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     refine ⟨?_, ?_⟩
     · simp only [main, circuit_norm]
       refine ⟨?_, ?_⟩
-      · -- the witnessed bit vector depends only on `input.val`
-        intro h_input _
+      · intro h_input _
         apply Vector.ext
         intro i hi
         simp only [circuit_norm, Witgen.VExpr.getElem_eval_mapRange, h_input]
-      · -- each `assertBool` in the `forEach` is assert-only ⇒ trivially computable
-        -- (`forEach` inlines `assertBool`, so we discharge the flat assert directly)
-        intro i h_input
-        simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit_norm,
-          FlatOperation.forAll_cons, FlatOperation.forAll_empty, Condition.applyFlat]
-    · -- output is the witnessed bit vector; environment agreement below `offset + n` gives equality
-      intro _ h_agrees
+      · grind
+    · intro _ h_agrees
       simp only [circuit_norm] at h_agrees ⊢
       apply Vector.ext
       intro i hi
@@ -98,16 +92,9 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   completeness := by circuit_proof_all [toBits]
 
   computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- forAll: single `toBits` subcircuit, computable from the (identical) input
-      simp only [circuit_norm]
-      intro h_input
-      exact GeneralFormalCircuit.toSubcircuit_computableWitnesses _
-        (by simpa only [circuit_norm] using h_input)
-    · -- output is unit
-      intro _ _
-      simp only [circuit_norm]
+    intro n input
+    simp_all only [circuit_norm]
+    grind
 
 end ToBits
 export ToBits (toBits)
