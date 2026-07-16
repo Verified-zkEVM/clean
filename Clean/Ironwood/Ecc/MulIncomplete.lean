@@ -1,25 +1,6 @@
-import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
-import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Ecc.DoubleAndAdd
-import Clean.Orchard.Ecc.Mul.Incomplete
-import Clean.Orchard.Ecc.Mul.Assign
+import Clean.Ironwood.Ecc.MulIncompleteRound
 
-/-!
-Variable-base scalar multiplication, *incomplete* phase. For each scalar bit, one merged
-double-and-add round over the `x_a / x_p / λ₁ / λ₂` column layout, with `q_mul` selectors at three
-rotations, a running `z` column (`z_i = 2·z_{i+1} + k_i`), and the round relation
-`acc_{i+1} = (acc_i + (2k−1)P) + acc_i` (specialized round gate `Y_A = (λ₁+λ₂)(x_A − x_R)`).
-
-Generic over the bit count `n + 1`: the `hi`/`lo` halves of `mul.rs` are two instantiations of this
-one `Config`, differing only in the advice columns and `NUM_BITS` (125 / 126).
-
-The value-level `Fp`/`Point` algebra is reused wholesale from the phase-one donor
-`Orchard.Ecc.Mul.Incomplete`; only the framework wiring (`Config`/gates/`configure`, the
-`synthesize` loop, the `FormalRegionCircuit` bundle) is new here.
-
-Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
--/
+/-! The double-and-add loop and bundle over the round gadget (`MulIncompleteRound.lean`). -/
 
 namespace Halo2.Ironwood.Ecc.MulIncomplete
 
@@ -30,251 +11,6 @@ open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
    accScalar_two_le accScalar_le pow254_lt_card)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
-
-/-! ## Config
-
-Rust `incomplete::Config<NUM_BITS>`, flattened. `NUM_BITS` is a Rust const generic; here it is the
-bit-count parameter `n + 1` on the *bundle*, not a `Config` field. -/
-
-structure Config where
-  -- Selector constraining the first row of incomplete addition.
-  qMul1 : Selector
-  -- Selector constraining the main loop of incomplete addition.
-  qMul2 : Selector
-  -- Selector constraining the last row of incomplete addition.
-  qMul3 : Selector
-  -- Cumulative sum used to decompose the scalar.
-  z : Column .advice
-  -- x-coordinate of the accumulator in each double-and-add iteration.
-  xA : Column .advice
-  -- x-coordinate of the point being added in each double-and-add iteration.
-  xP : Column .advice
-  -- y-coordinate of the point being added in each double-and-add iteration.
-  yP : Column .advice
-  -- lambda1 in each double-and-add iteration.
-  lambda1 : Column .advice
-  -- lambda2 in each double-and-add iteration.
-  lambda2 : Column .advice
-
-/-! ## Gates -/
-
-/-- `x_R = λ₁² − x_A − x_P` at `rot`. -/
-def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
-  let xA : Expression Fp Query := queryAdvice cfg.xA rot
-  let xP : Expression Fp Query := queryAdvice cfg.xP rot
-  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
-  l1 * l1 - xA - xP
-
-/-- `y_a = (λ₁ + λ₂)(x_A − x_R) · TWO_INV` at `rot`. The trailing `TWO_INV = (2 : Fp)⁻¹` factor
-matches the compiled Rust gate (VK-faithful). -/
-def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
-  let xA : Expression Fp Query := queryAdvice cfg.xA rot
-  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
-  let l2 : Expression Fp Query := queryAdvice cfg.lambda2 rot
-  (l1 + l2) * (xA - xRExpr cfg rot) * (2 : Fp)⁻¹
-
-/-- Constraints used for `q_mul_{2,3} == 1`. `yANextDouble` is the next-row `y_a`: derived
-(`yA cfg 1`) for `q_mul_2`, the witnessed final `y` for `q_mul_3`. -/
-def forLoopPolys (cfg : Config) (yANextDouble : Expression Fp Query) :
-    List (String × Expression Fp Query) :=
-  -- z_i
-  let zCur : Expression Fp Query := queryAdvice cfg.z 0
-  -- z_{i+1}
-  let zPrev : Expression Fp Query := queryAdvice cfg.z (-1)
-  -- x_{A,i}
-  let xACur : Expression Fp Query := queryAdvice cfg.xA 0
-  -- x_{A,i-1}
-  let xANext : Expression Fp Query := queryAdvice cfg.xA 1
-  -- x_{P,i}
-  let xPCur : Expression Fp Query := queryAdvice cfg.xP 0
-  -- y_{P,i}
-  let yPCur : Expression Fp Query := queryAdvice cfg.yP 0
-  -- λ_{1,i}
-  let l1 : Expression Fp Query := queryAdvice cfg.lambda1 0
-  -- λ_{2,i}
-  let l2 : Expression Fp Query := queryAdvice cfg.lambda2 0
-  -- The current bit in the scalar decomposition, k_i = z_i - 2⋅z_{i+1}.
-  -- Recall that we assigned the cumulative variable `z_i` in descending order,
-  -- i from n down to 0. So z_{i+1} corresponds to the `z_prev` query.
-  let k : Expression Fp Query := zCur - zPrev * 2
-  -- Check booleanity of decomposition.
-  let boolCheck := k * (1 - k)
-  -- λ_{1,i}⋅(x_{A,i} − x_{P,i}) − y_{A,i} + (2k_i - 1) y_{P,i} = 0
-  let gradient1 := l1 * (xACur - xPCur) - yA cfg 0 + (k * 2 - 1) * yPCur
-  -- λ_{2,i}^2 − x_{A,i-1} − x_{R,i} − x_{A,i} = 0
-  let secantLine := l2 * l2 - xANext - xRExpr cfg 0 - xACur
-  -- λ_{2,i}⋅(x_{A,i} − x_{A,i-1}) − y_{A,i} − y_{A,i-1} = 0
-  let gradient2 := l2 * (xACur - xANext) - yA cfg 0 - yANextDouble
-  [ ("bool_check", boolCheck),
-    ("gradient_1", gradient1),
-    ("secant_line", secantLine),
-    ("gradient_2", gradient2) ]
-
-/-- The `q_mul_1` gate: the witnessed `y_a` (in the `λ₁` column at the current row) equals the
-derived next-row `y_a`. -/
-def qMul1Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_1 == 1 checks"
-  selector := cfg.qMul1
-  constraints :=
-    let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
-    Constraints.withSelector cfg.qMul1
-      [("init y_a", yAWitnessed - yA cfg 1)]
-
-/-- The `q_mul_2` gate: `x_p`/`y_p` are constant on the next row, plus the shared loop body with the
-next-row `y_a` derived. -/
-def qMul2Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_2 == 1 checks"
-  selector := cfg.qMul2
-  constraints :=
-    let xPCur : Expression Fp Query := queryAdvice cfg.xP 0
-    let xPNext : Expression Fp Query := queryAdvice cfg.xP 1
-    let yPCur : Expression Fp Query := queryAdvice cfg.yP 0
-    let yPNext : Expression Fp Query := queryAdvice cfg.yP 1
-    Constraints.withSelector cfg.qMul2
-      ([ ("x_p_check", xPCur - xPNext),
-         ("y_p_check", yPCur - yPNext) ]
-        ++ forLoopPolys cfg (yA cfg 1))
-
-/-- The `q_mul_3` gate: the loop body on the last row, with the next-row `y_a` the WITNESSED final
-`y` in the `λ₁` column (a bare query, not a derived `Y_A`). -/
-def qMul3Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_3 == 1 checks"
-  selector := cfg.qMul3
-  constraints :=
-    let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
-    Constraints.withSelector cfg.qMul3 (forLoopPolys cfg yAFinal)
-
-/-- Rust `Config::configure`: enable equality on `z` and `λ₁`, allocate the three selectors, and
-register the three gates. The columns are handed down by `mul.rs` (different for `hi`/`lo`). -/
-def configure (z xA xP yP lambda1 lambda2 : Column .advice) : Configure Fp Config := do
-  enableEquality z
-  enableEquality lambda1
-  let qMul1 ← selector
-  let qMul2 ← selector
-  let qMul3 ← selector
-  let cfg : Config := { qMul1, qMul2, qMul3, z, xA, xP, yP, lambda1, lambda2 }
-  createGate (qMul1Gate cfg)
-  createGate (qMul2Gate cfg)
-  createGate (qMul3Gate cfg)
-  return cfg
-
-/-! ## Inputs / Output
-
-Mirrors the donor `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits derive
-from. -/
-
-/-- Prover-side scalar bits, MSB-first, indexed from the first processed bit. -/
-def BitsHint : Type := ℕ → Bool
-
-instance : Inhabited BitsHint := ⟨fun _ => false⟩
-
-/-- The verifier-visible inputs. The working scalar's bits are derived from the cell `alpha`
-(faithful to Rust `decompose_for_scalar_mul(alpha.value())`); there is NO prover-side `bits`
-parameter. -/
-structure Inputs (F : Type) where
-  -- Scalar cell the working scalar's bits are decomposed from.
-  -- TODO this is a prover hint (Rust source passes it as `Value`), so it should be a variant of Unconstrained,
-  -- NOT an Expression-level input, otherwise makes it look like this is constrained by the circuit, which it isn't.
-  alpha : F
-  -- The (non-identity, on-curve) base point.
-  base : Point F
-  -- Accumulator x-coordinate entering the phase.
-  xA : F
-  -- Accumulator y-coordinate entering the phase.
-  yA : F
-  -- Running sum entering the phase.
-  z : F
-deriving ProvableStruct
-
-/-- The final accumulator cells and the `numBits` interstitial running sums. -/
-structure Output (numBits : ℕ) (F : Type) where
-  -- Final accumulator x-coordinate.
-  xA : F
-  -- Final accumulator y-coordinate.
-  yA : F
-  -- The interstitial running sums, one per round.
-  zs : Vector F numBits
-deriving ProvableStruct
-
-/-! ## Honest witness programs
-
-The honest cell values are functions of the base/accumulator cells and the scalar bits, expressed
-via the witgen `native` escape hatch reading the placed prover environment.
-TODO CHANGE THAT, add `UnconstrainedNat` and vector-level IR hints to WitnessIR.
-The bits are derived from the witnessed scalar cell `input.alpha` (`kBits (readCell env input.alpha)`), windowed by the
-bundle's window offset `w`. -/
-
-/-- Read an input cell's value in a placed prover environment. -/
-def readCell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) : Fp :=
-  c.eval env.place env.env.toEnvironment
-
-/-- The `w`-shifted window of the working scalar's bits: `kBitsWindow a w i = kBits a (w + i)`,
-i.e. bit `k_{254-(w+i)}` of the unreduced working scalar `k = a.val + t_q`.
-
-KERNEL-SAFETY (load-bearing spelling): `t_q` is added on the LEFT (`tQNat + a.val`, flipped vs the
-donor's `kNat`). `Nat.add` recurses on its SECOND argument, so with the ~2^125 literal on the left
-kernel whnf is stuck immediately on the abstract `a.val` — the donor spelling would unfold the
-literal unarily ("(kernel) deep recursion detected"). Bridge to the donor's `kBits` via
-`kBitsWindow_eq_kBits`, a rewrite, never a defeq. -/
-def kBitsWindow (a : Fp) (w : ℕ) : BitsHint :=
-  fun i => (tQNat + a.val).testBit (254 - (w + i))
-
-/-- `kBitsWindow` is the `w`-shifted window of the donor's `kBits`. -/
-theorem kBitsWindow_eq_kBits (a : Fp) (w i : ℕ) :
-    kBitsWindow a w i = kBits a (w + i) := by
-  unfold kBitsWindow kBits kNat
-  rw [Nat.add_comm]
-
-/-- `kBitsWindow` as a donor-`kBits` lambda. -/
-theorem kBitsWindow_as_kBits (a : Fp) (w : ℕ) :
-    kBitsWindow a w = fun i => kBits a (w + i) :=
-  funext fun i => kBitsWindow_eq_kBits a w i
-
-/-- The zero-offset window is exactly the donor's `kBits`. -/
-theorem kBitsWindow_zero (a : Fp) : kBitsWindow a 0 = kBits a :=
-  funext fun i => by rw [kBitsWindow_eq_kBits, Nat.zero_add]
-
-/-- The working-scalar bit family, derived from the scalar cell in a placed prover environment:
-`bitsOf input w env = kBitsWindow (alpha value) w`. The only place the bits are computed; the loop
-below is abstract in the env-indexed family `ebits`, which the bundle sets to `bitsOf input w`. -/
-def bitsOf (input : Inputs (AssignedCell Fp)) (w : ℕ) :
-    Placed ProverEnvironment Fp → BitsHint :=
-  fun env => kBitsWindow (readCell env input.alpha) w
-
--- TODO make all these witness programs non-native
-
-/-- Honest `z` running-sum value at loop row `r`. -/
-def zWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[zRunValue (readCell env input.z) (ebits env) r]
-
-/-- Honest `λ₁` value at loop row `r`. -/
-def l1Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda1]
-
-/-- Honest `λ₂` value at loop row `r`. -/
-def l2Wit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (rowLambdaValue (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) r).lambda2]
-
-/-- Honest next-row `x_a` value after loop row `r` (`accVal … (r+1)`). -/
-def xANextWit (input : Inputs (AssignedCell Fp)) (ebits : Placed ProverEnvironment Fp → BitsHint)
-    (r : ℕ) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) (r + 1)).1]
-
-/-- Honest final `y_a` value after `n + 1` rounds (`accVal … (n+1)`). -/
-def yAFinalWit (n : ℕ) (input : Inputs (AssignedCell Fp))
-    (ebits : Placed ProverEnvironment Fp → BitsHint) : WitgenIR Fp 1 :=
-  .native fun env => #v[
-    (accVal (readCell env input.base.x) (readCell env input.base.y)
-      (readCell env input.xA) (readCell env input.yA) (ebits env) (n + 1)).2]
 
 /-! ## The per-bit round loop
 
@@ -294,7 +30,7 @@ Selectors: `q_mul_1` at `offset`; `q_mul_2` at `offset + 1 .. offset + n`; `q_mu
 `x_a`, and enables the round's selector (`q_mul_2` interior, `q_mul_3` last). On the first loop row
 (`r = 0`) `x_p`/`y_p` are copied from `base` (`CircuitVersion::AnchoredBase`); `q_mul_2` constancy
 propagates the anchor. Absolute rows make each round independent of the others. -/
-def round (cfg : Config) (input : Inputs (AssignedCell Fp))
+def roundOld (cfg : Config) (input : Inputs (AssignedCell Fp))
     (ebits : Placed ProverEnvironment Fp → BitsHint)
     (offset n r : ℕ) : RegionCircuit Fp Unit := do
   let row := offset + 1 + r
@@ -314,14 +50,13 @@ def round (cfg : Config) (input : Inputs (AssignedCell Fp))
     (qMul3Gate cfg).enable row
   else
     (qMul2Gate cfg).enable row
-  return ()
 
 /-- The double-and-add loop: `numRounds` independent rounds, round `r` at row `offset + 1 + r`. -/
 def loop (cfg : Config) (input : Inputs (AssignedCell Fp))
     (ebits : Placed ProverEnvironment Fp → BitsHint) (offset n numRounds : ℕ) :
     RegionCircuit Fp Unit :=
   RegionCircuit.forRange' (offset + 1) 1 numRounds
-    (fun r _row => round cfg input ebits offset n r)
+    (fun r _row => roundOld cfg input ebits offset n r)
 
 /-- Read the assigned cell at a known region-local row/column (no op emitted), so `synthesize` can
 name the output cells that live at fixed rows rather than being threaded through the loop. -/
@@ -420,17 +155,13 @@ private theorem loop_gate_facts (n : ℕ)
       (r ≠ n → XPr cfg place self env offset r = XPr cfg place self env offset (r + 1)
         ∧ YPr cfg place self env offset r = YPr cfg place self env offset (r + 1)) := by
   -- the framework split: `Constraints (loop) ↔ ∀ r : Fin (n+1), <round r's constraints>`
-  simp only [loop, circuit_norm, round] at hLoop
+  simp only [loop, circuit_norm, roundOld] at hLoop
   intro r hr
   have hrle : r ≤ n := by omega
   -- round `r`'s own constraints (the `forRange'` body ignores its base-row arg; `round` recomputes)
   have hRound := hLoop ⟨r, hr⟩
   -- `2 ≠ 0` clears the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
   have h2 : (2 : Fp) ≠ 0 := by decide
-  -- normalize the `z`-prev cell row `↑(place + offset+1+r) - 1` to the `Zpr` spelling
-  -- `↑(place + offset+r)`.
-  have hzp : ((place self + (offset + 1 + r) : ℕ) : ℤ) - 1
-      = ((place self + (offset + r) : ℕ) : ℤ) := by push_cast; ring
   -- YADr at `r` is always the derived form (since `r ≤ n < n+1`)
   have hYADr : YADr cfg place self env offset n r
       = (L1r cfg place self env offset r + L2r cfg place self env offset r) *
@@ -456,7 +187,7 @@ private theorem loop_gate_facts (n : ℕ)
     · -- single-round circuit: `q_mul_3` on row 0
       subst hrn
       rw [hYADr, hYADr1n]
-      round_norm [round, qMul3Gate, forLoopPolys, yA, xRExpr] at hRound
+      simp only [circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr] at hRound
       obtain ⟨_hxpc, _hypc, hbool, hg1, hsec, hg2⟩ := hRound
       refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
       · rcases mul_eq_zero.mp hbool with h | h
@@ -468,7 +199,8 @@ private theorem loop_gate_facts (n : ℕ)
       · linear_combination (norm := (field_simp; ring)) 2 * hg2
     · -- interior first row: `q_mul_2` on row 0
       rw [hYADr, hYADr1i hrn]
-      round_norm [round, qMul2Gate, forLoopPolys, yA, xRExpr, if_neg hrn] at hRound
+      simp only [circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
+        if_neg hrn] at hRound
       obtain ⟨_hxpc, _hypc, hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
       refine ⟨?_, ?_, ?_, ?_,
         fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
@@ -479,12 +211,13 @@ private theorem loop_gate_facts (n : ℕ)
       · linear_combination (norm := (field_simp; ring_nf)) 2 * hg1
       · linear_combination hsec
       · linear_combination (norm := (field_simp; ring)) 2 * hg2
-  · -- non-first loop row: `x_p`/`y_p` are plain assignments; `z`-prev normalizes via `hzp`
+  · -- non-first loop row: `x_p`/`y_p` are plain assignments
     by_cases hrn : r = n
     · -- last round: `q_mul_3`
       subst hrn
       rw [hYADr, hYADr1n]
-      round_norm [round, qMul3Gate, forLoopPolys, yA, xRExpr, if_neg hr0] at hRound
+      simp only [circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr,
+        if_neg hr0] at hRound
       obtain ⟨hbool, hg1, hsec, hg2⟩ := hRound
       refine ⟨?_, ?_, ?_, ?_, by intro h; exact absurd rfl h⟩
       · rcases mul_eq_zero.mp hbool with h | h
@@ -496,8 +229,8 @@ private theorem loop_gate_facts (n : ℕ)
       · linear_combination (norm := (field_simp; ring_nf)) 2 * hg2
     · -- interior round: `q_mul_2`
       rw [hYADr, hYADr1i hrn]
-      round_norm [round, qMul2Gate, forLoopPolys, yA, xRExpr, if_neg hr0, if_neg hrn]
-        at hRound
+      simp only [circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
+        if_neg hr0, if_neg hrn] at hRound
       obtain ⟨hxpk, hypk, hbool, hg1, hsec, hg2⟩ := hRound
       refine ⟨?_, ?_, ?_, ?_,
         fun _ => ⟨by linear_combination hxpk, by linear_combination hypk⟩⟩
@@ -518,7 +251,7 @@ private theorem loop_anchor (n : ℕ)
     adv cfg.yP place self env (offset + 1) = input.base.y.eval place env := by
   simp only [loop, circuit_norm] at hLoop
   have hRound := hLoop ⟨0, by omega⟩
-  simp only [round, circuit_norm, adv] at hRound ⊢
+  simp only [roundOld, circuit_norm, adv] at hRound ⊢
   exact ⟨hRound.1, hRound.2.1⟩
 
 end LoopFacts
@@ -716,9 +449,9 @@ private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)
   have hWround := hW ⟨r, hr⟩
   simp only [adv, show offset + 1 + (r + 1) = offset + 1 + r + 1 from by omega]
   by_cases hr0 : r = 0 <;>
-    [ simp only [round, hr0, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+    [ simp only [roundOld, hr0, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
         reduceIte] at hWround ⊢;
-      simp only [round, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
+      simp only [roundOld, circuit_norm, zWit, l1Wit, l2Wit, xANextWit, readCell,
         if_neg hr0] at hWround ⊢ ] <;>
     exact ⟨hWround.1, hWround.2.1, hWround.2.2.1, hWround.2.2.2.1,
       hWround.2.2.2.2.1, hWround.2.2.2.2.2.1⟩
@@ -876,8 +609,6 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       rcases Nat.eq_zero_or_pos k with rfl | hkpos <;> simpa using this
     -- expose the raw `env.advice` spellings the reduced gate polys use
     simp only [adv] at hVxp hVyp hVl1 hVl2 hVxa hVXcur hZstep hyAF'
-    have hzp : ((place self + (offset + 1 + k) : ℕ) : ℤ) - 1
-        = ((place self + (offset + k) : ℕ) : ℤ) := by push_cast; ring
     by_cases hrn : k = n
     · -- ── last round: `q_mul_3` (`Y_A(next)` = 2·witnessed final `y_a`; no constancy checks) ──
       subst hrn
@@ -885,8 +616,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       · -- single-round circuit: anchor copies + `q_mul_3` at row 0
         subst hr0
         simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
-        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr,
-          Constraints.withSelector]
+        simp only [roundOld, circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr]
         rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa, hyAF']
         refine ⟨hxPBase.symm, hyPBase.symm, ?_, ?_, ?_, ?_⟩
@@ -895,9 +625,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         · linear_combination -hXnext'
         · field_simp; linear_combination 2 * hHSg2 + hHSyad
       · -- last row of a longer run: `q_mul_3` only
-        simp only [round, circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr,
-          Constraints.withSelector, if_neg hr0]
-        rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+        simp only [roundOld, circuit_norm, qMul3Gate, forLoopPolys, yA, xRExpr,
+          if_neg hr0]
+        rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa, hyAF']
         refine ⟨?_, ?_, ?_, ?_⟩
         · split_ifs <;> ring
@@ -917,8 +647,8 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
       by_cases hr0 : k = 0
       · subst hr0
         simp only [Nat.add_zero] at hVxp hVyp hVl1 hVl2 hVXcur hZstep
-        simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
-          Constraints.withSelector, if_neg hrn]
+        simp only [roundOld, circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
+          if_neg hrn]
         rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 2 = offset + 1 + (0 + 1) from by omega, hVxa,
           hVxp1, hVyp1, hVl1', hVl2']
@@ -929,9 +659,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
         · field_simp; linear_combination -hHSg1 + hHSyad - 2 * hSy
         · linear_combination -hXnext'
         · field_simp; linear_combination 2 * hHSg2 + hHSyad + hHSyad1
-      · simp only [round, circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
-          Constraints.withSelector, if_neg hrn, if_neg hr0]
-        rw [hzp, hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
+      · simp only [roundOld, circuit_norm, qMul2Gate, forLoopPolys, yA, xRExpr,
+          if_neg hrn, if_neg hr0]
+        rw [hZstep, hVxp, hVyp, hVl1, hVl2, hVXcur,
           show offset + 1 + k + 1 = offset + 1 + (k + 1) from by omega, hVxa,
           hVxp1, hVyp1, hVl1', hVl2']
         refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -1004,13 +734,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
     ∃ bits : BitsHint, RoundInvariant n input output bits
 
   -- base on-curve; accumulator `[m]P` in the exceptional-case-free range
-  ProverAssumptions input _ :=
+  ProverAssumptions input _ _ :=
     input.base.OnCurve ∧ ∃ m : ℕ,
       Point.ofCoords (input.xA, input.yA) = m • input.base ∧
       2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
 
   -- honest bits derived from the scalar cell: `kBits alpha (w + ·)`
-  ProverSpec input output _ :=
+  ProverSpec input output _ _ :=
     RoundInvariant n input output (kBitsWindow input.alpha w)
 
   -- ══ Soundness ══
@@ -1038,13 +768,14 @@ def double_and_add (n : ℕ) (w : ℕ) :
     · -- running-sum chain conjunct of `RoundInvariant`
       refine ⟨?_, ?_⟩
       · -- z_0 = 2·input.z + bit 0
-        -- TODO why the .. are we reversing the direction of h_output here, the user-friendly way
-        -- is to rewrite everything in terms of the output variables
-        rw [← h_output_zs 0 (by omega)]
-        simpa only [Nat.add_zero, hinp, AssignedCell.eval, hIz] using hz0chain
+        have hz0 := h_output_zs 0 (by omega)
+        rw [Nat.add_zero] at hz0
+        rw [hz0] at hz0chain
+        simpa only [hinp, AssignedCell.eval, hIz] using hz0chain
       · intro b
-        rw [← h_output_zs (b.val + 1) (by omega), ← h_output_zs b.val (by omega)]
-        exact hzchain b
+        have h := hzchain b
+        rw [h_output_zs (b.val + 1) (by omega), h_output_zs b.val (by omega)] at h
+        exact h
     · -- accumulator conjunct: route `loop_acc_sound` into `Point.ofCoords`
       intro m hm h2 hbound
       -- the anchor copies pin `x_p`/`y_p` at `offset + 1` to `base.x`/`base.y`
@@ -1079,7 +810,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
       have hy : adv cfg.lambda1 env.place self env.env (offset + 1 + (n + 1))
           = (accScalar m bits' (n + 1) • ({ x := input_base_x, y := input_base_y } : Point Fp)).y :=
         mul_left_cancel₀ Orchard.two_ne_zero hy2
-      rw [← h_output_xA, ← h_output_yA, hx, hy]
+      rw [h_output_xA] at hx
+      rw [h_output_yA] at hy
+      rw [hx, hy]
       -- `ofCoords (p.x, p.y) = p`
       rfl
 
@@ -1088,12 +821,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
   -- the loop via `loop_constraints_complete` and `q_mul_1` via `honest_step`'s row-0 `Y_A` identity,
   -- and read `RoundInvariant` off the honest row values (`loop_row_values`) + `accVal_eq_nsmul`.
   completeness := by
-    -- TODO why are we passing circuit_norm lemmas to circuit_proof_start??
-    -- (still unresolved: the `Witgen.*` evaluators below are framework names, not gadget-own
-    -- defs — the framework should reduce honest witness IR without the user naming its internals)
     circuit_proof_start
       [yAFinalWit, readCell,
-       Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
        -- gate defs: normalize the `q_mul_1` gate constraint at the goal
        qMul1Gate, yA, xRExpr]
     obtain ⟨hWz, hWyA, hWxA, hWloop, hWyF⟩ := hwit
@@ -1164,18 +893,17 @@ def double_and_add (n : ℕ) (w : ℕ) :
         (by simp only [adv, hinp, AssignedCell.eval]; exact hWyF)
         hWloop
     · -- ── `RoundInvariant`, z-chain conjunct, round 0 ──
-      -- TODO why reverse direction of h_output?
-      rw [← h_output_zs 0 (by omega)]
       have h := (hRows 0 (by omega)).1
       simp only [hinp, adv, AssignedCell.eval, hIz] at h
-      rw [h]
-      rfl
+      rw [h_output_zs 0 (by omega)] at h
+      exact h
     · -- ── z-chain conjunct, interior rounds ──
       intro b
-      rw [← h_output_zs (b.val + 1) (by omega), ← h_output_zs b.val (by omega)]
       have h1 := (hRows (b.val + 1) (by omega)).1
       have h0 := (hRows b.val (by omega)).1
       simp only [hinp, adv, AssignedCell.eval, hIz] at h1 h0
+      rw [h_output_zs (b.val + 1) (by omega)] at h1
+      rw [h_output_zs b.val (by omega)] at h0
       rw [h1, h0]
       rfl
     · -- ── `RoundInvariant`, accumulator conjunct: `accVal_eq_nsmul` on the output cells ──
@@ -1198,7 +926,10 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hAccX', hAccY', hAV'] at hx
       -- output `y_a`: the witnessed final `y_a`
       rw [hBx, hBy, hIxA, hIyA, hAccX', hAccY', hAV'] at hWyF
-      rw [← h_output_xA, ← h_output_yA, show offset + 1 + n + 1 = offset + 1 + (n + 1) from by omega, hx, hWyF]
+      rw [show offset + 1 + (n + 1) = offset + 1 + n + 1 from by omega] at hx
+      rw [h_output_xA] at hx
+      rw [h_output_yA] at hWyF
+      rw [hx, hWyF]
       rfl
 
 end Halo2.Ironwood.Ecc.MulIncomplete
