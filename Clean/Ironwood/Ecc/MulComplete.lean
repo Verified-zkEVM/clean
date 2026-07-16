@@ -61,7 +61,7 @@ namespace Halo2.Ironwood.Ecc.MulComplete
 
 open Orchard (Point)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell adv kBitsWindow kBitsWindow_eq_kBits)
+open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell kBitsWindow kBitsWindow_eq_kBits)
 
 /-! ## Config
 
