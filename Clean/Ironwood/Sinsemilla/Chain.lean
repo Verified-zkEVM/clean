@@ -463,11 +463,11 @@ private theorem hashPiece_spec_eq (G : Generators) (n : ℕ) (b : Bool) :
 
 private theorem hashPiece_proverAssumptions_eq (G : Generators) (n : ℕ) (b : Bool) :
     (HashPiece.circuit G n b).ProverAssumptions
-      = fun input _ => HashPiece.ProverAssumptions G n input := rfl
+      = fun input _ _ => HashPiece.ProverAssumptions G n input := rfl
 
 private theorem hashPiece_proverSpec_eq (G : Generators) (n : ℕ) (b : Bool) :
     (HashPiece.circuit G n b).ProverSpec
-      = fun input output _ => HashPiece.ProverSpec G n input output () := rfl
+      = fun input output _ _ => HashPiece.ProverSpec G n input output () := rfl
 
 /-- The child call's output record: the four first/last row cells, the exit `x_a` cell, and the
 `w + 1` running-sum cells, at their fixed region-local rows (`HashPiece.synthesize`'s
@@ -889,7 +889,6 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
       output_eval_literal, row_eval_literal, point_eval_literal,
       List.isEmpty_nil, enterYA, if_true] at hwit ⊢
     obtain ⟨hWy, -, -⟩ := hwit
-    simp only [Witgen.WitgenIROver.eval] at hWy
     rw [hWy, hAy]
     simp [readCell, ProvableType.eval_field, AssignedCell.eval,
       Placed.toEnvironment_place, Placed.toEnvironment_env]
@@ -918,7 +917,7 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
       rw [ProvableStruct.eval_cells_eq_eval_prover, hp_inputs_eval_literal]
     -- the child's honest-prover precondition (piece in range + defined chain through this piece)
     have hChildPA : (HashPiece.circuit G n rest.isEmpty).ProverAssumptions
-        (eval env (⟨pieces[0], xACell, yACell⟩ : Var HashPiece.Inputs Fp)) env.env.hint := by
+        (eval env (⟨pieces[0], xACell, yACell⟩ : Var HashPiece.Inputs Fp)) () env.env.hint := by
       rw [hashPiece_proverAssumptions_eq, hinp]
       simp only [AssignedCell.eval]
       exact ⟨hb0, A, B₁, hAon, hAx, hAy, hpre⟩
@@ -955,7 +954,7 @@ theorem chainBody_complete (G : Generators) (cfg : Config)
       · exact h
       · exact False.elim (hB₁0 h)
     -- the scratch boundary-y pin lands on B₁.y (the honest chain through `accAfter`)
-    simp only [circuit_norm, yAWit, Witgen.WitgenIROver.eval, readCell] at hWyA
+    simp only [circuit_norm, yAWit, readCell] at hWyA
     rw [← hAx, ← hAy] at hWyA
     have hacc := accAfter_eq_chain G
       (env.env.get pieces[0].cell.column
@@ -1086,7 +1085,7 @@ def circuit (G : Generators) (ns : List ℕ) :
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
   Assumptions _ := True
   Spec := Spec G ns
-  ProverAssumptions input _ := ProverAssumptions G ns input
+  ProverAssumptions input _ _ := ProverAssumptions G ns input
   soundness := by
     -- list-recursive composite: the universal prefix (intro + `soundness_iff` + house names) runs;
     -- the folded `chainBody` constraints keep the goal composite, so the leaf-only finish is skipped

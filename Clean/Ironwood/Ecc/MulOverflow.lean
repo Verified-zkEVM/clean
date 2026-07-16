@@ -309,12 +309,13 @@ private theorem copyCheck_envAssumptions_eq (K : ℕ) (cfg : LookupRangeCheck.Co
 
 private theorem copyCheck_proverAssumptions_eq (K : ℕ) :
     (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
-      = fun input _ => (false = true → input.element.val < 2 ^ (K * numWords K)) := rfl
+      = fun input _ _ => (false = true → input.element.val < 2 ^ (K * numWords K)) := rfl
 
 /-- The copyCheck child's `ProverSpec` (C6): the honest nat decomposition of the tail. -/
 private theorem copyCheck_proverSpec_eq (K : ℕ) :
     (LookupRangeCheck.copyCheck K (numWords K) false).ProverSpec
-      = fun input output _ => output.zLast = ((input.element.val / 2 ^ (K * numWords K) : ℕ) : Fp) :=
+      = fun input output _ _ =>
+          output.zLast = ((input.element.val / 2 ^ (K * numWords K) : ℕ) : Fp) :=
   rfl
 
 /-- The child call's output record (`copyCheck = rangeCheck.toFormal`, so the layouter output at
@@ -383,7 +384,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   Spec input _ _ := Spec input
 
-  ProverAssumptions input _ := Spec input
+  ProverAssumptions input _ _ := Spec input
 
   -- ══ Soundness ══
   soundness := by
@@ -517,7 +518,11 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         rw [copyCheck_assumptions_eq]; exact hA
       have hChildPA : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
           (eval env ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-            : LookupRangeCheck.Inputs (AssignedCell Fp))) env.env.hint := by
+            : LookupRangeCheck.Inputs (AssignedCell Fp)))
+          ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
+            ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
+              : LookupRangeCheck.Inputs (AssignedCell Fp)) i₀ env.toEnvironment)
+          env.env.hint := by
         rw [copyCheck_proverAssumptions_eq]; simp
       obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hChildE hChildA hChildPA
       rw [copyCheck_spec_eq, copyCheck_output, copyCheckInputs_eval_eq] at hChildSpec

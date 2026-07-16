@@ -61,8 +61,8 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     return ⟨ xVar, yVar ⟩
 
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ := input.Valid
-  ProverSpec input output _ := output = input
+  ProverAssumptions input _ _ := input.Valid
+  ProverSpec input output _ _ := output = input
 
   soundness := by
     circuit_proof_start [pointGate, curveEqn]
@@ -97,8 +97,8 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
   -- on the identity; an on-curve point is automatically non-identity (`ne_zero_of_onCurve`),
   -- so a single `OnCurve` hint captures both the non-id error path and the curve constraint.
-  ProverAssumptions input _ := input.OnCurve
-  ProverSpec input output _ := output = input
+  ProverAssumptions input _ _ := input.OnCurve
+  ProverSpec input output _ _ := output = input
 
   soundness := by
     circuit_proof_start [pointNonIdGate, curveEqn]

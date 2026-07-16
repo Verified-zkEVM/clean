@@ -942,7 +942,7 @@ def mul :
 
   -- honest-prover precondition: base on-curve (the working-scalar bits are DERIVED from the
   -- alpha cell — nothing to assume about them).
-  ProverAssumptions input _ :=
+  ProverAssumptions input _ _ :=
     (input.base : Point Fp).OnCurve
 
   -- The honest-side output-value guarantee is deliberately `True`: the verifier-facing
@@ -950,7 +950,7 @@ def mul :
   -- as a child yet. A future chip-level caller needing the honest output value can
   -- strengthen this to `Spec` and extend `completeness` with the honest point algebra
   -- (the same ladder as the `soundness` finish, over the witness values).
-  ProverSpec _ _ _ := True
+  ProverSpec _ _ _ _ := True
 
   -- ══ Soundness ══
   -- Faithful layouter peel (main region at i₀ + the MulOverflow layouter chunk), the six child

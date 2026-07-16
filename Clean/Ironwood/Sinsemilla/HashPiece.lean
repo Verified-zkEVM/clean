@@ -1094,8 +1094,8 @@ def circuit (G : Generators) (w : ℕ) (final : Bool) :
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
   Assumptions _ := True
   Spec := Spec G w
-  ProverAssumptions input _ := ProverAssumptions G w input
-  ProverSpec input output _ := ProverSpec G w input output ()
+  ProverAssumptions input _ _ := ProverAssumptions G w input
+  ProverSpec input output _ _ := ProverSpec G w input output ()
   soundness := by
     -- loop-based composite: the universal prefix (intro + `soundness_iff` + house names, the
     -- synthesize op-list peel below, and `provable_type_simp`) runs; the folded loop chunk keeps the

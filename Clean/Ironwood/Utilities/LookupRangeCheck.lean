@@ -339,7 +339,7 @@ def shortRangeCheck (K numBits : ℕ) :
 
   -- honest-prover precondition: `element` really is a `num_bits` word (Rust's caller
   -- guarantees this — `short_range_check` is only sound *and* complete on such elements).
-  ProverAssumptions input _ := input.element.val < 2 ^ numBits
+  ProverAssumptions input _ _ := input.element.val < 2 ^ numBits
 
   soundness := by
     circuit_proof_start [rangeCheckLookup, bitshiftGate, invTwoPowS]
@@ -724,7 +724,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
   -- honest-prover precondition: in `strict` mode the element genuinely fits in `K·numWords`
   -- bits (the assertion precondition — the honest prover can only satisfy `z_last = 0` then).
   -- Non-strict imposes nothing. Established assertion-gadget pattern (cf. donor `Decomposed`).
-  ProverAssumptions input _ := strict = true → input.element.val < 2 ^ (K * numWords)
+  ProverAssumptions input _ _ := strict = true → input.element.val < 2 ^ (K * numWords)
 
   -- honest-prover postcondition (C6): the high-tail cell `zLast` holds the honest NATURAL-NUMBER
   -- decomposition `↑(element.val / 2^{K·numWords})` — the shift-right of `element` past the
@@ -732,7 +732,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
   -- (a field equation) does not expose (e.g. `MulOverflow`, which concludes `zLast = 0` when the
   -- high half vanishes). It now flows through the engine's `h_spec_i` derived statement like any
   -- other contract field — replacing the retired boundary-leaking `rangeCheck_call_zLast_value`.
-  ProverSpec input output _ :=
+  ProverSpec input output _ _ :=
     output.zLast = ((input.element.val / 2 ^ (K * numWords) : ℕ) : Fp)
 
   soundness := by
@@ -760,8 +760,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     -- resolve the output cells (case on `strict` to compute the tail ops)
     rcases hbstrict : strict with _ | _ <;>
-      simp only [hbstrict, circuit_norm, output_cellAt, operations_cellAt,
-        operations_constrainConstant,
+      simp only [hbstrict, circuit_norm,
         Bool.false_eq_true, if_true, if_false] at _hTailC h_output ⊢ <;>
       obtain ⟨hOz0, hOzLast⟩ := h_output <;>
       -- output_z0 = advice runningSum offset = f 0 ; output_zLast = advice … = f numWords
@@ -812,10 +811,9 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     · -- the tail: strict ⇒ `constrainConstant zLast 0` (⇒ z_last = 0); else nothing
       rcases hbstrict : strict with _ | _
       · -- strict = false: no tail constraint
-        simp only [circuit_norm, operations_cellAt]
+        simp only [circuit_norm]
       · -- strict = true: prove `zLast = 0` from the honest value (element < 2^{K·numWords})
-        simp only [circuit_norm, operations_cellAt, operations_constrainConstant,
-          AssignedCell.of_cell, Cell.of, Cell.eval]
+        simp only [circuit_norm]
         have hzn := hz numWords le_rfl
         simp only [zChain] at hzn
         have heInputLt : eCell.val < 2 ^ (K * numWords) := by
@@ -832,8 +830,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       -- reduce `h_output` to its component equations (the `if` on `strict` blocks `.output`, but the
       -- output literal `{ z0, zLast }` is identical in both branches) and read off `output_zLast`
       cases strict <;>
-        · simp only [circuit_norm, RegionCircuit.output_bind, output_cellAt,
-            Bool.false_eq_true, if_false, if_true,
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
             AssignedCell.eval, AssignedCell.of_cell,
             Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
             at h_output

@@ -537,8 +537,6 @@ theorem round_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
     ∧ env.env.advice cfg.zComplete ((env.place self + (offset + 2 * iter + 2) : ℕ) : ℤ)
         = zRunValue (readCell env input.z) (ebits env) iter := by
   simp only [round, circuit_norm, zWit, yPWit,
-    Witgen.WitgenIROver.eval, Witgen.WitgenIROver.ofFExpr, Witgen.VExprOver.eval,
-    Witgen.evalSteps,
     RegionCircuit.operations_bind, RegionCircuit.output_bind,
     operations_assignAdvice, operations_copyAdvice, operations_enable,
     RegionOperations.extendsWitnesses_append, RegionOperations.constraints_append] at hW ⊢
@@ -733,14 +731,15 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   Spec input output _ :=
     ∃ bits' : BitsHint, RoundInvariant numBits input output bits'
 
-  ProverAssumptions input _ :=
+  ProverAssumptions input _ _ :=
     let base : Point Fp := input.base
     let acc0 : Point Fp := { x := input.xA, y := input.yA }
     acc0.Valid ∧ base.Valid
 
   -- honest bits: the `w`-window of the scalar cell's `kBits` — the same family the witness
   -- closures compute (no external `bits` hint).
-  ProverSpec input output _ := RoundInvariant numBits input output (kBitsWindow input.alpha w)
+  ProverSpec input output _ _ :=
+    RoundInvariant numBits input output (kBitsWindow input.alpha w)
 
   -- ══ Soundness ══
   -- Peel `startCopy ++ loop ++ zsCells`, then route the loop constraints into `loop_sound`
