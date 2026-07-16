@@ -681,6 +681,19 @@ theorem FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow {env en
     Operations.forAll_toFlat_iff, Operations.forAllFlat]
   exact circuit.computableWitnesses'_onlyAccessedBelow (by simpa only [CircuitType.eval_var_prover_to_verifier] using h)
 
+/-- Backward-reasoning form used by `grind`. The separate offsets let E-matching find
+the composition rule before arithmetic normalization proves that they agree. -/
+@[grind ←]
+theorem FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+    {m n : ℕ} {env env' : ProverEnvironment F}
+    (circuit : FormalCircuit F Input Output)
+    (h_offset : m = n)
+    (h : ProverEnvironment.OnlyAccessedBelow n (F:=F)
+      (fun e => eval e.toEnvironment input_var) env env') :
+    (circuit.toSubcircuit m input_var).ComputableWitnesses n env env' := by
+  subst m
+  exact circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow h
+
 /-- ProvableType (verifier-eval) form of `FormalCircuitBase.output_of_input_eq`; shadows it for
 `FormalCircuit` values so parent proofs see the normal-form `eval env.toEnvironment`. -/
 theorem FormalCircuit.output_of_input_eq {env env' : ProverEnvironment F}
@@ -725,6 +738,20 @@ theorem FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow {env 
     Operations.forAllFlat, Operations.forAll_toFlat_iff]
   exact circuit.computableWitnesses'_onlyAccessedBelow (by simpa only [CircuitType.eval_var_prover_to_verifier] using h)
 
+/-- Backward-reasoning form used by `grind`. Keeping the subcircuit's type-index offset
+separate from the computability offset lets E-matching find the rule before arithmetic
+normalization proves that the offsets agree. -/
+@[grind ←]
+theorem FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+    {m n : ℕ} {env env' : ProverEnvironment F}
+    (circuit : FormalAssertion F Input)
+    (h_offset : m = n)
+    (h : ProverEnvironment.OnlyAccessedBelow n (F:=F)
+      (fun e => eval e.toEnvironment input_var) env env') :
+    (circuit.toSubcircuit m input_var).ComputableWitnesses n env env' := by
+  subst m
+  exact circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow h
+
 theorem GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
     {Input Output : TypeMap} [CircuitType Input] [CircuitType Output] {env env' : ProverEnvironment F}
     (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F)
@@ -745,6 +772,18 @@ theorem GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAcces
     Operations.forAllFlat, Operations.forAll_toFlat_iff]
   exact circuit.computableWitnesses'_onlyAccessedBelow h
 
+/-- Backward-reasoning form used by `grind`; see the `FormalCircuit` variant. -/
+@[grind ←]
+theorem GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+    {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    {m n : ℕ} {env env' : ProverEnvironment F}
+    (circuit : GeneralFormalCircuit.WithHint F Input Output) (input_var : Var Input F)
+    (h_offset : m = n)
+    (h : ProverEnvironment.OnlyAccessedBelow n (F:=F) (eval · input_var) env env') :
+    (circuit.toSubcircuit m input_var).ComputableWitnesses n env env' := by
+  subst m
+  exact circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow input_var h
+
 theorem GeneralFormalCircuit.toSubcircuit_computableWitnesses {env env' : ProverEnvironment F}
     (circuit : GeneralFormalCircuit F Input Output)
     (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var) :
@@ -758,6 +797,18 @@ theorem GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow 
     (circuit.toSubcircuit n input_var).ComputableWitnesses n env env' :=
   GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow circuit.toWithHint input_var
     (by simpa only [CircuitType.eval_var_prover_to_verifier] using h)
+
+/-- Backward-reasoning form used by `grind`; see the `FormalCircuit` variant. -/
+@[grind ←]
+theorem GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+    {m n : ℕ} {env env' : ProverEnvironment F}
+    (circuit : GeneralFormalCircuit F Input Output)
+    (h_offset : m = n)
+    (h : ProverEnvironment.OnlyAccessedBelow n (F:=F)
+      (fun e => eval e.toEnvironment input_var) env env') :
+    (circuit.toSubcircuit m input_var).ComputableWitnesses n env env' := by
+  subst m
+  exact circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow h
 
 -- Simplification lemmas for toSubcircuit channelsWithGuarantees and channelsWithRequirements
 

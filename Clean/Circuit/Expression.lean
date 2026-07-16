@@ -88,7 +88,7 @@ of all variables.
 This is needed when we want to make statements about a circuit in the adversarial
 situation where the prover can assign anything to variables.
 -/
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def eval (env : Environment F) : Expression F → F
   | var v => env.get v.index
   | const c => c

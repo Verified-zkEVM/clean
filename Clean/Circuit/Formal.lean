@@ -39,8 +39,8 @@ def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [Elabo
     }) ∧
   -- the output only refers to the input and this circuit's witnesses (below `n + localLength`)
   (eval env input = eval env' input →
-  env.AgreesBelow (n + ElaboratedCircuit.localLength main input) env' →
-  eval env (ElaboratedCircuit.output main input n) = eval env' (ElaboratedCircuit.output main input n))
+  ProverEnvironment.OnlyAccessedBelow (n + ElaboratedCircuit.localLength main input)
+    (fun env => eval env (ElaboratedCircuit.output main input n)) env env')
 end FormalCircuitBase
 
 @[explicit_circuit_unfold_type]

@@ -539,6 +539,12 @@ lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
   use { get i := if (i = m) then 1 else 0, data := default, hint := default }
   grind
 
+omit [FiniteField F] in
+lemma ProverEnvironment.onlyAccessedBelow_environment_get_of_lt {n m : ℕ} {env env' : ProverEnvironment F}
+  (h : m < n) : ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) env env' := by
+  simp only [OnlyAccessedBelow, AgreesBelow]
+  grind
+
 namespace FlatOperation
 /--
 If all witness generators only access the environment below the current offset, then

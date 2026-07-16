@@ -122,11 +122,11 @@ then elaborate as `@eval _ (M (Expression F)) (M F) ...` and can be applied by
 ordinary simplification.
 -/
 
-@[circuit_norm] lemma var_of_provableType (F) :
+@[circuit_norm, grind norm] lemma var_of_provableType (F) :
   Var M F = M (Expression F) := rfl
-@[circuit_norm] lemma proverValue_of_provableType (F) :
+@[circuit_norm, grind norm] lemma proverValue_of_provableType (F) :
   ProverValue M F = M F := rfl
-@[circuit_norm] lemma value_of_provableType (F) :
+@[circuit_norm, grind norm] lemma value_of_provableType (F) :
   Value M F = M F := rfl
 
 instance : VerifierEval F (Var M F) (M F) := verifierEval M
@@ -330,8 +330,9 @@ class ProvableStruct (α : TypeMap) where
 
 export ProvableStruct (components toComponents fromComponents)
 
-attribute [circuit_norm] components toComponents
-  ProvableStruct.combinedSize ProvableStruct.combinedSize'
+attribute [circuit_norm, grind unfold] components toComponents
+attribute [grind unfold] fromComponents
+attribute [circuit_norm] ProvableStruct.combinedSize ProvableStruct.combinedSize'
 
 namespace ProvableStruct
 -- convert between `ProvableTypeList` and a single flat `Vector` of field elements
@@ -392,11 +393,11 @@ variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 /--
 Alternative `eval` which evaluates each component separately.
 -/
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def eval (env : Environment F) (var : α (Expression F)) : α F :=
   toComponents var |> go (components α) |> fromComponents
 where
-  @[circuit_norm]
+  @[circuit_norm, grind unfold]
   go: (cs : List WithProvableType) → ProvableTypeList (Expression F) cs → ProvableTypeList F cs
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Eval.eval env a) (go cs as)
@@ -408,7 +409,7 @@ This gets high priority and is applied before simplifying arguments,
 because we prefer `ProvableStruct.eval` if it's available:
 It preserves high-level components instead of unfolding everything down to field elements.
 -/
-@[circuit_norm ↓ high]
+@[circuit_norm ↓ high, grind norm]
 theorem eval_eq_eval {α : TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : α (Expression F)),
     Eval.eval env x = ProvableStruct.eval env x := by
   intro env x
@@ -430,7 +431,7 @@ where
     -- recursively use this lemma!
     apply eval_eq_eval_aux
 
-@[circuit_norm ↓ high]
+@[circuit_norm ↓ high, grind norm]
 theorem eval_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
     (x : α (Expression F)) :
     Eval.eval env x = ProvableStruct.eval env.toEnvironment x := by
@@ -524,11 +525,11 @@ end ProvableType
 
 namespace CircuitType
 
-@[circuit_norm] lemma eval_expr (env : Environment F) (v : Expression F) :
+@[circuit_norm, grind norm] lemma eval_expr (env : Environment F) (v : Expression F) :
   Eval.eval env v = Expression.eval env v := by
   exact ProvableType.eval_field env v
 
-@[circuit_norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
+@[circuit_norm, grind norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
   Eval.eval env v = Expression.eval env v := by
   unfold Eval.eval
   change ProvableType.eval (M:=field) env.toEnvironment v = Expression.eval env.toEnvironment v

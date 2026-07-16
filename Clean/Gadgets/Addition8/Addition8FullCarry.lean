@@ -122,28 +122,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     exact ⟨completeness1, completeness2, completeness3⟩
 
   computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · simp only [main, circuit_norm]
-      refine ⟨?_, ?_, ?_⟩
-      · -- witness `z` is determined by the input
-        intro h_input _
-        simp only [Inputs.mk.injEq] at h_input
-        obtain ⟨hx, hy, hc⟩ := h_input
-        rw [hx, hy, hc]
-      · -- witness `carryOut` is determined by the input
-        intro h_input _
-        simp only [Inputs.mk.injEq] at h_input
-        obtain ⟨hx, hy, hc⟩ := h_input
-        rw [hx, hy, hc]
-      · -- `assertBool carryOut` is assert-only ⇒ trivially computable
-        intro h_input
-        simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit_norm,
-          FlatOperation.forAll_cons, FlatOperation.forAll_empty, Condition.applyFlat]
-    · -- output `{z, carryOut}` are the two witnessed vars, fixed by environment agreement
-      intro _ h_agrees
-      simp only [circuit_norm] at h_agrees ⊢
-      rw [h_agrees.1 n (by omega), h_agrees.1 (n + 1) (by omega)]
+    intro n input
+    simp_all only [circuit_norm, main, Inputs.mk.injEq]
+    grind
 
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
