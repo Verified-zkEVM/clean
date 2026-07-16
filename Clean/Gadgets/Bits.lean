@@ -64,20 +64,8 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   computableWitnesses := by
     intro offset input env env'
-    refine ⟨?_, ?_⟩
-    · simp only [main, circuit_norm]
-      refine ⟨?_, ?_⟩
-      · intro h_input _
-        apply Vector.ext
-        intro i hi
-        simp only [circuit_norm, Witgen.VExpr.getElem_eval_mapRange, h_input]
-      · grind
-    · intro _ h_agrees
-      simp only [circuit_norm] at h_agrees ⊢
-      apply Vector.ext
-      intro i hi
-      simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
-      exact h_agrees.1 (offset + i) (by omega)
+    simp only [main, circuit_norm]
+    grind
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 

@@ -106,13 +106,17 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (main offset) Assumpt
   rw [U64.ByteVector.normalized_iff] at h_assumptions
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 where
   main := main offset
   elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-}
+  computableWitnesses := by
+    intro n input env env'
+    simp_all only [main, output, circuit_norm, ByteDecomposition.circuit,
+      U64.ByteVector.eval_fromLimbs]
+    grind
 
 end Gadgets.Rotation64Bits

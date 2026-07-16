@@ -260,6 +260,16 @@ theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironm
     program.toIRLiteral.eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
 
+/-- Evaluate a literal provable value as a whole before vector extensionality exposes its
+individual witness-IR elements. This lets the existing struct-literal evaluator preserve
+the value's component structure in computable-witness proofs. -/
+@[circuit_norm ↓ high]
+theorem eval_ofFExprs_toElements (xs : value (FExpr F)) (env : ProverEnvironment F) :
+    (WitgenIR.ofFExprs (toElements xs)).eval env = toElements (Witgen.eval { env := env } xs) := by
+  change (toIRLiteral (pure xs)).eval env = _
+  rw [eval_toIRLiteral]
+  rfl
+
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M

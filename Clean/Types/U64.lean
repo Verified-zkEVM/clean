@@ -36,6 +36,32 @@ instance (T : Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[grind norm]
+theorem size_eq : size U64 = 8 := rfl
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[grind norm]
+theorem eval_eq_components {F : Type} [FiniteField F]
+    (env : Environment F) (x : U64 (Expression F)) :
+    Eval.eval env x =
+      { x0 := Eval.eval env x.x0, x1 := Eval.eval env x.x1,
+        x2 := Eval.eval env x.x2, x3 := Eval.eval env x.x3,
+        x4 := Eval.eval env x.x4, x5 := Eval.eval env x.x5,
+        x6 := Eval.eval env x.x6, x7 := Eval.eval env x.x7 } := by
+  with_unfolding_all rfl
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[grind norm]
+theorem eval_varFromOffset_eq_components {F : Type} [FiniteField F]
+    (env : Environment F) (offset : ℕ) :
+    Eval.eval env (varFromOffset U64 offset) =
+      (⟨env.get offset, env.get (offset + 1), env.get (offset + 2),
+        env.get (offset + 3), env.get (offset + 4), env.get (offset + 5),
+        env.get (offset + 6), env.get (offset + 7)⟩ : U64 F) := by
+  with_unfolding_all rfl
+
 def toLimbs {F} (x : U64 F) : Vector F 8 := toElements x
 def fromLimbs {F} (v : Vector F 8) : U64 F := fromElements v
 
@@ -241,12 +267,25 @@ namespace ByteVector
 theorem fromLimbs_toLimbs {F} (x : U64 F) :
     U64.fromLimbs x.toLimbs = x := rfl
 
+@[grind norm]
 theorem toLimbs_fromLimbs {F} (v : Vector F 8) :
     (U64.fromLimbs v).toLimbs = v := ProvableType.toElements_fromElements ..
 
 theorem ext_iff {F} {x y : U64 F} :
     x = y ↔ ∀ i (_ : i < 8), x.toLimbs[i] = y.toLimbs[i] := by
   simp only [U64.toLimbs, ProvableType.ext_iff, size]
+
+@[grind norm]
+theorem fromLimbs_inj {F} {x y : Vector F 8} :
+    U64.fromLimbs x = U64.fromLimbs y ↔ x = y := by
+  constructor
+  · intro h
+    have := congrArg U64.toLimbs h
+    simp only [toLimbs_fromLimbs] at this
+    exact this
+  · intro h
+    subst y
+    rfl
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem normalized_iff {x : U64 (F p)} :
@@ -272,6 +311,7 @@ lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
   simp [toLimbs, toElements, map]
 
+@[grind norm]
 lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   exact ProvableType.getElem_eval_toElements x i hi

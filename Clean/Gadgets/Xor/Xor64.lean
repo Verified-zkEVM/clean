@@ -110,4 +110,8 @@ def circuit : FormalCircuit (F p) Inputs U64 where
   Spec
   soundness
   completeness
+  computableWitnesses := by
+    intro n input env env'
+    simp_all only [main, circuit_norm, Inputs.mk.injEq]
+    grind
 end Gadgets.Xor64

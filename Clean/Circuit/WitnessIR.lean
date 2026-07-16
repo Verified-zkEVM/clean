@@ -136,7 +136,7 @@ variable [FiniteField F]
 
 mutual
 
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
   | .envGet i => ctx.env.get (i.eval ctx)
@@ -156,13 +156,13 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
 
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
   | _, [] => 0
   | 0, x :: _ => x.eval ctx
   | i + 1, _ :: xs => FExpr.evalList ctx i xs
 
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .const n => n
   | .val x => FiniteField.val (x.eval ctx)
@@ -182,7 +182,7 @@ def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
   | .shiftR x y => x.eval ctx >>> y.eval ctx
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
 
-@[circuit_norm]
+@[circuit_norm, grind unfold]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .true => true
   | .false => false
@@ -353,7 +353,7 @@ instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); togeth
 attribute [circuit_norm] decide_eq_true_eq
 
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind =]
 theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
@@ -368,7 +368,7 @@ theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
 
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind =]
 theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F))
     (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :

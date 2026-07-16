@@ -540,6 +540,11 @@ attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
 
+-- Extensionality introduces indexed `mapRange` terms during grind's search.
+-- Normalize these pointwise terms immediately; this eliminates `mapRange` without
+-- expanding the whole vector.
+attribute [grind norm] Vector.getElem_mapRange
+
 /-
 lemmas that would expand `Vector.{mapRange, mapFinRange}` are not added to the simp set,
 because they would sometimes be applied too eagerly where using the corresponding `getElem` lemma is much better
