@@ -43,7 +43,8 @@ namespace Halo2.ContractBridges
 /-- The contract fields to bridge, with the theorem-name suffix used for each. -/
 def contractFields : Array (Name × String) := #[
   (`Spec, "spec"), (`Assumptions, "assumptions"), (`EnvAssumptions, "envAssumptions"),
-  (`ProverAssumptions, "proverAssumptions"), (`ProverSpec, "proverSpec")]
+  (`ProverAssumptions, "proverAssumptions"), (`ProverSpec, "proverSpec"),
+  (`extract, "extract"), (`synthesize, "synthesize")]
 
 /-- Elaborate `bundle`, and for each contract field build the `rfl`-bridge
 `<projection> = <whnf projection>`, generalized over the term's free variables. Returns the

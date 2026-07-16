@@ -300,6 +300,20 @@ def State.step (s : State Fp) (k k' : Bool) : State Fp :=
     lambda2 := l.lambda2
     base := s.base }
 
+/-- Iterated honest steps: the state after `r` rounds starting at bit index 0 of `bits`. -/
+def State.iter (s : State Fp) (bits : ℕ → Bool) : ℕ → State Fp
+  | 0 => s
+  | r + 1 => (s.iter bits r).step (bits r) (bits (r + 1))
+
+/-- The scalar's bit family from the cell value, at window offset `w`. -/
+def bitsFrom (alpha : Fp) (w : ℕ) : ℕ → Bool :=
+  fun j => kBitsWindow alpha 0 (w + j)
+
+/-- The running-sum chain: each interstitial `z` doubles its predecessor and absorbs a bit. -/
+def zChain {n : ℕ} (zIn : Fp) (zs : Vector Fp n) (bits : ℕ → Bool) : Prop :=
+  ∀ j : Fin n, zs[j] = 2 * (if h : j.val = 0 then zIn else zs[j.val - 1]) +
+    (if bits j.val then 1 else 0)
+
 /-! ## The round bundle
 
 One interior double-and-add round, as a formal circuit sharing the parent's `Config`. Its
@@ -672,6 +686,55 @@ def yAFinalWit (n : ℕ) (input : Inputs (AssignedCell Fp))
   .native fun env => #v[
     (accVal (readCell env input.base.x) (readCell env input.base.y)
       (readCell env input.xA) (readCell env input.yA) (ebits env) (n + 1)).2]
+
+
+/-- Witness equations chain into the iterated step. -/
+theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
+    (hstep : ∀ i : Fin n, st (i.val + 1) = (st i.val).step (bits i.val) (bits (i.val + 1))) :
+    ∀ r, r ≤ n → st r = (st 0).iter bits r := by
+  intro r hr
+  induction r with
+  | zero => rfl
+  | succ v ih =>
+    rw [hstep ⟨v, by omega⟩, ih (by omega)]
+    rfl
+
+/-- Honesty chains along the witness equations, with the global budget supplying each
+round's headroom. -/
+theorem honest_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
+    (hstep : ∀ i : Fin n, st (i.val + 1) = (st i.val).step (bits i.val) (bits (i.val + 1)))
+    (m : ℕ) (hH0 : (st 0).Honest m (bits 0))
+    (hbudget : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
+    ∀ r, r < n → (st r).Honest (accScalar m bits r) (bits r) := by
+  have h2 : 2 ≤ m := hH0.2.1
+  intro r hr
+  induction r with
+  | zero => exact hH0
+  | succ v ih =>
+    have hv : v < n := by omega
+    have hprev := ih (by omega)
+    -- headroom for the stepped multiple, from the global budget
+    have hMle : accScalar m bits v ≤ 2 ^ v * (m + 1) - 1 := accScalar_le bits v
+    have hM2 : 2 ≤ accScalar m bits v := accScalar_two_le h2 bits v
+    have hp : 8 * (2 ^ v * (m + 1)) ≤ 2 ^ (n + 2) * (m + 1) := by
+      have hexp : (8 : ℕ) * 2 ^ v = 2 ^ (v + 3) := by rw [pow_add]; ring
+      calc 8 * (2 ^ v * (m + 1)) = 2 ^ (v + 3) * (m + 1) := by rw [← hexp]; ring
+        _ ≤ 2 ^ (n + 2) * (m + 1) :=
+          Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have hBound' : 4 * (2 * accScalar m bits v + (if bits v then 1 else 0) * 2 - 1) + 3
+        < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      rcases hb : bits v <;> simp only [Bool.false_eq_true, if_false, if_true] <;> omega
+    have := step_honest (bits (v + 1)) hprev hBound'
+    rw [← hstep ⟨v, hv⟩] at this
+    simpa [accScalar] using this
+
+/-- The round's output variable: the next row's neighborhood (position-determined). -/
+@[circuit_norm]
+theorem round_output (i : ℕ) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
+    (self : RegionIndex) :
+    (Halo2.Ironwood.Ecc.MulIncomplete.round i).output cfg o iv self
+      = reads cfg (o + 1) self := rfl
 
 
 end Halo2.Ironwood.Ecc.MulIncomplete

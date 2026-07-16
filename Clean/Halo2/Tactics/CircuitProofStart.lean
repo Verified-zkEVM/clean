@@ -359,6 +359,11 @@ def stateIsComposite (d : Direction) : TacticM Bool := withMainContext do
   else
     return exprHasCircuitStructure (← instantiateMVars (← getMainTarget))
 
+/-- Whether a hypothesis with the given user name exists (the splitter in
+`provable_type_simp` may have consumed `h_output` into per-component facts). -/
+def hypExists (n : Name) : TacticM Bool := withMainContext do
+  return ((← getLCtx).findFromUserName? n).isSome
+
 /-- Step (f): the row-fact chaining idiom, per the established shapes. Soundness lands the copied
 input/output cells on the input coordinates in the constraints hyp and the goal
 (`simp only [h_input, h_output] at hc ⊢`). Completeness first lands `hwit` on the input coordinates
@@ -366,11 +371,15 @@ input/output cells on the input coordinates in the constraints hyp and the goal
 (`simp only [circuit_norm, h_input, hwit] at ⊢ hA`). Each is `try`-guarded: a leaf/no-copy gadget
 whose hyps are already in normal form is a no-op. -/
 def rowFactChaining (d : Direction) : TacticM Unit := do
+  let hOut ← hypExists `h_output
   if d.isSoundness then
     -- `h_output` plays `hwit`'s role, landing the copied output cells alongside the input cells
     -- in the constraints hyp and the goal. (No `circuit_norm` here: the gate simprocs already
     -- fired in step (b); re-running them is wasted work and risks re-folding the split conjuncts.)
-    try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
+    if hOut then
+      try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
+    else
+      try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
   else
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident)) catch _ => pure ()
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident)) catch _ => pure ()
@@ -380,15 +389,48 @@ def rowFactChaining (d : Direction) : TacticM Unit := do
     -- (`output_i = input_i`), which its user half supplies directly (kept in scope by the
     -- `try clear` below). No-op / cleared for a gadget whose completeness goal is pure constraints
     -- (e.g. Add).
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at $(mkIdent `h_output):ident)) catch _ => pure ()
+    if hOut then
+      try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at $(mkIdent `h_output):ident)) catch _ => pure ()
+
+/-- Whether an expression still carries a **folded child contract** — an application of a
+bundle's `Spec`/`ProverSpec` projection (the shape `subcircuit_rw` leaves for consumers of
+`.call` chunks, including `∀`-bound loop chunks). While such applications remain, the
+input/output equations must survive the finish: after the consumer opens the contract
+bridges, the child's cell-spelled values need `h_input`/`h_output` to land on the parent's
+locals. -/
+def exprHasFoldedContract (e : Expr) : Bool :=
+  e.find? (fun sub =>
+    match sub.getAppFn.constName? with
+    | some ``FormalRegionCircuit.Spec => true
+    | some ``FormalRegionCircuit.ProverSpec => true
+    | some ``FormalCircuit.Spec => true
+    | some ``FormalCircuit.ProverSpec => true
+    | _ => false) |>.isSome
+
+/-- `true` when any hypothesis or the goal still carries a folded child contract. -/
+def stateHasFoldedContract : TacticM Bool := withMainContext do
+  if exprHasFoldedContract (← instantiateMVars (← getMainTarget)) then
+    return true
+  for decl in ← getLCtx do
+    if !decl.isImplementationDetail then
+      if exprHasFoldedContract (← instantiateMVars decl.type) then
+        return true
+  return false
 
 /-- Cleanup: drop the input/output (and, for completeness, witness) equations that steps (b)/(f)
 have already fully consumed — matching the reference proofs' `clear` after row-fact chaining. Kept
 `try`-guarded and total: if a hypothesis is still referenced (a diverging gadget's manual half may
 need it), `clear` fails and is silently skipped, leaving it in scope. -/
 def clearConsumed (d : Direction) : TacticM Unit := do
+  -- a consumer of folded child contracts still needs the input/output equations after it
+  -- opens the contract bridges — keep them (the linter treats them as used via the return)
+  if ← stateHasFoldedContract then
+    return
   if d.isSoundness then
-    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident)) catch _ => pure ()
+    if ← hypExists `h_output then
+      try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident)) catch _ => pure ()
+    else
+      try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident)) catch _ => pure ()
   else
     -- `h_input`/`hwit` are always spent by the finish. `h_output` is deliberately KEPT: after the
     -- value-landing in the finish it reads as the per-coordinate value equation

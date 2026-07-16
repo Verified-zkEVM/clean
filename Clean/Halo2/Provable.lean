@@ -64,6 +64,14 @@ verifier-side values under the honest prover's environment. -/
 def Placed.toEnvironment {F : Type} (env : Placed ProverEnvironment F) : Placed Environment F :=
   { place := env.place, env := env.env.toEnvironment }
 
+@[circuit_norm] lemma ProverEnvironment.toEnvironment_advice {F : Type}
+    (e : ProverEnvironment F) (col : Column .advice) (row : ℤ) :
+    e.toEnvironment.advice col row = e.advice col row := rfl
+
+@[circuit_norm] lemma ProverEnvironment.toEnvironment_get {F : Type}
+    (e : ProverEnvironment F) (col : AnyColumn) (row : ℤ) :
+    e.toEnvironment.get col row = e.get col row := rfl
+
 @[circuit_norm] lemma Placed.toEnvironment_place {F : Type} (env : Placed ProverEnvironment F) :
     env.toEnvironment.place = env.place := rfl
 

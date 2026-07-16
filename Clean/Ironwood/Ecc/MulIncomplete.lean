@@ -1,3 +1,4 @@
+import Clean.Halo2.Tactics.ContractBridges
 import Clean.Ironwood.Ecc.MulIncompleteRound
 
 /-! The double-and-add loop and bundle over the round gadget (`MulIncompleteRound.lean`). -/
@@ -52,7 +53,7 @@ def roundOld (cfg : Config) (input : Inputs (AssignedCell Fp))
     (qMul2Gate cfg).enable row
 
 /-- The double-and-add loop: `numRounds` independent rounds, round `r` at row `offset + 1 + r`. -/
-def loop (cfg : Config) (input : Inputs (AssignedCell Fp))
+def loopOld (cfg : Config) (input : Inputs (AssignedCell Fp))
     (ebits : Placed ProverEnvironment Fp → BitsHint) (offset n numRounds : ℕ) :
     RegionCircuit Fp Unit :=
   RegionCircuit.forRange' (offset + 1) 1 numRounds
@@ -85,6 +86,206 @@ theorem operations_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : �
 theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
     (cellVec col rows len).output self
       = Vector.ofFn (fun i => AssignedCell.of self (rows i) col) := rfl
+
+-- contract bridges for the `round` child (opened by the loop's proofs)
+derive_contract_bridges roundC (i : ℕ) := round i
+
+/-! ## The loop bundle
+
+The interior rounds (`q_mul_2` rows) as one formal circuit: `n` rounds of the `round`
+bundle at consecutive offsets. The entering neighborhood is positional (`Witness`), the
+exit neighborhood and the interstitial running sums are the output. The round-to-round
+induction lives in this bundle's proofs and nowhere else. -/
+
+/-- The loop's output: the exit neighborhood (the last round's output state, which the
+caller's final `q_mul_3` row consumes positionally) and the `n` interstitial running sums. -/
+structure LoopOut (n : ℕ) (F : Type) where
+  exit : State F
+  zs : Vector F n
+deriving ProvableStruct
+
+/-- The loop's row family: the neighborhood state at each round offset. -/
+private def rowFam (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironment Fp)
+    (self : RegionIndex) (offset : ℕ) : ℕ → State Fp := fun r =>
+  { z := e.advice cfg.z ((pl self + (offset + r) : ℕ) : ℤ),
+    xA := e.advice cfg.xA ((pl self + (offset + r + 1) : ℕ) : ℤ),
+    lambda1 := e.advice cfg.lambda1 ((pl self + (offset + r + 1) : ℕ) : ℤ),
+    lambda2 := e.advice cfg.lambda2 ((pl self + (offset + r + 1) : ℕ) : ℤ),
+    base := { x := e.advice cfg.xP ((pl self + (offset + r + 1) : ℕ) : ℤ),
+              y := e.advice cfg.yP ((pl self + (offset + r + 1) : ℕ) : ℤ) } }
+
+/-- The loop induction over an abstract row family: `n` constrained steps fold the
+accumulator to `accScalar` and propagate the base. -/
+private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
+    (hb : ∀ i : Fin n, (st (i.val + 1)).base = (st i.val).base)
+    (hacc : ∀ i : Fin n, ∀ m' : ℕ, (st i.val).base.OnCurve →
+      (st i.val).acc = m' • (st i.val).base → 2 ≤ m' → 2 * m' + 1 < PALLAS_SCALAR_CARD →
+      (st (i.val + 1)).acc
+        = (2 * m' + (if bits i.val then 1 else 0) * 2 - 1) • (st i.val).base)
+    (m : ℕ) (hOn : (st 0).base.OnCurve) (hacc0 : (st 0).acc = m • (st 0).base)
+    (h2 : 2 ≤ m) (hbudget : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
+    (st n).acc = accScalar m bits n • (st 0).base ∧ (st n).base = (st 0).base := by
+  suffices hinv : ∀ r, r ≤ n →
+      (st r).base = (st 0).base ∧ (st r).acc = accScalar m bits r • (st 0).base by
+    obtain ⟨hbase, hacc⟩ := hinv n le_rfl
+    exact ⟨hacc, hbase⟩
+  intro r hr
+  induction r with
+  | zero => exact ⟨rfl, hacc0⟩
+  | succ v ih =>
+    obtain ⟨ihb, iha⟩ := ih (by omega)
+    have hv : v < n := by omega
+    -- bounds on the accumulated multiplier
+    have hMle : accScalar m bits v ≤ 2 ^ v * (m + 1) - 1 := accScalar_le bits v
+    have hM2 : 2 ≤ accScalar m bits v := accScalar_two_le h2 bits v
+    have hpow : 2 ^ v * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
+    have hMbound : 2 * accScalar m bits v + 1 < PALLAS_SCALAR_CARD := by
+      have h254 := pow254_lt_card
+      have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
+      omega
+    have hstep := hacc ⟨v, hv⟩ (accScalar m bits v)
+      (by rw [ihb]; exact hOn) (by rw [iha, ihb]) hM2 hMbound
+    refine ⟨(hb ⟨v, hv⟩).trans ihb, ?_⟩
+    rw [hstep, ihb]
+    rfl
+
+def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) where
+  configure := pure
+
+  synthesize cfg offset (alpha : AssignedCell Fp) := do
+    RegionCircuit.forRange' offset 1 n (fun r o => do
+      let _ ← (round (w + r)).call cfg o alpha)
+    let exit ← readState cfg (offset + n)
+    let zs ← cellVec cfg.z (fun j => offset + 1 + j) n
+    return { exit, zs }
+
+  Witness := State
+  extract cfg offset _ self env := eval env (reads cfg offset self)
+
+  -- `n` constrained double-and-add steps: some bit sequence enters the running sums, and —
+  -- for an in-range entering accumulator `[m]·base` — the exit accumulator is
+  -- `[accScalar m bits n]·base` over the propagated base.
+  Spec _ out ws :=
+    ∃ bits : ℕ → Bool,
+      zChain ws.z out.zs bits ∧
+      ∀ m : ℕ, ws.base.OnCurve → ws.acc = m • ws.base →
+        2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
+        out.exit.acc = accScalar m bits n • ws.base ∧ out.exit.base = ws.base
+
+  -- honest entry: the neighborhood is the honest row for an accumulator multiple with
+  -- budget for all `n` rounds.
+  ProverAssumptions alpha ws _ :=
+    ∃ m : ℕ, ws.Honest m (kBitsWindow alpha 0 w) ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
+
+  ProverSpec alpha out ws _ :=
+    out.exit = ws.iter (bitsFrom alpha w) n ∧
+    ∀ j : Fin n, out.zs[j] = (ws.iter (bitsFrom alpha w) (j.val + 1)).z
+
+  soundness := by
+    circuit_proof_start [zChain, reads]
+    simp only [roundC_spec_eq, roundC_assumptions_eq, roundC_envAssumptions_eq,
+      roundC_extract_eq, round_output, mul_one, reads, circuit_norm] at hc
+    provable_type_simp
+    choose k hk using hc
+    refine ⟨fun j => if h : j < n then k ⟨j, h⟩ else false, ?_, ?_⟩
+    · -- the running-sum chain, from the per-round z-steps
+      intro j
+      rw [show (fun t => if h : t < n then k ⟨t, h⟩ else false) (j : ℕ) = k j from by
+        simp [j.isLt]]
+      have hz := (hk j).1
+      rw [show offset + ↑j + 1 = offset + 1 + ↑j from by omega,
+        h_output_zs ↑j j.isLt] at hz
+      rcases Nat.eq_zero_or_pos j.val with h0 | hpos
+      · rw [dif_pos h0]
+        rw [show offset + ↑j = offset from by omega] at hz
+        exact hz
+      · rw [dif_neg (by omega)]
+        rw [show offset + ↑j = offset + 1 + (↑j - 1) from by omega,
+          h_output_zs (↑j - 1) (by omega)] at hz
+        exact hz
+    · -- the accumulator fold
+      intro m hOn hacc0 h2m hbudget
+      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
+        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      have hfold := loop_fold
+        (fun r => { z := env.env.advice cfg.z ((env.place self + (offset + r) : ℕ) : ℤ),
+                    xA := env.env.advice cfg.xA ((env.place self + (offset + r + 1) : ℕ) : ℤ),
+                    lambda1 := env.env.advice cfg.lambda1
+                      ((env.place self + (offset + r + 1) : ℕ) : ℤ),
+                    lambda2 := env.env.advice cfg.lambda2
+                      ((env.place self + (offset + r + 1) : ℕ) : ℤ),
+                    base := { x := env.env.advice cfg.xP
+                                ((env.place self + (offset + r + 1) : ℕ) : ℤ),
+                              y := env.env.advice cfg.yP
+                                ((env.place self + (offset + r + 1) : ℕ) : ℤ) } })
+        (fun j => if h : j < n then k ⟨j, h⟩ else false)
+        (fun i => by
+          have hbp := (hk i).2.1
+          beta_reduce
+          rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,
+            show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
+          exact congrArg₂ Point.mk hbp.1 hbp.2 ▸ rfl)
+        (fun i => by
+          beta_reduce
+          rw [dif_pos i.isLt]
+          have ha := (hk i).2.2
+          rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,
+            show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
+          exact ha)
+        m (by simpa using hOn) (by simpa using hacc0) h2m hbudget
+      simpa using hfold
+
+  completeness := by
+    circuit_proof_start [reads]
+    obtain ⟨m, hH0, hbudget⟩ := hPA
+    -- the per-round witness equations, as steps of the row family
+    have hsteps : ∀ i : Fin n,
+        (rowFam cfg env.place env.env self offset) (i.val + 1)
+          = ((rowFam cfg env.place env.env self offset) i.val).step
+            (bitsFrom input w i.val) (bitsFrom input w (i.val + 1)) := by
+      intro i
+      have hw := hwit i
+      rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call] at hw
+      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, h_input] at hw
+      obtain ⟨hz, hxa, hl1, hl2, hxp, hyp⟩ := hw
+      simp only [rowFam, bitsFrom]
+      rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega,
+        show offset + ↑i + 1 + 1 = offset + ↑i + 2 from by omega,
+        hz, hxa, hl1, hl2, hxp, hyp]
+      rfl
+    have hIter := iter_of_steps (rowFam cfg env.place env.env self offset)
+      (bitsFrom input w) hsteps
+    have hHall := honest_of_steps (rowFam cfg env.place env.env self offset)
+      (bitsFrom input w) hsteps m
+      (by simp only [rowFam, bitsFrom, Nat.add_zero]; exact hH0) hbudget
+    refine ⟨?_, ?_, ?_⟩
+    · -- each round's constraints, via the engine leaf and the chained honesty
+      intro i
+      have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round (w + ↑i)) cfg
+        (offset + ↑i * 1) self env input_var (hwit i)
+      rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
+        roundC_extract_eq] at hleaf
+      refine hleaf ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
+      have hH := hHall ↑i i.isLt
+      simp only [rowFam, bitsFrom] at hH
+      simp only [reads, mul_one]
+      provable_type_simp
+      simp only [circuit_norm, h_input]
+      exact hH
+    · -- the exit state is the iterated step
+      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
+        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      have hn := hIter n le_rfl
+      simp only [rowFam] at hn
+      simpa using hn
+    · -- the interstitial running sums are the iterated z's
+      intro j
+      rw [← h_output_zs ↑j j.isLt]
+      have hj := hIter (↑j + 1) (by omega)
+      simp only [rowFam] at hj
+      rw [show offset + 1 + ↑j = offset + (↑j + 1) from by omega]
+      exact congrArg State.z hj
 
 /-! ## Loop-shaped standalone lemmas
 
@@ -132,7 +333,7 @@ four `forLoopPolys` facts (booleanity, gradient_1, secant_line, gradient_2), plu
 constancy on interior rounds (`r ≠ n`). -/
 private theorem loop_gate_facts (n : ℕ)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     ∀ r, r < n + 1 →
       -- booleanity of the bit
       (IsBool (Kr cfg place self env offset r)) ∧
@@ -155,7 +356,7 @@ private theorem loop_gate_facts (n : ℕ)
       (r ≠ n → XPr cfg place self env offset r = XPr cfg place self env offset (r + 1)
         ∧ YPr cfg place self env offset r = YPr cfg place self env offset (r + 1)) := by
   -- the framework split: `Constraints (loop) ↔ ∀ r : Fin (n+1), <round r's constraints>`
-  simp only [loop, circuit_norm, roundOld] at hLoop
+  simp only [loopOld, circuit_norm, roundOld] at hLoop
   intro r hr
   have hrle : r ≤ n := by omega
   -- round `r`'s own constraints (the `forRange'` body ignores its base-row arg; `round` recomputes)
@@ -246,10 +447,10 @@ private theorem loop_gate_facts (n : ℕ)
 (`CircuitVersion::AnchoredBase`), so the loop's `Constraints` pin them to `base.x`/`base.y`. -/
 private theorem loop_anchor (n : ℕ)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     adv cfg.xP place self env (offset + 1) = input.base.x.eval place env ∧
     adv cfg.yP place self env (offset + 1) = input.base.y.eval place env := by
-  simp only [loop, circuit_norm] at hLoop
+  simp only [loopOld, circuit_norm] at hLoop
   have hRound := hLoop ⟨0, by omega⟩
   simp only [roundOld, circuit_norm, adv] at hRound ⊢
   exact ⟨hRound.1, hRound.2.1⟩
@@ -281,7 +482,7 @@ theorem loop_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
             - adv cfg.xA place self env (offset + 1) - adv cfg.xP place self env (offset + 1)))
         = 2 * adv cfg.lambda1 place self env offset)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     adv cfg.xA place self env (offset + 1 + n + 1)
       = ((accScalar m bits' (n + 1)) • P).x
     ∧ 2 * adv cfg.lambda1 place self env (offset + 1 + (n + 1))
@@ -365,7 +566,7 @@ theorem loop_zchain_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset n : ℕ)
     (hz0 : adv cfg.z place self env offset = input.z.eval place env)
     (hLoop : RegionOperations.Constraints place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     ∃ bits' : BitsHint,
       -- per-round bit-match (the shape `loop_acc_sound.hbit` consumes)
       (∀ r, r ≤ n → adv cfg.z place self env (offset + 1 + r)
@@ -424,7 +625,7 @@ private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)
     (ebits : Placed ProverEnvironment Fp → BitsHint)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset n : ℕ)
     (hW : RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     ∀ r, r < n + 1 →
       adv cfg.z place self env.toEnvironment (offset + 1 + r)
           = zRunValue (input.z.eval place env.toEnvironment) (ebits ⟨place, env⟩) r ∧
@@ -444,7 +645,7 @@ private theorem loop_row_values (cfg : Config) (input : Inputs (AssignedCell Fp)
           = (accVal (input.base.x.eval place env.toEnvironment)
               (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
               (input.yA.eval place env.toEnvironment) (ebits ⟨place, env⟩) (r + 1)).1 := by
-  simp only [loop, circuit_norm] at hW
+  simp only [loopOld, circuit_norm] at hW
   intro r hr
   have hWround := hW ⟨r, hr⟩
   simp only [adv, show offset + 1 + (r + 1) = offset + 1 + r + 1 from by omega]
@@ -480,9 +681,9 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
           (input.base.y.eval place env.toEnvironment) (input.xA.eval place env.toEnvironment)
           (input.yA.eval place env.toEnvironment) bits (n + 1)).2)
     (hWit : RegionOperations.ExtendsWitnesses place self env
-      ((loop cfg input ebits offset n (n + 1)).operations self)) :
+      ((loopOld cfg input ebits offset n (n + 1)).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
-      ((loop cfg input ebits offset n (n + 1)).operations self) := by
+      ((loopOld cfg input ebits offset n (n + 1)).operations self) := by
   -- honest accumulator in point coordinates: `accVal … r = (accScalar r • P)`
   have hAV : ∀ r, r ≤ n + 1 →
       accVal P.x P.y (input.xA.eval place env.toEnvironment)
@@ -547,7 +748,7 @@ theorem loop_constraints_complete (cfg : Config) (input : Inputs (AssignedCell F
     rw [hxPBase, hyPBase] at h4' h5' h6'
     exact ⟨h1', h2', h3', h4', h5', h6'⟩
   -- discharge each round's gate constraints from the global honest cells (`hRowVals`) + `honest_step`
-  simp only [loop, circuit_norm]
+  simp only [loopOld, circuit_norm]
   intro rr
   obtain ⟨k, hkb⟩ := rr
   · -- `2 ≠ 0` clears the `TWO_INV = 2⁻¹` in the VK-faithful `y_a`.
@@ -717,7 +918,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
     -- q_mul_1 at `offset` (outside the loop rows); the per-round selectors are enabled inside `round`
     (qMul1Gate cfg).enable offset
     -- the per-bit round loop; bits derived from the scalar cell (`bitsOf input w`), not a prover hint
-    loop cfg input (bitsOf input w) offset n (n + 1)
+    loopOld cfg input (bitsOf input w) offset n (n + 1)
     -- the witnessed final y_a
     let _yAFinal ← assignAdvice cfg.lambda1 (offset + 1 + (n + 1))
       (yAFinalWit n input (bitsOf input w))

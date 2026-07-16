@@ -213,6 +213,18 @@ private partial def conjunctionEqs (e : Expr) : Option (Array (Expr × Expr)) :=
   | (``Eq, #[_, lhs, rhs]) => some #[(lhs, rhs)]
   | _ => none
 
+/-- Destructuring pattern mirroring an ∧-tree's actual shape (the leaves arrive in
+`conjunctionEqs` order, but the tree may be left-nested — a flat pattern only matches
+right-nested chains). -/
+private partial def conjPat (names : Array Name) (e : Expr) (i : ℕ) :
+    TacticM (TSyntax `rcasesPat × ℕ) := do
+  match e.getAppFnArgs with
+  | (``And, #[a, b]) =>
+    let (pa, i) ← conjPat names a i
+    let (pb, i) ← conjPat names b i
+    return (← `(rcasesPat| ⟨$pa, $pb⟩), i)
+  | _ => return (← `(rcasesPat| $(mkIdent names[i]!):ident), i + 1)
+
 /-- Replace a hypothesis whose type is (a conjunction of) per-component value equations — as
 `structEqSplit` leaves a split provable-struct value equation — with individually-named component
 facts, forming the per-index quantified fact for any **vector** component (`Eval.eval env ⟨cells⟩ =
@@ -230,6 +242,7 @@ constructed syntax. The preferred meta-level style is direct `MVarId` APIs (`MVa
 `obtain`, `MVarId.assert` + a built proof term for the `have`, `Simp.main`/`simpGoal` for the simp,
 `MVarId.clear`). Converting this (and the sibling `evalTactic` sites in `destructurePass`/`simpPass`)
 to the programmatic style is left for a follow-up pass. -/
+
 private def formVectorEqFacts (fvarId : FVarId) : TacticM Bool := withMainContext do
   let decl ← fvarId.getDecl
   if decl.isImplementationDetail then return false
@@ -264,7 +277,7 @@ private def formVectorEqFacts (fvarId : FVarId) : TacticM Bool := withMainContex
   let tmpNames := (Array.range eqs.size).map (fun i => Name.mkSimple s!"__veq_{i}")
   let s ← saveState
   try
-    let pat ← `(rcasesPat| ⟨$[$(tmpNames.map (fun n => mkIdent n)):rcasesPat],*⟩)
+    let (pat, _) ← conjPat tmpNames ty 0
     evalTactic (← `(tactic| obtain $pat := $(mkIdent hName):ident))
     for i in [0:eqs.size] do
       let (lhs, rhs) := eqs[i]!

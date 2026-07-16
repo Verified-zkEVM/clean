@@ -164,6 +164,23 @@ theorem layouter_soundness_leaf
   intro hc hE hA
   exact child.soundness config i₀ ⟨place, env⟩ input hE hA hc
 
+/-- Consumer-facing call boundary (witness side): a `.call` chunk's `ExtendsWitnesses` is its
+`synthesize`'s. Deliberately NOT `@[circuit_norm]` — the engine keys on the folded `.call`
+marker; consumers of `∀`-bound loop chunks open it explicitly when they need the per-round
+witness equations. -/
+theorem FormalRegionCircuit.extendsWitnesses_call {F : Type} [FiniteField F]
+    {CI Cfg : Type} {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+    (child : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment F)
+    (input : Var Input F) :
+    RegionOperations.ExtendsWitnesses place self env
+        ((child.call config offset input).operations self)
+      ↔ RegionOperations.ExtendsWitnesses place self env
+        ((child.synthesize config offset input).operations self) := by
+  simp only [FormalRegionCircuit.call, RegionCircuit.operations,
+    RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
+    RegionOperation.extendsWitness_subcircuit, and_true]
+
 /-- Region completeness derived statement: from the located `ExtendsWitnesses`, the child's
 `EnvA → A → PA → (Spec ∧ ProverSpec)` (soundness at the verifier view, ProverSpec from
 completeness). The `call_constraints_and_specs` composition, now a framework leaf. Over bare
