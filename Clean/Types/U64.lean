@@ -56,7 +56,7 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 @[grind norm]
 theorem eval_varFromOffset_eq_components {F : Type} [FiniteField F]
     (env : Environment F) (offset : ℕ) :
-    Eval.eval env (varFromOffset U64 offset) =
+    Eval.eval env (varFromOffset (F := F) U64 offset : U64 (Expression F)) =
       (⟨env.get offset, env.get (offset + 1), env.get (offset + 2),
         env.get (offset + 3), env.get (offset + 4), env.get (offset + 5),
         env.get (offset + 6), env.get (offset + 7)⟩ : U64 F) := by
