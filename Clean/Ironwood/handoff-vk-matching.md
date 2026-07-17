@@ -28,7 +28,36 @@ Done and green:
   `Clean/Halo2/Tests/TestVkLayoutMul.lean`. Machinery fully validated (σ replay from the
   dump's own copies, exact table/constants reconstruction).
 
-## The headline finding + the main task
+## DONE (2026-07-17 night run): the mul relayout arc is complete
+
+The main task below is finished and pushed; the three `TestVkLayoutMul.lean` `#guard`s
+(copyList/σ/fixed) are ON, unmodified, and green, with `TestVkMatchMul` still green.
+What happened, in order:
+
+- `MulIncomplete`: start-copy order fixed to Rust's z, x_a, y_a (`incomplete.rs:273-287`) —
+  the dump's ordered copy list pins it (`(5,4,4,3)` x_a before `(6,3,5,3)` y_a).
+- `Mul.lean` `mainRegion` re-laid to Rust's exact scheme: `offInit=0`, `offHi=offLo=1`
+  (side-by-side), `offComp=129`, `offLsb=135`. **Both proofs survived unchanged** — they
+  address cells through the symbolic offsets, and the overlapping `x_p`/`y_p` writes carry
+  equal values, so the completeness witness-env equations coincide.
+- The parked `mul-relayout-wip` "regenerated fixture" claim was verified INDEPENDENTLY and
+  confirmed: the fixture's `regions` line was wrong for regions 3/6 (recorded 0/1; truth
+  2/140). Evidence: the fixture's own copyList places the init-add copies at absolute rows
+  2/3, and `single_pass.rs:97-105` places the main region at the advices-0/1 tail (= 2).
+- Per Gregor's go-ahead ("write your own fixture dumping logic in the sibling halo2
+  folder"), a fresh dumper now lives at `halo2_gadgets/src/ecc/chip/layout_dump.rs`
+  (sibling checkout `/root/code/halo2`, tag `halo2_gadgets-0.5.0`, commit LOCAL to this
+  machine per the dumper ruling; run
+  `cargo test -p halo2_gadgets --lib ecc::chip::layout_dump -- --nocapture`). It rebuilds
+  the MulDumpCircuit harness and reproduces the original dump's 56-entry ordered copy list
+  **byte-for-byte** — harness equivalence — so its placement line is authoritative:
+  `[0, 0, 1, 2, 139, 139, 140]`. `MulLayout.lean`'s regions line (only) was regenerated
+  from it, with provenance in the fixture header.
+
+Still open from the queue below: #34, #30, #22, #23, #31, #32, and the Sinsemilla/Merkle
+layout tests (other agent's arc).
+
+## The headline finding + the main task (historical — done, see above)
 
 The mul port's `mainRegion` layout **diverges from Rust**: `Mul.lean` stacks
 hi/lo/complete vertically (~264 rows, the old "disjoint row ranges" soundness strategy),
