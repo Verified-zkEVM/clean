@@ -302,18 +302,7 @@ deriving ProvableStruct
 /-- The word at `offset+2`: `2^(−num_bits) = (2^num_bits)⁻¹`, assigned as a constant. -/
 def invTwoPowS (numBits : ℕ) : Fp := (2 ^ numBits : Fp)⁻¹
 
-/-- Read the assigned cell at a known region-local row/column (no op emitted) —
-`MulIncomplete.cellAt`. -/
-def cellAt (col : Column .advice) (row : ℕ) : RegionCircuit Fp (AssignedCell Fp) :=
-  fun self => (.of self row col, [])
-
-@[circuit_norm]
-theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
-    (cellAt col row).operations self = [] := rfl
-
-@[circuit_norm]
-theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
-    (cellAt col row).output self = .of self row col := rfl
+-- `cellAt` (naming a cell at a fixed row) lives in the framework (`Basic.lean`).
 
 /-- Rust `short_range_check` (`lookup_range_check.rs:455-490`), POSITIONAL: the element
 "must have been assigned to `running_sum` at `offset`" by the caller (no copy — Rust has no
@@ -679,6 +668,8 @@ theorem rangeCheck_loop_constraints_complete (K : ℕ) (cfg : Config K) (element
     -- the running word equals the table cell at row `word.val`
     rw [hTableEq _ hwordval, ZMod.natCast_zmod_val]
     simp only [zChain, show offset + n + 1 = offset + (n + 1) from by omega]
+
+-- `cellAt` (naming a cell at a fixed row) now lives in the framework (`Basic.lean`).
 
 /-- The `range_check` gadget (`lookup_range_check.rs:171-241`), region-level, parameterized
 by `numWords` and `strict`. Copies `element` into `running_sum` at `offset` (`z_0`), runs the

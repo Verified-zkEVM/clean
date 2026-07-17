@@ -277,11 +277,20 @@ private def formVectorEqFacts (fvarId : FVarId) : TacticM Bool := withMainContex
   let tmpNames := (Array.range eqs.size).map (fun i => Name.mkSimple s!"__veq_{i}")
   let s ← saveState
   try
-    let (pat, _) ← conjPat tmpNames ty 0
-    evalTactic (← `(tactic| obtain $pat := $(mkIdent hName):ident))
+    -- Single bare equation (a one-field struct output): do NOT `obtain` — `rcases h with x`
+    -- on a top-level `Eq` SUBSTITUTES the variable side instead of renaming (so the temp
+    -- name would never exist); the hypothesis already is its own single "leaf".
+    let isSingleEq := ty.getAppFnArgs.1 == ``Eq
+    let tmpIdents ←
+      if isSingleEq then
+        pure #[mkIdent hName]
+      else do
+        let (pat, _) ← conjPat tmpNames ty 0
+        evalTactic (← `(tactic| obtain $pat := $(mkIdent hName):ident))
+        pure (tmpNames.map mkIdent)
     for i in [0:eqs.size] do
       let (lhs, rhs) := eqs[i]!
-      let tmpId := mkIdent tmpNames[i]!
+      let tmpId := tmpIdents[i]!
       let finalId := mkIdent finalNames[i]!
       match ← asVectorEvalEq lhs rhs with
       | some (evalSide, varSide) =>

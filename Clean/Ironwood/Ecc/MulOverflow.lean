@@ -327,7 +327,7 @@ private theorem copyCheck_output (K : ℕ) (cfg : LookupRangeCheck.Config K)
           zLast := .of i (numWords K) cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheck K (numWords K) false).synthesize cfg 0 inp).output i = _
   simp only [LookupRangeCheck.rangeCheck, circuit_norm, RegionCircuit.output_bind,
-    LookupRangeCheck.output_cellAt,
+    output_cellAt,
     Bool.false_eq_true, if_false, Nat.zero_add]
 
 /-- Eval of the child's single-field input struct `{ element := c }`. -/
