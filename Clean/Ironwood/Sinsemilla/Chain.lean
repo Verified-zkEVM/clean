@@ -264,6 +264,7 @@ trailing dummy row — the linking gate's rotation-+1 reads). -/
 structure SlotReads (m : ℕ) (F : Type) where
   prev : DoubleAndAddRow F
   first : DoubleAndAddRow F
+  last : DoubleAndAddRow F
   zs : Vector F m
   next : DoubleAndAddRow F
   /-- The entering-`y` VALUE (the `yaIn`/boundary derivation — `extract` computes it;
@@ -279,6 +280,9 @@ def slotReads (cfg : Config) (n base : ℕ) (self : RegionIndex) :
             lambda2 := .of self (base - 1) cfg.lambda2 }
   first := { xA := .of self base cfg.xA, xP := .of self base cfg.xP,
              lambda1 := .of self base cfg.lambda1, lambda2 := .of self base cfg.lambda2 }
+  last := { xA := .of self (base + n) cfg.xA, xP := .of self (base + n) cfg.xP,
+            lambda1 := .of self (base + n) cfg.lambda1,
+            lambda2 := .of self (base + n) cfg.lambda2 }
   zs := Vector.ofFn fun r : Fin (n + 1) => .of self (base + r.val) cfg.bits
   next := { xA := .of self (base + n + 1) cfg.xA, xP := .of self (base + n + 1) cfg.xP,
             lambda1 := .of self (base + n + 1) cfg.lambda1,
@@ -349,6 +353,35 @@ private theorem link_step (G : Generators) (n : ℕ) (isFinal : Bool) (ms : ℕ 
     (by linear_combination hyck - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
   exact ⟨hpin.1, hpin.2.symm⟩
 
+/-- The slot's piece contract, positional (the donor `HashPiece.Spec` over the slot's
+neighborhood; the linking gate is chain-owned, so the chain completes the last word via
+`link_step`). -/
+def SlotSpec (G : Generators) (n : ℕ) (piece : Fp) (w : SlotReads (n + 1) Fp) : Prop :=
+  ∃ ms : ℕ → ℕ,
+    (∀ r, ms r < 2 ^ K) ∧
+    piece = ((∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
+    w.zs = Vector.ofFn (fun r : Fin (n + 1) =>
+      ((∑ j ∈ Finset.range (n + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
+    w.last.xP = (G.S (ms n)).x ∧
+    yA w.last * (2 : Fp)⁻¹ - w.last.lambda1 * (w.last.xA - w.last.xP) = (G.S (ms n)).y ∧
+    ∀ A : Point Fp, A.OnCurve → A.x = w.first.xA → 2 * A.y = yA w.first →
+      ∀ B, hashToPoint G.S A ((List.range n).map ms) = some B →
+        w.last.xA = B.x ∧ 2 * B.y = yA w.last
+
+/-- The slot's honest-prover precondition. -/
+def SlotPA (G : Generators) (n : ℕ) (piece : Fp) (w : SlotReads (n + 1) Fp) : Prop :=
+  piece.val < 2 ^ (K * (n + 1)) ∧
+  ∃ A B : Point Fp, A.OnCurve ∧ A.x = w.first.xA ∧ A.y = w.yIn ∧
+    hashToPoint G.S A ((List.range (n + 1)).map (pieceWord piece)) = some B
+
+/-- The slot's honest-prover contract (the piece's, positionally). -/
+def SlotPS (G : Generators) (n : ℕ) (piece : Fp) (w : SlotReads (n + 1) Fp) : Prop :=
+  ∀ A B : Point Fp, A.x = w.first.xA → A.y = w.yIn →
+    hashToPoint G.S A ((List.range (n + 1)).map (pieceWord piece)) = some B →
+    yA w.first = 2 * A.y ∧ w.next.xA = B.x ∧
+    w.last.lambda2 * w.last.lambda2 = w.next.xA + xR w.last + w.last.xA ∧
+    2 * w.last.lambda2 * (w.last.xA - w.next.xA) - yA w.last = 2 * B.y
+
 /-- One piece slot as a `Unit`-output formal circuit (the loop stays homogeneous — the
 piece call's width-dependent output lives inside this bundle). Slot `i` of the width list
 `ns`: the `HashPiece` call at its own base row, the boundary `q_s2` re-pin, and the
@@ -362,9 +395,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     let xEnter ← cellAt cfg.xA base
     let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
         (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base piece
-    let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
-      (qS2Boundary (decide (i = ns.length - 1)))
-    (sinsemillaGate cfg).enable (base + ns.getD i 0)
+    pure ()
 
   Witness := SlotReads (ns.getD i 0 + 1)
   extract cfg base _ self env :=
@@ -375,90 +406,57 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
 
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
 
-  -- One whole linked piece, in chain language: the piece value recombines from `n + 1`
-  -- words, the running sums are the suffix recombinations, and — for any on-curve
-  -- accumulator entering at the first row — the *next* row anchors the spec-level chain
-  -- point over all `n + 1` words (the linking gate completes the last word's step).
-  Spec piece _ w :=
-    ∃ ms : ℕ → ℕ,
-      (∀ r, ms r < 2 ^ K) ∧
-      piece = ((∑ r ∈ Finset.range (ns.getD i 0 + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
-      w.zs = Vector.ofFn (fun r : Fin (ns.getD i 0 + 1) =>
-        ((∑ j ∈ Finset.range (ns.getD i 0 + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ)
-          : Fp)) ∧
-      ∀ A : Point Fp, A.OnCurve → A.x = w.first.xA → 2 * A.y = yA w.first →
-        ∀ B, hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map ms) = some B →
-          w.next.xA = B.x ∧ 2 * B.y = enterYA (decide (i = ns.length - 1)) w.next
-
-  ProverAssumptions piece w _ :=
-    ZMod.val (show Fp from piece) < 2 ^ (K * (ns.getD i 0 + 1)) ∧
-    ∃ A B : Point Fp, A.OnCurve ∧ A.x = w.first.xA ∧ A.y = w.yIn ∧
-      hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B
-
-  ProverSpec piece _ w _ :=
-    ∀ A B : Point Fp, A.x = w.first.xA → A.y = w.yIn →
-      hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B →
-      yA w.first = 2 * A.y ∧ w.next.xA = B.x ∧
-      enterYA (decide (i = ns.length - 1)) w.next = 2 * B.y
+  Spec piece _ w := SlotSpec G (ns.getD i 0) piece w
+  ProverAssumptions piece w _ := SlotPA G (ns.getD i 0) piece w
+  ProverSpec piece _ w _ := SlotPS G (ns.getD i 0) piece w
 
   soundness := by
-    circuit_proof_start [sinsemillaGate, qS3Expr, yAExpr, xRExpr, slotReads]
-    obtain ⟨hPiece, hQ, hsec, hyck⟩ := hc
-    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at hPiece
-    simp only [HashPiece.Spec, circuit_norm] at hPiece
-    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hPiece _hE
-    rw [hQ] at hyck
-    refine ⟨ms, hms, ?_, ?_, ?_⟩
-    · -- the piece recombines
-      have hgi : (eval env input_var : Fp)
-          = env.env.get input_var.cell.column
-            ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
-        with_unfolding_all rfl
-      rw [← h_input, hgi]
-      exact hrecomb
-    · -- the running sums
-      exact hzs
-    · -- the linked chain contract
-      exact link_step G (ns.getD i 0) (decide (i = ns.length - 1)) ms
-        (first := { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
-                    xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
-                    lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
-                    lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) })
-        (last := { xA := env.env.advice cfg.xA
-                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
-                   xP := env.env.advice cfg.xP
-                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
-                   lambda1 := env.env.advice cfg.lambda1
-                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
-                   lambda2 := env.env.advice cfg.lambda2
-                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ) })
-        (next := { xA := env.env.advice cfg.xA
-                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-                   xP := env.env.advice cfg.xP
-                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-                   lambda1 := env.env.advice cfg.lambda1
-                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-                   lambda2 := env.env.advice cfg.lambda2
-                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ) })
-        hlxP hlyP hchainP
-        (by
-          simp only [xR]
-          linear_combination hsec)
-        (by
-          have hq := qS3_yRhs (decide (i = ns.length - 1))
-            { xA := env.env.advice cfg.xA
-                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-              xP := env.env.advice cfg.xP
-                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-              lambda1 := env.env.advice cfg.lambda1
-                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
-              lambda2 := env.env.advice cfg.lambda2
-                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ) }
-          simp only [yA, xR] at hq ⊢
-          linear_combination hyck + hq)
+    circuit_proof_start [slotReads, SlotSpec]
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at hc
+    simp only [HashPiece.Spec, circuit_norm] at hc
+    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hc _hE
+    refine ⟨ms, hms, ?_, hzs, hlxP, hlyP, hchainP⟩
+    have hgi : (eval env input_var : Fp)
+        = env.env.get input_var.cell.column
+          ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
+      with_unfolding_all rfl
+    rw [← h_input, hgi]
+    exact hrecomb
 
   completeness := by
-    sorry
+    circuit_proof_start [slotReads, SlotPA, SlotPS]
+    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := hPA
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_proverAssumptions_eq,
+      pieceC_extract_eq] at h_spec_0
+    have hCPA : HashPiece.ProverAssumptions G (ns.getD i 0)
+        (env.env.get input_var.cell.column
+          ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ))
+        (eval env.toEnvironment
+            (AssignedCell.of self offset cfg.xA : Var field Fp),
+          (if i = 0 then yaIn
+            else boundaryYA (reads cfg (offset - 1) self).row
+              (AssignedCell.of self offset cfg.xA)) env.toEnvironment) := by
+      rw [h_input]
+      refine ⟨hbound, A, B, hAon, ?_, ?_, hchain⟩
+      · rw [hAx]
+        with_unfolding_all rfl
+      · rw [hAy]
+        by_cases hi : i = 0 <;> simp [hi, reads]
+    have hsp := h_spec_0 _hE trivial hCPA
+    rw [pieceC_proverSpec_eq] at hsp
+    simp only [HashPiece.ProverSpec, circuit_norm] at hsp
+    obtain ⟨-, hPS⟩ := hsp
+    refine ⟨⟨_hE, trivial, ?_⟩, ?_⟩
+    · rw [pieceC_proverAssumptions_eq, pieceC_extract_eq]
+      rw [h_input] at hCPA
+      exact hCPA
+    · -- the slot's ProverSpec, off the child's
+      intro A' B' hA'x hA'y hchain'
+      have hres := hPS A' B'
+        (by rw [hA'x]; try with_unfolding_all rfl)
+        (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads])
+        (by rw [h_input]; exact hchain')
+      exact hres
 
 /-! ## The chain contract -/
 
@@ -578,7 +576,11 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
       (fun i base => do
         let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
-        pure ())
+        -- the boundary `q_s2` re-pin (idempotent) and the piece-linking gate at this
+        -- piece's last row — chain-owned: the gate reads the NEXT slot's first row
+        let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+          (qS2Boundary (decide (i = ns.length - 1)))
+        (sinsemillaGate cfg).enable (base + ns.getD i 0))
     -- the trailing dummy row: the final `y_a` into `λ₁`, dummy `λ₂`/`x_p`
     let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
     let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
