@@ -280,6 +280,29 @@ def selectorFixed (selMap : SelCompressMap) (acts : List (ℕ × ℕ)) : List (�
   acts.filterMap fun (sel, row) =>
     (selMap.entries.find? (·.1 = sel)).map fun (_, sc) => (sc.packedCol, row, sc.assignedRoot)
 
+/-- Fixed entries from in-region `assignFixed` ops (Rust `region.assign_fixed` — e.g.
+Sinsemilla's per-row `q_s2` boundary values and the `fixed_y_q` load), resolved to
+absolute rows. -/
+def assignedFixed (toNat : F → ℕ) (starts : List ℕ)
+    (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ × ℕ) :=
+  regions.flatMap fun (idx, body) =>
+    (flattenRegion body).filterMap fun op =>
+      match op with
+      | .assignFixed col row v => some (col.index, place starts idx + row, toNat v)
+      | _ => none
+
+/-- Deduplicate fixed entries by cell, keeping the LAST write (Rust `assign_fixed` on the
+same cell overwrites; Halo2-Clean re-pins — e.g. a piece boundary's `q_s2` — are idempotent
+same-value double writes, and a selector enabled by both a gate and a lookup at the same row
+activates once). -/
+def dedupFixed (l : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
+  let rec go : List (ℕ × ℕ × ℕ) → List (ℕ × ℕ × ℕ)
+    | [] => []
+    | (c, r, v) :: rest =>
+        if rest.any fun (c', r', _) => c' = c ∧ r' = r then go rest
+        else (c, r, v) :: go rest
+  go l
+
 /-- The constants column's fixed entries, straight from the fixture's allocation map:
 `(value, col, row) ↦ (col, row, value)`. -/
 def constantsFixed (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=

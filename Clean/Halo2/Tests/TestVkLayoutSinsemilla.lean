@@ -1,0 +1,168 @@
+import Clean.Halo2.Fixtures.Layout
+import Clean.Halo2.Fixtures.SinsemillaLayout
+import Clean.Halo2.Fixtures.SinsemillaSelMap
+import Clean.Halo2.Fixtures.SinsemillaPost
+import Clean.Halo2.Tests.TestVkMatchSinsemilla
+import Clean.Ironwood.Sinsemilla.HashToPoint
+
+/-!
+# VK-match test (Phase 2): the Sinsemilla chain — LAYOUT (permutation σ + fixed values)
+
+The layout counterpart of `TestVkMatchSinsemilla`. Mirrors `SinsemillaDumpCircuit::synthesize`
+(`halo2_gadgets/src/sinsemilla/dump.rs`, `Value::unknown`, k=11) as a Lean `Circuit Fp Unit`
+in the dump's exact region sequence — load the generator table (3 columns; `table_idx` doubles
+as the range-check table), witness the (unused) leaves, witness piece `a`, short-range-check
+`b_1`/`b_2` (5 bits), witness pieces `b`/`c`, then the real `hash_message` (`public Q`
+initialization + `Chain.circuit`) over widths `ns = [24, 1, 24]` (the MerkleCRH piece shape:
+25/2/25 words). `Fixtures.Layout` reconstructs the layout products from the `Operations`.
+
+## Region placement (hand-pinned, dump-derived)
+
+The reconstruction places regions with the single-pass first-fit starts derived from the
+dump's own absolute data (the copy rows, `q_s2`/`fixed_y_q` rows): leaves 0 (advices 0/1),
+piece `a` 0 (advice 6), range checks 0 and 3 (advice 9), pieces `b`/`c` 1/2, hash 1 (its
+columns advices 0-4 are busy at row 0 with the leaves). The fixture's `regions` start line
+disagrees for the copy-carrying hash region (prints 0) — the known dumper placement-line
+artifact (see `handoff-vk-matching.md`: mul main 0→2, overflow 1→140; being coordinated
+with the dumper owner). The copyList/σ/fixed below are the dump's raw absolute data and are
+guarded VERBATIM — they, not the placement line, are what σ and the VK pin.
+
+## The generator table / `Q`
+
+The dumped table columns ARE the `SINSEMILLA_S` contents; the test `Generators` reads them
+back from the fixture (with the on-curve fallback to `S(0)`, so no 1024-point kernel curve
+check is needed), and `Q` is the dumped MerkleCRH domain point (`x` from the constants
+allocation, `y` from the `fixed_y_q` load).
+-/
+
+namespace Halo2.Fixtures.Test.Layout
+
+open Ironwood (Fp)
+open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Fixtures.Layout
+open Halo2.Fixtures.Test (sinsemillaS0 sinsemillaS0_onCurve)
+open Halo2.Ironwood.Sinsemilla.HashToPoint (constWit witnessMessagePiece hashMessage)
+
+/-- The Sinsemilla configure chain (the same allocation sequence as
+`TestVkMatchSinsemilla.sinsemillaProgram`), also returning the range-check config the
+short checks need. -/
+def setup : Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Config 10 :=
+  let prog : Configure Fp
+      (Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Config 10) := do
+    let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
+    let a3 ← adviceColumn; let a4 ← adviceColumn; let _a5 ← adviceColumn
+    let a6 ← adviceColumn; let _a7 ← adviceColumn; let _a8 ← adviceColumn
+    let a9 ← adviceColumn
+    let constants ← fixedColumn
+    enableConstant constants
+    let fixedYQ ← fixedColumn
+    let t0 ← lookupTableColumn
+    let t1 ← lookupTableColumn
+    let t2 ← lookupTableColumn
+    let lookupConfig ← Ironwood.LookupRangeCheck.configure 10 a9 t0
+    let cfg ← Ironwood.Sinsemilla.HashPiece.configure Test.sinsemillaTestG
+      a0 a1 a2 a3 a4 a6 fixedYQ { tableIdx := t0, tableX := t1, tableY := t2 }
+    return (cfg, lookupConfig)
+  (prog {}).1
+
+def sCfg : Ironwood.Sinsemilla.HashPiece.Config := setup.1
+def sLookupCfg : Ironwood.LookupRangeCheck.Config 10 := setup.2
+
+/-- The generator-table x/y columns read back from the dump (`fixed` cols 3/4, block rows),
+as row-indexed arrays. -/
+def tblCol (c : ℕ) : Array ℕ := Id.run do
+  let mut arr : Array ℕ := Array.replicate 1024 0
+  for (c', r, v) in sinsemillaLayout.fixed do
+    if c' = c ∧ r < 1024 then arr := arr.set! r v
+  return arr
+
+def tblX : Array ℕ := tblCol 3
+def tblY : Array ℕ := tblCol 4
+
+/-- The dump-derived generator family: `S m` read off the dumped table (on-curve fallback
+`S(0)`, never taken on the real data — the guards would catch it as a value mismatch). -/
+def layoutG : Generators where
+  S m :=
+    let p : Orchard.Point Fp := { x := (tblX[m]! : Fp), y := (tblY[m]! : Fp) }
+    if p.y ^ 2 = p.x ^ 3 + Orchard.pallasB then p else sinsemillaS0
+  S_onCurve {m} _ := by
+    show Orchard.Point.OnCurve _
+    dsimp only
+    split
+    · next h => exact h
+    · exact sinsemillaS0_onCurve
+
+/-- The dumped MerkleCRH domain point `Q` (constants row 2 / the `fixed_y_q` value). -/
+def layoutQ : Orchard.Point Fp :=
+  { x := (16881378657874843773681581417214080072526588577393185124335110949068672401040 : Fp),
+    y := (28133183902167313796350353487269718050617152766571597387899637960749256839611 : Fp) }
+
+/-- A dummy witness (keygen never reads advice values — `Value::unknown`). -/
+def unknown : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
+
+/-- The MerkleCRH piece widths: 25/2/25 words. -/
+def sNs : List ℕ := [24, 1, 24]
+
+/-- The Lean mirror of `SinsemillaDumpCircuit::synthesize`. -/
+def layoutProgram : Circuit Fp Unit := do
+  -- SinsemillaChip::load → GeneratorTableConfig::load (one Rust assign_table over the
+  -- three columns; three single-column `loadTable`s here)
+  Ironwood.Sinsemilla.load layoutG sCfg.generatorTable
+  -- witness the (unused) leaves: left/right at advices 0/1, row 0
+  let _leaves ← assignRegion "witness leaves" (do
+    let l ← assignAdvice sCfg.xA 0 unknown
+    let r ← assignAdvice sCfg.xP 0 unknown
+    pure (l, r))
+  -- witness piece a; short-range-check b_1, b_2; witness pieces b, c
+  let pa ← witnessMessagePiece sCfg unknown
+  let _b1 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg unknown
+  let _b2 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg unknown
+  let pb ← witnessMessagePiece sCfg unknown
+  let pc ← witnessMessagePiece sCfg unknown
+  -- the real hash_message
+  let _ ← hashMessage layoutG sNs sCfg layoutQ ⟨#v[pa, pb, pc]⟩
+  pure ()
+
+/-- The reconstructed layout products. -/
+def ops : Operations Fp := layoutProgram.operations
+def regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
+
+/-- Hand-pinned single-pass starts (see the module docstring): leaves, piece a, RC b1,
+RC b2, piece b, piece c, hash. -/
+def starts : List ℕ := [0, 0, 0, 3, 1, 2, 1]
+
+def permCols : List ColRef := sinsemillaLayout.permColumns
+
+def myCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
+  copyList permCols starts regions sinsemillaLayout.constants
+def mySigma : List (ℕ × ℕ × ℕ × ℕ) :=
+  sigmaEntries (runAssembly sinsemillaLayout.n permCols.length myCopyList)
+def myUsable : ℕ := usableRows sinsemillaLayout.n sinsemillaPost.adviceQueryLayout
+def myFixed : List (ℕ × ℕ × ℕ) :=
+  sortFixed (dedupFixed
+    (tableFixed (ZMod.val : Fp → ℕ) myUsable ops
+      ++ constantsFixed sinsemillaLayout.constants
+      ++ selectorFixed sinsemillaSelMap (activations starts regions)
+      ++ assignedFixed (ZMod.val : Fp → ℕ) starts regions))
+
+/-! ## Machinery validation -/
+
+-- Blinding-factor / usable-row computation.
+#guard myUsable = 2042
+
+-- keygen `Assembly` σ replay from the fixture's OWN ordered copy list.
+#guard sigmaEntries (runAssembly sinsemillaLayout.n permCols.length sinsemillaLayout.copyList)
+  = sinsemillaLayout.sigma
+
+/-! ## End-to-end reconstruction vs the ported Sinsemilla stack -/
+
+-- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
+#guard myCopyList = sinsemillaLayout.copyList
+
+-- the keygen permutation σ
+#guard mySigma = sinsemillaLayout.sigma
+
+-- the full fixed contents: loaded tables, constants, packed selectors, q_s2 / fixed_y_q
+#guard myFixed = sortFixed sinsemillaLayout.fixed
+
+end Halo2.Fixtures.Test.Layout
