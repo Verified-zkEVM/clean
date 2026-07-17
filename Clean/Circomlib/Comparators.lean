@@ -400,6 +400,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   Spec := fun (x, y) output =>
     output = (if x.val <= y.val then 1 else 0)
 
+  computableWitnesses := by
+    computable_witnesses' [Prod.mk.injEq]
+
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
@@ -470,6 +473,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   Spec := fun (x, y) output =>
     output = (if x.val > y.val then 1 else 0)
 
+  computableWitnesses := by
+    computable_witnesses' [Prod.mk.injEq]
+
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
@@ -506,6 +512,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
     output = (if x.val >= y.val then 1 else 0)
+
+  computableWitnesses := by
+    computable_witnesses' [Prod.mk.injEq]
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds

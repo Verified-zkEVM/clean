@@ -42,10 +42,59 @@ def main (input : Expression (F p)) := do
 
   return bits
 
+omit [Fact (p < 2^254)] [Fact (p > 2^253)] in
+private theorem num2Bits_main_forAll_iff
+    {n offset : ℕ} {input : Expression (F p)} {env env' : ProverEnvironment (F p)} :
+    ((Num2Bits.main n input).operations offset).forAll offset {
+      witness n _ compute :=
+        eval env input = eval env' input →
+        env.AgreesBelow n env' → compute.eval env = compute.eval env'
+      subcircuit n _ subcircuit :=
+        eval env input = eval env' input →
+        subcircuit.ComputableWitnesses n env env'
+    } ↔ True := by
+  rw [iff_true]
+  exact (Num2Bits.arbitraryBitLengthCircuit (p := p) n).computableWitnesses
+    offset input env env' |>.1
+
+omit [Fact (p < 2^254)] [Fact (p > 2^253)] in
+private theorem num2Bits_main_output_eq_iff
+    {n offset : ℕ} {input : Expression (F p)} {env env' : ProverEnvironment (F p)}
+    (h_input : input.eval env = input.eval env')
+    (h_agrees : env.AgreesBelow (offset + (Num2Bits.main n input).localLength offset) env') :
+    (eval env.toEnvironment ((Num2Bits.main n input).output offset) =
+      eval env'.toEnvironment ((Num2Bits.main n input).output offset)) ↔ True := by
+  rw [iff_true]
+  let child := Num2Bits.arbitraryBitLengthCircuit (p := p) n
+  have hw := (child.computableWitnesses offset input env env').2
+  rw [← child.elaborated.localLength_eq input offset] at hw
+  rw [← child.elaborated.output_eq input offset] at hw
+  have h_input' : Eval.eval env (input : Var field (F p)) = Eval.eval env' input := by
+    simp only [CircuitType.eval_var_field_prover]
+    exact h_input
+  simpa only [child, CircuitType.eval_var_prover_to_verifier] using hw h_input' h_agrees
+
 set_option linter.constructorNameAsVariable false
 
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
+
+  computableWitnesses := by
+    unfold FormalCircuitBase.ComputableWitnesses
+    intros offset input env env'
+    simp only [main, Circuit.bind_forAll]
+    constructor
+    · constructor
+      · rw [num2Bits_main_forAll_iff]
+        trivial
+      · simp only [circuit_norm, computable_witnesses_norm]
+        intro h_input
+        apply FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow
+        intro h_agrees
+        rw [num2Bits_main_output_eq_iff h_input h_agrees]
+        trivial
+    · simp only [circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+      grind
 
   Spec input bits :=
     bits = fieldToBits 254 input
@@ -133,6 +182,23 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   Spec (input : fields 254 (F p)) output _ :=
     output.val = fromBits (input.map ZMod.val)
 
+  computableWitnesses := by
+    unfold FormalCircuitBase.ComputableWitnesses
+    intros offset input env env'
+    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+    constructor
+    · constructor
+      · intro h
+        apply FormalAssertion.toSubcircuit_computableWitnesses
+        simp only [circuit_norm, Vector.ext_iff] at h ⊢
+        exact h
+      · let child := Bits2Num.circuit (p := p) 254
+        have hw := (child.computableWitnesses
+          (offset + AliasCheck.circuit.localLength input) input env env').1
+        simp only [child, circuit_norm, Vector.ext_iff] at hw ⊢
+        exact hw
+    · grind
+
   soundness := by
     circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
     set output := (env.get (i₀ + (127 + 1 + 135 + 1)))
@@ -199,6 +265,28 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
+
+  computableWitnesses := by
+    unfold FormalCircuitBase.ComputableWitnesses
+    intros offset input env env'
+    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+    constructor
+    · constructor
+      · grind
+      · constructor
+        · intro i _
+          apply FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow
+          simp only [computable_witnesses_norm, circuit_norm]
+          grind
+        · intro h
+          apply FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+          · simp only [circuit_norm]
+            split <;> simp only [Nat.mul_zero, zero_add, add_zero]
+          · simp only [computable_witnesses_norm]
+            intro _
+            simp only [circuit_norm] at h ⊢
+            exact h
+    · grind
 
   soundness := by
     intro i0 env input_var (input : F p) h_input _ h_holds

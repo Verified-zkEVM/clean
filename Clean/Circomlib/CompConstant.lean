@@ -13,6 +13,30 @@ open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
 namespace CompConstant
+
+private lemma eval_sum_eq_of_eval_eq {F : Type} [Field F]
+    {env env' : Environment F} {n : ℕ} {v : Vector (Expression F) n}
+    (h : ∀ i : Fin n, Expression.eval env v[i] = Expression.eval env' v[i]) :
+    Expression.eval env v.sum = Expression.eval env' v.sum := by
+  have eval_sum (env : Environment F) (v : Vector (Expression F) n) :
+      Expression.eval env v.sum = (v.map (Expression.eval env)).sum := by
+    have eval_list_sum (l : List (Expression F)) :
+        (l.map (Expression.eval env)).sum = Expression.eval env l.sum := by
+      induction l with
+      | nil => simp only [List.map_nil, List.sum_nil, circuit_norm]
+      | cons x xs ih =>
+        simp only [List.map_cons, List.sum_cons, ih, circuit_norm]
+    simp only [Vector.sum, Vector.toArray_map]
+    conv_rhs => rw [← Array.sum_toList, Array.toList_map]
+    conv_lhs => rw [← Array.sum_toList]
+    exact (eval_list_sum _).symm
+  rw [eval_sum, eval_sum]
+  congr 1
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_map]
+  exact h ⟨i, hi⟩
+
 /-
 template CompConstant(ct) {
     signal input in[254];
@@ -102,6 +126,45 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
+
+  computableWitnesses := by
+    unfold FormalCircuitBase.ComputableWitnesses
+    intros n input env env'
+    simp only [circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+    unfold_formal_circuit_consts
+    simp only [circuit_norm, computable_witnesses_norm]
+    apply And.intro
+    · and_intros
+      · simp only [circuit_norm, explicit_provable_type,
+          apply_ite (Expression.eval env.toEnvironment),
+          apply_ite (Expression.eval env'.toEnvironment)]
+        grind
+      · intros _ h_agrees _ _
+        apply eval_sum_eq_of_eval_eq
+        intro i
+        simp only [Vector.getElem_mapRange, circuit_norm]
+        grind
+      · intro
+        apply GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        · rfl
+        · simp only [circuit_norm]
+          grind
+      · intros _ h_agrees _ _
+        have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
+        let child := Num2Bits.circuit 135 hp
+        letI : ElaboratedCircuit (F p) field (fields 135) child.main := child.elaborated
+        have h_input :
+            Eval.eval env (var (F := F p) ⟨n + 127⟩) =
+              Eval.eval env' (var (F := F p) ⟨n + 127⟩) := by
+          simp only [circuit_norm]
+          grind
+        have h_output := FormalCircuitBase.output_of_input_eq
+          (circuit := child.base)
+          (n := n + 127 + 1) (input := var ⟨n + 127⟩) h_input h_agrees
+        rw [ProvableType.getElem_eval_fields_prover,
+          ProvableType.getElem_eval_fields_prover]
+        exact congrArg (fun v => v[127]) h_output
+    · grind
 
   soundness := by
     circuit_proof_start [Num2Bits.circuit]

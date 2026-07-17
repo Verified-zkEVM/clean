@@ -554,7 +554,7 @@ variable {α : TypeMap} [ProvableType α]
 theorem varFromOffset_field {F} (offset : ℕ) :
   varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind norm]
 theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
   Eval.eval env x = x.map (Expression.eval env) := by
   rw [CircuitType.eval_expression]
@@ -567,7 +567,7 @@ theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
 theorem varFromOffset_fields {F} (offset : ℕ) :
   varFromOffset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind norm]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2):= by
   simp [circuit_norm, explicit_provable_type]
