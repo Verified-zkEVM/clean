@@ -809,7 +809,8 @@ Rust region sequence: witness `a`, short-range-check `b_1`/`b_2` (5 bits), witne
 `hash_to_point` (the `hashMessage` region), the `"Check piece decomposition"` gate region.
 Output: the hash point's `x` cell. -/
 def synthesize (G : Generators) (cfg : Config)
-    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp) (l : ℕ)
+    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   -- chip.rs:255-306 — witness a; range-check b1/b2; witness b, c
   let pa ← HashToPoint.witnessMessagePiece cfg.sinsemilla (waWit l input.left)
@@ -819,14 +820,15 @@ def synthesize (G : Generators) (cfg : Config)
     (wb2Wit input.right)
   let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
   let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
-  -- chip.rs:322-330 — the hash
-  let (out, z1s) ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q ⟨#v[pa, pb, pc]⟩
+  -- chip.rs:322-330 — the hash (the formal hash_to_point bundle)
+  let out ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q hQ (by decide)
+    (by decide) ⟨#v[pa, pb, pc]⟩
   -- chip.rs:337-397 — the decomposition-gate region
   let _ ← assignRegion "Check piece decomposition"
     ((Gate.circuit (l : Fp)).call cfg.gate 0
       { aWhole := pa, bWhole := pb, cWhole := pc,
         leftNode := input.left, rightNode := input.right,
-        z1A := z1s[0], z1B := z1s[1], b1 := b1, b2 := b2 })
+        z1A := out.z1s[0], z1B := out.z1s[1], b1 := b1, b2 := b2 })
   pure out.point.x
 
 end HashLayer

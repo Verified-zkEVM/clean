@@ -538,7 +538,7 @@ def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLength
       (zsFam zV rest (base + (n + 1))) : HVec (zLengths (n :: rest)) _)
 
 /-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
-private theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
+theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
     (v : Vector (AssignedCell Fp) k) :
     ProvableType.eval (M := fields k) place env v = v.map (AssignedCell.eval place env) := by
   simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements]
@@ -598,7 +598,7 @@ private theorem eval_zsCellsVal_flat (cfg : Config) (self : RegionIndex)
     · exact ih (off + (n + 1))
 
 /-- The `Eval`-head version of `eval_zsCellsVal_flat`. -/
-private theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
+theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
     (env : Placed Environment Fp) (ns : List ℕ) (off : ℕ) :
     (eval env (zsCellsVal cfg self ns off) : HVec (zLengths ns) Fp)
       = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
@@ -722,7 +722,7 @@ private theorem output_eval_literal (place : RegionIndex → ℕ) (env : Environ
       = { point := ProvableType.eval place env p, first := ProvableType.eval place env f } := by
   with_unfolding_all rfl
 
-private theorem point_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+theorem point_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     (a b : AssignedCell Fp) :
     ProvableType.eval place env ({ x := a, y := b } : Point (AssignedCell Fp))
       = { x := AssignedCell.eval place env a, y := AssignedCell.eval place env b } := by
@@ -1600,5 +1600,96 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         rw [slotEnterVal, if_pos rfl] at h
         simp only [prefixRows_zero, Nat.add_zero, dRowP] at h
         rw [h, hAy]
+
+/-- The chain's eval'd output, landed on raw advice reads (the public composition lemma —
+what `hash_message`-level consumers rewrite `(circuit …).output` with). -/
+theorem circuit_output_eval (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) (env : Placed Environment Fp) :
+    (eval env ((circuit G ns yaIn).output cfg offset iv self) : Value Output Fp)
+      = { point :=
+            { x := env.env.advice cfg.xA
+                ((env.place self + (offset + prefixRows ns ns.length) : ℕ) : ℤ),
+              y := env.env.advice cfg.lambda1
+                ((env.place self + (offset + prefixRows ns ns.length) : ℕ) : ℤ) },
+          first :=
+            { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
+              xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
+              lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
+              lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) } } := by
+  rw [FormalRegionCircuit.output, ((circuit G ns yaIn).elaborated cfg offset).output_eq]
+  show (eval env ((do
+        RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
+          (fun i base => do
+            let _ ← (slot G ns yaIn i).call cfg base (iv.pieces[i]!)
+            let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+              (qS2Boundary (decide (i = ns.length - 1)))
+            (sinsemillaGate cfg).enable (base + ns.getD i 0))
+        let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
+        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
+          (finalYAWit ex.row xExit)
+        let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
+        let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
+        let first ← readState cfg offset
+        return ({ point := { x := xExit, y := yFin }, first := first.row }
+          : Output (AssignedCell Fp))).output self) : Value Output Fp) = _
+  simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+    HashPiece.output_readState, Halo2.output_cellAt, output_assignAdvice]
+  rw [ProvableStruct.eval_cells_eq_eval, output_eval_literal, point_eval_literal,
+    row_eval_literal]
+  simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+
+/-- The chain's eval'd output, prover view (the completeness-side composition lemma). -/
+theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (iv : Var (Inputs ns.length) Fp) (self : RegionIndex)
+    (env : Placed ProverEnvironment Fp) :
+    (eval env ((circuit G ns yaIn).output cfg offset iv self) : Value Output Fp)
+      = { point :=
+            { x := env.env.advice cfg.xA
+                ((env.place self + (offset + prefixRows ns ns.length) : ℕ) : ℤ),
+              y := env.env.advice cfg.lambda1
+                ((env.place self + (offset + prefixRows ns ns.length) : ℕ) : ℤ) },
+          first :=
+            { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
+              xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
+              lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
+              lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) } } := by
+  rw [FormalRegionCircuit.output, ((circuit G ns yaIn).elaborated cfg offset).output_eq]
+  show (eval env ((do
+        RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
+          (fun i base => do
+            let _ ← (slot G ns yaIn i).call cfg base (iv.pieces[i]!)
+            let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+              (qS2Boundary (decide (i = ns.length - 1)))
+            (sinsemillaGate cfg).enable (base + ns.getD i 0))
+        let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
+        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
+          (finalYAWit ex.row xExit)
+        let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
+        let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
+        let first ← readState cfg offset
+        return ({ point := { x := xExit, y := yFin }, first := first.row }
+          : Output (AssignedCell Fp))).output self) : Value Output Fp) = _
+  simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+    HashPiece.output_readState, Halo2.output_cellAt, output_assignAdvice]
+  rw [output_eval_literal_prover, point_eval_literal, row_eval_literal]
+  simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+
+/-- The chain output's `point.x` cell (positional — the exit `x_a`). -/
+theorem output_point_x (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) :
+    ((circuit G ns yaIn).output cfg offset iv self).point.x
+      = AssignedCell.of self (offset + prefixRows ns ns.length) cfg.xA := rfl
+
+/-- The chain output's `point.y` cell (positional — the trailing `y_a` in `λ₁`). -/
+theorem output_point_y (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) :
+    ((circuit G ns yaIn).output cfg offset iv self).point.y
+      = AssignedCell.of self (offset + prefixRows ns ns.length) cfg.lambda1 := rfl
 
 end Halo2.Ironwood.Sinsemilla.Chain
