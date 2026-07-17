@@ -425,7 +425,7 @@ private theorem sound_step (G : Generators) {m : ℕ}
 
 /-- An honest row's derived `Y_A` is twice the accumulator's true y — the `Y_A`
 invariant, given the step at this word is defined. -/
-private theorem honest_yA (G : Generators) {s : State Fp} {p : Fp} {A : Point Fp} {r : ℕ}
+theorem honest_yA (G : Generators) {s : State Fp} {p : Fp} {A : Point Fp} {r : ℕ}
     {Ar B : Point Fp}
     (hH : s.Honest G p A r)
     (hAr : accAfter G (A.x, A.y) p r = (Ar.x, Ar.y))
@@ -600,6 +600,79 @@ private theorem step_gates (G : Generators) {s : State Fp} {p : Fp} {A B : Point
   · -- y check: the two raw Y_A invariants + the y-law of the step
     rw [hyA_r_raw, hyA_r1_raw]
     linear_combination 4 * hyAnew + 4 * haccY
+
+/-- Public chaining/exit lemma: an honest row at word `r` with the chain defined through
+word `r` steps to the honest row at `r + 1`, whose accumulator lands on the chain point
+`B` — plus the row identities a composing circuit consumes (the lookup's `y_p` fact and
+the y-law of the step). Only needs the `(r+1)`-prefix chain (no next-word gate here). -/
+theorem step_exit (G : Generators) {s : State Fp} {p : Fp} {A B : Point Fp} {r : ℕ}
+    (hH : s.Honest G p A r)
+    (hchain : hashToPoint G.S A ((List.range (r + 1)).map (pieceWord p)) = some B) :
+    (s.step ((G.S (pieceWord p (r + 1))).x, (G.S (pieceWord p (r + 1))).y)
+        (pieceZ p (r + 1))).Honest G p A (r + 1) ∧
+    (s.step ((G.S (pieceWord p (r + 1))).x, (G.S (pieceWord p (r + 1))).y)
+        (pieceZ p (r + 1))).row.xA = B.x ∧
+    s.row.lambda2 * (s.row.xA
+        - (s.step ((G.S (pieceWord p (r + 1))).x, (G.S (pieceWord p (r + 1))).y)
+            (pieceZ p (r + 1))).row.xA) - s.accY = B.y ∧
+    (s.row.lambda1 + s.row.lambda2)
+        * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)) * (2 : Fp)⁻¹
+      - s.row.lambda1 * (s.row.xA - s.row.xP) = (G.S (pieceWord p r)).y := by
+  obtain ⟨Ar, hAr⟩ := range_prefix_some G.S A (pieceWord p) hchain (show r ≤ r + 1 by omega)
+  have hstep_r : step G.S (pieceWord p r) Ar = some B :=
+    prefix_step_some G.S A (pieceWord p) hAr hchain
+  have hAcc_r : accAfter G (A.x, A.y) p r = (Ar.x, Ar.y) := accAfter_eq_chain G p hAr
+  have hAcc_r1 : accAfter G (A.x, A.y) p (r + 1) = (B.x, B.y) := accAfter_eq_chain G p hchain
+  have hyA_r : yA s.row = 2 * Ar.y := honest_yA G hH hAcc_r hstep_r
+  have hyA_r_raw : (s.row.lambda1 + s.row.lambda2)
+      * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)) = 2 * Ar.y := by
+    rw [show (s.row.lambda1 + s.row.lambda2)
+        * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP))
+        = yA s.row from rfl]
+    exact hyA_r
+  obtain ⟨hz, hxA, hxP, hl1, hl2⟩ := hH
+  rw [hAcc_r] at hxA hl1 hl2
+  have hhr := step_honest G.S hstep_r
+    (l1 := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1)
+    (l2 := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.1)
+    (xa' := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.2.1)
+    (ya' := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.2.2)
+    rfl rfl rfl rfl
+  obtain ⟨hline, hYAinv, hxNext, hyNext⟩ := hhr
+  have h2 : (2 : Fp) ≠ 0 := by decide
+  have haccY : s.accY = Ar.y := by
+    simp only [State.accY]
+    rw [hyA_r]
+    field_simp
+  set g' : Fp × Fp :=
+    ((G.S (pieceWord p (r + 1))).x, (G.S (pieceWord p (r + 1))).y) with hg'
+  have hxAnew : (s.step g' (pieceZ p (r + 1))).row.xA = B.x := by
+    rw [step_row_xA]
+    simp only [xR]
+    rw [hxA, hxP, hl1, hl2, ← hxNext, rowValue_xANext]
+  have hyAnew : s.row.lambda2 * (s.row.xA - (s.step g' (pieceZ p (r + 1))).row.xA)
+      - s.accY = B.y := by
+    rw [hxAnew, hl2, hxA, haccY, ← hyNext, rowValue_yANext, hxNext]
+  have hyAnew' : s.row.lambda2 * (s.row.xA - B.x) - s.accY = B.y := by
+    rw [← hxAnew]
+    exact hyAnew
+  have hl1next : (s.step g' (pieceZ p (r + 1))).row.lambda1
+      = (rowValue (B.x, B.y) g').1 := by
+    rw [step_row_lambda1, hxAnew, hyAnew', rowValue_lambda1]
+  have hl2next : (s.step g' (pieceZ p (r + 1))).row.lambda2
+      = (rowValue (B.x, B.y) g').2.1 := by
+    rw [step_row_lambda2, hxAnew, hyAnew', hl1next, rowValue_lambda2 (B.x, B.y) g']
+  refine ⟨⟨step_z .., ?_, step_row_xP .., ?_, ?_⟩, hxAnew, hyAnew, ?_⟩
+  · rw [hxAnew, hAcc_r1]
+  · rw [hl1next, hAcc_r1]
+  · rw [hl2next, hAcc_r1]
+  · have hhalf : (s.row.lambda1 + s.row.lambda2)
+        * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)) * (2 : Fp)⁻¹
+        = Ar.y := by
+      rw [hyA_r_raw]
+      field_simp
+    rw [hhalf, hl1, hxA, hxP]
+    exact hline
 
 /-- The round's constraint goal, in one goal-shaped package (the MulIncomplete
 `step_gates` convention): membership + secant + y-check exactly as the peeled
