@@ -302,8 +302,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     -- start copies (Rust execution order), materializing round 0's neighborhood
     let _z ← copyAdvice input.z cfg.z offset
-    let _yA ← copyAdvice input.acc.y cfg.lambda1 offset
     let _xA ← copyAdvice input.acc.x cfg.xA (offset + 1)
+    let _yA ← copyAdvice input.acc.y cfg.lambda1 offset
     let _xP ← copyAdvice input.base.x cfg.xP (offset + 1)
     let _yP ← copyAdvice input.base.y cfg.yP (offset + 1)
     let _l1 ← assignAdvice cfg.lambda1 (offset + 1)
@@ -342,7 +342,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
   soundness := by
     circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
-    obtain ⟨hcz, hcy, hcx, hcbx, hcby, hq1, hloop, hb3, hg13, hs3, hg23⟩ := hc
+    obtain ⟨hcz, hcx, hcy, hcbx, hcby, hq1, hloop, hb3, hg13, hs3, hg23⟩ := hc
     provable_type_simp
     obtain ⟨bits, hchain, hfold⟩ := hloop
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
@@ -437,7 +437,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
     circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
     obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := hPA
-    obtain ⟨hz0, hy0, hxa0, hxp0, hyp0, hl1w, hl2w, -, hzl, hxal, hyl⟩ := hwit
+    obtain ⟨hz0, hxa0, hy0, hxp0, hyp0, hl1w, hl2w, -, hzl, hxal, hyl⟩ := hwit
     obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := h_input
     -- the init λ witnesses, over the honest multiple's coordinates
     have hacx : input_acc_x = (m • Point.mk input_base_x input_base_y).x :=
@@ -473,7 +473,6 @@ def double_and_add (n : ℕ) (w : ℕ) :
         rw [hxp0, hyp0]
         exact hl2m
     -- the loop's contract arrived open; land the scalar cell's value in it
-    trace_state
     simp only [hia] at h_spec_0
     obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
