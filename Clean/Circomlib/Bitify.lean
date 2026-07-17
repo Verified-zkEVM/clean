@@ -173,6 +173,20 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
+omit [Fact (p > 2)] in
+private lemma lc_eq_map {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+    Expression.eval env (Fin.foldl n
+      (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
+        (lc1 + v[↑i] * e2, e2 + e2)) (0, 1)).1 =
+      fieldFromBits (v.map (Expression.eval env)) := by
+  rw [lc_eq]
+  congr 1
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_mapFinRange, Vector.getElem_map, Fin.getElem_fin]
+
+local grind_pattern lc_eq_map => Vector.map (Expression.eval env) v
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
 

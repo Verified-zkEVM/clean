@@ -120,6 +120,17 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     rw [h_env_i]
     ring
 
+  computableWitnesses := by
+    simp only [main, circuit_norm, computable_witnesses_norm,
+      ComputableWitnesses.structEqSplit, eval_vector, ProvableType.eval_fieldPair,
+      Vector.ext_iff, explicit_provable_type]
+    intros
+    apply And.intro
+    · intros
+      -- TODO COMPWIT why is this working when grind doesn't? should we have it as a fallback?
+      simp_all only
+    · grind
+
 end MultiMux1
 
 namespace Mux1
@@ -182,6 +193,18 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [MultiMux1.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all
+
+  computableWitnesses := by
+    simp only [main, circuit_norm, computable_witnesses_norm, MultiMux1.circuit,
+      ComputableWitnesses.structEqSplit, Vector.ext_iff, explicit_provable_type]
+    intros
+    apply And.intro
+    · intros
+      apply (MultiMux1.circuit 1).toSubcircuit_computableWitnesses
+      -- TODO COMPWIT grind should be able to come up with this split
+      simp only [circuit_norm, eval_vector]
+      grind
+    · grind
 
 end Mux1
 

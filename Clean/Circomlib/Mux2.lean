@@ -124,6 +124,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       rw [h_env_i]
       ring
 
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
+
 end MultiMux2
 
 namespace Mux2
@@ -192,6 +195,28 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [MultiMux2.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all
+
+  computableWitnesses := by
+    simp only [circuit_norm, computable_witnesses_norm,
+      ComputableWitnesses.structEqSplit, Vector.ext_iff, explicit_provable_type]
+    unfold_formal_circuit_consts
+    try simp only [circuit_norm, computable_witnesses_norm, explicit_provable_type]
+    intros offset input env env'
+    apply And.intro
+    · intro h_input
+      apply (MultiMux2.circuit 1).toSubcircuit_computableWitnesses
+      simp only [circuit_norm, eval_vector]
+      congr 1
+      · apply congrArg (fun x => #v[x])
+        rw [Vector.ext_iff]
+        intro i hi
+        simp only [Vector.getElem_map]
+        exact h_input.1 i hi
+      · rw [Vector.ext_iff]
+        intro i hi
+        simp only [Vector.getElem_map]
+        exact h_input.2 i hi
+    · grind
 
 end Mux2
 
