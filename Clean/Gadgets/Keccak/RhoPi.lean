@@ -65,4 +65,18 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  computableWitnesses := by
+    simp only [main, circuit_norm, computable_witnesses_norm, eval_vector, Vector.ext_iff]
+    intros n input env env'
+    constructor
+    · intro i
+      grind
+    · intro h_input h_agrees i hi
+      simp only [Vector.getElem_mapIdx]
+      have h_output := (Rotation64.circuit (-rhoPiConstants[i].2)).output_onlyAccessedBelow
+        (n := n + i * 16) (input_var := input[rhoPiConstants[i].1.val])
+        (fun _ => h_input rhoPiConstants[i].1.val (by omega))
+      rw [show (Rotation64.circuit (-rhoPiConstants[i].2)).localLength
+        input[rhoPiConstants[i].1.val] = 16 by rfl] at h_output
+      exact h_output (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
 end Gadgets.Keccak256.RhoPi

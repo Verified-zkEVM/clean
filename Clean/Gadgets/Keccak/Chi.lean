@@ -52,6 +52,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
+attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
+attribute [local grind ←] FormalCircuit.output_of_input_eq
+
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main
   elaborated
@@ -59,4 +62,6 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   Spec
   soundness
   completeness
+  computableWitnesses := by
+    computable_witnesses' [eval_vector, Vector.ext_iff]
 end Gadgets.Keccak256.Chi
