@@ -239,7 +239,7 @@ def circuit :
   synthesize cfg offset input := body cfg input offset
   Assumptions _ := True
   Spec input _ _ := GateSpec input
-  ProverAssumptions input _ := GateSpec input
+  ProverAssumptions input _ _ := GateSpec input
   soundness := by
     -- PLAYBOOK (blocked on MulFixed/CondSwap):
     -- `circuit_proof_start [body, decomposeGate]` runs the universal
