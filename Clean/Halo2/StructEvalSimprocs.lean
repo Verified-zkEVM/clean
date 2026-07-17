@@ -32,16 +32,33 @@ open Lean Meta Simp
 
 namespace Halo2.StructEval
 
+/-- Run a speculative step of the simproc machinery under a LOCAL heartbeat budget
+(fresh baseline via `withCurrHeartbeats`): a pathological component — e.g. a list-indexed
+`HVec (zLengths ns)` slot over an *abstract* width list (Sinsemilla's Chain output) —
+sends instance synthesis and the `.all` defeq validation into six-figure reduction
+counts. Speculative work must FAIL FAST and leave such values folded (parents consume
+them via explicit bridges), not eat the calling tactic's entire budget. The cap is far
+above any legitimate corpus step (small record/vector instances and defeqs). -/
+def speculative {α : Type} (act : MetaM α) (fallback : α) : MetaM α :=
+  withCurrHeartbeats <| withOptions (fun o => o.set `maxHeartbeats (8000 : Nat)) do
+    try
+      act
+    catch _ =>
+      return fallback
+
+/-- The `.all`-transparency definitional-equality validation, capped (see `speculative`). -/
+def validatedDefEq (a b : Expr) : MetaM Bool :=
+  speculative (withTransparency .all <| isDefEq a b) false
+
 /-- Whether `type` is `α ps` with `α` a `ProvableType` (behind `Var`/`Value` synonyms, so
 `.instances` whnf). This is the gate for destructuring, projection lift and equality split:
 `ProvableStruct` types qualify too (they have a `ProvableType` instance), and are handled
 at higher priority by the struct-eval bridges. -/
-def isProvableTypeLike (type : Expr) : MetaM Bool := do
-  let type' ← withTransparency .instances <| whnf type
-  let .app tycon _ := type' | return false
-  try
-    return (← trySynthInstance (← mkAppM ``ProvableType #[tycon])) matches .some _
-  catch _ => return false
+def isProvableTypeLike (type : Expr) : MetaM Bool :=
+  speculative (α := Bool) (do
+    let type' ← withTransparency .instances <| whnf type
+    let .app tycon _ := type' | return false
+    return (← trySynthInstance (← mkAppM ``ProvableType #[tycon])) matches .some _) false
 
 /-- View an expression as a structure projection `base.field`, returning the base and a
 function that rebuilds the same projection on a new base. Handles both `.proj` nodes and
@@ -89,9 +106,10 @@ component through its `ProvableStruct.components` entry rather than re-synthesiz
 field type; here we keep halo2's record-literal normal form (`⟨eval a, eval v, …⟩`). -/
 private def buildFieldEval (placedEnv field : Expr)
     (fallback? : Option (Expr × Expr)) : MetaM Expr := do
-  try
-    return ← withTransparency .default <| mkAppM ``Eval.eval #[placedEnv, field]
-  catch _ => pure ()
+  if let some r ← speculative
+      (some <$> (withTransparency .default <| mkAppM ``Eval.eval #[placedEnv, field]))
+      none then
+    return r
   let some (compTy, compInst) := fallback? |
     throwError "structEvalLiteral: no Eval instance for field {← ppExpr field} and no fallback"
   let placedTy ← whnf (← inferType placedEnv)
@@ -189,7 +207,7 @@ def structEvalLiteralProc : Simproc := fun e => do
     -- `.default` transparency to see through the reducible `CircuitType` instance behind
     -- `Value M F`-spelled field types (cf. the witgen simproc)
     let rhs ← withTransparency .default <| mkAppOptM fn newArgs
-    unless ← withTransparency .all <| isDefEq e rhs do
+    unless ← validatedDefEq e rhs do
       trace[Meta.Tactic.simp.rewrite] "structEvalLiteral: defeq validation failed {e} vs {rhs}"
       return .continue
     return .visit { expr := rhs, proof? := none }
@@ -223,7 +241,7 @@ def evalProjectionLiftProc : Simproc := fun e => do
   let evalOfBase ← try withTransparency .default <| mkAppM hname (envArgs.push base)
     catch _ => return .continue
   let rhs ← mkRhs evalOfBase
-  unless ← withTransparency .all <| isDefEq rhs e do return .continue
+  unless ← validatedDefEq rhs e do return .continue
   return .done { expr := rhs, proof? := none }
 
 /--

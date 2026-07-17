@@ -206,3 +206,22 @@ consumes the ∀-bound slot Specs in value land.
 
 `pieceSlot` (the plain-def version) is already in Chain.lean and becomes `slot`'s
 synthesize body.
+
+### Struct-eval machinery findings (2026-07-17, night session)
+
+- `StructEvalSimprocs` hardened: `speculative` runs instance synthesis and the
+  `.all`-defeq validations under a fresh-baseline heartbeat cap
+  (`withCurrHeartbeats` + local `maxHeartbeats 8000`), so pathological components fail
+  fast and stay folded instead of eating the caller's budget.
+- Doctrine settled: **list-indexed extraction data (`HVec (zLengths ns)`) belongs in the
+  `Witness` slot, not `Output`** — `Witness` needs only `Inhabited` and never routes
+  through the eval-of-var machinery. Chain's `zs` moved accordingly (`ChainWit`);
+  consumers read the `z` cells positionally.
+- RESIDUAL TACTIC GAP: even with a plain `Output`, `simp only [circuit_norm] at
+  h_output` on the chain bundle dies in ONE whnf call (Eq.rec ≈207k, List.rec ≈111k,
+  dite ≈95k, Vector.append/componentsToElements ≈41k) somewhere around the
+  `↓ eval_cells_eq_eval` rewrite of the composed `ElaboratedRegionCircuit.output`
+  term — i.e. inside simp-core lemma application, not in our simprocs (caps don't
+  bite). Suspected: instance-path defeq/whnf through the proof-carrying `slot` bundle
+  literal reachable from the composed output. Chain's proofs use the documented manual
+  house-prefix + targeted-peel idiom (Mul.lean) meanwhile.

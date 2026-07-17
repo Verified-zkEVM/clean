@@ -155,13 +155,25 @@ structure Inputs (len : ℕ) (F : Type) where
   pieces : Vector F len
 deriving ProvableStruct
 
-/-- Outputs: the hash point, the message's first double-and-add row (the init gate /
-`Spec` anchor), and the full per-piece running sums `zs`. -/
-structure Output (ns : List ℕ) (F : Type) where
+/-- Outputs: the hash point and the message's first double-and-add row (the init gate /
+`Spec` anchor). The per-piece running sums are NOT output data: they are extraction
+data — `ChainWit.zs` in the `Witness` slot (which never routes through the eval-of-var
+machinery, so its list-indexed `HVec` shape is harmless) — and consumers read the `z`
+CELLS positionally (the `zs[i][1]` reads of Merkle/NoteCommit). -/
+structure Output (F : Type) where
   point : Point F
   first : DoubleAndAddRow F
-  zs : HVec (zLengths ns) F
 deriving ProvableStruct
+
+/-- The chain's extraction data: the entering accumulator (positional `x_a`, the `yaIn`
+value) and the running sums of every piece. -/
+structure ChainWit (ns : List ℕ) (F : Type) where
+  xIn : F
+  yIn : F
+  zs : HVec (zLengths ns) F
+
+instance {ns : List ℕ} : Inhabited (ChainWit ns Fp) :=
+  ⟨{ xIn := 0, yIn := 0, zs := default }⟩
 
 /-- The honest accumulator after hashing the whole suffix `ns` starting from `(x, y)`. Each piece
 of width `n` advances the accumulator by `accAfter G · piece (n+1)`. -/
@@ -458,14 +470,134 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         (by rw [h_input]; exact hchain')
       exact hres
 
+/-! Contract bridges for the slot child (hand-written rfl — `derive_contract_bridges`
+chokes on the function-typed `yaIn` binder). -/
+
+private theorem slotC_spec_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).Spec = fun piece _ w => SlotSpec G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_assumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).Assumptions = fun _ => True := rfl
+
+private theorem slotC_envAssumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (env : Placed Environment Fp) :
+    (slot G ns yaIn i).EnvAssumptions cfg env
+      = GeneratorTableLoaded G cfg.generatorTable env.env := rfl
+
+private theorem slotC_proverAssumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).ProverAssumptions
+      = fun piece w _ => SlotPA G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_proverSpec_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).ProverSpec
+      = fun piece _ w _ => SlotPS G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_extract_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config) (base : ℕ)
+    (iv : AssignedCell Fp) (self : RegionIndex) (env : Placed Environment Fp) :
+    (slot G ns yaIn i).extract cfg base iv self env
+      = { eval env (slotReads cfg (ns.getD i 0) base self) with
+          yIn := if i = 0 then yaIn env
+            else boundaryYA (slotReads cfg (ns.getD i 0) base self).prev
+              (AssignedCell.of self base cfg.xA) env } := rfl
+
+/-! ## Value-level families for the chain induction -/
+
+/-- The flat chunk list of the per-piece word families, pieces indexed from `i0`. -/
+def chunksOf (msF : ℕ → ℕ → ℕ) : (ns : List ℕ) → (i0 : ℕ) → List ℕ
+  | [], _ => []
+  | n :: rest, i0 => (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1)
+
+/-- The running-sum family as a per-piece `HVec` (piece `i`'s `nᵢ + 1` values from its
+base row). -/
+def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLengths ns) Fp
+  | [], _ => HVec.nil
+  | n :: rest, base =>
+    (HVec.cons (Vector.ofFn fun r : Fin (n + 1) => zV (base + r.val))
+      (zsFam zV rest (base + (n + 1))) : HVec (zLengths (n :: rest)) _)
+
+/-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
+private theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
+    (v : Vector (AssignedCell Fp) k) :
+    ProvableType.eval (M := fields k) place env v = v.map (AssignedCell.eval place env) := by
+  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements]
+
+/-- Flat eval distributes over `HVec.cons`. -/
+private theorem hvec_eval_cons (place : RegionIndex → ℕ) (env : Environment Fp)
+    {n : ℕ} {ls : List ℕ}
+    (a : Vector (AssignedCell Fp) n) (b : HVec ls (AssignedCell Fp)) :
+    ProvableType.eval (M := HVec (n :: ls)) place env (HVec.cons a b)
+      = HVec.cons (ProvableType.eval (M := fields n) place env a)
+          (ProvableType.eval (M := HVec ls) place env b) := by
+  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+    HVec.cons]
+  exact congrArg HVec.mk (Vector.map_append ..)
+
+/-- `hvec_eval_cons` at the `zLengths (n :: rest)` spelling (keyed matching does not
+unfold `zLengths`). -/
+private theorem hvec_eval_cons_zl (place : RegionIndex → ℕ) (env : Environment Fp)
+    {n : ℕ} {rest : List ℕ}
+    (a : Vector (AssignedCell Fp) (n + 1)) (b : HVec (zLengths rest) (AssignedCell Fp)) :
+    ProvableType.eval (M := HVec (zLengths (n :: rest))) place env (HVec.cons a b)
+      = HVec.cons (ProvableType.eval (M := fields (n + 1)) place env a)
+          (ProvableType.eval (M := HVec (zLengths rest)) place env b) :=
+  hvec_eval_cons place env a b
+
+/-- The flat eval of the positional running-sum cells is the `zsFam` family. -/
+private theorem eval_zsCellsVal_flat (cfg : Config) (self : RegionIndex)
+    (env : Placed Environment Fp) :
+    ∀ (ns : List ℕ) (off : ℕ),
+      ProvableType.eval (M := HVec (zLengths ns)) env.place env.env
+          (zsCellsVal cfg self ns off)
+        = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
+  intro ns
+  induction ns with
+  | nil =>
+    intro off
+    with_unfolding_all rfl
+  | cons n rest ih =>
+    intro off
+    rw [show zsCellsVal cfg self (n :: rest) off
+        = (HVec.cons (Vector.ofFn fun r : Fin (n + 1) => .of self (off + r.val) cfg.bits)
+            (zsCellsVal cfg self rest (off + (n + 1)))
+          : HVec (zLengths (n :: rest)) _) from rfl]
+    rw [hvec_eval_cons_zl]
+    rw [show zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ))
+          (n :: rest) off
+        = (HVec.cons (Vector.ofFn fun r : Fin (n + 1) =>
+              env.env.advice cfg.bits ((env.place self + (off + r.val) : ℕ) : ℤ))
+            (zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) rest
+              (off + (n + 1))) : HVec (zLengths (n :: rest)) Fp) from rfl]
+    congr 1
+    · rw [eval_fields_eq_map]
+      apply Vector.ext
+      intro r hr
+      simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice]
+    · exact ih (off + (n + 1))
+
+/-- The `Eval`-head version of `eval_zsCellsVal_flat`. -/
+private theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
+    (env : Placed Environment Fp) (ns : List ℕ) (off : ℕ) :
+    (eval env (zsCellsVal cfg self ns off) : HVec (zLengths ns) Fp)
+      = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
+  rw [ProvableType.eval_cells (M := HVec (zLengths ns))]
+  exact eval_zsCellsVal_flat cfg self env ns off
+
 /-! ## The chain contract -/
 
 /-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
-(positional — no input accumulator cells). -/
+(positional — no input accumulator cells); the running-sum facts are stated on the
+extraction data. -/
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
-    (output : Value (Output ns) Fp) : Prop :=
+    (output : Value Output Fp) (wit : ChainWit ns Fp) : Prop :=
   ∃ chunks : List ℕ, PieceChunks ns input.pieces chunks ∧
-    ZsFacts ns chunks output.zs ∧
+    ZsFacts ns chunks wit.zs ∧
     ∀ A : Point Fp, A.OnCurve → A.x = output.first.xA →
       2 * A.y = enterYA ns.isEmpty output.first →
       ∀ B, hashToPoint G.S A chunks = some B →
@@ -474,16 +606,16 @@ def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
 /-- The honest-prover precondition: pieces in range and the honest chain from the
 entering accumulator (the `Witness` pair — positional `x_a`, `yaIn` value) defined. -/
 def ProverAssumptions (G : Generators) (ns : List ℕ)
-    (input : Value (Inputs ns.length) Fp) (wit : Fp × Fp) : Prop :=
+    (input : Value (Inputs ns.length) Fp) (wit : ChainWit ns Fp) : Prop :=
   PieceBounds ns input.pieces ∧
-  ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.1 ∧ A.y = wit.2 ∧
+  ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.xIn ∧ A.y = wit.yIn ∧
     hashToPoint G.S A (honestChunks ns input.pieces) = some B
 
 /-- The honest-prover contract: the hash point is the honest chain point, and the first
 row's `enterYA` derivation is `2·y_enter` (what a composing init gate consumes). -/
 def ProverSpec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
-    (output : Value (Output ns) Fp) (wit : Fp × Fp) : Prop :=
-  ∀ A B : Point Fp, A.x = wit.1 → A.y = wit.2 →
+    (output : Value Output Fp) (wit : ChainWit ns Fp) : Prop :=
+  ∀ A B : Point Fp, A.x = wit.xIn → A.y = wit.yIn →
     hashToPoint G.S A (honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y ∧
     enterYA ns.isEmpty output.first = 2 * A.y
@@ -565,10 +697,231 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         · exact False.elim (hB₁0 h)
       exact htail_chain B₁ hB₁on (hpin.1.symm.trans htfxA) hpin.2.symm B hB
 
+/-- Literal-eval bridges for the output record, at the `ProvableStruct`/`ProvableType`
+eval heads (the old-Chain-proven shape; the `Eval`-head spelling is bridged by a manual
+`ProvableStruct.eval_cells_eq_eval` rw at the reduced literal). -/
+private theorem output_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+    (p : Point (AssignedCell Fp)) (f : DoubleAndAddRow (AssignedCell Fp)) :
+    ProvableStruct.eval place env ({ point := p, first := f } : Output (AssignedCell Fp))
+      = { point := ProvableType.eval place env p, first := ProvableType.eval place env f } := by
+  with_unfolding_all rfl
+
+private theorem point_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+    (a b : AssignedCell Fp) :
+    ProvableType.eval place env ({ x := a, y := b } : Point (AssignedCell Fp))
+      = { x := AssignedCell.eval place env a, y := AssignedCell.eval place env b } := by
+  with_unfolding_all rfl
+
+private theorem row_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+    (a b c d : AssignedCell Fp) :
+    ProvableType.eval place env ({ xA := a, xP := b, lambda1 := c, lambda2 := d }
+        : DoubleAndAddRow (AssignedCell Fp))
+      = { xA := AssignedCell.eval place env a, xP := AssignedCell.eval place env b,
+          lambda1 := AssignedCell.eval place env c,
+          lambda2 := AssignedCell.eval place env d } := by
+  rw [ProvableStruct.eval_eq_eval]
+  with_unfolding_all rfl
+
+private theorem inputs_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+    {k : ℕ} (p : Vector (AssignedCell Fp) k) :
+    ProvableStruct.eval place env ({ pieces := p } : Inputs k (AssignedCell Fp))
+      = { pieces := ProvableType.eval (M := fields k) place env p } := by
+  with_unfolding_all rfl
+
+/-- The chain induction over abstract row/sum families: per-piece slot contracts and the
+per-boundary linking gates fold into the whole-message chain contract. Pieces indexed
+from `i0` (of `N` total — the final boundary flag), rows from `base`. The exit anchor is
+the trailing row: its `x_a` cell and (via the final gate's `enterYA true`) its `λ₁`. -/
+private theorem chain_fold (G : Generators) (N : ℕ)
+    (dR : ℕ → DoubleAndAddRow Fp) (zV : ℕ → Fp) (msF : ℕ → ℕ → ℕ)
+    (hms : ∀ j r, msF j r < 2 ^ K) :
+    ∀ (ns : List ℕ) (i0 base : ℕ) (pieces : Vector Fp ns.length),
+    i0 + ns.length = N →
+    (∀ j : Fin ns.length,
+      pieces[j] = ((∑ r ∈ Finset.range (ns.getD j.val 0 + 1),
+          msF (i0 + j.val) r * 2 ^ (K * r) : ℕ) : Fp) ∧
+      (∀ r : Fin (ns.getD j.val 0 + 1),
+        zV (base + prefixRows ns j.val + r.val)
+          = ((∑ t ∈ Finset.range (ns.getD j.val 0 + 1 - r.val),
+              msF (i0 + j.val) (r.val + t) * 2 ^ (K * t) : ℕ) : Fp)) ∧
+      (dR (base + prefixRows ns j.val + ns.getD j.val 0)).xP
+        = (G.S (msF (i0 + j.val) (ns.getD j.val 0))).x ∧
+      yA (dR (base + prefixRows ns j.val + ns.getD j.val 0)) * (2 : Fp)⁻¹
+        - (dR (base + prefixRows ns j.val + ns.getD j.val 0)).lambda1
+          * ((dR (base + prefixRows ns j.val + ns.getD j.val 0)).xA
+            - (dR (base + prefixRows ns j.val + ns.getD j.val 0)).xP)
+        = (G.S (msF (i0 + j.val) (ns.getD j.val 0))).y ∧
+      (∀ A : Point Fp, A.OnCurve → A.x = (dR (base + prefixRows ns j.val)).xA →
+        2 * A.y = yA (dR (base + prefixRows ns j.val)) →
+        ∀ B, hashToPoint G.S A
+            ((List.range (ns.getD j.val 0)).map (msF (i0 + j.val))) = some B →
+          (dR (base + prefixRows ns j.val + ns.getD j.val 0)).xA = B.x ∧
+          2 * B.y = yA (dR (base + prefixRows ns j.val + ns.getD j.val 0)))) →
+    (∀ j : Fin ns.length,
+      (dR (base + prefixRows ns j.val + ns.getD j.val 0)).lambda2
+          * (dR (base + prefixRows ns j.val + ns.getD j.val 0)).lambda2
+        = (dR (base + prefixRows ns j.val + ns.getD j.val 0 + 1)).xA
+          + xR (dR (base + prefixRows ns j.val + ns.getD j.val 0))
+          + (dR (base + prefixRows ns j.val + ns.getD j.val 0)).xA ∧
+      4 * (dR (base + prefixRows ns j.val + ns.getD j.val 0)).lambda2
+          * ((dR (base + prefixRows ns j.val + ns.getD j.val 0)).xA
+            - (dR (base + prefixRows ns j.val + ns.getD j.val 0 + 1)).xA)
+        = 2 * yA (dR (base + prefixRows ns j.val + ns.getD j.val 0))
+          + 2 * enterYA (decide (i0 + j.val = N - 1))
+              (dR (base + prefixRows ns j.val + ns.getD j.val 0 + 1))) →
+    PieceChunks ns pieces (chunksOf msF ns i0) ∧
+    ZsFacts ns (chunksOf msF ns i0) (zsFam zV ns base) ∧
+    (∀ A : Point Fp, A.OnCurve → A.x = (dR base).xA →
+      2 * A.y = enterYA ns.isEmpty (dR base) →
+      ∀ B, hashToPoint G.S A (chunksOf msF ns i0) = some B →
+        (dR (base + prefixRows ns ns.length)).xA = B.x ∧
+        (dR (base + prefixRows ns ns.length)).lambda1 = B.y) := by
+  intro ns
+  induction ns with
+  | nil =>
+    intro i0 base pieces hN hSlots hGates
+    refine ⟨rfl, trivial, ?_⟩
+    intro A hAon hAx hAyA B hB
+    rw [show chunksOf msF [] i0 = [] from rfl,
+      Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+    obtain rfl : A = B := Option.some.inj hB
+    simp only [List.isEmpty_nil, enterYA, if_true] at hAyA
+    refine ⟨?_, ?_⟩
+    · simpa using hAx.symm
+    · have h2 : (2 : Fp) ≠ 0 := by decide
+      have := mul_left_cancel₀ h2 hAyA
+      simpa using this.symm
+  | cons n rest ih =>
+    intro i0 base pieces hN hSlots hGates
+    have hlen : rest.length + 1 = (n :: rest).length := rfl
+    -- head facts (piece index 0 → rows base..base+n)
+    have h0 := hSlots ⟨0, by simp⟩
+    simp only [prefixRows_zero, Nat.add_zero, List.getD_cons_zero, Fin.getElem_fin] at h0
+    obtain ⟨hrec0, hzs0, hxP0, hyP0, hchain0⟩ := h0
+    have hg0 := hGates ⟨0, by simp⟩
+    simp only [prefixRows_zero, Nat.add_zero, List.getD_cons_zero] at hg0
+    obtain ⟨hsec0, hyck0⟩ := hg0
+    -- the head boundary flag agrees with the tail's emptiness
+    have hflag : decide (i0 + 0 = N - 1) = rest.isEmpty := by
+      have : rest.isEmpty = decide (rest.length = 0) := by
+        cases rest <;> simp
+      rw [this]
+      simp only [Nat.add_zero]
+      apply Bool.decide_congr
+      omega
+    -- the head piece + linking gate: the (n+1)-word chain to the next row's anchor
+    have hLinked := link_step G n rest.isEmpty (msF i0)
+      (first := dR base) (last := dR (base + n)) (next := dR (base + n + 1))
+      hxP0 hyP0 hchain0 hsec0
+      (by rw [← hflag]; simpa using hyck0)
+    -- tail via the induction hypothesis
+    have hTail := ih (i0 + 1) (base + (n + 1)) (Vector.cast (by simp) pieces.tail)
+      (by
+        simp only [List.length_cons] at hN
+        omega)
+      (by
+        intro j
+        have hj := hSlots ⟨j.val + 1, Nat.succ_lt_succ j.isLt⟩
+        simp only [prefixRows_succ, List.getD_cons_succ, Fin.getElem_fin] at hj ⊢
+        rw [show i0 + (j.val + 1) = i0 + 1 + j.val from by omega] at hj
+        rw [show base + ((n + 1) + prefixRows rest j.val)
+            = base + (n + 1) + prefixRows rest j.val from by omega] at hj
+        refine ⟨?_, hj.2.1, hj.2.2.1, hj.2.2.2.1, hj.2.2.2.2⟩
+        have hcst : (Vector.cast (by simp : (n :: rest).length - 1 = rest.length) pieces.tail
+            : Vector Fp rest.length)[j.val] = pieces[j.val + 1] := by
+          simp [Nat.add_comm]
+        rw [hcst]
+        exact hj.1)
+      (by
+        intro j
+        have hj := hGates ⟨j.val + 1, Nat.succ_lt_succ j.isLt⟩
+        simp only [prefixRows_succ, List.getD_cons_succ] at hj ⊢
+        rw [show i0 + (j.val + 1) = i0 + 1 + j.val from by omega,
+          show base + ((n + 1) + prefixRows rest j.val)
+            = base + (n + 1) + prefixRows rest j.val from by omega] at hj
+        exact hj)
+    obtain ⟨hPCt, hZst, hCt⟩ := hTail
+    refine ⟨?_, ?_, ?_⟩
+    · -- the pieces decompose
+      refine ⟨msF i0, hms i0, ?_, chunksOf msF rest (i0 + 1), rfl, ?_⟩
+      · simpa using hrec0
+      · exact hPCt
+    · -- the running sums
+      refine zsFacts_cons _ _ _ ?_ ?_
+      · apply Vector.ext
+        intro r hr
+        simp only [Vector.getElem_ofFn]
+        have hz := hzs0 ⟨r, hr⟩
+        rw [hz]
+        refine congrArg _ (Finset.sum_congr rfl fun t ht => ?_)
+        rw [show chunksOf msF (n :: rest) i0
+            = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
+          chunks_head_getD (msF i0) (chunksOf msF rest (i0 + 1)) (r + t)
+            (by simp only [Finset.mem_range] at ht; omega)]
+      · rw [show chunksOf msF (n :: rest) i0
+            = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
+          chunks_drop_append]
+        exact hZst
+    · -- the chain contract
+      intro A hAon hAx hAyA B hB
+      have hAyA' : 2 * A.y = yA (dR base) := by
+        simpa only [List.isEmpty_cons, enterYA, Bool.false_eq_true, if_false] using hAyA
+      rw [show chunksOf msF (n :: rest) i0
+          = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
+        Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
+      cases hpre : hashToPoint G.S A ((List.range (n + 1)).map (msF i0)) with
+      | none =>
+        rw [hpre] at hB
+        simp at hB
+      | some B1 =>
+        rw [hpre] at hB
+        replace hB : hashToPoint G.S B1 (chunksOf msF rest (i0 + 1)) = some B := hB
+        have hAvalid : A.Valid := Or.inl hAon
+        have hA0 : A ≠ 0 := Orchard.Point.ne_zero_of_onCurve hAon
+        have hpre_lt : ∀ m ∈ (List.range (n + 1)).map (msF i0), m < 2 ^ K := by
+          intro m hm
+          rcases List.mem_map.mp hm with ⟨t, ht, rfl⟩
+          exact hms i0 t
+        have hB1valid : B1.Valid :=
+          Orchard.Specs.Sinsemilla.hashToPoint_valid hAvalid hpre_lt hpre
+        have hB10 : B1 ≠ 0 :=
+          Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hpre_lt hpre
+        have hB1on : B1.OnCurve := by
+          rcases hB1valid with h | h
+          · exact h
+          · exact False.elim (hB10 h)
+        obtain ⟨hB1x, hB1y⟩ := hLinked A hAon hAx hAyA' B1 hpre
+        have hres := hCt B1 hB1on hB1x.symm hB1y B hB
+        rw [show base + prefixRows (n :: rest) (n :: rest).length
+            = base + (n + 1) + prefixRows rest rest.length from by
+          rw [show (n :: rest).length = rest.length + 1 from rfl, prefixRows_succ]
+          omega]
+        exact hres
+
 /-! ## The bundle -/
 
+instance circuitElaborated (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ) :
+    ElaboratedRegionCircuit Fp (Inputs ns.length) Output
+      (fun input : Var (Inputs ns.length) Fp => do
+        RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
+          (fun i base => do
+            let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
+            let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+              (qS2Boundary (decide (i = ns.length - 1)))
+            (sinsemillaGate cfg).enable (base + ns.getD i 0))
+        let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
+        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
+          (finalYAWit ex.row xExit)
+        let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
+        let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
+        let first ← readState cfg offset
+        return ({ point := { x := xExit, y := yFin }, first := first.row }
+          : Output (AssignedCell Fp))) := {}
+
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
-    FormalRegionCircuit Fp Config Config (Inputs ns.length) (Output ns) where
+    FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
   name := "sinsemilla hash_all_pieces"
   configure := pure
 
@@ -589,16 +942,19 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
     let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
     let first ← readState cfg offset
-    let zs ← zsCells cfg ns offset
-    return { point := { x := xExit, y := yFin }, first := first.row, zs }
+    return { point := { x := xExit, y := yFin }, first := first.row }
 
-  Witness := fieldPair
+  elaborated cfg offset := circuitElaborated G ns yaIn cfg offset
+
+  Witness := ChainWit ns
   extract cfg offset _ self env :=
-    (eval env (AssignedCell.of self offset cfg.xA : Var field Fp), yaIn env)
+    { xIn := eval env (AssignedCell.of self offset cfg.xA : Var field Fp),
+      yIn := yaIn env,
+      zs := eval env (zsCellsVal cfg self ns offset) }
 
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
 
-  Spec input output _ := Spec G ns input output
+  Spec input output wit := Spec G ns input output wit
   ProverAssumptions input wit _ := ProverAssumptions G ns input wit
   ProverSpec input output wit _ := ProverSpec G ns input output wit
 
@@ -608,7 +964,118 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     -- times out `circuit_proof_start`/the peel at whnf. Plan: wrap each slot as a
     -- Unit-output FormalRegionCircuit family (`slot i` — positional contract over its
     -- Witness readings, the `round i` pattern at piece scale) so the loop is homogeneous.
-    sorry
+    -- TACTIC GAP (recorded in sinsemilla-loop-design.md): `circuit_proof_start`'s
+    -- step (b) `simp only [circuit_norm] at h_output` dies at whnf on this bundle's
+    -- composed output (a single six-figure `Eq.rec`/`List.rec` reduction, surviving the
+    -- simproc heartbeat caps added in StructEvalSimprocs.speculative). Manual house
+    -- prefix + targeted peel (the Mul.lean idiom) until that burn is excised.
+    intro cfg offset
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output _hE hA hc
+    simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
+      RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState,
+      HashPiece.operations_cellAt] at hc
+    subcircuit_rw at hc
+    simp only [slotC_spec_eq, slotC_assumptions_eq, slotC_envAssumptions_eq,
+      slotC_extract_eq, sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
+      HashPiece.xRExpr, Constraints.withSelector, SlotSpec, slotReads,
+      circuit_norm] at hc
+    -- per-slot facts and the totalized word family
+    have hSp := fun i : Fin ns.length => (hc i).1 _hE
+    choose msF hbF hrecF hzsF hxPF hyPF hchF using hSp
+    have hQg := fun i : Fin ns.length => (hc i).2.1
+    have hGg := fun i : Fin ns.length => (hc i).2.2
+    clear hc
+    have hfold := chain_fold G ns.length
+      (fun r => { xA := env.env.advice cfg.xA ((env.place self + r : ℕ) : ℤ),
+                  xP := env.env.advice cfg.xP ((env.place self + r : ℕ) : ℤ),
+                  lambda1 := env.env.advice cfg.lambda1 ((env.place self + r : ℕ) : ℤ),
+                  lambda2 := env.env.advice cfg.lambda2 ((env.place self + r : ℕ) : ℤ) }
+        : ℕ → DoubleAndAddRow Fp)
+      (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ))
+      (fun j r => if h : j < ns.length then msF ⟨j, h⟩ r else 0)
+      (by
+        intro j r
+        beta_reduce
+        by_cases h : j < ns.length
+        · rw [dif_pos h]
+          exact hbF ⟨j, h⟩ r
+        · rw [dif_neg h]
+          norm_num [K])
+      ns 0 offset input.pieces (by omega)
+      (by
+        intro j
+        beta_reduce
+        simp only [Nat.zero_add, dif_pos j.isLt]
+        have hzsv := hzsF j
+        rw [ProvableType.eval_cells (M := fields (ns.getD j.val 0 + 1)),
+          eval_fields_eq_map] at hzsv
+        refine ⟨?_, ?_, hxPF j, hyPF j, hchF j⟩
+        · -- the piece value
+          have hpieces_eq : input.pieces
+              = input_var.pieces.map (fun c => AssignedCell.eval env.place env.env c) := by
+            rw [← h_input, ProvableStruct.eval_cells_eq_eval]
+            cases input_var with
+            | mk pv =>
+              rw [inputs_eval_literal]
+              exact eval_fields_eq_map env.place env.env pv
+          rw [Fin.getElem_fin, hpieces_eq, Vector.getElem_map]
+          have hrec := hrecF j
+          rw [getElem!_pos input_var.pieces j.val j.isLt] at hrec
+          simpa [AssignedCell.eval, Environment.get_advice] using hrec
+        · -- the running sums, pointwise off the vector equation
+          intro r
+          have hv := congrArg
+            (fun v : Vector Fp (ns.getD j.val 0 + 1) => v[r.val]'r.isLt) hzsv
+          simp only [Vector.getElem_map, Vector.getElem_ofFn] at hv
+          simpa [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+            Cell.of_rowOffset, Cell.of_column, Environment.get_advice] using hv)
+      (by
+        intro j
+        beta_reduce
+        simp only [Nat.zero_add]
+        obtain ⟨hsec, hyck⟩ := hGg j
+        rw [(hQg j)] at hyck
+        constructor
+        · simp only [xR]
+          linear_combination hsec
+        · have hq := qS3_yRhs (decide (j.val = ns.length - 1))
+            { xA := env.env.advice cfg.xA
+                ((env.place self + (offset + prefixRows ns j.val + ns.getD j.val 0 + 1)
+                  : ℕ) : ℤ),
+              xP := env.env.advice cfg.xP
+                ((env.place self + (offset + prefixRows ns j.val + ns.getD j.val 0 + 1)
+                  : ℕ) : ℤ),
+              lambda1 := env.env.advice cfg.lambda1
+                ((env.place self + (offset + prefixRows ns j.val + ns.getD j.val 0 + 1)
+                  : ℕ) : ℤ),
+              lambda2 := env.env.advice cfg.lambda2
+                ((env.place self + (offset + prefixRows ns j.val + ns.getD j.val 0 + 1)
+                  : ℕ) : ℤ) }
+          simp only [yA, xR] at hq ⊢
+          linear_combination hyck + hq)
+    obtain ⟨hPC, hZs, hContract⟩ := hfold
+    -- land the output on its record components
+    rw [ElaboratedRegionCircuit.output_eq] at h_output
+    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+      HashPiece.output_readState, HashPiece.output_cellAt,
+      output_assignAdvice] at h_output
+    rw [ProvableStruct.eval_cells_eq_eval, output_eval_literal, point_eval_literal,
+      row_eval_literal] at h_output
+    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
+    refine ⟨chunksOf (fun j r => if h : j < ns.length then msF ⟨j, h⟩ r else 0) ns 0,
+      hPC, ?_, ?_⟩
+    · -- the running sums (the extraction data)
+      rw [eval_zsCellsVal]
+      exact hZs
+    · -- the chain contract
+      intro A hAon hAx hAyA B hB
+      rw [← h_output] at hAx hAyA
+      have hres := hContract A hAon (by simpa using hAx) (by simpa using hAyA) B hB
+      rw [← h_output]
+      simp only []
+      exact ⟨hres.1.symm ▸ rfl, hres.2.symm ▸ rfl⟩
 
   completeness := by
     sorry
