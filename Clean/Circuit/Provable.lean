@@ -510,6 +510,8 @@ end ProvableStruct
 namespace ProvableType
 variable {α : TypeMap} [ProvableType α]
 
+attribute [grind norm] Prod.mk.injEq
+
 -- resolve `eval`, `const` and `varFromOffset` for a few basic types
 
 @[circuit_norm ↓ high]
