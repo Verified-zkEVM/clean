@@ -17,9 +17,9 @@ open Expression (var const add mul)
 variable {F : Type} [FiniteField F]
 
 def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
-    List (Constraint F) × ℕ :=
+    Except String (List (Constraint F) × ℕ) :=
   match ops with
-  | [] => (st.constraints, st.nextSignal)
+  | [] => pure (st.constraints, st.nextSignal)
   | .witness _ _ :: rest =>
     processOps vm rest st  -- VarMap already handles witness allocation
   | .assert e :: rest =>
@@ -27,7 +27,10 @@ def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F
     let constr : Constraint F := (lc, [(0, (1 : F))], [])
     let st2 := { st1 with constraints := constr :: st1.constraints }
     processOps vm rest st2
-  | _ :: rest => processOps vm rest st
+  | .lookup _ :: _ =>
+    .error "compileR1CS: lookup constraints cannot be represented in R1CS"
+  | .interact _ :: _ =>
+    .error "compileR1CS: interactions cannot be represented in R1CS"
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
 def linCombToJson (lc : List (ℕ × F)) : Json :=
@@ -41,19 +44,21 @@ def constraintToJson (c : Constraint F) : Json :=
 
 /--
 Compile Clean circuit operations to R1CS JSON (snarkjs-compatible format).
-Returns a pretty-printed JSON string.
+Returns a pretty-printed JSON string, or an error for operations that cannot
+be represented in R1CS (lookups, interactions) or witness IR the WASM
+backend cannot compile.
 -/
-def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
+def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Except String String := do
   let flatOps := Operations.toFlat ops
   -- Use the WASM compiler's VarMap to get the same signal layout
   let vm := VarMap.init numInputs
-  let (finalVm, _, _) := processFlatOps numInputs flatOps vm numInputs []
+  let (finalVm, _, _) ← processFlatOps numInputs flatOps vm numInputs []
   -- finalVm.nextLocal counts WASM locals (limbs). Convert to field element count.
   let witnessLocals := finalVm.nextLocal - numInputs * vm.numWords
   let witnessCount := witnessLocals / vm.numWords
   let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
   let st : FlattenState F := { nextSignal := totalSignals }
-  let (allConstraints, nVars) := processOps vm flatOps st
+  let (allConstraints, nVars) ← processOps vm flatOps st
   let ps := toString fieldPrime
   let constraintsArr := Json.arr (allConstraints.reverse.map constraintToJson |>.toArray)
   let json := Json.mkObj [
@@ -67,6 +72,6 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String
     ("nConstraints", Json.num allConstraints.length),
     ("constraints", constraintsArr)
   ]
-  json.pretty
+  pure json.pretty
 
 end Backends.Wasm

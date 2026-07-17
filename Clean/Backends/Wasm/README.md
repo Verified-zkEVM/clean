@@ -6,8 +6,10 @@ Compiles Clean witness-generation IR to WASM modules with full snarkjs Circom 2 
 
 Two compilers sharing a common flattening pass:
 
-- **WASM compiler** (`Compile.lean`): Compiles witness-generation IR to a typed WASM AST, emitted as WAT text or binary WASM. Generates all snarkjs-compatible ABI functions
+- **WASM compiler** (`Compile.lean`): Compiles witness-generation IR to a typed WASM AST, emitted as WAT text. Generates all snarkjs-compatible ABI functions
 - **R1CS exporter** (`R1CS.lean`): Converts circuit operations to R1CS JSON format, compatible with `snarkjs`
+
+Both entry points return `Except String String`: inputs the compiler does not support produce `.error` with a reason, never silently wrong output.
 
 ## Quick Start
 
@@ -15,14 +17,14 @@ Two compilers sharing a common flattening pass:
 import Clean.Backends.Wasm.Compile
 import Clean.Backends.Wasm.R1CS
 
--- Compile to WAT text (single-word, p < 2^32)
-def wat : String := compileModule 1009 2 myCircuitOps 1
+-- Compile to WAT text (single-word, p ≤ 2^32)
+def wat : Except String String := compileModule 1009 2 myCircuitOps 1
 
 -- Compile to WAT text (multi-word, BN254 needs 4 words)
-def watBN254 : String := compileModule BN254_PRIME 1 myPoseidonOps 4
+def watBN254 : Except String String := compileModule BN254_PRIME 1 myPoseidonOps 4
 
 -- Export R1CS constraints as JSON
-def r1csJson : String := compileR1CS BN254_PRIME 1 myPoseidonOps
+def r1csJson : Except String String := compileR1CS BN254_PRIME 1 myPoseidonOps
 ```
 
 
@@ -33,7 +35,8 @@ def r1csJson : String := compileR1CS BN254_PRIME 1 myPoseidonOps
 - `numInputs`: Number of public input signals
 - `ops`: List of circuit operations (`Operations F`)
 - `numWords`: Number of 64-bit limbs per field element. Must satisfy `numWords * 64 >= bitLength(fieldPrime)`
-  - Use `1` for primes < 2^32 (safe) or < 2^64 (requires `$mul64x64` for multiplication)
+  - Use `1` only for primes ≤ 2^32 (so products fit in an i64 before modular reduction; enforced with an error otherwise)
+  - Use `2` for primes between 2^32 and 2^64
   - Use `4` for BN254 (254-bit prime)
 
 
@@ -45,17 +48,20 @@ def r1csJson : String := compileR1CS BN254_PRIME 1 myPoseidonOps
 | ------------------------------------------- | --------------------------------------------------- |
 | `const`, `add`, `mul`, `inv`                | ✅ Supported                                         |
 | `var`, `localVar`                           | ✅ Supported                                         |
-| `ofNat`                                     | ✅ Supported (single-word; multi-word via field ops) |
+| `ofNat`, `val`                              | ✅ Single-word only (`.error` for multi-word)        |
 | `ite` (if-else)                             | ✅ Supported (multi-value for multi-word)            |
-| `feq`, `lt`, `neq`, `not`, `and` (booleans) | ✅ Supported                                         |
-| `envGet`                                    | ❌ Not yet supported                                 |
-| `listGet`                                   | ❌ Not yet supported                                 |
-| `dataGet`                                   | ❌ Not yet supported                                 |
-| `hintGet`                                   | ❌ Not yet supported                                 |
-| `idx` (outside `mapRange`)                  | ❌ Not yet supported                                 |
+| `lt`, `neq`, `not`, `and` (booleans)        | ✅ Supported                                         |
+| `feq`                                       | ✅ Single-word only (`.error` for multi-word)        |
+| `lit`, `mapRange`                           | ✅ Supported                                         |
+| `append`                                    | ❌ Not yet supported (`.error`)                      |
+| `envGet`, `listGet`, `dataGet`, `hintGet`   | ❌ Not yet supported (`.error`)                      |
+| `native` witnesses (Lean closures)          | ❌ Not compilable (`.error`)                         |
+| `idx` (outside `mapRange`)                  | ❌ Invalid (`.error`)                                |
+| lookups                                     | Ignored by witness gen; `.error` in R1CS export     |
+| interactions                                | ❌ Not supported (`.error`)                          |
 
 
-Unsupported operations cause a compile-time panic with a descriptive error message.
+Unsupported operations make the compiler return `.error` with a descriptive message. Note that Nat-sorted (`NExpr`) arithmetic is performed on single 64-bit words; operations whose intermediate values exceed 2^64 wrap around.
 
 ## Output Format
 
@@ -75,6 +81,7 @@ The generated WASM module exports these functions:
 | `getWitnessSize`                                     | Total number of signals                      |
 | `setInputSignal`                                     | Set an input signal value from shared memory |
 | `getWitness`                                         | Compute and return witness for a signal      |
+| `getMessageChar`                                     | Error message chars (always 0: no messages)  |
 | `getVersion` / `getMinorVersion` / `getPatchVersion` | snarkjs version info                         |
 | `init`                                               | Initialize signal memory                     |
 | `witness`                                            | Compute all witness values                   |
@@ -83,20 +90,20 @@ The generated WASM module exports these functions:
 ### Using with snarkjs
 
 ```bash
-# Generate witness
-snarkjs wtns calculate circuit.wasm input.json witness.wtns
-
-# The WAT text can be converted to binary WASM using wat2wasm:
+# The WAT text must first be converted to binary WASM using wat2wasm (from wabt):
 wat2wasm circuit.wat -o circuit.wasm
 
-# Or use Binary.lean to emit binary directly
+# Generate witness
+snarkjs wtns calculate circuit.wasm input.json witness.wtns
 ```
+
+The module implements the [Circom 2 witness-calculator ABI](https://github.com/iden3/circom_runtime/blob/master/js/witness_calculator.js) consumed by snarkjs.
 
 ## Field Arithmetic
 
-### Single-word (primes < 2^32 safe, or < 2^64 with care)
+### Single-word (primes ≤ 2^32)
 
-Uses WASM `i64` operations. Multiplication uses `i64.mul` followed by `i64.rem_u`. Safe for primes where `(p-1)^2 < 2^64` (i.e., `p < 2^32`).
+Uses WASM `i64` operations. Multiplication uses `i64.mul` followed by `i64.rem_u`. Safe for primes where `(p-1)^2 < 2^64` (i.e., `p ≤ 2^32`); larger primes with `numWords = 1` are rejected with an error.
 
 ### Multi-word (e.g., BN254)
 

@@ -2,9 +2,12 @@
 WASM Compiler: compiles Clean witness-generation IR to WASM modules
 with full snarkjs Circom 2 ABI compatibility.
 
-Produces typed WASM AST (Ast.lean) and emits either WAT text or
-LEB128-encoded WASM binary (Binary.lean). Supports single-word
-(primes < 2^63) and multi-word (BN254-size) field arithmetic.
+Produces typed WASM AST (Ast.lean) and emits WAT text. Supports
+single-word (primes ≤ 2^32, so products fit in an i64 before modular
+reduction) and multi-word (BN254-size) field arithmetic.
+
+All compilation entry points return `Except String _`: inputs the
+compiler does not support produce an error with a reason.
 -/
 import Clean.Circuit.WitnessIR
 import Clean.Circuit.Expression
@@ -87,50 +90,50 @@ def genSingleWordArith (p : ℕ) : List Func :=
     { name := "$fadd"
       params := [("", .i64), ("", .i64)]
       results := [.i64]
-      body := [.localGet 0, .localGet 1, .binop .i64 .add,
-               .const .i64 pVal, .binop .i64 .rem_u] }
+      body := [local.get 0, local.get 1, i64.add,
+               i64.const pVal, i64.rem_u] }
     ,
     { name := "$fmul"
       params := [("", .i64), ("", .i64)]
       results := [.i64]
-      body := [.localGet 0, .localGet 1, .binop .i64 .mul,
-               .const .i64 pVal, .binop .i64 .rem_u] }
+      body := [local.get 0, local.get 1, i64.mul,
+               i64.const pVal, i64.rem_u] }
     ,
     { name := "$fsub"
       params := [("", .i64), ("", .i64)]
       results := [.i64]
       locals := [("$d", .i64)]
-      body := [.localGet 0, .localGet 1, .binop .i64 .sub, .localTee 2,
-               .const .i64 0, .relop .i64 .lt_s,
+      body := [local.get 0, local.get 1, i64.sub, local.tee 2,
+               i64.const 0, i64.lt_s,
                .ifElse [ValType.i64]
-                 [.localGet 2, .const .i64 pVal, .binop .i64 .add]
-                 [.localGet 2],
-               .const .i64 pVal, .binop .i64 .rem_u] }
+                 [local.get 2, i64.const pVal, i64.add]
+                 [local.get 2],
+               i64.const pVal, i64.rem_u] }
     ,
     { name := "$fpow"
       params := [("", .i64), ("", .i64)]
       results := [.i64]
       locals := [("$r", .i64), ("$b", .i64), ("$e", .i64)]
-      body := [.const .i64 1, .localSet 2,
-               .localGet 0, .localSet 3,
-               .localGet 1, .localSet 4,
-               .block "done" none [
-                 .loop "loop" none [
-                   .localGet 4, .relop .i64 .eqz, .brIf "done",
-                   .localGet 4, .const .i64 1, .binop .i64 .and,
-                   .relop .i64 .eqz,
-                   .ifElse [] [] [.localGet 2, .localGet 3, .call "$fmul", .localSet 2],
-                   .localGet 3, .localGet 3, .call "$fmul", .localSet 3,
-                   .localGet 4, .const .i64 1, .binop .i64 .shr_u, .localSet 4,
-                   .br "loop"
+      body := [i64.const 1, local.set 2,
+               local.get 0, local.set 3,
+               local.get 1, local.set 4,
+               block "done" [
+                 loop "loop" [
+                   local.get 4, i64.eqz, br_if "done",
+                   local.get 4, i64.const 1, i64.and,
+                   i64.eqz,
+                   .ifElse [] [] [local.get 2, local.get 3, call "$fmul", local.set 2],
+                   local.get 3, local.get 3, call "$fmul", local.set 3,
+                   local.get 4, i64.const 1, i64.shr_u, local.set 4,
+                   br "loop"
                  ]
                ],
-               .localGet 2] }
+               local.get 2] }
     ,
     { name := "$finv"
       params := [("", .i64)]
       results := [.i64]
-      body := [.localGet 0, .const .i64 pm2, .call "$fpow"] }
+      body := [local.get 0, i64.const pm2, call "$fpow"] }
   ]
 
 /-! ## Multi-word field arithmetic (numWords > 1) -/
@@ -464,9 +467,12 @@ def genMultiWordArith (p numWords : ℕ) : List Func :=
 structure VarMap where
   env : List (ℕ × ℕ) := []
   nextLocal : ℕ := 0
+  /-- Inside a `mapRange` body, the (compile-time constant) index of the current
+      unrolled iteration; `none` outside of any `mapRange`. -/
   loopIdx : Option ℕ := none
   letBase : ℕ := 0
   numWords : ℕ := 1
+deriving Inhabited
 
 def VarMap.init (numInputs : ℕ) (numWords : ℕ := 1) : VarMap :=
   { env := List.range numInputs |>.map fun i => (i, i * numWords)
@@ -501,57 +507,115 @@ def pushVar (idx : ℕ) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (base + w))) cb
 
 mutual
-partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → CodeBuilder
-  | .const c, cb => pushConst c vm cb
-  | .add a e, cb => let cb := compileFExpr vm a cb; let cb := compileFExpr vm e cb; cb.push (call "$fadd")
-  | .mul a e, cb => let cb := compileFExpr vm a cb; let cb := compileFExpr vm e cb; cb.push (call "$fmul")
-  | .inv a, cb => let cb := compileFExpr vm a cb; cb.push (call "$finv")
-  | .expr (.var i), cb => pushVar i.index vm cb
-  | .expr (.const c), cb => pushConst c vm cb
-  | .expr (.add a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fadd")
-  | .expr (.mul a e), cb => let cb := compileFExpr vm (.expr a) cb; let cb := compileFExpr vm (.expr e) cb; cb.push (call "$fmul")
-  | .ite c t e, cb =>
-    let nw := vm.numWords
-    let cb := compileBExpr vm c cb
-    let thenCB := compileFExpr vm t {}
-    let elseCB := compileFExpr vm e {}
-    let results := List.replicate nw ValType.i64
-    cb.push (.ifElse results thenCB.build elseCB.build)
-  | .ofNat n, cb => compileNExpr vm n cb
-  | .localVar i, cb => pushVar (vm.letBase + i) vm cb
-  | .envGet _, _ => panic! "compileFExpr: envGet is not yet supported"
-  | .listGet _ _, _ => panic! "compileFExpr: listGet is not yet supported"
-  | .dataGet _ _ _ _, _ => panic! "compileFExpr: dataGet is not yet supported"
-  | .hintGet _ _ _ _, _ => panic! "compileFExpr: hintGet is not yet supported"
+partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeBuilder
+  | .const c, cb => pure (pushConst c vm cb)
+  | .add a e, cb => do
+    let cb ← compileFExpr vm a cb
+    let cb ← compileFExpr vm e cb
+    pure (cb.push (call "$fadd"))
+  | .mul a e, cb => do
+    let cb ← compileFExpr vm a cb
+    let cb ← compileFExpr vm e cb
+    pure (cb.push (call "$fmul"))
+  | .inv a, cb => do
+    let cb ← compileFExpr vm a cb
+    pure (cb.push (call "$finv"))
+  | .expr (.var i), cb => pure (pushVar i.index vm cb)
+  | .expr (.const c), cb => pure (pushConst c vm cb)
+  | .expr (.add a e), cb => do
+    let cb ← compileFExpr vm (.expr a) cb
+    let cb ← compileFExpr vm (.expr e) cb
+    pure (cb.push (call "$fadd"))
+  | .expr (.mul a e), cb => do
+    let cb ← compileFExpr vm (.expr a) cb
+    let cb ← compileFExpr vm (.expr e) cb
+    pure (cb.push (call "$fmul"))
+  | .ite c t e, cb => do
+    let cond ← compileBExpr vm c cb
+    let thenCB ← compileFExpr vm t {}
+    let elseCB ← compileFExpr vm e {}
+    let results := List.replicate vm.numWords ValType.i64
+    pure (cond.push (.ifElse results thenCB.build elseCB.build))
+  | .ofNat n, cb => do
+    if vm.numWords ≠ 1 then
+      throw s!"compileFExpr: ofNat is not yet supported for multi-word fields (numWords = {vm.numWords})"
+    let cb ← compileNExpr vm n cb
+    -- Reduce into the canonical representative: fromNat n = n mod p.
+    -- `$fadd n 0` computes (n + 0) mod p without needing the prime here.
+    pure (cb.push (i64.const 0) |>.push (call "$fadd"))
+  | .localVar i, cb => pure (pushVar (vm.letBase + i) vm cb)
+  | .envGet _, _ => .error "compileFExpr: envGet is not yet supported"
+  | .listGet _ _, _ => .error "compileFExpr: listGet is not yet supported"
+  | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
+  | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
 
-partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
-  | .const n, cb => cb.push (i64.const n)
-  | .val x, cb => compileFExpr vm x cb
-  | .idx, cb => match vm.loopIdx with | some _ => cb.push (local.get 0) | none => panic! "compileNExpr: idx used outside of mapRange loop"
-  | .localVar i, cb => cb.push (local.get (vm.lookup (vm.letBase + i)))
-  | .add a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.add
-  | .mul a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.mul
-  | .div a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push (.binop .i64 .div_u)
-  | .mod a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.rem_u
-  | .land a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.and
-  | .lor a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.or
-  | .lxor a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push (.binop .i64 .xor)
-  | .shiftL a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.shl
-  | .shiftR a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.shr_u
-  | .ite c t e, cb =>
-    let cb := compileBExpr vm c cb
-    let thenCB := compileNExpr vm t {}
-    let elseCB := compileNExpr vm e {}
-    cb.push (.ifElse [ValType.i64] thenCB.build elseCB.build)
+partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeBuilder
+  | .const n, cb =>
+    if n < 2^64 then pure (cb.push (i64.const n))
+    else .error s!"compileNExpr: constant {n} does not fit in 64 bits"
+  | .val x, cb =>
+    -- Naturals are single i64 words; a multi-word field element cannot be
+    -- narrowed to one word, so `val` requires numWords = 1.
+    if vm.numWords = 1 then compileFExpr vm x cb
+    else .error s!"compileNExpr: val is not yet supported for multi-word fields (numWords = {vm.numWords})"
+  | .idx, cb =>
+    -- mapRange loops are unrolled at compile time, so the index is a constant.
+    match vm.loopIdx with
+    | some i => pure (cb.push (i64.const i))
+    | none => .error "compileNExpr: idx used outside of a mapRange loop"
+  | .localVar i, cb => pure (cb.push (local.get (vm.lookup (vm.letBase + i))))
+  | .add a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.add)
+  | .mul a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.mul)
+  | .div a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push (.binop .i64 .div_u))
+  | .mod a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.rem_u)
+  | .land a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.and)
+  | .lor a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.or)
+  | .lxor a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push (.binop .i64 .xor))
+  | .shiftL a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.shl)
+  | .shiftR a e, cb => do
+    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.shr_u)
+  | .ite c t e, cb => do
+    let cond ← compileBExpr vm c cb
+    let thenCB ← compileNExpr vm t {}
+    let elseCB ← compileNExpr vm e {}
+    pure (cond.push (.ifElse [ValType.i64] thenCB.build elseCB.build))
 
-partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → CodeBuilder
-  | .true, cb => cb.push (i32.const 1)
-  | .false, cb => cb.push (i32.const 0)
-  | .feq a e, cb => let cb := compileFExpr vm a cb; let cb := compileFExpr vm e cb; cb.push i64.eq |>.push i32.wrap_i64
-  | .lt a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.lt_u |>.push i32.wrap_i64
-  | .neq a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.eq |>.push i64.eqz |>.push i32.wrap_i64
-  | .not x, cb => let cb := compileBExpr vm x cb; cb.push i32.eqz
-  | .and a e, cb => let cb := compileBExpr vm a cb; let cb := compileBExpr vm e cb; cb.push i32.and
+/-- Conditions compile to `i32`, the native WASM boolean type.
+    WASM relops on i64 operands already return i32, so no conversions are needed. -/
+partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeBuilder
+  | .true, cb => pure (cb.push (i32.const 1))
+  | .false, cb => pure (cb.push (i32.const 0))
+  | .feq a e, cb => do
+    -- Single i64 equality decides field equality only when elements are one word.
+    if vm.numWords ≠ 1 then
+      throw s!"compileBExpr: feq is not yet supported for multi-word fields (numWords = {vm.numWords})"
+    let cb ← compileFExpr vm a cb
+    let cb ← compileFExpr vm e cb
+    pure (cb.push i64.eq)
+  | .lt a e, cb => do
+    let cb ← compileNExpr vm a cb
+    let cb ← compileNExpr vm e cb
+    pure (cb.push i64.lt_u)
+  | .neq a e, cb => do
+    -- NOTE: despite the name, `BExpr.neq` is Nat *equality* (see `BExpr.eval`).
+    let cb ← compileNExpr vm a cb
+    let cb ← compileNExpr vm e cb
+    pure (cb.push i64.eq)
+  | .not x, cb => do
+    let cb ← compileBExpr vm x cb
+    pure (cb.push i32.eqz)
+  | .and a e, cb => do
+    let cb ← compileBExpr vm a cb
+    let cb ← compileBExpr vm e cb
+    pure (cb.push i32.and)
 end
 
 /-! ## Expression flattening (shared by WASM and R1CS compilers) -/
@@ -676,69 +740,98 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   (numInt, locals.reverse, instrs)
 
 /-- compile let-steps (letF/letN) to instructions. -/
-def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) : VarMap × ℕ × List Instr :=
-  steps.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) step =>
+def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
+    Except String (VarMap × ℕ × List Instr) :=
+  steps.foldlM (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) step => do
     match step with
     | .letF e =>
-      let cb := compileFExpr vm e {}
+      let cb ← compileFExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
       -- Capture all nw limbs: forward order pops lowest limb first
-      (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
+      pure (vm', vi + 1, instrs ++ cb.build ++ (locs.reverse.map fun idx => local.set idx))
     | .letN e =>
-      let cb := compileNExpr vm e {}
+      let cb ← compileNExpr vm e {}
       let (vm', locs) := vm.alloc 1 vi
-      (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
+      -- A Nat is a single i64: store it in the low limb and zero the rest.
+      let capture := match locs with
+        | [] => []
+        | base :: highs => local.set base :: (highs >>= fun idx => [i64.const 0, local.set idx])
+      pure (vm', vi + 1, instrs ++ cb.build ++ capture)
   ) (vm, vi, [])
 
 /-- compile a list of FExpr literals to instructions. -/
-def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F)) : VarMap × ℕ × List Instr :=
-  es.foldl (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) =>
-    let cb := compileFExpr vm e {}
+def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F)) :
+    Except String (VarMap × ℕ × List Instr) :=
+  es.foldlM (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) => do
+    let cb ← compileFExpr vm e {}
     let (vm', locs) := vm.alloc 1 vi
-    (vm', vi + 1, instrs ++ cb.build ++ locs.reverse.map fun idx => local.set idx)
+    pure (vm', vi + 1, instrs ++ cb.build ++ (locs.reverse.map fun idx => local.set idx))
   ) (vm, vi, acc)
 
 /-- compile a VExpr to instructions. -/
-def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) : {m : ℕ} → VExpr F m → VarMap × ℕ × List Instr
+def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
+    {m : ℕ} → VExpr F m → Except String (VarMap × ℕ × List Instr)
   | _, .lit es => compileLit vm vi acc es.toList
-  | _, .mapRange n body =>
-    match body with
-    | .envGet _ => (vm, vi, acc)
-    | _ =>
-      let (vmOut, _) := vm.alloc n vi
-      let outBase := vmOut.nextLocal - n
-      let instrs := (List.range n).foldl (fun (is : List Instr) (i : ℕ) =>
-        let vmB := { vmOut with loopIdx := some 0 }
-        let cb := compileFExpr vmB body {}
-        is ++ [i64.const i, local.set 0] ++ cb.build ++ [local.set (outBase + i)]
-      ) acc
-      ({ vmOut with loopIdx := none }, vi + n, instrs)
-  | _, .append _ _ => (vm, vi, acc)
+  | _, .mapRange n body => do
+    let nw := vm.numWords
+    let (vmOut, _) := vm.alloc n vi
+    let outBase := vmOut.nextLocal - n * nw
+    let instrs ← (List.range n).foldlM (fun (is : List Instr) (i : ℕ) => do
+      -- The loop is unrolled at compile time; `idx` in the body is the constant `i`.
+      let cb ← compileFExpr { vmOut with loopIdx := some i } body {}
+      -- Capture all nw limbs of element i: forward order pops lowest limb first
+      let elemBase := outBase + i * nw
+      let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
+      pure (is ++ cb.build ++ capture)
+    ) acc
+    pure (vmOut, vi + n, instrs)
+  | _, .append _ _ => .error "compileVExpr: append is not yet supported"
 
 /-- process flat operations, accumulating instructions. -/
-def processFlatOps (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ → List Instr → VarMap × ℕ × List Instr
-  | [], vm, _, instrs => (vm, numInputs, instrs)
-  | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc =>
+def processFlatOps (numInputs : ℕ) :
+    List (FlatOperation F) → VarMap → ℕ → List Instr → Except String (VarMap × ℕ × List Instr)
+  | [], vm, _, instrs => pure (vm, numInputs, instrs)
+  | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc => do
     let vmStep := { vm with letBase := vi }
-    let (vmS, viS, stepInstrs) := compileSteps vmStep vi steps
-    let (vmOut, viOut, outInstrs) := compileVExpr vmS viS stepInstrs vexpr
+    let (vmS, viS, stepInstrs) ← compileSteps vmStep vi steps
+    let (vmOut, viOut, outInstrs) ← compileVExpr vmS viS stepInstrs vexpr
     processFlatOps numInputs rest vmOut viOut (acc ++ outInstrs)
-  | _ :: rest, vm, vi, acc => processFlatOps numInputs rest vm vi acc
+  | .witness _ (.native _) :: _, _, _, _ =>
+    .error "processFlatOps: cannot compile a `native` witness (arbitrary Lean closure); rewrite it as structured witness IR"
+  | .assert _ :: rest, vm, vi, acc =>
+    -- Asserts allocate no witnesses and need no code here; intermediate signals
+    -- they induce are compiled separately by `discoverAndCompileIntermediates`.
+    processFlatOps numInputs rest vm vi acc
+  | .lookup _ :: rest, vm, vi, acc =>
+    -- Lookups constrain existing values and allocate no witnesses,
+    -- so witness generation ignores them.
+    processFlatOps numInputs rest vm vi acc
+  | .interact _ :: _, _, _, _ =>
+    .error "processFlatOps: interactions are not supported by the WASM backend"
 
-/-- Compile to a WASM Module. This is the main entry point.
-    `numWords` must be at least `ceil(bitLength(fieldPrime) / 64)`. -/
-def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) : String :=
+/-- Compile to a WASM module in WAT text form. This is the main entry point.
+    `numWords` must be at least `ceil(bitLength(fieldPrime) / 64)`, and
+    `numWords = 1` additionally requires `fieldPrime ≤ 2^32` so that products
+    of two field elements fit in an i64 before modular reduction.
+    Returns an error for inputs the compiler does not support. -/
+def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+    Except String String := do
   let nw := numWords
-  -- Validate that numWords is sufficient for the prime
+  -- Validate that numWords is sufficient for the prime.
+  -- For single-word (nw=1), the prime must satisfy (p-1)^2 < 2^64
+  -- to avoid i64.mul overflow, i.e., p <= 2^32.
   let primeBits := Nat.log2 fieldPrime + 1
+  let minWords := (primeBits + 63) / 64
+  if nw = 1 ∧ fieldPrime > 2^32 then
+    throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords 2}"
   if nw * 64 < primeBits then
-    s!"(error \"numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {((primeBits + 63) / 64)} words\")"
-  else let vm := VarMap.init numInputs nw
+    throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
+  let vm := VarMap.init numInputs nw
   let flatOps := Operations.toFlat ops
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
   -- and pushVar uses the circuit variable index from the witness IR directly.
-  let (finalVm, _, bodyInstrs) := processFlatOps numInputs flatOps vm numInputs []
+  let (finalVm, _, bodyInstrs) ← processFlatOps numInputs flatOps vm numInputs []
   let witnessWords := finalVm.nextLocal - numInputs * nw
   let witnessCount := witnessWords / nw
   let n32 := nw * 2
@@ -894,4 +987,4 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       { computeFunc with name := "$witness", exportName := some "witness" }]
       ++ abiFuncs
   }
-  Module.toString module
+  pure (Module.toString module)
