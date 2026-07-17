@@ -102,7 +102,7 @@ def initialYQGate (cfg : Config) : Gate Fp where
   constraints :=
     let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
     Constraints.withSelector cfg.qS4
-      [("init y_q", (2 : Fp) * yQ - yAExpr cfg 0)]
+      [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
 
 /-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)` (`chip.rs:49`, `98-102`): `0` when
 `q_s2 ∈ {0,1}`, `2` when `q_s2 = 2` (final piece). -/
@@ -125,8 +125,8 @@ def sinsemillaGate (cfg : Config) : Gate Fp where
     let l1Next : Expression Fp Query := queryAdvice cfg.lambda1 1
     let secant := l2Cur * l2Cur - (xANext + xRExpr cfg 0 + xACur)
     let yCheck :=
-      (4 : Fp) * l2Cur * (xACur - xANext)
-        - ((2 : Fp) * yAExpr cfg 0
+      l2Cur * (4 : Fp) * (xACur - xANext)
+        - (yAExpr cfg 0 * (2 : Fp)
             + ((2 : Fp) - qS3Expr cfg) * yAExpr cfg 1
             + qS3Expr cfg * (2 : Fp) * l1Next)
     Constraints.withSelector cfg.qS1
@@ -163,26 +163,36 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
 
 /-! ## Configure
 
-Rust `SinsemillaConfig::configure` (`chip.rs`): allocate the selectors, take the handed-down
-columns, register the two gates and the 3-tuple lookup. The generator-table columns are
-handed down (loaded separately by `Basic.load`). -/
-def configure (G : Generators) (fixedYQ : Column .fixed) (qS2 : Column .fixed)
-    (xA xP lambda1 lambda2 bits witnessPieces : Column .advice)
+Rust `SinsemillaChip::configure` (`chip.rs:170-286`), VK-exact in registration order:
+equality-enable all five double-and-add advices (`advices[0..5]` = `x_a, x_p, bits, λ₁,
+λ₂` — chip.rs:180-182), allocate `q_sinsemilla1` (complex), `q_sinsemilla2` (a FIXED
+column, allocated here), `q_sinsemilla4` (simple) in struct-literal order (chip.rs:185-187),
+then register the 3-tuple lookup (`GeneratorTableConfig::configure`, chip.rs:208) BEFORE
+the `Initial y_Q` and `Sinsemilla` gates (chip.rs:225, 243). `fixed_y_q` and the generator
+table columns are handed down (the table is loaded separately by `Basic.load`); the
+`allow_init_from_private_point = false` branch is the one ported (orchard's). -/
+def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) : Configure Fp Config := do
+  -- chip.rs:180-182 — equality on all advice columns, `advices` index order
   enableEquality xA.toAny
-  enableEquality lambda1.toAny
+  enableEquality xP.toAny
   enableEquality bits.toAny
+  enableEquality lambda1.toAny
+  enableEquality lambda2.toAny
+  -- chip.rs:185-187 — q_s1 complex, q_s2 a fresh fixed column, q_s4 simple
   let qS1 ← complexSelector
+  let qS2 ← fixedColumn
   let qS4 ← selector
   let cfg : Config :=
     { qS1, qS2, qS4, fixedYQ, xA, xP, lambda1, lambda2, bits, witnessPieces,
       generatorTable := genTable }
-  createGate (initialYQGate cfg)
-  createGate (sinsemillaGate cfg)
-  -- register the 3-tuple lookup: three (input, tableColumn) pairs
+  -- chip.rs:208 — the 3-tuple generator lookup, registered before the gates
   lookup [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
+  createGate (initialYQGate cfg)
+  createGate (sinsemillaGate cfg)
   return cfg
 
 /-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece
@@ -697,11 +707,11 @@ private theorem complete_gates (G : Generators)
       - ((s.step ((G.S (pieceWord p (i + 1))).x, (G.S (pieceWord p (i + 1))).y)
             (pieceZ p (i + 1))).row.xA
           + (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP) + s.row.xA) = 0 ∧
-    4 * s.row.lambda2 * (s.row.xA
+    s.row.lambda2 * 4 * (s.row.xA
         - (s.step ((G.S (pieceWord p (i + 1))).x, (G.S (pieceWord p (i + 1))).y)
             (pieceZ p (i + 1))).row.xA)
-      - (2 * ((s.row.lambda1 + s.row.lambda2)
-            * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)))
+      - ((s.row.lambda1 + s.row.lambda2)
+            * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)) * 2
           + (2 - (1 - 1))
               * (((s.step ((G.S (pieceWord p (i + 1))).x, (G.S (pieceWord p (i + 1))).y)
                     (pieceZ p (i + 1))).row.lambda1
