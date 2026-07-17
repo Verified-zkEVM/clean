@@ -377,10 +377,11 @@ def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : Prove
 
 -- unfold `AgreesBelow` under `circuit_norm` so its `∀ i < n` / hint / data facts are directly
 -- available to `simp`/`grind` in `computableWitnesses` proofs (no manual unfolding needed)
-@[circuit_norm, grind] def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
+@[circuit_norm, computable_witnesses_norm, grind]
+def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
-@[grind]
+@[computable_witnesses_norm, grind]
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
   env.AgreesBelow n env' → f env = f env'
 

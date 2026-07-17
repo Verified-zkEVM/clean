@@ -652,7 +652,7 @@ lemma fromElements_inj_iff {F} {A B : Vector F (size M)} :
 
 -- basic simp lemmas
 
-@[circuit_norm]
+@[circuit_norm, grind norm]
 theorem eval_const {env : Environment F} {x : α F} :
     Eval.eval env (const x) = x := by
   rw [CircuitType.eval_expression]
@@ -711,6 +711,7 @@ theorem toElements_eval (env : Environment F)
   rw [CircuitType.eval_expression]
   simp only [eval, toElements_fromElements]
 
+@[grind =]
 theorem getElem_eval_toElements
   {env : Environment F} (x : α (Expression F)) (i : ℕ) (hi : i < size α) :
     Expression.eval env (toElements x)[i] = (toElements (Eval.eval env x))[i] := by

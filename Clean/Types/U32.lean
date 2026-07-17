@@ -36,6 +36,17 @@ instance (T : Type) [Repr T] : Repr (U32 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ "⟩"
 
 namespace U32
+@[grind =]
+theorem size_eq : size U32 = 4 := rfl
+
+@[grind =]
+theorem eval_eq_components {F : Type} [FiniteField F]
+    (env : Environment F) (x : U32 (Expression F)) :
+    eval env x =
+      { x0 := eval env x.x0, x1 := eval env x.x1,
+        x2 := eval env x.x2, x3 := eval env x.x3 } := by
+  with_unfolding_all rfl
+
 def toLimbs {F} (x : U32 F) : Vector F 4 := toElements x
 def fromLimbs {F} (v : Vector F 4) : U32 F := fromElements v
 
