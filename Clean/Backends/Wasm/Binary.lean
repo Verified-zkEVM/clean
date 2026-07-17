@@ -33,7 +33,26 @@ def binopOffset : BinOp → ℕ
   | .shl => 10 | .shr_u => 11 | .shr_s => 12
   | .rotl => 13 | .rotr => 14
 
-partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) : Instr → ByteArray
+/-- Label stack entry: (label name, nesting depth from current position). -/
+abbrev LabelStack := List (String × ℕ)
+
+/-- Look up a label in the stack and return its relative depth (0-indexed from innermost). -/
+def resolveLabel (stack : LabelStack) (label : String) : ℕ :=
+  match stack.findIdx? fun (l, _) => l = label with
+  | some idx => idx
+  | none => 0
+
+/-- Encode a block type (empty or single value). -/
+def encodeBlockType (arr : ByteArray) : Option ValType → ByteArray
+  | none => arr.push 0x40
+  | some .i32 => arr.push 0x7F
+  | some .i64 => arr.push 0x7E
+
+/-- Encode memory alignment immediate. The align field is a power-of-2 exponent. -/
+def encodeMemArg (arr : ByteArray) (offset align : ℕ) : ByteArray :=
+  putULEB128 (putULEB128 arr align) offset
+
+partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack) : Instr → ByteArray
   | .const .i32 n => putULEB128 (arr.push 0x41) n
   | .const .i64 n => putULEB128 (arr.push 0x42) n
   | .binop .i32 op => arr.push (UInt8.ofNat (0x6A + binopOffset op))
@@ -45,41 +64,45 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) : Instr
   | .relop .i64 .eq => arr.push 0x51
   | .relop .i32 .lt_u => arr.push 0x49
   | .relop .i64 .lt_u => arr.push 0x65
+  | .relop .i32 .eqz => arr.push 0x45
   | .relop .i64 .eqz => arr.push 0x50
   | .relop _ _ => arr
   | .localGet idx => putULEB128 (arr.push 0x20) idx
   | .localSet idx => putULEB128 (arr.push 0x21) idx
   | .localTee idx => putULEB128 (arr.push 0x22) idx
   | .call name => putULEB128 (arr.push 0x10) (resolveCall name)
-  | .br _ => putULEB128 (arr.push 0x0C) 0
-  | .brIf _ => putULEB128 (arr.push 0x0D) 0
-  | .block _ _ body => encodeBlock arr resolveCall 0x02 body
-  | .loop _ _ body => encodeBlock arr resolveCall 0x03 body
+  | .br label => putULEB128 (arr.push 0x0C) (resolveLabel labels label)
+  | .brIf label => putULEB128 (arr.push 0x0D) (resolveLabel labels label)
+  | .block label result body => encodeBlock arr resolveCall labels 0x02 label result body
+  | .loop label result body => encodeBlock arr resolveCall labels 0x03 label result body
   | .ifElse result thenBody elseBody =>
     let arr := arr.push 0x04
     let arr := match result with
       | [] => arr.push 0x40  -- empty block type
       | [t] => arr.push (vtOpc t)  -- single result type
       | _ => arr.push 0x40  -- multi-value: placeholder (needs type section ref)
-    let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall i) arr
+    let innerLabels := ("", 0) :: labels  -- implicit label for if-else
+    let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
     let arr := if elseBody.isEmpty then arr else
-      (arr.push 0x05) |> fun a => elseBody.foldl (fun a' i => encodeInstr a' resolveCall i) a
+      (arr.push 0x05) |> fun a => elseBody.foldl (fun a' i => encodeInstr a' resolveCall innerLabels i) a
     arr.push 0x0B
-  | .memLoad .i32 off _ => putULEB128 (putULEB128 (arr.push 0x28) 2) off
-  | .memLoad .i64 off _ => putULEB128 (putULEB128 (arr.push 0x29) 3) off
-  | .memStore .i32 off _ => putULEB128 (putULEB128 (arr.push 0x36) 2) off
-  | .memStore .i64 off _ => putULEB128 (putULEB128 (arr.push 0x37) 3) off
+  | .memLoad .i32 off align => encodeMemArg (arr.push 0x28) off align
+  | .memLoad .i64 off align => encodeMemArg (arr.push 0x29) off align
+  | .memStore .i32 off align => encodeMemArg (arr.push 0x36) off align
+  | .memStore .i64 off align => encodeMemArg (arr.push 0x37) off align
   | .drop => arr.push 0x1A
   | .select => arr.push 0x1B
   | .unreachable => arr.push 0x00
   | .nop => arr.push 0x01
   | .return => arr.push 0x0F
 
-/-- Encode a block/loop body. -/
-partial def encodeBlock (arr : ByteArray) (resolveCall : String → ℕ) (opcode : UInt8) (body : List Instr) : ByteArray :=
+/-- Encode a block/loop body with correct result type and label tracking. -/
+partial def encodeBlock (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack)
+    (opcode : UInt8) (label : String) (result : Option ValType) (body : List Instr) : ByteArray :=
   let arr := arr.push opcode
-  let arr := arr.push 0x40  -- empty result type
-  let arr := body.foldl (fun a i => encodeInstr a resolveCall i) arr
+  let arr := encodeBlockType arr result
+  let innerLabels := (label, 0) :: labels.map fun (l, d) => (l, d + 1)
+  let arr := body.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
   arr.push 0x0B
 
 /-! ## Module encoding -/
@@ -148,7 +171,7 @@ def Module.toBinary (m : Module) : ByteArray :=
       putULEB128 (a.push (UInt8.ofNat 1)) 0 |> fun a' => a'.push (vtOpc t)
     ) localSec
     -- Body
-    let bodyArr := f.body.foldl (fun a i => encodeInstr a nameToIdx i) localSec
+    let bodyArr := f.body.foldl (fun a i => encodeInstr a nameToIdx [] i) localSec
     let funcBytes := bodyArr.push 0x0B  -- end
     putULEB128 arr 0 funcBytes.size |> fun a => a ++ funcBytes
   ) (putULEB128 ByteArray.empty 0 codeCount)

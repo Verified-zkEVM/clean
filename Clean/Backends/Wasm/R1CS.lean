@@ -16,26 +16,26 @@ open Expression (var const add mul)
 
 variable {F : Type} [FiniteField F]
 
-def processOps (p : ℕ) (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState) :
-    List Constraint × ℕ :=
+def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
+    List (Constraint F) × ℕ :=
   match ops with
   | [] => (st.constraints, st.nextSignal)
   | .witness _ _ :: rest =>
-    processOps p vm rest st  -- VarMap already handles witness allocation
+    processOps vm rest st  -- VarMap already handles witness allocation
   | .assert e :: rest =>
-    let (lc, st1) := flattenExpr p vm e st
-    let constr : Constraint := (lc, [(0, 1)], [])
+    let (lc, st1) := flattenExpr vm e st
+    let constr : Constraint F := (lc, [(0, (1 : F))], [])
     let st2 := { st1 with constraints := constr :: st1.constraints }
-    processOps p vm rest st2
-  | _ :: rest => processOps p vm rest st
+    processOps vm rest st2
+  | _ :: rest => processOps vm rest st
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
-def linCombToJson (lc : LinComb) : Json :=
+def linCombToJson (lc : List (ℕ × F)) : Json :=
   Json.mkObj (lc.map fun (i, coeff) =>
-    (toString i, Json.str (toString coeff)))
+    (toString i, Json.str (toString (FiniteField.val coeff))))
 
 /-- Convert a constraint (A, B, C) to a JSON array of three sparse objects. -/
-def constraintToJson (c : Constraint) : Json :=
+def constraintToJson (c : Constraint F) : Json :=
   let (a, b, c') := c
   Json.arr #[linCombToJson a, linCombToJson b, linCombToJson c']
 
@@ -44,7 +44,7 @@ Compile Clean circuit operations to R1CS JSON (snarkjs-compatible format).
 Returns a pretty-printed JSON string.
 -/
 def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String :=
-  let flatOps := flattenOps ops
+  let flatOps := Operations.toFlat ops
   -- Use the WASM compiler's VarMap to get the same signal layout
   let vm := VarMap.init numInputs
   let (finalVm, _, _) := processFlatOps numInputs flatOps vm numInputs []
@@ -52,8 +52,8 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : String
   let witnessLocals := finalVm.nextLocal - numInputs * vm.numWords
   let witnessCount := witnessLocals / vm.numWords
   let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
-  let st : FlattenState := { nextSignal := totalSignals }
-  let (allConstraints, nVars) := processOps fieldPrime vm flatOps st
+  let st : FlattenState F := { nextSignal := totalSignals }
+  let (allConstraints, nVars) := processOps vm flatOps st
   let ps := toString fieldPrime
   let constraintsArr := Json.arr (allConstraints.reverse.map constraintToJson |>.toArray)
   let json := Json.mkObj [

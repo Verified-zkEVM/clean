@@ -22,6 +22,7 @@ variable {F : Type} [FiniteField F]
 
 structure CodeBuilder where
   instrs : List Instr := []
+deriving Inhabited
 
 def CodeBuilder.push (i : Instr) (cb : CodeBuilder) : CodeBuilder :=
   { cb with instrs := i :: cb.instrs }
@@ -59,6 +60,7 @@ def i32.wrap_i64 : Instr := .unop .i32 .wrap_i64
 def i32.eqz : Instr := .relop .i32 .eqz
 def i32.mul : Instr := .binop .i32 .mul
 def i32.add : Instr := .binop .i32 .add
+def i32.and : Instr := .binop .i32 .and
 
 -- Local access (by index)
 def local.get (idx : ℕ) : Instr := .localGet idx
@@ -267,16 +269,16 @@ def genFmul (p numWords : ℕ) : Func :=
   -- Step 2: c = a * b (N×N schoolbook → 2N limbs, scratch at 8-11)
   let mainSB := genSchoolbook N 0 N cBase
 
-  -- Step 3: q1 = c[3..7] (c >> 192, 5 limbs)
+  -- Step 3: q1 = c[N-1..2N] (c >> ((N-1)*64), N+1 limbs)
   let extractQ1 : List Instr :=
-    (List.range (N+1)) >>= fun i => [ local.get (cBase + 3 + i), local.set (q1Base + i) ]
+    (List.range (N+1)) >>= fun i => [ local.get (cBase + (N-1) + i), local.set (q1Base + i) ]
 
   -- Step 4: q2 = q1 * μ (5×5 schoolbook → 9 limbs, scratch at 12-15)
   let muMult := genSchoolbook (N+1) q1Base muBase q2Base scratchN5
 
-  -- Step 5: q3 = q2[5..8] (q2 >> 320, 4 limbs), reuse q1Base[0..3]
+  -- Step 5: q3 = q2[N+1..2N+1] (q2 >> ((N+1)*64), N limbs), reuse q1Base[0..N-1]
   let extractQ3 : List Instr :=
-    (List.range N) >>= fun i => [ local.get (q2Base + 5 + i), local.set (q1Base + i) ]
+    (List.range N) >>= fun i => [ local.get (q2Base + (N+1) + i), local.set (q1Base + i) ]
 
   -- Step 6: r1 = c[0..4] (c mod 2^320, 5 limbs)
   let extractR1 : List Instr :=
@@ -454,6 +456,11 @@ def genFinv (p numWords : ℕ) : Func :=
 def genMultiWordArith (p numWords : ℕ) : List Func :=
   [ genMul64x64, genFmul p numWords, genFadd p numWords, genFsub numWords, genFinv p numWords ]
 
+/-- Maps circuit variable indices to WASM local indices.
+    `env` is a sparse list of `(circuitVarIndex, wasmLocalIndex)` pairs.
+    The fallback in `lookup` assumes a default layout where circuit variable `i`
+    maps to WASM local `i * numWords`. This works for inputs (set up by `init`)
+    and for sequentially allocated witnesses. -/
 structure VarMap where
   env : List (ℕ × ℕ) := []
   nextLocal : ℕ := 0
@@ -466,6 +473,9 @@ def VarMap.init (numInputs : ℕ) (numWords : ℕ := 1) : VarMap :=
     nextLocal := numInputs * numWords
     numWords }
 
+/-- Look up the WASM local index for a circuit variable.
+    Falls back to `idx * numWords` if not explicitly mapped,
+    which matches the default layout used by `init` and `alloc`. -/
 def VarMap.lookup (vm : VarMap) (idx : ℕ) : ℕ :=
   match vm.env.find? fun (i, _) => i = idx with | some (_, w) => w | none => idx * vm.numWords
 
@@ -505,20 +515,19 @@ partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → CodeBuilder
     let cb := compileBExpr vm c cb
     let thenCB := compileFExpr vm t {}
     let elseCB := compileFExpr vm e {}
-    -- compileBExpr pushes i64; ifElse expects i32 condition
     let results := List.replicate nw ValType.i64
-    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse results thenCB.build elseCB.build)
+    cb.push (.ifElse results thenCB.build elseCB.build)
   | .ofNat n, cb => compileNExpr vm n cb
   | .localVar i, cb => pushVar (vm.letBase + i) vm cb
-  | .envGet _, cb => cb.push (i64.const 0)
-  | .listGet _ _, cb => cb.push (i64.const 0)
-  | .dataGet _ _ _ _, cb => cb.push (i64.const 0)
-  | .hintGet _ _ _ _, cb => cb.push (i64.const 0)
+  | .envGet _, _ => panic! "compileFExpr: envGet is not yet supported"
+  | .listGet _ _, _ => panic! "compileFExpr: listGet is not yet supported"
+  | .dataGet _ _ _ _, _ => panic! "compileFExpr: dataGet is not yet supported"
+  | .hintGet _ _ _ _, _ => panic! "compileFExpr: hintGet is not yet supported"
 
 partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
   | .const n, cb => cb.push (i64.const n)
   | .val x, cb => compileFExpr vm x cb
-  | .idx, cb => match vm.loopIdx with | some _ => cb.push (local.get 0) | none => cb.push (i64.const 0)
+  | .idx, cb => match vm.loopIdx with | some _ => cb.push (local.get 0) | none => panic! "compileNExpr: idx used outside of mapRange loop"
   | .localVar i, cb => cb.push (local.get (vm.lookup (vm.letBase + i)))
   | .add a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.add
   | .mul a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.mul
@@ -533,63 +542,64 @@ partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → CodeBuilder
     let cb := compileBExpr vm c cb
     let thenCB := compileNExpr vm t {}
     let elseCB := compileNExpr vm e {}
-    cb.push (.unop .i32 .wrap_i64) |>.push (.ifElse [ValType.i64] thenCB.build elseCB.build)
+    cb.push (.ifElse [ValType.i64] thenCB.build elseCB.build)
 
 partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → CodeBuilder
-  | .true, cb => cb.push (i64.const 1)
-  | .false, cb => cb.push (i64.const 0)
-  | .feq a e, cb => let cb := compileFExpr vm a cb; let cb := compileFExpr vm e cb; cb.push i64.eq
-  | .lt a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.lt_u
-  | .neq a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.eq
-  | .not x, cb => let cb := compileBExpr vm x cb; cb.push i64.eqz
-  | .and a e, cb => let cb := compileBExpr vm a cb; let cb := compileBExpr vm e cb; cb.push i64.and
+  | .true, cb => cb.push (i32.const 1)
+  | .false, cb => cb.push (i32.const 0)
+  | .feq a e, cb => let cb := compileFExpr vm a cb; let cb := compileFExpr vm e cb; cb.push i64.eq |>.push i32.wrap_i64
+  | .lt a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.lt_u |>.push i32.wrap_i64
+  | .neq a e, cb => let cb := compileNExpr vm a cb; let cb := compileNExpr vm e cb; cb.push i64.eq |>.push i64.eqz |>.push i32.wrap_i64
+  | .not x, cb => let cb := compileBExpr vm x cb; cb.push i32.eqz
+  | .and a e, cb => let cb := compileBExpr vm a cb; let cb := compileBExpr vm e cb; cb.push i32.and
 end
 
 /-! ## Expression flattening (shared by WASM and R1CS compilers) -/
 
-abbrev LinComb := List (ℕ × ℕ)  -- sparse (signalIndex × coefficient) pairs
-abbrev Constraint := LinComb × LinComb × LinComb  -- (A, B, C)
+-- sparse (signalIndex × fieldCoefficient) pairs
+def LinComb (F : Type) := List (ℕ × F)
+def Constraint (F : Type) := List (ℕ × F) × List (ℕ × F) × List (ℕ × F)
 
-structure FlattenState where
+structure FlattenState (F : Type) where
   nextSignal : ℕ := 1
-  constraints : List Constraint := []
+  constraints : List (Constraint F) := []
 
-def isConstant (lc : LinComb) : Bool :=
+def isConstant (lc : List (ℕ × F)) : Bool :=
   match lc with | [(0, _)] => true | _ => false
 
-def scaleLinComb (c : ℕ) (lc : LinComb) (p : ℕ) : LinComb :=
-  lc.map fun (i, coeff) => (i, (c * coeff) % p)
+def scaleLinComb (c : F) (lc : List (ℕ × F)) : List (ℕ × F) :=
+  lc.map fun (i, coeff) => (i, c * coeff)
 
-def addLinCombs (a b : LinComb) (p : ℕ) : LinComb :=
+def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
   match a, b with
   | [], _ => b
   | _, [] => a
   | (i1, c1) :: xs, (i2, c2) :: ys =>
-    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys) p
-    else if i1 = i2 then (i1, (c1 + c2) % p) :: addLinCombs xs ys p
-    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys p
+    if i1 < i2 then (i1, c1) :: addLinCombs xs ((i2, c2) :: ys)
+    else if i1 = i2 then
+      let s := c1 + c2
+      if s = 0 then addLinCombs xs ys else (i1, s) :: addLinCombs xs ys
+    else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys
 
 open Expression (var const add mul) in
-partial def flattenExpr (p : ℕ) (vm : VarMap) : Expression F → FlattenState → (LinComb × FlattenState)
-  | .var i, st => ([(1 + vm.lookup i.index / vm.numWords, 1)], st)  -- R1CS signal = 1 + field element index
-  | .const c, st =>
-    let val := FiniteField.val c % p
-    ([(0, val)], st)
+partial def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
+  | .var i, st => ([(1 + vm.lookup i.index / vm.numWords, (1 : F))], st)  -- R1CS signal = 1 + field element index
+  | .const c, st => ([(0, c)], st)
   | .add a b, st =>
-    let (la, st1) := flattenExpr p vm a st
-    let (lb, st2) := flattenExpr p vm b st1
-    (addLinCombs la lb p, st2)
+    let (la, st1) := flattenExpr vm a st
+    let (lb, st2) := flattenExpr vm b st1
+    (addLinCombs la lb, st2)
   | .mul a b, st =>
-    let (la, st1) := flattenExpr p vm a st
-    let (lb, st2) := flattenExpr p vm b st1
+    let (la, st1) := flattenExpr vm a st
+    let (lb, st2) := flattenExpr vm b st1
     if isConstant la then
-      (scaleLinComb ((la.head?.getD (0,0)).2) lb p, st2)
+      (scaleLinComb ((la.head?.getD (0,0)).2) lb, st2)
     else if isConstant lb then
-      (scaleLinComb ((lb.head?.getD (0,0)).2) la p, st2)
+      (scaleLinComb ((lb.head?.getD (0,0)).2) la, st2)
     else
       let k := st2.nextSignal
-      let st3 : FlattenState := { nextSignal := k + 1, constraints := (la, lb, [(k, 1)]) :: st2.constraints }
-      ([(k, 1)], st3)
+      let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
+      ([(k, (1 : F))], st3)
 
 /-! ## AST-based witness computation helpers -/
 
@@ -608,19 +618,23 @@ def loadSignal (i signalBase signalBytes numWords : ℕ) : List Instr :=
 def pushCoeff (c numWords : ℕ) : List Instr :=
   (List.range numWords).map fun w => i64.const ((c >>> (w * 64)) % (2^64))
 
+/-- Push a field element as nw i64 limbs. -/
+def pushCoeffF (c : F) (numWords : ℕ) : List Instr :=
+  pushCoeff (FiniteField.val c) numWords
+
 /-- Evaluate a linear combination over nw-limb field elements. Leaves nw i64 on the stack. -/
-def compileLinComb (lc : LinComb) (signalBase signalBytes numWords : ℕ) : List Instr :=
+def compileLinComb (lc : List (ℕ × F)) (signalBase signalBytes numWords : ℕ) : List Instr :=
   let nw := numWords
   match lc with
   | [] => List.replicate nw (i64.const 0)
-  | [(0, c)] => pushCoeff c nw
-  | [(i, c)] => loadSignal i signalBase signalBytes nw ++ pushCoeff c nw ++ [call "$fmul"]
+  | [(0, c)] => pushCoeffF c nw
+  | [(i, c)] => loadSignal i signalBase signalBytes nw ++ pushCoeffF c nw ++ [call "$fmul"]
   | (i1, c1) :: rest =>
-    let first := if i1 = 0 then pushCoeff c1 nw
-      else loadSignal i1 signalBase signalBytes nw ++ pushCoeff c1 nw ++ [call "$fmul"]
+    let first := if i1 = 0 then pushCoeffF c1 nw
+      else loadSignal i1 signalBase signalBytes nw ++ pushCoeffF c1 nw ++ [call "$fmul"]
     let restInstrs : List Instr := rest >>= fun (i, c) =>
-      if i = 0 then pushCoeff c nw ++ [call "$fadd"]
-      else loadSignal i signalBase signalBytes nw ++ pushCoeff c nw ++ [call "$fmul", call "$fadd"]
+      if i = 0 then pushCoeffF c nw ++ [call "$fadd"]
+      else loadSignal i signalBase signalBytes nw ++ pushCoeffF c nw ++ [call "$fmul", call "$fadd"]
     first ++ restInstrs
 
 /--
@@ -628,20 +642,20 @@ Discover intermediate signals from assert expressions and compile to instruction
 `intLocalBase` is the starting local index for intermediate locals in the calling function.
 Returns (numIntermediates, local declarations, computation instructions).
 -/
-def discoverAndCompileIntermediates (p : ℕ) (vm : VarMap) (flatOps : List (FlatOperation F))
+def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation F))
     (startSignal signalBase signalBytes numWords intLocalBase : ℕ) : ℕ × List (String × ValType) × List Instr :=
   let nw := numWords
-  let (st, _) := flatOps.foldl (fun (acc : FlattenState × Unit) (op : FlatOperation F) =>
+  let (st, _) := flatOps.foldl (fun (acc : FlattenState F × Unit) (op : FlatOperation F) =>
     match op with
     | .assert e =>
-      let (_, st') := flattenExpr p vm e acc.1
+      let (_, st') := flattenExpr vm e acc.1
       (st', ())
     | _ => acc
-  ) ({ nextSignal := startSignal }, ())
+  ) (({ nextSignal := startSignal, constraints := [] } : FlattenState F), ())
   let numInt := st.nextSignal - startSignal
   let intConstraintsRev := List.reverse st.constraints
   let rec buildAST (idx : ℕ) (instrs : List Instr) (locals : List (String × ValType))
-      (remaining : List Constraint) : ℕ × List (String × ValType) × List Instr :=
+      (remaining : List (Constraint F)) : ℕ × List (String × ValType) × List Instr :=
     match remaining with
     | [] => (idx, locals, instrs)
     | (la, lb, [(k, _)]) :: rest =>
@@ -711,25 +725,16 @@ def processFlatOps (numInputs : ℕ) : List (FlatOperation F) → VarMap → ℕ
     processFlatOps numInputs rest vmOut viOut (acc ++ outInstrs)
   | _ :: rest, vm, vi, acc => processFlatOps numInputs rest vm vi acc
 
-/-- Flatten a nested Operation into a list of FlatOperations. -/
-def flattenOp : Operation F → List (FlatOperation F)
-  | .witness m code => [.witness m code]
-  | .assert e => [.assert e]
-  | .lookup l => [.lookup l]
-  | .interact i => [.interact i]
-  | .subcircuit s => s.ops.toFlat
-
-/-- Flatten a list of Operations. -/
-def flattenOps (ops : List (Operation F)) : List (FlatOperation F) :=
-  match ops with
-  | [] => []
-  | op :: rest => flattenOp op ++ flattenOps rest
-
-/-- Compile to a WASM Module. This is the main entry point. -/
-def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ := 1) : String :=
+/-- Compile to a WASM Module. This is the main entry point.
+    `numWords` must be at least `ceil(bitLength(fieldPrime) / 64)`. -/
+def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) : String :=
   let nw := numWords
-  let vm := VarMap.init numInputs nw
-  let flatOps := flattenOps ops
+  -- Validate that numWords is sufficient for the prime
+  let primeBits := Nat.log2 fieldPrime + 1
+  if nw * 64 < primeBits then
+    s!"(error \"numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {((primeBits + 63) / 64)} words\")"
+  else let vm := VarMap.init numInputs nw
+  let flatOps := Operations.toFlat ops
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
   -- and pushVar uses the circuit variable index from the witness IR directly.
@@ -748,7 +753,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- Each intermediate uses nw consecutive locals
   let intLocalBase := 3 + numInputs * nw
   let (numInt, intLocals, intCode) :=
-    discoverAndCompileIntermediates fieldPrime vm flatOps startSignal signalBase signalBytes nw intLocalBase
+    discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each 64-bit limb to signal memory.
   -- Witness i is stored at local (numInputs*nw + i*nw) since witnesses are
