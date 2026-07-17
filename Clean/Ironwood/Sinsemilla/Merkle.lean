@@ -9,6 +9,7 @@ import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
 import Clean.Ironwood.Utilities.LookupRangeCheck
 import Clean.Ironwood.Utilities.CondSwap
+import Clean.Ironwood.Sinsemilla.HashToPoint
 
 /-!
 # Sinsemilla MerkleCRH (Ironwood)
@@ -232,7 +233,7 @@ def circuit (l : Fp) :
       (Column .advice × Column .advice × Column .advice × Column .advice × Column .advice ×
         Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
       Config Inputs unit where
-  name := "GATE Decomposition check"
+  name := "Check piece decomposition"
   configure := fun (a, b, c, left, right, z1A, z1B, b1, b2, lw) =>
     configure a b c left right z1A z1B b1 b2 lw
   synthesize cfg offset input := body cfg l input offset
@@ -779,20 +780,54 @@ def ProverAssumptions (G : Generators) (Q : Point Fp) (l : ℕ)
     (merkleChunks l (ZMod.val (show Fp from input.left))
       (ZMod.val (show Fp from input.right))) = some B
 
-/-- STRUCTURE PLACEHOLDER (`hash_layer`): the region body witnesses the three pieces + short
-sub-pieces, range-checks `b_1`/`b_2` via `LookupRangeCheck.shortRangeCheck`, runs `Chain.circuit`
-on `a||b||c` reading `z_1 = zs[i][1]` off its exposed `zs`, and enables `Gate` on the pieces. The
-soundness/completeness glue is the lifted `assemble` (soundness) and `honest_pieces`/`honest_gate`
-(completeness). Left as a stated interface pending the full region body (the composition mirrors
-`CommitDomain`'s three-child pattern; children ported: `Chain`, `shortRangeCheck`, `Gate`). -/
-def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10) :
-    Prop :=
-  -- The bundle's type would be
-  --   `FormalRegionCircuit Fp _ _ Input field`
-  -- with `Spec G Q l` / `ProverAssumptions G Q l`. Stated as a `Prop` placeholder here to keep
-  -- the value algebra (above) landing green while the region body is completed.
-  ∀ input : Value Input Fp, ∀ output : Value field Fp,
-    Spec G Q l input output () ∨ True
+/-- The honest piece/sub-piece witness programs, computed off the node cells (Rust
+`bitrange_subset` values, `Value`-view). `lv`/`rv` are the canonical node values. -/
+def waWit (l : ℕ) (left : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env =>
+    #v[((l + 2 ^ 10 * bitrange (Sinsemilla.HashPiece.readCell env left).val 0 240 : ℕ) : Fp)]
+
+def wb1Wit (left : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env left).val 250 5 : ℕ) : Fp)]
+
+def wb2Wit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env right).val 0 5 : ℕ) : Fp)]
+
+def wbWit (left right : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env =>
+    #v[((bitrange (Sinsemilla.HashPiece.readCell env left).val 240 10
+        + 2 ^ 10 * bitrange (Sinsemilla.HashPiece.readCell env left).val 250 5
+        + 2 ^ 15 * bitrange (Sinsemilla.HashPiece.readCell env right).val 0 5 : ℕ) : Fp)]
+
+def wcWit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env right).val 5 250 : ℕ) : Fp)]
+
+/-- The MerkleCRH piece widths (25/2/25 words). -/
+def merkleNs : List ℕ := [24, 1, 24]
+
+/-- Rust `MerkleInstructions::hash_layer` (`merkle/chip.rs:229-436`), layouter-level, in the
+Rust region sequence: witness `a`, short-range-check `b_1`/`b_2` (5 bits), witness `b`/`c`,
+`hash_to_point` (the `hashMessage` region), the `"Check piece decomposition"` gate region.
+Output: the hash point's `x` cell. -/
+def synthesize (G : Generators) (cfg : Config)
+    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp) (l : ℕ)
+    (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
+  -- chip.rs:255-306 — witness a; range-check b1/b2; witness b, c
+  let pa ← HashToPoint.witnessMessagePiece cfg.sinsemilla (waWit l input.left)
+  let b1 ← Halo2.Ironwood.LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
+    (wb1Wit input.left)
+  let b2 ← Halo2.Ironwood.LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
+    (wb2Wit input.right)
+  let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
+  let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
+  -- chip.rs:322-330 — the hash
+  let (out, z1s) ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q ⟨#v[pa, pb, pc]⟩
+  -- chip.rs:337-397 — the decomposition-gate region
+  let _ ← assignRegion "Check piece decomposition"
+    ((Gate.circuit (l : Fp)).call cfg.gate 0
+      { aWhole := pa, bWhole := pb, cWhole := pc,
+        leftNode := input.left, rightNode := input.right,
+        z1A := z1s[0], z1B := z1s[1], b1 := b1, b2 := b2 })
+  pure out.point.x
 
 end HashLayer
 

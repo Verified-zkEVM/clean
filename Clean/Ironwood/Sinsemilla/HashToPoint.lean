@@ -54,9 +54,12 @@ def witnessMessagePiece (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) 
 
 /-- Rust `hash_message` (public `Q`): the `"hash_to_point"` region —
 `public_q_initialization` at offset 0 (`q_s4` enable, the `fixed_y_q` load, `x_a` from the
-constant `Q.x`), then `hash_all_pieces` (`Chain.circuit`) at the same offset. -/
+constant `Q.x`), then `hash_all_pieces` (`Chain.circuit`) at the same offset. Also returns
+the per-piece `z_1` cells (positional: `(bits, base_i + 1)` — the `zs[i][1]` reads Merkle's
+decomposition gate consumes; Rust returns the whole running sums). -/
 def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config) (Q : Point Fp)
-    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) : Circuit Fp (Var Sinsemilla.Chain.Output Fp) :=
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
+    Circuit Fp (Var Sinsemilla.Chain.Output Fp × Vector (AssignedCell Fp) ns.length) :=
   assignRegion "hash_to_point" (do
     -- public_q_initialization (hash_to_point.rs:148-175): q_s4 on the first row,
     -- y_Q into fixed_y_q there, x_Q into x_a from a constant
@@ -65,6 +68,12 @@ def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Con
     let xa ← assignAdvice cfg.xA 0 (constWit Q.x)
     constrainConstant xa Q.x
     -- hash_all_pieces (hash_to_point.rs:218-286) from the init offset
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg 0 pieces)
+    let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg 0 pieces
+    -- name the z_1 cells (no ops)
+    let z1s ← (fun self =>
+      (Vector.ofFn (fun i : Fin ns.length =>
+        AssignedCell.of self (Sinsemilla.Chain.prefixRows ns i + 1) cfg.bits),
+       ([] : RegionOperations Fp)))
+    pure (out, z1s))
 
 end Halo2.Ironwood.Sinsemilla.HashToPoint
