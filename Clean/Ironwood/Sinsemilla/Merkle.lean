@@ -8,6 +8,7 @@ import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
 import Clean.Ironwood.Utilities.LookupRangeCheck
+import Clean.Ironwood.Utilities.CondSwap
 
 /-!
 # Sinsemilla MerkleCRH (Ironwood)
@@ -156,20 +157,14 @@ theorem polysZero_of_spec {aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2
   · linear_combination -hright
   · linear_combination hb
 
-/-- Rust `Config::configure`: enable equality on the ten advice columns, allocate the
-`q_decompose` selector, register the gate. -/
+/-- The `q_decompose` slice of Rust `MerkleChip::configure` (`merkle/chip.rs:118-204`),
+VK-exact: allocate the `q_decompose` selector, register the gate — NO equality enabling
+(the five underlying advice columns are already equality-enabled by
+`SinsemillaChip::configure`; `merkle/chip.rs:113`). The ten config fields are instantiated
+column-coincident by the chip-level `configure` (`aWhole`/`z1A` share `advices[0]`, … —
+the gate reads the same five columns at rotations 0/1). -/
 def configure (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole : Column .advice) :
     Configure Fp Config := do
-  enableEquality aWhole.toAny
-  enableEquality bWhole.toAny
-  enableEquality cWhole.toAny
-  enableEquality leftNode.toAny
-  enableEquality rightNode.toAny
-  enableEquality z1A.toAny
-  enableEquality z1B.toAny
-  enableEquality b1.toAny
-  enableEquality b2.toAny
-  enableEquality lWhole.toAny
   let qDecompose ← selector
   let cfg : Config :=
     Config.mk qDecompose aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole
@@ -264,6 +259,28 @@ def circuit :
     sorry
 
 end Gate
+
+/-! ### The chip-level configure (Rust `MerkleChip::configure`, `merkle/chip.rs:109-212`)
+
+`CondSwapChip::configure` on the five Sinsemilla hash advices (`sinsemilla_config.advices()`
+= `[x_a, x_p, bits, λ₁, λ₂]`, `chip.rs:82-90`), then the `q_decompose` selector + the
+decomposition gate over the same five columns at rotations 0/1. -/
+
+/-- Rust `MerkleConfig` (`merkle/chip.rs:57-67`): the cond-swap child, the decomposition
+gate slice, and the underlying Sinsemilla config. -/
+structure Config where
+  condSwap : CondSwap.Config
+  gate : Gate.Config
+  sinsemilla : HashPiece.Config
+
+/-- Rust `MerkleChip::configure`: CondSwap first (on `advices()` order), then
+`q_decompose` + the decomposition gate, whose ten reads are the five advices at
+rotations 0/1 (`a_whole … right_node` at 0; `z1_a, z1_b, b_1, b_2, l` at 1). -/
+def configure (scfg : HashPiece.Config) : Configure Fp Config := do
+  let condSwap ← CondSwap.configure scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
+  let gate ← Gate.configure scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
+    scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
+  return { condSwap, gate, sinsemilla := scfg }
 
 /-! ### Digit toolkit (lifted verbatim from the donor)
 
