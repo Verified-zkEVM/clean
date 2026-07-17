@@ -180,13 +180,14 @@ instance : Inhabited BitsHint := ⟨fun _ => false⟩
 /-- The bundle inputs. The working scalar's bits are derived from the cell `alpha`
 (`decompose_for_scalar_mul(alpha.value())`); the `round`/`loop` children receive only its
 reading *program* (`.expr alpha` — their scalar input is `Unconstrained field`, matching
-the Rust `Value` dataflow).
-TODO alpha is a prover hint at this level too (nothing in this phase constrains the cell),
-so it should also be an `Unconstrained field` slot — blocked on `deriving CircuitType`
-being main-Clean-only (no handler for mixed hint+provable structs over the Halo2
-environments yet). -/
+the Rust `Value` dataflow). -/
 structure Inputs (F : Type) where
   -- Scalar cell the working scalar's bits are decomposed from.
+  -- TODO this is a prover hint (Rust source passes it as `Value`), so it should be a variant of Unconstrained,
+  -- NOT an Expression-level input, otherwise makes it look like this is constrained by the circuit, which it isn't.
+  -- (Done for the `round`/`loop` children; at this level blocked on `deriving CircuitType`
+  -- being main-Clean-only — no handler for mixed hint+provable structs over the Halo2
+  -- environments yet, see task #31.)
   alpha : F
   -- The (non-identity, on-curve) base point.
   base : Point F
