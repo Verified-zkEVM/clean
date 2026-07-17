@@ -134,7 +134,7 @@ instance : ProverEval F (Var M F) (M F) := proverEval M
 instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 @[circuit_norm] instance : ProverEval F (M (Expression F)) (M F) := proverEval M
 
-instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
+@[reducible] instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
     [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
   (inferInstance : GetElem (α (Expression F)) ℕ elem valid)
 
