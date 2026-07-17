@@ -275,10 +275,24 @@ def tableFixed [Inhabited F] (toNat : F → ℕ) (usable : ℕ) : Operations F �
 termination_by ops => sizeOf ops
 
 /-- Packed selector-column fixed entries: for each selector activation, look its index up in
-the compression map and write `assignedRoot` into its packed column at that row. -/
+the compression map and write `assignedRoot` into its packed column at that row. The
+activation list is deduped first: a selector shared by several gates is enabled once per
+gate object per row (e.g. `mul_fixed`'s `q_range_check` under both the range-check and the
+coords gate, matching Rust's two `enable` calls), and Rust's `enable_selector` is
+idempotent per cell. -/
 def selectorFixed (selMap : SelCompressMap) (acts : List (ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
-  acts.filterMap fun (sel, row) =>
+  acts.dedup.filterMap fun (sel, row) =>
     (selMap.entries.find? (·.1 = sel)).map fun (_, sc) => (sc.packedCol, row, sc.assignedRoot)
+
+/-- Fixed entries from region-level `assignFixed` ops (e.g. `mul_fixed`'s per-window
+Lagrange/`z` constants), at their placed absolute rows. -/
+def regionAssignFixed {F : Type} (toNat : F → ℕ) (starts : List ℕ)
+    (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ × ℕ) :=
+  regions.flatMap fun (idx, body) =>
+    (flattenRegion body).filterMap fun op =>
+      match op with
+      | .assignFixed col row v => some (col.index, place starts idx + row, toNat v)
+      | _ => none
 
 /-- Fixed entries from in-region `assignFixed` ops (Rust `region.assign_fixed` — e.g.
 Sinsemilla's per-row `q_s2` boundary values and the `fixed_y_q` load), resolved to
@@ -312,11 +326,13 @@ def constantsFixed (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ
 def sortFixed (l : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
   l.toArray.qsort (fun (c₁, r₁, _) (c₂, r₂, _) => c₁ < c₂ ∨ (c₁ = c₂ ∧ r₁ < r₂)) |>.toList
 
-/-- The full canonical fixed list: tables ++ constants ++ packed selectors, sorted. -/
+/-- The full canonical fixed list: tables ++ region `assignFixed`s ++ constants ++ packed
+selectors, sorted. -/
 def allFixed [Inhabited F] (toNat : F → ℕ) (usable : ℕ) (selMap : SelCompressMap)
     (ops : Operations F) (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
     (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
   sortFixed (tableFixed toNat usable ops
+    ++ regionAssignFixed toNat starts regions
     ++ constantsFixed consts
     ++ selectorFixed selMap (activations starts regions))
 

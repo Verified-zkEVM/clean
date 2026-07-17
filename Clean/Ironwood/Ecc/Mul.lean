@@ -100,7 +100,7 @@ open Orchard.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chai
 open Orchard.Ecc.Mul.Decompose (m_bounds)
 open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint readCell kBitsWindow kBitsWindow_eq_kBits
+open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
   kBitsWindow_as_kBits kBitsWindow_zero)
 
 /-! ## Config
