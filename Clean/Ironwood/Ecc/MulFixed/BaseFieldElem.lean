@@ -32,6 +32,7 @@ open Halo2.Ironwood.Ecc.MulFixed (coordsGate fixedConstantsLoop processWindow)
 open Halo2.Ironwood.DecomposeRunningSum (copyDecompose rangeCheckExpr)
 open Orchard (Point pallasB tP)
 open Orchard.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBaseData)
 
 /-- Rust `base_field_elem::Config` (lines 20-29). -/
 structure Config where
@@ -114,7 +115,7 @@ constants, the window-0 accumulator, the incomplete-addition loop over windows 1
 and the most significant window 84. Returns `(acc, mul_b, zs)` — the two points the
 complete addition combines, and the running-sum cells (`z_0 = α`, `z_43/z_44/z_84` feed
 the canonicity check). -/
-def innerRegion (B : FixedBase) (cfg : Config) (offset : ℕ) (alpha : AssignedCell Fp) :
+def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : AssignedCell Fp) :
     RegionCircuit Fp
       (Point (AssignedCell Fp) × Point (AssignedCell Fp) × Vector (AssignedCell Fp) 86) := do
   -- scalar decomposition (lines 179-193): strict `copy_decompose`
@@ -191,7 +192,7 @@ def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : Assigned
 
 /-- Rust `base_field_elem::Config::assign` (lines 165-378): the four layouter pieces in
 source order. Returns the result point `[α]B`. -/
-def synthesize (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) :
+def synthesize (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) :
     Circuit Fp (Var Point Fp) := do
   -- 1. the incomplete-addition region
   let ⟨acc, mulB, zs⟩ ←
@@ -201,11 +202,15 @@ def synthesize (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) :
   let result ←
     assignRegion "Base-field elem fixed-base mul (complete addition)"
       (Add.add.call cfg.superConfig.addConfig 0 ⟨mulB, acc⟩)
+  -- Rust binds `alpha := scalar.base_field_elem = running_sum[0]` (line 189/257): every
+  -- downstream α reference — the canonicity copy AND the witness programs — uses the
+  -- z_0 CELL, not the original α cell.
+  let alphaZ0 := zs[0]
   -- 3. the 13-word lookup range check of α₀' (lines 271-287)
-  let (alphaPrime, z13) ← witnessCheck13 cfg.lookupConfig (alphaZeroPrimeWit alpha zs[84])
+  let (alphaPrime, z13) ← witnessCheck13 cfg.lookupConfig (alphaZeroPrimeWit alphaZ0 zs[84])
   -- 4. the canonicity checks (lines 289-375)
   assignRegion "Canonicity checks"
-    (canonicityRegion cfg alpha zs[84] alphaPrime z13 zs[44] zs[43])
+    (canonicityRegion cfg alphaZ0 zs[84] alphaPrime z13 zs[44] zs[43])
   return result
 
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem

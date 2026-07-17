@@ -40,6 +40,8 @@ namespace Halo2.Ironwood.Ecc.MulFixed
 open Halo2.Ironwood (Fp)
 open Orchard (Point)
 open Orchard.Ecc.MulFixed (CoordsParams interpolate FixedBase windowPoint windowScalar)
+
+
 open Orchard (pallasB)
 open Halo2.Ironwood.DecomposeRunningSum (copyDecompose)
 
@@ -48,6 +50,21 @@ def H : ℕ := 8
 
 /-- Rust `NUM_WINDOWS = 85` (`constants.rs:18`): windows of a full-width decomposition. -/
 def NUM_WINDOWS : ℕ := 85
+
+/-- The fixed-base DATA a synthesize needs (no invariants): the per-window fixed-column
+values (`params`), and the window tables feeding the witness programs (the generator
+point and the `u` square roots). The donor `FixedBase` (data + the halo2 out-of-circuit
+invariants) lowers to this via `toData`; proof-free consumers (the VK layout tests, which
+only need concrete `params` values in the keygen view) construct it directly from dumped
+tables. -/
+structure FixedBaseData where
+  params : ℕ → CoordsParams Fp
+  point : Point Fp
+  u : ℕ → ℕ → Fp
+
+/-- The data of a proven fixed base. -/
+def _root_.Orchard.Ecc.MulFixed.FixedBase.toData (B : FixedBase) : FixedBaseData :=
+  { params := B.params, point := B.point, u := B.u }
 
 /-- Rust `mul_fixed::Config` (`mul_fixed.rs:35-52`). -/
 structure Config where
@@ -131,24 +148,24 @@ def windowVal (env : Placed ProverEnvironment Fp) (alpha : AssignedCell Fp) (w :
 /-- Witness program for `x_p` of window `w`: the window-table point's x-coordinate at the
 scalar's window value (`process_window`, `mul_fixed.rs:268-283`). The 8 candidate
 coordinates are precomputed per window (Rust precomputes the whole window table). -/
-def xPWit (B : FixedBase) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
+def xPWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x)[windowVal env alpha w]!)]
 
 /-- Witness program for `y_p` of window `w` (`mul_fixed.rs:285-295`). -/
-def yPWit (B : FixedBase) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
+def yPWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y)[windowVal env alpha w]!)]
 
 /-- Witness program for `u` of window `w`: `u² = y_p + z` (`mul_fixed.rs:300-302`). -/
-def uWit (B : FixedBase) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
+def uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => B.u w k.val)[windowVal env alpha w]!)]
 
 /-- One window row of `assign_fixed_constants` (`mul_fixed.rs:214-249`): enable the
 coords gate (the shared running-sum selector — Rust's second `enable` on the row), then
 the 8 Lagrange coefficients and the `z` value into the fixed columns. -/
-def fixedConstantsWindow (B : FixedBase) (cfg : Config) (w row : ℕ) :
+def fixedConstantsWindow (B : FixedBaseData) (cfg : Config) (w row : ℕ) :
     RegionCircuit Fp Unit := do
   (coordsGate cfg).enable row
   let p := B.params w
@@ -165,14 +182,14 @@ def fixedConstantsWindow (B : FixedBase) (cfg : Config) (w row : ℕ) :
 
 /-- `assign_fixed_constants` (`mul_fixed.rs:195-252`): the per-window fixed columns and
 coords-gate enables, one row per window, before any advice assignment. -/
-def fixedConstantsLoop (B : FixedBase) (cfg : Config) (offset numWindows : ℕ) :
+def fixedConstantsLoop (B : FixedBaseData) (cfg : Config) (offset numWindows : ℕ) :
     RegionCircuit Fp Unit :=
   RegionCircuit.forRange' offset 1 numWindows (fun w row => fixedConstantsWindow B cfg w row)
 
 /-- `process_window` (`mul_fixed.rs:254-305`): witness `[window_scalar]B`'s coordinates
 into the add config's `x_p`/`y_p` at the window row, and the `u` value. Returns the
 window-point cells. -/
-def processWindow (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) (w row : ℕ) :
+def processWindow (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) (w row : ℕ) :
     RegionCircuit Fp (Point (AssignedCell Fp)) := do
   let x ← assignAdvice cfg.addConfig.xP row (xPWit B alpha w)
   let y ← assignAdvice cfg.addConfig.yP row (yPWit B alpha w)

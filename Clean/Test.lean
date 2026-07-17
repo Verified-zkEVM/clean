@@ -24,5 +24,6 @@ import Clean.Halo2.Tests.TestVkMatchMul
 import Clean.Halo2.Tests.TestVkMatchSinsemilla
 import Clean.Halo2.Tests.TestVkMatchMerkle
 import Clean.Halo2.Tests.TestVkLayoutMul
+import Clean.Halo2.Tests.TestVkLayoutBaseField
 import Clean.Halo2.Tests.TestVkLayoutSinsemilla
 import Clean.Halo2.Tests.TestVkLayoutMerkle
