@@ -9,7 +9,7 @@ import Clean.Ironwood.Sinsemilla.HashToPoint
 # VK-match test (Phase 2): the Sinsemilla chain — LAYOUT (permutation σ + fixed values)
 
 The layout counterpart of `TestVkMatchSinsemilla`. Mirrors `SinsemillaDumpCircuit::synthesize`
-(`halo2_gadgets/src/sinsemilla/dump.rs`, `Value::unknown`, k=11) as a Lean `Circuit Fp Unit`
+(`halo2_gadgets/src/sinsemilla/dump.rs`, `Value::sUnknown`, k=11) as a Lean `Circuit Fp Unit`
 in the dump's exact region sequence — load the generator table (3 columns; `table_idx` doubles
 as the range-check table), witness the (unused) leaves, witness piece `a`, short-range-check
 `b_1`/`b_2` (5 bits), witness pieces `b`/`c`, then the real `hash_message` (`public Q`
@@ -42,7 +42,7 @@ open Halo2.Ironwood.Sinsemilla.HashToPoint (constWit witnessMessagePiece hashMes
 /-- The Sinsemilla configure chain (the same allocation sequence as
 `TestVkMatchSinsemilla.sinsemillaProgram`), also returning the range-check config the
 short checks need. -/
-def setup : Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Config 10 :=
+def sSetup : Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Config 10 :=
   let prog : Configure Fp
       (Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Config 10) := do
     let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
@@ -61,8 +61,8 @@ def setup : Ironwood.Sinsemilla.HashPiece.Config × Ironwood.LookupRangeCheck.Co
     return (cfg, lookupConfig)
   (prog {}).1
 
-def sCfg : Ironwood.Sinsemilla.HashPiece.Config := setup.1
-def sLookupCfg : Ironwood.LookupRangeCheck.Config 10 := setup.2
+def sCfg : Ironwood.Sinsemilla.HashPiece.Config := sSetup.1
+def sLookupCfg : Ironwood.LookupRangeCheck.Config 10 := sSetup.2
 
 /-- The generator-table x/y columns read back from the dump (`fixed` cols 3/4, block rows),
 as row-indexed arrays. -/
@@ -93,59 +93,59 @@ def layoutQ : Orchard.Point Fp :=
   { x := (16881378657874843773681581417214080072526588577393185124335110949068672401040 : Fp),
     y := (28133183902167313796350353487269718050617152766571597387899637960749256839611 : Fp) }
 
-/-- A dummy witness (keygen never reads advice values — `Value::unknown`). -/
-def unknown : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
+/-- A dummy witness (keygen never reads advice values — `Value::sUnknown`). -/
+def sUnknown : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
 
 /-- The MerkleCRH piece widths: 25/2/25 words. -/
 def sNs : List ℕ := [24, 1, 24]
 
 /-- The Lean mirror of `SinsemillaDumpCircuit::synthesize`. -/
-def layoutProgram : Circuit Fp Unit := do
+def sLayoutProgram : Circuit Fp Unit := do
   -- SinsemillaChip::load → GeneratorTableConfig::load (one Rust assign_table over the
   -- three columns; three single-column `loadTable`s here)
   Ironwood.Sinsemilla.load layoutG sCfg.generatorTable
   -- witness the (unused) leaves: left/right at advices 0/1, row 0
   let _leaves ← assignRegion "witness leaves" (do
-    let l ← assignAdvice sCfg.xA 0 unknown
-    let r ← assignAdvice sCfg.xP 0 unknown
+    let l ← assignAdvice sCfg.xA 0 sUnknown
+    let r ← assignAdvice sCfg.xP 0 sUnknown
     pure (l, r))
   -- witness piece a; short-range-check b_1, b_2; witness pieces b, c
-  let pa ← witnessMessagePiece sCfg unknown
-  let _b1 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg unknown
-  let _b2 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg unknown
-  let pb ← witnessMessagePiece sCfg unknown
-  let pc ← witnessMessagePiece sCfg unknown
+  let pa ← witnessMessagePiece sCfg sUnknown
+  let _b1 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg sUnknown
+  let _b2 ← Ironwood.LookupRangeCheck.witnessShortCheck 10 5 sLookupCfg sUnknown
+  let pb ← witnessMessagePiece sCfg sUnknown
+  let pc ← witnessMessagePiece sCfg sUnknown
   -- the real hash_message
   let _ ← hashMessage layoutG sNs sCfg layoutQ ⟨#v[pa, pb, pc]⟩
   pure ()
 
 /-- The reconstructed layout products. -/
-def ops : Operations Fp := layoutProgram.operations
-def regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
+def sOps : Operations Fp := sLayoutProgram.operations
+def sRegions : List (ℕ × RegionOperations Fp) := (indexedRegions sOps 0).1
 
-/-- Region starts from the fixture placements, in `assignRegion` order (the
+/-- Region sStarts from the fixture placements, in `assignRegion` order (the
 `generator_table` slot is the three `loadTable`s' — filtered). -/
-def starts : List ℕ :=
+def sStarts : List ℕ :=
   ((sinsemillaLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
 
-def permCols : List ColRef := sinsemillaLayout.permColumns
+def sPermCols : List ColRef := sinsemillaLayout.permColumns
 
-def myCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  copyList permCols starts regions sinsemillaLayout.constants
-def mySigma : List (ℕ × ℕ × ℕ × ℕ) :=
-  sigmaEntries (runAssembly sinsemillaLayout.n permCols.length myCopyList)
-def myUsable : ℕ := usableRows sinsemillaLayout.n sinsemillaPost.adviceQueryLayout
-def myFixed : List (ℕ × ℕ × ℕ) :=
+def sCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
+  copyList sPermCols sStarts sRegions sinsemillaLayout.constants
+def sSigma : List (ℕ × ℕ × ℕ × ℕ) :=
+  sigmaEntries (runAssembly sinsemillaLayout.n sPermCols.length sCopyList)
+def sUsable : ℕ := usableRows sinsemillaLayout.n sinsemillaPost.adviceQueryLayout
+def sFixed : List (ℕ × ℕ × ℕ) :=
   sortFixed (dedupFixed
-    (tableFixed (ZMod.val : Fp → ℕ) myUsable ops
+    (tableFixed (ZMod.val : Fp → ℕ) sUsable sOps
       ++ constantsFixed sinsemillaLayout.constants
-      ++ selectorFixed sinsemillaSelMap (activations starts regions)
-      ++ assignedFixed (ZMod.val : Fp → ℕ) starts regions))
+      ++ selectorFixed sinsemillaSelMap (activations sStarts sRegions)
+      ++ assignedFixed (ZMod.val : Fp → ℕ) sStarts sRegions))
 
 /-! ## Machinery validation -/
 
 -- Blinding-factor / usable-row computation.
-#guard myUsable = 2042
+#guard sUsable = 2042
 
 -- Region lockstep: the fixture's non-table region names, in order, are this side's
 -- assignRegion sequence.
@@ -154,18 +154,18 @@ def myFixed : List (ℕ × ℕ × ℕ) :=
      "witness message piece", "witness message piece", "hash_to_point"]
 
 -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list.
-#guard sigmaEntries (runAssembly sinsemillaLayout.n permCols.length sinsemillaLayout.copyList)
+#guard sigmaEntries (runAssembly sinsemillaLayout.n sPermCols.length sinsemillaLayout.copyList)
   = sinsemillaLayout.sigma
 
 /-! ## End-to-end reconstruction vs the ported Sinsemilla stack -/
 
 -- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
-#guard myCopyList = sinsemillaLayout.copyList
+#guard sCopyList = sinsemillaLayout.copyList
 
 -- the keygen permutation σ
-#guard mySigma = sinsemillaLayout.sigma
+#guard sSigma = sinsemillaLayout.sigma
 
 -- the full fixed contents: loaded tables, constants, packed selectors, q_s2 / fixed_y_q
-#guard myFixed = sortFixed sinsemillaLayout.fixed
+#guard sFixed = sortFixed sinsemillaLayout.fixed
 
 end Halo2.Fixtures.Test.Layout

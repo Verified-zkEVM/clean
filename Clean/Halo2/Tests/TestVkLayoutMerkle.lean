@@ -9,7 +9,7 @@ import Clean.Ironwood.Sinsemilla.Merkle
 # VK-match test (Phase 2): the Merkle chain — LAYOUT (permutation σ + fixed values)
 
 The layout counterpart of `TestVkMatchMerkle`. Mirrors `MerkleDumpCircuit::synthesize`
-(`Value::unknown`, k=11) in the dump's exact region sequence — load the generator table,
+(`Value::sUnknown`, k=11) in the dump's exact region sequence — load the generator table,
 witness the node, one real `CondSwapChip::swap`, one real `MerkleChip::hash_layer`
 (= witness `a`, short-range-check `b_1`/`b_2`, witness `b`/`c`, `hash_to_point`, the
 `"Check piece decomposition"` region) — using the real ported gadgets throughout
@@ -48,7 +48,7 @@ def mSetup : Ironwood.Sinsemilla.Merkle.Config × Ironwood.LookupRangeCheck.Conf
 def mCfg : Ironwood.Sinsemilla.Merkle.Config := mSetup.1
 def mLookupCfg : Ironwood.LookupRangeCheck.Config 10 := mSetup.2
 
-/-- A dummy `Bool` witness (`Value::unknown`). -/
+/-- A dummy `Bool` witness (`Value::sUnknown`). -/
 def unknownBool : Placed ProverEnvironment Fp → Bool := fun _ => false
 
 /-- The Lean mirror of `MerkleDumpCircuit::synthesize`, on the real ported gadgets. -/
@@ -56,10 +56,10 @@ def merkleLayoutProgram : Circuit Fp Unit := do
   Ironwood.Sinsemilla.load layoutG mCfg.sinsemilla.generatorTable
   -- witness the node: advices[0] row 0
   let node ← assignRegion "witness node"
-    (assignAdvice mCfg.sinsemilla.xA 0 unknown)
+    (assignAdvice mCfg.sinsemilla.xA 0 sUnknown)
   -- the real CondSwapChip::swap
   let pair ← assignRegion "swap"
-    ((Ironwood.CondSwap.swap unknown unknownBool).call mCfg.condSwap 0 { a := node })
+    ((Ironwood.CondSwap.swap sUnknown unknownBool).call mCfg.condSwap 0 { a := node })
   -- the real MerkleChip::hash_layer (l = 0)
   let _root ← Ironwood.Sinsemilla.Merkle.HashLayer.synthesize layoutG mCfg mLookupCfg
     layoutQ 0 { left := pair.aSwapped, right := pair.bSwapped }
