@@ -81,7 +81,6 @@ elab_rules : tactic
             ComputableWitnesses.structEqSplit, $lemmasArray,*]))
         catch _ =>
           pure ()
-    evalTactic (← `(tactic| intros))
     simpPass
     for _ in [0:2] do
       unless (← getGoals).isEmpty do
