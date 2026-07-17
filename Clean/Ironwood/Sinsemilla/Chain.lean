@@ -242,6 +242,21 @@ theorem output_zsCells (cfg : Config) (ns : List ℕ) (off : ℕ) (self : Region
 derive_contract_bridges pieceC (G : Generators) (n : ℕ) (b : Bool)
   (ya : Placed Environment Fp → Fp) := HashPiece.circuit G n b ya
 
+/-- One piece's slot of the chain loop, at piece index `i` and base row `base` (top-level
+def — the outer peel keeps it folded; the per-slot reduction unfolds it selectively).
+`prev`/`xEnter` name the boundary cells for the entering-`y` derivation (junk reads at
+`i = 0`, where `yaIn` is used instead). -/
+def pieceSlot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (pieces : Vector (AssignedCell Fp) ns.length) (i base : ℕ) :
+    RegionCircuit Fp Unit := do
+  let prev ← readState cfg (base - 1)
+  let xEnter ← cellAt cfg.xA base
+  let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
+      (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base (pieces[i]!)
+  let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+    (qS2Boundary (decide (i = ns.length - 1)))
+  (sinsemillaGate cfg).enable (base + ns.getD i 0)
+
 /-! ## The chain contract -/
 
 /-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
@@ -372,19 +387,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
 
   synthesize cfg offset (input : Var (Inputs ns.length) Fp) := do
     RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
-      (fun i base => do
-        -- the previous piece's last row and this piece's first-row `x_a` — the boundary
-        -- `y` derivation's cells (unused junk reads for `i = 0`, where `yaIn` is used)
-        let prev ← readState cfg (base - 1)
-        let xEnter ← cellAt cfg.xA base
-        let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
-            (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base
-            (input.pieces[i]!)
-        -- the parent's own handle on the boundary `q_s2` (idempotent re-pin) and the
-        -- piece-linking gate at this piece's last row
-        let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
-          (qS2Boundary (decide (i = ns.length - 1)))
-        (sinsemillaGate cfg).enable (base + ns.getD i 0))
+      (pieceSlot G ns yaIn cfg input.pieces)
     -- the trailing dummy row: the final `y_a` into `λ₁`, dummy `λ₂`/`x_p`
     let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
     let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
@@ -407,6 +410,11 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
   ProverSpec input output wit _ := ProverSpec G ns input output wit
 
   soundness := by
+    -- ENGINE WALL (recorded in sinsemilla-loop-design.md): the heterogeneous piece call
+    -- (child output type `HashPiece.Output (ns.getD i 0 + 1)` depends on the loop index)
+    -- times out `circuit_proof_start`/the peel at whnf. Plan: wrap each slot as a
+    -- Unit-output FormalRegionCircuit family (`slot i` — positional contract over its
+    -- Witness readings, the `round i` pattern at piece scale) so the loop is homogeneous.
     sorry
 
   completeness := by

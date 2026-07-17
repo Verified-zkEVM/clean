@@ -183,3 +183,26 @@ target, exercising `lookupInputExprs`/`lookupTableExprs` projection and the
    port (donor `Orchard.Utilities.CondSwap`), Merkle Gate body fix (`l` is a CONSTANT at
    advices[4] row g+1, not a copy; 9 copies not 10) + HashLayer/Layer/CalculateRoot,
    CommitDomain rework on the faithful init. No sorries anywhere.
+
+### Chain engine wall (found 2026-07-17, plan for the continuation)
+
+`forRangeVar'` with the piece call inline (or hoisted as a plain `pieceSlot` def) stalls
+the peel at whnf: the child call's output type `HashPiece.Output (ns.getD i 0 + 1)`
+depends on the loop index (heterogeneous widths), and the do-elaborator's dependent
+`let x : Var … := __discr` plus the engine's call-hunting whnf both choke on it.
+MulIncomplete's loop worked because `round i`'s output type (`State`) is constant.
+
+**Plan:** make the loop homogeneous — wrap each slot as a `Unit`-output
+`FormalRegionCircuit` family `slot G ns yaIn i` (configure := pure, Input = field (the
+piece cell), Output = unit) whose synthesize does: readState (base−1) + cellAt (its own
+first-row x_a) + the `HashPiece.circuit` call (entering-y := `if i = 0 then yaIn else
+boundaryYA prev.row xEnter` — positional, its own offset−1) + `q_s2` re-pin + linking
+gate. Contract in the `round i` pattern: `Witness` = the slot's positional neighborhood
+(exit row of the piece + next row's first cells + the piece's `zs` positions, a per-`i`
+sized struct), `Spec` = piece recombination + zs suffix sums + the linked step (the
+donor `soundness_aux` unit), `ProverSpec` = honest-values thread. The chain then loops
+`(slot …).call` over `forRangeVar'` (all-Unit — engine-friendly), and its induction
+consumes the ∀-bound slot Specs in value land.
+
+`pieceSlot` (the plain-def version) is already in Chain.lean and becomes `slot`'s
+synthesize body.
