@@ -114,9 +114,5 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 where
   soundness := soundness offset
   completeness := completeness offset
   computableWitnesses := by
-    intro n input env env'
-    simp_all only [main, output, circuit_norm, ByteDecomposition.circuit,
-      U64.ByteVector.eval_fromLimbs]
-    grind
-
+    computable_witnesses [output, U64.ByteVector.fromLimbs_inj, Vector.ext_iff]
 end Gadgets.Rotation64Bits
