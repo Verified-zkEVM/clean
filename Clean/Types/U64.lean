@@ -6,7 +6,7 @@ import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
 section
-variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {p : ℕ}
 
 /--
   A 64-bit unsigned integer is represented using eight limbs of 8 bits each.
@@ -37,29 +37,17 @@ instance (T : Type) [Repr T] : Repr (U64 T) where
 
 namespace U64
 
-omit [Fact (Nat.Prime p)] p_large_enough in
-@[grind norm]
+@[grind =]
 theorem size_eq : size U64 = 8 := rfl
 
-omit [Fact (Nat.Prime p)] p_large_enough in
-@[grind norm]
+@[grind =]
 theorem eval_eq_components {F : Type} [FiniteField F]
     (env : Environment F) (x : U64 (Expression F)) :
-    Eval.eval env x =
-      { x0 := Eval.eval env x.x0, x1 := Eval.eval env x.x1,
-        x2 := Eval.eval env x.x2, x3 := Eval.eval env x.x3,
-        x4 := Eval.eval env x.x4, x5 := Eval.eval env x.x5,
-        x6 := Eval.eval env x.x6, x7 := Eval.eval env x.x7 } := by
-  with_unfolding_all rfl
-
-omit [Fact (Nat.Prime p)] p_large_enough in
-@[grind norm]
-theorem eval_varFromOffset_eq_components {F : Type} [FiniteField F]
-    (env : Environment F) (offset : ℕ) :
-    Eval.eval env (varFromOffset (F := F) U64 offset : U64 (Expression F)) =
-      (⟨env.get offset, env.get (offset + 1), env.get (offset + 2),
-        env.get (offset + 3), env.get (offset + 4), env.get (offset + 5),
-        env.get (offset + 6), env.get (offset + 7)⟩ : U64 F) := by
+    eval env x =
+      { x0 := eval env x.x0, x1 := eval env x.x1,
+        x2 := eval env x.x2, x3 := eval env x.x3,
+        x4 := eval env x.x4, x5 := eval env x.x5,
+        x6 := eval env x.x6, x7 := eval env x.x7 } := by
   with_unfolding_all rfl
 
 def toLimbs {F} (x : U64 F) : Vector F 8 := toElements x
@@ -70,7 +58,6 @@ def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
 
 def vals (x : U64 (F p)) : U64 ℕ := x.map ZMod.val
 
-omit [Fact (Nat.Prime p)] p_large_enough in
 /--
   Extensionality principle for U64
 -/
@@ -104,19 +91,16 @@ def value (x : U64 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3 +
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
-omit [Fact (Nat.Prime p)] p_large_enough in
 theorem value_lt_of_normalized {x : U64 (F p)} (hx : x.Normalized) : x.value < 2^64 := by
   simp_all only [value, Normalized]
   linarith
 
-omit [Fact (Nat.Prime p)] p_large_enough in
 theorem value_horner (x : U64 (F p)) : x.value =
     x.x0.val + 2^8 * (x.x1.val + 2^8 * (x.x2.val + 2^8 * (x.x3.val +
       2^8 * (x.x4.val + 2^8 * (x.x5.val + 2^8 * (x.x6.val + 2^8 * x.x7.val)))))) := by
   simp only [value]
   ring
 
-omit [Fact (Nat.Prime p)] p_large_enough in
 theorem value_xor_horner {x : U64 (F p)} (hx : x.Normalized) : x.value =
     x.x0.val ^^^ 2^8 * (x.x1.val ^^^ 2^8 * (x.x2.val ^^^ 2^8 * (x.x3.val ^^^
       2^8 * (x.x4.val ^^^ 2^8 * (x.x5.val ^^^ 2^8 * (x.x6.val ^^^ 2^8 * x.x7.val)))))) := by
@@ -130,7 +114,6 @@ def valueNat (x : U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
 
-omit [Fact (Nat.Prime p)] p_large_enough in
 lemma vals_valueNat (x : U64 (F p)) : x.vals.valueNat = x.value := rfl
 
 /--
@@ -177,14 +160,15 @@ def fromUInt64 (x : UInt64) : U64 (F p) :=
 def valueU64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
   UInt64.ofNatLT x.value (value_lt_of_normalized h)
 
-omit p_large_enough in
 lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt64, decomposeNat]
   have h (y : ℕ) : y % 256 % p < 256 :=
     lt_of_le_of_lt (Nat.mod_le _ _) (Nat.mod_lt _ (by norm_num))
   simp [h]
 
-theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
+theorem value_fromUInt64
+  [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+  (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
   simp only [value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
@@ -204,7 +188,10 @@ theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat :=
   rw [div_succ_pow 1, Nat.pow_one, Nat.mod_add_div, Nat.mod_add_div]
 end U64
 
+variable [Fact p.Prime]
+
 namespace U64.AssertNormalized
+variable [Fact (p > 512)]
 open Gadgets (ByteTable)
 
 /--
@@ -243,7 +230,7 @@ end U64.AssertNormalized
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness (value : U64 (Witgen.FExpr (F p))) := do
+def U64.witness [Fact (p > 512)] (value : U64 (Witgen.FExpr (F p))) := do
   let x ← Witnessable.witness (F := F p) value
   U64.AssertNormalized.circuit x
   return x
@@ -252,11 +239,11 @@ namespace U64
 def fromByte (x : Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
-lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
+lemma fromByte_value [p_large_enough: Fact (p > 512)] {x : Fin 256} : (fromByte x).value (p:=p) = x := by
   simp [value, fromByte]
   exact Nat.mod_eq_of_lt (by linarith [x.is_lt, p_large_enough.elim])
 
-lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
+lemma fromByte_normalized [p_large_enough: Fact (p > 512)] {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
   rw [Nat.mod_eq_of_lt (by linarith [x.is_lt, p_large_enough.elim])]
   exact x.is_lt
@@ -267,7 +254,7 @@ namespace ByteVector
 theorem fromLimbs_toLimbs {F} (x : U64 F) :
     U64.fromLimbs x.toLimbs = x := rfl
 
-@[grind norm]
+@[grind =]
 theorem toLimbs_fromLimbs {F} (v : Vector F 8) :
     (U64.fromLimbs v).toLimbs = v := ProvableType.toElements_fromElements ..
 
@@ -275,7 +262,7 @@ theorem ext_iff {F} {x y : U64 F} :
     x = y ↔ ∀ i (_ : i < 8), x.toLimbs[i] = y.toLimbs[i] := by
   simp only [U64.toLimbs, ProvableType.ext_iff, size]
 
-@[grind norm]
+@[grind =]
 theorem fromLimbs_inj {F} {x y : Vector F 8} :
     U64.fromLimbs x = U64.fromLimbs y ↔ x = y := by
   constructor
@@ -287,7 +274,7 @@ theorem fromLimbs_inj {F} {x y : Vector F 8} :
     subst y
     rfl
 
-omit [Fact (Nat.Prime p)] p_large_enough in
+omit [Fact (Nat.Prime p)] in
 theorem normalized_iff {x : U64 (F p)} :
     x.Normalized ↔ ∀ i (_ : i < 8), x.toLimbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
@@ -311,7 +298,7 @@ lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
     toLimbs (map x f) = (toLimbs x).map f := by
   simp [toLimbs, toElements, map]
 
-@[grind norm]
+@[grind =]
 lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   exact ProvableType.getElem_eval_toElements x i hi

@@ -632,6 +632,24 @@ lemma fromElements_eq_iff' {F} {B : Vector F (size M)} {A : M F} :
   · intro h
     rw [← h, fromElements_toElements]
 
+@[grind =]
+lemma toElements_inj_iff {F} {A B : M F} :
+    toElements A = toElements B ↔ A = B := by
+  constructor
+  · intro h
+    rw [← fromElements_toElements A, ← fromElements_toElements B, h]
+  · intro h
+    rw [h]
+
+@[grind =]
+lemma fromElements_inj_iff {F} {A B : Vector F (size M)} :
+    fromElements A = fromElements B ↔ A = B := by
+  constructor
+  · intro h
+    rw [← toElements_fromElements A, ← toElements_fromElements B, h]
+  · intro h
+    rw [h]
+
 -- basic simp lemmas
 
 @[circuit_norm]
@@ -652,6 +670,7 @@ theorem eval_const_prover {F : Type} [FiniteField F] {α : TypeMap} [ProvableTyp
   exact (CircuitType.eval_expression_prover env (const x)).trans (by
     simpa only [CircuitType.eval_expression] using eval_const (env:=env.toEnvironment) (x:=x))
 
+@[grind =]
 theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
@@ -663,6 +682,7 @@ theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
   intro i hi
   simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
 
+@[grind =]
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by

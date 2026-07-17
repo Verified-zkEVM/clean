@@ -112,6 +112,8 @@ def circuit : FormalCircuit (F p) Inputs U64 where
   completeness
   computableWitnesses := by
     intro n input env env'
-    simp_all only [main, circuit_norm, Inputs.mk.injEq]
+    -- TODO we might want to define a custom simp set of stuff invoked in `computableWitnesses` proofs
+    -- that shouldn't go into `circuit_norm`?
+    simp only [circuit_norm, main, Witgen.WitgenIR.eval_ofCompositeFExpr]
     grind
 end Gadgets.Xor64
