@@ -473,7 +473,6 @@ def double_and_add (n : ℕ) (w : ℕ) :
         rw [hxp0, hyp0]
         exact hl2m
     -- the loop's contract arrived open; land the scalar cell's value in it
-    trace_state
     simp only [hia] at h_spec_0
     obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
