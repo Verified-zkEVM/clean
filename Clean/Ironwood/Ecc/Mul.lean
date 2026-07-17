@@ -50,15 +50,19 @@ then registers the LSB gate and asserts a set of column non-overlap facts (`mul.
   output; sharing a column would alias two distinct logical cells.
 
 **ConfigWF verdict.** In the Halo2-Clean model every advice cell read is keyed by
-`(column.index, row)` (`Environment.advice`). The composition threads each child at a
-DISTINCT region-local offset, so distinct phases occupy disjoint row ranges — the aliasing
-Rust guards against by column-disjointness we avoid by *row*-disjointness (the offsets). The
-column non-overlap asserts therefore reduce, in this model, to the offset discipline already
-enforced by `synthesize`, and are NOT needed as soundness hypotheses. The one genuinely
-load-bearing config fact that does surface is the overflow child's selector distinctness,
-carried (per the MulOverflow projection pattern) in `EnvAssumptions`. This is the predicted
-"ConfigWF finally bites" location: it bites only as the overflow lookup's env-assumption
-projection, not as the cross-sub-config column asserts, which are model-vacuous here.
+`(column.index, row)` (`Environment.advice`). This port is VK-faithful: hi and lo run at the
+SAME rows on DISJOINT column sets (bar the shared `xP=a0`/`yP=a1`), and the complete/LSB
+phases follow below. Non-overlap thus holds by `(column, row)` disjointness, exactly as Rust
+intends — `hi.z`/`hi.lambda_1` (a9/a4) and `lo.z`/`lo.lambda_1` (a6/a8) are all distinct from
+the complete-addition output columns `{x_qr=a2, y_qr=a3}`, so the cross-sub-config column
+asserts are discharged by the concrete column wiring and are NOT needed as soundness
+hypotheses. The one place hi and lo DO share cells is `xP`/`yP`: there both halves write the
+SAME base coordinate at each overlapping row (Rust re-`assign_advice`s the base per row in
+each half), so the environment value at those cells is unambiguous — the "assign the same
+value to the same cell twice" no-op, the same mechanism `z_init`'s self-copy already uses.
+The one genuinely load-bearing config fact that surfaces is the overflow child's selector
+distinctness, carried (per the MulOverflow projection pattern) in `EnvAssumptions` — the
+predicted "ConfigWF finally bites" location.
 
 ## Donor
 
@@ -193,17 +197,28 @@ deriving ProvableStruct
 
 /-! ## Row-span offsets (`mul.rs::assign` — the MAIN region's phase threading)
 
-The five region children of the MAIN region are composed at distinct region-local base offsets,
-so the phases occupy disjoint row ranges (the model's replacement for Rust's column non-overlap
-asserts — see the ConfigWF verdict). These offsets are region-relative to the main region's
-own placement (its row-0), which the floor planner fixes. The spans:
+The children of the MAIN region are composed at Rust's exact region-local base offsets,
+VK-faithfully: hi and lo run SIDE BY SIDE (both `double_and_add` at the same starting row, on
+their disjoint column sets — sharing only `x_p`/`y_p` = the base point, written with EQUAL
+values by both halves). These offsets are region-relative to the main region's placement,
+which the floor planner fixes (the `SimpleFloorPlanner` puts the main region at absolute
+row 2, below the base/alpha witness rows on `advices[0]`/`advices[1]`). The scheme, exactly
+`mul.rs:171-296`:
 
 - `Add.add` init at `offInit = 0`: complete addition writes rows `0..1`.
-- `Add`'s output row is `1`; the hi half starts at `offHi`. In Rust the incomplete `z_init`
-  and the hi/lo/complete phases share a running region; here each child owns its rows.
-- `MulIncomplete.double_and_add 124` (hi) at `offHi`: rows `offHi .. offHi + 1 + 126`.
-- `MulIncomplete.double_and_add 125` (lo) at `offLo`: rows `offLo .. offLo + 1 + 127`.
-- `MulComplete.assign_region 3` (complete) at `offComp`: rows `offComp .. offComp + 6`.
+- `z_init = 0` on the hi `z` column at `offHi = 1` (Rust `offset + 1` after the init add).
+  The hi half copies this same cell into its own `z` at `offHi` — the "assign the same value
+  to the same cell twice" no-op (`mul.rs:196-206`).
+- `MulIncomplete.double_and_add 124` (hi) at `offHi = 1`: `z` copy at `offHi`, loop rows
+  `offHi + 1 .. offHi + 125`, exit `x_a`/`y_a` at `offHi + 126`. Columns `z=a9, xA=a3,
+  xP=a0, yP=a1, λ1=a4, λ2=a5`.
+- `MulIncomplete.double_and_add 125` (lo) at `offLo = offHi` (SAME rows): columns `z=a6,
+  xA=a7, xP=a0, yP=a1, λ1=a8, λ2=a2` — disjoint from hi EXCEPT the shared `xP=a0`/`yP=a1`,
+  where both halves write the base coordinates (equal values; row 0 of each half
+  `copy_advice`s the base anchor, so BOTH anchor copies appear in the ordered copy list,
+  hi's before lo's).
+- `MulComplete.assign_region 3` (complete) at `offComp = offLo + loSpan` (Rust
+  `offset + INCOMPLETE_LO_RANGE.len() + 2 = 129`): rows `offComp .. offComp + 6`.
 - the LSB step: its base row IS the last complete-round row (`offLsb = offComp + 6`,
   Rust `mul.rs:256`: the row holding `z_1 = comp.zs[2]` and the last round's accumulator).
   `q_mul_lsb` at `offLsb` (reads `z_1` at cur, `z_0` at next); `z_0` at `offLsb + 1`;
@@ -213,21 +228,22 @@ own placement (its row-0), which the floor planner fixes. The spans:
 The OVERFLOW CHECK (`MulOverflow.circuit 10`) is NOT in the main region: it runs at the
 layouter level in three sibling regions AFTER the main region closes (`mul.rs:299`). -/
 
-/-- Rows consumed by the hi double-and-add (`n = 124`): `1 + (n + 1) + 1 = 127`. -/
-def hiSpan : ℕ := 127
-/-- Rows consumed by the lo double-and-add (`n = 125`): `1 + (n + 1) + 1 = 128`. -/
+/-- The offset advance from the shared incomplete-half start row to the complete phase
+(Rust `INCOMPLETE_LO_RANGE.len() + 2 = 126 + 2`, `mul.rs:236` — the lo half is the taller
+of the two side-by-side halves). -/
 def loSpan : ℕ := 128
 /-- Rows from `offComp` to the LSB base row: the last complete round's `z` cell
 (`comp.zs[2]`) sits at `offComp + 2·2 + 2 = offComp + 6`, and the LSB step is based there. -/
 def compSpan : ℕ := 6
 
-/-- Init complete addition at offset 0. -/
+/-- Init complete addition at the region's first row (Rust `offset = 0`). -/
 def offInit : ℕ := 0
-/-- Hi half, after the 2-row init add. -/
-def offHi : ℕ := 2
-/-- Lo half. -/
-def offLo : ℕ := offHi + hiSpan
-/-- Complete rounds. -/
+/-- Hi half, one row after the init add's input row (`z_init` and the hi `z` copy live here;
+Rust `offset + 1`, `mul.rs:193`). -/
+def offHi : ℕ := 1
+/-- Lo half — SIDE BY SIDE with hi (same starting row, disjoint columns bar `xP`/`yP`). -/
+def offLo : ℕ := offHi
+/-- Complete rounds (Rust `offset + INCOMPLETE_LO_RANGE.len() + 2`, `mul.rs:236`). -/
 def offComp : ℕ := offLo + loSpan
 /-- LSB step. -/
 def offLsb : ℕ := offComp + compSpan
