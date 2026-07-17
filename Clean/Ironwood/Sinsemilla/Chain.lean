@@ -470,6 +470,125 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         (by rw [h_input]; exact hchain')
       exact hres
 
+/-! Contract bridges for the slot child (hand-written rfl — `derive_contract_bridges`
+chokes on the function-typed `yaIn` binder). -/
+
+private theorem slotC_spec_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).Spec = fun piece _ w => SlotSpec G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_assumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).Assumptions = fun _ => True := rfl
+
+private theorem slotC_envAssumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (env : Placed Environment Fp) :
+    (slot G ns yaIn i).EnvAssumptions cfg env
+      = GeneratorTableLoaded G cfg.generatorTable env.env := rfl
+
+private theorem slotC_proverAssumptions_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).ProverAssumptions
+      = fun piece w _ => SlotPA G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_proverSpec_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    (slot G ns yaIn i).ProverSpec
+      = fun piece _ w _ => SlotPS G (ns.getD i 0) piece w := rfl
+
+private theorem slotC_extract_eq (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config) (base : ℕ)
+    (iv : AssignedCell Fp) (self : RegionIndex) (env : Placed Environment Fp) :
+    (slot G ns yaIn i).extract cfg base iv self env
+      = { eval env (slotReads cfg (ns.getD i 0) base self) with
+          yIn := if i = 0 then yaIn env
+            else boundaryYA (slotReads cfg (ns.getD i 0) base self).prev
+              (AssignedCell.of self base cfg.xA) env } := rfl
+
+/-! ## Value-level families for the chain induction -/
+
+/-- The flat chunk list of the per-piece word families, pieces indexed from `i0`. -/
+def chunksOf (msF : ℕ → ℕ → ℕ) : (ns : List ℕ) → (i0 : ℕ) → List ℕ
+  | [], _ => []
+  | n :: rest, i0 => (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1)
+
+/-- The running-sum family as a per-piece `HVec` (piece `i`'s `nᵢ + 1` values from its
+base row). -/
+def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLengths ns) Fp
+  | [], _ => HVec.nil
+  | n :: rest, base =>
+    (HVec.cons (Vector.ofFn fun r : Fin (n + 1) => zV (base + r.val))
+      (zsFam zV rest (base + (n + 1))) : HVec (zLengths (n :: rest)) _)
+
+/-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
+private theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
+    (v : Vector (AssignedCell Fp) k) :
+    ProvableType.eval (M := fields k) place env v = v.map (AssignedCell.eval place env) := by
+  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements]
+
+/-- Flat eval distributes over `HVec.cons`. -/
+private theorem hvec_eval_cons (place : RegionIndex → ℕ) (env : Environment Fp)
+    {n : ℕ} {ls : List ℕ}
+    (a : Vector (AssignedCell Fp) n) (b : HVec ls (AssignedCell Fp)) :
+    ProvableType.eval (M := HVec (n :: ls)) place env (HVec.cons a b)
+      = HVec.cons (ProvableType.eval (M := fields n) place env a)
+          (ProvableType.eval (M := HVec ls) place env b) := by
+  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+    HVec.cons]
+  exact congrArg HVec.mk (Vector.map_append ..)
+
+/-- `hvec_eval_cons` at the `zLengths (n :: rest)` spelling (keyed matching does not
+unfold `zLengths`). -/
+private theorem hvec_eval_cons_zl (place : RegionIndex → ℕ) (env : Environment Fp)
+    {n : ℕ} {rest : List ℕ}
+    (a : Vector (AssignedCell Fp) (n + 1)) (b : HVec (zLengths rest) (AssignedCell Fp)) :
+    ProvableType.eval (M := HVec (zLengths (n :: rest))) place env (HVec.cons a b)
+      = HVec.cons (ProvableType.eval (M := fields (n + 1)) place env a)
+          (ProvableType.eval (M := HVec (zLengths rest)) place env b) :=
+  hvec_eval_cons place env a b
+
+/-- The flat eval of the positional running-sum cells is the `zsFam` family. -/
+private theorem eval_zsCellsVal_flat (cfg : Config) (self : RegionIndex)
+    (env : Placed Environment Fp) :
+    ∀ (ns : List ℕ) (off : ℕ),
+      ProvableType.eval (M := HVec (zLengths ns)) env.place env.env
+          (zsCellsVal cfg self ns off)
+        = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
+  intro ns
+  induction ns with
+  | nil =>
+    intro off
+    with_unfolding_all rfl
+  | cons n rest ih =>
+    intro off
+    rw [show zsCellsVal cfg self (n :: rest) off
+        = (HVec.cons (Vector.ofFn fun r : Fin (n + 1) => .of self (off + r.val) cfg.bits)
+            (zsCellsVal cfg self rest (off + (n + 1)))
+          : HVec (zLengths (n :: rest)) _) from rfl]
+    rw [hvec_eval_cons_zl]
+    rw [show zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ))
+          (n :: rest) off
+        = (HVec.cons (Vector.ofFn fun r : Fin (n + 1) =>
+              env.env.advice cfg.bits ((env.place self + (off + r.val) : ℕ) : ℤ))
+            (zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) rest
+              (off + (n + 1))) : HVec (zLengths (n :: rest)) Fp) from rfl]
+    congr 1
+    · rw [eval_fields_eq_map]
+      apply Vector.ext
+      intro r hr
+      simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice]
+    · exact ih (off + (n + 1))
+
+/-- The `Eval`-head version of `eval_zsCellsVal_flat`. -/
+private theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
+    (env : Placed Environment Fp) (ns : List ℕ) (off : ℕ) :
+    (eval env (zsCellsVal cfg self ns off) : HVec (zLengths ns) Fp)
+      = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
+  rw [ProvableType.eval_cells (M := HVec (zLengths ns))]
+  exact eval_zsCellsVal_flat cfg self env ns off
+
 /-! ## The chain contract -/
 
 /-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
