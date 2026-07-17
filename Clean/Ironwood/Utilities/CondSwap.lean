@@ -66,4 +66,98 @@ def configure (a b aSwapped bSwapped swap : Column .advice) : Configure Fp Confi
   createGate (swapGate cfg)
   return cfg
 
+/-! ## The `swap` gadget (Rust `CondSwapInstructions::swap`, `cond_swap.rs:88-134`)
+
+One row: copy `a` in, witness `b` and the boolean `swap` flag, witness the conditionally
+swapped pair, enable the gate. The `swap` witness program is `Bool`-valued (Rust:
+`Value<bool>`), so the honest run is boolean by construction. -/
+
+/-- The `a` input (the cell copied in). -/
+structure Input (F : Type) where
+  a : F
+deriving ProvableStruct
+
+/-- The swapped pair. -/
+structure Output (F : Type) where
+  aSwapped : F
+  bSwapped : F
+deriving ProvableStruct
+
+/-- The verifier-view swap contract over the pair `(b, swap)` of witnessed values:
+`swap` is boolean and the output pair is the (conditionally) swapped `(a, b)`. -/
+def SwapSpec (a : Fp) (output : Output Fp) (wit : Fp × Fp) : Prop :=
+  IsBool wit.2 ∧
+  output.aSwapped = (if wit.2 = 1 then wit.1 else a) ∧
+  output.bSwapped = (if wit.2 = 1 then a else wit.1)
+
+/-- Rust `CondSwapChip::swap`'s region body as a formal circuit: input `a` (copied in),
+parameterized by the `b` witness program and the `Bool`-valued `swap` program. Output
+`(a_swapped, b_swapped)`. -/
+def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
+    FormalRegionCircuit Fp Config Config Input Output where
+  configure := pure
+
+  synthesize cfg offset (input : Input (AssignedCell Fp)) := do
+    -- cond_swap.rs:97 — q_swap first
+    (swapGate cfg).enable offset
+    let aC ← copyAdvice input.a cfg.a offset
+    let b ← assignAdvice cfg.b offset wb
+    let sw ← assignAdvice cfg.swap offset
+      (.native fun env => #v[if wswap env then (1 : Fp) else 0])
+    let aS ← assignAdvice cfg.aSwapped offset
+      (.ofFExpr ((.expr sw) * (.expr b) + ((.const (1 : Fp)) - (.expr sw)) * (.expr aC)))
+    let bS ← assignAdvice cfg.bSwapped offset
+      (.ofFExpr ((.expr sw) * (.expr aC) + ((.const (1 : Fp)) - (.expr sw)) * (.expr b)))
+    return { aSwapped := aS, bSwapped := bS }
+
+  -- the `(b, swap)` cell values, as extraction data
+  Witness := fieldPair
+  extract cfg offset _ self env :=
+    (eval env (AssignedCell.of self offset cfg.b : Var field Fp),
+     eval env (AssignedCell.of self offset cfg.swap : Var field Fp))
+
+  Spec := fun input output wit => SwapSpec input.a output wit
+
+  ProverSpec := fun input output wit _ =>
+    output.aSwapped = (if wit.2 = 1 then wit.1 else input.a) ∧
+    output.bSwapped = (if wit.2 = 1 then input.a else wit.1)
+
+  soundness := by
+    circuit_proof_start [swapGate, SwapSpec]
+    obtain ⟨⟨hACheck, hBCheck, hBool⟩, hCopy⟩ := hc
+    set sw := env.env.advice cfg.swap ↑(env.place self + offset) with hsw
+    have hboolv : IsBool sw := by
+      rcases mul_eq_zero.mp hBool with h | h
+      · exact Or.inl h
+      · exact Or.inr (by linear_combination -h)
+    refine ⟨hboolv, ?_, ?_⟩
+    · rcases hboolv with h0 | h1
+      · rw [if_neg (show ¬ sw = 1 from by rw [h0]; decide)]
+        rw [h0] at hACheck
+        linear_combination hACheck + hCopy
+      · rw [if_pos h1]
+        rw [h1] at hACheck
+        linear_combination hACheck
+    · rcases hboolv with h0 | h1
+      · rw [if_neg (show ¬ sw = 1 from by rw [h0]; decide)]
+        rw [h0] at hBCheck
+        linear_combination hBCheck
+      · rw [if_pos h1]
+        rw [h1] at hBCheck
+        linear_combination hBCheck + hCopy
+
+  completeness := by
+    circuit_proof_start [swapGate]
+    obtain ⟨hOA, hOB⟩ := h_output
+    rcases Bool.eq_false_or_eq_true (wswap { place := env.place, env := env.env }) with hs | hs <;>
+      simp only [hs, Bool.false_eq_true, if_false, if_true] at hOA hOB ⊢
+    · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
+      · linear_combination -hOA
+      · linear_combination -hOB
+    · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
+      · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
+        linear_combination -hOA
+      · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
+        linear_combination -hOB
+
 end Halo2.Ironwood.CondSwap
