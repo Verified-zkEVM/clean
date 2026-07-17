@@ -60,6 +60,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
+attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
+attribute [local grind ←] FormalCircuit.output_onlyAccessedBelow
+
 def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   main := main
   elaborated := elaborated
@@ -68,6 +71,6 @@ def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   soundness := soundness
   completeness := completeness
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff]
+    computable_witnesses' [eval_vector, Vector.ext_iff]
 
 end Gadgets.Keccak256.ThetaC

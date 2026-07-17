@@ -58,6 +58,44 @@ def structEqSplitProc : Simproc := fun e => do
 
 simproc structEqSplit (_ = _) := structEqSplitProc
 
+private def runComputableWitnesses
+    (extraTerms : Array (TSyntax `term)) (unfoldCircuitConsts : Bool) : TacticM Unit := do
+  let lemmasArray ← extraTerms.mapM fun term =>
+    `(Lean.Parser.Tactic.simpLemma| $term:term)
+  let simpPass : TacticM Unit := do
+    unless (← getGoals).isEmpty do
+      try
+        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+      catch _ =>
+        pure ()
+  simpPass
+  if !unfoldCircuitConsts then
+    unless (← getGoals).isEmpty do
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent `main):ident))
+      catch _ =>
+        pure ()
+      simpPass
+  else
+    for _ in [0:2] do
+      unless (← getGoals).isEmpty do
+        evalTactic (← `(tactic| unfold_formal_circuit_consts))
+        simpPass
+  unless (← getGoals).isEmpty do
+    evalTactic (← `(tactic| intros))
+  unless (← getGoals).isEmpty do
+    withMainContext do
+      let target ← whnf (← getMainTarget)
+      if target.isAppOfArity ``And 2 then
+        evalTacticSeq (← `(tacticSeq|
+          apply And.intro
+          · intros
+            (try and_intros) <;> grind
+          · grind))
+      else
+        evalTactic (← `(tactic| grind))
+
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,
 two bounded rounds of circuit-wrapper unfolding, structural splitting of the operations/output
@@ -67,37 +105,16 @@ Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]`
 -/
 syntax "computable_witnesses" ("[" term,* "]")? : tactic
 
+/--
+Experimental variant of `computable_witnesses` that does not unfold circuit-valued constants.
+It unfolds a `main` declaration in the current scope, while child subcircuit constants remain opaque.
+-/
+syntax "computable_witnesses'" ("[" term,* "]")? : tactic
+
 elab_rules : tactic
-  | `(tactic| computable_witnesses $[[$terms:term,*]]?) => do
-    let extraLemmas := match terms with
-      | some terms => terms.getElems.map fun term =>
-          `(Lean.Parser.Tactic.simpLemma| $term:term)
-      | none => #[]
-    let lemmasArray ← extraLemmas.mapM id
-    let simpPass : TacticM Unit := do
-      unless (← getGoals).isEmpty do
-        try
-          evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-            ComputableWitnesses.structEqSplit, $lemmasArray,*]))
-        catch _ =>
-          pure ()
-    simpPass
-    for _ in [0:2] do
-      unless (← getGoals).isEmpty do
-        evalTactic (← `(tactic| unfold_formal_circuit_consts))
-        simpPass
-    unless (← getGoals).isEmpty do
-      evalTactic (← `(tactic| intros))
-    unless (← getGoals).isEmpty do
-      withMainContext do
-        let target ← whnf (← getMainTarget)
-        if target.isAppOfArity ``And 2 then
-          evalTacticSeq (← `(tacticSeq|
-            apply And.intro
-            · intros
-              (try and_intros) <;> grind
-            · grind))
-        else
-          evalTactic (← `(tactic| grind))
+  | `(tactic| computable_witnesses $[[$terms:term,*]]?) =>
+      runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[]) true
+  | `(tactic| computable_witnesses' $[[$terms:term,*]]?) =>
+      runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[]) false
 
 end ComputableWitnesses

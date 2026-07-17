@@ -64,6 +64,6 @@ def circuit : FormalCircuit (F p) Inputs KeccakState where
   soundness := soundness
   completeness := completeness
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff]
+    computable_witnesses' [eval_vector, Vector.ext_iff]
 
 end Gadgets.Keccak256.ThetaXor

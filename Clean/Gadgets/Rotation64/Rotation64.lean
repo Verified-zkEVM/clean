@@ -79,10 +79,6 @@ def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   soundness := soundness offset
   completeness := completeness offset
   computableWitnesses := by
-    intro n input env env'
-    simp only [main, circuit_norm]
-    apply And.intro
-    · and_intros <;> grind
-    · grind
+    computable_witnesses'
 
 end Gadgets.Rotation64

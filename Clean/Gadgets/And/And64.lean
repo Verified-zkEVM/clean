@@ -85,8 +85,6 @@ def circuit : FormalCircuit (F p) Inputs U64 where
   soundness
   completeness
   computableWitnesses := by
-    intro n input env env'
-    simp_all only [main, circuit_norm, Inputs.mk.injEq]
-    grind
+    computable_witnesses' [Inputs.mk.injEq]
 
 end Gadgets.And.And64
