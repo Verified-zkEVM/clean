@@ -157,3 +157,43 @@ fixtures. State:
 - CS Pre/Post fixture (symbolic gates/queries, TestVkMatchMul-style) — needs a gate-AST
   emitter in the halo2_proofs local helpers; queued.
 - full_width/short wrappers after base_field_elem.
+
+
+## Sinsemilla/Merkle arc status (2026-07-18, overnight run)
+
+All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
+
+- **Chain completeness closed** — the whole round/loop/slot/chain restructure is proven.
+  Honest-prover runs require `ns ≠ []` (`Chain.ProverAssumptions`).
+- **CS VK matches green**: `TestVkMatchSinsemilla`, `TestVkMatchMerkle` (pre+post).
+  `SinsemillaChip::configure` made VK-exact (equality on all five advices, `q_s2`
+  allocated inside, lookup-before-gates, Rust const-mul orientations — the eraser maps
+  right-mul-by-const to `Scaled`). `MerkleChip::configure` ported (CondSwap + q_decompose).
+- **Layout VK matches green end-to-end**: `TestVkLayoutSinsemilla` (6/6 copies, 12/12 σ,
+  6241/6241 fixed), `TestVkLayoutMerkle` (17/17 copies, σ, fixed). New machinery:
+  `assignedFixed` (in-region assign_fixed extraction), `dedupFixed`. Placement lines of
+  both fixtures regenerated via a new sibling-checkout dumper
+  (`halo2_gadgets/src/sinsemilla/layout_dump.rs`, local-only commit — same min-touched
+  attribution bug as mul regions 3/6).
+- **Rust-faithfulness refactors**: `shortRangeCheck` positional (no copy-in — Rust
+  `short_range_check`) + `witnessShortCheck` layouter wrapper; Merkle `Gate` takes `l`
+  from a constant (9 copies), both directions proven; `CondSwap.swap` gadget fully proven
+  (Bool-valued swap program).
+- **`hash_message` FORMAL bundle proven** (`HashToPoint.hashRegion`/`hashCircuit`): the
+  public-Q init pins the chain's ∀-A contract to the hash from `Q`; Spec exposes chunking
+  + ZsFacts + the flat `z1View`; ProverSpec the honest hash. Chain exports the public
+  composition lemmas (`circuit_output_eval`(_prover), `output_point_x/y`).
+- **`HashLayer.synthesize`** (Rust `hash_layer`) is real and layout-validated, consuming
+  the formal hash bundle.
+
+### Remaining (the ⊤-level proof compositions)
+
+1. `HashLayer` as a `FormalCircuit` (Mul.lean-style layouter peel): children all proven
+   (witnessShortCheck ×2, hashCircuit, Gate); the value glue is in place
+   (`assemble` for soundness, `honest_pieces`/`honest_gate` for completeness; the z_1
+   values come from the hash Spec's `ZsFacts`+`z1View` — unfold at `merkleNs`).
+2. `Layer` = CondSwap.swap + HashLayer; `CalculateRoot` = the 32-fold
+   (`merkleRoot_of_steps`/`honestNode` algebra ready).
+3. `CommitDomain.commit` = hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth`
+   boundary (`BlindSpecPinned` pattern; the mul_fixed arc on the other machine will
+   discharge it).
