@@ -98,9 +98,9 @@ instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
 
 variable [FiniteField F]
 
-instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
+@[reducible] instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
   CircuitType.verifierEval (Unconstrained value)
-instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
+@[reducible] instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
   CircuitType.proverEval (Unconstrained value)
 
 @[circuit_norm] lemma eval_unconstrained
@@ -109,7 +109,20 @@ instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
 
 @[circuit_norm] lemma eval_unconstrained_prover
     (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
-    eval pe v = Witgen.eval { env := pe } v := by with_unfolding_all rfl
+    eval pe v
+      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
+  with_unfolding_all rfl
+
+/-- The same reduction keyed on the raw `CircuitType.proverEval` instance application — the
+spelling `completeness_iff`'s generic `eval env input_var = input` hypothesis carries (the
+named forwarder instance above is a different constant, which keyed matching does not see
+through). -/
+@[circuit_norm] lemma eval_unconstrained_prover_raw
+    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
+    @Eval.eval (Placed ProverEnvironment F) (value (FExpr F)) (value F)
+        (CircuitType.proverEval (Unconstrained value)) pe v
+      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
+  with_unfolding_all rfl
 
 end Unconstrained
 
@@ -166,3 +179,61 @@ theorem WitgenIROver.getElem_eval_ofFExprs {n : ℕ} (es : Vector (FExprOver F V
   simp [WitgenIROver.ofFExprs, WitgenIROver.eval, VExprOver.eval, evalSteps]
 
 end Witgen
+
+/-! ## Hint-input evaluation dispatch
+
+The `_iff` statements evaluate an `Unconstrained` input generically (`eval env input_var`),
+with the `Eval` instance arriving in several spellings (the named forwarder above, the raw
+`CircuitType.proverEval` application). Keyed lemma matching does not see through those, so
+a simproc dispatches on the whnf'd instance and reduces: prover view to the witness-program
+evaluation in the engine's canonical spelling (`Witgen.eval { env := ⟨pe.place, pe.env⟩ } v`
+— the reconstructed-`Placed` form the witness closures receive), verifier view to `()`. -/
+
+open Lean Meta Simp in
+def Halo2.unconstrainedEvalProc : Simproc := fun e => do
+  unless e.isAppOfArity ``Eval.eval 6 do return .continue
+  let args := e.getAppArgs
+  let inst := args[3]!
+  let pe := args[4]!
+  let v := args[5]!
+  -- unfold the instance just far enough to expose the verifier/prover dispatch head (a
+  -- plain whnf would reduce past it, to the `Eval.mk` structure literal)
+  let (instW, isProver) ← withTransparency .default do
+    if let some x ← whnfUntil inst ``Halo2.CircuitType.proverEval then
+      pure (some x, true)
+    else if let some x ← whnfUntil inst ``Halo2.CircuitType.verifierEval then
+      pure (some x, false)
+    else
+      pure (none, false)
+  let some instW := instW | return .continue
+  let isVerifier := !isProver
+  let some m := instW.getAppArgs[2]? | return .continue
+  unless m.getAppFn.isConstOf ``Halo2.Unconstrained do return .continue
+  if isVerifier then
+    let rhs := mkConst ``Unit.unit
+    let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
+    return .visit { expr := rhs, proof? := some pf }
+  let pePlace ← mkAppM ``Halo2.Placed.place #[pe]
+  let peEnv ← mkAppM ``Halo2.Placed.env #[pe]
+  let pe' ← mkAppM ``Halo2.Placed.mk #[pePlace, peEnv]
+  let fF := (← withTransparency .default (whnf (← inferType pe'))).getAppArgs[1]!
+  let sumTy ← mkAppM ``Sum #[fF, mkConst ``Nat]
+  let locals ← mkAppOptM ``List.toArray
+    #[some sumTy, some (← mkAppOptM ``List.nil #[some sumTy])]
+  let ctx ← withTransparency .default <| mkAppM ``Witgen.CtxOver.mk #[pe', locals, mkNatLit 0]
+  -- `M := value` must be supplied explicitly: higher-order unification cannot recover it
+  -- from the folded `Var (Unconstrained value) F` type of `v`
+  let some value := m.getAppArgs[0]? | return .continue
+  let rhs ← withTransparency .default <| mkAppOptM ``Witgen.eval
+    #[none, none, none, none, none, some value, none, some ctx, some v]
+  let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
+  return .visit { expr := rhs, proof? := some pf }
+
+open Lean Meta Elab in
+run_cmd Command.liftTermElabM do
+  let f ← mkConstWithFreshMVarLevels ``Eval.eval
+  let (mvars, _, _) ← forallMetaTelescope (← inferType f)
+  let keys ← withSimpGlobalConfig <| DiscrTree.mkPath (mkAppN f mvars)
+  Simp.registerSimproc ``Halo2.unconstrainedEvalProc keys
+
+attribute [circuit_norm] Halo2.unconstrainedEvalProc

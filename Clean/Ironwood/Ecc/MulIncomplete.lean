@@ -122,10 +122,10 @@ private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool
     rw [hstep, ihb]
     rfl
 
-def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) where
+def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
   configure := pure
 
-  synthesize cfg offset (alpha : AssignedCell Fp) := do
+  synthesize cfg offset (alpha : FExpr Fp) := do
     RegionCircuit.forRange' offset 1 n (fun r o => do
       let _ ← (round (w + r)).call cfg o alpha)
     let exit ← readState cfg (offset + n)
@@ -259,7 +259,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) wh
 
 /-- The loop's output variable: exit neighborhood + interstitial z cells (rfl). -/
 @[circuit_norm]
-theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
+theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : FExpr Fp)
     (self : RegionIndex) :
     (loop n w).output cfg o iv self
       = { exit := reads cfg (o + n) self,
@@ -274,13 +274,13 @@ def RoundInvariant (numBits : ℕ) (input : Inputs Fp) (output : Output numBits 
     output.acc = accScalar m bits numBits • input.base
 
 /-- Honest witnesses for the init row's slopes (round 0's λ's), from the input cells. -/
-def initLambdaWit (alpha : AssignedCell Fp) (base acc : Point (AssignedCell Fp)) (w : ℕ)
+def initLambdaWit (alpha : FExpr Fp) (base acc : Point (AssignedCell Fp)) (w : ℕ)
     (f : Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[f (lambdaCellsValue (readCell env base.x) (readCell env base.y)
     (readCell env acc.x) (readCell env acc.y) (bitWit alpha w env))]
 
 @[circuit_norm]
-theorem initLambdaWit_eval (alpha : AssignedCell Fp) (base acc : Point (AssignedCell Fp))
+theorem initLambdaWit_eval (alpha : FExpr Fp) (base acc : Point (AssignedCell Fp))
     (w : ℕ) (f : Orchard.Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initLambdaWit alpha base acc w f).eval env)[j]
@@ -307,17 +307,17 @@ def double_and_add (n : ℕ) (w : ℕ) :
     let _xP ← copyAdvice input.base.x cfg.xP (offset + 1)
     let _yP ← copyAdvice input.base.y cfg.yP (offset + 1)
     let _l1 ← assignAdvice cfg.lambda1 (offset + 1)
-      (initLambdaWit input.alpha input.base input.acc w (·.lambda1))
+      (initLambdaWit (.expr input.alpha) input.base input.acc w (·.lambda1))
     let _l2 ← assignAdvice cfg.lambda2 (offset + 1)
-      (initLambdaWit input.alpha input.base input.acc w (·.lambda2))
+      (initLambdaWit (.expr input.alpha) input.base input.acc w (·.lambda2))
     (qMul1Gate cfg).enable offset
     -- the interior rounds
-    let _lp ← (loop n w).call cfg offset input.alpha
+    let _lp ← (loop n w).call cfg offset (.expr input.alpha)
     -- the final `q_mul_3` round on the exit neighborhood
     let ex ← readState cfg (offset + n)
     (qMul3Gate cfg).enable (offset + n + 1)
-    let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit input.alpha ex (w + n) (·.z))
-    let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit input.alpha ex (w + n) (·.xA))
+    let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit (.expr input.alpha) ex (w + n) (·.z))
+    let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit (.expr input.alpha) ex (w + n) (·.xA))
     let yf ← assignAdvice cfg.lambda1 (offset + n + 2) (readWit ex State.stepY)
     let xf ← cellAt cfg.xA (offset + n + 2)
     let zs ← cellVec cfg.z (fun j => offset + 1 + j) (n + 1)
