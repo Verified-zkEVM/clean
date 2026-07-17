@@ -205,9 +205,7 @@ structure Output (numBits : ℕ) (F : Type) where
   zs : Vector F numBits
 deriving ProvableStruct
 
-/-- Read an input cell's value in a placed prover environment. -/
-def readCell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) : Fp :=
-  c.eval env.place env.env.toEnvironment
+-- `readCell` (reading an input cell in a prover env) now lives in the framework (`Basic.lean`).
 
 /-- The `w`-shifted window of the working scalar's bits: `kBitsWindow a w i = kBits a (w + i)`,
 i.e. bit `k_{254-(w+i)}` of the unreduced working scalar `k = a.val + t_q`.

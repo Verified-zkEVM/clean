@@ -112,6 +112,18 @@ theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex
 theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
     (cellAt (F := F) col row).output self = .of self row col := rfl
 
+/-- Read an input cell's value in a placed prover environment — the standard accessor for
+witness programs that derive values from earlier cells. (Promoted from the per-gadget
+copies in `MulIncompleteRound`/`HashPieceRound` — the friction-twice rule.) -/
+def readCell [Field F] (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
+  c.eval env.place env.env.toEnvironment
+
+@[circuit_norm]
+theorem readCell_of [Field F] (env : Placed ProverEnvironment F) (self : RegionIndex)
+    (row : ℕ) (col : Column .advice) :
+    readCell env (AssignedCell.of self row col)
+      = env.env.advice col ((env.place self + row : ℕ) : ℤ) := rfl
+
 /-- Name a vector of cells at fixed region-local rows (no op emitted) — the vector-valued
 analogue of `cellAt`, for running-sum-style output cell vectors. Returns `Vector.ofFn` so
 its `output` is `rfl`. -/

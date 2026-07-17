@@ -135,17 +135,26 @@ def selector : Configure F Selector :=
 def complexSelector : Configure F Selector :=
   fun cs => (⟨cs.numSelectors, false⟩, { cs with numSelectors := cs.numSelectors + 1 })
 
-/-- Rust: `meta.enable_equality(column)`. -/
+/-- Rust: `meta.enable_equality(column)`. Idempotent, exactly like Rust's
+`permutation::Argument::add_column` (`permutation.rs:61-65`: `if !columns.contains`),
+which matters for VK-faithful permutation-column order when a column is
+equality-enabled twice (e.g. `mul_fixed`'s `window`: once by `mul_fixed::configure`,
+once by `RunningSumConfig::configure`). -/
 def enableEquality (c : AnyColumn) : Configure F Unit :=
-  fun cs => ((), { cs with permutationColumns := cs.permutationColumns ++ [c] })
+  fun cs => ((), { cs with permutationColumns :=
+    if c ∈ cs.permutationColumns then cs.permutationColumns
+    else cs.permutationColumns ++ [c] })
 
 /-- Rust: `meta.enable_constant(column)`: registers the constants column and enables
-equality on it (constants are enforced via copies into this column). -/
+equality on it (constants are enforced via copies into this column; the equality enable
+dedups like `enableEquality`). -/
 def enableConstant (col : Column .fixed) : Configure F Unit :=
   fun cs => ((),
     { cs with
       constants := cs.constants ++ [col]
-      permutationColumns := cs.permutationColumns ++ [col.toAny] })
+      permutationColumns :=
+        if col.toAny ∈ cs.permutationColumns then cs.permutationColumns
+        else cs.permutationColumns ++ [col.toAny] })
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
