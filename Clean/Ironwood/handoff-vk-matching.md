@@ -117,3 +117,43 @@ in Witness/extract, specs in domain language, improve the tactic layer rather th
 bespoke plumbing, never delta-unfold a bundle def in simp. Only remove TODOs that are
 done. Full `lake build Clean` + `lake build CleanTests` before any push (a partial build
 once masked a broken file); commit in reviewable increments, append-only git.
+
+## mul_fixed stack (2026-07-18 continuation, in progress)
+
+Gregor's follow-up goal: the mul_fixed stack — circuits, proofs, VK tests with OWN
+fixtures. State:
+
+**DONE (pushed, all green):**
+- `Clean/Ironwood/Utilities/DecomposeRunningSum.lean`: strict `copy_decompose` bundle,
+  soundness + completeness PROVEN (backward-chain lemma `chain_shifts` pins every
+  interior running sum). Range-check gate = exact halo2 `range_check` fold AST, bridged
+  to the donor `rangeCheckPoly`/`InRange` machinery by `eval_rangeCheckExpr`.
+- `Clean/Ironwood/Ecc/MulFixed.lean`: core Config/coords-gate/configure +
+  `assign_fixed_constants`/`process_window` pieces over `FixedBaseData` (proof-free
+  data; donor `FixedBase.toData` bridges).
+- `Clean/Ironwood/Ecc/MulFixed/BaseFieldElem.lean`: canonicity gate (exact AST),
+  configure, full 4-piece synthesize. NOTE the z_0 aliasing: Rust binds
+  `alpha := running_sum[0]` — all canonicity-region references use the z_0 CELL.
+- Own fixtures via the sibling-checkout dumper (`layout_dump.rs::dump_layout_base_field`
+  + LOCAL-ONLY `lean_dump_*` helpers in halo2_proofs/src/plonk/circuit.rs — replicates
+  compress_selectors to get real SelectorAssignments): `BaseFieldLayout`/`BaseFieldSelMap`/
+  `BaseFieldParams` fixtures + fixture generator
+  (scratchpad `gen_bf_fixtures.py` — regenerate command in fixture headers).
+- `TestVkLayoutBaseField`: ALL guards green (placements/copyList/σ/fixed).
+- Framework: `enableEquality`/`enableConstant` dedup (Rust add_column semantics);
+  `cellAt`/`cellVec`/`readCell` promoted to `Basic.lean`; `provable_type_simp`
+  single-vector-eq fix (`obtain <ident>` on a bare Eq substitutes — skip the obtain);
+  Layout machinery: `selectorFixed` dedups activations, new `regionAssignFixed`.
+
+**REMAINING (the proof arc):**
+- Bundle the inner region (copyDecompose ✓ done + fixed-constants coords facts +
+  AddIncomplete window chain) as a FormalRegionCircuit; donor value algebra:
+  `Orchard/Ecc/MulFixed/BaseFieldElem.lean` `RunningSumMul` (soundness 503-921,
+  completeness 922-1297) + `MulFixed.FixedBase.coords_eq_windowPoint`/`partialSum`.
+- Canonicity gate spec: donor `BaseFieldElem.Gate` (Spec/soundness ready to transplant).
+- Top-level `FormalCircuit` (layouter): needs a positional/bundled witnessCheck13
+  (currently a plain Circuit def — bundle it when proofs need the lookup facts, or
+  positionalize `LookupRangeCheck.rangeCheck` like the short variant was).
+- CS Pre/Post fixture (symbolic gates/queries, TestVkMatchMul-style) — needs a gate-AST
+  emitter in the halo2_proofs local helpers; queued.
+- full_width/short wrappers after base_field_elem.
