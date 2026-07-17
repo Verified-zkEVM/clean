@@ -35,7 +35,7 @@ check is needed), and `Q` is the dumped MerkleCRH domain point (`x` from the con
 allocation, `y` from the `fixed_y_q` load).
 -/
 
-namespace Halo2.Fixtures.Test.Layout
+namespace Halo2.Fixtures.Test.LayoutSinsemilla
 
 open Ironwood (Fp)
 open Orchard.Specs.Sinsemilla (Generators)
@@ -165,4 +165,4 @@ def myFixed : List (ℕ × ℕ × ℕ) :=
 -- the full fixed contents: loaded tables, constants, packed selectors, q_s2 / fixed_y_q
 #guard myFixed = sortFixed sinsemillaLayout.fixed
 
-end Halo2.Fixtures.Test.Layout
+end Halo2.Fixtures.Test.LayoutSinsemilla
