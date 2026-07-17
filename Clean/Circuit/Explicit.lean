@@ -385,7 +385,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
     rw [inst.witness_def]
-    show _ = inst.var_eq ▸ (witnessIR value (.ofFExprs (toElements c))).output n
+    show _ = inst.var_eq ▸ (witnessIR value (.ofCompositeFExpr c)).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -395,7 +395,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
       cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
     rfl
 
-  operations c n := [.witness (size value) (.ofFExprs (toElements c))]
+  operations c n := [.witness (size value) (.ofCompositeFExpr c)]
   operations_eq c n := by
     rw [inst.witness_def, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
       snd_cast (by rw [inst.var_eq])]

@@ -260,19 +260,36 @@ theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironm
     program.toIRLiteral.eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
 
-/-- Evaluate a literal provable value as a whole before vector extensionality exposes its
-individual witness-IR elements. This lets the existing struct-literal evaluator preserve
-the value's component structure in computable-witness proofs. -/
-@[circuit_norm ↓ high]
-theorem eval_ofFExprs_toElements (xs : value (FExpr F)) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements xs)).eval env = toElements (Witgen.eval { env := env } xs) := by
-  change (toIRLiteral (pure xs)).eval env = _
-  rw [eval_toIRLiteral]
-  rfl
 
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M
+
+namespace WitgenIR
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
+/-- TODO this is not in `circuit_norm`, but currently needed for `computableWitnesses` proofs.
+in `circuit_norm` it would change the normal form away from the LHS
+of `ProverEnvironment.extendsVector_ofCompositeFExpr` which is an important
+rewrite lemma in completeness proofs. -/
+theorem eval_ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExpr F)) (env : ProverEnvironment F) :
+    (ofCompositeFExpr e).eval env = toElements (Witgen.eval { env } e) := by
+  change (M.toIRLiteral (pure e)).eval env = _
+  rw [M.eval_toIRLiteral]
+  rfl
+
+/--
+TODO this would be the preferred form of `eval_ofCompositeFExpr` for `computableWitnesses` proofs,
+but empirically doesn't fire early enough before the implicit `size value` Vector length (in `eval`) gets rewritten
+to a literal which stops making this fire in simp. -/
+@[circuit_norm ↓ high]
+theorem eval_ofCompositeFExpr_eq_iff (xs : value (FExpr F)) (env env' : ProverEnvironment F) :
+    (ofCompositeFExpr xs).eval env = (ofCompositeFExpr xs).eval env' ↔
+    Witgen.eval { env } xs = Witgen.eval { env := env' } xs := by
+  simp_rw [eval_ofCompositeFExpr, ProvableType.toElements_inj_iff]
+
+end WitgenIR
 end Witgen
 
 /--

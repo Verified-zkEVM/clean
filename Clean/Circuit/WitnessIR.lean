@@ -289,8 +289,9 @@ simp-normalize to exactly the same hypothesis shapes as the closures they replac
 def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit #v[e])
 
 /-- Witness program computing each output element from its own IR expression. -/
-def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
-  .ir [] (.lit es)
+def WitgenIR.ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExpr F)) : WitgenIR F (size value) :=
+  .ir [] (.lit (toElements e))
 
 /-- Witness program computing a whole provable value from a native Lean closure — the
 payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
@@ -352,16 +353,19 @@ instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); togeth
 `FiniteField.val_inj` this gives `.feq` conditions the plain `x = y` shape. -/
 attribute [circuit_norm] decide_eq_true_eq
 
+section
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓, grind =]
-theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
+theorem VExpr.getElem_eval_mapRange (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
+theorem VExpr.getElem_eval_lit {n : ℕ} (ctx : Ctx F)
     (es : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.lit es))[i] = es[i].eval ctx := by
   simp [VExpr.eval]
@@ -369,7 +373,7 @@ theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
 @[circuit_norm ↓, grind =]
-theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F))
+theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
     (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :
     ((WitgenIR.ir steps out).eval env)[i]
@@ -378,7 +382,7 @@ theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
+theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env } := by
   rcases Nat.lt_one_iff.mp hi
@@ -386,28 +390,28 @@ theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
-    (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
-    ((ofFExprs es).eval env)[i] = es[i].eval { env } := by
-  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
+theorem WitgenIR.getElem_eval_ofCompositeFExpr (e : value (FExpr F))
+    (env : ProverEnvironment F) (i : ℕ) (hi : i < size value) :
+    ((ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by
+  simp [ofCompositeFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+theorem WitgenIR.eval_ofCompositeFExpr_singleton {F: Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
+    (WitgenIR.ofCompositeFExpr (value:=field) x).eval env = #v[x.eval { env }] := by
   with_unfolding_all rfl
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
 @[circuit_norm]
-theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
+theorem BExpr.eval_feq_iff (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]
 
 /-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
+theorem WitgenIR.eval_ofFExpr_expr (e : Expression F)
     (env : ProverEnvironment F) :
     (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := by
   ext i hi
@@ -418,7 +422,7 @@ theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
 fires regardless of how the expression vector was built (matches the codebase's
 getElem-first simp discipline). -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
+theorem WitgenIR.getElem_eval_ofExprs {n : ℕ}
     (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by
   rw [eval_ofExprs]
@@ -427,11 +431,12 @@ theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
 /-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofExprs_toElements [FiniteField F] {M : TypeMap} [ProvableType M]
+theorem WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
     (x : M (Expression F)) (env : ProverEnvironment F) :
     (WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
   rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
+end
 
 /-!
 ## Eval-simplification tooling

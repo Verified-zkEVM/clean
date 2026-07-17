@@ -264,7 +264,7 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_def (xs : value (Witgen.FExpr F)) :
-    witness xs = var_eq ▸ _root_.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
+    witness xs = var_eq ▸ _root_.witnessIR value (.ofCompositeFExpr xs) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
     witnessIR code = var_eq ▸ _root_.witnessIR value code := by intros; rfl
 
@@ -329,12 +329,12 @@ theorem ProverEnvironment.extendsVector_nativeValue {value : TypeMap} [ProvableT
 provable values: the witnessed variable evaluates to the value of the given expressions.
 See `ProverEnvironment.extendsVector_toIRLiteral`. -/
 @[circuit_norm ↓ high]
-theorem ProverEnvironment.extendsVector_ofFExprs {value : TypeMap} [ProvableType value]
+theorem ProverEnvironment.extendsVector_ofCompositeFExpr {value : TypeMap} [ProvableType value]
     (env : ProverEnvironment F) (xs : value (Witgen.FExpr F)) (n : ℕ) :
-    env.ExtendsVector ((Witgen.WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
+    env.ExtendsVector ((Witgen.WitgenIR.ofCompositeFExpr xs).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
         = Witgen.eval { env := env } xs := by
-  rw [show Witgen.WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
+  rw [show Witgen.WitgenIR.ofCompositeFExpr (value:=value) xs = Witgen.M.toIRLiteral (pure xs) from rfl,
     ProverEnvironment.extendsVector_toIRLiteral,
     show Witgen.M.eval env (pure xs) = Witgen.eval { env := env } xs from rfl]
 
@@ -347,12 +347,12 @@ instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
   witnessIR := witnessIR _
 
 instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
-  witness xs := witnessIR M (.ofFExprs (toElements xs))
+  witness xs := witnessIR M (.ofCompositeFExpr xs)
   witnessIR := witnessIR M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
+  witness xs := witnessIR (ProvableVector α m) (.ofCompositeFExpr xs)
   witnessIR := witnessIR (ProvableVector α m)
 
 -- witness generation
