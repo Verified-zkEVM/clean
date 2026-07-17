@@ -385,6 +385,14 @@ def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
   env.AgreesBelow n env' → f env = f env'
 
+omit [FiniteField F] in
+@[grind norm]
+theorem ProverEnvironment.onlyAccessedBelow_iff (n : ℕ)
+    (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :
+    ProverEnvironment.OnlyAccessedBelow n f env env' ↔
+      (env.AgreesBelow n env' → f env = f env') := by
+  rfl
+
 def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   FlatOperation.forAll n {
     witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
@@ -540,6 +548,10 @@ attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_push Vector.getElem_set Vector.getElem_cast
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
+
+attribute [grind norm]
+  Vector.getElem_ofFn Vector.getElem_mk List.getElem_toArray
+  List.getElem_cons_zero List.getElem_cons_succ
 
 -- Extensionality introduces indexed `mapRange` terms during grind's search.
 -- Normalize these pointwise terms immediately; this eliminates `mapRange` without

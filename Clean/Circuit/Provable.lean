@@ -767,6 +767,7 @@ theorem eval_vector (env : Environment F)
   rw [Vector.flatten_toChunks]
   simp [explicit_provable_type]
 
+@[grind norm, grind _=_]
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
     eval env x[i] = (eval env x)[i] := by
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
