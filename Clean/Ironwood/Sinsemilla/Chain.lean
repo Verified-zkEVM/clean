@@ -155,13 +155,25 @@ structure Inputs (len : ℕ) (F : Type) where
   pieces : Vector F len
 deriving ProvableStruct
 
-/-- Outputs: the hash point, the message's first double-and-add row (the init gate /
-`Spec` anchor), and the full per-piece running sums `zs`. -/
-structure Output (ns : List ℕ) (F : Type) where
+/-- Outputs: the hash point and the message's first double-and-add row (the init gate /
+`Spec` anchor). The per-piece running sums are NOT output data: they are extraction
+data — `ChainWit.zs` in the `Witness` slot (which never routes through the eval-of-var
+machinery, so its list-indexed `HVec` shape is harmless) — and consumers read the `z`
+CELLS positionally (the `zs[i][1]` reads of Merkle/NoteCommit). -/
+structure Output (F : Type) where
   point : Point F
   first : DoubleAndAddRow F
-  zs : HVec (zLengths ns) F
 deriving ProvableStruct
+
+/-- The chain's extraction data: the entering accumulator (positional `x_a`, the `yaIn`
+value) and the running sums of every piece. -/
+structure ChainWit (ns : List ℕ) (F : Type) where
+  xIn : F
+  yIn : F
+  zs : HVec (zLengths ns) F
+
+instance {ns : List ℕ} : Inhabited (ChainWit ns Fp) :=
+  ⟨{ xIn := 0, yIn := 0, zs := default }⟩
 
 /-- The honest accumulator after hashing the whole suffix `ns` starting from `(x, y)`. Each piece
 of width `n` advances the accumulator by `accAfter G · piece (n+1)`. -/
@@ -461,11 +473,12 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
 /-! ## The chain contract -/
 
 /-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
-(positional — no input accumulator cells). -/
+(positional — no input accumulator cells); the running-sum facts are stated on the
+extraction data. -/
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
-    (output : Value (Output ns) Fp) : Prop :=
+    (output : Value Output Fp) (wit : ChainWit ns Fp) : Prop :=
   ∃ chunks : List ℕ, PieceChunks ns input.pieces chunks ∧
-    ZsFacts ns chunks output.zs ∧
+    ZsFacts ns chunks wit.zs ∧
     ∀ A : Point Fp, A.OnCurve → A.x = output.first.xA →
       2 * A.y = enterYA ns.isEmpty output.first →
       ∀ B, hashToPoint G.S A chunks = some B →
@@ -474,16 +487,16 @@ def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
 /-- The honest-prover precondition: pieces in range and the honest chain from the
 entering accumulator (the `Witness` pair — positional `x_a`, `yaIn` value) defined. -/
 def ProverAssumptions (G : Generators) (ns : List ℕ)
-    (input : Value (Inputs ns.length) Fp) (wit : Fp × Fp) : Prop :=
+    (input : Value (Inputs ns.length) Fp) (wit : ChainWit ns Fp) : Prop :=
   PieceBounds ns input.pieces ∧
-  ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.1 ∧ A.y = wit.2 ∧
+  ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.xIn ∧ A.y = wit.yIn ∧
     hashToPoint G.S A (honestChunks ns input.pieces) = some B
 
 /-- The honest-prover contract: the hash point is the honest chain point, and the first
 row's `enterYA` derivation is `2·y_enter` (what a composing init gate consumes). -/
 def ProverSpec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
-    (output : Value (Output ns) Fp) (wit : Fp × Fp) : Prop :=
-  ∀ A B : Point Fp, A.x = wit.1 → A.y = wit.2 →
+    (output : Value Output Fp) (wit : ChainWit ns Fp) : Prop :=
+  ∀ A B : Point Fp, A.x = wit.xIn → A.y = wit.yIn →
     hashToPoint G.S A (honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y ∧
     enterYA ns.isEmpty output.first = 2 * A.y
@@ -568,7 +581,7 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
 /-! ## The bundle -/
 
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
-    FormalRegionCircuit Fp Config Config (Inputs ns.length) (Output ns) where
+    FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
   name := "sinsemilla hash_all_pieces"
   configure := pure
 
@@ -589,16 +602,17 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
     let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
     let first ← readState cfg offset
-    let zs ← zsCells cfg ns offset
-    return { point := { x := xExit, y := yFin }, first := first.row, zs }
+    return { point := { x := xExit, y := yFin }, first := first.row }
 
-  Witness := fieldPair
+  Witness := ChainWit ns
   extract cfg offset _ self env :=
-    (eval env (AssignedCell.of self offset cfg.xA : Var field Fp), yaIn env)
+    { xIn := eval env (AssignedCell.of self offset cfg.xA : Var field Fp),
+      yIn := yaIn env,
+      zs := eval env (zsCellsVal cfg self ns offset) }
 
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
 
-  Spec input output _ := Spec G ns input output
+  Spec input output wit := Spec G ns input output wit
   ProverAssumptions input wit _ := ProverAssumptions G ns input wit
   ProverSpec input output wit _ := ProverSpec G ns input output wit
 
@@ -608,6 +622,17 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     -- times out `circuit_proof_start`/the peel at whnf. Plan: wrap each slot as a
     -- Unit-output FormalRegionCircuit family (`slot i` — positional contract over its
     -- Witness readings, the `round i` pattern at piece scale) so the loop is homogeneous.
+    -- TACTIC GAP (recorded in sinsemilla-loop-design.md): `circuit_proof_start`'s
+    -- step (b) `simp only [circuit_norm] at h_output` dies at whnf on this bundle's
+    -- composed output (a single six-figure `Eq.rec`/`List.rec` reduction, surviving the
+    -- simproc heartbeat caps added in StructEvalSimprocs.speculative). Manual house
+    -- prefix + targeted peel (the Mul.lean idiom) until that burn is excised.
+    intro cfg offset
+    rw [FormalRegionCircuit.soundness_iff]
+    intro self env input_var input output h_input h_output _hE hA hc
+    simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
+      RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState,
+      HashPiece.operations_cellAt] at hc
     sorry
 
   completeness := by
