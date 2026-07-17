@@ -65,10 +65,7 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assump
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
--- Local experiment: propagate the byte-rotation output access bound into the
--- following bit-rotation subcircuit using grind's backward reasoning.
 attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
-attribute [local grind ←] FormalCircuit.output_onlyAccessedBelow
 
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   main := main offset

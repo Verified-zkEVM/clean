@@ -53,7 +53,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp_all
 
 attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
-attribute [local grind ←] FormalCircuit.output_of_input_eq
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main

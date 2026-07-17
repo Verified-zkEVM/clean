@@ -696,6 +696,7 @@ theorem FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offs
 
 /-- ProvableType (verifier-eval) form of `FormalCircuitBase.output_of_input_eq`; shadows it for
 `FormalCircuit` values so parent proofs see the normal-form `eval env.toEnvironment`. -/
+@[grind ←]
 theorem FormalCircuit.output_of_input_eq {env env' : ProverEnvironment F}
     (circuit : FormalCircuit F Input Output)
     (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
@@ -707,6 +708,7 @@ theorem FormalCircuit.output_of_input_eq {env env' : ProverEnvironment F}
   simpa only [CircuitType.eval_var_prover_to_verifier] using h
 
 /-- ProvableType (verifier-eval) form of `FormalCircuitBase.output_onlyAccessedBelow`. -/
+@[grind ←]
 theorem FormalCircuit.output_onlyAccessedBelow {env env' : ProverEnvironment F}
     (circuit : FormalCircuit F Input Output)
     (h : ProverEnvironment.OnlyAccessedBelow n (F:=F) (fun e => eval e.toEnvironment input_var) env env') :
