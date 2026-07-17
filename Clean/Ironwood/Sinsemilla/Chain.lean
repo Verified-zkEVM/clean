@@ -193,6 +193,22 @@ theorem prefixRows_succ (n : ℕ) (rest : List ℕ) (i : ℕ) :
     prefixRows (n :: rest) (i + 1) = (n + 1) + prefixRows rest i := by
   simp [prefixRows, List.take_succ_cons]
 
+/-- Step the prefix-row count at an in-range index. -/
+theorem prefixRows_step (ns : List ℕ) (m : ℕ) (hm : m < ns.length) :
+    prefixRows ns (m + 1) = prefixRows ns m + (ns.getD m 0 + 1) := by
+  induction ns generalizing m with
+  | nil => simp at hm
+  | cons n rest ih =>
+    rcases Nat.eq_zero_or_pos m with rfl | hpos
+    · simp [prefixRows_succ, prefixRows_zero]
+    · have hm' : m - 1 < rest.length := by
+        simp at hm
+        omega
+      rw [show m = (m - 1) + 1 from by omega]
+      rw [prefixRows_succ, prefixRows_succ, ih (m - 1) hm']
+      rw [show (n :: rest).getD ((m - 1) + 1) 0 = rest.getD (m - 1) 0 from rfl]
+      omega
+
 /-- The boundary entering-`y` value: the previous piece's exit `y`, derived from its last
 row and the next row's `x_a` (`y_exit = nextYA / 2`) — Rust's `Y<Value>` thread, positional. -/
 def boundaryYA (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell Fp) :
@@ -1315,7 +1331,56 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             · exact hCy
             · simp only [AssignedCell.eval] at hsplit
               exact hsplit
-          sorry
+          -- the slot's derived contract on the honest run
+          have hder := Halo2.SubcircuitRw.region_completeness_derived_placed
+            (slot G ns yaIn m) cfg (offset + prefixRows ns m) self env
+            (input_var.pieces[m]!) ((hWs ⟨m, by omega⟩).1)
+            (by rw [slotC_envAssumptions_eq]; exact _hE) trivial
+            (by rw [slotC_proverAssumptions_eq]; exact hPAm)
+          rw [slotC_proverSpec_eq] at hder
+          obtain ⟨-, hPS⟩ := hder
+          rw [SlotPS, slotC_extract_eq, slotReads_eval] at hPS
+          simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+            Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
+          have hfacts := hPS Cm Dm hCx hCy (by
+            rw [eval_field_cell]
+            simp only [AssignedCell.eval]
+            exact hsplit)
+          obtain ⟨hfy, hnx, hlsec, hlnyA⟩ := hfacts
+          -- Dm is on-curve
+          have hCmValid : Cm.Valid := Or.inl hCon
+          have hCm0 : Cm ≠ 0 := Orchard.Point.ne_zero_of_onCurve hCon
+          have hwords_lt : ∀ w ∈ (List.range (ns.getD m 0 + 1)).map
+              (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
+                (input_var.pieces[m]!))), w < 2 ^ K := by
+            intro w hw
+            rcases List.mem_map.mp hw with ⟨t, ht, rfl⟩
+            exact pieceWord_lt _ t
+          have hDmValid : Dm.Valid :=
+            Orchard.Specs.Sinsemilla.hashToPoint_valid hCmValid hwords_lt hsplit
+          have hDm0 : Dm ≠ 0 :=
+            Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hCmValid hCm0 hwords_lt hsplit
+          have hDmOn : Dm.OnCurve := by
+            rcases hDmValid with h | h
+            · exact h
+            · exact False.elim (hDm0 h)
+          have hrowstep : offset + prefixRows ns (m + 1)
+              = offset + prefixRows ns m + ns.getD m 0 + 1 := by
+            rw [prefixRows_step ns m (by omega)]
+            omega
+          refine ⟨Dm, hDmOn, ?_, ?_, ?_⟩
+          · rw [hrowstep]
+            exact hnx.symm
+          · rw [if_neg (by omega : ¬ m + 1 = 0)]
+            have h2 : (2 : Fp) ≠ 0 := by decide
+            simp only [boundaryYA, nextYA, slotReads, AssignedCell.eval,
+              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+              Cell.of_column, Environment.get_advice]
+            rw [hrowstep,
+              show offset + prefixRows ns m + ns.getD m 0 + 1 - 1
+                = offset + prefixRows ns m + ns.getD m 0 from by omega]
+            linear_combination (norm := (field_simp; ring)) (-(2 : Fp)⁻¹) * hlnyA
+          · exact hCchain
     sorry
 
 end Halo2.Ironwood.Sinsemilla.Chain
