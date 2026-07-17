@@ -97,6 +97,39 @@ def constrainEqual (a b : AssignedCell F) : RegionCircuit F Unit :=
 def constrainConstant (a : AssignedCell F) (value : F) : RegionCircuit F Unit :=
   fun _ => ((), [.constrainConstant a.cell value])
 
+/-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
+`synthesize` name output cells that live at fixed rows rather than being threaded through
+loop return values. (Promoted from the per-gadget copies in `MulIncomplete`/
+`LookupRangeCheck` — the friction-twice rule.) -/
+def cellAt (col : Column .advice) (row : ℕ) : RegionCircuit F (AssignedCell F) :=
+  fun self => (.of self row col, [])
+
+@[circuit_norm]
+theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt (F := F) col row).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (cellAt (F := F) col row).output self = .of self row col := rfl
+
+/-- Name a vector of cells at fixed region-local rows (no op emitted) — the vector-valued
+analogue of `cellAt`, for running-sum-style output cell vectors. Returns `Vector.ofFn` so
+its `output` is `rfl`. -/
+def cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) :
+    RegionCircuit F (Vector (AssignedCell F) len) :=
+  fun self => (Vector.ofFn (fun i => AssignedCell.of self (rows i) col), [])
+
+@[circuit_norm]
+theorem operations_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ)
+    (self : RegionIndex) :
+    (cellVec (F := F) col rows len).operations self = [] := rfl
+
+@[circuit_norm]
+theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ)
+    (self : RegionIndex) :
+    (cellVec (F := F) col rows len).output self
+      = Vector.ofFn (fun i => AssignedCell.of self (rows i) col) := rfl
+
 /-- Enable a gate at a local row (Rust: `selector.enable(region, offset)`): records the
 selector activation and carries the gate's constraints. See `Operations.lean`. -/
 def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=

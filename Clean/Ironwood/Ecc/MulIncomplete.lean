@@ -19,33 +19,7 @@ open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 start copies, the `q_mul_1` boundary, the final `q_mul_3` row — around the `loop` bundle.
 Instantiated at `n = 124` (`hi`) and `n = 125` (`lo`), window offset `w`. -/
 
-/-- Read the assigned cell at a known region-local row/column (no op emitted), so `synthesize` can
-name the output cells that live at fixed rows rather than being threaded through the loop. -/
-def cellAt (col : Column .advice) (row : ℕ) : RegionCircuit Fp (AssignedCell Fp) :=
-  fun self => (.of self row col, [])
-
-@[circuit_norm]
-theorem operations_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
-    (cellAt col row).operations self = [] := rfl
-
-@[circuit_norm]
-theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
-    (cellAt col row).output self = .of self row col := rfl
-
-/-- Name a vector of cells at fixed region-local rows (no op emitted) — the vector-valued analogue
-of `cellAt`, for the `Output.zs` running-sum cells. Returns `Vector.ofFn` so its `output` is `rfl`. -/
-def cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) :
-    RegionCircuit Fp (Vector (AssignedCell Fp) len) :=
-  fun self => (Vector.ofFn (fun i => AssignedCell.of self (rows i) col), [])
-
-@[circuit_norm]
-theorem operations_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
-    (cellVec col rows len).operations self = [] := rfl
-
-@[circuit_norm]
-theorem output_cellVec (col : Column .advice) (rows : ℕ → ℕ) (len : ℕ) (self : RegionIndex) :
-    (cellVec col rows len).output self
-      = Vector.ofFn (fun i => AssignedCell.of self (rows i) col) := rfl
+-- `cellAt`/`cellVec` (naming cells at fixed rows) now live in the framework (`Basic.lean`).
 
 -- contract bridges for the `round` child (opened by the loop's proofs)
 derive_contract_bridges roundC (i : ℕ) := round i
