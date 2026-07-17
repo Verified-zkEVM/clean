@@ -66,6 +66,11 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assump
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
+-- Local experiment: propagate the byte-rotation output access bound into the
+-- following bit-rotation subcircuit using grind's backward reasoning.
+attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
+attribute [local grind ←] FormalCircuit.output_onlyAccessedBelow
+
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   main := main offset
   elaborated := elaborated offset
@@ -75,18 +80,9 @@ def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   completeness := completeness offset
   computableWitnesses := by
     intro n input env env'
-    simp_all only [main, circuit_norm, Rotation64Bytes.circuit, Rotation64Bits.circuit]
-    refine ⟨⟨?_, ?_⟩, ?_⟩
-    · intro h_input
-      exact FormalCircuit.toSubcircuit_computableWitnesses
-        (Rotation64Bytes.circuit ⟨offset.val / 8, by omega⟩) h_input
-    · intro h_input
-      apply FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow
-      exact (Rotation64Bytes.circuit ⟨offset.val / 8, by omega⟩).output_onlyAccessedBelow
-        (fun _ => h_input)
-    · intro h_input
-      apply (Rotation64Bits.circuit ⟨offset.val % 8, by omega⟩).output_onlyAccessedBelow
-      exact (Rotation64Bytes.circuit ⟨offset.val / 8, by omega⟩).output_onlyAccessedBelow
-        (fun _ => h_input)
+    simp only [main, circuit_norm]
+    apply And.intro
+    · and_intros <;> grind
+    · grind
 
 end Gadgets.Rotation64
