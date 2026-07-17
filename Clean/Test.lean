@@ -21,3 +21,4 @@ import Clean.Halo2.Tests.TestProofStart
 import Clean.Halo2.Tests.TestTupleLookup
 import Clean.Halo2.Tests.TestVkMatchAdd
 import Clean.Halo2.Tests.TestVkMatchMul
+import Clean.Halo2.Tests.TestVkLayoutMul
