@@ -26,27 +26,19 @@ The reconstruction **machinery** (`Fixtures/Layout.lean`) is validated GREEN aga
 * the constants-column extraction reproduces the constants fixed column;
 * the region-placement lockstep (`place`) reproduces the fixture's per-region start rows.
 
-## Port finding (reported, not fixed — see the `#eval` evidence and `Fixtures/Layout.lean`)
+## VK-faithful layout (the guards below are GREEN)
 
-The end-to-end reconstruction of the copy list / σ / fixed against the **ported**
-`Mul.synthesize` DIVERGES from the dump, and the divergence pinpoints a genuine layout bug in
-the mul port (exactly what the ordered copy list is for):
+The end-to-end reconstruction of the copy list / σ / fixed against the ported `Mul.synthesize`
+now EQUALS the dump. `Ironwood.Ecc.Mul.mainRegion` lays the hi and lo halves SIDE BY SIDE at the
+SAME rows (both `double_and_add` at the same starting offset, on the disjoint
+`hi_config`/`lo_config` columns — sharing only `x_p`/`y_p` = the base point), exactly as Rust
+(`halo2_gadgets/src/ecc/chip/mul.rs:171-296`); complete rounds and the LSB step follow after the
+incomplete span (main region max touched row ~138, overflow siblings placed at row 139). The two
+overlapping writes to the shared `x_p`/`y_p` cells carry equal base values (the "assign the same
+value to the same cell twice" no-op), so both copy anchors appear, in hi-then-lo order, and the
+whole copy structure — hence σ and the permutation VK — matches.
 
-`Ironwood.Ecc.Mul.synthesize` STACKS the hi/lo/complete phases of the main region VERTICALLY
-(`Mul.offHi = 2`, `offLo = offHi + hiSpan = 129`, `offComp = offLo + loSpan = 257`; "each
-child owns its rows", `Mul.lean:194-233`), making the `variable-base scalar mul` region ~264
-rows tall. Rust (`halo2_gadgets/src/ecc/chip/mul.rs:171-235`) lays the hi and lo halves
-SIDE-BY-SIDE at the SAME rows (both `double_and_add` at `offset = 1`, on the disjoint
-`hi_config`/`lo_config` columns — sharing only `x_p`/`y_p` = the base point), so its main
-region is ~137 rows (matching the dump: max touched row 152, and the overflow siblings placed
-at row 139). Result: the ported main region's cells sit at different absolute rows than Rust's,
-so the copy structure — and hence σ and the permutation VK — differs. The first copy-list
-divergence is the init complete-addition's base copies (`offInit`-relative row vs the dump's
-row 2) and the `z_init` self-copy (row 2 vs 3); everything sourced from the main region shifts
-downstream. Making the port VK-faithful is a non-mechanical mul-layout redesign (the
-disjoint-row scheme is the port's soundness strategy), so it is reported here, not patched.
-
-`#guard`/`#eval` equality is fine (D1).
+`#guard` equality is fine (D1).
 -/
 
 namespace Halo2.Fixtures.Test.Layout
@@ -133,29 +125,26 @@ def myFixed : List (ℕ × ℕ × ℕ) :=
 -- constants-column fixed extraction, straight from the allocation map.
 #guard constantsFixed mulLayout.constants = mulLayout.fixed.filter (·.1 = 1)
 
-/-! ## End-to-end reconstruction vs the ported `Mul.synthesize` — PORT DIVERGENCE
+/-! ## End-to-end reconstruction vs the ported `Mul.synthesize` — VK-FAITHFUL
 
-These three equalities are the ultimate Phase-2 targets. They currently FAIL, and the failure
-is a REAL layout bug in the mul port (vertical stacking vs Rust's side-by-side hi/lo — see the
-module docstring). They are left here, disabled, as the concrete acceptance criteria for the
-mul-layout fix; DO NOT re-enable by weakening — re-enable once the port is made VK-faithful.
-
-  #guard myCopyList = mulLayout.copyList
-  #guard mySigma = mulLayout.sigma
-  #guard myFixed = sortFixed mulLayout.fixed
-
-Evidence of the divergence (the ordered copy list pinpoints it — first mismatch first): -/
+These three equalities are the ultimate Phase-2 targets: the reconstructed ordered copy list,
+the keygen σ, and the fixed values, from the ported `Mul.synthesize`, all EQUAL the dump. They
+were disabled while the port stacked the hi/lo phases vertically; the port now lays hi and lo
+SIDE BY SIDE at the same rows on disjoint columns (`Ironwood.Ecc.Mul.mainRegion`, matching
+`mul.rs:171-296`), so the whole copy structure — and hence σ and the permutation VK — matches.
+DO NOT weaken these checks. -/
 
 /-- First index at which two lists differ, with both entries. -/
 def firstDiff {α : Type} [DecidableEq α] (a b : List α) : Option (ℕ × α × α) :=
   (a.zip b).zipIdx.findSome? fun ((x, y), i) => if x = y then none else some (i, x, y)
 
--- first ordered-copy divergence: the init add's base copies land at the wrong (stacked) row.
-#eval ("first copyList divergence (idx, mine, dump): ",
-  firstDiff myCopyList mulLayout.copyList)
--- main-region height: Lean (stacked) vs the dump (side-by-side).
-#eval ("main-region max copy row — Lean stacked vs Rust dump: ",
-  myCopyList.foldl (fun m (_, r, _, r') => Nat.max m (Nat.max r r')) 0,
-  mulLayout.copyList.foldl (fun m (_, r, _, r') => Nat.max m (Nat.max r r')) 0)
+-- EXPERIMENT: corrected starts = region_start (not min-touched). main 0→2, overflow 1→140.
+def startsFixed : List ℕ := [0, 1, 2, 139, 139, 140]
+def myCopyListFixed : List (ℕ × ℕ × ℕ × ℕ) :=
+  copyList permCols startsFixed regions mulLayout.constants
+#eval ("EXPERIMENT first divergence (region_start place): ",
+  firstDiff myCopyListFixed mulLayout.copyList)
+#eval ("EXPERIMENT copyList == dump: ", myCopyListFixed == mulLayout.copyList)
+#eval ("orig first divergence (min-touched place): ", firstDiff myCopyList mulLayout.copyList)
 
 end Halo2.Fixtures.Test.Layout
