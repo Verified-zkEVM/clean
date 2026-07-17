@@ -155,9 +155,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) wh
     ∀ j : Fin n, out.zs[j] = (ws.iter (bitsFrom alpha w) (j.val + 1)).z
 
   soundness := by
-    circuit_proof_start [zChain, reads]
-    simp only [roundC_spec_eq, roundC_assumptions_eq, roundC_envAssumptions_eq,
-      roundC_extract_eq, round_output, mul_one, reads, circuit_norm] at hc
+    circuit_proof_start [zChain, reads, round, mul_one]
     provable_type_simp
     choose k hk using hc
     refine ⟨fun j => if h : j < n then k ⟨j, h⟩ else false, ?_, ?_⟩
@@ -259,9 +257,6 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) wh
       rw [show offset + 1 + ↑j = offset + (↑j + 1) from by omega]
       exact congrArg State.z hj
 
--- contract bridges for the `loop` child (opened by double_and_add's proofs)
-derive_contract_bridges loopC (n w : ℕ) := loop n w
-
 /-- The loop's output variable: exit neighborhood + interstitial z cells (rfl). -/
 @[circuit_norm]
 theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
@@ -345,10 +340,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
     RoundInvariant (n + 1) input output (bitsFrom input.alpha w)
 
   soundness := by
-    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant]
+    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
+      loop]
     obtain ⟨hcz, hcy, hcx, hcbx, hcby, hq1, hloop, hb3, hg13, hs3, hg23⟩ := hc
-    simp only [loopC_spec_eq, loopC_assumptions_eq, loopC_envAssumptions_eq,
-      loopC_extract_eq, loop_output, reads, circuit_norm, forall_const] at hloop
     provable_type_simp
     obtain ⟨bits, hchain, hfold⟩ := hloop
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
@@ -440,7 +434,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hext, if_neg (show ¬ n < n by omega)]
 
   completeness := by
-    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant]
+    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
+      loop]
     obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := hPA
     obtain ⟨hz0, hy0, hxa0, hxp0, hyp0, hl1w, hl2w, -, hzl, hxal, hyl⟩ := hwit
     obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := h_input
@@ -477,10 +472,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
       · show env.env.advice cfg.lambda2 _ = _
         rw [hxp0, hyp0]
         exact hl2m
-    -- open the loop's contract and collect its spec + prover spec
-    rw [loopC_envAssumptions_eq, loopC_assumptions_eq, loopC_proverAssumptions_eq,
-      loopC_spec_eq, loopC_proverSpec_eq, loopC_extract_eq] at h_spec_0
-    simp only [loop_output, reads, circuit_norm, hia] at h_spec_0
+    -- the loop's contract arrived open; land the scalar cell's value in it
+    trace_state
+    simp only [hia] at h_spec_0
     obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
     have hstepz : ∀ (s : State Fp) (k k' : Bool),
@@ -573,17 +567,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
     beta_reduce at hyv2
     rw [show (2 : Fp) * input_acc_y * (2 : Fp)⁻¹ = input_acc_y from by
       rw [mul_comm (2 : Fp) input_acc_y, mul_assoc, mul_inv_cancel₀ h2, mul_one]] at hyv2
-    refine ⟨⟨?_, ⟨?_, ?_, ?_⟩, hlg.1, hlg.2.1, hlg.2.2.1, hlg.2.2.2⟩, hzc, ?_⟩
+    refine ⟨⟨?_, ⟨m, ?_, hbudget⟩, hlg.1, hlg.2.1, hlg.2.2.1, hlg.2.2.2⟩, hzc, ?_⟩
     · -- the `q_mul_1` boundary: the witnessed init y_a is the accumulator's y
       simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay]
       linear_combination -hyv2
-    · rw [loopC_envAssumptions_eq]
-      trivial
-    · rw [loopC_assumptions_eq]
-      trivial
-    · rw [loopC_proverAssumptions_eq, loopC_extract_eq]
-      simp only [reads, circuit_norm]
-      exact ⟨m, hH0, hbudget⟩
+    · -- the loop's honest entry, in the witnessed-value spelling
+      simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay]
+      exact hHV
     · -- the accumulator fold, for any in-range multiple entering the region:
       -- replay the constraints (loop spec + final-row donor identities), which hold
       -- for the honest witness and quantify over every multiple

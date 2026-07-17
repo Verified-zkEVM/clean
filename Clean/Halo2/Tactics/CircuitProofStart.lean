@@ -3,6 +3,7 @@ import Clean.Halo2.Formal
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.AbstractOutputs
 import Clean.Halo2.Tactics.SubcircuitRw
+import Clean.Halo2.Tactics.ContractBridges
 import Clean.Utils.Tactics.CircuitProofStart
 
 /-!
@@ -42,6 +43,10 @@ Given a bundle-proof goal `∀ config (offset)?, FormalRegionCircuit.Soundness �
 (d) `abstract_outputs` — make every child-call output opaque (no-op on leaf gadgets).
 (e) `subcircuit_rw at hc` (soundness) / `subcircuit_rw` (completeness) — consume the child chunks
     (silent no-op when there are none, e.g. leaf gadgets).
+(e′) **normalize what (e) created** — chunk consumption is the first time `(child).output`/
+    `.extract`/contract-projection spellings exist, so `simp only [circuit_norm, <unfold list>,
+    <bridges>]` runs again over that material: `hc` for soundness, the engine-emitted `h_spec_*`
+    hypotheses and the goal for completeness.
 
 Then, **only if the state is not composite** (`stateIsComposite` — see below), the leaf-only finish:
 
@@ -90,6 +95,12 @@ witness-eval reductions (`WitgenIR.getElem_eval_*`, `VExpr.getElem_eval_*`) are 
 `@[circuit_norm ↓]`, so the raw structural recursors (`WitgenIROver.eval`, `VExprOver.eval`,
 `WitgenIROver.ofFExpr`) never belong in a list — they are deliberately untagged to preserve the
 opaque-until-consumed discipline, and the getElem-keyed lemmas do the reduction without them.
+
+**Bundle entries.** A list entry that resolves to a **formal-circuit bundle** (`round`, `loop`) is
+NOT unfolded — delta-unfolding a bundle materializes its proof-carrying structure literal, the
+whnf/kernel hazard. Instead its contract bridges (`derive_contract_bridges` on the fly — the
+per-projection `rfl` equations) are built and fed to step (e′), so the child's contract arrives
+open without the consumer declaring or naming any bridge lemmas.
 
 A shared **spec** unfold that the gadget's user half genuinely needs (e.g.
 `Orchard.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
@@ -285,17 +296,54 @@ it in the unfold list is redundant (it changes nothing). Remove it — the unfol
 only names defined in this gadget's own file (gates, witness programs, `Spec`)."
       return
 
+/-- Whether the constant is a formal-circuit bundle: its type, behind any parameter binders, is a
+`FormalRegionCircuit`/`FormalCircuit` application. -/
+def isBundleConst (n : Name) : MetaM Bool := do
+  let some info := (← getEnv).find? n | return false
+  forallTelescopeReducing info.type fun _ ty =>
+    match ty.getAppFn.constName? with
+    | some ``FormalRegionCircuit => return true
+    | some ``FormalCircuit => return true
+    | _ => return false
+
+/-- Contract bridges for a bundle constant, as inline `simpLemma` terms: bind the bundle's
+parameters, run `ContractBridges.buildBridges` on the applied bundle (yielding the closed
+`∀ params, (bundle params).Spec = <reduced>` equations and their `rfl` proofs), and quote each
+proof back to syntax. This is `derive_contract_bridges` on the fly — the caller passes the bundle
+itself in the unfold list and never declares or names the bridge lemmas. -/
+def mkBundleBridges (n : Name) : TermElabM (Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
+  let some info := (← getEnv).find? n | return #[]
+  let bridges ← forallTelescopeReducing info.type fun params _ =>
+    Halo2.ContractBridges.buildBridges n (mkAppN (mkConst n (info.levelParams.map mkLevelParam)) params)
+  bridges.mapM fun (_, ty, pf) => do
+    -- ascribe the bridge's `lhs = rhs` statement: the proof is a bare `Eq.refl`, whose inferred
+    -- type is the useless `lhs = lhs`
+    let stx ← Term.exprToSyntax (← mkExpectedTypeHint pf ty)
+    `(Lean.Parser.Tactic.simpLemma| $stx:term)
+
 /-- Build the extra-lemma `simpLemma` syntaxes from the user's `[<unfold list>]`, warning on any
-argument that is already a `circuit_norm` member (see `warnRedundantUnfold`). -/
+argument that is already a `circuit_norm` member (see `warnRedundantUnfold`). A list entry that
+resolves to a **formal-circuit bundle** is NOT unfolded (delta-unfolding a bundle materializes its
+proof-carrying structure literal — the whnf/kernel hazard); instead its contract bridges are built
+on the fly and returned separately, to be applied by the post-chunk normalize step (e′), where the
+child's contract projections first appear. -/
 def mkUnfoldLemmas (terms : Option (Array Term)) :
-    TacticM (Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
+    TacticM (Array (TSyntax `Lean.Parser.Tactic.simpLemma) ×
+             Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
   match terms with
   | some ts =>
     let members ← circuitNormMembers
-    ts.mapM fun t => do
-      warnRedundantUnfold t members
-      `(Lean.Parser.Tactic.simpLemma| $t:term)
-  | none => pure #[]
+    let mut unfold := #[]
+    let mut bridges := #[]
+    for t in ts do
+      let names ← try pure (← resolveGlobalConst t.raw) catch _ => pure []
+      match ← names.findM? (fun n => isBundleConst n) with
+      | some n => bridges := bridges ++ (← mkBundleBridges n)
+      | none =>
+        warnRedundantUnfold t members
+        unfold := unfold.push (← `(Lean.Parser.Tactic.simpLemma| $t:term))
+    return (unfold, bridges)
+  | none => pure (#[], #[])
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
 target set. Soundness peels `hc` and `h_output` (the constraints hyp and the output-value
@@ -329,6 +377,30 @@ def consumeChunks (d : Direction) : TacticM Unit := do
     try evalTactic (← `(tactic| subcircuit_rw at $(mkIdent `hc):ident)) catch _ => pure ()
   else
     try evalTactic (← `(tactic| subcircuit_rw)) catch _ => pure ()
+
+/-- The engine-emitted `h_spec_*` hypotheses (the completeness-side child contracts). -/
+def specHypIdents : TacticM (Array Ident) := withMainContext do
+  let mut acc : Array Ident := #[]
+  for decl in ← getLCtx do
+    if !decl.isImplementationDetail && decl.userName.getString!.startsWith "h_spec" then
+      acc := acc.push (mkIdent decl.userName)
+  return acc
+
+/-- Step (e′): normalize what `subcircuit_rw` created. The child chunks' consumption is the first
+time `(child).output`/`.extract`/contract-projection spellings exist, so the `circuit_norm` set —
+including the gadget's own tagged output lemmas — plus the unfold list and any on-the-fly contract
+bridges (bundle entries of the unfold list) must run again over that material: `hc` for soundness,
+the engine-emitted `h_spec_*` hypotheses and the goal for completeness. `try`-guarded no-op on
+leaves (nothing new appeared). -/
+def normalizeEmitted (d : Direction)
+    (unfold bridges : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) : TacticM Unit := do
+  if d.isSoundness then
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $(mkIdent `hc):ident)) catch _ => pure ()
+  else
+    let specHyps ← specHypIdents
+    for h in specHyps do
+      try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $h:ident)) catch _ => pure ()
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*])) catch _ => pure ()
 
 /-- Whether an expression still carries **unpeeled circuit structure** — an application of one of
 the constraint predicates `RegionOperations.Constraints` / `Constraints` (layouter) /
@@ -422,9 +494,10 @@ have already fully consumed — matching the reference proofs' `clear` after row
 `try`-guarded and total: if a hypothesis is still referenced (a diverging gadget's manual half may
 need it), `clear` fails and is silently skipped, leaving it in scope. -/
 def clearConsumed (d : Direction) : TacticM Unit := do
-  -- a consumer of folded child contracts still needs the input/output equations after it
-  -- opens the contract bridges — keep them (the linter treats them as used via the return)
-  if ← stateHasFoldedContract then
+  -- a consumer of child contracts — folded, or already opened by (e′)'s bridges but with the
+  -- engine-emitted `h_spec_*` hypotheses still to consume — needs the input/output equations
+  -- in its manual continuation; keep them (the linter treats them as used via the return)
+  if (← stateHasFoldedContract) || !(← specHypIdents).isEmpty then
     return
   if d.isSoundness then
     if ← hypExists `h_output then
@@ -453,11 +526,12 @@ manual-rest shape). -/
 def run (terms : Option (Array Term)) : TacticM Unit := do
   let d ← introBundleBindersAndDetect
   rwIffAndIntro d
-  let unfold ← mkUnfoldLemmas terms
+  let (unfold, bridges) ← mkUnfoldLemmas terms
   peelConstraints d unfold
   normalizeProvable
   abstractOutputs
   consumeChunks d
+  normalizeEmitted d unfold bridges
   unless (← stateIsComposite d) do
     rowFactChaining d
     clearConsumed d
