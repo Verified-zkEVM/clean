@@ -293,7 +293,8 @@ Membership at the two short rows + the loaded table (`EnvAssumptions := TableLoa
 `word, shifted < 2^K`; the bitshift gate gives `shifted = word · 2^(K−num_bits)`; the shift
 argument (`shortRange_soundness_aux`) then yields `element.val < 2^num_bits`. -/
 
-/-- Single-field input: the `element` to be range-checked (an already-assigned cell). -/
+/-- Single-field input: the `element` to be range-checked (an already-assigned cell) — the
+input of the running-sum `rangeCheck`/`copyCheck` (Rust copies the element in there). -/
 structure Inputs (F : Type) where
   element : F
 deriving ProvableStruct
@@ -301,24 +302,31 @@ deriving ProvableStruct
 /-- The word at `offset+2`: `2^(−num_bits) = (2^num_bits)⁻¹`, assigned as a constant. -/
 def invTwoPowS (numBits : ℕ) : Fp := (2 ^ numBits : Fp)⁻¹
 
+-- `cellAt` (naming a cell at a fixed row) lives in the framework (`Basic.lean`).
+
+/-- Rust `short_range_check` (`lookup_range_check.rs:455-490`), POSITIONAL: the element
+"must have been assigned to `running_sum` at `offset`" by the caller (no copy — Rust has no
+copy-in short check; `witness_short_check` is the caller-side `assign_advice` + this).
+The returned cell is the positional element cell (Rust hands the witnessed cell out for
+downstream copies). -/
 def shortRangeCheck (K numBits : ℕ) :
-    FormalRegionCircuit Fp (Config K) (Config K) Inputs field where
+    FormalRegionCircuit Fp (Config K) (Config K) unit field where
   configure := fun cfg => pure cfg
 
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
-    -- copy `element` into `running_sum` at `offset`; short lookup there (q_running OFF)
-    let _elt ← copyAdvice input.element cfg.runningSum offset
+  synthesize cfg offset _ := do
+    -- the caller-assigned `element` at `offset`; short lookup there (q_running OFF)
+    let elt ← cellAt cfg.runningSum offset
     (rangeCheckLookup K cfg).enable [cfg.qLookup] offset
     -- assign shifted = element · 2^(K − num_bits) at `offset + 1`; short lookup there too
     let _shifted ← assignAdvice cfg.runningSum (offset + 1)
-      (.ofFExpr ((.expr input.element) * (.const (2 ^ (K - numBits) : Fp))))
+      (.ofFExpr ((.expr elt) * (.const (2 ^ (K - numBits) : Fp))))
     (rangeCheckLookup K cfg).enable [cfg.qLookup] (offset + 1)
     -- assign 2^(−num_bits) as a constant at `offset + 2`
     let invCell ← assignAdvice cfg.runningSum (offset + 2) (.ofFExpr (.const (invTwoPowS numBits)))
     constrainConstant invCell (invTwoPowS numBits)
     -- bitshift gate at `offset + 1`
     (bitshiftGate K cfg).enable (offset + 1)
-    return input.element
+    return elt
 
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
   -- table row holds a value `< 2^K`, the block holds exact contents, and the block fits the
@@ -335,11 +343,19 @@ def shortRangeCheck (K numBits : ℕ) :
   -- `Inputs` value is not otherwise constrained.
   Assumptions _ := numBits ≤ K ∧ 2 ^ K * 2 ^ K < PALLAS_BASE_CARD
 
-  Spec input _ _ := input.element.val < 2 ^ numBits
+  -- the positional element cell (the output), as extraction data
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.runningSum : Var field Fp)
 
-  -- honest-prover precondition: `element` really is a `num_bits` word (Rust's caller
-  -- guarantees this — `short_range_check` is only sound *and* complete on such elements).
-  ProverAssumptions input _ _ := input.element.val < 2 ^ numBits
+  Spec := fun _ (out : Fp) _ => out.val < 2 ^ numBits
+
+  -- honest-prover precondition: the witnessed element really is a `num_bits` word (Rust's
+  -- caller guarantees this — `witness_short_check` is only sound *and* complete on such
+  -- elements). Stated on the extraction data (the positional cell's value).
+  ProverAssumptions _ wit _ := wit.val < 2 ^ numBits
+
+  ProverSpec _ output wit _ := output = wit
 
   soundness := by
     circuit_proof_start [rangeCheckLookup, bitshiftGate, invTwoPowS]
@@ -348,25 +364,20 @@ def shortRangeCheck (K numBits : ℕ) :
     -- the short-row valuation: `q_running ∉ [q_lookup]` (distinct indices), so the gated
     -- input reduces to `z_cur` at both rows
     rw [if_neg (fun h => hDistinct h.symm)] at hc
-    -- destructure: copy (element ↦ runningSum@offset), two memberships, bitshift gate
-    obtain ⟨hCopy, hMemWord, hMemShift, hBitshift⟩ := hc
-    -- ACCEPTANCE (C2a #5): consume each membership existential + `TableLoaded`'s usable-rows
-    -- bound into a value bound via `mem_usableRows_val_lt` — the mechanized "two obtains + apply"
-    -- pattern, collapsed to one `exact` per membership.
+    -- destructure: two memberships (the element cell IS the output — positional), the
+    -- `invTwoPowS` constant, the bitshift gate
+    obtain ⟨hMemWord, hMemShift, hInvConst, hGate⟩ := hc
     simp only [List.cons.injEq, and_true, one_mul, zero_mul, sub_zero,
       zero_add] at hMemWord hMemShift
-    have hWordLt : (env.env.advice cfg.runningSum ↑(env.place self + offset)).val < 2 ^ K :=
+    have hWordLt : output.val < 2 ^ K :=
       mem_usableRows_val_lt hTableLt hMemWord
     have hShiftLt :
         (env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))).val < 2 ^ K :=
       mem_usableRows_val_lt hTableLt hMemShift
-    -- the copy constraint lands the input element on the running-sum cell @offset (the prefix's
-    -- row-fact chaining already read `hCopy` as the value equation `word = input_element`)
-    rw [← hCopy]
-    -- bitshift gate: shifted = word · 2^K · 2^(−num_bits) = word · 2^(K−num_bits)
-    -- (rearranged via the field-inverse split), so the shift lemma applies
-    set word := env.env.advice cfg.runningSum ↑(env.place self + offset) with hword_def
-    set shifted := env.env.advice cfg.runningSum ↑(env.place self + (offset + 1)) with hshift_def
+    set shifted := env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))
+      with hshift_def
+    let word : Fp := output
+    have hword : word = output := rfl
     have hPowLtCard : 2 ^ numBits < PALLAS_BASE_CARD :=
       lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits)
         (lt_of_le_of_lt (Nat.le_mul_of_pos_right _ (pow_two_pos K)) hCard)
@@ -376,10 +387,7 @@ def shortRangeCheck (K numBits : ℕ) :
       have hdiv := (ZMod.natCast_eq_zero_iff (2 ^ numBits) PALLAS_BASE_CARD).mp hzero'
       exact (Nat.not_dvd_of_pos_of_lt (pow_two_pos _) hPowLtCard) hdiv
     have hEqShift : shifted = word * (2 ^ (K - numBits) : Fp) := by
-      -- hBitshift decomposes into: invTwoPowS cell = (2^num_bits)⁻¹, and the gate poly
-      -- word · 2^K · invTwoPowS − shifted = 0 (with invTwoPowS the offset+2 cell). The
-      -- gate's cell rows arrive normalized by `cast_row_pred`/`row_succ_succ` (Lemmas.lean).
-      obtain ⟨hInvConst, hGate⟩ := hBitshift
+      -- the gate poly `word · 2^K · invTwoPowS − shifted = 0` with the constant landed
       rw [hInvConst] at hGate
       have hb : shifted = word * (2 ^ K : Fp) * ((2 ^ numBits : Fp))⁻¹ := by
         rw [← sub_eq_zero]; linear_combination -hGate
@@ -392,47 +400,43 @@ def shortRangeCheck (K numBits : ℕ) :
 
   completeness := by
     circuit_proof_start [rangeCheckLookup, bitshiftGate, invTwoPowS]
-    -- the prefix's row-fact chaining already baked the honest witnesses (`hwit`) and the input
-    -- copy (`h_input`) into the goal, so the two membership existentials and the bitshift-gate
-    -- equation are stated directly over `input_element` — no cell abstraction to peel.
     obtain ⟨⟨hUsable, _hTableLt, hTableEq⟩, hDistinct⟩ := _hE
     obtain ⟨hNumBits, hCard⟩ := hA
-    -- normalize the table facts to the prover env's `.env` spelling (they arrive over
-    -- `env.toEnvironment.env`; `Placed.toEnvironment_env` bridges to `env.env.toEnvironment`,
-    -- defeq to the `env.env.fixed` in the goal)
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
     -- `q_running` OFF (distinct selectors): the gated rows read `z_cur` (the plain element)
     rw [if_neg (fun h => hDistinct h.symm)]
-    -- the element's `.val` bound from the honest-prover assumption
-    have hEltLt : input_element.val < 2 ^ numBits := hPA
-    have hEltLtK : input_element.val < 2 ^ K :=
+    -- the caller-assigned element's `.val` bound, off the honest-prover assumption on the
+    -- extraction data (the positional cell's verifier-view value = the advice read)
+    have hEltLt : (env.env.advice cfg.runningSum
+        ((env.place self + offset : ℕ) : ℤ)).val < 2 ^ numBits := hPA
+    have hOut : env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+        = output := h_output
+    set elt := env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+      with helt_def
+    have hEltLtK : elt.val < 2 ^ K :=
       lt_of_lt_of_le hEltLt (Nat.pow_le_pow_right (by norm_num) hNumBits)
     have hCardK : 2 ^ K < PALLAS_BASE_CARD :=
       lt_of_le_of_lt (Nat.le_mul_of_pos_right _ (pow_two_pos K)) hCard
-    -- `↑input.val = input` (input < 2^K < |Fp|)
-    have hE_cast : ((input_element.val : ℕ) : Fp) = input_element := ZMod.natCast_zmod_val _
-    -- the shifted word value and its `.val` bound (donor completeness lemma)
-    have hShiftedLtK : (input_element * (2 ^ (K - numBits) : Fp)).val < 2 ^ K :=
-      shortRange_completeness_shifted K numBits hNumBits hCardK input_element hEltLt
+    have hE_cast : ((elt.val : ℕ) : Fp) = elt := ZMod.natCast_zmod_val _
+    have hShiftedLtK : (elt * (2 ^ (K - numBits) : Fp)).val < 2 ^ K :=
+      shortRange_completeness_shifted K numBits hNumBits hCardK elt hEltLt
     have hShift_cast :
-        (((input_element * (2 ^ (K - numBits) : Fp)).val : ℕ) : Fp)
-          = input_element * (2 ^ (K - numBits) : Fp) :=
+        (((elt * (2 ^ (K - numBits) : Fp)).val : ℕ) : Fp)
+          = elt * (2 ^ (K - numBits) : Fp) :=
       ZMod.natCast_zmod_val _
-    refine ⟨?_, ?_, ?_⟩
-    · -- membership @offset: witness row `input.val` (usable: `input.val < 2^K ≤ usableRows`),
-      -- holding `↑input.val = input = z_cur`
-      refine ⟨input_element.val, lt_of_lt_of_le hEltLtK hUsable, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+    · -- membership @offset: witness row `elt.val`
+      refine ⟨elt.val, lt_of_lt_of_le hEltLtK hUsable, ?_⟩
       simp only [one_mul, zero_mul, sub_zero, zero_add, List.cons.injEq, and_true]
-      rw [hTableEq input_element.val hEltLtK]
+      rw [hTableEq elt.val hEltLtK]
       exact hE_cast.symm
-    · -- membership @(offset+1): witness row `shifted.val` (usable), holding `↑shifted.val = shifted`
-      refine ⟨(input_element * (2 ^ (K - numBits) : Fp)).val,
+    · -- membership @(offset+1): witness row `shifted.val`
+      refine ⟨(elt * (2 ^ (K - numBits) : Fp)).val,
         lt_of_lt_of_le hShiftedLtK hUsable, ?_⟩
       simp only [one_mul, zero_mul, sub_zero, zero_add, List.cons.injEq, and_true]
       rw [hTableEq _ hShiftedLtK]
       exact hShift_cast.symm
-    · -- bitshift gate: shifted = word · 2^K · 2^(−num_bits). Cell rows arrive normalized
-      -- by `cast_row_pred`/`row_succ_succ` (Lemmas.lean).
+    · -- bitshift gate
       have hPowLtCard : 2 ^ numBits < PALLAS_BASE_CARD :=
         lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hNumBits) hCardK
       have hPowNe : (2 ^ numBits : Fp) ≠ 0 := by
@@ -443,6 +447,8 @@ def shortRangeCheck (K numBits : ℕ) :
       have hPowSplitFp : (2 ^ K : Fp) = (2 ^ (K - numBits) : Fp) * (2 ^ numBits : Fp) := by
         rw [← pow_add]; congr 1; omega
       rw [hPowSplitFp]; field_simp; ring
+    · -- the honest-prover contract: the output IS the extraction cell
+      exact hOut.symm
 
 /-! ## The pure telescoping algebra for `range_check`
 
@@ -841,5 +847,16 @@ def copyCheck (K numWords : ℕ) (strict : Bool) :
     FormalCircuit Fp (Config K) (Config K) Inputs Output :=
   (rangeCheck K numWords strict).toFormal
     s!"{numWords} words range check"
+
+/-- Rust `witness_short_check` (`lookup_range_check.rs:271-294`): its own
+`"Range check {num_bits} bits"` region, witnessing the element from the caller-supplied
+program `w` at `(running_sum, 0)` — NO copy — then the positional `shortRangeCheck`.
+Returns the witnessed element cell (Rust hands it out for downstream copies). -/
+def witnessShortCheck (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) :
+    Circuit Fp (AssignedCell Fp) :=
+  assignRegion s!"Range check {numBits} bits" (do
+    let elt ← assignAdvice cfg.runningSum 0 w
+    let _ ← (shortRangeCheck K numBits).call cfg 0 ()
+    pure elt)
 
 end Halo2.Ironwood.LookupRangeCheck
