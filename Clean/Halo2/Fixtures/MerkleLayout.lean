@@ -13,6 +13,13 @@
 -- constants, the LOADED generator + range-check lookup-table columns, and the post-compression
 -- packed-selector columns. Values are decimal ℕ (canonical Pallas base).
 -- Regenerate: cargo run -p halo2_gadgets --features dump-lean --bin dump_lean_sinsemilla -- <out_dir>
+-- Regions 2/8/9 regenerated 2026-07-17 by `sinsemilla::layout_dump` (sibling halo2 checkout):
+-- the original dump recorded 0/0/0 (the min-touched attribution bug, cf. MulLayout regions
+-- 3/6), contradicting its own copyList (swap's node copy at absolute row 1, the hash x_a
+-- constant copy at row 2, the decomposition copies at rows 55/56). The layout_dump harness
+-- reproduces the ordered copyList byte-for-byte (17/17).
+-- Regenerate (regions/copyList, sibling checkout):
+--   cargo test -p halo2_gadgets --lib sinsemilla::layout_dump -- --nocapture
 import Clean.Halo2.Fixtures.FixtureTypes
 
 namespace Halo2.Fixtures
@@ -26,7 +33,7 @@ set_option maxRecDepth 100000 in
 def merkleLayout : LayoutFixture :=
   { k := 11,
     n := 2048,
-    regions := [⟨0, "generator_table", 0⟩, ⟨1, "witness node", 0⟩, ⟨2, "swap", 0⟩, ⟨3, "witness message piece", 0⟩, ⟨4, "Range check 5 bits", 0⟩, ⟨5, "Range check 5 bits", 3⟩, ⟨6, "witness message piece", 1⟩, ⟨7, "witness message piece", 2⟩, ⟨8, "hash_to_point", 0⟩, ⟨9, "Check piece decomposition", 0⟩],
+    regions := [⟨0, "generator_table", 0⟩, ⟨1, "witness node", 0⟩, ⟨2, "swap", 1⟩, ⟨3, "witness message piece", 0⟩, ⟨4, "Range check 5 bits", 0⟩, ⟨5, "Range check 5 bits", 3⟩, ⟨6, "witness message piece", 1⟩, ⟨7, "witness message piece", 2⟩, ⟨8, "hash_to_point", 2⟩, ⟨9, "Check piece decomposition", 55⟩],
     permColumns := [.fixed 0, .advice 9, .advice 0, .advice 1, .advice 2, .advice 3, .advice 4, .advice 5, .advice 6, .advice 7, .advice 8],
     copyList := [(2, 1, 2, 0),
       (0, 0, 1, 2),
