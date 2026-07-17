@@ -349,8 +349,12 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
   lambda2 := readCell env w.lambda2
   base := { x := readCell env w.base.x, y := readCell env w.base.y }
 
--- TODO make all these witness programs non-native
--- TODO CHANGE THAT, add `UnconstrainedNat` and vector-level IR hints to WitnessIR.
+-- TODO make all these witness programs non-native (exportable IR instead of `.native`
+-- closures). Prerequisites: the `Witgen.M` let-step builder monad (the λ-formulas need
+-- shared intermediates; `Clean/Halo2/WitnessIR.lean` defers that port), plus
+-- `UnconstrainedNat` and vector-level IR hints for the bit decomposition
+-- (`kBitsWindow` is Nat-level: `(tQNat + a.val).testBit …` — NExpr has
+-- shiftR/land/mod, so it is expressible once the builder lands).
 
 /-- The y-coordinate the step leaves at the new accumulator (bit-free: the second
 addition's y-law over the current row's cells) — the value the final row witnesses. -/
@@ -656,8 +660,6 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     obtain ⟨m, hH⟩ := hPA
     refine ⟨step_gates hH, ?_⟩
     simp [← h_output]
-
--- TODO make all these witness programs non-native
 
 /-- Witness equations chain into the iterated step. -/
 theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
