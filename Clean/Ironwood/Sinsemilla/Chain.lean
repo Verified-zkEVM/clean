@@ -257,6 +257,90 @@ def pieceSlot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp →
     (qS2Boundary (decide (i = ns.length - 1)))
   (sinsemillaGate cfg).enable (base + ns.getD i 0)
 
+/-- The slot's positional neighborhood: the previous row (the preceding piece's last row
+— the boundary-`y` derivation's cells; junk for slot 0), the piece's first row, its
+`n + 1` running-sum cells, and the next row (the following piece's first row / the
+trailing dummy row — the linking gate's rotation-+1 reads). -/
+structure SlotReads (m : ℕ) (F : Type) where
+  prev : DoubleAndAddRow F
+  first : DoubleAndAddRow F
+  zs : Vector F m
+  next : DoubleAndAddRow F
+deriving ProvableStruct
+
+/-- The slot's neighborhood cells at base row `base` (piece width `n`). -/
+def slotReads (cfg : Config) (n base : ℕ) (self : RegionIndex) :
+    SlotReads (n + 1) (AssignedCell Fp) where
+  prev := { xA := .of self (base - 1) cfg.xA, xP := .of self (base - 1) cfg.xP,
+            lambda1 := .of self (base - 1) cfg.lambda1,
+            lambda2 := .of self (base - 1) cfg.lambda2 }
+  first := { xA := .of self base cfg.xA, xP := .of self base cfg.xP,
+             lambda1 := .of self base cfg.lambda1, lambda2 := .of self base cfg.lambda2 }
+  zs := Vector.ofFn fun r : Fin (n + 1) => .of self (base + r.val) cfg.bits
+  next := { xA := .of self (base + n + 1) cfg.xA, xP := .of self (base + n + 1) cfg.xP,
+            lambda1 := .of self (base + n + 1) cfg.lambda1,
+            lambda2 := .of self (base + n + 1) cfg.lambda2 }
+
+/-- The slot's entering-`y` value over its neighborhood: the chain's `yaIn` program for
+slot 0, the positional boundary derivation otherwise. -/
+def slotEnterY {m : ℕ} (yaIn : Placed Environment Fp → Fp) (i : ℕ) (w : SlotReads m Fp)
+    (env : Placed Environment Fp) : Fp :=
+  if i = 0 then yaIn env else nextYA w.prev w.first.xA * (2 : Fp)⁻¹
+
+/-- One piece slot as a `Unit`-output formal circuit (the loop stays homogeneous — the
+piece call's width-dependent output lives inside this bundle). Slot `i` of the width list
+`ns`: the `HashPiece` call at its own base row, the boundary `q_s2` re-pin, and the
+piece-linking `sinsemillaGate` at its last row. -/
+def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+    FormalRegionCircuit Fp Config Config field unit where
+  configure := pure
+
+  synthesize cfg base (piece : AssignedCell Fp) := do
+    let prev ← readState cfg (base - 1)
+    let xEnter ← cellAt cfg.xA base
+    let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
+        (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base piece
+    let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
+      (qS2Boundary (decide (i = ns.length - 1)))
+    (sinsemillaGate cfg).enable (base + ns.getD i 0)
+
+  Witness := SlotReads (ns.getD i 0 + 1)
+  extract cfg base _ self env := eval env (slotReads cfg (ns.getD i 0) base self)
+
+  EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
+
+  -- One whole linked piece, in chain language: the piece value recombines from `n + 1`
+  -- words, the running sums are the suffix recombinations, and — for any on-curve
+  -- accumulator entering at the first row — the *next* row anchors the spec-level chain
+  -- point over all `n + 1` words (the linking gate completes the last word's step).
+  Spec piece _ w :=
+    ∃ ms : ℕ → ℕ,
+      (∀ r, ms r < 2 ^ K) ∧
+      piece = ((∑ r ∈ Finset.range (ns.getD i 0 + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
+      w.zs = Vector.ofFn (fun r : Fin (ns.getD i 0 + 1) =>
+        ((∑ j ∈ Finset.range (ns.getD i 0 + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ)
+          : Fp)) ∧
+      ∀ A : Point Fp, A.OnCurve → A.x = w.first.xA → 2 * A.y = yA w.first →
+        ∀ B, hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map ms) = some B →
+          w.next.xA = B.x ∧ 2 * B.y = enterYA (decide (i = ns.length - 1)) w.next
+
+  ProverAssumptions piece w _ :=
+    ZMod.val (show Fp from piece) < 2 ^ (K * (ns.getD i 0 + 1)) ∧
+    ∃ A B : Point Fp, A.OnCurve ∧ A.x = w.first.xA ∧
+      hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B
+
+  ProverSpec piece _ w _ :=
+    ∀ A B : Point Fp, A.x = w.first.xA →
+      hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B →
+      yA w.first = 2 * A.y ∧ w.next.xA = B.x ∧
+      enterYA (decide (i = ns.length - 1)) w.next = 2 * B.y
+
+  soundness := by
+    sorry
+
+  completeness := by
+    sorry
+
 /-! ## The chain contract -/
 
 /-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
@@ -387,7 +471,9 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
 
   synthesize cfg offset (input : Var (Inputs ns.length) Fp) := do
     RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
-      (pieceSlot G ns yaIn cfg input.pieces)
+      (fun i base => do
+        let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
+        pure ())
     -- the trailing dummy row: the final `y_a` into `λ₁`, dummy `λ₂`/`x_p`
     let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
     let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
