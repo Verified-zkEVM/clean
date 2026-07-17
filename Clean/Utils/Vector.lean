@@ -200,6 +200,18 @@ theorem getElem_mapFinRange {n} {create : Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
   simp [mapFinRange, finRange]
 
+attribute [grind norm] Vector.getElem_map Vector.getElem_mapFinRange
+
+/-- Pointwise consequence of equality between two maps of the same vector.
+The generated grind multi-pattern requires the indexed `get` and both mapped vectors. -/
+@[grind .]
+theorem map_eq_map_get (v : Vector α n) (f g : α → β)
+    (h : v.map f = v.map g) (i : Fin n) :
+    f (v.get i) = g (v.get i) := by
+  have h := congrArg (fun w => w.get i) h
+  change (v.map f)[i.val] = (v.map g)[i.val] at h
+  simpa only [Vector.getElem_map] using h
+
 lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
     Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
   ext i

@@ -25,8 +25,4 @@ def circuit : FormalCircuit F field field where
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
 
-  computableWitnesses := by
-    simp only [circuit_norm]
-    grind
-
 end Gadgets.IsZeroField

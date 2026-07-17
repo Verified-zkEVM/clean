@@ -1,22 +1,10 @@
 import Clean.Circuit.Explicit
+import Clean.Utils.Tactics.ComputableWitnesses
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 section
 variable {Input Output : TypeMap}
-
-open Lean Meta Elab Tactic in
-elab "unfold_formal_circuit_consts" : tactic => do
-  withMainContext do
-    let noUnfold ← labelled `explicit_circuit_no_unfold
-    let unfoldTypes ← labelled `explicit_circuit_unfold_type
-    let names ← collectUnfoldableCircuitDecls (← getMainTarget) #[]
-      (some noUnfold) (some unfoldTypes)
-    for name in names do
-      try
-        evalTactic (← `(tactic| unfold $(mkIdent name)))
-      catch _ =>
-        pure ()
 
 namespace FormalCircuitBase
 variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
@@ -81,15 +69,7 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
     This allows us to prove the existence of the honest-prover environment which is
     used in the hypotheses of `Completeness` variants below. -/
   computableWitnesses : FormalCircuitBase.ComputableWitnesses main := by
-    -- TODO proper auto-tactic that systematically applies toSubcircuit_computableWitnesses lemmas
-    try dsimp only [main]
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · simp only [circuit_norm]
-      try (unfold_formal_circuit_consts; simp only [circuit_norm])
-    · intro _ _
-      simp_all only [circuit_norm]
-      try (unfold_formal_circuit_consts; simp_all only [circuit_norm])
+    computable_witnesses
 
 attribute [circuit_norm] FormalCircuitBase.elaborated FormalCircuitBase.exposedChannels
   FormalCircuitBase.channelsWithRequirements

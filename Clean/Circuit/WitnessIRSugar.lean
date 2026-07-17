@@ -256,6 +256,7 @@ def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
   let (out, steps) := program #[]
   .ir steps.toList (.lit (toElements out))
 
+@[computable_witnesses_norm]
 theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
     program.toIRLiteral.eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
@@ -272,6 +273,7 @@ variable [FiniteField F] {value : TypeMap} [ProvableType value]
 in `circuit_norm` it would change the normal form away from the LHS
 of `ProverEnvironment.extendsVector_ofCompositeFExpr` which is an important
 rewrite lemma in completeness proofs. -/
+@[computable_witnesses_norm]
 theorem eval_ofCompositeFExpr {value : TypeMap} [ProvableType value]
     (e : value (FExpr F)) (env : ProverEnvironment F) :
     (ofCompositeFExpr e).eval env = toElements (Witgen.eval { env } e) := by

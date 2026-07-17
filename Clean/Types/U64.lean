@@ -303,6 +303,7 @@ lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U64 (E
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
   exact ProvableType.getElem_eval_toElements x i hi
 
+@[computable_witnesses_norm]
 lemma eval_fromLimbs {F} [FiniteField F] {env : Environment F} {v : Vector (Expression F) 8} :
     eval env (U64.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [circuit_norm, U64.fromLimbs, ProvableType.eval_fromElements]

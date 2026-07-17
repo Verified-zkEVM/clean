@@ -121,11 +121,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     exact ⟨completeness1, completeness2, completeness3⟩
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm, main, Inputs.mk.injEq]
-    grind
-
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"

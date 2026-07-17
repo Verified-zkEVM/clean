@@ -62,11 +62,6 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     show input = env (fieldFromBitsExpr bit_vars)
     rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
 
-  computableWitnesses := by
-    intro offset input env env'
-    simp only [main, circuit_norm]
-    grind
-
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
 def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
