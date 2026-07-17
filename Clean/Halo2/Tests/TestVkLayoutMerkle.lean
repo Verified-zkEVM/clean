@@ -18,10 +18,11 @@ sibling-checkout `sinsemilla::layout_dump` harness (copyList reproduced 17/17 �
 fixture header).
 -/
 
-namespace Halo2.Fixtures.Test.Layout
+namespace Halo2.Fixtures.Test.LayoutMerkle
 
 open Ironwood (Fp)
 open Halo2.Fixtures.Layout
+open Halo2.Fixtures.Test.LayoutSinsemilla (layoutG layoutQ sUnknown)
 
 /-- The Merkle configure chain (the same allocation sequence as
 `TestVkMatchMerkle.merkleProgram`), also returning the range-check config. -/
@@ -113,4 +114,4 @@ def mFixed : List (ℕ × ℕ × ℕ) :=
 -- the full fixed contents
 #guard mFixed = sortFixed merkleLayout.fixed
 
-end Halo2.Fixtures.Test.Layout
+end Halo2.Fixtures.Test.LayoutMerkle
