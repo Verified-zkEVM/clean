@@ -74,11 +74,6 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   soundness := by circuit_proof_all [toBits]
   completeness := by circuit_proof_all [toBits]
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm]
-    grind
-
 end ToBits
 export ToBits (toBits)
 end Gadgets

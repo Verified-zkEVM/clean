@@ -67,5 +67,7 @@ def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff]
 
 end Gadgets.Keccak256.ThetaC

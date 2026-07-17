@@ -60,7 +60,8 @@ simproc structEqSplit (_ = _) := structEqSplitProc
 
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,
-two bounded rounds of circuit-wrapper unfolding, and `grind`.
+two bounded rounds of circuit-wrapper unfolding, structural splitting of the operations/output
+conjunction, and `grind`.
 
 Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]`.
 -/
@@ -87,6 +88,17 @@ elab_rules : tactic
         evalTactic (← `(tactic| unfold_formal_circuit_consts))
         simpPass
     unless (← getGoals).isEmpty do
-      evalTactic (← `(tactic| grind))
+      evalTactic (← `(tactic| intros))
+    unless (← getGoals).isEmpty do
+      withMainContext do
+        let target ← whnf (← getMainTarget)
+        if target.isAppOfArity ``And 2 then
+          evalTacticSeq (← `(tacticSeq|
+            apply And.intro
+            · intros
+              (try and_intros) <;> grind
+            · grind))
+        else
+          evalTactic (← `(tactic| grind))
 
 end ComputableWitnesses
