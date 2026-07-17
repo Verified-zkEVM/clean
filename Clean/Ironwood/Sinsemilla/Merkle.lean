@@ -177,8 +177,9 @@ Verifier-visible inputs are the ten already-assigned cells; no output (`unit`), 
 `MulOverflow.circuit`. The body copies the ten cells into the gate window and enables
 `q_decompose`. -/
 
-/-- The ten already-assigned input cells (row `g`: whole pieces + nodes; row `g+1`: `z_1` cells,
-sub-pieces, `l`). -/
+/-- The nine already-assigned input cells (row `g`: whole pieces + nodes; row `g+1`: `z_1`
+cells, sub-pieces). `l` is NOT an input — Rust assigns it from a constant
+(`merkle/chip.rs:349-354`, `assign_advice_from_constant`). -/
 structure Inputs (F : Type) where
   aWhole : F
   bWhole : F
@@ -189,32 +190,35 @@ structure Inputs (F : Type) where
   z1B : F
   b1 : F
   b2 : F
-  lWhole : F
 deriving ProvableStruct
 
-/-- The decomposition-gate body: copy the ten cells into the gate window (row `g` / `g+1`), enable
-`q_decompose` at `g`. Returns `unit`. -/
-def body (cfg : Config) (input : Inputs (AssignedCell Fp)) (offset : ℕ) :
+/-- The decomposition-gate body, in Rust's exact op order (`merkle/chip.rs:344-396`):
+enable `q_decompose` at `g`, assign `l` from a constant at `(l, g+1)`, then the nine
+copies (row `g`: pieces + nodes; row `g+1`: `z_1` cells, sub-pieces). Returns `unit`. -/
+def body (cfg : Config) (l : Fp) (input : Inputs (AssignedCell Fp)) (offset : ℕ) :
     RegionCircuit Fp Unit := do
+  (decomposeGate cfg).enable offset
+  -- `l` from a constant (assign_advice_from_constant, chip.rs:349-354)
+  let lCell ← assignAdvice cfg.lWhole (offset + 1) (.native fun _ => #v[l])
+  constrainConstant lCell l
   -- row g: the whole pieces + the two nodes
   let _a ← copyAdvice input.aWhole cfg.aWhole offset
   let _b ← copyAdvice input.bWhole cfg.bWhole offset
   let _c ← copyAdvice input.cWhole cfg.cWhole offset
   let _left ← copyAdvice input.leftNode cfg.leftNode offset
   let _right ← copyAdvice input.rightNode cfg.rightNode offset
-  -- row g+1: the two z_1 cells, b_1/b_2, l
+  -- row g+1: the two z_1 cells, b_1/b_2
   let _z1A ← copyAdvice input.z1A cfg.z1A (offset + 1)
   let _z1B ← copyAdvice input.z1B cfg.z1B (offset + 1)
   let _b1 ← copyAdvice input.b1 cfg.b1 (offset + 1)
   let _b2 ← copyAdvice input.b2 cfg.b2 (offset + 1)
-  let _l ← copyAdvice input.lWhole cfg.lWhole (offset + 1)
-  (decomposeGate cfg).enable offset
   return ()
 
-/-- The value-level spec on the input cells' evaluations (donor `Merkle.Gate.Spec`). -/
-def GateSpec (input : Inputs Fp) : Prop :=
+/-- The value-level spec on the input cells' evaluations (donor `Merkle.Gate.Spec`), at the
+constant `l`. -/
+def GateSpec (l : Fp) (input : Inputs Fp) : Prop :=
   Spec input.aWhole input.bWhole input.cWhole input.leftNode input.rightNode
-    input.z1A input.z1B input.b1 input.b2 input.lWhole
+    input.z1A input.z1B input.b1 input.b2 l
 
 /-- The decomposition-gate gadget. Pure assertion (`unit` output). Soundness: the four polys imply
 `GateSpec`; completeness: `GateSpec` (the honest-caller precondition, like `MulOverflow`) implies
@@ -223,40 +227,28 @@ the polys.
 STRUCTURE-COMPLETE-WITH-STATED-SORRIES: both directions reduce to `spec_of_polysZero` /
 `polysZero_of_spec` after peeling the ten copies + the gate via `circuit_norm` (the
 `MulOverflow.circuit` pattern); the copies chain each gate-window cell to its input component. -/
-def circuit :
+def circuit (l : Fp) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice × Column .advice ×
         Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
       Config Inputs unit where
   name := "GATE Decomposition check"
-  configure := fun (a, b, c, left, right, z1A, z1B, b1, b2, l) =>
-    configure a b c left right z1A z1B b1 b2 l
-  synthesize cfg offset input := body cfg input offset
+  configure := fun (a, b, c, left, right, z1A, z1B, b1, b2, lw) =>
+    configure a b c left right z1A z1B b1 b2 lw
+  synthesize cfg offset input := body cfg l input offset
   Assumptions _ := True
-  Spec input _ _ := GateSpec input
-  ProverAssumptions input _ _ := GateSpec input
+  Spec input _ _ := GateSpec l input
+  ProverAssumptions input _ _ := GateSpec l input
   soundness := by
-    -- PLAYBOOK (blocked on MulFixed/CondSwap):
-    -- `circuit_proof_start [body, decomposeGate]` runs the universal
-    -- prefix — intro + `soundness_iff` + house names, the 10-copies-+-4-poly-gate peel over the
-    -- unfold list below, and `provable_type_simp`. This gate is a LEAF (no folded child chunk), so
-    -- the leaf-only finish fires: the copy equations land the input coordinates on the gate cells and
-    -- `h_input`/`h_output` are cleared. The user half then destructures `hc` into the 10 copies + the
-    -- 4 gate polys and closes with `exact spec_of_polysZero hLcheck hLeftCheck hRightCheck hB1B2`
-    -- (value math DONE by `spec_of_polysZero`; only the copy-cell/input-cell bookkeeping remains,
-    -- as `Add.soundness`/`AddIncomplete.soundness` do it).
     circuit_proof_start [body, decomposeGate]
-    sorry
+    obtain ⟨⟨hL, hLeft, hRight, hB⟩, hlc, ha, hb, hcw, hleft, hright, hz1a, hz1b,
+      hb1, hb2⟩ := hc
+    simp only [hlc, ha, hb, hcw, hleft, hright, hz1a, hz1b, hb1, hb2] at hL hLeft hRight hB
+    exact spec_of_polysZero (by linear_combination hL) (by linear_combination hLeft)
+      (by linear_combination hRight) (by linear_combination hB)
   completeness := by
-    -- PLAYBOOK (blocked on MulFixed/CondSwap):
-    -- `circuit_proof_start [body, decomposeGate]` runs the universal
-    -- prefix — intro + `completeness_iff` + house names, the copy/gate peel over the unfold list, and
-    -- `provable_type_simp`. Leaf gate ⇒ the finish lands `h_input`/`hwit`/`h_output` on the input
-    -- coordinates. The user half `obtain … := hPA` (`GateSpec`) and closes the 4 gate polys with
-    -- `polysZero_of_spec hPA`; the copy goals are witness-consistent (value math DONE by
-    -- `polysZero_of_spec`).
     circuit_proof_start [body, decomposeGate]
-    sorry
+    exact polysZero_of_spec hPA
 
 end Gate
 
