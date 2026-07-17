@@ -91,4 +91,66 @@ structure SelCompressMap where
   entries : List (ℕ × SelCompress)
 deriving DecidableEq, Repr
 
+/-! ## Phase 2: layout fixtures (permutation σ + fixed values + region placements)
+
+The `CsFixture` above captures the *symbolic* constraint system. `LayoutFixture` captures the
+**keygen-view layout** the CS dump elides — the products of running the harness circuit's
+`synthesize` exactly as `plonk::keygen::keygen_vk` does. Kept intentionally minimal and
+`DecidableEq`-friendly: everything is `ℕ`, `String`, and flat tuples of `ℕ`. Field values are
+`ℕ` literals — canonical Pallas-base representatives (the same `to_repr()` integer `mkFp`
+decodes, but decimal, so no field arithmetic is forced during elaboration). -/
+
+/-- A permutation-argument column reference, in `cs.permutation.get_columns()` order.
+Matches the ironwood `permutationChunks` `ColumnRef` spelling (`.advice`/`.fixed`/`.instance`
+with a per-type column index). -/
+inductive ColRef where
+  | advice : ℕ → ColRef
+  | fixed : ℕ → ColRef
+  | instance : ℕ → ColRef
+deriving DecidableEq, Repr
+
+/-- One floor-planner region placement: creation-order `index`, region `name`, and `start`
+row. `start` is the minimum absolute row the region touches, which equals the
+`SimpleFloorPlanner`/`V1` `region_start` for every `halo2_gadgets` region (each assigns its
+first row at relative offset 0). -/
+structure RegionPlacement where
+  index : ℕ
+  name : String
+  start : ℕ
+deriving DecidableEq, Repr
+
+/-- The keygen-view layout of one harness circuit, dumped by `halo2 dump_lean` Phase 2.
+
+* `regions` — floor-planner placements, in creation order.
+* `permColumns` — the permutation column order (`cs.permutation.get_columns()`); the column
+  indices in `copyList` and `sigma` index into this list.
+* `copyList` — the **ordered** raw `copy(leftCol, leftRow, rightCol, rightRow)` calls the keygen
+  `Assembly` received, IN ORDER, before any cycle merge (flat `ℕ` quadruples, col indices into
+  `permColumns`). keygen's cycle-merge (`permutation/keygen.rs`) produces different cycle
+  rotations for different copy orders, so the Lean side checks its own copy sequence
+  element-for-element (strict, order-sensitive — pinpoints placement/ordering bugs) BEFORE σ.
+* `sigma` — the **sparse** permutation mapping σ (the exact keygen cycle structure, the semantic
+  object built FROM `copyList`): each entry `(colIdx, row, colIdx', row')` is a cell where
+  `mapping[colIdx][row] = (colIdx', row') ≠ (colIdx, row)`. Flat `ℕ` quadruples for compact
+  elaboration; grouped `((colIdx, row), (colIdx', row'))` conceptually.
+* `constants` — the floor-planner's constants allocation, in assignment order:
+  `(value, constantsColIdx, row)`. `constrain_constant` / `assign_advice_from_constant` route
+  through rows of the constants fixed column that the planner picks; those rows are not derivable
+  Lean-side, so they are pinned here (like `regions`). These cells also appear in `copyList`,
+  `sigma`, and `fixed` — expected and wanted. `value` is a decimal `ℕ` (canonical Pallas base).
+* `fixed` — the **sparse** fixed-column assignments `(fixedColIdx, row, value)`: constants
+  (`assign_fixed` / `assign_advice_from_constant`), any loaded lookup-table columns, and the
+  post-compression packed-selector columns (`compress_selectors` output polys, indexed
+  `numFixedBefore + j`). `value` is a canonical Pallas-base representative as a decimal `ℕ`. -/
+structure LayoutFixture where
+  k : ℕ
+  n : ℕ
+  regions : List RegionPlacement
+  permColumns : List ColRef
+  copyList : List (ℕ × ℕ × ℕ × ℕ)
+  sigma : List (ℕ × ℕ × ℕ × ℕ)
+  constants : List (ℕ × ℕ × ℕ)
+  fixed : List (ℕ × ℕ × ℕ)
+deriving DecidableEq, Repr
+
 end Halo2.Fixtures
