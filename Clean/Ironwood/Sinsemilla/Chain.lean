@@ -728,6 +728,77 @@ private theorem inputs_eval_literal (place : RegionIndex → ℕ) (env : Environ
       = { pieces := ProvableType.eval (M := fields k) place env p } := by
   with_unfolding_all rfl
 
+private theorem slotReads_eval_literal (env : Placed Environment Fp) {m : ℕ}
+    (p f l : DoubleAndAddRow (AssignedCell Fp)) (zs : Vector (AssignedCell Fp) m)
+    (nx : DoubleAndAddRow (AssignedCell Fp)) (y : AssignedCell Fp) :
+    (eval env ({ prev := p, first := f, last := l, zs := zs, next := nx, yIn := y }
+        : SlotReads m (AssignedCell Fp)) : SlotReads m Fp)
+      = { prev := ProvableType.eval env.place env.env p,
+          first := ProvableType.eval env.place env.env f,
+          last := ProvableType.eval env.place env.env l,
+          zs := ProvableType.eval (M := fields m) env.place env.env zs,
+          next := ProvableType.eval env.place env.env nx,
+          yIn := AssignedCell.eval env.place env.env y } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+/-- The flattened eval of the slot neighborhood (all cells named, rows explicit). -/
+private theorem slotReads_eval (env : Placed Environment Fp) (cfg : Config) (n base : ℕ)
+    (self : RegionIndex) :
+    (eval env (slotReads cfg n base self) : SlotReads (n + 1) Fp)
+      = { prev :=
+            { xA := AssignedCell.eval env.place env.env (.of self (base - 1) cfg.xA),
+              xP := AssignedCell.eval env.place env.env (.of self (base - 1) cfg.xP),
+              lambda1 := AssignedCell.eval env.place env.env (.of self (base - 1) cfg.lambda1),
+              lambda2 := AssignedCell.eval env.place env.env (.of self (base - 1) cfg.lambda2) },
+          first :=
+            { xA := AssignedCell.eval env.place env.env (.of self base cfg.xA),
+              xP := AssignedCell.eval env.place env.env (.of self base cfg.xP),
+              lambda1 := AssignedCell.eval env.place env.env (.of self base cfg.lambda1),
+              lambda2 := AssignedCell.eval env.place env.env (.of self base cfg.lambda2) },
+          last :=
+            { xA := AssignedCell.eval env.place env.env (.of self (base + n) cfg.xA),
+              xP := AssignedCell.eval env.place env.env (.of self (base + n) cfg.xP),
+              lambda1 := AssignedCell.eval env.place env.env (.of self (base + n) cfg.lambda1),
+              lambda2 := AssignedCell.eval env.place env.env (.of self (base + n) cfg.lambda2) },
+          zs := (Vector.ofFn (fun r : Fin (n + 1) => .of self (base + r.val) cfg.bits)).map
+            (AssignedCell.eval env.place env.env),
+          next :=
+            { xA := AssignedCell.eval env.place env.env (.of self (base + n + 1) cfg.xA),
+              xP := AssignedCell.eval env.place env.env (.of self (base + n + 1) cfg.xP),
+              lambda1 := AssignedCell.eval env.place env.env
+                (.of self (base + n + 1) cfg.lambda1),
+              lambda2 := AssignedCell.eval env.place env.env
+                (.of self (base + n + 1) cfg.lambda2) },
+          yIn := AssignedCell.eval env.place env.env (.of self base cfg.xA) } := by
+  rw [show slotReads cfg n base self
+      = ({ prev :=
+              { xA := .of self (base - 1) cfg.xA, xP := .of self (base - 1) cfg.xP,
+                lambda1 := .of self (base - 1) cfg.lambda1,
+                lambda2 := .of self (base - 1) cfg.lambda2 },
+           first :=
+              { xA := .of self base cfg.xA, xP := .of self base cfg.xP,
+                lambda1 := .of self base cfg.lambda1, lambda2 := .of self base cfg.lambda2 },
+           last :=
+              { xA := .of self (base + n) cfg.xA, xP := .of self (base + n) cfg.xP,
+                lambda1 := .of self (base + n) cfg.lambda1,
+                lambda2 := .of self (base + n) cfg.lambda2 },
+           zs := Vector.ofFn (fun r : Fin (n + 1) => .of self (base + r.val) cfg.bits),
+           next :=
+              { xA := .of self (base + n + 1) cfg.xA, xP := .of self (base + n + 1) cfg.xP,
+                lambda1 := .of self (base + n + 1) cfg.lambda1,
+                lambda2 := .of self (base + n + 1) cfg.lambda2 },
+           yIn := .of self base cfg.xA } : SlotReads (n + 1) (AssignedCell Fp)) from rfl,
+    slotReads_eval_literal]
+  rw [row_eval_literal, row_eval_literal, row_eval_literal, row_eval_literal,
+    eval_fields_eq_map]
+
+/-- Prover-side field-cell eval, in the `AssignedCell.eval` spelling. -/
+private theorem eval_field_cell (env : Placed ProverEnvironment Fp) (c : AssignedCell Fp) :
+    (eval env (c : Var field Fp) : Fp)
+      = AssignedCell.eval env.place env.env.toEnvironment c := by
+  with_unfolding_all rfl
+
 /-- The chain induction over abstract row/sum families: per-piece slot contracts and the
 per-boundary linking gates fold into the whole-message chain contract. Pieces indexed
 from `i0` (of `N` total — the final boundary flag), rows from `base`. The exit anchor is
@@ -897,6 +968,93 @@ private theorem chain_fold (G : Generators) (N : ℕ)
           rw [show (n :: rest).length = rest.length + 1 from rfl, prefixRows_succ]
           omega]
         exact hres
+
+/-- Per-index piece bound out of `PieceBounds`. -/
+private theorem pieceBounds_getElem :
+    ∀ (nsSuf : List ℕ) (pieces : Vector Fp nsSuf.length),
+    PieceBounds nsSuf pieces →
+    ∀ j : Fin nsSuf.length, (pieces[j] : Fp).val < 2 ^ (K * (nsSuf.getD j.val 0 + 1)) := by
+  intro nsSuf
+  induction nsSuf with
+  | nil =>
+    intro pieces _ j
+    exact absurd j.isLt (by simp)
+  | cons n rest ih =>
+    intro pieces hb j
+    obtain ⟨hb0, hbrest⟩ := hb
+    rcases Nat.eq_zero_or_pos j.val with h0 | hpos
+    · have : j = ⟨0, by simp⟩ := Fin.ext h0
+      subst this
+      simpa using hb0
+    · have hlt : j.val - 1 < rest.length := by
+        have := j.isLt
+        simp at this
+        omega
+      have hres := ih pieces.tail hbrest ⟨j.val - 1, hlt⟩
+      simp only [Fin.getElem_fin] at hres ⊢
+      rw [show (n :: rest).getD j.val 0 = rest.getD (j.val - 1) 0 from by
+        rw [show j.val = (j.val - 1) + 1 from by omega]
+        rfl]
+      convert hres using 2
+      simp
+      congr 1
+      omega
+
+/-- Suffix chunk list over a piece-value family (pieces indexed from `k`). -/
+private def sufChunks (pv : ℕ → Fp) : (rem : List ℕ) → (k : ℕ) → List ℕ
+  | [], _ => []
+  | n :: rest, k => (List.range (n + 1)).map (pieceWord (pv k)) ++ sufChunks pv rest (k + 1)
+
+/-- `honestChunks` over a matching value family is the 0-indexed suffix chunk list. -/
+private theorem honestChunks_eq_suf (pv : ℕ → Fp) :
+    ∀ (nsSuf : List ℕ) (pieces : Vector Fp nsSuf.length) (k : ℕ),
+    (∀ j : Fin nsSuf.length, pieces[j] = pv (k + j.val)) →
+    honestChunks nsSuf pieces = sufChunks pv nsSuf k := by
+  intro nsSuf
+  induction nsSuf with
+  | nil =>
+    intro pieces k _
+    rfl
+  | cons n rest ih =>
+    intro pieces k hpv
+    show (List.range (n + 1)).map (pieceWord pieces[0]) ++ honestChunks rest pieces.tail
+      = (List.range (n + 1)).map (pieceWord (pv k)) ++ sufChunks pv rest (k + 1)
+    rw [show pieces[0] = pv k from by simpa using hpv ⟨0, by simp⟩]
+    congr 1
+    have hcast : honestChunks rest pieces.tail
+        = honestChunks rest (Vector.cast (by simp) pieces.tail) := by
+      simp
+    rw [hcast]
+    exact ih (Vector.cast (by simp) pieces.tail) (k + 1) (by
+      intro j
+      have h := hpv ⟨j.val + 1, Nat.succ_lt_succ j.isLt⟩
+      simp only [Fin.getElem_fin] at h ⊢
+      rw [show (Vector.cast (by simp) pieces.tail
+          : Vector Fp rest.length)[j.val] = pieces[j.val + 1] from by simp [Nat.add_comm]]
+      rw [h]
+      congr 1
+      omega)
+
+/-- Step a suffix chunk list at an in-range index. -/
+private theorem sufChunks_drop_succ (pv : ℕ → Fp) (ns : List ℕ) (k : ℕ) (hk : k < ns.length) :
+    sufChunks pv (ns.drop k) k
+      = (List.range (ns.getD k 0 + 1)).map (pieceWord (pv k))
+        ++ sufChunks pv (ns.drop (k + 1)) (k + 1) := by
+  rw [List.drop_eq_getElem_cons hk]
+  rw [show sufChunks pv (ns[k] :: ns.drop (k + 1)) k
+      = (List.range (ns[k] + 1)).map (pieceWord (pv k))
+        ++ sufChunks pv (ns.drop (k + 1)) (k + 1) from rfl]
+  congr 3
+  rw [List.getD_eq_getElem ns 0 hk]
+
+/-- Prover-view literal-eval bridges for the output record. -/
+private theorem output_eval_literal_prover (env : Placed ProverEnvironment Fp)
+    (p : Point (AssignedCell Fp)) (f : DoubleAndAddRow (AssignedCell Fp)) :
+    (eval env ({ point := p, first := f } : Output (AssignedCell Fp)) : Output Fp)
+      = { point := ProvableType.eval env.place env.env.toEnvironment p,
+          first := ProvableType.eval env.place env.env.toEnvironment f } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
 
 /-! ## The bundle -/
 
@@ -1078,6 +1236,86 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       exact ⟨hres.1.symm ▸ rfl, hres.2.symm ▸ rfl⟩
 
   completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [RegionCircuit.operations_bind, RegionOperations.extendsWitnesses_append,
+      RegionCircuit.forRangeVar'_extendsWitnesses, HashPiece.operations_readState,
+      HashPiece.operations_cellAt, circuit_norm] at hwit
+    obtain ⟨hWs, hWyFin, -, -⟩ := hwit
+    obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hPA
+    -- the piece-value family and the chunk-list rewrite
+    have hpieces_eq : input.pieces
+        = input_var.pieces.map
+            (fun c => AssignedCell.eval env.place env.env.toEnvironment c) := by
+      rw [← h_input, ProvableStruct.eval_cells_eq_eval_prover]
+      cases input_var with
+      | mk pv =>
+        rw [inputs_eval_literal]
+        exact eval_fields_eq_map env.place env.env.toEnvironment pv
+    have hpv : ∀ j : Fin ns.length,
+        input.pieces[j] = AssignedCell.eval env.place env.env.toEnvironment
+          (input_var.pieces[j.val]!) := by
+      intro j
+      rw [Fin.getElem_fin, hpieces_eq, Vector.getElem_map,
+        getElem!_pos input_var.pieces j.val j.isLt]
+    have hchainS : hashToPoint G.S A
+        (sufChunks (fun t => AssignedCell.eval env.place env.env.toEnvironment
+          (input_var.pieces[t]!)) ns 0) = some B := by
+      rw [← honestChunks_eq_suf _ ns input.pieces 0 (by
+        intro j
+        simpa using hpv j)]
+      exact hchain
+    -- the honest thread: per-suffix entering point with its positional facts
+    have hthread : ∀ k : ℕ, k ≤ ns.length → ∃ Ck : Point Fp, Ck.OnCurve ∧
+        Ck.x = env.env.advice cfg.xA
+          ((env.place self + (offset + prefixRows ns k) : ℕ) : ℤ) ∧
+        Ck.y = (if k = 0 then yaIn env.toEnvironment
+          else boundaryYA (slotReads cfg (ns.getD k 0) (offset + prefixRows ns k) self).prev
+            (AssignedCell.of self (offset + prefixRows ns k) cfg.xA) env.toEnvironment) ∧
+        hashToPoint G.S Ck (sufChunks (fun t =>
+          AssignedCell.eval env.place env.env.toEnvironment (input_var.pieces[t]!))
+          (ns.drop k) k) = some B := by
+      intro k
+      induction k with
+      | zero =>
+        intro _
+        refine ⟨A, hAon, ?_, ?_, by simpa using hchainS⟩
+        · rw [hAx]
+          show (eval env.toEnvironment (AssignedCell.of self offset cfg.xA : Var field Fp)
+            : Fp) = _
+          simp only [Nat.add_zero, prefixRows_zero]
+          with_unfolding_all rfl
+        · rw [if_pos rfl, hAy]
+      | succ m ih =>
+        intro hm1
+        obtain ⟨Cm, hCon, hCx, hCy, hCchain⟩ := ih (by omega)
+        rw [sufChunks_drop_succ _ ns m (by omega),
+          Orchard.Specs.Sinsemilla.hashToPoint_append] at hCchain
+        cases hsplit : hashToPoint G.S Cm ((List.range (ns.getD m 0 + 1)).map
+            (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
+              (input_var.pieces[m]!)))) with
+        | none =>
+          rw [hsplit] at hCchain
+          simp at hCchain
+        | some Dm =>
+          rw [hsplit] at hCchain
+          -- slot m's honest-prover precondition and derived contract
+          have hPAm : SlotPA G (ns.getD m 0)
+              (eval env (input_var.pieces[m]! : Var field Fp))
+              ((slot G ns yaIn m).extract cfg (offset + prefixRows ns m)
+                (input_var.pieces[m]!) self env.toEnvironment) := by
+            rw [slotC_extract_eq, slotReads_eval]
+            simp only [AssignedCell.eval, eval_field_cell]
+            refine ⟨?_, Cm, Dm, hCon, ?_, ?_, ?_⟩
+            · have hb := pieceBounds_getElem ns input.pieces hbounds ⟨m, by omega⟩
+              rw [hpv ⟨m, by omega⟩] at hb
+              simpa using hb
+            · exact hCx
+            · exact hCy
+            · simp only [AssignedCell.eval] at hsplit
+              exact hsplit
+          sorry
     sorry
 
 end Halo2.Ironwood.Sinsemilla.Chain
