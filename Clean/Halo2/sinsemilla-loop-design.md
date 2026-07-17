@@ -147,3 +147,39 @@ a hypothesis, not a hole).
 run; `TestVkMatchSinsemilla` extends the Add/Mul pattern — the first lookup-bearing
 target, exercising `lookupInputExprs`/`lookupTableExprs` projection and the
 `witness_pieces`/`fixed_y_q` columns this restructure adds back.
+
+---
+
+## Working state (updated as the restructure lands)
+
+**Done (pushed through c728175a):**
+- `HashPieceRound.lean` — Config (+`witnessPieces` restored)/gates/lookup/configure moved
+  here; `State` (`{z, row : DoubleAndAddRow}`), `State.step` via standalone defs
+  (`stepXA/stepYA/stepL1/stepL2` — NEVER lets: zeta explosion), round bundle proven.
+  Kernel lessons (all encoded in comments there): raw-polynomial spellings produced via
+  the `rowValue` route (`step_gates`), never `simp only [...] at` a step-term hypothesis
+  (deep congruence trees), goal-shaped `complete_gates` applied once syntactically.
+- `HashPiece.lean` — rebuilt: `State.iter`/`iter_of_steps`/`iter_honest` (via public
+  `step_exit`), `loop_fold`, `wordChain`, `LoopOut`, `rowFam` (top-level def), `loop`
+  bundle (forRange' of round.call) proven; `circuit G w final yaIn` (edges) proven.
+  I/O: Input = piece cell (`field`); Witness = `fieldPair` (positional x_a read, `yaIn`
+  value); Output = {first, last, xANext, zs}; Spec anchored on `output.first`.
+
+**Next (in order, per maintainer resequencing):**
+1. `Chain.lean` rework: `forRangeVar'` over `rows i` = offset + partial sums of
+   `(nsᵢ+1)`; body i = `(HashPiece.circuit G nᵢ (i = last) (chainYA i)).call cfg (rows i)
+   {pieces[i]}` + `q_s2` re-pin at `rows i + nᵢ` + linking `sinsemillaGate` enable there;
+   trailing dummy row (λ₁ := final y via chainYA len, dummy λ₂/x_p := 0); `Output.zs`
+   positional (`zsCells ns offset : HVec (zLengths ns) (AssignedCell Fp)`, no ops);
+   `chainYA 0 = yaIn`, `chainYA (i+1)` = positional `nextYA` over piece i's last row +
+   `x_a @ rows (i+1)`. Inputs = {pieces} only. Value-level list induction replaces
+   `chainBody_sound`/`chainBody_complete`; `soundness_aux` glue per boundary stays.
+2. **VK matching immediately after** (before Merkle/CommitDomain proofs — layout pinned
+   first): composite `configure`s mirroring the incoming Rust-exact fixture call
+   sequences (Sinsemilla chain; Merkle chain incl. CondSwap `configure`), wire
+   `TestVkMatchSinsemilla`/`Merkle` on the replacement fixtures (ignore 793d84f5's).
+   Note other agent's fb5d88ee/2631644a: Phase-2 layout machinery (permutation σ dumps).
+3. `hash_message` public-Q init (q_s4 + fixed_y_q + x_a from constant), CondSwap gadget
+   port (donor `Orchard.Utilities.CondSwap`), Merkle Gate body fix (`l` is a CONSTANT at
+   advices[4] row g+1, not a copy; 9 copies not 10) + HashLayer/Layer/CalculateRoot,
+   CommitDomain rework on the faithful init. No sorries anywhere.
