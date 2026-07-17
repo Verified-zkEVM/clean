@@ -623,7 +623,7 @@ def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)
 entering accumulator (the `Witness` pair — positional `x_a`, `yaIn` value) defined. -/
 def ProverAssumptions (G : Generators) (ns : List ℕ)
     (input : Value (Inputs ns.length) Fp) (wit : ChainWit ns Fp) : Prop :=
-  PieceBounds ns input.pieces ∧
+  ns ≠ [] ∧ PieceBounds ns input.pieces ∧
   ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.xIn ∧ A.y = wit.yIn ∧
     hashToPoint G.S A (honestChunks ns input.pieces) = some B
 
@@ -1072,6 +1072,24 @@ private theorem output_eval_literal_prover (env : Placed ProverEnvironment Fp)
   rw [ProvableStruct.eval_cells_eq_eval_prover]
   with_unfolding_all rfl
 
+/-- The slot-`k` entering-`y` VALUE (the `yaIn` program for slot 0, the positional
+boundary derivation otherwise) — choice-free spelling shared by the completeness facts. -/
+private def slotEnterVal (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+    (ns : List ℕ) (offset : ℕ) (self : RegionIndex) (env : Placed Environment Fp)
+    (k : ℕ) : Fp :=
+  if k = 0 then yaIn env
+  else boundaryYA (slotReads cfg (ns.getD k 0) (offset + prefixRows ns k) self).prev
+    (AssignedCell.of self (offset + prefixRows ns k) cfg.xA) env
+
+/-- Prover-env double-and-add row read at region-local row `r` (top-level def — compact
+spelling for the completeness facts; unfolds to the raw advice reads). -/
+private def dRowP (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironment Fp)
+    (self : RegionIndex) (r : ℕ) : DoubleAndAddRow Fp where
+  xA := e.advice cfg.xA ((pl self + r : ℕ) : ℤ)
+  xP := e.advice cfg.xP ((pl self + r : ℕ) : ℤ)
+  lambda1 := e.advice cfg.lambda1 ((pl self + r : ℕ) : ℤ)
+  lambda2 := e.advice cfg.lambda2 ((pl self + r : ℕ) : ℤ)
+
 /-! ## The bundle -/
 
 instance circuitElaborated (G : Generators) (ns : List ℕ)
@@ -1259,7 +1277,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       RegionCircuit.forRangeVar'_extendsWitnesses, HashPiece.operations_readState,
       HashPiece.operations_cellAt, circuit_norm] at hwit
     obtain ⟨hWs, hWyFin, -, -⟩ := hwit
-    obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hPA
+    obtain ⟨hns, hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hPA
     -- the piece-value family and the chunk-list rewrite
     have hpieces_eq : input.pieces
         = input_var.pieces.map
@@ -1286,9 +1304,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     have hthread : ∀ k : ℕ, k ≤ ns.length → ∃ Ck : Point Fp, Ck.OnCurve ∧
         Ck.x = env.env.advice cfg.xA
           ((env.place self + (offset + prefixRows ns k) : ℕ) : ℤ) ∧
-        Ck.y = (if k = 0 then yaIn env.toEnvironment
-          else boundaryYA (slotReads cfg (ns.getD k 0) (offset + prefixRows ns k) self).prev
-            (AssignedCell.of self (offset + prefixRows ns k) cfg.xA) env.toEnvironment) ∧
+        Ck.y = slotEnterVal yaIn cfg ns offset self env.toEnvironment k ∧
         hashToPoint G.S Ck (sufChunks (fun t =>
           AssignedCell.eval env.place env.env.toEnvironment (input_var.pieces[t]!))
           (ns.drop k) k) = some B := by
@@ -1302,7 +1318,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             : Fp) = _
           simp only [Nat.add_zero, prefixRows_zero]
           with_unfolding_all rfl
-        · rw [if_pos rfl, hAy]
+        · rw [slotEnterVal, if_pos rfl, hAy]
       | succ m ih =>
         intro hm1
         obtain ⟨Cm, hCon, hCx, hCy, hCchain⟩ := ih (by omega)
@@ -1328,7 +1344,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
               rw [hpv ⟨m, by omega⟩] at hb
               simpa using hb
             · exact hCx
-            · exact hCy
+            · rw [hCy, slotEnterVal]
             · simp only [AssignedCell.eval] at hsplit
               exact hsplit
           -- the slot's derived contract on the honest run
@@ -1371,7 +1387,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           refine ⟨Dm, hDmOn, ?_, ?_, ?_⟩
           · rw [hrowstep]
             exact hnx.symm
-          · rw [if_neg (by omega : ¬ m + 1 = 0)]
+          · rw [slotEnterVal, if_neg (by omega : ¬ m + 1 = 0)]
             have h2 : (2 : Fp) ≠ 0 := by decide
             simp only [boundaryYA, nextYA, slotReads, AssignedCell.eval,
               AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -1381,6 +1397,208 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
                 = offset + prefixRows ns m + ns.getD m 0 from by omega]
             linear_combination (norm := (field_simp; ring)) (-(2 : Fp)⁻¹) * hlnyA
           · exact hCchain
-    sorry
+    -- per-slot data: the PA (for the engine leaf), the first-row Y_A value fact, and
+    -- the last-row secant/y-law facts (for the chain-owned gates) — all choice-free
+    have hSlotData : ∀ i : Fin ns.length,
+        ((slot G ns yaIn ↑i).ProverAssumptions
+          (eval env (input_var.pieces[↑i]! : Var field Fp))
+          ((slot G ns yaIn ↑i).extract cfg (offset + prefixRows ns ↑i)
+            (input_var.pieces[↑i]!) self env.toEnvironment) env.env.hint) ∧
+        yA (dRowP cfg env.place env.env self (offset + prefixRows ns ↑i))
+          = 2 * slotEnterVal yaIn cfg ns offset self env.toEnvironment ↑i ∧
+        (dRowP cfg env.place env.env self
+            (offset + prefixRows ns ↑i + ns.getD ↑i 0)).lambda2
+          * (dRowP cfg env.place env.env self
+              (offset + prefixRows ns ↑i + ns.getD ↑i 0)).lambda2
+          = (dRowP cfg env.place env.env self
+              (offset + prefixRows ns ↑i + ns.getD ↑i 0 + 1)).xA
+            + xR (dRowP cfg env.place env.env self
+                (offset + prefixRows ns ↑i + ns.getD ↑i 0))
+            + (dRowP cfg env.place env.env self
+                (offset + prefixRows ns ↑i + ns.getD ↑i 0)).xA ∧
+        2 * (dRowP cfg env.place env.env self
+              (offset + prefixRows ns ↑i + ns.getD ↑i 0)).lambda2
+          * ((dRowP cfg env.place env.env self
+              (offset + prefixRows ns ↑i + ns.getD ↑i 0)).xA
+            - (dRowP cfg env.place env.env self
+                (offset + prefixRows ns ↑i + ns.getD ↑i 0 + 1)).xA)
+          - yA (dRowP cfg env.place env.env self
+              (offset + prefixRows ns ↑i + ns.getD ↑i 0))
+          = 2 * slotEnterVal yaIn cfg ns offset self env.toEnvironment (↑i + 1) := by
+      intro i
+      obtain ⟨m, hm⟩ := i
+      simp only [Fin.val_mk]
+      obtain ⟨Ci, hCon, hCx, hCy, hCchain⟩ := hthread m (le_of_lt hm)
+      rw [sufChunks_drop_succ _ ns m hm,
+        Orchard.Specs.Sinsemilla.hashToPoint_append] at hCchain
+      cases hsplit : hashToPoint G.S Ci
+          ((List.range (ns.getD m 0 + 1)).map (pieceWord
+            (AssignedCell.eval env.place env.env.toEnvironment
+              (input_var.pieces[m]!)))) with
+      | none =>
+        rw [hsplit] at hCchain
+        simp at hCchain
+      | some Di =>
+        rw [hsplit] at hCchain
+        have hPAi : SlotPA G (ns.getD m 0)
+            (eval env (input_var.pieces[m]! : Var field Fp))
+            ((slot G ns yaIn m).extract cfg (offset + prefixRows ns m)
+              (input_var.pieces[m]!) self env.toEnvironment) := by
+          rw [slotC_extract_eq, slotReads_eval]
+          simp only [AssignedCell.eval, eval_field_cell]
+          refine ⟨?_, Ci, Di, hCon, ?_, ?_, ?_⟩
+          · have hb := pieceBounds_getElem ns input.pieces hbounds ⟨m, hm⟩
+            rw [hpv ⟨m, hm⟩] at hb
+            simpa using hb
+          · exact hCx
+          · rw [hCy, slotEnterVal]
+          · simp only [AssignedCell.eval] at hsplit
+            exact hsplit
+        have hder := Halo2.SubcircuitRw.region_completeness_derived_placed
+          (slot G ns yaIn m) cfg (offset + prefixRows ns m) self env
+          (input_var.pieces[m]!) ((hWs ⟨m, hm⟩).1)
+          (by rw [slotC_envAssumptions_eq]; exact _hE) trivial
+          (by rw [slotC_proverAssumptions_eq]; exact hPAi)
+        rw [slotC_proverSpec_eq] at hder
+        obtain ⟨-, hPS⟩ := hder
+        rw [SlotPS, slotC_extract_eq, slotReads_eval] at hPS
+        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
+        have hfacts := hPS Ci Di hCx hCy (by
+          rw [eval_field_cell]
+          simp only [AssignedCell.eval]
+          exact hsplit)
+        obtain ⟨hfy, hnx, hlsec, hlnyA⟩ := hfacts
+        refine ⟨by rw [slotC_proverAssumptions_eq]; exact hPAi, ?_, ?_, ?_⟩
+        · simp only [dRowP]
+          rw [← hCy]
+          exact hfy
+        · simp only [dRowP]
+          exact hlsec
+        · -- the exit `2·y` is the (i+1)-boundary entering value — pure boundary algebra
+          rw [slotEnterVal, if_neg (by omega : ¬ m + 1 = 0)]
+          have hrowstep : offset + prefixRows ns (m + 1)
+              = offset + prefixRows ns m + ns.getD m 0 + 1 := by
+            rw [prefixRows_step ns m hm]
+            omega
+          simp only [boundaryYA, nextYA, slotReads, dRowP, yA, AssignedCell.eval,
+            AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+            Cell.of_column, Environment.get_advice, Placed.toEnvironment_place,
+            Placed.toEnvironment_env]
+          rw [hrowstep,
+            show offset + prefixRows ns m + ns.getD m 0 + 1 - 1
+              = offset + prefixRows ns m + ns.getD m 0 from by omega]
+          have h2 : (2 : Fp) ≠ 0 := by decide
+          field_simp
+    refine ⟨?_, ?_⟩
+    · -- the constraints
+      simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
+        RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState,
+        HashPiece.operations_cellAt]
+      refine ⟨fun i => ?_, ?_⟩
+      · obtain ⟨m, hm⟩ := i
+        obtain ⟨hPAm, h2yA, hsec, hlny⟩ := hSlotData ⟨m, hm⟩
+        refine ⟨?_, ?_, ?_⟩
+        · -- the slot subcircuit, via the engine leaf
+          exact Halo2.SubcircuitRw.region_completeness_leaf_placed
+            (slot G ns yaIn m) cfg (offset + prefixRows ns m) self env
+            (input_var.pieces[m]!) ((hWs ⟨m, hm⟩).1)
+            ⟨by rw [slotC_envAssumptions_eq]; exact _hE, trivial, hPAm⟩
+        · -- the boundary `q_s2` value
+          simp only [circuit_norm]
+          exact (hWs ⟨m, hm⟩).2
+        · -- the piece-linking gate
+          simp only [sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
+            HashPiece.xRExpr, Constraints.withSelector, circuit_norm]
+          rw [(hWs ⟨m, hm⟩).2]
+          simp only [dRowP, yA, xR] at hsec hlny
+          have hq := qS3_yRhs (decide (m = ns.length - 1))
+            { xA := env.env.advice cfg.xA
+                ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+              xP := env.env.advice cfg.xP
+                ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+              lambda1 := env.env.advice cfg.lambda1
+                ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+              lambda2 := env.env.advice cfg.lambda2
+                ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ) }
+          have henter : enterYA (decide (m = ns.length - 1))
+              { xA := env.env.advice cfg.xA
+                  ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+                xP := env.env.advice cfg.xP
+                  ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+                lambda1 := env.env.advice cfg.lambda1
+                  ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ),
+                lambda2 := env.env.advice cfg.lambda2
+                  ((env.place self + (offset + prefixRows ns m + ns.getD m 0 + 1) : ℕ) : ℤ) }
+              = 2 * slotEnterVal yaIn cfg ns offset self env.toEnvironment (m + 1) := by
+            by_cases hb : m = ns.length - 1
+            · -- the final boundary: the trailing row's witnessed `y_a`
+              rw [show (decide (m = ns.length - 1)) = true from by simp [hb]]
+              simp only [enterYA, if_true]
+              rw [show m + 1 = ns.length from by omega]
+              rw [slotEnterVal, if_neg (by omega : ¬ ns.length = 0)]
+              rw [show offset + prefixRows ns m + ns.getD m 0 + 1
+                  = offset + prefixRows ns ns.length from by
+                rw [show ns.length = m + 1 from by omega, prefixRows_step ns m hm]
+                omega]
+              rw [hWyFin]
+              simp only [boundaryYA, nextYA, slotReads, HashPiece.reads,
+                AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+                Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+                Placed.toEnvironment_place, Placed.toEnvironment_env]
+            · -- an interior boundary: the next slot's first-row `Y_A`
+              rw [show (decide (m = ns.length - 1)) = false from by simp [hb]]
+              simp only [enterYA, Bool.false_eq_true, if_false]
+              have h := (hSlotData ⟨m + 1, by omega⟩).2.1
+              rw [show offset + prefixRows ns (m + 1)
+                  = offset + prefixRows ns m + ns.getD m 0 + 1 from by
+                rw [prefixRows_step ns m hm]
+                omega] at h
+              simp only [dRowP] at h
+              exact h
+          simp only [yA, xR] at hq
+          refine ⟨?_, ?_⟩
+          · linear_combination hsec
+          · linear_combination 2 * hlny - hq - 2 * henter
+      · -- the trailing dummy row emits no constraints
+        simp only [circuit_norm]
+    · -- the honest-prover contract
+      rw [ElaboratedRegionCircuit.output_eq] at h_output
+      simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+        HashPiece.output_readState, HashPiece.output_cellAt,
+        output_assignAdvice] at h_output
+      rw [output_eval_literal_prover, point_eval_literal, row_eval_literal] at h_output
+      simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell,
+        Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+        Environment.get_advice] at h_output
+      intro A' B' hA'x hA'y hchain'
+      have hA'A : A' = A := by
+        cases A'
+        cases A
+        rw [Point.mk.injEq]
+        exact ⟨hA'x.trans hAx.symm, hA'y.trans hAy.symm⟩
+      rw [hA'A] at hchain'
+      have hBB : B' = B := Option.some.inj (hchain'.symm.trans hchain)
+      obtain ⟨C, hCon, hCx, hCy, hCch⟩ := hthread ns.length le_rfl
+      rw [List.drop_length] at hCch
+      have hCB : C = B := Option.some.inj hCch
+      have hlen0 : ¬ ns.length = 0 := by
+        simp only [List.length_eq_zero_iff]
+        exact hns
+      rw [← h_output, hA'A, hBB, ← hCB]
+      simp only []
+      refine ⟨?_, ?_, ?_⟩
+      · exact hCx.symm
+      · rw [hCy, slotEnterVal, if_neg hlen0, hWyFin]
+        simp only [boundaryYA, nextYA, slotReads, HashPiece.reads,
+          AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+          Placed.toEnvironment_place, Placed.toEnvironment_env]
+      · rw [show ns.isEmpty = false from by simp [hns]]
+        simp only [enterYA, Bool.false_eq_true, if_false]
+        have h := (hSlotData ⟨0, by omega⟩).2.1
+        rw [slotEnterVal, if_pos rfl] at h
+        simp only [prefixRows_zero, Nat.add_zero, dRowP] at h
+        rw [h, hAy]
 
 end Halo2.Ironwood.Sinsemilla.Chain
