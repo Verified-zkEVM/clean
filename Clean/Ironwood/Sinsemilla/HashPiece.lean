@@ -333,4 +333,415 @@ theorem loop_output (G : Generators) (n : ℕ) (cfg : Config) (o : ℕ) (iv : As
       = { exit := reads cfg (o + n) self,
           zs := Vector.ofFn (fun j => AssignedCell.of self (o + 1 + j) cfg.bits) } := rfl
 
+/-! ## The `hash_piece` bundle (edges)
+
+The `z_0` piece copy, the init-row slopes (word 0's — the init materializes round 0's
+input row), the loop, and the last-word edge (`q_s2 = qS2Boundary`, the exit `x_a`, the
+word-`w` lookup — no gate: the piece-linking gate belongs to the composing circuit). -/
+
+/-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece —
+re-exported alias so composing files keep their `open`s. -/
+theorem qS2Boundary_def (final : Bool) : qS2Boundary final = if final then 2 else 0 := rfl
+
+/-- Honest `x_p` at word 0: the generator x-column read off the piece cell. -/
+def initXPWit (G : Generators) (piece : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env => #v[(G.S (pieceWord (readCell env piece) 0)).x]
+
+@[circuit_norm]
+theorem initXPWit_eval (G : Generators) (piece : AssignedCell Fp)
+    (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
+    ((initXPWit G piece).eval env)[j]
+      = (G.S (pieceWord (env.env.get piece.cell.column
+          ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x := by
+  have hj0 : j = 0 := by omega
+  subst hj0
+  simp only [initXPWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
+
+/-- Honest word-0 slopes: `rowValue` of the entering accumulator (the positional `x_a`
+cell and the `yaIn` derivation program — Rust's `Y<Value>` thread) at word 0's generator. -/
+def initLWit (G : Generators) (piece xAcell : AssignedCell Fp)
+    (yaIn : Placed Environment Fp → Fp) (f : Fp × Fp × (Fp × Fp) → Fp) : WitgenIR Fp 1 :=
+  .native fun env =>
+    let p := readCell env piece
+    #v[f (rowValue (readCell env xAcell, yaIn env.toEnvironment)
+      ((G.S (pieceWord p 0)).x, (G.S (pieceWord p 0)).y))]
+
+@[circuit_norm]
+theorem initLWit_eval (G : Generators) (piece xAcell : AssignedCell Fp)
+    (yaIn : Placed Environment Fp → Fp) (f : Fp × Fp × (Fp × Fp) → Fp)
+    (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
+    ((initLWit G piece xAcell yaIn f).eval env)[j]
+      = f (rowValue
+          (env.env.get xAcell.cell.column
+            ((env.place xAcell.cell.regionIndex + xAcell.cell.rowOffset : ℕ) : ℤ),
+           yaIn env.toEnvironment)
+          ((G.S (pieceWord (env.env.get piece.cell.column
+              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x,
+           (G.S (pieceWord (env.env.get piece.cell.column
+              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).y)) := by
+  have hj0 : j = 0 := by omega
+  subst hj0
+  simp only [initLWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
+
+/-- The exit `x_a` (Rust assigns `x_a` for the next row on every word, the last included):
+the stepped accumulator x over the exit-row readings. -/
+def exitXAWit (w : State (AssignedCell Fp)) : WitgenIR Fp 1 :=
+  .native fun env => #v[(readsValue w env).stepXA]
+
+@[circuit_norm]
+theorem exitXAWit_eval (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
+    (j : ℕ) (hj : j < 1) :
+    ((exitXAWit w).eval env)[j] = (readsValue w env).stepXA := by
+  have hj0 : j = 0 := by omega
+  subst hj0
+  simp only [exitXAWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
+
+/-- Output: the first and last double-and-add rows, the exit `x_a` cell, and the piece's
+`w + 1` running sums. -/
+structure Output (numWords : ℕ) (F : Type) where
+  first : DoubleAndAddRow F
+  last : DoubleAndAddRow F
+  xANext : F
+  zs : Vector F numWords
+deriving ProvableStruct
+
+/-- The piece `Spec` (donor-shaped): the piece is the base-`2^K` recombination of its
+`< 2^K` words, the running sums are the suffix recombinations, the last row's `x_p`/`y_p`
+land on `S(m_w)`, and — for any on-curve entering accumulator matching the first row —
+the exit `x_a`/`Y_A` are the spec-level chain point over the first `w` words. The entering
+`x_a` is positional (`output.first.xA` — never copied), matching Rust. -/
+def Spec (G : Generators) (w : ℕ) (piece : Fp) (output : Output (w + 1) Fp) : Prop :=
+  ∃ ms : ℕ → ℕ,
+    (∀ r, ms r < 2 ^ K) ∧
+    piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
+    output.zs = Vector.ofFn (fun r : Fin (w + 1) =>
+      ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
+    output.last.xP = (G.S (ms w)).x ∧
+    yA output.last * (2 : Fp)⁻¹ - output.last.lambda1 * (output.last.xA - output.last.xP)
+      = (G.S (ms w)).y ∧
+    ∀ A : Point Fp, A.OnCurve → A.x = output.first.xA → 2 * A.y = yA output.first →
+      ∀ B, hashToPoint G.S A ((List.range w).map ms) = some B →
+        output.last.xA = B.x ∧ 2 * B.y = yA output.last
+
+/-- The honest-prover precondition: the piece fits in `K·(w+1)` bits and the spec-level
+chain from the entering accumulator (the positional `x_a` and the `yaIn` value — the
+`Witness` pair) is defined. -/
+def ProverAssumptions (G : Generators) (w : ℕ) (piece : Fp) (wit : Fp × Fp) : Prop :=
+  piece.val < 2 ^ (K * (w + 1)) ∧
+  ∃ A B : Point Fp, A.OnCurve ∧ A.x = wit.1 ∧ A.y = wit.2 ∧
+    hashToPoint G.S A ((List.range (w + 1)).map (pieceWord piece)) = some B
+
+/-- The honest-prover contract a COMPOSING circuit's completeness consumes: for the honest
+entering accumulator (the `Witness` pair) with exit chain point `B`, the first row's
+derived `Y_A` is `2·y_enter`, the exit `x_a` is `B.x`, the last row completes its step's
+secant against the exit `x_a`, and the `nextYA` derivation lands on `2·B.y`. -/
+def ProverSpec (G : Generators) (w : ℕ) (piece : Fp) (output : Output (w + 1) Fp)
+    (wit : Fp × Fp) : Prop :=
+  ∀ A B : Point Fp, A.x = wit.1 → A.y = wit.2 →
+    hashToPoint G.S A ((List.range (w + 1)).map (pieceWord piece)) = some B →
+    yA output.first = 2 * A.y ∧
+    output.xANext = B.x ∧
+    output.last.lambda2 * output.last.lambda2
+      = output.xANext + xR output.last + output.last.xA ∧
+    2 * output.last.lambda2 * (output.last.xA - output.xANext) - yA output.last = 2 * B.y
+
+/-- Restricting the word family to its used indices keeps the chain. -/
+private theorem map_range_congr (w : ℕ) (ms ms' : ℕ → ℕ)
+    (h : ∀ j, j < w → ms j = ms' j) :
+    (List.range w).map ms = (List.range w).map ms' :=
+  List.map_congr_left fun j hj => h j (List.mem_range.mp hj)
+
+/-- `stepXA` is the stepped row's `x_a`, for any generator/sum arguments (definitional). -/
+private theorem stepXA_eq (s : State Fp) (g' : Fp × Fp) (z' : Fp) :
+    s.stepXA = (s.step g' z').row.xA := rfl
+
+def circuit (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) :
+    FormalRegionCircuit Fp Config Config field (Output (w + 1)) where
+  name := "sinsemilla hash_piece"
+  configure := pure
+
+  synthesize cfg offset (piece : AssignedCell Fp) := do
+    -- z_0 = copy of the piece into the `bits` column (the only copy — the entering
+    -- `x_a` is positional, Rust `hash_piece`'s "not copied" rule)
+    let _z0 ← copyAdvice piece cfg.bits offset
+    let w0 ← readState cfg offset
+    -- the init-row slopes: word 0's generator x and the `rowValue` slopes of the
+    -- entering accumulator (positional x_a + the `yaIn` thread)
+    let _xP ← assignAdvice cfg.xP offset (initXPWit G piece)
+    let _l1 ← assignAdvice cfg.lambda1 offset (initLWit G piece w0.row.xA yaIn (·.1))
+    let _l2 ← assignAdvice cfg.lambda2 offset (initLWit G piece w0.row.xA yaIn (·.2.1))
+    -- the interior word rounds
+    let _lp ← (loop G w).call cfg offset piece
+    -- the last-word edge at row `offset + w`
+    let ex ← readState cfg (offset + w)
+    let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
+    let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
+    (generatorLookup G cfg).enable [cfg.qS1] (offset + w)
+    -- name the output cells (fixed rows)
+    let first0 ← cellAt cfg.xA offset
+    let firstXP ← cellAt cfg.xP offset
+    let firstL1 ← cellAt cfg.lambda1 offset
+    let firstL2 ← cellAt cfg.lambda2 offset
+    let last0 ← cellAt cfg.xA (offset + w)
+    let lastXP ← cellAt cfg.xP (offset + w)
+    let lastL1 ← cellAt cfg.lambda1 (offset + w)
+    let lastL2 ← cellAt cfg.lambda2 (offset + w)
+    let xANext ← cellAt cfg.xA (offset + w + 1)
+    let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
+    return {
+      first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
+      last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
+      xANext := xANext,
+      zs := zsCells }
+
+  Witness := fieldPair
+  extract cfg offset _ self env :=
+    (eval env (AssignedCell.of self offset cfg.xA : Var field Fp), yaIn env)
+
+  EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
+
+  Spec piece output _ := Spec G w piece output
+  ProverAssumptions piece wit _ := ProverAssumptions G w piece wit
+  ProverSpec piece output wit _ := ProverSpec G w piece output wit
+
+  soundness := by
+    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, HashPiece.Spec]
+    obtain ⟨hZ0, hLoop, hQ, hMem⟩ := hc
+    rw [loopC_envAssumptions_eq, loopC_assumptions_eq, loopC_spec_eq,
+      loopC_extract_eq] at hLoop
+    simp only [reads, circuit_norm, forall_const, wordChain] at hLoop
+    obtain ⟨ms0, hms0, hwc, hfold⟩ := hLoop _hE
+    -- the last-word edge: `q_run` vanishes at the boundary value, the word is `z_w`
+    simp only [List.cons.injEq, and_true] at hMem
+    obtain ⟨t, ht, h0, h1, h2y⟩ := hMem
+    obtain ⟨-, hSpec, -⟩ := _hE
+    obtain ⟨mw, hmw, hIdx, hX, hY⟩ := hSpec t ht
+    rw [hQ] at h0
+    rw [hIdx] at h0
+    rw [hX] at h1
+    rw [hY] at h2y
+    have hzw : env.env.advice cfg.bits ((env.place self + (offset + w) : ℕ) : ℤ)
+        = (mw : Fp) := by
+      linear_combination h0
+        + env.env.advice cfg.bits ((env.place self + (offset + w + 1) : ℕ) : ℤ)
+          * (2 : Fp) ^ K * qS2Boundary_run final
+    -- the word family and the running-sum family
+    refine ⟨fun r => if r < w then ms0 r else mw, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · intro r
+      beta_reduce
+      by_cases hr : r < w
+      · rw [if_pos hr]
+        exact hms0 r
+      · rw [if_neg hr]
+        exact hmw
+    · -- the piece recombines from its words
+      have hkey := chain_eq_sum (n := w + 1)
+        (fun r => if r ≤ w
+          then env.env.advice cfg.bits ((env.place self + (offset + r) : ℕ) : ℤ) else 0)
+        (fun r => if r < w then ms0 r else mw)
+        (by
+          intro r hr
+          beta_reduce
+          rw [if_pos (show r ≤ w by omega)]
+          rcases Nat.lt_or_ge r w with hrw | hrw
+          · rw [if_pos hrw, if_pos (show r + 1 ≤ w by omega)]
+            have hj := hwc ⟨r, hrw⟩
+            simp only [circuit_norm] at hj
+            rcases Nat.eq_zero_or_pos r with h0r | hposr
+            · subst h0r
+              rw [dif_pos rfl] at hj
+              simpa using hj
+            · rw [dif_neg (by omega)] at hj
+              rw [show offset + 1 + (r - 1) = offset + r from by omega,
+                show offset + 1 + r = offset + (r + 1) from by omega] at hj
+              exact hj
+          · obtain rfl : r = w := by omega
+            rw [if_neg (by omega), if_neg (by omega)]
+            rw [hzw]
+            ring)
+        (by
+          beta_reduce
+          rw [if_neg (by omega)])
+      beta_reduce at hkey ⊢
+      rw [if_pos (by omega : 0 ≤ w), Nat.add_zero] at hkey
+      have hgi : (eval env input_var : Fp)
+          = env.env.get input_var.cell.column
+            ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
+        with_unfolding_all rfl
+      rw [← h_input, hgi, ← hZ0]
+      exact hkey
+    · -- the running sums are the suffix recombinations
+      apply Vector.ext
+      intro i hi
+      simp only [Vector.getElem_ofFn]
+      rw [← h_output_zs i hi]
+      have hsfx := chain_eq_suffix_sum
+        (fun r => env.env.advice cfg.bits ((env.place self + (offset + r) : ℕ) : ℤ))
+        (fun r => if r < w then ms0 r else mw)
+        (by
+          intro sIdx hs
+          beta_reduce
+          rw [if_pos hs]
+          have hj := hwc ⟨sIdx, hs⟩
+          simp only [circuit_norm] at hj
+          rcases Nat.eq_zero_or_pos sIdx with h0r | hposr
+          · subst h0r
+            rw [dif_pos rfl] at hj
+            simpa using hj
+          · rw [dif_neg (by omega)] at hj
+            rw [show offset + 1 + (sIdx - 1) = offset + sIdx from by omega,
+              show offset + 1 + sIdx = offset + (sIdx + 1) from by omega] at hj
+            exact hj)
+        (by
+          beta_reduce
+          rw [if_neg (by omega)]
+          exact hzw)
+        (w - i) i (by omega)
+      rw [show w - i + 1 = w + 1 - i from by omega] at hsfx
+      exact hsfx
+    · -- the last row's x_p lands on the generator
+      beta_reduce
+      rw [← h_output_last_xP, if_neg (show ¬ w < w by omega)]
+      linear_combination h1
+    · -- the last row's y_p derivation lands on the generator
+      beta_reduce
+      rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
+        ← h_output_last_lambda2, if_neg (show ¬ w < w by omega)]
+      simp only [yA, xR]
+      linear_combination h2y
+    · -- the chain contract, from the loop's fold
+      beta_reduce
+      intro A hAon hAx hAyA B hB
+      rw [← h_output_first_xA] at hAx
+      rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,
+        ← h_output_first_lambda2] at hAyA
+      rw [map_range_congr w _ ms0 (fun j hj => if_pos hj)] at hB
+      have hres := hfold A hAon hAx hAyA B hB
+      rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
+        ← h_output_last_lambda2]
+      exact hres
+
+  completeness := by
+    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, HashPiece.ProverSpec, HashPiece.ProverAssumptions]
+    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := hPA
+    obtain ⟨hWz0, hWxp, hWl1, hWl2, hWloop, hWq, hWxf⟩ := hwit
+    have h2 : (2 : Fp) ≠ 0 := by decide
+    -- the entering row is the honest row 0
+    have hH0 : (State.mk
+        (env.env.advice cfg.bits ((env.place self + offset : ℕ) : ℤ))
+        { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
+          xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
+          lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
+          lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) }).Honest
+        G input A 0 := by
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · show env.env.advice cfg.bits _ = pieceZ input 0
+        rw [pieceZ_zero]
+        exact hWz0
+      · exact hAx.symm
+      · exact hWxp
+      · show env.env.advice cfg.lambda1 _
+          = (rowValue (accAfter G (A.x, A.y) input 0) _).1
+        rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
+        exact hWl1
+      · show env.env.advice cfg.lambda2 _
+          = (rowValue (accAfter G (A.x, A.y) input 0) _).2.1
+        rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
+        exact hWl2
+    rw [h_input] at h_spec_0
+    -- the loop's honest-prover precondition
+    have hLPA : (loop G w).ProverAssumptions input
+        ((loop G w).extract cfg offset input_var self env.toEnvironment) env.env.hint := by
+      rw [loopC_proverAssumptions_eq, loopC_extract_eq]
+      simp only [reads, circuit_norm]
+      exact ⟨A, B, hAon, hH0, hchain⟩
+    -- the loop's Spec + ProverSpec on the honest run
+    have hsp := h_spec_0 _hE trivial hLPA
+    rw [loopC_spec_eq, loopC_proverSpec_eq, loopC_extract_eq] at hsp
+    simp only [reads, circuit_norm] at hsp
+    obtain ⟨-, hExit, hZs⟩ := hsp
+    -- the exit row is honest at word w
+    have hHexit := iter_honest G
+      (State.mk (env.env.advice cfg.bits ((env.place self + offset : ℕ) : ℤ))
+        { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
+          xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
+          lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
+          lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) })
+      hH0 hchain w le_rfl
+    rw [← hExit] at hHexit
+    -- the exit-row identities (the whole-piece chain point)
+    have hEx := step_exit G hHexit hchain
+    obtain ⟨-, hExB, hEyB, hEyp⟩ := hEx
+    obtain ⟨hzE, hxAE, hxPE, hl1E, hl2E⟩ := hHexit
+    have hUsable := _hE.1
+    have hBlock := _hE.2.2
+    rw [Placed.toEnvironment_env] at hUsable hBlock
+    obtain ⟨hb_idx, hb_x, hb_y⟩ := hBlock (pieceWord input w) (pieceWord_lt input w)
+    refine ⟨⟨⟨_hE, trivial, hLPA⟩,
+      ⟨pieceWord input w, lt_of_lt_of_le (pieceWord_lt input w) hUsable, ?_⟩⟩, ?_⟩
+    · -- the word-`w` membership: `q_run` vanishes at the boundary, the word is `z_w`
+      simp only [List.cons.injEq, and_true]
+      refine ⟨?_, ?_, ?_⟩
+      · rw [hb_idx]
+        have hzwv : env.env.advice cfg.bits ((env.place self + (offset + w) : ℕ) : ℤ)
+            = pieceZ input w := hzE
+        rw [hzwv, pieceZ_last hbound]
+        linear_combination
+          (-(env.env.advice cfg.bits ((env.place self + (offset + w + 1) : ℕ) : ℤ))
+            * (2 : Fp) ^ K) * qS2Boundary_run final
+      · rw [hb_x]
+        linear_combination hxPE
+      · rw [hb_y]
+        linear_combination hEyp
+    · -- ProverSpec: the honest-cell facts the composing circuit consumes
+      intro A' B' hA'x hA'y hchain'
+      have hAA : A' = A := by
+        have hx : A'.x = A.x := by rw [hA'x, hAx]
+        have hy : A'.y = A.y := by rw [hA'y, hAy]
+        cases A'
+        cases A
+        simp_all
+      rw [hAA] at hchain' ⊢
+      have hBB : B' = B := by
+        rw [hchain] at hchain'
+        exact (Option.some.inj hchain').symm
+      rw [hBB]
+      -- first-row Y_A = 2·A.y
+      obtain ⟨B1, hB1⟩ := range_prefix_some G.S A (pieceWord input) hchain
+        (show 1 ≤ w + 1 by omega)
+      have hstep0 : step G.S (pieceWord input 0) A = some B1 := by
+        refine prefix_step_some G.S A (pieceWord input) ?_ hB1
+        rw [show ((List.range 0).map (pieceWord input)) = ([] : List ℕ) from rfl,
+          Orchard.Specs.Sinsemilla.hashToPoint_nil]
+      have hyA0 := honest_yA G hH0 (show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl)
+        hstep0
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,
+          ← h_output_first_lambda2]
+        exact hyA0
+      · rw [← h_output_xANext, hWxf,
+          stepXA_eq _ ((G.S (pieceWord input (w + 1))).x, (G.S (pieceWord input (w + 1))).y)
+            (pieceZ input (w + 1))]
+        exact hExB
+      · -- secant: the exit x_a is the stepped x over the last row's cells
+        rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
+          ← h_output_last_lambda2, ← h_output_xANext, hWxf]
+        simp only [State.stepXA, xR]
+        ring
+      · -- the `nextYA` derivation lands on `2·B.y`
+        rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
+          ← h_output_last_lambda2, ← h_output_xANext, hWxf,
+          stepXA_eq _ ((G.S (pieceWord input (w + 1))).x, (G.S (pieceWord input (w + 1))).y)
+            (pieceZ input (w + 1))]
+        simp only [yA, xR, State.accY, Orchard.Ecc.DoubleAndAdd.yA,
+          Orchard.Ecc.DoubleAndAdd.xR] at hEyB ⊢
+        linear_combination (norm := (field_simp; ring)) 2 * hEyB
+
 end Halo2.Ironwood.Sinsemilla.HashPiece
+
