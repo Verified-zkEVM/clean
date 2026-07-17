@@ -3,8 +3,16 @@
 -- halo2_gadgets/src/ecc/chip/dump.rs). Produced by running `MulDumpCircuit::synthesize` —
 -- one real variable-base scalar mul, Value::unknown() witnesses, k=11 — through the
 -- `SimpleFloorPlanner` exactly as `keygen_vk` does, and reading:
---   regions    : floor-planner placements (index, name, start row = min absolute row touched;
---                equals SimpleFloorPlanner's region_start since every region assigns offset 0);
+--   regions    : floor-planner placements (index, name, start row = SimpleFloorPlanner
+--                region_start = min row touched by the region window's OWN assigns/selector
+--                enables — every region here assigns at region-local offset 0). Regions 3/6
+--                regenerated 2026-07-17 by `ecc::chip::layout_dump` (sibling halo2 checkout,
+--                halo2_gadgets/src/ecc/chip/layout_dump.rs): the original dump recorded 0/1
+--                there (a min-touched attribution bug — out-of-window rows), contradicting
+--                its own copyList (init-add copies at absolute rows 2/3) and single_pass.rs
+--                placement (main uses advices 0/1, whose tails are 2 after the witness
+--                regions). The layout_dump harness reproduces the original ordered copyList
+--                byte-for-byte (56/56), pinning harness equivalence;
 --   permColumns: cs.permutation.get_columns() in registration order;
 --   copyList   : the ORDERED raw copy(leftCol,leftRow,rightCol,rightRow) calls (col indices
 --                into permColumns), before the Assembly cycle-merge — the order-sensitive check;
@@ -17,6 +25,8 @@
 --                (selector_polys from compress_selectors on the REAL activation table).
 -- Values are decimal ℕ literals: canonical Pallas-base representatives.
 -- Regenerate: cargo run -p halo2_gadgets --features dump-lean --bin dump_lean_mul -- <out_dir>
+-- Regenerate (regions/copyList only, sibling checkout):
+--   cargo test -p halo2_gadgets --lib ecc::chip::layout_dump -- --nocapture
 import Clean.Halo2.Fixtures.FixtureTypes
 
 namespace Halo2.Fixtures
@@ -30,7 +40,7 @@ set_option maxRecDepth 100000 in
 def mulLayout : LayoutFixture :=
   { k := 11,
     n := 2048,
-    regions := [⟨0, "table_idx", 0⟩, ⟨1, "witness base", 0⟩, ⟨2, "witness alpha", 1⟩, ⟨3, "variable-base scalar mul", 0⟩, ⟨4, "s = alpha + k_254 ⋅ 2^130", 139⟩, ⟨5, "13 words range check", 139⟩, ⟨6, "overflow check", 1⟩],
+    regions := [⟨0, "table_idx", 0⟩, ⟨1, "witness base", 0⟩, ⟨2, "witness alpha", 1⟩, ⟨3, "variable-base scalar mul", 2⟩, ⟨4, "s = alpha + k_254 ⋅ 2^130", 139⟩, ⟨5, "13 words range check", 139⟩, ⟨6, "overflow check", 140⟩],
     permColumns := [.fixed 1, .advice 9, .advice 0, .advice 1, .advice 2, .advice 3, .advice 4, .advice 6, .advice 8, .advice 7],
     copyList := [(2, 2, 2, 0),
       (3, 2, 3, 0),
