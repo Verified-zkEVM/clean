@@ -743,5 +743,19 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
           Orchard.Ecc.DoubleAndAdd.xR] at hEyB ⊢
         linear_combination (norm := (field_simp; ring)) 2 * hEyB
 
+/-- The piece bundle's output variable (position-determined, rfl). -/
+@[circuit_norm]
+theorem piece_output (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
+    (self : RegionIndex) :
+    (circuit G w final yaIn).output cfg o iv self
+      = { first := { xA := .of self o cfg.xA, xP := .of self o cfg.xP,
+                     lambda1 := .of self o cfg.lambda1, lambda2 := .of self o cfg.lambda2 },
+          last := { xA := .of self (o + w) cfg.xA, xP := .of self (o + w) cfg.xP,
+                    lambda1 := .of self (o + w) cfg.lambda1,
+                    lambda2 := .of self (o + w) cfg.lambda2 },
+          xANext := .of self (o + w + 1) cfg.xA,
+          zs := Vector.ofFn (fun r => .of self (o + r.val) cfg.bits) } := rfl
+
 end Halo2.Ironwood.Sinsemilla.HashPiece
 

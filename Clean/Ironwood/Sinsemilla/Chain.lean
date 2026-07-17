@@ -266,6 +266,9 @@ structure SlotReads (m : ℕ) (F : Type) where
   first : DoubleAndAddRow F
   zs : Vector F m
   next : DoubleAndAddRow F
+  /-- The entering-`y` VALUE (the `yaIn`/boundary derivation — `extract` computes it;
+  the cell-record `slotReads` fills a junk cell, never read). -/
+  yIn : F
 deriving ProvableStruct
 
 /-- The slot's neighborhood cells at base row `base` (piece width `n`). -/
@@ -280,12 +283,71 @@ def slotReads (cfg : Config) (n base : ℕ) (self : RegionIndex) :
   next := { xA := .of self (base + n + 1) cfg.xA, xP := .of self (base + n + 1) cfg.xP,
             lambda1 := .of self (base + n + 1) cfg.lambda1,
             lambda2 := .of self (base + n + 1) cfg.lambda2 }
+  yIn := .of self base cfg.xA
 
 /-- The slot's entering-`y` value over its neighborhood: the chain's `yaIn` program for
 slot 0, the positional boundary derivation otherwise. -/
 def slotEnterY {m : ℕ} (yaIn : Placed Environment Fp → Fp) (i : ℕ) (w : SlotReads m Fp)
     (env : Placed Environment Fp) : Fp :=
   if i = 0 then yaIn env else nextYA w.prev w.first.xA * (2 : Fp)⁻¹
+
+/-- The gate's y-check RHS at the boundary `q_s2` value reduces to `2·enterYA` of the next row
+(donor `Cons.gate_yRhs_enterYA`): `q_s3 = 0` between pieces selects the next row's `Y_A`,
+`q_s3 = 2` on the final piece selects twice the witnessed `y_a` in `λ₁`. -/
+private theorem qS3_yRhs (b : Bool) (row : DoubleAndAddRow Fp) :
+    (2 - qS2Boundary b * (qS2Boundary b - 1)) * yA row
+      + qS2Boundary b * (qS2Boundary b - 1) * 2 * row.lambda1
+    = 2 * enterYA b row := by
+  cases b
+  · simp only [enterYA, HashPiece.qS2Boundary, Bool.false_eq_true, if_false]
+    ring
+  · simp only [enterYA, HashPiece.qS2Boundary, if_true]
+    norm_num
+    ring
+
+/-- The linking gate completes the piece's last word: from the piece's prefix contract
+(its last row anchors the `n`-word chain) and the boundary gate's secant/y-check, the
+*next* row anchors the `(n+1)`-word chain (the `soundness_aux` core, tail-free). -/
+private theorem link_step (G : Generators) (n : ℕ) (isFinal : Bool) (ms : ℕ → ℕ)
+    {first last next : DoubleAndAddRow Fp}
+    (hlast_xP : last.xP = (G.S (ms n)).x)
+    (hlast_yp : yA last * (2 : Fp)⁻¹ - last.lambda1 * (last.xA - last.xP) = (G.S (ms n)).y)
+    (hchain_piece : ∀ A : Point Fp, A.OnCurve → A.x = first.xA → 2 * A.y = yA first →
+      ∀ B, hashToPoint G.S A ((List.range n).map ms) = some B →
+        last.xA = B.x ∧ 2 * B.y = yA last)
+    (hsec : last.lambda2 * last.lambda2 = next.xA + xR last + last.xA)
+    (hyck : 4 * last.lambda2 * (last.xA - next.xA)
+      = 2 * yA last + 2 * enterYA isFinal next) :
+    ∀ A : Point Fp, A.OnCurve → A.x = first.xA → 2 * A.y = yA first →
+      ∀ B, hashToPoint G.S A ((List.range (n + 1)).map ms) = some B →
+        next.xA = B.x ∧ 2 * B.y = enterYA isFinal next := by
+  intro A hAon hAx hAyA B hB
+  obtain ⟨B0, hB0⟩ := Halo2.Ironwood.Sinsemilla.HashPiece.range_prefix_some G.S A ms hB
+    (show n ≤ n + 1 by omega)
+  have hstep : step G.S (ms n) B0 = some B :=
+    Halo2.Ironwood.Sinsemilla.HashPiece.prefix_step_some G.S A ms hB0 hB
+  obtain ⟨hlast_xA, hlast_yA⟩ := hchain_piece A hAon hAx hAyA B0 hB0
+  have hlast_yA' := hlast_yA
+  simp only [yA, xR] at hlast_yA'
+  have hsec' := hsec
+  simp only [xR] at hsec'
+  have hlast_yp2 : yA last - 2 * (last.lambda1 * (last.xA - last.xP))
+      = 2 * (G.S (ms n)).y := by
+    have h2 := congrArg (fun t => 2 * t) hlast_yp
+    simp only [mul_sub] at h2
+    rw [show (2 : Fp) * (yA last * (2 : Fp)⁻¹) = yA last from by
+      rw [mul_comm (yA last), ← mul_assoc, mul_inv_cancel₀ (by decide : (2 : Fp) ≠ 0),
+        one_mul]] at h2
+    linear_combination h2
+  have hpin := step_coordinates_of_constraints G.S hstep
+    (xp := last.xP) (lambda1 := last.lambda1) (lambda2 := last.lambda2)
+    (xa' := next.xA) (YA' := enterYA isFinal next)
+    (by linear_combination hlast_yp2 + hlast_yA + 2 * last.lambda1 * hlast_xA)
+    hlast_xP
+    (by linear_combination hlast_yA' + 2 * (last.lambda1 + last.lambda2) * hlast_xA)
+    (by linear_combination hsec')
+    (by linear_combination hyck - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
+  exact ⟨hpin.1, hpin.2.symm⟩
 
 /-- One piece slot as a `Unit`-output formal circuit (the loop stays homogeneous — the
 piece call's width-dependent output lives inside this bundle). Slot `i` of the width list
@@ -305,7 +367,11 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     (sinsemillaGate cfg).enable (base + ns.getD i 0)
 
   Witness := SlotReads (ns.getD i 0 + 1)
-  extract cfg base _ self env := eval env (slotReads cfg (ns.getD i 0) base self)
+  extract cfg base _ self env :=
+    { eval env (slotReads cfg (ns.getD i 0) base self) with
+      yIn := if i = 0 then yaIn env
+        else boundaryYA (slotReads cfg (ns.getD i 0) base self).prev
+          (AssignedCell.of self base cfg.xA) env }
 
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
 
@@ -326,17 +392,70 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
 
   ProverAssumptions piece w _ :=
     ZMod.val (show Fp from piece) < 2 ^ (K * (ns.getD i 0 + 1)) ∧
-    ∃ A B : Point Fp, A.OnCurve ∧ A.x = w.first.xA ∧
+    ∃ A B : Point Fp, A.OnCurve ∧ A.x = w.first.xA ∧ A.y = w.yIn ∧
       hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B
 
   ProverSpec piece _ w _ :=
-    ∀ A B : Point Fp, A.x = w.first.xA →
+    ∀ A B : Point Fp, A.x = w.first.xA → A.y = w.yIn →
       hashToPoint G.S A ((List.range (ns.getD i 0 + 1)).map (pieceWord piece)) = some B →
       yA w.first = 2 * A.y ∧ w.next.xA = B.x ∧
       enterYA (decide (i = ns.length - 1)) w.next = 2 * B.y
 
   soundness := by
-    sorry
+    circuit_proof_start [sinsemillaGate, qS3Expr, yAExpr, xRExpr, slotReads]
+    obtain ⟨hPiece, hQ, hsec, hyck⟩ := hc
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at hPiece
+    simp only [HashPiece.Spec, circuit_norm] at hPiece
+    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hPiece _hE
+    rw [hQ] at hyck
+    refine ⟨ms, hms, ?_, ?_, ?_⟩
+    · -- the piece recombines
+      have hgi : (eval env input_var : Fp)
+          = env.env.get input_var.cell.column
+            ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
+        with_unfolding_all rfl
+      rw [← h_input, hgi]
+      exact hrecomb
+    · -- the running sums
+      exact hzs
+    · -- the linked chain contract
+      exact link_step G (ns.getD i 0) (decide (i = ns.length - 1)) ms
+        (first := { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
+                    xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
+                    lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
+                    lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) })
+        (last := { xA := env.env.advice cfg.xA
+                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
+                   xP := env.env.advice cfg.xP
+                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
+                   lambda1 := env.env.advice cfg.lambda1
+                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ),
+                   lambda2 := env.env.advice cfg.lambda2
+                     ((env.place self + (offset + ns.getD i 0) : ℕ) : ℤ) })
+        (next := { xA := env.env.advice cfg.xA
+                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+                   xP := env.env.advice cfg.xP
+                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+                   lambda1 := env.env.advice cfg.lambda1
+                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+                   lambda2 := env.env.advice cfg.lambda2
+                     ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ) })
+        hlxP hlyP hchainP
+        (by
+          simp only [xR]
+          linear_combination hsec)
+        (by
+          have hq := qS3_yRhs (decide (i = ns.length - 1))
+            { xA := env.env.advice cfg.xA
+                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+              xP := env.env.advice cfg.xP
+                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+              lambda1 := env.env.advice cfg.lambda1
+                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ),
+              lambda2 := env.env.advice cfg.lambda2
+                ((env.place self + (offset + ns.getD i 0 + 1) : ℕ) : ℤ) }
+          simp only [yA, xR] at hq ⊢
+          linear_combination hyck + hq)
 
   completeness := by
     sorry
@@ -447,20 +566,6 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         · exact h
         · exact False.elim (hB₁0 h)
       exact htail_chain B₁ hB₁on (hpin.1.symm.trans htfxA) hpin.2.symm B hB
-
-/-- The gate's y-check RHS at the boundary `q_s2` value reduces to `2·enterYA` of the next row
-(donor `Cons.gate_yRhs_enterYA`): `q_s3 = 0` between pieces selects the next row's `Y_A`,
-`q_s3 = 2` on the final piece selects twice the witnessed `y_a` in `λ₁`. -/
-private theorem qS3_yRhs (b : Bool) (row : DoubleAndAddRow Fp) :
-    (2 - qS2Boundary b * (qS2Boundary b - 1)) * yA row
-      + qS2Boundary b * (qS2Boundary b - 1) * 2 * row.lambda1
-    = 2 * enterYA b row := by
-  cases b
-  · simp only [enterYA, HashPiece.qS2Boundary, Bool.false_eq_true, if_false]
-    ring
-  · simp only [enterYA, HashPiece.qS2Boundary, if_true]
-    norm_num
-    ring
 
 /-! ## The bundle -/
 
