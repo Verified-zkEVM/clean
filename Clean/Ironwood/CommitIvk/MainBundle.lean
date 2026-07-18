@@ -651,7 +651,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ))
     (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ))
     (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ))
-    hwa (by rw [hwb]; try push_cast; try ring) hwc (by rw [hwd]; try push_cast; try ring)
+    hwa (by rw [hwb]) hwc (by rw [hwd])
   obtain ⟨hPBdonor, hHonestDonor⟩ := hHF
   have hPB : Sinsemilla.Chain.PieceBounds ns
       #v[env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),

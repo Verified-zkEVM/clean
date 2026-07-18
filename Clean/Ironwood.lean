@@ -20,7 +20,6 @@ import Clean.Ironwood.NoteCommit.Canonicity
 import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.NoteCommit.YComposite
 import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.CommitIvk.Gadget
 import Clean.Ironwood.NoteCommit.MainBundle
 import Clean.Ironwood.CommitIvk.Main
 import Clean.Ironwood.CommitIvk.MainBundle

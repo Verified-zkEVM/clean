@@ -2,7 +2,7 @@ import Clean.Ironwood.Ecc.Chip
 import Clean.Ironwood.Poseidon.Hash
 import Clean.Ironwood.Utilities.AddChip
 import Clean.Ironwood.Sinsemilla.Merkle
-import Clean.Ironwood.CommitIvk.Gadget
+import Clean.Ironwood.CommitIvk.Main
 import Clean.Ironwood.NoteCommit.Main
 
 /-!

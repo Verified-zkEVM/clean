@@ -954,6 +954,7 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
     simp only [Operations.regionCount]]
   simp only [Circuit.operations_pure, Operations.regionCount]
 
+set_option linter.unusedSimpArgs false in
 /-- One Merkle layer hash as a layouter-level formal circuit (Rust
 `MerkleInstructions::hash_layer`, `merkle/chip.rs:229-436`), on the proven children
 (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition `Gate`). -/
