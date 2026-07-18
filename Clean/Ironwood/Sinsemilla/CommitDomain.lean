@@ -6,6 +6,7 @@ import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Ecc.MulFixed.Short
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Add
+import Clean.Ironwood.Ecc.MulFixed.FullWidth
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
@@ -27,20 +28,13 @@ Reference (ported from actual Rust, not memory):
   sums `zs` (`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells).
 - `CommitDomain::blinding_factor` (`sinsemilla.rs:471-486`) is the bare `[r]·R`.
 
-## The `[r]R` leg — Rust→Lean resolution (the stated boundary)
+## The `[r]R` leg
 
 `R : ecc::FixedPoint<C, EccChip>` (`sinsemilla.rs:417`), and `self.R.mul(..)` (`sinsemilla.rs:501`)
-resolves to `FixedPoint::mul` — **full-width fixed-base scalar multiplication**. In the phase-one
-donor (`Clean/Orchard/Sinsemilla/CommitDomain.lean`) this is `MulFixed.FullWidth.circuit R`.
-
-**`MulFixed` is NOT ported to the Ironwood (region-level) tree** (only the phase-one
-`GeneralFormalCircuit` form exists). Per the slice's hard rule, the `[r]R` leg is therefore a
-**stated boundary**: the composition structure is real, but the fixed-base child is carried as an
-*abstract* `FormalRegionCircuit` parameter `blind` with its interface pinned (via the
-`blind_*_eq` projection hypotheses) to the exact contract a ported `MulFixed.FullWidth` would
-expose (output on-curve/valid, `output = r • R`). When `MulFixed.FullWidth` lands in Ironwood,
-these hypotheses are discharged by that gadget's bundle; the CommitDomain composition above it
-needs no change.
+resolves to `FixedPoint::mul` — full-width fixed-base scalar multiplication, the Ironwood
+`Ecc.MulFixed.FullWidth.circuit R windows` bundle (parameterized by the caller's 85 window
+witness programs; the scalar the windows encode is the child's extraction data, so the
+commitment `Spec` is stated at the extracted scalar).
 
 ## Donor lifting
 
@@ -108,27 +102,45 @@ deriving ProvableStruct
 
 `commit = hash_to_point(Q, msg) + [r]R` (`sinsemilla.rs:488-509`), on the faithful
 `hash_message` bundle (`HashToPoint.hashCircuit` — the Q-init is inside its region). The
-`[r]R` leg is the abstract `MulFixed.FullWidth` boundary
-(`BlindSpecPinned`/`BlindEnvPinned`). -/
+`[r]R` leg is the `Ecc.MulFixed.FullWidth` bundle. -/
 
-variable {BCI BCfg : Type}
+/-- `CommitDomain::blinding_factor` (`sinsemilla.rs:471-486`) is the bare `[r]R`. -/
+def blindingFactor (R : FixedBase) (windows : Vector (FExpr Fp) 85) :
+    FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config unit Point :=
+  Ecc.MulFixed.FullWidth.circuit R windows
 
-/-- The blinding child's `Spec` is the `scalarOf input • R` contract (with validity). The
-child is LAYOUTER-level (Rust `FixedPoint::mul` spans several regions; the ported
-`mul_fixed` synthesize is a `Circuit`). -/
-def BlindSpecPinned {k : ℕ} (blind : FormalCircuit Fp BCI BCfg (Input k) Point)
-    (R : FixedBase) (scalarOf : Value (Input k) Fp → Fq) : Prop :=
-  blind.Spec = fun input (output : Point Fp) _ => output.Valid ∧ output = scalarOf input • R
+/-! ### Blinding-child contract bridges (`rfl`, child stays folded) -/
 
-/-- The blinding child carries no ambient/verifier/honest preconditions. -/
-def BlindEnvPinned {k : ℕ} (blind : FormalCircuit Fp BCI BCfg (Input k) Point) : Prop :=
-  blind.EnvAssumptions = (fun _ _ => True) ∧ blind.Assumptions = (fun _ => True) ∧
-  blind.ProverAssumptions = fun _ _ _ => True
+section BlindBridges
 
-/-- `CommitDomain::blinding_factor` is the bare `[r]R` — the abstract blinding child itself. -/
-def blindingFactor {k : ℕ} (blind : FormalCircuit Fp BCI BCfg (Input k) Point) :
-    FormalCircuit Fp BCI BCfg (Input k) Point :=
-  blind
+variable (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+
+private theorem blind_spec_eq :
+    (Ecc.MulFixed.FullWidth.circuit R windows).Spec
+      = fun _ (output : Point Fp) (s : Vector Fp 85 × Fq) =>
+          output = (s.2 • R : Point Fp) := rfl
+
+private theorem blind_assumptions_eq :
+    (Ecc.MulFixed.FullWidth.circuit R windows).Assumptions = fun _ => True := rfl
+
+private theorem blind_envAssumptions_eq :
+    (Ecc.MulFixed.FullWidth.circuit R windows).EnvAssumptions
+      = Ecc.MulFixed.FullWidth.EnvAssumptions := rfl
+
+private theorem blind_proverAssumptions_eq :
+    (Ecc.MulFixed.FullWidth.circuit R windows).ProverAssumptions
+      = fun _ (s : Vector Fp 85 × Fq) _ => ∀ w : Fin 85, (s.1[w.val]).val < 8 := rfl
+
+private theorem blind_proverSpec_eq :
+    (Ecc.MulFixed.FullWidth.circuit R windows).ProverSpec
+      = fun _ _ _ _ => True := rfl
+
+private theorem blind_extract_eq (cfg : Ecc.MulFixed.FullWidth.Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (Ecc.MulFixed.FullWidth.circuit R windows).extract cfg () i env
+      = Ecc.MulFixed.FullWidth.fwExtract cfg i env := rfl
+
+end BlindBridges
 
 /-! ## The `commit` bundle -/
 
@@ -161,36 +173,33 @@ private theorem hashC_proverSpec_eq' (G : Generators) (ns : List ℕ) (Q : Point
     (HashToPoint.hashCircuit G ns Q hQ hns hpos).ProverSpec input output wit hint
       = HashToPoint.ProverSpec G ns Q input output := rfl
 
-/-- A layouter child's call chunk counts its own regions. -/
-private theorem blind_call_regionCount {k : ℕ}
-    (blind : FormalCircuit Fp BCI BCfg (Input k) Point) (bcfg : BCfg)
-    (input : Var (Input k) Fp) (j : RegionIndex) :
-    Operations.regionCount ((blind.call bcfg input).operations j)
-      = blind.regionCount bcfg input := by
-  simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
-  rw [show blind.regionCount bcfg input
-      = Operations.regionCount ((blind.synthesize bcfg input).operations j) from
-    ((blind.elaborated bcfg).regionCount_eq input j)]
+/-- The blinding child's call chunk spans its two regions. -/
+private theorem blind_call_regionCount (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (bcfg : Ecc.MulFixed.FullWidth.Config) (j : RegionIndex) :
+    Operations.regionCount
+      (((Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()).operations j) = 2 := by
+  rw [FormalCircuit.call_regionCount]
   rfl
 
-/-- The region count of `commit`: the blinding child's regions, the hash region, the
+/-- The region count of `commit`: the blinding child's two regions, the hash region, the
 final complete addition. -/
 private theorem commit_regionCount
     (G : Generators) (ns : List ℕ)
-    (blind : FormalCircuit Fp BCI BCfg (Input ns.length) Point)
+    (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve)
     (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
-    (bcfg : BCfg) (hcfg : HashPiece.Config) (acfg : Ecc.Add.Config)
+    (bcfg : Ecc.MulFixed.FullWidth.Config) (hcfg : HashPiece.Config)
+    (acfg : Ecc.Add.Config)
     (input : Var (Input ns.length) Fp) (i : RegionIndex) :
     Operations.regionCount
       ((do
-        let blindOut ← blind.call bcfg input
+        let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
         let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
           { pieces := input.pieces }
         let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
           { p := hashOut.point, q := blindOut }
         pure result).operations i)
-      = blind.regionCount bcfg input + 2 := by
+      = 4 := by
   simp only [Circuit.operations_bind, Circuit.operations_pure,
     Operations.regionCount_append, Operations.regionCount]
   rw [show ∀ (j : RegionIndex) (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp),
@@ -214,25 +223,26 @@ private theorem commit_regionCount
               (Ecc.Add.add.synthesize acfg 0 inp)).operations j) from rfl,
         operations_assignRegion]
       simp only [Operations.regionCount]]
-  rw [blind_call_regionCount blind bcfg input i]
+  rw [blind_call_regionCount R windows bcfg i]
 
-/-- Rust `CommitDomain::commit` (`sinsemilla.rs:488-509`): `[r]R` (the abstract blinding
-child), `hash_to_point(Q, msg)` (the proven hash bundle), and the final complete addition
-`M + [r]R`. `Spec`: the commitment is `SinsemillaHashToPoint(Q, chunks) + scalarOf·R`
-whenever the hash is defined, with the message chunking and running-sum facts exposed. -/
+/-- Rust `CommitDomain::commit` (`sinsemilla.rs:488-509`): `[r]R` (the
+`Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)` (the proven hash bundle), and
+the final complete addition `M + [r]R`. `Spec`: the commitment is
+`SinsemillaHashToPoint(Q, chunks) + s·R` at the extracted window scalar `s`, whenever the
+hash is defined, with the message chunking and running-sum facts exposed. -/
 def commit (G : Generators) (ns : List ℕ)
-    (blind : FormalCircuit Fp BCI BCfg (Input ns.length) Point)
-    (R : FixedBase) (scalarOf : Value (Input ns.length) Fp → Fq)
-    (hBS : BlindSpecPinned blind R scalarOf) (hBE : BlindEnvPinned blind)
+    (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve)
     (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x) :
-    FormalCircuit Fp (BCI × BCfg × HashPiece.Config × Ecc.Add.Config)
-      (BCfg × HashPiece.Config × Ecc.Add.Config) (Input ns.length) Point where
+    FormalCircuit Fp
+      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+      (Input ns.length) Point where
   name := "sinsemilla commit"
-  configure := fun (_, cfg) => pure cfg
+  configure := pure
 
   synthesize := fun (bcfg, hcfg, acfg) input => do
-    let blindOut ← blind.call bcfg input
+    let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
     let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
       { pieces := input.pieces }
     let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
@@ -242,50 +252,55 @@ def commit (G : Generators) (ns : List ℕ)
   elaborated := fun (bcfg, hcfg, acfg) =>
     { output := fun input i =>
         ((do
-          let blindOut ← blind.call bcfg input
+          let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
           let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
             { pieces := input.pieces }
           let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
             { p := hashOut.point, q := blindOut }
           pure result : Circuit Fp (Var Point Fp)).output i)
-      regionCount := fun input => blind.regionCount bcfg input + 2
+      regionCount := fun _ => 4
       output_eq := by intro _ _; rfl
       regionCount_eq := fun input i =>
-        (commit_regionCount G ns blind Q hQ hns hpos bcfg hcfg acfg input i).symm }
+        (commit_regionCount G ns R windows Q hQ hns hpos bcfg hcfg acfg input i).symm }
 
-  EnvAssumptions := fun (_, hcfg, _) env =>
-    Sinsemilla.GeneratorTableLoaded G hcfg.generatorTable env.env
+  EnvAssumptions := fun (bcfg, hcfg, _) env =>
+    Sinsemilla.GeneratorTableLoaded G hcfg.generatorTable env.env ∧
+    Ecc.MulFixed.FullWidth.EnvAssumptions bcfg env
 
   Assumptions _ := True
 
-  Witness := Sinsemilla.Chain.ChainWit ns
+  Witness := fun F => Sinsemilla.Chain.ChainWit ns F × (Vector F 85 × Fq)
   extract := fun (bcfg, hcfg, _) input i₀ env =>
-    (HashToPoint.hashCircuit G ns Q hQ hns hpos).extract hcfg
-      { pieces := input.pieces } (i₀ + blind.regionCount bcfg input) env
+    ((HashToPoint.hashCircuit G ns Q hQ hns hpos).extract hcfg
+      { pieces := input.pieces } (i₀ + 2) env,
+     Ecc.MulFixed.FullWidth.fwExtract bcfg i₀ env)
 
   Spec input output wit :=
     ∃ chunks : List ℕ,
       Sinsemilla.Chain.PieceChunks ns (input.pieces) chunks ∧
-      Sinsemilla.Chain.ZsFacts ns chunks wit.zs ∧
+      Sinsemilla.Chain.ZsFacts ns chunks wit.1.zs ∧
       ∀ B, hashToPoint G.S Q chunks = some B →
-        output.Valid ∧ output = B + (scalarOf input • R : Point Fp)
+        output.Valid ∧ output = B + (wit.2.2 • R : Point Fp)
 
-  ProverAssumptions input _ _ :=
+  ProverAssumptions input wit _ :=
     Sinsemilla.Chain.PieceBounds ns (input.pieces) ∧
-    ∃ B, hashToPoint G.S Q
-      (Sinsemilla.Chain.honestChunks ns (input.pieces)) = some B
+    (∃ B, hashToPoint G.S Q
+      (Sinsemilla.Chain.honestChunks ns (input.pieces)) = some B) ∧
+    ∀ w : Fin 85, (wit.2.1[w.val]).val < 8
 
   ProverSpec _ _ _ _ := True
 
   soundness := by
     circuit_proof_start
+    obtain ⟨hTableE, hMulE⟩ := _hE
     obtain ⟨hBlind, hHash, hAdd⟩ := hc
-    -- the blind child's pinned contract
-    have hBl := hBlind (by rw [hBE.1]; trivial) (by rw [hBE.2.1]; trivial)
-    rw [hBS] at hBl
+    -- the blind child's contract: the output is the extracted window scalar times `R`
+    have hBl := hBlind (by rw [blind_envAssumptions_eq]; exact hMulE)
+      (by rw [blind_assumptions_eq]; trivial)
+    rw [blind_spec_eq, blind_extract_eq] at hBl
     -- the hash child's contract
-    have hHashS := hHash (by rw [hashC_envAssumptions_eq']; exact _hE) trivial
-    rw [hashC_spec_eq', blind_call_regionCount blind cfg.1 input_var i₀] at hHashS
+    have hHashS := hHash (by rw [hashC_envAssumptions_eq']; exact hTableE) trivial
+    rw [hashC_spec_eq', blind_call_regionCount R windows cfg.1 i₀] at hHashS
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
     -- input eval landing
     have hin : (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -354,19 +369,21 @@ def commit (G : Generators) (ns : List ℕ)
           : Value Ecc.Add.Inputs Fp).q : Point Fp).Valid
       constructor
       · rw [heP, hPB]; exact hBvalid
-      · rw [heQ]; exact hBl.1)
+      · rw [heQ, hBl]; exact R.smul_valid _)
     obtain ⟨hVout, hSum⟩ := hAddS
     refine ⟨hVout, ?_⟩
-    rw [hSum, heP, hPB, heQ, hBl.2, ← h_input, ProvableStruct.eval_cells_eq_eval]
+    rw [hSum, heP, hPB, heQ, hBl]
 
   completeness := by
     circuit_proof_start
-    obtain ⟨hPBounds, B0, hB0⟩ := hPA
+    obtain ⟨hTableE, hMulE⟩ := _hE
+    obtain ⟨hPBounds, ⟨B0, hB0⟩, hWin⟩ := hPA
     obtain ⟨bx, byv⟩ := B0
-    -- the blind child's contract (its obligations are pinned trivial)
-    have hBl := (h_spec_0 (by rw [hBE.1]; trivial) (by rw [hBE.2.1]; trivial)
-      (by rw [hBE.2.2]; trivial)).1
-    rw [hBS] at hBl
+    -- the blind child's contract
+    have hBl := (h_spec_0 (by rw [blind_envAssumptions_eq]; exact hMulE)
+      (by rw [blind_assumptions_eq]; trivial)
+      (by rw [blind_proverAssumptions_eq, blind_extract_eq]; exact hWin)).1
+    rw [blind_spec_eq, blind_extract_eq] at hBl
     -- prover input landing
     have hinP : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ pieces := input_var.pieces }
         : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
@@ -380,7 +397,8 @@ def commit (G : Generators) (ns : List ℕ)
           : Var (Sinsemilla.Chain.Inputs ns.length) Fp))
         ((HashToPoint.hashCircuit G ns Q hQ hns hpos).extract cfg.2.1
           { pieces := input_var.pieces }
-          (i₀ + ((blind.call cfg.1 input_var).operations i₀).regionCount)
+          (i₀ + (((Ecc.MulFixed.FullWidth.circuit R windows).call cfg.1 ()).operations
+            i₀).regionCount)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
         env.hint := by
       rw [hashC_proverAssumptions_eq']
@@ -388,7 +406,8 @@ def commit (G : Generators) (ns : List ℕ)
       · rw [hinP]; exact hPBounds
       · rw [hinP]; exact hB0
     -- the hash child's honest contract (prover side: the output point IS the honest hash)
-    have hPSHash := (h_spec_1 (by rw [hashC_envAssumptions_eq']; exact _hE) trivial hPAhash).2
+    have hPSHash := (h_spec_1 (by rw [hashC_envAssumptions_eq']; exact hTableE)
+      trivial hPAhash).2
     rw [hashC_proverSpec_eq'] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by rw [hinP]; exact hB0)
     -- prover-eval output point = verifier-eval point (projection commute + hint erasure)
@@ -422,8 +441,10 @@ def commit (G : Generators) (ns : List ℕ)
         = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_1 : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
-    refine ⟨⟨by rw [hBE.1]; trivial, by rw [hBE.2.1]; trivial, by rw [hBE.2.2]; trivial⟩,
-      ⟨by rw [hashC_envAssumptions_eq']; exact _hE, trivial, hPAhash⟩,
+    refine ⟨⟨by rw [blind_envAssumptions_eq]; exact hMulE,
+      by rw [blind_assumptions_eq]; trivial,
+      by rw [blind_proverAssumptions_eq, blind_extract_eq]; exact hWin⟩,
+      ⟨by rw [hashC_envAssumptions_eq']; exact hTableE, trivial, hPAhash⟩,
       trivial, ?_, trivial⟩
     show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
@@ -433,6 +454,6 @@ def commit (G : Generators) (ns : List ℕ)
         : Value Ecc.Add.Inputs Fp).q : Point Fp).Valid
     constructor
     · rw [hePv, hPB0]; exact hB0valid
-    · rw [heQv]; exact hBl.1
+    · rw [heQv, hBl]; exact R.smul_valid _
 
 end Halo2.Ironwood.Sinsemilla.CommitDomain
