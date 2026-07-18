@@ -484,3 +484,15 @@ haz0/htelA⟩ — mirror Composites.lean; then Pkd/Val/Rho/Psi; then the donor
 chunk-equality assembly (pieceChunks_eq_noteCommitChunks_of_indexed_piece_values +
 gate Specs) to land Spec at the extracted scalar (commit's wit.2.2 = rcmExtract via
 commit_extract_eq at i₀+25 spelling).
+
+### CRITICAL CORRECTION (found via donor zsFacts_cell bound): ns convention
+Chain's ns entries are WORDS − 1 (donor messagePieceRounds = [24,0,24,5,0,24,24,0]).
+Main.ns := [25,1,25,6,1,25,25,1] is WRONG. Fix to [24,0,24,5,0,24,24,0]. Cascades:
+- zCell rows (zLengths = [25,1,25,6,1,25,25,1] cells/piece; piece starts
+  [0,25,26,51,57,58,83,108]): z13_a=13, z13_c=39, z1_d=52, z13_f=71, z1_g=84, z13_g=96.
+- zs_get_* lemma literals accordingly.
+- hpos (∀ x ∈ ns, 0 < x) FAILS for the zero entries: hashCircuit's z1s output
+  (z1View, Merkle sugar) requires every piece ≥ 2 words. NoteCommit needs a
+  point-only hash variant WITHOUT hpos: add hashRegionP/hashCircuitP in
+  HashToPoint.lean (same proofs minus the z1s clause), switch CommitDomain.commit to
+  it and DROP its ns_pos parameter; Main drops ns_pos. Merkle keeps the z1s variant.
