@@ -388,13 +388,13 @@ private theorem windowScalar_partialSum (ks : ℕ → ℕ) :
   push_cast
   ring
 
-private theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
+theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
     S < PALLAS_SCALAR_CARD := by
   have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 84 := Nat.pow_le_pow_right (by norm_num) (by omega)
   have hcard : 2 * 8 ^ 84 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   omega
 
-private theorem step_sum_lt {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
+theorem step_sum_lt {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
     (ht : t ≤ 9 * 8 ^ (j + 1)) (hj : j ≤ 82) : S + t < PALLAS_SCALAR_CARD := by
   have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 83 := Nat.pow_le_pow_right (by norm_num) (by omega)
   have hcard : 11 * 8 ^ 83 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]

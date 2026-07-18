@@ -57,6 +57,15 @@ theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (
     (input : Var Input F) (i : RegionIndex) :
     (self.call config input).output i = self.output config input i := rfl
 
+/-- `output` of a region-level `call` (the child's elaborated output) — the region-level
+analogue of `FormalCircuit.output_call`. `@[circuit_norm]`. -/
+@[circuit_norm]
+theorem FormalRegionCircuit.output_call {CI Cfg : Type}
+    (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (input : Var Input F) (region : RegionIndex) :
+    (self.call config offset input).output region
+      = self.output config offset input region := rfl
+
 /-- `nextRegionIndex` of a layouter `call`, spelled as the append offset
 `Operations.regionCount ((self.call …).operations i)` — so that when a parent's
 `operations_bind` splits into `++` and `constraints_append` threads its offset, a *second*

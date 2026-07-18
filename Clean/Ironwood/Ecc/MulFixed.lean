@@ -83,11 +83,18 @@ def windowPow (word : Expression Fp Query) (k : ℕ) : Expression Fp Query :=
   (List.range k).foldl (fun acc _ => acc * word) (Expression.const 1)
 
 /-- The interpolated `x_p` (`mul_fixed.rs:151-154`): fold from `Const 0`,
-`acc + window_pow[k] · lagrange_coeffs[k]`. -/
+`acc + window_pow[k] · lagrange_coeffs[k]` — the 8-iteration fold written out (identical
+AST; keeps the eval bridge fold-free). -/
 def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Query :=
-  (List.finRange 8).foldl
-    (fun acc k => acc + windowPow word k.val * queryFixed (cfg.lagrangeCoeffs k))
-    (Expression.const 0)
+  Expression.const 0
+    + windowPow word 0 * queryFixed (cfg.lagrangeCoeffs 0)
+    + windowPow word 1 * queryFixed (cfg.lagrangeCoeffs 1)
+    + windowPow word 2 * queryFixed (cfg.lagrangeCoeffs 2)
+    + windowPow word 3 * queryFixed (cfg.lagrangeCoeffs 3)
+    + windowPow word 4 * queryFixed (cfg.lagrangeCoeffs 4)
+    + windowPow word 5 * queryFixed (cfg.lagrangeCoeffs 5)
+    + windowPow word 6 * queryFixed (cfg.lagrangeCoeffs 6)
+    + windowPow word 7 * queryFixed (cfg.lagrangeCoeffs 7)
 
 /-- Rust `coords_check` (`mul_fixed.rs:131-169`): the shared per-window-row constraint
 list over a given window-value expression. Reads `x_p`/`y_p` on the add config's columns
@@ -119,6 +126,39 @@ def coordsGate (cfg : Config) : Gate Fp where
     let zNext : Expression Fp Query := queryAdvice cfg.window 1
     let word := zCur - zNext * (((H : ℕ) : Fp) : Expression Fp Query)
     Constraints.withSelector cfg.runningSumConfig.qRangeCheck (coordsCheck cfg word)
+
+/-- The `CoordsParams` read off the environment's fixed cells at a given row — what the
+coords gate's queries see. -/
+def readParams (cfg : Config) (f : Query → Fp) : CoordsParams Fp where
+  z := f (.fixed cfg.fixedZ 0)
+  lagrange0 := f (.fixed (cfg.lagrangeCoeffs 0) 0)
+  lagrange1 := f (.fixed (cfg.lagrangeCoeffs 1) 0)
+  lagrange2 := f (.fixed (cfg.lagrangeCoeffs 2) 0)
+  lagrange3 := f (.fixed (cfg.lagrangeCoeffs 3) 0)
+  lagrange4 := f (.fixed (cfg.lagrangeCoeffs 4) 0)
+  lagrange5 := f (.fixed (cfg.lagrangeCoeffs 5) 0)
+  lagrange6 := f (.fixed (cfg.lagrangeCoeffs 6) 0)
+  lagrange7 := f (.fixed (cfg.lagrangeCoeffs 7) 0)
+
+/-- `interpolatedX` evaluates to the donor `interpolate` over the read-back params — the
+bridge from the gate AST to the donor's coordinate algebra. -/
+theorem eval_interpolatedX (cfg : Config) (word : Expression Fp Query) (f : Query → Fp) :
+    (interpolatedX cfg word).eval f
+      = Orchard.Ecc.MulFixed.interpolate (readParams cfg f) (word.eval f) := by
+  simp only [interpolatedX, windowPow, queryFixed, List.range_succ, List.range_zero,
+    List.append_nil, List.nil_append, List.cons_append, List.foldl_cons, List.foldl_nil,
+    List.foldl_append, circuit_norm, Orchard.Ecc.MulFixed.interpolate, readParams]
+
+/-- `interpolate` only depends on the params componentwise — the bridge from the
+`readParams` cell reads to a known `CoordsParams` value. -/
+theorem interpolate_congr_params {p q : CoordsParams Fp}
+    (h0 : p.lagrange0 = q.lagrange0) (h1 : p.lagrange1 = q.lagrange1)
+    (h2 : p.lagrange2 = q.lagrange2) (h3 : p.lagrange3 = q.lagrange3)
+    (h4 : p.lagrange4 = q.lagrange4) (h5 : p.lagrange5 = q.lagrange5)
+    (h6 : p.lagrange6 = q.lagrange6) (h7 : p.lagrange7 = q.lagrange7) (w : Fp) :
+    Orchard.Ecc.MulFixed.interpolate p w = Orchard.Ecc.MulFixed.interpolate q w := by
+  unfold Orchard.Ecc.MulFixed.interpolate
+  rw [h0, h1, h2, h3, h4, h5, h6, h7]
 
 /-- Rust `mul_fixed::Config::configure` (`mul_fixed.rs:54-104`): equality on `window` and
 `u`, a fresh selector for the running-sum config (whose `configure` registers the "range

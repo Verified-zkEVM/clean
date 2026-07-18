@@ -258,6 +258,24 @@ theorem chain_shifts (W n : ℕ) (f : ℕ → Fp)
     push_cast [hks', dif_pos hwn]
     ring
 
+/-- The word of consecutive shift values is the base-`2^W` digit:
+`↑(V/2^{W·w}) − ↑(V/2^{W·(w+1)})·2^W = ↑(V/2^{W·w} mod 2^W)` — how a consumer of
+`copyDecompose`'s Spec reads the window value off two adjacent running sums (e.g. the
+`mul_fixed` coords rows). -/
+theorem shift_word_eq (W V w : ℕ) :
+    ((V / 2 ^ (W * w) : ℕ) : Fp) - ((V / 2 ^ (W * (w + 1)) : ℕ) : Fp) * 2 ^ W
+      = ((V / 2 ^ (W * w) % 2 ^ W : ℕ) : Fp) := by
+  have hsplit : V / 2 ^ (W * (w + 1)) = V / 2 ^ (W * w) / 2 ^ W := by
+    rw [Nat.div_div_eq_div_mul, ← pow_add]
+    ring_nf
+  have hmoddiv : (2 ^ W * (V / 2 ^ (W * w) / 2 ^ W) + V / 2 ^ (W * w) % 2 ^ W : ℕ)
+      = V / 2 ^ (W * w) := Nat.div_add_mod _ (2 ^ W)
+  have hcast := congrArg (Nat.cast (R := Fp)) hmoddiv
+  push_cast at hcast ⊢
+  rw [hsplit]
+  push_cast
+  linear_combination -hcast
+
 /-- Strict `copy_decompose` (`decompose_running_sum.rs:121-133, 139-205`): copy `α` in as
 `z_0`, enable the range-check gate on all `numWindows` rows, assign the interior running
 sums, and constrain the final `z_numWindows` to `0`.
@@ -376,5 +394,14 @@ def copyDecompose (W numWindows : ℕ) :
       intro w
       rw [← h_output_zs w.val w.isLt]
       exact hz w.val (by omega)
+
+/-- The bundle's output variable (rfl — the `loop_output` pattern): the whole running-sum
+cell vector at rows `offset + j`. Keeps parents' output projections lazy (no whnf through
+the symbolic loops). -/
+@[circuit_norm]
+theorem copyDecompose_output (W numWindows : ℕ) (cfg : Config) (o : ℕ)
+    (input : Inputs (AssignedCell Fp)) (self : RegionIndex) :
+    (copyDecompose W numWindows).output cfg o input self
+      = { zs := Vector.ofFn (fun j => AssignedCell.of self (o + j) cfg.z) } := rfl
 
 end Halo2.Ironwood.DecomposeRunningSum
