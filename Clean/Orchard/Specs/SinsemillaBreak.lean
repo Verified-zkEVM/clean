@@ -130,6 +130,19 @@ theorem hashToPointB_inl {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List �
     hashToPoint S Q chunks = some B := by
   rw [← getLeft?_hashToPointB, h]; rfl
 
+/-- A defined hash forces the Σ-chain onto the value branch. -/
+theorem hashToPointB_inl_of_some {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
+    {B : Point Fp} (h : hashToPoint S Q chunks = some B) :
+    hashToPointB S Q chunks = .inl B := by
+  have hp := getLeft?_hashToPointB S Q chunks
+  rw [h] at hp
+  cases hB : hashToPointB S Q chunks with
+  | inl B' =>
+    rw [hB] at hp
+    simp only [Sum.getLeft?, Option.some.injEq] at hp
+    rw [hp]
+  | inr br => rw [hB] at hp; simp at hp
+
 theorem hashToPoint_of_inr {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
     {br : BreakData} (h : hashToPointB S Q chunks = .inr br) :
     hashToPoint S Q chunks = none := by

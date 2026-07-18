@@ -201,6 +201,7 @@ structure ActionData where
   pkdOld : Point Fp
   gdNew : Point Fp
   pkdNew : Point Fp
+  merklePath : ℕ → Fp × Fp
   rcv : Vector Fp 85 × Fq
   alpha : Vector Fp 85 × Fq
   rivk : Vector Fp 85 × Fq
@@ -246,6 +247,13 @@ def extract (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
             cellRead env (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y⟩
   pkdNew := ⟨cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
              cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y⟩
+  merklePath := fun j =>
+    if j < 16 then
+      (cellRead env (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b,
+       cellRead env (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap)
+    else
+      (cellRead env (i₀ + 136 + 8 * (j - 16)) 0 cfg.merkle2.condSwap.b,
+       cellRead env (i₀ + 136 + 8 * (j - 16)) 0 cfg.merkle2.condSwap.swap)
   rcv := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 268) env
   alpha := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 280) env
   rivk := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 290) env
@@ -305,9 +313,26 @@ def Spec (G : Generators) (B : Bases)
   wit.vOld * (1 - wit.enableSpend) = 0 ∧
   wit.vNew * (1 - wit.enableOutput) = 0
 
+/-- The generator table holds *exactly* the `load` contents (block + default fill) —
+the completeness-side strengthening of `GeneratorTableLoaded` (the honest env is one
+that ran the load). Stated as the load's own constraint set (place-independent). -/
+def GeneratorTableExact (G : Generators) (cfg : Sinsemilla.GeneratorTableConfig)
+    (env : Environment Fp) : Prop :=
+  Halo2.Constraints (fun _ => 0) env
+    ((Sinsemilla.load G cfg).operations 0) 0
+
+set_option linter.unusedSimpArgs false in
+private theorem generatorTableExact_constraints (G : Generators)
+    (cfg : Sinsemilla.GeneratorTableConfig) (env : Environment Fp)
+    (h : GeneratorTableExact G cfg env) (place : RegionIndex → ℕ) (i : RegionIndex) :
+    Halo2.Constraints place env ((Sinsemilla.load G cfg).operations i) i := by
+  simp only [GeneratorTableExact, Sinsemilla.load, circuit_norm] at h ⊢
+  exact h
+
 /-- Env preconditions: the loaded tables and selector-distinctness every child asserts. -/
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=
+  GeneratorTableExact G cfg.sinsemilla1.generatorTable env.env ∧
   Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla1.generatorTable env.env ∧
   Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla2.generatorTable env.env ∧
   Sinsemilla.GeneratorTableLoaded G cfg.merkle1.sinsemilla.generatorTable env.env ∧
@@ -350,6 +375,14 @@ private theorem wpoint_assumptions_eq (name : String) :
 
 private theorem wpointNonId_assumptions_eq (name : String) :
     (Ecc.WitnessPoint.pointNonId.toFormal name).Assumptions = fun _ => True := rfl
+
+private theorem wpoint_proverAssumptions_eq (name : String) :
+    (Ecc.WitnessPoint.point.toFormal name).ProverAssumptions
+      = Ecc.WitnessPoint.point.ProverAssumptions := rfl
+
+private theorem wpointNonId_proverAssumptions_eq (name : String) :
+    (Ecc.WitnessPoint.pointNonId.toFormal name).ProverAssumptions
+      = Ecc.WitnessPoint.pointNonId.ProverAssumptions := rfl
 
 private theorem wpoint_spec_eq (name : String) :
     (Ecc.WitnessPoint.point.toFormal name).Spec
@@ -613,7 +646,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
       (main G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (Spec G B) := by
   circuit_proof_start
-  obtain ⟨hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
+  obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
   simp only [main, synthesize, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
@@ -980,5 +1013,261 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
       simp only [if_pos rfl] at h
       rw [hOn, hOeo] at h
       linear_combination h
+
+open Sinsemilla.Merkle.CalculateRoot (pathNode) in
+/-- Honest-prover preconditions: well-formed witness points, 3-bit windows for the five
+fixed-base scalars, a fully-defined Merkle path, defined Sinsemilla hashes for the three
+commitment legs (with the honest commitment equations for the copies/instance rows),
+and the `q_orchard` value checks at the honest values. -/
+def ProverAssumptions (G : Generators) (B : Bases)
+    (_ : ProverValue unit Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
+  wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
+  wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
+  (∀ w : Fin 85, (wit.rcv.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.alpha.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rivk.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rcmOld.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rcmNew.1[w.val]).val < 8) ∧
+  wit.magnitude.val < 2 ^ 64 ∧ (wit.sign = 1 ∨ wit.sign = -1) ∧
+  (show Fp from wit.vOld).val < 2 ^ 64 ∧ (show Fp from wit.vNew).val < 2 ^ 64 ∧
+  -- the Merkle path is fully defined, split at the chip boundary
+  (∃ mid, pathNode G B.merkleQ 0 wit.merklePath wit.cmOld.x 16 = some mid ∧
+    ∃ root, pathNode G B.merkleQ 16 (fun j => wit.merklePath (16 + j)) mid 16
+      = some root ∧
+    wit.anchor = root ∧
+    wit.vOld * (root - wit.anchor) = 0) ∧
+  -- the three Sinsemilla legs are defined, with the honest commitment equations
+  (∃ Bi, hashToPoint G.S B.ivkQ
+      (commitIvkChunks wit.akP.x.val wit.nk.val) = some Bi ∧
+    wit.pkdOld = (((Bi + (wit.rivk.2 • B.commitIvkR : Point Fp)).x).val
+      • wit.gdOld : Point Fp)) ∧
+  (∃ Bo, hashToPoint G.S B.noteQ
+      (Orchard.Action.NoteCommit.noteScalars wit.gdOld wit.pkdOld wit.vOld
+        wit.rhoOld wit.psiOld).chunks = some Bo ∧
+    wit.cmOld = Bo + (wit.rcmOld.2 • B.noteCommitR : Point Fp)) ∧
+  (∃ Bn, hashToPoint G.S B.noteQ
+      (Orchard.Action.NoteCommit.noteScalars wit.gdNew wit.pkdNew wit.vNew
+        wit.nfOld wit.psiNew).chunks = some Bn ∧
+    wit.cmx = (Bn + (wit.rcmNew.2 • B.noteCommitR : Point Fp)).x) ∧
+  -- the public-input rows are the honestly computed values
+  ((wit.sign = 1 →
+      (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = ((wit.magnitude.val : Fq) • B.valueCommitV : Point Fp)
+          + (wit.rcv.2 • B.valueCommitR : Point Fp)) ∧
+   (wit.sign = -1 →
+      (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = (((-(wit.magnitude.val : Fq)) : Fq) • B.valueCommitV : Point Fp)
+          + (wit.rcv.2 • B.valueCommitR : Point Fp))) ∧
+  wit.nfOld = ((wit.cmOld +
+    ((Orchard.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld]
+      + wit.psiOld).val : Fq) • B.nullifierK : Point Fp)).x ∧
+  (⟨wit.rkX, wit.rkY⟩ : Point Fp)
+    = (wit.alpha.2 • B.spendAuthG : Point Fp) + wit.akP ∧
+  -- the remaining `q_orchard` value checks at the honest values
+  wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
+  wit.vOld * (1 - wit.enableSpend) = 0 ∧
+  wit.vNew * (1 - wit.enableOutput) = 0
+
+/-! ## Completeness -/
+
+private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
+    (inp : Var In Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) :
+    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
+      = RegionOperations.ExtendsWitnesses place i env
+          ((b.synthesize cfg 0 inp).operations i) := by
+  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
+    assignRegion, ExtendsWitnesses, and_true]
+  rfl
+
+private theorem wpoint_call_witnesses (name : String)
+    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (i : RegionIndex)
+    (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
+    ExtendsWitnesses place env
+      (((Ecc.WitnessPoint.point.toFormal name).call c inp).operations i) i
+      = RegionOperations.ExtendsWitnesses place i env
+          ((Ecc.WitnessPoint.point.synthesize c 0 inp).operations i) := by
+  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
+    assignRegion, ExtendsWitnesses, and_true]
+  rfl
+
+private theorem wpointNonId_call_witnesses (name : String)
+    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (i : RegionIndex)
+    (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
+    ExtendsWitnesses place env
+      (((Ecc.WitnessPoint.pointNonId.toFormal name).call c inp).operations i) i
+      = RegionOperations.ExtendsWitnesses place i env
+          ((Ecc.WitnessPoint.pointNonId.synthesize c 0 inp).operations i) := by
+  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
+    assignRegion, ExtendsWitnesses, and_true]
+  rfl
+
+set_option linter.unusedSimpArgs false in
+private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (hT : Halo2.Constraints place env
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀)
+    (h1 : Constraints place env
+      (((Ecc.WitnessPoint.point.toFormal "witness point").call
+        cfg.eccConfig.witnessPoint W.cmOld).operations (i₀ + 2)) (i₀ + 2))
+    (h2 : Constraints place env
+      (((Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+        cfg.eccConfig.witnessPoint W.gdOld).operations (i₀ + 3)) (i₀ + 3))
+    (h3 : Constraints place env
+      (((Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+        cfg.eccConfig.witnessPoint W.akP).operations (i₀ + 4)) (i₀ + 4)) :
+    Constraints place env ((synthWitness G W cfg).operations i₀) i₀ := by
+  simp only [Sinsemilla.load, circuit_norm] at hT
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
+    Nat.add_assoc, Nat.reduceAdd]
+  rw [wpoint_call_regionCount, wpointNonId_call_regionCount]
+  simp only [Nat.add_assoc, Nat.reduceAdd]
+  exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
+    h1, h2, h3⟩
+
+set_option maxRecDepth 8192 in
+theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    FormalCircuit.Completeness (Witness := fun _ => ActionData)
+      (main G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (ProverAssumptions G B) (fun _ _ _ _ => True) := by
+  circuit_proof_start
+  obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
+  obtain ⟨hVcm, hVgd, hVak, hVpk, hVgdn, hVpkn, hWrcv, hWal, hWri, hWro, hWrn,
+    hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hAnch, hVanch⟩,
+    ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmo⟩, ⟨Bn, hBn, hCmx⟩,
+    ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
+  simp only [main, synthesize, circuit_norm] at hwit ⊢
+  have hWw := hwit.1
+  have hWc := hwit.2.1
+  have hWn := hwit.2.2
+  clear hwit
+  -- ── stage A witnesses: the shared cells are the programs' honest values ──
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
+    readCell] at hWw
+  obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
+  rw [wpoint_call_regionCount] at hWgd hWak
+  rw [wpointNonId_call_regionCount] at hWak
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hWgd hWak
+  have hWcmE := hWcm
+  have hWgdE := hWgd
+  have hWakE := hWak
+  rw [wpoint_call_witnesses] at hWcmE
+  rw [wpointNonId_call_witnesses] at hWgdE hWakE
+  simp only [Ecc.WitnessPoint.point, Ecc.WitnessPoint.pointNonId, circuit_norm,
+    readCell, Nat.add_assoc, Nat.reduceAdd] at hWcmE hWgdE hWakE
+  refine ⟨buildWitness G W cfg i₀ place _
+    (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (Ecc.WitnessPoint.point.toFormal "witness point")
+      cfg.eccConfig.witnessPoint (i₀ + 2) place env _ hWcm
+      ⟨(by rw [wpoint_envAssumptions_eq]; trivial),
+       (by rw [wpoint_assumptions_eq]; trivial),
+       (by rw [wpoint_proverAssumptions_eq]
+           show Orchard.Point.Valid _
+           have h : Orchard.Point.Valid
+               (⟨(Witgen.FExprOver.eval
+                   { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
+                   W.cmOld.x : Fp),
+                 (Witgen.FExprOver.eval
+                   { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
+                   W.cmOld.y : Fp)⟩ : Point Fp) := by
+             rw [← hWcmE.1, ← hWcmE.2]
+             with_unfolding_all exact hVcm
+           with_unfolding_all exact h)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+      cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd
+      ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
+       (by rw [wpointNonId_assumptions_eq]; trivial),
+       (by rw [wpointNonId_proverAssumptions_eq]
+           show Orchard.Point.OnCurve _
+           with_unfolding_all exact hVgd)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+      cfg.eccConfig.witnessPoint (i₀ + 4) place env _ hWak
+      ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
+       (by rw [wpointNonId_assumptions_eq]; trivial),
+       (by rw [wpointNonId_proverAssumptions_eq]
+           show Orchard.Point.OnCurve _
+           with_unfolding_all exact hVak)⟩
+  · -- ── stages B and C ──
+    simp only [synthWitness_output, synthWitness_nextRegionIndex,
+      synthWitness_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWc hWn
+    simp only [synthChecks, loadPrivate, circuit_norm, readCell] at hWc
+    obtain ⟨hWm1, hWm2, hwMag, hwSign, hWvc, hWdn, hWsa, hWci, hWai⟩ := hWc
+    -- offset-normalize the stage-B witness chunks
+    rw [merkle_call_regionCount] at hWm2 hWvc hWdn hWsa hWci hWai
+    rw [merkle_call_regionCount] at hWvc hWdn hWsa hWci hWai
+    rw [vc_call_regionCount] at hWdn hWsa hWci hWai
+    rw [dn_call_regionCount] at hWsa hWci hWai
+    rw [sa_call_regionCount] at hWci hWai
+    rw [civk_call_regionCount] at hWai
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hWm2 hWvc hWdn hWsa hWci hWai
+    -- ── the fold contracts: honest mid/root landings ──
+    have hM1der := Halo2.SubcircuitRw.layouter_completeness_derived
+      (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+        0 16 (by norm_num) W.merkleSib W.merkleSwap)
+      (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) (i₀ + 8) place env _ hWm1
+      (by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
+      (by rw [merkle_assumptions_eq]; trivial)
+      (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0 _ _ 16).isSome)
+          rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+            (w' := fun j => (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+            (h := by
+              intro j hj
+              simp only [extract, cellRead, if_pos hj]
+              with_unfolding_all rfl)]
+          rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+              (fun j => (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
+            = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+              (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+              (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
+            from by with_unfolding_all rfl]
+          rw [hMid]
+          rfl)
+    -- fold 1 lands on `mid`
+    have hM1mid : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          0 16 (by norm_num) W.merkleSib W.merkleSwap).output
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
+          (i₀ + 8)) : Fp) = mid := by
+      refine hM1der.2 mid ?_
+      rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          0 16 (by norm_num) W.merkleSib W.merkleSwap).extract
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) _ (i₀ + 8)
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+        = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b
+              : Var field Fp) : Fp),
+          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap
+              : Var field Fp) : Fp)) from by
+        funext j
+        with_unfolding_all rfl]
+      rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+        (w' := fun j => (extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+        (h := by
+          intro j hj
+          simp only [extract, cellRead, if_pos hj]
+          try with_unfolding_all rfl)]
+      rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+          (fun j => (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
+        = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
+        from by with_unfolding_all rfl]
+      exact hMid
+    sorry
 
 end Halo2.Ironwood.Action.Circuit

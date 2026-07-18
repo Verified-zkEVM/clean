@@ -1825,6 +1825,15 @@ def pathNode (G : Generators) (Q : Point Fp) (l₀ : ℕ) (wit : ℕ → Fp × F
   | k + 1 => (pathNode G Q l₀ wit node k).bind fun n =>
       (hashToPoint G.S Q (proverChunks (l₀ + k) n (wit k).1 ((wit k).2 = 1))).map (·.x)
 
+/-- `pathNode` only reads the witness below the depth. -/
+theorem pathNode_congr (G : Generators) (Q : Point Fp) (l₀ : ℕ)
+    {w w' : ℕ → Fp × Fp} (node : Fp) (k : ℕ) (h : ∀ j, j < k → w j = w' j) :
+    pathNode G Q l₀ w node k = pathNode G Q l₀ w' node k := by
+  induction k with
+  | zero => rfl
+  | succ n ih =>
+    rw [pathNode, pathNode, ih (fun j hj => h j (by omega)), h n (by omega)]
+
 theorem pathNode_isSome_of_succ (G : Generators) (Q : Point Fp) (l₀ : ℕ) (wit : ℕ → Fp × Fp)
     (node : Fp) (k : ℕ) (h : (pathNode G Q l₀ wit node (k + 1)).isSome) :
     (pathNode G Q l₀ wit node k).isSome := by
@@ -1934,7 +1943,10 @@ def circuit :
 
   ProverAssumptions input wit _ := (pathNode G Q l₀ wit input.node d).isSome
 
-  ProverSpec _ _ _ _ := True
+  -- the honest output is the running `pathNode` value (exported so a parent can chain
+  -- a second fold from this fold's output cell)
+  ProverSpec input output wit _ :=
+    ∀ n, pathNode G Q l₀ wit (input.node : Fp) d = some n → (output : Fp) = n
 
   soundness := by
     circuit_proof_start
@@ -2033,7 +2045,6 @@ def circuit :
   completeness := by
     circuit_proof_start
     rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_extendsWitnesses] at hwit
-    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints]
     set w : ℕ → Fp × Fp := fun j =>
       (env.advice cfg.1.b ((place (i₀ + 8 * j) : ℕ) : ℤ),
        env.advice cfg.1.swap ((place (i₀ + 8 * j) : ℕ) : ℤ)) with hw_def
@@ -2157,6 +2168,10 @@ def circuit :
             Nat.mod_eq_of_lt (show l₀ + k < 2 ^ 10 from by omega)]
           exact hB
         rw [hnodeS k, hps, hn]
+    -- the honest-output landing (the strengthened `ProverSpec`), then the constraints
+    refine ⟨?_, fun n hn => h_output.symm.trans
+      (by with_unfolding_all exact hmain d (Nat.le_refl d) n hn)⟩
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints]
     -- discharge each layer's chunk
     intro i
     have hs := pathNode_isSome_le G Q l₀ w input_node
