@@ -57,12 +57,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     input.value = input.d2 + input.d3 * (2 ^ 8 : Fp) + input.e0 * (2 ^ 58 : Fp)
 
   soundness := by
-    -- DONOR-REPLAY parked: applying the donor FormalAssertion at const-lifted inputs
-    -- works down to the ConstraintsHold conversion, but main-Clean `const`'s
-    -- toElements chain hits whnf walls. PLAN: refactor the donor gates to expose
-    -- row-level `spec_of_eqs` value lemmas (soundness bodies already work over
-    -- `input_*` values) and call those here. See handoff.
-    sorry
+    circuit_proof_start [gate]
+    obtain ⟨heq, hcv, hcd2, hcd3, hce0⟩ := hc
+    rw [hcv, hcd2, hcd3, hce0] at heq
+    exact Orchard.Action.NoteCommit.ValueCanonicity.Gate.spec_of_eq
+      ⟨input_value, input_d2, input_d3, input_e0⟩ hA
+      (by push_cast; linear_combination heq)
 
   completeness := by
     intro cfg offset
