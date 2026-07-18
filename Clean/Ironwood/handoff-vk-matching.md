@@ -294,7 +294,17 @@ entry-point hash circuit (ConstantLength<2> P128Pow5T3 — DeriveNullifier's
   exact ⟨by linear_combination -hg0, ...⟩`. KEY GOTCHAS: `Nat.reduceMod` needed (Fin 3
   coes leave `mds (0 % 3)`), `Nat.add_assoc` for row-index spellings, and the gate polys
   are `STUFF - out = 0` so `linear_combination -hg`.
-- REMAINING sorries: fullRound completeness; partialRound soundness+completeness
+- **POSEIDON ARC COMPLETE (2026-07-18)** — all bundles fully proven, no sorries:
+  `Rounds.lean` (fullRound/partialRound), `Permute.lean` (permuteRegion, 4+28+4 via
+  per-round chunk auto-lift + `foldl_of_steps`), `Hash.lean` (initRegion,
+  addInputRegion — NOTE the input words use Rust's reversed `constrain_equal(cell, var)`
+  orientation, NOT `copy_advice` — and the ConstantLength<2> `hash` bundle, Spec = donor
+  `HashPaddedBlock.value` at capacity `2·2⁶⁴`). VK layout fixture test
+  `TestVkLayoutPoseidon` GREEN end-to-end (regions/copyList incl. deferred init
+  constants/σ/fixed+packed selectors) against the sibling-checkout
+  `poseidon::layout_dump` dump (converter validated byte-exact by round-tripping the
+  FullWidth fixture). Wired into `Clean/Ironwood.lean` + `Clean/Test.lean`.
+- (historical) sorries were: fullRound completeness; partialRound soundness+completeness
   (soundness needs the donor `mds_mul_mdsInv_apply` algebra — see donor `circuitP128`
   proofs in `Clean/Orchard/Poseidon/Pow5.lean` for both directions; the completeness
   witness-eval side uses `rowWit_eval` (`@[circuit_norm]`) like MulIncompleteRound's

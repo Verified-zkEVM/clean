@@ -7,6 +7,10 @@ import Clean.Ironwood.Ecc.MulComplete
 import Clean.Ironwood.Ecc.MulOverflow
 import Clean.Ironwood.Ecc.Mul
 import Clean.Ironwood.Utilities.LookupRangeCheck
+import Clean.Ironwood.Poseidon.Pow5
+import Clean.Ironwood.Poseidon.Rounds
+import Clean.Ironwood.Poseidon.Permute
+import Clean.Ironwood.Poseidon.Hash
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain

@@ -101,8 +101,12 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
     let i0 ← copyAdvice input.initialState.x0 (cfg.state 0) offset
     let i1 ← copyAdvice input.initialState.x1 (cfg.state 1) offset
     let i2 ← copyAdvice input.initialState.x2 (cfg.state 2) offset
-    let w0 ← copyAdvice input.input.x0 (cfg.state 0) (offset + 1)
-    let w1 ← copyAdvice input.input.x1 (cfg.state 1) (offset + 1)
+    -- pow5.rs:356-362 — `assign_advice` + explicit `constrain_equal(cell, var)`
+    -- (source-left orientation, unlike `copy_advice`)
+    let w0 ← assignAdvice (cfg.state 0) (offset + 1) (readCellWit input.input.x0)
+    constrainEqual input.input.x0 w0
+    let w1 ← assignAdvice (cfg.state 1) (offset + 1) (readCellWit input.input.x1)
+    constrainEqual input.input.x1 w1
     let o0 ← assignAdvice (cfg.state 0) (offset + 2) (addWit i0 w0)
     let o1 ← assignAdvice (cfg.state 1) (offset + 2) (addWit i1 w1)
     let o2 ← assignAdvice (cfg.state 2) (offset + 2) (readCellWit i2)
@@ -114,12 +118,12 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
   soundness := by
     circuit_proof_start [padAndAddGate, Sponge.AddInput.value]
     obtain ⟨⟨g0, g1, g2⟩, c0, c1, c2, c3, c4⟩ := hc
-    rw [c0, c3] at g0
-    rw [c1, c4] at g1
+    rw [c0, ← c3] at g0
+    rw [c1, ← c4] at g1
     rw [c2] at g2
     exact ⟨by linear_combination -g0, by linear_combination -g1, by linear_combination -g2⟩
   completeness := by
-    circuit_proof_start [padAndAddGate, Sponge.AddInput.value]
+    circuit_proof_start [padAndAddGate, Sponge.AddInput.value, readCell]
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
@@ -190,7 +194,6 @@ def hash (capacity : Fp) :
 
   soundness := by
     circuit_proof_start
-    subcircuit_rw at hc
     obtain ⟨hInit, hAdd, hPerm⟩ := hc
     have h0 := hInit trivial trivial
     simp only [initRegion_spec_eq] at h0
