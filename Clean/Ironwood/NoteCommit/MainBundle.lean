@@ -1464,7 +1464,6 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hwd0 := hWgd.2.1
   have hwg0 := hWgg.2.1
   have hwh1 := hWgh.2.2
-  trace_state
   have hMCF : Orchard.Action.NoteCommit.MessageCellFacts
       ⟨env.get input_var_gdX.cell.column ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩
       ⟨env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩

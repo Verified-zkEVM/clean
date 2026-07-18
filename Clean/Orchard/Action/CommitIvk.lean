@@ -799,7 +799,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 `PieceBounds` and their honest chunks are `commitIvkChunks ak.val nk.val`. Stated over the
 abstract piece cells (with their honest-slice values) so the heavy WithZs offsets never enter
 the kernel-checked term. -/
-private theorem honest_pieces_facts (ak nk a b c d : Fp)
+theorem honest_pieces_facts (ak nk a b c d : Fp)
     (ha : a = ((bitrange ak.val 0 250 : ℕ) : Fp))
     (hb : b = ((bitrange ak.val 250 4 : ℕ) : Fp) + ((bitrange ak.val 254 1 : ℕ) : Fp) * 2 ^ 4
             + ((bitrange nk.val 0 5 : ℕ) : Fp) * 2 ^ 5)
