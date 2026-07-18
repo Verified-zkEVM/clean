@@ -118,6 +118,7 @@ copies in `MulIncompleteRound`/`HashPieceRound` — the friction-twice rule.) -/
 def readCell [Field F] (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
   c.eval env.place env.env.toEnvironment
 
+omit [FiniteField F] in
 @[circuit_norm]
 theorem readCell_of [Field F] (env : Placed ProverEnvironment F) (self : RegionIndex)
     (row : ℕ) (col : Column .advice) :

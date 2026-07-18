@@ -108,6 +108,152 @@ theorem RegionOperation.extendsWitness_subcircuit (place : RegionIndex → ℕ)
 
 end
 
+/-! ## `foldCall` — the serial layouter fold over a formal-circuit family
+
+The layouter-level loop combinator (the `RegionCircuit.foldRange` analogue): round `m`
+calls `c m` on the accumulated input var and feeds `toInput` of its output to round
+`m + 1`. The accumulator var and base region index at each round are the **closed form**
+`foldState` (the ConstantOutput analogue — the maintainer rule from `Loops.lean`), so the
+split lemmas turn `Constraints` / `ExtendsWitnesses` of the whole fold into
+`∀ i : Fin m, <round i's folded call chunk at its closed-form input/index>` — the shape
+`subcircuit_rw` (or the manual `layouter_*_leaf` applications) consume per round. -/
+
+section
+variable [CircuitType Input] [CircuitType Output]
+
+/-- A layouter `call` chunk counts exactly the child's regions. -/
+theorem FormalCircuit.call_regionCount (self : FormalCircuit F CI Cfg Input Output)
+    (config : Cfg) (input : Var Input F) (i : RegionIndex) :
+    Operations.regionCount ((self.call config input).operations i)
+      = self.regionCount config input := by
+  simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
+  rw [show self.regionCount config input
+      = Operations.regionCount ((self.synthesize config input).operations i) from
+    ((self.elaborated config).regionCount_eq input i)]
+  rfl
+
+/-- The closed-form fold state: the accumulator input var and the base region index
+*entering* round `m`. -/
+def FormalCircuit.foldState (c : ℕ → FormalCircuit F CI Cfg Input Output)
+    (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
+    (i₀ : RegionIndex) : ℕ → Var Input F × RegionIndex
+  | 0 => (init, i₀)
+  | m + 1 =>
+    let s := FormalCircuit.foldState c toInput config init i₀ m
+    (toInput ((c m).output config s.1 s.2), s.2 + (c m).regionCount config s.1)
+
+/-- The serial fold of layouter calls; returns the final accumulated input var. -/
+def FormalCircuit.foldCall (c : ℕ → FormalCircuit F CI Cfg Input Output)
+    (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F) :
+    ℕ → Circuit F (Var Input F)
+  | 0 => pure init
+  | m + 1 => do
+    let acc ← FormalCircuit.foldCall c toInput config init m
+    let out ← (c m).call config acc
+    pure (toInput out)
+
+/-- The fold's operations: round `i`'s folded call chunk at its closed-form state. -/
+def FormalCircuit.foldOps (c : ℕ → FormalCircuit F CI Cfg Input Output)
+    (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
+    (i₀ : RegionIndex) : ℕ → Operations F
+  | 0 => []
+  | m + 1 =>
+    FormalCircuit.foldOps c toInput config init i₀ m
+      ++ ((c m).call config (FormalCircuit.foldState c toInput config init i₀ m).1).operations
+        (FormalCircuit.foldState c toInput config init i₀ m).2
+
+variable (c : ℕ → FormalCircuit F CI Cfg Input Output)
+  (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
+  (i₀ : RegionIndex)
+
+/-- The fold's run, in closed form: output/ops/next are `foldState`/`foldOps`. -/
+theorem FormalCircuit.foldCall_run (m : ℕ) :
+    FormalCircuit.foldCall c toInput config init m i₀
+      = ((FormalCircuit.foldState c toInput config init i₀ m).1,
+         FormalCircuit.foldOps c toInput config init i₀ m,
+         (FormalCircuit.foldState c toInput config init i₀ m).2) := by
+  induction m with
+  | zero => rfl
+  | succ m ih =>
+    show (FormalCircuit.foldCall c toInput config init m >>= fun acc =>
+      (c m).call config acc >>= fun out => pure (toInput out)) i₀ = _
+    simp only [Bind.bind, ih]
+    simp only [FormalCircuit.foldOps, FormalCircuit.foldState, List.append_nil]
+    rfl
+
+theorem FormalCircuit.foldCall_operations (m : ℕ) :
+    (FormalCircuit.foldCall c toInput config init m).operations i₀
+      = FormalCircuit.foldOps c toInput config init i₀ m := by
+  rw [Circuit.operations, FormalCircuit.foldCall_run]
+
+theorem FormalCircuit.foldCall_output (m : ℕ) :
+    (FormalCircuit.foldCall c toInput config init m).output i₀
+      = (FormalCircuit.foldState c toInput config init i₀ m).1 := by
+  rw [Circuit.output, FormalCircuit.foldCall_run]
+
+theorem FormalCircuit.foldCall_nextRegionIndex (m : ℕ) :
+    (FormalCircuit.foldCall c toInput config init m).nextRegionIndex i₀
+      = (FormalCircuit.foldState c toInput config init i₀ m).2 := by
+  rw [Circuit.nextRegionIndex, FormalCircuit.foldCall_run]
+
+/-- The fold's region count, in `foldState` form. -/
+theorem FormalCircuit.foldOps_regionCount (m : ℕ) :
+    i₀ + Operations.regionCount (FormalCircuit.foldOps c toInput config init i₀ m)
+      = (FormalCircuit.foldState c toInput config init i₀ m).2 := by
+  induction m with
+  | zero => simp [FormalCircuit.foldOps, FormalCircuit.foldState, Operations.regionCount]
+  | succ m ih =>
+    rw [FormalCircuit.foldOps]
+    show _ = (FormalCircuit.foldState c toInput config init i₀ m).2
+      + (c m).regionCount config (FormalCircuit.foldState c toInput config init i₀ m).1
+    rw [Operations.regionCount_append, FormalCircuit.call_regionCount, ← Nat.add_assoc, ih]
+
+/-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
+theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)
+    (m : ℕ) :
+    Halo2.Constraints place env (FormalCircuit.foldOps c toInput config init i₀ m) i₀
+      ↔ ∀ i : Fin m,
+        Halo2.Constraints place env
+          (((c i).call config
+              (FormalCircuit.foldState c toInput config init i₀ i).1).operations
+            (FormalCircuit.foldState c toInput config init i₀ i).2)
+          (FormalCircuit.foldState c toInput config init i₀ i).2 := by
+  induction m with
+  | zero =>
+    simp only [FormalCircuit.foldOps, Halo2.Constraints]
+    exact ⟨fun _ i => i.elim0, fun _ => trivial⟩
+  | succ m ih =>
+    rw [FormalCircuit.foldOps, Halo2.constraints_append, ih,
+      show i₀ + Operations.regionCount (FormalCircuit.foldOps c toInput config init i₀ m)
+        = (FormalCircuit.foldState c toInput config init i₀ m).2 from
+        FormalCircuit.foldOps_regionCount c toInput config init i₀ m,
+      Fin.forall_fin_succ']
+    simp only [Fin.val_castSucc, Fin.val_last]
+
+/-- The completeness-side split: `ExtendsWitnesses` of the fold is the per-round chunks. -/
+theorem FormalCircuit.foldOps_extendsWitnesses (place : RegionIndex → ℕ)
+    (env : ProverEnvironment F) (m : ℕ) :
+    Halo2.ExtendsWitnesses place env (FormalCircuit.foldOps c toInput config init i₀ m) i₀
+      ↔ ∀ i : Fin m,
+        Halo2.ExtendsWitnesses place env
+          (((c i).call config
+              (FormalCircuit.foldState c toInput config init i₀ i).1).operations
+            (FormalCircuit.foldState c toInput config init i₀ i).2)
+          (FormalCircuit.foldState c toInput config init i₀ i).2 := by
+  induction m with
+  | zero =>
+    simp only [FormalCircuit.foldOps, Halo2.ExtendsWitnesses]
+    exact ⟨fun _ i => i.elim0, fun _ => trivial⟩
+  | succ m ih =>
+    rw [FormalCircuit.foldOps, Halo2.extendsWitnesses_append, ih,
+      show i₀ + Operations.regionCount (FormalCircuit.foldOps c toInput config init i₀ m)
+        = (FormalCircuit.foldState c toInput config init i₀ m).2 from
+        FormalCircuit.foldOps_regionCount c toInput config init i₀ m,
+      Fin.forall_fin_succ']
+    simp only [Fin.val_castSucc, Fin.val_last]
+
+end
+
 /-! ## `CoeFun` — subcircuits look like function calls -/
 
 section

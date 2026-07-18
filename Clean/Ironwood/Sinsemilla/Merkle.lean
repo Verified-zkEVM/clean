@@ -809,7 +809,8 @@ Rust region sequence: witness `a`, short-range-check `b_1`/`b_2` (5 bits), witne
 `hash_to_point` (the `hashMessage` region), the `"Check piece decomposition"` gate region.
 Output: the hash point's `x` cell. -/
 def synthesize (G : Generators) (cfg : Config)
-    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp) (l : ℕ)
+    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   -- chip.rs:255-306 — witness a; range-check b1/b2; witness b, c
   let pa ← HashToPoint.witnessMessagePiece cfg.sinsemilla (waWit l input.left)
@@ -819,17 +820,626 @@ def synthesize (G : Generators) (cfg : Config)
     (wb2Wit input.right)
   let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
   let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
-  -- chip.rs:322-330 — the hash
-  let (out, z1s) ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q ⟨#v[pa, pb, pc]⟩
+  -- chip.rs:322-330 — the hash (the formal hash_to_point bundle)
+  let out ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q hQ (by decide)
+    (by decide) ⟨#v[pa, pb, pc]⟩
   -- chip.rs:337-397 — the decomposition-gate region
   let _ ← assignRegion "Check piece decomposition"
     ((Gate.circuit (l : Fp)).call cfg.gate 0
       { aWhole := pa, bWhole := pb, cWhole := pc,
         leftNode := input.left, rightNode := input.right,
-        z1A := z1s[0], z1B := z1s[1], b1 := b1, b2 := b2 })
+        z1A := out.z1s[0], z1B := out.z1s[1], b1 := b1, b2 := b2 })
   pure out.point.x
 
 end HashLayer
+
+/-- Literal-eval bridge for the gate-input record (component-wise cell evals). -/
+private theorem gateInputs_eval_literal (env : Placed Environment Fp)
+    (a b c ln rn zA zB s1 s2 : AssignedCell Fp) :
+    (eval env ({ aWhole := a, bWhole := b, cWhole := c, leftNode := ln, rightNode := rn,
+                 z1A := zA, z1B := zB, b1 := s1, b2 := s2 } : Gate.Inputs (AssignedCell Fp))
+      : Value Gate.Inputs Fp)
+      = { aWhole := AssignedCell.eval env.place env.env a,
+          bWhole := AssignedCell.eval env.place env.env b,
+          cWhole := AssignedCell.eval env.place env.env c,
+          leftNode := AssignedCell.eval env.place env.env ln,
+          rightNode := AssignedCell.eval env.place env.env rn,
+          z1A := AssignedCell.eval env.place env.env zA,
+          z1B := AssignedCell.eval env.place env.env zB,
+          b1 := AssignedCell.eval env.place env.env s1,
+          b2 := AssignedCell.eval env.place env.env s2 } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+/-- Literal-eval bridge for the gate-input record, prover view. -/
+private theorem gateInputs_eval_literal_prover (env : Placed ProverEnvironment Fp)
+    (a b c ln rn zA zB s1 s2 : AssignedCell Fp) :
+    (eval env ({ aWhole := a, bWhole := b, cWhole := c, leftNode := ln, rightNode := rn,
+                 z1A := zA, z1B := zB, b1 := s1, b2 := s2 } : Gate.Inputs (AssignedCell Fp))
+      : Value Gate.Inputs Fp)
+      = { aWhole := AssignedCell.eval env.place env.env.toEnvironment a,
+          bWhole := AssignedCell.eval env.place env.env.toEnvironment b,
+          cWhole := AssignedCell.eval env.place env.env.toEnvironment c,
+          leftNode := AssignedCell.eval env.place env.env.toEnvironment ln,
+          rightNode := AssignedCell.eval env.place env.env.toEnvironment rn,
+          z1A := AssignedCell.eval env.place env.env.toEnvironment zA,
+          z1B := AssignedCell.eval env.place env.env.toEnvironment zB,
+          b1 := AssignedCell.eval env.place env.env.toEnvironment s1,
+          b2 := AssignedCell.eval env.place env.env.toEnvironment s2 } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
+-- contract bridges for the children
+derive_contract_bridges shortC (K : ℕ) (numBits : ℕ) :=
+  Halo2.Ironwood.LookupRangeCheck.shortRangeCheck K numBits
+
+derive_contract_bridges gateC (lv : Fp) := Gate.circuit lv
+
+-- contract bridges for the children (hand-written for the proof-typed binders)
+private theorem hashC_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : HashLayer.merkleNs ≠ []) (hpos : ∀ x ∈ HashLayer.merkleNs, 0 < x) :
+    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns hpos).Spec
+      = fun input output wit => HashToPoint.Spec G HashLayer.merkleNs Q input output wit := rfl
+
+private theorem hashC_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : HashLayer.merkleNs ≠ []) (hpos : ∀ x ∈ HashLayer.merkleNs, 0 < x) :
+    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns hpos).Assumptions = fun _ => True := rfl
+
+private theorem hashC_envAssumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : HashLayer.merkleNs ≠ []) (hpos : ∀ x ∈ HashLayer.merkleNs, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config) (env : Placed Environment Fp) :
+    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns hpos).EnvAssumptions cfg env
+      = Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env := rfl
+
+private theorem hashC_proverAssumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : HashLayer.merkleNs ≠ []) (hpos : ∀ x ∈ HashLayer.merkleNs, 0 < x)
+    (input : Value (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp)
+    (wit : Sinsemilla.Chain.ChainWit HashLayer.merkleNs Fp) (hint : ProverHint Fp) :
+    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns hpos).ProverAssumptions input wit hint
+      = HashToPoint.ProverAssumptions G HashLayer.merkleNs Q input := rfl
+
+private theorem hashC_proverSpec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : HashLayer.merkleNs ≠ []) (hpos : ∀ x ∈ HashLayer.merkleNs, 0 < x)
+    (input : Value (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp)
+    (output : Value (HashToPoint.Output HashLayer.merkleNs.length) Fp)
+    (wit : Sinsemilla.Chain.ChainWit HashLayer.merkleNs Fp) (hint : ProverHint Fp) :
+    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns hpos).ProverSpec input output wit hint
+      = HashToPoint.ProverSpec G HashLayer.merkleNs Q input output := rfl
+
+/-- The suffix sum of bounded digits is the `pieceZ` of the recombined value (digit
+canonicity: the value's `val` is the digit sum, and dividing by `2^K` drops the head). -/
+private theorem sum_z1_eq_pieceZ {n : ℕ} (hn : K * (n + 1) ≤ 250) {ms : ℕ → ℕ}
+    (hms : ∀ r, ms r < 2 ^ K)
+    {p : Fp} (hp : p = ((∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) : ℕ) : Fp)) :
+    ((∑ j ∈ Finset.range n, ms (j + 1) * 2 ^ (K * j) : ℕ) : Fp) = pieceZ p 1 := by
+  have hsum_lt : (∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r)) < 2 ^ (K * (n + 1)) :=
+    sum_digits_lt hms (n + 1)
+  have hlt_p : (∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r)) < PALLAS_BASE_CARD :=
+    lt_trans (lt_of_lt_of_le hsum_lt (Nat.pow_le_pow_right (by norm_num) hn))
+      two_pow_250_lt_p
+  have hval : ZMod.val p = ∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) := by
+    rw [hp, ZMod.val_natCast_of_lt hlt_p]
+  have hshift := sum_head_shift K n ms
+  show _ = ((ZMod.val p / 2 ^ (K * 1) : ℕ) : Fp)
+  rw [hval, hshift]
+  congr 1
+  rw [show K * 1 = K from by ring,
+    Nat.add_mul_div_left (ms 0) _ (Nat.two_pow_pos K),
+    Nat.div_eq_of_lt (hms 0)]
+  omega
+
+/-- The region count of `HashLayer.synthesize`: three witness-piece regions, two short
+range checks, the hash region, the decomposition region = 7. -/
+private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
+    (lcfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (input : Var HashLayer.Input Fp) (i : RegionIndex) :
+    Operations.regionCount
+      ((HashLayer.synthesize G cfg lcfg Q hQ l input).operations i) = 7 := by
+  simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
+    Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+    Circuit.operations_bind, operations_assignRegion,
+    Operations.regionCount_append, Operations.regionCount]
+  rw [show ∀ (j : RegionIndex) (pieces : Var (Sinsemilla.Chain.Inputs
+        HashLayer.merkleNs.length) Fp) (h1 : HashLayer.merkleNs ≠ [])
+        (h2 : ∀ x ∈ HashLayer.merkleNs, 0 < x),
+      Operations.regionCount
+        (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ h1 h2).call
+          cfg.sinsemilla pieces).operations j) = 1 from fun j pieces h1 h2 => by
+    simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount,
+      HashToPoint.hashCircuit, FormalRegionCircuit.toFormal]
+    show Operations.regionCount ((assignRegion
+        (HashToPoint.hashRegion G HashLayer.merkleNs Q hQ h1 h2).name
+        ((HashToPoint.hashRegion G HashLayer.merkleNs Q hQ h1 h2).synthesize
+          cfg.sinsemilla 0 pieces)).operations j) + 0 = 1
+    rw [operations_assignRegion]
+    simp only [Operations.regionCount]]
+  simp only [Circuit.operations_pure, Operations.regionCount]
+
+/-- One Merkle layer hash as a layouter-level formal circuit (Rust
+`MerkleInstructions::hash_layer`, `merkle/chip.rs:229-436`), on the proven children
+(`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition `Gate`). -/
+def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
+    (hl : l < 2 ^ 10) :
+    FormalCircuit Fp (Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (Config × Halo2.Ironwood.LookupRangeCheck.Config 10) HashLayer.Input field where
+  name := "hash layer"
+  configure := pure
+
+  synthesize := fun (cfg, lcfg) input => HashLayer.synthesize G cfg lcfg Q hQ l input
+
+  elaborated := fun (cfg, lcfg) =>
+    { output := fun input i =>
+        (HashLayer.synthesize G cfg lcfg Q hQ l input).output i
+      regionCount := fun _ => 7
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun input i =>
+        (hashLayer_regionCount G cfg lcfg Q hQ l input i).symm }
+
+  EnvAssumptions := fun (cfg, lcfg) env =>
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
+    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    lcfg.qLookup.index ≠ lcfg.qRunning.index
+
+  Assumptions _ := True
+
+  Spec input output _ := HashLayer.Spec G Q l input output ()
+
+  ProverAssumptions input _ _ := HashLayer.ProverAssumptions G Q l input
+
+  ProverSpec input output _ _ :=
+    ∀ B, hashToPoint G.S Q
+        (merkleChunks l (ZMod.val (show Fp from input.left))
+          (ZMod.val (show Fp from input.right))) = some B →
+      output = B.x
+
+  soundness := by
+    circuit_proof_start
+    simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
+      Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+      circuit_norm] at hc
+    subcircuit_rw at hc
+    simp only [shortC_spec_eq, shortC_assumptions_eq, shortC_envAssumptions_eq,
+      gateC_spec_eq, gateC_assumptions_eq, gateC_envAssumptions_eq,
+      hashC_spec_eq, hashC_assumptions_eq, hashC_envAssumptions_eq] at hc
+    obtain ⟨hB1, hB2, hHash, hGate⟩ := hc
+    obtain ⟨hEgen, hEtab, hEdist⟩ := _hE
+    have hAshort : (5 : ℕ) ≤ 10 ∧ 2 ^ 10 * 2 ^ 10 < PALLAS_BASE_CARD := by
+      constructor
+      · norm_num
+      · norm_num [PALLAS_BASE_CARD]
+    -- the eval of a positional cell is the raw advice read
+    have hcellEval : ∀ (j : RegionIndex) (r : ℕ) (col : Column .advice),
+        (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          (AssignedCell.of j r col : Var field Fp) : Fp)
+        = env.env.advice col ((env.place j + r : ℕ) : ℤ) := fun _ _ _ => by
+      with_unfolding_all rfl
+    -- the b_1/b_2 range bounds (the shortcheck outputs ARE the gate's b_1/b_2 cells)
+    have hb1 := hB1 ⟨hEtab, hEdist⟩ hAshort
+    have hb2 := hB2 ⟨hEtab, hEdist⟩ hAshort
+    rw [show (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 1)
+        = AssignedCell.of (i₀ + 1) 0 cfg.2.runningSum from rfl, hcellEval] at hb1
+    rw [show (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 2)
+        = AssignedCell.of (i₀ + 2) 0 cfg.2.runningSum from rfl, hcellEval] at hb2
+    -- the hash spec: chunking + running sums + the z1 view + the hash-from-Q contract
+    have hHashS := hHash hEgen trivial
+    rw [ProvableStruct.eval_cells_eq_eval, Sinsemilla.Chain.inputs_eval_literal] at hHashS
+    rw [HashToPoint.hashCircuit_output_eval] at hHashS
+    obtain ⟨chunks, hPC, hZs, hz1v, hContract⟩ := hHashS
+    -- the gate spec on the landed cell values
+    have hGateS := hGate trivial trivial
+    simp only [HashToPoint.hashCircuit_output_z1s] at hGateS
+    rw [gateInputs_eval_literal] at hGateS
+    -- flatten every cell eval to raw advice reads
+    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+      Vector.getElem_ofFn] at hGateS hPC hb1 hb2
+    -- land the running-sum extraction on the zsFam family and unpack the per-piece facts
+    rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+          HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2).extract
+          cfg.1.sinsemilla
+          { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+                         AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+                         AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+          (i₀ + 3 + 2) { place := env.place, env := env.env }).zs
+        = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (Sinsemilla.Chain.zsCellsVal cfg.1.sinsemilla (i₀ + 3 + 2)
+              HashLayer.merkleNs 0) from rfl,
+      Sinsemilla.Chain.eval_zsCellsVal] at hZs
+    rw [show HashLayer.merkleNs = 24 :: 1 :: 24 :: ([] : List ℕ) from rfl] at hZs
+    obtain ⟨hzA, hzB, -⟩ := hZs
+    simp only [Sinsemilla.Chain.zsFam_head] at hzA hzB
+    have hzB' := (Sinsemilla.Chain.zsFam_tail_head
+        (fun r => env.env.advice cfg.1.sinsemilla.bits
+          ((env.place (i₀ + 3 + 2) + r : ℕ) : ℤ)) 24 1 [24] 0).symm.trans hzB
+    -- the piece chunking at the concrete widths (`merkleNs` unfolds reducibly)
+    obtain ⟨msA, hmsA, hpAval, tailB, hchunksEq, hPCB⟩ := hPC
+    obtain ⟨msB, hmsB, hpBval, tailC, htailC, hPCC⟩ := hPCB
+    obtain ⟨msC, hmsC, hpCval, tailN, htailN, hnil⟩ := hPCC
+    rw [show ProvableType.eval (M := fields HashLayer.merkleNs.length) env.place env.env
+        #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+           AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+           AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces]
+      = #v[env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ + 0 : ℕ) : ℤ),
+           env.env.advice cfg.1.sinsemilla.witnessPieces
+             ((env.place (i₀ + 1 + 2) + 0 : ℕ) : ℤ),
+           env.env.advice cfg.1.sinsemilla.witnessPieces
+             ((env.place (i₀ + 2 + 2) + 0 : ℕ) : ℤ)] from by
+        with_unfolding_all rfl] at hpAval hpBval hpCval
+    simp only [show ∀ (a b c : Fp), (#v[a, b, c] : Vector Fp 3)[0] = a from fun _ _ _ => rfl,
+      show ∀ (a b c : Fp), (Vector.tail (#v[a, b, c] : Vector Fp 3))[0] = b
+        from fun _ _ _ => rfl,
+      show ∀ (a b c : Fp), (Vector.tail (Vector.tail (#v[a, b, c] : Vector Fp 3)))[0] = c
+        from fun _ _ _ => rfl] at hpAval hpBval hpCval
+    -- the z_1 values off the running-sum vectors, chunk-indexed through the append shape
+    have hz1Aval := congrArg (fun v : Vector Fp 25 => v[1]'(by norm_num)) hzA
+    have hz1Bval := congrArg (fun v : Vector Fp 2 => v[1]'(by norm_num)) hzB'
+    simp only [Vector.getElem_ofFn] at hz1Aval hz1Bval
+    -- normalize the row spellings across all facts
+    simp only [show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 0 = 0 from rfl,
+      show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 1 = 25 from rfl,
+      Nat.add_zero, Nat.zero_add, show (24 + 1 + 1 : ℕ) = 26 from rfl]
+      at hGateS hz1Aval hz1Bval hpAval hpBval hpCval hb1 hb2
+    -- the chunk words through the append shape
+    have hsumA : (∑ j ∈ Finset.range (24 + 1 - 1), chunks.getD (1 + j) 0 * 2 ^ (K * j))
+        = ∑ j ∈ Finset.range 24, msA (j + 1) * 2 ^ (K * j) := by
+      refine Finset.sum_congr (by norm_num) fun j hj => ?_
+      rw [hchunksEq, Sinsemilla.Chain.chunks_head_getD msA tailB (1 + j)
+        (by simp at hj; omega), Nat.add_comm 1 j]
+    have hdrop : chunks.drop (24 + 1) = tailB := by
+      rw [hchunksEq]
+      exact Sinsemilla.Chain.chunks_drop_append msA tailB
+    have hsumB : (∑ j ∈ Finset.range (1 + 1 - 1),
+          (chunks.drop (24 + 1)).getD (1 + j) 0 * 2 ^ (K * j))
+        = msB 1 := by
+      rw [show (1 + 1 - 1) = 1 from rfl, Finset.sum_range_one, hdrop, htailC,
+        Sinsemilla.Chain.chunks_head_getD msB tailC 1 (by norm_num)]
+      norm_num
+    rw [hsumA] at hz1Aval
+    rw [hsumB] at hz1Bval
+    -- the gate equations
+    obtain ⟨hg1, hg2, hg3, hg4⟩ := hGateS
+    dsimp only [] at hg1 hg2 hg3 hg4
+    -- assemble the two node values
+    have e10 : (twoPow10 : Fp) = (2 ^ 10 : Fp) := by norm_num [twoPow10]
+    have e5 : (twoPow5 : Fp) = (2 ^ 5 : Fp) := by norm_num [twoPow5]
+    have e240 : (twoPow240 : Fp) = (2 ^ 240 : Fp) := by norm_num [twoPow240]
+    rw [show (24 + 1 : ℕ) = 25 from rfl] at hpAval
+    rw [show (1 + 1 : ℕ) = 2 from rfl] at hpBval
+    rw [show (24 + 1 : ℕ) = 25 from rfl] at hpCval
+    rw [← e10] at hg1
+    rw [← e10, ← e240] at hg2
+    rw [← e5] at hg3
+    rw [← e5] at hg4
+    have hasm := assemble hmsA hmsB hmsC hl hb1 hb2
+      hpAval hpBval hpCval
+      (ZMod.natCast_zmod_val (env.env.advice cfg.2.runningSum
+        ((env.place (i₀ + 1) : ℕ) : ℤ))).symm
+      (ZMod.natCast_zmod_val (env.env.advice cfg.2.runningSum
+        ((env.place (i₀ + 2) : ℕ) : ℤ))).symm
+      hz1Aval hz1Bval hg1 hg2 hg3 hg4
+    obtain ⟨lv, rv, hlv255, hrv255, hleftv, hrightv, hchunksM⟩ := hasm
+    have hchunksIs : chunks = merkleChunks l lv rv := by
+      rw [hchunksEq, htailC, htailN, hnil, hchunksM, List.append_nil]
+    refine ⟨lv, rv, hlv255, hrv255, ?_, ?_, ?_⟩
+    · show ((lv : ℕ) : Fp) = input_left
+      rw [← h_input.1]
+      exact hleftv
+    · show ((rv : ℕ) : Fp) = input_right
+      rw [← h_input.2]
+      exact hrightv
+    · intro B hB
+      have hres := hContract B (by rw [hchunksIs]; exact hB)
+      dsimp only [] at hres
+      rw [show ((HashLayer.synthesize G cfg.1 cfg.2 Q hQ l
+          { left := input_var_left, right := input_var_right }).output i₀)
+        = AssignedCell.of (i₀ + 3 + 2)
+            (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
+            cfg.1.sinsemilla.xA from rfl] at h_output
+      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice] at h_output
+      rw [← h_output]
+      exact hres.1
+
+  completeness := by
+    circuit_proof_start
+    simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
+      Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+      circuit_norm] at hwit ⊢
+    obtain ⟨hWa, ⟨hWb1x, hWb1⟩, ⟨hWb2x, hWb2⟩, hWb, hWc, hWhash, hWgate⟩ := hwit
+    -- the canonical node values, the node reads, and the honest piece values
+    obtain ⟨B0, hB0⟩ := hPA
+    have hlv255 : ZMod.val input_left < 2 ^ 255 :=
+      lt_trans (ZMod.val_lt _) p_lt_two_pow_255
+    have hrv255 : ZMod.val input_right < 2 ^ 255 :=
+      lt_trans (ZMod.val_lt _) p_lt_two_pow_255
+    have hreadL : Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩ input_var_left
+        = input_left := by
+      rw [← h_input.1]
+      with_unfolding_all rfl
+    have hreadR : Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩ input_var_right
+        = input_right := by
+      rw [← h_input.2]
+      with_unfolding_all rfl
+    have hwaV : env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ : ℕ) : ℤ)
+        = ((l + 2 ^ 10 * bitrange (ZMod.val input_left) 0 240 : ℕ) : Fp) := by
+      rw [hWa]
+      simp only [HashLayer.waWit, Witgen.WitgenIROver.eval_native_apply, hreadL]
+      rfl
+    have hwbV : env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)
+        = ((bitrange (ZMod.val input_left) 240 10
+            + 2 ^ 10 * bitrange (ZMod.val input_left) 250 5
+            + 2 ^ 15 * bitrange (ZMod.val input_right) 0 5 : ℕ) : Fp) := by
+      rw [hWb]
+      simp only [HashLayer.wbWit, Witgen.WitgenIROver.eval_native_apply, hreadL, hreadR]
+      rfl
+    have hwcV : env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)
+        = ((bitrange (ZMod.val input_right) 5 250 : ℕ) : Fp) := by
+      rw [hWc]
+      simp only [HashLayer.wcWit, Witgen.WitgenIROver.eval_native_apply, hreadR]
+      rfl
+    have hhp := honest_pieces hl hlv255 hrv255 hwaV hwbV hwcV
+    obtain ⟨⟨hbA, hbB, hbC⟩, hhchunks⟩ := hhp
+    -- the hash child's honest-prover precondition (used by the leaf AND the derived run)
+    have hPAhash : (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+        HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2).ProverAssumptions
+        (eval env ({ pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+            AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+            AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+          : Var (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp))
+        ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+          HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2).extract
+          cfg.1.sinsemilla
+          { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+              AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+              AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+          (i₀ + 3 + 2) env.toEnvironment) env.env.hint := by
+      rw [hashC_proverAssumptions_eq]
+      rw [ProvableStruct.eval_cells_eq_eval_prover, Sinsemilla.Chain.inputs_eval_literal,
+        show ProvableType.eval (M := fields HashLayer.merkleNs.length) env.place
+          env.env.toEnvironment
+          #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+             AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+             AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces]
+        = #v[env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ : ℕ) : ℤ),
+             env.env.advice cfg.1.sinsemilla.witnessPieces
+               ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
+             env.env.advice cfg.1.sinsemilla.witnessPieces
+               ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)]
+        from by with_unfolding_all rfl]
+      refine ⟨by decide, ⟨?_, ?_, ?_, trivial⟩, B0, ?_⟩
+      · show ZMod.val (env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place i₀ : ℕ) : ℤ)) < 2 ^ (K * 25)
+        exact hbA
+      · show ZMod.val (env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)) < 2 ^ (K * 2)
+        exact hbB
+      · show ZMod.val (env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)) < 2 ^ (K * 25)
+        exact hbC
+      · show Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+          ((List.range 25).map (pieceWord (env.env.advice cfg.1.sinsemilla.witnessPieces
+              ((env.place i₀ : ℕ) : ℤ)))
+            ++ ((List.range 2).map (pieceWord (env.env.advice
+                  cfg.1.sinsemilla.witnessPieces ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)))
+              ++ (List.range 25).map (pieceWord (env.env.advice
+                  cfg.1.sinsemilla.witnessPieces ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)))))
+          = some B0
+        rw [hhchunks]
+        exact hB0
+    -- the b_1/b_2 witnessed values, canonical
+    have hb1V : env.env.advice cfg.2.runningSum ((env.place (i₀ + 1) : ℕ) : ℤ)
+        = ((bitrange (ZMod.val input_left) 250 5 : ℕ) : Fp) := by
+      rw [hWb1x]
+      simp only [HashLayer.wb1Wit, Witgen.WitgenIROver.eval_native_apply, hreadL]
+      rfl
+    have hb2V : env.env.advice cfg.2.runningSum ((env.place (i₀ + 2) : ℕ) : ℤ)
+        = ((bitrange (ZMod.val input_right) 0 5 : ℕ) : Fp) := by
+      rw [hWb2x]
+      simp only [HashLayer.wb2Wit, Witgen.WitgenIROver.eval_native_apply, hreadR]
+      rfl
+    -- the hash child's honest run: the verifier Spec (for the z_1 values) + the honest PS
+    have hder := Halo2.SubcircuitRw.layouter_completeness_derived_placed
+      (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+        HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2)
+      cfg.1.sinsemilla (i₀ + 3 + 2) env
+      { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+          AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+          AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+      hWhash _hE.1 trivial hPAhash
+    obtain ⟨hSpecH, hPSH⟩ := hder
+    rw [hashC_spec_eq] at hSpecH
+    rw [hashC_proverSpec_eq] at hPSH
+    rw [HashToPoint.hashCircuit_output_eval] at hSpecH
+    obtain ⟨chunksH, hPCH, hZsH, -, -⟩ := hSpecH
+    -- normalize the verifier-view spellings to the prover reads
+    try simp only [Placed.toEnvironment_place, Placed.toEnvironment_env,
+      ProverEnvironment.toEnvironment_advice] at hPCH hZsH
+    -- the running-sum families and the z_1 sums (the soundness-side extraction)
+    rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+          HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2).extract
+          cfg.1.sinsemilla
+          { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
+              AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+              AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+          (i₀ + 3 + 2) env.toEnvironment).zs
+        = eval env.toEnvironment
+            (Sinsemilla.Chain.zsCellsVal cfg.1.sinsemilla (i₀ + 3 + 2)
+              HashLayer.merkleNs 0) from rfl,
+      Sinsemilla.Chain.eval_zsCellsVal] at hZsH
+    simp only [Placed.toEnvironment_place, Placed.toEnvironment_env] at hZsH
+    rw [show HashLayer.merkleNs = 24 :: 1 :: 24 :: ([] : List ℕ) from rfl] at hZsH
+    obtain ⟨hzAH, hzBH, -⟩ := hZsH
+    simp only [Sinsemilla.Chain.zsFam_head] at hzAH
+    have hzBH' := (Sinsemilla.Chain.zsFam_tail_head
+        (fun r => env.env.advice cfg.1.sinsemilla.bits
+          ((env.place (i₀ + 3 + 2) + r : ℕ) : ℤ)) 24 1 [24] 0).symm.trans hzBH
+    obtain ⟨msA', hmsA', hpAval', tailB', hchunksEq', hPCB'⟩ := hPCH
+    obtain ⟨msB', hmsB', hpBval', tailC', htailC', -⟩ := hPCB'
+    have hpA2 : env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ : ℕ) : ℤ)
+        = ((∑ r ∈ Finset.range (24 + 1), msA' r * 2 ^ (K * r) : ℕ) : Fp) := by
+      rw [← hpAval']
+      with_unfolding_all rfl
+    have hpB2 : env.env.advice cfg.1.sinsemilla.witnessPieces
+          ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)
+        = ((∑ r ∈ Finset.range (1 + 1), msB' r * 2 ^ (K * r) : ℕ) : Fp) := by
+      rw [← hpBval']
+      with_unfolding_all rfl
+    -- the z_1 cell values in `pieceZ` form (digit canonicity)
+    have hz1AV := congrArg (fun v : Vector Fp 25 => v[1]'(by norm_num)) hzAH
+    have hz1BV := congrArg (fun v : Vector Fp 2 => v[1]'(by norm_num)) hzBH'
+    simp only [Vector.getElem_ofFn] at hz1AV hz1BV
+    have hsumA' : (∑ j ∈ Finset.range (24 + 1 - 1), chunksH.getD (1 + j) 0 * 2 ^ (K * j))
+        = ∑ j ∈ Finset.range 24, msA' (j + 1) * 2 ^ (K * j) := by
+      refine Finset.sum_congr (by norm_num) fun j hj => ?_
+      rw [hchunksEq', Sinsemilla.Chain.chunks_head_getD msA' tailB' (1 + j)
+        (by simp at hj; omega), Nat.add_comm 1 j]
+    have hsumB' : (∑ j ∈ Finset.range (1 + 1 - 1),
+          (chunksH.drop (24 + 1)).getD (1 + j) 0 * 2 ^ (K * j))
+        = msB' 1 := by
+      rw [show (1 + 1 - 1) = 1 from rfl, Finset.sum_range_one,
+        show chunksH.drop (24 + 1) = tailB' from by
+          rw [hchunksEq']; exact Sinsemilla.Chain.chunks_drop_append msA' tailB',
+        htailC', Sinsemilla.Chain.chunks_head_getD msB' tailC' 1 (by norm_num)]
+      norm_num
+    rw [hsumA'] at hz1AV
+    rw [hsumB'] at hz1BV
+    have hz1A_pieceZ : env.env.advice cfg.1.sinsemilla.bits
+          ((env.place (i₀ + 3 + 2) + (0 + 1) : ℕ) : ℤ)
+        = pieceZ (env.env.advice cfg.1.sinsemilla.witnessPieces
+            ((env.place i₀ : ℕ) : ℤ)) 1 := by
+      rw [hz1AV]
+      exact sum_z1_eq_pieceZ (by norm_num [show K = 10 from rfl]) hmsA' hpA2
+    have hz1B_pieceZ : env.env.advice cfg.1.sinsemilla.bits
+          ((env.place (i₀ + 3 + 2) + (0 + (24 + 1) + 1) : ℕ) : ℤ)
+        = pieceZ (env.env.advice cfg.1.sinsemilla.witnessPieces
+            ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)) 1 := by
+      rw [hz1BV,
+        show ((msB' 1 : ℕ) : Fp)
+          = ((∑ j ∈ Finset.range 1, msB' (j + 1) * 2 ^ (K * j) : ℕ) : Fp) from by
+          rw [Finset.sum_range_one]; norm_num]
+      exact sum_z1_eq_pieceZ (by norm_num [show K = 10 from rfl]) hmsB' hpB2
+    -- the gate spec on the honest values
+    have hg := honest_gate hl hlv255 hrv255 hwaV hb1V hb2V hwbV hwcV
+      hz1A_pieceZ hz1B_pieceZ (ZMod.natCast_zmod_val input_left)
+      (ZMod.natCast_zmod_val input_right)
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
+    · -- b1 short check
+      refine Halo2.SubcircuitRw.region_completeness_leaf_placed
+        (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 1) env ()
+        hWb1 ⟨⟨?_, ?_⟩, ?_, ?_⟩
+      · exact _hE.2.1
+      · exact _hE.2.2
+      · exact ⟨by norm_num, by norm_num [PALLAS_BASE_CARD]⟩
+      · rw [shortC_proverAssumptions_eq]
+        rw [show ((Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).extract
+            cfg.2 0 () (i₀ + 1) env.toEnvironment : Fp)
+          = env.env.advice cfg.2.runningSum ((env.place (i₀ + 1) : ℕ) : ℤ) from by
+            with_unfolding_all rfl, hWb1x]
+        rw [show (Witgen.WitgenIROver.eval (HashLayer.wb1Wit input_var_left)
+            { place := env.place, env := env.env })[0]
+          = ((bitrange (Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩
+              input_var_left).val 250 5 : ℕ) : Fp) from by
+            simp only [HashLayer.wb1Wit, Witgen.WitgenIROver.eval_native_apply]
+            rfl]
+        show ZMod.val ((bitrange (Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩
+            input_var_left).val 250 5 : ℕ) : Fp) < 2 ^ 5
+        rw [ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by
+          norm_num [PALLAS_BASE_CARD]))]
+        exact bitrange_lt _ _ _
+    · -- b2 short check
+      refine Halo2.SubcircuitRw.region_completeness_leaf_placed
+        (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 2) env ()
+        hWb2 ⟨⟨?_, ?_⟩, ?_, ?_⟩
+      · exact _hE.2.1
+      · exact _hE.2.2
+      · exact ⟨by norm_num, by norm_num [PALLAS_BASE_CARD]⟩
+      · rw [shortC_proverAssumptions_eq]
+        rw [show ((Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).extract
+            cfg.2 0 () (i₀ + 2) env.toEnvironment : Fp)
+          = env.env.advice cfg.2.runningSum ((env.place (i₀ + 2) : ℕ) : ℤ) from by
+            with_unfolding_all rfl, hWb2x]
+        rw [show (Witgen.WitgenIROver.eval (HashLayer.wb2Wit input_var_right)
+            { place := env.place, env := env.env })[0]
+          = ((bitrange (Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩
+              input_var_right).val 0 5 : ℕ) : Fp) from by
+            simp only [HashLayer.wb2Wit, Witgen.WitgenIROver.eval_native_apply]
+            rfl]
+        show ZMod.val ((bitrange (Sinsemilla.HashPiece.readCell ⟨env.place, env.env⟩
+            input_var_right).val 0 5 : ℕ) : Fp) < 2 ^ 5
+        rw [ZMod.val_natCast_of_lt (lt_trans (bitrange_lt _ _ _) (by
+          norm_num [PALLAS_BASE_CARD]))]
+        exact bitrange_lt _ _ _
+    · -- the hash
+      refine Halo2.SubcircuitRw.layouter_completeness_leaf_placed
+        (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ HashLayer.synthesize._proof_1
+          HashLayer.synthesize._proof_2) cfg.1.sinsemilla (i₀ + 3 + 2) env _ hWhash
+        ⟨?_, trivial, ?_⟩
+      · exact _hE.1
+      · exact hPAhash
+    · -- the decomposition gate
+      refine Halo2.SubcircuitRw.region_completeness_leaf_placed
+        (Gate.circuit (l : Fp)) cfg.1.gate 0 _ env _ hWgate ⟨trivial, trivial, ?_⟩
+      rw [gateC_proverAssumptions_eq]
+      simp only [HashToPoint.hashCircuit_output_z1s]
+      rw [gateInputs_eval_literal_prover]
+      simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+        Vector.getElem_ofFn,
+        show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 0 = 0 from rfl,
+        show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 1 = 25 from rfl,
+        Nat.add_zero, Nat.zero_add, show (25 + 1 : ℕ) = 26 from rfl]
+      simp only [Nat.zero_add,
+        show (24 + 1 + 1 : ℕ) = 26 from rfl,
+        show (twoPow10 : Fp) = (2 ^ 10 : Fp) from by norm_num [twoPow10],
+        show (twoPow5 : Fp) = (2 ^ 5 : Fp) from by norm_num [twoPow5],
+        show (twoPow240 : Fp) = (2 ^ 240 : Fp) from by norm_num [twoPow240]] at hg
+      rw [show Gate.GateSpec (↑l : Fp) = fun input => Gate.Spec input.aWhole input.bWhole
+          input.cWhole input.leftNode input.rightNode input.z1A input.z1B input.b1
+          input.b2 ↑l from rfl]
+      dsimp only []
+      rw [h_input.1, h_input.2]
+      exact hg
+    · -- the honest-prover contract
+      intro B hB
+      have hPSH' := hPSH B (by
+        rw [show (eval env ({ pieces := #v[AssignedCell.of i₀ 0
+                  cfg.1.sinsemilla.witnessPieces,
+                AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
+                AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
+              : Var (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp)
+              : Value (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp).pieces
+          = #v[env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ : ℕ) : ℤ),
+               env.env.advice cfg.1.sinsemilla.witnessPieces
+                 ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
+               env.env.advice cfg.1.sinsemilla.witnessPieces
+                 ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)] from by with_unfolding_all rfl,
+          show Sinsemilla.Chain.honestChunks HashLayer.merkleNs
+            #v[env.env.advice cfg.1.sinsemilla.witnessPieces ((env.place i₀ : ℕ) : ℤ),
+               env.env.advice cfg.1.sinsemilla.witnessPieces
+                 ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
+               env.env.advice cfg.1.sinsemilla.witnessPieces
+                 ((env.place (i₀ + 2 + 2) : ℕ) : ℤ)]
+          = (List.range 25).map (pieceWord (env.env.advice cfg.1.sinsemilla.witnessPieces
+              ((env.place i₀ : ℕ) : ℤ)))
+            ++ ((List.range 2).map (pieceWord (env.env.advice
+                  cfg.1.sinsemilla.witnessPieces ((env.place (i₀ + 1 + 2) : ℕ) : ℤ)))
+              ++ (List.range 25).map (pieceWord (env.env.advice
+                  cfg.1.sinsemilla.witnessPieces ((env.place (i₀ + 2 + 2) : ℕ) : ℤ))))
+          from by with_unfolding_all rfl, hhchunks]
+        exact hB)
+      rw [HashToPoint.hashCircuit_output_eval_prover] at hPSH'
+      obtain ⟨hpx, -⟩ := hPSH'
+      rw [show ((HashLayer.synthesize G cfg.1 cfg.2 Q hQ l
+          { left := input_var_left, right := input_var_right }).output i₀)
+        = AssignedCell.of (i₀ + 3 + 2)
+            (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
+            cfg.1.sinsemilla.xA from rfl] at h_output
+      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice] at h_output
+      rw [← h_output]
+      exact hpx
 
 /-! ### Merkle path (`MerkleStep` / `MerkleRoot`, lifted verbatim) -/
 
@@ -867,13 +1477,12 @@ theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp) (f : ℕ → Fp) (l 
         rw [this]; exact hi')
       simpa using hres
 
-/-! ### `Layer` (CondSwap + HashLayer) — the CondSwap STATED BOUNDARY
+/-! ### `Layer` (CondSwap + HashLayer)
 
-`MerkleInstructions::hash_layer` first conditionally swaps `(node, sibling)` by the position bit,
-then hashes. **`CondSwap` is NOT ported to the Ironwood region tree** (only the phase-one
-`Orchard.Utilities.CondSwap` exists) → the swap child is a **stated boundary**, mirroring
-`CommitDomain`'s `MulFixed` cut. When a region-level `CondSwap.Swap` lands, it is composed with
-`HashLayer.circuit` exactly as the donor `Merkle.Layer.main` does. -/
+One Merkle path layer (`MerklePath::calculate_root`'s loop body): conditionally swap
+`(node, sibling)` by the position bit — the sibling and the bit are prover witnesses
+(Rust `Value`s) — then hash the swapped pair. Both children are proven
+(`CondSwap.swap`, `HashLayer.circuit`). -/
 
 /-- The swapped `(left, right)` pair a layer hashes, selected by the position bit. Donor
 `Merkle.Layer.proverChunks` (value-level). -/
@@ -881,6 +1490,259 @@ def proverChunks (l : ℕ) (node sibling : Fp) (posBit : Bool) : List ℕ :=
   merkleChunks l
     (ZMod.val (if posBit then sibling else node))
     (ZMod.val (if posBit then node else sibling))
+
+namespace Layer
+
+/-- The layer input: the running node cell (the sibling and position bit are witnesses). -/
+structure Input (F : Type) where
+  node : F
+deriving ProvableStruct
+
+end Layer
+
+-- contract bridges for the layer's children (hand-written for the proof-typed binders)
+private theorem hashLayerC_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    (HashLayer.circuit G Q hQ l hl).Spec
+      = fun input output _ => HashLayer.Spec G Q l input output () := rfl
+
+private theorem hashLayerC_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    (HashLayer.circuit G Q hQ l hl).Assumptions = fun _ => True := rfl
+
+private theorem hashLayerC_envAssumptions_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (cfg : Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (env : Placed Environment Fp) :
+    (HashLayer.circuit G Q hQ l hl).EnvAssumptions cfg env
+      = (Sinsemilla.GeneratorTableLoaded G cfg.1.sinsemilla.generatorTable env.env ∧
+        Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 cfg.2 env.env ∧
+        cfg.2.qLookup.index ≠ cfg.2.qRunning.index) := rfl
+
+private theorem hashLayerC_proverAssumptions_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (input : Value HashLayer.Input Fp) (wit : Value unit Fp) (hint : ProverHint Fp) :
+    (HashLayer.circuit G Q hQ l hl).ProverAssumptions input wit hint
+      = HashLayer.ProverAssumptions G Q l input := rfl
+
+private theorem hashLayerC_proverSpec_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (input : Value HashLayer.Input Fp) (output : Value field Fp)
+    (wit : Value unit Fp) (hint : ProverHint Fp) :
+    (HashLayer.circuit G Q hQ l hl).ProverSpec input output wit hint
+      = ∀ B, hashToPoint G.S Q (merkleChunks l (ZMod.val (show Fp from input.left))
+          (ZMod.val (show Fp from input.right))) = some B → output = B.x := rfl
+
+/-- The region count of the layer: the swap region + the hash layer's 7. -/
+private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool)
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lcfg : Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i : RegionIndex) :
+    Operations.regionCount
+      ((do
+        let pair ← assignRegion "swap"
+          ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+        (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+          { left := pair.aSwapped, right := pair.bSwapped }).operations i) = 8 := by
+  simp only [Circuit.operations_bind, operations_assignRegion,
+    Operations.regionCount_append, Operations.regionCount]
+  rw [show ∀ (j : RegionIndex) (inp : Var HashLayer.Input Fp),
+      Operations.regionCount
+        (((HashLayer.circuit G Q hQ l hl).call (cfg, lcfg) inp).operations j) = 7
+    from fun j inp => by
+      simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
+      rw [show ((HashLayer.circuit G Q hQ l hl).synthesize (cfg, lcfg) inp j).2.1
+          = ((HashLayer.synthesize G cfg lcfg Q hQ l inp).operations j) from rfl]
+      rw [hashLayer_regionCount G cfg lcfg Q hQ l inp j]]
+
+/-- One Merkle path layer (the `MerklePath::calculate_root` loop body): conditionally swap
+`(node, sibling)` by the position bit — sibling and bit are prover witness programs — then
+the layer hash. `Spec` is `MerkleStep`. -/
+def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
+    (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field where
+  name := "MerkleCRH layer"
+  configure := pure
+
+  synthesize := fun (ccfg, cfg, lcfg) input => do
+    let pair ← assignRegion "swap"
+      ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+    (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+      { left := pair.aSwapped, right := pair.bSwapped }
+
+  elaborated := fun (ccfg, cfg, lcfg) =>
+    { output := fun input i =>
+        ((do
+          let pair ← assignRegion "swap"
+            ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+          (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+            { left := pair.aSwapped, right := pair.bSwapped }
+          : Circuit Fp (Var field Fp)).output i)
+      regionCount := fun _ => 8
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun input i =>
+        (layer_regionCount G Q hQ l hl wsib wswap ccfg cfg lcfg input i).symm }
+
+  EnvAssumptions := fun (ccfg, cfg, lcfg) env =>
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
+    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    lcfg.qLookup.index ≠ lcfg.qRunning.index
+
+  Assumptions _ := True
+
+  -- the swap witnesses (sibling, position flag), read off the swap region's cells
+  Witness := fieldPair
+  extract := fun (ccfg, _, _) _ i₀ env =>
+    (eval env (AssignedCell.of i₀ 0 ccfg.b : Var field Fp),
+     eval env (AssignedCell.of i₀ 0 ccfg.swap : Var field Fp))
+
+  Spec input output _ := MerkleStep G Q l input.node output
+
+  ProverAssumptions input wit _ :=
+    ∃ B, hashToPoint G.S Q (proverChunks l input.node wit.1 (wit.2 = 1)) = some B
+
+  ProverSpec input output wit _ :=
+    ∀ B, hashToPoint G.S Q (proverChunks l input.node wit.1 (wit.2 = 1)) = some B →
+      output = B.x
+
+  soundness := by
+    circuit_proof_start
+    obtain ⟨hSwap, hHash⟩ := hc
+    have hSw : Halo2.Ironwood.CondSwap.SwapSpec input_node
+        (ProvableStruct.eval env.place env.env x_gen_out_0)
+        ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0 { a := input_var_node }
+          i₀ ⟨env.place, env.env⟩) := hSwap trivial trivial
+    obtain ⟨hbool, hASw, hBSw⟩ := hSw
+    -- the swapped cells' reads are the eval'd swap-output components
+    have hAread : (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env x_gen_out_0).aSwapped := by
+      with_unfolding_all rfl
+    have hBread : (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env x_gen_out_0).bSwapped := by
+      with_unfolding_all rfl
+    have hHashS := hHash ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
+    rw [hashLayerC_spec_eq] at hHashS
+    obtain ⟨lv, rv, hlv, hrv, hleftEq, hrightEq, hcontract⟩ := hHashS
+    rw [show ({ left := env.env.get x_gen_out_0.aSwapped.cell.column
+                  ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+                right := env.env.get x_gen_out_0.bSwapped.cell.column
+                  ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        : Value HashLayer.Input Fp).left
+      = (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      hAread, hASw] at hleftEq
+    rw [show ({ left := env.env.get x_gen_out_0.aSwapped.cell.column
+                  ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+                right := env.env.get x_gen_out_0.bSwapped.cell.column
+                  ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        : Value HashLayer.Input Fp).right
+      = (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      hBread, hBSw] at hrightEq
+    refine ⟨lv, rv, hlv, hrv, ?_, hcontract⟩
+    rcases hbool with h0 | h1
+    · rw [if_neg (show ¬ _ = (1 : Fp) from by rw [h0]; decide)] at hleftEq
+      exact Or.inl hleftEq
+    · rw [if_pos h1] at hrightEq
+      exact Or.inr hrightEq
+
+  completeness := by
+    circuit_proof_start
+    obtain ⟨B0, hB0⟩ := hPA
+    -- the swap child's honest values (its ProverSpec, over the witness-cell reads)
+    have hSwPS := h_spec_0 trivial trivial trivial
+    have hwit1 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+          { a := input_var_node } i₀ env.toEnvironment).1
+        = env.env.advice cfg.1.b ((env.place i₀ : ℕ) : ℤ) := by
+      with_unfolding_all rfl
+    have hwit2 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+          { a := input_var_node } i₀ env.toEnvironment).2
+        = env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) := by
+      with_unfolding_all rfl
+    obtain ⟨-, hASw, hBSw⟩ := hSwPS
+    rw [hwit1, hwit2, h_input] at hASw hBSw
+    -- the swapped cells' reads are the eval'd swap-output components
+    have hAread : (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env.toEnvironment x_gen_out_0).aSwapped := by
+      with_unfolding_all rfl
+    have hBread : (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env.toEnvironment x_gen_out_0).bSwapped := by
+      with_unfolding_all rfl
+    -- the hash child's honest-prover precondition
+    have hPAhash : (HashLayer.circuit G Q hQ l hl).ProverAssumptions
+        { left := env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+          right := env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        ((HashLayer.circuit G Q hQ l hl).extract (cfg.2.1, cfg.2.2)
+          { left := x_gen_out_0.aSwapped, right := x_gen_out_0.bSwapped } (i₀ + 1)
+          env.toEnvironment) env.env.hint := by
+      rw [hashLayerC_proverAssumptions_eq]
+      refine ⟨B0, ?_⟩
+      show hashToPoint G.S Q (merkleChunks l
+          (ZMod.val (env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
+          (ZMod.val (env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B0
+      rw [hAread, hBread, hASw, hBSw]
+      by_cases hs : env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1
+      · rw [if_pos hs, if_pos hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = true from by simp [hs]] at hB0
+        simpa [proverChunks] using hB0
+      · rw [if_neg hs, if_neg hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = false from by simp [hs]] at hB0
+        simpa [proverChunks] using hB0
+    refine ⟨⟨⟨trivial, trivial, trivial⟩, ⟨_hE.1, _hE.2.1, _hE.2.2⟩, trivial, hPAhash⟩, ?_⟩
+    -- the honest-prover contract
+    intro B hB
+    have hPShash := (h_spec_1 ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial hPAhash).2
+    rw [hashLayerC_proverSpec_eq] at hPShash
+    have hres := hPShash B (by
+      show hashToPoint G.S Q (merkleChunks l
+          (ZMod.val (env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
+          (ZMod.val (env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B
+      rw [hAread, hBread, hASw, hBSw]
+      by_cases hs : env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1
+      · rw [if_pos hs, if_pos hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = true from by simp [hs]] at hB
+        simpa [proverChunks] using hB
+      · rw [if_neg hs, if_neg hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = false from by simp [hs]] at hB
+        simpa [proverChunks] using hB)
+    rw [← h_output]
+    exact hres
 
 /-! ### `CalculateRoot` (32-layer fold, structure) -/
 
@@ -921,6 +1783,394 @@ theorem honestNode_isSome_le (G : Generators) (Q : Point Fp)
     · exact ih (by omega) (honestNode_isSome_of_succ G Q leaf path pos m h)
     · have : i = m + 1 := by omega
       rwa [this]
+
+/-! #### The 32-layer fold (`MerklePath::calculate_root`), on `FormalCircuit.foldCall` -/
+
+/-- The layer family: layer `i` is `Layer.circuit` at `l = i` (`% 2 ^ 10` totalizer —
+identity on the 32 layers used). -/
+def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool) (i : ℕ) :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field :=
+  Layer.circuit G Q hQ (i % 2 ^ 10) (Nat.mod_lt _ (by norm_num)) (wsib i) (wswap i)
+
+/-- Feed a layer's root cell back as the next layer's node. -/
+def toInput : Var field Fp → Var Layer.Input Fp := fun out => { node := out }
+
+/-- The running node over the *extracted* per-layer `(sibling, swap)` readings (`none` once a
+layer hash is undefined) — the fold's own honest-node chain. The honest-input instantiation
+(path/pos witness programs) recovers `honestNode`. -/
+def pathNode (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp) (node : Fp) : ℕ → Option Fp
+  | 0 => some node
+  | k + 1 => (pathNode G Q wit node k).bind fun n =>
+      (hashToPoint G.S Q (proverChunks k n (wit k).1 ((wit k).2 = 1))).map (·.x)
+
+theorem pathNode_isSome_of_succ (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp)
+    (node : Fp) (k : ℕ) (h : (pathNode G Q wit node (k + 1)).isSome) :
+    (pathNode G Q wit node k).isSome := by
+  rw [pathNode] at h
+  rcases hb : pathNode G Q wit node k with _ | v
+  · rw [hb] at h; simp at h
+  · simp
+
+theorem pathNode_isSome_le (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp)
+    (node : Fp) {i j : ℕ} (hij : i ≤ j) (h : (pathNode G Q wit node j).isSome) :
+    (pathNode G Q wit node i).isSome := by
+  induction j with
+  | zero => rw [Nat.le_zero.mp hij]; exact h
+  | succ m ih =>
+    rcases Nat.lt_or_ge i (m + 1) with hlt | hge
+    · exact ih (by omega) (pathNode_isSome_of_succ G Q wit node m h)
+    · have : i = m + 1 := by omega
+      rwa [this]
+
+variable (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+  (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+
+/-- The fold's region index entering layer `m`: 8 regions per layer. -/
+private theorem foldState_snd
+    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i₀ : RegionIndex) : ∀ m : ℕ,
+    (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i₀ m).2
+      = i₀ + 8 * m
+  | 0 => rfl
+  | m + 1 => by
+    show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i₀ m).2 + 8
+      = i₀ + 8 * (m + 1)
+    rw [foldState_snd cfg input i₀ m, Nat.mul_succ, Nat.add_assoc]
+
+/-- The fold's region count: `8 * depth`. -/
+private theorem fold_regionCount
+    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i : RegionIndex) :
+    Operations.regionCount
+      (((FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth >>=
+        fun acc => pure acc.node) : Circuit Fp (Var field Fp)).operations i)
+      = 8 * depth := by
+  have h := FormalCircuit.foldOps_regionCount (layerAt G Q hQ wsib wswap) toInput cfg input
+    i depth
+  rw [foldState_snd G Q hQ wsib wswap cfg input i depth] at h
+  simp only [Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.foldCall_operations, Operations.regionCount_append, Operations.regionCount]
+  rw [Nat.add_zero]
+  exact Nat.add_left_cancel h
+
+/-- Projection landing: `.node` of an eval'd `Layer.Input` var is the eval of its cell. -/
+private theorem input_eval_node (env : Placed Environment Fp) (v : Var Layer.Input Fp) :
+    (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem input_eval_node_prover (env : Placed ProverEnvironment Fp)
+    (v : Var Layer.Input Fp) :
+    (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
+/-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
+`Layer.circuit` (layer `i` at `l = i`), fed by the per-layer sibling/position-bit witness
+programs. `Spec` is `MerkleRoot` over the leaf. -/
+def circuit :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field where
+  name := "MerkleCRH calculate_root"
+  configure := pure
+
+  synthesize cfg input := do
+    let acc ← FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth
+    pure acc.node
+
+  elaborated cfg :=
+    { output := fun input i =>
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i depth).1.node
+      regionCount := fun _ => 8 * depth
+      output_eq := by
+        intro input i
+        show (FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth >>=
+          fun acc => pure acc.node).output i = _
+        rw [Circuit.output_bind, FormalCircuit.foldCall_output]
+      regionCount_eq := fun input i =>
+        (fold_regionCount G Q hQ wsib wswap cfg input i).symm }
+
+  EnvAssumptions := fun (_, cfg, lcfg) env =>
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
+    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    lcfg.qLookup.index ≠ lcfg.qRunning.index
+
+  Assumptions _ := True
+
+  -- the 32 per-layer (sibling, swap) cell readings, at 8-region stride
+  Witness := fun F => ℕ → F × F
+  extract := fun (ccfg, _, _) _ i₀ env => fun j =>
+    (eval env (AssignedCell.of (i₀ + 8 * j) 0 ccfg.b : Var field Fp),
+     eval env (AssignedCell.of (i₀ + 8 * j) 0 ccfg.swap : Var field Fp))
+
+  Spec input output _ := MerkleRoot G Q 0 input.node depth output
+
+  ProverAssumptions input wit _ := (pathNode G Q wit input.node depth).isSome
+
+  ProverSpec _ _ _ _ := True
+
+  soundness := by
+    circuit_proof_start
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints] at hc
+    subcircuit_rw at hc
+    -- the per-layer contract, `l = i`
+    have hstep : ∀ i : Fin depth, MerkleStep G Q ↑i
+        ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+        (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          ((layerAt G Q hQ wsib wswap ↑i).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).2)) := by
+      intro i
+      have h : MerkleStep G Q (↑i % 2 ^ 10)
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+          (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            ((layerAt G Q hQ wsib wswap ↑i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ ↑i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ ↑i).2)) :=
+        hc i ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
+      rwa [Nat.mod_eq_of_lt (show (↑i : ℕ) < 2 ^ 10 from by
+        have := i.isLt; simp only [depth] at this; omega)] at h
+    -- assemble the step chain into the root
+    have hroot := merkleRoot_of_steps G Q
+      (fun k => (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node) 0 depth
+      (fun i hi => by
+        have h := hstep ⟨i, hi⟩
+        rw [Nat.zero_add]
+        show MerkleStep G Q i
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ i).1 : Value Layer.Input Fp).node)
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node)
+        rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node
+          = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            ((layerAt G Q hQ wsib wswap i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).2) from by
+          rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1
+            = toInput ((layerAt G Q hQ wsib wswap i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).2) from rfl]
+          rw [input_eval_node]
+          rfl]
+        exact h)
+    -- land the endpoints
+    have hf0 : (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1 : Value Layer.Input Fp).node = input_node := by
+      rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1
+        = ({ node := input_var_node } : Var Layer.Input Fp) from rfl]
+      rw [input_eval_node]
+      rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
+        = env.env.get input_var_node.cell.column
+          ((env.place input_var_node.cell.regionIndex
+            + input_var_node.cell.rowOffset : ℕ) : ℤ) from by with_unfolding_all rfl]
+      exact h_input
+    have hfd : (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ depth).1 : Value Layer.Input Fp).node = output := by
+      rw [input_eval_node]
+      rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          ((FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ depth).1.node) : Fp)
+        = env.env.get (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ depth).1.node.cell.column
+          ((env.place (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ depth).1.node.cell.regionIndex
+            + (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ depth).1.node.cell.rowOffset : ℕ) : ℤ)
+          from by with_unfolding_all rfl]
+      exact h_output
+    rw [← hf0, ← hfd]
+    exact hroot
+
+  completeness := by
+    circuit_proof_start
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_extendsWitnesses] at hwit
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints]
+    set w : ℕ → Fp × Fp := fun j =>
+      (env.env.advice cfg.1.b ((env.place (i₀ + 8 * j) : ℕ) : ℤ),
+       env.env.advice cfg.1.swap ((env.place (i₀ + 8 * j) : ℕ) : ℤ)) with hw_def
+    -- the per-layer extract readings ARE `w`
+    have hext : ∀ k : ℕ, (layerAt G Q hQ wsib wswap k).extract cfg
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment
+        = w k := by
+      intro k
+      rw [foldState_snd G Q hQ wsib wswap cfg { node := input_var_node } i₀ k]
+      with_unfolding_all rfl
+    -- accumulator step landing (prover view)
+    have hnodeS : ∀ k : ℕ,
+        (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ (k + 1)).1 : Value Layer.Input Fp).node
+        = (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) := by
+      intro k
+      rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ (k + 1)).1
+        = toInput ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) from rfl]
+      rw [input_eval_node_prover]
+      rfl
+    -- the honest running node lands on the accumulator, layer by layer
+    have hmain : ∀ k : ℕ, k ≤ depth →
+        ∀ n, pathNode G Q w input_node k = some n →
+        (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node = n := by
+      intro k
+      induction k with
+      | zero =>
+        intro _ n hn
+        simp only [pathNode, Option.some.injEq] at hn
+        rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1
+          = ({ node := input_var_node } : Var Layer.Input Fp) from rfl]
+        rw [input_eval_node_prover]
+        rw [show (eval env (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
+          = env.env.get input_var_node.cell.column
+            ((env.place input_var_node.cell.regionIndex
+              + input_var_node.cell.rowOffset : ℕ) : ℤ) from by with_unfolding_all rfl]
+        rw [← hn]
+        exact h_input
+      | succ k ih =>
+        intro hk n hn
+        rw [pathNode] at hn
+        rcases hpk : pathNode G Q w input_node k with _ | nk
+        · rw [hpk] at hn; simp at hn
+        rw [hpk] at hn
+        simp only [Option.bind_some] at hn
+        rcases hB : hashToPoint G.S Q (proverChunks k nk (w k).1 ((w k).2 = 1)) with _ | B
+        · rw [hB] at hn; simp at hn
+        rw [hB] at hn
+        simp only [Option.map_some, Option.some.injEq] at hn
+        -- layer k's honest-prover precondition
+        have hPAk : (layerAt G Q hQ wsib wswap k).ProverAssumptions
+            (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1)
+            ((layerAt G Q hQ wsib wswap k).extract cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment)
+            env.env.hint := by
+          show ∃ B', hashToPoint G.S Q (proverChunks (k % 2 ^ 10)
+              ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node)
+              ((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).1
+              (((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).2 = 1)) = some B'
+          rw [hext k, ih (by omega) nk hpk,
+            Nat.mod_eq_of_lt (show k < 2 ^ 10 from by simp only [depth] at hk; omega)]
+          exact ⟨B, hB⟩
+        -- layer k's honest contract: the output cell is the layer hash
+        have hd := SubcircuitRw.layouter_completeness_derived_placed (layerAt G Q hQ wsib wswap k) cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+          (hwit ⟨k, Nat.lt_of_succ_le hk⟩) ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial hPAk
+        have hps : (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) = B.x := by
+          refine (show ∀ B' : Point Fp, hashToPoint G.S Q (proverChunks (k % 2 ^ 10)
+              ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node)
+              ((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).1
+              (((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).2 = 1)) = some B' →
+              (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) = B'.x from hd.2) B ?_
+          rw [hext k, ih (by omega) nk hpk,
+            Nat.mod_eq_of_lt (show k < 2 ^ 10 from by simp only [depth] at hk; omega)]
+          exact hB
+        rw [hnodeS k, hps, hn]
+    -- discharge each layer's chunk
+    intro i
+    have hs := pathNode_isSome_le G Q w input_node
+      (show (↑i + 1 : ℕ) ≤ depth from i.isLt) hPA
+    rw [pathNode] at hs
+    rcases hpk : pathNode G Q w input_node ↑i with _ | nk
+    · rw [hpk] at hs; simp at hs
+    rw [hpk] at hs
+    simp only [Option.bind_some] at hs
+    rcases hB : hashToPoint G.S Q (proverChunks ↑i nk (w ↑i).1 ((w ↑i).2 = 1)) with _ | B
+    · rw [hB] at hs; simp at hs
+    refine SubcircuitRw.layouter_completeness_leaf_placed (layerAt G Q hQ wsib wswap ↑i) cfg
+      (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env
+      (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+      (hwit i) ⟨⟨_hE.1, _hE.2.1, _hE.2.2⟩, trivial, ?_⟩
+    show ∃ B', hashToPoint G.S Q (proverChunks (↑i % 2 ^ 10)
+        ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+        ((layerAt G Q hQ wsib wswap ↑i).extract cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env.toEnvironment).1
+        (((layerAt G Q hQ wsib wswap ↑i).extract cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env.toEnvironment).2 = 1)) = some B'
+    rw [hext ↑i, hmain ↑i (Nat.le_of_lt i.isLt) nk hpk,
+      Nat.mod_eq_of_lt (show (↑i : ℕ) < 2 ^ 10 from by
+        have := i.isLt; simp only [depth] at this; omega)]
+    exact ⟨B, hB⟩
 
 end CalculateRoot
 

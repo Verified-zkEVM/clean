@@ -157,3 +157,77 @@ fixtures. State:
 - CS Pre/Post fixture (symbolic gates/queries, TestVkMatchMul-style) — needs a gate-AST
   emitter in the halo2_proofs local helpers; queued.
 - full_width/short wrappers after base_field_elem.
+
+
+## Sinsemilla/Merkle arc status (2026-07-18, overnight run)
+
+All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
+
+- **Chain completeness closed** — the whole round/loop/slot/chain restructure is proven.
+  Honest-prover runs require `ns ≠ []` (`Chain.ProverAssumptions`).
+- **CS VK matches green**: `TestVkMatchSinsemilla`, `TestVkMatchMerkle` (pre+post).
+  `SinsemillaChip::configure` made VK-exact (equality on all five advices, `q_s2`
+  allocated inside, lookup-before-gates, Rust const-mul orientations — the eraser maps
+  right-mul-by-const to `Scaled`). `MerkleChip::configure` ported (CondSwap + q_decompose).
+- **Layout VK matches green end-to-end**: `TestVkLayoutSinsemilla` (6/6 copies, 12/12 σ,
+  6241/6241 fixed), `TestVkLayoutMerkle` (17/17 copies, σ, fixed). New machinery:
+  `assignedFixed` (in-region assign_fixed extraction), `dedupFixed`. Placement lines of
+  both fixtures regenerated via a new sibling-checkout dumper
+  (`halo2_gadgets/src/sinsemilla/layout_dump.rs`, local-only commit — same min-touched
+  attribution bug as mul regions 3/6).
+- **Rust-faithfulness refactors**: `shortRangeCheck` positional (no copy-in — Rust
+  `short_range_check`) + `witnessShortCheck` layouter wrapper; Merkle `Gate` takes `l`
+  from a constant (9 copies), both directions proven; `CondSwap.swap` gadget fully proven
+  (Bool-valued swap program).
+- **`hash_message` FORMAL bundle proven** (`HashToPoint.hashRegion`/`hashCircuit`): the
+  public-Q init pins the chain's ∀-A contract to the hash from `Q`; Spec exposes chunking
+  + ZsFacts + the flat `z1View`; ProverSpec the honest hash. Chain exports the public
+  composition lemmas (`circuit_output_eval`(_prover), `output_point_x/y`).
+- **`HashLayer.synthesize`** (Rust `hash_layer`) is real and layout-validated, consuming
+  the formal hash bundle.
+
+### Remaining (the ⊤-level proof compositions)
+
+1. ~~`HashLayer` as a `FormalCircuit`~~ **DONE (2026-07-18)** — `HashLayer.circuit` fully
+   proven both directions (the Mul-style layouter peel over the proven children; the
+   `sum_z1_eq_pieceZ` digit-canonicity bridge feeds `honest_gate`).
+2. ~~`Layer` = CondSwap.swap + HashLayer~~ **DONE (2026-07-18)** — `Layer.circuit` fully
+   proven (Spec = `MerkleStep`; the completeness prefix auto-lifts the children's PA
+   obligations and provides per-child derived implications `h_spec_0/1` — no manual peel
+   needed at all for a two-child layouter compose).
+   ~~`CalculateRoot` = the 32-fold of `Layer.circuit`~~ **DONE (2026-07-18)** —
+   `CalculateRoot.circuit` fully proven on the NEW layouter-level fold combinator
+   `FormalCircuit.foldCall` (`Clean/Halo2/Subcircuit.lean`): serial fold of a
+   formal-circuit family with closed-form accumulator/region state (`foldState`) and
+   `Constraints`/`ExtendsWitnesses` split lemmas into `∀ i : Fin m` per-round call
+   chunks. Soundness: split + `subcircuit_rw` (walks under the binder) +
+   `merkleRoot_of_steps`; completeness: split + a `pathNode` (running-node-over-readings)
+   induction discharging each chunk via the `SubcircuitRw.layouter_completeness_*_placed`
+   framework leaves manually. `Spec` = `MerkleRoot G Q 0 leaf 32 root`.
+3. ~~`CommitDomain.commit`~~ **DONE (2026-07-18)** — fully proven both directions:
+   hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth` boundary (`BlindSpecPinned`
+   pattern; the mul_fixed arc will discharge the pinned hypotheses when it lands).
+   `Spec`: `∀ B, hashToPoint Q chunks = some B → output.Valid ∧ output = B + scalarOf·R`
+   with `PieceChunks`/`ZsFacts` exposed. Completeness rides the hash child's
+   `ProverSpec` (honest hash point) — no chunk-canonicity needed.
+
+**The sinsemilla stack (merkle + commitdomain) is COMPLETE — no sorries.**
+
+### Proof-engineering notes from the HashLayer arc (read before composing further)
+
+- `rw`/`simp only` routinely FAIL to match `HVec.head/tail`/`Vector.ofFn`-getElem terms on
+  invisible implicit spellings (`zLengths (n::rest)` vs `(n+1) :: …`, reduced vs unreduced
+  sizes). Term-level `congrArg`/`.trans` compositions and `show … from by
+  with_unfolding_all rfl` conversions are the reliable route; big prover-eval defeqs must
+  be SPLIT (record→literal vector, then the value function) or `isDefEq` walls at 200k.
+- `circuit_proof_start` completeness bakes `hwit` into witness-eval form; generic
+  `WitgenIR` params make hypotheses/goal speak different languages — bundles should carry
+  positional cells (`cellAt`) or Bool/native witness programs with eval lemmas.
+- For pair/field outputs, prefer a named `Output` struct (`deriving ProvableStruct`) so
+  the splitter yields per-component `h_output_*`/`output_*` facts; `field`-input leaves
+  lose `h_input` (spelling gap) — use a one-field `Input` struct instead.
+- The layouter peel of a 7-region synthesize works out of the box:
+  `simp only [<own defs>, circuit_norm] at hc` → 4 chunks; `subcircuit_rw` handles
+  region- and layouter-level chunks alike; region counts via
+  `Operations.regionCount_append` + a per-chunk `show`-lemma (regionCount is WF-recursive
+  — not `rfl`; use its equation lemmas).

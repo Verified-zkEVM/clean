@@ -93,6 +93,10 @@ def layoutQ : Orchard.Point Fp :=
   { x := (16881378657874843773681581417214080072526588577393185124335110949068672401040 : Fp),
     y := (28133183902167313796350353487269718050617152766571597387899637960749256839611 : Fp) }
 
+theorem layoutQ_onCurve : layoutQ.OnCurve := by
+  show layoutQ.y ^ 2 = layoutQ.x ^ 3 + Orchard.pallasB
+  decide
+
 /-- A dummy witness (keygen never reads advice values — `Value::sUnknown`). -/
 def sUnknown : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
 
@@ -116,7 +120,8 @@ def sLayoutProgram : Circuit Fp Unit := do
   let pb ← witnessMessagePiece sCfg sUnknown
   let pc ← witnessMessagePiece sCfg sUnknown
   -- the real hash_message
-  let _ ← hashMessage layoutG sNs sCfg layoutQ ⟨#v[pa, pb, pc]⟩
+  let _ ← hashMessage layoutG sNs sCfg layoutQ layoutQ_onCurve (by decide) (by decide)
+    ⟨#v[pa, pb, pc]⟩
   pure ()
 
 /-- The reconstructed layout products. -/

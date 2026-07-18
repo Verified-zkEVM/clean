@@ -41,7 +41,6 @@ open Halo2.Ironwood (Fp)
 open Orchard (Point)
 open Orchard.Ecc.MulFixed (CoordsParams interpolate FixedBase windowPoint windowScalar)
 
-
 open Orchard (pallasB)
 open Halo2.Ironwood.DecomposeRunningSum (copyDecompose)
 

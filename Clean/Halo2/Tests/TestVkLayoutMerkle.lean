@@ -22,7 +22,7 @@ namespace Halo2.Fixtures.Test.LayoutMerkle
 
 open Ironwood (Fp)
 open Halo2.Fixtures.Layout
-open Halo2.Fixtures.Test.LayoutSinsemilla (layoutG layoutQ sUnknown)
+open Halo2.Fixtures.Test.LayoutSinsemilla (layoutG layoutQ layoutQ_onCurve sUnknown)
 
 /-- The Merkle configure chain (the same allocation sequence as
 `TestVkMatchMerkle.merkleProgram`), also returning the range-check config. -/
@@ -63,7 +63,7 @@ def merkleLayoutProgram : Circuit Fp Unit := do
     ((Ironwood.CondSwap.swap sUnknown unknownBool).call mCfg.condSwap 0 { a := node })
   -- the real MerkleChip::hash_layer (l = 0)
   let _root ← Ironwood.Sinsemilla.Merkle.HashLayer.synthesize layoutG mCfg mLookupCfg
-    layoutQ 0 { left := pair.aSwapped, right := pair.bSwapped }
+    layoutQ layoutQ_onCurve 0 { left := pair.aSwapped, right := pair.bSwapped }
   pure ()
 
 def mOps : Operations Fp := merkleLayoutProgram.operations
