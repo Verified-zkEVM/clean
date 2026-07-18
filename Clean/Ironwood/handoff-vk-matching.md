@@ -516,3 +516,33 @@ donor pieceBounds_of_cellFacts — donor lemma reusable at the read-cells record
 ∃B honest hash (top hPA hB0 + honestChunks_eq_noteCommitChunks_of_cellFacts), window
 bounds (top hPA hWin, spelling via rcmExtract); gate PAs = mirror the composite
 completeness glue (Composites.lean PA branches) with hwit facts + child PSs.
+
+### Completeness remaining (after 3e3d4890: 11/24 leaves done)
+Order of the remaining work (13 leaves: Y1, Y2, commit, 10 gates):
+1. Witness projections FIRST (needed by everything below):
+   - per-gate: rw [toFormal_call_witnesses] at a copy of the relevant hWGt chunk
+     (destructure hWGt stage-relative like soundness peel — or write peelGatesW mirroring
+     peelGates over RegionOperations.ExtendsWitnesses), then per-bundle
+     simp only [<Bundle>.bundle, <Bundle>.gate?, circuit_norm, readCell] destructure →
+     the witnessed-bit equations (b1/d0/g0/h1 = ↑bitrange reads) + copy witnesses.
+   - Y (2-level): make YComposite's gateChild_call_witnesses + gateChild public (edit
+     YComposite.lean), then Y-call projection = simp [YCanonicityCheck.synth?…]-analogue:
+     EW ((YC.call c inp).ops i) i = the 5 sub-chunks; the gate sub-chunk via the published
+     YComposite projection → the lsb equation (wlsb = brWit gdY 0 1 → lsb-read =
+     ↑bitrange(gdY,0,1)).
+2. Prover-side MessageCellFacts record (21 clauses from the witness equations + the
+   witnessed-bit equations; IsLowBit via isLowBit_iff_mod_two + bitrange(_,0,1) = %2).
+3. commit leaf: PA = ⟨PieceBounds (donor pieceBounds_of_cellFacts + a
+   PieceBounds donor_iff bridge — same induction as pieceChunks_donor_iff),
+   ∃B honest (donor honestChunks_eq_noteCommitChunks_of_cellFacts + honestChunks
+   donor-iff bridge + top hB0), windows (top hWin — spelling via commit_extract_eq +
+   fwExtract at i₀+25)⟩ via layouter_completeness_leaf.
+4. Y leaves: PA = IsLowBit y-read lsb-read from the projected lsb equations.
+5. Gate leaves: PAs per the composite completeness glue (Composites.lean/CommitIvk
+   patterns) using the witness equations + the commit child's PS zs facts (obtain via
+   layouter_completeness_derived_placed on the commit chunk — gives Spec∧PS after PA
+   discharge, ZsHonest-style honest z-values for the z13/z1 clauses; mirror
+   the YComposite guard/tail discharges with high_bit_canonical/base_val_lt_tP_val/
+   shifted_high_zero at the honest values).
+Then: def circuit compiles (already written), import MainBundle into Clean/Ironwood.lean,
+full build, commit. Then VK fixture (orchard dump harness).
