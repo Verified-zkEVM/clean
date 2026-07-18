@@ -120,30 +120,13 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : Assig
       (Point (AssignedCell Fp) × Point (AssignedCell Fp) × Vector (AssignedCell Fp) 86) := do
   -- scalar decomposition (lines 179-193): strict `copy_decompose`
   let zsOut ← (copyDecompose 3 85).call cfg.superConfig.runningSumConfig offset ⟨alpha⟩
-  -- `assign_fixed_constants` (mul_fixed.rs:181, 195-252)
-  fixedConstantsLoop B cfg.superConfig offset 85
-  -- initialize the accumulator: window 0 (mul_fixed.rs:184, 307-321)
-  let acc0 ← processWindow B cfg.superConfig alpha 0 offset
-  -- window 1 (mul_fixed.rs:187, 323-360): the accumulator is the window-0 point — a
-  -- REAL copy into the incomplete-addition q cells
-  let mulB1 ← processWindow B cfg.superConfig alpha 1 (offset + 1)
-  let _a1 ← AddIncomplete.add.call cfg.superConfig.addIncompleteConfig (offset + 1)
-    ⟨mulB1, acc0⟩
-  -- windows 2..83: the accumulator is the previous round's output, which sits at the
-  -- SAME cells the q-copy targets (Rust "will be copied into themselves")
-  RegionCircuit.forRange' (offset + 2) 1 82 (fun i row => do
-    let mulB ← processWindow B cfg.superConfig alpha (i + 2) row
-    let qx ← cellAt cfg.superConfig.addIncompleteConfig.xQR row
-    let qy ← cellAt cfg.superConfig.addIncompleteConfig.yQR row
-    let _ ← AddIncomplete.add.call cfg.superConfig.addIncompleteConfig row
-      ⟨mulB, { x := qx, y := qy }⟩
-    return ())
-  -- most significant window 84 (mul_fixed.rs:190, 378-405)
-  let mulB ← processWindow B cfg.superConfig alpha 84 (offset + 84)
-  -- the exit accumulator: the last incomplete addition's output cells (row offset+84)
-  let accX ← cellAt cfg.superConfig.addIncompleteConfig.xQR (offset + 84)
-  let accY ← cellAt cfg.superConfig.addIncompleteConfig.yQR (offset + 84)
-  return ({ x := accX, y := accY }, mulB, zsOut.zs)
+  -- `assign_fixed_constants` (mul_fixed.rs:181, 195-252); the coords toggle is the
+  -- running-sum selector's coords gate
+  fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 85
+  -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
+  let (acc, mulB) ← MulFixed.windowChain cfg.superConfig
+    (processWindow B cfg.superConfig alpha) offset 85
+  return (acc, mulB, zsOut.zs)
 
 /-- The honest `α₀' = (α − z_84·2^252) + 2^130 − t_p` witness, from the α and `z_84`
 cells (`base_field_elem.rs:262-277`). -/

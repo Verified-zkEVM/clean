@@ -90,11 +90,28 @@ def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Qu
     (fun acc k => acc + windowPow word k.val * queryFixed (cfg.lagrangeCoeffs k))
     (Expression.const 0)
 
-/-- The "Running sum coordinates check" gate (`mul_fixed.rs:115-129` +
-`coords_check`, lines 131-169), registered on the running sum's `q_range_check`
-selector. The window value is derived: `word = z_cur − z_next·8` (`mul_fixed.rs:120-125`,
-constant scale on the right). Reads `x_p`/`y_p` on the add config's columns at `cur`,
-`u` at `cur`, `fixed_z` and the 8 Lagrange columns as rotation-0 fixed queries. -/
+/-- Rust `coords_check` (`mul_fixed.rs:131-169`): the shared per-window-row constraint
+list over a given window-value expression. Reads `x_p`/`y_p` on the add config's columns
+at `cur`, `u` at `cur`, `fixed_z` and the 8 Lagrange columns as rotation-0 fixed queries.
+Used by BOTH the running-sum coords gate (word = `z_cur − z_next·8`) and the full-width
+gate (word = the raw `window` query). -/
+def coordsCheck (cfg : Config) (word : Expression Fp Query) :
+    List (String × Expression Fp Query) :=
+  let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0
+  let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0
+  let z : Expression Fp Query := queryFixed cfg.fixedZ
+  let u : Expression Fp Query := queryAdvice cfg.u 0
+  -- check x: interpolated_x − x_p   (`mul_fixed.rs:156-157`)
+  let xCheck := interpolatedX cfg word - xP
+  -- check y: u² − y_p − z           (`mul_fixed.rs:158-159`)
+  let yCheck := u * u - yP - z
+  -- on-curve: y_p² − x_p²·x_p − b   (`mul_fixed.rs:160-162`)
+  let onCurve := yP * yP - xP * xP * xP - (pallasB : Expression Fp Query)
+  [("check x", xCheck), ("check y", yCheck), ("on-curve", onCurve)]
+
+/-- The "Running sum coordinates check" gate (`mul_fixed.rs:115-129`), registered on the
+running sum's `q_range_check` selector. The window value is derived:
+`word = z_cur − z_next·8` (`mul_fixed.rs:120-125`, constant scale on the right). -/
 def coordsGate (cfg : Config) : Gate Fp where
   name := "Running sum coordinates check"
   selector := cfg.runningSumConfig.qRangeCheck
@@ -102,18 +119,7 @@ def coordsGate (cfg : Config) : Gate Fp where
     let zCur : Expression Fp Query := queryAdvice cfg.window 0
     let zNext : Expression Fp Query := queryAdvice cfg.window 1
     let word := zCur - zNext * (((H : ℕ) : Fp) : Expression Fp Query)
-    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0
-    let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0
-    let z : Expression Fp Query := queryFixed cfg.fixedZ
-    let u : Expression Fp Query := queryAdvice cfg.u 0
-    -- check x: interpolated_x − x_p   (`mul_fixed.rs:156-157`)
-    let xCheck := interpolatedX cfg word - xP
-    -- check y: u² − y_p − z           (`mul_fixed.rs:158-159`)
-    let yCheck := u * u - yP - z
-    -- on-curve: y_p² − x_p²·x_p − b   (`mul_fixed.rs:160-162`)
-    let onCurve := yP * yP - xP * xP * xP - (pallasB : Expression Fp Query)
-    Constraints.withSelector cfg.runningSumConfig.qRangeCheck
-      [("check x", xCheck), ("check y", yCheck), ("on-curve", onCurve)]
+    Constraints.withSelector cfg.runningSumConfig.qRangeCheck (coordsCheck cfg word)
 
 /-- Rust `mul_fixed::Config::configure` (`mul_fixed.rs:54-104`): equality on `window` and
 `u`, a fresh selector for the running-sum config (whose `configure` registers the "range
@@ -163,11 +169,12 @@ def uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1
     #v[((Vector.ofFn fun k : Fin 8 => B.u w k.val)[windowVal env alpha w]!)]
 
 /-- One window row of `assign_fixed_constants` (`mul_fixed.rs:214-249`): enable the
-coords gate (the shared running-sum selector — Rust's second `enable` on the row), then
-the 8 Lagrange coefficients and the `z` value into the fixed columns. -/
-def fixedConstantsWindow (B : FixedBaseData) (cfg : Config) (w row : ℕ) :
+coords-check toggle gate (Rust's `coords_check_toggle` selector parameter — the coords
+gate for the running-sum wrappers, the full-width gate for `full_width`), then the 8
+Lagrange coefficients and the `z` value into the fixed columns. -/
+def fixedConstantsWindow (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config) (w row : ℕ) :
     RegionCircuit Fp Unit := do
-  (coordsGate cfg).enable row
+  toggle.enable row
   let p := B.params w
   let _ ← assignFixed (cfg.lagrangeCoeffs 0) row p.lagrange0
   let _ ← assignFixed (cfg.lagrangeCoeffs 1) row p.lagrange1
@@ -181,10 +188,11 @@ def fixedConstantsWindow (B : FixedBaseData) (cfg : Config) (w row : ℕ) :
   return ()
 
 /-- `assign_fixed_constants` (`mul_fixed.rs:195-252`): the per-window fixed columns and
-coords-gate enables, one row per window, before any advice assignment. -/
-def fixedConstantsLoop (B : FixedBaseData) (cfg : Config) (offset numWindows : ℕ) :
-    RegionCircuit Fp Unit :=
-  RegionCircuit.forRange' offset 1 numWindows (fun w row => fixedConstantsWindow B cfg w row)
+coords-toggle enables, one row per window, before any advice assignment. -/
+def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) : RegionCircuit Fp Unit :=
+  RegionCircuit.forRange' offset 1 numWindows
+    (fun w row => fixedConstantsWindow toggle B cfg w row)
 
 /-- `process_window` (`mul_fixed.rs:254-305`): witness `[window_scalar]B`'s coordinates
 into the add config's `x_p`/`y_p` at the window row, and the `u` value. Returns the
@@ -195,5 +203,31 @@ def processWindow (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) (
   let y ← assignAdvice cfg.addConfig.yP row (yPWit B alpha w)
   let _u ← assignAdvice cfg.u row (uWit B alpha w)
   return { x, y }
+
+/-- The shared window chain of `assign_region_inner` (`mul_fixed.rs:183-192`):
+`initialize_accumulator` (window 0), the incomplete-addition loop over windows
+`1..numWindows−2` (window 1's accumulator q-copy is REAL — the window-0 point; later
+windows' are the Rust "copied into themselves" self-copies of the previous round's
+output), and `process_msb` (window `numWindows−1`, no addition). Generic over the
+per-window witness function (cell-scalar for the running-sum wrappers, hint-driven for
+`full_width`). Returns `(acc, mul_b)`. -/
+def windowChain (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (offset numWindows : ℕ) :
+    RegionCircuit Fp (Point (AssignedCell Fp) × Point (AssignedCell Fp)) := do
+  let acc0 ← processW 0 offset
+  let mulB1 ← processW 1 (offset + 1)
+  let _a1 ← AddIncomplete.add.call cfg.addIncompleteConfig (offset + 1) ⟨mulB1, acc0⟩
+  RegionCircuit.forRange' (offset + 2) 1 (numWindows - 3) (fun i row => do
+    let mulB ← processW (i + 2) row
+    let qx ← cellAt cfg.addIncompleteConfig.xQR row
+    let qy ← cellAt cfg.addIncompleteConfig.yQR row
+    let _ ← AddIncomplete.add.call cfg.addIncompleteConfig row
+      ⟨mulB, { x := qx, y := qy }⟩
+    return ())
+  let mulB ← processW (numWindows - 1) (offset + (numWindows - 1))
+  let accX ← cellAt cfg.addIncompleteConfig.xQR (offset + (numWindows - 1))
+  let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
+  return ({ x := accX, y := accY }, mulB)
 
 end Halo2.Ironwood.Ecc.MulFixed
