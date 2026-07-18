@@ -712,6 +712,34 @@ private theorem peelGatesW (cfg : Config) (input : Inputs (AssignedCell Fp))
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
   exact h
 
+set_option linter.unusedSimpArgs false in
+/-- The `lsb` cell witnessed inside a y-canonicity flow's gate region reads the
+caller's program (two-level witness projection). -/
+private theorem yc_lsb_witness (w : WitgenIR Fp 1)
+    (c : YCanonicity.Config × LookupRangeCheck.Config 10)
+    (inp : Var YCanonicityCheck.Inputs Fp) (i : RegionIndex)
+    (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (h : ExtendsWitnesses place env
+      (((YCanonicityCheck.circuit w).call c inp).operations i) i) :
+    env.advice (c.1.advices 6) ((place (i + 4) : ℕ) : ℤ)
+      = ((w.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) := by
+  rw [show ExtendsWitnesses place env
+        (((YCanonicityCheck.circuit w).call c inp).operations i) i
+      = ExtendsWitnesses place env
+        (((YCanonicityCheck.circuit w).synthesize c inp).operations i) i from by
+    simp only [FormalCircuit.call, Circuit.operations, ExtendsWitnesses, and_true]] at h
+  simp only [YCanonicityCheck.circuit] at h
+  simp only [YCanonicityCheck.synth, LookupRangeCheck.witnessShortCheck,
+    LookupRangeCheck.witnessCheckDecomposed, LookupRangeCheck.witnessCheck,
+    Circuit.operations_bind, operations_assignRegion, RegionCircuit.operations_bind,
+    circuit_norm] at h
+  have hg := h.2.2.2.2
+  rw [YCanonicityCheck.gateChild_call_witnesses] at hg
+  simp only [YCanonicity.bundle, YCanonicity.gate, circuit_norm] at hg
+  have hlsb := hg.2.1
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hlsb ⊢
+  exact hlsb
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)

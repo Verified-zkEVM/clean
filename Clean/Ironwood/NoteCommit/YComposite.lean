@@ -256,7 +256,7 @@ private theorem gateChild_output (wlsb : WitgenIR Fp 1) (input : Inputs (Assigne
   show ((YCanonicity.bundle wlsb (k3Wit input.y)).synthesize cfg 0 row).output i = _
   simp only [YCanonicity.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
 
-private theorem gateChild_call_witnesses (wlsb : WitgenIR Fp 1)
+theorem gateChild_call_witnesses (wlsb : WitgenIR Fp 1)
     (input : Inputs (AssignedCell Fp)) (cfg : YCanonicity.Config)
     (row : Var YCanonicity.Row Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) :
