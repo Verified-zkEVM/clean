@@ -269,4 +269,141 @@ def windowChain (cfg : Config)
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
 
+/-! ## Shared proof helpers for the wrapper bundles
+
+Context-free value lemmas the sibling proof arcs (`base_field_elem`, `full_width`,
+`short`) all consume. File-level so in-proof uses run in an empty context (`omega`
+whnf-scans every hypothesis; see `doc/performance-problems.md`). -/
+
+/-- Structure eta for `Point` as an equation. -/
+theorem point_eta (P : Point Fp) : ({ x := P.x, y := P.y } : Point Fp) = P := rfl
+
+/-- `OnCurve` of the coords-mk of a point is `OnCurve` of the point (structure eta). -/
+theorem point_eta_onCurve {P : Point Fp} (h : P.OnCurve) :
+    ({ x := P.x, y := P.y } : Point Fp).OnCurve := h
+
+/-- `partialSum` at 1, unfolded (context-free arithmetic). -/
+theorem partialSum_one (ks : ℕ → ℕ) :
+    Orchard.Ecc.MulFixed.partialSum ks 1 = ks 0 + 2 + (ks 1 + 2) * 8 ^ 1 := by
+  simp [Orchard.Ecc.MulFixed.partialSum]
+
+/-- `partialSum` at a successor (context-free unfold). -/
+theorem partialSum_succ (ks : ℕ → ℕ) (n : ℕ) :
+    Orchard.Ecc.MulFixed.partialSum ks (n + 1)
+      = Orchard.Ecc.MulFixed.partialSum ks n + (ks (n + 1) + 2) * 8 ^ (n + 1) := rfl
+
+/-- Pure-ℕ bounds for the ladder's first addition (windows 0 + 1). -/
+theorem base_bounds {a b : ℕ} (ha : a < 8) (hb : b < 8) :
+    0 < (a + 2) * 8 ^ 0 ∧ (a + 2) * 8 ^ 0 < (b + 2) * 8 ^ 1 ∧
+    (a + 2) * 8 ^ 0 + (b + 2) * 8 ^ 1
+      < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
+  have hcard : 100 < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
+  norm_num
+  omega
+
+/-- Pure-ℕ bounds for a ladder step (self-contained; the donor `step_sum_lt`/
+`inv_lt_card` content). -/
+theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
+    (hS_pos : 0 < S) (hj : j ≤ 82) :
+    0 < (k + 2) * 8 ^ (j + 1) ∧ S < (k + 2) * 8 ^ (j + 1) ∧
+    (k + 2) * 8 ^ (j + 1) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
+    S < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
+    S + (k + 2) * 8 ^ (j + 1) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
+  have hpow : 0 < (8 : ℕ) ^ (j + 1) := pow_pos (by norm_num) _
+  have htu : (k + 2) * 8 ^ (j + 1) ≤ 9 * 8 ^ (j + 1) := Nat.mul_le_mul_right _ (by omega)
+  have htl : 2 * 8 ^ (j + 1) ≤ (k + 2) * 8 ^ (j + 1) := Nat.mul_le_mul_right _ (by omega)
+  have hp83 : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 83 := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hcard : 11 * 8 ^ 83 < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
+  refine ⟨by positivity, by omega, by omega, by omega, by omega⟩
+
+/-- The shared incomplete-addition ladder, abstract over the cell reads: window `w`
+holds `[windowScalar w (ks w)]·B` (`hWP`), the entering accumulator is window 0
+(`hAcc0`), and each guarded addition fact (`hStep`, the post-`subcircuit_rw` shape of
+an `add_incomplete` chunk: distinct-x on-curve points imply the output is the sum) —
+then the accumulator after windows `0..j` is `[partialSum ks j]·B`. One induction for
+every wrapper's soundness AND completeness ladder (the circuit-fact glue differs per
+caller; the value algebra does not). -/
+theorem chain_ladder (B : Orchard.Ecc.MulFixed.FixedBase) (ks : ℕ → ℕ)
+    (hks_lt : ∀ t, ks t < 8)
+    (wx wy ax ay : ℕ → Fp)
+    (hWP : ∀ w, w < 85 →
+      wx w = (Orchard.Ecc.MulFixed.windowPoint B.point w (ks w)).x ∧
+      wy w = (Orchard.Ecc.MulFixed.windowPoint B.point w (ks w)).y)
+    (hAcc0 : ax 0 = wx 0 ∧ ay 0 = wy 0)
+    (hStep : ∀ j, 1 ≤ j → j ≤ 83 →
+      (({ x := wx j, y := wy j } : Point Fp).OnCurve ∧
+        ({ x := ax (j - 1), y := ay (j - 1) } : Point Fp).OnCurve ∧
+        wx j ≠ ax (j - 1)) →
+      ({ x := ax j, y := ay j } : Point Fp)
+        = { x := wx j, y := wy j } + { x := ax (j - 1), y := ay (j - 1) }) :
+    ∀ j, j ≤ 83 →
+      ax j = (Orchard.Ecc.MulFixed.partialSum ks j • B.point).x ∧
+      ay j = (Orchard.Ecc.MulFixed.partialSum ks j • B.point).y := by
+  intro j
+  induction j with
+  | zero =>
+    intro _
+    obtain ⟨s0, hs0_def⟩ :
+        ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 0 (ks 0)).val := ⟨_, rfl⟩
+    have hwp0 : Orchard.Ecc.MulFixed.windowPoint B.point 0 (ks 0) = s0 • B.point := by
+      rw [hs0_def]; rfl
+    have hs0 : s0 = Orchard.Ecc.MulFixed.partialSum ks 0 := by
+      rw [hs0_def, Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)]
+      simp [Orchard.Ecc.MulFixed.partialSum]
+    obtain ⟨h0x, h0y⟩ := hWP 0 (by norm_num)
+    rw [hwp0, hs0] at h0x h0y
+    exact ⟨hAcc0.1.trans h0x, hAcc0.2.trans h0y⟩
+  | succ n ih =>
+    intro hle
+    have hih := ih (by omega)
+    obtain ⟨hpx, hpy⟩ := hWP (n + 1) (by omega)
+    -- opaque scalars (performance: keep `.val` terms off the goal)
+    obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
+        t = (Orchard.Ecc.MulFixed.windowScalar (n + 1) (ks (n + 1))).val := ⟨_, rfl⟩
+    obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
+        S = Orchard.Ecc.MulFixed.partialSum ks n := ⟨_, rfl⟩
+    have hval : t = (ks (n + 1) + 2) * 8 ^ (n + 1) := by
+      rw [ht_def]
+      exact Orchard.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
+    have hwp : Orchard.Ecc.MulFixed.windowPoint B.point (n + 1) (ks (n + 1))
+        = t • B.point := by
+      rw [ht_def]; rfl
+    rw [hwp] at hpx hpy
+    rw [← hS_def] at hih
+    have hS_lt : S < 2 * 8 ^ (n + 1) := by
+      rw [hS_def]
+      exact Orchard.Ecc.MulFixed.partialSum_lt _ n (fun _ _ => hks_lt _)
+    have hS_pos : 0 < S := by
+      rw [hS_def]; exact Orchard.Ecc.MulFixed.partialSum_pos _ n
+    obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
+      step_bounds (hks_lt (n + 1)) hS_lt hS_pos (by omega)
+    rw [← hval] at hb1 hb2 hb3 hb5
+    have hOut := hStep (n + 1) (by omega) (by omega) ⟨by
+        rw [hpx, hpy]
+        exact point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
+      by
+        rw [show n + 1 - 1 = n from by omega, hih.1, hih.2]
+        exact point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
+      by
+        rw [show n + 1 - 1 = n from by omega, hpx, hih.1]
+        exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
+    rw [show n + 1 - 1 = n from by omega, hpx, hpy, hih.1, hih.2] at hOut
+    rw [point_eta (t • B.point), point_eta (S • B.point),
+      Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
+    have hps : t + S = Orchard.Ecc.MulFixed.partialSum ks (n + 1) := by
+      rw [hval, hS_def, partialSum_succ]
+      ring
+    rw [hps] at hOut
+    exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
+
+/-- The incomplete-addition child's output cells (`rfl`; the hand `add_output_eq`
+pattern). -/
+theorem addinc_output_cells (cfgI : AddIncomplete.Config) (row : ℕ)
+    (input : Var AddIncomplete.Inputs Fp) (self : RegionIndex) :
+    AddIncomplete.add.output cfgI row input self
+      = { x := AssignedCell.of self (row + 1) cfgI.xQR,
+          y := AssignedCell.of self (row + 1) cfgI.yQR } := rfl
+
 end Halo2.Ironwood.Ecc.MulFixed

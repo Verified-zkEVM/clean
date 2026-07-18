@@ -238,56 +238,6 @@ private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : 
 derive_contract_bridges dec := Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 85
 derive_contract_bridges addinc := Halo2.Ironwood.Ecc.AddIncomplete.add
 
-/-- Pure-ℕ bounds for the first addition (windows 0 + 1) — file-level so the in-proof
-uses run in an empty context (`omega` whnfs every hypothesis it scans). -/
-private theorem base_bounds {a b : ℕ} (ha : a < 8) (hb : b < 8) :
-    0 < (a + 2) * 8 ^ 0 ∧ (a + 2) * 8 ^ 0 < (b + 2) * 8 ^ 1 ∧
-    (a + 2) * 8 ^ 0 + (b + 2) * 8 ^ 1
-      < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
-  have hcard : 100 < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
-    norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
-  norm_num
-  omega
-
-/-- `OnCurve` of the coords-mk of a point is `OnCurve` of the point (structure eta). -/
-private theorem point_eta_onCurve {P : Point Fp} (h : P.OnCurve) :
-    ({ x := P.x, y := P.y } : Point Fp).OnCurve := h
-
-/-- Pure-ℕ bounds for a ladder step (file-level, context-free). -/
-private theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
-    (hS_pos : 0 < S) (hj : j ≤ 82) :
-    0 < (k + 2) * 8 ^ (j + 1) ∧ S < (k + 2) * 8 ^ (j + 1) ∧
-    (k + 2) * 8 ^ (j + 1) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
-    S < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
-    S + (k + 2) * 8 ^ (j + 1) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD := by
-  have hpow : 0 < (8 : ℕ) ^ (j + 1) := pow_pos (by norm_num) _
-  have htu : (k + 2) * 8 ^ (j + 1) ≤ 9 * 8 ^ (j + 1) := Nat.mul_le_mul_right _ (by omega)
-  have htl : 2 * 8 ^ (j + 1) ≤ (k + 2) * 8 ^ (j + 1) := Nat.mul_le_mul_right _ (by omega)
-  have hcard := Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.step_sum_lt hS_lt htu hj
-  have hcard2 := Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS_lt (by omega)
-  refine ⟨by positivity, by omega, by omega, hcard2, hcard⟩
-
-/-- `partialSum` at a successor (context-free unfold). -/
-private theorem partialSum_succ (ks : ℕ → ℕ) (n : ℕ) :
-    Orchard.Ecc.MulFixed.partialSum ks (n + 1)
-      = Orchard.Ecc.MulFixed.partialSum ks n + (ks (n + 1) + 2) * 8 ^ (n + 1) := rfl
-
-/-- Structure eta for `Point` as an equation. -/
-private theorem point_eta (P : Point Fp) : ({ x := P.x, y := P.y } : Point Fp) = P := rfl
-
-/-- `partialSum` at 1, unfolded (file-level, context-free arithmetic). -/
-private theorem partialSum_one (ks : ℕ → ℕ) :
-    Orchard.Ecc.MulFixed.partialSum ks 1 = ks 0 + 2 + (ks 1 + 2) * 8 ^ 1 := by
-  simp [Orchard.Ecc.MulFixed.partialSum]
-
-/-- The incomplete-addition child's output cells (rfl; the hand `add_output_eq`
-pattern). -/
-private theorem addinc_output (cfgI : AddIncomplete.Config) (row : ℕ)
-    (input : Var AddIncomplete.Inputs Fp) (self : RegionIndex) :
-    AddIncomplete.add.output cfgI row input self
-      = { x := AssignedCell.of self (row + 1) cfgI.xQR,
-          y := AssignedCell.of self (row + 1) cfgI.yQR } := rfl
-
 /-- The inner bundle's config facts — exactly Rust's `configure`-time asserts
 (`mul_fixed.rs:81-99` + running-sum column sharing). -/
 def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
@@ -489,7 +439,7 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
      ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
       AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
   simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-    addinc_proverAssumptions_eq, addinc_output, circuit_norm] at hD1
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hD1
   have hLoopD := fun (i : Fin 82) => by
     have h := Halo2.SubcircuitRw.region_completeness_derived_placed
       AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 2 + i.val) self env
@@ -499,9 +449,52 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
         AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
       ((hLoopW i).2.2.2)
     simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-      addinc_proverAssumptions_eq, addinc_output, circuit_norm] at h
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at h
     exact h
-  -- honest accumulator invariant: cells at `offset + j + 1` hold `[partialSum ks j]·B`
+  -- honest accumulator invariant via the shared ladder (`MulFixed.chain_ladder`)
+  have hLadder := MulFixed.chain_ladder B (fun t => input_alpha.val / 2 ^ (3 * t) % 8)
+    hks_lt
+    (fun w => env.env.advice cfg.superConfig.addConfig.xP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun w => env.env.advice cfg.superConfig.addConfig.yP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun w hw => ⟨(hPW ⟨w, hw⟩).1, (hPW ⟨w, hw⟩).2.1⟩)
+    ⟨if_pos rfl, if_pos rfl⟩
+    (by
+      intro j hj1 hj83 hass
+      obtain ⟨hOnP, hOnQ, hne⟩ := hass
+      dsimp only at hOnP hOnQ hne ⊢
+      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rcases Nat.lt_or_ge j 2 with hj2 | hj2
+      · -- j = 1: the explicit first chunk (window 1 + window 0)
+        have hj : j = 1 := by omega
+        subst hj
+        obtain ⟨⟨-, hOut⟩, -⟩ := hD1 ⟨hOnP, hOnQ, hne⟩
+        exact hOut
+      · -- j ≥ 2: loop chunk j − 2
+        have h := hLoopD ⟨j - 2, by omega⟩
+        rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+        rw [if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hne
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega]
+        obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
+        exact hOut)
+  -- the invariant in the downstream row spelling
   have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 83 →
       env.env.advice cfg.superConfig.addIncompleteConfig.xQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
@@ -511,106 +504,11 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
         = (Orchard.Ecc.MulFixed.partialSum
             (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).y := by
-    intro j
-    induction j with
-    | zero => exact fun h _ => absurd h (by norm_num)
-    | succ n ih =>
-      intro _ hle
-      rcases Nat.eq_zero_or_pos n with rfl | hnpos
-      · -- j = 1: the explicit first addition
-        obtain ⟨hp1x, hp1y, -⟩ := hPW ⟨1, by norm_num⟩
-        obtain ⟨hp0x, hp0y, -⟩ := hPW ⟨0, by norm_num⟩
-        rw [show ((⟨1, by norm_num⟩ : Fin 85) : ℕ) = 1 from rfl] at hp1x hp1y
-        rw [show ((⟨0, by norm_num⟩ : Fin 85) : ℕ) = 0 from rfl,
-          show offset + 0 = offset from by omega] at hp0x hp0y
-        obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 1
-          (input_alpha.val / 2 ^ (3 * 1) % 8)).val := ⟨_, rfl⟩
-        obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 0
-          (input_alpha.val / 2 ^ (3 * 0) % 8)).val := ⟨_, rfl⟩
-        have ht1 : t1 = (input_alpha.val / 2 ^ (3 * 1) % 8 + 2) * 8 ^ 1 := by
-          rw [ht1_def]
-          exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 1)
-        have hs0 : s0 = (input_alpha.val / 2 ^ (3 * 0) % 8 + 2) * 8 ^ 0 := by
-          rw [hs0_def]
-          exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)
-        have hwp1 : Orchard.Ecc.MulFixed.windowPoint B.point 1
-            (input_alpha.val / 2 ^ (3 * 1) % 8) = t1 • B.point := by rw [ht1_def]; rfl
-        have hwp0 : Orchard.Ecc.MulFixed.windowPoint B.point 0
-            (input_alpha.val / 2 ^ (3 * 0) % 8) = s0 • B.point := by rw [hs0_def]; rfl
-        rw [hwp1] at hp1x hp1y
-        rw [hwp0] at hp0x hp0y
-        have hOnP : (t1 • B.point).OnCurve := by
-          rw [← hwp1]; exact B.windowPoint_onCurve (hks_lt 1)
-        have hOnQ : (s0 • B.point).OnCurve := by
-          rw [← hwp0]; exact B.windowPoint_onCurve (hks_lt 0)
-        obtain ⟨hbb1, hbb2, hbb3⟩ := base_bounds (hks_lt 0) (hks_lt 1)
-        rw [← hs0] at hbb1 hbb2 hbb3
-        rw [← ht1] at hbb2 hbb3
-        have hxne : (t1 • B.point).x ≠ (s0 • B.point).x :=
-          B.nsmul_x_ne hbb1 hbb2 hbb3
-        obtain ⟨⟨-, hOut⟩, -⟩ := hD1 ⟨by rw [hp1x, hp1y]; exact point_eta_onCurve hOnP,
-          by rw [hp0x, hp0y]; exact point_eta_onCurve hOnQ,
-          by rw [hp1x, hp0x]; exact hxne⟩
-        rw [show offset + 1 + 1 = offset + 2 from by omega] at hOut
-        rw [show offset + 0 + 1 + 1 = offset + 2 from by omega]
-        rw [hp1x, hp1y, hp0x, hp0y] at hOut
-        rw [point_eta (t1 • B.point), point_eta (s0 • B.point),
-          Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
-        have hps : t1 + s0 = Orchard.Ecc.MulFixed.partialSum
-            (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 1 := by
-          rw [ht1, hs0, partialSum_one]
-          ring
-        rw [hps] at hOut
-        exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
-      · -- step: window n+1 (loop chunk i = n−1)
-        have hL := hLoopD ⟨n - 1, by omega⟩
-        rw [show offset + 2 + (n - 1) = offset + n + 1 from by omega] at hL
-        obtain ⟨hpx, hpy, -⟩ := hPW ⟨n + 1, by omega⟩
-        rw [show ((⟨n + 1, by omega⟩ : Fin 85) : ℕ) = n + 1 from rfl,
-          show offset + (n + 1) = offset + n + 1 from by omega] at hpx hpy
-        have hih := ih (by omega) (by omega)
-        obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
-            t = (Orchard.Ecc.MulFixed.windowScalar (n + 1)
-              (input_alpha.val / 2 ^ (3 * (n + 1)) % 8)).val := ⟨_, rfl⟩
-        obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
-            S = Orchard.Ecc.MulFixed.partialSum
-              (fun t => input_alpha.val / 2 ^ (3 * t) % 8) n := ⟨_, rfl⟩
-        have hval : t = (input_alpha.val / 2 ^ (3 * (n + 1)) % 8 + 2) * 8 ^ (n + 1) := by
-          rw [ht_def]
-          exact Orchard.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
-        have hwp : Orchard.Ecc.MulFixed.windowPoint B.point (n + 1)
-            (input_alpha.val / 2 ^ (3 * (n + 1)) % 8) = t • B.point := by
-          rw [ht_def]; rfl
-        rw [hwp] at hpx hpy
-        rw [← hS_def] at hih
-        have hS_lt : S < 2 * 8 ^ (n + 1) := by
-          rw [hS_def]
-          exact Orchard.Ecc.MulFixed.partialSum_lt _ n (fun _ _ => hks_lt _)
-        have hS_pos : 0 < S := by
-          rw [hS_def]; exact Orchard.Ecc.MulFixed.partialSum_pos _ n
-        obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
-          step_bounds (hks_lt (n + 1)) hS_lt hS_pos (by omega)
-        rw [← hval] at hb1 hb2 hb3 hb5
-        obtain ⟨⟨-, hOut⟩, -⟩ := hL ⟨by
-            rw [hpx, hpy]
-            exact point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
-          by
-            rw [hih.1, hih.2]
-            exact point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
-          by
-            rw [hpx, hih.1]
-            exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
-        rw [show offset + n + 1 + 1 = offset + n + 2 from by omega] at hOut
-        rw [show offset + (n + 1) + 1 = offset + n + 2 from by omega]
-        rw [hpx, hpy, hih.1, hih.2] at hOut
-        rw [point_eta (t • B.point), point_eta (S • B.point),
-          Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
-        have hps : t + S = Orchard.Ecc.MulFixed.partialSum
-            (fun t => input_alpha.val / 2 ^ (3 * t) % 8) (n + 1) := by
-          rw [hval, hS_def, partialSum_succ]
-          ring
-        rw [hps] at hOut
-        exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
+    intro j hj1 hj83
+    have h := hLadder j hj83
+    dsimp only at h
+    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
       = (Orchard.Ecc.MulFixed.partialSum
@@ -641,7 +539,7 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
      ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
       AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
   simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-    addinc_proverAssumptions_eq, addinc_output, circuit_norm] at hC1
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC1
   constructor
   · -- first addition: window-1 point + window-0 point, honest values
     obtain ⟨hp1x, hp1y, -⟩ := hPW ⟨1, by norm_num⟩
@@ -687,7 +585,7 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
         AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
       ((hLoopW i).2.2.2)
     simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-      addinc_proverAssumptions_eq, addinc_output, circuit_norm] at hC
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC
     obtain ⟨hpx, hpy, -⟩ := hPW ⟨i.val + 2, by omega⟩
     rw [show ((⟨i.val + 2, by omega⟩ : Fin 85) : ℕ) = i.val + 2 from rfl,
       show offset + (i.val + 2) = offset + 2 + i.val from by omega] at hpx hpy
@@ -896,14 +794,6 @@ private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
   simp only [h_input] at hZs
   exact hZs
 
-/-- Constraints of a `pure` region step, any payload (no ops; substitution-friendly). -/
-private theorem pure_constraints (place : RegionIndex → ℕ) (self : RegionIndex)
-    (env : Environment Fp) (v : Var InnerOut Fp) :
-    RegionOperations.Constraints place self env
-      ((pure (f := RegionCircuit Fp) v).operations self) := by
-  rw [RegionCircuit.operations_pure]
-  exact trivial
-
 /-- The inner bundle's completeness, standalone (its own declaration/heartbeat budget —
 the shared-budget split; body per the donor `RunningSumMul.completeness`). -/
 private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
@@ -1084,133 +974,62 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
       obtain ⟨hA1, hALoop⟩ := hChain
       subcircuit_rw at hA1
       simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-        addinc_output, circuit_norm] at hA1
+        MulFixed.addinc_output_cells, circuit_norm] at hA1
       have hLoopS := fun (i : Fin 82) => by
         have h := hALoop i
         subcircuit_rw at h
         simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-          addinc_output, circuit_norm, mul_one] at h
+          MulFixed.addinc_output_cells, circuit_norm, mul_one] at h
         exact h
       clear hALoop
       -- window points as nsmul, with scalar values
       have hks_lt : ∀ t, V / 2 ^ (3 * t) % 8 < 8 := fun t => Nat.mod_lt _ (by norm_num)
-      -- ── the accumulator invariant: after windows 0..j, the output cells at
-      --    `offset + j + 1` hold `[partialSum ks j]·B` ──
-      have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 83 →
-          env.env.advice cfg.superConfig.addIncompleteConfig.xQR
-              ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-            = (Orchard.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) j
-                • B.point).x ∧
-          env.env.advice cfg.superConfig.addIncompleteConfig.yQR
-              ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-            = (Orchard.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) j
-                • B.point).y := by
-        intro j
-        induction j with
-        | zero => exact fun h _ => absurd h (by norm_num)
-        | succ n ih =>
-          intro _ hle
-          rcases Nat.eq_zero_or_pos n with rfl | hnpos
-          · -- base j = 1: the explicit first addition (windows 1 + 0)
-            obtain ⟨hp1x, hp1y⟩ := hWP ⟨1, by norm_num⟩
-            obtain ⟨hp0x, hp0y⟩ := hWP ⟨0, by norm_num⟩
-            rw [show ((⟨1, by norm_num⟩ : Fin 85) : ℕ) = 1 from rfl] at hp1x hp1y
-            rw [show ((⟨0, by norm_num⟩ : Fin 85) : ℕ) = 0 from rfl] at hp0x hp0y
-            rw [show offset + 0 = offset from by omega] at hp0x hp0y
-            -- scalar values of the two window points, kept OPAQUE (performance)
-            obtain ⟨t1, ht1_def⟩ :
-                ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 1 (V / 2 ^ (3 * 1) % 8)).val :=
-              ⟨_, rfl⟩
-            obtain ⟨s0, hs0_def⟩ :
-                ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 0 (V / 2 ^ (3 * 0) % 8)).val :=
-              ⟨_, rfl⟩
-            have ht1 : t1 = (V / 2 ^ (3 * 1) % 8 + 2) * 8 ^ 1 := by
-              rw [ht1_def]
-              exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 1)
-            have hs0 : s0 = (V / 2 ^ (3 * 0) % 8 + 2) * 8 ^ 0 := by
-              rw [hs0_def]
-              exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)
-            have hwp1 : Orchard.Ecc.MulFixed.windowPoint B.point 1 (V / 2 ^ (3 * 1) % 8)
-                = t1 • B.point := by rw [ht1_def]; rfl
-            have hwp0 : Orchard.Ecc.MulFixed.windowPoint B.point 0 (V / 2 ^ (3 * 0) % 8)
-                = s0 • B.point := by rw [hs0_def]; rfl
-            rw [hwp1] at hp1x hp1y
-            rw [hwp0] at hp0x hp0y
-            have hOnP : (t1 • B.point).OnCurve := by
-              rw [← hwp1]; exact B.windowPoint_onCurve (hks_lt 1)
-            have hOnQ : (s0 • B.point).OnCurve := by
-              rw [← hwp0]; exact B.windowPoint_onCurve (hks_lt 0)
-            obtain ⟨hbb1, hbb2, hbb3⟩ := base_bounds (hks_lt 0) (hks_lt 1)
-            rw [← hs0] at hbb1 hbb2 hbb3
-            rw [← ht1] at hbb2 hbb3
-            have hxne : (t1 • B.point).x ≠ (s0 • B.point).x :=
-              B.nsmul_x_ne hbb1 hbb2 hbb3
-            obtain ⟨-, hOut⟩ := hA1 ⟨by rw [hp1x, hp1y]; exact point_eta_onCurve hOnP,
-              by rw [hp0x, hp0y]; exact point_eta_onCurve hOnQ,
-              by rw [hp1x, hp0x]; exact hxne⟩
-            rw [show offset + 1 + 1 = offset + 2 from by omega] at hOut
-            rw [show offset + 0 + 1 + 1 = offset + 2 from by omega]
-            rw [hp1x, hp1y, hp0x, hp0y] at hOut
-            rw [point_eta (t1 • B.point), point_eta (s0 • B.point),
-              Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
-            have hps : t1 + s0
-                = Orchard.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 1 := by
-              rw [ht1, hs0, partialSum_one]
-              ring
-            rw [hps] at hOut
-            exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
-          · -- step: window n+1 joins the accumulator (loop chunk i = n−1)
-            have hL := hLoopS ⟨n - 1, by omega⟩
-            rw [show offset + 2 + (n - 1) = offset + n + 1 from by omega] at hL
-            obtain ⟨hpx, hpy⟩ := hWP ⟨n + 1, by omega⟩
-            rw [show ((⟨n + 1, by omega⟩ : Fin 85) : ℕ) = n + 1 from rfl,
-              show offset + (n + 1) = offset + n + 1 from by omega] at hpx hpy
-            have hih := ih (by omega) (by omega)
-            -- opaque scalars (performance)
-            obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
-                t = (Orchard.Ecc.MulFixed.windowScalar (n + 1)
-                  (V / 2 ^ (3 * (n + 1)) % 8)).val := ⟨_, rfl⟩
-            obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
-                S = Orchard.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) n :=
-              ⟨_, rfl⟩
-            have hval : t = (V / 2 ^ (3 * (n + 1)) % 8 + 2) * 8 ^ (n + 1) := by
-              rw [ht_def]
-              exact Orchard.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
-            have hwp : Orchard.Ecc.MulFixed.windowPoint B.point (n + 1)
-                (V / 2 ^ (3 * (n + 1)) % 8) = t • B.point := by
-              rw [ht_def]; rfl
-            rw [hwp] at hpx hpy
-            rw [← hS_def] at hih
-            have hS_lt : S < 2 * 8 ^ (n + 1) := by
-              rw [hS_def]
-              exact Orchard.Ecc.MulFixed.partialSum_lt _ n (fun _ _ => hks_lt _)
-            have hS_pos : 0 < S := by
-              rw [hS_def]; exact Orchard.Ecc.MulFixed.partialSum_pos _ n
-            obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
-              step_bounds (hks_lt (n + 1)) hS_lt hS_pos (by omega)
-            rw [← hval] at hb1 hb2 hb3 hb5
-            obtain ⟨-, hOut⟩ := hL ⟨by
-                rw [hpx, hpy]
-                exact point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
-              by
-                rw [hih.1, hih.2]
-                exact point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
-              by
-                rw [hpx, hih.1]
-                exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
-            rw [show offset + n + 1 + 1 = offset + n + 2 from by omega] at hOut
-            rw [show offset + (n + 1) + 1 = offset + n + 2 from by omega]
-            rw [hpx, hpy, hih.1, hih.2] at hOut
-            rw [point_eta (t • B.point), point_eta (S • B.point),
-              Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
-            have hps : t + S = Orchard.Ecc.MulFixed.partialSum
-                (fun t => V / 2 ^ (3 * t) % 8) (n + 1) := by
-              rw [hval, hS_def, partialSum_succ]
-              ring
-            rw [hps] at hOut
-            exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
-      have hI83 := hInv 83 (by norm_num) le_rfl
-      rw [show offset + 83 + 1 = offset + 84 from by omega] at hI83
+      -- ── the shared ladder (`MulFixed.chain_ladder`), at this region's reads ──
+      have hLadder := MulFixed.chain_ladder B (fun t => V / 2 ^ (3 * t) % 8) hks_lt
+        (fun w => env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w) : ℕ) : ℤ))
+        (fun w => env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w) : ℕ) : ℤ))
+        (fun j => if j = 0 then
+            env.env.advice cfg.superConfig.addConfig.xP
+              ((env.place self + offset : ℕ) : ℤ)
+          else
+            env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+              ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+        (fun j => if j = 0 then
+            env.env.advice cfg.superConfig.addConfig.yP
+              ((env.place self + offset : ℕ) : ℤ)
+          else
+            env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+              ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+        (fun w hw => hWP ⟨w, hw⟩)
+        ⟨if_pos rfl, if_pos rfl⟩
+        (by
+          intro j hj1 hj83 hass
+          obtain ⟨hOnP, hOnQ, hne⟩ := hass
+          dsimp only at hOnP hOnQ hne ⊢
+          rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+          rcases Nat.lt_or_ge j 2 with hj2 | hj2
+          · -- j = 1: the explicit first chunk (window 1 + window 0)
+            have hj : j = 1 := by omega
+            subst hj
+            obtain ⟨-, hOut⟩ := hA1 ⟨hOnP, hOnQ, hne⟩
+            exact hOut
+          · -- j ≥ 2: loop chunk j − 2
+            have h := hLoopS ⟨j - 2, by omega⟩
+            rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+            rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+              show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+            rw [if_neg (by omega : ¬j - 1 = 0),
+              show offset + (j - 1) + 1 = offset + j from by omega] at hne
+            rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+              show offset + (j - 1) + 1 = offset + j from by omega]
+            obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
+            exact hOut)
+      have hI83 := hLadder 83 le_rfl
+      dsimp only at hI83
+      rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
+        show offset + 83 + 1 = offset + 84 from by omega] at hI83
       rw [← hOax, ← hOay]
       rcases hP : Orchard.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 83
           • B.point with ⟨px, py⟩
