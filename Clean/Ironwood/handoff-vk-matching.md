@@ -380,8 +380,18 @@ Goal: steps 1-3 — canonicity/decomposition gates with phase-1-shaped semantic 
 - NEXT (canonicity bundles, `Clean/Ironwood/NoteCommit/Canonicity.lean`): Input = donor
   `*.Gate.Row` (ALL cells copied in the Rust assigns — pure-copy bundles, Witness :=
   unit), Assumptions = donor `Gate.Assumptions` (rely), Spec = donor `Gate.Spec`.
-  For the VALUE ARGUMENTS (the ~100-line-per-gate canonicity proofs in the donor
-  `Canonicity.lean`/`CommitIvkGate.lean`): try the DONOR-REPLAY bridge first — apply the
+  For the VALUE ARGUMENTS: the DONOR-REPLAY bridge (tried in
+  `Ironwood/NoteCommit/Canonicity.lean` ValueCanonicity.soundness, parked) gets the
+  donor applied but main-Clean `const`'s toElements chain whnf-walls on the
+  ConstraintsHold conversion. GO WITH THE FALLBACK: refactor the donor gates
+  (`Clean/Orchard/Action/Canonicity.lean`, `CommitIvkGate.lean`) to expose row-level
+  `spec_of_eqs (row) (hAss) (heq1) ... : Spec row` value lemmas — mechanical extraction:
+  each donor soundness body already works over `input_*` component values after its
+  peel; rename to `row.*` and have the donor soundness call the lemma. Ironwood
+  soundness then calls the same lemma with its landed equations (watch ℕ-cast
+  constants: donor spells `((2^8:ℕ):Fp)`, Ironwood gates `(2^8:Fp)` — push_cast or
+  linear_combination absorbs). Completeness stays Ironwood-local (short boolean case
+  splits; ValueCanonicity's is DONE and green as the template). (superseded plan: try the DONOR-REPLAY bridge first — apply the
   donor `Gate.circuit.soundness/completeness` (a main-Clean FormalAssertion) at offset 0,
   a trivial env, and CONST-lifted input expressions; the main-Clean ConstraintsHold
   reduce (simp [circuit_norm]) to exactly the Ironwood-landed field equations, so the
