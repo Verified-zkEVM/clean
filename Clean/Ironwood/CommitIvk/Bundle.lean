@@ -88,15 +88,13 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
 
   -- the input-only rely-conditions (donor `Assumptions` minus the witnessed-bit
   -- implications)
+  -- input-only rely-conditions: the gate itself enforces both shifts (constraints 9/13)
   Assumptions input :=
     input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧ input.b2.val < 2 ^ 5 ∧
     input.c.val < 2 ^ 240 ∧ input.d0.val < 2 ^ 9 ∧
-    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP ∧
     input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
     (∃ lo : ℕ, lo < 2 ^ 130 ∧
       input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime) ∧
-    input.b2CPrime = input.b2 + input.c * ((2 ^ 5 : ℕ) : Fp)
-      + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP ∧
     input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) ∧
     (∃ lo : ℕ, lo < 2 ^ 140 ∧
       input.b2CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14B2CPrime)
@@ -105,6 +103,9 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
 
   ProverAssumptions := fun input (wit : Fp × Fp) _ =>
     (wit.1 = 1 → input.z13APrime = 0) ∧ (wit.2 = 1 → input.z14B2CPrime = 0) ∧
+    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP ∧
+    input.b2CPrime = input.b2 + input.c * ((2 ^ 5 : ℕ) : Fp)
+      + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP ∧
     DSpec (toDonor input wit.1 wit.2)
 
   soundness := by
@@ -125,6 +126,13 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     rw [hcz14] at hd1z14
     have hidx1 : (((place self : ℕ) : ℤ) + (((offset : ℕ) : ℤ) + 1))
         = ((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ) + 1 := by ring
+    rw [hca, hcap] at hapC
+    rw [hcb2, hcc, hcb2cp] at hb2cpC
+    have hapS : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hapC ⊢; linear_combination -hapC
+    have hb2cS : input_b2CPrime = input_b2 + input_c * ((2 ^ 5 : ℕ) : Fp)
+        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hb2cpC ⊢; linear_combination -hb2cpC
     have hakEq : input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp)
         + env.advice (cfg.advices 4)
             (((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ))
@@ -140,12 +148,12 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
       linear_combination hnk
     obtain ⟨hakE1, hakE2, hakE3⟩ :=
       Orchard.Action.CommitIvk.Gate.soundness_ak hA.1 hA.2.1
-        (isBool_of_boolCheck hb1c) hA.2.2.2.2.2.1 hA.2.2.2.2.2.2.1
-        hA.2.2.2.2.2.2.2.1 hakEq hb1b0 hb1z13A hb1z13ap
+        (isBool_of_boolCheck hb1c) hapS hA.2.2.2.2.2.1
+        hA.2.2.2.2.2.2.1 hakEq hb1b0 hb1z13A hb1z13ap
     obtain ⟨hnkE1, hnkE2, hnkE3, hnkE4⟩ :=
       Orchard.Action.CommitIvk.Gate.soundness_nk hA.2.2.1 hA.2.2.2.1 hA.2.2.2.2.1
-        (isBool_of_boolCheck (hidx1 ▸ hd1c)) hA.2.2.2.2.2.2.2.2.1
-        hA.2.2.2.2.2.2.2.2.2.2 hnkEq (hidx1 ▸ hd1d0) (hidx1 ▸ hd1z14)
+        (isBool_of_boolCheck hd1c) hb2cS
+        hA.2.2.2.2.2.2.2.2 hnkEq hd1d0 hd1z14
     exact ⟨hakE1, hakE2, hakE3, hnkE1, hnkE2, hnkE3, hnkE4,
       by simp only [toDonor]; push_cast at hbW ⊢; linear_combination hbW,
       by simp only [toDonor]; push_cast at hdW ⊢
@@ -258,10 +266,10 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
       (toDonor input
         (env.env.advice (cfg.advices 4) ((env.place self + offset : ℕ) : ℤ))
         (env.env.advice (cfg.advices 4) ((env.place self + (offset + 1) : ℕ) : ℤ)))
-      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1, hA.2.2.2.2.2.1,
-        hA.2.2.2.2.2.2.1, hA.2.2.2.2.2.2.2.1, hPA.1, hA.2.2.2.2.2.2.2.2.1,
-        hA.2.2.2.2.2.2.2.2.2.1, hA.2.2.2.2.2.2.2.2.2.2, hPA.2.1⟩
-      hPA.2.2
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1, hPA.2.2.1,
+        hA.2.2.2.2.2.1, hA.2.2.2.2.2.2.1, hPA.1, hPA.2.2.2.1,
+        hA.2.2.2.2.2.2.2.1, hA.2.2.2.2.2.2.2.2, hPA.2.1⟩
+      hPA.2.2.2.2
     obtain ⟨hbb1, hbd1, he3, he4, he5, he6, he7, he8, he9, he10, he11, he12,
       he13, he14⟩ := heqs
     simp only [toDonor] at hbb1 hbd1 he3 he4 he5 he6 he7 he8 he9 he10 he11 he12 he13 he14
