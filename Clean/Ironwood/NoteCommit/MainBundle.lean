@@ -858,8 +858,36 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
      hGbS.2.2, by rw [← hz1dEq]; exact hGdS.2.2, hGeS,
      by rw [← hz1gEq]; exact hGgS.2, hGhS.2⟩
     hGvalS.1
-  trace_state
-  sorry
+  -- ── land the Spec ──
+  simp only [Spec]
+  intro B hB
+  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
+  rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at hchunksEq
+  rw [show (Orchard.Action.NoteCommit.noteScalars ⟨input_gdX, input_gdY⟩
+      ⟨input_pkdX, input_pkdY⟩ input_value input_rho input_psi).chunks
+    = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
+      input_pkdX.val (input_pkdY.val % 2) input_value.val input_rho.val input_psi.val
+    from rfl] at hB
+  rw [← hchunksEq] at hB
+  obtain ⟨-, hOut⟩ := hContract B hB
+  have hOutVar : ({ x := output_x, y := output_y } : Orchard.Point Fp)
+      = eval (⟨place, env⟩ : Placed Environment Fp)
+        ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+          { pieces :=
+              #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 1 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 2 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 4 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 7 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 8 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 10 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i₀ + 12 + 2) 0 cfg.hashConfig.witnessPieces] }
+          (i₀ + 15 + 5 + 5)) := by
+    rw [← h_output]
+    with_unfolding_all rfl
+  rw [hOutVar]
+  exact hOut
 
 theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
