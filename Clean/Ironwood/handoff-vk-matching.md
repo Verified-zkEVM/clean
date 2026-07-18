@@ -298,7 +298,11 @@ DONE (fully proven, in `Clean/Ironwood/NoteCommit/Composites.lean`):
   `base_val_lt_tP_val`/`high_bit_canonical` + `shifted_high_zero`.
 - Value composite = `ValueCanonicity.bundle` itself (donor composite is gate-only).
 
-REMAINING:
+REMAINING (CommitIvk composite DONE as of f992a441 — `Clean/Ironwood/CommitIvk/Composite.lean`,
+fully proven; note the fixes it needed vs the NoteCommit template: literal-RHS bridges instead
+of `= bundle.Assumptions` + simp-unfolding `bundle` (maxRecDepth), a `gateChild_extract_eq`
+rfl-bridge for the fieldPair wit, PA-branch = simp [PA-bridge, extract-bridge, circuit_norm]
+then rw ALL h_input components on the goal BEFORE refine, `set_option maxRecDepth 4096 in`):
 1. Y composite (`y_canonicity`, note_commit.rs:1962-2032; donor
    `Orchard.Action.NoteCommit.YCanonicity` at NoteCommit.lean:525-646):
    children = witnessShortCheck k0 (bits 1..10) + witnessShortCheck k2 (250..254) +
