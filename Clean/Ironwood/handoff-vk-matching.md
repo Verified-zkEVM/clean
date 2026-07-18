@@ -366,6 +366,25 @@ Y-composite patterns worth reusing:
 NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
 the decompose bundles + these composites + Sinsemilla, per the donor
 Orchard.Action.NoteCommit top level.
+## Breaks-as-data (ironwood#45) + CommitIvk main — COMPLETE (2026-07-19)
+
+- `Clean/Orchard/Specs/SinsemillaBreak.lean`: `BreakData`/`hashToPointB` Σ-refinement
+  of the ⊥-chain, projection lemma to §5.4.1.9, `ValidBreak` (computational Thm 5.4.4:
+  honest prefix + resolved escape equation), `SpecOrBreak`, and the one-line
+  `breaksOfGuarded` soundness-upgrade bridge.
+- Relations restated as `SpecOrBreak` (prover-side stays guarded): donor
+  `NoteCommitRelation`, donor `CommitIvk.Spec`, `AddressIntegrity.Spec`'s ivk clause,
+  Ironwood `NoteCommit.Main.Spec`. All soundness proofs upgraded via the bridge; the
+  guarded bodies slot in unchanged.
+- **CommitIvk main circuit** (`Clean/Ironwood/CommitIvk/Main.lean` + `MainBundle.lean`):
+  14-region `synth` (7 pieces/shorts, 4-region `short_commit` via `CommitDomain.commit`
+  at `ns = [24,0,23,0]`, the proven 3-region Canonicity composite as a unit — contiguous
+  in Rust), output = extracted x-coordinate. Soundness AND completeness fully proven;
+  `Spec` breaks-as-data from the start; bundled `circuit`; imported by
+  `Clean/Ironwood.lean`. The structure-only `Gadget.lean` stub was replaced by this
+  (Action/Circuit.lean repointed). No VK layout fixture for CommitIvk-main yet (the
+  orchard dumper pipeline from NoteCommit applies directly when wanted).
+
 ## NoteCommit main — COMPLETE (2026-07-18)
 
 The full goal is done: `Clean/Ironwood/NoteCommit/Main.lean` (defs/contract layer) +
