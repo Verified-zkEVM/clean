@@ -145,6 +145,15 @@ private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
       = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
           Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
 
+private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).ProverAssumptions
+      = fun input wit _ =>
+          Sinsemilla.Chain.PieceBounds ns input.pieces ∧
+          (∃ B, hashToPoint G.S Q
+            (Sinsemilla.Chain.honestChunks ns input.pieces) = some B) ∧
+          ∀ w : Fin 85, (wit.2.1[w.val]).val < 8 := rfl
+
 private theorem commit_extract_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
@@ -1321,6 +1330,34 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       try ring
     · rw [hwh, ← hwh0, ← hwh1]
       try ring
+  have hPB : Sinsemilla.Chain.PieceBounds ns
+      #v[env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 9) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ)] :=
+    (pieceBounds_donor_iff _ _).mpr
+      (Orchard.Action.NoteCommit.pieceBounds_of_cellFacts hMCF)
+  have hHonest : Sinsemilla.Chain.honestChunks ns
+      #v[env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 9) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ),
+        env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ)]
+      = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
+        input_pkdX.val (input_pkdY.val % 2) input_value.val input_rho.val
+        input_psi.val := by
+    rw [honestChunks_donor_eq]
+    have := Orchard.Action.NoteCommit.honestChunks_eq_noteCommitChunks_of_cellFacts
+      hMCF hVal64'
+    rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at this
+    exact this
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
@@ -1435,7 +1472,23 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            exact Orchard.Specs.bitrange_lt _ _ _)⟩
   · sorry
   · sorry
-  · sorry
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil)
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
+      ⟨(by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
+       (by rw [commit_assumptions_eq]; trivial),
+       (by rw [commit_proverAssumptions_eq]
+           refine ⟨?_, ?_, ?_⟩
+           · show Sinsemilla.Chain.PieceBounds ns _
+             with_unfolding_all exact hPB
+           · refine ⟨B0, ?_⟩
+             rw [show (Sinsemilla.Chain.honestChunks ns _ : List ℕ)
+                 = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val
+                   (input_gdY.val % 2) input_pkdX.val (input_pkdY.val % 2)
+                   input_value.val input_rho.val input_psi.val from by
+               with_unfolding_all exact hHonest]
+             exact hB0
+           · exact hWin)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
       place env () hWra
