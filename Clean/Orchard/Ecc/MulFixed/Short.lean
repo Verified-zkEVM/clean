@@ -1118,7 +1118,7 @@ private theorem honest_loop_constraints (B : FixedBase) (env : ProverEnvironment
     exact B.nsmul_x_ne hS_pos
       (Nat.lt_of_lt_of_le hS_lt ht_lower) hsum_card
 
-private theorem signed_y_eq_of_gate
+theorem signed_y_eq_of_gate
     {sign yA yP : Fp} (hyP : yP = sign * yA) :
     (sign = 1 → yP = yA) ∧ (sign = -1 → yP = -yA) := by
   constructor
@@ -1128,7 +1128,7 @@ private theorem signed_y_eq_of_gate
     rw [hyP, hs]
     ring
 
-private theorem signed_output_spec (B : FixedBase) {m : ℕ}
+theorem signed_output_spec (B : FixedBase) {m : ℕ}
     {sign x y ySigned : Fp}
     (hmulEq : ({ x := x, y := y } : Point Fp) = ((m : Fq) • B))
     (hySigned_pos : sign = 1 → ySigned = y)
@@ -1154,7 +1154,7 @@ private theorem zValue_22_eq_zero {m : Fp} (hm : m.val < 2 ^ 64) : zValue m 22 =
   exact Nat.cast_zero
 
 /-- The last window of a 64-bit magnitude is a bit. -/
-private theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue m 21) := by
+theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue m 21) := by
   have hdiv : m.val / 8 ^ 21 = 0 ∨ m.val / 8 ^ 21 = 1 := by
     have h8 : (8 : ℕ) ^ 21 = 2 ^ 63 := by norm_num
     have : m.val / 8 ^ 21 < 2 := by omega
@@ -1165,7 +1165,7 @@ private theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue
   · exact Or.inr Nat.cast_one
 
 /-- Base-8 digit recombination of the magnitude. -/
-private theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
+theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
     ∑ j ∈ Finset.range 22, windowVal m j * 8 ^ j = m.val := by
   unfold windowVal
   have h := sum_base8 m.val 22
