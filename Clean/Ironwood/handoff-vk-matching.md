@@ -440,3 +440,30 @@ goals, short rw chains), combine. The stage split will also make the 30-child
 soundness peel tractable (hc splits into 3 then further). Cells thread across stages
 via small record types. The bridges compile and are kept... (removed with the failed
 lemma — recover from this note or git history at the failed attempt).
+
+## NoteCommit soundness state (MainBundle.lean WIP, un-imported)
+
+WORKING (compiles, ~10s): circuit_proof_start → 3-stage peel → stage 1 (7 short-check
+bound facts hb0..hh0 in read language) → stage 2 (hY1S/hY2S IsLowBit conditionals at
+the lsb cells (i₀+15+4)/(i₀+15+5+4) advices6; hCmS = commit chunks/ZsFacts/point
+contract; 4 telescope facts haz0/htelA..hgz0/htelG) → pieceChunks_donor_iff bridge
+(unlocks donor pieceChunks_val_lt + chunk-equality connectors).
+
+KERNEL CLIFF hit at stage 3: normalizing hGt's indices (Operations.regionCount simp +
+yc/commit rw + 9× toFormal_call_regionCount rw) exceeds the kernel budget when inlined.
+FIX (per doc/performance-problems.md "kernel size cliffs"): factor the three stage
+peels into standalone private lemmas, each kernel-checked alone:
+  private theorem peelGates (cfg input pcs ccs iHash i₀ place env)
+    (h : Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
+    <10-conjunct of folded gate-call chunks at clean numeric indices>
+(statements = the folded `(bundle.toFormal name).call` chunks subcircuit_rw expects, at
+i₀, i₀+1, ..., i₀+9; proofs = the existing simp/index-normalization + exact). Same for
+peelChecks (indices i₀..i₀+17: Y at i₀/i₀+5, commit i₀+10, wchecks i₀+14..17) and
+optionally peelPieces. Main soundness then applies these and stays small. Bridges for
+stage 3 already in the file: toFormal_{spec,assumptions,envAssumptions,extract}_eq
+(generic), decomposeB/D/G/H_output, toFormal_call_regionCount.
+Remaining after stage 3: A-discharges for the 5 canonicity gates (chain telescope
+facts + piece bounds via pieceChunks_val_lt/donor bridge + hb0.. shorts + hGbS
+booleans — exactly the Composites.lean glue), then the donor chunk-equality assembly
+(pieceChunks_eq_noteCommitChunks_of_indexed_piece_values, NoteCommit.lean:447/1661)
+to land Spec. Then completeness (mirror), circuit def, VK fixture.

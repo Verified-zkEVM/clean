@@ -1,4 +1,5 @@
 import Clean.Ironwood.NoteCommit.Main
+import Clean.Orchard.Sinsemilla.HashToPoint
 
 /-!
 # NoteCommit bundle proofs (soundness / completeness / the `circuit` def)
@@ -155,7 +156,83 @@ private theorem commit_extract_eq (G : Generators) (R : FixedBase)
           { pieces := inp.pieces } (i + 2) env,
          Ecc.MulFixed.FullWidth.fwExtract c.1 i env) := rfl
 
+private theorem toFormal_call_regionCount {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
+    (inp : Var In Fp) (j : RegionIndex) :
+    Operations.regionCount (((b.toFormal name).call cfg inp).operations j) = 1 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+private theorem toFormal_spec_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).Spec = b.Spec := rfl
+
+private theorem toFormal_assumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).Assumptions = b.Assumptions := rfl
+
+private theorem toFormal_envAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).EnvAssumptions = b.EnvAssumptions := rfl
+
+private theorem toFormal_extract_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
+    (inp : Var In Fp) (i : RegionIndex) (env : Placed Environment Fp) :
+    (b.toFormal name).extract cfg inp i env = b.extract cfg 0 inp i env := rfl
+
+private theorem decomposeB_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeB.bundle w).toFormal name).output cfg inp i
+      = AssignedCell.of i 0 cfg.colR := by
+  show (((DecomposeB.bundle w).synthesize cfg 0 inp)).output i = _
+  simp only [DecomposeB.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeD_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeD.Config) (inp : Var DecomposeD.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeD.bundle w).toFormal name).output cfg inp i
+      = AssignedCell.of i 0 cfg.colM := by
+  show (((DecomposeD.bundle w).synthesize cfg 0 inp)).output i = _
+  simp only [DecomposeD.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeG_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeG.Config) (inp : Var DecomposeG.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeG.bundle w).toFormal name).output cfg inp i
+      = AssignedCell.of i 0 cfg.colM := by
+  show (((DecomposeG.bundle w).synthesize cfg 0 inp)).output i = _
+  simp only [DecomposeG.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeH_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeH.Config) (inp : Var DecomposeH.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeH.bundle w).toFormal name).output cfg inp i
+      = AssignedCell.of i 0 cfg.colR := by
+  show (((DecomposeH.bundle w).synthesize cfg 0 inp)).output i = _
+  simp only [DecomposeH.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
 end ChildBridges
+
+/-- The Ironwood `Chain.PieceChunks` is the donor's, verbatim — the bridge unlocks the
+donor's piece-value/chunk-equality connectors. -/
+private theorem pieceChunks_donor_iff :
+    ∀ (ms : List ℕ) (pieces : Vector Fp ms.length) (chunks : List ℕ),
+      Sinsemilla.Chain.PieceChunks ms pieces chunks ↔
+      Orchard.Sinsemilla.Chain.PieceChunks ms pieces chunks := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro pieces chunks
+    simp only [Sinsemilla.Chain.PieceChunks, Orchard.Sinsemilla.Chain.PieceChunks]
+  | cons n rest ih =>
+    intro pieces chunks
+    constructor
+    · rintro ⟨msf, h1, h2, tailChunks, h3, h4⟩
+      exact ⟨msf, h1, h2, tailChunks, h3, (ih _ _).mp h4⟩
+    · rintro ⟨msf, h1, h2, tailChunks, h3, h4⟩
+      exact ⟨msf, h1, h2, tailChunks, h3, (ih _ _).mpr h4⟩
 
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
@@ -178,6 +255,8 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   simp only [synthGates, synthChecks, synthPieces, LookupRangeCheck.witnessShortCheck,
     LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
     circuit_norm] at hGt
+  simp only [Operations.regionCount, yc_output] at hGt
+  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hGt
   -- ── stage 1: the seven sub-piece short checks ──
   have hSb0 := hP.1
   have hSb3 := hP.2.1
