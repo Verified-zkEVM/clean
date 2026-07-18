@@ -1,0 +1,405 @@
+import Clean.Ironwood.NoteCommit.Gates
+import Clean.Orchard.Action.Decompose
+
+/-!
+Reference (ported from actual Rust, not memory):
+`orchard@0.14.0/src/circuit/note_commit.rs` — the five `Decompose*::assign` regions
+(`"NoteCommit MessagePiece b"` 179-215, `d` 297-340, `e` 418-448, `g` 540-575,
+`h` 660-694): enable the gate at row 0, copy the piece and the externally-constrained
+subpieces in, assign the in-gate boolean subpiece (returned; `e` assigns nothing).
+
+The semantic contracts are the phase-1 gate specs
+(`Clean/Orchard/Action/Decompose.lean`, `Decompose{B,D,E,G,H}.Gate.Spec`) verbatim: the
+booleanity of the in-gate bits plus the piece decomposition identity. Externally-provided
+range facts stay OUT of these bundles (they are the callers' rely-conditions, threaded at
+the composite level exactly as in phase 1).
+-/
+
+namespace Halo2.Ironwood.NoteCommit
+
+open Halo2.Ironwood (Fp)
+
+/-- `v·(1−v) = 0` pins a boolean. -/
+private theorem isBool_of_boolCheck {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
+  rcases mul_eq_zero.mp h with h0 | h1
+  · exact Or.inl h0
+  · exact Or.inr (by linear_combination -h1)
+
+namespace DecomposeB
+
+/-- The copied-in cells: the piece and the externally-constrained subpieces. -/
+structure Inputs (F : Type) where
+  b : F
+  b0 : F
+  b2 : F
+  b3 : F
+deriving ProvableStruct
+
+/-- Rust `DecomposeB::assign` (`note_commit.rs:179-215`), parameterized by the `b_1`
+witness program (Rust: `RangeConstrained::bitrange_of(gd_x, 254..255)`). Output is the
+witnessed `b_1` cell; `Spec` is the donor `DecomposeB.Gate.Spec`. -/
+def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+  configure := pure
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _b ← copyAdvice input.b cfg.colL offset
+    let _b0 ← copyAdvice input.b0 cfg.colM offset
+    let b1 ← assignAdvice cfg.colR offset wb1
+    let _b2 ← copyAdvice input.b2 cfg.colM (offset + 1)
+    let _b3 ← copyAdvice input.b3 cfg.colR (offset + 1)
+    pure b1
+
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.colR : Var field Fp)
+
+  Spec := fun input (out : Fp) _ => IsBool out ∧ IsBool input.b2 ∧
+    input.b = input.b0 + out * 16 + input.b2 * 32 + input.b3 * 64
+
+  ProverAssumptions := fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.b2 ∧
+    input.b = input.b0 + wit * 16 + input.b2 * 32 + input.b3 * 64
+
+  ProverSpec := fun _ (out : Fp) (wit : Fp) _ => out = wit
+
+  soundness := by
+    circuit_proof_start [gate, boolCheck]
+    obtain ⟨⟨hb1, hb2, hdec⟩, hcb, hcb0, hcb2, hcb3⟩ := hc
+    rw [hcb2] at hb2
+    rw [hcb, hcb0, hcb2, hcb3] at hdec
+    exact ⟨isBool_of_boolCheck hb1, isBool_of_boolCheck hb2,
+      by linear_combination hdec⟩
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
+    obtain ⟨hwb, hwb0, hwb1, hwb2, hwb3⟩ := hwit
+    obtain ⟨hpa1, hpa2, hpa3⟩ := hPA
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Inputs Fp)
+      = { b := env.env.get input_var.b.cell.column
+            ((env.place input_var.b.cell.regionIndex
+              + input_var.b.cell.rowOffset : ℕ) : ℤ),
+          b0 := env.env.get input_var.b0.cell.column
+            ((env.place input_var.b0.cell.regionIndex
+              + input_var.b0.cell.rowOffset : ℕ) : ℤ),
+          b2 := env.env.get input_var.b2.cell.column
+            ((env.place input_var.b2.cell.regionIndex
+              + input_var.b2.cell.rowOffset : ℕ) : ℤ),
+          b3 := env.env.get input_var.b3.cell.column
+            ((env.place input_var.b3.cell.regionIndex
+              + input_var.b3.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input
+    have hib : env.env.get input_var.b.cell.column
+        ((env.place input_var.b.cell.regionIndex
+          + input_var.b.cell.rowOffset : ℕ) : ℤ) = input.b := congrArg Inputs.b h_input
+    have hib0 : env.env.get input_var.b0.cell.column
+        ((env.place input_var.b0.cell.regionIndex
+          + input_var.b0.cell.rowOffset : ℕ) : ℤ) = input.b0 := congrArg Inputs.b0 h_input
+    have hib2 : env.env.get input_var.b2.cell.column
+        ((env.place input_var.b2.cell.regionIndex
+          + input_var.b2.cell.rowOffset : ℕ) : ℤ) = input.b2 := congrArg Inputs.b2 h_input
+    have hib3 : env.env.get input_var.b3.cell.column
+        ((env.place input_var.b3.cell.regionIndex
+          + input_var.b3.cell.rowOffset : ℕ) : ℤ) = input.b3 := congrArg Inputs.b3 h_input
+    rw [← hib2, ← hwb2] at hpa2
+    rw [← hib, ← hib0, ← hib2, ← hib3, ← hwb, ← hwb0, ← hwb2, ← hwb3] at hpa3
+    refine ⟨⟨⟨?_, ?_, ?_⟩, hwb, hwb0, hwb2, hwb3⟩, h_output.symm⟩
+    · rcases hpa1 with h | h <;> rw [h] <;> ring
+    · rcases hpa2 with h | h <;> rw [h] <;> ring
+    · linear_combination hpa3
+
+end DecomposeB
+
+namespace DecomposeD
+
+structure Inputs (F : Type) where
+  d : F
+  d1 : F
+  d2 : F
+  d3 : F
+deriving ProvableStruct
+
+/-- Rust `DecomposeD::assign` (`note_commit.rs:297-340`), parameterized by the `d_0`
+witness program (bit 254 of `x(pk_d)`). Output is the witnessed `d_0` cell; `Spec` is
+the donor `DecomposeD.Gate.Spec`. -/
+def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+  configure := pure
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _d ← copyAdvice input.d cfg.colL offset
+    let d0 ← assignAdvice cfg.colM offset wd0
+    let _d1 ← copyAdvice input.d1 cfg.colR offset
+    let _d2 ← copyAdvice input.d2 cfg.colM (offset + 1)
+    let _d3 ← copyAdvice input.d3 cfg.colR (offset + 1)
+    pure d0
+
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.colM : Var field Fp)
+
+  Spec := fun input (out : Fp) _ => IsBool out ∧ IsBool input.d1 ∧
+    input.d = out + input.d1 * 2 + input.d2 * 4 + input.d3 * 1024
+
+  ProverAssumptions := fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.d1 ∧
+    input.d = wit + input.d1 * 2 + input.d2 * 4 + input.d3 * 1024
+
+  ProverSpec := fun _ (out : Fp) (wit : Fp) _ => out = wit
+
+  soundness := by
+    circuit_proof_start [gate, boolCheck]
+    obtain ⟨⟨hd0, hd1, hdec⟩, hcd, hcd1, hcd2, hcd3⟩ := hc
+    rw [hcd1] at hd1
+    rw [hcd, hcd1, hcd2, hcd3] at hdec
+    exact ⟨isBool_of_boolCheck hd0, isBool_of_boolCheck hd1,
+      by linear_combination hdec⟩
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
+    obtain ⟨hwd, hwd0, hwd1, hwd2, hwd3⟩ := hwit
+    obtain ⟨hpa1, hpa2, hpa3⟩ := hPA
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Inputs Fp)
+      = { d := env.env.get input_var.d.cell.column
+            ((env.place input_var.d.cell.regionIndex
+              + input_var.d.cell.rowOffset : ℕ) : ℤ),
+          d1 := env.env.get input_var.d1.cell.column
+            ((env.place input_var.d1.cell.regionIndex
+              + input_var.d1.cell.rowOffset : ℕ) : ℤ),
+          d2 := env.env.get input_var.d2.cell.column
+            ((env.place input_var.d2.cell.regionIndex
+              + input_var.d2.cell.rowOffset : ℕ) : ℤ),
+          d3 := env.env.get input_var.d3.cell.column
+            ((env.place input_var.d3.cell.regionIndex
+              + input_var.d3.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input
+    have hid : env.env.get input_var.d.cell.column
+        ((env.place input_var.d.cell.regionIndex
+          + input_var.d.cell.rowOffset : ℕ) : ℤ) = input.d := congrArg Inputs.d h_input
+    have hid1 : env.env.get input_var.d1.cell.column
+        ((env.place input_var.d1.cell.regionIndex
+          + input_var.d1.cell.rowOffset : ℕ) : ℤ) = input.d1 := congrArg Inputs.d1 h_input
+    have hid2 : env.env.get input_var.d2.cell.column
+        ((env.place input_var.d2.cell.regionIndex
+          + input_var.d2.cell.rowOffset : ℕ) : ℤ) = input.d2 := congrArg Inputs.d2 h_input
+    have hid3 : env.env.get input_var.d3.cell.column
+        ((env.place input_var.d3.cell.regionIndex
+          + input_var.d3.cell.rowOffset : ℕ) : ℤ) = input.d3 := congrArg Inputs.d3 h_input
+    rw [← hid1, ← hwd1] at hpa2
+    rw [← hid, ← hid1, ← hid2, ← hid3, ← hwd, ← hwd1, ← hwd2, ← hwd3] at hpa3
+    refine ⟨⟨⟨?_, ?_, ?_⟩, hwd, hwd1, hwd2, hwd3⟩, h_output.symm⟩
+    · rcases hpa1 with h | h <;> rw [h] <;> ring
+    · rcases hpa2 with h | h <;> rw [h] <;> ring
+    · linear_combination hpa3
+
+end DecomposeD
+
+namespace DecomposeE
+
+structure Inputs (F : Type) where
+  e : F
+  e0 : F
+  e1 : F
+deriving ProvableStruct
+
+/-- Rust `DecomposeE::assign` (`note_commit.rs:418-448`): pure copies, no in-gate
+witness. `Spec` is the donor `DecomposeE.Gate.Spec`. -/
+def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
+  configure := pure
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _e ← copyAdvice input.e cfg.colL offset
+    let _e0 ← copyAdvice input.e0 cfg.colM offset
+    let _e1 ← copyAdvice input.e1 cfg.colR offset
+    pure ()
+
+  Spec input _ _ := input.e = input.e0 + input.e1 * 64
+
+  ProverAssumptions input _ _ := input.e = input.e0 + input.e1 * 64
+
+  soundness := by
+    circuit_proof_start [gate]
+    obtain ⟨hdec, hce, hce0, hce1⟩ := hc
+    rw [hce, hce0, hce1] at hdec
+    linear_combination hdec
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate] at hwit h_input h_output hPA ⊢
+    obtain ⟨hwe, hwe0, hwe1⟩ := hwit
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Inputs Fp)
+      = { e := env.env.get input_var.e.cell.column
+            ((env.place input_var.e.cell.regionIndex
+              + input_var.e.cell.rowOffset : ℕ) : ℤ),
+          e0 := env.env.get input_var.e0.cell.column
+            ((env.place input_var.e0.cell.regionIndex
+              + input_var.e0.cell.rowOffset : ℕ) : ℤ),
+          e1 := env.env.get input_var.e1.cell.column
+            ((env.place input_var.e1.cell.regionIndex
+              + input_var.e1.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input
+    have hie : env.env.get input_var.e.cell.column
+        ((env.place input_var.e.cell.regionIndex
+          + input_var.e.cell.rowOffset : ℕ) : ℤ) = input.e := congrArg Inputs.e h_input
+    have hie0 : env.env.get input_var.e0.cell.column
+        ((env.place input_var.e0.cell.regionIndex
+          + input_var.e0.cell.rowOffset : ℕ) : ℤ) = input.e0 := congrArg Inputs.e0 h_input
+    have hie1 : env.env.get input_var.e1.cell.column
+        ((env.place input_var.e1.cell.regionIndex
+          + input_var.e1.cell.rowOffset : ℕ) : ℤ) = input.e1 := congrArg Inputs.e1 h_input
+    rw [← hie, ← hie0, ← hie1, ← hwe, ← hwe0, ← hwe1] at hPA
+    exact ⟨by linear_combination hPA, hwe, hwe0, hwe1⟩
+
+end DecomposeE
+
+namespace DecomposeG
+
+structure Inputs (F : Type) where
+  g : F
+  g1 : F
+  g2 : F
+deriving ProvableStruct
+
+/-- Rust `DecomposeG::assign` (`note_commit.rs:540-575`), parameterized by the `g_0`
+witness program (bit 254 of `rho`). Output is the witnessed `g_0` cell; `Spec` is the
+donor `DecomposeG.Gate.Spec`. -/
+def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+  configure := pure
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _g ← copyAdvice input.g cfg.colL offset
+    let g0 ← assignAdvice cfg.colM offset wg0
+    let _g1 ← copyAdvice input.g1 cfg.colL (offset + 1)
+    let _g2 ← copyAdvice input.g2 cfg.colM (offset + 1)
+    pure g0
+
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.colM : Var field Fp)
+
+  Spec := fun input (out : Fp) _ => IsBool out ∧
+    input.g = out + input.g1 * 2 + input.g2 * 1024
+
+  ProverAssumptions := fun input (wit : Fp) _ => IsBool wit ∧
+    input.g = wit + input.g1 * 2 + input.g2 * 1024
+
+  ProverSpec := fun _ (out : Fp) (wit : Fp) _ => out = wit
+
+  soundness := by
+    circuit_proof_start [gate, boolCheck]
+    obtain ⟨⟨hg0, hdec⟩, hcg, hcg1, hcg2⟩ := hc
+    rw [hcg, hcg1, hcg2] at hdec
+    exact ⟨isBool_of_boolCheck hg0, by linear_combination hdec⟩
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
+    obtain ⟨hwg, hwg0, hwg1, hwg2⟩ := hwit
+    obtain ⟨hpa1, hpa2⟩ := hPA
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Inputs Fp)
+      = { g := env.env.get input_var.g.cell.column
+            ((env.place input_var.g.cell.regionIndex
+              + input_var.g.cell.rowOffset : ℕ) : ℤ),
+          g1 := env.env.get input_var.g1.cell.column
+            ((env.place input_var.g1.cell.regionIndex
+              + input_var.g1.cell.rowOffset : ℕ) : ℤ),
+          g2 := env.env.get input_var.g2.cell.column
+            ((env.place input_var.g2.cell.regionIndex
+              + input_var.g2.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input
+    have hig : env.env.get input_var.g.cell.column
+        ((env.place input_var.g.cell.regionIndex
+          + input_var.g.cell.rowOffset : ℕ) : ℤ) = input.g := congrArg Inputs.g h_input
+    have hig1 : env.env.get input_var.g1.cell.column
+        ((env.place input_var.g1.cell.regionIndex
+          + input_var.g1.cell.rowOffset : ℕ) : ℤ) = input.g1 := congrArg Inputs.g1 h_input
+    have hig2 : env.env.get input_var.g2.cell.column
+        ((env.place input_var.g2.cell.regionIndex
+          + input_var.g2.cell.rowOffset : ℕ) : ℤ) = input.g2 := congrArg Inputs.g2 h_input
+    rw [← hig, ← hig1, ← hig2, ← hwg, ← hwg1, ← hwg2] at hpa2
+    refine ⟨⟨⟨?_, ?_⟩, hwg, hwg1, hwg2⟩, h_output.symm⟩
+    · rcases hpa1 with h | h <;> rw [h] <;> ring
+    · linear_combination hpa2
+
+end DecomposeG
+
+namespace DecomposeH
+
+structure Inputs (F : Type) where
+  h : F
+  h0 : F
+deriving ProvableStruct
+
+/-- Rust `DecomposeH::assign` (`note_commit.rs:660-694`), parameterized by the `h_1`
+witness program (bit 254 of `psi`). Output is the witnessed `h_1` cell; `Spec` is the
+donor `DecomposeH.Gate.Spec`. -/
+def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+  configure := pure
+
+  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _h ← copyAdvice input.h cfg.colL offset
+    let _h0 ← copyAdvice input.h0 cfg.colM offset
+    let h1 ← assignAdvice cfg.colR offset wh1
+    pure h1
+
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.colR : Var field Fp)
+
+  Spec := fun input (out : Fp) _ => IsBool out ∧ input.h = input.h0 + out * 32
+
+  ProverAssumptions := fun input (wit : Fp) _ => IsBool wit ∧ input.h = input.h0 + wit * 32
+
+  ProverSpec := fun _ (out : Fp) (wit : Fp) _ => out = wit
+
+  soundness := by
+    circuit_proof_start [gate, boolCheck]
+    obtain ⟨⟨hh1, hdec⟩, hch, hch0⟩ := hc
+    rw [hch, hch0] at hdec
+    exact ⟨isBool_of_boolCheck hh1, by linear_combination hdec⟩
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
+    obtain ⟨hwh, hwh0, hwh1⟩ := hwit
+    obtain ⟨hpa1, hpa2⟩ := hPA
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Inputs Fp)
+      = { h := env.env.get input_var.h.cell.column
+            ((env.place input_var.h.cell.regionIndex
+              + input_var.h.cell.rowOffset : ℕ) : ℤ),
+          h0 := env.env.get input_var.h0.cell.column
+            ((env.place input_var.h0.cell.regionIndex
+              + input_var.h0.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input
+    have hih : env.env.get input_var.h.cell.column
+        ((env.place input_var.h.cell.regionIndex
+          + input_var.h.cell.rowOffset : ℕ) : ℤ) = input.h := congrArg Inputs.h h_input
+    have hih0 : env.env.get input_var.h0.cell.column
+        ((env.place input_var.h0.cell.regionIndex
+          + input_var.h0.cell.rowOffset : ℕ) : ℤ) = input.h0 := congrArg Inputs.h0 h_input
+    rw [← hih, ← hih0, ← hwh, ← hwh0] at hpa2
+    refine ⟨⟨⟨?_, ?_⟩, hwh, hwh0⟩, h_output.symm⟩
+    · rcases hpa1 with h | h <;> rw [h] <;> ring
+    · linear_combination hpa2
+
+end DecomposeH
+
+end Halo2.Ironwood.NoteCommit
