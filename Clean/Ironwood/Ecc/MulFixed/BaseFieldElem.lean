@@ -452,8 +452,8 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at h
     exact h
   -- honest accumulator invariant via the shared ladder (`MulFixed.chain_ladder`)
-  have hLadder := MulFixed.chain_ladder B (fun t => input_alpha.val / 2 ^ (3 * t) % 8)
-    hks_lt
+  have hLadder := MulFixed.chain_ladder B.point B.onCurve 85 (by norm_num)
+    (by norm_num) (fun t => input_alpha.val / 2 ^ (3 * t) % 8) hks_lt
     (fun w => env.env.advice cfg.superConfig.addConfig.xP
       ((env.place self + (offset + w) : ℕ) : ℤ))
     (fun w => env.env.advice cfg.superConfig.addConfig.yP
@@ -470,7 +470,10 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       else
         env.env.advice cfg.superConfig.addIncompleteConfig.yQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ))
-    (fun w hw => ⟨(hPW ⟨w, hw⟩).1, (hPW ⟨w, hw⟩).2.1⟩)
+    (fun w hw => by
+      obtain ⟨hx, hy, -⟩ := hPW ⟨w, by omega⟩
+      rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
+      exact ⟨hx, hy⟩)
     ⟨if_pos rfl, if_pos rfl⟩
     (by
       intro j hj1 hj83 hass
@@ -983,7 +986,8 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
       -- window points as nsmul, with scalar values
       have hks_lt : ∀ t, V / 2 ^ (3 * t) % 8 < 8 := fun t => Nat.mod_lt _ (by norm_num)
       -- ── the shared ladder (`MulFixed.chain_ladder`), at this region's reads ──
-      have hLadder := MulFixed.chain_ladder B (fun t => V / 2 ^ (3 * t) % 8) hks_lt
+      have hLadder := MulFixed.chain_ladder B.point B.onCurve 85 (by norm_num)
+        (by norm_num) (fun t => V / 2 ^ (3 * t) % 8) hks_lt
         (fun w => env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w) : ℕ) : ℤ))
         (fun w => env.env.advice cfg.superConfig.addConfig.yP
@@ -1000,7 +1004,10 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
           else
             env.env.advice cfg.superConfig.addIncompleteConfig.yQR
               ((env.place self + (offset + j + 1) : ℕ) : ℤ))
-        (fun w hw => hWP ⟨w, hw⟩)
+        (fun w hw => by
+          obtain ⟨hx, hy⟩ := hWP ⟨w, by omega⟩
+          rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
+          exact ⟨hx, hy⟩)
         ⟨if_pos rfl, if_pos rfl⟩
         (by
           intro j hj1 hj83 hass
@@ -1024,7 +1031,7 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
               show offset + (j - 1) + 1 = offset + j from by omega]
             obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
             exact hOut)
-      have hI83 := hLadder 83 le_rfl
+      have hI83 := hLadder 83 (by norm_num)
       dsimp only at hI83
       rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
         show offset + 83 + 1 = offset + 84 from by omega] at hI83

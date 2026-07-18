@@ -327,59 +327,53 @@ theorem partialSum_congr {ks ks' : ℕ → ℕ} (w : ℕ) (h : ∀ t ≤ w, ks t
     simp only [Orchard.Ecc.MulFixed.partialSum]
     rw [ih (fun t ht => h t (by omega)), h (n + 1) le_rfl]
 
-/-- The shared incomplete-addition ladder, abstract over the cell reads: window `w`
-holds `[windowScalar w (ks w)]·B` (`hWP`), the entering accumulator is window 0
-(`hAcc0`), and each guarded addition fact (`hStep`, the post-`subcircuit_rw` shape of
-an `add_incomplete` chunk: distinct-x on-curve points imply the output is the sum) —
-then the accumulator after windows `0..j` is `[partialSum ks j]·B`. One induction for
-every wrapper's soundness AND completeness ladder (the circuit-fact glue differs per
-caller; the value algebra does not). -/
-theorem chain_ladder (B : Orchard.Ecc.MulFixed.FixedBase) (ks : ℕ → ℕ)
-    (hks_lt : ∀ t, ks t < 8)
+/-- Lower windows' table point as a plain scalar multiple (the `+2`-padded window
+scalar; both the 85- and 22-window families share this form below the MSB). -/
+theorem windowPoint_lower (point : Point Fp) {w k : ℕ} (hw : w < 84) (hk : k < 8) :
+    Orchard.Ecc.MulFixed.windowPoint point w k = (((k + 2) * 8 ^ w : ℕ) • point) := by
+  unfold Orchard.Ecc.MulFixed.windowPoint
+  rw [Orchard.Ecc.MulFixed.windowScalar_val hw hk]
+
+/-- The shared incomplete-addition ladder, abstract over the base point, window count
+and cell reads: window `w < N−1` holds `[(ks w + 2)·8^w]·P` (`hWP`), the entering
+accumulator is window 0 (`hAcc0`), and each guarded addition fact (`hStep`, the
+post-`subcircuit_rw` shape of an `add_incomplete` chunk) — then the accumulator after
+windows `0..j` is `[partialSum ks j]·P`. One induction for every wrapper's soundness
+AND completeness ladder (85-window and 22-window families alike); the circuit-fact glue
+differs per caller, the value algebra does not. -/
+theorem chain_ladder (point : Point Fp) (hP : point.OnCurve)
+    (N : ℕ) (hN2 : 2 ≤ N) (hN85 : N ≤ 85)
+    (ks : ℕ → ℕ) (hks_lt : ∀ t, ks t < 8)
     (wx wy ax ay : ℕ → Fp)
-    (hWP : ∀ w, w < 85 →
-      wx w = (Orchard.Ecc.MulFixed.windowPoint B.point w (ks w)).x ∧
-      wy w = (Orchard.Ecc.MulFixed.windowPoint B.point w (ks w)).y)
+    (hWP : ∀ w, w < N - 1 →
+      wx w = ((((ks w + 2) * 8 ^ w : ℕ)) • point).x ∧
+      wy w = ((((ks w + 2) * 8 ^ w : ℕ)) • point).y)
     (hAcc0 : ax 0 = wx 0 ∧ ay 0 = wy 0)
-    (hStep : ∀ j, 1 ≤ j → j ≤ 83 →
+    (hStep : ∀ j, 1 ≤ j → j ≤ N - 2 →
       (({ x := wx j, y := wy j } : Point Fp).OnCurve ∧
         ({ x := ax (j - 1), y := ay (j - 1) } : Point Fp).OnCurve ∧
         wx j ≠ ax (j - 1)) →
       ({ x := ax j, y := ay j } : Point Fp)
         = { x := wx j, y := wy j } + { x := ax (j - 1), y := ay (j - 1) }) :
-    ∀ j, j ≤ 83 →
-      ax j = (Orchard.Ecc.MulFixed.partialSum ks j • B.point).x ∧
-      ay j = (Orchard.Ecc.MulFixed.partialSum ks j • B.point).y := by
+    ∀ j, j ≤ N - 2 →
+      ax j = (Orchard.Ecc.MulFixed.partialSum ks j • point).x ∧
+      ay j = (Orchard.Ecc.MulFixed.partialSum ks j • point).y := by
   intro j
   induction j with
   | zero =>
     intro _
-    obtain ⟨s0, hs0_def⟩ :
-        ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 0 (ks 0)).val := ⟨_, rfl⟩
-    have hwp0 : Orchard.Ecc.MulFixed.windowPoint B.point 0 (ks 0) = s0 • B.point := by
-      rw [hs0_def]; rfl
-    have hs0 : s0 = Orchard.Ecc.MulFixed.partialSum ks 0 := by
-      rw [hs0_def, Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)]
-      simp [Orchard.Ecc.MulFixed.partialSum]
-    obtain ⟨h0x, h0y⟩ := hWP 0 (by norm_num)
-    rw [hwp0, hs0] at h0x h0y
+    obtain ⟨h0x, h0y⟩ := hWP 0 (by omega)
+    rw [show ((ks 0 + 2) * 8 ^ 0 : ℕ) = Orchard.Ecc.MulFixed.partialSum ks 0 from by
+      simp [Orchard.Ecc.MulFixed.partialSum]] at h0x h0y
     exact ⟨hAcc0.1.trans h0x, hAcc0.2.trans h0y⟩
   | succ n ih =>
     intro hle
     have hih := ih (by omega)
     obtain ⟨hpx, hpy⟩ := hWP (n + 1) (by omega)
-    -- opaque scalars (performance: keep `.val` terms off the goal)
-    obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
-        t = (Orchard.Ecc.MulFixed.windowScalar (n + 1) (ks (n + 1))).val := ⟨_, rfl⟩
-    obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
-        S = Orchard.Ecc.MulFixed.partialSum ks n := ⟨_, rfl⟩
-    have hval : t = (ks (n + 1) + 2) * 8 ^ (n + 1) := by
-      rw [ht_def]
-      exact Orchard.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
-    have hwp : Orchard.Ecc.MulFixed.windowPoint B.point (n + 1) (ks (n + 1))
-        = t • B.point := by
-      rw [ht_def]; rfl
-    rw [hwp] at hpx hpy
+    -- opaque scalars (performance: keep the products off the goal)
+    obtain ⟨t, ht_def⟩ : ∃ t : ℕ, t = (ks (n + 1) + 2) * 8 ^ (n + 1) := ⟨_, rfl⟩
+    obtain ⟨S, hS_def⟩ : ∃ S : ℕ, S = Orchard.Ecc.MulFixed.partialSum ks n := ⟨_, rfl⟩
+    rw [← ht_def] at hpx hpy
     rw [← hS_def] at hih
     have hS_lt : S < 2 * 8 ^ (n + 1) := by
       rw [hS_def]
@@ -388,21 +382,21 @@ theorem chain_ladder (B : Orchard.Ecc.MulFixed.FixedBase) (ks : ℕ → ℕ)
       rw [hS_def]; exact Orchard.Ecc.MulFixed.partialSum_pos _ n
     obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
       step_bounds (hks_lt (n + 1)) hS_lt hS_pos (by omega)
-    rw [← hval] at hb1 hb2 hb3 hb5
+    rw [← ht_def] at hb1 hb2 hb3 hb5
     have hOut := hStep (n + 1) (by omega) (by omega) ⟨by
         rw [hpx, hpy]
-        exact point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
+        exact point_eta_onCurve (Orchard.Point.nsmul_onCurve hP hb1 hb3),
       by
         rw [show n + 1 - 1 = n from by omega, hih.1, hih.2]
-        exact point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
+        exact point_eta_onCurve (Orchard.Point.nsmul_onCurve hP hS_pos hb4),
       by
         rw [show n + 1 - 1 = n from by omega, hpx, hih.1]
-        exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
+        exact Orchard.Point.nsmul_x_ne hP hS_pos hb2 (by omega)⟩
     rw [show n + 1 - 1 = n from by omega, hpx, hpy, hih.1, hih.2] at hOut
-    rw [point_eta (t • B.point), point_eta (S • B.point),
-      Orchard.Point.nsmul_add_nsmul B.onCurve] at hOut
+    rw [point_eta ((t : ℕ) • point), point_eta ((S : ℕ) • point),
+      Orchard.Point.nsmul_add_nsmul hP] at hOut
     have hps : t + S = Orchard.Ecc.MulFixed.partialSum ks (n + 1) := by
-      rw [hval, hS_def, partialSum_succ]
+      rw [ht_def, hS_def, partialSum_succ]
       ring
     rw [hps] at hOut
     exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
