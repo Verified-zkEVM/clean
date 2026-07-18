@@ -32,6 +32,10 @@ requirements doc upgrades exactly this family to extractor form
 that lands with this file's proof arc.
 -/
 
+-- The variable-name style linter whnf-walks the chunk-typed statements of the proof
+-- helpers below and times out; disabled file-wide (as in `BaseFieldElem.lean`).
+set_option linter.constructorNameAsVariable false
+
 namespace Halo2.Ironwood.Ecc.MulFixed.FullWidth
 
 open Halo2.Ironwood (Fp)
@@ -188,6 +192,14 @@ def windowCells (cfg : Config) (offset : ℕ) (self : RegionIndex) :
   Vector.ofFn (fun w : Fin 85 =>
     AssignedCell.of self (offset + w.val) cfg.superConfig.window)
 
+/-- The inner region's output cells, reduced (the explicit `elaborated` output). -/
+def innerOutCells (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    Var InnerOut Fp where
+  acc := { x := AssignedCell.of self (offset + 84) cfg.superConfig.addIncompleteConfig.xQR,
+           y := AssignedCell.of self (offset + 84) cfg.superConfig.addIncompleteConfig.yQR }
+  mulB := { x := AssignedCell.of self (offset + 84) cfg.superConfig.addConfig.xP,
+            y := AssignedCell.of self (offset + 84) cfg.superConfig.addConfig.yP }
+
 /-- Soundness contract: each window cell is a 3-bit digit, and the exit cells hold the
 windowed ladder values at those digits. -/
 def InnerSpec (B : FixedBase) (_ : Value unit Fp) (out : Value InnerOut Fp)
@@ -212,12 +224,17 @@ def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
   out.mulB.x = (Orchard.Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).x ∧
   out.mulB.y = (Orchard.Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).y
 
-/-- The elaborated-metadata instance for the inner region's synthesize lambda (the
-bundle's default `{}`), local so the proofs can name the output. -/
+/-- The elaborated-metadata instance for the inner region's synthesize lambda, with the
+output cells in explicit reduced form (`innerOutCells`) — computing the default output
+projection runs the whole region monad (a `List.append` whnf storm). -/
 instance innerElab (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
     (config : Config) (offset : ℕ) :
     ElaboratedRegionCircuit Fp unit InnerOut
-      (fun _ : Var unit Fp => innerRegion B config offset windows) := {}
+      (fun _ : Var unit Fp => innerRegion B config offset windows) where
+  output := fun _ self => innerOutCells config offset self
+  output_eq := by
+    intro _ self
+    rw [innerOutCells, innerRegion_output]
 
 /-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
 private theorem ofFn8_get_hint (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
@@ -606,6 +623,252 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
         ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
           ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
 
+/-- The elaborated output projection, reduced (`rfl` via `innerElab`). -/
+private theorem innerElab_output (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
+    (config : Config) (offset : ℕ) (input : Var unit Fp) (self : RegionIndex) :
+    ElaboratedRegionCircuit.output
+        (fun _ : Var unit Fp => innerRegion B config offset windows) input self
+      = innerOutCells config offset self := rfl
+
+set_option linter.all false in
+/-- The inner region's soundness, standalone (own declaration budget). -/
+private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (cfg : Config) (offset : ℕ) :
+    FormalRegionCircuit.Soundness (Input := unit) (Output := InnerOut)
+      (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
+      (fun _ self env => eval env (windowCells cfg offset self))
+      (InnerEnvAssumptions cfg) (fun _ => True) (InnerSpec B) := by
+  -- the Mul.lean recipe: contract defs only in the list, targeted peels after
+  circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
+  obtain ⟨env, rfl, rfl⟩ :
+      ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
+    ⟨⟨place, env⟩, rfl, rfl⟩
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionOperations.constraints_append] at hc
+  obtain ⟨-, hFixed, hChain, -⟩ := hc
+  rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+  provable_type_simp
+  obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
+  obtain ⟨hXPeq, hYPeq⟩ := _hE
+  -- ── the per-row gate + Lagrange-fixed rows ──
+  simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
+    fullWidthGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
+    Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+    circuit_norm, mul_one, one_mul] at hFixed
+  -- ── the 3-bit digits, from the per-row window range checks ──
+  have hdig : ∀ w : Fin 85, ∃ k : ℕ, k < 8 ∧
+      env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ) = ((k : ℕ) : Fp) := by
+    intro w
+    obtain ⟨⟨-, -, -, hRange⟩, -⟩ := hFixed w
+    exact (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mp
+      ((Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mp hRange)
+  choose kf hkf_lt hkf_eq using hdig
+  obtain ⟨ks, hks_def⟩ : ∃ ks : ℕ → ℕ,
+      ks = fun t => if h : t < 85 then kf ⟨t, h⟩ else 0 := ⟨_, rfl⟩
+  have hks_lt : ∀ t, ks t < 8 := by
+    intro t
+    rw [hks_def]
+    dsimp only
+    split
+    · exact hkf_lt _
+    · norm_num
+  have hkeq : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
+      ((env.place self + (offset + w.val) : ℕ) : ℤ) = ((ks w.val : ℕ) : Fp) := by
+    intro w
+    rw [hks_def]
+    dsimp only
+    rw [dif_pos w.isLt]
+    exact hkf_eq w
+  -- ── the per-row window points (the coords rows) ──
+  have hWP : ∀ w : Fin 85,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).y := by
+    intro w
+    have hRow := hFixed w
+    obtain ⟨⟨hIx, hUy, hCrv, -⟩, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hRow
+    simp only [show B.toData.params = B.params from rfl]
+      at hL0 hL1 hL2 hL3 hL4 hL5 hL6 hL7 hZf
+    rw [hkeq w] at hIx
+    have hxP : env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = Orchard.Ecc.MulFixed.interpolate (B.params w.val)
+            ((ks w.val : ℕ) : Fp) := by
+      rw [← sub_eq_zero.mp hIx]
+      apply MulFixed.interpolate_congr_params <;>
+        simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
+        first
+        | exact hL0 | exact hL1 | exact hL2 | exact hL3
+        | exact hL4 | exact hL5 | exact hL6 | exact hL7
+    have hspec : Orchard.Ecc.MulFixed.Coords.Spec (B.params w.val)
+        { window := ((ks w.val : ℕ) : Fp),
+          xP := env.env.advice cfg.superConfig.addConfig.xP
+            ((env.place self + (offset + w.val) : ℕ) : ℤ),
+          yP := env.env.advice cfg.superConfig.addConfig.yP
+            ((env.place self + (offset + w.val) : ℕ) : ℤ),
+          u := env.env.advice cfg.superConfig.u
+            ((env.place self + (offset + w.val) : ℕ) : ℤ) } := by
+      refine ⟨hxP, ?_, ?_⟩
+      · rw [← hZf]; linear_combination hUy
+      · linear_combination hCrv
+    have hcw := B.coords_eq_windowPoint (w := w.val) (k := ks w.val)
+      (by omega) (hks_lt _) rfl hspec
+    dsimp only at hcw
+    exact hcw
+  refine ⟨ks, fun w _ => hks_lt w, ?_, ?_, ?_⟩
+  · -- the window cells hold the digits
+    intro w
+    simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
+      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+      Environment.get_advice]
+    exact hkeq w
+  · -- acc = [partialSum ks 83]·B  (the window-chain ladder)
+    simp only [MulFixed.windowChain, processWindowH, circuit_norm,
+      RegionCircuit.operations_bind, RegionOperations.constraints_append] at hChain
+    obtain ⟨hA1, hALoop⟩ := hChain
+    subcircuit_rw at hA1
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      MulFixed.addinc_output_cells, circuit_norm] at hA1
+    have hLoopS := fun (i : Fin 82) => by
+      have h := hALoop i
+      subcircuit_rw at h
+      simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+        MulFixed.addinc_output_cells, circuit_norm, mul_one] at h
+      exact h
+    clear hALoop
+    -- ── the shared ladder, at this region's reads ──
+    have hLadder := MulFixed.chain_ladder B ks hks_lt
+      (fun w => env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + w) : ℕ) : ℤ))
+      (fun w => env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + w) : ℕ) : ℤ))
+      (fun j => if j = 0 then
+          env.env.advice cfg.superConfig.addConfig.xP
+            ((env.place self + offset : ℕ) : ℤ)
+        else
+          env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+            ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+      (fun j => if j = 0 then
+          env.env.advice cfg.superConfig.addConfig.yP
+            ((env.place self + offset : ℕ) : ℤ)
+        else
+          env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+            ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+      (fun w hw => hWP ⟨w, hw⟩)
+      ⟨if_pos rfl, if_pos rfl⟩
+      (by
+        intro j hj1 hj83 hass
+        obtain ⟨hOnP, hOnQ, hne⟩ := hass
+        dsimp only at hOnP hOnQ hne ⊢
+        rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+        rcases Nat.lt_or_ge j 2 with hj2 | hj2
+        · -- j = 1: the explicit first chunk (window 1 + window 0)
+          have hj : j = 1 := by omega
+          subst hj
+          obtain ⟨-, hOut⟩ := hA1 ⟨hOnP, hOnQ, hne⟩
+          exact hOut
+        · -- j ≥ 2: loop chunk j − 2
+          have h := hLoopS ⟨j - 2, by omega⟩
+          rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+          rw [if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega] at hne
+          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega]
+          obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
+          exact hOut)
+    have hI83 := hLadder 83 le_rfl
+    dsimp only at hI83
+    rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
+      show offset + 83 + 1 = offset + 84 from by omega] at hI83
+    rw [← hOax, ← hOay]
+    rcases hP : Orchard.Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩
+    rw [hP] at hI83
+    rw [hI83.1, hI83.2]
+  · -- mulB = windowPoint 84 k₈₄  (the MSB coords row)
+    obtain ⟨hwx, hwy⟩ := hWP ⟨84, by norm_num⟩
+    rw [← hOmx, ← hOmy]
+    rcases hW : Orchard.Ecc.MulFixed.windowPoint B.point 84 (ks 84) with ⟨wx, wy⟩
+    rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl, hW] at hwx hwy
+    rw [hwx, hwy]
+
+set_option linter.all false in
+/-- The inner region's completeness, standalone (own declaration budget). -/
+private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (cfg : Config) (offset : ℕ) :
+    FormalRegionCircuit.Completeness (Input := unit) (Output := InnerOut)
+      (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
+      (fun _ self env => eval env (windowCells cfg offset self))
+      (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
+      (InnerProverSpec B) := by
+  circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions,
+    InnerProverSpec]
+  obtain ⟨env, rfl, rfl⟩ :
+      ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+    ⟨⟨place, env⟩, rfl, rfl⟩
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
+    at hwit ⊢
+  obtain ⟨hWwsl, hWfix, hWchain, -⟩ := hwit
+  obtain ⟨hXPeq, hYPeq⟩ := _hE
+  -- the honest `< 8` bound, landed on the advice reads
+  simp only [windowCells, Vector.getElem_ofFn, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+    at hPA
+  -- the window cells hold the hint digits (the witness loop's assign clauses).
+  -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
+  simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
+  have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
+      ((env.place self + (offset + w.val) : ℕ) : ℤ)
+    = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
+    intro w
+    have hclause := hWwsl w
+    simp only [hintWindowVal]
+    rw [hclause, Nat.mod_eq_of_lt (by rw [← hclause]; exact hPA w)]
+    exact (ZMod.natCast_zmod_val _).symm
+  refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
+  · with_reducible
+      exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).1
+  · with_reducible
+      exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).2
+  · with_reducible
+      exact (fw_completeness_chain B cfg offset self env windows hWchain
+        hXPeq hYPeq).1
+  · rw [RegionCircuit.operations_pure]
+    exact trivial
+  · -- the honest-prover contract (`InnerProverSpec`)
+    rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+    provable_type_simp
+    obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
+    have hws : ∀ t : ℕ, t < 85 →
+        ZMod.val (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+          (eval (⟨env.place, env.env.toEnvironment⟩ : Placed Environment Fp)
+            (windowCells cfg offset self)) t)
+        = hintWindowVal env windows t := by
+      intro t ht
+      rw [getElem!_pos _ t (by simpa using ht)]
+      simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
+        AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+        Environment.get_advice]
+      rw [hWin ⟨t, ht⟩]
+      rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
+      exact lt_of_lt_of_le (Nat.mod_lt _ (by norm_num))
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    have hax := (fw_completeness_chain B cfg offset self env windows hWchain
+      hXPeq hYPeq).2
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [← hOax, hax.1,
+        MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
+    · rw [← hOay, hax.2.1,
+        MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
+    · rw [← hOmx, hax.2.2.1, hws 84 (by norm_num)]
+    · rw [← hOmy, hax.2.2.2, hws 84 (by norm_num)]
+
 set_option linter.constructorNameAsVariable false in
 /-- The inner-region bundle: region 1 with the extractor-form contract. -/
 def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
@@ -627,228 +890,88 @@ def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
 
   ProverSpec := InnerProverSpec B
 
+  soundness := fun cfg offset => fw_inner_soundness B windows cfg offset
+
+  completeness := fun cfg offset => fw_inner_completeness B windows cfg offset
+
+/-! ## The gadget bundle (`FixedPoint::mul`, `full_width.rs::assign`)
+
+Extractor form per the requirements doc: `Witness` carries the window cells AND the
+scalar they encode; `Spec` is literally `output = s • B`. -/
+
+open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
+/-- The scalar read off the 85 window cells (the constructive extractor). -/
+def windowsScalar (ws : Vector Fp 85) : CompElliptic.Fields.Pasta.Fq :=
+  ((∑ w ∈ Finset.range 85, (ws[w]!).val * 8 ^ w : ℕ) : CompElliptic.Fields.Pasta.Fq)
+
+/-- The top-level extraction data: the window cells and the scalar they encode
+(a named def keeps the pair opaque during proof setup). -/
+def fwExtract (cfg : Config) (i₀ : RegionIndex) (env : Placed Environment Fp) :
+    Vector Fp 85 × CompElliptic.Fields.Pasta.Fq :=
+  let ws := eval env (windowCells cfg 0 i₀)
+  (ws, windowsScalar ws)
+
+/-- Env-level preconditions: the `EccChip` wiring asserts the inner region consumes. -/
+def EnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
+  cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP ∧
+  cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
+
+/-- The region count of `synthesize`: inner mul + complete addition. -/
+private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+    (windows : Vector (FExpr Fp) 85) (i : RegionIndex) :
+    Operations.regionCount ((synthesize B cfg windows).operations i) = 2 := by
+  simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
+
+seal innerRegion in
+set_option linter.constructorNameAsVariable false in
+/-- Rust `FixedPoint::mul` (`full_width.rs::assign`): `[s]B` for the full-width scalar
+the witnessed windows encode. -/
+def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
+    FormalCircuit Fp MulFixed.Config Config unit Point where
+  name := "fixed-base mul (full width)"
+
+  configure := configure
+
+  synthesize cfg _ := synthesize B.toData cfg windows
+
+  elaborated cfg :=
+    { output := fun _ i => (synthesize B.toData cfg windows).output i
+      regionCount := fun _ => 2
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun _ i => (synthesize_regionCount B.toData cfg windows i).symm }
+
+  EnvAssumptions := EnvAssumptions
+
+  Assumptions _ := True
+
+  Witness := fun F => Vector F 85 × CompElliptic.Fields.Pasta.Fq
+  extract cfg _ i₀ env := fwExtract cfg i₀ env
+
+  Spec _ output s := output = (s.2 • B : Point Fp)
+
+  ProverAssumptions _ s _ := ∀ w : Fin 85, (s.1[w.val]).val < 8
+
+  ProverSpec _ _ _ _ := True
+
   soundness := by
-    -- the Mul.lean recipe: contract defs only in the list, targeted peels after
-    circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
+    circuit_proof_start
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [innerRegion, RegionCircuit.operations_bind,
-      RegionOperations.constraints_append] at hc
-    obtain ⟨-, hFixed, hChain, -⟩ := hc
-    rw [innerRegion_output] at h_output
-    provable_type_simp
-    obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
-    obtain ⟨hXPeq, hYPeq⟩ := _hE
-    -- ── the per-row gate + Lagrange-fixed rows ──
-    simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
-      fullWidthGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
-      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
-      circuit_norm, mul_one, one_mul] at hFixed
-    -- ── the 3-bit digits, from the per-row window range checks ──
-    have hdig : ∀ w : Fin 85, ∃ k : ℕ, k < 8 ∧
-        env.env.advice cfg.superConfig.window
-          ((env.place self + (offset + w.val) : ℕ) : ℤ) = ((k : ℕ) : Fp) := by
-      intro w
-      obtain ⟨⟨-, -, -, hRange⟩, -⟩ := hFixed w
-      exact (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mp
-        ((Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mp hRange)
-    choose kf hkf_lt hkf_eq using hdig
-    obtain ⟨ks, hks_def⟩ : ∃ ks : ℕ → ℕ,
-        ks = fun t => if h : t < 85 then kf ⟨t, h⟩ else 0 := ⟨_, rfl⟩
-    have hks_lt : ∀ t, ks t < 8 := by
-      intro t
-      rw [hks_def]
-      dsimp only
-      split
-      · exact hkf_lt _
-      · norm_num
-    have hkeq : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
-        ((env.place self + (offset + w.val) : ℕ) : ℤ) = ((ks w.val : ℕ) : Fp) := by
-      intro w
-      rw [hks_def]
-      dsimp only
-      rw [dif_pos w.isLt]
-      exact hkf_eq w
-    -- ── the per-row window points (the coords rows) ──
-    have hWP : ∀ w : Fin 85,
-        env.env.advice cfg.superConfig.addConfig.xP
-            ((env.place self + (offset + w.val) : ℕ) : ℤ)
-          = (Orchard.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).x ∧
-        env.env.advice cfg.superConfig.addConfig.yP
-            ((env.place self + (offset + w.val) : ℕ) : ℤ)
-          = (Orchard.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).y := by
-      intro w
-      have hRow := hFixed w
-      obtain ⟨⟨hIx, hUy, hCrv, -⟩, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hRow
-      simp only [show B.toData.params = B.params from rfl]
-        at hL0 hL1 hL2 hL3 hL4 hL5 hL6 hL7 hZf
-      rw [hkeq w] at hIx
-      have hxP : env.env.advice cfg.superConfig.addConfig.xP
-            ((env.place self + (offset + w.val) : ℕ) : ℤ)
-          = Orchard.Ecc.MulFixed.interpolate (B.params w.val)
-              ((ks w.val : ℕ) : Fp) := by
-        rw [← sub_eq_zero.mp hIx]
-        apply MulFixed.interpolate_congr_params <;>
-          simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
-          first
-          | exact hL0 | exact hL1 | exact hL2 | exact hL3
-          | exact hL4 | exact hL5 | exact hL6 | exact hL7
-      have hspec : Orchard.Ecc.MulFixed.Coords.Spec (B.params w.val)
-          { window := ((ks w.val : ℕ) : Fp),
-            xP := env.env.advice cfg.superConfig.addConfig.xP
-              ((env.place self + (offset + w.val) : ℕ) : ℤ),
-            yP := env.env.advice cfg.superConfig.addConfig.yP
-              ((env.place self + (offset + w.val) : ℕ) : ℤ),
-            u := env.env.advice cfg.superConfig.u
-              ((env.place self + (offset + w.val) : ℕ) : ℤ) } := by
-        refine ⟨hxP, ?_, ?_⟩
-        · rw [← hZf]; linear_combination hUy
-        · linear_combination hCrv
-      have hcw := B.coords_eq_windowPoint (w := w.val) (k := ks w.val)
-        (by omega) (hks_lt _) rfl hspec
-      dsimp only at hcw
-      exact hcw
-    refine ⟨ks, fun w _ => hks_lt w, ?_, ?_, ?_⟩
-    · -- the window cells hold the digits
-      intro w
-      simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
-        AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-        Environment.get_advice]
-      exact hkeq w
-    · -- acc = [partialSum ks 83]·B  (the window-chain ladder)
-      simp only [MulFixed.windowChain, processWindowH, circuit_norm,
-        RegionCircuit.operations_bind, RegionOperations.constraints_append] at hChain
-      obtain ⟨hA1, hALoop⟩ := hChain
-      subcircuit_rw at hA1
-      simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-        MulFixed.addinc_output_cells, circuit_norm] at hA1
-      have hLoopS := fun (i : Fin 82) => by
-        have h := hALoop i
-        subcircuit_rw at h
-        simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
-          MulFixed.addinc_output_cells, circuit_norm, mul_one] at h
-        exact h
-      clear hALoop
-      -- ── the shared ladder, at this region's reads ──
-      have hLadder := MulFixed.chain_ladder B ks hks_lt
-        (fun w => env.env.advice cfg.superConfig.addConfig.xP
-          ((env.place self + (offset + w) : ℕ) : ℤ))
-        (fun w => env.env.advice cfg.superConfig.addConfig.yP
-          ((env.place self + (offset + w) : ℕ) : ℤ))
-        (fun j => if j = 0 then
-            env.env.advice cfg.superConfig.addConfig.xP
-              ((env.place self + offset : ℕ) : ℤ)
-          else
-            env.env.advice cfg.superConfig.addIncompleteConfig.xQR
-              ((env.place self + (offset + j + 1) : ℕ) : ℤ))
-        (fun j => if j = 0 then
-            env.env.advice cfg.superConfig.addConfig.yP
-              ((env.place self + offset : ℕ) : ℤ)
-          else
-            env.env.advice cfg.superConfig.addIncompleteConfig.yQR
-              ((env.place self + (offset + j + 1) : ℕ) : ℤ))
-        (fun w hw => hWP ⟨w, hw⟩)
-        ⟨if_pos rfl, if_pos rfl⟩
-        (by
-          intro j hj1 hj83 hass
-          obtain ⟨hOnP, hOnQ, hne⟩ := hass
-          dsimp only at hOnP hOnQ hne ⊢
-          rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
-          rcases Nat.lt_or_ge j 2 with hj2 | hj2
-          · -- j = 1: the explicit first chunk (window 1 + window 0)
-            have hj : j = 1 := by omega
-            subst hj
-            obtain ⟨-, hOut⟩ := hA1 ⟨hOnP, hOnQ, hne⟩
-            exact hOut
-          · -- j ≥ 2: loop chunk j − 2
-            have h := hLoopS ⟨j - 2, by omega⟩
-            rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-            rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
-              show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-            rw [if_neg (by omega : ¬j - 1 = 0),
-              show offset + (j - 1) + 1 = offset + j from by omega] at hne
-            rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
-              show offset + (j - 1) + 1 = offset + j from by omega]
-            obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
-            exact hOut)
-      have hI83 := hLadder 83 le_rfl
-      dsimp only at hI83
-      rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
-        show offset + 83 + 1 = offset + 84 from by omega] at hI83
-      rw [← hOax, ← hOay]
-      rcases hP : Orchard.Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩
-      rw [hP] at hI83
-      rw [hI83.1, hI83.2]
-    · -- mulB = windowPoint 84 k₈₄  (the MSB coords row)
-      obtain ⟨hwx, hwy⟩ := hWP ⟨84, by norm_num⟩
-      rw [← hOmx, ← hOmy]
-      rcases hW : Orchard.Ecc.MulFixed.windowPoint B.point 84 (ks 84) with ⟨wx, wy⟩
-      rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl, hW] at hwx hwy
-      rw [hwx, hwy]
+    simp only [synthesize, circuit_norm] at hc
+    obtain ⟨hInner, hAdd⟩ := hc
+    -- region 1: the inner windowed mul (whole-region bundle). The `change` pre-betas
+    -- the chunk spelling: the raw application's expected-type check unfolds
+    -- `innerRegion` instead of beta-reducing the synthesize lambda (16s whnf storm).
+    change RegionOperations.Constraints env.place i₀ env.env
+      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 windows)
+        input_var).operations i₀) at hInner
+    have hIS : InnerSpec B (eval env input_var)
+        (eval env (innerOutCells cfg 0 i₀))
+        (eval env (windowCells cfg 0 i₀)) :=
+      fw_inner_soundness B windows cfg 0 i₀ env input_var _hE trivial hInner
+    sorry
 
-  completeness := by
-    circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions,
-      InnerProverSpec]
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [innerRegion, RegionCircuit.operations_bind,
-      RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
-      at hwit ⊢
-    obtain ⟨hWwsl, hWfix, hWchain, -⟩ := hwit
-    obtain ⟨hXPeq, hYPeq⟩ := _hE
-    -- the honest `< 8` bound, landed on the advice reads
-    simp only [windowCells, Vector.getElem_ofFn, AssignedCell.of_cell,
-      Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-      at hPA
-    -- the window cells hold the hint digits (the witness loop's assign clauses).
-    -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
-    simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
-    have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
-        ((env.place self + (offset + w.val) : ℕ) : ℤ)
-      = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
-      intro w
-      have hclause := hWwsl w
-      simp only [hintWindowVal]
-      rw [hclause, Nat.mod_eq_of_lt (by rw [← hclause]; exact hPA w)]
-      exact (ZMod.natCast_zmod_val _).symm
-    refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
-    · with_reducible
-        exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).1
-    · with_reducible
-        exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).2
-    · with_reducible
-        exact (fw_completeness_chain B cfg offset self env windows hWchain
-          hXPeq hYPeq).1
-    · rw [RegionCircuit.operations_pure]
-      exact trivial
-    · -- the honest-prover contract (`InnerProverSpec`)
-      simp only [innerRegion_output] at h_output
-      provable_type_simp
-      obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
-      have hws : ∀ t : ℕ, t < 85 →
-          ZMod.val (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval (⟨env.place, env.env.toEnvironment⟩ : Placed Environment Fp)
-              (windowCells cfg offset self)) t)
-          = hintWindowVal env windows t := by
-        intro t ht
-        rw [getElem!_pos _ t (by simpa using ht)]
-        simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
-          AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-          Environment.get_advice]
-        rw [hWin ⟨t, ht⟩]
-        rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
-        exact lt_of_lt_of_le (Nat.mod_lt _ (by norm_num))
-          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      have hax := (fw_completeness_chain B cfg offset self env windows hWchain
-        hXPeq hYPeq).2
-      refine ⟨?_, ?_, ?_, ?_⟩
-      · rw [← hOax, hax.1,
-          MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
-      · rw [← hOay, hax.2.1,
-          MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
-      · rw [← hOmx, hax.2.2.1, hws 84 (by norm_num)]
-      · rw [← hOmy, hax.2.2.2, hws 84 (by norm_num)]
+  completeness := by sorry
 
 end Halo2.Ironwood.Ecc.MulFixed.FullWidth
