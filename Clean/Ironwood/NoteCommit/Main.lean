@@ -1,6 +1,7 @@
 import Clean.Ironwood.NoteCommit.Gates
 import Clean.Ironwood.NoteCommit.Decompose
 import Clean.Ironwood.NoteCommit.Canonicity
+import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.NoteCommit.YComposite
 import Clean.Ironwood.Sinsemilla.CommitDomain
@@ -458,7 +459,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
-open Orchard.Specs.Sinsemilla (hashToPoint)
+open Orchard.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
@@ -488,17 +489,17 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
     (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
   Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env
 
-/-- The donor `NoteCommitRelation` at the extracted window scalar: whenever the
-Sinsemilla hash of the note's canonical chunk encoding is defined, the output is that
-hash translated by `[rcm]R`. -/
+/-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
+chain over the note's canonical chunks is defined and the output is the commitment
+`B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
+(`Orchard.Specs.Sinsemilla.ValidBreak`). -/
 def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
-  ∀ B : Orchard.Point Fp,
-    hashToPoint G.S Q
+  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Orchard.Point Fp))
+    (hashToPointB G.S Q
       (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
-        ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B →
-    output = B + (rcm.2 • R : Orchard.Point Fp)
+        ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Inputs Fp) (rcm : Vector Fp 85 × Fq)

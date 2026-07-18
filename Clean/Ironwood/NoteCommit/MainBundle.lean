@@ -1369,6 +1369,10 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     hGvalS.1
   -- ── land the Spec ──
   simp only [Spec]
+  refine Orchard.Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
+    (fun m hm => G.S_onCurve (Orchard.Specs.Sinsemilla.chunksOf_mem_lt (by
+      simpa [Orchard.Action.NoteCommit.NoteCommitScalars.chunks,
+        Orchard.Specs.Sinsemilla.noteCommitChunks] using hm))) ?_
   intro B hB
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
   rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at hchunksEq

@@ -338,7 +338,32 @@ theorem validBreak_of_inr {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List �
   · exact hEq.2.2.2
   · exact doubleCollision_resolve haccV hchunk hEq
 
-/-! ## The bridge from guarded soundness conclusions -/
+/-! ## The breaks-as-data disjunction and the bridge from guarded conclusions -/
+
+/-- The breaks-as-data disjunction: the payload predicate on the hash point, or a
+valid exhibited break. Relation-layer specs are stated as
+`SpecOrBreak S Q P (hashToPointB S Q chunks)`. -/
+def SpecOrBreak (S : ℕ → Point Fp) (Q : Point Fp) (P : Point Fp → Prop) :
+    Point Fp ⊕ BreakData → Prop
+  | .inl B => P B
+  | .inr br => ValidBreak S Q br
+
+theorem SpecOrBreak.mono {S : ℕ → Point Fp} {Q : Point Fp}
+    {P P' : Point Fp → Prop} (h : ∀ B, P B → P' B) :
+    ∀ {v : Point Fp ⊕ BreakData}, SpecOrBreak S Q P v → SpecOrBreak S Q P' v
+  | .inl B, hv => h B hv
+  | .inr _, hv => hv
+
+/-- Every `K`-bit chunk read off a value is in the generator table's index range. -/
+theorem chunksOf_mem_lt {val n m : ℕ} (h : m ∈ chunksOf val n) : m < 2 ^ K := by
+  simp only [chunksOf, List.mem_map, List.mem_range] at h
+  obtain ⟨i, -, rfl⟩ := h
+  exact Orchard.Specs.bitrange_lt _ _ _
+
+/-- The generator table is on-curve at every chunk of a `chunksOf` message. -/
+theorem Generators.chunksOf_onCurve (G : Generators) (val n : ℕ) :
+    ∀ m ∈ chunksOf val n, (G.S m).OnCurve := fun _ hm =>
+  G.S_onCurve (chunksOf_mem_lt hm)
 
 /-- Upgrade a guarded (`∀ B, hashToPoint … = some B → P B`) soundness conclusion to
 the breaks-as-data disjunction: either the hash is defined and `P` holds of it, or
@@ -347,9 +372,7 @@ composed circuit soundness proofs. -/
 theorem breaksOfGuarded {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
     (hQ : Q.Valid) (hS : ∀ m ∈ chunks, (S m).OnCurve)
     {P : Point Fp → Prop} (h : ∀ B, hashToPoint S Q chunks = some B → P B) :
-    match hashToPointB S Q chunks with
-    | .inl B => P B
-    | .inr br => ValidBreak S Q br := by
+    SpecOrBreak S Q P (hashToPointB S Q chunks) := by
   cases hB : hashToPointB S Q chunks with
   | inl B => exact h B (hashToPointB_inl hB)
   | inr br => exact validBreak_of_inr hQ hS hB
