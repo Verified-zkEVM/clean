@@ -17,6 +17,12 @@ namespace Halo2.Ironwood.NoteCommit
 
 open Halo2.Ironwood (Fp)
 
+/-- `v·(1−v) = 0` pins a boolean. -/
+private theorem isBool_of_boolCheck' {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
+  rcases mul_eq_zero.mp h with h0 | h1
+  · exact Or.inl h0
+  · exact Or.inr (by linear_combination -h1)
+
 namespace ValueCanonicity
 
 private abbrev DRow := Orchard.Action.NoteCommit.ValueCanonicity.Gate.Row
@@ -617,7 +623,184 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
 end PsiCanonicity
 
+namespace YCanonicity
 
+private abbrev DRow := Orchard.Action.NoteCommit.YCanonicity.Gate.Row
+private abbrev DSpec := Orchard.Action.NoteCommit.YCanonicity.Gate.Spec
+private abbrev DAssumptions := Orchard.Action.NoteCommit.YCanonicity.Gate.Assumptions
 
+/-- The copied-in cells (the `lsb`/`k_3` sign bits are witnessed in-region). -/
+structure Row (F : Type) where
+  y : F
+  k0 : F
+  k2 : F
+  j : F
+  z1J : F
+  z13J : F
+  jPrime : F
+  z13JPrime : F
+deriving ProvableStruct
+
+/-- The donor-side row at the witnessed `(lsb, k3)` pair. -/
+def toDonor (row : Row Fp) (lsb k3 : Fp) : DRow Fp :=
+  ⟨row.y, lsb, row.k0, row.k2, k3, row.j, row.z1J, row.z13J, row.jPrime,
+    row.z13JPrime⟩
+
+/-- Rust `YCanonicity::assign` (`note_commit.rs:1345-1409`): `q_y_canon` at row 0; row 0
+copies `y`/`k_0`/`k_2` and witnesses `LSB`/`k_3` (the `wlsb`/`wk3` programs); row 1 copies
+`j`/`z1_j`/`z13_j`/`j_prime`/`z13_j_prime`. Output is the witnessed `lsb` cell; the
+`(lsb, k3)` readings are the extraction data. `Spec` is the donor `YCanonicity.Gate.Spec`
+CONDITIONED on the output's booleanity — as in Rust, the lsb cell is boolean-constrained
+*outside* this gate (the decompose gates' `bool_check` on the copied cell), so the
+composite threads it back as a rely. -/
+def bundle (wlsb wk3 : WitgenIR Fp 1) :
+    FormalRegionCircuit Fp Config Config Row field where
+  configure := pure
+
+  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
+    (gate cfg).enable offset
+    let _y ← copyAdvice input.y (cfg.advices 5) offset
+    let lsb ← assignAdvice (cfg.advices 6) offset wlsb
+    let _k0 ← copyAdvice input.k0 (cfg.advices 7) offset
+    let _k2 ← copyAdvice input.k2 (cfg.advices 8) offset
+    let _k3 ← assignAdvice (cfg.advices 9) offset wk3
+    let _j ← copyAdvice input.j (cfg.advices 5) (offset + 1)
+    let _z1 ← copyAdvice input.z1J (cfg.advices 6) (offset + 1)
+    let _z13 ← copyAdvice input.z13J (cfg.advices 7) (offset + 1)
+    let _jp ← copyAdvice input.jPrime (cfg.advices 8) (offset + 1)
+    let _z13p ← copyAdvice input.z13JPrime (cfg.advices 9) (offset + 1)
+    pure lsb
+
+  Witness := fieldPair
+  extract cfg offset _ self env :=
+    (eval env (AssignedCell.of self offset (cfg.advices 6) : Var field Fp),
+     eval env (AssignedCell.of self offset (cfg.advices 9) : Var field Fp))
+
+  -- the input-only rely-conditions (donor `Assumptions` minus `IsBool lsb`)
+  Assumptions input :=
+    input.j.val < 2 ^ 250 ∧ input.k0.val < 2 ^ 9 ∧ input.k2.val < 2 ^ 4 ∧
+    input.jPrime = input.j + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP ∧
+    input.z1J.val = input.j.val / 2 ^ 10 ∧
+    input.z13J.val = input.j.val / 2 ^ 130 ∧
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧
+      input.jPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13JPrime
+
+  Spec := fun input (out : Fp) (wit : Fp × Fp) =>
+    out = wit.1 ∧ (IsBool out → DSpec (toDonor input out wit.2))
+
+  ProverAssumptions := fun input (wit : Fp × Fp) _ =>
+    IsBool wit.1 ∧ DSpec (toDonor input wit.1 wit.2)
+
+  ProverSpec := fun _ (out : Fp) (wit : Fp × Fp) _ => out = wit.1
+
+  soundness := by
+    circuit_proof_start [gate, boolCheck]
+    obtain ⟨⟨hk3c, hjdec, hyc, hjpc, hg1, hg2, hg3⟩,
+      hcy, hck0, hck2, hcj, hcz1, hcz13, hcjp, hcz13p⟩ := hc
+    rw [hcj, hck0, hcz1] at hjdec
+    rw [hcy, hcj, hck2] at hyc
+    rw [hck2] at hg1
+    rw [hcz13p] at hg3
+    have hidx : ((place self + offset : ℕ) : ℤ)
+        = ((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ) := by push_cast; ring
+    rw [hidx] at hk3c hyc hg1 hg3
+    exact ⟨trivial, fun hbool =>
+      Orchard.Action.NoteCommit.YCanonicity.Gate.spec_of_eqs
+        (toDonor ⟨input_y, input_k0, input_k2, input_j, input_z1J, input_z13J,
+          input_jPrime, input_z13JPrime⟩ _ _)
+        ⟨hbool, hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1,
+          hA.2.2.2.2.2.1, hA.2.2.2.2.2.2⟩
+        (isBool_of_boolCheck' hk3c)
+        (by simp only [toDonor]; push_cast at hjdec ⊢; linear_combination hjdec)
+        (by simp only [toDonor]; push_cast at hyc ⊢; linear_combination hyc)
+        (by simp only [toDonor]; push_cast at hg1 ⊢; linear_combination hg1)
+        (by simp only [toDonor]; push_cast at hg3 ⊢; linear_combination hg3)⟩
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hA hPA ⊢
+    obtain ⟨hwy, hwlsb, hwk0, hwk2, hwk3, hwj, hwz1, hwz13, hwjp, hwz13p⟩ := hwit
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Row Fp)
+      = { y := env.env.get input_var.y.cell.column
+            ((env.place input_var.y.cell.regionIndex
+              + input_var.y.cell.rowOffset : ℕ) : ℤ),
+          k0 := env.env.get input_var.k0.cell.column
+            ((env.place input_var.k0.cell.regionIndex
+              + input_var.k0.cell.rowOffset : ℕ) : ℤ),
+          k2 := env.env.get input_var.k2.cell.column
+            ((env.place input_var.k2.cell.regionIndex
+              + input_var.k2.cell.rowOffset : ℕ) : ℤ),
+          j := env.env.get input_var.j.cell.column
+            ((env.place input_var.j.cell.regionIndex
+              + input_var.j.cell.rowOffset : ℕ) : ℤ),
+          z1J := env.env.get input_var.z1J.cell.column
+            ((env.place input_var.z1J.cell.regionIndex
+              + input_var.z1J.cell.rowOffset : ℕ) : ℤ),
+          z13J := env.env.get input_var.z13J.cell.column
+            ((env.place input_var.z13J.cell.regionIndex
+              + input_var.z13J.cell.rowOffset : ℕ) : ℤ),
+          jPrime := env.env.get input_var.jPrime.cell.column
+            ((env.place input_var.jPrime.cell.regionIndex
+              + input_var.jPrime.cell.rowOffset : ℕ) : ℤ),
+          z13JPrime := env.env.get input_var.z13JPrime.cell.column
+            ((env.place input_var.z13JPrime.cell.regionIndex
+              + input_var.z13JPrime.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input hA
+    rw [h_input] at hA
+    have hiy : env.env.get input_var.y.cell.column
+        ((env.place input_var.y.cell.regionIndex
+          + input_var.y.cell.rowOffset : ℕ) : ℤ) = input.y := congrArg Row.y h_input
+    have hik0 : env.env.get input_var.k0.cell.column
+        ((env.place input_var.k0.cell.regionIndex
+          + input_var.k0.cell.rowOffset : ℕ) : ℤ) = input.k0 := congrArg Row.k0 h_input
+    have hik2 : env.env.get input_var.k2.cell.column
+        ((env.place input_var.k2.cell.regionIndex
+          + input_var.k2.cell.rowOffset : ℕ) : ℤ) = input.k2 := congrArg Row.k2 h_input
+    have hij : env.env.get input_var.j.cell.column
+        ((env.place input_var.j.cell.regionIndex
+          + input_var.j.cell.rowOffset : ℕ) : ℤ) = input.j := congrArg Row.j h_input
+    have hiz1J : env.env.get input_var.z1J.cell.column
+        ((env.place input_var.z1J.cell.regionIndex
+          + input_var.z1J.cell.rowOffset : ℕ) : ℤ) = input.z1J := congrArg Row.z1J h_input
+    have hiz13J : env.env.get input_var.z13J.cell.column
+        ((env.place input_var.z13J.cell.regionIndex
+          + input_var.z13J.cell.rowOffset : ℕ) : ℤ) = input.z13J := congrArg Row.z13J h_input
+    have hijPrime : env.env.get input_var.jPrime.cell.column
+        ((env.place input_var.jPrime.cell.regionIndex
+          + input_var.jPrime.cell.rowOffset : ℕ) : ℤ) = input.jPrime := congrArg Row.jPrime h_input
+    have hiz13JPrime : env.env.get input_var.z13JPrime.cell.column
+        ((env.place input_var.z13JPrime.cell.regionIndex
+          + input_var.z13JPrime.cell.rowOffset : ℕ) : ℤ) = input.z13JPrime := congrArg Row.z13JPrime h_input
+    have heqs := Orchard.Action.NoteCommit.YCanonicity.Gate.eqs_of_spec
+      (toDonor input
+        (env.env.advice (cfg.advices 6) ((env.place self + offset : ℕ) : ℤ))
+        (env.env.advice (cfg.advices 9) ((env.place self + offset : ℕ) : ℤ)))
+      ⟨hPA.1, hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1,
+        hA.2.2.2.2.2.1, hA.2.2.2.2.2.2⟩ hPA.2
+    obtain ⟨hb, he2, he3, he4, he5, he6, he7⟩ := heqs
+    simp only [toDonor] at hb he2 he3 he4 he5 he6 he7
+    rw [← hij, ← hik0, ← hiz1J, ← hwj, ← hwk0, ← hwz1] at he2
+    rw [← hiy, ← hij, ← hik2, ← hwy, ← hwj, ← hwk2] at he3
+    rw [← hij, ← hijPrime, ← hwj, ← hwjp] at he4
+    rw [← hik2, ← hwk2] at he5
+    rw [← hiz13J, ← hwz13] at he6
+    rw [← hiz13JPrime, ← hwz13p] at he7
+    refine ⟨⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+      hwy, hwk0, hwk2, hwj, hwz1, hwz13, hwjp, hwz13p⟩, h_output.symm⟩
+    · rcases hb with h | h <;> rw [h] <;> ring
+    · push_cast at he2 ⊢
+      linear_combination he2
+    · push_cast at he3 ⊢
+      linear_combination he3
+    · push_cast at he4 ⊢
+      linear_combination he4
+    · linear_combination he5
+    · linear_combination he6
+    · linear_combination he7
+
+end YCanonicity
 
 end Halo2.Ironwood.NoteCommit

@@ -853,8 +853,6 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
         simp only [circuit_norm]
         exact hDC.2 w
 
-
-
 set_option linter.constructorNameAsVariable false in
 /-- The inner-region bundle: `innerRegion` with the donor-shaped contract. -/
 def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config

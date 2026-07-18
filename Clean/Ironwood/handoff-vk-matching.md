@@ -1,88 +1,9 @@
-# Handoff: full VK matching arc (Mul.lean) + parked tasks
+# Ironwood arc status (was: VK-matching handoff)
 
-Branch `halo2-clean-2` (PR #418). Everything referenced below is pushed. Read
-`Clean/Halo2/vk-matching-design.md` first for the framing; the state below supersedes its
-"Phase 2 deferred" status.
-
-## Where VK matching stands
-
-Goal (Gregor): match the *full* VK content — CS structure AND everything `synthesize` adds
-(selector activations, copy constraints/σ, fixed-column values incl. lookup tables and
-constants). MSM commitments stay a trusted deterministic function of that data.
-
-Done and green:
-
-- CS-structure fixtures pre+post selector compression, `#guard`-pinned:
-  `TestVkMatchMul`/`TestVkMatchAdd`, plus per-circuit `Sinsemilla*`/`Merkle*`
-  Pre/Post/SelMap in `Clean/Halo2/Fixtures/` (commit `4b45ed6e` — each header documents the
-  exact Rust call chain).
-- **Layout fixtures** (commit `2631644a`): `MulLayout`/`SinsemillaLayout`/`MerkleLayout` —
-  region placements, permutation column order, **ordered raw copy list** (σ's cycle
-  rotations depend on copy order), exact keygen σ (sparse), constants-allocation map
-  (floor-planner-routed rows), full fixed contents including loaded tables. k=11 keygen
-  view, `Value::unknown()`.
-- **Lean reconstruction machinery** (commit `fb5d88ee`): `Clean/Halo2/Fixtures/Layout.lean`
-  (reusable — lockstep place-walk incl. `table_idx` region slots; ordered copy extraction
-  with constants deferred to region end; verbatim `permutation/keygen.rs` Assembly port;
-  `usableRows = n − 6`; `compress_selectors` assignedRoot encoding) +
-  `Clean/Halo2/Tests/TestVkLayoutMul.lean`. Machinery fully validated (σ replay from the
-  dump's own copies, exact table/constants reconstruction).
-
-## DONE (2026-07-17 night run): the mul relayout arc is complete
-
-The main task below is finished and pushed; the three `TestVkLayoutMul.lean` `#guard`s
-(copyList/σ/fixed) are ON, unmodified, and green, with `TestVkMatchMul` still green.
-What happened, in order:
-
-- `MulIncomplete`: start-copy order fixed to Rust's z, x_a, y_a (`incomplete.rs:273-287`) —
-  the dump's ordered copy list pins it (`(5,4,4,3)` x_a before `(6,3,5,3)` y_a).
-- `Mul.lean` `mainRegion` re-laid to Rust's exact scheme: `offInit=0`, `offHi=offLo=1`
-  (side-by-side), `offComp=129`, `offLsb=135`. **Both proofs survived unchanged** — they
-  address cells through the symbolic offsets, and the overlapping `x_p`/`y_p` writes carry
-  equal values, so the completeness witness-env equations coincide.
-- The parked `mul-relayout-wip` "regenerated fixture" claim was verified INDEPENDENTLY and
-  confirmed: the fixture's `regions` line was wrong for regions 3/6 (recorded 0/1; truth
-  2/140). Evidence: the fixture's own copyList places the init-add copies at absolute rows
-  2/3, and `single_pass.rs:97-105` places the main region at the advices-0/1 tail (= 2).
-- Per Gregor's go-ahead ("write your own fixture dumping logic in the sibling halo2
-  folder"), a fresh dumper now lives at `halo2_gadgets/src/ecc/chip/layout_dump.rs`
-  (sibling checkout `/root/code/halo2`, tag `halo2_gadgets-0.5.0`, commit LOCAL to this
-  machine per the dumper ruling; run
-  `cargo test -p halo2_gadgets --lib ecc::chip::layout_dump -- --nocapture`). It rebuilds
-  the MulDumpCircuit harness and reproduces the original dump's 56-entry ordered copy list
-  **byte-for-byte** — harness equivalence — so its placement line is authoritative:
-  `[0, 0, 1, 2, 139, 139, 140]`. `MulLayout.lean`'s regions line (only) was regenerated
-  from it, with provenance in the fixture header.
-
-Still open from the queue below: #34, #30, #22, #23, #31, #32, and the Sinsemilla/Merkle
-layout tests (other agent's arc).
-
-## The headline finding + the main task (historical — done, see above)
-
-The mul port's `mainRegion` layout **diverges from Rust**: `Mul.lean` stacks
-hi/lo/complete vertically (~264 rows, the old "disjoint row ranges" soundness strategy),
-but `mul.rs:171-296` runs the hi/lo `double_and_add` halves **side-by-side at the same
-rows** on disjoint column sets sharing only `x_p/y_p` (~137 rows; the floor planner places
-the overflow siblings at row 139, which collides with the stacked layout).
-
-Task: re-lay `mainRegion` to Rust's exact row scheme (child bundles are offset-generic —
-change instantiation, not contracts; configure/gates are VK-frozen, `TestVkMatchMul` must
-stay green), absorb the proof fallout in `Mul.lean` (non-overlap now by
-column-disjointness; overlapping `x_p/y_p` writes carry equal values — there is
-same-cell-double-assign precedent in the file), then **turn on the three disabled
-`#guard`s in `TestVkLayoutMul.lean` (copyList/σ/fixed) unmodified** — they are the
-acceptance criteria. Never weaken a check; the ordered copy list's first divergence is the
-diagnostic.
-
-Partial prior work is parked on branch **`mul-relayout-wip`** (do-not-merge): its last
-finding was that after the row change, a regenerated fixture differed *only* in region
-placements (main 0→2, overflow 1→140) with copyList/σ/fixed identical — close, but verify
-independently; it may have assumed a harness tweak.
-
-**Caveat**: the Rust dumper lives only on Gregor's main machine (halo2 checkout, local
-branch `lean-fixture-dump`; fixture headers carry regeneration commands). If the fixture's
-placement line genuinely needs regenerating, coordinate with Gregor rather than
-hand-editing dumped data.
+Live status log for the in-flight arcs, shared across machines. The original mul
+VK-matching handoff is COMPLETE (mul is fully VK-matched, CS + layout — see
+`Clean/Halo2/vk-matching-design.md`'s implementation-status banner for the machinery
+summary); completed narrative sections were retired 2026-07-18.
 
 ## Settled rulings (don't relitigate)
 
@@ -231,135 +152,18 @@ in elaborated-accessor form (a file-level `instance innerElab` changes the spell
    point circuits".
 
 
-## Sinsemilla/Merkle arc status (2026-07-18, overnight run)
+## Sinsemilla/Merkle arc: COMPLETE (2026-07-18)
 
-All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
+All pushed, `lake build Clean` + `CleanTests` green, tree sorry-free: chain/hash_message/
+HashLayer/Layer/CalculateRoot/CommitDomain proven; VK CS + layout tests green. Details in
+git history (section retired).
 
-- **Chain completeness closed** — the whole round/loop/slot/chain restructure is proven.
-  Honest-prover runs require `ns ≠ []` (`Chain.ProverAssumptions`).
-- **CS VK matches green**: `TestVkMatchSinsemilla`, `TestVkMatchMerkle` (pre+post).
-  `SinsemillaChip::configure` made VK-exact (equality on all five advices, `q_s2`
-  allocated inside, lookup-before-gates, Rust const-mul orientations — the eraser maps
-  right-mul-by-const to `Scaled`). `MerkleChip::configure` ported (CondSwap + q_decompose).
-- **Layout VK matches green end-to-end**: `TestVkLayoutSinsemilla` (6/6 copies, 12/12 σ,
-  6241/6241 fixed), `TestVkLayoutMerkle` (17/17 copies, σ, fixed). New machinery:
-  `assignedFixed` (in-region assign_fixed extraction), `dedupFixed`. Placement lines of
-  both fixtures regenerated via a new sibling-checkout dumper
-  (`halo2_gadgets/src/sinsemilla/layout_dump.rs`, local-only commit — same min-touched
-  attribution bug as mul regions 3/6).
-- **Rust-faithfulness refactors**: `shortRangeCheck` positional (no copy-in — Rust
-  `short_range_check`) + `witnessShortCheck` layouter wrapper; Merkle `Gate` takes `l`
-  from a constant (9 copies), both directions proven; `CondSwap.swap` gadget fully proven
-  (Bool-valued swap program).
-- **`hash_message` FORMAL bundle proven** (`HashToPoint.hashRegion`/`hashCircuit`): the
-  public-Q init pins the chain's ∀-A contract to the hash from `Q`; Spec exposes chunking
-  + ZsFacts + the flat `z1View`; ProverSpec the honest hash. Chain exports the public
-  composition lemmas (`circuit_output_eval`(_prover), `output_point_x/y`).
-- **`HashLayer.synthesize`** (Rust `hash_layer`) is real and layout-validated, consuming
-  the formal hash bundle.
+## Poseidon arc: COMPLETE (2026-07-18)
 
-### Remaining (the ⊤-level proof compositions)
-
-1. ~~`HashLayer` as a `FormalCircuit`~~ **DONE (2026-07-18)** — `HashLayer.circuit` fully
-   proven both directions (the Mul-style layouter peel over the proven children; the
-   `sum_z1_eq_pieceZ` digit-canonicity bridge feeds `honest_gate`).
-2. ~~`Layer` = CondSwap.swap + HashLayer~~ **DONE (2026-07-18)** — `Layer.circuit` fully
-   proven (Spec = `MerkleStep`; the completeness prefix auto-lifts the children's PA
-   obligations and provides per-child derived implications `h_spec_0/1` — no manual peel
-   needed at all for a two-child layouter compose).
-   ~~`CalculateRoot` = the 32-fold of `Layer.circuit`~~ **DONE (2026-07-18)** —
-   `CalculateRoot.circuit` fully proven on the NEW layouter-level fold combinator
-   `FormalCircuit.foldCall` (`Clean/Halo2/Subcircuit.lean`): serial fold of a
-   formal-circuit family with closed-form accumulator/region state (`foldState`) and
-   `Constraints`/`ExtendsWitnesses` split lemmas into `∀ i : Fin m` per-round call
-   chunks. Soundness: split + `subcircuit_rw` (walks under the binder) +
-   `merkleRoot_of_steps`; completeness: split + a `pathNode` (running-node-over-readings)
-   induction discharging each chunk via the `SubcircuitRw.layouter_completeness_*_placed`
-   framework leaves manually. `Spec` = `MerkleRoot G Q 0 leaf 32 root`.
-3. ~~`CommitDomain.commit`~~ **DONE (2026-07-18)** — fully proven both directions:
-   hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth` boundary (`BlindSpecPinned`
-   pattern; the mul_fixed arc will discharge the pinned hypotheses when it lands).
-   `Spec`: `∀ B, hashToPoint Q chunks = some B → output.Valid ∧ output = B + scalarOf·R`
-   with `PieceChunks`/`ZsFacts` exposed. Completeness rides the hash child's
-   `ProverSpec` (honest hash point) — no chunk-canonicity needed.
-
-**The sinsemilla stack (merkle + commitdomain) is COMPLETE — no sorries.**
-
-### Proof-engineering notes from the HashLayer arc (read before composing further)
-
-- `rw`/`simp only` routinely FAIL to match `HVec.head/tail`/`Vector.ofFn`-getElem terms on
-  invisible implicit spellings (`zLengths (n::rest)` vs `(n+1) :: …`, reduced vs unreduced
-  sizes). Term-level `congrArg`/`.trans` compositions and `show … from by
-  with_unfolding_all rfl` conversions are the reliable route; big prover-eval defeqs must
-  be SPLIT (record→literal vector, then the value function) or `isDefEq` walls at 200k.
-- `circuit_proof_start` completeness bakes `hwit` into witness-eval form; generic
-  `WitgenIR` params make hypotheses/goal speak different languages — bundles should carry
-  positional cells (`cellAt`) or Bool/native witness programs with eval lemmas.
-- For pair/field outputs, prefer a named `Output` struct (`deriving ProvableStruct`) so
-  the splitter yields per-component `h_output_*`/`output_*` facts; `field`-input leaves
-  lose `h_input` (spelling gap) — use a one-field `Input` struct instead.
-- The layouter peel of a 7-region synthesize works out of the box:
-  `simp only [<own defs>, circuit_norm] at hc` → 4 chunks; `subcircuit_rw` handles
-  region- and layouter-level chunks alike; region counts via
-  `Operations.regionCount_append` + a per-chunk `show`-lemma (regionCount is WF-recursive
-  — not `rfl`; use its equation lemmas).
-
-## Poseidon arc (started 2026-07-18)
-
-Goal: port Poseidon from halo2 `poseidon/pow5.rs` + `Clean/Orchard/Poseidon` donors to
-`Clean/Ironwood/Poseidon`, with formal bundle proofs and a green VK fixture test for the
-entry-point hash circuit (ConstantLength<2> P128Pow5T3 — DeriveNullifier's
-`poseidon_hash(nk, rho)`).
-
-- DONE: `Clean/Ironwood/Poseidon/Pow5.lean` — `Config`, the three VK-exact gates
-  (`full round`/`partial rounds`/`pad-and-add`, Rust-orientation-exact: `expr * (c : Fp)`
-  const-mul, left-fold sums, unnamed constraints), `configure` (equality on state then
-  rc_b, three plain selectors, three gates). MDS/mdsInv baked as constants from the donor
-  `P128Pow5T3`; round constants are queried fixed columns.
-- Orchard's column instantiation (for the dump/VK test): state = advices[6..9],
-  partial_sbox = advices[5], rc_a = fixed lagrange_coeffs[2..5], rc_b = [5..8]
-  (`orchard/src/circuit.rs:354-389`).
-- Region schedule (pow5.rs): permute = ONE region "permute state", 37 rows: row 0 load
-  (copy_advice ×3), rows 0-3 s_full (rc_a at offset, next state at offset+1), rows 4-31
-  s_partial (rc_a + rc_b at offset, partial_sbox mid at offset, next at offset+1), rows
-  32-35 s_full. `initial_state` region: 3× assign_advice_from_constant row 0.
-  `add_input` region: s_pad_and_add at row 1, copy state row 0, copy inputs row 1 (L=2:
-  both Message words, no fixed padding), outputs row 2. Hash(L=2) region sequence:
-  ["initial state for domain ConstantLength<2>", "add input for domain ConstantLength<2>",
-  "permute state"]; squeeze is region-free (output = state[0]).
-- DONE: `Clean/Ironwood/Poseidon/Rounds.lean` — `fullRound r`/`partialRound r`
-  FormalRegionCircuits (positional, MulIncompleteRound pattern: `stateRow`/
-  `readStateRow`/`rowValue`/`rowWit` helpers; Witness = entering state row; Spec = donor
-  `FullRound.value`/`PartialRounds.value`). fullRound SOUNDNESS PROVEN:
-  `circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
-  FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod]` then
-  `obtain ⟨⟨hg0,hg1,hg2⟩, hrc0, hrc1, hrc2⟩ := hc; rw [hrc...] at hg...;
-  exact ⟨by linear_combination -hg0, ...⟩`. KEY GOTCHAS: `Nat.reduceMod` needed (Fin 3
-  coes leave `mds (0 % 3)`), `Nat.add_assoc` for row-index spellings, and the gate polys
-  are `STUFF - out = 0` so `linear_combination -hg`.
-- **POSEIDON ARC COMPLETE (2026-07-18)** — all bundles fully proven, no sorries:
-  `Rounds.lean` (fullRound/partialRound), `Permute.lean` (permuteRegion, 4+28+4 via
-  per-round chunk auto-lift + `foldl_of_steps`), `Hash.lean` (initRegion,
-  addInputRegion — NOTE the input words use Rust's reversed `constrain_equal(cell, var)`
-  orientation, NOT `copy_advice` — and the ConstantLength<2> `hash` bundle, Spec = donor
-  `HashPaddedBlock.value` at capacity `2·2⁶⁴`). VK layout fixture test
-  `TestVkLayoutPoseidon` GREEN end-to-end (regions/copyList incl. deferred init
-  constants/σ/fixed+packed selectors) against the sibling-checkout
-  `poseidon::layout_dump` dump (converter validated byte-exact by round-tripping the
-  FullWidth fixture). Wired into `Clean/Ironwood.lean` + `Clean/Test.lean`.
-- (historical) sorries were: fullRound completeness; partialRound soundness+completeness
-  (soundness needs the donor `mds_mul_mdsInv_apply` algebra — see donor `circuitP128`
-  proofs in `Clean/Orchard/Poseidon/Pow5.lean` for both directions; the completeness
-  witness-eval side uses `rowWit_eval` (`@[circuit_norm]`) like MulIncompleteRound's
-  `readWit_eval`).
-- THEN: full/partial round FormalRegionCircuits (positional, MulIncompleteRound pattern;
-  Witness = entering state row, Spec = donor `FullRound.value`/`PartialRounds.value`);
-  loop bundles (RegionCircuit.forRange', stride 1: rounds share rows!) — NOTE round r
-  writes row offset+1 which round r+1 reads: entering-state positional contract like
-  MulIncomplete's round; then permute region bundle (Spec = donor `Permute.value`),
-  layouter initial_state/add_input, hash bundle (Spec = donor
-  `Hash.HashPaddedBlock.value` at capacity `2 * 2^64`); dump harness
-  (`halo2_gadgets/src/poseidon/layout_dump.rs`, mirror sinsemilla's) + fixtures + tests.
+Code is fully landed and sorry-free: Pow5 config + VK-exact gates, full/partial round
+bundles, `permuteRegion`, layouter init/addInput + the hash `FormalCircuit`
+(`Clean/Ironwood/Poseidon/{Pow5,Rounds,Permute,Hash}.lean`), Poseidon fixtures +
+`TestVkLayoutPoseidon`. (This section had gone stale mid-sprint; details in git history.)
 
 ## NoteCommit/CommitIvk gate-layer arc (started 2026-07-18, goal-hooked)
 
