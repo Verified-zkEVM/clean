@@ -3,7 +3,12 @@
 Replaces the absorption-iff mechanism (`Clean/Halo2/Subcircuit.lean`) as the way parent
 proofs consume child contracts. The iffs were the deliberate fast unblock; this is the
 "proper engine that doesn't leave obligations/premises in place" (maintainer, 2026-07-10).
-The iff mechanism stays until migration completes, then retires.
+
+> **STATUS (superseding the future-tense framing below): migration is complete.** The
+> absorption iffs, their concrete-α/`_bare` restatement families, the markers, and the
+> `call_constraints_and_specs` copies have all been retired from `Subcircuit.lean` (only a
+> historical docstring there records them); `subcircuit_rw` is the sole consumption mechanism.
+> Read the "Migration and retirement" and D1 sections below as done, not planned.
 
 ## Why the iffs are not the endgame
 
@@ -88,8 +93,9 @@ instantiates the child's contract itself. Consequences:
   a chunk under a hypothesis's `→`-left would be skipped silently — acceptable, and the
   tactic reports matched/skipped counts.
 - It does not unfold or normalize anything else. Sequencing stays: `circuit_norm` simp
-  → `provable_type_simp` → `subcircuit_rw` → row-fact chaining. (Eventual starting
-  tactic composes these.)
+  → `provable_type_simp` → `abstract_outputs` → `subcircuit_rw` → row-fact chaining. The
+  starting tactic that composes these now exists — `circuit_proof_start`
+  (`Clean/Halo2/Tactics/CircuitProofStart.lean`).
 - Knowledge-soundness check: `extract` is a function of the environment, not of the
   constraint proposition, so consuming the chunk entirely loses nothing an extractor
   needs.
