@@ -13,6 +13,34 @@
 
 # Ironwood arc status (was: VK-matching handoff)
 
+## Action-circuit assembly arc (2026-07-18, in progress — "everything else" agent)
+
+Gregor's split: the other agent owns the Sinsemilla ⊥-case specs + commit_ivk
+bundling/proofs; this arc owns everything else. DONE so far (all pushed):
+`Action/DeriveNullifier.lean`, `Action/ValueCommit.lean`, `Action/SpendAuthority.lean`
+(knowledge-sound Specs at extracted witnesses), `Action/AddressIntegrity.lean` — all
+fully proven; `CommitIvk/Gadget.lean` (structure-only stub, VK-exact region order);
+`Ecc/Chip.lean` (EccChip::configure aggregate); `Action/Circuit.lean` (the FULL
+`Circuit::configure`, VK-exact: q_orchard gate + all chips in Rust order).
+
+REMAINING:
+1. `assign_advice_from_instance` region op (framework: Operations.lean op +
+   Constraints/ExtendsWitnesses cases + Lemmas circuit_norm + Fixtures/Layout
+   compilation incl. the instance-side copy for σ) — needed only by the final
+   `"Orchard circuit checks"` region.
+2. `Action/Circuit.lean` synthesize: table load, witness regions (load private ×5,
+   witness point cm_old, non-id g_d_old/ak_P/g_d_new/pk_d_new), Merkle root, the four
+   proven composites via `.call`, commit_ivk stub call, note_commit old/new
+   (`NoteCommit.Main.synth`), cm_old "constrain equal" region, constrain_instance rows
+   (CV_NET_X/Y, NF_OLD, RK_X/Y, CMX + ANCHOR/ENABLE_SPEND/ENABLE_OUTPUT via
+   assign_advice_from_instance), the q_orchard region. ScalarFixed/ScalarVar::new are
+   region-FREE (lazy witnessing) — no regions for rcv/alpha/rivk/rcm/ivk wrappers.
+3. VK fixtures: orchard checkout has `src/circuit/layout_dump.rs` (other agent's
+   FullRecorder for NoteCommit) — add a whole-`Circuit` keygen-view dump test (real
+   `Circuit::default()`); reuse halo2-side `lean_dump_cs_fixture`/`lean_dump_compressed`
+   (from the mul_fixed CS arc) for configure-level Pre/Post; then
+   `TestVkMatchAction` (CS) + `TestVkLayoutAction` (σ/regions/copies/fixed).
+
 Live status log for the in-flight arcs, shared across machines. The original mul
 VK-matching handoff is COMPLETE (mul is fully VK-matched, CS + layout — see
 `Clean/Halo2/vk-matching-design.md`'s implementation-status banner for the machinery

@@ -34,6 +34,8 @@ import Clean.Ironwood.Action.DeriveNullifier
 import Clean.Ironwood.Action.ValueCommit
 import Clean.Ironwood.Action.SpendAuthority
 import Clean.Ironwood.Action.AddressIntegrity
+import Clean.Ironwood.Ecc.Chip
+import Clean.Ironwood.Action.Circuit
 
 /-!
 # Ironwood circuits
