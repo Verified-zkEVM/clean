@@ -166,6 +166,49 @@ points VK-layout-matched green. full_width input = `Unconstrained` window hints
   proofs join the same arc (short: donor `Short.lean` Gate + signed-magnitude algebra;
   full_width: donor `FullWidth.lean` + the extractor-form spec upgrade).
 
+**Proof-arc progress (2026-07-18, working tree):** the base_field_elem INNER-REGION
+bundle (`BaseFieldElem.inner`) SOUNDNESS IS FULLY PROVEN — decompose consumption via
+bridges, the ∀-window coords/window-point fact (`hWP`, via `eval_interpolatedX` +
+`readParams`/`interpolate_congr_params` + `shift_word_eq`), the complete 83-step
+incomplete-addition ladder (opaque-scalar pattern; context-free bound lemmas
+`base_bounds`/`step_bounds` because `omega` whnf-scans big hypotheses), the MSB row,
+z-shifts. Key infra learned/added: region-level `FormalRegionCircuit.output_call`
+(Subcircuit.lean), hand `copyDecompose_output`/`innerRegion_output_*` lazy projection
+lemmas (rfl cliffs at concrete 85 — use the simp walk), `addinc_output`, donor
+`inv_lt_card`/`step_sum_lt` de-privatized, `interpolatedX` unrolled (fold ASTs resist
+`ring` under `Fin.succ` atoms; unrolled AST is data-identical — layout tests still
+green). REMAINING sorry: `inner_completeness` (now a STANDALONE theorem — per-declaration
+heartbeat budgets; contract fields factored into `InnerSpec`/`InnerEnvAssumptions`/
+`InnerProverAssumptions` defs, pass them to `circuit_proof_start`'s list).
+
+**inner_completeness state + the whnf-storm dossier (read before continuing):**
+- PROVEN prefix: peel (append-lemmas ONLY — adding `*_nil`/`operations_pure` to the simp
+  makes it hunt []-patterns and whnf the 85-window op lists), `hWdec/hWfix/hWchain`
+  obtained, dec-child consumed via `SubcircuitRw.region_completeness_leaf_placed` +
+  `region_completeness_derived_placed` + bridges (hDecC/hDecS reduce to clean
+  cell-level facts), `hPA'`, honest `hZs` (z-cells = input shifts, on `window` via hZW).
+- BLOCKER: ANY goal-splitting tactic after the prefix (⟨⟩-refine, And.intro-refine,
+  constructor, or exact/convert on a conjunct) triggers ~515k `List.append` unfolds
+  (`set_option diagnostics true`: List.append 515176, fixedConstantsWindow 85,
+  assignFixed 765, loopAux 86 — the whole fixed-constants op list quadratically
+  normalized) and blows the 200k budget. The SAME split succeeds under the LSP
+  (bigger budget) with clean goals. Plain closing `sorry` (no split) builds.
+- Completeness plan (unchanged): conjunct 2 = coords rows via B.interpolate_eq/u_mul_u/
+  windowPoint_onCurve on honest digits (hZs + shift_word_eq + hWfix's fixed-value
+  witness equations); conjunct 3 = per-addinc leaf lemmas + the honest partialSum
+  ladder (mirror of the PROVEN soundness induction — reuse base_bounds/step_bounds);
+  conjunct 4 (pure) = rw [RegionCircuit.operations_pure].
+- Candidate storm fixes: (a) find why conjunct-granular isDefEq whnfs the chunk
+  (suspect: mvar-motive instantiation over the ⊢-simp-rewritten goal), (b) restructure:
+  state the three chunk-Constraints as standalone lemmas parameterized by the peel
+  products and assemble with a single non-splitting term, (c) framework: a
+  `constraints_of_chunks` splitter lemma applied via `apply` (no ⟨⟩ heuristics).
+
+Also learned: `ElaboratedRegionCircuit.output_eq` is the bridge when h_output arrives
+in elaborated-accessor form (a file-level `instance innerElab` changes the spelling);
+`omega`/anonymous-⟨⟩ whnf-scan pitfalls; `Fin.mk`-val spellings normalize with
+`rw [show ((⟨k, _⟩ : Fin n) : ℕ) = k from rfl]`.
+
 **Proof-arc plan (worked out, next up):**
 1. `MulFixed.windowChain` soundness/completeness lemmas over an abstract per-window
    fact family (the coords facts arrive from the toggled gate enables; the chain
