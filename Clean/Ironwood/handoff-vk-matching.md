@@ -273,3 +273,14 @@ Established patterns (beyond the earlier notes):
   (bit-slice payoffs, NoteCommit.lean 1112-1445). 2-child layouter compose w/ h_spec
   auto-lift; the gate child's PA gets the shift + witnessed-bit facts from the
   witnessCheck child's derived facts + own PA.
+
+- CONTRACT FIX progress: Gd/Pkd/Rho DONE (template: rw the shift constraint's copies
+  (`rw [hc-args] at hg2`), `have hshift := by push_cast at hg2 ⊢; linear_combination
+  -hg2`, construct the donor hAss tuple with hshift in the donor position; completeness
+  hAss-tuple takes hPA.2 in that slot, spec from hPA.1). REMAINING: Psi (shift = g1 +
+  g2·2^9 + 2^130 − tP, constraint hg2, donor slot 5 of 7-tuple ⟨hh1, g1_lt, g2_lt,
+  h0_lt, hg1g2P, hz13G, hzgDec⟩ — my Psi Assumptions must become input-only 6-tuple),
+  Y (jPrime shift from hjpc, my Y Assumptions conjunct 4 → PA), CommitIvk (TWO shifts
+  from hapC/hb2cpC — donor hAss slots 6 and 10 of the 13-tuple; my 11-conjunct
+  Assumptions drops slots 6/9 → 9 conjuncts, PA gains both).
+- THEN: the six composites per the earlier notes (witnessCheck child + gate child).
