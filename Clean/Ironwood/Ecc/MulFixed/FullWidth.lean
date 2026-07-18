@@ -219,6 +219,393 @@ instance innerElab (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
     ElaboratedRegionCircuit Fp unit InnerOut
       (fun _ : Var unit Fp => innerRegion B config offset windows) := {}
 
+/-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
+private theorem ofFn8_get_hint (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
+    (windows : Vector (FExpr Fp) 85) (w : ℕ) :
+    (Vector.ofFn f)[hintWindowVal env windows w]!
+      = f ⟨hintWindowVal env windows w, Nat.mod_lt _ (by norm_num)⟩ := by
+  have hlt : hintWindowVal env windows w < 8 := Nat.mod_lt _ (by norm_num)
+  rw [getElem!_pos (Vector.ofFn f) (hintWindowVal env windows w) (by simpa using hlt)]
+  rw [Vector.getElem_ofFn]
+
+set_option linter.all false in
+/-- The honest per-window point values: the chain's witness programs put the
+window-table coordinates and `u` values at each window row, at the HINT digits. -/
+private theorem fw_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (windows : Vector (FExpr Fp) 85)
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
+        85).operations self)) :
+    ∀ w : Fin 85,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.windowPoint B.point w.val
+            (hintWindowVal env windows w.val)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.windowPoint B.point w.val
+            (hintWindowVal env windows w.val)).y ∧
+      env.env.advice cfg.superConfig.u
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = B.u w.val (hintWindowVal env windows w.val) := by
+  simp only [MulFixed.windowChain, processWindowH, circuit_norm, mul_one,
+    xPWitH, yPWitH, uWitH] at hWchain
+  obtain ⟨hx0, hy0, hu0, hx1, hy1, hu1, _hAW1, hLoopW, hx84, hy84, hu84⟩ := hWchain
+  intro w
+  rcases w with ⟨wv, hwv⟩
+  simp only []
+  rcases Nat.eq_zero_or_pos wv with rfl | hpos
+  · rw [show offset + 0 = offset from by omega]
+    rw [hx0, hy0, hu0, ofFn8_get_hint _ env windows 0, ofFn8_get_hint _ env windows 0,
+      ofFn8_get_hint _ env windows 0]
+    exact ⟨rfl, rfl, rfl⟩
+  rcases Nat.lt_or_ge wv 2 with h1 | h2
+  · rw [show wv = 1 from by omega]
+    rw [hx1, hy1, hu1, ofFn8_get_hint _ env windows 1, ofFn8_get_hint _ env windows 1,
+      ofFn8_get_hint _ env windows 1]
+    exact ⟨rfl, rfl, rfl⟩
+  rcases Nat.lt_or_ge wv 84 with h84 | h84
+  · obtain ⟨hxw, hyw, huw, -⟩ := hLoopW ⟨wv - 2, by omega⟩
+    rw [show offset + 2 + (wv - 2) = offset + wv from by omega,
+      show wv - 2 + 2 = wv from by omega] at hxw hyw huw
+    rw [hxw, hyw, huw, ofFn8_get_hint _ env windows wv, ofFn8_get_hint _ env windows wv,
+      ofFn8_get_hint _ env windows wv]
+    exact ⟨rfl, rfl, rfl⟩
+  · rw [show wv = 84 from by omega]
+    rw [hx84, hy84, hu84, ofFn8_get_hint _ env windows 84,
+      ofFn8_get_hint _ env windows 84, ofFn8_get_hint _ env windows 84]
+    exact ⟨rfl, rfl, rfl⟩
+
+set_option linter.all false in
+/-- Completeness of the window chain (standalone): the incomplete additions' constraints
+from their completeness leaves on the honest ladder, plus the honest exit values. -/
+private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (windows : Vector (FExpr Fp) 85)
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
+        85).operations self))
+    (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
+    (hYPeq : cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP) :
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
+        85).operations self) ∧
+    (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+          • B.point).x ∧
+     env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+          • B.point).y ∧
+     env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
+     env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y) := by
+  have hPW := fw_windows_honest B cfg offset self env windows hWchain
+  have hks_lt : ∀ t, hintWindowVal env windows t < 8 :=
+    fun t => Nat.mod_lt _ (by norm_num)
+  -- the addinc chunk witnesses
+  simp only [MulFixed.windowChain, processWindowH, circuit_norm, mul_one] at hWchain
+  obtain ⟨-, -, -, -, -, -, hAW1, hLoopW, -, -, -⟩ := hWchain
+  -- per-chunk derived statements (Spec under Assumptions)
+  have hD1 := Halo2.SubcircuitRw.region_completeness_derived_placed
+    AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 1) self env
+    ⟨⟨AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.xP,
+      AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.yP⟩,
+     ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
+      AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
+  simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hD1
+  have hLoopD := fun (i : Fin 82) => by
+    have h := Halo2.SubcircuitRw.region_completeness_derived_placed
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 2 + i.val) self env
+      ⟨⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.xP,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.yP⟩,
+       ⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.xQR,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
+      ((hLoopW i).2.2.2)
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at h
+    exact h
+  -- the honest ladder (shared)
+  have hLadder := MulFixed.chain_ladder B (fun t => hintWindowVal env windows t) hks_lt
+    (fun w => env.env.advice cfg.superConfig.addConfig.xP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun w => env.env.advice cfg.superConfig.addConfig.yP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun w hw => ⟨(hPW ⟨w, hw⟩).1, (hPW ⟨w, hw⟩).2.1⟩)
+    ⟨if_pos rfl, if_pos rfl⟩
+    (by
+      intro j hj1 hj83 hass
+      obtain ⟨hOnP, hOnQ, hne⟩ := hass
+      dsimp only at hOnP hOnQ hne ⊢
+      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rcases Nat.lt_or_ge j 2 with hj2 | hj2
+      · have hj : j = 1 := by omega
+        subst hj
+        obtain ⟨⟨-, hOut⟩, -⟩ := hD1 ⟨hOnP, hOnQ, hne⟩
+        exact hOut
+      · have h := hLoopD ⟨j - 2, by omega⟩
+        rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+        rw [if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hne
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega]
+        obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
+        exact hOut)
+  have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 83 →
+      env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
+            • B.point).x ∧
+      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ)
+        = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
+            • B.point).y := by
+    intro j hj1 hj83
+    have h := hLadder j hj83
+    dsimp only at h
+    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    exact h
+  have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+          • B.point).x ∧
+      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+          • B.point).y ∧
+      env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y := by
+    have h83 := hInv 83 (by norm_num) le_rfl
+    rw [show offset + 83 + 1 = offset + 84 from by omega] at h83
+    obtain ⟨hx84', hy84', -⟩ := hPW ⟨84, by norm_num⟩
+    rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl] at hx84' hy84'
+    exact ⟨h83.1, h83.2, hx84', hy84'⟩
+  refine And.intro ?_ hHonest
+  simp only [MulFixed.windowChain, processWindowH, circuit_norm, mul_one]
+  have hC1 := Halo2.SubcircuitRw.region_completeness_leaf_placed
+    AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 1) self env
+    ⟨⟨AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.xP,
+      AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.yP⟩,
+     ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
+      AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
+  simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC1
+  constructor
+  · -- first addition: window-1 point + window-0 point, honest values
+    obtain ⟨hp1x, hp1y, -⟩ := hPW ⟨1, by norm_num⟩
+    obtain ⟨hp0x, hp0y, -⟩ := hPW ⟨0, by norm_num⟩
+    rw [show ((⟨1, by norm_num⟩ : Fin 85) : ℕ) = 1 from rfl] at hp1x hp1y
+    rw [show ((⟨0, by norm_num⟩ : Fin 85) : ℕ) = 0 from rfl,
+      show offset + 0 = offset from by omega] at hp0x hp0y
+    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 1
+      (hintWindowVal env windows 1)).val := ⟨_, rfl⟩
+    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Orchard.Ecc.MulFixed.windowScalar 0
+      (hintWindowVal env windows 0)).val := ⟨_, rfl⟩
+    have ht1 : t1 = (hintWindowVal env windows 1 + 2) * 8 ^ 1 := by
+      rw [ht1_def]
+      exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 1)
+    have hs0 : s0 = (hintWindowVal env windows 0 + 2) * 8 ^ 0 := by
+      rw [hs0_def]
+      exact Orchard.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)
+    have hwp1 : Orchard.Ecc.MulFixed.windowPoint B.point 1
+        (hintWindowVal env windows 1) = t1 • B.point := by rw [ht1_def]; rfl
+    have hwp0 : Orchard.Ecc.MulFixed.windowPoint B.point 0
+        (hintWindowVal env windows 0) = s0 • B.point := by rw [hs0_def]; rfl
+    rw [hwp1] at hp1x hp1y
+    rw [hwp0] at hp0x hp0y
+    obtain ⟨hbb1, hbb2, hbb3⟩ := MulFixed.base_bounds (hks_lt 0) (hks_lt 1)
+    rw [← hs0] at hbb1 hbb2 hbb3
+    rw [← ht1] at hbb2 hbb3
+    exact hC1 ⟨by
+        rw [hp1x, hp1y]
+        exact MulFixed.point_eta_onCurve
+          (by rw [← hwp1]; exact B.windowPoint_onCurve (hks_lt 1)),
+      by
+        rw [hp0x, hp0y]
+        exact MulFixed.point_eta_onCurve
+          (by rw [← hwp0]; exact B.windowPoint_onCurve (hks_lt 0)),
+      by
+        rw [hp1x, hp0x]
+        exact B.nsmul_x_ne hbb1 hbb2 hbb3⟩
+  · -- loop chunk i: window-(i+2) point + honest accumulator [partialSum (i+1)]·B
+    intro i
+    have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 2 + i.val) self env
+      ⟨⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.xP,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.yP⟩,
+       ⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.xQR,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
+      ((hLoopW i).2.2.2)
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC
+    obtain ⟨hpx, hpy, -⟩ := hPW ⟨i.val + 2, by omega⟩
+    rw [show ((⟨i.val + 2, by omega⟩ : Fin 85) : ℕ) = i.val + 2 from rfl,
+      show offset + (i.val + 2) = offset + 2 + i.val from by omega] at hpx hpy
+    have hih := hInv (i.val + 1) (by omega) (by omega)
+    rw [show offset + (i.val + 1) + 1 = offset + 2 + i.val from by omega] at hih
+    obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
+        t = (Orchard.Ecc.MulFixed.windowScalar (i.val + 2)
+          (hintWindowVal env windows (i.val + 2))).val := ⟨_, rfl⟩
+    obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
+        S = Orchard.Ecc.MulFixed.partialSum
+          (fun t => hintWindowVal env windows t) (i.val + 1) := ⟨_, rfl⟩
+    have hval : t = (hintWindowVal env windows (i.val + 2) + 2) * 8 ^ (i.val + 2) := by
+      rw [ht_def]
+      exact Orchard.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
+    have hwp : Orchard.Ecc.MulFixed.windowPoint B.point (i.val + 2)
+        (hintWindowVal env windows (i.val + 2)) = t • B.point := by
+      rw [ht_def]; rfl
+    rw [hwp] at hpx hpy
+    rw [← hS_def] at hih
+    have hS_lt : S < 2 * 8 ^ (i.val + 2) := by
+      rw [hS_def]
+      exact Orchard.Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
+    have hS_pos : 0 < S := by
+      rw [hS_def]; exact Orchard.Ecc.MulFixed.partialSum_pos _ _
+    obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
+      MulFixed.step_bounds (hks_lt (i.val + 2)) hS_lt hS_pos (by omega)
+    rw [← hval] at hb1 hb2 hb3 hb5
+    exact hC ⟨by
+        rw [hpx, hpy]
+        exact MulFixed.point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
+      by
+        rw [hih.1, hih.2]
+        exact MulFixed.point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
+      by
+        rw [hpx, hih.1]
+        exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
+
+set_option linter.all false in
+/-- Completeness of the gate/fixed rows (standalone): the fixed-cell witness equations
+pin the Lagrange columns, and the gate holds at the honest window digits — for BOTH
+enable sites (the witness loop and the fixed-constants loop share the same per-row gate
+equations; the latter's are proven and the former's extracted). Needs the window cells
+pinned to the hint digits (`hWin` — the honest-prover `< 8` guarantee, threaded from
+`ProverAssumptions`). -/
+private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (windows : Vector (FExpr Fp) 85)
+    (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((fixedConstantsLoop (fullWidthGate cfg) B.toData cfg.superConfig offset
+        85).operations self))
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
+        85).operations self))
+    (hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((hintWindowVal env windows w.val : ℕ) : Fp)) :
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      ((witnessScalarLoop cfg windows offset).operations self) ∧
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      ((fixedConstantsLoop (fullWidthGate cfg) B.toData cfg.superConfig offset
+        85).operations self) := by
+  have hPW := fw_windows_honest B cfg offset self env windows hWchain
+  simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow, circuit_norm,
+    mul_one] at hWfix
+  constructor
+  · -- the witness loop's 85 gate enables
+    simp only [witnessScalarLoop, fullWidthGate, MulFixed.coordsCheck,
+      MulFixed.eval_interpolatedX,
+      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+      circuit_norm, mul_one, one_mul]
+    intro i
+    obtain ⟨hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hWfix i
+    simp only [show B.toData.params = B.params from rfl] at hL0 hL1 hL2 hL3 hL4 hL5
+    simp only [show B.toData.params = B.params from rfl] at hL6 hL7 hZf
+    obtain ⟨hpx, hpy, hpu⟩ := hPW i
+    have hdig : hintWindowVal env windows i.val < 8 := Nat.mod_lt _ (by norm_num)
+    have hxi : (Orchard.Ecc.MulFixed.windowPoint B.point i.val
+          (hintWindowVal env windows i.val)).x
+        = Orchard.Ecc.MulFixed.interpolate (B.params i.val)
+            ((hintWindowVal env windows i.val : ℕ) : Fp) :=
+      (B.interpolate_eq i.val i.isLt _ hdig).symm
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · -- check x
+      rw [hWin i, hpx, hxi, sub_eq_zero]
+      symm
+      apply MulFixed.interpolate_congr_params <;>
+        simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
+        first
+        | exact hL0.symm | exact hL1.symm | exact hL2.symm | exact hL3.symm
+        | exact hL4.symm | exact hL5.symm | exact hL6.symm | exact hL7.symm
+    · -- check y (u² = y_p + z)
+      rw [hpu, hpy, hZf]
+      have huu := B.u_mul_u i.val i.isLt _ hdig
+      linear_combination huu
+    · -- on-curve
+      rw [hpx, hpy]
+      have hoc := B.windowPoint_onCurve (w := i.val) hdig
+      unfold Orchard.Point.OnCurve at hoc
+      linear_combination hoc
+    · -- window range check
+      rw [hWin i]
+      exact (Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
+        ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
+          ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
+  · -- the fixed-constants loop: the same gate equations + the fixed-cell clauses
+    simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
+      fullWidthGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
+      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+      circuit_norm, mul_one, one_mul]
+    intro i
+    obtain ⟨hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hWfix i
+    simp only [show B.toData.params = B.params from rfl] at hL0 hL1 hL2 hL3 hL4 hL5
+    simp only [show B.toData.params = B.params from rfl] at hL6 hL7 hZf
+    obtain ⟨hpx, hpy, hpu⟩ := hPW i
+    have hdig : hintWindowVal env windows i.val < 8 := Nat.mod_lt _ (by norm_num)
+    have hxi : (Orchard.Ecc.MulFixed.windowPoint B.point i.val
+          (hintWindowVal env windows i.val)).x
+        = Orchard.Ecc.MulFixed.interpolate (B.params i.val)
+            ((hintWindowVal env windows i.val : ℕ) : Fp) :=
+      (B.interpolate_eq i.val i.isLt _ hdig).symm
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩
+    · -- check x
+      rw [hWin i, hpx, hxi, sub_eq_zero]
+      symm
+      apply MulFixed.interpolate_congr_params <;>
+        simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
+        first
+        | exact hL0.symm | exact hL1.symm | exact hL2.symm | exact hL3.symm
+        | exact hL4.symm | exact hL5.symm | exact hL6.symm | exact hL7.symm
+    · -- check y (u² = y_p + z)
+      rw [hpu, hpy, hZf]
+      have huu := B.u_mul_u i.val i.isLt _ hdig
+      linear_combination huu
+    · -- on-curve
+      rw [hpx, hpy]
+      have hoc := B.windowPoint_onCurve (w := i.val) hdig
+      unfold Orchard.Point.OnCurve at hoc
+      linear_combination hoc
+    · -- window range check
+      rw [hWin i]
+      exact (Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
+        ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
+          ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
+
 set_option linter.constructorNameAsVariable false in
 /-- The inner-region bundle: region 1 with the extractor-form contract. -/
 def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
@@ -400,6 +787,68 @@ def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
       rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl, hW] at hwx hwy
       rw [hwx, hwy]
 
-  completeness := by sorry
+  completeness := by
+    circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions,
+      InnerProverSpec]
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
+      at hwit ⊢
+    obtain ⟨hWwsl, hWfix, hWchain, -⟩ := hwit
+    obtain ⟨hXPeq, hYPeq⟩ := _hE
+    -- the honest `< 8` bound, landed on the advice reads
+    simp only [windowCells, Vector.getElem_ofFn, AssignedCell.of_cell,
+      Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+      at hPA
+    -- the window cells hold the hint digits (the witness loop's assign clauses).
+    -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
+    simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
+    have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
+      intro w
+      have hclause := hWwsl w
+      simp only [hintWindowVal]
+      rw [hclause, Nat.mod_eq_of_lt (by rw [← hclause]; exact hPA w)]
+      exact (ZMod.natCast_zmod_val _).symm
+    refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
+    · with_reducible
+        exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).1
+    · with_reducible
+        exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).2
+    · with_reducible
+        exact (fw_completeness_chain B cfg offset self env windows hWchain
+          hXPeq hYPeq).1
+    · rw [RegionCircuit.operations_pure]
+      exact trivial
+    · -- the honest-prover contract (`InnerProverSpec`)
+      simp only [innerRegion_output] at h_output
+      provable_type_simp
+      obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
+      have hws : ∀ t : ℕ, t < 85 →
+          ZMod.val (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+            (eval (⟨env.place, env.env.toEnvironment⟩ : Placed Environment Fp)
+              (windowCells cfg offset self)) t)
+          = hintWindowVal env windows t := by
+        intro t ht
+        rw [getElem!_pos _ t (by simpa using ht)]
+        simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
+          AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+          Environment.get_advice]
+        rw [hWin ⟨t, ht⟩]
+        rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
+        exact lt_of_lt_of_le (Nat.mod_lt _ (by norm_num))
+          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+      have hax := (fw_completeness_chain B cfg offset self env windows hWchain
+        hXPeq hYPeq).2
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [← hOax, hax.1,
+          MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
+      · rw [← hOay, hax.2.1,
+          MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
+      · rw [← hOmx, hax.2.2.1, hws 84 (by norm_num)]
+      · rw [← hOmy, hax.2.2.2, hws 84 (by norm_num)]
 
 end Halo2.Ironwood.Ecc.MulFixed.FullWidth

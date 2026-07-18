@@ -318,6 +318,15 @@ theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
     norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
   refine ⟨by positivity, by omega, by omega, by omega, by omega⟩
 
+/-- `partialSum` only reads windows `0..w`. -/
+theorem partialSum_congr {ks ks' : ℕ → ℕ} (w : ℕ) (h : ∀ t ≤ w, ks t = ks' t) :
+    Orchard.Ecc.MulFixed.partialSum ks w = Orchard.Ecc.MulFixed.partialSum ks' w := by
+  induction w with
+  | zero => simp [Orchard.Ecc.MulFixed.partialSum, h 0 (by omega)]
+  | succ n ih =>
+    simp only [Orchard.Ecc.MulFixed.partialSum]
+    rw [ih (fun t ht => h t (by omega)), h (n + 1) le_rfl]
+
 /-- The shared incomplete-addition ladder, abstract over the cell reads: window `w`
 holds `[windowScalar w (ks w)]·B` (`hWP`), the entering accumulator is window 0
 (`hAcc0`), and each guarded addition fact (`hStep`, the post-`subcircuit_rw` shape of
