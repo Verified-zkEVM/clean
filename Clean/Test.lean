@@ -33,3 +33,4 @@ import Clean.Halo2.Tests.TestVkLayoutShort
 import Clean.Halo2.Tests.TestVkLayoutSinsemilla
 import Clean.Halo2.Tests.TestVkLayoutMerkle
 import Clean.Halo2.Tests.TestVkLayoutPoseidon
+import Clean.Halo2.Tests.TestVkLayoutNoteCommit
