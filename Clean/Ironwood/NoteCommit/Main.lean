@@ -482,28 +482,31 @@ def Assumptions (input : Value Inputs Fp) : Prop :=
   Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
   Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩
 
-/-- The extracted `rcm` scalar: the fixed-base mul's window reading, inside the commit
-child (regions `i₀+25`/`i₀+26`). -/
+/-- The extracted `rcm` window data: the fixed-base mul's window readings and the scalar
+they encode, inside the commit child (regions `i₀+25`/`i₀+26`). -/
 def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
-    (env : Placed Environment Fp) : Fq :=
-  (Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env).2
+    (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
+  Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env
 
 /-- The donor `NoteCommitRelation` at the extracted window scalar: whenever the
 Sinsemilla hash of the note's canonical chunk encoding is defined, the output is that
 hash translated by `[rcm]R`. -/
 def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
-    (input : Value Inputs Fp) (output : Value Point Fp) (rcm : Fq) : Prop :=
+    (input : Value Inputs Fp) (output : Value Point Fp)
+    (rcm : Vector Fp 85 × Fq) : Prop :=
   ∀ B : Orchard.Point Fp,
     hashToPoint G.S Q
       (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
         ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B →
-    output = B + (rcm • R : Orchard.Point Fp)
+    output = B + (rcm.2 • R : Orchard.Point Fp)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (input : ProverValue Inputs Fp) (_ : Fq) (_ : ProverHint Fp) : Prop :=
+    (input : ProverValue Inputs Fp) (rcm : Vector Fp 85 × Fq)
+    (_ : ProverHint Fp) : Prop :=
   Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
   Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
   (show Fp from input.value).val < 2 ^ 64 ∧
+  (∀ w : Fin 85, (rcm.1[w.val]).val < 8) ∧
   (∃ B, hashToPoint G.S Q
     (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
       ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B)

@@ -464,7 +464,8 @@ private theorem zs_get_z13g (f : ℕ → Fp) :
 
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    FormalCircuit.Soundness (Witness := fun _ => Fq) (synth G R windows Q hQ cfg)
+    FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
+      (synth G R windows Q hQ cfg)
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (Spec G Q R) := by
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
@@ -891,7 +892,8 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
 
 theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    FormalCircuit.Completeness (Witness := fun _ => Fq) (synth G R windows Q hQ cfg)
+    FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)
+      (synth G R windows Q hQ cfg)
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (ProverAssumptions G Q)
       (fun _ _ _ _ => True) := by
   sorry
@@ -904,7 +906,7 @@ def circuit (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
   configure := pure
   synthesize := synth G R windows Q hQ
   elaborated := elaborated G R windows Q hQ
-  Witness := fun _ => Fq
+  Witness := fun _ => Vector Fp 85 × Fq
   extract := rcmExtract
   EnvAssumptions := EnvAssumptions G
   Assumptions := Assumptions
