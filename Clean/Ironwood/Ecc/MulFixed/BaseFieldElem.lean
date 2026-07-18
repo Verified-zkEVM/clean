@@ -1516,6 +1516,78 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     rw [hinput, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp, hOutEq, hchain]
     exact (point_eta _).symm
 
-  completeness := by sorry
+  completeness := by
+    circuit_proof_start
+    simp only [synthesize, witnessCheck13, circuit_norm] at hwit ⊢
+    obtain ⟨hWInner, hWAdd, ⟨hWap, hWrc⟩, hWCanon⟩ := hwit
+    obtain ⟨hEI, hTable, hDistinct⟩ := _hE
+    -- every base-field element fits 255 bits (the inner honest-prover precondition)
+    have hval255 : ∀ x : Fp, x.val < 2 ^ 255 := fun x =>
+      lt_of_lt_of_le (ZMod.val_lt x)
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    -- the inner bundle's honest-prover facts (exit accumulator/MSB, running sums)
+    have hIPS : InnerProverSpec B
+        (eval env ({ alpha := input_var } :
+          Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp))
+        (eval env ((innerRegion B.toData cfg 0 input_var).output i₀))
+        default env.env.hint :=
+      ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
+        trivial (hval255 _)).2
+    simp only [InnerProverSpec, innerRegion_output, circuit_norm] at hIPS
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · exact ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
+        trivial (hval255 _)).1
+    · -- the complete addition `mul_b + acc` on the honest exit points
+      have hks_lt : ∀ t : ℕ, ZMod.val (env.env.get input_var.cell.column
+            ((env.place input_var.cell.regionIndex
+              + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8 < 8 :=
+        fun t => Nat.mod_lt _ (by norm_num)
+      obtain ⟨hax, hay, hmx, hmy, -⟩ := hIPS
+      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
+        cfg.superConfig.addConfig 0 (i₀ + 1) env
+        ⟨((innerRegion B.toData cfg 0 input_var).output i₀).mulB,
+         ((innerRegion B.toData cfg 0 input_var).output i₀).acc⟩ hWAdd
+      simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+        addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
+        Nat.zero_add, circuit_norm] at hC
+      refine hC ⟨?_, ?_⟩
+      · have hOn : (Orchard.Ecc.MulFixed.windowPoint B.point 84
+            (ZMod.val (env.env.get input_var.cell.column
+              ((env.place input_var.cell.regionIndex
+                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8)).OnCurve :=
+          B.windowPoint_onCurve (hks_lt 84)
+        rcases hWp : Orchard.Ecc.MulFixed.windowPoint B.point 84
+            (ZMod.val (env.env.get input_var.cell.column
+              ((env.place input_var.cell.regionIndex
+                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8) with ⟨wx, wy⟩
+        rw [hWp] at hOn hmx hmy
+        rw [hmx, hmy]
+        exact Or.inl hOn
+      · have hOn : ((Orchard.Ecc.MulFixed.partialSum
+            (fun t => ZMod.val (env.env.get input_var.cell.column
+              ((env.place input_var.cell.regionIndex
+                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
+            • B.point)).OnCurve :=
+          B.nsmul_onCurve (Orchard.Ecc.MulFixed.partialSum_pos _ _)
+            (Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+              (Orchard.Ecc.MulFixed.partialSum_lt _ 83 (fun j _ => hks_lt j))
+              (by norm_num))
+        rcases hSp : Orchard.Ecc.MulFixed.partialSum
+            (fun t => ZMod.val (env.env.get input_var.cell.column
+              ((env.place input_var.cell.regionIndex
+                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
+            • B.point with ⟨sx, sy⟩
+        rw [hSp] at hOn hax hay
+        rw [hax, hay]
+        exact Or.inl hOn
+    · -- the 13-word range check chunk
+      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed
+        (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 2) env () hWrc
+      simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
+        rca_proverAssumptions_eq, circuit_norm] at hC
+      exact hC ⟨⟨hTable, hDistinct⟩,
+        by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
+        by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
+    · sorry
 
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem
