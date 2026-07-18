@@ -540,6 +540,18 @@ private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount]
   exact h
 
+private theorem short_proverAssumptions_eq (b : ℕ) :
+    (LookupRangeCheck.shortRangeCheck 10 b).ProverAssumptions
+      = fun _ (wit : Fp) _ => wit.val < 2 ^ b := rfl
+
+private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
+    (i : RegionIndex) (env : Placed Environment Fp) :
+    (LookupRangeCheck.shortRangeCheck 10 b).extract cfg 0 () i env
+      = (env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) : Fp) := by
+  show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
+  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_zero]
+
 set_option linter.unusedSimpArgs false in
 /-- Build direction for stage 1: the seven short-check chunks give the stage. -/
 private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
@@ -1090,6 +1102,111 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     buildGates cfg _ _ _ _ (i₀ + 33) place _
       ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 1) place env ()
+      hWrb0
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 1) : ℕ) : ℤ)).val < 2 ^ 4
+           rw [hwb0, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 2) place env ()
+      hWrb3
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 2) : ℕ) : ℤ)).val < 2 ^ 4
+           rw [hwb3, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 8) cfg.lookupConfig 0 (i₀ + 5) place env ()
+      hWrd2
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 8).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 5) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 8
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 5) : ℕ) : ℤ)).val < 2 ^ 8
+           rw [hwd2, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 6) cfg.lookupConfig 0 (i₀ + 7) place env ()
+      hWre0
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 6).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 7) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 6
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 7) : ℕ) : ℤ)).val < 2 ^ 6
+           rw [hwe0, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 8) place env ()
+      hWre1
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 8) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 8) : ℕ) : ℤ)).val < 2 ^ 4
+           rw [hwe1, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 9) cfg.lookupConfig 0 (i₀ + 11) place env ()
+      hWrg1
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 9).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 11) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 9
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 11) : ℕ) : ℤ)).val < 2 ^ 9
+           rw [hwg1, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.shortRangeCheck 10 5) cfg.lookupConfig 0 (i₀ + 13) place env ()
+      hWrh0
+      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [short_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [short_proverAssumptions_eq]
+           show (show Fp from (LookupRangeCheck.shortRangeCheck 10 5).extract
+             cfg.lookupConfig 0 ()
+             (i₀ + 13) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 5
+           rw [short_extract_eq']
+           show (env.advice cfg.lookupConfig.runningSum
+             ((place (i₀ + 13) : ℕ) : ℤ)).val < 2 ^ 5
+           rw [hwh0, Orchard.Specs.cast_bitrange_val (by norm_num)]
+           exact Orchard.Specs.bitrange_lt _ _ _)⟩
   all_goals sorry
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
