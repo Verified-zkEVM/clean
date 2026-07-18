@@ -143,10 +143,10 @@ def regionCopies (permCols : List ColRef) (starts : List ℕ)
         let (rc, rr) := resolveCell permCols starts b
         some (lc, lr, rc, rr)
     | .assignAdviceFromInstance icol irow cell =>
-        -- Rust `assign_advice_from_instance`: the instance-left copy at the absolute
-        -- instance row, against the assigned advice cell
+        -- Rust `assign_advice_from_instance`: the advice-left copy against the
+        -- instance cell at its absolute row
         let (rc, rr) := resolveCell permCols starts cell
-        some (permIndex permCols icol.toAny, irow, rc, rr)
+        some (rc, rr, permIndex permCols icol.toAny, irow)
     | _ => none
   -- deferred constants, in body order, consuming the fixture's allocation map
   let rec go : List (RegionOperation F) → List (ℕ × ℕ × ℕ) →
@@ -172,6 +172,48 @@ def copyList (permCols : List ColRef) (starts : List ℕ)
         let (cps, cs') := regionCopies permCols starts body cs
         cps ++ go rest cs'
   go regions consts
+
+/-- Like `regionCopies`, but with the equality and deferred-constants copies returned
+separately (for planners that defer constants past the whole synthesis). -/
+def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
+    (body : RegionOperations F) (consts : List (ℕ × ℕ × ℕ)) :
+    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
+  let (cps, consts') := regionCopies permCols starts body consts
+  let isConst : (ℕ × ℕ × ℕ × ℕ) → Bool := fun _ => false
+  -- `regionCopies` returns eq-copies first, then exactly the consumed constants
+  let nEq := cps.length - (consts.length - consts'.length)
+  (cps.take nEq, cps.drop nEq, consts')
+
+/-- The whole-synthesis copy stream in the halo2-0.5 `SimpleFloorPlanner` order: region
+equality copies in creation order with the layouter-level `constrain_instance` copies
+inline (advice-left, instance-right), and ALL deferred `constrain_constant` copies at
+the very end of synthesis (in region/collection order). -/
+def copyStreamDeferred (permCols : List ColRef) (starts : List ℕ) :
+    Operations F → List (ℕ × ℕ × ℕ) →
+    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ)
+  | [], _ => ([], [])
+  | .region _ body :: rest, cs =>
+      let (eqs, cnsts, cs') := regionCopiesSplit permCols starts body cs
+      let (r1, r2) := copyStreamDeferred permCols starts rest cs'
+      (eqs ++ r1, cnsts ++ r2)
+  | .subcircuit sub :: rest, cs =>
+      let (s1, s2) := copyStreamDeferred permCols starts sub cs
+      -- thread the constants tail by count (sub consumed `cs.length - ?` — recompute)
+      let consumed := s2.length
+      let (r1, r2) := copyStreamDeferred permCols starts rest (cs.drop consumed)
+      (s1 ++ r1, s2 ++ r2)
+  | .constrainInstance cell col row :: rest, cs =>
+      let (rc, rr) := resolveCell permCols starts cell
+      let (r1, r2) := copyStreamDeferred permCols starts rest cs
+      ((rc, rr, permIndex permCols col.toAny, row) :: r1, r2)
+  | .loadTable _ _ :: rest, cs => copyStreamDeferred permCols starts rest cs
+termination_by ops => sizeOf ops
+
+/-- `copyStreamDeferred`, concatenated (the actual keygen copy order). -/
+def copyListDeferred (permCols : List ColRef) (starts : List ℕ)
+    (ops : Operations F) (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ × ℕ) :=
+  let (eqs, cnsts) := copyStreamDeferred permCols starts ops consts
+  eqs ++ cnsts
 
 /-! ## Permutation σ — keygen `Assembly` replay (`permutation/keygen.rs`)
 

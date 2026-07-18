@@ -212,12 +212,13 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   -- circuit.rs:535-548 — the Merkle path (leaf = cm_old.extract_p); 16 layers per
   -- Sinsemilla instance (`merkle.rs:122-126`, `chips[i / layers_per_chip]`)
   let half ← FormalCircuit.foldCall
-    (Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve W.merkleSib W.merkleSwap)
+    (Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve 0
+      W.merkleSib W.merkleSwap)
     Sinsemilla.Merkle.CalculateRoot.toInput (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
     { node := cmOld.x } 16
   let rootAcc ← FormalCircuit.foldCall
-    (fun i => Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve
-      W.merkleSib W.merkleSwap (i + 16))
+    (Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve 16
+      (fun i => W.merkleSib (i + 16)) (fun i => W.merkleSwap (i + 16)))
     Sinsemilla.Merkle.CalculateRoot.toInput (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
     half 16
   let root := rootAcc.node
