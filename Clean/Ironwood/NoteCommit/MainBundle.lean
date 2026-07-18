@@ -462,6 +462,20 @@ private theorem zs_get_z13g (f : ℕ → Fp) :
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
+/-- Witness-side projection through a `toFormal` call (the YComposite pattern,
+generic): the parent reads the child's in-region witness equations. -/
+private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
+    (inp : Var In Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) :
+    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
+      = RegionOperations.ExtendsWitnesses place i env
+          ((b.synthesize cfg 0 inp).operations i) := by
+  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
+    assignRegion, ExtendsWitnesses, and_true]
+  rfl
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -896,6 +910,25 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (synth G R windows Q hQ cfg)
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (ProverAssumptions G Q)
       (fun _ _ _ _ => True) := by
+  circuit_proof_start
+  obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
+  obtain ⟨hOnGd, hOnPkd, hVal64, hWin, B0, hB0⟩ := hPA
+  simp only [synth, currentRegion, circuit_norm] at hwit ⊢
+  have hWP := hwit.1
+  have hWCk := hwit.2.1
+  have hWGt := hwit.2.2
+  clear hwit
+  simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
+    Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, readCell] at hWP
+  obtain ⟨hwa, ⟨hwb0, hWrb0⟩, ⟨hwb3, hWrb3⟩, hwb, hwc, ⟨hwd2, hWrd2⟩, hwd,
+    ⟨hwe0, hWre0⟩, ⟨hwe1, hWre1⟩, hwe, hwf, ⟨hwg1, hWrg1⟩, hwg, ⟨hwh0, hWrh0⟩, hwh⟩ := hWP
+  simp only [synthChecks, synthPieces, LookupRangeCheck.witnessShortCheck,
+    LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
+    circuit_norm, readCell] at hWCk
+  simp only [Operations.regionCount] at hWCk
+  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
+  obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
+  trace_state
   sorry
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
