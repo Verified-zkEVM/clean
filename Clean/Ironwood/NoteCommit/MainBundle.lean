@@ -647,6 +647,71 @@ private theorem buildSynth (G : Generators) (R : FixedBase)
     Nat.add_assoc, Nat.reduceAdd]
   exact ⟨h1, h2, h3⟩
 
+set_option linter.unusedSimpArgs false in
+/-- Witness-side stage-3 peel (kernel-checked alone): the ten gate-call witness chunks. -/
+private theorem peelGatesW (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (h : ExtendsWitnesses place env
+      ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
+    
+    ExtendsWitnesses place env
+      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+        "NoteCommit MessagePiece b").call cfg.gates.b
+        { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
+    ExtendsWitnesses place env
+      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+        "NoteCommit MessagePiece d").call cfg.gates.d
+        { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+          d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
+    ExtendsWitnesses place env
+      (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
+        { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
+    ExtendsWitnesses place env
+      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+        "NoteCommit MessagePiece g").call cfg.gates.g
+        { g := pcs.g, g1 := pcs.g1,
+          g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
+    ExtendsWitnesses place env
+      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+        "NoteCommit MessagePiece h").call cfg.gates.h
+        { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
+    ExtendsWitnesses place env
+      (((GdCanonicity.bundle.toFormal "NoteCommit input g_d").call cfg.gates.gd
+        { gdX := input.gdX, b0 := pcs.b0, b1 := AssignedCell.of i₀ 0 cfg.gates.b.colR,
+          a := pcs.a, aPrime := ccs.aZs.z0,
+          z13A := zCell cfg.hashConfig iHash 0 13,
+          z13APrime := ccs.aZs.zLast }).operations (i₀ + 5)) (i₀ + 5) ∧
+    ExtendsWitnesses place env
+      (((PkdCanonicity.bundle.toFormal "NoteCommit input pk_d").call cfg.gates.pkd
+        { pkdX := input.pkdX, b3 := pcs.b3,
+          d0 := AssignedCell.of (i₀ + 1) 0 cfg.gates.d.colM, c := pcs.c,
+          b3CPrime := ccs.bZs.z0, z13C := zCell cfg.hashConfig iHash 2 13,
+          z14B3CPrime := ccs.bZs.zLast }).operations (i₀ + 6)) (i₀ + 6) ∧
+    ExtendsWitnesses place env
+      (((ValueCanonicity.bundle.toFormal "NoteCommit input value").call cfg.gates.value
+        { value := input.value, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1,
+          e0 := pcs.e0 }).operations (i₀ + 7)) (i₀ + 7) ∧
+    ExtendsWitnesses place env
+      (((RhoCanonicity.bundle.toFormal "NoteCommit input rho").call cfg.gates.rho
+        { rho := input.rho, e1 := pcs.e1,
+          g0 := AssignedCell.of (i₀ + 3) 0 cfg.gates.g.colM, f := pcs.f,
+          e1FPrime := ccs.eZs.z0, z13F := zCell cfg.hashConfig iHash 5 13,
+          z14E1FPrime := ccs.eZs.zLast }).operations (i₀ + 8)) (i₀ + 8) ∧
+    ExtendsWitnesses place env
+      (((PsiCanonicity.bundle.toFormal "NoteCommit input psi").call cfg.gates.psi
+        { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1,
+          h1 := AssignedCell.of (i₀ + 4) 0 cfg.gates.h.colR,
+          g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
+          z13G := zCell cfg.hashConfig iHash 6 13,
+          z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
+  simp only [synthGates, circuit_norm, decomposeB_output,
+    decomposeD_output, decomposeG_output, decomposeH_output] at h
+  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
+  exact h
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -1099,6 +1164,39 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   simp only [Operations.regionCount] at hWCk
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
+  -- gate-internal witnesses (the b1/d0/g0/h1 bit cells)
+  simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
+    synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
+    at hWGt
+  have hGW := peelGatesW cfg _ _ _ _ _ place env hWGt
+  clear hWGt
+  have hWgb := hGW.1
+  have hWgd := hGW.2.1
+  have hWgg := hGW.2.2.2.1
+  have hWgh := hGW.2.2.2.2.1
+  clear hGW
+  rw [toFormal_call_witnesses] at hWgb hWgd hWgg hWgh
+  simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb
+  simp only [DecomposeD.bundle, synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgd
+  simp only [DecomposeG.bundle, synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgg
+  simp only [DecomposeH.bundle, synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
+  have hwb1 := hWgb.2.2.1
+  have hwd0 := hWgd.2.1
+  have hwg0 := hWgg.2.1
+  have hwh1 := hWgh.2.2
+  trace_state
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
