@@ -298,6 +298,101 @@ private theorem peelGates (cfg : Config) (input : Inputs (AssignedCell Fp))
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
   exact h
 
+/-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
+private theorem zsFacts_donor_iff :
+    ∀ (ms : List ℕ) (chunks : List ℕ)
+      (zs : Orchard.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
+      Sinsemilla.Chain.ZsFacts ms chunks zs ↔
+      Orchard.Sinsemilla.Chain.ZsFacts ms chunks zs := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro chunks zs
+    simp only [Sinsemilla.Chain.ZsFacts, Orchard.Sinsemilla.Chain.ZsFacts]
+  | cons n rest ih =>
+    intro chunks zs
+    constructor
+    · rintro ⟨h1, h2⟩
+      exact ⟨h1, (ih _ _).mp h2⟩
+    · rintro ⟨h1, h2⟩
+      exact ⟨h1, (ih _ _).mpr h2⟩
+
+/-- The hash child's extracted running sums are the `bits`-column reads. -/
+private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (iH : RegionIndex)
+    (place : RegionIndex → ℕ) (env : Environment Fp) :
+    ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil ns_pos).extract cfg inp iH
+        (⟨place, env⟩ : Placed Environment Fp)).zs
+      = Sinsemilla.Chain.zsFam
+          (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
+  show (eval (⟨place, env⟩ : Placed Environment Fp)
+    (Sinsemilla.Chain.zsCellsVal cfg iH ns 0)
+    : Orchard.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
+  exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
+
+/-- The six hash running-sum reads the gates copy, at the concrete `ns` layout
+(rows: piece starts `[0,26,28,54,61,63,89,115]`). -/
+private theorem zs_get_z13a (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[13]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
+private theorem zs_get_z13c (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 41 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[13]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
+private theorem zs_get_z1d (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 55 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[1]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
+private theorem zs_get_z13f (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 76 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[13]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
+private theorem zs_get_z1g (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 90 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[1]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
+private theorem zs_get_z13g (f : ℕ → Fp) :
+    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 102 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
+    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+  exact (congrArg (fun v => v[13]'(by norm_num))
+    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Fq) (synth G R windows Q hQ cfg)
