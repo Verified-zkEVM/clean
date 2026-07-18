@@ -4,6 +4,7 @@ import Clean.Ironwood.NoteCommit.Canonicity
 import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.NoteCommit.YComposite
 import Clean.Ironwood.Sinsemilla.CommitDomain
+import Clean.Orchard.Action.NoteCommit
 
 /-!
 # NoteCommit main circuit (Ironwood)
@@ -35,12 +36,11 @@ open Orchard.Specs (bitrange)
 open Orchard.Specs.Sinsemilla (Generators)
 
 /-- The NoteCommit message piece lengths in `K = 10`-bit words:
-`a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)`. -/
-def ns : List ℕ := [25, 1, 25, 6, 1, 25, 25, 1]
+`a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)` — the chain
+convention counts words − 1 per piece. -/
+def ns : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
-
-theorem ns_pos : ∀ x ∈ ns, 0 < x := by simp [ns]
 
 /-- The circuit inputs: the note's field-element cells (`x/y(g_d)`, `x/y(pk_d)`, the
 64-bit value, `rho`, `psi`). The blinding scalar `rcm` enters through the fixed-base
@@ -193,6 +193,16 @@ theorem currentRegion_operations (i : RegionIndex) :
     currentRegion.operations i = [] := by
   with_unfolding_all rfl
 
+@[circuit_norm]
+theorem currentRegion_nextRegionIndex (i : RegionIndex) :
+    currentRegion.nextRegionIndex i = i := by
+  with_unfolding_all rfl
+
+@[circuit_norm]
+theorem currentRegion_output (i : RegionIndex) :
+    currentRegion.output i = i := by
+  with_unfolding_all rfl
+
 /-- The piece/sub-piece cells stage 1 hands to the later stages. -/
 structure PieceCells where
   a : AssignedCell Fp
@@ -258,7 +268,7 @@ def synthChecks (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85
     (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }
   let d1 ← (YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }
-  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
     { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false cfg.lookupConfig
@@ -346,7 +356,7 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -392,5 +402,113 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
   simp only [synth, currentRegion, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
   rw [synthPieces_regionCount, synthChecks_regionCount, synthGates_regionCount]
+
+theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i : RegionIndex) :
+    (synthPieces cfg input).nextRegionIndex i = i + 15 := by
+  with_unfolding_all rfl
+
+theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i : RegionIndex) :
+    (synthChecks G R windows Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
+  with_unfolding_all rfl
+
+theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i : RegionIndex) :
+    (synthPieces cfg input).output i
+      = { a := .of i 0 cfg.hashConfig.witnessPieces,
+          b := .of (i + 3) 0 cfg.hashConfig.witnessPieces,
+          c := .of (i + 4) 0 cfg.hashConfig.witnessPieces,
+          d := .of (i + 6) 0 cfg.hashConfig.witnessPieces,
+          e := .of (i + 9) 0 cfg.hashConfig.witnessPieces,
+          f := .of (i + 10) 0 cfg.hashConfig.witnessPieces,
+          g := .of (i + 12) 0 cfg.hashConfig.witnessPieces,
+          h := .of (i + 14) 0 cfg.hashConfig.witnessPieces,
+          b0 := .of (i + 1) 0 cfg.lookupConfig.runningSum,
+          b3 := .of (i + 2) 0 cfg.lookupConfig.runningSum,
+          d2 := .of (i + 5) 0 cfg.lookupConfig.runningSum,
+          e0 := .of (i + 7) 0 cfg.lookupConfig.runningSum,
+          e1 := .of (i + 8) 0 cfg.lookupConfig.runningSum,
+          g1 := .of (i + 11) 0 cfg.lookupConfig.runningSum,
+          h0 := .of (i + 13) 0 cfg.lookupConfig.runningSum } := by
+  with_unfolding_all rfl
+
+theorem synthChecks_output (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i : RegionIndex) :
+    (synthChecks G R windows Q hQ cfg input pcs iHash).output i
+      = { b2 := .of (i + 4) 0 (cfg.gates.y.advices 6),
+          d1 := .of (i + 5 + 4) 0 (cfg.gates.y.advices 6),
+          cm := (Sinsemilla.CommitDomain.commit G ns R windows Q hQ
+            ns_ne_nil).output (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+            { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
+            (i + 10),
+          aZs := { z0 := .of (i + 14) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 14) 13 cfg.lookupConfig.runningSum },
+          bZs := { z0 := .of (i + 15) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 15) 14 cfg.lookupConfig.runningSum },
+          eZs := { z0 := .of (i + 16) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 16) 14 cfg.lookupConfig.runningSum },
+          gZs := { z0 := .of (i + 17) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 17) 13 cfg.lookupConfig.runningSum } } := by
+  with_unfolding_all rfl
+
+/-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
+
+open Orchard.Specs.Sinsemilla (hashToPoint)
+open CompElliptic.Fields.Pasta (Fq)
+
+/-- The elaborated metadata, standalone (the factored soundness statement needs the
+instance). -/
+instance elaborated (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
+    ElaboratedCircuit Fp Inputs Point (synth G R windows Q hQ cfg) where
+  output input i := (synth G R windows Q hQ cfg input).output i
+  regionCount _ := 43
+  output_eq := by intro _ _; rfl
+  regionCount_eq input i := (synth_regionCount G R windows Q hQ cfg input i).symm
+
+def EnvAssumptions (G : Generators) (cfg : Config)
+    (env : Placed Environment Fp) : Prop :=
+  Sinsemilla.GeneratorTableLoaded G cfg.hashConfig.generatorTable env.env ∧
+  Ecc.MulFixed.FullWidth.EnvAssumptions cfg.mulConfig env ∧
+  LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env ∧
+  cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
+
+def Assumptions (input : Value Inputs Fp) : Prop :=
+  Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩
+
+/-- The extracted `rcm` window data: the fixed-base mul's window readings and the scalar
+they encode, inside the commit child (regions `i₀+25`/`i₀+26`). -/
+def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
+    (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
+  Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env
+
+/-- The donor `NoteCommitRelation` at the extracted window scalar: whenever the
+Sinsemilla hash of the note's canonical chunk encoding is defined, the output is that
+hash translated by `[rcm]R`. -/
+def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
+    (input : Value Inputs Fp) (output : Value Point Fp)
+    (rcm : Vector Fp 85 × Fq) : Prop :=
+  ∀ B : Orchard.Point Fp,
+    hashToPoint G.S Q
+      (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+        ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B →
+    output = B + (rcm.2 • R : Orchard.Point Fp)
+
+def ProverAssumptions (G : Generators) (Q : Point Fp)
+    (input : ProverValue Inputs Fp) (rcm : Vector Fp 85 × Fq)
+    (_ : ProverHint Fp) : Prop :=
+  Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
+  (show Fp from input.value).val < 2 ^ 64 ∧
+  (∀ w : Fin 85, (rcm.1[w.val]).val < 8) ∧
+  (∃ B, hashToPoint G.S Q
+    (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+      ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B)
 
 end Halo2.Ironwood.NoteCommit.Main

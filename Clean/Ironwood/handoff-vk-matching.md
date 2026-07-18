@@ -440,3 +440,136 @@ goals, short rw chains), combine. The stage split will also make the 30-child
 soundness peel tractable (hc splits into 3 then further). Cells thread across stages
 via small record types. The bridges compile and are kept... (removed with the failed
 lemma — recover from this note or git history at the failed attempt).
+
+## NoteCommit soundness state (MainBundle.lean WIP, un-imported)
+
+WORKING (compiles, ~10s): circuit_proof_start → 3-stage peel → stage 1 (7 short-check
+bound facts hb0..hh0 in read language) → stage 2 (hY1S/hY2S IsLowBit conditionals at
+the lsb cells (i₀+15+4)/(i₀+15+5+4) advices6; hCmS = commit chunks/ZsFacts/point
+contract; 4 telescope facts haz0/htelA..hgz0/htelG) → pieceChunks_donor_iff bridge
+(unlocks donor pieceChunks_val_lt + chunk-equality connectors).
+
+KERNEL CLIFF hit at stage 3: normalizing hGt's indices (Operations.regionCount simp +
+yc/commit rw + 9× toFormal_call_regionCount rw) exceeds the kernel budget when inlined.
+FIX (per doc/performance-problems.md "kernel size cliffs"): factor the three stage
+peels into standalone private lemmas, each kernel-checked alone:
+  private theorem peelGates (cfg input pcs ccs iHash i₀ place env)
+    (h : Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
+    <10-conjunct of folded gate-call chunks at clean numeric indices>
+(statements = the folded `(bundle.toFormal name).call` chunks subcircuit_rw expects, at
+i₀, i₀+1, ..., i₀+9; proofs = the existing simp/index-normalization + exact). Same for
+peelChecks (indices i₀..i₀+17: Y at i₀/i₀+5, commit i₀+10, wchecks i₀+14..17) and
+optionally peelPieces. Main soundness then applies these and stays small. Bridges for
+stage 3 already in the file: toFormal_{spec,assumptions,envAssumptions,extract}_eq
+(generic), decomposeB/D/G/H_output, toFormal_call_regionCount.
+Remaining after stage 3: A-discharges for the 5 canonicity gates (chain telescope
+facts + piece bounds via pieceChunks_val_lt/donor bridge + hb0.. shorts + hGbS
+booleans — exactly the Composites.lean glue), then the donor chunk-equality assembly
+(pieceChunks_eq_noteCommitChunks_of_indexed_piece_values, NoteCommit.lean:447/1661)
+to land Spec. Then completeness (mirror), circuit def, VK fixture.
+
+### NoteCommit soundness: z-value plumbing (next block)
+Peel now complete through clean read-language facts (a6eb4489). Next: the six hash
+z-cell value facts (z13_a/z13_c/z1_d/z13_f/z1_g/z13_g). Route:
+1. zsFacts_donor_iff (mirror pieceChunks_donor_iff; HVec/zLengths defeq across trees).
+2. donor zsFacts_cell (NoteCommit.lean:1525): PieceChunks+ZsFacts → zs[i][r] =
+   ↑(pieces[i].val / 2^(10r)).
+3. extract-side: hashCircuit.extract's .zs = eval of Chain.zsCellsVal (rfl at
+   HashToPoint.lean:314-317) + Chain.eval_zsCellsVal → zsFam f — then getElem of zsFam
+   at (i,r) = f (prefixRows ns i + r) = env.advice bits ↑(place iH + prefixRows+r)
+   (zsFam_elems / z1View_zsFam patterns in HashToPoint.lean:76-127).
+Then the canonicity-gate A-discharges: Gd = ⟨hGbS.1 (b1 bool), piece-a bound
+(pieceChunks_val_lt via donor bridge, idx 0), hb0, hz13a, telescope ⟨loA,...⟩ via
+haz0/htelA⟩ — mirror Composites.lean; then Pkd/Val/Rho/Psi; then the donor
+chunk-equality assembly (pieceChunks_eq_noteCommitChunks_of_indexed_piece_values +
+gate Specs) to land Spec at the extracted scalar (commit's wit.2.2 = rcmExtract via
+commit_extract_eq at i₀+25 spelling).
+
+### CRITICAL CORRECTION (found via donor zsFacts_cell bound): ns convention
+Chain's ns entries are WORDS − 1 (donor messagePieceRounds = [24,0,24,5,0,24,24,0]).
+Main.ns := [25,1,25,6,1,25,25,1] is WRONG. Fix to [24,0,24,5,0,24,24,0]. Cascades:
+- zCell rows (zLengths = [25,1,25,6,1,25,25,1] cells/piece; piece starts
+  [0,25,26,51,57,58,83,108]): z13_a=13, z13_c=39, z1_d=52, z13_f=71, z1_g=84, z13_g=96.
+- zs_get_* lemma literals accordingly.
+- hpos (∀ x ∈ ns, 0 < x) FAILS for the zero entries: hashCircuit's z1s output
+  (z1View, Merkle sugar) requires every piece ≥ 2 words. NoteCommit needs a
+  point-only hash variant WITHOUT hpos: add hashRegionP/hashCircuitP in
+  HashToPoint.lean (same proofs minus the z1s clause), switch CommitDomain.commit to
+  it and DROP its ns_pos parameter; Main drops ns_pos. Merkle keeps the z1s variant.
+
+### NoteCommit completeness route (soundness DONE at f838d63d)
+Stage-1/2 witness facts + generic toFormal_call_witnesses land (9f5b9f47). The
+goal-side one-shot stage simp + subcircuit_rw hits the kernel cliff (like stage 3 of
+soundness). FIX: (a) build-direction stage lemmas (mpr of the peel pattern):
+buildSynth/buildPieces/buildChecks/buildGates — `<child-chunk conj at clean indices> →
+Constraints ((stage).operations i) i`, each kernel-checked alone; (b) discharge each
+child chunk MANUALLY via the SubcircuitRw completeness leaves, Merkle-style
+(Merkle.lean:1375: `refine Halo2.SubcircuitRw.layouter_completeness_leaf_placed child
+cfg idx ⟨place,env⟩ _ hWchunk ⟨envA, A, PA⟩` — and region_completeness_leaf(_placed)
+for in-region children), which also provides the child Spec/PS facts needed by later
+children's PAs (commit PS → gate PAs; the per-gate witnessed-bit facts via
+toFormal_call_witnesses + per-bundle synthesize simp destructure — bundle-completeness
+hwit pattern). PA sources: shorts = hw* bitrange bounds (cast_bitrange_val+bitrange_lt);
+Y children PA (IsLowBit) = from hwit-projected wlsb equations (brWit gdY 0 1 →
+isLowBit_iff_mod_two + bitrange%2); commit PA = PieceBounds (hw pieces + tiling like
+donor pieceBounds_of_cellFacts — donor lemma reusable at the read-cells record!),
+∃B honest hash (top hPA hB0 + honestChunks_eq_noteCommitChunks_of_cellFacts), window
+bounds (top hPA hWin, spelling via rcmExtract); gate PAs = mirror the composite
+completeness glue (Composites.lean PA branches) with hwit facts + child PSs.
+
+### Completeness remaining (after 4108df7f: 11/24 leaves done; ALL witness
+projections landed — hwb1/hwd0/hwg0/hwh1 (peelGatesW + toFormal_call_witnesses +
+bundle simps) and hwb2/hwd1 (yc_lsb_witness two-level projection) are read-language
+bit equations; the 15 piece/short equations hwa..hwh are in context)
+Order of the remaining work (13 leaves: Y1, Y2, commit, 10 gates):
+1. Witness projections FIRST (needed by everything below):
+   - per-gate: rw [toFormal_call_witnesses] at a copy of the relevant hWGt chunk
+     (destructure hWGt stage-relative like soundness peel — or write peelGatesW mirroring
+     peelGates over RegionOperations.ExtendsWitnesses), then per-bundle
+     simp only [<Bundle>.bundle, <Bundle>.gate?, circuit_norm, readCell] destructure →
+     the witnessed-bit equations (b1/d0/g0/h1 = ↑bitrange reads) + copy witnesses.
+   - Y (2-level): make YComposite's gateChild_call_witnesses + gateChild public (edit
+     YComposite.lean), then Y-call projection = simp [YCanonicityCheck.synth?…]-analogue:
+     EW ((YC.call c inp).ops i) i = the 5 sub-chunks; the gate sub-chunk via the published
+     YComposite projection → the lsb equation (wlsb = brWit gdY 0 1 → lsb-read =
+     ↑bitrange(gdY,0,1)).
+2. Prover-side MessageCellFacts record (21 clauses from the witness equations + the
+   witnessed-bit equations; IsLowBit via isLowBit_iff_mod_two + bitrange(_,0,1) = %2).
+3. commit leaf: PA = ⟨PieceBounds (donor pieceBounds_of_cellFacts + a
+   PieceBounds donor_iff bridge — same induction as pieceChunks_donor_iff),
+   ∃B honest (donor honestChunks_eq_noteCommitChunks_of_cellFacts + honestChunks
+   donor-iff bridge + top hB0), windows (top hWin — spelling via commit_extract_eq +
+   fwExtract at i₀+25)⟩ via layouter_completeness_leaf.
+4. Y leaves: PA = IsLowBit y-read lsb-read from the projected lsb equations.
+5. Gate leaves: PAs per the composite completeness glue (Composites.lean/CommitIvk
+   patterns) using the witness equations + the commit child's PS zs facts (obtain via
+   layouter_completeness_derived_placed on the commit chunk — gives Spec∧PS after PA
+   discharge, ZsHonest-style honest z-values for the z13/z1 clauses; mirror
+   the YComposite guard/tail discharges with high_bit_canonical/base_val_lt_tP_val/
+   shifted_high_zero at the honest values).
+Then: def circuit compiles (already written), import MainBundle into Clean/Ironwood.lean,
+full build, commit. Then VK fixture (orchard dump harness).
+
+### Gate-leaf arc (the LAST 10 leaves; state at ee5d3b3c + MCF/PieceBounds/honest
+in-context): the inline layouter_completeness_derived application for the commit Spec
+hits a whnf wall (and `seal` breaks the soundness-side extract defeq — reverted).
+ROUTE: standalone private lemma
+  commit_derived_spec (G R windows Q hQ cfg i₀ place env)
+    (hWcm : ExtendsWitnesses ... commit-call chunk) (hPB' hHon' hWin') :
+    <the commit_spec_eq/commit_extract_eq-bridged Spec at the (i₀+25) call args>
+proved by layouter_completeness_derived + the same PA discharge + bridge rws — kernel
+and whnf checked alone (the peel-lemma pattern; the leaf discharge by-blocks compile in
+goal position, so pass hPB/hHonest/hWin as HYPOTHESES of the lemma to avoid re-elaboration).
+Same standalone treatment for the four rangeCheckAt derived Specs if they also wall
+(they are smaller; try inline first). Then the six z-value facts replay EXACTLY the
+soundness block (zsFacts_cell + zs_get_* + defeq transports, at env.toEnvironment), and
+the ten gate leaves discharge with:
+- decompose gates: A trivial×2; PA = ⟨IsBool wit (from hwb1/hwd0/hwg0/hwh1 + bitrange<2),
+  IsBool b2/d1-eval (hwb2/hwd1 + %2), the decomposition equation (hMCF clauses 17-21
+  modulo eval-spelling)⟩ via toFormal bridges + the leaf.
+- canonicity gates: A = the soundness A-discharges verbatim (z-facts + telescopes +
+  bounds); PA = ⟨DSpec (MCF slices + guard via honest zLast + high_bit_canonical/
+  base_val_lt_tP_val + shifted_high_zero — the Composites.lean completeness guards),
+  shift (hWaP/hWbP/hWeP/hWgP witness equations)⟩.
+Then `def circuit` (already written) + import MainBundle in Clean/Ironwood.lean + full
+build → NoteCommit bundle DONE. Then the VK fixture (orchard dump harness) remains.

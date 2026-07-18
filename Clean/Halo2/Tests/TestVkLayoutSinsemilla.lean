@@ -120,7 +120,7 @@ def sLayoutProgram : Circuit Fp Unit := do
   let pb ← witnessMessagePiece sCfg sUnknown
   let pc ← witnessMessagePiece sCfg sUnknown
   -- the real hash_message
-  let _ ← hashMessage layoutG sNs sCfg layoutQ layoutQ_onCurve (by decide) (by decide)
+  let _ ← hashMessage layoutG sNs sCfg layoutQ layoutQ_onCurve (by decide)
     ⟨#v[pa, pb, pc]⟩
   pure ()
 

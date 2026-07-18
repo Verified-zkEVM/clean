@@ -71,44 +71,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       (by push_cast; linear_combination heq)
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwv, hwd2, hwd3, hwe0⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { value := env.env.get input_var.value.cell.column
-            ((env.place input_var.value.cell.regionIndex
-              + input_var.value.cell.rowOffset : ℕ) : ℤ),
-          d2 := env.env.get input_var.d2.cell.column
-            ((env.place input_var.d2.cell.regionIndex
-              + input_var.d2.cell.rowOffset : ℕ) : ℤ),
-          d3 := env.env.get input_var.d3.cell.column
-            ((env.place input_var.d3.cell.regionIndex
-              + input_var.d3.cell.rowOffset : ℕ) : ℤ),
-          e0 := env.env.get input_var.e0.cell.column
-            ((env.place input_var.e0.cell.regionIndex
-              + input_var.e0.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hiv : env.env.get input_var.value.cell.column
-        ((env.place input_var.value.cell.regionIndex
-          + input_var.value.cell.rowOffset : ℕ) : ℤ) = input.value :=
-      congrArg Row.value h_input
-    have hid2 : env.env.get input_var.d2.cell.column
-        ((env.place input_var.d2.cell.regionIndex
-          + input_var.d2.cell.rowOffset : ℕ) : ℤ) = input.d2 :=
-      congrArg Row.d2 h_input
-    have hid3 : env.env.get input_var.d3.cell.column
-        ((env.place input_var.d3.cell.regionIndex
-          + input_var.d3.cell.rowOffset : ℕ) : ℤ) = input.d3 :=
-      congrArg Row.d3 h_input
-    have hie0 : env.env.get input_var.e0.cell.column
-        ((env.place input_var.e0.cell.regionIndex
-          + input_var.e0.cell.rowOffset : ℕ) : ℤ) = input.e0 :=
-      congrArg Row.e0 h_input
-    rw [← hiv, ← hid2, ← hid3, ← hie0, ← hwv, ← hwd2, ← hwd3, ← hwe0] at hPA
-    exact ⟨by linear_combination -hPA, hwv, hwd2, hwd3, hwe0⟩
+    circuit_proof_start [gate]
+    linear_combination -hPA
 
 end ValueCanonicity
 
@@ -178,67 +142,14 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       (by push_cast; linear_combination hg1) hg3 hg4 hg5
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hA hPA ⊢
-    obtain ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { gdX := env.env.get input_var.gdX.cell.column
-            ((env.place input_var.gdX.cell.regionIndex
-              + input_var.gdX.cell.rowOffset : ℕ) : ℤ),
-          b0 := env.env.get input_var.b0.cell.column
-            ((env.place input_var.b0.cell.regionIndex
-              + input_var.b0.cell.rowOffset : ℕ) : ℤ),
-          b1 := env.env.get input_var.b1.cell.column
-            ((env.place input_var.b1.cell.regionIndex
-              + input_var.b1.cell.rowOffset : ℕ) : ℤ),
-          a := env.env.get input_var.a.cell.column
-            ((env.place input_var.a.cell.regionIndex
-              + input_var.a.cell.rowOffset : ℕ) : ℤ),
-          aPrime := env.env.get input_var.aPrime.cell.column
-            ((env.place input_var.aPrime.cell.regionIndex
-              + input_var.aPrime.cell.rowOffset : ℕ) : ℤ),
-          z13A := env.env.get input_var.z13A.cell.column
-            ((env.place input_var.z13A.cell.regionIndex
-              + input_var.z13A.cell.rowOffset : ℕ) : ℤ),
-          z13APrime := env.env.get input_var.z13APrime.cell.column
-            ((env.place input_var.z13APrime.cell.regionIndex
-              + input_var.z13APrime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
-    rw [h_input] at hA
-    have higdX : env.env.get input_var.gdX.cell.column
-        ((env.place input_var.gdX.cell.regionIndex
-          + input_var.gdX.cell.rowOffset : ℕ) : ℤ) = input.gdX := congrArg Row.gdX h_input
-    have hib0 : env.env.get input_var.b0.cell.column
-        ((env.place input_var.b0.cell.regionIndex
-          + input_var.b0.cell.rowOffset : ℕ) : ℤ) = input.b0 := congrArg Row.b0 h_input
-    have hib1 : env.env.get input_var.b1.cell.column
-        ((env.place input_var.b1.cell.regionIndex
-          + input_var.b1.cell.rowOffset : ℕ) : ℤ) = input.b1 := congrArg Row.b1 h_input
-    have hia : env.env.get input_var.a.cell.column
-        ((env.place input_var.a.cell.regionIndex
-          + input_var.a.cell.rowOffset : ℕ) : ℤ) = input.a := congrArg Row.a h_input
-    have hiaPrime : env.env.get input_var.aPrime.cell.column
-        ((env.place input_var.aPrime.cell.regionIndex
-          + input_var.aPrime.cell.rowOffset : ℕ) : ℤ) = input.aPrime := congrArg Row.aPrime h_input
-    have hiz13A : env.env.get input_var.z13A.cell.column
-        ((env.place input_var.z13A.cell.regionIndex
-          + input_var.z13A.cell.rowOffset : ℕ) : ℤ) = input.z13A := congrArg Row.z13A h_input
-    have hiz13APrime : env.env.get input_var.z13APrime.cell.column
-        ((env.place input_var.z13APrime.cell.regionIndex
-          + input_var.z13APrime.cell.rowOffset : ℕ) : ℤ) = input.z13APrime := congrArg Row.z13APrime h_input
+    circuit_proof_start [gate]
     have heqs := Orchard.Action.NoteCommit.GdCanonicity.Gate.eqs_of_spec
-      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
+      (toDonor { gdX := input_gdX, b0 := input_b0, b1 := input_b1, a := input_a,
+                 aPrime := input_aPrime, z13A := input_z13A, z13APrime := input_z13APrime })
+      ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4, he5⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4 he5
-    rw [← higdX, ← hib0, ← hib1, ← hia, ← hw1, ← hw2, ← hw3, ← hw4] at he1
-    rw [← hia, ← hiaPrime, ← hw4, ← hw5] at he2
-    rw [← hib1, ← hib0, ← hw3, ← hw2] at he3
-    rw [← hib1, ← hiz13A, ← hw3, ← hw6] at he4
-    rw [← hib1, ← hiz13APrime, ← hw3, ← hw7] at he5
-    refine ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · push_cast at he1 ⊢
       linear_combination he1
     · push_cast at he2 ⊢
@@ -315,66 +226,15 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       (by push_cast; linear_combination hg1) hg3 hg4
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hA hPA ⊢
-    obtain ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { pkdX := env.env.get input_var.pkdX.cell.column
-            ((env.place input_var.pkdX.cell.regionIndex
-              + input_var.pkdX.cell.rowOffset : ℕ) : ℤ),
-          b3 := env.env.get input_var.b3.cell.column
-            ((env.place input_var.b3.cell.regionIndex
-              + input_var.b3.cell.rowOffset : ℕ) : ℤ),
-          d0 := env.env.get input_var.d0.cell.column
-            ((env.place input_var.d0.cell.regionIndex
-              + input_var.d0.cell.rowOffset : ℕ) : ℤ),
-          c := env.env.get input_var.c.cell.column
-            ((env.place input_var.c.cell.regionIndex
-              + input_var.c.cell.rowOffset : ℕ) : ℤ),
-          b3CPrime := env.env.get input_var.b3CPrime.cell.column
-            ((env.place input_var.b3CPrime.cell.regionIndex
-              + input_var.b3CPrime.cell.rowOffset : ℕ) : ℤ),
-          z13C := env.env.get input_var.z13C.cell.column
-            ((env.place input_var.z13C.cell.regionIndex
-              + input_var.z13C.cell.rowOffset : ℕ) : ℤ),
-          z14B3CPrime := env.env.get input_var.z14B3CPrime.cell.column
-            ((env.place input_var.z14B3CPrime.cell.regionIndex
-              + input_var.z14B3CPrime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
-    rw [h_input] at hA
-    have hipkdX : env.env.get input_var.pkdX.cell.column
-        ((env.place input_var.pkdX.cell.regionIndex
-          + input_var.pkdX.cell.rowOffset : ℕ) : ℤ) = input.pkdX := congrArg Row.pkdX h_input
-    have hib3 : env.env.get input_var.b3.cell.column
-        ((env.place input_var.b3.cell.regionIndex
-          + input_var.b3.cell.rowOffset : ℕ) : ℤ) = input.b3 := congrArg Row.b3 h_input
-    have hid0 : env.env.get input_var.d0.cell.column
-        ((env.place input_var.d0.cell.regionIndex
-          + input_var.d0.cell.rowOffset : ℕ) : ℤ) = input.d0 := congrArg Row.d0 h_input
-    have hic : env.env.get input_var.c.cell.column
-        ((env.place input_var.c.cell.regionIndex
-          + input_var.c.cell.rowOffset : ℕ) : ℤ) = input.c := congrArg Row.c h_input
-    have hib3CPrime : env.env.get input_var.b3CPrime.cell.column
-        ((env.place input_var.b3CPrime.cell.regionIndex
-          + input_var.b3CPrime.cell.rowOffset : ℕ) : ℤ) = input.b3CPrime := congrArg Row.b3CPrime h_input
-    have hiz13C : env.env.get input_var.z13C.cell.column
-        ((env.place input_var.z13C.cell.regionIndex
-          + input_var.z13C.cell.rowOffset : ℕ) : ℤ) = input.z13C := congrArg Row.z13C h_input
-    have hiz14B3CPrime : env.env.get input_var.z14B3CPrime.cell.column
-        ((env.place input_var.z14B3CPrime.cell.regionIndex
-          + input_var.z14B3CPrime.cell.rowOffset : ℕ) : ℤ) = input.z14B3CPrime := congrArg Row.z14B3CPrime h_input
+    circuit_proof_start [gate]
     have heqs := Orchard.Action.NoteCommit.PkdCanonicity.Gate.eqs_of_spec
-      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
+      (toDonor { pkdX := input_pkdX, b3 := input_b3, d0 := input_d0, c := input_c,
+                 b3CPrime := input_b3CPrime, z13C := input_z13C,
+                 z14B3CPrime := input_z14B3CPrime })
+      ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4
-    rw [← hipkdX, ← hib3, ← hid0, ← hic, ← hw1, ← hw2, ← hw3, ← hw4] at he1
-    rw [← hib3, ← hic, ← hib3CPrime, ← hw2, ← hw4, ← hw5] at he2
-    rw [← hid0, ← hiz13C, ← hw3, ← hw6] at he3
-    rw [← hid0, ← hiz14B3CPrime, ← hw3, ← hw7] at he4
-    refine ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · push_cast at he1 ⊢
       linear_combination he1
     · push_cast at he2 ⊢
@@ -450,66 +310,15 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       (by push_cast; linear_combination hg1) hg3 hg4
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hA hPA ⊢
-    obtain ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { rho := env.env.get input_var.rho.cell.column
-            ((env.place input_var.rho.cell.regionIndex
-              + input_var.rho.cell.rowOffset : ℕ) : ℤ),
-          e1 := env.env.get input_var.e1.cell.column
-            ((env.place input_var.e1.cell.regionIndex
-              + input_var.e1.cell.rowOffset : ℕ) : ℤ),
-          g0 := env.env.get input_var.g0.cell.column
-            ((env.place input_var.g0.cell.regionIndex
-              + input_var.g0.cell.rowOffset : ℕ) : ℤ),
-          f := env.env.get input_var.f.cell.column
-            ((env.place input_var.f.cell.regionIndex
-              + input_var.f.cell.rowOffset : ℕ) : ℤ),
-          e1FPrime := env.env.get input_var.e1FPrime.cell.column
-            ((env.place input_var.e1FPrime.cell.regionIndex
-              + input_var.e1FPrime.cell.rowOffset : ℕ) : ℤ),
-          z13F := env.env.get input_var.z13F.cell.column
-            ((env.place input_var.z13F.cell.regionIndex
-              + input_var.z13F.cell.rowOffset : ℕ) : ℤ),
-          z14E1FPrime := env.env.get input_var.z14E1FPrime.cell.column
-            ((env.place input_var.z14E1FPrime.cell.regionIndex
-              + input_var.z14E1FPrime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
-    rw [h_input] at hA
-    have hirho : env.env.get input_var.rho.cell.column
-        ((env.place input_var.rho.cell.regionIndex
-          + input_var.rho.cell.rowOffset : ℕ) : ℤ) = input.rho := congrArg Row.rho h_input
-    have hie1 : env.env.get input_var.e1.cell.column
-        ((env.place input_var.e1.cell.regionIndex
-          + input_var.e1.cell.rowOffset : ℕ) : ℤ) = input.e1 := congrArg Row.e1 h_input
-    have hig0 : env.env.get input_var.g0.cell.column
-        ((env.place input_var.g0.cell.regionIndex
-          + input_var.g0.cell.rowOffset : ℕ) : ℤ) = input.g0 := congrArg Row.g0 h_input
-    have hif : env.env.get input_var.f.cell.column
-        ((env.place input_var.f.cell.regionIndex
-          + input_var.f.cell.rowOffset : ℕ) : ℤ) = input.f := congrArg Row.f h_input
-    have hie1FPrime : env.env.get input_var.e1FPrime.cell.column
-        ((env.place input_var.e1FPrime.cell.regionIndex
-          + input_var.e1FPrime.cell.rowOffset : ℕ) : ℤ) = input.e1FPrime := congrArg Row.e1FPrime h_input
-    have hiz13F : env.env.get input_var.z13F.cell.column
-        ((env.place input_var.z13F.cell.regionIndex
-          + input_var.z13F.cell.rowOffset : ℕ) : ℤ) = input.z13F := congrArg Row.z13F h_input
-    have hiz14E1FPrime : env.env.get input_var.z14E1FPrime.cell.column
-        ((env.place input_var.z14E1FPrime.cell.regionIndex
-          + input_var.z14E1FPrime.cell.rowOffset : ℕ) : ℤ) = input.z14E1FPrime := congrArg Row.z14E1FPrime h_input
+    circuit_proof_start [gate]
     have heqs := Orchard.Action.NoteCommit.RhoCanonicity.Gate.eqs_of_spec
-      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
+      (toDonor { rho := input_rho, e1 := input_e1, g0 := input_g0, f := input_f,
+                 e1FPrime := input_e1FPrime, z13F := input_z13F,
+                 z14E1FPrime := input_z14E1FPrime })
+      ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4
-    rw [← hirho, ← hie1, ← hig0, ← hif, ← hw1, ← hw2, ← hw3, ← hw4] at he1
-    rw [← hie1, ← hif, ← hie1FPrime, ← hw2, ← hw4, ← hw5] at he2
-    rw [← hig0, ← hiz13F, ← hw3, ← hw6] at he3
-    rw [← hig0, ← hiz14E1FPrime, ← hw3, ← hw7] at he4
-    refine ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · push_cast at he1 ⊢
       linear_combination he1
     · push_cast at he2 ⊢
@@ -589,75 +398,15 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       (by push_cast; linear_combination hg1) hg3 hg4 hg5
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hA hPA ⊢
-    obtain ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, hw8⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { psi := env.env.get input_var.psi.cell.column
-            ((env.place input_var.psi.cell.regionIndex
-              + input_var.psi.cell.rowOffset : ℕ) : ℤ),
-          h0 := env.env.get input_var.h0.cell.column
-            ((env.place input_var.h0.cell.regionIndex
-              + input_var.h0.cell.rowOffset : ℕ) : ℤ),
-          g1 := env.env.get input_var.g1.cell.column
-            ((env.place input_var.g1.cell.regionIndex
-              + input_var.g1.cell.rowOffset : ℕ) : ℤ),
-          h1 := env.env.get input_var.h1.cell.column
-            ((env.place input_var.h1.cell.regionIndex
-              + input_var.h1.cell.rowOffset : ℕ) : ℤ),
-          g2 := env.env.get input_var.g2.cell.column
-            ((env.place input_var.g2.cell.regionIndex
-              + input_var.g2.cell.rowOffset : ℕ) : ℤ),
-          g1G2Prime := env.env.get input_var.g1G2Prime.cell.column
-            ((env.place input_var.g1G2Prime.cell.regionIndex
-              + input_var.g1G2Prime.cell.rowOffset : ℕ) : ℤ),
-          z13G := env.env.get input_var.z13G.cell.column
-            ((env.place input_var.z13G.cell.regionIndex
-              + input_var.z13G.cell.rowOffset : ℕ) : ℤ),
-          z13G1G2Prime := env.env.get input_var.z13G1G2Prime.cell.column
-            ((env.place input_var.z13G1G2Prime.cell.regionIndex
-              + input_var.z13G1G2Prime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
-    rw [h_input] at hA
-    have hipsi : env.env.get input_var.psi.cell.column
-        ((env.place input_var.psi.cell.regionIndex
-          + input_var.psi.cell.rowOffset : ℕ) : ℤ) = input.psi := congrArg Row.psi h_input
-    have hih0 : env.env.get input_var.h0.cell.column
-        ((env.place input_var.h0.cell.regionIndex
-          + input_var.h0.cell.rowOffset : ℕ) : ℤ) = input.h0 := congrArg Row.h0 h_input
-    have hig1 : env.env.get input_var.g1.cell.column
-        ((env.place input_var.g1.cell.regionIndex
-          + input_var.g1.cell.rowOffset : ℕ) : ℤ) = input.g1 := congrArg Row.g1 h_input
-    have hih1 : env.env.get input_var.h1.cell.column
-        ((env.place input_var.h1.cell.regionIndex
-          + input_var.h1.cell.rowOffset : ℕ) : ℤ) = input.h1 := congrArg Row.h1 h_input
-    have hig2 : env.env.get input_var.g2.cell.column
-        ((env.place input_var.g2.cell.regionIndex
-          + input_var.g2.cell.rowOffset : ℕ) : ℤ) = input.g2 := congrArg Row.g2 h_input
-    have hig1G2Prime : env.env.get input_var.g1G2Prime.cell.column
-        ((env.place input_var.g1G2Prime.cell.regionIndex
-          + input_var.g1G2Prime.cell.rowOffset : ℕ) : ℤ) = input.g1G2Prime := congrArg Row.g1G2Prime h_input
-    have hiz13G : env.env.get input_var.z13G.cell.column
-        ((env.place input_var.z13G.cell.regionIndex
-          + input_var.z13G.cell.rowOffset : ℕ) : ℤ) = input.z13G := congrArg Row.z13G h_input
-    have hiz13G1G2Prime : env.env.get input_var.z13G1G2Prime.cell.column
-        ((env.place input_var.z13G1G2Prime.cell.regionIndex
-          + input_var.z13G1G2Prime.cell.rowOffset : ℕ) : ℤ) = input.z13G1G2Prime := congrArg Row.z13G1G2Prime h_input
+    circuit_proof_start [gate]
     have heqs := Orchard.Action.NoteCommit.PsiCanonicity.Gate.eqs_of_spec
-      (toDonor input)
+      (toDonor { psi := input_psi, h0 := input_h0, g1 := input_g1, h1 := input_h1,
+                 g2 := input_g2, g1G2Prime := input_g1G2Prime, z13G := input_z13G,
+                 z13G1G2Prime := input_z13G1G2Prime })
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hPA.2, hA.2.2.2.2.1, hA.2.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4, he5⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4 he5
-    rw [← hig1, ← hig2, ← hih0, ← hih1, ← hipsi,
-      ← hw3, ← hw5, ← hw2, ← hw4, ← hw1] at he1
-    rw [← hig1, ← hig2, ← hig1G2Prime, ← hw3, ← hw5, ← hw6] at he2
-    rw [← hih1, ← hih0, ← hw4, ← hw2] at he3
-    rw [← hih1, ← hiz13G, ← hw4, ← hw7] at he4
-    rw [← hih1, ← hiz13G1G2Prime, ← hw4, ← hw8] at he5
-    refine ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, hw8, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · push_cast at he1 ⊢
       linear_combination he1
     · push_cast at he2 ⊢
@@ -766,82 +515,20 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
         (by simp only [toDonor]; push_cast at hg3 ⊢; linear_combination hg3)⟩
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hA hPA ⊢
-    obtain ⟨hwy, hwlsb, hwk0, hwk2, hwk3, hwj, hwz1, hwz13, hwjp, hwz13p⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Row Fp)
-      = { y := env.env.get input_var.y.cell.column
-            ((env.place input_var.y.cell.regionIndex
-              + input_var.y.cell.rowOffset : ℕ) : ℤ),
-          k0 := env.env.get input_var.k0.cell.column
-            ((env.place input_var.k0.cell.regionIndex
-              + input_var.k0.cell.rowOffset : ℕ) : ℤ),
-          k2 := env.env.get input_var.k2.cell.column
-            ((env.place input_var.k2.cell.regionIndex
-              + input_var.k2.cell.rowOffset : ℕ) : ℤ),
-          j := env.env.get input_var.j.cell.column
-            ((env.place input_var.j.cell.regionIndex
-              + input_var.j.cell.rowOffset : ℕ) : ℤ),
-          z1J := env.env.get input_var.z1J.cell.column
-            ((env.place input_var.z1J.cell.regionIndex
-              + input_var.z1J.cell.rowOffset : ℕ) : ℤ),
-          z13J := env.env.get input_var.z13J.cell.column
-            ((env.place input_var.z13J.cell.regionIndex
-              + input_var.z13J.cell.rowOffset : ℕ) : ℤ),
-          jPrime := env.env.get input_var.jPrime.cell.column
-            ((env.place input_var.jPrime.cell.regionIndex
-              + input_var.jPrime.cell.rowOffset : ℕ) : ℤ),
-          z13JPrime := env.env.get input_var.z13JPrime.cell.column
-            ((env.place input_var.z13JPrime.cell.regionIndex
-              + input_var.z13JPrime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
-    rw [h_input] at hA
-    have hiy : env.env.get input_var.y.cell.column
-        ((env.place input_var.y.cell.regionIndex
-          + input_var.y.cell.rowOffset : ℕ) : ℤ) = input.y := congrArg Row.y h_input
-    have hik0 : env.env.get input_var.k0.cell.column
-        ((env.place input_var.k0.cell.regionIndex
-          + input_var.k0.cell.rowOffset : ℕ) : ℤ) = input.k0 := congrArg Row.k0 h_input
-    have hik2 : env.env.get input_var.k2.cell.column
-        ((env.place input_var.k2.cell.regionIndex
-          + input_var.k2.cell.rowOffset : ℕ) : ℤ) = input.k2 := congrArg Row.k2 h_input
-    have hij : env.env.get input_var.j.cell.column
-        ((env.place input_var.j.cell.regionIndex
-          + input_var.j.cell.rowOffset : ℕ) : ℤ) = input.j := congrArg Row.j h_input
-    have hiz1J : env.env.get input_var.z1J.cell.column
-        ((env.place input_var.z1J.cell.regionIndex
-          + input_var.z1J.cell.rowOffset : ℕ) : ℤ) = input.z1J := congrArg Row.z1J h_input
-    have hiz13J : env.env.get input_var.z13J.cell.column
-        ((env.place input_var.z13J.cell.regionIndex
-          + input_var.z13J.cell.rowOffset : ℕ) : ℤ) = input.z13J := congrArg Row.z13J h_input
-    have hijPrime : env.env.get input_var.jPrime.cell.column
-        ((env.place input_var.jPrime.cell.regionIndex
-          + input_var.jPrime.cell.rowOffset : ℕ) : ℤ) = input.jPrime := congrArg Row.jPrime h_input
-    have hiz13JPrime : env.env.get input_var.z13JPrime.cell.column
-        ((env.place input_var.z13JPrime.cell.regionIndex
-          + input_var.z13JPrime.cell.rowOffset : ℕ) : ℤ) = input.z13JPrime := congrArg Row.z13JPrime h_input
+    circuit_proof_start [gate, boolCheck]
     have heqs := Orchard.Action.NoteCommit.YCanonicity.Gate.eqs_of_spec
-      (toDonor input
-        (env.env.advice (cfg.advices 6) ((env.place self + offset : ℕ) : ℤ))
-        (env.env.advice (cfg.advices 9) ((env.place self + offset : ℕ) : ℤ)))
+      (toDonor { y := input_y, k0 := input_k0, k2 := input_k2, j := input_j,
+                 z1J := input_z1J, z13J := input_z13J, jPrime := input_jPrime,
+                 z13JPrime := input_z13JPrime }
+        (Witgen.WitgenIROver.eval wlsb ⟨place, env⟩)[0]
+        (Witgen.WitgenIROver.eval wk3 ⟨place, env⟩)[0])
       ⟨hPA.1, hA.1, hA.2.1, hA.2.2.1, hPA.2.2, hA.2.2.2.1,
         hA.2.2.2.2.1, hA.2.2.2.2.2⟩ hPA.2.1
     obtain ⟨hb, he2, he3, he4, he5, he6, he7⟩ := heqs
     simp only [toDonor] at hb he2 he3 he4 he5 he6 he7
-    rw [← hij, ← hik0, ← hiz1J, ← hwj, ← hwk0, ← hwz1] at he2
-    rw [← hiy, ← hij, ← hik2, ← hwy, ← hwj, ← hwk2] at he3
-    rw [← hij, ← hijPrime, ← hwj, ← hwjp] at he4
-    rw [← hik2, ← hwk2] at he5
-    rw [← hiz13J, ← hwz13] at he6
-    rw [← hiz13JPrime, ← hwz13p] at he7
-    refine ⟨⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
-      hwy, hwk0, hwk2, hwj, hwz1, hwz13, hwjp, hwz13p⟩, h_output.symm⟩
+    refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, h_output.symm⟩
     · rcases hb with h | h <;> rw [h] <;> ring
-    · push_cast at he2 ⊢
-      linear_combination he2
+    · linear_combination he2
     · push_cast at he3 ⊢
       linear_combination he3
     · push_cast at he4 ⊢
