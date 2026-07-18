@@ -188,16 +188,33 @@ def zCell (hcfg : Sinsemilla.HashPiece.Config) (iHash : RegionIndex) (i j : ℕ)
 `zCell` references to the flow's starting index. -/
 def currentRegion : Circuit Fp RegionIndex := fun i => (i, [], i)
 
-/-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
-Parameterized (like the fixed-base mul bundle) by the `rcm` window programs. -/
-def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) : Circuit Fp (Var Point Fp) := do
-  let i₀ ← currentRegion
-  -- the `hash_to_point` region of the `CommitDomain::commit` below (region 28 of the
-  -- flow: 15 piece/short regions, two 5-region y-canonicity flows, the 2-region blind)
-  let iHash := i₀ + 27
-  -- ── pieces and sub-piece range checks (`note_commit.rs:1608-1653`) ──
+@[circuit_norm]
+theorem currentRegion_operations (i : RegionIndex) :
+    currentRegion.operations i = [] := by
+  with_unfolding_all rfl
+
+/-- The piece/sub-piece cells stage 1 hands to the later stages. -/
+structure PieceCells where
+  a : AssignedCell Fp
+  b : AssignedCell Fp
+  c : AssignedCell Fp
+  d : AssignedCell Fp
+  e : AssignedCell Fp
+  f : AssignedCell Fp
+  g : AssignedCell Fp
+  h : AssignedCell Fp
+  b0 : AssignedCell Fp
+  b3 : AssignedCell Fp
+  d2 : AssignedCell Fp
+  e0 : AssignedCell Fp
+  e1 : AssignedCell Fp
+  g1 : AssignedCell Fp
+  h0 : AssignedCell Fp
+
+/-- Stage 1 (15 regions): the eight message pieces interleaved with the seven
+sub-piece short checks (`note_commit.rs:1608-1653`). -/
+def synthPieces (cfg : Config) (input : Inputs (AssignedCell Fp)) :
+    Circuit Fp PieceCells := do
   let a ← witnessMessagePiece cfg.hashConfig (brWit input.gdX 0 250)
   let b0 ← LookupRangeCheck.witnessShortCheck 10 4 cfg.lookupConfig
     (brWit input.gdX 250 4)
@@ -220,53 +237,90 @@ def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
   let h0 ← LookupRangeCheck.witnessShortCheck 10 5 cfg.lookupConfig
     (brWit input.psi 249 5)
   let h ← witnessMessagePiece cfg.hashConfig (hWit input.psi)
-  -- ── the two y-canonicity flows (`note_commit.rs:1654-1670`) ──
+  pure { a, b, c, d, e, f, g, h, b0, b3, d2, e0, e1, g1, h0 }
+
+/-- The cells stage 2 hands to the gate stage. -/
+structure CheckCells where
+  b2 : AssignedCell Fp
+  d1 : AssignedCell Fp
+  cm : Var Point Fp
+  aZs : Var LookupRangeCheck.Output Fp
+  bZs : Var LookupRangeCheck.Output Fp
+  eZs : Var LookupRangeCheck.Output Fp
+  gZs : Var LookupRangeCheck.Output Fp
+
+/-- Stage 2 (18 regions): the two y-canonicity flows, `CommitDomain::commit`, and the
+four canonicity `witness_check`s (`note_commit.rs:1654-1737`). -/
+def synthChecks (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (pcs : PieceCells) (iHash : RegionIndex) : Circuit Fp CheckCells := do
   let b2 ← (YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }
   let d1 ← (YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }
-  -- ── `cm = NoteCommit(rcm, a‖b‖c‖d‖e‖f‖g‖h)` (`note_commit.rs:1672-1698`) ──
   let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-    { pieces := #v[a, b, c, d, e, f, g, h] }
-  -- ── the four canonicity witness_checks (`note_commit.rs:1710-1737`) ──
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false cfg.lookupConfig
-    (GdCanonicityCheck.aPrimeWit a)
+    (GdCanonicityCheck.aPrimeWit pcs.a)
   let bZs ← LookupRangeCheck.witnessCheck 10 14 false cfg.lookupConfig
-    (PkdCanonicityCheck.b3CPrimeWit b3 c)
+    (PkdCanonicityCheck.b3CPrimeWit pcs.b3 pcs.c)
   let eZs ← LookupRangeCheck.witnessCheck 10 14 false cfg.lookupConfig
-    (RhoCanonicityCheck.e1FPrimeWit e1 f)
+    (RhoCanonicityCheck.e1FPrimeWit pcs.e1 pcs.f)
   let gZs ← LookupRangeCheck.witnessCheck 10 13 false cfg.lookupConfig
-    (PsiCanonicityCheck.g1G2PrimeWit g1 (zCell cfg.hashConfig iHash 6 1))
-  -- ── the ten gate regions (`note_commit.rs:1739-1795`) ──
+    (PsiCanonicityCheck.g1G2PrimeWit pcs.g1 (zCell cfg.hashConfig iHash 6 1))
+  pure { b2, d1, cm, aZs, bZs, eZs, gZs }
+
+/-- Stage 3 (10 regions): the gate regions (`note_commit.rs:1739-1795`). -/
+def synthGates (cfg : Config) (input : Inputs (AssignedCell Fp)) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash : RegionIndex) : Circuit Fp Unit := do
   let b1 ← ((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
-    "NoteCommit MessagePiece b").call cfg.gates.b { b, b0, b2, b3 }
+    "NoteCommit MessagePiece b").call cfg.gates.b
+    { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }
   let d0 ← ((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
     "NoteCommit MessagePiece d").call cfg.gates.d
-    { d, d1, d2, d3 := zCell cfg.hashConfig iHash 3 1 }
+    { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1 }
   let _ ← (DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
-    { e, e0, e1 }
+    { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }
   let g0 ← ((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
     "NoteCommit MessagePiece g").call cfg.gates.g
-    { g, g1, g2 := zCell cfg.hashConfig iHash 6 1 }
+    { g := pcs.g, g1 := pcs.g1, g2 := zCell cfg.hashConfig iHash 6 1 }
   let h1 ← ((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
-    "NoteCommit MessagePiece h").call cfg.gates.h { h, h0 }
+    "NoteCommit MessagePiece h").call cfg.gates.h { h := pcs.h, h0 := pcs.h0 }
   let _ ← (GdCanonicity.bundle.toFormal "NoteCommit input g_d").call cfg.gates.gd
-    { gdX := input.gdX, b0, b1, a, aPrime := aZs.z0,
-      z13A := zCell cfg.hashConfig iHash 0 13, z13APrime := aZs.zLast }
+    { gdX := input.gdX, b0 := pcs.b0, b1, a := pcs.a, aPrime := ccs.aZs.z0,
+      z13A := zCell cfg.hashConfig iHash 0 13, z13APrime := ccs.aZs.zLast }
   let _ ← (PkdCanonicity.bundle.toFormal "NoteCommit input pk_d").call cfg.gates.pkd
-    { pkdX := input.pkdX, b3, d0, c, b3CPrime := bZs.z0,
-      z13C := zCell cfg.hashConfig iHash 2 13, z14B3CPrime := bZs.zLast }
+    { pkdX := input.pkdX, b3 := pcs.b3, d0, c := pcs.c, b3CPrime := ccs.bZs.z0,
+      z13C := zCell cfg.hashConfig iHash 2 13, z14B3CPrime := ccs.bZs.zLast }
   let _ ← (ValueCanonicity.bundle.toFormal "NoteCommit input value").call cfg.gates.value
-    { value := input.value, d2, d3 := zCell cfg.hashConfig iHash 3 1, e0 }
+    { value := input.value, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1,
+      e0 := pcs.e0 }
   let _ ← (RhoCanonicity.bundle.toFormal "NoteCommit input rho").call cfg.gates.rho
-    { rho := input.rho, e1, g0, f, e1FPrime := eZs.z0,
-      z13F := zCell cfg.hashConfig iHash 5 13, z14E1FPrime := eZs.zLast }
+    { rho := input.rho, e1 := pcs.e1, g0, f := pcs.f, e1FPrime := ccs.eZs.z0,
+      z13F := zCell cfg.hashConfig iHash 5 13, z14E1FPrime := ccs.eZs.zLast }
   let _ ← (PsiCanonicity.bundle.toFormal "NoteCommit input psi").call cfg.gates.psi
-    { psi := input.psi, h0, g1, h1, g2 := zCell cfg.hashConfig iHash 6 1,
-      g1G2Prime := gZs.z0, z13G := zCell cfg.hashConfig iHash 6 13,
-      z13G1G2Prime := gZs.zLast }
-  pure cm
+    { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1,
+      g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
+      z13G := zCell cfg.hashConfig iHash 6 13, z13G1G2Prime := ccs.gZs.zLast }
+  pure ()
+
+/-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
+Parameterized (like the fixed-base mul bundle) by the `rcm` window programs. -/
+def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) : Circuit Fp (Var Point Fp) := do
+  let i₀ ← currentRegion
+  -- the `hash_to_point` region of the `CommitDomain::commit` in stage 2 (region 28 of
+  -- the flow: 15 piece/short regions, two 5-region y-canonicity flows, the 2-region
+  -- blind)
+  let iHash := i₀ + 27
+  let pcs ← synthPieces cfg input
+  let ccs ← synthChecks G R windows Q hQ cfg input pcs iHash
+  synthGates cfg input pcs ccs iHash
+  pure ccs.cm
+
+/-! ## Region counts -/
 
 /-- A `toFormal`-lifted region bundle's call chunk is exactly one region. -/
 private theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMap}
@@ -296,5 +350,47 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
+
+set_option linter.unusedSimpArgs false in
+theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i : RegionIndex) :
+    Operations.regionCount ((synthPieces cfg input).operations i) = 15 := by
+  simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
+    Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, Circuit.operations_bind,
+    operations_assignRegion, Operations.regionCount_append, Operations.regionCount]
+
+theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i : RegionIndex) :
+    Operations.regionCount
+      ((synthChecks G R windows Q hQ cfg input pcs iHash).operations i) = 18 := by
+  simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm,
+    Circuit.operations_bind, operations_assignRegion, Operations.regionCount_append,
+    Operations.regionCount]
+  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+
+set_option linter.unusedSimpArgs false in
+theorem synthGates_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
+    Operations.regionCount
+      ((synthGates cfg input pcs ccs iHash).operations i) = 10 := by
+  simp only [synthGates, circuit_norm, Circuit.operations_bind,
+    Operations.regionCount_append, Operations.regionCount]
+  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount]
+
+set_option linter.unusedSimpArgs false in
+/-- The region count of the flow: 15 piece/short regions, the 18-region check stage,
+the 10 gate regions — 43. -/
+theorem synth_regionCount (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
+    Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 43 := by
+  simp only [synth, currentRegion, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+  rw [synthPieces_regionCount, synthChecks_regionCount, synthGates_regionCount]
 
 end Halo2.Ironwood.NoteCommit.Main
