@@ -404,6 +404,18 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
   rw [synthPieces_regionCount, synthChecks_regionCount, synthGates_regionCount]
 
+theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i : RegionIndex) :
+    (synthPieces cfg input).nextRegionIndex i = i + 15 := by
+  with_unfolding_all rfl
+
+theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i : RegionIndex) :
+    (synthChecks G R windows Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
+  with_unfolding_all rfl
+
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
 open Orchard.Specs.Sinsemilla (hashToPoint)

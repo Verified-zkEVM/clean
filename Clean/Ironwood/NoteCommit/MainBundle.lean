@@ -234,6 +234,70 @@ private theorem pieceChunks_donor_iff :
     · rintro ⟨msf, h1, h2, tailChunks, h3, h4⟩
       exact ⟨msf, h1, h2, tailChunks, h3, (ih _ _).mpr h4⟩
 
+set_option linter.unusedSimpArgs false in
+/-- Stage-3 peel, standalone (kernel-checked alone): the ten folded gate-call chunks at
+clean relative indices. -/
+private theorem peelGates (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (h : Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
+    Constraints place env
+      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+        "NoteCommit MessagePiece b").call cfg.gates.b
+        { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
+    Constraints place env
+      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+        "NoteCommit MessagePiece d").call cfg.gates.d
+        { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+          d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
+    Constraints place env
+      (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
+        { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
+    Constraints place env
+      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+        "NoteCommit MessagePiece g").call cfg.gates.g
+        { g := pcs.g, g1 := pcs.g1,
+          g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
+    Constraints place env
+      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+        "NoteCommit MessagePiece h").call cfg.gates.h
+        { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
+    Constraints place env
+      (((GdCanonicity.bundle.toFormal "NoteCommit input g_d").call cfg.gates.gd
+        { gdX := input.gdX, b0 := pcs.b0, b1 := AssignedCell.of i₀ 0 cfg.gates.b.colR,
+          a := pcs.a, aPrime := ccs.aZs.z0,
+          z13A := zCell cfg.hashConfig iHash 0 13,
+          z13APrime := ccs.aZs.zLast }).operations (i₀ + 5)) (i₀ + 5) ∧
+    Constraints place env
+      (((PkdCanonicity.bundle.toFormal "NoteCommit input pk_d").call cfg.gates.pkd
+        { pkdX := input.pkdX, b3 := pcs.b3,
+          d0 := AssignedCell.of (i₀ + 1) 0 cfg.gates.d.colM, c := pcs.c,
+          b3CPrime := ccs.bZs.z0, z13C := zCell cfg.hashConfig iHash 2 13,
+          z14B3CPrime := ccs.bZs.zLast }).operations (i₀ + 6)) (i₀ + 6) ∧
+    Constraints place env
+      (((ValueCanonicity.bundle.toFormal "NoteCommit input value").call cfg.gates.value
+        { value := input.value, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1,
+          e0 := pcs.e0 }).operations (i₀ + 7)) (i₀ + 7) ∧
+    Constraints place env
+      (((RhoCanonicity.bundle.toFormal "NoteCommit input rho").call cfg.gates.rho
+        { rho := input.rho, e1 := pcs.e1,
+          g0 := AssignedCell.of (i₀ + 3) 0 cfg.gates.g.colM, f := pcs.f,
+          e1FPrime := ccs.eZs.z0, z13F := zCell cfg.hashConfig iHash 5 13,
+          z14E1FPrime := ccs.eZs.zLast }).operations (i₀ + 8)) (i₀ + 8) ∧
+    Constraints place env
+      (((PsiCanonicity.bundle.toFormal "NoteCommit input psi").call cfg.gates.psi
+        { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1,
+          h1 := AssignedCell.of (i₀ + 4) 0 cfg.gates.h.colR,
+          g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
+          z13G := zCell cfg.hashConfig iHash 6 13,
+          z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
+  simp only [synthGates, circuit_norm, decomposeB_output,
+    decomposeD_output, decomposeG_output, decomposeH_output] at h
+  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
+  exact h
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Fq) (synth G R windows Q hQ cfg)
@@ -252,11 +316,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     circuit_norm] at hCk
   simp only [Operations.regionCount] at hCk
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hCk
-  simp only [synthGates, synthChecks, synthPieces, LookupRangeCheck.witnessShortCheck,
-    LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
-    circuit_norm] at hGt
-  simp only [Operations.regionCount, yc_output] at hGt
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hGt
+
   -- ── stage 1: the seven sub-piece short checks ──
   have hSb0 := hP.1
   have hSb3 := hP.2.1
@@ -365,6 +425,54 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
   obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
   clear hWa hWb hWe hWg
+  -- ── stage 3: the ten gate regions (standalone peel) ──
+  simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
+    synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hGt
+  have hGates := peelGates cfg _ _ _ _ _ place env hGt
+  clear hGt
+  have hGb := hGates.1
+  have hGd := hGates.2.1
+  have hGe := hGates.2.2.1
+  have hGg := hGates.2.2.2.1
+  have hGh := hGates.2.2.2.2.1
+  have hGgd := hGates.2.2.2.2.2.1
+  have hGpkd := hGates.2.2.2.2.2.2.1
+  have hGval := hGates.2.2.2.2.2.2.2.1
+  have hGrho := hGates.2.2.2.2.2.2.2.2.1
+  have hGpsi := hGates.2.2.2.2.2.2.2.2.2
+  clear hGates
+  subcircuit_rw at hGb
+  subcircuit_rw at hGd
+  subcircuit_rw at hGe
+  subcircuit_rw at hGg
+  subcircuit_rw at hGh
+  subcircuit_rw at hGgd
+  subcircuit_rw at hGpkd
+  subcircuit_rw at hGval
+  subcircuit_rw at hGrho
+  subcircuit_rw at hGpsi
+  -- the five decomposition gates (no rely-conditions)
+  have hGbS := hGb (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq]; trivial)
+  rw [toFormal_spec_eq, decomposeB_output, toFormal_extract_eq] at hGbS
+  simp only [DecomposeB.bundle, circuit_norm] at hGbS
+  have hGdS := hGd (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq]; trivial)
+  rw [toFormal_spec_eq, decomposeD_output, toFormal_extract_eq] at hGdS
+  simp only [DecomposeD.bundle, circuit_norm] at hGdS
+  have hGeS := hGe (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq]; trivial)
+  rw [toFormal_spec_eq] at hGeS
+  simp only [DecomposeE.bundle, circuit_norm] at hGeS
+  have hGgS := hGg (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq]; trivial)
+  rw [toFormal_spec_eq, decomposeG_output, toFormal_extract_eq] at hGgS
+  simp only [DecomposeG.bundle, circuit_norm] at hGgS
+  have hGhS := hGh (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq]; trivial)
+  rw [toFormal_spec_eq, decomposeH_output, toFormal_extract_eq] at hGhS
+  simp only [DecomposeH.bundle, circuit_norm] at hGhS
+  clear hGb hGd hGe hGg hGh
   trace_state
   sorry
 
