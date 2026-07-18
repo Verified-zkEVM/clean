@@ -444,9 +444,9 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     simp only [HashPiece.Spec, circuit_norm] at hc
     obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hc _hE
     refine ⟨ms, hms, ?_, hzs, hlxP, hlyP, hchainP⟩
-    have hgi : (eval env input_var : Fp)
-        = env.env.get input_var.cell.column
-          ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
+    have hgi : (eval (⟨place, env⟩ : Placed Environment Fp) input_var : Fp)
+        = env.get input_var.cell.column
+          ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
       with_unfolding_all rfl
     rw [← h_input, hgi]
     exact hrecomb
@@ -457,13 +457,13 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_proverAssumptions_eq,
       pieceC_extract_eq] at h_spec_0
     have hCPA : HashPiece.ProverAssumptions G (ns.getD i 0)
-        (env.env.get input_var.cell.column
-          ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ))
-        (eval env.toEnvironment
+        (env.get input_var.cell.column
+          ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ))
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of self offset cfg.xA : Var field Fp),
           (if i = 0 then yaIn
             else boundaryYA (reads cfg (offset - 1) self).row
-              (AssignedCell.of self offset cfg.xA)) env.toEnvironment) := by
+              (AssignedCell.of self offset cfg.xA)) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) := by
       rw [h_input]
       refine ⟨hbound, A, B, hAon, ?_, ?_, hchain⟩
       · rw [hAx]

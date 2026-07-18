@@ -204,10 +204,10 @@ def hash (capacity : Fp) :
     rw [h0] at h1
     rw [h1] at h2
     rw [← h_output]
-    rw [show env.env.get x_gen_out_2.x0.cell.column
-        ((env.place x_gen_out_2.x0.cell.regionIndex
+    rw [show env.get x_gen_out_2.x0.cell.column
+        ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
-      = (ProvableStruct.eval env.place env.env x_gen_out_2 : State Fp).x0 from by
+      = (ProvableStruct.eval place env x_gen_out_2 : State Fp).x0 from by
         with_unfolding_all rfl]
     rw [h2]
     rfl
@@ -225,10 +225,10 @@ def hash (capacity : Fp) :
     refine ⟨⟨⟨trivial, trivial, trivial⟩, ⟨trivial, trivial, trivial⟩,
       trivial, trivial, trivial⟩, ?_⟩
     rw [← h_output]
-    rw [show env.env.get x_gen_out_2.x0.cell.column
-        ((env.place x_gen_out_2.x0.cell.regionIndex
+    rw [show env.get x_gen_out_2.x0.cell.column
+        ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
-      = (ProvableStruct.eval env.place env.env.toEnvironment x_gen_out_2
+      = (ProvableStruct.eval place env.toEnvironment x_gen_out_2
           : State Fp).x0 from by with_unfolding_all rfl]
     rw [h2]
     rw [h_input.1, h_input.2]

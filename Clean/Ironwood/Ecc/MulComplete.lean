@@ -758,7 +758,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
     -- ── the loop invariant, by induction via `round_acc_sound` (both add chunks per round) ──
     obtain ⟨bits', hchain, hout, hvalid⟩ :=
-      loop_sound cfg inp (bitsOf inp w) env.place self env.env offset
+      loop_sound cfg inp (bitsOf inp w) place self env offset
         { x := input_xA, y := input_yA } { x := input_base_x, y := input_base_y }
         hAcc0V hBaseV
         (by simp only [hinp, circuit_norm]; exact hIxA)
@@ -772,11 +772,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
     -- them as this conjunction). Read each off. ──
     obtain ⟨hOaccEval, hOzsEval⟩ := h_output
     have hOutAcc : (⟨output_acc_x, output_acc_y⟩ : Point Fp)
-        = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
           ((loop cfg inp (bitsOf inp w) offset numBits).output self) := hOaccEval.symm
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
-        output_zs[i] = env.env.advice cfg.zComplete
-          ((env.place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
+        output_zs[i] = env.advice cfg.zComplete
+          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
       intro i hi
       have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
       simpa only [circuit_norm] using this
@@ -815,15 +815,15 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       { alpha := input_var_alpha, base := { x := input_var_base_x, y := input_var_base_y },
         xA := input_var_xA, yA := input_var_yA, z := input_var_z } with hinp
     -- the honest entering-z read, in value form
-    have hzread : readCell env inp.z = input_z := hIz
+    have hzread : readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) inp.z = input_z := hIz
     -- the honest bit sequence (`ProverSpec` target), equal to the family the witness
     -- closures compute (`bitsOf inp w`, at this placed environment)
     set bits : BitsHint := kBitsWindow input_alpha w with hbitsdef
-    have hbits : bits = bitsOf inp w env :=
+    have hbits : bits = bitsOf inp w (⟨place, env⟩ : Placed ProverEnvironment Fp) :=
       congrArg (fun a => kBitsWindow a w) hIalpha.symm
     -- ── the loop: constraints + honest accumulator/z values, via `loop_complete` ──
     obtain ⟨hCloop, hAccOut, hZs⟩ :=
-      loop_complete cfg inp (bitsOf inp w) self env offset
+      loop_complete cfg inp (bitsOf inp w) self (⟨place, env⟩ : Placed ProverEnvironment Fp) offset
         { x := input_xA, y := input_yA } { x := input_base_x, y := input_base_y }
         hAcc0V hBaseV
         (by simp only [hinp, circuit_norm]; exact hIxA)
@@ -841,8 +841,8 @@ def assign_region (numBits : ℕ) (w : ℕ) :
             { x := input_xA, y := input_yA } bits numBits :=
       hOaccEval.symm.trans hAccOut
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
-        output_zs[i] = env.env.advice cfg.zComplete
-          ((env.place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
+        output_zs[i] = env.advice cfg.zComplete
+          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
       intro i hi
       have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
       simpa only [circuit_norm] using this

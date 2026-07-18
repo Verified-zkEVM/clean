@@ -118,7 +118,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
       mul_one] at hfullA hpart hfullB
     -- the row-value family
     set st : ℕ → State Fp := fun k =>
-      ProvableStruct.eval env.place env.env (stateRow cfg (offset + k) self) with hst
+      ProvableStruct.eval place env (stateRow cfg (offset + k) self) with hst
     -- per-phase step facts on the family
     have hstepA : ∀ i : ℕ, i < 4 →
         st (0 + i + 1) = FullRound.value (FullRound.params roundConstants mds i)
@@ -147,11 +147,11 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     -- endpoints
     have h0 : st 0 = { x0 := input_x0, x1 := input_x1, x2 := input_x2 } := by
       simp only [hst, Nat.add_zero]
-      rw [show (ProvableStruct.eval env.place env.env (stateRow cfg offset self)
+      rw [show (ProvableStruct.eval place env (stateRow cfg offset self)
           : State Fp)
-        = { x0 := env.env.advice (cfg.state 0) ((env.place self + offset : ℕ) : ℤ),
-            x1 := env.env.advice (cfg.state 1) ((env.place self + offset : ℕ) : ℤ),
-            x2 := env.env.advice (cfg.state 2) ((env.place self + offset : ℕ) : ℤ) }
+        = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
+            x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
+            x2 := env.advice (cfg.state 2) ((place self + offset : ℕ) : ℤ) }
         from by with_unfolding_all rfl]
       rw [hcp0, hcp1, hcp2]
     have h36 : st 36 = { x0 := output_x0, x1 := output_x1, x2 := output_x2 } := h_output
@@ -174,20 +174,20 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     obtain ⟨hw0, hw1, hw2, hwA, hwB, hwC⟩ := hwit
     -- per-chunk derived contracts (verifier-view Spec is all we need for the chain)
     have hdA := fun i : Fin 4 => (SubcircuitRw.region_completeness_derived
-      (fullRound ↑i) cfg (offset + ↑i * 1) self env.place env.env () (hwA i)
+      (fullRound ↑i) cfg (offset + ↑i * 1) self place env () (hwA i)
       trivial trivial trivial).1
     have hdB := fun i : Fin 28 => (SubcircuitRw.region_completeness_derived
-      (partialRound (4 + 2 * ↑i)) cfg (offset + 4 + ↑i * 1) self env.place env.env ()
+      (partialRound (4 + 2 * ↑i)) cfg (offset + 4 + ↑i * 1) self place env ()
       (hwB i) trivial trivial trivial).1
     have hdC := fun i : Fin 4 => (SubcircuitRw.region_completeness_derived
-      (fullRound (60 + ↑i)) cfg (offset + 32 + ↑i * 1) self env.place env.env ()
+      (fullRound (60 + ↑i)) cfg (offset + 32 + ↑i * 1) self place env ()
       (hwC i) trivial trivial trivial).1
     simp only [fullRound_spec_eq, fullRound_extract_eq, fullRound_output_eq,
       partialRound_spec_eq, partialRound_extract_eq, partialRound_output_eq,
       ProvableStruct.eval_cells_eq_eval, mul_one] at hdA hdB hdC
     -- the row-value family (verifier view of the honest environment)
     set st : ℕ → State Fp := fun k =>
-      ProvableStruct.eval env.place env.env.toEnvironment (stateRow cfg (offset + k) self)
+      ProvableStruct.eval place env.toEnvironment (stateRow cfg (offset + k) self)
       with hst
     have hstepA : ∀ i : ℕ, i < 4 →
         st (0 + i + 1) = FullRound.value (FullRound.params roundConstants mds i)
@@ -215,11 +215,11 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
       exact h
     have h0 : st 0 = { x0 := input_x0, x1 := input_x1, x2 := input_x2 } := by
       simp only [hst, Nat.add_zero]
-      rw [show (ProvableStruct.eval env.place env.env.toEnvironment
+      rw [show (ProvableStruct.eval place env.toEnvironment
           (stateRow cfg offset self) : State Fp)
-        = { x0 := env.env.advice (cfg.state 0) ((env.place self + offset : ℕ) : ℤ),
-            x1 := env.env.advice (cfg.state 1) ((env.place self + offset : ℕ) : ℤ),
-            x2 := env.env.advice (cfg.state 2) ((env.place self + offset : ℕ) : ℤ) }
+        = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
+            x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
+            x2 := env.advice (cfg.state 2) ((place self + offset : ℕ) : ℤ) }
         from by with_unfolding_all rfl]
       rw [hw0, hw1, hw2, h_input.1, h_input.2.1, h_input.2.2]
     have h36 : st 36 = { x0 := output_x0, x1 := output_x1, x2 := output_x2 } := h_output
@@ -234,19 +234,19 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     refine ⟨⟨hw0, hw1, hw2, ?_, ?_, ?_⟩, ?_⟩
     · intro i
       have hleaf := SubcircuitRw.region_completeness_leaf_placed (fullRound ↑i) cfg
-        (offset + ↑i * 1) self env () (hwA i)
+        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) () (hwA i)
       rw [fullRound_envAssumptions_eq, fullRound_assumptions_eq,
         fullRound_proverAssumptions_eq] at hleaf
       exact hleaf ⟨trivial, trivial, trivial⟩
     · intro i
       have hleaf := SubcircuitRw.region_completeness_leaf_placed
-        (partialRound (4 + 2 * ↑i)) cfg (offset + 4 + ↑i * 1) self env () (hwB i)
+        (partialRound (4 + 2 * ↑i)) cfg (offset + 4 + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) () (hwB i)
       rw [partialRound_envAssumptions_eq, partialRound_assumptions_eq,
         partialRound_proverAssumptions_eq] at hleaf
       exact hleaf ⟨trivial, trivial, trivial⟩
     · intro i
       have hleaf := SubcircuitRw.region_completeness_leaf_placed (fullRound (60 + ↑i))
-        cfg (offset + 32 + ↑i * 1) self env () (hwC i)
+        cfg (offset + 32 + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) () (hwC i)
       rw [fullRound_envAssumptions_eq, fullRound_assumptions_eq,
         fullRound_proverAssumptions_eq] at hleaf
       exact hleaf ⟨trivial, trivial, trivial⟩

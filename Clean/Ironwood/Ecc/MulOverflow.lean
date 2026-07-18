@@ -410,10 +410,10 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     subcircuit_rw at hChild
     -- discharge the child's EnvAssumptions (BY PROJECTION from the parent's) and Assumptions
     have hChildE : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
-        cfg.lookupConfig env := by
+        cfg.lookupConfig (⟨place, env⟩ : Placed Environment Fp) := by
       rw [copyCheck_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩
     have hChildA : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
-        (eval env ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
+        (eval (⟨place, env⟩ : Placed Environment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
           : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
       rw [copyCheck_assumptions_eq]; exact hA
     have hSpec := hChild hChildE hChildA
@@ -447,13 +447,13 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       · exact Or.inl h
       · exact Or.inr (by rw [h2124]; linear_combination sub_eq_zero.mp h)
     · -- the canonicity existential: sHi = zLast, sLo = lo
-      refine ⟨env.env.advice cfg.lookupConfig.runningSum
-        ((env.place (i₀ + 1) + numWords K : ℕ) : ℤ), lo, hlo, ?_, ?_, ?_⟩
+      refine ⟨env.advice cfg.lookupConfig.runningSum
+        ((place (i₀ + 1) + numWords K : ℕ) : ℤ), lo, hlo, ?_, ?_, ?_⟩
       · -- alpha + k_254·2^130 = lo + 2^130·zLast, chaining:
         --   gate alpha/k254 → s cell (s_check) → original s (s copy) → decomposition
         rw [← hCalpha, ← hCk254]
         -- normalize hDecomp's `place i₀ + 0` to `place i₀` (defeq) so hCs lines up
-        rw [show ((env.place i₀ + 0 : ℕ) : ℤ) = ((env.place i₀ : ℕ) : ℤ) from by norm_num] at hDecomp
+        rw [show ((place i₀ + 0 : ℕ) : ℤ) = ((place i₀ : ℕ) : ℤ) from by norm_num] at hDecomp
         -- s_check gives adv2@(gate cur) = alpha_gate + k254_gate·2^130; hCs gives adv2@(gate cur) =
         -- adv0@(place i₀) = s_original; hDecomp splits s_original. Chain by linear_combination.
         linear_combination -hSCheck + hCs + hDecomp
@@ -508,21 +508,21 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     · -- the gate region constraints, from the honest values + the child's derived contract
       -- (`h_spec_0`, verifier `Spec` + honest `ProverSpec`) + the honest `Spec` premise (`hpa`).
       have hChildE : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
-          cfg.lookupConfig env.toEnvironment := by
+          cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
         rw [copyCheck_envAssumptions_eq]
         simp only [Placed.toEnvironment_env] at hTable ⊢
         exact ⟨hTable, hDistinct⟩
       have hChildA : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
-          (eval env.toEnvironment ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
+          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
             : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
         rw [copyCheck_assumptions_eq]; exact hA
       have hChildPA : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
-          (eval env ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
+          (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
             : LookupRangeCheck.Inputs (AssignedCell Fp)))
           ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
             ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-              : LookupRangeCheck.Inputs (AssignedCell Fp)) i₀ env.toEnvironment)
-          env.env.hint := by
+              : LookupRangeCheck.Inputs (AssignedCell Fp)) i₀ (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+          env.hint := by
         rw [copyCheck_proverAssumptions_eq]; simp
       obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hChildE hChildA hChildPA
       rw [copyCheck_spec_eq, copyCheck_output, copyCheckInputs_eval_eq] at hChildSpec
@@ -557,7 +557,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling. The
       -- engine's Placed-view derived statement (finding #1) spells the child-Spec decomposition
       -- (`hDecompV`) without the `+ 0`, so only `hChildPS` needs it now.
-      rw [show ((env.place i₀ + 0 : ℕ) : ℤ) = ((env.place i₀ : ℕ) : ℤ) from by norm_num]
+      rw [show ((place i₀ + 0 : ℕ) : ℤ) = ((place i₀ : ℕ) : ℤ) from by norm_num]
         at hChildPS
       rw [hKW] at hDecompV hlo hChildPS
       rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecompV
@@ -565,12 +565,12 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       -- the honest `Spec` pins `s = ↑sLo < 2^130`, so `s.val < 2^130` and the shift is 0.
       have hCard130 : 2 ^ 130 < PALLAS_BASE_CARD := by
         norm_num [PALLAS_BASE_CARD]
-      have hzLastZero : sHi = 0 → env.env.advice cfg.lookupConfig.runningSum
-          ((env.place (i₀ + 1) + numWords K : ℕ) : ℤ) = 0 := by
+      have hzLastZero : sHi = 0 → env.advice cfg.lookupConfig.runningSum
+          ((place (i₀ + 1) + numWords K : ℕ) : ℤ) = 0 := by
         intro hsHi0
         rw [hChildPS]
-        have hsVal : (env.env.advice cfg.adv0 ((env.place i₀ : ℕ) : ℤ)).val < 2 ^ 130 := by
-          have hs_eq : env.env.advice cfg.adv0 ((env.place i₀ : ℕ) : ℤ) = (sLo : Fp) := by
+        have hsVal : (env.advice cfg.adv0 ((place i₀ : ℕ) : ℤ)).val < 2 ^ 130 := by
+          have hs_eq : env.advice cfg.adv0 ((place i₀ : ℕ) : ℤ) = (sLo : Fp) := by
             rw [hWs, hkey, hsHi0]; ring
           rw [hs_eq, ZMod.val_natCast_of_lt (lt_trans hsLo_lt hCard130)]; exact hsLo_lt
         rw [Nat.div_eq_of_lt hsVal, Nat.cast_zero]

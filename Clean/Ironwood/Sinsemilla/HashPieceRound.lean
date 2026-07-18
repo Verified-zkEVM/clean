@@ -816,9 +816,9 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
     rw [Placed.toEnvironment_env] at hUsable hBlock
     obtain ⟨ho1, ho2, ho3, ho4, ho5⟩ := h_output
     refine ⟨complete_gates G _
-      (fun t => env.env.fixed cfg.generatorTable.tableIdx.inner (t : ℤ))
-      (fun t => env.env.fixed cfg.generatorTable.tableX.inner (t : ℤ))
-      (fun t => env.env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
+      (fun t => env.fixed cfg.generatorTable.tableIdx.inner (t : ℤ))
+      (fun t => env.fixed cfg.generatorTable.tableX.inner (t : ℤ))
+      (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
       hH hchain hUsable hBlock, ?_⟩
     rw [State.mk.injEq, DoubleAndAddRow.mk.injEq]
     exact ⟨ho1.symm, ho2.symm, ho3.symm, ho4.symm, ho5.symm⟩

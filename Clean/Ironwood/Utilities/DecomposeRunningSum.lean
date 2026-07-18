@@ -305,7 +305,7 @@ def copyDecompose (W numWindows : ℕ) :
     simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul] at hEnables
     -- the running sum read off the env
     set f : ℕ → Fp := fun j =>
-      env.env.advice cfg.z ((env.place self + (offset + j) : ℕ) : ℤ) with hf
+      env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ) with hf
     have hwords : ∀ i, i < numWindows →
         ∃ k : ℕ, k < 2 ^ W ∧ f i = 2 ^ W * f (i + 1) + (k : Fp) := by
       intro i hi
@@ -335,7 +335,7 @@ def copyDecompose (W numWindows : ℕ) :
     simp only [assignLoop, circuit_norm, zWitness, mul_one] at hAssignWit
     -- the honest z-chain: `z_j = ↑(α.val ≫ (W·j))`
     have hz : ∀ j, j ≤ numWindows →
-        env.env.advice cfg.z ((env.place self + (offset + j) : ℕ) : ℤ)
+        env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ)
           = ((input_alpha.val / 2 ^ (W * j) : ℕ) : Fp) := by
       intro j hj
       rcases Nat.eq_zero_or_pos j with rfl | hjpos

@@ -521,20 +521,23 @@ def mkLeafPlaced (c : ChunkMatch) (leafName : Name) (penv : Expr) (extraArgs : A
     | none => #[c.regionIdx, penv, c.input]
   return mkAppN (← mkConstWithFreshMVarLevels leafName) (common ++ mid ++ extraArgs)
 
-/-- If the chunk's `place`/`env` are the `.place`/`.env` projections of one common
-`penv : Placed ProverEnvironment F`, return that `penv`. This is the shape
-`FormalRegionCircuit.completeness_iff`/`FormalCircuit.completeness_iff` produce (they intro a
-single `env : Placed ProverEnvironment` and constrain over `env.place`/`env.env`). When present,
-the engine uses the `*_placed` leaves so the verifier view is spelled `penv.toEnvironment` rather
-than the non-reducible reconstructed record `⟨penv.place, penv.env.toEnvironment⟩` (finding #1). -/
-def placedEnv? (place env : Expr) : Option Expr := do
-  -- A completeness GOAL chunk is `Constraints X.place self (X.env).toEnvironment ops` for a common
-  -- `X : Placed ProverEnvironment F` (the verifier view of the honest prover env): `place` is
-  -- field 0 (`Placed.place`) of `X`, and `env` is `ProverEnvironment.toEnvironment` applied to
-  -- field 1 (`Placed.env`) of `X`. Accept both the application and primitive-projection forms of
-  -- each projection. When present, return that `X` so the engine uses the `*_placed` leaves, which
-  -- spell the verifier view as `X.toEnvironment` (= `⟨X.place, X.env.toEnvironment⟩`) — matching how
-  -- consumer proofs write their bridges (finding #1). -/
+/-- Return the `penv : Placed ProverEnvironment F` whose verifier view a completeness GOAL chunk's
+`place`/`env` present, or `none` if `env` is not a `ProverEnvironment.toEnvironment` (no Placed view
+to use). Two spellings are recognized:
+
+* **projection shape (finding #1)** — `place = X.place` and `env = (X.env).toEnvironment` of one
+  common `X`, as `FormalRegionCircuit.completeness_iff`/`FormalCircuit.completeness_iff` produce when
+  a single `env : Placed ProverEnvironment` is introduced. Returns that `X`.
+* **split shape** — after `circuit_proof_start` destructures the placed env, the chunk is
+  `Constraints place self env.toEnvironment ops` over a bare `place`/`env`. Returns `⟨place, env⟩`.
+
+Either way the `*_placed` leaves spell the verifier view as `penv.toEnvironment`
+(`= ⟨penv.place, penv.env.toEnvironment⟩`), defeq to the chunk. Preferring the Placed view whenever
+the chunk carries a `toEnvironment` verifier env is what makes the split-env completeness path
+total: the bare leaf recovers its env from the located witness, which is NOT reliably defeq to the
+chunk's for every child (a unit-input region feeding an abstracted output fails `isDefEq concl
+chunk`), so it would silently drop such a chunk. -/
+def placedEnv? (place env : Expr) : MetaM (Option Expr) := do
   let placeProj (e : Expr) : Option Expr :=
     match e with
     | .proj ``Placed 0 s => some s
@@ -543,13 +546,18 @@ def placedEnv? (place env : Expr) : Option Expr := do
     match e with
     | .proj ``Placed 1 s => some s
     | _ => if e.isAppOfArity ``Placed.env 3 then some e.appArg! else none
-  -- strip the outer `ProverEnvironment.toEnvironment` on the env slot
-  let env ← if env.isAppOfArity ``ProverEnvironment.toEnvironment 2 then some env.appArg!
-            else if env.isAppOfArity ``ProverEnvironment.toEnvironment 1 then some env.appArg!
-            else none
-  let p ← placeProj place
-  let v ← envProj env
-  if p == v then some p else none
+  -- strip the outer `ProverEnvironment.toEnvironment` on the env slot; without it there is no
+  -- Placed verifier view to reconstruct
+  let some strippedEnv :=
+    (if env.isAppOfArity ``ProverEnvironment.toEnvironment 2 then some env.appArg!
+     else if env.isAppOfArity ``ProverEnvironment.toEnvironment 1 then some env.appArg!
+     else none) | return none
+  -- projection shape (finding #1): both are `.place`/`.env` of one common placed record `X`
+  match placeProj place, envProj strippedEnv with
+  | some p, some v => if p == v then return some p
+                      else return some (← mkAppM ``Placed.mk #[place, strippedEnv])
+  -- split shape (`circuit_proof_start` destructured the placed env): reconstruct `⟨place, env⟩`
+  | _, _ => return some (← mkAppM ``Placed.mk #[place, strippedEnv])
 
 /-! ### Abstract-output cooperation (the `abstract_outputs` contract)
 
@@ -853,7 +861,7 @@ Prefers the Placed-view leaf (finding #1) when the chunk's `place`/`env` are pro
 common `penv : Placed ProverEnvironment`; falls back to the bare leaf otherwise. -/
 def completenessLeaf? (c : ChunkMatch) (chunk witProof witTy : Expr) :
     MetaM (Option (Expr × Expr)) := do
-  let leaf? ← match placedEnv? c.place c.env with
+  let leaf? ← match ← placedEnv? c.place c.env with
     | some penv =>
       let leafName := if c.isRegion then ``region_completeness_leaf_placed
         else ``layouter_completeness_leaf_placed
@@ -879,7 +887,7 @@ def completenessLeaf? (c : ChunkMatch) (chunk witProof witTy : Expr) :
 /-- Derived contract statement `EnvA → A → PA → Spec ∧ ProverSpec` from the located witness.
 Placed-view (finding #1) when the projection shape is present, else bare. -/
 def derivedStatement (c : ChunkMatch) (witProof witTy : Expr) : MetaM (Option (Expr × Expr)) := do
-  let leaf? ← match placedEnv? c.place c.env with
+  let leaf? ← match ← placedEnv? c.place c.env with
     | some penv =>
       let leafName := if c.isRegion then ``region_completeness_derived_placed
         else ``layouter_completeness_derived_placed

@@ -153,16 +153,16 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
         ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
       have hfold := loop_fold
-        (fun r => { z := env.env.advice cfg.z ((env.place self + (offset + r) : ℕ) : ℤ),
-                    xA := env.env.advice cfg.xA ((env.place self + (offset + r + 1) : ℕ) : ℤ),
-                    lambda1 := env.env.advice cfg.lambda1
-                      ((env.place self + (offset + r + 1) : ℕ) : ℤ),
-                    lambda2 := env.env.advice cfg.lambda2
-                      ((env.place self + (offset + r + 1) : ℕ) : ℤ),
-                    base := { x := env.env.advice cfg.xP
-                                ((env.place self + (offset + r + 1) : ℕ) : ℤ),
-                              y := env.env.advice cfg.yP
-                                ((env.place self + (offset + r + 1) : ℕ) : ℤ) } })
+        (fun r => { z := env.advice cfg.z ((place self + (offset + r) : ℕ) : ℤ),
+                    xA := env.advice cfg.xA ((place self + (offset + r + 1) : ℕ) : ℤ),
+                    lambda1 := env.advice cfg.lambda1
+                      ((place self + (offset + r + 1) : ℕ) : ℤ),
+                    lambda2 := env.advice cfg.lambda2
+                      ((place self + (offset + r + 1) : ℕ) : ℤ),
+                    base := { x := env.advice cfg.xP
+                                ((place self + (offset + r + 1) : ℕ) : ℤ),
+                              y := env.advice cfg.yP
+                                ((place self + (offset + r + 1) : ℕ) : ℤ) } })
         (fun j => if h : j < n then k ⟨j, h⟩ else false)
         (fun i => by
           have hbp := (hk i).2.1
@@ -185,8 +185,8 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
     obtain ⟨m, hH0, hbudget⟩ := hPA
     -- the per-round witness equations, as steps of the row family
     have hsteps : ∀ i : Fin n,
-        (rowFam cfg env.place env.env self offset) (i.val + 1)
-          = ((rowFam cfg env.place env.env self offset) i.val).step
+        (rowFam cfg place env self offset) (i.val + 1)
+          = ((rowFam cfg place env self offset) i.val).step
             (bitsFrom input w i.val) (bitsFrom input w (i.val + 1)) := by
       intro i
       have hw := hwit i
@@ -198,16 +198,16 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         show offset + ↑i + 1 + 1 = offset + ↑i + 2 from by omega,
         hz, hxa, hl1, hl2, hxp, hyp]
       rfl
-    have hIter := iter_of_steps (rowFam cfg env.place env.env self offset)
+    have hIter := iter_of_steps (rowFam cfg place env self offset)
       (bitsFrom input w) hsteps
-    have hHall := honest_of_steps (rowFam cfg env.place env.env self offset)
+    have hHall := honest_of_steps (rowFam cfg place env self offset)
       (bitsFrom input w) hsteps m
       (by simp only [rowFam, bitsFrom, Nat.add_zero]; exact hH0) hbudget
     refine ⟨?_, ?_, ?_⟩
     · -- each round's constraints, via the engine leaf and the chained honesty
       intro i
       have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round (w + ↑i)) cfg
-        (offset + ↑i * 1) self env input_var (hwit i)
+        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var (hwit i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
         roundC_extract_eq] at hleaf
       refine hleaf ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
@@ -361,13 +361,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
         (by rw [hcbx, hcby]; exact hbOn)
         (by
           simp only [State.acc, State.yA2, State.xR]
-          have hy : (env.env.advice cfg.lambda1 ((env.place self + (offset + 1) : ℕ) : ℤ)
-                + env.env.advice cfg.lambda2 ((env.place self + (offset + 1) : ℕ) : ℤ))
-              * (env.env.advice cfg.xA ((env.place self + (offset + 1) : ℕ) : ℤ)
-                - (env.env.advice cfg.lambda1 ((env.place self + (offset + 1) : ℕ) : ℤ)
-                    * env.env.advice cfg.lambda1 ((env.place self + (offset + 1) : ℕ) : ℤ)
-                  - env.env.advice cfg.xA ((env.place self + (offset + 1) : ℕ) : ℤ)
-                  - env.env.advice cfg.xP ((env.place self + (offset + 1) : ℕ) : ℤ)))
+          have hy : (env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ)
+                + env.advice cfg.lambda2 ((place self + (offset + 1) : ℕ) : ℤ))
+              * (env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ)
+                - (env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ)
+                    * env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ)
+                  - env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ)
+                  - env.advice cfg.xP ((place self + (offset + 1) : ℕ) : ℤ)))
               * (2 : Fp)⁻¹ = input_acc_y := by
             linear_combination hcy - hq1
           rw [hy, hcx, hcbx, hcby]
@@ -394,8 +394,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
         h2n hMb
       rw [hbx, hby] at hlast
       rw [← h_output_acc_x, ← h_output_acc_y]
-      rw [show ((env.place self + (offset + n + 2) : ℕ) : ℤ)
-          = ((env.place self + (offset + n + 1 + 1) : ℕ) : ℤ) from by push_cast; ring] at hlast ⊢
+      rw [show ((place self + (offset + n + 2) : ℕ) : ℤ)
+          = ((place self + (offset + n + 1 + 1) : ℕ) : ℤ) from by push_cast; ring] at hlast ⊢
       rw [hlast]
       congr 1
       have hext : accScalar m (fun j => if j < n then bits j else kl) n
@@ -423,12 +423,12 @@ def double_and_add (n : ℕ) (w : ℕ) :
     have hl2m := hl2w
     rw [hacx, hacy] at hl1m hl2m
     -- the entering neighborhood is the honest row for `[m]·base`
-    have hH0 : (State.mk (env.env.advice cfg.z ((env.place self + offset : ℕ) : ℤ))
-        (env.env.advice cfg.xA ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (env.env.advice cfg.lambda1 ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (env.env.advice cfg.lambda2 ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (Point.mk (env.env.advice cfg.xP ((env.place self + (offset + 1) : ℕ) : ℤ))
-          (env.env.advice cfg.yP ((env.place self + (offset + 1) : ℕ) : ℤ)))).Honest
+    have hH0 : (State.mk (env.advice cfg.z ((place self + offset : ℕ) : ℤ))
+        (env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ))
+        (env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ))
+        (env.advice cfg.lambda2 ((place self + (offset + 1) : ℕ) : ℤ))
+        (Point.mk (env.advice cfg.xP ((place self + (offset + 1) : ℕ) : ℤ))
+          (env.advice cfg.yP ((place self + (offset + 1) : ℕ) : ℤ)))).Honest
         m (kBitsWindow input_alpha 0 w) := by
       have h4 : 2 ^ 2 * (m + 1) ≤ 2 ^ (n + 2) * (m + 1) :=
         Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by omega))
@@ -437,13 +437,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
       · show (Point.mk _ _).OnCurve
         rw [hxp0, hyp0]
         exact hbOn
-      · show env.env.advice cfg.xA _ = _
+      · show env.advice cfg.xA _ = _
         rw [hxa0, hxp0, hyp0]
         exact hacx
-      · show env.env.advice cfg.lambda1 _ = _
+      · show env.advice cfg.lambda1 _ = _
         rw [hxp0, hyp0]
         exact hl1m
-      · show env.env.advice cfg.lambda2 _ = _
+      · show env.advice cfg.lambda2 _ = _
         rw [hxp0, hyp0]
         exact hl2m
     -- the loop's contract arrived open; land the scalar cell's value in it
@@ -457,12 +457,12 @@ def double_and_add (n : ℕ) (w : ℕ) :
       fun _ _ _ => rfl
     -- honesty chains to every round, including the exit row
     have hHiter := honest_of_steps
-      (fun r => (State.mk (env.env.advice cfg.z ((env.place self + offset : ℕ) : ℤ))
-        (env.env.advice cfg.xA ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (env.env.advice cfg.lambda1 ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (env.env.advice cfg.lambda2 ((env.place self + (offset + 1) : ℕ) : ℤ))
-        (Point.mk (env.env.advice cfg.xP ((env.place self + (offset + 1) : ℕ) : ℤ))
-          (env.env.advice cfg.yP ((env.place self + (offset + 1) : ℕ) : ℤ)))).iter
+      (fun r => (State.mk (env.advice cfg.z ((place self + offset : ℕ) : ℤ))
+        (env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ))
+        (env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ))
+        (env.advice cfg.lambda2 ((place self + (offset + 1) : ℕ) : ℤ))
+        (Point.mk (env.advice cfg.xP ((place self + (offset + 1) : ℕ) : ℤ))
+          (env.advice cfg.yP ((place self + (offset + 1) : ℕ) : ℤ)))).iter
         (bitsFrom input_alpha w) r)
       (bitsFrom input_alpha w) (fun i => rfl) m
       (by simpa [bitsFrom] using hH0) hbudget
@@ -474,10 +474,10 @@ def double_and_add (n : ℕ) (w : ℕ) :
     have hlg := last_gates (k' := kBitsWindow input_alpha 0 (w + n + 1)) hHn
     -- the per-round chain over the raw cells, in `bitsFrom` form
     have hcell : ∀ j : Fin n,
-        env.env.advice cfg.z ((env.place self + (offset + 1 + j.val) : ℕ) : ℤ)
+        env.advice cfg.z ((place self + (offset + 1 + j.val) : ℕ) : ℤ)
           = 2 * (if h : j.val = 0
-              then env.env.advice cfg.z ((env.place self + offset : ℕ) : ℤ)
-              else env.env.advice cfg.z ((env.place self + (offset + 1 + (j.val - 1)) : ℕ) : ℤ))
+              then env.advice cfg.z ((place self + offset : ℕ) : ℤ)
+              else env.advice cfg.z ((place self + (offset + 1 + (j.val - 1)) : ℕ) : ℤ))
             + (if bitsFrom input_alpha w j.val then 1 else 0) := by
       intro j
       rw [hPS2 j, hiterz]

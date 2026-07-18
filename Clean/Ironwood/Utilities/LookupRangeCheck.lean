@@ -372,9 +372,9 @@ def shortRangeCheck (K numBits : ℕ) :
     have hWordLt : output.val < 2 ^ K :=
       mem_usableRows_val_lt hTableLt hMemWord
     have hShiftLt :
-        (env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))).val < 2 ^ K :=
+        (env.advice cfg.runningSum ↑(place self + (offset + 1))).val < 2 ^ K :=
       mem_usableRows_val_lt hTableLt hMemShift
-    set shifted := env.env.advice cfg.runningSum ↑(env.place self + (offset + 1))
+    set shifted := env.advice cfg.runningSum ↑(place self + (offset + 1))
       with hshift_def
     let word : Fp := output
     have hword : word = output := rfl
@@ -407,11 +407,11 @@ def shortRangeCheck (K numBits : ℕ) :
     rw [if_neg (fun h => hDistinct h.symm)]
     -- the caller-assigned element's `.val` bound, off the honest-prover assumption on the
     -- extraction data (the positional cell's verifier-view value = the advice read)
-    have hEltLt : (env.env.advice cfg.runningSum
-        ((env.place self + offset : ℕ) : ℤ)).val < 2 ^ numBits := hPA
-    have hOut : env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+    have hEltLt : (env.advice cfg.runningSum
+        ((place self + offset : ℕ) : ℤ)).val < 2 ^ numBits := hPA
+    have hOut : env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
         = output := h_output
-    set elt := env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+    set elt := env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
       with helt_def
     have hEltLtK : elt.val < 2 ^ K :=
       lt_of_lt_of_le hEltLt (Nat.pow_le_pow_right (by norm_num) hNumBits)
@@ -744,8 +744,8 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- (`input`/`output` are already destructured to `input_element` / `output_z0` /
     -- `output_zLast` by the prefix's `provable_type_simp`)
     -- the running-sum chain read off the env; the word-bound induction over the loop chunk
-    set f := zChain K cfg env.place self env.env offset with hf_def
-    have hwords := rangeCheck_loop_word_bounds K cfg input_var_element env.place self env.env
+    set f := zChain K cfg place self env offset with hf_def
+    have hwords := rangeCheck_loop_word_bounds K cfg input_var_element place self env
       offset hTableLt numWords hLoop
     -- z_0 = element (copy)
     have hz0 : f 0 = input_element := by
@@ -784,24 +784,24 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- the element cell value (`input_var_element`'s eval); by `h_input` it is `input_element`, and
     -- `input_element.val` is the decomposed nat `a`. The prefix's `provable_type_simp` already
     -- destructured `input_var` to `input_var_element`, so we work with the cell spelling directly.
-    set eCell := env.env.get input_var_element.cell.column
-      ↑(env.place input_var_element.cell.regionIndex + input_var_element.cell.rowOffset) with heCell
+    set eCell := env.get input_var_element.cell.column
+      ↑(place input_var_element.cell.regionIndex + input_var_element.cell.rowOffset) with heCell
     have heInput : eCell = input_element := h_input
     -- z_0 = element cell (from the copy's assignAdvice witness)
-    have hz0 : zChain K cfg env.place self env.env.toEnvironment offset 0 = eCell := by
+    have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
       simp only [zChain, add_zero, heCell, hCopyWit]
     -- the honest z-chain up to numWords: `z_j = ↑(eCell.val ≫ (K·j))`
-    have hz : ∀ j, j ≤ numWords → zChain K cfg env.place self env.env.toEnvironment offset j
+    have hz : ∀ j, j ≤ numWords → zChain K cfg place self env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
       intro j hj
       rcases Nat.eq_zero_or_pos j with rfl | hjpos
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
-      · exact rangeCheck_loop_zvalues K cfg input_var_element env.place self env.env offset
+      · exact rangeCheck_loop_zvalues K cfg input_var_element place self env offset
           numWords hLoopWit j hjpos hj
     refine ⟨⟨hCopyWit, ?_, ?_⟩, ?_⟩
     · -- the loop's Constraints (membership at each round), via the completeness loop lemma
-      exact rangeCheck_loop_constraints_complete K cfg input_var_element env.place self
-        env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
+      exact rangeCheck_loop_constraints_complete K cfg input_var_element place self
+        env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
     · -- the tail: strict ⇒ `constrainConstant zLast 0` (⇒ z_last = 0); else nothing
       rcases hbstrict : strict with _ | _
       · -- strict = false: no tail constraint

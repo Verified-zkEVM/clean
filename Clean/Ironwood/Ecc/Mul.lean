@@ -989,6 +989,12 @@ def mul :
     -- `synthesize` manually at `hc` only, below. The folded `synthesize` keeps the goal composite, so
     -- the leaf-only finish is skipped and `hc`/`h_input` survive for the manual layouter peel.
     circuit_proof_start
+    -- `circuit_proof_start` splits the placed environment into `place`/`env`; this manual composite
+    -- peels the layouter structure and drives `subcircuit_rw` by hand, whose `*_placed` leaves key
+    -- on a single common `penv : Placed …` (`SubcircuitRw.placedEnv?`). Reassemble it (naming it
+    -- `env` again) so the peel + engine see the Placed-view chunk shape.
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env := ⟨⟨place, env⟩, rfl, rfl⟩
     -- ── peel the faithful layouter structure: the MAIN REGION (index i₀) and the layouter-level
     -- MulOverflow chunk (its three sibling regions at i₀+1..i₀+3) ──
     simp only [synthesize, circuit_norm] at hc
@@ -1405,6 +1411,12 @@ def mul :
   -- consumed at the LAYOUTER level.
   completeness := by
     circuit_proof_start
+    -- `circuit_proof_start` splits the placed environment into `place`/`env`; this manual composite
+    -- peels the layouter structure and drives `subcircuit_rw` by hand, whose `*_placed` completeness
+    -- leaf keys on a single common `penv : Placed …` (`SubcircuitRw.placedEnv?`) to locate all six
+    -- child contracts. Reassemble it (naming it `env` again) so the engine sees the Placed-view.
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env := ⟨⟨place, env⟩, rfl, rfl⟩
     -- composite layouter gadget: step (a) + provable-eval normalization bundled; the folded
     -- `synthesize` keeps the goal composite, so the leaf-only finish is skipped and
     -- `hwit`/`h_input`/`⊢` survive for the manual layouter peel below.

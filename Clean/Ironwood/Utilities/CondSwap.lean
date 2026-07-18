@@ -125,7 +125,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
   soundness := by
     circuit_proof_start [swapGate, SwapSpec]
     obtain ⟨⟨hACheck, hBCheck, hBool⟩, hCopy⟩ := hc
-    set sw := env.env.advice cfg.swap ↑(env.place self + offset) with hsw
+    set sw := env.advice cfg.swap ↑(place self + offset) with hsw
     have hboolv : IsBool sw := by
       rcases mul_eq_zero.mp hBool with h | h
       · exact Or.inl h
@@ -149,7 +149,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
   completeness := by
     circuit_proof_start [swapGate]
     obtain ⟨hOA, hOB⟩ := h_output
-    rcases Bool.eq_false_or_eq_true (wswap { place := env.place, env := env.env }) with hs | hs <;>
+    rcases Bool.eq_false_or_eq_true (wswap { place := place, env := env }) with hs | hs <;>
       simp only [hs, Bool.false_eq_true, if_false, if_true] at hOA hOB ⊢
     · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
       · linear_combination -hOA

@@ -72,6 +72,12 @@ def Placed.toEnvironment {F : Type} (env : Placed ProverEnvironment F) : Placed 
     (e : ProverEnvironment F) (col : AnyColumn) (row : ℤ) :
     e.toEnvironment.get col row = e.get col row := rfl
 
+/-- `toEnvironment` of a reconstructed placed environment, reduced — the spelling the
+split-`env` proof states carry after `circuit_proof_start` destructures the binder. -/
+@[circuit_norm] lemma Placed.toEnvironment_mk {F : Type} (p : RegionIndex → ℕ)
+    (e : ProverEnvironment F) :
+    (Placed.mk p e).toEnvironment = ⟨p, e.toEnvironment⟩ := rfl
+
 @[circuit_norm] lemma Placed.toEnvironment_place {F : Type} (env : Placed ProverEnvironment F) :
     env.toEnvironment.place = env.place := rfl
 
