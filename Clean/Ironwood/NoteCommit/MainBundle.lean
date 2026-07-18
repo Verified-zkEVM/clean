@@ -787,6 +787,68 @@ private theorem honestChunks_donor_eq :
       ih]
     rfl
 
+/-- Prover-eval of the commit input record over opaque cells (doc pattern 1: the
+transport lemma is checked once over abstract variables). -/
+private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      ({ pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇] }
+        : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces
+    = #v[readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₀,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₁,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₂,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₃,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₄,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₅,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₆,
+        readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₇] := by
+  with_unfolding_all rfl
+
+/-- The commit child's derived verifier contract on the completeness side, standalone
+(the inline `layouter_completeness_derived` application hits a whnf wall in the main
+proof's context). -/
+private theorem commit_derived_spec (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
+    (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
+    (hw : ExtendsWitnesses place env
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+        c inp).operations i) i)
+    (hEnvA : (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).EnvAssumptions
+      c (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+    (hPB' : Sinsemilla.Chain.PieceBounds ns
+      (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces)
+    (hHon' : ∃ B, hashToPoint G.S Q
+      (Sinsemilla.Chain.honestChunks ns
+        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces) = some B)
+    (hWin' : ∀ w : Fin 85,
+      (((Ecc.MulFixed.FullWidth.fwExtract c.1 i
+        (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).1)[w.val]).val < 8) :
+    ∃ chunks : List ℕ,
+      Sinsemilla.Chain.PieceChunks ns
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp).pieces chunks ∧
+      Sinsemilla.Chain.ZsFacts ns chunks
+        ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
+          { pieces := inp.pieces } (i + 2)
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).zs ∧
+      ∀ B, hashToPoint G.S Q chunks = some B →
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+            c inp i) : Value Point Fp).Valid ∧
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+            c inp i) : Value Point Fp)
+          = B + (((Ecc.MulFixed.FullWidth.fwExtract c.1 i
+              (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).2 • R) : Point Fp) := by
+  have h := (Halo2.SubcircuitRw.layouter_completeness_derived
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil) c i place env inp hw
+    hEnvA (by rw [commit_assumptions_eq]; trivial)
+    (by rw [commit_proverAssumptions_eq, commit_extract_eq]
+        exact ⟨hPB', hHon', hWin'⟩)).1
+  rw [commit_spec_eq, commit_extract_eq] at h
+  exact h
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -1363,6 +1425,109 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       hMCF hVal64'
     rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at this
     exact this
+  -- ── derived child contracts for the gate rely-conditions ──
+  have hPB2 : Sinsemilla.Chain.PieceBounds ns
+      (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ({ pieces :=
+          #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 9) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 10) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 12) 0 cfg.hashConfig.witnessPieces,
+            AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces] }
+          : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces := by
+    rw [pieces_eval_eq]
+    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    exact hPB
+  have hHon2 : ∃ B, hashToPoint G.S Q
+      (Sinsemilla.Chain.honestChunks ns
+        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          ({ pieces :=
+            #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 9) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 10) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 12) 0 cfg.hashConfig.witnessPieces,
+              AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces] }
+            : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces)
+      = some B := by
+    refine ⟨B0, ?_⟩
+    rw [pieces_eval_eq]
+    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    rw [hHonest]
+    exact hB0
+  have hCmS := commit_derived_spec G R windows Q hQ
+    (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
+    (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
+    hPB2 hHon2 hWin
+  obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
+  rw [hashExtract_zs] at hZs
+  have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
+  have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
+  have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13a] at hz13a
+  have hz13c := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13c] at hz13c
+  have hz1d := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨3, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
+  rw [zs_get_z1d] at hz1d
+  have hz13f := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨5, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13f] at hz13f
+  have hz1g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
+  rw [zs_get_z1g] at hz1g
+  have hz13g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13g] at hz13g
+  have hWaS := (Halo2.SubcircuitRw.region_completeness_derived
+    (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
+    place env () hWra
+    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)).1
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
+  simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWaS
+  obtain ⟨haz0, loA, hloA, htelA⟩ := hWaS
+  have hWbS := (Halo2.SubcircuitRw.region_completeness_derived
+    (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 30)
+    place env () hWrb
+    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)).1
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
+  simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWbS
+  obtain ⟨hbz0, loB, hloB, htelB⟩ := hWbS
+  have hWeS := (Halo2.SubcircuitRw.region_completeness_derived
+    (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 31)
+    place env () hWre
+    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)).1
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
+  simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWeS
+  obtain ⟨hez0, loE, hloE, htelE⟩ := hWeS
+  have hWgS := (Halo2.SubcircuitRw.region_completeness_derived
+    (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 32)
+    place env () hWrg
+    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)).1
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
+  simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
+  obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
