@@ -1460,6 +1460,21 @@ def MerkleRoot (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp → P
   | l, node, k + 1, root =>
     ∃ mid, MerkleStep G Q l node mid ∧ MerkleRoot G Q (l + 1) mid k root
 
+/-- Chain two `MerkleRoot` segments. -/
+theorem MerkleRoot.trans (G : Generators) (Q : Point Fp) {l a m r : _} {k k' : ℕ}
+    (h1 : MerkleRoot G Q l a k m) (h2 : MerkleRoot G Q (l + k) m k' r) :
+    MerkleRoot G Q l a (k + k') r := by
+  induction k generalizing l a with
+  | zero =>
+    simp only [MerkleRoot] at h1
+    subst h1
+    simpa using h2
+  | succ n ih =>
+    obtain ⟨mid, hstep, hrest⟩ := h1
+    rw [show n + 1 + k' = (n + k') + 1 from by omega, MerkleRoot]
+    exact ⟨mid, hstep,
+      ih hrest (by rwa [show l + 1 + n = l + (n + 1) from by omega])⟩
+
 /-- Forward induction: a chain of `MerkleStep`s assembles into a `MerkleRoot`. Donor
 `Merkle.merkleRoot_of_steps`. -/
 theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp) (f : ℕ → Fp) (l : ℕ) :

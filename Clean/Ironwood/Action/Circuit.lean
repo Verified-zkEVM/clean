@@ -211,16 +211,13 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   let vNew ← loadPrivate (cfg.advices 0) W.vNew
   -- circuit.rs:535-548 — the Merkle path (leaf = cm_old.extract_p); 16 layers per
   -- Sinsemilla instance (`merkle.rs:122-126`, `chips[i / layers_per_chip]`)
-  let half ← FormalCircuit.foldCall
-    (Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve W.merkleSib W.merkleSwap)
-    Sinsemilla.Merkle.CalculateRoot.toInput (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
-    { node := cmOld.x } 16
-  let rootAcc ← FormalCircuit.foldCall
-    (fun i => Sinsemilla.Merkle.CalculateRoot.layerAt G B.merkleQ B.merkleQ_onCurve
-      W.merkleSib W.merkleSwap (i + 16))
-    Sinsemilla.Merkle.CalculateRoot.toInput (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
-    half 16
-  let root := rootAcc.node
+  let half ← (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+      0 16 (by norm_num) W.merkleSib W.merkleSwap).call
+    (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) { node := cmOld.x }
+  let root ← (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+      16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
+      (fun i => W.merkleSwap (16 + i))).call
+    (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) { node := half }
   -- circuit.rs:551-605 — value-commit integrity
   let magnitude ← loadPrivate (cfg.advices 9) W.magnitude
   let sign ← loadPrivate (cfg.advices 9) W.sign
