@@ -136,7 +136,8 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : Assig
   fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 85
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig
-    (processWindow B cfg.superConfig alpha) offset 85
+    (processWindow B (Orchard.Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha)
+    offset 85
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
 /-- The honest `α₀' = (α − z_84·2^252) + 2^130 − t_p` witness, from the α and `z_84`
@@ -289,23 +290,6 @@ instance innerElab (B : FixedBaseData) (config : Config) (offset : ℕ) :
       (fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
         innerRegion B config offset input.alpha) := {}
 
-/-- Reduce the witness tables' `getElem!` at the honest window value: index
-`windowVal = α.val / 8^w % 8 < 8`, and `8^w = 2^{3w}`. -/
-private theorem ofFn8_get_windowVal (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (w : ℕ) (a : Fp) (ha : readCell env alpha = a) :
-    (Vector.ofFn f)[MulFixed.windowVal env alpha w]!
-      = f ⟨a.val / 2 ^ (3 * w) % 8, Nat.mod_lt _ (by norm_num)⟩ := by
-  have hidx : MulFixed.windowVal env alpha w = a.val / 2 ^ (3 * w) % 8 := by
-    unfold MulFixed.windowVal
-    rw [ha, pow_mul]
-    norm_num
-  have hlt : MulFixed.windowVal env alpha w < 8 := by
-    rw [hidx]; exact Nat.mod_lt _ (by norm_num)
-  rw [getElem!_pos (Vector.ofFn f) (MulFixed.windowVal env alpha w) (by simpa using hlt)]
-  rw [Vector.getElem_ofFn]
-  congr 1
-  exact Fin.ext hidx
-
 set_option linter.all false in
 /-- The honest per-window point values (shared by the fixed-rows and chain completeness
 halves): the chain's witness programs put the window-table coordinates and `u` values at
@@ -318,7 +302,7 @@ private theorem inner_windows_honest (B : FixedBase) (cfg : Config) (offset : �
         + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Orchard.Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         85).operations self)) :
     ∀ w : Fin 85,
       env.env.advice cfg.superConfig.addConfig.xP
@@ -396,7 +380,7 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
         cfg.superConfig offset 85).operations self))
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Orchard.Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         85).operations self))
     (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
     (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
@@ -406,7 +390,7 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)) :
     RegionOperations.Constraints env.place self env.env.toEnvironment
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Orchard.Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         85).operations self) ∧
     (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
@@ -641,7 +625,7 @@ private theorem inner_completeness_fixed (B : FixedBase) (cfg : Config) (offset 
         cfg.superConfig offset 85).operations self))
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Orchard.Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         85).operations self))
     (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
     (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)

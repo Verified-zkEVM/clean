@@ -192,15 +192,17 @@ def windowVal (env : Placed ProverEnvironment Fp) (alpha : AssignedCell Fp) (w :
 
 /-- Witness program for `x_p` of window `w`: the window-table point's x-coordinate at the
 scalar's window value (`process_window`, `mul_fixed.rs:268-283`). The 8 candidate
-coordinates are precomputed per window (Rust precomputes the whole window table). -/
-def xPWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
+coordinates are precomputed per window (Rust precomputes the whole window table, from
+the base's own scalar-kind-specific window formula — hence the table parameter `tbl`:
+`windowPoint point` for the 85-window kinds, `Short.windowPoint point` for short). -/
+def xPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
-    #v[((Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x)[windowVal env alpha w]!)]
+    #v[((Vector.ofFn fun k : Fin 8 => (tbl w k.val).x)[windowVal env alpha w]!)]
 
 /-- Witness program for `y_p` of window `w` (`mul_fixed.rs:285-295`). -/
-def yPWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
+def yPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
-    #v[((Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y)[windowVal env alpha w]!)]
+    #v[((Vector.ofFn fun k : Fin 8 => (tbl w k.val).y)[windowVal env alpha w]!)]
 
 /-- Witness program for `u` of window `w`: `u² = y_p + z` (`mul_fixed.rs:300-302`). -/
 def uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
@@ -236,10 +238,11 @@ def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
 /-- `process_window` (`mul_fixed.rs:254-305`): witness `[window_scalar]B`'s coordinates
 into the add config's `x_p`/`y_p` at the window row, and the `u` value. Returns the
 window-point cells. -/
-def processWindow (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) (w row : ℕ) :
+def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Config)
+    (alpha : AssignedCell Fp) (w row : ℕ) :
     RegionCircuit Fp (Point (AssignedCell Fp)) := do
-  let x ← assignAdvice cfg.addConfig.xP row (xPWit B alpha w)
-  let y ← assignAdvice cfg.addConfig.yP row (yPWit B alpha w)
+  let x ← assignAdvice cfg.addConfig.xP row (xPWit tbl alpha w)
+  let y ← assignAdvice cfg.addConfig.yP row (yPWit tbl alpha w)
   let _u ← assignAdvice cfg.u row (uWit B alpha w)
   return { x, y }
 
@@ -400,6 +403,23 @@ theorem chain_ladder (point : Point Fp) (hP : point.OnCurve)
       ring
     rw [hps] at hOut
     exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
+
+/-- Reduce the witness tables' `getElem!` at the honest window value: index
+`windowVal = α.val / 8^w % 8 < 8`, and `8^w = 2^{3w}`. -/
+theorem ofFn8_get_windowVal (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
+    (alpha : AssignedCell Fp) (w : ℕ) (a : Fp) (ha : readCell env alpha = a) :
+    (Vector.ofFn f)[windowVal env alpha w]!
+      = f ⟨a.val / 2 ^ (3 * w) % 8, Nat.mod_lt _ (by norm_num)⟩ := by
+  have hidx : windowVal env alpha w = a.val / 2 ^ (3 * w) % 8 := by
+    unfold windowVal
+    rw [ha, pow_mul]
+    norm_num
+  have hlt : windowVal env alpha w < 8 := by
+    rw [hidx]; exact Nat.mod_lt _ (by norm_num)
+  rw [getElem!_pos (Vector.ofFn f) (windowVal env alpha w) (by simpa using hlt)]
+  rw [Vector.getElem_ofFn]
+  congr 1
+  exact Fin.ext hidx
 
 /-- The incomplete-addition child's output cells (`rfl`; the hand `add_output_eq`
 pattern). -/
