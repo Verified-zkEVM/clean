@@ -314,6 +314,23 @@ def InnerProverAssumptions
     (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
   input.alpha.val < 2 ^ 255
 
+/-- Honest-prover postcondition (donor `RunningSumMul.ProverSpec`, region-split): the
+exit cells hold the honest ladder values at α's own digits, and the running sums hold
+α's 3-bit shifts. What the parent's completeness needs to discharge the complete
+addition's assumptions and the canonicity gate. -/
+def InnerProverSpec (B : FixedBase)
+    (input : ProverValue Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
+    (out : ProverValue InnerOut Fp) (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
+  out.acc.x = (Orchard.Ecc.MulFixed.partialSum
+      (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).x ∧
+  out.acc.y = (Orchard.Ecc.MulFixed.partialSum
+      (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).y ∧
+  out.mulB.x = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+      (input.alpha.val / 2 ^ (3 * 84) % 8)).x ∧
+  out.mulB.y = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+      (input.alpha.val / 2 ^ (3 * 84) % 8)).y ∧
+  ∀ w : Fin 86, out.zs[w.val] = ((input.alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)
+
 /-- The elaborated-metadata instance for the inner region's synthesize lambda (the
 bundle's default `{}`), local so the standalone proofs can state
 `Soundness`/`Completeness` over it. -/
@@ -440,7 +457,23 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
     RegionOperations.Constraints env.place self env.env.toEnvironment
       ((MulFixed.windowChain cfg.superConfig
         (MulFixed.processWindow B.toData cfg.superConfig input_var_alpha) offset
-        85).operations self) := by
+        85).operations self) ∧
+    (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).x ∧
+     env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).y ∧
+     env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+          (input_alpha.val / 2 ^ (3 * 84) % 8)).x ∧
+     env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+          (input_alpha.val / 2 ^ (3 * 84) % 8)).y) := by
   have hPW := inner_windows_honest B cfg offset self env input_var_alpha input_alpha
     h_input hWchain
   have hks_lt : ∀ t, input_alpha.val / 2 ^ (3 * t) % 8 < 8 :=
@@ -578,6 +611,28 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
           ring
         rw [hps] at hOut
         exact ⟨congrArg Orchard.Point.x hOut, congrArg Orchard.Point.y hOut⟩
+  have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).x ∧
+      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 83 • B.point).y ∧
+      env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+          (input_alpha.val / 2 ^ (3 * 84) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 84) : ℕ) : ℤ)
+      = (Orchard.Ecc.MulFixed.windowPoint B.point 84
+          (input_alpha.val / 2 ^ (3 * 84) % 8)).y := by
+    have h83 := hInv 83 (by norm_num) le_rfl
+    rw [show offset + 83 + 1 = offset + 84 from by omega] at h83
+    obtain ⟨hx84, hy84, -⟩ := hPW ⟨84, by norm_num⟩
+    rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl] at hx84 hy84
+    exact ⟨h83.1, h83.2, hx84, hy84⟩
+  refine And.intro ?_ hHonest
   simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm, mul_one]
   have hC1 := Halo2.SubcircuitRw.region_completeness_leaf_placed
     AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 1) self env
@@ -858,7 +913,7 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
         innerRegion B.toData cfg offset input.alpha)
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
-      (fun _ _ _ _ => True) := by
+      (InnerProverSpec B) := by
     circuit_proof_start
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
@@ -872,16 +927,38 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
       = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp) := by
       rw [← hZW]
       exact hDC.2
-    refine And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))
+    refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
     · with_reducible exact hDC.1
     · with_reducible
         exact inner_completeness_fixed B cfg offset self env input_var_alpha
           input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs
     · with_reducible
-        exact inner_completeness_chain B cfg offset self env input_var_alpha
-          input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs
+        exact (inner_completeness_chain B cfg offset self env input_var_alpha
+          input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).1
     · rw [RegionCircuit.operations_pure]
       exact trivial
+    · -- the honest-prover contract (`InnerProverSpec`)
+      simp only [InnerProverSpec]
+      rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+      provable_type_simp
+      obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · rw [← hOax]
+        with_reducible exact (inner_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.1
+      · rw [← hOay]
+        with_reducible exact (inner_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.1
+      · rw [← hOmx]
+        with_reducible exact (inner_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.1
+      · rw [← hOmy]
+        with_reducible exact (inner_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.2
+      · intro w
+        rw [← congrArg (fun v => v[w.val]'w.isLt) hOzs]
+        simp only [circuit_norm]
+        exact hDC.2 w
 
 
 
