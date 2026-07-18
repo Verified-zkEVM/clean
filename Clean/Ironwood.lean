@@ -6,6 +6,10 @@ import Clean.Ironwood.Ecc.MulIncomplete
 import Clean.Ironwood.Ecc.MulComplete
 import Clean.Ironwood.Ecc.MulOverflow
 import Clean.Ironwood.Ecc.Mul
+import Clean.Ironwood.Ecc.MulFixed
+import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+import Clean.Ironwood.Ecc.MulFixed.FullWidth
+import Clean.Ironwood.Ecc.MulFixed.Short
 import Clean.Ironwood.Utilities.LookupRangeCheck
 import Clean.Ironwood.CommitIvk.Gate
 import Clean.Ironwood.CommitIvk.Bundle
@@ -24,6 +28,7 @@ import Clean.Ironwood.Poseidon.Hash
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
+import Clean.Ironwood.Action.DeriveNullifier
 
 /-!
 # Ironwood circuits
