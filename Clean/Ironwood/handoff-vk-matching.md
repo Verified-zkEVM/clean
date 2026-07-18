@@ -188,12 +188,30 @@ All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
 
 ### Remaining (the ⊤-level proof compositions)
 
-1. `HashLayer` as a `FormalCircuit` (Mul.lean-style layouter peel): children all proven
-   (witnessShortCheck ×2, hashCircuit, Gate); the value glue is in place
-   (`assemble` for soundness, `honest_pieces`/`honest_gate` for completeness; the z_1
-   values come from the hash Spec's `ZsFacts`+`z1View` — unfold at `merkleNs`).
-2. `Layer` = CondSwap.swap + HashLayer; `CalculateRoot` = the 32-fold
-   (`merkleRoot_of_steps`/`honestNode` algebra ready).
+1. ~~`HashLayer` as a `FormalCircuit`~~ **DONE (2026-07-18)** — `HashLayer.circuit` fully
+   proven both directions (the Mul-style layouter peel over the proven children; the
+   `sum_z1_eq_pieceZ` digit-canonicity bridge feeds `honest_gate`).
+2. `Layer` = CondSwap.swap + HashLayer (both proven — a two-child layouter compose);
+   `CalculateRoot` = the 32-fold (`merkleRoot_of_steps`/`honestNode` algebra ready).
 3. `CommitDomain.commit` = hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth`
    boundary (`BlindSpecPinned` pattern; the mul_fixed arc on the other machine will
    discharge it).
+
+### Proof-engineering notes from the HashLayer arc (read before composing further)
+
+- `rw`/`simp only` routinely FAIL to match `HVec.head/tail`/`Vector.ofFn`-getElem terms on
+  invisible implicit spellings (`zLengths (n::rest)` vs `(n+1) :: …`, reduced vs unreduced
+  sizes). Term-level `congrArg`/`.trans` compositions and `show … from by
+  with_unfolding_all rfl` conversions are the reliable route; big prover-eval defeqs must
+  be SPLIT (record→literal vector, then the value function) or `isDefEq` walls at 200k.
+- `circuit_proof_start` completeness bakes `hwit` into witness-eval form; generic
+  `WitgenIR` params make hypotheses/goal speak different languages — bundles should carry
+  positional cells (`cellAt`) or Bool/native witness programs with eval lemmas.
+- For pair/field outputs, prefer a named `Output` struct (`deriving ProvableStruct`) so
+  the splitter yields per-component `h_output_*`/`output_*` facts; `field`-input leaves
+  lose `h_input` (spelling gap) — use a one-field `Input` struct instead.
+- The layouter peel of a 7-region synthesize works out of the box:
+  `simp only [<own defs>, circuit_norm] at hc` → 4 chunks; `subcircuit_rw` handles
+  region- and layouter-level chunks alike; region counts via
+  `Operations.regionCount_append` + a per-chunk `show`-lemma (regionCount is WF-recursive
+  — not `rfl`; use its equation lemmas).
