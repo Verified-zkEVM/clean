@@ -39,6 +39,15 @@ REMAINING:
    run). synthesize assembly DONE (region count 395 == dump exactly). ActionLayout.lean
    fixture generated+builds (regions/permcols F3=constants/copies 2964/σ 1602/fixed
    10186/constants 166; the two empty "constrain equal" regions store start 0).
+   TestVkLayoutAction recipe settled (2026-07-19): use the REAL Action.Circuit.configure
+   (CS already matches) with dump-derived aG (ncG pattern); mirror the synthesize with
+   data-level mul_fixed calls (FixedBaseData: u := 0, point := 0 — only params matter
+   for keygen fixed). ActionParams extraction from action_layout.json fixed data:
+   z = F11[row], coeffs k = F(3+k)[row] at each mul region's start+window rows (fixed
+   col map: F0-2 table, F3-10 lagrange, F11 fixedZ, F12/13 = qS2 sinsemilla1/2; 5 bases:
+   valueCommitV short 22w, valueCommitR/spendAuthG/commitIvkR fw 85w, nullifierK bfe 85w;
+   noteCommitR EXISTS = NoteCommitParams). Q on-curve proofs by decide (ncQ pattern).
+   Guards per TestVkLayoutNoteCommit: copyList/σ/allFixed + region lockstep.
    REMAINING for TestVkLayoutAction: the data-level mirror synthesize (TestVkLayoutNoteCommit
    pattern — bundles → raw synthesize at FixedBaseData; needs param fixtures for the 6
    bases read off the dump's lagrange/fixed data + Q points + ncG-style generator table),
