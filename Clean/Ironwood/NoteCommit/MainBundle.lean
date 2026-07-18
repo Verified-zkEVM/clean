@@ -809,6 +809,55 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpsiS
+  -- ── the chunk-equality assembly ──
+  have hLow1 := hY1S hGbS.2.1
+  have hLow2 := hY2S hGdS.2.1
+  have hz1dEq := Orchard.Action.NoteCommit.cell_eq_of_val hGvalS.2.2.1
+  have hz1gEq := Orchard.Action.NoteCommit.cell_eq_of_val hGpsiS.2.1
+  have hchunksEq := Orchard.Action.NoteCommit.note_chunks_eq_of_cellFacts
+    (gd := ⟨env.get input_var_gdX.cell.column
+        ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ),
+      env.get input_var_gdY.cell.column
+        ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩)
+    (pkd := ⟨env.get input_var_pkdX.cell.column
+        ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ),
+      env.get input_var_pkdY.cell.column
+        ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩)
+    (value := env.get input_var_value.cell.column
+      ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))
+    (rho := env.get input_var_rho.cell.column
+      ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))
+    (psi := env.get input_var_psi.cell.column
+      ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))
+    (cells :=
+      { a := env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),
+        b := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ),
+        c := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ),
+        d := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ),
+        e := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 9) : ℕ) : ℤ),
+        f := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ),
+        g := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ),
+        h := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ),
+        b0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ),
+        b1 := env.advice cfg.gates.b.colR ((place (i₀ + 33) : ℕ) : ℤ),
+        b2 := env.advice (cfg.gates.y.advices 6) ((place (i₀ + 19) : ℕ) : ℤ),
+        b3 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ),
+        d0 := env.advice cfg.gates.d.colM ((place (i₀ + 34) : ℕ) : ℤ),
+        d1 := env.advice (cfg.gates.y.advices 6) ((place (i₀ + 24) : ℕ) : ℤ),
+        d2 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ),
+        e0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 7) : ℕ) : ℤ),
+        e1 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 8) : ℕ) : ℤ),
+        g0 := env.advice cfg.gates.g.colM ((place (i₀ + 36) : ℕ) : ℤ),
+        g1 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 11) : ℕ) : ℤ),
+        h0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 13) : ℕ) : ℤ),
+        h1 := env.advice cfg.gates.h.colR ((place (i₀ + 37) : ℕ) : ℤ) })
+    (by with_unfolding_all exact hPC')
+    ⟨hGgdS.1, hGgdS.2.1, hGgdS.2.2.1, hLow1, hGpkdS.1, hGpkdS.2.1, hGpkdS.2.2.1, hLow2,
+     hGvalS.2.1, hGvalS.2.2.2, hGrhoS.1, hGrhoS.2.1, hGrhoS.2.2.1, hGpsiS.1,
+     hGpsiS.2.2.1, hGpsiS.2.2.2.1,
+     hGbS.2.2, by rw [← hz1dEq]; exact hGdS.2.2, hGeS,
+     by rw [← hz1gEq]; exact hGgS.2, hGhS.2⟩
+    hGvalS.1
   trace_state
   sorry
 
