@@ -146,8 +146,8 @@ theorem eval_interpolatedX (cfg : Config) (word : Expression Fp Query) (f : Quer
     (interpolatedX cfg word).eval f
       = Orchard.Ecc.MulFixed.interpolate (readParams cfg f) (word.eval f) := by
   simp only [interpolatedX, windowPow, queryFixed, List.range_succ, List.range_zero,
-    List.append_nil, List.nil_append, List.cons_append, List.foldl_cons, List.foldl_nil,
-    List.foldl_append, circuit_norm, Orchard.Ecc.MulFixed.interpolate, readParams]
+    List.nil_append, List.cons_append, List.foldl_cons, List.foldl_nil,
+    circuit_norm, Orchard.Ecc.MulFixed.interpolate, readParams]
 
 /-- `interpolate` only depends on the params componentwise — the bridge from the
 `readParams` cell reads to a known `CoordsParams` value. -/
@@ -308,7 +308,7 @@ theorem base_bounds {a b : ℕ} (ha : a < 8) (hb : b < 8) :
 /-- Pure-ℕ bounds for a ladder step (self-contained; the donor `step_sum_lt`/
 `inv_lt_card` content). -/
 theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
-    (hS_pos : 0 < S) (hj : j ≤ 82) :
+    (_hS_pos : 0 < S) (hj : j ≤ 82) :
     0 < (k + 2) * 8 ^ (j + 1) ∧ S < (k + 2) * 8 ^ (j + 1) ∧
     (k + 2) * 8 ^ (j + 1) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
     S < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧

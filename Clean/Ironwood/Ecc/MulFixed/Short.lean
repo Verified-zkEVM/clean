@@ -1250,14 +1250,14 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         cfg.superConfig.addConfig 0 (i₀ + 1) env
         ⟨((innerRegion B.toData cfg 0 input_var_magnitude).output i₀).mulB,
          ((innerRegion B.toData cfg 0 input_var_magnitude).output i₀).acc⟩ hWAdd
-      simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      simp only [addc_assumptions_eq, addc_envAssumptions_eq,
         addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
         Nat.zero_add, circuit_norm] at hC
       -- honest values at the sign row
       rw [yVarWit_eval, addc_call_out] at hWyVar
       simp only [readCell, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.zero_add,
-        Nat.add_zero] at hWyVar
+        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+        Nat.zero_add] at hWyVar
       rw [hISign] at hWyVar
       have h2ne : (2 : Fp) ≠ 0 := by
         have h : ((2 : ℕ) : Fp) ≠ 0 := by
