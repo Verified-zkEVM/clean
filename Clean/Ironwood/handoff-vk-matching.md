@@ -298,24 +298,30 @@ DONE (fully proven, in `Clean/Ironwood/NoteCommit/Composites.lean`):
   `base_val_lt_tP_val`/`high_bit_canonical` + `shifted_high_zero`.
 - Value composite = `ValueCanonicity.bundle` itself (donor composite is gate-only).
 
-REMAINING (CommitIvk composite DONE as of f992a441 — `Clean/Ironwood/CommitIvk/Composite.lean`,
-fully proven; note the fixes it needed vs the NoteCommit template: literal-RHS bridges instead
-of `= bundle.Assumptions` + simp-unfolding `bundle` (maxRecDepth), a `gateChild_extract_eq`
-rfl-bridge for the fieldPair wit, PA-branch = simp [PA-bridge, extract-bridge, circuit_norm]
-then rw ALL h_input components on the goal BEFORE refine, `set_option maxRecDepth 4096 in`):
-1. Y composite (`y_canonicity`, note_commit.rs:1962-2032; donor
-   `Orchard.Action.NoteCommit.YCanonicity` at NoteCommit.lean:525-646):
-   children = witnessShortCheck k0 (bits 1..10) + witnessShortCheck k2 (250..254) +
-   witness_check(j, 25, true) + witness_check(j', 13, false) + YCanonicity.bundle gate
-   (bundle already witnesses lsb/k3 internally via wlsb/wk3 programs).
-   NEEDS: a `rangeCheckAt`-style bundle exposing z1 AND z13 of the 25-word strict check
-   (donor `CopyCheck.Decomposed` analogue) — z1_j is the k1 cell wired into the gate, and
-   its spec facts ((hDec hjlt).2.1/.2.2 in the donor) feed the gate's rely-conditions.
-   Options: new FormalRegionCircuit `rangeCheckAtDecomposed` in LookupRangeCheck.lean
-   (positional, Output {z0,z1,z13,zLast}, Spec = donor Decomposed.Spec shape); do NOT
-   change rangeCheckAt's Spec (MulOverflow/BaseFieldElem consume it).
-2. CommitIvk composite (commit_ivk.rs `assign_region` flow around CommitIvk.bundle):
-   witness_check(a', 13, false) + witness_check(b2_c', 14, false) + CommitIvk.bundle.
-   Same template as Gd but two witnessCheck children and the two-row gate bundle
-   (b1/d1 witnessed internally). Donor: Orchard.Action.CommitIvk (donor composite
-   Assumptions/Spec in Clean/Orchard/Action/CommitIvk.lean).
+STEP 3 COMPLETE as of 04bea3a6. All six canonicity flows (Gd/Pkd/Value/Rho/Psi/Y) plus
+CommitIvk are covered by fully-proven composites:
+- Clean/Ironwood/NoteCommit/Composites.lean (Gd/Pkd/Rho/Psi; Value = ValueCanonicity.bundle)
+- Clean/Ironwood/CommitIvk/Composite.lean
+- Clean/Ironwood/NoteCommit/YComposite.lean (five children; new infra:
+  LookupRangeCheck.chain_read + rangeCheckAtDecomposed (numWords-generic, keeps the loop
+  folded) + witnessCheckDecomposed)
+
+Y-composite patterns worth reusing:
+- Bundled-call witness opacity: to read a gate child's in-region witness programs from the
+  parent (lsb/k3), prove a per-child projection lemma
+  `ExtendsWitnesses place env (((child.call cfg row).operations i)) i =
+   RegionOperations.ExtendsWitnesses place i env ((bundle.synthesize cfg 0 row).operations i)`
+  by `simp only [childDef, FormalRegionCircuit.toFormal, FormalCircuit.call,
+  Circuit.operations, assignRegion, ExtendsWitnesses, and_true]; rfl`, rw it at the hwit
+  chunk AFTER subcircuit_rw (rewriting before breaks the engine's chunk matching), then
+  destructure like the bundle's own completeness.
+- Non-vacuous child ProverAssumptions on extraction data need the haves stated in the
+  goal's extract spelling: `(show Fp from (child).extract … ⟨place,env⟩.toEnvironment).val`
+  with an extract→advice rfl/simp bridge.
+- Witness the honest values by canonical bit-slice programs (not by replaying the Rust
+  value dataflow) whenever the payoff is a bitrange fact — the parent then gets the value
+  equations directly from its own hwit (no cross-child value plumbing).
+
+NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
+the decompose bundles + these composites + Sinsemilla, per the donor
+Orchard.Action.NoteCommit top level.
