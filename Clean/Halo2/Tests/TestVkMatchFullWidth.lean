@@ -39,7 +39,6 @@ def program : Configure Fp Config := do
       ![l0, l1, l2, l3, l4, l5, l6, l7] a4 a5 addConfig addIncompleteConfig
     configure mulFixedConfig
 
-
 def fullWidthCS : ConstraintSystem Fp := (program {}).2
 
 /-- Registration-order query seed from the dumped pre layouts. -/
