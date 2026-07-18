@@ -517,7 +517,10 @@ donor pieceBounds_of_cellFacts — donor lemma reusable at the read-cells record
 bounds (top hPA hWin, spelling via rcmExtract); gate PAs = mirror the composite
 completeness glue (Composites.lean PA branches) with hwit facts + child PSs.
 
-### Completeness remaining (after 3e3d4890: 11/24 leaves done)
+### Completeness remaining (after 4108df7f: 11/24 leaves done; ALL witness
+projections landed — hwb1/hwd0/hwg0/hwh1 (peelGatesW + toFormal_call_witnesses +
+bundle simps) and hwb2/hwd1 (yc_lsb_witness two-level projection) are read-language
+bit equations; the 15 piece/short equations hwa..hwh are in context)
 Order of the remaining work (13 leaves: Y1, Y2, commit, 10 gates):
 1. Witness projections FIRST (needed by everything below):
    - per-gate: rw [toFormal_call_witnesses] at a copy of the relevant hWGt chunk

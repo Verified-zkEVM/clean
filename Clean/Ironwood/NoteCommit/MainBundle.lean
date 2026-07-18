@@ -1220,6 +1220,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
     circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
+  have hwb2 := yc_lsb_witness (brWit input_var_gdY 0 1) _ _ _ place env hWy1
+  have hwd1 := yc_lsb_witness (brWit input_var_pkdY 0 1) _ _ _ place env hWy2
+  simp only [circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hwb2 hwd1
   have hwb1 := hWgb.2.2.1
   have hwd0 := hWgd.2.1
   have hwg0 := hWgg.2.1
