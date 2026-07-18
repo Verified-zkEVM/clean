@@ -97,7 +97,10 @@ def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
 
   completeness := by
     circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
-      FullRound.params, pow5]
+      FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
+    -- WIP: goal is the three gate polys at the honest witness (all in raw advice-read
+    -- form after the peel; h_output are the three honest value equations). The refine
+    -- split mis-parses the conjunction shape — inspect `lean_goal` here before closing.
     sorry
 
 /-- Rust `Pow5State::partial_round` at source round `r` (`pow5.rs:461-534`): one row
