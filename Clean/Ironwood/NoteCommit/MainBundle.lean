@@ -740,6 +740,39 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
   simp only [Nat.add_assoc, Nat.reduceAdd] at hlsb ⊢
   exact hlsb
 
+/-- The Ironwood `Chain.PieceBounds`/`honestChunks` are the donor's, verbatim. -/
+private theorem pieceBounds_donor_iff :
+    ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
+      Sinsemilla.Chain.PieceBounds ms pieces ↔
+      Orchard.Sinsemilla.Chain.PieceBounds ms pieces := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro pieces
+    simp only [Sinsemilla.Chain.PieceBounds, Orchard.Sinsemilla.Chain.PieceBounds]
+  | cons n rest ih =>
+    intro pieces
+    constructor
+    · rintro ⟨h1, h2⟩
+      exact ⟨h1, (ih _).mp h2⟩
+    · rintro ⟨h1, h2⟩
+      exact ⟨h1, (ih _).mpr h2⟩
+
+private theorem honestChunks_donor_eq :
+    ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
+      Sinsemilla.Chain.honestChunks ms pieces
+        = Orchard.Sinsemilla.Chain.honestChunks ms pieces := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro pieces
+    simp only [Sinsemilla.Chain.honestChunks, Orchard.Sinsemilla.Chain.honestChunks]
+  | cons n rest ih =>
+    intro pieces
+    simp only [Sinsemilla.Chain.honestChunks, Orchard.Sinsemilla.Chain.honestChunks,
+      ih]
+    rfl
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -1192,6 +1225,10 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   simp only [Operations.regionCount] at hWCk
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
+  -- ── prover-side MessageCellFacts at the read cells ──
+  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
+  have hVal64' : (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ 64 := by
+    rw [hival]; exact hVal64
   -- gate-internal witnesses (the b1/d0/g0/h1 bit cells)
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
@@ -1228,6 +1265,62 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hwg0 := hWgg.2.1
   have hwh1 := hWgh.2.2
   trace_state
+  have hMCF : Orchard.Action.NoteCommit.MessageCellFacts
+      ⟨env.get input_var_gdX.cell.column ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩
+      ⟨env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩
+      (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))
+      { a := env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ), b := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ), c := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ), d := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ),
+        e := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 9) : ℕ) : ℤ), f := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ), g := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ), h := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ),
+        b0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ),
+        b1 := env.advice cfg.gates.b.colR ((place (i₀ + 33) : ℕ) : ℤ),
+        b2 := env.advice (cfg.gates.y.advices 6) ((place (i₀ + 19) : ℕ) : ℤ),
+        b3 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ),
+        d0 := env.advice cfg.gates.d.colM ((place (i₀ + 34) : ℕ) : ℤ),
+        d1 := env.advice (cfg.gates.y.advices 6) ((place (i₀ + 24) : ℕ) : ℤ),
+        d2 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ), e0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 7) : ℕ) : ℤ), e1 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 8) : ℕ) : ℤ),
+        g0 := env.advice cfg.gates.g.colM ((place (i₀ + 36) : ℕ) : ℤ),
+        g1 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 11) : ℕ) : ℤ), h0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 13) : ℕ) : ℤ),
+        h1 := env.advice cfg.gates.h.colR ((place (i₀ + 37) : ℕ) : ℤ) } := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+      ?_, ?_, ?_, ?_, ?_⟩
+    · rw [hwa]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwb0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwb1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+      rw [hwb2, show Orchard.Specs.bitrange (ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+          = ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+        simp [Orchard.Specs.bitrange]]
+      try exact ZMod.val_natCast_of_lt (lt_of_le_of_lt (Nat.le_of_lt_succ
+        (Nat.mod_lt _ (by norm_num)))
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    · rw [hwb3]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwc]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwd0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+      rw [hwd1, show Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+          = ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+        simp [Orchard.Specs.bitrange]]
+      try exact ZMod.val_natCast_of_lt (lt_of_le_of_lt (Nat.le_of_lt_succ
+        (Nat.mod_lt _ (by norm_num)))
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+    · rw [hwd2]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwe0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwe1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwf]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwg0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwg1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwh0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwh1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwb, ← hwb0, ← hwb1, ← hwb2, ← hwb3]
+      try ring
+    · rw [hwd, ← hwd0, ← hwd1, ← hwd2]
+      try ring
+    · rw [hwe, ← hwe0, ← hwe1]
+      try ring
+    · rw [hwg, ← hwg0, ← hwg1]
+      try ring
+    · rw [hwh, ← hwh0, ← hwh1]
+      try ring
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
