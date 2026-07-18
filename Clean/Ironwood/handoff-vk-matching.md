@@ -426,3 +426,17 @@ VK fixture (parallel track): needs orchard-crate dump harness (halo2_gadgets
 FullRecorder is pub(crate) — expose or vendor into orchard test), the note_commit
 test circuit (note_commit.rs:2054+) as dump target, convert_dump.py, fixture files,
 TestVkLayoutNoteCommit mirroring TestVkLayoutPoseidon.
+
+### synth_regionCount blocker (Main.lean, = 43)
+The one-shot simp peel leaves 13 folded call chunks; `rw` on them (even with
+specialized per-child rfl-bridges `toFormal_call_regionCount`/`yc_call_regionCount`/
+`commit_call_regionCount`, and even with the circuits `seal`ed) hits the 200k-heartbeat
+isDefEq wall — kabstract tries defeq of the pattern against every other chunk.
+`simp only [bridge]` never fires on call chunks (known simp-vs-rw asymmetry).
+`with_unfolding_all rfl` on the whole thing fails (not defeq at rfl).
+RECOMMENDED FIX: split synth into 3 stage defs (pieces 15 regions / checks 18 =
+2×Y(5)+commit(4)+4 wchecks / gates 10), prove each stage's count separately (small
+goals, short rw chains), combine. The stage split will also make the 30-child
+soundness peel tractable (hc splits into 3 then further). Cells thread across stages
+via small record types. The bridges compile and are kept... (removed with the failed
+lemma — recover from this note or git history at the failed attempt).

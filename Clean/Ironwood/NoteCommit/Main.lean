@@ -268,4 +268,33 @@ def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
       z13G1G2Prime := gZs.zLast }
   pure cm
 
+/-- A `toFormal`-lifted region bundle's call chunk is exactly one region. -/
+private theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (b : FormalRegionCircuit Fp CI Cfg Input Output) (name : String) (cfg : Cfg)
+    (inp : Var Input Fp) (j : RegionIndex) :
+    Operations.regionCount (((b.toFormal name).call cfg inp).operations j) = 1 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+/-- The y-canonicity flow's call chunk spans its five regions. -/
+private theorem yc_call_regionCount (w : WitgenIR Fp 1)
+    (c : YCanonicity.Config × LookupRangeCheck.Config 10)
+    (inp : Var YCanonicityCheck.Inputs Fp) (j : RegionIndex) :
+    Operations.regionCount
+      (((YCanonicityCheck.circuit w).call c inp).operations j) = 5 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+/-- The commit call chunk spans its four regions. -/
+private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
+    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
+    Operations.regionCount
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+        c inp).operations j) = 4 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
 end Halo2.Ironwood.NoteCommit.Main
