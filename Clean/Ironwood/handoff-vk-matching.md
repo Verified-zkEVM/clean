@@ -284,7 +284,22 @@ entry-point hash circuit (ConstantLength<2> P128Pow5T3 — DeriveNullifier's
   both Message words, no fixed padding), outputs row 2. Hash(L=2) region sequence:
   ["initial state for domain ConstantLength<2>", "add input for domain ConstantLength<2>",
   "permute state"]; squeeze is region-free (output = state[0]).
-- NEXT: full/partial round FormalRegionCircuits (positional, MulIncompleteRound pattern;
+- DONE: `Clean/Ironwood/Poseidon/Rounds.lean` — `fullRound r`/`partialRound r`
+  FormalRegionCircuits (positional, MulIncompleteRound pattern: `stateRow`/
+  `readStateRow`/`rowValue`/`rowWit` helpers; Witness = entering state row; Spec = donor
+  `FullRound.value`/`PartialRounds.value`). fullRound SOUNDNESS PROVEN:
+  `circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
+  FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod]` then
+  `obtain ⟨⟨hg0,hg1,hg2⟩, hrc0, hrc1, hrc2⟩ := hc; rw [hrc...] at hg...;
+  exact ⟨by linear_combination -hg0, ...⟩`. KEY GOTCHAS: `Nat.reduceMod` needed (Fin 3
+  coes leave `mds (0 % 3)`), `Nat.add_assoc` for row-index spellings, and the gate polys
+  are `STUFF - out = 0` so `linear_combination -hg`.
+- REMAINING sorries: fullRound completeness; partialRound soundness+completeness
+  (soundness needs the donor `mds_mul_mdsInv_apply` algebra — see donor `circuitP128`
+  proofs in `Clean/Orchard/Poseidon/Pow5.lean` for both directions; the completeness
+  witness-eval side uses `rowWit_eval` (`@[circuit_norm]`) like MulIncompleteRound's
+  `readWit_eval`).
+- THEN: full/partial round FormalRegionCircuits (positional, MulIncompleteRound pattern;
   Witness = entering state row, Spec = donor `FullRound.value`/`PartialRounds.value`);
   loop bundles (RegionCircuit.forRange', stride 1: rounds share rows!) — NOTE round r
   writes row offset+1 which round r+1 reads: entering-state positional contract like
