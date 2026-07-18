@@ -1105,4 +1105,43 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
         rw [hax, hay]
         exact Or.inl hOn
 
+/-! ## Bundle contract bridges, shared by the layouter-level consumers (`rfl`, the
+bundle stays folded) -/
+
+section Bridges
+
+open CompElliptic.Fields.Pasta (Fq)
+
+variable (B : FixedBase) (windows : Vector (FExpr Fp) 85)
+
+theorem circuit_spec_eq :
+    (circuit B windows).Spec
+      = fun _ (output : Point Fp) (s : Vector Fp 85 × Fq) =>
+          output = (s.2 • B : Point Fp) := rfl
+
+theorem circuit_assumptions_eq :
+    (circuit B windows).Assumptions = fun _ => True := rfl
+
+theorem circuit_envAssumptions_eq :
+    (circuit B windows).EnvAssumptions = EnvAssumptions := rfl
+
+theorem circuit_proverAssumptions_eq :
+    (circuit B windows).ProverAssumptions
+      = fun _ (s : Vector Fp 85 × Fq) _ => ∀ w : Fin 85, (s.1[w.val]).val < 8 := rfl
+
+theorem circuit_proverSpec_eq :
+    (circuit B windows).ProverSpec = fun _ _ _ _ => True := rfl
+
+theorem circuit_extract_eq (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (circuit B windows).extract cfg () i env = fwExtract cfg i env := rfl
+
+/-- The bundle's call chunk spans its two regions. -/
+theorem circuit_call_regionCount (cfg : Config) (j : RegionIndex) :
+    Operations.regionCount (((circuit B windows).call cfg ()).operations j) = 2 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+end Bridges
+
 end Halo2.Ironwood.Ecc.MulFixed.FullWidth

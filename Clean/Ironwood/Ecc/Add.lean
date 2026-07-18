@@ -419,6 +419,25 @@ def add : FormalRegionCircuit Fp
     rw [ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
+/-! ## Layouter-level contract bridges (`add.toFormal`), shared by the gadget.rs-level
+composites (`rfl`, the bundle stays folded) -/
+
+theorem toFormal_spec_eq (name : String) :
+    (add.toFormal name).Spec
+      = fun (input : Value Inputs Fp) (output : Point Fp) (_ : Unit) =>
+          output.Valid ∧ output = input.p + input.q := rfl
+
+theorem toFormal_assumptions_eq (name : String) :
+    (add.toFormal name).Assumptions
+      = fun (input : Value Inputs Fp) => input.p.Valid ∧ input.q.Valid := rfl
+
+/-- The lifted complete addition's call chunk is one region. -/
+theorem toFormal_call_regionCount (name : String) (cfg : Config)
+    (input : Var Inputs Fp) (j : RegionIndex) :
+    Operations.regionCount (((add.toFormal name).call cfg input).operations j) = 1 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
 end Add
 
 end Halo2.Ironwood.Ecc

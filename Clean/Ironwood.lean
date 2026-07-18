@@ -29,6 +29,7 @@ import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
 import Clean.Ironwood.Action.DeriveNullifier
+import Clean.Ironwood.Action.ValueCommit
 
 /-!
 # Ironwood circuits

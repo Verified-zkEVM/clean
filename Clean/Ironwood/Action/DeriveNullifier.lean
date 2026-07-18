@@ -99,16 +99,6 @@ private theorem bfe_proverAssumptions_eq :
     (Ecc.MulFixed.BaseFieldElem.circuit K).ProverAssumptions
       = fun _ _ _ => True := rfl
 
-private theorem eccAdd_spec_eq :
-    (Ecc.Add.add.toFormal "complete point addition").Spec
-      = fun (input : Value Ecc.Add.Inputs Fp) (output : Point Fp) (_ : Unit) =>
-          output.Valid ∧ output = input.p + input.q := rfl
-
-private theorem eccAdd_assumptions_eq :
-    (Ecc.Add.add.toFormal "complete point addition").Assumptions
-      = fun (input : Value Ecc.Add.Inputs Fp) =>
-          input.p.Valid ∧ input.q.Valid := rfl
-
 end Bridges
 
 /-! ## Region counts -/
@@ -138,15 +128,6 @@ private theorem bfe_call_regionCount (K : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-/-- The complete-addition child's call chunk is one region. -/
-private theorem eccAdd_call_regionCount (ecfg : Ecc.Add.Config)
-    (input : Var Ecc.Add.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Ecc.Add.add.toFormal "complete point addition").call ecfg input).operations j)
-      = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
 /-- The region count of `derive_nullifier`: the Poseidon child's three regions, the
 add-chip region, the fixed-base mul's four regions, the final complete addition. -/
 private theorem deriveNullifier_regionCount (K : FixedBase)
@@ -167,7 +148,7 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
   simp only [Circuit.operations_bind, Circuit.operations_pure,
     Operations.regionCount_append, Operations.regionCount,
     hash_call_regionCount, addChip_call_regionCount, bfe_call_regionCount,
-    eccAdd_call_regionCount]
+    Ecc.Add.toFormal_call_regionCount]
 
 /-! ## The `derive_nullifier` bundle -/
 
@@ -238,9 +219,9 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     simp only [Ecc.MulFixed.BaseFieldElem.Spec] at hB
     -- the complete addition: `nf = cm + product` (both summands valid)
     have hAddS := hAdd trivial (by
-      rw [eccAdd_assumptions_eq]
+      rw [Ecc.Add.toFormal_assumptions_eq]
       exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩)
-    rw [eccAdd_spec_eq] at hAddS
+    rw [Ecc.Add.toFormal_spec_eq] at hAddS
     have hSum : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
         : Value Point Fp)
         = ({ x := input_cm_x, y := input_cm_y } : Point Fp)
@@ -263,7 +244,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     refine ⟨⟨trivial, trivial, trivial⟩, ⟨trivial, trivial, trivial⟩,
       ⟨by rw [bfe_envAssumptions_eq]; exact _hE, trivial, trivial⟩,
       trivial, ?_, trivial⟩
-    rw [eccAdd_assumptions_eq]
+    rw [Ecc.Add.toFormal_assumptions_eq]
     exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩
 
 end Halo2.Ironwood.Action.DeriveNullifier
