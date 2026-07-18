@@ -396,3 +396,33 @@ composite glue; keep proofs local until sorry-free). (3) VK layout fixture: need
 dump harness for orchard's note_commit test circuit (orchard crate, not halo2_gadgets —
 FullRecorder is pub(crate) there; vendor or expose), convert_dump.py, fixture files,
 TestVkLayoutNoteCommit.
+
+## NoteCommit bundle phase (next; defs milestone a5328282 DONE — Main.lean compiles)
+
+Main.lean synth compiles with all ~30 children wired (iHash = i₀+27; currentRegion
+primitive anchors positional zCells). Next: the FormalCircuit bundle around synth.
+
+Donor top-level to mirror (Clean/Orchard/Action/NoteCommit.lean:1806-1930 + 2523):
+- Spec = NoteCommitRelation G Q R input cm; PA = ProverNoteCommitRelation-side
+  (OnCurve gd/pkd, value < 2^64, rcm canonical, honest hash defined).
+- Ironwood deltas: Inputs are coordinate CELLS {gdX gdY pkdX pkdY value rho psi};
+  rcm scalar = FullWidth extraction data (CommitDomain pattern: wit.2.2-style);
+  Assumptions = gd/pkd OnCurve stated on the coord evals.
+- REUSE the donor value-theory connectors (all value-level, no circuit traces):
+  PieceExtraction section — MessageCellFacts, pieceBounds_of_cellFacts,
+  noteCommitChunks / noteChunksOfScalars / note_chunks_eq_of_cellFacts,
+  honestChunks_eq_noteCommitChunks_of_cellFacts, z13G_tail_of_decompose_g,
+  valueCanonicity_assumptions_of_commit (donor NoteCommit.lean 1600-1800, 1880-2520).
+  The Ironwood soundness = 30-child subcircuit_rw peel (template: the composite
+  soundness scripts in Composites.lean/YComposite.lean/CommitIvk/Composite.lean,
+  esp. chaining witnessCheck telescopes into gate-bundle rely-conditions) + these
+  donor connectors for the value algebra.
+- Witness/extract: ChainWit (hash) × fwExtract (scalar) × per-gate bit cells as needed;
+  output = Point (cm).
+- Proof scale: expect the largest proof in the tree; keep the bundle LOCAL (uncommitted)
+  until sorry-free; sub-lemmas that are pure value algebra may be committed early.
+
+VK fixture (parallel track): needs orchard-crate dump harness (halo2_gadgets
+FullRecorder is pub(crate) — expose or vendor into orchard test), the note_commit
+test circuit (note_commit.rs:2054+) as dump target, convert_dump.py, fixture files,
+TestVkLayoutNoteCommit mirroring TestVkLayoutPoseidon.
