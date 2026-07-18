@@ -150,7 +150,7 @@ def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
 
 /-! ## Region counts and stage outputs -/
 
-private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
+theorem commit_call_regionCount (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
@@ -160,7 +160,7 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-private theorem composite_call_regionCount (wb1 wd1 : WitgenIR Fp 1)
+theorem composite_call_regionCount (wb1 wd1 : WitgenIR Fp 1)
     (c : CommitIvk.Config × LookupRangeCheck.Config 10)
     (inp : Var Canonicity.Inputs Fp) (j : RegionIndex) :
     Operations.regionCount
