@@ -486,6 +486,60 @@ private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   rw [ProvableStruct.eval_cells_eq_eval]
   with_unfolding_all rfl
 
+private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ magnitude := c1, sign := c2 } : Var Ecc.MulFixed.Short.Inputs Fp))
+    = { magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        sign := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 c3 : AssignedCell Fp) (p : Point (AssignedCell Fp)) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ nk := c1, rho := c2, psi := c3, cm := p } : Var DeriveNullifier.Input Fp))
+    = { nk := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        rho := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp),
+        psi := eval (⟨place, env⟩ : Placed Environment Fp) (c3 : Var field Fp),
+        cm := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (p : Point (AssignedCell Fp)) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ akP := p } : Var SpendAuthority.Input Fp))
+    = { akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ ak := c1, nk := c2 } : Var CommitIvk.Main.Inputs Fp))
+    = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        nk := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem aiInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp)) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ ivk := c1, gDOld := p } : Var AddressIntegrity.Input Fp))
+    = { ivk := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        gDOld := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ node := c } : Var Sinsemilla.Merkle.Layer.Input Fp))
+    = { node := eval (⟨place, env⟩ : Placed Environment Fp) (c : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
 private theorem nc_extract_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
     (c : NoteCommit.Main.Config) (inp : Var NoteCommit.Main.Inputs Fp)
@@ -494,6 +548,10 @@ private theorem nc_extract_eq (G : Generators) (R : FixedBase)
       = Ecc.MulFixed.FullWidth.fwExtract c.mulConfig (i + 25) env := rfl
 
 /-! ## Stage outputs and offsets -/
+
+private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
+    (col : Column .instance) (row : ℕ) (i : RegionIndex) :
+    (constrainInstance cell col row).nextRegionIndex i = i := rfl
 
 theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses) (cfg : Config)
     (i : RegionIndex) :
@@ -603,13 +661,83 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   have hCI := hCk.2.2.2.2.2.2.2.2.2.2.1
   have hAI := hCk.2.2.2.2.2.2.2.2.2.2.2
   clear hCk
-  rw [merkle_call_regionCount] at hM2 hVC hDN hSA hCI hAI
-  rw [merkle_call_regionCount] at hVC hDN hSA hCI hAI
-  rw [vc_call_regionCount] at hDN hSA hCI hAI
-  rw [dn_call_regionCount] at hSA hCI hAI
-  rw [sa_call_regionCount] at hCI hAI
-  rw [civk_call_regionCount] at hAI
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hM2 hVC hDN hSA hCI hAI
+  try rw [merkle_call_regionCount] at hM2
+  try rw [merkle_call_regionCount] at hM2
+  try rw [vc_call_regionCount] at hM2
+  try rw [dn_call_regionCount] at hM2
+  try rw [sa_call_regionCount] at hM2
+  try rw [civk_call_regionCount] at hM2
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hM2
+  try rw [merkle_call_regionCount] at hVC
+  try rw [merkle_call_regionCount] at hVC
+  try rw [vc_call_regionCount] at hVC
+  try rw [dn_call_regionCount] at hVC
+  try rw [sa_call_regionCount] at hVC
+  try rw [civk_call_regionCount] at hVC
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hVC
+  try rw [merkle_call_regionCount] at hIcvx
+  try rw [merkle_call_regionCount] at hIcvx
+  try rw [vc_call_regionCount] at hIcvx
+  try rw [dn_call_regionCount] at hIcvx
+  try rw [sa_call_regionCount] at hIcvx
+  try rw [civk_call_regionCount] at hIcvx
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIcvx
+  try rw [merkle_call_regionCount] at hIcvy
+  try rw [merkle_call_regionCount] at hIcvy
+  try rw [vc_call_regionCount] at hIcvy
+  try rw [dn_call_regionCount] at hIcvy
+  try rw [sa_call_regionCount] at hIcvy
+  try rw [civk_call_regionCount] at hIcvy
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIcvy
+  try rw [merkle_call_regionCount] at hDN
+  try rw [merkle_call_regionCount] at hDN
+  try rw [vc_call_regionCount] at hDN
+  try rw [dn_call_regionCount] at hDN
+  try rw [sa_call_regionCount] at hDN
+  try rw [civk_call_regionCount] at hDN
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hDN
+  try rw [merkle_call_regionCount] at hInf
+  try rw [merkle_call_regionCount] at hInf
+  try rw [vc_call_regionCount] at hInf
+  try rw [dn_call_regionCount] at hInf
+  try rw [sa_call_regionCount] at hInf
+  try rw [civk_call_regionCount] at hInf
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hInf
+  try rw [merkle_call_regionCount] at hSA
+  try rw [merkle_call_regionCount] at hSA
+  try rw [vc_call_regionCount] at hSA
+  try rw [dn_call_regionCount] at hSA
+  try rw [sa_call_regionCount] at hSA
+  try rw [civk_call_regionCount] at hSA
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hSA
+  try rw [merkle_call_regionCount] at hIrkx
+  try rw [merkle_call_regionCount] at hIrkx
+  try rw [vc_call_regionCount] at hIrkx
+  try rw [dn_call_regionCount] at hIrkx
+  try rw [sa_call_regionCount] at hIrkx
+  try rw [civk_call_regionCount] at hIrkx
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIrkx
+  try rw [merkle_call_regionCount] at hIrky
+  try rw [merkle_call_regionCount] at hIrky
+  try rw [vc_call_regionCount] at hIrky
+  try rw [dn_call_regionCount] at hIrky
+  try rw [sa_call_regionCount] at hIrky
+  try rw [civk_call_regionCount] at hIrky
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIrky
+  try rw [merkle_call_regionCount] at hCI
+  try rw [merkle_call_regionCount] at hCI
+  try rw [vc_call_regionCount] at hCI
+  try rw [dn_call_regionCount] at hCI
+  try rw [sa_call_regionCount] at hCI
+  try rw [civk_call_regionCount] at hCI
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hCI
+  try rw [merkle_call_regionCount] at hAI
+  try rw [merkle_call_regionCount] at hAI
+  try rw [vc_call_regionCount] at hAI
+  try rw [dn_call_regionCount] at hAI
+  try rw [sa_call_regionCount] at hAI
+  try rw [civk_call_regionCount] at hAI
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hAI
   subcircuit_rw at hM1
   subcircuit_rw at hM2
   subcircuit_rw at hVC
@@ -620,28 +748,36 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   have hM1S := hM1 (by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
     (by rw [merkle_assumptions_eq]; trivial)
   rw [merkle_spec_eq] at hM1S
+  rw [layerInput_eval_eq] at hM1S
   have hM2S := hM2 (by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
     (by rw [merkle_assumptions_eq]; trivial)
   rw [merkle_spec_eq] at hM2S
+  try rw [layerInput_eval_eq] at hM2S
   have hVCS := hVC (by exact ⟨hSh, hFw⟩) (by trivial)
   rw [vc_spec_eq, vc_extract_eq] at hVCS
+  rw [vcInputs_eval_eq] at hVCS
   have hDNS := hDN (by exact hBf) (by
     show Orchard.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact hCmS)
   rw [dn_spec_eq] at hDNS
+  rw [dnInputs_eval_eq] at hDNS
   have hSAS := hSA (by exact hFw) (by
     show Orchard.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact Or.inl hAkS)
   rw [sa_spec_eq, sa_extract_eq] at hSAS
+  rw [saInputs_eval_eq] at hSAS
   have hCIS := hCI (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
   rw [civk_spec_eq, civk_extract_eq] at hCIS
+  simp only [CommitIvk.Main.Spec] at hCIS
+  rw [civkInputs_eval_eq] at hCIS
   have hAIS := hAI (by exact hMulE) (by
     show Orchard.Point.OnCurve _
     simp only [circuit_norm, Point.eval_eq]
     exact hGdS)
   rw [ai_spec_eq, ai_output] at hAIS
+  rw [aiInputs_eval_eq] at hAIS
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero,
     Nat.add_assoc, Nat.reduceAdd] at hAIS
@@ -658,6 +794,43 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   have hIcmx := hN.2.2.2.2.2.1
   have hOrch := hN.2.2.2.2.2.2
   clear hN
+  try rw [nc_call_regionCount] at hEqR
+  try rw [wpointNonId_call_regionCount] at hEqR
+  try rw [wpointNonId_call_regionCount] at hEqR
+  try rw [nc_call_regionCount] at hEqR
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hEqR
+  try rw [nc_call_regionCount] at hGdN
+  try rw [wpointNonId_call_regionCount] at hGdN
+  try rw [wpointNonId_call_regionCount] at hGdN
+  try rw [nc_call_regionCount] at hGdN
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hGdN
+  try rw [nc_call_regionCount] at hPkN
+  try rw [wpointNonId_call_regionCount] at hPkN
+  try rw [wpointNonId_call_regionCount] at hPkN
+  try rw [nc_call_regionCount] at hPkN
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hPkN
+  try rw [nc_call_regionCount] at hNCn
+  try rw [wpointNonId_call_regionCount] at hNCn
+  try rw [wpointNonId_call_regionCount] at hNCn
+  try rw [nc_call_regionCount] at hNCn
+  try simp only [Nat.add_assoc, Nat.reduceAdd] at hNCn
+  try rw [nc_call_regionCount] at hIcmx
+  try rw [wpointNonId_call_regionCount] at hIcmx
+  try rw [wpointNonId_call_regionCount] at hIcmx
+  try rw [nc_call_regionCount] at hIcmx
+  try simp only [nextRegionIndex_constrainInstance, circuit_norm, Nat.add_assoc,
+    Nat.reduceAdd] at hIcmx
+  try rw [nc_call_regionCount] at hOrch
+  try rw [wpointNonId_call_regionCount] at hOrch
+  try rw [wpointNonId_call_regionCount] at hOrch
+  try rw [nc_call_regionCount] at hOrch
+  try simp only [nextRegionIndex_constrainInstance, circuit_norm, Nat.add_assoc,
+    Nat.reduceAdd] at hOrch
+  rw [wpointNonId_output] at hNCn
+  rw [wpointNonId_output] at hNCn
+  try rw [wpointNonId_output] at hIcmx
+  try rw [wpointNonId_output] at hIcmx
+  simp only [] at hNCn hIcmx
   subcircuit_rw at hNCo
   subcircuit_rw at hGdN
   subcircuit_rw at hPkN
@@ -670,6 +843,8 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
         · show Orchard.Point.OnCurve _
           with_unfolding_all exact hAIS.1)
   rw [nc_spec_eq, nc_extract_eq] at hNCoS
+  simp only [NoteCommit.Main.Spec] at hNCoS
+  rw [ncInputs_eval_eq] at hNCoS
   have hGdNS := hGdN (by rw [wpointNonId_envAssumptions_eq]; trivial)
     (by rw [wpointNonId_assumptions_eq]; trivial)
   rw [wpointNonId_spec_eq, wpointNonId_output] at hGdNS
@@ -684,12 +859,126 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
         · show Orchard.Point.OnCurve _
           with_unfolding_all exact hPkNS)
   rw [nc_spec_eq, nc_extract_eq] at hNCnS
+  simp only [NoteCommit.Main.Spec] at hNCnS
+  rw [ncInputs_eval_eq] at hNCnS
   clear hNCo hGdN hPkN hNCn
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_zero] at hGdNS hPkNS
   -- the "constrain equal" region: derived cm_old = witnessed cm_old
-  simp only [circuit_norm] at hEqR hOrch
-  sorry
+  try simp only [circuit_norm] at hEqR
+  try simp only [circuit_norm] at hOrch
+  -- ── assemble the statement ──
+  simp only [Spec, extract, cellRead, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_zero, Nat.add_assoc, Nat.reduceAdd]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · with_unfolding_all exact hCmS
+  · with_unfolding_all exact hGdS
+  · with_unfolding_all exact hAkS
+  · with_unfolding_all exact hAIS.1
+  · with_unfolding_all exact hGdNS
+  · with_unfolding_all exact hPkNS
+  · -- value-commitment integrity
+    obtain ⟨m, hm, hmag, hdisj⟩ := hVCS
+    have hP : ({ x := env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
+                 y := env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ) } : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).output
+              (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+               cfg.eccConfig.add)
+              { magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
+                sign := AssignedCell.of (i₀ + 265) 0 (cfg.advices 9) }
+              (i₀ + 266)) := by
+      apply Point.ext_coords
+      show (env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
+            env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ)) = _
+      rw [← hIcvx, ← hIcvy]
+      with_unfolding_all rfl
+    refine ⟨m, hm, by with_unfolding_all exact hmag, ?_⟩
+    rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
+    · exact Or.inl ⟨by with_unfolding_all exact hs, by rw [hP]; exact he⟩
+    · exact Or.inr ⟨by with_unfolding_all exact hs, by rw [hP]; exact he⟩
+  · -- nullifier integrity
+    exact hInf.symm.trans (by with_unfolding_all exact hDNS)
+  · -- spend authority
+    have hP : ({ x := env.inst cfg.primary ((RK_X : ℕ) : ℤ),
+                 y := env.inst cfg.primary ((RK_Y : ℕ) : ℤ) } : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((SpendAuthority.circuit B.spendAuthG W.alphaWindows).output
+              (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+              { akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+                         y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
+              (i₀ + 280)) := by
+      apply Point.ext_coords
+      show (env.inst cfg.primary ((RK_X : ℕ) : ℤ),
+            env.inst cfg.primary ((RK_Y : ℕ) : ℤ)) = _
+      rw [← hIrkx, ← hIrky]
+      with_unfolding_all rfl
+    rw [hP, hSAS]
+    with_unfolding_all rfl
+  · -- diversified-address integrity
+    exact ⟨_, by with_unfolding_all exact hCIS, by with_unfolding_all exact hAIS.2⟩
+  · -- old note-commitment integrity
+    refine Orchard.Specs.Sinsemilla.SpecOrBreak.mono ?_
+      (by with_unfolding_all exact hNCoS)
+    intro bp hbp
+    have hcmP : ({ x := env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 2) : ℕ) : ℤ),
+                   y := env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 2) : ℕ) : ℤ) }
+                : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+              B.noteQ_onCurve).output
+              { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+                lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+                addConfig := cfg.eccConfig.add }
+              { gdX := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                gdY := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y,
+                pkdX := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                pkdY := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y,
+                value := AssignedCell.of (i₀ + 6) 0 (cfg.advices 0),
+                rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                psi := AssignedCell.of i₀ 0 (cfg.advices 0) }
+              (i₀ + 303)) := by
+      apply Point.ext_coords
+      simp only [Point.coords]
+      rw [← hEqR.1, ← hEqR.2]
+      with_unfolding_all rfl
+    rw [hcmP]
+    exact hbp
+  · -- new note-commitment integrity
+    rw [← hInf]
+    refine Orchard.Specs.Sinsemilla.SpecOrBreak.mono ?_
+      (by with_unfolding_all exact hNCnS)
+    intro bp hbp
+    rw [← hIcmx]
+    with_unfolding_all exact congrArg Point.x hbp
+  · -- Merkle path validity + the anchor check
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S hM2S
+    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    have h := hGate.2.1
+    simp only [if_pos rfl] at h
+    rw [hOv, hOr, hOa] at h
+    exact ⟨_, by with_unfolding_all exact hRoot, by with_unfolding_all exact h⟩
+  · -- `v_old − v_new = magnitude · sign`
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    have h := hGate.1
+    simp only [if_pos rfl] at h
+    rw [hOv, hOn, hOm, hOs] at h
+    linear_combination h
+  · -- the enable-flag checks
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    refine ⟨?_, ?_⟩
+    · have h := hGate.2.2.1
+      simp only [if_pos rfl] at h
+      rw [hOv, hOes] at h
+      linear_combination h
+    · have h := hGate.2.2.2
+      simp only [if_pos rfl] at h
+      rw [hOn, hOeo] at h
+      linear_combination h
 
 end Halo2.Ironwood.Action.Circuit
