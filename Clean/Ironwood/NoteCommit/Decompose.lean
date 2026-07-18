@@ -71,42 +71,9 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
       by linear_combination hdec⟩
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwb, hwb0, hwb1, hwb2, hwb3⟩ := hwit
+    circuit_proof_start [gate, boolCheck]
     obtain ⟨hpa1, hpa2, hpa3⟩ := hPA
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Inputs Fp)
-      = { b := env.env.get input_var.b.cell.column
-            ((env.place input_var.b.cell.regionIndex
-              + input_var.b.cell.rowOffset : ℕ) : ℤ),
-          b0 := env.env.get input_var.b0.cell.column
-            ((env.place input_var.b0.cell.regionIndex
-              + input_var.b0.cell.rowOffset : ℕ) : ℤ),
-          b2 := env.env.get input_var.b2.cell.column
-            ((env.place input_var.b2.cell.regionIndex
-              + input_var.b2.cell.rowOffset : ℕ) : ℤ),
-          b3 := env.env.get input_var.b3.cell.column
-            ((env.place input_var.b3.cell.regionIndex
-              + input_var.b3.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hib : env.env.get input_var.b.cell.column
-        ((env.place input_var.b.cell.regionIndex
-          + input_var.b.cell.rowOffset : ℕ) : ℤ) = input.b := congrArg Inputs.b h_input
-    have hib0 : env.env.get input_var.b0.cell.column
-        ((env.place input_var.b0.cell.regionIndex
-          + input_var.b0.cell.rowOffset : ℕ) : ℤ) = input.b0 := congrArg Inputs.b0 h_input
-    have hib2 : env.env.get input_var.b2.cell.column
-        ((env.place input_var.b2.cell.regionIndex
-          + input_var.b2.cell.rowOffset : ℕ) : ℤ) = input.b2 := congrArg Inputs.b2 h_input
-    have hib3 : env.env.get input_var.b3.cell.column
-        ((env.place input_var.b3.cell.regionIndex
-          + input_var.b3.cell.rowOffset : ℕ) : ℤ) = input.b3 := congrArg Inputs.b3 h_input
-    rw [← hib2, ← hwb2] at hpa2
-    rw [← hib, ← hib0, ← hib2, ← hib3, ← hwb, ← hwb0, ← hwb2, ← hwb3] at hpa3
-    refine ⟨⟨⟨?_, ?_, ?_⟩, hwb, hwb0, hwb2, hwb3⟩, h_output.symm⟩
+    refine ⟨⟨?_, ?_, ?_⟩, h_output.symm⟩
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · rcases hpa2 with h | h <;> rw [h] <;> ring
     · linear_combination hpa3
@@ -158,42 +125,9 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
       by linear_combination hdec⟩
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwd, hwd0, hwd1, hwd2, hwd3⟩ := hwit
+    circuit_proof_start [gate, boolCheck]
     obtain ⟨hpa1, hpa2, hpa3⟩ := hPA
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Inputs Fp)
-      = { d := env.env.get input_var.d.cell.column
-            ((env.place input_var.d.cell.regionIndex
-              + input_var.d.cell.rowOffset : ℕ) : ℤ),
-          d1 := env.env.get input_var.d1.cell.column
-            ((env.place input_var.d1.cell.regionIndex
-              + input_var.d1.cell.rowOffset : ℕ) : ℤ),
-          d2 := env.env.get input_var.d2.cell.column
-            ((env.place input_var.d2.cell.regionIndex
-              + input_var.d2.cell.rowOffset : ℕ) : ℤ),
-          d3 := env.env.get input_var.d3.cell.column
-            ((env.place input_var.d3.cell.regionIndex
-              + input_var.d3.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hid : env.env.get input_var.d.cell.column
-        ((env.place input_var.d.cell.regionIndex
-          + input_var.d.cell.rowOffset : ℕ) : ℤ) = input.d := congrArg Inputs.d h_input
-    have hid1 : env.env.get input_var.d1.cell.column
-        ((env.place input_var.d1.cell.regionIndex
-          + input_var.d1.cell.rowOffset : ℕ) : ℤ) = input.d1 := congrArg Inputs.d1 h_input
-    have hid2 : env.env.get input_var.d2.cell.column
-        ((env.place input_var.d2.cell.regionIndex
-          + input_var.d2.cell.rowOffset : ℕ) : ℤ) = input.d2 := congrArg Inputs.d2 h_input
-    have hid3 : env.env.get input_var.d3.cell.column
-        ((env.place input_var.d3.cell.regionIndex
-          + input_var.d3.cell.rowOffset : ℕ) : ℤ) = input.d3 := congrArg Inputs.d3 h_input
-    rw [← hid1, ← hwd1] at hpa2
-    rw [← hid, ← hid1, ← hid2, ← hid3, ← hwd, ← hwd1, ← hwd2, ← hwd3] at hpa3
-    refine ⟨⟨⟨?_, ?_, ?_⟩, hwd, hwd1, hwd2, hwd3⟩, h_output.symm⟩
+    refine ⟨⟨?_, ?_, ?_⟩, h_output.symm⟩
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · rcases hpa2 with h | h <;> rw [h] <;> ring
     · linear_combination hpa3
@@ -231,34 +165,8 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
     linear_combination hdec
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwe, hwe0, hwe1⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Inputs Fp)
-      = { e := env.env.get input_var.e.cell.column
-            ((env.place input_var.e.cell.regionIndex
-              + input_var.e.cell.rowOffset : ℕ) : ℤ),
-          e0 := env.env.get input_var.e0.cell.column
-            ((env.place input_var.e0.cell.regionIndex
-              + input_var.e0.cell.rowOffset : ℕ) : ℤ),
-          e1 := env.env.get input_var.e1.cell.column
-            ((env.place input_var.e1.cell.regionIndex
-              + input_var.e1.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hie : env.env.get input_var.e.cell.column
-        ((env.place input_var.e.cell.regionIndex
-          + input_var.e.cell.rowOffset : ℕ) : ℤ) = input.e := congrArg Inputs.e h_input
-    have hie0 : env.env.get input_var.e0.cell.column
-        ((env.place input_var.e0.cell.regionIndex
-          + input_var.e0.cell.rowOffset : ℕ) : ℤ) = input.e0 := congrArg Inputs.e0 h_input
-    have hie1 : env.env.get input_var.e1.cell.column
-        ((env.place input_var.e1.cell.regionIndex
-          + input_var.e1.cell.rowOffset : ℕ) : ℤ) = input.e1 := congrArg Inputs.e1 h_input
-    rw [← hie, ← hie0, ← hie1, ← hwe, ← hwe0, ← hwe1] at hPA
-    exact ⟨by linear_combination hPA, hwe, hwe0, hwe1⟩
+    circuit_proof_start [gate]
+    linear_combination hPA
 
 end DecomposeE
 
@@ -303,35 +211,9 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     exact ⟨isBool_of_boolCheck hg0, by linear_combination hdec⟩
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwg, hwg0, hwg1, hwg2⟩ := hwit
+    circuit_proof_start [gate, boolCheck]
     obtain ⟨hpa1, hpa2⟩ := hPA
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Inputs Fp)
-      = { g := env.env.get input_var.g.cell.column
-            ((env.place input_var.g.cell.regionIndex
-              + input_var.g.cell.rowOffset : ℕ) : ℤ),
-          g1 := env.env.get input_var.g1.cell.column
-            ((env.place input_var.g1.cell.regionIndex
-              + input_var.g1.cell.rowOffset : ℕ) : ℤ),
-          g2 := env.env.get input_var.g2.cell.column
-            ((env.place input_var.g2.cell.regionIndex
-              + input_var.g2.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hig : env.env.get input_var.g.cell.column
-        ((env.place input_var.g.cell.regionIndex
-          + input_var.g.cell.rowOffset : ℕ) : ℤ) = input.g := congrArg Inputs.g h_input
-    have hig1 : env.env.get input_var.g1.cell.column
-        ((env.place input_var.g1.cell.regionIndex
-          + input_var.g1.cell.rowOffset : ℕ) : ℤ) = input.g1 := congrArg Inputs.g1 h_input
-    have hig2 : env.env.get input_var.g2.cell.column
-        ((env.place input_var.g2.cell.regionIndex
-          + input_var.g2.cell.rowOffset : ℕ) : ℤ) = input.g2 := congrArg Inputs.g2 h_input
-    rw [← hig, ← hig1, ← hig2, ← hwg, ← hwg1, ← hwg2] at hpa2
-    refine ⟨⟨⟨?_, ?_⟩, hwg, hwg1, hwg2⟩, h_output.symm⟩
+    refine ⟨⟨?_, ?_⟩, h_output.symm⟩
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · linear_combination hpa2
 
@@ -374,29 +256,9 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     exact ⟨isBool_of_boolCheck hh1, by linear_combination hdec⟩
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hPA ⊢
-    obtain ⟨hwh, hwh0, hwh1⟩ := hwit
+    circuit_proof_start [gate, boolCheck]
     obtain ⟨hpa1, hpa2⟩ := hPA
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
-        : Inputs Fp)
-      = { h := env.env.get input_var.h.cell.column
-            ((env.place input_var.h.cell.regionIndex
-              + input_var.h.cell.rowOffset : ℕ) : ℤ),
-          h0 := env.env.get input_var.h0.cell.column
-            ((env.place input_var.h0.cell.regionIndex
-              + input_var.h0.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input
-    have hih : env.env.get input_var.h.cell.column
-        ((env.place input_var.h.cell.regionIndex
-          + input_var.h.cell.rowOffset : ℕ) : ℤ) = input.h := congrArg Inputs.h h_input
-    have hih0 : env.env.get input_var.h0.cell.column
-        ((env.place input_var.h0.cell.regionIndex
-          + input_var.h0.cell.rowOffset : ℕ) : ℤ) = input.h0 := congrArg Inputs.h0 h_input
-    rw [← hih, ← hih0, ← hwh, ← hwh0] at hpa2
-    refine ⟨⟨⟨?_, ?_⟩, hwh, hwh0⟩, h_output.symm⟩
+    refine ⟨⟨?_, ?_⟩, h_output.symm⟩
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · linear_combination hpa2
 

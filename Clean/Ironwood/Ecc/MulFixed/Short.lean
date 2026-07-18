@@ -983,8 +983,6 @@ private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset 
         simp only [circuit_norm]
         exact hDC.2 w
 
-
-
 /-- The inner-region bundle. -/
 def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut where

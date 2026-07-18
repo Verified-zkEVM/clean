@@ -338,3 +338,105 @@ Y-composite patterns worth reusing:
 NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
 the decompose bundles + these composites + Sinsemilla, per the donor
 Orchard.Action.NoteCommit top level.
+## NoteCommit main — assembly design (read note_commit.rs:1596-1800 alongside)
+
+Goal (active hook): fully port NoteCommit + deps, proven bundles + VK matching.
+CommitDomain de-abstraction DONE (24cdc725): commit now composes MulFixed.FullWidth
+directly; scalar = extraction data (fwExtract), validity via FixedBase.smul_valid.
+
+KEY LAYOUT FACT: Rust's region order interleaves — the four canonicity witness_checks
+(a'/b3c'/e1f'/g1g2') run mid-flow, the TEN gate regions all run at the END. So the
+Gd/Pkd/Rho/Psi composites (witnessCheck+gate contiguous) canNOT be called as units in
+NoteCommit (wrong region order for VK layout). Main calls the individual bundles in
+Rust call order; the composites' soundness scripts are the exact glue template to
+inline. The Y composites ARE contiguous in Rust and are called as units. CommitIvk
+composite: verify commit_ivk.rs region order before reusing it in its parent.
+
+Region sequence (ns := [25,1,25,6,1,25,25,1]; pieces a..h):
+ 1 piece a (witnessMessagePiece, aWit = br(gdX,0,250))
+ 2 short 4 b0=br(gdX,250,4)   3 short 4 b3=br(pkdX,0,4)     4 piece b (b0+b1·2^4+b2·2^5+b3·2^6)
+ 5 piece c (br(pkdX,4,250))
+ 6 short 8 d2=br(value,0,8)   7 piece d (d0+d1·2+d2·2^2+d3·2^10, d3=br(value,8,50))
+ 8 short 6 e0=br(value,58,6)  9 short 4 e1=br(rho,0,4)      10 piece e (e0+e1·2^6)
+11 piece f (br(rho,4,250))
+12 short 9 g1=br(psi,0,9)     13 piece g (g0+g1·2+g2·2^10, g0=br(rho,254,1), g2=br(psi,9,240))
+14 short 5 h0=br(psi,249,5)   15 piece h (h0+h1·2^5, h1=br(psi,254,1))
+16-20 YCanonicityCheck.circuit (wlsb=br(gdY,0,1)) input {y:=gdY} → b2 cell
+21-25 YCanonicityCheck.circuit (wlsb=br(pkdY,0,1)) input {y:=pkdY} → d1 cell
+26-29 CommitDomain.commit G ns R windows Q … input {pieces := #v[a..h]} → cm point
+      (blind 2 regions at 26/27, hash at 28, add at 29)
+30 witnessCheck 13 aPrimeWit(aPiece)       31 witnessCheck 14 b3CPrimeWit(b3,c)
+32 witnessCheck 14 e1FPrimeWit(e1,f)       33 witnessCheck 13 g1G2PrimeWit(g1, z1_g cell)
+34 (DecomposeB.bundle wb1=br(gdX,254,1)).toFormal {b, b0, b2:=Ygd-out, b3} → b1
+35 (DecomposeD.bundle wd0=br(pkdX,254,1)).toFormal {d, d1:=Ypkd-out, d2, d3:=z1_d} → d0
+36 DecomposeE.bundle.toFormal {e, e0, e1}
+37 (DecomposeG.bundle wg0=br(rho,254,1)).toFormal {g, g1, g2:=z1_g} → g0
+38 (DecomposeH.bundle wh1=br(psi,254,1)).toFormal {h, h0} → h1
+39 GdCanonicity.bundle.toFormal {gdX, b0, b1, a, aPrime:=r30.z0, z13A:=z13_a, z13APrime:=r30.zLast}
+40 PkdCanonicity.bundle.toFormal {pkdX, b3, d0, c, b3CPrime:=r31.z0, z13C:=z13_c, z14B3CPrime:=r31.zLast}
+41 ValueCanonicity.bundle.toFormal {v:=value, d2, z1D:=z1_d, e0}  (check Row field names!)
+42 RhoCanonicity.bundle.toFormal {rho, e1, g0, f, e1FPrime:=r32.z0, z13F:=z13_f, z14E1FPrime:=r32.zLast}
+43 PsiCanonicity.bundle.toFormal {psi, h0, g1, h1, g2:=z1_g, g1G2Prime:=r33.z0, z13G:=z13_g, z13G1G2Prime:=r33.zLast}
+
+Hash z cells (positional, hash region iH = i₀+28, column hcfg.bits, offset base 0):
+z(i,j) = AssignedCell.of iH (prefixRows ns i + j) hcfg.bits; iH = i₀+27 (NOT +28); prefixRows for ns:
+[0,26,28,54,61,63,89,115]. z13_a=(0,13)→row 13; z13_c=(2,13)→41; z1_d=(3,1)→55;
+z13_f=(5,13)→76; z1_g=(6,1)→90; z13_g=(6,13)→102.
+
+Main.circuit params: (R : FixedBase) (windows : Vector (FExpr Fp) 85) (G Q hQ …).
+Inputs {gdX gdY pkdX pkdY value rho psi}. Output Point (cm).
+Config: (NoteCommit.Config × HashPiece.Config × LookupRangeCheck.Config 10 ×
+MulFixed.FullWidth.Config × Ecc.Add.Config), configure := pure (NoteCommit.configure
+in Gates.lean is the VK-exact gate registration; the outer test circuit composes).
+Spec target: donor Orchard.Action.NoteCommit top-level Spec.
+
+Plan: (1) Main.lean defs (witness programs + synthesize + regionCount) compile-clean,
+commit. (2) soundness/completeness (the giant compose; inline the Gd/Pkd/Rho/Psi
+composite glue; keep proofs local until sorry-free). (3) VK layout fixture: needs a
+dump harness for orchard's note_commit test circuit (orchard crate, not halo2_gadgets —
+FullRecorder is pub(crate) there; vendor or expose), convert_dump.py, fixture files,
+TestVkLayoutNoteCommit.
+
+## NoteCommit bundle phase (next; defs milestone a5328282 DONE — Main.lean compiles)
+
+Main.lean synth compiles with all ~30 children wired (iHash = i₀+27; currentRegion
+primitive anchors positional zCells). Next: the FormalCircuit bundle around synth.
+
+Donor top-level to mirror (Clean/Orchard/Action/NoteCommit.lean:1806-1930 + 2523):
+- Spec = NoteCommitRelation G Q R input cm; PA = ProverNoteCommitRelation-side
+  (OnCurve gd/pkd, value < 2^64, rcm canonical, honest hash defined).
+- Ironwood deltas: Inputs are coordinate CELLS {gdX gdY pkdX pkdY value rho psi};
+  rcm scalar = FullWidth extraction data (CommitDomain pattern: wit.2.2-style);
+  Assumptions = gd/pkd OnCurve stated on the coord evals.
+- REUSE the donor value-theory connectors (all value-level, no circuit traces):
+  PieceExtraction section — MessageCellFacts, pieceBounds_of_cellFacts,
+  noteCommitChunks / noteChunksOfScalars / note_chunks_eq_of_cellFacts,
+  honestChunks_eq_noteCommitChunks_of_cellFacts, z13G_tail_of_decompose_g,
+  valueCanonicity_assumptions_of_commit (donor NoteCommit.lean 1600-1800, 1880-2520).
+  The Ironwood soundness = 30-child subcircuit_rw peel (template: the composite
+  soundness scripts in Composites.lean/YComposite.lean/CommitIvk/Composite.lean,
+  esp. chaining witnessCheck telescopes into gate-bundle rely-conditions) + these
+  donor connectors for the value algebra.
+- Witness/extract: ChainWit (hash) × fwExtract (scalar) × per-gate bit cells as needed;
+  output = Point (cm).
+- Proof scale: expect the largest proof in the tree; keep the bundle LOCAL (uncommitted)
+  until sorry-free; sub-lemmas that are pure value algebra may be committed early.
+
+VK fixture (parallel track): needs orchard-crate dump harness (halo2_gadgets
+FullRecorder is pub(crate) — expose or vendor into orchard test), the note_commit
+test circuit (note_commit.rs:2054+) as dump target, convert_dump.py, fixture files,
+TestVkLayoutNoteCommit mirroring TestVkLayoutPoseidon.
+
+### synth_regionCount blocker (Main.lean, = 43)
+The one-shot simp peel leaves 13 folded call chunks; `rw` on them (even with
+specialized per-child rfl-bridges `toFormal_call_regionCount`/`yc_call_regionCount`/
+`commit_call_regionCount`, and even with the circuits `seal`ed) hits the 200k-heartbeat
+isDefEq wall — kabstract tries defeq of the pattern against every other chunk.
+`simp only [bridge]` never fires on call chunks (known simp-vs-rw asymmetry).
+`with_unfolding_all rfl` on the whole thing fails (not defeq at rfl).
+RECOMMENDED FIX: split synth into 3 stage defs (pieces 15 regions / checks 18 =
+2×Y(5)+commit(4)+4 wchecks / gates 10), prove each stage's count separately (small
+goals, short rw chains), combine. The stage split will also make the 30-child
+soundness peel tractable (hc splits into 3 then further). Cells thread across stages
+via small record types. The bridges compile and are kept... (removed with the failed
+lemma — recover from this note or git history at the failed attempt).

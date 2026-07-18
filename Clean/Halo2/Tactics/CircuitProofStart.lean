@@ -471,7 +471,7 @@ def rowFactChaining (d : Direction) : TacticM Unit := do
       try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
   else
     try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident)) catch _ => pure ()
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident)) catch _ => pure ()
+    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident $(mkIdent `hPA):ident)) catch _ => pure ()
     -- Land `h_output` on the input/witness values. A leaf whose `ProverSpec` is a value equation
     -- (`output = input`, e.g. WitnessPoint) leaves that obligation as a goal conjunct over the free
     -- `output` coords; after this rewrite `h_output` reads as the per-coordinate value equation
