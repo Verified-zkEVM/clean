@@ -215,6 +215,63 @@ private theorem decomposeH_output (w : WitgenIR Fp 1) (name : String)
 
 end ChildBridges
 
+private theorem gd_assumptions_eq :
+    GdCanonicity.bundle.Assumptions = fun input =>
+      IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧
+      input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
+      ∃ lo : ℕ, lo < 2 ^ 130 ∧
+        input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime := rfl
+
+private theorem gd_spec_eq :
+    GdCanonicity.bundle.Spec = fun input _ _ =>
+      Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) := rfl
+
+private theorem pkd_assumptions_eq :
+    PkdCanonicity.bundle.Assumptions = fun input =>
+      IsBool input.d0 ∧ input.c.val < 2 ^ 250 ∧ input.b3.val < 2 ^ 4 ∧
+      input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+      ∃ lo : ℕ, lo < 2 ^ 140 ∧
+        input.b3CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14B3CPrime := rfl
+
+private theorem pkd_spec_eq :
+    PkdCanonicity.bundle.Spec = fun input _ _ =>
+      Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec
+        (PkdCanonicity.toDonor input) := rfl
+
+private theorem value_assumptions_eq :
+    ValueCanonicity.bundle.Assumptions = fun input =>
+      input.d2.val < 2 ^ 8 ∧ input.d3.val < 2 ^ 50 ∧ input.e0.val < 2 ^ 6 := rfl
+
+private theorem value_spec_eq :
+    ValueCanonicity.bundle.Spec = fun input _ _ =>
+      Orchard.Action.NoteCommit.ValueCanonicity.Gate.Spec
+        (ValueCanonicity.toDonor input) := rfl
+
+private theorem rho_assumptions_eq :
+    RhoCanonicity.bundle.Assumptions = fun input =>
+      IsBool input.g0 ∧ input.f.val < 2 ^ 250 ∧ input.e1.val < 2 ^ 4 ∧
+      input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp) ∧
+      ∃ lo : ℕ, lo < 2 ^ 140 ∧
+        input.e1FPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14E1FPrime := rfl
+
+private theorem rho_spec_eq :
+    RhoCanonicity.bundle.Spec = fun input _ _ =>
+      Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec
+        (RhoCanonicity.toDonor input) := rfl
+
+private theorem psi_assumptions_eq :
+    PsiCanonicity.bundle.Assumptions = fun input =>
+      IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧ input.g2.val < 2 ^ 240 ∧
+      input.h0.val < 2 ^ 5 ∧
+      input.z13G = (((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) : Fp) ∧
+      ∃ lo : ℕ, lo < 2 ^ 130 ∧
+        input.g1G2Prime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13G1G2Prime := rfl
+
+private theorem psi_spec_eq :
+    PsiCanonicity.bundle.Spec = fun input _ _ =>
+      Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec
+        (PsiCanonicity.toDonor input) := rfl
+
 /-- The Ironwood `Chain.PieceChunks` is the donor's, verbatim — the bridge unlocks the
 donor's piece-value/chunk-equality connectors. -/
 private theorem pieceChunks_donor_iff :
@@ -600,6 +657,87 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   have hz13g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13g] at hz13g
+  -- ── normalize region-index spellings ──
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S
+  simp only [Nat.add_assoc, Nat.reduceAdd] at haz0 htelA hbz0 htelB hez0 htelE hgz0 htelG
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c hz1d hz13f hz1g hz13g
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hb0 hb3 hd2 he0 he1 hg1 hh0
+  -- ── the piece-value bounds (from the chunk decompositions) ──
+  have hpieceA := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨0, by decide⟩ hPC' (by decide)
+  have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨2, by decide⟩ hPC' (by decide)
+  have hpieceD := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨3, by decide⟩ hPC' (by decide)
+  have hpieceF := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨5, by decide⟩ hPC' (by decide)
+  have hpieceG := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨6, by decide⟩ hPC' (by decide)
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC hpieceD hpieceF hpieceG
+  -- restate the vector-element facts on the piece reads (defeq transport)
+  have haval : (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceA
+  have hcval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceC
+  have hdval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
+      < 2 ^ 60 := by with_unfolding_all exact hpieceD
+  have hfval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceF
+  have hgval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceG
+  have hza : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 13 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13a
+  have hzc : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 39 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13c
+  have hzd : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
+        / 2 ^ 10 : ℕ) : Fp) := by with_unfolding_all exact hz1d
+  have hzf : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 71 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13f
+  have hzg1 : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+        / 2 ^ 10 : ℕ) : Fp) := by with_unfolding_all exact hz1g
+  have hzg13 : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 96 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13g
+  -- cast-value bounds for the copied running-sum cells
+  have hzdval : ((((env.advice cfg.hashConfig.witnessPieces
+        ((place (i₀ + 6) : ℕ) : ℤ)).val / 2 ^ 10 : ℕ) : Fp)).val < 2 ^ 50 := by
+    rw [ZMod.val_natCast_of_lt (by
+      have h60 : (2 : ℕ) ^ 60 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+      have := Nat.div_le_self (env.advice cfg.hashConfig.witnessPieces
+        ((place (i₀ + 6) : ℕ) : ℤ)).val (2 ^ 10)
+      omega)]
+    have := hdval
+    have h50 : (2 : ℕ) ^ 60 = 2 ^ 50 * 2 ^ 10 := by norm_num
+    exact Nat.div_lt_of_lt_mul (by omega)
+  have hzg1val : ((((env.advice cfg.hashConfig.witnessPieces
+        ((place (i₀ + 12) : ℕ) : ℤ)).val / 2 ^ 10 : ℕ) : Fp)).val < 2 ^ 240 := by
+    rw [ZMod.val_natCast_of_lt (by
+      have h250 : (2 : ℕ) ^ 250 < CompElliptic.Fields.Pasta.PALLAS_BASE_CARD := by
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+      have := Nat.div_le_self (env.advice cfg.hashConfig.witnessPieces
+        ((place (i₀ + 12) : ℕ) : ℤ)).val (2 ^ 10)
+      omega)]
+    have := hgval
+    have h240 : (2 : ℕ) ^ 250 = 2 ^ 240 * 2 ^ 10 := by norm_num
+    exact Nat.div_lt_of_lt_mul (by omega)
+  -- ── the five canonicity gates ──
+  have hGgdS := hGgd (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
+        simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+          Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
+        exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
+  rw [toFormal_spec_eq, gd_spec_eq] at hGgdS
+  simp only [GdCanonicity.toDonor, Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec,
+    circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+    Nat.add_zero] at hGgdS
   trace_state
   sorry
 
