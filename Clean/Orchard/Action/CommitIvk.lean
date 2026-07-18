@@ -2,6 +2,7 @@ import Clean.Orchard.Action.CommitIvkGate
 import Clean.Orchard.Action.CommitIvkChunks
 import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Specs.Sinsemilla
+import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
 
 /-!
@@ -47,7 +48,8 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := default }⟩
 
 open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
+open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
+  hashToPointB SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
@@ -1069,13 +1071,15 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input field (main G Q hQ R) := by
   elaborate_circuit
 
-/-- The committed `ivk` is the `x`-coordinate of the Sinsemilla short commitment of the
-canonical message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)`, blinded by `[rivk] CommitIvkR`. -/
+/-- Breaks-as-data `Commit^ivk` relation (zcash/ironwood#45): either the Sinsemilla
+chain over the canonical `commit_ivk` chunks is defined and `ivk` is the extracted
+short commitment, or the incomplete-addition escape is exhibited as a valid break.
+Projecting the break branch to `⊥` recovers `ivk ∈ {…, ⊥}` (§4.17.4). -/
 def Spec (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
-  ∃ rivk : Fq, ∀ B : Point Fp,
-    hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-      ivk = (B + rivk • R).x
+  ∃ rivk : Fq,
+    SpecOrBreak G.S Q (fun B => ivk = (B + rivk • R).x)
+      (hashToPointB G.S Q (commitIvkChunks ak.val nk.val))
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : Point Fp)
@@ -1227,7 +1231,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       (by simp only [circuit_norm]; simpa [bitrange] using hPVd) hak hnk
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
-  · refine ⟨rivk, fun B hB => ?_⟩
+  · refine ⟨rivk, breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve
+      (chunksOf_mem_lt (by
+        simpa [Orchard.Specs.Sinsemilla.commitIvkChunks] using hm))) fun B hB => ?_⟩
     have hpt := hHash B (by rw [hchunks]; exact hB)
     have hx := congrArg Point.x hpt
     rw [hO] at hx

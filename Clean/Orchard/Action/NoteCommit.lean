@@ -2,6 +2,7 @@ import Clean.Orchard.Action.Canonicity
 import Clean.Orchard.Action.Decompose
 import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Specs.Bitrange
+import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
 
 /-!
@@ -25,6 +26,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
+open Orchard.Specs.Sinsemilla (hashToPointB ValidBreak SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
@@ -856,12 +858,19 @@ def ProverMessagePiecesEncode (input : ProverValue Input Fp)
   Chain.honestChunks messagePieceRounds (messagePieces cells) =
     (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
+/-- Breaks-as-data note-commitment relation (zcash/ironwood#45): either the honest
+Sinsemilla chain is defined and `cm` is the commitment `B + [rcm]R`, or the chain
+escaped and the break is exhibited (`ValidBreak`: the honest prefix chain plus the
+resolved incomplete-addition collision equation — a discrete-log relation among the
+domain generators with coefficients read off the break datum). Projecting the break
+branch to `⊥` recovers the protocol specification's `NoteCommit(…) ∈ {cm, ⊥}`
+(§4.17.4), via `getLeft?_hashToPointB`. -/
 def NoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
-  ∃ rcm : Fq, ∀ B : Point Fp,
-    hashToPoint G.S Q
-        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + rcm • R
+  ∃ rcm : Fq,
+    SpecOrBreak G.S Q (fun B => cm = B + rcm • R)
+      (hashToPointB G.S Q
+        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks)
 
 def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
@@ -2232,7 +2241,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       hgdX hgdY hpkdX hpkdY hv hrho hpsi
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [Spec, NoteCommitRelation]
-    refine ⟨rcm, ?_⟩
+    refine ⟨rcm, breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve
+      (chunksOf_mem_lt (by
+        simpa [NoteCommitScalars.chunks, noteCommitChunks] using hm))) ?_⟩
     intro B hBhash
     have hHashB := hHash B (by simpa [hchunks] using hBhash)
     have hCOutPoint :

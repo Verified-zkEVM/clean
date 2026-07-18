@@ -24,7 +24,7 @@ namespace Orchard.Action.AddressIntegrity
 open CompElliptic.Curves.Pasta
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 open Ecc
-open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint)
+open Orchard.Specs.Sinsemilla (Generators commitIvkChunks hashToPoint hashToPointB SpecOrBreak)
 
 /-- Inputs of the diversified-address integrity block. `ak`, `nk`, and `rivk` feed
 `CommitIvk`; `gDOld` is the old diversified base point, and `pkDOld` is the explicit
@@ -63,9 +63,9 @@ def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
 def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (ak nk : Fp) (gDOld output : Point Fp) : Prop :=
   ∃ ivk : Fp,
-    (∃ rivk : Fq, ∀ B : Point Fp,
-      hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-        ivk = (B + rivk • R).x) ∧
+    (∃ rivk : Fq,
+      SpecOrBreak G.S Q (fun B => ivk = (B + rivk • R).x)
+        (hashToPointB G.S Q (commitIvkChunks ak.val nk.val))) ∧
     output = ivk.val • gDOld
 
 /-- Honest-prover diversified-address integrity for the concrete `rivk`. -/
