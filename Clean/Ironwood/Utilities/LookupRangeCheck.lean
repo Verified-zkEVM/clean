@@ -504,6 +504,43 @@ theorem honest_word_val_lt (K : ℕ) (hCard : 2 ^ K ≤ PALLAS_BASE_CARD) (b : �
   rw [hsub, ZMod.val_natCast_of_lt (lt_of_lt_of_le (Nat.mod_lt _ (pow_two_pos K)) hCard)]
   exact Nat.mod_lt _ (pow_two_pos K)
 
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+/-- A fully-decomposed chain pins each running sum to the exact shift of the element:
+`(f k).val = (f 0).val / 2^(K·k)` (donor `CopyCheck.read`, chain-language). -/
+theorem chain_read (K numWords : ℕ) (hpow : K * numWords ≤ 254) (f : ℕ → Fp)
+    (hchain : ∀ i, i < numWords → ∃ w : ℕ, w < 2 ^ K ∧ f i = 2 ^ K * f (i + 1) + (w : Fp))
+    (htop : f numWords = 0) (k : ℕ) (hk : k ≤ numWords) :
+    (f k).val = (f 0).val / 2 ^ (K * k) := by
+  have hcard : ∀ m : ℕ, m ≤ 254 → (2 : ℕ) ^ m < PALLAS_BASE_CARD := fun m hm =>
+    lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hm) (by norm_num [PALLAS_BASE_CARD])
+  have hsubpow : K * (numWords - k) ≤ 254 :=
+    le_trans (Nat.mul_le_mul_left K (Nat.sub_le numWords k)) hpow
+  obtain ⟨lok, hlok, htelk⟩ := chain_telescope K f k fun i hi => hchain i (by omega)
+  obtain ⟨lo', hlo', hzk⟩ := chain_telescope K (fun i => f (k + i)) (numWords - k)
+    fun i hi => by
+      obtain ⟨w, hw, hstep⟩ := hchain (k + i) (by omega)
+      exact ⟨w, hw, by
+        show f (k + i) = 2 ^ K * f (k + (i + 1)) + (w : Fp)
+        rw [show k + (i + 1) = k + i + 1 from by omega]; exact hstep⟩
+  simp only [show k + (numWords - k) = numWords from by omega, htop, mul_zero,
+    _root_.add_zero] at hzk
+  have hsum_lt : lok + 2 ^ (K * k) * lo' < 2 ^ (K * numWords) := by
+    have hab : 2 ^ (K * k) * 2 ^ (K * (numWords - k)) = 2 ^ (K * numWords) := by
+      rw [← pow_add]; congr 1; rw [← Nat.mul_add]; congr 1; omega
+    calc lok + 2 ^ (K * k) * lo'
+        < 2 ^ (K * k) + 2 ^ (K * k) * lo' := by omega
+      _ = 2 ^ (K * k) * (lo' + 1) := by ring
+      _ ≤ 2 ^ (K * k) * 2 ^ (K * (numWords - k)) := by gcongr; omega
+      _ = 2 ^ (K * numWords) := hab
+  have hzkval : (f k).val = lo' := by
+    rw [hzk]; exact ZMod.val_natCast_of_lt (lt_trans hlo' (hcard _ hsubpow))
+  have helem : f 0 = (((lok + 2 ^ (K * k) * lo' : ℕ)) : Fp) := by
+    rw [htelk, hzk]; push_cast; ring
+  have helemval : (f 0).val = lok + 2 ^ (K * k) * lo' := by
+    rw [helem]; exact ZMod.val_natCast_of_lt (lt_trans hsum_lt (hcard _ hpow))
+  rw [hzkval, helemval, Nat.add_mul_div_left _ _ (by positivity : 0 < 2 ^ (K * k)),
+    Nat.div_eq_of_lt hlok, Nat.zero_add]
+
 /-! ## `range_check` — the running-sum decomposition gadget (the loop)
 
 Rust `LookupRangeCheckConfig::range_check` (`lookup_range_check.rs:171-241`), reached via
@@ -948,6 +985,126 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
             Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
             at h_output
           exact h_output.2.symm
+
+/-- The decomposition output cells of the strict 25-word check: `z_0`, `z_1` (the `k_1`
+cell in `y_canonicity`) and `z_13`. -/
+structure DecomposedOutput (F : Type) where
+  z0 : F
+  z1 : F
+  z13 : F
+deriving ProvableStruct
+
+open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
+/-- The positional strict 25-word running-sum check exposing `z_1`/`z_13` (donor
+`CopyCheck.Decomposed`, positional): Rust `witness_check(j, 25, true)` as consumed by
+`y_canonicity` (`note_commit.rs:1997-2010`), which hands out `zs[1]` and `zs[13]`. The
+strict tail derives `elt < 2^250` and pins every running sum to the exact shift. -/
+def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
+    (hpow : 10 * numWords ≤ 254) :
+    FormalRegionCircuit Fp (Config 10) (Config 10) unit DecomposedOutput where
+  configure := fun cfg => pure cfg
+
+  synthesize cfg offset _ := do
+    let z0 ← cellAt cfg.runningSum offset
+    rangeCheckLoop 10 cfg z0 offset numWords
+    let zLast ← cellAt cfg.runningSum (offset + numWords)
+    constrainConstant zLast (0 : Fp)
+    let z1 ← cellAt cfg.runningSum (offset + 1)
+    let z13 ← cellAt cfg.runningSum (offset + 13)
+    return { z0, z1, z13 }
+
+  EnvAssumptions cfg env :=
+    TableLoaded 10 cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
+
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.runningSum : Var field Fp)
+
+  Spec _ output elt :=
+    output.z0 = elt ∧ elt.val < 2 ^ (10 * numWords) ∧
+    output.z1.val = elt.val / 2 ^ 10 ∧ output.z13.val = elt.val / 2 ^ 130
+
+  ProverAssumptions _ elt _ := elt.val < 2 ^ (10 * numWords)
+
+  ProverSpec _ output elt _ :=
+    output.z0 = elt ∧ output.z1 = ((elt.val / 2 ^ 10 : ℕ) : Fp) ∧
+    output.z13 = ((elt.val / 2 ^ 130 : ℕ) : Fp)
+
+  soundness := by
+    circuit_proof_start
+    obtain ⟨hTable, _hDistinct⟩ := _hE
+    obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
+    obtain ⟨hLoop, hTailC⟩ := hc
+    set f := zChain 10 cfg place self env offset with hf_def
+    have hwords := rangeCheck_loop_word_bounds 10 cfg
+      (AssignedCell.of self offset cfg.runningSum) place self env
+      offset hTableLt numWords hLoop
+    have hzLast0 : f numWords = 0 := by simp only [hf_def, zChain]; exact hTailC
+    have hCard : (2 : ℕ) ^ (10 * numWords) ≤ PALLAS_BASE_CARD :=
+      le_of_lt (lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hpow)
+        (by norm_num [PALLAS_BASE_CARD]))
+    obtain ⟨hOz0, hOz1, hOz13⟩ := h_output
+    rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
+      show output_z1 = f 1 from by rw [← hOz1]; simp only [hf_def, zChain],
+      show output_z13 = f 13 from by rw [← hOz13]; simp only [hf_def, zChain],
+      show env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ) = f 0
+        from by simp only [hf_def, zChain, add_zero]]
+    refine ⟨rfl, ?_, ?_, ?_⟩
+    · exact chain_element_lt 10 numWords hCard f hwords hzLast0
+    · simpa only [show (10 * 1 : ℕ) = 10 from by norm_num] using
+        chain_read 10 numWords hpow f hwords hzLast0 1 (by omega)
+    · simpa only [show (10 * 13 : ℕ) = 130 from by norm_num] using
+        chain_read 10 numWords hpow f hwords hzLast0 13 (by omega)
+
+  completeness := by
+    circuit_proof_start
+    obtain ⟨hTable, hDistinct⟩ := _hE
+    obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
+    simp only [Placed.toEnvironment_env] at hTableEq hUsable
+    -- the positional element cell's value (`z_0`)
+    set eCell := env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
+      with heCell
+    have hz0 : zChain 10 cfg place self env.toEnvironment offset 0 = eCell := by
+      simp only [zChain, add_zero, heCell]
+    have hz : ∀ j, j ≤ numWords → zChain 10 cfg place self env.toEnvironment offset j
+        = ((eCell.val / 2 ^ (10 * j) : ℕ) : Fp) := by
+      intro j hj
+      rcases Nat.eq_zero_or_pos j with rfl | hjpos
+      · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
+      · have hv := rangeCheck_loop_zvalues 10 cfg
+          (AssignedCell.of self offset cfg.runningSum) place self env offset
+          numWords hwit j hjpos hj
+        rw [hv]
+        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell]
+    have heInputLt : eCell.val < 2 ^ (10 * numWords) := hPA
+    refine ⟨⟨?_, ?_⟩, ?_, ?_, ?_⟩
+    · exact rangeCheck_loop_constraints_complete 10 cfg
+        (AssignedCell.of self offset cfg.runningSum) place self
+        env.toEnvironment offset eCell.val (by norm_num [PALLAS_BASE_CARD])
+        hUsable hTableEq numWords hz
+    · have hzn := hz numWords le_rfl
+      simp only [zChain] at hzn
+      rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
+    · rw [heCell]
+      exact h_output.1.symm
+    · have hzn := hz 1 (by omega)
+      simp only [zChain] at hzn
+      rw [← hzn]
+      exact h_output.2.1.symm
+    · have hzn := hz 13 (by omega)
+      simp only [zChain] at hzn
+      rw [show (130 : ℕ) = 10 * 13 from by norm_num, ← hzn]
+      exact h_output.2.2.symm
+
+/-- Rust `witness_check(j, 25, true)` as used by `y_canonicity`: its own
+`"Witness element"` region, witnessing the element from the caller-supplied program `w`,
+then the positional strict decomposed check. -/
+def witnessCheckDecomposed (cfg : Config 10) (w : WitgenIR Fp 1) :
+    Circuit Fp (Var DecomposedOutput Fp) :=
+  assignRegion "Witness element" (do
+    let _elt ← assignAdvice cfg.runningSum 0 w
+    (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).call cfg 0 ())
 
 /-! ## `copy_check` — the layouter-level range-check wrapper
 
