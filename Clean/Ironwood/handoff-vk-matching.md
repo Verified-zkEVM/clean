@@ -211,3 +211,40 @@ Goal: steps 1-3 — canonicity/decomposition gates with phase-1-shaped semantic 
   (K-generic telescope value lemmas already ported), then the composite per-input
   canonicity bundles (donor `NoteCommit.{Gd,Pkd,Value,Rho,Psi,Y}Canonicity` in
   NoteCommit.lean = gate bundle + telescoped copy-checks, Spec = bit-slice payoff).
+
+### NoteCommit arc — Step 2 COMPLETE (2026-07-18, pushed b2c6abc9)
+
+All 12 gate bundles FULLY PROVEN with phase-1 semantic specs: Decompose B/D/E/G/H,
+canonicity Value/Gd/Pkd/Rho/Psi/Y, CommitIvk. Donor gates refactored to row-level
+`spec_of_eqs`/`eqs_of_spec` value lemmas (extraction is verbatim body-move + input_→row.
+renames; donors' own proofs now call them). Wired into `Clean/Ironwood.lean`; full build
+green, --wfail clean on my files.
+
+Established patterns (beyond the earlier notes):
+- Witnessed-bit gates (Y: LSB/k3; CommitIvk: b1/d1): witness programs as bundle params,
+  readings in `Witness := fieldPair`; input-only rely-conditions in `Assumptions`, the
+  witnessed-bit implications / booleanity move to `ProverAssumptions` (Y uses a
+  conditional Spec: `IsBool out → DSpec …` since lsb's booleanity is enforced by the
+  DECOMPOSE gates' bool_check on the copied cell, as in Rust).
+- Index-cast spelling hazards: constraint-derived reads spell `↑(place self + offset)`
+  (cast-of-sum), extract-derived Spec holes spell `↑place + ↑offset` (sum-of-casts), and
+  row-1 sometimes `↑place + (↑offset + 1)` vs `… + 1` association. Fix: pin equation
+  `have`s at the GOAL's spelling (never `_`-holes into `by`-wrappers — metavar
+  corruption), `rw [hidx…]`/`▸` normalize hypotheses, `ring_nf at h ⊢` as last resort.
+- `simp only [toDonor]` before `linear_combination` whenever the goal has stuck
+  `(toDonor …).field` projections.
+
+### Step 3 REMAINING (the composites)
+
+- Lookup infra: `copyCheck` (toFormal of rangeCheck; Spec exposes z0 = element + the
+  TELESCOPED decomposition ∃ lo < 2^(K·numWords), … ✓) and `rangeCheckAt` (positional,
+  mul agent) EXIST. MISSING: the word-wise `witness_check` wrapper (Rust
+  `lookup_range_check.rs:witness_check` — witness element from a program + range check;
+  mirror `witnessShortCheck` but over `rangeCheckAt K numWords strict`).
+- Then the six composite canonicity bundles (donor `NoteCommit.{Gd,Pkd,Value,Rho,Psi,Y}Canonicity`
+  in `Clean/Orchard/Action/NoteCommit.lean` 1112-1445 + YCanonicity 525-646): layouter
+  FormalCircuits = witness_check region(s) for the shifted values (a', b3_c', e1_f',
+  g1_g2', j', j) + the gate bundle region; Assumptions = the remaining rely (ranges,
+  running-sum tails from Sinsemilla zs); Spec = the donor composite bit-slice payoffs.
+  Layer-compose pattern: Merkle.Layer / CommitDomain (2-child layouter, h_spec auto-lift).
+- CommitIvk composite analogue lives in donor `CommitIvk.lean` (uses the same shape).
