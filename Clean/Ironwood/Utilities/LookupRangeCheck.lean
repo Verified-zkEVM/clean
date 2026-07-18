@@ -830,6 +830,126 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
             at h_output
           exact h_output.2.symm
 
+/-- Rust `witness_check`'s check body (`lookup_range_check.rs:142-162`), POSITIONAL: the
+element "must have been assigned to `running_sum` at `offset`" by the caller (Rust
+`witness_check` does the `assign_advice` itself; the Lean caller witnesses the cell and
+composes this check — the `witnessShortCheck` pattern). Contracts mirror `rangeCheck`,
+with the copied-in element replaced by the positional cell (the extraction data, following
+`shortRangeCheck`). -/
+def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
+    FormalRegionCircuit Fp (Config K) (Config K) unit Output where
+  configure := fun cfg => pure cfg
+
+  synthesize cfg offset _ := do
+    -- the caller-assigned `element` at `offset` (`z_0`)
+    let z0 ← cellAt cfg.runningSum offset
+    -- the running-sum loop: `numWords` rounds
+    rangeCheckLoop K cfg z0 offset numWords
+    let zLast ← cellAt cfg.runningSum (offset + numWords)
+    -- strict mode: constrain the final running sum to 0
+    if strict then constrainConstant zLast (0 : Fp)
+    return { z0, zLast }
+
+  EnvAssumptions cfg env :=
+    TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
+  Assumptions _ := 2 ^ (K * numWords) ≤ PALLAS_BASE_CARD ∧ 2 ^ K ≤ PALLAS_BASE_CARD
+
+  -- the positional element cell (`z_0`), as extraction data
+  Witness := field
+  extract cfg offset _ self env :=
+    eval env (AssignedCell.of self offset cfg.runningSum : Var field Fp)
+
+  Spec _ output elt :=
+    output.z0 = elt ∧
+    (∃ lo : ℕ, lo < 2 ^ (K * numWords) ∧
+      elt = (lo : Fp) + ((2 ^ (K * numWords) : ℕ) : Fp) * output.zLast) ∧
+    (strict = true → output.zLast = 0 ∧ elt.val < 2 ^ (K * numWords))
+
+  -- honest-prover precondition, on the extraction data (mirror of `rangeCheck`'s, which
+  -- states it on the copied input)
+  ProverAssumptions _ elt _ := strict = true → elt.val < 2 ^ (K * numWords)
+
+  ProverSpec _ output elt _ :=
+    output.z0 = elt ∧ output.zLast = ((elt.val / 2 ^ (K * numWords) : ℕ) : Fp)
+
+  soundness := by
+    circuit_proof_start
+    obtain ⟨hTable, _hDistinct⟩ := _hE
+    obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
+    obtain ⟨hLoop, _hTailC⟩ := hc
+    set f := zChain K cfg env.place self env.env offset with hf_def
+    have hwords := rangeCheck_loop_word_bounds K cfg
+      (AssignedCell.of self offset cfg.runningSum) env.place self env.env
+      offset hTableLt numWords hLoop
+    obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
+    rcases hbstrict : strict with _ | _ <;>
+      simp only [hbstrict, circuit_norm,
+        Bool.false_eq_true, if_true, if_false] at _hTailC h_output ⊢ <;>
+      obtain ⟨hOz0, hOzLast⟩ := h_output <;>
+      rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
+        show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain],
+        show env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ) = f 0
+          from by simp only [hf_def, zChain, add_zero]]
+    · exact ⟨rfl, lo, hlo, by push_cast; exact htel⟩
+    · have hzLast0 : f numWords = 0 := by simp only [hf_def, zChain]; exact _hTailC
+      refine ⟨rfl, ⟨lo, hlo, ?_⟩, hzLast0, ?_⟩
+      · push_cast; exact htel
+      · exact chain_element_lt K numWords hA.1 f hwords hzLast0
+
+  completeness := by
+    circuit_proof_start
+    obtain ⟨hTable, hDistinct⟩ := _hE
+    obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
+    simp only [Placed.toEnvironment_env] at hTableEq hUsable
+    obtain ⟨hLoopWit, hTailWit⟩ := hwit
+    obtain ⟨hCardN, hKcard⟩ := hA
+    -- the positional element cell's value (`z_0`)
+    set eCell := env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+      with heCell
+    have hz0 : zChain K cfg env.place self env.env.toEnvironment offset 0 = eCell := by
+      simp only [zChain, add_zero, heCell, Placed.toEnvironment_env]
+    have hz : ∀ j, j ≤ numWords → zChain K cfg env.place self env.env.toEnvironment offset j
+        = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
+      intro j hj
+      rcases Nat.eq_zero_or_pos j with rfl | hjpos
+      · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
+      · have hv := rangeCheck_loop_zvalues K cfg
+          (AssignedCell.of self offset cfg.runningSum) env.place self env.env offset
+          numWords hLoopWit j hjpos hj
+        rw [hv]
+        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell,
+          Placed.toEnvironment_env]
+    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
+    · exact rangeCheck_loop_constraints_complete K cfg
+        (AssignedCell.of self offset cfg.runningSum) env.place self
+        env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
+    · rcases hbstrict : strict with _ | _
+      · simp only [circuit_norm]
+      · simp only [circuit_norm]
+        have hzn := hz numWords le_rfl
+        simp only [zChain] at hzn
+        have heInputLt : eCell.val < 2 ^ (K * numWords) := hPA hbstrict
+        rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
+    · -- ProverSpec, first conjunct: `output_z0` is the positional cell
+      cases strict <;>
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
+            AssignedCell.eval, AssignedCell.of_cell,
+            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+            at h_output
+          rw [heCell]
+          exact h_output.1.symm
+    · -- ProverSpec, C6: `output_zLast = ↑(elt.val / 2^{K·numWords})`
+      have hzn := hz numWords le_rfl
+      simp only [zChain] at hzn
+      rw [← hzn]
+      cases strict <;>
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
+            AssignedCell.eval, AssignedCell.of_cell,
+            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+            at h_output
+          exact h_output.2.symm
+
 /-! ## `copy_check` — the layouter-level range-check wrapper
 
 Rust `LookupRangeCheck::copy_check` (`lookup_range_check.rs:124-140`): a

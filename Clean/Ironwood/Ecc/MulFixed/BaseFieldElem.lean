@@ -153,9 +153,8 @@ def witnessCheck13 (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1) :
     Circuit Fp (AssignedCell Fp × AssignedCell Fp) :=
   assignRegion "Witness element" (do
     let z0 ← assignAdvice cfg.runningSum 0 w
-    LookupRangeCheck.rangeCheckLoop 10 cfg z0 0 13
-    let z13 ← cellAt cfg.runningSum 13
-    return (z0, z13))
+    let out ← (LookupRangeCheck.rangeCheckAt 10 13 false).call cfg 0 ()
+    return (z0, out.zLast))
 
 /-- The honest `α_1 = α[252..=253]` witness (`bitrange_subset`, line 327). -/
 def alpha1Wit (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
