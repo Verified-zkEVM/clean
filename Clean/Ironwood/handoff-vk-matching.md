@@ -284,3 +284,34 @@ Established patterns (beyond the earlier notes):
   from hapC/hb2cpC — donor hAss slots 6 and 10 of the 13-tuple; my 11-conjunct
   Assumptions drops slots 6/9 → 9 conjuncts, PA gains both).
 - THEN: the six composites per the earlier notes (witnessCheck child + gate child).
+
+## Step-3 composites: state as of 179d46f5
+
+DONE (fully proven, in `Clean/Ironwood/NoteCommit/Composites.lean`):
+- Gd/Pkd/Rho/Psi canonicity composites (`*CanonicityCheck.circuit`), each a two-child
+  layouter FormalCircuit = `witnessCheck` region + gate-bundle `.toFormal` region.
+  THE FILE ITSELF IS THE TEMPLATE — parameterized `rangeCheckAt_*_eq` bridges at the top
+  (rfl, child stays folded), `synth_regionCount` via `FormalCircuit.call_regionCount`,
+  soundness = peel (`simp only [synth, witnessCheck, circuit_norm] at hc`) →
+  `subcircuit_rw at hWC/hGate` → discharge → donor `Gate.Spec` projections; completeness =
+  `subcircuit_rw` → replay child contract via `h_spec_0` → tail vanishing via
+  `base_val_lt_tP_val`/`high_bit_canonical` + `shifted_high_zero`.
+- Value composite = `ValueCanonicity.bundle` itself (donor composite is gate-only).
+
+REMAINING:
+1. Y composite (`y_canonicity`, note_commit.rs:1962-2032; donor
+   `Orchard.Action.NoteCommit.YCanonicity` at NoteCommit.lean:525-646):
+   children = witnessShortCheck k0 (bits 1..10) + witnessShortCheck k2 (250..254) +
+   witness_check(j, 25, true) + witness_check(j', 13, false) + YCanonicity.bundle gate
+   (bundle already witnesses lsb/k3 internally via wlsb/wk3 programs).
+   NEEDS: a `rangeCheckAt`-style bundle exposing z1 AND z13 of the 25-word strict check
+   (donor `CopyCheck.Decomposed` analogue) — z1_j is the k1 cell wired into the gate, and
+   its spec facts ((hDec hjlt).2.1/.2.2 in the donor) feed the gate's rely-conditions.
+   Options: new FormalRegionCircuit `rangeCheckAtDecomposed` in LookupRangeCheck.lean
+   (positional, Output {z0,z1,z13,zLast}, Spec = donor Decomposed.Spec shape); do NOT
+   change rangeCheckAt's Spec (MulOverflow/BaseFieldElem consume it).
+2. CommitIvk composite (commit_ivk.rs `assign_region` flow around CommitIvk.bundle):
+   witness_check(a', 13, false) + witness_check(b2_c', 14, false) + CommitIvk.bundle.
+   Same template as Gd but two witnessCheck children and the two-row gate bundle
+   (b1/d1 witnessed internally). Donor: Orchard.Action.CommitIvk (donor composite
+   Assumptions/Spec in Clean/Orchard/Action/CommitIvk.lean).
