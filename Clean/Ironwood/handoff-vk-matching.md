@@ -496,3 +496,23 @@ Main.ns := [25,1,25,6,1,25,25,1] is WRONG. Fix to [24,0,24,5,0,24,24,0]. Cascade
   point-only hash variant WITHOUT hpos: add hashRegionP/hashCircuitP in
   HashToPoint.lean (same proofs minus the z1s clause), switch CommitDomain.commit to
   it and DROP its ns_pos parameter; Main drops ns_pos. Merkle keeps the z1s variant.
+
+### NoteCommit completeness route (soundness DONE at f838d63d)
+Stage-1/2 witness facts + generic toFormal_call_witnesses land (9f5b9f47). The
+goal-side one-shot stage simp + subcircuit_rw hits the kernel cliff (like stage 3 of
+soundness). FIX: (a) build-direction stage lemmas (mpr of the peel pattern):
+buildSynth/buildPieces/buildChecks/buildGates — `<child-chunk conj at clean indices> →
+Constraints ((stage).operations i) i`, each kernel-checked alone; (b) discharge each
+child chunk MANUALLY via the SubcircuitRw completeness leaves, Merkle-style
+(Merkle.lean:1375: `refine Halo2.SubcircuitRw.layouter_completeness_leaf_placed child
+cfg idx ⟨place,env⟩ _ hWchunk ⟨envA, A, PA⟩` — and region_completeness_leaf(_placed)
+for in-region children), which also provides the child Spec/PS facts needed by later
+children's PAs (commit PS → gate PAs; the per-gate witnessed-bit facts via
+toFormal_call_witnesses + per-bundle synthesize simp destructure — bundle-completeness
+hwit pattern). PA sources: shorts = hw* bitrange bounds (cast_bitrange_val+bitrange_lt);
+Y children PA (IsLowBit) = from hwit-projected wlsb equations (brWit gdY 0 1 →
+isLowBit_iff_mod_two + bitrange%2); commit PA = PieceBounds (hw pieces + tiling like
+donor pieceBounds_of_cellFacts — donor lemma reusable at the read-cells record!),
+∃B honest hash (top hPA hB0 + honestChunks_eq_noteCommitChunks_of_cellFacts), window
+bounds (top hPA hWin, spelling via rcmExtract); gate PAs = mirror the composite
+completeness glue (Composites.lean PA branches) with hwit facts + child PSs.
