@@ -272,6 +272,12 @@ private theorem psi_spec_eq :
       Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec
         (PsiCanonicity.toDonor input) := rfl
 
+private theorem prefixRows_ns_0 : Sinsemilla.Chain.prefixRows ns 0 = 0 := rfl
+private theorem prefixRows_ns_2 : Sinsemilla.Chain.prefixRows ns 2 = 26 := rfl
+private theorem prefixRows_ns_3 : Sinsemilla.Chain.prefixRows ns 3 = 51 := rfl
+private theorem prefixRows_ns_5 : Sinsemilla.Chain.prefixRows ns 5 = 58 := rfl
+private theorem prefixRows_ns_6 : Sinsemilla.Chain.prefixRows ns 6 = 83 := rfl
+
 /-- The Ironwood `Chain.PieceChunks` is the donor's, verbatim — the bridge unlocks the
 donor's piece-value/chunk-equality connectors. -/
 private theorem pieceChunks_donor_iff :
@@ -729,15 +735,80 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   -- ── the five canonicity gates ──
   have hGgdS := hGgd (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
-        simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-          Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
+        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Nat.add_zero]
         exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
   rw [toFormal_spec_eq, gd_spec_eq] at hGgdS
   simp only [GdCanonicity.toDonor, Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec,
-    circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
-    Nat.add_zero] at hGgdS
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
+    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGgdS
+  have hGpkdS := hGpkd (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq, pkd_assumptions_eq]
+        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Nat.add_zero]
+        exact ⟨hGdS.1, hcval, hb3, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩)
+  rw [toFormal_spec_eq, pkd_spec_eq] at hGpkdS
+  simp only [PkdCanonicity.toDonor, Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
+    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpkdS
+  have hGvalS := hGval (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq, value_assumptions_eq]
+        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Nat.add_zero]
+        exact ⟨hd2, by rw [hzd]; exact hzdval, he0⟩)
+  rw [toFormal_spec_eq, value_spec_eq] at hGvalS
+  simp only [ValueCanonicity.toDonor, Orchard.Action.NoteCommit.ValueCanonicity.Gate.Spec,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
+    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGvalS
+  have hGrhoS := hGrho (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq, rho_assumptions_eq]
+        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Nat.add_zero]
+        exact ⟨hGgS.1, hfval, he1, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩)
+  rw [toFormal_spec_eq, rho_spec_eq] at hGrhoS
+  simp only [RhoCanonicity.toDonor, Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
+    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGrhoS
+  simp only [prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5,
+    prefixRows_ns_6, Nat.reduceAdd] at hGbS hGdS hGeS hGgS hGhS
+  -- Psi: the z13G tail via the donor bridge over the DecomposeG facts
+  have hz13G_tail := Orchard.Action.NoteCommit.z13G_tail_of_decompose_g
+    hGgS.1 hg1 (by rw [hzg1]; exact hzg1val) hGgS.2 hzg13
+  have hGpsiS := hGpsi (by rw [toFormal_envAssumptions_eq]; trivial)
+    (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
+        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Nat.add_zero]
+        exact ⟨hGhS.1, hg1, by rw [hzg1]; exact hzg1val, hh0, hz13G_tail,
+          loG, hloG, by rw [← hgz0] at htelG; exact htelG⟩)
+  rw [toFormal_spec_eq, psi_spec_eq] at hGpsiS
+  simp only [PsiCanonicity.toDonor, Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
+    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpsiS
   trace_state
   sorry
 

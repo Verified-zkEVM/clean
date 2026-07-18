@@ -1877,7 +1877,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (_ : ProverHint Fp) : Prop :=
   ProverNoteCommitRelation G Q R input cm
 
-private theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
+theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
     (hg0_bool : IsBool g0)
     (hg1_lt : g1.val < 2 ^ 9)
     (hg2_lt : g2.val < 2 ^ 240)
