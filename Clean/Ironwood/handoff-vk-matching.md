@@ -35,7 +35,13 @@ REMAINING:
    (CV_NET_X/Y, NF_OLD, RK_X/Y, CMX + ANCHOR/ENABLE_SPEND/ENABLE_OUTPUT via
    assign_advice_from_instance), the q_orchard region. ScalarFixed/ScalarVar::new are
    region-FREE (lazy witnessing) — no regions for rcv/alpha/rivk/rcm/ivk wrappers.
-3. STATUS 2026-07-18 late: CS half DONE GREEN (TestVkMatchAction, both guards, first
+3. STATUS 2026-07-19: ARC COMPLETE — TestVkMatchAction (CS pre+post) AND
+   TestVkLayoutAction (regions/copies/σ/allFixed, 17566 cells) ALL GREEN against the
+   real orchard Circuit. Layout-machinery additions: copyListDeferred (halo2-0.5
+   planner order: constants deferred past the whole synthesis, constrain_instance
+   copies inline advice-left), assign_advice_from_instance copies advice-left.
+   Assembly merged onto the Bundle arc's stage-split Circuit.lean (abb981de).
+   (superseded interim status: CS half DONE GREEN (TestVkMatchAction, both guards, first
    run). synthesize assembly DONE (region count 395 == dump exactly). ActionLayout.lean
    fixture generated+builds (regions/permcols F3=constants/copies 2964/σ 1602/fixed
    10186/constants 166; the two empty "constrain equal" regions store start 0).
@@ -53,7 +59,7 @@ REMAINING:
    bases read off the dump's lagrange/fixed data + Q points + ncG-style generator table),
    PACKED/FILLS selector sections extraction, then the layout guards. Dump log:
    scratchpad action_dump.log; parse json: action_layout.json; orchard-side test:
-   dump_layout_action (local commit).
+   dump_layout_action (local commit).)
 4. (was 3) VK fixtures: orchard checkout has `src/circuit/layout_dump.rs` (other agent's
    FullRecorder for NoteCommit) — add a whole-`Circuit` keygen-view dump test (real
    `Circuit::default()`); reuse halo2-side `lean_dump_cs_fixture`/`lean_dump_compressed`
