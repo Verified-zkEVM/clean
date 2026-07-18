@@ -94,10 +94,18 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     return ⟨ xVar, yVar ⟩
 
   Spec _ output _ := output.OnCurve
+  -- the witnessed point, published as extraction data (positional cells) so parents can
+  -- state honest-prover conditions on the value actually assigned
+  Witness := Point
+  extract := fun cfg offset _ self env =>
+    eval env ({ x := AssignedCell.of self offset cfg.x,
+                y := AssignedCell.of self offset cfg.y } : Var Point Fp)
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
   -- on the identity; an on-curve point is automatically non-identity (`ne_zero_of_onCurve`),
   -- so a single `OnCurve` hint captures both the non-id error path and the curve constraint.
-  ProverAssumptions input _ _ := input.OnCurve
+  -- Stated at the extracted cell values (not the program), so parents discharge it from
+  -- their own extract-level assumptions.
+  ProverAssumptions _ wit _ := wit.OnCurve
   ProverSpec input output _ _ := output = input
 
   soundness := by
@@ -109,6 +117,53 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
     grind [Orchard.Point.OnCurve]
+
+/-! ## Layouter-level bridges for `pointNonId.toFormal`, shared by the consumers
+(`rfl`, the bundle stays folded) -/
+
+section Bridges
+
+variable (name : String)
+
+theorem pointNonId_toFormal_spec_eq :
+    (pointNonId.toFormal name).Spec
+      = fun _ (output : Point Fp) (_ : Point Fp) => output.OnCurve := rfl
+
+theorem pointNonId_toFormal_assumptions_eq :
+    (pointNonId.toFormal name).Assumptions = fun _ => True := rfl
+
+theorem pointNonId_toFormal_proverAssumptions_eq :
+    (pointNonId.toFormal name).ProverAssumptions
+      = fun _ (wit : Point Fp) _ => wit.OnCurve := rfl
+
+theorem pointNonId_toFormal_proverSpec_eq :
+    (pointNonId.toFormal name).ProverSpec
+      = fun (input : Point Fp) (output : Point Fp) (_ : Point Fp) _ =>
+          output = input := rfl
+
+theorem pointNonId_toFormal_extract_eq (cfg : Config)
+    (input : Var (Unconstrained Point) Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (pointNonId.toFormal name).extract cfg input i env
+      = (eval env ({ x := AssignedCell.of i 0 cfg.x,
+                     y := AssignedCell.of i 0 cfg.y } : Var Point Fp)
+          : Value Point Fp) := rfl
+
+/-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
+theorem pointNonId_toFormal_output (cfg : Config)
+    (input : Var (Unconstrained Point) Fp) (i : RegionIndex) :
+    (pointNonId.toFormal name).output cfg input i
+      = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
+
+/-- The lifted `pointNonId`'s call chunk is one region. -/
+theorem pointNonId_toFormal_call_regionCount (cfg : Config)
+    (input : Var (Unconstrained Point) Fp) (j : RegionIndex) :
+    Operations.regionCount
+      (((pointNonId.toFormal name).call cfg input).operations j) = 1 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+end Bridges
 
 end WitnessPoint
 
