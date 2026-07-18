@@ -537,6 +537,26 @@ def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLength
     (HVec.cons (Vector.ofFn fun r : Fin (n + 1) => zV (base + r.val))
       (zsFam zV rest (base + (n + 1))) : HVec (zLengths (n :: rest)) _)
 
+/-- `zsFam`'s head vector (the first piece's running sums). -/
+theorem zsFam_head (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
+    Orchard.Sinsemilla.HVec.head (zsFam zV (n :: rest) base)
+      = Vector.ofFn (fun r : Fin (n + 1) => zV (base + r.val)) :=
+  Orchard.Sinsemilla.HVec.head_cons _ _
+
+/-- `zsFam`'s tail (the remaining pieces' running sums). -/
+theorem zsFam_tail (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
+    Orchard.Sinsemilla.HVec.tail (zsFam zV (n :: rest) base)
+      = zsFam zV rest (base + (n + 1)) :=
+  Orchard.Sinsemilla.HVec.tail_cons _ _
+
+/-- `zsFam`'s second piece's running sums (the composed tail-head view). -/
+theorem zsFam_tail_head (zV : ℕ → Fp) (n m : ℕ) (rest : List ℕ) (base : ℕ) :
+    Orchard.Sinsemilla.HVec.head
+        (Orchard.Sinsemilla.HVec.tail (zsFam zV (n :: m :: rest) base))
+      = Vector.ofFn (fun r : Fin (m + 1) => zV (base + (n + 1) + r.val)) :=
+  (congrArg Orchard.Sinsemilla.HVec.head (zsFam_tail zV n (m :: rest) base)).trans
+    (zsFam_head zV m rest (base + (n + 1)))
+
 /-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
 theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
     (v : Vector (AssignedCell Fp) k) :
@@ -556,7 +576,7 @@ private theorem hvec_eval_cons (place : RegionIndex → ℕ) (env : Environment 
 
 /-- `hvec_eval_cons` at the `zLengths (n :: rest)` spelling (keyed matching does not
 unfold `zLengths`). -/
-private theorem hvec_eval_cons_zl (place : RegionIndex → ℕ) (env : Environment Fp)
+theorem hvec_eval_cons_zl (place : RegionIndex → ℕ) (env : Environment Fp)
     {n : ℕ} {rest : List ℕ}
     (a : Vector (AssignedCell Fp) (n + 1)) (b : HVec (zLengths rest) (AssignedCell Fp)) :
     ProvableType.eval (M := HVec (zLengths (n :: rest))) place env (HVec.cons a b)
@@ -738,7 +758,7 @@ private theorem row_eval_literal (place : RegionIndex → ℕ) (env : Environmen
   rw [ProvableStruct.eval_eq_eval]
   with_unfolding_all rfl
 
-private theorem inputs_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
+theorem inputs_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     {k : ℕ} (p : Vector (AssignedCell Fp) k) :
     ProvableStruct.eval place env ({ pieces := p } : Inputs k (AssignedCell Fp))
       = { pieces := ProvableType.eval (M := fields k) place env p } := by

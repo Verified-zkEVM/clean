@@ -440,4 +440,99 @@ def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Con
     Circuit Fp (Var (Output ns.length) Fp) :=
   (hashCircuit G ns Q hQ hns hpos).call cfg pieces
 
+/-- The hash bundle's output `z1s` cells (positional, rfl). -/
+theorem hashCircuit_output_z1s (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
+    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).z1s
+      = Vector.ofFn (fun j : Fin ns.length =>
+          AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) := rfl
+
+/-- The hash bundle's output `point.x` cell (positional, rfl). -/
+theorem hashCircuit_output_point_x (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
+    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).point.x
+      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA := rfl
+
+/-- The hash bundle's output `point.y` cell (positional, rfl). -/
+theorem hashCircuit_output_point_y (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
+    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).point.y
+      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 := rfl
+
+/-- The hash bundle's eval'd output (verifier view), landed on raw advice reads. -/
+theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (eval env ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i)
+        : Value (Output ns.length) Fp)
+      = { point :=
+            { x := env.env.advice cfg.xA
+                ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ns.length) : ℕ) : ℤ),
+              y := env.env.advice cfg.lambda1
+                ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ns.length) : ℕ) : ℤ) },
+          z1s :=
+            Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
+              ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
+  rw [show (hashCircuit G ns Q hQ hns hpos).output cfg pieces i
+      = ({ point :=
+              { x := AssignedCell.of i
+                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
+                y := AssignedCell.of i
+                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
+            z1s :=
+              Vector.ofFn (fun j : Fin ns.length => AssignedCell.of i
+                (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) }
+        : Output ns.length (AssignedCell Fp)) from rfl,
+    out_eval_lit]
+  simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  congr 1
+  ext j hj
+  simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+
+/-- The hash bundle's eval'd output (prover view), landed on raw advice reads. -/
+theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
+    (env : Placed ProverEnvironment Fp) :
+    (eval env ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i)
+        : Value (Output ns.length) Fp)
+      = { point :=
+            { x := env.env.advice cfg.xA
+                ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ns.length) : ℕ) : ℤ),
+              y := env.env.advice cfg.lambda1
+                ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ns.length) : ℕ) : ℤ) },
+          z1s :=
+            Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
+              ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
+  rw [show (hashCircuit G ns Q hQ hns hpos).output cfg pieces i
+      = ({ point :=
+              { x := AssignedCell.of i
+                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
+                y := AssignedCell.of i
+                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
+            z1s :=
+              Vector.ofFn (fun j : Fin ns.length => AssignedCell.of i
+                (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) }
+        : Output ns.length (AssignedCell Fp)) from rfl,
+    out_eval_lit_prover]
+  simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    ProverEnvironment.toEnvironment_advice]
+  congr 1
+  ext j hj
+  simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    ProverEnvironment.toEnvironment_advice]
+
 end Halo2.Ironwood.Sinsemilla.HashToPoint
