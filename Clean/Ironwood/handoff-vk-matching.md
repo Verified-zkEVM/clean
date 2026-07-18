@@ -467,3 +467,20 @@ facts + piece bounds via pieceChunks_val_lt/donor bridge + hb0.. shorts + hGbS
 booleans — exactly the Composites.lean glue), then the donor chunk-equality assembly
 (pieceChunks_eq_noteCommitChunks_of_indexed_piece_values, NoteCommit.lean:447/1661)
 to land Spec. Then completeness (mirror), circuit def, VK fixture.
+
+### NoteCommit soundness: z-value plumbing (next block)
+Peel now complete through clean read-language facts (a6eb4489). Next: the six hash
+z-cell value facts (z13_a/z13_c/z1_d/z13_f/z1_g/z13_g). Route:
+1. zsFacts_donor_iff (mirror pieceChunks_donor_iff; HVec/zLengths defeq across trees).
+2. donor zsFacts_cell (NoteCommit.lean:1525): PieceChunks+ZsFacts → zs[i][r] =
+   ↑(pieces[i].val / 2^(10r)).
+3. extract-side: hashCircuit.extract's .zs = eval of Chain.zsCellsVal (rfl at
+   HashToPoint.lean:314-317) + Chain.eval_zsCellsVal → zsFam f — then getElem of zsFam
+   at (i,r) = f (prefixRows ns i + r) = env.advice bits ↑(place iH + prefixRows+r)
+   (zsFam_elems / z1View_zsFam patterns in HashToPoint.lean:76-127).
+Then the canonicity-gate A-discharges: Gd = ⟨hGbS.1 (b1 bool), piece-a bound
+(pieceChunks_val_lt via donor bridge, idx 0), hb0, hz13a, telescope ⟨loA,...⟩ via
+haz0/htelA⟩ — mirror Composites.lean; then Pkd/Val/Rho/Psi; then the donor
+chunk-equality assembly (pieceChunks_eq_noteCommitChunks_of_indexed_piece_values +
+gate Specs) to land Spec at the extracted scalar (commit's wit.2.2 = rcmExtract via
+commit_extract_eq at i₀+25 spelling).
