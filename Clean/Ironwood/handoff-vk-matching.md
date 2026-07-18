@@ -248,3 +248,28 @@ Established patterns (beyond the earlier notes):
   running-sum tails from Sinsemilla zs); Spec = the donor composite bit-slice payoffs.
   Layer-compose pattern: Merkle.Layer / CommitDomain (2-child layouter, h_spec auto-lift).
 - CommitIvk composite analogue lives in donor `CommitIvk.lean` (uses the same shape).
+
+### Step 3 continuation notes (post-52ad905d)
+
+- `LookupRangeCheck.witnessCheck` (word-wise Rust `witness_check`) ADDED — assignRegion
+  "Witness element" (assign from program + `rangeCheckAt.call`).
+- CONTRACT FIX REQUIRED before the composites: the canonicity gate bundles currently
+  carry the shift equations (`aPrime = a + 2^130 − tP` etc.) in `Assumptions`, mirroring
+  the donors — but the composite CANNOT supply them soundly (phase-1's Telescoped child
+  pinned z0 = the input EXPRESSION; Ironwood's positional `witnessCheck` only pins
+  z0 = the read). The gate itself enforces the shift (the `a_prime_check`-family
+  constraints my bundle soundness currently IGNORES). Rework per canonicity bundle
+  (Gd/Pkd/Rho/Psi/Y + CommitIvk's two shifts): move the shift conjunct(s) from
+  `Assumptions` to `ProverAssumptions`, and in soundness derive them from the landed
+  shift constraints (`by linear_combination -hapC`-style) before calling `spec_of_eqs`.
+  (The donor row-lemmas take the shift via hAss — construct hAss from hA + the derived
+  shift.) Completeness unchanged except PA now carries the shift (the honest prover
+  computes a' by that very formula).
+- THEN the six composites: Input = {piece cells + subpiece cells + Sinsemilla z-tails};
+  synthesize = witnessCheck(s) for the shifted value(s) (programs computing
+  `readCell a + 2^130 − tP` etc.) + assignRegion(gate bundle .call) — Rust region
+  sequence per note_commit decompose/canonicity flow; Assumptions = donor composite
+  Assumptions (IsBool b1, ranges, z13A = a/2^130 …); Spec = donor composite Spec
+  (bit-slice payoffs, NoteCommit.lean 1112-1445). 2-child layouter compose w/ h_spec
+  auto-lift; the gate child's PA gets the shift + witnessed-bit facts from the
+  witnessCheck child's derived facts + own PA.

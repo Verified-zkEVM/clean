@@ -979,4 +979,13 @@ def witnessShortCheck (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) :
     let _ ← (shortRangeCheck K numBits).call cfg 0 ()
     pure elt)
 
+/-- Rust `witness_check` (`lookup_range_check.rs:143-161`): its own `"Witness element"`
+region, witnessing the element at `(running_sum, 0)` from the caller-supplied program
+`w`, then the positional word-wise `rangeCheckAt`. Returns the `(z0, zLast)` cells. -/
+def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (w : WitgenIR Fp 1) : Circuit Fp (Var Output Fp) :=
+  assignRegion "Witness element" (do
+    let _elt ← assignAdvice cfg.runningSum 0 w
+    (rangeCheckAt K numWords strict).call cfg 0 ())
+
 end Halo2.Ironwood.LookupRangeCheck
