@@ -211,3 +211,76 @@ Goal: steps 1-3 — canonicity/decomposition gates with phase-1-shaped semantic 
   (K-generic telescope value lemmas already ported), then the composite per-input
   canonicity bundles (donor `NoteCommit.{Gd,Pkd,Value,Rho,Psi,Y}Canonicity` in
   NoteCommit.lean = gate bundle + telescoped copy-checks, Spec = bit-slice payoff).
+
+### NoteCommit arc — Step 2 COMPLETE (2026-07-18, pushed b2c6abc9)
+
+All 12 gate bundles FULLY PROVEN with phase-1 semantic specs: Decompose B/D/E/G/H,
+canonicity Value/Gd/Pkd/Rho/Psi/Y, CommitIvk. Donor gates refactored to row-level
+`spec_of_eqs`/`eqs_of_spec` value lemmas (extraction is verbatim body-move + input_→row.
+renames; donors' own proofs now call them). Wired into `Clean/Ironwood.lean`; full build
+green, --wfail clean on my files.
+
+Established patterns (beyond the earlier notes):
+- Witnessed-bit gates (Y: LSB/k3; CommitIvk: b1/d1): witness programs as bundle params,
+  readings in `Witness := fieldPair`; input-only rely-conditions in `Assumptions`, the
+  witnessed-bit implications / booleanity move to `ProverAssumptions` (Y uses a
+  conditional Spec: `IsBool out → DSpec …` since lsb's booleanity is enforced by the
+  DECOMPOSE gates' bool_check on the copied cell, as in Rust).
+- Index-cast spelling hazards: constraint-derived reads spell `↑(place self + offset)`
+  (cast-of-sum), extract-derived Spec holes spell `↑place + ↑offset` (sum-of-casts), and
+  row-1 sometimes `↑place + (↑offset + 1)` vs `… + 1` association. Fix: pin equation
+  `have`s at the GOAL's spelling (never `_`-holes into `by`-wrappers — metavar
+  corruption), `rw [hidx…]`/`▸` normalize hypotheses, `ring_nf at h ⊢` as last resort.
+- `simp only [toDonor]` before `linear_combination` whenever the goal has stuck
+  `(toDonor …).field` projections.
+
+### Step 3 REMAINING (the composites)
+
+- Lookup infra: `copyCheck` (toFormal of rangeCheck; Spec exposes z0 = element + the
+  TELESCOPED decomposition ∃ lo < 2^(K·numWords), … ✓) and `rangeCheckAt` (positional,
+  mul agent) EXIST. MISSING: the word-wise `witness_check` wrapper (Rust
+  `lookup_range_check.rs:witness_check` — witness element from a program + range check;
+  mirror `witnessShortCheck` but over `rangeCheckAt K numWords strict`).
+- Then the six composite canonicity bundles (donor `NoteCommit.{Gd,Pkd,Value,Rho,Psi,Y}Canonicity`
+  in `Clean/Orchard/Action/NoteCommit.lean` 1112-1445 + YCanonicity 525-646): layouter
+  FormalCircuits = witness_check region(s) for the shifted values (a', b3_c', e1_f',
+  g1_g2', j', j) + the gate bundle region; Assumptions = the remaining rely (ranges,
+  running-sum tails from Sinsemilla zs); Spec = the donor composite bit-slice payoffs.
+  Layer-compose pattern: Merkle.Layer / CommitDomain (2-child layouter, h_spec auto-lift).
+- CommitIvk composite analogue lives in donor `CommitIvk.lean` (uses the same shape).
+
+### Step 3 continuation notes (post-52ad905d)
+
+- `LookupRangeCheck.witnessCheck` (word-wise Rust `witness_check`) ADDED — assignRegion
+  "Witness element" (assign from program + `rangeCheckAt.call`).
+- CONTRACT FIX REQUIRED before the composites: the canonicity gate bundles currently
+  carry the shift equations (`aPrime = a + 2^130 − tP` etc.) in `Assumptions`, mirroring
+  the donors — but the composite CANNOT supply them soundly (phase-1's Telescoped child
+  pinned z0 = the input EXPRESSION; Ironwood's positional `witnessCheck` only pins
+  z0 = the read). The gate itself enforces the shift (the `a_prime_check`-family
+  constraints my bundle soundness currently IGNORES). Rework per canonicity bundle
+  (Gd/Pkd/Rho/Psi/Y + CommitIvk's two shifts): move the shift conjunct(s) from
+  `Assumptions` to `ProverAssumptions`, and in soundness derive them from the landed
+  shift constraints (`by linear_combination -hapC`-style) before calling `spec_of_eqs`.
+  (The donor row-lemmas take the shift via hAss — construct hAss from hA + the derived
+  shift.) Completeness unchanged except PA now carries the shift (the honest prover
+  computes a' by that very formula).
+- THEN the six composites: Input = {piece cells + subpiece cells + Sinsemilla z-tails};
+  synthesize = witnessCheck(s) for the shifted value(s) (programs computing
+  `readCell a + 2^130 − tP` etc.) + assignRegion(gate bundle .call) — Rust region
+  sequence per note_commit decompose/canonicity flow; Assumptions = donor composite
+  Assumptions (IsBool b1, ranges, z13A = a/2^130 …); Spec = donor composite Spec
+  (bit-slice payoffs, NoteCommit.lean 1112-1445). 2-child layouter compose w/ h_spec
+  auto-lift; the gate child's PA gets the shift + witnessed-bit facts from the
+  witnessCheck child's derived facts + own PA.
+
+- CONTRACT FIX progress: Gd/Pkd/Rho DONE (template: rw the shift constraint's copies
+  (`rw [hc-args] at hg2`), `have hshift := by push_cast at hg2 ⊢; linear_combination
+  -hg2`, construct the donor hAss tuple with hshift in the donor position; completeness
+  hAss-tuple takes hPA.2 in that slot, spec from hPA.1). REMAINING: Psi (shift = g1 +
+  g2·2^9 + 2^130 − tP, constraint hg2, donor slot 5 of 7-tuple ⟨hh1, g1_lt, g2_lt,
+  h0_lt, hg1g2P, hz13G, hzgDec⟩ — my Psi Assumptions must become input-only 6-tuple),
+  Y (jPrime shift from hjpc, my Y Assumptions conjunct 4 → PA), CommitIvk (TWO shifts
+  from hapC/hb2cpC — donor hAss slots 6 and 10 of the 13-tuple; my 11-conjunct
+  Assumptions drops slots 6/9 → 9 conjuncts, PA gains both).
+- THEN: the six composites per the earlier notes (witnessCheck child + gate child).

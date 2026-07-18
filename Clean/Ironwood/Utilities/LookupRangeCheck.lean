@@ -907,7 +907,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     set eCell := env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
       with heCell
     have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
-      simp only [zChain, add_zero, heCell, Placed.toEnvironment_env]
+      simp only [zChain, add_zero, heCell]
     have hz : ∀ j, j ≤ numWords → zChain K cfg place self env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
       intro j hj
@@ -918,8 +918,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
           numWords hLoopWit j hjpos hj
         rw [hv]
         simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell,
-          Placed.toEnvironment_env]
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell]
     refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
     · exact rangeCheck_loop_constraints_complete K cfg
         (AssignedCell.of self offset cfg.runningSum) place self
@@ -978,5 +977,14 @@ def witnessShortCheck (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) :
     let elt ← assignAdvice cfg.runningSum 0 w
     let _ ← (shortRangeCheck K numBits).call cfg 0 ()
     pure elt)
+
+/-- Rust `witness_check` (`lookup_range_check.rs:143-161`): its own `"Witness element"`
+region, witnessing the element at `(running_sum, 0)` from the caller-supplied program
+`w`, then the positional word-wise `rangeCheckAt`. Returns the `(z0, zLast)` cells. -/
+def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (w : WitgenIR Fp 1) : Circuit Fp (Var Output Fp) :=
+  assignRegion "Witness element" (do
+    let _elt ← assignAdvice cfg.runningSum 0 w
+    (rangeCheckAt K numWords strict).call cfg 0 ())
 
 end Halo2.Ironwood.LookupRangeCheck

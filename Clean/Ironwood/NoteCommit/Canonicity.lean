@@ -149,22 +149,32 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     (gate cfg).enable offset
     pure ()
 
-  Assumptions input := DAssumptions (toDonor input)
+  -- input-only rely-conditions: the gate itself enforces the `a'` shift (constraint 2)
+  Assumptions input := IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧
+    input.b0.val < 2 ^ 4 ∧
+    input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧
+      input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime
 
   Spec input _ _ := DSpec (toDonor input)
 
-  ProverAssumptions input _ _ := DSpec (toDonor input)
+  ProverAssumptions input _ _ := DSpec (toDonor input) ∧
+    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP
 
   soundness := by
     circuit_proof_start [gate]
     obtain ⟨hc1, hc2, hc3, hc4, hc5, hc6, hc7, hg1, hg2, hg3, hg4, hg5⟩ := hc
     rw [hc4, hc2, hc3, hc1] at hg1
+    rw [hc4, hc5] at hg2
     rw [hc3, hc2] at hg3
     rw [hc3, hc6] at hg4
     rw [hc3, hc7] at hg5
+    have haPrime : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hg2 ⊢; linear_combination -hg2
     exact Orchard.Action.NoteCommit.GdCanonicity.Gate.spec_of_eqs
       ⟨input_gdX, input_b0, input_b1, input_a, input_aPrime, input_z13A,
-        input_z13APrime⟩ hA
+        input_z13APrime⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, haPrime, hA.2.2.2.1, hA.2.2.2.2⟩
       (by push_cast; linear_combination hg1) hg3 hg4 hg5
 
   completeness := by
@@ -220,7 +230,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
         ((env.place input_var.z13APrime.cell.regionIndex
           + input_var.z13APrime.cell.rowOffset : ℕ) : ℤ) = input.z13APrime := congrArg Row.z13APrime h_input
     have heqs := Orchard.Action.NoteCommit.GdCanonicity.Gate.eqs_of_spec
-      (toDonor input) hA hPA
+      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4, he5⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4 he5
     rw [← higdX, ← hib0, ← hib1, ← hia, ← hw1, ← hw2, ← hw3, ← hw4] at he1
@@ -276,21 +286,32 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     (gate cfg).enable offset
     pure ()
 
-  Assumptions input := DAssumptions (toDonor input)
+  -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
+  Assumptions input := IsBool input.d0 ∧ input.c.val < 2 ^ 250 ∧
+    input.b3.val < 2 ^ 4 ∧
+    input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) ∧
+    ∃ lo : ℕ, lo < 2 ^ 140 ∧
+      input.b3CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14B3CPrime
 
   Spec input _ _ := DSpec (toDonor input)
 
-  ProverAssumptions input _ _ := DSpec (toDonor input)
+  ProverAssumptions input _ _ := DSpec (toDonor input) ∧
+    input.b3CPrime = input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP
 
   soundness := by
     circuit_proof_start [gate]
     obtain ⟨hc1, hc2, hc3, hc4, hc5, hc6, hc7, hg1, hg2, hg3, hg4⟩ := hc
     rw [hc4, hc2, hc3, hc1] at hg1
+    rw [hc2, hc4, hc5] at hg2
     rw [hc3, hc6] at hg3
     rw [hc3, hc7] at hg4
+    have hshift : input_b3CPrime = input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)
+        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hg2 ⊢; linear_combination -hg2
     exact Orchard.Action.NoteCommit.PkdCanonicity.Gate.spec_of_eqs
       ⟨input_pkdX, input_b3, input_d0, input_c, input_b3CPrime, input_z13C,
-        input_z14B3CPrime⟩ hA
+        input_z14B3CPrime⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hshift, hA.2.2.2.1, hA.2.2.2.2⟩
       (by push_cast; linear_combination hg1) hg3 hg4
 
   completeness := by
@@ -346,7 +367,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
         ((env.place input_var.z14B3CPrime.cell.regionIndex
           + input_var.z14B3CPrime.cell.rowOffset : ℕ) : ℤ) = input.z14B3CPrime := congrArg Row.z14B3CPrime h_input
     have heqs := Orchard.Action.NoteCommit.PkdCanonicity.Gate.eqs_of_spec
-      (toDonor input) hA hPA
+      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4
     rw [← hipkdX, ← hib3, ← hid0, ← hic, ← hw1, ← hw2, ← hw3, ← hw4] at he1
@@ -400,21 +421,32 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     (gate cfg).enable offset
     pure ()
 
-  Assumptions input := DAssumptions (toDonor input)
+  -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
+  Assumptions input := IsBool input.g0 ∧ input.f.val < 2 ^ 250 ∧
+    input.e1.val < 2 ^ 4 ∧
+    input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp) ∧
+    ∃ lo : ℕ, lo < 2 ^ 140 ∧
+      input.e1FPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14E1FPrime
 
   Spec input _ _ := DSpec (toDonor input)
 
-  ProverAssumptions input _ _ := DSpec (toDonor input)
+  ProverAssumptions input _ _ := DSpec (toDonor input) ∧
+    input.e1FPrime = input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP
 
   soundness := by
     circuit_proof_start [gate]
     obtain ⟨hc1, hc2, hc3, hc4, hc5, hc6, hc7, hg1, hg2, hg3, hg4⟩ := hc
     rw [hc4, hc2, hc3, hc1] at hg1
+    rw [hc2, hc4, hc5] at hg2
     rw [hc3, hc6] at hg3
     rw [hc3, hc7] at hg4
+    have hshift : input_e1FPrime = input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)
+        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hg2 ⊢; linear_combination -hg2
     exact Orchard.Action.NoteCommit.RhoCanonicity.Gate.spec_of_eqs
       ⟨input_rho, input_e1, input_g0, input_f, input_e1FPrime, input_z13F,
-        input_z14E1FPrime⟩ hA
+        input_z14E1FPrime⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hshift, hA.2.2.2.1, hA.2.2.2.2⟩
       (by push_cast; linear_combination hg1) hg3 hg4
 
   completeness := by
@@ -470,7 +502,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
         ((env.place input_var.z14E1FPrime.cell.regionIndex
           + input_var.z14E1FPrime.cell.rowOffset : ℕ) : ℤ) = input.z14E1FPrime := congrArg Row.z14E1FPrime h_input
     have heqs := Orchard.Action.NoteCommit.RhoCanonicity.Gate.eqs_of_spec
-      (toDonor input) hA hPA
+      (toDonor input) ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4
     rw [← hirho, ← hie1, ← hig0, ← hif, ← hw1, ← hw2, ← hw3, ← hw4] at he1
@@ -526,22 +558,34 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     (gate cfg).enable offset
     pure ()
 
-  Assumptions input := DAssumptions (toDonor input)
+  -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
+  Assumptions input := IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧
+    input.g2.val < 2 ^ 240 ∧ input.h0.val < 2 ^ 5 ∧
+    input.z13G = (((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) : Fp) ∧
+    ∃ lo : ℕ, lo < 2 ^ 130 ∧
+      input.g1G2Prime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13G1G2Prime
 
   Spec input _ _ := DSpec (toDonor input)
 
-  ProverAssumptions input _ _ := DSpec (toDonor input)
+  ProverAssumptions input _ _ := DSpec (toDonor input) ∧
+    input.g1G2Prime = input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp)
+      + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP
 
   soundness := by
     circuit_proof_start [gate]
     obtain ⟨hc1, hc2, hc3, hc4, hc5, hc6, hc7, hc8, hg1, hg2, hg3, hg4, hg5⟩ := hc
     rw [hc3, hc5, hc2, hc4, hc1] at hg1
+    rw [hc3, hc5, hc6] at hg2
     rw [hc4, hc2] at hg3
     rw [hc4, hc7] at hg4
     rw [hc4, hc8] at hg5
+    have hshift : input_g1G2Prime = input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)
+        + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hg2 ⊢; linear_combination -hg2
     exact Orchard.Action.NoteCommit.PsiCanonicity.Gate.spec_of_eqs
       ⟨input_psi, input_h0, input_g1, input_h1, input_g2, input_g1G2Prime, input_z13G,
-        input_z13G1G2Prime⟩ hA
+        input_z13G1G2Prime⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hshift, hA.2.2.2.2.1, hA.2.2.2.2.2⟩
       (by push_cast; linear_combination hg1) hg3 hg4 hg5
 
   completeness := by
@@ -603,7 +647,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
         ((env.place input_var.z13G1G2Prime.cell.regionIndex
           + input_var.z13G1G2Prime.cell.rowOffset : ℕ) : ℤ) = input.z13G1G2Prime := congrArg Row.z13G1G2Prime h_input
     have heqs := Orchard.Action.NoteCommit.PsiCanonicity.Gate.eqs_of_spec
-      (toDonor input) hA hPA
+      (toDonor input)
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hPA.2, hA.2.2.2.2.1, hA.2.2.2.2.2⟩ hPA.1
     obtain ⟨he1, he2, he3, he4, he5⟩ := heqs
     simp only [toDonor] at he1 he2 he3 he4 he5
     rw [← hig1, ← hig2, ← hih0, ← hih1, ← hipsi,
@@ -677,9 +722,9 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
      eval env (AssignedCell.of self offset (cfg.advices 9) : Var field Fp))
 
   -- the input-only rely-conditions (donor `Assumptions` minus `IsBool lsb`)
+  -- input-only rely-conditions: the gate itself enforces the `j'` shift (constraint 4)
   Assumptions input :=
     input.j.val < 2 ^ 250 ∧ input.k0.val < 2 ^ 9 ∧ input.k2.val < 2 ^ 4 ∧
-    input.jPrime = input.j + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP ∧
     input.z1J.val = input.j.val / 2 ^ 10 ∧
     input.z13J.val = input.j.val / 2 ^ 130 ∧
     ∃ lo : ℕ, lo < 2 ^ 130 ∧
@@ -689,7 +734,8 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     out = wit.1 ∧ (IsBool out → DSpec (toDonor input out wit.2))
 
   ProverAssumptions := fun input (wit : Fp × Fp) _ =>
-    IsBool wit.1 ∧ DSpec (toDonor input wit.1 wit.2)
+    IsBool wit.1 ∧ DSpec (toDonor input wit.1 wit.2) ∧
+    input.jPrime = input.j + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP
 
   ProverSpec := fun _ (out : Fp) (wit : Fp × Fp) _ => out = wit.1
 
@@ -700,7 +746,10 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     rw [hcj, hck0, hcz1] at hjdec
     rw [hcy, hcj, hck2] at hyc
     rw [hck2] at hg1
+    rw [hcj, hcjp] at hjpc
     rw [hcz13p] at hg3
+    have hjP : input_jPrime = input_j + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := by
+      push_cast at hjpc ⊢; linear_combination -hjpc
     have hidx : ((place self + offset : ℕ) : ℤ)
         = ((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ) := by push_cast; ring
     rw [hidx] at hk3c hyc hg1 hg3
@@ -708,10 +757,10 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
       Orchard.Action.NoteCommit.YCanonicity.Gate.spec_of_eqs
         (toDonor ⟨input_y, input_k0, input_k2, input_j, input_z1J, input_z13J,
           input_jPrime, input_z13JPrime⟩ _ _)
-        ⟨hbool, hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1,
-          hA.2.2.2.2.2.1, hA.2.2.2.2.2.2⟩
+        ⟨hbool, hA.1, hA.2.1, hA.2.2.1, hjP, hA.2.2.2.1,
+          hA.2.2.2.2.1, hA.2.2.2.2.2⟩
         (isBool_of_boolCheck' hk3c)
-        (by simp only [toDonor]; push_cast at hjdec ⊢; linear_combination hjdec)
+        (by simp only [toDonor]; linear_combination hjdec)
         (by simp only [toDonor]; push_cast at hyc ⊢; linear_combination hyc)
         (by simp only [toDonor]; push_cast at hg1 ⊢; linear_combination hg1)
         (by simp only [toDonor]; push_cast at hg3 ⊢; linear_combination hg3)⟩
@@ -778,8 +827,8 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
       (toDonor input
         (env.env.advice (cfg.advices 6) ((env.place self + offset : ℕ) : ℤ))
         (env.env.advice (cfg.advices 9) ((env.place self + offset : ℕ) : ℤ)))
-      ⟨hPA.1, hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1,
-        hA.2.2.2.2.2.1, hA.2.2.2.2.2.2⟩ hPA.2
+      ⟨hPA.1, hA.1, hA.2.1, hA.2.2.1, hPA.2.2, hA.2.2.2.1,
+        hA.2.2.2.2.1, hA.2.2.2.2.2⟩ hPA.2.1
     obtain ⟨hb, he2, he3, he4, he5, he6, he7⟩ := heqs
     simp only [toDonor] at hb he2 he3 he4 he5 he6 he7
     rw [← hij, ← hik0, ← hiz1J, ← hwj, ← hwk0, ← hwz1] at he2
