@@ -303,3 +303,60 @@ All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
   region- and layouter-level chunks alike; region counts via
   `Operations.regionCount_append` + a per-chunk `show`-lemma (regionCount is WF-recursive
   — not `rfl`; use its equation lemmas).
+
+## Poseidon arc (started 2026-07-18)
+
+Goal: port Poseidon from halo2 `poseidon/pow5.rs` + `Clean/Orchard/Poseidon` donors to
+`Clean/Ironwood/Poseidon`, with formal bundle proofs and a green VK fixture test for the
+entry-point hash circuit (ConstantLength<2> P128Pow5T3 — DeriveNullifier's
+`poseidon_hash(nk, rho)`).
+
+- DONE: `Clean/Ironwood/Poseidon/Pow5.lean` — `Config`, the three VK-exact gates
+  (`full round`/`partial rounds`/`pad-and-add`, Rust-orientation-exact: `expr * (c : Fp)`
+  const-mul, left-fold sums, unnamed constraints), `configure` (equality on state then
+  rc_b, three plain selectors, three gates). MDS/mdsInv baked as constants from the donor
+  `P128Pow5T3`; round constants are queried fixed columns.
+- Orchard's column instantiation (for the dump/VK test): state = advices[6..9],
+  partial_sbox = advices[5], rc_a = fixed lagrange_coeffs[2..5], rc_b = [5..8]
+  (`orchard/src/circuit.rs:354-389`).
+- Region schedule (pow5.rs): permute = ONE region "permute state", 37 rows: row 0 load
+  (copy_advice ×3), rows 0-3 s_full (rc_a at offset, next state at offset+1), rows 4-31
+  s_partial (rc_a + rc_b at offset, partial_sbox mid at offset, next at offset+1), rows
+  32-35 s_full. `initial_state` region: 3× assign_advice_from_constant row 0.
+  `add_input` region: s_pad_and_add at row 1, copy state row 0, copy inputs row 1 (L=2:
+  both Message words, no fixed padding), outputs row 2. Hash(L=2) region sequence:
+  ["initial state for domain ConstantLength<2>", "add input for domain ConstantLength<2>",
+  "permute state"]; squeeze is region-free (output = state[0]).
+- DONE: `Clean/Ironwood/Poseidon/Rounds.lean` — `fullRound r`/`partialRound r`
+  FormalRegionCircuits (positional, MulIncompleteRound pattern: `stateRow`/
+  `readStateRow`/`rowValue`/`rowWit` helpers; Witness = entering state row; Spec = donor
+  `FullRound.value`/`PartialRounds.value`). fullRound SOUNDNESS PROVEN:
+  `circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
+  FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod]` then
+  `obtain ⟨⟨hg0,hg1,hg2⟩, hrc0, hrc1, hrc2⟩ := hc; rw [hrc...] at hg...;
+  exact ⟨by linear_combination -hg0, ...⟩`. KEY GOTCHAS: `Nat.reduceMod` needed (Fin 3
+  coes leave `mds (0 % 3)`), `Nat.add_assoc` for row-index spellings, and the gate polys
+  are `STUFF - out = 0` so `linear_combination -hg`.
+- **POSEIDON ARC COMPLETE (2026-07-18)** — all bundles fully proven, no sorries:
+  `Rounds.lean` (fullRound/partialRound), `Permute.lean` (permuteRegion, 4+28+4 via
+  per-round chunk auto-lift + `foldl_of_steps`), `Hash.lean` (initRegion,
+  addInputRegion — NOTE the input words use Rust's reversed `constrain_equal(cell, var)`
+  orientation, NOT `copy_advice` — and the ConstantLength<2> `hash` bundle, Spec = donor
+  `HashPaddedBlock.value` at capacity `2·2⁶⁴`). VK layout fixture test
+  `TestVkLayoutPoseidon` GREEN end-to-end (regions/copyList incl. deferred init
+  constants/σ/fixed+packed selectors) against the sibling-checkout
+  `poseidon::layout_dump` dump (converter validated byte-exact by round-tripping the
+  FullWidth fixture). Wired into `Clean/Ironwood.lean` + `Clean/Test.lean`.
+- (historical) sorries were: fullRound completeness; partialRound soundness+completeness
+  (soundness needs the donor `mds_mul_mdsInv_apply` algebra — see donor `circuitP128`
+  proofs in `Clean/Orchard/Poseidon/Pow5.lean` for both directions; the completeness
+  witness-eval side uses `rowWit_eval` (`@[circuit_norm]`) like MulIncompleteRound's
+  `readWit_eval`).
+- THEN: full/partial round FormalRegionCircuits (positional, MulIncompleteRound pattern;
+  Witness = entering state row, Spec = donor `FullRound.value`/`PartialRounds.value`);
+  loop bundles (RegionCircuit.forRange', stride 1: rounds share rows!) — NOTE round r
+  writes row offset+1 which round r+1 reads: entering-state positional contract like
+  MulIncomplete's round; then permute region bundle (Spec = donor `Permute.value`),
+  layouter initial_state/add_input, hash bundle (Spec = donor
+  `Hash.HashPaddedBlock.value` at capacity `2 * 2^64`); dump harness
+  (`halo2_gadgets/src/poseidon/layout_dump.rs`, mirror sinsemilla's) + fixtures + tests.
