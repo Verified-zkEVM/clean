@@ -18,7 +18,7 @@ open Halo2.Ironwood (Fp)
 open Orchard (tP)
 
 /-- Rust `bool_check` (`utilities.rs:141-143`): `v · (1 − v)`. -/
-private def boolCheck (v : Expression Fp Query) : Expression Fp Query :=
+def boolCheck (v : Expression Fp Query) : Expression Fp Query :=
   v * ((1 : Fp) - v)
 
 /-- Rust `CommitIvkConfig` (`commit_ivk.rs:45-51`). -/

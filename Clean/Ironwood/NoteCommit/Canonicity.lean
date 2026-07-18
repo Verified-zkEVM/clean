@@ -711,7 +711,7 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
         ⟨hbool, hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1,
           hA.2.2.2.2.2.1, hA.2.2.2.2.2.2⟩
         (isBool_of_boolCheck' hk3c)
-        (by simp only [toDonor]; push_cast at hjdec ⊢; linear_combination hjdec)
+        (by simp only [toDonor]; linear_combination hjdec)
         (by simp only [toDonor]; push_cast at hyc ⊢; linear_combination hyc)
         (by simp only [toDonor]; push_cast at hg1 ⊢; linear_combination hg1)
         (by simp only [toDonor]; push_cast at hg3 ⊢; linear_combination hg3)⟩
