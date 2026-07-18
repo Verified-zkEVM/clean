@@ -7,6 +7,7 @@ import Clean.Ironwood.Ecc.MulComplete
 import Clean.Ironwood.Ecc.MulOverflow
 import Clean.Ironwood.Ecc.Mul
 import Clean.Ironwood.Utilities.LookupRangeCheck
+import Clean.Ironwood.Utilities.AddChip
 import Clean.Ironwood.Poseidon.Pow5
 import Clean.Ironwood.Poseidon.Rounds
 import Clean.Ironwood.Poseidon.Permute

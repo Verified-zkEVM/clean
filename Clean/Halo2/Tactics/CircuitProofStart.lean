@@ -253,12 +253,23 @@ def introBundleBindersAndDetect : TacticM Direction := do
   throwError "circuit_proof_start: could not locate a bundle Soundness/Completeness head after introducing leading binders"
 
 /-- Step (a) part 2: `rw` the direction's `_iff` and intro the post-iff binders with the house
-names. -/
+names. Immediately after introducing the placed environment binder `env`
+(`env : Placed (Prover)Environment F`), destructure it into its two fields — the placement
+`place : RegionIndex → ℕ` and the underlying environment `env : (Prover)Environment F` — so that
+every `env.place`/`env.env` projection in the introduced hypotheses and goal reduces to bare
+`place`/`env`, and any engine-reconstructed `Placed` literal becomes `⟨place, env⟩` over the two
+variables. Both directions, both region and layouter paths (all four go through this loop).
+
+`subcircuit_rw` (step e) needs no special handling: `SubcircuitRw.placedEnv?` reconstructs the
+`⟨place, env⟩` literal from the bare pair when the common-`penv` projection shape is absent, so
+the engine's `*_placed` leaves instantiate directly against the split context. -/
 def rwIffAndIntro (d : Direction) : TacticM Unit := do
   let iff := mkIdent d.iffLemma
   evalTactic (← `(tactic| rw [$iff:ident]))
   for nm in d.introNames do
     evalTactic (← `(tactic| intro $(mkIdent nm):ident))
+    if nm == `env then
+      evalTactic (← `(tactic| obtain ⟨$(mkIdent `place):ident, $(mkIdent `env):ident⟩ := $(mkIdent `env):ident))
 
 /-- The set of names that are already `circuit_norm` members — the union of the extension's
 simp-theorem origins (tagged theorems) and its `toUnfold` set (tagged `def`s, e.g.
@@ -371,7 +382,11 @@ def abstractOutputs : TacticM Unit := do
   try evalTactic (← `(tactic| abstract_outputs)) catch _ => pure ()
 
 /-- Step (e): consume the child chunks — `subcircuit_rw at hc` (soundness) / `subcircuit_rw`
-(completeness). Silent no-op when there are no chunks (leaf gadgets), so this is total. -/
+(completeness). Silent no-op when there are no chunks (leaf gadgets), so this is total.
+
+No env re-bundling is needed on either path: `SubcircuitRw.placedEnv?` reconstructs
+`⟨place, env⟩` from the split pair for the completeness `*_placed` leaves (its split-shape
+fallback), and soundness's leaves read `place`/`env` positionally. -/
 def consumeChunks (d : Direction) : TacticM Unit := do
   if d.isSoundness then
     try evalTactic (← `(tactic| subcircuit_rw at $(mkIdent `hc):ident)) catch _ => pure ()

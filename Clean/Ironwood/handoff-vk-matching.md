@@ -360,3 +360,50 @@ entry-point hash circuit (ConstantLength<2> P128Pow5T3 — DeriveNullifier's
   layouter initial_state/add_input, hash bundle (Spec = donor
   `Hash.HashPaddedBlock.value` at capacity `2 * 2^64`); dump harness
   (`halo2_gadgets/src/poseidon/layout_dump.rs`, mirror sinsemilla's) + fixtures + tests.
+
+## NoteCommit/CommitIvk gate-layer arc (started 2026-07-18, goal-hooked)
+
+Goal: steps 1-3 — canonicity/decomposition gates with phase-1-shaped semantic specs.
+
+- DONE (pushed): `Clean/Ironwood/NoteCommit/Gates.lean` (11 VK-exact gates + configure,
+  col_l/m/r/z = advices[6..10]); `Clean/Ironwood/CommitIvk/Gate.lean` (the 14-constraint
+  two-row gate); `Clean/Ironwood/NoteCommit/Decompose.lean` — ALL FIVE MessagePiece
+  bundles FULLY PROVEN (FormalRegionCircuit wrapping the Rust assign region; Spec =
+  donor `Decompose*.Gate.Spec`; PA = honest decomposition over extracted readings).
+- KEY PATTERN (Decompose completeness): abstract WitgenIR params sever the read↔program
+  link, so use the MANUAL prefix `intro cfg offset; rw
+  [FormalRegionCircuit.completeness_iff]; intro self env input_var input output h_input
+  h_output hwit _hE hA hPA; simp only [circuit_norm, gate, boolCheck] at hwit h_input
+  h_output hPA ⊢` — everything lands in READ language with hwit kept; land h_input via a
+  `show`-rw to the literal GET-record + per-component `congrArg Inputs.<f> h_input`
+  haves; close polys by rcases/ring + linear_combination.
+- NEXT (canonicity bundles, `Clean/Ironwood/NoteCommit/Canonicity.lean`): Input = donor
+  `*.Gate.Row` (ALL cells copied in the Rust assigns — pure-copy bundles, Witness :=
+  unit), Assumptions = donor `Gate.Assumptions` (rely), Spec = donor `Gate.Spec`.
+  For the VALUE ARGUMENTS: the DONOR-REPLAY bridge (tried in
+  `Ironwood/NoteCommit/Canonicity.lean` ValueCanonicity.soundness, parked) gets the
+  donor applied but main-Clean `const`'s toElements chain whnf-walls on the
+  ConstraintsHold conversion. GO WITH THE FALLBACK: refactor the donor gates
+  (`Clean/Orchard/Action/Canonicity.lean`, `CommitIvkGate.lean`) to expose row-level
+  `spec_of_eqs (row) (hAss) (heq1) ... : Spec row` value lemmas — mechanical extraction:
+  each donor soundness body already works over `input_*` component values after its
+  peel; rename to `row.*` and have the donor soundness call the lemma. Ironwood
+  soundness then calls the same lemma with its landed equations (watch ℕ-cast
+  constants: donor spells `((2^8:ℕ):Fp)`, Ironwood gates `(2^8:Fp)` — push_cast or
+  linear_combination absorbs). Completeness stays Ironwood-local (short boolean case
+  splits; ValueCanonicity's is DONE and green as the template). (superseded plan: try the DONOR-REPLAY bridge first — apply the
+  donor `Gate.circuit.soundness/completeness` (a main-Clean FormalAssertion) at offset 0,
+  a trivial env, and CONST-lifted input expressions; the main-Clean ConstraintsHold
+  reduce (simp [circuit_norm]) to exactly the Ironwood-landed field equations, so the
+  donor's value proof is reused wholesale. If the replay fights main-Clean plumbing,
+  fall back to refactoring the donors to expose row-level `spec_of_eqs`/`eqs_of_spec`
+  value lemmas (mechanical: the donor proof bodies already work over `input_*` values).
+  Gates: Gd (5 eqs), Pkd (4), Value (1), Rho (4), Psi (5), Y (7, advices[5..9] two-row),
+  CommitIvk (14, two-row, advices[0..8]). Rust assigns: note_commit.rs 789-841 (g_d,
+  all copies), 905-956 (pk_d), 994-1035 (value), 1098-1150 (rho), 1240-1274 (psi),
+  1345-1409 (y — witnesses LSB and k_3 in-region from Value params, rest copies!),
+  commit_ivk.rs 237-320 (all copies over two rows).
+- THEN (step 3): `LookupRangeCheck.CopyCheck.Telescoped` bundle variant if missing
+  (K-generic telescope value lemmas already ported), then the composite per-input
+  canonicity bundles (donor `NoteCommit.{Gd,Pkd,Value,Rho,Psi,Y}Canonicity` in
+  NoteCommit.lean = gate bundle + telescoped copy-checks, Spec = bit-slice payoff).

@@ -288,7 +288,7 @@ def commit (G : Generators) (ns : List ℕ)
     rw [hashC_spec_eq', blind_call_regionCount blind cfg.1 input_var i₀] at hHashS
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
     -- input eval landing
-    have hin : (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+    have hin : (eval (⟨place, env⟩ : Placed Environment Fp)
         ({ pieces := input_var.pieces }
           : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
         : Value (Sinsemilla.Chain.Inputs ns.length) Fp).pieces
@@ -296,7 +296,7 @@ def commit (G : Generators) (ns : List ℕ)
       rw [← h_input, ProvableStruct.eval_cells_eq_eval,
         Sinsemilla.Chain.inputs_eval_literal]
       with_unfolding_all rfl
-    rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+    rw [show (eval (⟨place, env⟩ : Placed Environment Fp)
         ({ pieces := input_var.pieces }
           : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
         : Value (Sinsemilla.Chain.Inputs ns.length) Fp).pieces
@@ -307,21 +307,21 @@ def commit (G : Generators) (ns : List ℕ)
     -- the hash output point value IS the eval'd point (projection commute; go through
     -- the componentwise `ProvableStruct.eval` — the flat eval of the whole symbolic-size
     -- Output struct is a whnf wall)
-    have hpoint : (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0
+    have hpoint : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
         : Value (HashToPoint.Output ns.length) Fp).point
-        = (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0.point
+        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
     have hpx := congrArg Orchard.Point.x hpoint
     have hpy := congrArg Orchard.Point.y hpoint
     -- the hash point equals B
-    have hPB : (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0.point
+    have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
         : Value Point Fp) = B := by
       obtain ⟨bx, byv⟩ := B
-      have hx : (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0.point
+      have hx : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp).x = bx := by rw [← hpx]; exact hcoords.1
-      have hy : (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0.point
+      have hy : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp).y = byv := by rw [← hpy]; exact hcoords.2
       rw [← hx, ← hy]
     -- B is a valid point (the chunks are generator indices)
@@ -330,26 +330,26 @@ def commit (G : Generators) (ns : List ℕ)
         (Sinsemilla.Chain.pieceChunks_bound hPC) hB
     -- Add-input projection commutes (componentwise eval route — the flat eval is a
     -- whnf wall)
-    have heP : ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+    have heP : ((eval (⟨place, env⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).p : Point Fp)
-        = (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_0.point
+        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
-    have heQ : ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+    have heQ : ((eval (⟨place, env⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).q : Point Fp)
-        = (eval (⟨env.place, env.env⟩ : Placed Environment Fp) x_gen_out_1
+        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
           : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
     -- the complete addition's contract
     have hAddS := hAdd trivial (by
-      show ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+      show ((eval (⟨place, env⟩ : Placed Environment Fp)
           ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
           : Value Ecc.Add.Inputs Fp).p : Point Fp).Valid ∧
-        ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        ((eval (⟨place, env⟩ : Placed Environment Fp)
           ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
           : Value Ecc.Add.Inputs Fp).q : Point Fp).Valid
       constructor
@@ -368,7 +368,7 @@ def commit (G : Generators) (ns : List ℕ)
       (by rw [hBE.2.2]; trivial)).1
     rw [hBS] at hBl
     -- prover input landing
-    have hinP : (eval env ({ pieces := input_var.pieces }
+    have hinP : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ pieces := input_var.pieces }
         : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
         : Value (Sinsemilla.Chain.Inputs ns.length) Fp).pieces = input.pieces := by
       rw [← h_input, ProvableStruct.eval_cells_eq_eval_prover,
@@ -376,13 +376,13 @@ def commit (G : Generators) (ns : List ℕ)
       with_unfolding_all rfl
     -- the hash child's honest-prover precondition
     have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns hpos).ProverAssumptions
-        (eval env ({ pieces := input_var.pieces }
+        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ pieces := input_var.pieces }
           : Var (Sinsemilla.Chain.Inputs ns.length) Fp))
         ((HashToPoint.hashCircuit G ns Q hQ hns hpos).extract cfg.2.1
           { pieces := input_var.pieces }
           (i₀ + ((blind.call cfg.1 input_var).operations i₀).regionCount)
-          env.toEnvironment)
-        env.env.hint := by
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+        env.hint := by
       rw [hashC_proverAssumptions_eq']
       refine ⟨hns, ?_, ⟨bx, byv⟩, ?_⟩
       · rw [hinP]; exact hPBounds
@@ -392,17 +392,17 @@ def commit (G : Generators) (ns : List ℕ)
     rw [hashC_proverSpec_eq'] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by rw [hinP]; exact hB0)
     -- prover-eval output point = verifier-eval point (projection commute + hint erasure)
-    have hpointP : (eval env x_gen_out_0
+    have hpointP : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) x_gen_out_0
         : Value (HashToPoint.Output ns.length) Fp).point
-        = (eval env.toEnvironment x_gen_out_0.point : Value Point Fp) := by
+        = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval_prover]
       with_unfolding_all rfl
     -- the hash point equals the honest B0
-    have hPB0 : (eval env.toEnvironment x_gen_out_0.point : Value Point Fp)
+    have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp)
         = (⟨bx, byv⟩ : Point Fp) := by
-      have hx : (eval env.toEnvironment x_gen_out_0.point : Value Point Fp).x = bx := by
+      have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp).x = bx := by
         rw [← congrArg Orchard.Point.x hpointP]; exact hres.1
-      have hy : (eval env.toEnvironment x_gen_out_0.point : Value Point Fp).y = byv := by
+      have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp).y = byv := by
         rw [← congrArg Orchard.Point.y hpointP]; exact hres.2
       rw [← hx, ← hy]
     have hB0valid : (⟨bx, byv⟩ : Point Fp).Valid :=
@@ -410,25 +410,25 @@ def commit (G : Generators) (ns : List ℕ)
         (Sinsemilla.Chain.pieceChunks_bound
           (Sinsemilla.Chain.pieceChunks_honestChunks ns input.pieces hPBounds)) hB0
     -- Add-input projections (verifier eval over the hint-erased env)
-    have hePv : ((eval env.toEnvironment
+    have hePv : ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).p : Point Fp)
-        = (eval env.toEnvironment x_gen_out_0.point : Value Point Fp) := by
+        = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
-    have heQv : ((eval env.toEnvironment
+    have heQv : ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).q : Point Fp)
-        = (eval env.toEnvironment x_gen_out_1 : Value Point Fp) := by
+        = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_1 : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
     refine ⟨⟨by rw [hBE.1]; trivial, by rw [hBE.2.1]; trivial, by rw [hBE.2.2]; trivial⟩,
       ⟨by rw [hashC_envAssumptions_eq']; exact _hE, trivial, hPAhash⟩,
       trivial, ?_, trivial⟩
-    show ((eval env.toEnvironment
+    show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).p : Point Fp).Valid ∧
-      ((eval env.toEnvironment
+      ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ({ p := x_gen_out_0.point, q := x_gen_out_1 } : Var Ecc.Add.Inputs Fp)
         : Value Ecc.Add.Inputs Fp).q : Point Fp).Valid
     constructor

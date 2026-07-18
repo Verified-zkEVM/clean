@@ -242,13 +242,13 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       rw [← h_output_exit_row_xA, ← h_output_exit_row_xP,
         ← h_output_exit_row_lambda1, ← h_output_exit_row_lambda2]
       have hfold := loop_fold G
-        (fun r => { z := env.env.advice cfg.bits ((env.place self + (offset + r) : ℕ) : ℤ),
-                    row := { xA := env.env.advice cfg.xA ((env.place self + (offset + r) : ℕ) : ℤ),
-                             xP := env.env.advice cfg.xP ((env.place self + (offset + r) : ℕ) : ℤ),
-                             lambda1 := env.env.advice cfg.lambda1
-                               ((env.place self + (offset + r) : ℕ) : ℤ),
-                             lambda2 := env.env.advice cfg.lambda2
-                               ((env.place self + (offset + r) : ℕ) : ℤ) } })
+        (fun r => { z := env.advice cfg.bits ((place self + (offset + r) : ℕ) : ℤ),
+                    row := { xA := env.advice cfg.xA ((place self + (offset + r) : ℕ) : ℤ),
+                             xP := env.advice cfg.xP ((place self + (offset + r) : ℕ) : ℤ),
+                             lambda1 := env.advice cfg.lambda1
+                               ((place self + (offset + r) : ℕ) : ℤ),
+                             lambda2 := env.advice cfg.lambda2
+                               ((place self + (offset + r) : ℕ) : ℤ) } })
         (fun j => if h : j < n then m ⟨j, h⟩ else 0)
         (fun i => by
           beta_reduce
@@ -268,8 +268,8 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
     obtain ⟨A, B, hAon, hH0, hchain⟩ := hPA
     -- the per-round witness equations, as steps of the row family
     have hsteps : ∀ i : Fin n,
-        rowFam cfg env.place env.env self offset (i.val + 1)
-          = (rowFam cfg env.place env.env self offset i.val).step
+        rowFam cfg place env self offset (i.val + 1)
+          = (rowFam cfg place env self offset i.val).step
             ((G.S (pieceWord input (i.val + 1))).x, (G.S (pieceWord input (i.val + 1))).y)
             (pieceZ input (i.val + 1)) := by
       intro i
@@ -282,7 +282,7 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       rw [State.mk.injEq, DoubleAndAddRow.mk.injEq]
       exact ⟨hz, hxa, hxp, hl1, hl2⟩
     have hIter := iter_of_steps G input _ hsteps
-    have hHall := iter_honest G (rowFam cfg env.place env.env self offset 0)
+    have hHall := iter_honest G (rowFam cfg place env self offset 0)
       (by
         simp only [rowFam]
         exact hH0) hchain
@@ -290,12 +290,12 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
     · -- each round's constraints, via the engine leaf and the chained honesty
       intro i
       have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round G ↑i) cfg
-        (offset + ↑i * 1) self env input_var (hwit i)
+        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var (hwit i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
         roundC_extract_eq] at hleaf
       obtain ⟨C, hC⟩ := range_prefix_some G.S A (pieceWord input) hchain
         (show ↑i + 2 ≤ n + 1 by omega)
-      have hinp : (eval env input_var : Fp) = input := by
+      have hinp : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var : Fp) = input := by
         rw [← h_input]
         with_unfolding_all rfl
       rw [← hinp] at hC
@@ -525,10 +525,10 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     rw [hIdx] at h0
     rw [hX] at h1
     rw [hY] at h2y
-    have hzw : env.env.advice cfg.bits ((env.place self + (offset + w) : ℕ) : ℤ)
+    have hzw : env.advice cfg.bits ((place self + (offset + w) : ℕ) : ℤ)
         = (mw : Fp) := by
       linear_combination h0
-        + env.env.advice cfg.bits ((env.place self + (offset + w + 1) : ℕ) : ℤ)
+        + env.advice cfg.bits ((place self + (offset + w + 1) : ℕ) : ℤ)
           * (2 : Fp) ^ K * qS2Boundary_run final
     -- the word family and the running-sum family
     refine ⟨fun r => if r < w then ms0 r else mw, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -542,7 +542,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     · -- the piece recombines from its words
       have hkey := chain_eq_sum (n := w + 1)
         (fun r => if r ≤ w
-          then env.env.advice cfg.bits ((env.place self + (offset + r) : ℕ) : ℤ) else 0)
+          then env.advice cfg.bits ((place self + (offset + r) : ℕ) : ℤ) else 0)
         (fun r => if r < w then ms0 r else mw)
         (by
           intro r hr
@@ -569,9 +569,9 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
           rw [if_neg (by omega)])
       beta_reduce at hkey ⊢
       rw [if_pos (by omega : 0 ≤ w), Nat.add_zero] at hkey
-      have hgi : (eval env input_var : Fp)
-          = env.env.get input_var.cell.column
-            ((env.place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
+      have hgi : (eval (⟨place, env⟩ : Placed Environment Fp) input_var : Fp)
+          = env.get input_var.cell.column
+            ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
         with_unfolding_all rfl
       rw [← h_input, hgi, ← hZ0]
       exact hkey
@@ -581,7 +581,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       simp only [Vector.getElem_ofFn]
       rw [← h_output_zs i hi]
       have hsfx := chain_eq_suffix_sum
-        (fun r => env.env.advice cfg.bits ((env.place self + (offset + r) : ℕ) : ℤ))
+        (fun r => env.advice cfg.bits ((place self + (offset + r) : ℕ) : ℤ))
         (fun r => if r < w then ms0 r else mw)
         (by
           intro sIdx hs
@@ -634,30 +634,30 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     have h2 : (2 : Fp) ≠ 0 := by decide
     -- the entering row is the honest row 0
     have hH0 : (State.mk
-        (env.env.advice cfg.bits ((env.place self + offset : ℕ) : ℤ))
-        { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
-          xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
-          lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
-          lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) }).Honest
+        (env.advice cfg.bits ((place self + offset : ℕ) : ℤ))
+        { xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
+          xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
+          lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
+          lambda2 := env.advice cfg.lambda2 ((place self + offset : ℕ) : ℤ) }).Honest
         G input A 0 := by
       refine ⟨?_, ?_, ?_, ?_, ?_⟩
-      · show env.env.advice cfg.bits _ = pieceZ input 0
+      · show env.advice cfg.bits _ = pieceZ input 0
         rw [pieceZ_zero]
         exact hWz0
       · exact hAx.symm
       · exact hWxp
-      · show env.env.advice cfg.lambda1 _
+      · show env.advice cfg.lambda1 _
           = (rowValue (accAfter G (A.x, A.y) input 0) _).1
         rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
         exact hWl1
-      · show env.env.advice cfg.lambda2 _
+      · show env.advice cfg.lambda2 _
           = (rowValue (accAfter G (A.x, A.y) input 0) _).2.1
         rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
         exact hWl2
     rw [h_input] at h_spec_0
     -- the loop's honest-prover precondition
     have hLPA : (loop G w).ProverAssumptions input
-        ((loop G w).extract cfg offset input_var self env.toEnvironment) env.env.hint := by
+        ((loop G w).extract cfg offset input_var self (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
       rw [loopC_proverAssumptions_eq, loopC_extract_eq]
       simp only [reads, circuit_norm]
       exact ⟨A, B, hAon, hH0, hchain⟩
@@ -668,11 +668,11 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     obtain ⟨-, hExit, hZs⟩ := hsp
     -- the exit row is honest at word w
     have hHexit := iter_honest G
-      (State.mk (env.env.advice cfg.bits ((env.place self + offset : ℕ) : ℤ))
-        { xA := env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ),
-          xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
-          lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
-          lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) })
+      (State.mk (env.advice cfg.bits ((place self + offset : ℕ) : ℤ))
+        { xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
+          xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
+          lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
+          lambda2 := env.advice cfg.lambda2 ((place self + offset : ℕ) : ℤ) })
       hH0 hchain w le_rfl
     rw [← hExit] at hHexit
     -- the exit-row identities (the whole-piece chain point)
@@ -689,11 +689,11 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       simp only [List.cons.injEq, and_true]
       refine ⟨?_, ?_, ?_⟩
       · rw [hb_idx]
-        have hzwv : env.env.advice cfg.bits ((env.place self + (offset + w) : ℕ) : ℤ)
+        have hzwv : env.advice cfg.bits ((place self + (offset + w) : ℕ) : ℤ)
             = pieceZ input w := hzE
         rw [hzwv, pieceZ_last hbound]
         linear_combination
-          (-(env.env.advice cfg.bits ((env.place self + (offset + w + 1) : ℕ) : ℤ))
+          (-(env.advice cfg.bits ((place self + (offset + w + 1) : ℕ) : ℤ))
             * (2 : Fp) ^ K) * qS2Boundary_run final
       · rw [hb_x]
         linear_combination hxPE

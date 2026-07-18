@@ -328,6 +328,30 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.d2 + row.d3 * Expression.const ((2 ^ 8 : ℕ) : Fp) +
     row.e0 * Expression.const ((2 ^ 58 : ℕ) : Fp) - row.value)
 
+/-- Row-level payoff (extracted from `soundness` for reuse by the halo2-native port):
+the gate equation plus the rely-conditions pin the canonical decomposition. -/
+theorem spec_of_eq (row : Row Fp) (hAss : Assumptions row)
+    (heq : row.d2 + row.d3 * ((2 ^ 8 : ℕ) : Fp) + row.e0 * ((2 ^ 58 : ℕ) : Fp)
+      - row.value = 0) : Spec row := by
+  obtain ⟨hd2_lt, hd3_lt, he0_lt⟩ := hAss
+  have hp := pallasBaseCard_eq
+  have hbnd : row.d2.val + row.d3.val * 2 ^ 8 + row.e0.val * 2 ^ 58
+      < PALLAS_BASE_CARD := by omega
+  have hval : row.value.val
+      = row.d2.val + row.d3.val * 2 ^ 8 + row.e0.val * 2 ^ 58 := by
+    have hcast : row.value
+        = ((row.d2.val + row.d3.val * 2 ^ 8 + row.e0.val * 2 ^ 58 : ℕ) : Fp) := by
+      have hrec : row.value = row.d2 + row.d3 * ((2 ^ 8 : ℕ) : Fp)
+          + row.e0 * ((2 ^ 58 : ℕ) : Fp) := by linear_combination -heq
+      rw [hrec]; push_cast
+      rw [ZMod.natCast_rightInverse row.d2, ZMod.natCast_rightInverse row.d3,
+        ZMod.natCast_rightInverse row.e0]
+    rw [hcast, ZMod.val_natCast_of_lt hbnd]
+  refine ⟨by rw [hval]; omega, ?_, ?_, ?_⟩
+  · simp only [bitrange, pow_zero, Nat.div_one, hval]; omega
+  · simp only [bitrange, hval]; omega
+  · simp only [bitrange, hval]; omega
+
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input value"
   main
@@ -335,24 +359,9 @@ def circuit : FormalAssertion Fp Row where
   Spec
   soundness := by
     circuit_proof_start
-    obtain ⟨hd2_lt, hd3_lt, he0_lt⟩ := h_assumptions
-    have hp := pallasBaseCard_eq
-    have hbnd : input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58
-        < PALLAS_BASE_CARD := by omega
-    have hval : input_value.val
-        = input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58 := by
-      have hcast : input_value
-          = ((input_d2.val + input_d3.val * 2 ^ 8 + input_e0.val * 2 ^ 58 : ℕ) : Fp) := by
-        have hrec : input_value = input_d2 + input_d3 * ((2 ^ 8 : ℕ) : Fp)
-            + input_e0 * ((2 ^ 58 : ℕ) : Fp) := by linear_combination -h_holds
-        rw [hrec]; push_cast
-        rw [ZMod.natCast_rightInverse input_d2, ZMod.natCast_rightInverse input_d3,
-          ZMod.natCast_rightInverse input_e0]
-      rw [hcast, ZMod.val_natCast_of_lt hbnd]
-    refine ⟨by rw [hval]; omega, ?_, ?_, ?_⟩
-    · simp only [bitrange, pow_zero, Nat.div_one, hval]; omega
-    · simp only [bitrange, hval]; omega
-    · simp only [bitrange, hval]; omega
+    exact spec_of_eq
+      { value := input_value, d2 := input_d2, d3 := input_d3, e0 := input_e0 }
+      h_assumptions h_holds
   completeness := by
     circuit_proof_start
     obtain ⟨hval_lt, hd2_val, hd3_val, he0_val⟩ := h_spec
