@@ -97,6 +97,10 @@ inductive RegionOperation (F : Type) where
   | constrainEqual : Cell → Cell → RegionOperation F
   /-- Copy constraint against the constants column. Rust: `region.constrain_constant`. -/
   | constrainConstant : Cell → F → RegionOperation F
+  /-- Assign an advice cell from an instance-column value (absolute `row`) and constrain
+  them equal. Rust: `region.assign_advice_from_instance` — an advice assignment plus the
+  instance-left copy. -/
+  | assignAdviceFromInstance : Column .instance → ℕ → Cell → RegionOperation F
   /-- A region-level subcircuit call: a packaged fragment's operations, in the ambient
   region. The proof boundary at row granularity. -/
   | subcircuit : List (RegionOperation F) → RegionOperation F
@@ -179,6 +183,8 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
           (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (tableRow : ℤ)))
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
+  | .assignAdviceFromInstance instCol instRow cell =>
+      cell.eval place env = env.get instCol (instRow : ℤ)
   | .subcircuit ops => RegionOperations.Constraints place self env ops
 
 /-- Constraints of a list of region operations. -/
@@ -231,6 +237,8 @@ def RegionOperation.ExtendsWitness (place : RegionIndex → ℕ) (self : RegionI
   | .assignAdvice col row compute =>
       env.get col (place self + row : ℕ) = (compute.eval ⟨place, env⟩)[0]
   | .assignFixed col row v => env.get col (place self + row : ℕ) = v
+  | .assignAdviceFromInstance instCol instRow cell =>
+      cell.eval place env.toEnvironment = env.get instCol (instRow : ℤ)
   | .subcircuit ops => RegionOperations.ExtendsWitnesses place self env ops
   | _ => True
 

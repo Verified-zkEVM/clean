@@ -142,6 +142,11 @@ def regionCopies (permCols : List ColRef) (starts : List ℕ)
         let (lc, lr) := resolveCell permCols starts a
         let (rc, rr) := resolveCell permCols starts b
         some (lc, lr, rc, rr)
+    | .assignAdviceFromInstance icol irow cell =>
+        -- Rust `assign_advice_from_instance`: the instance-left copy at the absolute
+        -- instance row, against the assigned advice cell
+        let (rc, rr) := resolveCell permCols starts cell
+        some (permIndex permCols icol.toAny, irow, rc, rr)
     | _ => none
   -- deferred constants, in body order, consuming the fixture's allocation map
   let rec go : List (RegionOperation F) → List (ℕ × ℕ × ℕ) →

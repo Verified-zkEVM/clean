@@ -97,6 +97,13 @@ def constrainEqual (a b : AssignedCell F) : RegionCircuit F Unit :=
 def constrainConstant (a : AssignedCell F) (value : F) : RegionCircuit F Unit :=
   fun _ => ((), [.constrainConstant a.cell value])
 
+/-- Assign an advice cell from an instance value (absolute `instRow`) and constrain them
+equal. Rust: `region.assign_advice_from_instance(instance, row, advice, offset)`. -/
+def assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
+    (col : Column .advice) (row : ℕ) : RegionCircuit F (AssignedCell F) :=
+  fun self =>
+    (.of self row col, [.assignAdviceFromInstance instCol instRow (Cell.of self row col)])
+
 /-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
 `synthesize` name output cells that live at fixed rows rather than being threaded through
 loop return values. (Promoted from the per-gadget copies in `MulIncomplete`/
