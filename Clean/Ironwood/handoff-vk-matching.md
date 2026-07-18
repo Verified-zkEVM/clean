@@ -191,8 +191,15 @@ All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
 1. ~~`HashLayer` as a `FormalCircuit`~~ **DONE (2026-07-18)** — `HashLayer.circuit` fully
    proven both directions (the Mul-style layouter peel over the proven children; the
    `sum_z1_eq_pieceZ` digit-canonicity bridge feeds `honest_gate`).
-2. `Layer` = CondSwap.swap + HashLayer (both proven — a two-child layouter compose);
-   `CalculateRoot` = the 32-fold (`merkleRoot_of_steps`/`honestNode` algebra ready).
+2. ~~`Layer` = CondSwap.swap + HashLayer~~ **DONE (2026-07-18)** — `Layer.circuit` fully
+   proven (Spec = `MerkleStep`; the completeness prefix auto-lifts the children's PA
+   obligations and provides per-child derived implications `h_spec_0/1` — no manual peel
+   needed at all for a two-child layouter compose).
+   `CalculateRoot` = the 32-fold of `Layer.circuit` — NEEDS a layouter-level fold
+   combinator with peel lemmas (the `forRangeVar'` analogue at `Circuit` level; a manual
+   32-iteration peel is not reasonable). `merkleRoot_of_steps`/`honestNode` value algebra
+   is ready; each layer's `l` is the loop index (`l < 2^10` by `omega`), the sibling/bit
+   witness programs index the path.
 3. `CommitDomain.commit` = hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth`
    boundary (`BlindSpecPinned` pattern; the mul_fixed arc on the other machine will
    discharge it).
