@@ -1,4 +1,5 @@
 import Clean.Ironwood.Ecc.MulFixed
+import Clean.Orchard.Ecc.MulFixed.BaseFieldElem
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -970,8 +971,130 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
         (eval env (innerOutCells cfg 0 i₀))
         (eval env (windowCells cfg 0 i₀)) :=
       fw_inner_soundness B windows cfg 0 i₀ env input_var _hE trivial hInner
-    sorry
+    simp only [InnerSpec, innerOutCells, windowCells, circuit_norm] at hIS
+    obtain ⟨ks, hks_lt', hws, hAcc, hMulB⟩ := hIS
+    -- ── region 2: the complete addition `mul_b + acc` ──
+    subcircuit_rw at hAdd
+    simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add, circuit_norm]
+      at hAdd
+    -- ── the honest scalars, opaque ──
+    obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
+        t = (Orchard.Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
+    have hwp84 : Orchard.Ecc.MulFixed.windowPoint B.point 84 (ks 84) = t84 • B.point := by
+      rw [ht84_def]; rfl
+    obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = Orchard.Ecc.MulFixed.partialSum ks 83 := ⟨_, rfl⟩
+    have hS83_lt : S83 < 2 * 8 ^ 84 := by
+      rw [hS83_def]
+      exact Orchard.Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hks_lt' j (by omega))
+    have hS83_pos : 0 < S83 := by
+      rw [hS83_def]
+      exact Orchard.Ecc.MulFixed.partialSum_pos _ _
+    have hS83_card : S83 < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD :=
+      Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS83_lt (by norm_num)
+    have hOnP : (t84 • B.point).OnCurve := by
+      rw [← hwp84]
+      exact B.windowPoint_onCurve (hks_lt' 84 (by norm_num))
+    have hOnQ : (S83 • B.point).OnCurve := B.nsmul_onCurve hS83_pos hS83_card
+    obtain ⟨-, hOutEq⟩ := hAdd ⟨by rw [hMulB, hwp84]; exact Or.inl hOnP,
+      by rw [hAcc, ← hS83_def]; exact Or.inl hOnQ⟩
+    rw [hMulB, hAcc, hwp84, ← hS83_def,
+      show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
+    simp only [synthesize, circuit_norm] at h_output
+    rw [FormalRegionCircuit.output_call] at h_output
+    simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add,
+      circuit_norm] at h_output
+    rw [h_output] at hOutEq
+    rw [Orchard.Point.nsmul_add_nsmul B.onCurve] at hOutEq
+    -- ── the extracted scalar is the digit sum ──
+    have hchain : (t84 + S83) • B.point
+        = (((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
+            CompElliptic.Fields.Pasta.Fq)).val • B.point := by
+      rw [ht84_def, hS83_def, ← Orchard.Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
+        Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
+    have hsum : windowsScalar
+        (eval (⟨env.place, env.env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀))
+        = ((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
+            CompElliptic.Fields.Pasta.Fq) := by
+      unfold windowsScalar
+      refine congrArg Nat.cast (Finset.sum_congr rfl ?_)
+      intro w hw
+      have hwlt : w < 85 := Finset.mem_range.mp hw
+      rw [getElem!_pos _ w (by simpa using hwlt)]
+      simp only [windowCells, circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
+        AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+        Environment.get_advice, Nat.zero_add]
+      rw [hws ⟨w, hwlt⟩, ZMod.val_natCast,
+        Nat.mod_eq_of_lt (lt_of_lt_of_le (hks_lt' w hwlt)
+          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
+    show ({ x := output_x, y := output_y } : Point Fp)
+      = ((fwExtract cfg i₀ ⟨env.place, env.env⟩).2 • B : Point Fp)
+    simp only [fwExtract]
+    rw [hsum, hOutEq, hchain]
+    exact (MulFixed.point_eta _).symm
 
-  completeness := by sorry
+  completeness := by
+    circuit_proof_start
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
+    simp only [synthesize, circuit_norm] at hwit ⊢
+    obtain ⟨hWInner, hWAdd⟩ := hwit
+    change RegionOperations.ExtendsWitnesses env.place i₀ env.env
+      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 windows)
+        input_var).operations i₀) at hWInner
+    simp only [fwExtract] at hPA
+    have hIC := fw_inner_completeness B windows cfg 0 i₀ env input_var hWInner _hE
+      trivial hPA
+    refine And.intro ?_ ?_
+    · with_reducible exact hIC.1
+    · -- the complete addition on the honest exit points
+      have hPS := hIC.2
+      rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at hPS
+      simp only [InnerProverSpec, circuit_norm] at hPS
+      obtain ⟨hax, hay, hmx, hmy⟩ := hPS
+      -- the digit bounds, in the `getElem!` spelling the honest facts use
+      have hkv : ∀ t : ℕ, t < 85 →
+          (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+            (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val < 8 := by
+        intro t ht
+        rw [getElem!_pos _ t (by simpa using ht)]
+        exact hPA ⟨t, ht⟩
+      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
+        cfg.superConfig.addConfig 0 (i₀ + 1) env
+        ⟨((innerRegion B.toData cfg 0 windows).output i₀).mulB,
+         ((innerRegion B.toData cfg 0 windows).output i₀).acc⟩ hWAdd
+      simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+        addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
+        Nat.zero_add, circuit_norm] at hC
+      simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add]
+      refine hC ⟨?_, ?_⟩
+      · -- mulB honest: window-84 point on curve
+        have hOn : (Orchard.Ecc.MulFixed.windowPoint B.point 84
+            (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+              (eval env.toEnvironment (windowCells cfg 0 i₀)) 84).val).OnCurve :=
+          B.windowPoint_onCurve (hkv 84 (by norm_num))
+        rcases hWp : Orchard.Ecc.MulFixed.windowPoint B.point 84
+            (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+              (eval env.toEnvironment (windowCells cfg 0 i₀)) 84).val with ⟨wx, wy⟩
+        rw [hWp] at hOn hmx hmy
+        rw [hmx, hmy]
+        exact Or.inl hOn
+      · -- acc honest: partialSum point on curve
+        have hOn : ((Orchard.Ecc.MulFixed.partialSum
+            (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+              (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val) 83)
+              • B.point).OnCurve :=
+          B.nsmul_onCurve (Orchard.Ecc.MulFixed.partialSum_pos _ _)
+            (Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+              (Orchard.Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hkv j (by omega)))
+              (by norm_num))
+        rcases hSp : Orchard.Ecc.MulFixed.partialSum
+            (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
+              (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val) 83
+            • B.point with ⟨sx, sy⟩
+        rw [hSp] at hOn hax hay
+        rw [hax, hay]
+        exact Or.inl hOn
 
 end Halo2.Ironwood.Ecc.MulFixed.FullWidth
