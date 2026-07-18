@@ -416,6 +416,47 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
     (synthChecks G R windows Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
   with_unfolding_all rfl
 
+theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i : RegionIndex) :
+    (synthPieces cfg input).output i
+      = { a := .of i 0 cfg.hashConfig.witnessPieces,
+          b := .of (i + 3) 0 cfg.hashConfig.witnessPieces,
+          c := .of (i + 4) 0 cfg.hashConfig.witnessPieces,
+          d := .of (i + 6) 0 cfg.hashConfig.witnessPieces,
+          e := .of (i + 9) 0 cfg.hashConfig.witnessPieces,
+          f := .of (i + 10) 0 cfg.hashConfig.witnessPieces,
+          g := .of (i + 12) 0 cfg.hashConfig.witnessPieces,
+          h := .of (i + 14) 0 cfg.hashConfig.witnessPieces,
+          b0 := .of (i + 1) 0 cfg.lookupConfig.runningSum,
+          b3 := .of (i + 2) 0 cfg.lookupConfig.runningSum,
+          d2 := .of (i + 5) 0 cfg.lookupConfig.runningSum,
+          e0 := .of (i + 7) 0 cfg.lookupConfig.runningSum,
+          e1 := .of (i + 8) 0 cfg.lookupConfig.runningSum,
+          g1 := .of (i + 11) 0 cfg.lookupConfig.runningSum,
+          h0 := .of (i + 13) 0 cfg.lookupConfig.runningSum } := by
+  with_unfolding_all rfl
+
+theorem synthChecks_output (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i : RegionIndex) :
+    (synthChecks G R windows Q hQ cfg input pcs iHash).output i
+      = { b2 := .of (i + 4) 0 (cfg.gates.y.advices 6),
+          d1 := .of (i + 5 + 4) 0 (cfg.gates.y.advices 6),
+          cm := (Sinsemilla.CommitDomain.commit G ns R windows Q hQ
+            ns_ne_nil ns_pos).output (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+            { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
+            (i + 10),
+          aZs := { z0 := .of (i + 14) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 14) 13 cfg.lookupConfig.runningSum },
+          bZs := { z0 := .of (i + 15) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 15) 14 cfg.lookupConfig.runningSum },
+          eZs := { z0 := .of (i + 16) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 16) 14 cfg.lookupConfig.runningSum },
+          gZs := { z0 := .of (i + 17) 0 cfg.lookupConfig.runningSum,
+                   zLast := .of (i + 17) 13 cfg.lookupConfig.runningSum } } := by
+  with_unfolding_all rfl
+
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
 open Orchard.Specs.Sinsemilla (hashToPoint)

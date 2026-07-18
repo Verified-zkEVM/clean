@@ -473,6 +473,9 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   rw [toFormal_spec_eq, decomposeH_output, toFormal_extract_eq] at hGhS
   simp only [DecomposeH.bundle, circuit_norm] at hGhS
   clear hGb hGd hGe hGg hGh
+  simp only [synthPieces_output, synthChecks_output, circuit_norm, zCell,
+    AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+    Environment.get_advice] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
   trace_state
   sorry
 
