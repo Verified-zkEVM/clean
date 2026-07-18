@@ -195,14 +195,23 @@ All pushed, `lake build Clean`+`CleanTests` green, tree sorry-free:
    proven (Spec = `MerkleStep`; the completeness prefix auto-lifts the children's PA
    obligations and provides per-child derived implications `h_spec_0/1` — no manual peel
    needed at all for a two-child layouter compose).
-   `CalculateRoot` = the 32-fold of `Layer.circuit` — NEEDS a layouter-level fold
-   combinator with peel lemmas (the `forRangeVar'` analogue at `Circuit` level; a manual
-   32-iteration peel is not reasonable). `merkleRoot_of_steps`/`honestNode` value algebra
-   is ready; each layer's `l` is the loop index (`l < 2^10` by `omega`), the sibling/bit
-   witness programs index the path.
-3. `CommitDomain.commit` = hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth`
-   boundary (`BlindSpecPinned` pattern; the mul_fixed arc on the other machine will
-   discharge it).
+   ~~`CalculateRoot` = the 32-fold of `Layer.circuit`~~ **DONE (2026-07-18)** —
+   `CalculateRoot.circuit` fully proven on the NEW layouter-level fold combinator
+   `FormalCircuit.foldCall` (`Clean/Halo2/Subcircuit.lean`): serial fold of a
+   formal-circuit family with closed-form accumulator/region state (`foldState`) and
+   `Constraints`/`ExtendsWitnesses` split lemmas into `∀ i : Fin m` per-round call
+   chunks. Soundness: split + `subcircuit_rw` (walks under the binder) +
+   `merkleRoot_of_steps`; completeness: split + a `pathNode` (running-node-over-readings)
+   induction discharging each chunk via the `SubcircuitRw.layouter_completeness_*_placed`
+   framework leaves manually. `Spec` = `MerkleRoot G Q 0 leaf 32 root`.
+3. ~~`CommitDomain.commit`~~ **DONE (2026-07-18)** — fully proven both directions:
+   hashCircuit + Ecc.Add + the abstract `MulFixed.FullWidth` boundary (`BlindSpecPinned`
+   pattern; the mul_fixed arc will discharge the pinned hypotheses when it lands).
+   `Spec`: `∀ B, hashToPoint Q chunks = some B → output.Valid ∧ output = B + scalarOf·R`
+   with `PieceChunks`/`ZsFacts` exposed. Completeness rides the hash child's
+   `ProverSpec` (honest hash point) — no chunk-canonicity needed.
+
+**The sinsemilla stack (merkle + commitdomain) is COMPLETE — no sorries.**
 
 ### Proof-engineering notes from the HashLayer arc (read before composing further)
 

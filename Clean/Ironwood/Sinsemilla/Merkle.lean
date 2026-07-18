@@ -1789,6 +1789,394 @@ theorem honestNode_isSome_le (G : Generators) (Q : Point Fp)
     · have : i = m + 1 := by omega
       rwa [this]
 
+/-! #### The 32-layer fold (`MerklePath::calculate_root`), on `FormalCircuit.foldCall` -/
+
+/-- The layer family: layer `i` is `Layer.circuit` at `l = i` (`% 2 ^ 10` totalizer —
+identity on the 32 layers used). -/
+def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool) (i : ℕ) :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field :=
+  Layer.circuit G Q hQ (i % 2 ^ 10) (Nat.mod_lt _ (by norm_num)) (wsib i) (wswap i)
+
+/-- Feed a layer's root cell back as the next layer's node. -/
+def toInput : Var field Fp → Var Layer.Input Fp := fun out => { node := out }
+
+/-- The running node over the *extracted* per-layer `(sibling, swap)` readings (`none` once a
+layer hash is undefined) — the fold's own honest-node chain. The honest-input instantiation
+(path/pos witness programs) recovers `honestNode`. -/
+def pathNode (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp) (node : Fp) : ℕ → Option Fp
+  | 0 => some node
+  | k + 1 => (pathNode G Q wit node k).bind fun n =>
+      (hashToPoint G.S Q (proverChunks k n (wit k).1 ((wit k).2 = 1))).map (·.x)
+
+theorem pathNode_isSome_of_succ (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp)
+    (node : Fp) (k : ℕ) (h : (pathNode G Q wit node (k + 1)).isSome) :
+    (pathNode G Q wit node k).isSome := by
+  rw [pathNode] at h
+  rcases hb : pathNode G Q wit node k with _ | v
+  · rw [hb] at h; simp at h
+  · simp
+
+theorem pathNode_isSome_le (G : Generators) (Q : Point Fp) (wit : ℕ → Fp × Fp)
+    (node : Fp) {i j : ℕ} (hij : i ≤ j) (h : (pathNode G Q wit node j).isSome) :
+    (pathNode G Q wit node i).isSome := by
+  induction j with
+  | zero => rw [Nat.le_zero.mp hij]; exact h
+  | succ m ih =>
+    rcases Nat.lt_or_ge i (m + 1) with hlt | hge
+    · exact ih (by omega) (pathNode_isSome_of_succ G Q wit node m h)
+    · have : i = m + 1 := by omega
+      rwa [this]
+
+variable (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+  (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+
+/-- The fold's region index entering layer `m`: 8 regions per layer. -/
+private theorem foldState_snd
+    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i₀ : RegionIndex) : ∀ m : ℕ,
+    (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i₀ m).2
+      = i₀ + 8 * m
+  | 0 => rfl
+  | m + 1 => by
+    show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i₀ m).2 + 8
+      = i₀ + 8 * (m + 1)
+    rw [foldState_snd cfg input i₀ m, Nat.mul_succ, Nat.add_assoc]
+
+/-- The fold's region count: `8 * depth`. -/
+private theorem fold_regionCount
+    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i : RegionIndex) :
+    Operations.regionCount
+      (((FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth >>=
+        fun acc => pure acc.node) : Circuit Fp (Var field Fp)).operations i)
+      = 8 * depth := by
+  have h := FormalCircuit.foldOps_regionCount (layerAt G Q hQ wsib wswap) toInput cfg input
+    i depth
+  rw [foldState_snd G Q hQ wsib wswap cfg input i depth] at h
+  simp only [Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.foldCall_operations, Operations.regionCount_append, Operations.regionCount]
+  rw [Nat.add_zero]
+  exact Nat.add_left_cancel h
+
+/-- Projection landing: `.node` of an eval'd `Layer.Input` var is the eval of its cell. -/
+private theorem input_eval_node (env : Placed Environment Fp) (v : Var Layer.Input Fp) :
+    (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
+  rw [ProvableStruct.eval_cells_eq_eval]
+  with_unfolding_all rfl
+
+private theorem input_eval_node_prover (env : Placed ProverEnvironment Fp)
+    (v : Var Layer.Input Fp) :
+    (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
+/-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
+`Layer.circuit` (layer `i` at `l = i`), fed by the per-layer sibling/position-bit witness
+programs. `Spec` is `MerkleRoot` over the leaf. -/
+def circuit :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field where
+  name := "MerkleCRH calculate_root"
+  configure := pure
+
+  synthesize cfg input := do
+    let acc ← FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth
+    pure acc.node
+
+  elaborated cfg :=
+    { output := fun input i =>
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg input i depth).1.node
+      regionCount := fun _ => 8 * depth
+      output_eq := by
+        intro input i
+        show (FormalCircuit.foldCall (layerAt G Q hQ wsib wswap) toInput cfg input depth >>=
+          fun acc => pure acc.node).output i = _
+        rw [Circuit.output_bind, FormalCircuit.foldCall_output]
+      regionCount_eq := fun input i =>
+        (fold_regionCount G Q hQ wsib wswap cfg input i).symm }
+
+  EnvAssumptions := fun (_, cfg, lcfg) env =>
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
+    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    lcfg.qLookup.index ≠ lcfg.qRunning.index
+
+  Assumptions _ := True
+
+  -- the 32 per-layer (sibling, swap) cell readings, at 8-region stride
+  Witness := fun F => ℕ → F × F
+  extract := fun (ccfg, _, _) _ i₀ env => fun j =>
+    (eval env (AssignedCell.of (i₀ + 8 * j) 0 ccfg.b : Var field Fp),
+     eval env (AssignedCell.of (i₀ + 8 * j) 0 ccfg.swap : Var field Fp))
+
+  Spec input output _ := MerkleRoot G Q 0 input.node depth output
+
+  ProverAssumptions input wit _ := (pathNode G Q wit input.node depth).isSome
+
+  ProverSpec _ _ _ _ := True
+
+  soundness := by
+    circuit_proof_start
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints] at hc
+    subcircuit_rw at hc
+    -- the per-layer contract, `l = i`
+    have hstep : ∀ i : Fin depth, MerkleStep G Q ↑i
+        ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+        (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          ((layerAt G Q hQ wsib wswap ↑i).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).2)) := by
+      intro i
+      have h : MerkleStep G Q (↑i % 2 ^ 10)
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+          (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            ((layerAt G Q hQ wsib wswap ↑i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ ↑i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ ↑i).2)) :=
+        hc i ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
+      rwa [Nat.mod_eq_of_lt (show (↑i : ℕ) < 2 ^ 10 from by
+        have := i.isLt; simp only [depth] at this; omega)] at h
+    -- assemble the step chain into the root
+    have hroot := merkleRoot_of_steps G Q
+      (fun k => (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node) 0 depth
+      (fun i hi => by
+        have h := hstep ⟨i, hi⟩
+        rw [Nat.zero_add]
+        show MerkleStep G Q i
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ i).1 : Value Layer.Input Fp).node)
+          ((eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node)
+        rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node
+          = eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+            ((layerAt G Q hQ wsib wswap i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).2) from by
+          rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ (i + 1)).1
+            = toInput ((layerAt G Q hQ wsib wswap i).output cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+                { node := input_var_node } i₀ i).2) from rfl]
+          rw [input_eval_node]
+          rfl]
+        exact h)
+    -- land the endpoints
+    have hf0 : (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1 : Value Layer.Input Fp).node = input_node := by
+      rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1
+        = ({ node := input_var_node } : Var Layer.Input Fp) from rfl]
+      rw [input_eval_node]
+      rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
+        = env.env.get input_var_node.cell.column
+          ((env.place input_var_node.cell.regionIndex
+            + input_var_node.cell.rowOffset : ℕ) : ℤ) from by with_unfolding_all rfl]
+      exact h_input
+    have hfd : (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ depth).1 : Value Layer.Input Fp).node = output := by
+      rw [input_eval_node]
+      rw [show (eval (⟨env.place, env.env⟩ : Placed Environment Fp)
+          ((FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ depth).1.node) : Fp)
+        = env.env.get (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+            { node := input_var_node } i₀ depth).1.node.cell.column
+          ((env.place (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ depth).1.node.cell.regionIndex
+            + (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+              { node := input_var_node } i₀ depth).1.node.cell.rowOffset : ℕ) : ℤ)
+          from by with_unfolding_all rfl]
+      exact h_output
+    rw [← hf0, ← hfd]
+    exact hroot
+
+  completeness := by
+    circuit_proof_start
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_extendsWitnesses] at hwit
+    rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints]
+    set w : ℕ → Fp × Fp := fun j =>
+      (env.env.advice cfg.1.b ((env.place (i₀ + 8 * j) : ℕ) : ℤ),
+       env.env.advice cfg.1.swap ((env.place (i₀ + 8 * j) : ℕ) : ℤ)) with hw_def
+    -- the per-layer extract readings ARE `w`
+    have hext : ∀ k : ℕ, (layerAt G Q hQ wsib wswap k).extract cfg
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+        (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment
+        = w k := by
+      intro k
+      rw [foldState_snd G Q hQ wsib wswap cfg { node := input_var_node } i₀ k]
+      with_unfolding_all rfl
+    -- accumulator step landing (prover view)
+    have hnodeS : ∀ k : ℕ,
+        (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ (k + 1)).1 : Value Layer.Input Fp).node
+        = (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) := by
+      intro k
+      rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ (k + 1)).1
+        = toInput ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) from rfl]
+      rw [input_eval_node_prover]
+      rfl
+    -- the honest running node lands on the accumulator, layer by layer
+    have hmain : ∀ k : ℕ, k ≤ depth →
+        ∀ n, pathNode G Q w input_node k = some n →
+        (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node = n := by
+      intro k
+      induction k with
+      | zero =>
+        intro _ n hn
+        simp only [pathNode, Option.some.injEq] at hn
+        rw [show (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ 0).1
+          = ({ node := input_var_node } : Var Layer.Input Fp) from rfl]
+        rw [input_eval_node_prover]
+        rw [show (eval env (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
+          = env.env.get input_var_node.cell.column
+            ((env.place input_var_node.cell.regionIndex
+              + input_var_node.cell.rowOffset : ℕ) : ℤ) from by with_unfolding_all rfl]
+        rw [← hn]
+        exact h_input
+      | succ k ih =>
+        intro hk n hn
+        rw [pathNode] at hn
+        rcases hpk : pathNode G Q w input_node k with _ | nk
+        · rw [hpk] at hn; simp at hn
+        rw [hpk] at hn
+        simp only [Option.bind_some] at hn
+        rcases hB : hashToPoint G.S Q (proverChunks k nk (w k).1 ((w k).2 = 1)) with _ | B
+        · rw [hB] at hn; simp at hn
+        rw [hB] at hn
+        simp only [Option.map_some, Option.some.injEq] at hn
+        -- layer k's honest-prover precondition
+        have hPAk : (layerAt G Q hQ wsib wswap k).ProverAssumptions
+            (eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1)
+            ((layerAt G Q hQ wsib wswap k).extract cfg
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+              (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment)
+            env.env.hint := by
+          show ∃ B', hashToPoint G.S Q (proverChunks (k % 2 ^ 10)
+              ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node)
+              ((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).1
+              (((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).2 = 1)) = some B'
+          rw [hext k, ih (by omega) nk hpk,
+            Nat.mod_eq_of_lt (show k < 2 ^ 10 from by simp only [depth] at hk; omega)]
+          exact ⟨B, hB⟩
+        -- layer k's honest contract: the output cell is the layer hash
+        have hd := SubcircuitRw.layouter_completeness_derived_placed (layerAt G Q hQ wsib wswap k) cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+          (hwit ⟨k, Nat.lt_of_succ_le hk⟩) ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial hPAk
+        have hps : (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+            (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) = B.x := by
+          refine (show ∀ B' : Point Fp, hashToPoint G.S Q (proverChunks (k % 2 ^ 10)
+              ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node)
+              ((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).1
+              (((layerAt G Q hQ wsib wswap k).extract cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2 env.toEnvironment).2 = 1)) = some B' →
+              (eval env ((layerAt G Q hQ wsib wswap k).output cfg
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).1
+                (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ k).2) : Fp) = B'.x from hd.2) B ?_
+          rw [hext k, ih (by omega) nk hpk,
+            Nat.mod_eq_of_lt (show k < 2 ^ 10 from by simp only [depth] at hk; omega)]
+          exact hB
+        rw [hnodeS k, hps, hn]
+    -- discharge each layer's chunk
+    intro i
+    have hs := pathNode_isSome_le G Q w input_node
+      (show (↑i + 1 : ℕ) ≤ depth from i.isLt) hPA
+    rw [pathNode] at hs
+    rcases hpk : pathNode G Q w input_node ↑i with _ | nk
+    · rw [hpk] at hs; simp at hs
+    rw [hpk] at hs
+    simp only [Option.bind_some] at hs
+    rcases hB : hashToPoint G.S Q (proverChunks ↑i nk (w ↑i).1 ((w ↑i).2 = 1)) with _ | B
+    · rw [hB] at hs; simp at hs
+    refine SubcircuitRw.layouter_completeness_leaf_placed (layerAt G Q hQ wsib wswap ↑i) cfg
+      (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env
+      (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+      (hwit i) ⟨⟨_hE.1, _hE.2.1, _hE.2.2⟩, trivial, ?_⟩
+    show ∃ B', hashToPoint G.S Q (proverChunks (↑i % 2 ^ 10)
+        ((eval env (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
+        ((layerAt G Q hQ wsib wswap ↑i).extract cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env.toEnvironment).1
+        (((layerAt G Q hQ wsib wswap ↑i).extract cfg
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).1
+          (FormalCircuit.foldState (layerAt G Q hQ wsib wswap) toInput cfg
+          { node := input_var_node } i₀ ↑i).2 env.toEnvironment).2 = 1)) = some B'
+    rw [hext ↑i, hmain ↑i (Nat.le_of_lt i.isLt) nk hpk,
+      Nat.mod_eq_of_lt (show (↑i : ℕ) < 2 ^ 10 from by
+        have := i.isLt; simp only [depth] at this; omega)]
+    exact ⟨B, hB⟩
+
 end CalculateRoot
 
 end Halo2.Ironwood.Sinsemilla.Merkle
