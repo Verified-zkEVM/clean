@@ -1481,13 +1481,12 @@ theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp) (f : ℕ → Fp) (l 
         rw [this]; exact hi')
       simpa using hres
 
-/-! ### `Layer` (CondSwap + HashLayer) — the CondSwap STATED BOUNDARY
+/-! ### `Layer` (CondSwap + HashLayer)
 
-`MerkleInstructions::hash_layer` first conditionally swaps `(node, sibling)` by the position bit,
-then hashes. **`CondSwap` is NOT ported to the Ironwood region tree** (only the phase-one
-`Orchard.Utilities.CondSwap` exists) → the swap child is a **stated boundary**, mirroring
-`CommitDomain`'s `MulFixed` cut. When a region-level `CondSwap.Swap` lands, it is composed with
-`HashLayer.circuit` exactly as the donor `Merkle.Layer.main` does. -/
+One Merkle path layer (`MerklePath::calculate_root`'s loop body): conditionally swap
+`(node, sibling)` by the position bit — the sibling and the bit are prover witnesses
+(Rust `Value`s) — then hash the swapped pair. Both children are proven
+(`CondSwap.swap`, `HashLayer.circuit`). -/
 
 /-- The swapped `(left, right)` pair a layer hashes, selected by the position bit. Donor
 `Merkle.Layer.proverChunks` (value-level). -/
@@ -1495,6 +1494,260 @@ def proverChunks (l : ℕ) (node sibling : Fp) (posBit : Bool) : List ℕ :=
   merkleChunks l
     (ZMod.val (if posBit then sibling else node))
     (ZMod.val (if posBit then node else sibling))
+
+namespace Layer
+
+/-- The layer input: the running node cell (the sibling and position bit are witnesses). -/
+structure Input (F : Type) where
+  node : F
+deriving ProvableStruct
+
+end Layer
+
+-- contract bridges for the layer's children (hand-written for the proof-typed binders)
+private theorem hashLayerC_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    (HashLayer.circuit G Q hQ l hl).Spec
+      = fun input output _ => HashLayer.Spec G Q l input output () := rfl
+
+private theorem hashLayerC_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) :
+    (HashLayer.circuit G Q hQ l hl).Assumptions = fun _ => True := rfl
+
+private theorem hashLayerC_envAssumptions_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (cfg : Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (env : Placed Environment Fp) :
+    (HashLayer.circuit G Q hQ l hl).EnvAssumptions cfg env
+      = (Sinsemilla.GeneratorTableLoaded G cfg.1.sinsemilla.generatorTable env.env ∧
+        Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 cfg.2 env.env ∧
+        cfg.2.qLookup.index ≠ cfg.2.qRunning.index) := rfl
+
+private theorem hashLayerC_proverAssumptions_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (input : Value HashLayer.Input Fp) (wit : Value unit Fp) (hint : ProverHint Fp) :
+    (HashLayer.circuit G Q hQ l hl).ProverAssumptions input wit hint
+      = HashLayer.ProverAssumptions G Q l input := rfl
+
+private theorem hashLayerC_proverSpec_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (input : Value HashLayer.Input Fp) (output : Value field Fp)
+    (wit : Value unit Fp) (hint : ProverHint Fp) :
+    (HashLayer.circuit G Q hQ l hl).ProverSpec input output wit hint
+      = ∀ B, hashToPoint G.S Q (merkleChunks l (ZMod.val (show Fp from input.left))
+          (ZMod.val (show Fp from input.right))) = some B → output = B.x := rfl
+
+/-- The region count of the layer: the swap region + the hash layer's 7. -/
+private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool)
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lcfg : Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (i : RegionIndex) :
+    Operations.regionCount
+      ((do
+        let pair ← assignRegion "swap"
+          ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+        (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+          { left := pair.aSwapped, right := pair.bSwapped }).operations i) = 8 := by
+  simp only [Circuit.operations_bind, operations_assignRegion,
+    Operations.regionCount_append, Operations.regionCount]
+  rw [show ∀ (j : RegionIndex) (inp : Var HashLayer.Input Fp),
+      Operations.regionCount
+        (((HashLayer.circuit G Q hQ l hl).call (cfg, lcfg) inp).operations j) = 7
+    from fun j inp => by
+      simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
+      rw [show ((HashLayer.circuit G Q hQ l hl).synthesize (cfg, lcfg) inp j).2.1
+          = ((HashLayer.synthesize G cfg lcfg Q hQ l inp).operations j) from rfl]
+      rw [hashLayer_regionCount G cfg lcfg Q hQ l inp j]]
+
+/-- One Merkle path layer (the `MerklePath::calculate_root` loop body): conditionally swap
+`(node, sibling)` by the position bit — sibling and bit are prover witness programs — then
+the layer hash. `Spec` is `MerkleStep`. -/
+def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
+    (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) :
+    FormalCircuit Fp
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      Layer.Input field where
+  name := "MerkleCRH layer"
+  configure := pure
+
+  synthesize := fun (ccfg, cfg, lcfg) input => do
+    let pair ← assignRegion "swap"
+      ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+    (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+      { left := pair.aSwapped, right := pair.bSwapped }
+
+  elaborated := fun (ccfg, cfg, lcfg) =>
+    { output := fun input i =>
+        ((do
+          let pair ← assignRegion "swap"
+            ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+          (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
+            { left := pair.aSwapped, right := pair.bSwapped }
+          : Circuit Fp (Var field Fp)).output i)
+      regionCount := fun _ => 8
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun input i =>
+        (layer_regionCount G Q hQ l hl wsib wswap ccfg cfg lcfg input i).symm }
+
+  EnvAssumptions := fun (ccfg, cfg, lcfg) env =>
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
+    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    lcfg.qLookup.index ≠ lcfg.qRunning.index
+
+  Assumptions _ := True
+
+  -- the swap witnesses (sibling, position flag), read off the swap region's cells
+  Witness := fieldPair
+  extract := fun (ccfg, _, _) _ i₀ env =>
+    (eval env (AssignedCell.of i₀ 0 ccfg.b : Var field Fp),
+     eval env (AssignedCell.of i₀ 0 ccfg.swap : Var field Fp))
+
+  Spec input output _ := MerkleStep G Q l input.node output
+
+  ProverAssumptions input wit _ :=
+    ∃ B, hashToPoint G.S Q (proverChunks l input.node wit.1 (wit.2 = 1)) = some B
+
+  ProverSpec input output wit _ :=
+    ∀ B, hashToPoint G.S Q (proverChunks l input.node wit.1 (wit.2 = 1)) = some B →
+      output = B.x
+
+  soundness := by
+    circuit_proof_start
+    subcircuit_rw at hc
+    obtain ⟨hSwap, hHash⟩ := hc
+    have hSw : Halo2.Ironwood.CondSwap.SwapSpec input_node
+        (ProvableStruct.eval env.place env.env x_gen_out_0)
+        ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0 { a := input_var_node }
+          i₀ ⟨env.place, env.env⟩) := hSwap trivial trivial
+    obtain ⟨hbool, hASw, hBSw⟩ := hSw
+    -- the swapped cells' reads are the eval'd swap-output components
+    have hAread : (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env x_gen_out_0).aSwapped := by
+      with_unfolding_all rfl
+    have hBread : (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env x_gen_out_0).bSwapped := by
+      with_unfolding_all rfl
+    have hHashS := hHash ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
+    rw [hashLayerC_spec_eq] at hHashS
+    obtain ⟨lv, rv, hlv, hrv, hleftEq, hrightEq, hcontract⟩ := hHashS
+    rw [show ({ left := env.env.get x_gen_out_0.aSwapped.cell.column
+                  ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+                right := env.env.get x_gen_out_0.bSwapped.cell.column
+                  ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        : Value HashLayer.Input Fp).left
+      = (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      hAread, hASw] at hleftEq
+    rw [show ({ left := env.env.get x_gen_out_0.aSwapped.cell.column
+                  ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+                right := env.env.get x_gen_out_0.bSwapped.cell.column
+                  ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        : Value HashLayer.Input Fp).right
+      = (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      hBread, hBSw] at hrightEq
+    refine ⟨lv, rv, hlv, hrv, ?_, hcontract⟩
+    rcases hbool with h0 | h1
+    · rw [if_neg (show ¬ _ = (1 : Fp) from by rw [h0]; decide)] at hleftEq
+      exact Or.inl hleftEq
+    · rw [if_pos h1] at hrightEq
+      exact Or.inr hrightEq
+
+  completeness := by
+    circuit_proof_start
+    obtain ⟨B0, hB0⟩ := hPA
+    -- the swap child's honest values (its ProverSpec, over the witness-cell reads)
+    have hSwPS := h_spec_0 trivial trivial trivial
+    have hwit1 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+          { a := input_var_node } i₀ env.toEnvironment).1
+        = env.env.advice cfg.1.b ((env.place i₀ : ℕ) : ℤ) := by
+      with_unfolding_all rfl
+    have hwit2 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+          { a := input_var_node } i₀ env.toEnvironment).2
+        = env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) := by
+      with_unfolding_all rfl
+    obtain ⟨-, hASw, hBSw⟩ := hSwPS
+    rw [hwit1, hwit2, h_input] at hASw hBSw
+    -- the swapped cells' reads are the eval'd swap-output components
+    have hAread : (env.env.get x_gen_out_0.aSwapped.cell.column
+          ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env.toEnvironment x_gen_out_0).aSwapped := by
+      with_unfolding_all rfl
+    have hBread : (env.env.get x_gen_out_0.bSwapped.cell.column
+          ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+        = (ProvableStruct.eval env.place env.env.toEnvironment x_gen_out_0).bSwapped := by
+      with_unfolding_all rfl
+    -- the hash child's honest-prover precondition
+    have hPAhash : (HashLayer.circuit G Q hQ l hl).ProverAssumptions
+        { left := env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
+          right := env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        ((HashLayer.circuit G Q hQ l hl).extract (cfg.2.1, cfg.2.2)
+          { left := x_gen_out_0.aSwapped, right := x_gen_out_0.bSwapped } (i₀ + 1)
+          env.toEnvironment) env.env.hint := by
+      rw [hashLayerC_proverAssumptions_eq]
+      refine ⟨B0, ?_⟩
+      show hashToPoint G.S Q (merkleChunks l
+          (ZMod.val (env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
+          (ZMod.val (env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B0
+      rw [hAread, hBread, hASw, hBSw]
+      by_cases hs : env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1
+      · rw [if_pos hs, if_pos hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = true from by simp [hs]] at hB0
+        simpa [proverChunks] using hB0
+      · rw [if_neg hs, if_neg hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = false from by simp [hs]] at hB0
+        simpa [proverChunks] using hB0
+    refine ⟨⟨⟨trivial, trivial, trivial⟩, ⟨_hE.1, _hE.2.1, _hE.2.2⟩, trivial, hPAhash⟩, ?_⟩
+    -- the honest-prover contract
+    intro B hB
+    have hPShash := (h_spec_1 ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial hPAhash).2
+    rw [hashLayerC_proverSpec_eq] at hPShash
+    have hres := hPShash B (by
+      show hashToPoint G.S Q (merkleChunks l
+          (ZMod.val (env.env.get x_gen_out_0.aSwapped.cell.column
+            ((env.place x_gen_out_0.aSwapped.cell.regionIndex
+              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
+          (ZMod.val (env.env.get x_gen_out_0.bSwapped.cell.column
+            ((env.place x_gen_out_0.bSwapped.cell.regionIndex
+              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B
+      rw [hAread, hBread, hASw, hBSw]
+      by_cases hs : env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1
+      · rw [if_pos hs, if_pos hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = true from by simp [hs]] at hB
+        simpa [proverChunks] using hB
+      · rw [if_neg hs, if_neg hs]
+        rw [show decide (env.env.advice cfg.1.swap ((env.place i₀ : ℕ) : ℤ) = 1)
+            = false from by simp [hs]] at hB
+        simpa [proverChunks] using hB)
+    rw [← h_output]
+    exact hres
 
 /-! ### `CalculateRoot` (32-layer fold, structure) -/
 
