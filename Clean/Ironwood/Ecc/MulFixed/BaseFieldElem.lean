@@ -1310,6 +1310,15 @@ private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
   simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
 
+/-- The α₀' witness program's value (single-element vector, `rfl` tail). -/
+private theorem alphaZeroPrimeWit_eval (env : Placed ProverEnvironment Fp)
+    (alpha z84 : AssignedCell Fp) :
+    ((alphaZeroPrimeWit alpha z84).eval env)[0]
+      = readCell env alpha - readCell env z84 * ((2 ^ 252 : ℕ) : Fp)
+        + ((2 ^ 130 : ℕ) : Fp) - tP := by
+  simp only [alphaZeroPrimeWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
+
 /-- The eight canonicity-gate polynomial identities from the donor `Gate.Spec` facts
 (the donor `Gate.circuit.completeness` algebra, value-level and context-free). -/
 private theorem canon_gate_polys {row : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.Input Fp}
@@ -1669,6 +1678,110 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       simp only [canonicityRegion, canonGate, alpha1Wit, alpha2Wit,
         Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, circuit_norm]
         at hWCanon ⊢
-      sorry
+      obtain ⟨hWcA, hWcZ84, hWcAP, hWa1, hWa2, hWcZ13, hWcZ44, hWcZ43⟩ := hWCanon
+      rw [rca_call_zLast] at hWcZ13
+      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice, Nat.zero_add] at hWcZ13
+      obtain ⟨-, -, -, -, hZs⟩ := hIPS
+      -- the α₀' witness value, on the honest running sums
+      simp only [innerRegion_output_zs, Vector.getElem_ofFn] at hWap
+      rw [alphaZeroPrimeWit_eval] at hWap
+      simp only [readCell_of, Nat.zero_add, Nat.add_zero] at hWap
+      -- z13's honest value (the range-check chunk's honest contract)
+      have hZL := Halo2.SubcircuitRw.region_completeness_derived_placed
+        (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 2) env () hWrc
+      simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
+        rca_proverAssumptions_eq, rca_proverSpec_eq, rca_output, rca_extract,
+        circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+        Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero] at hZL
+      obtain ⟨-, hzLast⟩ := hZL ⟨hTable, hDistinct⟩
+        ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
+         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
+      rw [show (10 * 13 : ℕ) = 130 from by norm_num] at hzLast
+      -- the honest running sums at 0/84/44/43, in `8^w` form
+      have hz0 := hZs ⟨0, by norm_num⟩
+      have hz84 := hZs ⟨84, by norm_num⟩
+      have hz44 := hZs ⟨44, by norm_num⟩
+      have hz43 := hZs ⟨43, by norm_num⟩
+      rw [show ((⟨0, by norm_num⟩ : Fin 86) : ℕ) = 0 from rfl] at hz0
+      rw [show ((⟨84, by norm_num⟩ : Fin 86) : ℕ) = 84 from rfl,
+        show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84
+      rw [show ((⟨44, by norm_num⟩ : Fin 86) : ℕ) = 44 from rfl,
+        show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44
+      rw [show ((⟨43, by norm_num⟩ : Fin 86) : ℕ) = 43 from rfl,
+        show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43
+      simp only [Nat.add_zero, Nat.mul_zero, pow_zero, Nat.div_one] at hz0
+      -- the α value: `z_0 = α` (the copied base-field element)
+      obtain ⟨A, hA_def⟩ : ∃ a : Fp, a = env.env.get input_var.cell.column
+          ((env.place input_var.cell.regionIndex
+            + input_var.cell.rowOffset : ℕ) : ℤ) := ⟨_, rfl⟩
+      rw [← hA_def] at hz0 hz84 hz44 hz43
+      have hz0A : env.env.advice cfg.superConfig.runningSumConfig.z
+          ((env.place i₀ : ℕ) : ℤ) = A := hz0.trans (ZMod.natCast_zmod_val A)
+      -- the gate-row facts (donor `honest_canon_spec` hypotheses)
+      rw [hz0A] at hWa1 hWa2 hWap
+      rw [hz84] at hWap
+      rw [show (2:ℕ) ^ 252 = 8 ^ 84 from by norm_num] at hWa1
+      have hdiv2 : A.val / 2 ^ 254 % 2 = A.val / 8 ^ 84 / 4 := by
+        rw [Nat.div_div_eq_div_mul, show (8:ℕ) ^ 84 * 4 = 2 ^ 254 from by norm_num]
+        exact Nat.mod_eq_of_lt
+          (Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num)))
+      rw [hdiv2] at hWa2
+      have hap : env.env.advice (cfg.canonAdvices 0)
+            ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)
+          = A - ((A.val / 8 ^ 84 : ℕ) : Fp) * (2:Fp) ^ 252 + (2:Fp) ^ 130
+            - ((Orchard.Ecc.MulFixed.BaseFieldElem.tPNat : ℕ) : Fp) := by
+        rw [hWcAP, hWap]
+        push_cast [Orchard.tP, Orchard.Ecc.MulFixed.BaseFieldElem.tPNat]
+        ring
+      have hz13row : env.env.advice (cfg.canonAdvices 0)
+            ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ)
+          = ((((env.env.advice (cfg.canonAdvices 0)
+              ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)).val / 2 ^ 130 : ℕ)) : Fp) := by
+        rw [hWcZ13, hzLast, hWcAP]
+      obtain ⟨hDecR, hCanonR⟩ := Orchard.Ecc.MulFixed.BaseFieldElem.honest_canon_spec
+        (row := { alpha := env.env.advice (cfg.canonAdvices 0)
+                    ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
+                  z84Alpha := env.env.advice (cfg.canonAdvices 2)
+                    ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
+                  alpha1 := env.env.advice (cfg.canonAdvices 1)
+                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                  alpha2 := env.env.advice (cfg.canonAdvices 2)
+                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                  alpha0Prime := env.env.advice (cfg.canonAdvices 0)
+                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                  z13Alpha0Prime := env.env.advice (cfg.canonAdvices 0)
+                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
+                  z44Alpha := env.env.advice (cfg.canonAdvices 1)
+                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
+                  z43Alpha := env.env.advice (cfg.canonAdvices 2)
+                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ) })
+        (α := A) (ZMod.val_lt A)
+        (hWcA.trans hz0A) (hWcZ84.trans hz84) hWa1 hWa2 hap
+        (hWcZ44.trans hz44) (hWcZ43.trans hz43) hz13row
+      -- α₁ ∈ {0..3}, α₂ boolean (the honest witnessed top bits)
+      have hA1 : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1
+          (((A.val / 8 ^ 84 % 4 : ℕ) : Fp)) := by
+        have hlt : A.val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
+        obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 % 4 := ⟨_, rfl⟩
+        rw [← hm_def]
+        rw [← hm_def] at hlt
+        interval_cases m <;>
+          simp [Orchard.Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1]
+      have hA2 : IsBool (((A.val / 8 ^ 84 / 4 : ℕ) : Fp)) := by
+        have hlt : A.val / 8 ^ 84 / 4 < 2 := by
+          rw [Nat.div_div_eq_div_mul, show (8:ℕ) ^ 84 * 4 = 2 ^ 254 from by norm_num]
+          exact Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num))
+        obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 / 4 := ⟨_, rfl⟩
+        rw [← hm_def]
+        rw [← hm_def] at hlt
+        interval_cases m <;> simp [IsBool]
+      rw [← hWa1] at hA1
+      rw [← hWa2] at hA2
+      have hPolys := canon_gate_polys hA1 hA2 hDecR hCanonR
+      rw [rca_call_zLast]
+      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+        Cell.of_column, Environment.get_advice, Nat.zero_add]
+      exact ⟨hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
 
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem
