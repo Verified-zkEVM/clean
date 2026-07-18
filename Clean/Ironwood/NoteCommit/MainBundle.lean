@@ -839,6 +839,14 @@ private theorem decomposeH_extract_eq (w : WitgenIR Fp 1) (name : String)
     ((DecomposeH.bundle w).toFormal name).extract cfg inp i env
       = (eval env (AssignedCell.of i 0 cfg.colR : Var field Fp) : Fp) := rfl
 
+private theorem z1d_div (a b c d : ℕ) (h1 : a < 2) (h2 : b < 2) (h3 : c < 2 ^ 8)
+    (h4 : d < 2 ^ 50) : (a + b * 2 + c * 4 + d * 1024) / 2 ^ 10 = d := by
+  omega
+
+private theorem z1g_div (a b c : ℕ) (h1 : a < 2) (h2 : b < 2 ^ 9) (h3 : c < 2 ^ 240) :
+    (a + b * 2 + c * 1024) / 2 ^ 10 = c := by
+  omega
+
 private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) := by
   interval_cases m
   · exact Or.inl (by norm_num)
@@ -1645,6 +1653,54 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hzg13 : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 96 : ℕ) : ℤ)
       = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
         / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13g
+  -- honest z1 cells are the canonical middle slices
+  have hdnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
+      = Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 := by
+    rw [hwd, show ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
+        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 : ℕ) : Fp) * 2
+        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 : ℕ) : Fp) * (2 ^ 2 : Fp)
+        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 : ℕ) : Fp) from by
+      push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by
+      have h1 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+      have h2 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+      have h3 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
+      have h4 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 h4 ⊢
+      omega)]
+  have hzdEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
+      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) := by
+    rw [hzd, hdnat, z1d_div _ _ _ _ (Orchard.Specs.bitrange_lt _ _ _)
+      (Orchard.Specs.bitrange_lt _ _ _) (Orchard.Specs.bitrange_lt _ _ _)
+      (Orchard.Specs.bitrange_lt _ _ _)]
+  have hgnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+      = Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 := by
+    rw [hwg, show ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
+        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 : ℕ) : Fp) * 2
+        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
+        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 : ℕ) : Fp) from by
+      push_cast; ring]
+    rw [ZMod.val_natCast_of_lt (by
+      have h1 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+      have h2 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9
+      have h3 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240
+      norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 ⊢
+      omega)]
+  have hzgEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ)
+      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) := by
+    rw [hzg1, hgnat, z1g_div _ _ _ (Orchard.Specs.bitrange_lt _ _ _)
+      (Orchard.Specs.bitrange_lt _ _ _) (Orchard.Specs.bitrange_lt _ _ _)]
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
@@ -1870,11 +1926,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
            · rw [hwd1]
              exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
-           · rw [show env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
-                 = (((env.advice cfg.hashConfig.witnessPieces
-                   ((place (i₀ + 6) : ℕ) : ℤ)).val / 2 ^ 10 : ℕ) : Fp) from hz1d,
-               hwd, ← hwd0, ← hwd1, ← hwd2]
-             sorry)⟩
+           · rw [hzdEq, hwd, ← hwd0, ← hwd1, ← hwd2]
+             try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (DecomposeE.bundle.toFormal "NoteCommit MessagePiece e") cfg.gates.e
       (i₀ + 35) place env _ hGW.2.2.1
@@ -1902,7 +1955,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            refine ⟨?_, ?_⟩
            · rw [hwg0]
              exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
-           · sorry)⟩
+           · rw [hzgEq, hwg, ← hwg0, ← hwg1]
+             try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       ((DecomposeH.bundle (brWit input_var_psi 254 1)).toFormal
         "NoteCommit MessagePiece h") cfg.gates.h (i₀ + 37) place env _ hGW.2.2.2.2.1
