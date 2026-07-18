@@ -273,7 +273,6 @@ theorem shift_word_eq (W V w : ℕ) :
   have hcast := congrArg (Nat.cast (R := Fp)) hmoddiv
   push_cast at hcast ⊢
   rw [hsplit]
-  push_cast
   linear_combination -hcast
 
 /-- Strict `copy_decompose` (`decompose_running_sum.rs:121-133, 139-205`): copy `α` in as

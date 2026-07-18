@@ -1251,7 +1251,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     simp only [innerRegion_output_zs] at hCanon
     simp only [Vector.getElem_ofFn] at hCanon
     simp only [canonicityRegion, canonGate,
-      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, rca_output,
+      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
       circuit_norm] at hCanon
     obtain ⟨⟨hG1, hG2, hG3, hG4, hG5, hG6, hG7, hG8⟩,
       hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := hCanon
@@ -1442,7 +1442,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         cfg.superConfig.addConfig 0 (i₀ + 1) env
         ⟨((innerRegion B.toData cfg 0 input_var).output i₀).mulB,
          ((innerRegion B.toData cfg 0 input_var).output i₀).acc⟩ hWAdd
-      simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      simp only [addc_assumptions_eq, addc_envAssumptions_eq,
         addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
         Nat.zero_add, circuit_norm] at hC
       refine hC ⟨?_, ?_⟩
@@ -1478,7 +1478,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     · -- the 13-word range check chunk
       have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed
         (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 2) env () hWrc
-      simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
+      simp only [rca_assumptions_eq, rca_envAssumptions_eq,
         rca_proverAssumptions_eq, circuit_norm] at hC
       exact hC ⟨⟨hTable, hDistinct⟩,
         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],

@@ -1072,7 +1072,7 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
         cfg.superConfig.addConfig 0 (i₀ + 1) env
         ⟨((innerRegion B.toData cfg 0 windows).output i₀).mulB,
          ((innerRegion B.toData cfg 0 windows).output i₀).acc⟩ hWAdd
-      simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      simp only [addc_assumptions_eq, addc_envAssumptions_eq,
         addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
         Nat.zero_add, circuit_norm] at hC
       simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add]

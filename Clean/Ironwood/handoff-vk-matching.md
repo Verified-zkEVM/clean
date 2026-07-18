@@ -338,6 +338,27 @@ Y-composite patterns worth reusing:
 NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
 the decompose bundles + these composites + Sinsemilla, per the donor
 Orchard.Action.NoteCommit top level.
+## NoteCommit main — COMPLETE (2026-07-18)
+
+The full goal is done: `Clean/Ironwood/NoteCommit/Main.lean` (defs/contract layer) +
+`MainBundle.lean` (soundness AND completeness fully proven, `circuit` bundled, imported
+by `Clean/Ironwood.lean`) + VK layout matched. VK fixture chain:
+- orchard-crate dumper `orchard/src/circuit/layout_dump.rs` (LOCAL-ONLY commit in the
+  sibling orchard checkout; `[patch.crates-io]` to the sibling halo2 for the
+  `lean_dump_*` helpers; vendored `FullRecorder`/`full_dump`). Dump circuit = the
+  `note_commit::tests` harness truncated after `gadgets::note_commit` (keygen view).
+- fixtures `NoteCommitLayout` (constants map + expanded table fills, fixed list chunked
+  against elaboration limits) / `NoteCommitSelMap` / `NoteCommitParams` (the NoteCommitR
+  window table read off the mul rows).
+- `TestVkLayoutNoteCommit`: full configure chain (range check, sinsemilla, 11 NoteCommit
+  gates, whole `EccChip::configure` registration sequence) + the 49-region synthesize
+  mirror (commit block mirrored data-level via raw `FullWidth.synthesize` on the dumped
+  params — `Main.synth` takes a proof-carrying `FixedBase`, and `indexedRegions`
+  recurses through subcircuit wrappers so the region stream is identical). ALL guards
+  green: names lockstep, copyList, σ, full fixed contents.
+- NOTE: `CommitDomain`'s add region renamed "M + [r] R" → "complete point addition"
+  (the Rust region name).
+
 ## NoteCommit main — assembly design (read note_commit.rs:1596-1800 alongside)
 
 Goal (active hook): fully port NoteCommit + deps, proven bundles + VK matching.

@@ -21,7 +21,7 @@ Reference (ported from actual Rust, not memory):
   ```
   let (blind, _) = self.R.mul(layouter.namespace(|| "[r] R"), r)?;   // 501
   let (p, zs)    = self.M.hash_to_point(layouter.namespace(|| "M"), message)?;  // 502
-  let commitment = p.add(layouter.namespace(|| "M + [r] R"), &blind)?;          // 503
+  let commitment = p.add(layouter.namespace(|| "complete point addition"), &blind)?;          // 503
   Ok((commitment, zs))
   ```
   i.e. `commit(msg, r) = hash_to_point(Q, msg) + [r]·R`, keeping the per-piece running
@@ -196,7 +196,7 @@ private theorem commit_regionCount
         let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
         let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
           { pieces := input.pieces }
-        let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
+        let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
           { p := hashOut.point, q := blindOut }
         pure result).operations i)
       = 4 := by
@@ -215,11 +215,11 @@ private theorem commit_regionCount
       simp only [Operations.regionCount]]
   rw [show ∀ (j : RegionIndex) (inp : Var Ecc.Add.Inputs Fp),
       Operations.regionCount
-        (((Ecc.Add.add.toFormal "M + [r] R").call acfg inp).operations j) = 1
+        (((Ecc.Add.add.toFormal "complete point addition").call acfg inp).operations j) = 1
     from fun j inp => by
       simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
-      rw [show ((Ecc.Add.add.toFormal "M + [r] R").synthesize acfg inp j).2.1
-          = ((assignRegion "M + [r] R"
+      rw [show ((Ecc.Add.add.toFormal "complete point addition").synthesize acfg inp j).2.1
+          = ((assignRegion "complete point addition"
               (Ecc.Add.add.synthesize acfg 0 inp)).operations j) from rfl,
         operations_assignRegion]
       simp only [Operations.regionCount]]
@@ -245,7 +245,7 @@ def commit (G : Generators) (ns : List ℕ)
     let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
     let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
       { pieces := input.pieces }
-    let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
+    let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
       { p := hashOut.point, q := blindOut }
     pure result
 
@@ -255,7 +255,7 @@ def commit (G : Generators) (ns : List ℕ)
           let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
           let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
             { pieces := input.pieces }
-          let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
+          let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
             { p := hashOut.point, q := blindOut }
           pure result : Circuit Fp (Var Point Fp)).output i)
       regionCount := fun _ => 4
