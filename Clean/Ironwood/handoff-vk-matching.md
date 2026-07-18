@@ -549,3 +549,27 @@ Order of the remaining work (13 leaves: Y1, Y2, commit, 10 gates):
    shifted_high_zero at the honest values).
 Then: def circuit compiles (already written), import MainBundle into Clean/Ironwood.lean,
 full build, commit. Then VK fixture (orchard dump harness).
+
+### Gate-leaf arc (the LAST 10 leaves; state at ee5d3b3c + MCF/PieceBounds/honest
+in-context): the inline layouter_completeness_derived application for the commit Spec
+hits a whnf wall (and `seal` breaks the soundness-side extract defeq — reverted).
+ROUTE: standalone private lemma
+  commit_derived_spec (G R windows Q hQ cfg i₀ place env)
+    (hWcm : ExtendsWitnesses ... commit-call chunk) (hPB' hHon' hWin') :
+    <the commit_spec_eq/commit_extract_eq-bridged Spec at the (i₀+25) call args>
+proved by layouter_completeness_derived + the same PA discharge + bridge rws — kernel
+and whnf checked alone (the peel-lemma pattern; the leaf discharge by-blocks compile in
+goal position, so pass hPB/hHonest/hWin as HYPOTHESES of the lemma to avoid re-elaboration).
+Same standalone treatment for the four rangeCheckAt derived Specs if they also wall
+(they are smaller; try inline first). Then the six z-value facts replay EXACTLY the
+soundness block (zsFacts_cell + zs_get_* + defeq transports, at env.toEnvironment), and
+the ten gate leaves discharge with:
+- decompose gates: A trivial×2; PA = ⟨IsBool wit (from hwb1/hwd0/hwg0/hwh1 + bitrange<2),
+  IsBool b2/d1-eval (hwb2/hwd1 + %2), the decomposition equation (hMCF clauses 17-21
+  modulo eval-spelling)⟩ via toFormal bridges + the leaf.
+- canonicity gates: A = the soundness A-discharges verbatim (z-facts + telescopes +
+  bounds); PA = ⟨DSpec (MCF slices + guard via honest zLast + high_bit_canonical/
+  base_val_lt_tP_val + shifted_high_zero — the Composites.lean completeness guards),
+  shift (hWaP/hWbP/hWeP/hWgP witness equations)⟩.
+Then `def circuit` (already written) + import MainBundle in Clean/Ironwood.lean + full
+build → NoteCommit bundle DONE. Then the VK fixture (orchard dump harness) remains.
