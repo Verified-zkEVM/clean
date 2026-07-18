@@ -915,6 +915,9 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
       (InnerProverSpec B) := by
     circuit_proof_start
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
       at hwit ⊢
@@ -984,6 +987,9 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     -- PROOF ARC recipe per Mul.lean:982-1002: NO structural unfolds in the list
     -- (innerRegion at h_output/goal whnf-cliffs); contract defs only.
     circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionOperations.constraints_append] at hc
     obtain ⟨hDec, hFixed, hChain, -⟩ := hc
@@ -1304,6 +1310,68 @@ private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
   simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
 
+/-- The eight canonicity-gate polynomial identities from the donor `Gate.Spec` facts
+(the donor `Gate.circuit.completeness` algebra, value-level and context-free). -/
+private theorem canon_gate_polys {row : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.Input Fp}
+    (hA1 : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1 row.alpha1)
+    (hA2 : IsBool row.alpha2)
+    (hDec : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.DecomposesBaseFieldElem row)
+    (hCanon : Orchard.Ecc.MulFixed.BaseFieldElem.Gate.CanonicalHighBit row) :
+    row.alpha2 * row.alpha1 = 0 ∧
+    row.alpha2 * (row.z44Alpha - row.z84Alpha * ((2 ^ 120 : ℕ) : Fp)) = 0 ∧
+    row.alpha2 * Orchard.Utilities.RunningSum.rangeCheckPoly 2
+      (row.z43Alpha - row.z44Alpha * 8) = 0 ∧
+    row.alpha2 * row.z13Alpha0Prime = 0 ∧
+    Orchard.Utilities.RunningSum.rangeCheckPoly 4 row.alpha1 = 0 ∧
+    Orchard.Utilities.RunningSum.rangeCheckPoly 2 row.alpha2 = 0 ∧
+    row.z84Alpha - (row.alpha1 + row.alpha2 * ((1 <<< 2 : ℕ) : Fp)) = 0 ∧
+    row.alpha0Prime - (row.alpha - row.z84Alpha * ((2 ^ 252 : ℕ) : Fp)
+      + ((2 ^ 130 : ℕ) : Fp) - tP) = 0 := by
+  simp only [Orchard.Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1] at hA1
+  simp only [IsBool] at hA2
+  simp only [Orchard.Ecc.MulFixed.BaseFieldElem.Gate.CanonicalHighBit,
+    Orchard.Ecc.MulFixed.BaseFieldElem.Gate.alpha0Hi120,
+    Orchard.Ecc.MulFixed.BaseFieldElem.Gate.a43, IsBool] at hCanon
+  obtain ⟨hDec84, hDecAP⟩ := hDec
+  simp only [Orchard.Ecc.MulFixed.BaseFieldElem.Gate.alpha0] at hDecAP
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rcases hA2 with h0 | h1
+    · rw [h0]; ring
+    · rw [h1, (hCanon h1).1]; ring
+  · rcases hA2 with h0 | h1
+    · rw [h0]; ring
+    · rw [h1, one_mul, show ((2 ^ 120 : ℕ) : Fp) = OfNat.ofNat (2 ^ 120) from by
+        norm_num]
+      exact (hCanon h1).2.1
+  · rcases hA2 with h0 | h1
+    · rw [h0]; ring
+    · rw [h1, one_mul,
+        Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff,
+        Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)]
+      rcases (hCanon h1).2.2.1 with hb0 | hb1
+      · exact ⟨0, by norm_num, by rw [hb0]; norm_num⟩
+      · exact ⟨1, by norm_num, by rw [hb1]; norm_num⟩
+  · rcases hA2 with h0 | h1
+    · rw [h0]; ring
+    · rw [h1, (hCanon h1).2.2.2]; ring
+  · rw [Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff,
+      Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 4 (by norm_num)]
+    rcases hA1 with h | h | h | h
+    · exact ⟨0, by norm_num, by rw [h]; norm_num⟩
+    · exact ⟨1, by norm_num, by rw [h]; norm_num⟩
+    · exact ⟨2, by norm_num, by rw [h]; norm_num⟩
+    · exact ⟨3, by norm_num, by rw [h]; norm_num⟩
+  · rw [Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff,
+      Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)]
+    rcases hA2 with h | h
+    · exact ⟨0, by norm_num, by rw [h]; norm_num⟩
+    · exact ⟨1, by norm_num, by rw [h]; norm_num⟩
+  · rw [hDec84, show ((1 <<< 2 : ℕ) : Fp) = 4 from by norm_num [Nat.shiftLeft_eq]]
+    ring
+  · rw [hDecAP]
+    push_cast [Orchard.tP]
+    ring
+
 /-- Rust `FixedPointBaseField::mul` (`base_field_elem.rs::assign`): `[α]B` for a
 base-field element α, canonically. -/
 def circuit (B : FixedBase) : FormalCircuit Fp
@@ -1334,6 +1402,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp
 
   soundness := by
     circuit_proof_start
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
     simp only [synthesize, witnessCheck13, circuit_norm] at hc
     obtain ⟨hInner, hAdd, hRC, hCanon⟩ := hc
     obtain ⟨hEI, hTable, hDistinct⟩ := _hE
@@ -1518,6 +1589,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp
 
   completeness := by
     circuit_proof_start
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
     simp only [synthesize, witnessCheck13, circuit_norm] at hwit ⊢
     obtain ⟨hWInner, hWAdd, ⟨hWap, hWrc⟩, hWCanon⟩ := hwit
     obtain ⟨hEI, hTable, hDistinct⟩ := _hE
@@ -1588,6 +1662,13 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       exact hC ⟨⟨hTable, hDistinct⟩,
         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
-    · sorry
+    · -- the canonicity region: copies by their witness clauses, the gate on the
+      -- honest values (donor `honest_canon_spec` + `canon_gate_polys`)
+      simp only [innerRegion_output_zs] at hWCanon ⊢
+      simp only [Vector.getElem_ofFn] at hWCanon ⊢
+      simp only [canonicityRegion, canonGate, alpha1Wit, alpha2Wit,
+        Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, circuit_norm]
+        at hWCanon ⊢
+      sorry
 
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem

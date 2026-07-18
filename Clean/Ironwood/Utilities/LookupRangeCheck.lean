@@ -877,9 +877,9 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     obtain ⟨hTable, _hDistinct⟩ := _hE
     obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
     obtain ⟨hLoop, _hTailC⟩ := hc
-    set f := zChain K cfg env.place self env.env offset with hf_def
+    set f := zChain K cfg place self env offset with hf_def
     have hwords := rangeCheck_loop_word_bounds K cfg
-      (AssignedCell.of self offset cfg.runningSum) env.place self env.env
+      (AssignedCell.of self offset cfg.runningSum) place self env
       offset hTableLt numWords hLoop
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     rcases hbstrict : strict with _ | _ <;>
@@ -888,7 +888,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
       obtain ⟨hOz0, hOzLast⟩ := h_output <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
         show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain],
-        show env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ) = f 0
+        show env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ) = f 0
           from by simp only [hf_def, zChain, add_zero]]
     · exact ⟨rfl, lo, hlo, by push_cast; exact htel⟩
     · have hzLast0 : f numWords = 0 := by simp only [hf_def, zChain]; exact _hTailC
@@ -904,17 +904,17 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     obtain ⟨hLoopWit, hTailWit⟩ := hwit
     obtain ⟨hCardN, hKcard⟩ := hA
     -- the positional element cell's value (`z_0`)
-    set eCell := env.env.advice cfg.runningSum ((env.place self + offset : ℕ) : ℤ)
+    set eCell := env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
       with heCell
-    have hz0 : zChain K cfg env.place self env.env.toEnvironment offset 0 = eCell := by
+    have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
       simp only [zChain, add_zero, heCell, Placed.toEnvironment_env]
-    have hz : ∀ j, j ≤ numWords → zChain K cfg env.place self env.env.toEnvironment offset j
+    have hz : ∀ j, j ≤ numWords → zChain K cfg place self env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
       intro j hj
       rcases Nat.eq_zero_or_pos j with rfl | hjpos
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
       · have hv := rangeCheck_loop_zvalues K cfg
-          (AssignedCell.of self offset cfg.runningSum) env.place self env.env offset
+          (AssignedCell.of self offset cfg.runningSum) place self env offset
           numWords hLoopWit j hjpos hj
         rw [hv]
         simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
@@ -922,8 +922,8 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
           Placed.toEnvironment_env]
     refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
     · exact rangeCheck_loop_constraints_complete K cfg
-        (AssignedCell.of self offset cfg.runningSum) env.place self
-        env.env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
+        (AssignedCell.of self offset cfg.runningSum) place self
+        env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
     · rcases hbstrict : strict with _ | _
       · simp only [circuit_norm]
       · simp only [circuit_norm]
