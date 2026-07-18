@@ -379,7 +379,7 @@ Region sequence (ns := [25,1,25,6,1,25,25,1]; pieces a..h):
 43 PsiCanonicity.bundle.toFormal {psi, h0, g1, h1, g2:=z1_g, g1G2Prime:=r33.z0, z13G:=z13_g, z13G1G2Prime:=r33.zLast}
 
 Hash z cells (positional, hash region iH = i₀+28, column hcfg.bits, offset base 0):
-z(i,j) = AssignedCell.of iH (prefixRows ns i + j) hcfg.bits; prefixRows for ns:
+z(i,j) = AssignedCell.of iH (prefixRows ns i + j) hcfg.bits; iH = i₀+27 (NOT +28); prefixRows for ns:
 [0,26,28,54,61,63,89,115]. z13_a=(0,13)→row 13; z13_c=(2,13)→41; z1_d=(3,1)→55;
 z13_f=(5,13)→76; z1_g=(6,1)→90; z13_g=(6,13)→102.
 
