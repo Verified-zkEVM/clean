@@ -38,6 +38,7 @@ open Halo2.Ironwood.DecomposeRunningSum (copyDecompose rangeCheckExpr)
 open Orchard (Point pallasB tP)
 open Orchard.Ecc.MulFixed (FixedBase)
 open Halo2.Ironwood.Ecc.MulFixed (FixedBaseData)
+open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 
 /-- Rust `base_field_elem::Config` (lines 20-29). -/
 structure Config where
@@ -1170,5 +1171,274 @@ def synthesize (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) :
   assignRegion "Canonicity checks"
     (canonicityRegion cfg alphaZ0 zs[84] alphaPrime z13 zs[44] zs[43])
   return result
+
+/-! ## The gadget bundle (`FixedPointBaseField::mul`, `base_field_elem.rs:165-378`)
+
+The layouter-level `FormalCircuit`: four regions (inner mul, complete addition, the
+13-word witness check, the canonicity checks). Donor: the top-level
+`Orchard.Ecc.MulFixed.BaseFieldElem.{Spec, soundness, completeness}`. -/
+
+derive_contract_bridges addc := Halo2.Ironwood.Ecc.Add.add
+derive_contract_bridges rca := Halo2.Ironwood.LookupRangeCheck.rangeCheckAt 10 13 false
+
+/-- Env-level preconditions of the full gadget: the shared-config asserts consumed by the
+inner region, the loaded 10-bit lookup table, and the lookup config's selector
+distinctness (both consumed by the witness check). -/
+def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
+  InnerEnvAssumptions cfg env ∧
+  LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env ∧
+  cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
+
+/-- The gadget's semantic contract (donor `BaseFieldElem.Spec`): the output is the
+fixed base scaled by the base-field element α, embedded into the scalar field — full
+scalar multiplication, canonical in α (that is what the canonicity checks buy). -/
+def Spec (B : FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
+  output = (alpha.val : Fq) • B
+
+/-- The region count of `synthesize`: inner mul, complete addition, witness check,
+canonicity checks. -/
+private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+    (alpha : AssignedCell Fp) (i : RegionIndex) :
+    Operations.regionCount ((synthesize B cfg alpha).operations i) = 4 := by
+  simp only [synthesize, witnessCheck13, circuit_norm, operations_assignRegion,
+    Operations.regionCount]
+
+/-- The range-check chunk's output cells (positional `z0`/`z13`). -/
+private theorem rca_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
+    (self : RegionIndex) :
+    (LookupRangeCheck.rangeCheckAt 10 13 false).output cfgL offset () self
+      = { z0 := AssignedCell.of self offset cfgL.runningSum,
+          zLast := AssignedCell.of self (offset + 13) cfgL.runningSum } := rfl
+
+/-- The `zLast` output cell of the range-check chunk, through the `call` wrapper (the
+`output_call` rewrite does not fire inside cell projections; this is its `rfl` fusion
+with `rca_output`). -/
+private theorem rca_call_zLast (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
+    (self : RegionIndex) :
+    (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfgL offset ()).output self).zLast
+      = AssignedCell.of self (offset + 13) cfgL.runningSum := rfl
+
+/-- The range-check chunk's extraction data: the positional element cell's value. -/
+private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
+    (self : RegionIndex) (env : Placed Environment Fp) :
+    (LookupRangeCheck.rangeCheckAt 10 13 false).extract cfgL offset () self env
+      = env.env.advice cfgL.runningSum ((env.place self + offset : ℕ) : ℤ) := by
+  show eval env (AssignedCell.of self offset cfgL.runningSum : Var field Fp) = _
+  simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+
+/-- Rust `FixedPointBaseField::mul` (`base_field_elem.rs::assign`): `[α]B` for a
+base-field element α, canonically. -/
+def circuit (B : FixedBase) : FormalCircuit Fp
+    ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config)
+    Config field Point where
+  name := "fixed-base mul (base field elem)"
+
+  configure := fun (canonAdvices, lookupConfig, superConfig) =>
+    configure canonAdvices lookupConfig superConfig
+
+  synthesize cfg alpha := synthesize B.toData cfg alpha
+
+  elaborated cfg :=
+    { output := fun alpha i => (synthesize B.toData cfg alpha).output i
+      regionCount := fun _ => 4
+      output_eq := by intro _ _; rfl
+      regionCount_eq := fun alpha i => (synthesize_regionCount B.toData cfg alpha i).symm }
+
+  EnvAssumptions := EnvAssumptions
+
+  Assumptions _ := True
+
+  Spec input output _ := Spec B input output
+
+  ProverAssumptions _ _ _ := True
+
+  ProverSpec _ _ _ _ := True
+
+  soundness := by
+    circuit_proof_start
+    simp only [synthesize, witnessCheck13, circuit_norm] at hc
+    obtain ⟨hInner, hAdd, hRC, hCanon⟩ := hc
+    obtain ⟨hEI, hTable, hDistinct⟩ := _hE
+    -- ── region 1: the inner windowed mul, consumed through the bundle's soundness ──
+    have hIS := (inner B).soundness cfg 0 i₀ env ⟨input_var⟩ hEI trivial hInner
+    have hIS' : InnerSpec B
+        (eval env ({ alpha := input_var } :
+          Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp))
+        (eval env ((innerRegion B.toData cfg 0 input_var).output i₀)) () := hIS
+    rw [innerRegion_output] at hIS'
+    simp only [InnerSpec, circuit_norm] at hIS'
+    obtain ⟨ks, hks_lt, hαV, hAcc, hMulB, hZs⟩ := hIS'
+    -- ── region 2: the complete addition `mul_b + acc` ──
+    subcircuit_rw at hAdd
+    simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      innerRegion_output, circuit_norm] at hAdd
+    simp only [synthesize, witnessCheck13, circuit_norm] at h_output
+    -- ── region 3: the 13-word lookup range check of α₀' ──
+    subcircuit_rw at hRC
+    simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
+      circuit_norm] at hRC
+    -- ── region 4: the canonicity checks (lazy zs-projection first) ──
+    simp only [innerRegion_output_zs] at hCanon
+    simp only [Vector.getElem_ofFn] at hCanon
+    simp only [canonicityRegion, canonGate,
+      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, rca_output,
+      circuit_norm] at hCanon
+    obtain ⟨⟨hG1, hG2, hG3, hG4, hG5, hG6, hG7, hG8⟩,
+      hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := hCanon
+    rw [rca_call_zLast] at hCpZ13
+    simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+      Cell.of_column, Environment.get_advice, Nat.zero_add] at hCpZ13
+    -- ── the range-check contract, landed on advice reads ──
+    have hRCS := hRC ⟨hTable, hDistinct⟩
+      ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
+       by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
+    simp only [rca_output, rca_extract, circuit_norm, AssignedCell.eval,
+      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+      Environment.get_advice] at hRCS
+    obtain ⟨lo, hlo, htel⟩ := hRCS
+    -- ── the running-sum cells feeding the canonicity gate, in `8^w` form ──
+    set V := ∑ j ∈ Finset.range 85, ks j * 8 ^ j with hV
+    have hz0V := hZs ⟨0, by norm_num⟩
+    have hz84V := hZs ⟨84, by norm_num⟩
+    have hz44V := hZs ⟨44, by norm_num⟩
+    have hz43V := hZs ⟨43, by norm_num⟩
+    rw [show ((⟨0, by norm_num⟩ : Fin 86) : ℕ) = 0 from rfl] at hz0V
+    rw [show ((⟨84, by norm_num⟩ : Fin 86) : ℕ) = 84 from rfl,
+      show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84V
+    rw [show ((⟨44, by norm_num⟩ : Fin 86) : ℕ) = 44 from rfl,
+      show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44V
+    rw [show ((⟨43, by norm_num⟩ : Fin 86) : ℕ) = 43 from rfl,
+      show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43V
+    simp only [Nat.add_zero, pow_zero, Nat.mul_zero, Nat.div_one] at hz0V
+    rw [hz0V] at hCpA
+    rw [hz84V] at hCpZ84
+    rw [hz44V] at hCpZ44
+    rw [hz43V] at hCpZ43
+    -- ── the gate facts (donor `Gate.soundness` algebra) ──
+    obtain ⟨a1n, ha1n_lt, ha1n⟩ :=
+      (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 4 (by norm_num) _).mp
+        ((Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 4 _).mp hG5)
+    obtain ⟨a2n, ha2n_lt, ha2n⟩ :=
+      (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num) _).mp
+        ((Orchard.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mp hG6)
+    rw [sub_eq_zero] at hG7 hG8
+    rw [hCpZ84, ha1n, ha2n,
+      show ((1 <<< 2 : ℕ) : Fp) = ((4 : ℕ) : Fp) from by norm_num [Nat.shiftLeft_eq]] at hG7
+    -- ── the crux (donor transplant): V is the canonical representative ──
+    have hVlt : V < 8 ^ 85 :=
+      Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.sum_lt_of_windows hks_lt
+    set A0 : ℕ := V / 8 ^ 84 with hA0
+    have hA0lt : A0 < 8 := by
+      rw [hA0]
+      rw [show (8 : ℕ) ^ 85 = 8 ^ 84 * 8 from by ring] at hVlt
+      exact Nat.div_lt_of_lt_mul (by omega)
+    set α0 : ℕ := V % 8 ^ 84 with hα0def
+    have hα0lt : α0 < 2 ^ 252 := by
+      rw [hα0def]
+      exact lt_of_lt_of_le (Nat.mod_lt _ (by positivity)) (by norm_num)
+    have hVsplit : V = α0 + A0 * 8 ^ 84 := by rw [hα0def, hA0]; omega
+    have h884 : (8 : ℕ) ^ 84 = 2 ^ 252 := by norm_num
+    have hVltp : V < PALLAS_BASE_CARD := by
+      rw [Orchard.Ecc.MulFixed.BaseFieldElem.base_card_eq]
+      rcases (by omega : a2n = 0 ∨ a2n = 1) with h20 | h21
+      · -- α₂ = 0: the top window is a1n ≤ 3, so V < 2^254
+        have hA0eq : A0 = a1n :=
+          Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
+            hA0lt (by omega) (by rw [hG7, h20]; norm_num)
+        have hmul : A0 * 8 ^ 84 ≤ 3 * 2 ^ 252 := by
+          rw [h884]
+          exact Nat.mul_le_mul_right _ (by omega)
+        rw [hVsplit]
+        norm_num [Orchard.Ecc.MulFixed.BaseFieldElem.tPNat] at hα0lt ⊢
+        omega
+      · -- α₂ = 1: canonicity forces α0 < t_p
+        rw [ha2n, h21] at hG1 hG2 hG4
+        simp only [Nat.cast_one, one_mul] at hG1 hG2 hG4
+        -- α₁ = 0, so the top window is exactly 4
+        have ha1z : a1n = 0 :=
+          Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
+            (by omega) (by norm_num) (by rw [← ha1n, hG1]; norm_num)
+        have hA04 : A0 = 4 :=
+          Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
+            hA0lt (by norm_num) (by rw [hG7, ha1z, h21]; norm_num)
+        have hV254 : V = α0 + 2 ^ 254 := by
+          rw [hVsplit, hA04, h884]
+          norm_num
+        -- `alpha0_hi_120 = 0` forces `α0 < 2^132`
+        have h844 : (8 : ℕ) ^ 44 = 2 ^ 132 := by norm_num
+        have hdiv44 : V / 8 ^ 44 = α0 / 2 ^ 132 + 2 ^ 122 := by
+          rw [hV254, h844, show (2 : ℕ) ^ 254 = 2 ^ 122 * 2 ^ 132 from by ring,
+            Nat.add_mul_div_right _ _ (by positivity)]
+        rw [hCpZ44, hCpZ84, hdiv44, hA04] at hG2
+        have hq0 : α0 / 2 ^ 132 = 0 := by
+          have hcast : ((α0 / 2 ^ 132 : ℕ) : Fp) = 0 := by
+            push_cast at hG2 ⊢
+            linear_combination hG2
+          have hlt : α0 / 2 ^ 132 < PALLAS_BASE_CARD := by
+            have : α0 / 2 ^ 132 < 2 ^ 120 := Nat.div_lt_of_lt_mul
+              (by rw [show 2 ^ 132 * 2 ^ 120 = 2 ^ 252 from by ring]; omega)
+            rw [Orchard.Ecc.MulFixed.BaseFieldElem.base_card_eq]
+            norm_num [Orchard.Ecc.MulFixed.BaseFieldElem.tPNat] at this ⊢
+            omega
+          exact Nat.eq_zero_of_dvd_of_lt ((ZMod.natCast_eq_zero_iff _ _).mp hcast) hlt
+        have hα0lt132 : α0 < 2 ^ 132 := by
+          rcases Nat.div_eq_zero_iff.mp hq0 with h | h
+          · norm_num at h
+          · exact h
+        -- the 13-word lookup on α₀' forces α0 < t_p
+        rw [hCpZ13] at hG4
+        rw [hG4, mul_zero, _root_.add_zero] at htel
+        rw [show (10 * 13 : ℕ) = 130 from by norm_num] at hlo
+        rw [← hCpAP, hG8, hCpA, hCpZ84, hA04] at htel
+        have hfield : (lo : Fp) = (α0 : Fp) + (2 : Fp) ^ 130
+            - ((Orchard.Ecc.MulFixed.BaseFieldElem.tPNat : ℕ) : Fp) := by
+          rw [← htel, hV254]
+          push_cast [Orchard.tP, Orchard.Ecc.MulFixed.BaseFieldElem.tPNat]
+          ring
+        have hα0tp : α0 < Orchard.Ecc.MulFixed.BaseFieldElem.tPNat :=
+          Orchard.Ecc.MulFixed.BaseFieldElem.alpha0_lt_tp hlo hα0lt132 hfield
+        rw [hV254]
+        omega
+    have hinput : input = ((V : ℕ) : Fp) := by
+      rw [← h_input]
+      simp only [circuit_norm, AssignedCell.eval]
+      exact hαV
+    -- ── the output value: `mul_b + acc = [V]B` (donor final algebra) ──
+    obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
+        t = (Orchard.Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
+    have hwp84 : Orchard.Ecc.MulFixed.windowPoint B.point 84 (ks 84) = t84 • B.point := by
+      rw [ht84_def]; rfl
+    obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = Orchard.Ecc.MulFixed.partialSum ks 83 := ⟨_, rfl⟩
+    have hS83_lt : S83 < 2 * 8 ^ 84 := by
+      rw [hS83_def]
+      exact Orchard.Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hks_lt j (by omega))
+    have hS83_pos : 0 < S83 := by
+      rw [hS83_def]
+      exact Orchard.Ecc.MulFixed.partialSum_pos _ _
+    have hS83_card : S83 < PALLAS_SCALAR_CARD :=
+      Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS83_lt (by norm_num)
+    have hOnP : (t84 • B.point).OnCurve := by
+      rw [← hwp84]
+      exact B.windowPoint_onCurve (hks_lt 84 (by norm_num))
+    have hOnQ : (S83 • B.point).OnCurve := B.nsmul_onCurve hS83_pos hS83_card
+    obtain ⟨-, hOutEq⟩ := hAdd ⟨by rw [hMulB, hwp84]; exact Or.inl hOnP,
+      by rw [hAcc, ← hS83_def]; exact Or.inl hOnQ⟩
+    rw [hMulB, hAcc, hwp84, ← hS83_def,
+      show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
+    simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add,
+      circuit_norm] at h_output
+    rw [FormalRegionCircuit.output_call] at h_output
+    rw [h_output] at hOutEq
+    rw [Orchard.Point.nsmul_add_nsmul B.onCurve] at hOutEq
+    -- (t84 + S83) • B = [(V : Fq).val] • B = the Spec's scalar mul
+    have hchain : (t84 + S83) • B.point = ((V : Fq)).val • B.point := by
+      rw [ht84_def, hS83_def, ← Orchard.Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
+        Orchard.Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
+    simp only [Spec]
+    rw [hinput, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp, hOutEq, hchain]
+    exact (point_eta _).symm
+
+  completeness := by sorry
 
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem
