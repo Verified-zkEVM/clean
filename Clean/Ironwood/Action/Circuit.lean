@@ -190,14 +190,22 @@ def loadPrivate (col : Column .advice) (w : WitgenIR Fp 1) :
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "load private" (assignAdvice col 0 w)
 
-/-- Rust `Circuit::synthesize` (`circuit.rs:461-828`), in exact region-creation order.
-Structure-only for now (the bundle + proofs land once the commit-arc contracts settle);
-every child is a proven bundle except the region-free glue. -/
-def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Circuit Fp Unit := do
-  -- circuit.rs:467 — the Sinsemilla generator table, loaded once
+/-- The shared witness cells (stage A's outputs). -/
+structure WitnessCells where
+  psiOld : AssignedCell Fp
+  rhoOld : AssignedCell Fp
+  cmOld : Var Point Fp
+  gdOld : Var Point Fp
+  akP : Var Point Fp
+  nk : AssignedCell Fp
+  vOld : AssignedCell Fp
+  vNew : AssignedCell Fp
+
+/-- Stage A (8 regions after the table load): the shared witness regions
+(`circuit.rs:467-532`). -/
+def synthWitness (G : Generators) (W : Witnesses) (cfg : Config) :
+    Circuit Fp WitnessCells := do
   Sinsemilla.load G cfg.sinsemilla1.generatorTable
-  -- circuit.rs:473-532 — the shared witness regions
   let psiOld ← loadPrivate (cfg.advices 0) W.psiOld
   let rhoOld ← loadPrivate (cfg.advices 0) W.rhoOld
   let cmOld ← (Ecc.WitnessPoint.point.toFormal "witness point").call
@@ -209,11 +217,25 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   let nk ← loadPrivate (cfg.advices 0) W.nk
   let vOld ← loadPrivate (cfg.advices 0) W.vOld
   let vNew ← loadPrivate (cfg.advices 0) W.vNew
+  pure { psiOld, rhoOld, cmOld, gdOld, akP, nk, vOld, vNew }
+
+/-- Stage B's outputs. -/
+structure CheckCells where
+  root : AssignedCell Fp
+  magnitude : AssignedCell Fp
+  sign : AssignedCell Fp
+  nfOld : AssignedCell Fp
+  pkdOld : Var Point Fp
+
+/-- Stage B (295 regions): the Merkle path, value-commit / nullifier / spend-authority /
+diversified-address integrity (`circuit.rs:535-693`). -/
+def synthChecks (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
+    (wc : WitnessCells) : Circuit Fp CheckCells := do
   -- circuit.rs:535-548 — the Merkle path (leaf = cm_old.extract_p); 16 layers per
   -- Sinsemilla instance (`merkle.rs:122-126`, `chips[i / layers_per_chip]`)
   let half ← (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
       0 16 (by norm_num) W.merkleSib W.merkleSwap).call
-    (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) { node := cmOld.x }
+    (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) { node := wc.cmOld.x }
   let root ← (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
       16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
       (fun i => W.merkleSwap (16 + i))).call
@@ -230,11 +252,11 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   let nfOld ← (DeriveNullifier.circuit B.nullifierK).call
     (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
      cfg.eccConfig.add)
-    { nk := nk, rho := rhoOld, psi := psiOld, cm := cmOld }
+    { nk := wc.nk, rho := wc.rhoOld, psi := wc.psiOld, cm := wc.cmOld }
   constrainInstance nfOld cfg.primary NF_OLD
   -- circuit.rs:627-644 — spend authority
   let rk ← (SpendAuthority.circuit B.spendAuthG W.alphaWindows).call
-    (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) { akP := akP }
+    (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) { akP := wc.akP }
   constrainInstance rk.x cfg.primary RK_X
   constrainInstance rk.y cfg.primary RK_Y
   -- circuit.rs:647-693 — diversified address integrity
@@ -244,20 +266,26 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
-    { ak := akP.x, nk := nk }
-  let _pkDOld ← (AddressIntegrity.circuit W.pkDOld).call
-    (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) { ivk := ivk, gDOld := gdOld }
+    { ak := wc.akP.x, nk := wc.nk }
+  let pkdOld ← (AddressIntegrity.circuit W.pkDOld).call
+    (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) { ivk := ivk, gDOld := wc.gdOld }
+  pure { root, magnitude, sign, nfOld, pkdOld }
+
+/-- Stage C (91 regions): old/new note-commitment integrity and the final
+`"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
+def synthNotes (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
+    (wc : WitnessCells) (cc : CheckCells) : Circuit Fp Unit := do
   -- circuit.rs:696-729 — old note commitment integrity
   let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows
       B.noteQ B.noteQ_onCurve).call
     { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
-    { gdX := gdOld.x, gdY := gdOld.y, pkdX := _pkDOld.x, pkdY := _pkDOld.y,
-      value := vOld, rho := rhoOld, psi := psiOld }
+    { gdX := wc.gdOld.x, gdY := wc.gdOld.y, pkdX := cc.pkdOld.x, pkdY := cc.pkdOld.y,
+      value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld }
   assignRegion "constrain equal" (do
-    constrainEqual derivedCmOld.x cmOld.x
-    constrainEqual derivedCmOld.y cmOld.y)
+    constrainEqual derivedCmOld.x wc.cmOld.x
+    constrainEqual derivedCmOld.y wc.cmOld.y)
   -- circuit.rs:731-779 — new note commitment integrity (`rho_new = nf_old`)
   let gdNew ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
     cfg.eccConfig.witnessPoint W.gdNew
@@ -270,19 +298,27 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
     { gdX := gdNew.x, gdY := gdNew.y, pkdX := pkdNew.x, pkdY := pkdNew.y,
-      value := vNew, rho := nfOld, psi := psiNew }
+      value := wc.vNew, rho := cc.nfOld, psi := psiNew }
   constrainInstance cmNew.x cfg.primary CMX
   -- circuit.rs:781-826 — the final `"Orchard circuit checks"` region
   assignRegion "Orchard circuit checks" (do
-    let _ ← copyAdvice vOld (cfg.advices 0) 0
-    let _ ← copyAdvice vNew (cfg.advices 1) 0
-    let _ ← copyAdvice magnitude (cfg.advices 2) 0
-    let _ ← copyAdvice sign (cfg.advices 3) 0
-    let _ ← copyAdvice root (cfg.advices 4) 0
+    let _ ← copyAdvice wc.vOld (cfg.advices 0) 0
+    let _ ← copyAdvice wc.vNew (cfg.advices 1) 0
+    let _ ← copyAdvice cc.magnitude (cfg.advices 2) 0
+    let _ ← copyAdvice cc.sign (cfg.advices 3) 0
+    let _ ← copyAdvice cc.root (cfg.advices 4) 0
     let _ ← assignAdviceFromInstance cfg.primary ANCHOR (cfg.advices 5) 0
     let _ ← assignAdviceFromInstance cfg.primary ENABLE_SPEND (cfg.advices 6) 0
     let _ ← assignAdviceFromInstance cfg.primary ENABLE_OUTPUT (cfg.advices 7) 0
     (orchardGate cfg.qOrchard cfg.advices).enable 0)
   pure ()
+
+/-- Rust `Circuit::synthesize` (`circuit.rs:461-828`), in exact region-creation order:
+the staged composition of the witness, integrity-check, and note-commitment stages. -/
+def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    Circuit Fp Unit := do
+  let wc ← synthWitness G W cfg
+  let cc ← synthChecks G B W cfg wc
+  synthNotes G B W cfg wc cc
 
 end Halo2.Ironwood.Action.Circuit
