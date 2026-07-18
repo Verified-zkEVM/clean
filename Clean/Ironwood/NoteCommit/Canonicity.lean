@@ -357,5 +357,130 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
 end PkdCanonicity
 
+namespace RhoCanonicity
+
+private abbrev DRow := Orchard.Action.NoteCommit.RhoCanonicity.Gate.Row
+private abbrev DSpec := Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec
+private abbrev DAssumptions := Orchard.Action.NoteCommit.RhoCanonicity.Gate.Assumptions
+
+structure Row (F : Type) where
+  rho : F
+  e1 : F
+  g0 : F
+  f : F
+  e1FPrime : F
+  z13F : F
+  z14E1FPrime : F
+deriving ProvableStruct
+
+/-- The donor-side row record. -/
+def toDonor (row : Row Fp) : DRow Fp :=
+  ⟨row.rho, row.e1, row.g0, row.f, row.e1FPrime, row.z13F, row.z14E1FPrime⟩
+
+/-- Rust `RhoCanonicity::assign` (`note_commit.rs:789-841`): pure copies (rows 0/1 of
+`col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
+`RhoCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
+def bundle : FormalRegionCircuit Fp Config Config Row unit where
+  configure := pure
+
+  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
+    let _x ← copyAdvice input.rho cfg.colL offset
+    let _e1 ← copyAdvice input.e1 cfg.colM offset
+    let _g0 ← copyAdvice input.g0 cfg.colM (offset + 1)
+    let _f ← copyAdvice input.f cfg.colR offset
+    let _ap ← copyAdvice input.e1FPrime cfg.colR (offset + 1)
+    let _z ← copyAdvice input.z13F cfg.colZ offset
+    let _zp ← copyAdvice input.z14E1FPrime cfg.colZ (offset + 1)
+    (gate cfg).enable offset
+    pure ()
+
+  Assumptions input := DAssumptions (toDonor input)
+
+  Spec input _ _ := DSpec (toDonor input)
+
+  ProverAssumptions input _ _ := DSpec (toDonor input)
+
+  soundness := by
+    circuit_proof_start [gate]
+    obtain ⟨hc1, hc2, hc3, hc4, hc5, hc6, hc7, hg1, hg2, hg3, hg4⟩ := hc
+    rw [hc4, hc2, hc3, hc1] at hg1
+    rw [hc3, hc6] at hg3
+    rw [hc3, hc7] at hg4
+    exact Orchard.Action.NoteCommit.RhoCanonicity.Gate.spec_of_eqs
+      ⟨input_rho, input_e1, input_g0, input_f, input_e1FPrime, input_z13F,
+        input_z14E1FPrime⟩ hA
+      (by push_cast; linear_combination hg1) hg3 hg4
+
+  completeness := by
+    intro cfg offset
+    rw [FormalRegionCircuit.completeness_iff]
+    intro self env input_var input output h_input h_output hwit _hE hA hPA
+    simp only [circuit_norm, gate] at hwit h_input h_output hA hPA ⊢
+    obtain ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7⟩ := hwit
+    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+        : Row Fp)
+      = { rho := env.env.get input_var.rho.cell.column
+            ((env.place input_var.rho.cell.regionIndex
+              + input_var.rho.cell.rowOffset : ℕ) : ℤ),
+          e1 := env.env.get input_var.e1.cell.column
+            ((env.place input_var.e1.cell.regionIndex
+              + input_var.e1.cell.rowOffset : ℕ) : ℤ),
+          g0 := env.env.get input_var.g0.cell.column
+            ((env.place input_var.g0.cell.regionIndex
+              + input_var.g0.cell.rowOffset : ℕ) : ℤ),
+          f := env.env.get input_var.f.cell.column
+            ((env.place input_var.f.cell.regionIndex
+              + input_var.f.cell.rowOffset : ℕ) : ℤ),
+          e1FPrime := env.env.get input_var.e1FPrime.cell.column
+            ((env.place input_var.e1FPrime.cell.regionIndex
+              + input_var.e1FPrime.cell.rowOffset : ℕ) : ℤ),
+          z13F := env.env.get input_var.z13F.cell.column
+            ((env.place input_var.z13F.cell.regionIndex
+              + input_var.z13F.cell.rowOffset : ℕ) : ℤ),
+          z14E1FPrime := env.env.get input_var.z14E1FPrime.cell.column
+            ((env.place input_var.z14E1FPrime.cell.regionIndex
+              + input_var.z14E1FPrime.cell.rowOffset : ℕ) : ℤ) } from by
+        with_unfolding_all rfl] at h_input hA
+    rw [h_input] at hA
+    have hirho : env.env.get input_var.rho.cell.column
+        ((env.place input_var.rho.cell.regionIndex
+          + input_var.rho.cell.rowOffset : ℕ) : ℤ) = input.rho := congrArg Row.rho h_input
+    have hie1 : env.env.get input_var.e1.cell.column
+        ((env.place input_var.e1.cell.regionIndex
+          + input_var.e1.cell.rowOffset : ℕ) : ℤ) = input.e1 := congrArg Row.e1 h_input
+    have hig0 : env.env.get input_var.g0.cell.column
+        ((env.place input_var.g0.cell.regionIndex
+          + input_var.g0.cell.rowOffset : ℕ) : ℤ) = input.g0 := congrArg Row.g0 h_input
+    have hif : env.env.get input_var.f.cell.column
+        ((env.place input_var.f.cell.regionIndex
+          + input_var.f.cell.rowOffset : ℕ) : ℤ) = input.f := congrArg Row.f h_input
+    have hie1FPrime : env.env.get input_var.e1FPrime.cell.column
+        ((env.place input_var.e1FPrime.cell.regionIndex
+          + input_var.e1FPrime.cell.rowOffset : ℕ) : ℤ) = input.e1FPrime := congrArg Row.e1FPrime h_input
+    have hiz13F : env.env.get input_var.z13F.cell.column
+        ((env.place input_var.z13F.cell.regionIndex
+          + input_var.z13F.cell.rowOffset : ℕ) : ℤ) = input.z13F := congrArg Row.z13F h_input
+    have hiz14E1FPrime : env.env.get input_var.z14E1FPrime.cell.column
+        ((env.place input_var.z14E1FPrime.cell.regionIndex
+          + input_var.z14E1FPrime.cell.rowOffset : ℕ) : ℤ) = input.z14E1FPrime := congrArg Row.z14E1FPrime h_input
+    have heqs := Orchard.Action.NoteCommit.RhoCanonicity.Gate.eqs_of_spec
+      (toDonor input) hA hPA
+    obtain ⟨he1, he2, he3, he4⟩ := heqs
+    simp only [toDonor] at he1 he2 he3 he4
+    rw [← hirho, ← hie1, ← hig0, ← hif, ← hw1, ← hw2, ← hw3, ← hw4] at he1
+    rw [← hie1, ← hif, ← hie1FPrime, ← hw2, ← hw4, ← hw5] at he2
+    rw [← hig0, ← hiz13F, ← hw3, ← hw6] at he3
+    rw [← hig0, ← hiz14E1FPrime, ← hw3, ← hw7] at he4
+    refine ⟨hw1, hw2, hw3, hw4, hw5, hw6, hw7, ?_, ?_, ?_, ?_⟩
+    · push_cast at he1 ⊢
+      linear_combination he1
+    · push_cast at he2 ⊢
+      linear_combination he2
+    · linear_combination he3
+    · linear_combination he4
+
+end RhoCanonicity
+
+
 
 end Halo2.Ironwood.NoteCommit

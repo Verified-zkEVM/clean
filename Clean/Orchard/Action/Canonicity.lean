@@ -460,6 +460,101 @@ def main (row : Var Row Fp) : Circuit Fp Unit := do
   assertZero (row.g0 * row.z13F)
   assertZero (row.g0 * row.z14E1F')
 
+/-- Row-level payoff (extracted from `soundness` for the halo2-native port). -/
+theorem spec_of_eqs (row : Row Fp) (hAss : Assumptions row)
+    (heq1 : row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + row.g0 * ((2 ^ 254 : ℕ) : Fp)
+      - row.rho = 0)
+    (heq3 : row.g0 * row.z13F = 0) (heq4 : row.g0 * row.z14E1F' = 0) : Spec row := by
+  obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec⟩ := hAss
+  have hp := pallasBaseCard_eq
+  have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+  have hlo_sum : row.e1.val + row.f.val * 2 ^ 4 < PALLAS_BASE_CARD := by omega
+  have hlo_val : (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val
+      = row.e1.val + row.f.val * 2 ^ 4 := val_limb2 4 hlo_sum
+  have hlo_lt : (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val < 2 ^ 254 := by rw [hlo_val]; omega
+  have hcanon : row.g0 = 1 → (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val < tPNat := by
+    intro h1
+    have hf130 : row.f.val < 2 ^ 130 := by
+      have hz : row.z13F = 0 := by
+        rcases mul_eq_zero.mp heq3 with h | h
+        · exact absurd (h1 ▸ h) one_ne_zero
+        · exact h
+      rw [hz13F] at hz
+      have := natCast_eq_zero
+        (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hf_lt (by norm_num [PALLAS_BASE_CARD]))) hz
+      omega
+    have he1fP_val : row.e1F'.val
+        = (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
+      rw [he1fP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
+    have he1fP_lt : row.e1F'.val < 2 ^ 140 := by
+      have hz : row.z14E1F' = 0 := by
+        rcases mul_eq_zero.mp heq4 with h | h
+        · exact absurd (h1 ▸ h) one_ne_zero
+        · exact h
+      obtain ⟨lo, hlo, hdec⟩ := hzeDec
+      rw [hz, mul_zero, _root_.add_zero] at hdec
+      rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
+      exact hlo
+    omega
+  have hrecL : row.rho = (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp))
+      + row.g0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -heq1
+  obtain ⟨_, hlo_eq, hg0_eq⟩ := canonical_top_decomp hrecL hlo_lt hg0 hcanon
+  have hmod : bitrange row.rho.val 0 254 = row.rho.val % 2 ^ 254 := by simp [bitrange]
+  have he1_eq : row.e1.val = bitrange row.rho.val 0 4 := by
+    have h1 : row.e1.val = bitrange (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val 0 4 := by
+      simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
+    rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 4 ≤ 254)]
+  have hf_eq : row.f.val = bitrange row.rho.val 4 250 := by
+    have h1 : row.f.val = bitrange (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
+      simp only [bitrange, hlo_val]; omega
+    rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
+  exact ⟨he1_eq, hf_eq, hg0_eq, fun h1 => by
+    rcases mul_eq_zero.mp heq4 with h | h
+    · exact absurd (h1 ▸ h) one_ne_zero
+    · exact h⟩
+
+/-- Row-level completeness direction. -/
+theorem eqs_of_spec (row : Row Fp) (hAss : Assumptions row) (hSpec : Spec row) :
+    (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + row.g0 * ((2 ^ 254 : ℕ) : Fp)
+      - row.rho = 0) ∧
+    (row.e1 + row.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP - row.e1F' = 0) ∧
+    row.g0 * row.z13F = 0 ∧ row.g0 * row.z14E1F' = 0 := by
+  obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _⟩ := hAss
+  obtain ⟨he1_val, hf_val, hg0_val, hzeZero⟩ := hSpec
+  have hp := pallasBaseCard_eq
+  have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
+  have hrhoX : row.rho.val < 2 ^ 255 :=
+    lt_trans (ZMod.val_lt row.rho) (by norm_num [PALLAS_BASE_CARD])
+  have he1_eq : row.e1 = ((bitrange row.rho.val 0 4 : ℕ) : Fp) := by
+    rw [← he1_val]; exact (ZMod.natCast_rightInverse row.e1).symm
+  have hf_eq : row.f = ((bitrange row.rho.val 4 250 : ℕ) : Fp) := by
+    rw [← hf_val]; exact (ZMod.natCast_rightInverse row.f).symm
+  have hg0_eq : row.g0 = ((bitrange row.rho.val 254 1 : ℕ) : Fp) := by
+    rw [← hg0_val]; exact (ZMod.natCast_rightInverse row.g0).symm
+  have hg0cases := show bitrange row.rho.val 254 1 = 0 ∨ bitrange row.rho.val 254 1 = 1 from by
+    have := bitrange_lt row.rho.val 254 1; omega
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · have hdec : row.rho.val = bitrange row.rho.val 0 4
+        + 2 ^ 4 * bitrange row.rho.val 4 250 + 2 ^ 254 * bitrange row.rho.val 254 1 := by
+      simp only [bitrange, pow_zero, Nat.div_one]; omega
+    have hrho_eq : row.rho = ((bitrange row.rho.val 0 4 : ℕ) : Fp)
+        + ((bitrange row.rho.val 4 250 : ℕ) : Fp) * ((2 ^ 4 : ℕ) : Fp)
+        + ((bitrange row.rho.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+      conv_lhs => rw [← ZMod.natCast_rightInverse row.rho, hdec]
+      push_cast; ring
+    rw [he1_eq, hf_eq, hg0_eq]; linear_combination -hrho_eq
+  · rw [he1fP]; ring
+  · rcases hg0cases with h | h
+    · rw [hg0_eq, h]; simp
+    · rw [hz13F, hf_val,
+        show bitrange row.rho.val 4 250 / 2 ^ 130 = bitrange row.rho.val 134 120 from
+          bitrange_div_pow row.rho.val 4 130 120,
+        high_bit_high_zero (ZMod.val_lt row.rho) h (by norm_num) (by norm_num)]
+      simp
+  · rcases hg0cases with h | h
+    · rw [hg0_eq, h]; simp
+    · rw [hzeZero (by rw [hg0_eq, h]; norm_num)]; simp
+
 def circuit : FormalAssertion Fp Row where
   name := "GATE NoteCommit input rho"
   main
@@ -467,91 +562,15 @@ def circuit : FormalAssertion Fp Row where
   Spec
   soundness := by
     circuit_proof_start [tP]
-    obtain ⟨hg0, hf_lt, he1_lt, he1fP, hz13F, hzeDec⟩ := h_assumptions
     obtain ⟨hrec, _, hg1, hg2⟩ := h_holds
-    have hp := pallasBaseCard_eq
-    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
-    have hlo_sum : input_e1.val + input_f.val * 2 ^ 4 < PALLAS_BASE_CARD := by omega
-    have hlo_val : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val
-        = input_e1.val + input_f.val * 2 ^ 4 := val_limb2 4 hlo_sum
-    have hlo_lt : (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val < 2 ^ 254 := by rw [hlo_val]; omega
-    have hcanon : input_g0 = 1 → (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val < tPNat := by
-      intro h1
-      have hf130 : input_f.val < 2 ^ 130 := by
-        have hz : input_z13F = 0 := by
-          rcases mul_eq_zero.mp hg1 with h | h
-          · exact absurd (h1 ▸ h) one_ne_zero
-          · exact h
-        rw [hz13F] at hz
-        have := natCast_eq_zero
-          (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_trans hf_lt (by norm_num [PALLAS_BASE_CARD]))) hz
-        omega
-      have he1fP_val : input_e1F'.val
-          = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val + 2 ^ 140 - tPNat := by
-        rw [he1fP]; exact val_shift 140 (by rw [hlo_val]; omega) (by rw [hlo_val]; omega)
-      have he1fP_lt : input_e1F'.val < 2 ^ 140 := by
-        have hz : input_z14E1F' = 0 := by
-          rcases mul_eq_zero.mp hg2 with h | h
-          · exact absurd (h1 ▸ h) one_ne_zero
-          · exact h
-        obtain ⟨lo, hlo, hdec⟩ := hzeDec
-        rw [hz, mul_zero, _root_.add_zero] at hdec
-        rw [hdec, ZMod.val_natCast_of_lt (lt_trans hlo (by norm_num [PALLAS_BASE_CARD]))]
-        exact hlo
-      omega
-    have hrecL : input_rho = (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp))
-        + input_g0 * ((2 ^ 254 : ℕ) : Fp) := by linear_combination -hrec
-    obtain ⟨_, hlo_eq, hg0_eq⟩ := canonical_top_decomp hrecL hlo_lt hg0 hcanon
-    have hmod : bitrange input_rho.val 0 254 = input_rho.val % 2 ^ 254 := by simp [bitrange]
-    have he1_eq : input_e1.val = bitrange input_rho.val 0 4 := by
-      have h1 : input_e1.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 0 4 := by
-        simp only [bitrange, pow_zero, Nat.div_one, hlo_val]; omega
-      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 0 + 4 ≤ 254)]
-    have hf_eq : input_f.val = bitrange input_rho.val 4 250 := by
-      have h1 : input_f.val = bitrange (input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)).val 4 250 := by
-        simp only [bitrange, hlo_val]; omega
-      rw [h1, hlo_eq, hmod, bitrange_mod (by norm_num : 4 + 250 ≤ 254)]
-    exact ⟨he1_eq, hf_eq, hg0_eq, fun h1 => by
-      rcases mul_eq_zero.mp hg2 with h | h
-      · exact absurd (h1 ▸ h) one_ne_zero
-      · exact h⟩
+    exact spec_of_eqs
+      ⟨input_rho, input_e1, input_g0, input_f, input_e1F', input_z13F, input_z14E1F'⟩
+      h_assumptions hrec hg1 hg2
   completeness := by
     circuit_proof_start
-    obtain ⟨_, hf_lt, he1_lt, he1fP, hz13F, _⟩ := h_assumptions
-    obtain ⟨he1_val, hf_val, hg0_val, hzeZero⟩ := h_spec
-    have hp := pallasBaseCard_eq
-    have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
-    have hrhoX : input_rho.val < 2 ^ 255 :=
-      lt_trans (ZMod.val_lt input_rho) (by norm_num [PALLAS_BASE_CARD])
-    have he1_eq : input_e1 = ((bitrange input_rho.val 0 4 : ℕ) : Fp) := by
-      rw [← he1_val]; exact (ZMod.natCast_rightInverse input_e1).symm
-    have hf_eq : input_f = ((bitrange input_rho.val 4 250 : ℕ) : Fp) := by
-      rw [← hf_val]; exact (ZMod.natCast_rightInverse input_f).symm
-    have hg0_eq : input_g0 = ((bitrange input_rho.val 254 1 : ℕ) : Fp) := by
-      rw [← hg0_val]; exact (ZMod.natCast_rightInverse input_g0).symm
-    have hg0cases := show bitrange input_rho.val 254 1 = 0 ∨ bitrange input_rho.val 254 1 = 1 from by
-      have := bitrange_lt input_rho.val 254 1; omega
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · have hdec : input_rho.val = bitrange input_rho.val 0 4
-          + 2 ^ 4 * bitrange input_rho.val 4 250 + 2 ^ 254 * bitrange input_rho.val 254 1 := by
-        simp only [bitrange, pow_zero, Nat.div_one]; omega
-      have hrho_eq : input_rho = ((bitrange input_rho.val 0 4 : ℕ) : Fp)
-          + ((bitrange input_rho.val 4 250 : ℕ) : Fp) * ((2 ^ 4 : ℕ) : Fp)
-          + ((bitrange input_rho.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
-        conv_lhs => rw [← ZMod.natCast_rightInverse input_rho, hdec]
-        push_cast; ring
-      rw [he1_eq, hf_eq, hg0_eq]; linear_combination -hrho_eq
-    · rw [he1fP]; ring
-    · rcases hg0cases with h | h
-      · rw [hg0_eq, h]; simp
-      · rw [hz13F, hf_val,
-          show bitrange input_rho.val 4 250 / 2 ^ 130 = bitrange input_rho.val 134 120 from
-            bitrange_div_pow input_rho.val 4 130 120,
-          high_bit_high_zero (ZMod.val_lt input_rho) h (by norm_num) (by norm_num)]
-        simp
-    · rcases hg0cases with h | h
-      · rw [hg0_eq, h]; simp
-      · rw [hzeZero (by rw [hg0_eq, h]; norm_num)]; simp
+    exact eqs_of_spec
+      ⟨input_rho, input_e1, input_g0, input_f, input_e1F', input_z13F, input_z14E1F'⟩
+      h_assumptions h_spec
 
 end RhoCanonicity.Gate
 
