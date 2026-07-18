@@ -145,7 +145,13 @@ fixtures. State:
   single-vector-eq fix (`obtain <ident>` on a bare Eq substitutes — skip the obtain);
   Layout machinery: `selectorFixed` dedups activations, new `regionAssignFixed`.
 
-**REMAINING (the proof arc):**
+**DONE (2026-07-18 continued):** full_width + short circuits (shared `windowChain`/
+`coordsCheck`/toggle-parameterized `fixedConstantsLoop` refactor of the core), own
+fixtures + `TestVkLayoutFullWidth`/`TestVkLayoutShort` — ALL THREE mul_fixed entry
+points VK-layout-matched green. full_width input = `Unconstrained` window hints
+(85 × FExpr; scalar is prover-side only). Short: 22 windows, msw region with sign row.
+
+**REMAINING (the proof arc — the goal is NOT done until these are sorry-free):**
 - Bundle the inner region (copyDecompose ✓ done + fixed-constants coords facts +
   AddIncomplete window chain) as a FormalRegionCircuit; donor value algebra:
   `Orchard/Ecc/MulFixed/BaseFieldElem.lean` `RunningSumMul` (soundness 503-921,
@@ -156,7 +162,30 @@ fixtures. State:
   positionalize `LookupRangeCheck.rangeCheck` like the short variant was).
 - CS Pre/Post fixture (symbolic gates/queries, TestVkMatchMul-style) — needs a gate-AST
   emitter in the halo2_proofs local helpers; queued.
-- full_width/short wrappers after base_field_elem.
+- full_width/short wrappers after base_field_elem: DONE at circuit+fixture level; their
+  proofs join the same arc (short: donor `Short.lean` Gate + signed-magnitude algebra;
+  full_width: donor `FullWidth.lean` + the extractor-form spec upgrade).
+
+**Proof-arc plan (worked out, next up):**
+1. `MulFixed.windowChain` soundness/completeness lemmas over an abstract per-window
+   fact family (the coords facts arrive from the toggled gate enables; the chain
+   induction mirrors `MulIncomplete.loop_fold` with `partialSum` from the donor;
+   `coords_eq_windowPoint` turns per-row gate facts + window values into window-table
+   points). Bundle per wrapper (the row/word sources differ: running-sum words for
+   base_field/short, witnessed window cells for full_width).
+2. base_field_elem: inner bundle consumes `copyDecompose`'s Spec (already proven) —
+   words = `V/8^w % 8` via the cast-word helper; canonicity gate + donor
+   `BaseFieldElem.Gate` spec; `witnessCheck13` needs bundling (positionalize
+   `LookupRangeCheck.rangeCheck` like the short variant, or a dedicated bundle whose
+   Inputs are the α/z_84 cells and whose witgen builds α₀′ internally); top-level
+   `FormalCircuit` with donor Spec `output = (α.val : Fq) • B`, Assumptions True.
+3. full_width: top-level with extractor-form spec (`Witness := Fq` from the window
+   cells — the requirements-doc upgrade of the donor's `∃ s, output = s • B`).
+4. short: msw-region sign algebra (donor Short value lemmas), spec
+   `∃ m < 2^64, magnitude = ↑m ∧ (sign = ±1 cases)`.
+5. CS Pre/Post fixtures for the three chains (gate-AST emitter in the local
+   halo2_proofs helpers) — the symbolic half of "match vk fixtures on all entry
+   point circuits".
 
 
 ## Sinsemilla/Merkle arc status (2026-07-18, overnight run)
