@@ -540,6 +540,10 @@ private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount]
   exact h
 
+private theorem rangeCheckAt_proverAssumptions_eq (n : ℕ) :
+    (LookupRangeCheck.rangeCheckAt 10 n false).ProverAssumptions
+      = fun _ (elt : Fp) _ => (false = true → elt.val < 2 ^ (10 * n)) := rfl
+
 private theorem short_proverAssumptions_eq (b : ℕ) :
     (LookupRangeCheck.shortRangeCheck 10 b).ProverAssumptions
       = fun _ (wit : Fp) _ => wit.val < 2 ^ b := rfl
@@ -1207,6 +1211,37 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              ((place (i₀ + 13) : ℕ) : ℤ)).val < 2 ^ 5
            rw [hwh0, Orchard.Specs.cast_bitrange_val (by norm_num)]
            exact Orchard.Specs.bitrange_lt _ _ _)⟩
+  · sorry
+  · sorry
+  · sorry
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
+      place env () hWra
+      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [rangeCheckAt_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 30)
+      place env () hWrb
+      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [rangeCheckAt_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 31)
+      place env () hWre
+      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [rangeCheckAt_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+  · exact Halo2.SubcircuitRw.region_completeness_leaf
+      (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 32)
+      place env () hWrg
+      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [rangeCheckAt_assumptions_eq]
+           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
+       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
   all_goals sorry
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
