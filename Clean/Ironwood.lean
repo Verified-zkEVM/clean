@@ -12,6 +12,7 @@ import Clean.Ironwood.CommitIvk.Bundle
 import Clean.Ironwood.NoteCommit.Gates
 import Clean.Ironwood.NoteCommit.Decompose
 import Clean.Ironwood.NoteCommit.Canonicity
+import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.Utilities.AddChip
 import Clean.Ironwood.Poseidon.Pow5
 import Clean.Ironwood.Poseidon.Rounds
