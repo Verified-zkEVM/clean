@@ -86,7 +86,11 @@ def canonGate (cfg : Config) : Gate Fp where
       alpha0Prime - (alpha0 + (((2 ^ 130 : ℕ) : Fp) : Expression Fp Query)
         - ((tP : Fp) : Expression Fp Query))
     -- canonicity checks for MSB = 1 (lines 130-154)
-    let alpha0Hi120 := z44Alpha - z84Alpha * (((2 ^ 120 : ℕ) : Fp) : Expression Fp Query)
+    -- Rust multiplies by an `Expression::Constant` here (a `Product` node, unlike the
+    -- `Scaled` field-mul used everywhere else in this gate) — `mulConstant` keeps the
+    -- erased AST byte-identical (VK matching).
+    let alpha0Hi120 :=
+      z44Alpha - Expression.mulConstant z84Alpha ((2 ^ 120 : ℕ) : Fp)
     let a43 := z43Alpha - z44Alpha * (((8 : ℕ) : Fp) : Expression Fp Query)
     Constraints.withSelector cfg.qMulFixedBaseField
       [ ("MSB = 1 => alpha_1 = 0", alpha2 * alpha1),

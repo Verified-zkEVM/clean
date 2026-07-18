@@ -258,6 +258,19 @@ instance : Neg (Expression F L) where neg e := mul (const (-1)) e
 instance : Sub (Expression F L) where sub e₁ e₂ := add e₁ (-e₂)
 instance : Mul (Expression F L) where mul := mul
 
+/-- Rust `e * Expression::Constant(c)` — a genuine right-constant `Product` node (NOT
+`Scaled`, which is Rust's `e * (c : F)` and is spelled `e * (c : F)` here). The marker
+shape `e * (const c * const 1)` erases to `.product e (.constant c)` in the VK-matching
+projection (`Fixtures/Project.lean`); semantically it is just `e * c` (`mul_one` folds
+the marker in proofs). First needed by `base_field_elem`'s `alpha_0_hi_120`. -/
+def mulConstant (e : Expression F L) (c : F) : Expression F L :=
+  mul e (mul (const c) (const 1))
+
+@[circuit_norm]
+theorem eval_mulConstant (v : L → F) (e : Expression F L) (c : F) :
+    (e.mulConstant c).eval v = e.eval v * c := by
+  simp [mulConstant, eval]
+
 instance : Coe F (Expression F L) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F L) n where
   ofNat := const (OfNat.ofNat n)

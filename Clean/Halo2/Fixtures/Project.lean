@@ -97,6 +97,16 @@ def eraseExpr : _root_.Halo2.Expression Fp Query → QueryState → Expr Fp × Q
   -- `mul e (const c)`, and the erasure target is `.scaled` (`Expression.lean:104-109`).
   -- Ports must therefore write field scalings as `e * (c : Fp)` (constant on the right),
   -- matching Rust's `e * F`; a genuine constant product is `(c : Fp) * e` (constant left).
+  -- The `mulConstant` marker (`Expression.lean`): Rust's right-constant `Product`
+  -- (`e * Expression::Constant(c)`), spelled `e * (const c * const 1)` in ports.
+  | .mul e (.mul (.const c) (.const one)), s =>
+      if one = (1 : Fp) then
+        let (e', s) := eraseExpr e s
+        (.product e' (.constant c), s)
+      else
+        let (e', s) := eraseExpr e s
+        let (i', s) := eraseExpr (.mul (.const c) (.const one)) s
+        (.product e' i', s)
   | .mul e (.const c), s =>
       let (e', s) := eraseExpr e s
       (.scaled e' c, s)
