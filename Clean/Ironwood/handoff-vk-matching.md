@@ -391,6 +391,36 @@ Y-composite patterns worth reusing:
 NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
 the decompose bundles + these composites + Sinsemilla, per the donor
 Orchard.Action.NoteCommit top level.
+## E2E Action circuit bundle — COMPLETE (2026-07-19)
+
+`Clean/Ironwood/Action/Bundle.lean`: the whole-circuit `FormalCircuit Fp Unit Config
+unit unit` over the 394-region `synthesize`, soundness AND completeness fully proven,
+`circuit` bundled, imported by `Clean/Ironwood.lean`.
+
+- **Contract**: `ActionData` (9 primary-instance rows + shared witness cells + the six
+  witnessed points + merklePath + five `fwExtract` window/scalar readings); `extract`
+  reads it off the region map documented at `synthesize_regionCount`. `Spec` is the
+  §4.17.4 statement, breaks-as-data (`SpecOrBreak`) for the three Sinsemilla legs,
+  knowledge-sound at the extracted data. `EnvAssumptions` = GeneratorTableExact
+  (sinsemilla1's own load, needed for load completeness) + 4× GeneratorTableLoaded +
+  the mul-family env facts + range TableLoaded + qLookup≠qRunning.
+- **Proof idioms that made it go through** (see also the NoteCommit sections): stage
+  split (`synthWitness`/`synthChecks`/`synthNotes`) against kabstract walls; per-child
+  concrete `*_call_regionCount`/`*_spec_eq`/`*_pa_eq` rfl-bridges + record-eval
+  transports (`XInputs_eval_eq(_prover)`); goal-side `refine ⟨?_, ?_⟩` BEFORE
+  per-stage simp; derived contracts (`layouter_completeness_derived`) established
+  before the leaves so honest cell values (`hCVval`/`hSAval`/`hDNval`/`hNCoval`/
+  `hNCnval`/`hIvkVal`/`hM1mid`/`hM2root`) exist for equal-region/instance/gate goals.
+- Merkle: `CalculateRoot` generalized to `(l₀ d, l₀ + d ≤ 2^10)` (Rust layers_per_chip
+  = 16, two chips); `ProverSpec` strengthened to the pathNode-landing fact; the two
+  chained fold calls tie via `pathNode_congr`/`pathNode_congr₂` + `MerkleRoot.trans`.
+- The orchard-gate region completeness reverses the soundness recipe: normalize
+  `nextRegionIndex_constrainInstance`, discharge the 8 copy/instance equalities from
+  the region's ExtendsWitnesses conjuncts, then `linear_combination` the four gate
+  polys from the PA value checks after rewriting reads through those equalities.
+- No VK fixture work here (TestVkMatchAction/TestVkLayoutAction already green, see the
+  assembly arc above).
+
 ## Breaks-as-data (ironwood#45) + CommitIvk main — COMPLETE (2026-07-19)
 
 - `Clean/Orchard/Specs/SinsemillaBreak.lean`: `BreakData`/`hashToPointB` Σ-refinement

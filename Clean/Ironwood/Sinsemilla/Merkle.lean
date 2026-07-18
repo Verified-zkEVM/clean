@@ -1834,6 +1834,12 @@ theorem pathNode_congr (G : Generators) (Q : Point Fp) (l₀ : ℕ)
   | succ n ih =>
     rw [pathNode, pathNode, ih (fun j hj => h j (by omega)), h n (by omega)]
 
+theorem pathNode_congr₂ (G : Generators) (Q : Point Fp) (l₀ : ℕ)
+    {w w' : ℕ → Fp × Fp} {node node' : Fp} (k : ℕ)
+    (hw : ∀ j, j < k → w j = w' j) (hn : node = node') :
+    pathNode G Q l₀ w node k = pathNode G Q l₀ w' node' k := by
+  rw [hn, pathNode_congr G Q l₀ node' k hw]
+
 theorem pathNode_isSome_of_succ (G : Generators) (Q : Point Fp) (l₀ : ℕ) (wit : ℕ → Fp × Fp)
     (node : Fp) (k : ℕ) (h : (pathNode G Q l₀ wit node (k + 1)).isSome) :
     (pathNode G Q l₀ wit node k).isSome := by

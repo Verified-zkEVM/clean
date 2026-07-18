@@ -207,6 +207,7 @@ structure ActionData where
   rivk : Vector Fp 85 × Fq
   rcmOld : Vector Fp 85 × Fq
   rcmNew : Vector Fp 85 × Fq
+deriving Inhabited
 
 /-- One advice cell read. -/
 private def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
@@ -604,6 +605,26 @@ private theorem sa_assumptions_eq (G : FixedBase) (w : Vector (FExpr Fp) 85) :
       = fun (input : Value SpendAuthority.Input Fp) =>
           Orchard.Point.Valid input.akP := rfl
 
+private theorem ai_assumptions_eq (pkD : Point (FExpr Fp)) :
+    (AddressIntegrity.circuit pkD).Assumptions
+      = fun (input : Value AddressIntegrity.Input Fp) =>
+          Orchard.Point.OnCurve input.gDOld := rfl
+
+private theorem ai_pa_eq (pkD : Point (FExpr Fp)) :
+    (AddressIntegrity.circuit pkD).ProverAssumptions
+      = fun (input : ProverValue AddressIntegrity.Input Fp) (wit : Point Fp) _ =>
+          wit.OnCurve ∧ wit = (input.ivk.val • input.gDOld : Point Fp) := rfl
+
+private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp)) :
+    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      ({ ivk := c1, gDOld := p } : Var AddressIntegrity.Input Fp))
+    = { ivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        gDOld := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (p : Var Point Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
 private theorem vc_pa_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) :
     (ValueCommit.circuit V R w).ProverAssumptions
@@ -616,6 +637,27 @@ private theorem civk_pa_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
     (CommitIvk.Main.circuit G R w Q hQ).ProverAssumptions
       = CommitIvk.Main.ProverAssumptions G Q := rfl
+
+private theorem nc_pa_eq (G : Generators) (R : FixedBase)
+    (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
+    (NoteCommit.Main.circuit G R w Q hQ).ProverAssumptions
+      = NoteCommit.Main.ProverAssumptions G Q := rfl
+
+private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      ({ gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
+         psi := c7 } : Var NoteCommit.Main.Inputs Fp))
+    = { gdX := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        gdY := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c2 : Var field Fp),
+        pkdX := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c3 : Var field Fp),
+        pkdY := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c4 : Var field Fp),
+        value := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c5 : Var field Fp),
+        rho := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c6 : Var field Fp),
+        psi := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c7 : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
 
 private theorem nc_extract_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -684,6 +726,7 @@ theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses)
 
 open Halo2.Ironwood.Sinsemilla.Merkle (MerkleRoot)
 
+set_option linter.unusedSimpArgs false in
 set_option maxRecDepth 8192 in
 theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
@@ -1171,6 +1214,7 @@ private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
   exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
     h1, h2, h3⟩
 
+set_option linter.unusedSimpArgs false in
 set_option maxRecDepth 8192 in
 theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
@@ -1312,6 +1356,68 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
         from by with_unfolding_all rfl]
       exact hMid
+    have hM2der := Halo2.SubcircuitRw.layouter_completeness_derived
+      (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+        16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
+        (fun i => W.merkleSwap (16 + i)))
+      (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) (i₀ + 136) place env _
+      hWm2
+      (by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
+      (by rw [merkle_assumptions_eq]; trivial)
+      (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
+            _ _ 16).isSome)
+          rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+            (w' := fun j => (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩
+                : Placed Environment Fp)).merklePath (16 + j))
+            (node' := mid)
+            (hw := by
+              intro j hj
+              simp only [extract, cellRead,
+                show ¬(16 + j < 16) from by omega, if_false,
+                show 16 + j - 16 = j from by omega]
+              try with_unfolding_all rfl)
+            (hn := by with_unfolding_all exact hM1mid)]
+          rw [hRootP]
+          rfl)
+    -- fold 2 lands on `root`
+    have hM2root : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
+          (fun i => W.merkleSwap (16 + i))).output
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+          { node := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 0 16 (by norm_num) W.merkleSib W.merkleSwap).output
+              (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+              { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
+              (i₀ + 8) }
+          (i₀ + 136)) : Fp) = root := by
+      refine hM2der.2 root ?_
+      rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
+          (fun i => W.merkleSwap (16 + i))).extract
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) _ (i₀ + 136)
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+        = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.b
+              : Var field Fp) : Fp),
+          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.swap
+              : Var field Fp) : Fp)) from by
+        funext j
+        with_unfolding_all rfl]
+      rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+        (w' := fun j => (extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath (16 + j))
+        (node' := mid)
+        (hw := by
+          intro j hj
+          simp only [extract, cellRead,
+            show ¬(16 + j < 16) from by omega, if_false,
+            show 16 + j - 16 = j from by omega]
+          try with_unfolding_all rfl)
+        (hn := by with_unfolding_all exact hM1mid)]
+      exact hRootP
     -- ── the remaining child contracts (for the instance rows and the gate) ──
     have hVCder := (Halo2.SubcircuitRw.layouter_completeness_derived
       (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows)
@@ -1376,6 +1482,485 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
         (show hashToPoint G.S B.ivkQ _ = some Bi from by
           with_unfolding_all exact hBi)] at hCIder
       with_unfolding_all exact hCIder
-    sorry
+    -- ── stage C witnesses and contracts ──
+    simp only [synthChecks_output, synthChecks_nextRegionIndex,
+      synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
+    simp only [synthNotes, loadPrivate, circuit_norm, readCell] at hWn
+    obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
+    rw [nc_call_regionCount] at hWgdn hWpkn hWncn hWorch
+    rw [wpointNonId_call_regionCount] at hWpkn hWncn hWorch
+    rw [wpointNonId_call_regionCount] at hWncn hWorch
+    rw [nc_call_regionCount] at hWorch
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
+    have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+        B.noteQ_onCurve)
+      { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
+      (by exact ⟨hT1, hFw, hTL, hDist⟩)
+      (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+          refine ⟨?_, ?_⟩
+          · show Orchard.Point.OnCurve _
+            with_unfolding_all exact hVgd
+          · show Orchard.Point.OnCurve _
+            with_unfolding_all exact hVpk)
+      (by rw [nc_pa_eq]
+          simp only [NoteCommit.Main.ProverAssumptions]
+          rw [ncInputs_eval_eq_prover]
+          refine ⟨?_, ?_, ?_, ?_, ?_⟩
+          · with_unfolding_all exact hVgd
+          · with_unfolding_all exact hVpk
+          · with_unfolding_all exact hV64o
+          · with_unfolding_all exact hWro
+          · refine ⟨Bo, ?_⟩
+            with_unfolding_all exact hBo)).1
+    -- the nullifier output cell carries the honest `nf_old` (= the NF_OLD row)
+    have hDNval : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((DeriveNullifier.circuit B.nullifierK).output
+          (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+           cfg.eccConfig.add)
+          { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+            rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+            psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+            cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                    y := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.y } }
+          (i₀ + 271)) : Fp)
+        = (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld := by
+      rw [dn_spec_eq, dnInputs_eval_eq] at hDNder
+      rw [hNf]
+      with_unfolding_all exact hDNder
+    have hNCnDer := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+        B.noteQ_onCurve)
+      { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
+      (by exact ⟨hT2, hFw, hTL, hDist⟩)
+      (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+          refine ⟨?_, ?_⟩
+          · show Orchard.Point.OnCurve _
+            with_unfolding_all exact hVgdn
+          · show Orchard.Point.OnCurve _
+            with_unfolding_all exact hVpkn)
+      (by rw [nc_pa_eq]
+          simp only [NoteCommit.Main.ProverAssumptions]
+          rw [ncInputs_eval_eq_prover]
+          refine ⟨?_, ?_, ?_, ?_, ?_⟩
+          · with_unfolding_all exact hVgdn
+          · with_unfolding_all exact hVpkn
+          · with_unfolding_all exact hV64n
+          · with_unfolding_all exact hWrn
+          · refine ⟨Bn, ?_⟩
+            rw [show (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+                ((DeriveNullifier.circuit B.nullifierK).output
+                  (cfg.poseidonConfig, cfg.addChipConfig,
+                   cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+                  { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                    rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                    psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                    cm := { x := AssignedCell.of (i₀ + 2) 0
+                              cfg.eccConfig.witnessPoint.x,
+                            y := AssignedCell.of (i₀ + 2) 0
+                              cfg.eccConfig.witnessPoint.y } }
+                  (i₀ + 271)) : Fp)
+              = (extract cfg input_var i₀
+                  (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+              from hDNval]
+            with_unfolding_all exact hBn)).1
+    -- the honest instance-row values of the child outputs
+    have hCVval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).output
+          (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+           cfg.eccConfig.add)
+          { magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
+            sign := AssignedCell.of (i₀ + 265) 0 (cfg.advices 9) }
+          (i₀ + 266)) : Point Fp)
+        = ⟨(extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvX,
+           (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvY⟩ := by
+      rw [vc_spec_eq, vc_extract_eq, vcInputs_eval_eq] at hVCder
+      obtain ⟨m, hm, hmag, hdisj⟩ := hVCder
+      have hmval : (extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude.val = m := by
+        rw [show (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude
+          = ((m : ℕ) : Fp) from by with_unfolding_all exact hmag]
+        exact ZMod.val_natCast_of_lt (lt_trans hm
+          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+      rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
+      · rw [he]
+        have h2 := hCv1 (by with_unfolding_all exact hs)
+        rw [hmval] at h2
+        with_unfolding_all exact h2.symm
+      · rw [he]
+        have h2 := hCv2 (by with_unfolding_all exact hs)
+        rw [hmval] at h2
+        with_unfolding_all exact h2.symm
+    have hSAval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((SpendAuthority.circuit B.spendAuthG W.alphaWindows).output
+          (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+          { akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
+          (i₀ + 280)) : Point Fp)
+        = ⟨(extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
+           (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ := by
+      rw [sa_spec_eq, sa_extract_eq, saInputs_eval_eq] at hSAder
+      rw [hSAder]
+      rw [show ((⟨(extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ : Point Fp))
+        = ((extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).alpha.2
+              • B.spendAuthG : Point Fp)
+          + (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).akP from hRk]
+      with_unfolding_all rfl
+    have hNCoval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+          B.noteQ_onCurve).output
+          { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { gdX := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+            gdY := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y,
+            pkdX := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+            pkdY := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y,
+            value := AssignedCell.of (i₀ + 6) 0 (cfg.advices 0),
+            rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+            psi := AssignedCell.of i₀ 0 (cfg.advices 0) }
+          (i₀ + 303)) : Point Fp)
+        = (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld := by
+      rw [nc_spec_eq, nc_extract_eq] at hNCoDer
+      simp only [NoteCommit.Main.Spec] at hNCoDer
+      rw [ncInputs_eval_eq] at hNCoDer
+      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+        (show hashToPoint G.S B.noteQ _ = some Bo from by
+          with_unfolding_all exact hBo)] at hNCoDer
+      rw [hCmo]
+      with_unfolding_all exact hNCoDer
+    have hNCnval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+          B.noteQ_onCurve).output
+          { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { gdX := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+            gdY := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y,
+            pkdX := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+            pkdY := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y,
+            value := AssignedCell.of (i₀ + 7) 0 (cfg.advices 0),
+            rho := (DeriveNullifier.circuit B.nullifierK).output
+              (cfg.poseidonConfig, cfg.addChipConfig,
+               cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+              { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                        y := AssignedCell.of (i₀ + 2) 0
+                          cfg.eccConfig.witnessPoint.y } }
+              (i₀ + 271),
+            psi := AssignedCell.of (i₀ + 349) 0 (cfg.advices 0) }
+          (i₀ + 350)) : Point Fp)
+        = Bn + ((extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rcmNew.2
+              • B.noteCommitR : Point Fp) := by
+      rw [nc_spec_eq, nc_extract_eq] at hNCnDer
+      simp only [NoteCommit.Main.Spec] at hNCnDer
+      rw [ncInputs_eval_eq] at hNCnDer
+      rw [show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          ((DeriveNullifier.circuit B.nullifierK).output
+            (cfg.poseidonConfig, cfg.addChipConfig,
+             cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+            { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+              rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+              psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+              cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 2) 0
+                        cfg.eccConfig.witnessPoint.y } }
+            (i₀ + 271) : Var field Fp) : Fp))
+          = (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+          from by with_unfolding_all exact hDNval] at hNCnDer
+      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+        (show hashToPoint G.S B.noteQ _ = some Bn from by
+          with_unfolding_all exact hBn)] at hNCnDer
+      with_unfolding_all exact hNCnDer
+    -- ── assemble the stage-B and stage-C constraints ──
+    simp only [synthWitness_output, synthWitness_nextRegionIndex,
+      synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,
+      synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
+    refine ⟨?_, ?_⟩
+    · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc,
+        Nat.reduceAdd]
+      rw [merkle_call_regionCount, merkle_call_regionCount, vc_call_regionCount,
+        dn_call_regionCount, sa_call_regionCount, civk_call_regionCount]
+      simp only [Nat.add_assoc, Nat.reduceAdd]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          _ _ (i₀ + 8) place env _ hWm1
+          ⟨(by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩),
+           (by rw [merkle_assumptions_eq]; trivial),
+           (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                 _ _ 16).isSome)
+               rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+                 (w' := fun j => (extract cfg input_var i₀
+                   (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+                 (h := by
+                   intro j hj
+                   simp only [extract, cellRead, if_pos hj]
+                   try with_unfolding_all rfl)]
+               rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                   (fun j => (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩
+                       : Placed Environment Fp)).merklePath j) _ 16))
+                 = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                   (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+                   (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩
+                       : Placed Environment Fp)).cmOld.x 16)
+                 from by with_unfolding_all rfl]
+               rw [hMid]
+               rfl)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          _ _ (i₀ + 136) place env _ hWm2
+          ⟨(by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩),
+           (by rw [merkle_assumptions_eq]; trivial),
+           (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
+                 _ _ 16).isSome)
+               rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+                 (w' := fun j => (extract cfg input_var i₀
+                   (⟨place, env.toEnvironment⟩
+                     : Placed Environment Fp)).merklePath (16 + j))
+                 (node' := mid)
+                 (hw := by
+                   intro j hj
+                   simp only [extract, cellRead,
+                     show ¬(16 + j < 16) from by omega, if_false,
+                     show 16 + j - 16 = j from by omega]
+                   try with_unfolding_all rfl)
+                 (hn := by with_unfolding_all exact hM1mid)]
+               rw [hRootP]
+               rfl)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows)
+          (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+           cfg.eccConfig.add) (i₀ + 266) place env _ hWvc
+          ⟨(by exact ⟨hSh, hFw⟩), (by trivial),
+           (by rw [vc_pa_eq, vcInputs_eval_eq_prover]
+               refine ⟨?_, ?_, ?_⟩
+               · with_unfolding_all exact hMag
+               · with_unfolding_all exact hSign
+               · with_unfolding_all exact hWrcv)⟩
+      · with_unfolding_all exact congrArg Point.x hCVval
+      · with_unfolding_all exact congrArg Point.y hCVval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (DeriveNullifier.circuit B.nullifierK)
+          (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+           cfg.eccConfig.add) (i₀ + 271) place env _ hWdn
+          ⟨(by exact hBf),
+           (by rw [dn_assumptions_eq, dnInputs_eval_eq]
+               show Orchard.Point.Valid _
+               simp only [Point.eval_eq]
+               with_unfolding_all exact hVcm),
+           (by trivial)⟩
+      · with_unfolding_all exact hDNval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (SpendAuthority.circuit B.spendAuthG W.alphaWindows)
+          (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
+          ⟨(by exact hFw),
+           (by rw [sa_assumptions_eq, saInputs_eval_eq]
+               show Orchard.Point.Valid _
+               simp only [Point.eval_eq]
+               with_unfolding_all exact Or.inl hVak),
+           (by with_unfolding_all exact hWal)⟩
+      · with_unfolding_all exact congrArg Point.x hSAval
+      · with_unfolding_all exact congrArg Point.y hSAval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ
+            B.ivkQ_onCurve)
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
+          ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩), (by trivial),
+           (by rw [civk_pa_eq]
+               simp only [CommitIvk.Main.ProverAssumptions]
+               rw [civkInputs_eval_eq_prover]
+               refine ⟨?_, ?_⟩
+               · with_unfolding_all exact hWri
+               · refine ⟨Bi, ?_⟩
+                 with_unfolding_all exact hBi)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (AddressIntegrity.circuit W.pkDOld)
+          (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) (i₀ + 297) place env _
+          hWai
+          ⟨(by exact hMulE),
+           (by rw [ai_assumptions_eq, aiInputs_eval_eq]
+               show Orchard.Point.OnCurve _
+               simp only [Point.eval_eq]
+               with_unfolding_all exact hVgd),
+           (by rw [ai_pa_eq, aiInputs_eval_eq_prover]
+               refine ⟨?_, ?_⟩
+               · with_unfolding_all exact hVpk
+               · have h := hPkd
+                 rw [← hIvkVal] at h
+                 with_unfolding_all exact h)⟩
+    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc,
+        Nat.reduceAdd]
+      rw [nc_call_regionCount, wpointNonId_call_regionCount,
+        wpointNonId_call_regionCount, nc_call_regionCount]
+      simp only [Nat.add_assoc, Nat.reduceAdd]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+            B.noteQ_onCurve)
+          { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
+          ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩),
+           (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+               refine ⟨?_, ?_⟩
+               · show Orchard.Point.OnCurve _
+                 with_unfolding_all exact hVgd
+               · show Orchard.Point.OnCurve _
+                 with_unfolding_all exact hVpk),
+           (by rw [nc_pa_eq]
+               simp only [NoteCommit.Main.ProverAssumptions]
+               rw [ncInputs_eval_eq_prover]
+               refine ⟨?_, ?_, ?_, ?_, ?_⟩
+               · with_unfolding_all exact hVgd
+               · with_unfolding_all exact hVpk
+               · with_unfolding_all exact hV64o
+               · with_unfolding_all exact hWro
+               · refine ⟨Bo, ?_⟩
+                 with_unfolding_all exact hBo)⟩
+      · refine ⟨?_, ?_⟩
+        · with_unfolding_all exact congrArg Point.x hNCoval
+        · with_unfolding_all exact congrArg Point.y hNCoval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+          cfg.eccConfig.witnessPoint (i₀ + 347) place env _ hWgdn
+          ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
+           (by rw [wpointNonId_assumptions_eq]; trivial),
+           (by rw [wpointNonId_proverAssumptions_eq]
+               show Orchard.Point.OnCurve _
+               with_unfolding_all exact hVgdn)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+          cfg.eccConfig.witnessPoint (i₀ + 348) place env _ hWpkn
+          ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
+           (by rw [wpointNonId_assumptions_eq]; trivial),
+           (by rw [wpointNonId_proverAssumptions_eq]
+               show Orchard.Point.OnCurve _
+               with_unfolding_all exact hVpkn)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+            B.noteQ_onCurve)
+          { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
+          ⟨(by exact ⟨hT2, hFw, hTL, hDist⟩),
+           (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+               refine ⟨?_, ?_⟩
+               · show Orchard.Point.OnCurve _
+                 with_unfolding_all exact hVgdn
+               · show Orchard.Point.OnCurve _
+                 with_unfolding_all exact hVpkn),
+           (by rw [nc_pa_eq]
+               simp only [NoteCommit.Main.ProverAssumptions]
+               rw [ncInputs_eval_eq_prover]
+               refine ⟨?_, ?_, ?_, ?_, ?_⟩
+               · with_unfolding_all exact hVgdn
+               · with_unfolding_all exact hVpkn
+               · with_unfolding_all exact hV64n
+               · with_unfolding_all exact hWrn
+               · refine ⟨Bn, ?_⟩
+                 rw [show ((eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+                     ((DeriveNullifier.circuit B.nullifierK).output
+                       (cfg.poseidonConfig, cfg.addChipConfig,
+                        cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+                       { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                         rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                         psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                         cm := { x := AssignedCell.of (i₀ + 2) 0
+                                   cfg.eccConfig.witnessPoint.x,
+                                 y := AssignedCell.of (i₀ + 2) 0
+                                   cfg.eccConfig.witnessPoint.y } }
+                       (i₀ + 271)) : Fp))
+                   = (extract cfg input_var i₀
+                       (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+                   from by with_unfolding_all exact hDNval]
+                 with_unfolding_all exact hBn)⟩
+      · with_unfolding_all exact (congrArg Point.x hNCnval).trans hCmx.symm
+      · -- the final `"Orchard circuit checks"` region
+        simp only [nextRegionIndex_constrainInstance, Nat.add_assoc, Nat.reduceAdd]
+        simp only [nextRegionIndex_constrainInstance, Nat.add_assoc,
+          Nat.reduceAdd] at hWorch
+        obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo⟩ := hWorch
+        have hOr' : env.advice (cfg.advices 4) ((place (i₀ + 393) : ℕ) : ℤ)
+            = root := hOr.trans (by with_unfolding_all exact hM2root)
+        refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · with_unfolding_all exact hOv
+        · with_unfolding_all exact hOn
+        · with_unfolding_all exact hOm
+        · with_unfolding_all exact hOs
+        · with_unfolding_all exact hOr
+        · with_unfolding_all exact hOa
+        · with_unfolding_all exact hOes
+        · with_unfolding_all exact hOeo
+        · simp only [orchardGate, Constraints.withSelector, circuit_norm,
+            List.Forall, if_pos rfl]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · rw [hOv, hOn, hOm, hOs]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                - env.advice (cfg.advices 0) ((place (i₀ + 7) : ℕ) : ℤ)
+                = env.advice (cfg.advices 9) ((place (i₀ + 264) : ℕ) : ℤ)
+                  * env.advice (cfg.advices 9) ((place (i₀ + 265) : ℕ) : ℤ) := by
+              with_unfolding_all exact hVms
+            linear_combination h
+          · rw [hOv, hOr', hOa]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                * (root - env.inst cfg.primary ((ANCHOR : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVanch
+            linear_combination h
+          · rw [hOv, hOes]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                * (1 - env.inst cfg.primary ((ENABLE_SPEND : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVes
+            linear_combination h
+          · rw [hOn, hOeo]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 7) : ℕ) : ℤ)
+                * (1 - env.inst cfg.primary ((ENABLE_OUTPUT : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVeo
+            linear_combination h
+
+/-- Rust `impl Circuit for Circuit` (`circuit.rs:271-828`) as a proof-carrying bundle:
+the e2e Orchard Action statement (§4.17.4, breaks-as-data) over the extracted
+primary-instance rows and witness data. -/
+def circuit (G : Generators) (B : Bases) (W : Witnesses) :
+    FormalCircuit Fp Unit Config unit unit where
+  name := "OrchardAction"
+  configure := fun _ => configure G
+  synthesize := main G B W
+  elaborated := fun cfg => elaborated G B W cfg
+  Witness := fun _ => ActionData
+  extract := extract
+  EnvAssumptions := EnvAssumptions G
+  Assumptions := fun _ => True
+  Spec := Spec G B
+  ProverAssumptions := ProverAssumptions G B
+  ProverSpec := fun _ _ _ _ => True
+  soundness := soundness G B W
+  completeness := completeness G B W
 
 end Halo2.Ironwood.Action.Circuit
