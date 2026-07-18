@@ -476,6 +476,161 @@ private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
     assignRegion, ExtendsWitnesses, and_true]
   rfl
 
+set_option linter.unusedSimpArgs false in
+/-- Build direction of `peelGates` (kernel-checked alone). -/
+private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (h : 
+    Constraints place env
+      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+        "NoteCommit MessagePiece b").call cfg.gates.b
+        { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
+    Constraints place env
+      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+        "NoteCommit MessagePiece d").call cfg.gates.d
+        { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+          d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
+    Constraints place env
+      (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
+        { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
+    Constraints place env
+      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+        "NoteCommit MessagePiece g").call cfg.gates.g
+        { g := pcs.g, g1 := pcs.g1,
+          g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
+    Constraints place env
+      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+        "NoteCommit MessagePiece h").call cfg.gates.h
+        { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
+    Constraints place env
+      (((GdCanonicity.bundle.toFormal "NoteCommit input g_d").call cfg.gates.gd
+        { gdX := input.gdX, b0 := pcs.b0, b1 := AssignedCell.of i₀ 0 cfg.gates.b.colR,
+          a := pcs.a, aPrime := ccs.aZs.z0,
+          z13A := zCell cfg.hashConfig iHash 0 13,
+          z13APrime := ccs.aZs.zLast }).operations (i₀ + 5)) (i₀ + 5) ∧
+    Constraints place env
+      (((PkdCanonicity.bundle.toFormal "NoteCommit input pk_d").call cfg.gates.pkd
+        { pkdX := input.pkdX, b3 := pcs.b3,
+          d0 := AssignedCell.of (i₀ + 1) 0 cfg.gates.d.colM, c := pcs.c,
+          b3CPrime := ccs.bZs.z0, z13C := zCell cfg.hashConfig iHash 2 13,
+          z14B3CPrime := ccs.bZs.zLast }).operations (i₀ + 6)) (i₀ + 6) ∧
+    Constraints place env
+      (((ValueCanonicity.bundle.toFormal "NoteCommit input value").call cfg.gates.value
+        { value := input.value, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1,
+          e0 := pcs.e0 }).operations (i₀ + 7)) (i₀ + 7) ∧
+    Constraints place env
+      (((RhoCanonicity.bundle.toFormal "NoteCommit input rho").call cfg.gates.rho
+        { rho := input.rho, e1 := pcs.e1,
+          g0 := AssignedCell.of (i₀ + 3) 0 cfg.gates.g.colM, f := pcs.f,
+          e1FPrime := ccs.eZs.z0, z13F := zCell cfg.hashConfig iHash 5 13,
+          z14E1FPrime := ccs.eZs.zLast }).operations (i₀ + 8)) (i₀ + 8) ∧
+    Constraints place env
+      (((PsiCanonicity.bundle.toFormal "NoteCommit input psi").call cfg.gates.psi
+        { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1,
+          h1 := AssignedCell.of (i₀ + 4) 0 cfg.gates.h.colR,
+          g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
+          z13G := zCell cfg.hashConfig iHash 6 13,
+          z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9)) :
+    Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀ := by
+  simp only [synthGates, circuit_norm, decomposeB_output,
+    decomposeD_output, decomposeG_output, decomposeH_output]
+  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
+    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount]
+  exact h
+
+set_option linter.unusedSimpArgs false in
+/-- Build direction for stage 1: the seven short-check chunks give the stage. -/
+private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (h :
+    RegionOperations.Constraints place (i₀ + 1) env
+      (((LookupRangeCheck.shortRangeCheck 10 4).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 1)) ∧
+    RegionOperations.Constraints place (i₀ + 2) env
+      (((LookupRangeCheck.shortRangeCheck 10 4).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 2)) ∧
+    RegionOperations.Constraints place (i₀ + 5) env
+      (((LookupRangeCheck.shortRangeCheck 10 8).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 5)) ∧
+    RegionOperations.Constraints place (i₀ + 7) env
+      (((LookupRangeCheck.shortRangeCheck 10 6).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 7)) ∧
+    RegionOperations.Constraints place (i₀ + 8) env
+      (((LookupRangeCheck.shortRangeCheck 10 4).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 8)) ∧
+    RegionOperations.Constraints place (i₀ + 11) env
+      (((LookupRangeCheck.shortRangeCheck 10 9).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 11)) ∧
+    RegionOperations.Constraints place (i₀ + 13) env
+      (((LookupRangeCheck.shortRangeCheck 10 5).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 13))) :
+    Constraints place env ((synthPieces cfg input).operations i₀) i₀ := by
+  simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
+    Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, Nat.add_assoc,
+    Nat.reduceAdd]
+  exact h
+
+set_option linter.unusedSimpArgs false in
+/-- Build direction for stage 2: the y-flows, the commit, the four witness_checks. -/
+private theorem buildChecks (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (h :
+    Constraints place env
+      (((YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
+        (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }).operations i₀) i₀ ∧
+    Constraints place env
+      (((YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
+        (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }).operations (i₀ + 5))
+      (i₀ + 5) ∧
+    Constraints place env
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }).operations
+        (i₀ + 10)) (i₀ + 10) ∧
+    RegionOperations.Constraints place (i₀ + 14) env
+      (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 14)) ∧
+    RegionOperations.Constraints place (i₀ + 15) env
+      (((LookupRangeCheck.rangeCheckAt 10 14 false).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 15)) ∧
+    RegionOperations.Constraints place (i₀ + 16) env
+      (((LookupRangeCheck.rangeCheckAt 10 14 false).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 16)) ∧
+    RegionOperations.Constraints place (i₀ + 17) env
+      (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfg.lookupConfig 0 ()).operations
+        (i₀ + 17))) :
+    Constraints place env
+      ((synthChecks G R windows Q hQ cfg input pcs iHash).operations i₀) i₀ := by
+  simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm]
+  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+  simp only [Nat.add_assoc, Nat.reduceAdd]
+  exact h
+
+set_option linter.unusedSimpArgs false in
+/-- Assemble the three stage constraint blocks into the whole flow. -/
+private theorem buildSynth (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
+    (env : Environment Fp)
+    (h1 : Constraints place env ((synthPieces cfg input).operations i₀) i₀)
+    (h2 : Constraints place env
+      ((synthChecks G R windows Q hQ cfg input
+        ((synthPieces cfg input).output i₀) (i₀ + 27)).operations (i₀ + 15)) (i₀ + 15))
+    (h3 : Constraints place env
+      ((synthGates cfg input ((synthPieces cfg input).output i₀)
+        ((synthChecks G R windows Q hQ cfg input ((synthPieces cfg input).output i₀)
+          (i₀ + 27)).output (i₀ + 15)) (i₀ + 27)).operations (i₀ + 33)) (i₀ + 33)) :
+    Constraints place env
+      ((synth G R windows Q hQ cfg input).operations i₀) i₀ := by
+  simp only [synth, currentRegion, circuit_norm, synthPieces_nextRegionIndex,
+    synthChecks_nextRegionIndex, synthPieces_regionCount, synthChecks_regionCount,
+    Nat.add_assoc, Nat.reduceAdd]
+  exact ⟨h1, h2, h3⟩
+
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -928,8 +1083,14 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   simp only [Operations.regionCount] at hWCk
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
-  trace_state
-  sorry
+  simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
+    synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
+  refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+    buildChecks G R windows Q hQ cfg _ _ _ (i₀ + 15) place _
+      ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+    buildGates cfg _ _ _ _ (i₀ + 33) place _
+      ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  all_goals sorry
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
 def circuit (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
