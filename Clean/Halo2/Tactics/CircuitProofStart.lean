@@ -36,9 +36,10 @@ Given a bundle-proof goal `∀ config (offset)?, FormalRegionCircuit.Soundness �
     direction from the goal head, `rw` the matching `_iff`, and intro the post-iff binders with the
     established house names.
 (b) `simp only [circuit_norm, <unfold list>]` at the direction's established target set — the
-    **constraints** side: `hc` and `h_output` for soundness; `hwit`, `hA`, `h_input`, `h_output`
-    and the goal for completeness. `try`-guarded (a multi-target `simp … at …` fails only when NO
-    target progresses, so it is a no-op on an already-normal state).
+    **constraints** side: `hc`, `h_output` and the goal for soundness; `hwit`, `hA`, `hPA`,
+    `h_input`, `h_output` and the goal for completeness. `try`-guarded (a multi-target
+    `simp … at …` fails only when NO target progresses, so it is a no-op on an already-normal
+    state).
 (c) `provable_type_simp` — normalize provable-type evals to the shared component normal form.
 (d) `abstract_outputs` — make every child-call output opaque (no-op on leaf gadgets).
 (e) `subcircuit_rw at hc` (soundness) / `subcircuit_rw` (completeness) — consume the child chunks
@@ -357,10 +358,11 @@ def mkUnfoldLemmas (terms : Option (Array Term)) :
   | none => pure (#[], #[])
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
-target set. Soundness peels `hc` and `h_output` (the constraints hyp and the output-value
-equation). Completeness peels `hwit`, `hA`, `h_input`, `h_output` and the goal — the witness hyp,
-the assumptions, the input/output equations, and the goal constraints (matching the reference
-completeness prefix). The whole call is `try`-guarded: a multi-target `simp only … at …` fails only
+target set. Soundness peels `hc`, `h_output` and the goal (the constraints hyp, the output-value
+equation, and the goal `Spec`). Completeness peels `hwit`, `hA`, `hPA`, `h_input`, `h_output` and
+the goal — the witness hyp, the (prover) assumptions, the input/output equations, and the goal
+constraints (matching the reference completeness prefix). The whole call is `try`-guarded: a
+multi-target `simp only … at …` fails only
 when NO target makes progress, so this is a no-op on a gadget already in normal form. -/
 def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do

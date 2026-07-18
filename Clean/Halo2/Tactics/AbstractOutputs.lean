@@ -63,14 +63,16 @@ it is covered for free, because the `eval` is not part of the abstracted subterm
 `eval env <output>` becomes `eval env o`. No separate value-local is minted; the caller may layer
 `set ov := eval env o` if it wants a named value.
 
-## Reused technique (Phase 2)
+## The abstraction technique (Phase 2)
 
-Non-forcing abstraction via kabstract at `.reducible` with no `isTypeCorrect` re-check
-(`SubcircuitRw.abstractInExpr`), so a deep composed `.output` never unfolds during matching. This
-tactic generalizes that helper from "deep chunk inputs" to "all child outputs", which is why the
-engine's threshold-gated deep-input machinery is subsumed: once every call output is an opaque
+Non-forcing abstraction via `kabstract` at `.reducible` with no `isTypeCorrect` re-check
+(`abstractOutputsInExpr`, below), so a deep composed `.output` never unfolds during matching. This
+generalizes from "deep chunk inputs" to "all child outputs", which is why the subcircuit engine's
+former threshold-gated deep-input machinery could be RETIRED: once every call output is an opaque
 local, the inputs that used to be deep (they embedded a composed `.output`) are shallow by
-construction.
+construction, so the engine no longer detects or abstracts them. (Historically the kabstract
+helper lived in `SubcircuitRw` as `abstractInExpr` and was shared; it is gone and the technique
+now lives here.)
 
 ## Engine cooperation (Phase 2/3)
 
@@ -259,13 +261,13 @@ def collectAllOutputs : TacticM (Array Expr) := withMainContext do
 
 /-! ## The abstraction
 
-For the collected outputs `es` (innermost-first), abstract each to a fresh opaque local `o_i` and
-leave the equation `h_out_i : eᵢ = o_i` in context. We do this whole-context (revert every
-non-implementation hypothesis into the goal, abstract in the combined goal, re-intro) — the same
-shape as `SubcircuitRw.runSoundness`'s deep-input abstraction, generalized to all hypotheses so an
-output shared between a hypothesis and the goal is abstracted to ONE local everywhere.
+For the collected outputs `es` (innermost-first), abstract each to a fresh opaque local
+`x_gen_out_i` and leave the equation `h_gen_out_i : eᵢ = x_gen_out_i` in context. We do this
+whole-context (revert every non-implementation hypothesis into the goal, abstract in the combined
+goal, re-intro), so an output shared between a hypothesis and the goal is abstracted to ONE local
+everywhere.
 
-`abstractInExpr` (reused) does the non-forcing `kabstract` at `.reducible` and skips the
+`abstractOutputsInExpr` (below) does the non-forcing `kabstract` at `.reducible` and skips the
 `isTypeCorrect` re-check, so a deep composed `.output` never unfolds. -/
 
 /-- Abstract the outputs `es` (innermost-first) in `target`, threading the substitution so nested
@@ -274,8 +276,8 @@ outputs (guise 4) still match after their inner output has been abstracted. Retu
 `eᵢ'` = `eᵢ` with each earlier `eⱼ` replaced by `xⱼ`), and `wrap : target' → target` supplies each
 `xᵢ := eᵢ`, `hᵢ := rfl`.
 
-Unlike `SubcircuitRw.abstractInExpr`, after abstracting `eᵢ ↦ xᵢ` in the body we ALSO rewrite the
-remaining targets `eⱼ` (j>i) by `eᵢ ↦ xᵢ`, so an outer output whose input embedded the inner output
+Unlike a plain single-target `kabstract`, after abstracting `eᵢ ↦ xᵢ` in the body we ALSO rewrite
+the remaining targets `eⱼ` (j>i) by `eᵢ ↦ xᵢ`, so an outer output whose input embedded the inner output
 matches the (now inner-abstracted) occurrence in the body. Non-forcing `kabstract` at `.reducible`;
 no `isTypeCorrect` re-check (a deep composed `.output` never unfolds). `wrap`'s `rfl` proofs
 typecheck because each `xᵢ := eᵢ` and, by the `eⱼ' = eⱼ[eⱼ's earlier ⱼ := xⱼ]` construction with
@@ -395,8 +397,8 @@ end AbstractOutputs
 /-- `abstract_outputs` — replace every subcircuit-call output in the proof state by an opaque local.
 
 Canonicalizes call-form outputs (`(child.call …).output self`) to output form
-(`child.output … self`), then abstracts every distinct child output to a fresh `o_out_<i>` local,
-leaving `h_out_<i> : <output> = o_out_<i>` in context. Every occurrence — inside later inputs, under
+(`child.output … self`), then abstracts every distinct child output to a fresh `x_gen_out_<i>`
+local, leaving `h_gen_out_<i> : <output> = x_gen_out_<i>` in context. Every occurrence — inside later inputs, under
 `eval`, under projections, in hypotheses and the goal — is replaced by the local. Innermost-first,
 so nested composed outputs abstract bottom-up. Silent no-op when no child output is present (leaf
 gadgets). `set_option trace.Halo2.abstract_outputs true` to debug. -/

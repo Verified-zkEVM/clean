@@ -4,10 +4,12 @@ import Clean.Halo2.Subcircuit
 /-!
 # `subcircuit_rw` — the polarity-aware monotone subcircuit rewriter
 
-The proper engine that replaces the absorption-iff mechanism (`Clean/Halo2/Subcircuit.lean`)
-as the way parent proofs consume child contracts. See `Clean/Halo2/subcircuit-engine-design.md`
-for the full design; this file is its implementation. Both mechanisms coexist until the
-migration pass retires the iffs — nothing here retires anything.
+The engine that parent proofs use to consume child contracts. See
+`Clean/Halo2/subcircuit-engine-design.md` for the full design; this file is its implementation.
+It replaced an earlier "absorption iff" mechanism, which has since been fully retired: the
+migration is done and `subcircuit_rw` is now the sole consumption mechanism. `Subcircuit.lean`
+keeps only the `call`-boundary opacity contract (a docstring there is the last record of the
+retired iffs).
 
 ## The core idea
 
