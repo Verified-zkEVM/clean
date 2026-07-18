@@ -260,10 +260,9 @@ every `env.place`/`env.env` projection in the introduced hypotheses and goal red
 `place`/`env`, and any engine-reconstructed `Placed` literal becomes `⟨place, env⟩` over the two
 variables. Both directions, both region and layouter paths (all four go through this loop).
 
-The one place that needs the env UNsplit is `subcircuit_rw` (step e): its completeness `*_placed`
-leaves locate child chunks by the common-`penv` projection shape (`SubcircuitRw.placedEnv?`), which
-the bare `place`/`env` pair does not present — so `consumeChunks` re-bundles `⟨place, env⟩` around
-the engine call and re-splits afterwards. -/
+`subcircuit_rw` (step e) needs no special handling: `SubcircuitRw.placedEnv?` reconstructs the
+`⟨place, env⟩` literal from the bare pair when the common-`penv` projection shape is absent, so
+the engine's `*_placed` leaves instantiate directly against the split context. -/
 def rwIffAndIntro (d : Direction) : TacticM Unit := do
   let iff := mkIdent d.iffLemma
   evalTactic (← `(tactic| rw [$iff:ident]))
@@ -385,14 +384,9 @@ def abstractOutputs : TacticM Unit := do
 /-- Step (e): consume the child chunks — `subcircuit_rw at hc` (soundness) / `subcircuit_rw`
 (completeness). Silent no-op when there are no chunks (leaf gadgets), so this is total.
 
-`subcircuit_rw`'s completeness `*_placed` leaf locates each child chunk by the common-`penv`
-projection shape (`SubcircuitRw.placedEnv?` — `penv.place` / `penv.env.toEnvironment`), which the
-bare `place`/`env` pair left by the step-(a) split does NOT present; the bare-leaf fallback can miss
-same-config sibling chunks (two `Add.add` calls, a repeated round). So on the completeness path we
-re-bundle a single `penv := ⟨place, env⟩` (an ordinary `∃`-obtain that `subst`s `place`/`env` to its
-projections), run the engine, then re-split — the engine sees the Placed view, everything else keeps
-the split `place`/`env`. Soundness's `subcircuit_rw at hc` is left on the split env (its leaves read
-`place`/`env` positionally and do not key on the projection shape). -/
+No env re-bundling is needed on either path: `SubcircuitRw.placedEnv?` reconstructs
+`⟨place, env⟩` from the split pair for the completeness `*_placed` leaves (its split-shape
+fallback), and soundness's leaves read `place`/`env` positionally. -/
 def consumeChunks (d : Direction) : TacticM Unit := do
   if d.isSoundness then
     try evalTactic (← `(tactic| subcircuit_rw at $(mkIdent `hc):ident)) catch _ => pure ()
