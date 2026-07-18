@@ -1,3 +1,16 @@
+# Handoff: VK-matching arc
+
+> **STATUS (July 18, 2026): the mul_fixed family is COMPLETE** — `base_field_elem`,
+> `full_width`, `short`: circuits, VK layout fixtures + tests (all three entry points),
+> and all proofs (inner + layouter bundles, soundness AND completeness) sorry-free.
+> Shared proof infra lives in `Clean/Ironwood/Ecc/MulFixed.lean` (`chain_ladder`,
+> `partialSum_congr`, bounds/eta helpers, `ofFn8_get_windowVal`,
+> `addinc_output_cells`); `rangeCheckAt` (positional `witness_check` body) in
+> `LookupRangeCheck.lean`. Storm-pattern notes: see the commit messages on
+> `dd995c6d`..`a3e47935` (rw-vs-simp on chunk hypotheses, no chunk-typed `have`s,
+> `seal <region> in` on consuming decls, explicit `@getElem!` spellings,
+> explicit-output `ElaboratedRegionCircuit` instances).
+
 # Ironwood arc status (was: VK-matching handoff)
 
 Live status log for the in-flight arcs, shared across machines. The original mul
