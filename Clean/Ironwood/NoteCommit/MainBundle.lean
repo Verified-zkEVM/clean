@@ -259,6 +259,33 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     (by rw [commit_assumptions_eq]; trivial)
   rw [commit_spec_eq, commit_extract_eq] at hCmS
+  clear hCm
+  -- the four shift `witness_check`s: telescoped decompositions
+  have hWaS := hWa (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
+  simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWaS
+  obtain ⟨haz0, loA, hloA, htelA⟩ := hWaS
+  have hWbS := hWb (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
+  simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWbS
+  obtain ⟨hbz0, loB, hloB, htelB⟩ := hWbS
+  have hWeS := hWe (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
+  simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWeS
+  obtain ⟨hez0, loE, hloE, htelE⟩ := hWeS
+  have hWgS := hWg (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [rangeCheckAt_assumptions_eq]
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
+  simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
+  obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
+  clear hWa hWb hWe hWg
   trace_state
   sorry
 
