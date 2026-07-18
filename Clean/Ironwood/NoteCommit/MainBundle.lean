@@ -787,6 +787,63 @@ private theorem honestChunks_donor_eq :
       ih]
     rfl
 
+private theorem toFormal_proverAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).ProverAssumptions = b.ProverAssumptions := rfl
+
+private theorem decomposeB_pa_eq (w : WitgenIR Fp 1) :
+    (DecomposeB.bundle w).ProverAssumptions
+      = fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.b2 ∧
+          input.b = input.b0 + wit * 16 + input.b2 * 32 + input.b3 * 64 := rfl
+
+private theorem decomposeD_pa_eq (w : WitgenIR Fp 1) :
+    (DecomposeD.bundle w).ProverAssumptions
+      = fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.d1 ∧
+          input.d = wit + input.d1 * 2 + input.d2 * 4 + input.d3 * 1024 := rfl
+
+private theorem decomposeE_pa_eq :
+    DecomposeE.bundle.ProverAssumptions
+      = fun input _ _ => input.e = input.e0 + input.e1 * 64 := rfl
+
+private theorem decomposeG_pa_eq (w : WitgenIR Fp 1) :
+    (DecomposeG.bundle w).ProverAssumptions
+      = fun input (wit : Fp) _ => IsBool wit ∧
+          input.g = wit + input.g1 * 2 + input.g2 * 1024 := rfl
+
+private theorem decomposeH_pa_eq (w : WitgenIR Fp 1) :
+    (DecomposeH.bundle w).ProverAssumptions
+      = fun input (wit : Fp) _ => IsBool wit ∧ input.h = input.h0 + wit * 32 := rfl
+
+private theorem decomposeB_extract_eq (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    ((DecomposeB.bundle w).toFormal name).extract cfg inp i env
+      = (eval env (AssignedCell.of i 0 cfg.colR : Var field Fp) : Fp) := rfl
+
+private theorem decomposeD_extract_eq (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeD.Config) (inp : Var DecomposeD.Inputs Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    ((DecomposeD.bundle w).toFormal name).extract cfg inp i env
+      = (eval env (AssignedCell.of i 0 cfg.colM : Var field Fp) : Fp) := rfl
+
+private theorem decomposeG_extract_eq (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeG.Config) (inp : Var DecomposeG.Inputs Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    ((DecomposeG.bundle w).toFormal name).extract cfg inp i env
+      = (eval env (AssignedCell.of i 0 cfg.colM : Var field Fp) : Fp) := rfl
+
+private theorem decomposeH_extract_eq (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeH.Config) (inp : Var DecomposeH.Inputs Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    ((DecomposeH.bundle w).toFormal name).extract cfg inp i env
+      = (eval env (AssignedCell.of i 0 cfg.colR : Var field Fp) : Fp) := rfl
+
+private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) := by
+  interval_cases m
+  · exact Or.inl (by norm_num)
+  · exact Or.inr (by norm_num)
+
 /-- Prover-eval of the commit input record over opaque cells (doc pattern 1: the
 transport lemma is checked once over abstract variables). -/
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
@@ -802,6 +859,23 @@ private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnviro
         readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₅,
         readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₆,
         readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₇] := by
+  with_unfolding_all rfl
+
+/-- Environment-side sibling of `pieces_eval_eq`. -/
+private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇] }
+        : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces
+    = #v[env.get c₀.cell.column ((place c₀.cell.regionIndex + c₀.cell.rowOffset : ℕ) : ℤ),
+        env.get c₁.cell.column ((place c₁.cell.regionIndex + c₁.cell.rowOffset : ℕ) : ℤ),
+        env.get c₂.cell.column ((place c₂.cell.regionIndex + c₂.cell.rowOffset : ℕ) : ℤ),
+        env.get c₃.cell.column ((place c₃.cell.regionIndex + c₃.cell.rowOffset : ℕ) : ℤ),
+        env.get c₄.cell.column ((place c₄.cell.regionIndex + c₄.cell.rowOffset : ℕ) : ℤ),
+        env.get c₅.cell.column ((place c₅.cell.regionIndex + c₅.cell.rowOffset : ℕ) : ℤ),
+        env.get c₆.cell.column ((place c₆.cell.regionIndex + c₆.cell.rowOffset : ℕ) : ℤ),
+        env.get c₇.cell.column ((place c₇.cell.regionIndex
+          + c₇.cell.rowOffset : ℕ) : ℤ)] := by
   with_unfolding_all rfl
 
 /-- The commit child's derived verifier contract on the completeness side, standalone
@@ -1315,7 +1389,6 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hWgd := hGW.2.1
   have hWgg := hGW.2.2.2.1
   have hWgh := hGW.2.2.2.2.1
-  clear hGW
   rw [toFormal_call_witnesses] at hWgb hWgd hWgg hWgh
   simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
@@ -1468,6 +1541,10 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     hPB2 hHon2 hWin
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
+  rw [pieces_eval_eq_env] at hPC
+  simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+    Cell.of_column, Environment.get_advice, Nat.add_zero, Nat.add_assoc,
+    Nat.reduceAdd] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
@@ -1528,6 +1605,46 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
   obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c hz1d hz13f hz1g hz13g
+  have hpieceA := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨0, by decide⟩ hPC' (by decide)
+  have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨2, by decide⟩ hPC' (by decide)
+  have hpieceD := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨3, by decide⟩ hPC' (by decide)
+  have hpieceF := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨5, by decide⟩ hPC' (by decide)
+  have hpieceG := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+    ⟨6, by decide⟩ hPC' (by decide)
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC hpieceD hpieceF hpieceG
+  have haval : (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceA
+  have hcval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceC
+  have hdval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
+      < 2 ^ 60 := by with_unfolding_all exact hpieceD
+  have hfval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceF
+  have hgvalP : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+      < 2 ^ 250 := by with_unfolding_all exact hpieceG
+  have hza : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 13 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13a
+  have hzc : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 39 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13c
+  have hzd : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
+        / 2 ^ 10 : ℕ) : Fp) := by with_unfolding_all exact hz1d
+  have hzf : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 71 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13f
+  have hzg1 : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+        / 2 ^ 10 : ℕ) : Fp) := by with_unfolding_all exact hz1g
+  have hzg13 : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 96 : ℕ) : ℤ)
+      = (((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
+        / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13g
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
@@ -1719,6 +1836,89 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
        (by rw [rangeCheckAt_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
        (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      ((DecomposeB.bundle (brWit input_var_gdX 254 1)).toFormal
+        "NoteCommit MessagePiece b") cfg.gates.b (i₀ + 33) place env _ hGW.1
+      ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
+       (by rw [toFormal_assumptions_eq]; trivial),
+       (by rw [toFormal_proverAssumptions_eq, decomposeB_pa_eq, decomposeB_extract_eq]
+           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Nat.add_zero]
+           refine ⟨?_, ?_, ?_⟩
+           · rw [hwb1]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · rw [hwb2]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · rw [hwb, ← hwb0, ← hwb1, ← hwb2, ← hwb3]
+             try ring)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      ((DecomposeD.bundle (brWit input_var_pkdX 254 1)).toFormal
+        "NoteCommit MessagePiece d") cfg.gates.d (i₀ + 34) place env _ hGW.2.1
+      ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
+       (by rw [toFormal_assumptions_eq]; trivial),
+       (by rw [toFormal_proverAssumptions_eq, decomposeD_pa_eq, decomposeD_extract_eq]
+           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Nat.add_zero]
+           refine ⟨?_, ?_, ?_⟩
+           · rw [hwd0]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · rw [hwd1]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · rw [show env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
+                 = (((env.advice cfg.hashConfig.witnessPieces
+                   ((place (i₀ + 6) : ℕ) : ℤ)).val / 2 ^ 10 : ℕ) : Fp) from hz1d,
+               hwd, ← hwd0, ← hwd1, ← hwd2]
+             sorry)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (DecomposeE.bundle.toFormal "NoteCommit MessagePiece e") cfg.gates.e
+      (i₀ + 35) place env _ hGW.2.2.1
+      ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
+       (by rw [toFormal_assumptions_eq]; trivial),
+       (by rw [toFormal_proverAssumptions_eq, decomposeE_pa_eq]
+           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Nat.add_zero]
+           rw [hwe, ← hwe0, ← hwe1]
+           try ring)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      ((DecomposeG.bundle (brWit input_var_rho 254 1)).toFormal
+        "NoteCommit MessagePiece g") cfg.gates.g (i₀ + 36) place env _ hGW.2.2.2.1
+      ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
+       (by rw [toFormal_assumptions_eq]; trivial),
+       (by rw [toFormal_proverAssumptions_eq, decomposeG_pa_eq, decomposeG_extract_eq]
+           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Nat.add_zero]
+           refine ⟨?_, ?_⟩
+           · rw [hwg0]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · sorry)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      ((DecomposeH.bundle (brWit input_var_psi 254 1)).toFormal
+        "NoteCommit MessagePiece h") cfg.gates.h (i₀ + 37) place env _ hGW.2.2.2.2.1
+      ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
+       (by rw [toFormal_assumptions_eq]; trivial),
+       (by rw [toFormal_proverAssumptions_eq, decomposeH_pa_eq, decomposeH_extract_eq]
+           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Nat.add_zero]
+           refine ⟨?_, ?_⟩
+           · rw [hwh1]
+             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+           · rw [hwh, ← hwh0, ← hwh1]
+             try ring)⟩
   all_goals sorry
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
