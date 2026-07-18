@@ -88,7 +88,7 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -123,7 +123,7 @@ private theorem yc_extract (w : WitgenIR Fp 1)
 
 private theorem commit_spec_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).Spec
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).Spec
       = fun input (output : Value Point Fp) wit =>
           ∃ chunks : List ℕ,
             Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
@@ -133,14 +133,14 @@ private theorem commit_spec_eq (G : Generators) (R : FixedBase)
 
 private theorem commit_assumptions_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).Assumptions
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).Assumptions
       = fun _ => True := rfl
 
 private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).EnvAssumptions
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).EnvAssumptions
         c env
       = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
           Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
@@ -150,9 +150,9 @@ private theorem commit_extract_eq (G : Generators) (R : FixedBase)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).extract
+    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).extract
         c inp i env
-      = ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil ns_pos).extract c.2.1
+      = ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
           { pieces := inp.pieces } (i + 2) env,
          Ecc.MulFixed.FullWidth.fwExtract c.1 i env) := rfl
 
@@ -322,7 +322,7 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Sinsemilla.HashPiece.Config)
     (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (iH : RegionIndex)
     (place : RegionIndex → ℕ) (env : Environment Fp) :
-    ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil ns_pos).extract cfg inp iH
+    ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract cfg inp iH
         (⟨place, env⟩ : Placed Environment Fp)).zs
       = Sinsemilla.Chain.zsFam
           (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
@@ -332,11 +332,12 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
 
 /-- The six hash running-sum reads the gates copy, at the concrete `ns` layout
-(rows: piece starts `[0,26,28,54,61,63,89,115]`). -/
+(rows: piece starts `[0,25,26,51,57,58,83,108]`). -/
 private theorem zs_get_z13a (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -344,9 +345,10 @@ private theorem zs_get_z13a (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
-      (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 41 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -354,9 +356,10 @@ private theorem zs_get_z13c (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1d (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
-      (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 55 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 52 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -364,9 +367,10 @@ private theorem zs_get_z1d (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13f (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
-      (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 76 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 71 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -374,9 +378,10 @@ private theorem zs_get_z13f (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1g (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
-      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 90 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 84 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -384,9 +389,10 @@ private theorem zs_get_z1g (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13g (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
-      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 102 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+      (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 96 := by
+  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+    List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
     Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
     Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
@@ -571,6 +577,29 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   simp only [synthPieces_output, synthChecks_output, circuit_norm, zCell,
     AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
     Environment.get_advice] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
+  -- ── the six hash running-sum value facts ──
+  obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
+  rw [hashExtract_zs] at hZs
+  have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
+  have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
+  have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13a] at hz13a
+  have hz13c := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13c] at hz13c
+  have hz1d := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨3, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
+  rw [zs_get_z1d] at hz1d
+  have hz13f := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨5, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13f] at hz13f
+  have hz1g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
+  rw [zs_get_z1g] at hz1g
+  have hz13g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+    ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
+  rw [zs_get_z13g] at hz13g
   trace_state
   sorry
 

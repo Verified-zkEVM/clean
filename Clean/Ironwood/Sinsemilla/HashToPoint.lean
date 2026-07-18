@@ -140,7 +140,7 @@ def Spec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (wit : Sinsemilla.Chain.ChainWit ns Fp) : Prop :=
   ∃ chunks : List ℕ, Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
     Sinsemilla.Chain.ZsFacts ns chunks wit.zs ∧
-    output.z1s = z1View ns wit.zs ∧
+    ((∀ x ∈ ns, 0 < x) → output.z1s = z1View ns wit.zs) ∧
     ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
       output.point.x = B.x ∧ output.point.y = B.y
 
@@ -239,7 +239,7 @@ instance hashRegionElaborated (G : Generators) (ns : List ℕ) (Q : Point Fp)
 `hns`: a Sinsemilla message is nonempty (for `ns = []` the trailing dummy row's `λ₁` is
 unconstrained, so the exit `y` would be unpinned). -/
 def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x) :
+    (hns : ns ≠ []) :
     FormalRegionCircuit Fp Sinsemilla.HashPiece.Config Sinsemilla.HashPiece.Config
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) where
   name := "hash_to_point"
@@ -306,6 +306,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
     refine ⟨chunks, hPC, hZs, ?_, ?_⟩
     · -- the z_1 view of the running sums
+      intro hpos
       rw [← h_output]
       show (Vector.ofFn fun i : Fin ns.length =>
           AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits).map
@@ -427,50 +428,50 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
 /-- The layouter-level `hash_message` bundle: the `"hash_to_point"` region (Rust
 `SinsemillaChip::hash_to_point`). -/
 def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x) :
+    (hns : ns ≠ []) :
     FormalCircuit Fp Sinsemilla.HashPiece.Config Sinsemilla.HashPiece.Config
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) :=
-  (hashRegion G ns Q hQ hns hpos).toFormal
+  (hashRegion G ns Q hQ hns).toFormal
 
 /-- Call the hash bundle (Rust `hash_to_point` at a layouter). -/
 def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
-    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
     Circuit Fp (Var (Output ns.length) Fp) :=
-  (hashCircuit G ns Q hQ hns hpos).call cfg pieces
+  (hashCircuit G ns Q hQ hns).call cfg pieces
 
 /-- The hash bundle's output `z1s` cells (positional, rfl). -/
 theorem hashCircuit_output_z1s (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
-    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).z1s
+    ((hashCircuit G ns Q hQ hns).output cfg pieces i).z1s
       = Vector.ofFn (fun j : Fin ns.length =>
           AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) := rfl
 
 /-- The hash bundle's output `point.x` cell (positional, rfl). -/
 theorem hashCircuit_output_point_x (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
-    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).point.x
+    ((hashCircuit G ns Q hQ hns).output cfg pieces i).point.x
       = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA := rfl
 
 /-- The hash bundle's output `point.y` cell (positional, rfl). -/
 theorem hashCircuit_output_point_y (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
-    ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i).point.y
+    ((hashCircuit G ns Q hQ hns).output cfg pieces i).point.y
       = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 := rfl
 
 /-- The hash bundle's eval'd output (verifier view), landed on raw advice reads. -/
 theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
-    (eval env ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i)
+    (eval env ((hashCircuit G ns Q hQ hns).output cfg pieces i)
         : Value (Output ns.length) Fp)
       = { point :=
             { x := env.env.advice cfg.xA
@@ -480,7 +481,7 @@ theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
           z1s :=
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
-  rw [show (hashCircuit G ns Q hQ hns hpos).output cfg pieces i
+  rw [show (hashCircuit G ns Q hQ hns).output cfg pieces i
       = ({ point :=
               { x := AssignedCell.of i
                   (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
@@ -500,11 +501,11 @@ theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
 
 /-- The hash bundle's eval'd output (prover view), landed on raw advice reads. -/
 theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
     (env : Placed ProverEnvironment Fp) :
-    (eval env ((hashCircuit G ns Q hQ hns hpos).output cfg pieces i)
+    (eval env ((hashCircuit G ns Q hQ hns).output cfg pieces i)
         : Value (Output ns.length) Fp)
       = { point :=
             { x := env.env.advice cfg.xA
@@ -514,7 +515,7 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
           z1s :=
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
-  rw [show (hashCircuit G ns Q hQ hns hpos).output cfg pieces i
+  rw [show (hashCircuit G ns Q hQ hns).output cfg pieces i
       = ({ point :=
               { x := AssignedCell.of i
                   (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,

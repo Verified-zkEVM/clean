@@ -148,29 +148,29 @@ open Orchard.Specs.Sinsemilla (hashToPoint)
 
 -- local contract bridges for the hash child (proof-typed binders)
 private theorem hashC_spec_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x) :
-    (HashToPoint.hashCircuit G ns Q hQ hns hpos).Spec
+    (hQ : Q.OnCurve) (hns : ns ≠ []) :
+    (HashToPoint.hashCircuit G ns Q hQ hns).Spec
       = fun input output wit => HashToPoint.Spec G ns Q input output wit := rfl
 
 private theorem hashC_envAssumptions_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (cfg : HashPiece.Config) (env : Placed Environment Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns hpos).EnvAssumptions cfg env
+    (HashToPoint.hashCircuit G ns Q hQ hns).EnvAssumptions cfg env
       = Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env := rfl
 
 private theorem hashC_proverAssumptions_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
     (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns hpos).ProverAssumptions input wit hint
+    (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions input wit hint
       = HashToPoint.ProverAssumptions G ns Q input := rfl
 
 private theorem hashC_proverSpec_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
     (output : Value (HashToPoint.Output ns.length) Fp)
     (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns hpos).ProverSpec input output wit hint
+    (HashToPoint.hashCircuit G ns Q hQ hns).ProverSpec input output wit hint
       = HashToPoint.ProverSpec G ns Q input output := rfl
 
 /-- The blinding child's call chunk spans its two regions. -/
@@ -187,14 +187,14 @@ private theorem commit_regionCount
     (G : Generators) (ns : List ℕ)
     (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x)
+    (hns : ns ≠ [])
     (bcfg : Ecc.MulFixed.FullWidth.Config) (hcfg : HashPiece.Config)
     (acfg : Ecc.Add.Config)
     (input : Var (Input ns.length) Fp) (i : RegionIndex) :
     Operations.regionCount
       ((do
         let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
-        let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
+        let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
           { pieces := input.pieces }
         let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
           { p := hashOut.point, q := blindOut }
@@ -204,12 +204,12 @@ private theorem commit_regionCount
     Operations.regionCount_append, Operations.regionCount]
   rw [show ∀ (j : RegionIndex) (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp),
       Operations.regionCount
-        (((HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg inp).operations j) = 1
+        (((HashToPoint.hashCircuit G ns Q hQ hns).call hcfg inp).operations j) = 1
     from fun j inp => by
       simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
-      rw [show ((HashToPoint.hashCircuit G ns Q hQ hns hpos).synthesize hcfg inp j).2.1
-          = ((assignRegion (HashToPoint.hashRegion G ns Q hQ hns hpos).name
-              ((HashToPoint.hashRegion G ns Q hQ hns hpos).synthesize hcfg 0
+      rw [show ((HashToPoint.hashCircuit G ns Q hQ hns).synthesize hcfg inp j).2.1
+          = ((assignRegion (HashToPoint.hashRegion G ns Q hQ hns).name
+              ((HashToPoint.hashRegion G ns Q hQ hns).synthesize hcfg 0
                 inp)).operations j) from rfl,
         operations_assignRegion]
       simp only [Operations.regionCount]]
@@ -233,7 +233,7 @@ hash is defined, with the message chunking and running-sum facts exposed. -/
 def commit (G : Generators) (ns : List ℕ)
     (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : ns ≠ []) (hpos : ∀ x ∈ ns, 0 < x) :
+    (hns : ns ≠ []) :
     FormalCircuit Fp
       (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
       (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
@@ -243,7 +243,7 @@ def commit (G : Generators) (ns : List ℕ)
 
   synthesize := fun (bcfg, hcfg, acfg) input => do
     let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
-    let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
+    let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
       { pieces := input.pieces }
     let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
       { p := hashOut.point, q := blindOut }
@@ -253,7 +253,7 @@ def commit (G : Generators) (ns : List ℕ)
     { output := fun input i =>
         ((do
           let blindOut ← (Ecc.MulFixed.FullWidth.circuit R windows).call bcfg ()
-          let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns hpos).call hcfg
+          let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
             { pieces := input.pieces }
           let result ← (Ecc.Add.add.toFormal "M + [r] R").call acfg
             { p := hashOut.point, q := blindOut }
@@ -261,7 +261,7 @@ def commit (G : Generators) (ns : List ℕ)
       regionCount := fun _ => 4
       output_eq := by intro _ _; rfl
       regionCount_eq := fun input i =>
-        (commit_regionCount G ns R windows Q hQ hns hpos bcfg hcfg acfg input i).symm }
+        (commit_regionCount G ns R windows Q hQ hns bcfg hcfg acfg input i).symm }
 
   EnvAssumptions := fun (bcfg, hcfg, _) env =>
     Sinsemilla.GeneratorTableLoaded G hcfg.generatorTable env.env ∧
@@ -271,7 +271,7 @@ def commit (G : Generators) (ns : List ℕ)
 
   Witness := fun F => Sinsemilla.Chain.ChainWit ns F × (Vector F 85 × Fq)
   extract := fun (bcfg, hcfg, _) input i₀ env =>
-    ((HashToPoint.hashCircuit G ns Q hQ hns hpos).extract hcfg
+    ((HashToPoint.hashCircuit G ns Q hQ hns).extract hcfg
       { pieces := input.pieces } (i₀ + 2) env,
      Ecc.MulFixed.FullWidth.fwExtract bcfg i₀ env)
 
@@ -392,10 +392,10 @@ def commit (G : Generators) (ns : List ℕ)
         Sinsemilla.Chain.inputs_eval_literal]
       with_unfolding_all rfl
     -- the hash child's honest-prover precondition
-    have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns hpos).ProverAssumptions
+    have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions
         (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ pieces := input_var.pieces }
           : Var (Sinsemilla.Chain.Inputs ns.length) Fp))
-        ((HashToPoint.hashCircuit G ns Q hQ hns hpos).extract cfg.2.1
+        ((HashToPoint.hashCircuit G ns Q hQ hns).extract cfg.2.1
           { pieces := input_var.pieces }
           (i₀ + (((Ecc.MulFixed.FullWidth.circuit R windows).call cfg.1 ()).operations
             i₀).regionCount)

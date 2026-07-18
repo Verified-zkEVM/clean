@@ -36,12 +36,11 @@ open Orchard.Specs (bitrange)
 open Orchard.Specs.Sinsemilla (Generators)
 
 /-- The NoteCommit message piece lengths in `K = 10`-bit words:
-`a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)`. -/
-def ns : List ℕ := [25, 1, 25, 6, 1, 25, 25, 1]
+`a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)` — the chain
+convention counts words − 1 per piece. -/
+def ns : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
-
-theorem ns_pos : ∀ x ∈ ns, 0 < x := by simp [ns]
 
 /-- The circuit inputs: the note's field-element cells (`x/y(g_d)`, `x/y(pk_d)`, the
 64-bit value, `rho`, `psi`). The blinding scalar `rcm` enters through the fixed-base
@@ -269,7 +268,7 @@ def synthChecks (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85
     (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }
   let d1 ← (YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }
-  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
     { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false cfg.lookupConfig
@@ -357,7 +356,7 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil ns_pos).call
+      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -444,7 +443,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
       = { b2 := .of (i + 4) 0 (cfg.gates.y.advices 6),
           d1 := .of (i + 5 + 4) 0 (cfg.gates.y.advices 6),
           cm := (Sinsemilla.CommitDomain.commit G ns R windows Q hQ
-            ns_ne_nil ns_pos).output (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+            ns_ne_nil).output (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
             { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
             (i + 10),
           aZs := { z0 := .of (i + 14) 0 cfg.lookupConfig.runningSum,
