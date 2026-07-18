@@ -790,5 +790,4 @@ theorem round_output (i : ℕ) (cfg : Config) (o : ℕ) (iv : FExpr Fp)
     (Halo2.Ironwood.Ecc.MulIncomplete.round i).output cfg o iv self
       = reads cfg (o + 1) self := rfl
 
-
 end Halo2.Ironwood.Ecc.MulIncomplete

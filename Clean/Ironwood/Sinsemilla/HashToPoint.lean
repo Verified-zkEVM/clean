@@ -103,7 +103,7 @@ private theorem z1View_zsFam (f : ℕ → Fp) (ns : List ℕ) (off : ℕ)
     z1View ns (zsFam f ns off)
       = Vector.ofFn (fun i : Fin ns.length => f (off + (prefixRows ns ↑i + 1))) := by
   have hsum : (zLengths ns).sum = prefixRows ns ns.length := by
-    simp [zLengths, prefixRows, List.map_take, List.take_length]
+    simp [zLengths, prefixRows, List.take_length]
   have hidx : ∀ i : Fin ns.length, prefixRows ns ↑i + 1 < (zLengths ns).sum := by
     intro i
     have hstep := prefixRows_step ns ↑i i.isLt
@@ -320,7 +320,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
       simp only [Vector.getElem_map, Vector.getElem_ofFn, AssignedCell.eval,
         AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
         Environment.get_advice]
-      congr 2 <;> omega
+      congr 2
     · -- the hash from `Q`
       intro B hB
       have hres := hContract Q hQ hXa.symm (by
@@ -385,8 +385,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         from rfl,
       Sinsemilla.Chain.output_point_x, Sinsemilla.Chain.output_point_y] at h_output
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-      ProverEnvironment.toEnvironment_advice] at h_output
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
     refine ⟨?_, ?_⟩
     · -- the constraints
       simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
@@ -527,12 +526,10 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
         : Output ns.length (AssignedCell Fp)) from rfl,
     out_eval_lit_prover]
   simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-    ProverEnvironment.toEnvironment_advice]
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
   congr 1
   ext j hj
   simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-    ProverEnvironment.toEnvironment_advice]
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
 
 end Halo2.Ironwood.Sinsemilla.HashToPoint

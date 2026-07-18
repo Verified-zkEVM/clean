@@ -1185,8 +1185,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output _hE hA hc
     simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
-      RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState,
-      HashPiece.operations_cellAt] at hc
+      RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState] at hc
     subcircuit_rw at hc
     simp only [slotC_spec_eq, slotC_assumptions_eq, slotC_envAssumptions_eq,
       slotC_extract_eq, sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
@@ -1270,7 +1269,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     -- land the output on its record components
     rw [ElaboratedRegionCircuit.output_eq] at h_output
     simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-      HashPiece.output_readState, HashPiece.output_cellAt,
+      HashPiece.output_readState,
       output_assignAdvice] at h_output
     rw [ProvableStruct.eval_cells_eq_eval, output_eval_literal, point_eval_literal,
       row_eval_literal] at h_output
@@ -1295,7 +1294,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     intro self env input_var input output h_input h_output hwit _hE hA hPA
     simp only [RegionCircuit.operations_bind, RegionOperations.extendsWitnesses_append,
       RegionCircuit.forRangeVar'_extendsWitnesses, HashPiece.operations_readState,
-      HashPiece.operations_cellAt, circuit_norm] at hwit
+      circuit_norm] at hwit
     obtain ⟨hWs, hWyFin, -, -⟩ := hwit
     obtain ⟨hns, hbounds, A, B, hAon, hAx, hAy, hchain⟩ := hPA
     -- the piece-value family and the chunk-list rewrite
@@ -1513,8 +1512,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     refine ⟨?_, ?_⟩
     · -- the constraints
       simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
-        RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState,
-        HashPiece.operations_cellAt]
+        RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState]
       refine ⟨fun i => ?_, ?_⟩
       · obtain ⟨m, hm⟩ := i
         obtain ⟨hPAm, h2yA, hsec, hlny⟩ := hSlotData ⟨m, hm⟩
@@ -1585,7 +1583,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     · -- the honest-prover contract
       rw [ElaboratedRegionCircuit.output_eq] at h_output
       simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-        HashPiece.output_readState, HashPiece.output_cellAt,
+        HashPiece.output_readState,
         output_assignAdvice] at h_output
       rw [output_eval_literal_prover, point_eval_literal, row_eval_literal] at h_output
       simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell,

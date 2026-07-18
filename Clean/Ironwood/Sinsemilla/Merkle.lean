@@ -946,8 +946,7 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
         (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ h1 h2).call
           cfg.sinsemilla pieces).operations j) = 1 from fun j pieces h1 h2 => by
     simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount,
-      HashToPoint.hashCircuit, FormalRegionCircuit.toFormal,
-      Operations.regionCount_append]
+      HashToPoint.hashCircuit, FormalRegionCircuit.toFormal]
     show Operations.regionCount ((assignRegion
         (HashToPoint.hashRegion G HashLayer.merkleNs Q hQ h1 h2).name
         ((HashToPoint.hashRegion G HashLayer.merkleNs Q hQ h1 h2).synthesize
@@ -1024,7 +1023,6 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     -- the hash spec: chunking + running sums + the z1 view + the hash-from-Q contract
     have hHashS := hHash hEgen trivial
     rw [ProvableStruct.eval_cells_eq_eval, Sinsemilla.Chain.inputs_eval_literal] at hHashS
-    simp only [Sinsemilla.Chain.eval_fields_eq_map] at hHashS
     rw [HashToPoint.hashCircuit_output_eval] at hHashS
     obtain ⟨chunks, hPC, hZs, hz1v, hContract⟩ := hHashS
     -- the gate spec on the landed cell values
@@ -1033,8 +1031,8 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     rw [gateInputs_eval_literal] at hGateS
     -- flatten every cell eval to raw advice reads
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Vector.getElem_ofFn,
-      Vector.map_ofFn] at hGateS hPC hb1 hb2
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+      Vector.getElem_ofFn] at hGateS hPC hb1 hb2
     -- land the running-sum extraction on the zsFam family and unpack the per-piece facts
     rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
           HashLayer.synthesize._proof_1 HashLayer.synthesize._proof_2).extract
@@ -1049,7 +1047,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       Sinsemilla.Chain.eval_zsCellsVal] at hZs
     rw [show HashLayer.merkleNs = 24 :: 1 :: 24 :: ([] : List ℕ) from rfl] at hZs
     obtain ⟨hzA, hzB, -⟩ := hZs
-    simp only [Sinsemilla.Chain.zsFam_tail_head, Sinsemilla.Chain.zsFam_head] at hzA hzB
+    simp only [Sinsemilla.Chain.zsFam_head] at hzA hzB
     have hzB' := (Sinsemilla.Chain.zsFam_tail_head
         (fun r => env.env.advice cfg.1.sinsemilla.bits
           ((env.place (i₀ + 3 + 2) + r : ℕ) : ℤ)) 24 1 [24] 0).symm.trans hzB
@@ -1079,8 +1077,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     -- normalize the row spellings across all facts
     simp only [show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 0 = 0 from rfl,
       show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 1 = 25 from rfl,
-      Nat.add_zero, Nat.zero_add, show (24 + 1 + 1 : ℕ) = 26 from rfl,
-      show (25 + 1 : ℕ) = 26 from rfl]
+      Nat.add_zero, Nat.zero_add, show (24 + 1 + 1 : ℕ) = 26 from rfl]
       at hGateS hz1Aval hz1Bval hpAval hpBval hpCval hb1 hb2
     -- the chunk words through the append shape
     have hsumA : (∑ j ∈ Finset.range (24 + 1 - 1), chunks.getD (1 + j) 0 * 2 ^ (K * j))
@@ -1271,8 +1268,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
             (Sinsemilla.Chain.zsCellsVal cfg.1.sinsemilla (i₀ + 3 + 2)
               HashLayer.merkleNs 0) from rfl,
       Sinsemilla.Chain.eval_zsCellsVal] at hZsH
-    simp only [Placed.toEnvironment_place, Placed.toEnvironment_env,
-      ProverEnvironment.toEnvironment_advice] at hZsH
+    simp only [Placed.toEnvironment_place, Placed.toEnvironment_env] at hZsH
     rw [show HashLayer.merkleNs = 24 :: 1 :: 24 :: ([] : List ℕ) from rfl] at hZsH
     obtain ⟨hzAH, hzBH, -⟩ := hZsH
     simp only [Sinsemilla.Chain.zsFam_head] at hzAH
@@ -1390,11 +1386,11 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       rw [gateInputs_eval_literal_prover]
       simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-        ProverEnvironment.toEnvironment_advice, Vector.getElem_ofFn,
+        Vector.getElem_ofFn,
         show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 0 = 0 from rfl,
         show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 1 = 25 from rfl,
         Nat.add_zero, Nat.zero_add, show (25 + 1 : ℕ) = 26 from rfl]
-      simp only [Nat.zero_add, Nat.add_zero,
+      simp only [Nat.zero_add,
         show (24 + 1 + 1 : ℕ) = 26 from rfl,
         show (twoPow10 : Fp) = (2 ^ 10 : Fp) from by norm_num [twoPow10],
         show (twoPow5 : Fp) = (2 ^ 5 : Fp) from by norm_num [twoPow5],
@@ -1617,7 +1613,6 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   soundness := by
     circuit_proof_start
-    subcircuit_rw at hc
     obtain ⟨hSwap, hHash⟩ := hc
     have hSw : Halo2.Ironwood.CondSwap.SwapSpec input_node
         (ProvableStruct.eval env.place env.env x_gen_out_0)
