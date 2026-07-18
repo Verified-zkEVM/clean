@@ -145,6 +145,11 @@ private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
       = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
           Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
 
+private theorem yc_proverAssumptions_eq (w : WitgenIR Fp 1) :
+    (YCanonicityCheck.circuit w).ProverAssumptions
+      = fun input (wit : Fp) _ =>
+          Orchard.Action.NoteCommit.IsLowBit input.y wit := rfl
+
 private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
     (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).ProverAssumptions
@@ -1470,8 +1475,40 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              ((place (i₀ + 13) : ℕ) : ℤ)).val < 2 ^ 5
            rw [hwh0, Orchard.Specs.cast_bitrange_val (by norm_num)]
            exact Orchard.Specs.bitrange_lt _ _ _)⟩
-  · sorry
-  · sorry
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (YCanonicityCheck.circuit (brWit input_var_gdY 0 1))
+      (cfg.gates.y, cfg.lookupConfig) (i₀ + 15) place env _ hWy1
+      ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [yc_assumptions_eq]; trivial),
+       (by rw [yc_proverAssumptions_eq, yc_extract]
+           refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+           simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+             Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+             Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
+           rw [hwb2, show Orchard.Specs.bitrange (ZMod.val (env.get
+               input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex
+               + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+             = ZMod.val (env.get input_var_gdY.cell.column
+               ((place input_var_gdY.cell.regionIndex
+               + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+             simp [Orchard.Specs.bitrange]])⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (YCanonicityCheck.circuit (brWit input_var_pkdY 0 1))
+      (cfg.gates.y, cfg.lookupConfig) (i₀ + 20) place env _ hWy2
+      ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [yc_assumptions_eq]; trivial),
+       (by rw [yc_proverAssumptions_eq, yc_extract]
+           refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+           simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+             Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+             Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
+           rw [hwd1, show Orchard.Specs.bitrange (ZMod.val (env.get
+               input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex
+               + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+             = ZMod.val (env.get input_var_pkdY.cell.column
+               ((place input_var_pkdY.cell.regionIndex
+               + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+             simp [Orchard.Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
