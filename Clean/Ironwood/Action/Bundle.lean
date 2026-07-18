@@ -573,6 +573,50 @@ private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environm
   rw [ProvableStruct.eval_cells_eq_eval]
   with_unfolding_all rfl
 
+private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      ({ magnitude := c1, sign := c2 } : Var Ecc.MulFixed.Short.Inputs Fp))
+    = { magnitude := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c1 : Var field Fp),
+        sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c2 : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
+private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      ({ ak := c1, nk := c2 } : Var CommitIvk.Main.Inputs Fp))
+    = { ak := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        nk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c2 : Var field Fp) } := by
+  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  with_unfolding_all rfl
+
+private theorem dn_assumptions_eq (K : FixedBase) :
+    (DeriveNullifier.circuit K).Assumptions
+      = fun (input : Value DeriveNullifier.Input Fp) =>
+          Orchard.Point.Valid input.cm := rfl
+
+private theorem sa_assumptions_eq (G : FixedBase) (w : Vector (FExpr Fp) 85) :
+    (SpendAuthority.circuit G w).Assumptions
+      = fun (input : Value SpendAuthority.Input Fp) =>
+          Orchard.Point.Valid input.akP := rfl
+
+private theorem vc_pa_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (w : Vector (FExpr Fp) 85) :
+    (ValueCommit.circuit V R w).ProverAssumptions
+      = fun (input : ProverValue Ecc.MulFixed.Short.Inputs Fp)
+          (wit : Vector Fp 85 × Fq) _ =>
+          input.magnitude.val < 2 ^ 64 ∧ (input.sign = 1 ∨ input.sign = -1) ∧
+          ∀ w : Fin 85, (wit.1[w.val]).val < 8 := rfl
+
+private theorem civk_pa_eq (G : Generators) (R : FixedBase)
+    (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
+    (CommitIvk.Main.circuit G R w Q hQ).ProverAssumptions
+      = CommitIvk.Main.ProverAssumptions G Q := rfl
+
 private theorem nc_extract_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
     (c : NoteCommit.Main.Config) (inp : Var NoteCommit.Main.Inputs Fp)
@@ -1268,6 +1312,70 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
         from by with_unfolding_all rfl]
       exact hMid
+    -- ── the remaining child contracts (for the instance rows and the gate) ──
+    have hVCder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows)
+      (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+      (i₀ + 266) place env _ hWvc (by exact ⟨hSh, hFw⟩) (by trivial)
+      (by rw [vc_pa_eq, vcInputs_eval_eq_prover]
+          refine ⟨?_, ?_, ?_⟩
+          · with_unfolding_all exact hMag
+          · with_unfolding_all exact hSign
+          · with_unfolding_all exact hWrcv)).1
+    have hDNder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (DeriveNullifier.circuit B.nullifierK)
+      (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+       cfg.eccConfig.add) (i₀ + 271) place env _ hWdn (by exact hBf)
+      (by rw [dn_assumptions_eq, dnInputs_eval_eq]
+          show Orchard.Point.Valid _
+          simp only [Point.eval_eq]
+          with_unfolding_all exact hVcm)
+      (by trivial)).1
+    have hSAder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (SpendAuthority.circuit B.spendAuthG W.alphaWindows)
+      (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
+      (by exact hFw)
+      (by rw [sa_assumptions_eq, saInputs_eval_eq]
+          show Orchard.Point.Valid _
+          simp only [Point.eval_eq]
+          with_unfolding_all exact Or.inl hVak)
+      (by with_unfolding_all exact hWal)).1
+    have hCIder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ B.ivkQ_onCurve)
+      { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
+      (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
+      (by rw [civk_pa_eq]
+          simp only [CommitIvk.Main.ProverAssumptions]
+          rw [civkInputs_eval_eq_prover]
+          refine ⟨?_, ?_⟩
+          · with_unfolding_all exact hWri
+          · refine ⟨Bi, ?_⟩
+            with_unfolding_all exact hBi)).1
+    -- the ivk output cell carries the honest commitment value
+    have hIvkVal : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ
+          B.ivkQ_onCurve).output
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { ak := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+            nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0) }
+          (i₀ + 283)) : Fp)
+        = (Bi + ((extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rivk.2
+              • B.commitIvkR : Point Fp)).x := by
+      rw [civk_spec_eq, civk_extract_eq] at hCIder
+      simp only [CommitIvk.Main.Spec] at hCIder
+      rw [civkInputs_eval_eq] at hCIder
+      simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
+        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+        Nat.add_zero] at hCIder
+      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+        (show hashToPoint G.S B.ivkQ _ = some Bi from by
+          with_unfolding_all exact hBi)] at hCIder
+      with_unfolding_all exact hCIder
     sorry
 
 end Halo2.Ironwood.Action.Circuit
