@@ -98,10 +98,18 @@ def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   completeness := by
     circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
       FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
-    -- WIP: goal is the three gate polys at the honest witness (all in raw advice-read
-    -- form after the peel; h_output are the three honest value equations). The refine
-    -- split mis-parses the conjunction shape — inspect `lean_goal` here before closing.
-    sorry
+    exact ⟨⟨by ring, by ring, by ring⟩,
+      h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
+
+/-- `M⁻¹ · (M · r) = r` in the gate's exact sum shape, with the `r`-components free for
+unification against the honest-witness goal. -/
+private theorem nextInv_cancel (j : Fin 3) (r0 r1 r2 : Fp) :
+    (match j with | ⟨0, _⟩ => r0 | ⟨1, _⟩ => r1 | _ => r2)
+      - ((r0 * mds 0 0 + r1 * mds 0 1 + r2 * mds 0 2) * mdsInv j.val 0 +
+         (r0 * mds 1 0 + r1 * mds 1 1 + r2 * mds 1 2) * mdsInv j.val 1 +
+         (r0 * mds 2 0 + r1 * mds 2 1 + r2 * mds 2 2) * mdsInv j.val 2) = 0 := by
+  rw [sub_eq_zero, Eq.comm]
+  exact Orchard.Poseidon.Permute.P128Pow5T3.mdsInv_mul_mds_apply j r0 r1 r2
 
 /-- Rust `Pow5State::partial_round` at source round `r` (`pow5.rs:461-534`): one row
 checking two source rounds. Enable `s_partial` at `offset`, load `rc_a` (round `r`) and
@@ -145,13 +153,40 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
   soundness := by
     circuit_proof_start [partialRoundsGate, pow5Expr, stateRow,
       PartialRounds.value, PartialRounds.mid0SboxValue, PartialRounds.paramsP128,
-      PartialRounds.params, pow5]
-    sorry
+      PartialRounds.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
+    obtain ⟨⟨gmid, gb, gl1, gl2⟩, ha0, ha1, ha2, hb0, hb1, hb2⟩ := hc
+    rw [ha0] at gmid
+    rw [ha1, ha2] at gb gl1 gl2
+    rw [hb0] at gb
+    rw [hb1] at gl1
+    rw [hb2] at gl2
+    have hmid := (sub_eq_zero.mp gmid).symm
+    rw [hmid] at gb gl1 gl2
+    have hInv0 := (sub_eq_zero.mp gb).symm
+    have hInv1 := (sub_eq_zero.mp gl1).symm
+    have hInv2 := (sub_eq_zero.mp gl2).symm
+    refine ⟨?_, ?_, ?_⟩
+    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+        ⟨0, by norm_num⟩ output_x0 output_x1 output_x2
+      rw [hInv0, hInv1, hInv2] at happ
+      simpa using happ.symm
+    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+        ⟨1, by norm_num⟩ output_x0 output_x1 output_x2
+      rw [hInv0, hInv1, hInv2] at happ
+      simpa using happ.symm
+    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+        ⟨2, by norm_num⟩ output_x0 output_x1 output_x2
+      rw [hInv0, hInv1, hInv2] at happ
+      simpa using happ.symm
 
   completeness := by
     circuit_proof_start [partialRoundsGate, pow5Expr, stateRow,
       PartialRounds.value, PartialRounds.mid0SboxValue, PartialRounds.paramsP128,
-      PartialRounds.params, pow5]
-    sorry
+      PartialRounds.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
+    refine ⟨⟨by ring, ?_, ?_, ?_⟩,
+      h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
+    · exact nextInv_cancel ⟨0, by norm_num⟩ _ _ _
+    · exact nextInv_cancel ⟨1, by norm_num⟩ _ _ _
+    · exact nextInv_cancel ⟨2, by norm_num⟩ _ _ _
 
 end Halo2.Ironwood.Poseidon
