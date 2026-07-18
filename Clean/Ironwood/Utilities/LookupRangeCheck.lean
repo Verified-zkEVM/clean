@@ -907,7 +907,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     set eCell := env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ)
       with heCell
     have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
-      simp only [zChain, add_zero, heCell, Placed.toEnvironment_env]
+      simp only [zChain, add_zero, heCell]
     have hz : ∀ j, j ≤ numWords → zChain K cfg place self env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
       intro j hj
@@ -918,8 +918,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
           numWords hLoopWit j hjpos hj
         rw [hv]
         simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell,
-          Placed.toEnvironment_env]
+          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell]
     refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
     · exact rangeCheck_loop_constraints_complete K cfg
         (AssignedCell.of self offset cfg.runningSum) place self
