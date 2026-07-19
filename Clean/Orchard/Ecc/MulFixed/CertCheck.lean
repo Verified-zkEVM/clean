@@ -1,4 +1,5 @@
 import Clean.Orchard.Specs.PallasCert
+import Clean.Orchard.Ecc.MulFixed
 
 /-!
 # Nat-level certification checker for concrete fixed-base window tables
@@ -499,6 +500,72 @@ theorem checkBase_sound {numLower : ℕ} (hnl : 6 < numLower) {c : BaseCert}
         have := hrow k hkd
         simp only [List.getElem_drop, show 1 + k = k + 1 from by omega] at this
         rw [this]
+
+/-! ### The `windowPoint` bridge (85-window donor scalars) -/
+
+/-- The certified table entry for window `w`, value `k`. -/
+def certEntry (c : BaseCert) (w k : ℕ) : ℕ × ℕ :=
+  if w < 84 then ((c.rows[w]!)[k]!).1 else (c.msb[k]!).1
+
+open CompElliptic.Fields.Pasta (Fq PALLAS_SCALAR_CARD)
+
+theorem windowScalar_val_lower {w k : ℕ} (hw : w < 84) (hk : k < 8) :
+    (Orchard.Ecc.MulFixed.windowScalar w k).val = (k + 2) * 8 ^ w := by
+  rw [Orchard.Ecc.MulFixed.windowScalar, if_neg (by omega)]
+  have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
+    push_cast
+    ring
+  rw [hcast, ZMod.val_cast_of_lt]
+  calc (k + 2) * 8 ^ w ≤ 9 * 8 ^ 83 := by
+        apply Nat.mul_le_mul (by omega)
+        exact Nat.pow_le_pow_right (by norm_num) (by omega)
+    _ < PALLAS_SCALAR_CARD := by
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
+
+theorem offsetAcc_eq_sum :
+    Orchard.Ecc.MulFixed.offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
+  rw [Orchard.Ecc.MulFixed.offsetAcc]
+  apply Finset.sum_congr rfl
+  intro j _
+  rw [pow_succ' 2 (3 * j), pow_mul]
+  norm_num
+
+open Orchard.Point in
+/-- The full 85-window bridge: a passed `checkBase 84` certificate's entries ARE the
+donor `windowPoint`s of its base. -/
+theorem cert_windowPoint_eq {c : BaseCert}
+    (hB : (pointOf c.base).OnCurve) (h : checkBase 84 c = true) :
+    ∀ w, (hw : w < 85) → ∀ k, (hk : k < 8) →
+      pointOf (certEntry c w k)
+        = Orchard.Ecc.MulFixed.windowPoint (pointOf c.base) w k := by
+  obtain ⟨hlow, hmsb⟩ := checkBase_sound (by omega) hB h
+  intro w hw k hk
+  rw [Orchard.Ecc.MulFixed.windowPoint]
+  by_cases hw84 : w < 84
+  · obtain ⟨hw', hk', hval⟩ := hlow w hw84 k hk
+    rw [certEntry, if_pos hw84, getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
+      windowScalar_val_lower hw84 hk]
+  · have hw' : w = 84 := by omega
+    subst hw'
+    obtain ⟨hk', hval⟩ := hmsb k hk
+    rw [certEntry, if_neg (by omega), getElem!_pos c.msb k hk', hval]
+    apply Orchard.Point.nsmul_congr hB
+    rw [← ZMod.natCast_eq_natCast_iff]
+    set S : ℕ := ∑ j ∈ Finset.range 84, 2 * 8 ^ j with hSdef
+    have hSle : S % PALLAS_SCALAR_CARD ≤ PALLAS_SCALAR_CARD :=
+      Nat.le_of_lt (Nat.mod_lt _ (by norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]))
+    have hcast : ((PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD + k * 8 ^ 84 : ℕ) : Fq)
+        = (k : Fq) * 8 ^ 84 - (S : Fq) := by
+      rw [Nat.cast_add, Nat.cast_sub hSle, ZMod.natCast_self,
+        show ((S % PALLAS_SCALAR_CARD : ℕ) : Fq) = (S : Fq) from ZMod.natCast_mod S _]
+      push_cast
+      ring
+    rw [hcast]
+    have hws : Orchard.Ecc.MulFixed.windowScalar 84 k
+        = (k : Fq) * 8 ^ 84 - (S : Fq) := by
+      rw [Orchard.Ecc.MulFixed.windowScalar, if_pos rfl, offsetAcc_eq_sum, hSdef]
+    rw [← hws]
+    exact (ZMod.natCast_rightInverse _).symm
 
 end Chain
 
