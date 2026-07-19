@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.Circuit
+import Clean.Ironwood.Action.CircuitPreIronwood
 
 /-!
 # The Orchard Action circuit: bundle contract (spec / extract / elaborated)
@@ -146,15 +146,16 @@ set_option linter.unusedSimpArgs false in
 stage, the 91-region note stage — 394. -/
 theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (i : RegionIndex) :
-    Operations.regionCount ((synthesize G B W cfg).operations i) = 394 := by
-  simp only [synthesize, circuit_norm, Circuit.operations_bind,
+    Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
+      = 394 := by
+  simp only [CircuitPreIronwood.synthesize, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
 /-- The `FormalCircuit` entry: `unit → unit`, everything through the extraction. -/
 def main (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     Var unit Fp → Circuit Fp (Var unit Fp) := fun _ => do
-  synthesize G B W cfg
+  let _ ← CircuitPreIronwood.synthesize G B W cfg
   pure ()
 
 set_option linter.unusedSimpArgs false in
@@ -734,7 +735,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
       (Spec G B) := by
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
-  simp only [main, synthesize, circuit_norm] at hc
+  simp only [main, CircuitPreIronwood.synthesize, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
   have hN := hc.2.2
@@ -1226,7 +1227,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hAnch, hVanch⟩,
     ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmo⟩, ⟨Bn, hBn, hCmx⟩,
     ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
-  simp only [main, synthesize, circuit_norm] at hwit ⊢
+  simp only [main, CircuitPreIronwood.synthesize, circuit_norm] at hwit ⊢
   have hWw := hwit.1
   have hWc := hwit.2.1
   have hWn := hwit.2.2

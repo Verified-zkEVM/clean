@@ -76,6 +76,12 @@ summary); completed narrative sections were retired 2026-07-18.
 - Generated layout fixtures' `maxRecDepth` is an accepted allowances exception (data-only,
   8–21s builds); chunked rendering is the eventual cleanup.
 - halo2 dumper commits stay local to Gregor's machine.
+- VK-matching target: the orchard `ebfull/ironwood` branch (`ironwood-dump` local branch
+  in the checkout = ironwood + dump commits). The MAIN circuit is post-NU 6.3
+  (`Action.Circuit.synthesize`, fixture `ActionLayout`); the pre-ironwood fixed post-NU
+  6.2 circuit is `Action/CircuitPreIronwood.lean` (fixture `ActionBaseLayout`, and the
+  proven `Action.Bundle` targets it). The CS is version-independent (verified: 6.2 CS on
+  ironwood == 0.14.0 == 6.3 CS), so `ActionPre/Post/SelMap` are shared.
 - Equality-set question resolved as a **layered structure**: core chip Pre/Post fixtures
   stay chip-only; the Layout fixtures index against an *orchard-consistent wrapper*
   (test-prelude `enableEquality` on all 10 advices — which also adds rot-0 queries);

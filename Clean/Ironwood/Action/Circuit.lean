@@ -142,6 +142,7 @@ def RK_Y : ℕ := 5
 def CMX : ℕ := 6
 def ENABLE_SPEND : ℕ := 7
 def ENABLE_OUTPUT : ℕ := 8
+def DISABLE_CROSS_ADDRESS : ℕ := 9
 
 /-- The fixed bases and Sinsemilla domain points the Action circuit is instantiated at
 (Rust reaches them through `OrchardFixedBases` / the domain constants). -/
@@ -271,10 +272,16 @@ def synthChecks (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) { ivk := ivk, gDOld := wc.gdOld }
   pure { root, magnitude, sign, nfOld, pkdOld }
 
+/-- Stage C's outputs: the new-note diversified-address cells (the Rust `AddressPoints`
+half the cross-address stage reads; the old halves live in `WitnessCells`/`CheckCells`). -/
+structure NoteCells where
+  gdNew : Var Point Fp
+  pkdNew : Var Point Fp
+
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
 `"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
 def synthNotes (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
-    (wc : WitnessCells) (cc : CheckCells) : Circuit Fp Unit := do
+    (wc : WitnessCells) (cc : CheckCells) : Circuit Fp NoteCells := do
   -- circuit.rs:696-729 — old note commitment integrity
   let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows
       B.noteQ B.noteQ_onCurve).call
@@ -311,14 +318,45 @@ def synthNotes (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     let _ ← assignAdviceFromInstance cfg.primary ENABLE_SPEND (cfg.advices 6) 0
     let _ ← assignAdviceFromInstance cfg.primary ENABLE_OUTPUT (cfg.advices 7) 0
     (orchardGate cfg.qOrchard cfg.advices).enable 0)
-  pure ()
+  pure { gdNew, pkdNew }
 
-/-- Rust `Circuit::synthesize` (`circuit.rs:461-828`), in exact region-creation order:
-the staged composition of the witness, integrity-check, and note-commitment stages. -/
+/-- Ironwood `Circuit::synthesize_cross_address_checks` (`circuit.rs:920-1035`): the
+`"post-NU 6.3 cross-address checks"` region — one row per address coordinate, reusing
+the `q_orchard` gate as `disableCrossAddress − 0 = disableCrossAddress · 1` (value
+row), `disableCrossAddress · (old − new) = 0` (root/anchor row), with both enable
+checks neutralized and the rightmost columns occupied against foreign gate rows. -/
+def synthCrossAddressChecks (cfg : Config) (wc : WitnessCells) (cc : CheckCells)
+    (nc : NoteCells) : Circuit Fp Unit :=
+  assignRegion "post-NU 6.3 cross-address checks" (do
+    let coords := [(wc.gdOld.x, nc.gdNew.x), (wc.gdOld.y, nc.gdNew.y),
+                   (cc.pkdOld.x, nc.pkdNew.x), (cc.pkdOld.y, nc.pkdNew.y)]
+    for h : row in [0:4] do
+      let (oldC, newC) := coords[row]!
+      let dca ← assignAdviceFromInstance cfg.primary DISABLE_CROSS_ADDRESS
+        (cfg.advices 0) row
+      let z ← assignAdvice (cfg.advices 1) row (Poseidon.constWit 0)
+      constrainConstant z 0
+      let _ ← copyAdvice dca (cfg.advices 2) row
+      let o3 ← assignAdvice (cfg.advices 3) row (Poseidon.constWit 1)
+      constrainConstant o3 1
+      let _ ← copyAdvice oldC (cfg.advices 4) row
+      let _ ← copyAdvice newC (cfg.advices 5) row
+      let o6 ← assignAdvice (cfg.advices 6) row (Poseidon.constWit 1)
+      constrainConstant o6 1
+      let o7 ← assignAdvice (cfg.advices 7) row (Poseidon.constWit 1)
+      constrainConstant o7 1
+      let _ ← copyAdvice dca (cfg.advices 8) row
+      let _ ← copyAdvice dca (cfg.advices 9) row
+      (orchardGate cfg.qOrchard cfg.advices).enable row)
+
+/-- The ironwood (post-NU 6.3) `Circuit::synthesize` — THE top-level circuit this repo
+targets: the base stages plus the cross-address checks region. The pre-ironwood
+(fixed post-NU 6.2) circuit lives in `Action/CircuitPreIronwood.lean`. -/
 def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     Circuit Fp Unit := do
   let wc ← synthWitness G W cfg
   let cc ← synthChecks G B W cfg wc
-  synthNotes G B W cfg wc cc
+  let nc ← synthNotes G B W cfg wc cc
+  synthCrossAddressChecks cfg wc cc nc
 
 end Halo2.Ironwood.Action.Circuit

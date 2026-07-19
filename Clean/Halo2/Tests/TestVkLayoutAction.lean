@@ -109,8 +109,11 @@ def commitMirror (ns : List ℕ) (hns : ns ≠ []) (Q : Orchard.Point Fp) (hQ : 
     { p := hashOut.point, q := blindOut }
 
 open Halo2.Ironwood in
-/-- The mirror of `Action.Circuit.synthesize` (keygen witnesses, data-level bases). -/
-def aProgram : Circuit Fp Unit := do
+/-- The mirror of the base stages (keygen witnesses, data-level bases), returning the
+cells the ironwood cross-address stage reads. -/
+def aProgramCore : Circuit Fp
+    (Ironwood.Action.Circuit.WitnessCells × Ironwood.Action.Circuit.CheckCells ×
+      Ironwood.Action.Circuit.NoteCells) := do
   Ironwood.Sinsemilla.load aG aCfg.sinsemilla1.generatorTable
   -- the eight shared witness regions
   let psiOld ← loadPrivate (aCfg.advices 0) unk
@@ -218,7 +221,9 @@ def aProgram : Circuit Fp Unit := do
     let _ ← assignAdviceFromInstance aCfg.primary ENABLE_SPEND (aCfg.advices 6) 0
     let _ ← assignAdviceFromInstance aCfg.primary ENABLE_OUTPUT (aCfg.advices 7) 0
     (orchardGate aCfg.qOrchard aCfg.advices).enable 0)
-  pure ()
+  pure ({ psiOld, rhoOld, cmOld, gdOld, akP, nk, vOld, vNew },
+    { root, magnitude, sign, nfOld, pkdOld := pkDOld },
+    { gdNew, pkdNew })
 where
   /-- One `NoteCommit` (the `TestVkLayoutNoteCommit` mirror body, at this circuit's
   configs; 43 regions). -/
@@ -256,7 +261,18 @@ where
       { b2, d1, cm, aZs, bZs, eZs, gZs } iHash
     pure cm
 
-/-! ## The reconstructed layout products -/
+/-- The pre-ironwood (fixed post-NU 6.2) mirror. -/
+def aProgramBase : Circuit Fp Unit := do
+  let _ ← aProgramCore
+  pure ()
+
+/-- The ironwood (post-NU 6.3) mirror — the base stages plus the REAL
+`synthCrossAddressChecks` (shared with the main circuit, no mirror copy). -/
+def aProgram : Circuit Fp Unit := do
+  let (wc, cc, nc) ← aProgramCore
+  Halo2.Ironwood.Action.Circuit.synthCrossAddressChecks aCfg wc cc nc
+
+/-! ## The reconstructed layout products (ironwood) -/
 
 def aOps : Operations Fp := aProgram.operations
 def aRegions : List (ℕ × RegionOperations Fp) := (indexedRegions aOps 0).1
