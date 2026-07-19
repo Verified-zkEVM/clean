@@ -499,9 +499,10 @@ theorem checkBase_sound {numLower : ℕ} (hnl : 6 < numLower) {c : BaseCert}
 
 /-! ### The `windowPoint` bridge (85-window donor scalars) -/
 
-/-- The certified table entry for window `w`, value `k`. -/
-def certEntry (c : BaseCert) (w k : ℕ) : ℕ × ℕ :=
-  if w < 84 then ((c.rows[w]!)[k]!).1 else (c.msb[k]!).1
+/-- The certified table entry for window `w`, value `k` (of a base with
+`numLower + 1` windows). -/
+def certEntry (numLower : ℕ) (c : BaseCert) (w k : ℕ) : ℕ × ℕ :=
+  if w < numLower then ((c.rows[w]!)[k]!).1 else (c.msb[k]!).1
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_SCALAR_CARD)
 
@@ -532,19 +533,19 @@ donor `windowPoint`s of its base. -/
 theorem cert_windowPoint_eq {c : BaseCert}
     (hB : (pointOf c.base).OnCurve) (h : checkBase 84 c = true) :
     ∀ w, (hw : w < 85) → ∀ k, (hk : k < 8) →
-      pointOf (certEntry c w k)
+      pointOf (certEntry 84 c w k)
         = Orchard.Ecc.MulFixed.windowPoint (pointOf c.base) w k := by
   obtain ⟨hlow, hmsb⟩ := checkBase_sound (by omega) hB h
   intro w hw k hk
   rw [Orchard.Ecc.MulFixed.windowPoint]
   by_cases hw84 : w < 84
   · obtain ⟨hw', hk', hval⟩ := hlow w hw84 k hk
-    rw [certEntry, if_pos hw84, getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
+    rw [certEntry, if_pos (show w < 84 from hw84), getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
       windowScalar_val_lower hw84 hk]
   · have hw' : w = 84 := by omega
     subst hw'
     obtain ⟨hk', hval⟩ := hmsb k hk
-    rw [certEntry, if_neg (by omega), getElem!_pos c.msb k hk', hval]
+    rw [certEntry, if_neg (by omega : ¬ 84 < 84), getElem!_pos c.msb k hk', hval]
     apply Orchard.Point.nsmul_congr hB
     rw [← ZMod.natCast_eq_natCast_iff]
     set S : ℕ := ∑ j ∈ Finset.range 84, 2 * 8 ^ j with hSdef
@@ -709,8 +710,8 @@ structure FullCert extends BaseCert where
   us : List (List ℕ)
 
 /-- The certified x/y coordinate of entry `(w, k)`. -/
-def entryX (c : BaseCert) (w k : ℕ) : ℕ := (certEntry c w k).1
-def entryY (c : BaseCert) (w k : ℕ) : ℕ := (certEntry c w k).2
+def entryX (numLower : ℕ) (c : BaseCert) (w k : ℕ) : ℕ := (certEntry numLower c w k).1
+def entryY (numLower : ℕ) (c : BaseCert) (w k : ℕ) : ℕ := (certEntry numLower c w k).2
 
 /-- The whole certificate check for a base with `numLower + 1` windows. -/
 def checkFull (numLower : ℕ) (c : FullCert) : Bool :=
@@ -722,22 +723,22 @@ def checkFull (numLower : ℕ) (c : FullCert) : Bool :=
   (List.range (numLower + 1)).all fun w =>
     (c.coeffs[w]!.length == 8) &&
     checkInterp c.coeffs[w]!
-      ((List.range 8).map fun k => entryX c.toBaseCert w k) &&
+      ((List.range 8).map fun k => entryX numLower c.toBaseCert w k) &&
     checkU c.zs[w]! c.us[w]!
-      ((List.range 8).map fun k => entryY c.toBaseCert w k) &&
+      ((List.range 8).map fun k => entryY numLower c.toBaseCert w k) &&
     (List.range 8).all fun k =>
-      (entryY c.toBaseCert w k < P) &&
-      checkNonSquare (subm c.zs[w]! (entryY c.toBaseCert w k))
+      (entryY numLower c.toBaseCert w k < P) &&
+      checkNonSquare (subm c.zs[w]! (entryY numLower c.toBaseCert w k))
 
 /-- The per-window facts `checkFull` certifies, at the `Fp` level. -/
 theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     (h : checkFull numLower c = true) :
     ∀ (w : ℕ), (hw : w < numLower + 1) → ∀ (k : ℕ), (hk : k < 8) →
       (Orchard.Ecc.MulFixed.interpolate (mkParams c.zs[w]! c.coeffs[w]!) (k : Fp)
-          = ((entryX c.toBaseCert w k : ℕ) : Fp)) ∧
+          = ((entryX numLower c.toBaseCert w k : ℕ) : Fp)) ∧
       (((c.us[w]!)[k]! : Fp) * ((c.us[w]!)[k]! : Fp)
-          = ((entryY c.toBaseCert w k : ℕ) : Fp) + ((c.zs[w]! : ℕ) : Fp)) ∧
-      ¬ IsSquare (((c.zs[w]! : ℕ) : Fp) - ((entryY c.toBaseCert w k : ℕ) : Fp)) := by
+          = ((entryY numLower c.toBaseCert w k : ℕ) : Fp) + ((c.zs[w]! : ℕ) : Fp)) ∧
+      ¬ IsSquare (((c.zs[w]! : ℕ) : Fp) - ((entryY numLower c.toBaseCert w k : ℕ) : Fp)) := by
   simp only [checkFull, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
     List.mem_range] at h
   obtain ⟨⟨⟨⟨⟨hbase, honc⟩, hzl⟩, hcl⟩, hul⟩, hwin⟩ := h
@@ -759,8 +760,8 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     have hcast := congrArg (Nat.cast (R := Fp)) this
     rw [evalInterp_cast c.zs[w]! c0 c1 c2 c3 c4 c5 c6 c7 k] at hcast
     rw [hcast]
-    rw [show ((List.range 8).map fun k => entryX c.toBaseCert w k)[k]!
-        = entryX c.toBaseCert w k from by
+    rw [show ((List.range 8).map fun k => entryX numLower c.toBaseCert w k)[k]!
+        = entryX numLower c.toBaseCert w k from by
       rw [getElem!_pos _ k (by simp; omega), List.getElem_map, List.getElem_range]]
     rw [cast_mod]
   · -- u-table
@@ -768,8 +769,8 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
       List.mem_range] at hu
     obtain ⟨⟨_, _⟩, huk⟩ := hu
     have := huk k hk
-    rw [show ((List.range 8).map fun k => entryY c.toBaseCert w k)[k]!
-        = entryY c.toBaseCert w k from by
+    rw [show ((List.range 8).map fun k => entryY numLower c.toBaseCert w k)[k]!
+        = entryY numLower c.toBaseCert w k from by
       rw [getElem!_pos _ k (by simp; omega), List.getElem_map, List.getElem_range]] at this
     have hcast := congrArg (Nat.cast (R := Fp)) this
     rw [cast_mulm, cast_mod] at hcast
@@ -835,6 +836,100 @@ def ofCert (c : FullCert) (h : checkFull 84 c = true) :
         simp only [checkFull, Bool.and_eq_true] at h'
         exact checkOnCurve_sound h'.1.1.1.1.2)
       hbase w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).2.2
+    rw [← hwp]
+    exact this
+
+/-! ### The Short (22-window) variant -/
+
+theorem short_windowScalar_val_lower {w k : ℕ} (hw : w < 21) (hk : k < 8) :
+    (Orchard.Ecc.MulFixed.Short.windowScalar w k).val = (k + 2) * 8 ^ w := by
+  rw [Orchard.Ecc.MulFixed.Short.windowScalar, if_neg (by omega)]
+  have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
+    push_cast
+    ring
+  rw [hcast, ZMod.val_cast_of_lt]
+  calc (k + 2) * 8 ^ w ≤ 9 * 8 ^ 20 := by
+        apply Nat.mul_le_mul (by omega)
+        exact Nat.pow_le_pow_right (by norm_num) (by omega)
+    _ < PALLAS_SCALAR_CARD := by
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
+
+open Orchard.Point in
+/-- The 22-window bridge: a passed `checkBase 21` certificate's entries ARE the donor
+Short `windowPoint`s of its base. -/
+theorem cert_windowPoint_eq_short {c : BaseCert}
+    (hB : (pointOf c.base).OnCurve) (h : checkBase 21 c = true) :
+    ∀ (w : ℕ), (hw : w < 22) → ∀ (k : ℕ), (hk : k < 8) →
+      pointOf (certEntry 21 c w k)
+        = Orchard.Ecc.MulFixed.Short.windowPoint (pointOf c.base) w k := by
+  obtain ⟨hlow, hmsb⟩ := checkBase_sound (by omega) hB h
+  intro w hw k hk
+  rw [Orchard.Ecc.MulFixed.Short.windowPoint]
+  by_cases hw21 : w < 21
+  · obtain ⟨hw', hk', hval⟩ := hlow w hw21 k hk
+    rw [certEntry, if_pos (show w < 21 from hw21), getElem!_pos c.rows w hw',
+      getElem!_pos _ k hk', hval, short_windowScalar_val_lower hw21 hk]
+  · have hw' : w = 21 := by omega
+    subst hw'
+    obtain ⟨hk', hval⟩ := hmsb k hk
+    rw [certEntry, if_neg (by omega : ¬ 21 < 21), getElem!_pos c.msb k hk', hval]
+    apply Orchard.Point.nsmul_congr hB
+    rw [← ZMod.natCast_eq_natCast_iff]
+    set S : ℕ := ∑ j ∈ Finset.range 21, 2 * 8 ^ j with hSdef
+    have hSle : S % PALLAS_SCALAR_CARD ≤ PALLAS_SCALAR_CARD :=
+      Nat.le_of_lt (Nat.mod_lt _
+        (by norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]))
+    have hcast : ((PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD + k * 8 ^ 21 : ℕ) : Fq)
+        = (k : Fq) * 8 ^ 21 - (S : Fq) := by
+      rw [Nat.cast_add, Nat.cast_sub hSle, ZMod.natCast_self,
+        show ((S % PALLAS_SCALAR_CARD : ℕ) : Fq) = (S : Fq) from ZMod.natCast_mod S _]
+      push_cast
+      ring
+    rw [hcast]
+    have hws : Orchard.Ecc.MulFixed.Short.windowScalar 21 k
+        = (k : Fq) * 8 ^ 21 - (S : Fq) := by
+      rw [Orchard.Ecc.MulFixed.Short.windowScalar, if_pos rfl,
+        Orchard.Ecc.MulFixed.Short.offsetAcc_eq, hSdef]
+    rw [← hws]
+    exact (ZMod.natCast_rightInverse _).symm
+
+open Orchard.Point in
+/-- Construct a proof-carrying donor `Short.FixedBase` (22 windows) from a passed
+certificate. -/
+def ofCertShort (c : FullCert) (h : checkFull 21 c = true) :
+    Orchard.Ecc.MulFixed.Short.FixedBase where
+  point := pointOf c.base
+  onCurve := by
+    have h' := h
+    simp only [checkFull, Bool.and_eq_true] at h'
+    exact checkOnCurve_sound h'.1.1.1.1.2
+  params := fun w => mkParams c.zs[w]! c.coeffs[w]!
+  u := fun w k => ((c.us[w]!)[k]! : Fp)
+  interpolate_eq := by
+    intro w hw k hk
+    have h' := h
+    simp only [checkFull, Bool.and_eq_true] at h'
+    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
+      h'.1.1.1.1.1 w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).1
+    rw [this, ← hwp]
+    rfl
+  u_mul_u := by
+    intro w hw k hk
+    have h' := h
+    simp only [checkFull, Bool.and_eq_true] at h'
+    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
+      h'.1.1.1.1.1 w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).2.1
+    rw [this, ← hwp]
+    rfl
+  z_sub_y_not_square := by
+    intro w hw k hk
+    have h' := h
+    simp only [checkFull, Bool.and_eq_true] at h'
+    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
+      h'.1.1.1.1.1 w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).2.2
     rw [← hwp]
     exact this
