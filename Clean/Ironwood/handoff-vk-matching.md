@@ -105,7 +105,24 @@ The generation procedure (halo2_gadgets/src/ecc/chip/constants.rs):
 - The u tables and base points are Rust constants (orchard/src/constants/fixed_bases/*.rs
   — `GENERATOR`, `U`, `Z` arrays); dump them like the Q points (byte-array parse).
 
-Proof plan, ALL kernel-checkable (no native_decide), all ingredients already in-repo:
+REVISED (Gregor 2026-07-19): define bases as the PROCEDURE's output, not as checked
+tables — `FixedBase.ofBase B hB` smart constructor:
+- `params w := lagrangeCoeffs ((windowPointFast B w ·).x)`, `(z, u)` from a ported
+  self-checking `find_zs_and_us` (sqrt returns are self-certifying; non-square test IS
+  the Euler exponentiation).
+- GENERIC one-time theorems (no per-base field computation): `interpolate_eq` = the
+  eval-at-node property of `lagrangeCoeffs` (64 concrete basis identities over the fixed
+  nodes 0..7, or Mathlib `Lagrange.eval_interpolate_at_node`); on-curve of every window
+  point from `Point.nsmul_onCurve`; `u_mul_u`/`z_sub_y_not_square` = the search's
+  by-construction postcondition (`ZMod.euler_criterion` for the negative direction).
+- Computational reflection ONCE: `smulFast` (binary double-and-add) with
+  `smulFast n P = n • P` (from `nsmul_add_nsmul`) — needed because evaluating
+  `ShortWeierstrass.smul` unfolds n≈2^255 times; this makes the derived tables
+  kernel-computable (~2k curve adds per base).
+- Per base, only three concrete `decide`s: `B.OnCurve`; the search succeeds; derived
+  `toData` values = the dumped fixture values (the VK-matching content).
+
+Superseded original plan (bulk-checking framing, kept for reference):
 1. Window table in Lean by k-chains: start `(k+2)•B` (small, unary `nsmul` fine),
    then 3 complete-addition doublings per window step (2·n•P = n•P + n•P via
    `Point.nsmul_add_nsmul hOnCurve` — Pallas.lean:306). Generic lemma
