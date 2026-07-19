@@ -38,6 +38,7 @@ import Clean.Ironwood.Action.AddressIntegrity
 import Clean.Ironwood.Ecc.Chip
 import Clean.Ironwood.Action.Circuit
 import Clean.Ironwood.Action.Bundle
+import Clean.Ironwood.Action.RealBases
 
 /-!
 # Ironwood circuits
