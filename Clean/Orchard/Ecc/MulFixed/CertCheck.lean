@@ -1,5 +1,6 @@
 import Clean.Orchard.Specs.PallasCert
 import Clean.Orchard.Ecc.MulFixed
+import Clean.Orchard.Ecc.MulFixed.Short
 
 /-!
 # Nat-level certification checker for concrete fixed-base window tables
@@ -697,6 +698,146 @@ theorem checkOnCurve_sound {x y : ℕ} (h : checkOnCurve x y = true) :
   rw [show ((y : ℕ) : Fp) ^ 2 = ((y : ℕ) : Fp) * ((y : ℕ) : Fp) from sq _]
   rw [this]
   ring
+
+/-! ### The full certificate and the `FixedBase` constructors -/
+
+/-- A full fixed-base certificate: the chain data plus the dumped `z`/coefficient/u
+tables. -/
+structure FullCert extends BaseCert where
+  zs : List ℕ
+  coeffs : List (List ℕ)
+  us : List (List ℕ)
+
+/-- The certified x/y coordinate of entry `(w, k)`. -/
+def entryX (c : BaseCert) (w k : ℕ) : ℕ := (certEntry c w k).1
+def entryY (c : BaseCert) (w k : ℕ) : ℕ := (certEntry c w k).2
+
+/-- The whole certificate check for a base with `numLower + 1` windows. -/
+def checkFull (numLower : ℕ) (c : FullCert) : Bool :=
+  checkBase numLower c.toBaseCert &&
+  checkOnCurve c.base.1 c.base.2 &&
+  (c.zs.length == numLower + 1) &&
+  (c.coeffs.length == numLower + 1) &&
+  (c.us.length == numLower + 1) &&
+  (List.range (numLower + 1)).all fun w =>
+    (c.coeffs[w]!.length == 8) &&
+    checkInterp c.coeffs[w]!
+      ((List.range 8).map fun k => entryX c.toBaseCert w k) &&
+    checkU c.zs[w]! c.us[w]!
+      ((List.range 8).map fun k => entryY c.toBaseCert w k) &&
+    (List.range 8).all fun k =>
+      (entryY c.toBaseCert w k < P) &&
+      checkNonSquare (subm c.zs[w]! (entryY c.toBaseCert w k))
+
+/-- The per-window facts `checkFull` certifies, at the `Fp` level. -/
+theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
+    (h : checkFull numLower c = true) :
+    ∀ (w : ℕ), (hw : w < numLower + 1) → ∀ (k : ℕ), (hk : k < 8) →
+      (Orchard.Ecc.MulFixed.interpolate (mkParams c.zs[w]! c.coeffs[w]!) (k : Fp)
+          = ((entryX c.toBaseCert w k : ℕ) : Fp)) ∧
+      (((c.us[w]!)[k]! : Fp) * ((c.us[w]!)[k]! : Fp)
+          = ((entryY c.toBaseCert w k : ℕ) : Fp) + ((c.zs[w]! : ℕ) : Fp)) ∧
+      ¬ IsSquare (((c.zs[w]! : ℕ) : Fp) - ((entryY c.toBaseCert w k : ℕ) : Fp)) := by
+  simp only [checkFull, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+    List.mem_range] at h
+  obtain ⟨⟨⟨⟨⟨hbase, honc⟩, hzl⟩, hcl⟩, hul⟩, hwin⟩ := h
+  intro w hw k hk
+  obtain ⟨⟨⟨hc8, hinterp⟩, hu⟩, hns⟩ := hwin w hw
+  refine ⟨?_, ?_, ?_⟩
+  · -- interpolation
+    simp only [checkInterp, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at hinterp
+    obtain ⟨⟨_, _⟩, hik⟩ := hinterp
+    have := hik k hk
+    have hcs : ∃ c0 c1 c2 c3 c4 c5 c6 c7,
+        c.coeffs[w]! = [c0, c1, c2, c3, c4, c5, c6, c7] := by
+      match hval : c.coeffs[w]!, hc8 with
+      | [c0, c1, c2, c3, c4, c5, c6, c7], _ =>
+          exact ⟨c0, c1, c2, c3, c4, c5, c6, c7, rfl⟩
+    obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, hcs⟩ := hcs
+    rw [hcs] at this ⊢
+    have hcast := congrArg (Nat.cast (R := Fp)) this
+    rw [evalInterp_cast c.zs[w]! c0 c1 c2 c3 c4 c5 c6 c7 k] at hcast
+    rw [hcast]
+    rw [show ((List.range 8).map fun k => entryX c.toBaseCert w k)[k]!
+        = entryX c.toBaseCert w k from by
+      rw [getElem!_pos _ k (by simp; omega), List.getElem_map, List.getElem_range]]
+    rw [cast_mod]
+  · -- u-table
+    simp only [checkU, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at hu
+    obtain ⟨⟨_, _⟩, huk⟩ := hu
+    have := huk k hk
+    rw [show ((List.range 8).map fun k => entryY c.toBaseCert w k)[k]!
+        = entryY c.toBaseCert w k from by
+      rw [getElem!_pos _ k (by simp; omega), List.getElem_map, List.getElem_range]] at this
+    have hcast := congrArg (Nat.cast (R := Fp)) this
+    rw [cast_mulm, cast_mod] at hcast
+    rw [hcast]
+    push_cast
+    ring
+  · -- non-squareness
+    obtain ⟨hylt, hnsk⟩ := hns k hk
+    have := checkNonSquare_sound hnsk
+    rwa [cast_subm _ (Nat.le_of_lt (of_decide_eq_true hylt))] at this
+
+open Orchard.Point in
+/-- Construct a proof-carrying donor `FixedBase` (85 windows) from a passed
+certificate. -/
+def ofCert (c : FullCert) (h : checkFull 84 c = true) :
+    Orchard.Ecc.MulFixed.FixedBase where
+  point := pointOf c.base
+  onCurve := by
+    have h' := h
+    simp only [checkFull, Bool.and_eq_true] at h'
+    exact checkOnCurve_sound h'.1.1.1.1.2
+  params := fun w => mkParams c.zs[w]! c.coeffs[w]!
+  u := fun w k => ((c.us[w]!)[k]! : Fp)
+  interpolate_eq := by
+    intro w hw k hk
+    have hbase : checkBase 84 c.toBaseCert = true := by
+      have h' := h
+      simp only [checkFull, Bool.and_eq_true] at h'
+      exact h'.1.1.1.1.1
+    have hwp := cert_windowPoint_eq
+      (by
+        have h' := h
+        simp only [checkFull, Bool.and_eq_true] at h'
+        exact checkOnCurve_sound h'.1.1.1.1.2)
+      hbase w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).1
+    rw [this, ← hwp]
+    rfl
+  u_mul_u := by
+    intro w hw k hk
+    have hbase : checkBase 84 c.toBaseCert = true := by
+      have h' := h
+      simp only [checkFull, Bool.and_eq_true] at h'
+      exact h'.1.1.1.1.1
+    have hwp := cert_windowPoint_eq
+      (by
+        have h' := h
+        simp only [checkFull, Bool.and_eq_true] at h'
+        exact checkOnCurve_sound h'.1.1.1.1.2)
+      hbase w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).2.1
+    rw [this, ← hwp]
+    rfl
+  z_sub_y_not_square := by
+    intro w hw k hk
+    have hbase : checkBase 84 c.toBaseCert = true := by
+      have h' := h
+      simp only [checkFull, Bool.and_eq_true] at h'
+      exact h'.1.1.1.1.1
+    have hwp := cert_windowPoint_eq
+      (by
+        have h' := h
+        simp only [checkFull, Bool.and_eq_true] at h'
+        exact checkOnCurve_sound h'.1.1.1.1.2)
+      hbase w hw k hk
+    have := (checkFull_window_facts h w (by omega) k hk).2.2
+    rw [← hwp]
+    exact this
 
 end Chain
 
