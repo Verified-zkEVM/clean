@@ -163,4 +163,116 @@ theorem checkDouble_sound {px py l rx ry : ℕ}
     have := congrArg (Nat.cast (R := Fp)) h3
     rwa [cast_subm _ (hPle hpy), cast_mulm, cast_subm _ (hPle hrx)] at this
 
+
+/-! ## Chain checkers (row / window fold) and their soundness -/
+
+namespace Chain
+
+open Orchard.Point
+
+/-- Check a row tail: successive entries step by the fixed point `S`
+(`entry + S = next`, secant with witnessed slope). -/
+def checkRow (S : ℕ × ℕ) (prev : ℕ × ℕ) : List ((ℕ × ℕ) × ℕ) → Bool
+  | [] => true
+  | (r, l) :: rest =>
+      checkAdd prev.1 prev.2 S.1 S.2 l r.1 r.2 && checkRow S r rest
+
+/-- Check one window: entry 0 is the doubling `S + S`, the rest a `checkRow`. -/
+def checkWindow (S : ℕ × ℕ) : List ((ℕ × ℕ) × ℕ) → Bool
+  | [] => false
+  | (p0, l0) :: rest => checkDouble S.1 S.2 l0 p0.1 p0.2 && checkRow S p0 rest
+
+/-- Check a list of windows, threading the step point `S_{w+1} = row_w[6]`
+(the `k = 6` entry is `8·8^w·B`). -/
+def checkWindows (S : ℕ × ℕ) : List (List ((ℕ × ℕ) × ℕ)) → Bool
+  | [] => true
+  | row :: rest =>
+      checkWindow S row &&
+      match row[6]? with
+      | some (s', _) => checkWindows s' rest
+      | none => false
+
+theorem one_nsmul_point (p : Point Fp) : (1 : ℕ) • p = p := by
+  rw [Orchard.Point.nsmul_def]
+  show Orchard.Point.ofCoords
+    (CompElliptic.CurveForms.ShortWeierstrass.add _ ((0 : ℕ) • p).coords p.coords) = p
+  rw [show ((0 : ℕ) • p).coords = ((0 : Fp), (0 : Fp)) from rfl,
+    CompElliptic.CurveForms.ShortWeierstrass.zero_add]
+  rfl
+
+theorem checkRow_sound {B : Point Fp} (hB : B.OnCurve) {S : ℕ × ℕ} {s : ℕ}
+    (hS : pointOf S = s • B) (row : List ((ℕ × ℕ) × ℕ)) :
+    ∀ (prev : ℕ × ℕ) (a : ℕ),
+      pointOf prev = a • B → checkRow S prev row = true →
+      ∀ i, (hi : i < row.length) → pointOf row[i].1 = (a + (i + 1) * s) • B := by
+  induction row with
+  | nil => intro _ _ _ _ i hi; simp at hi
+  | cons e rest ih =>
+      obtain ⟨r, l⟩ := e
+      intro prev a hprev h i hi
+      simp only [checkRow, Bool.and_eq_true] at h
+      have hr : pointOf r = (a + s) • B := by
+        rw [← Orchard.Point.nsmul_add_nsmul hB, ← hprev, ← hS]
+        exact (checkAdd_sound h.1).symm
+      match i with
+      | 0 => simpa using hr
+      | Nat.succ i =>
+          simp only [List.getElem_cons_succ]
+          rw [show a + (i + 1 + 1) * s = (a + s) + (i + 1) * s from by ring]
+          exact ih r (a + s) hr h.2 i (by simpa using hi)
+
+theorem checkWindow_sound {B : Point Fp} (hB : B.OnCurve) {S : ℕ × ℕ} {s : ℕ}
+    (hS : pointOf S = s • B) {row : List ((ℕ × ℕ) × ℕ)}
+    (h : checkWindow S row = true) :
+    ∀ i, (hi : i < row.length) → pointOf row[i].1 = ((i + 2) * s) • B := by
+  cases row with
+  | nil => simp [checkWindow] at h
+  | cons e rest =>
+      obtain ⟨p0, l0⟩ := e
+      simp only [checkWindow, Bool.and_eq_true] at h
+      have h0 : pointOf p0 = (2 * s) • B := by
+        rw [show 2 * s = s + s from by ring, ← Orchard.Point.nsmul_add_nsmul hB, ← hS]
+        exact (checkDouble_sound h.1).symm
+      intro i hi
+      match i with
+      | 0 => simpa using h0
+      | Nat.succ i =>
+          simp only [List.getElem_cons_succ]
+          rw [show (i + 1 + 2) * s = 2 * s + (i + 1) * s from by ring]
+          exact checkRow_sound hB hS rest p0 (2 * s) h0 h.2 i (by simpa using hi)
+
+theorem checkWindows_sound {B : Point Fp} (hB : B.OnCurve)
+    (rows : List (List ((ℕ × ℕ) × ℕ))) :
+    ∀ (S : ℕ × ℕ) (s : ℕ),
+      pointOf S = s • B → checkWindows S rows = true →
+      ∀ w, (hw : w < rows.length) → ∀ i, (hi : i < rows[w].length) →
+        pointOf (rows[w][i]).1 = ((i + 2) * (8 ^ w * s)) • B := by
+  induction rows with
+  | nil => intro _ _ _ _ w hw; simp at hw
+  | cons row rest ih =>
+      intro S s hS h w hw i hi
+      simp only [checkWindows, Bool.and_eq_true] at h
+      obtain ⟨hwin, hnext⟩ := h
+      match w with
+      | 0 =>
+          have := checkWindow_sound hB hS hwin i (by simpa using hi)
+          simpa using this
+      | Nat.succ w =>
+          match hrow6 : row[6]? with
+          | none => rw [hrow6] at hnext; exact absurd hnext (by simp)
+          | some e =>
+              rw [hrow6] at hnext
+              obtain ⟨hlen, hval⟩ := List.getElem?_eq_some_iff.mp hrow6
+              have h6 : pointOf e.1 = (8 * s) • B := by
+                have := checkWindow_sound hB hS hwin 6 hlen
+                rw [hval] at this
+                simpa using this
+              simp only [List.getElem_cons_succ]
+              rw [show (i + 2) * (8 ^ (w + 1) * s) = (i + 2) * (8 ^ w * (8 * s))
+                from by ring]
+              exact ih e.1 (8 * s) h6 hnext w (by simpa using hw) i
+                (by simpa using hi)
+
+end Chain
+
 end Orchard.Ecc.MulFixed.Cert
