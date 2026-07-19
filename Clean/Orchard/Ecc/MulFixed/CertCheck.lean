@@ -273,6 +273,82 @@ theorem checkWindows_sound {B : Point Fp} (hB : B.OnCurve)
               exact ih e.1 (8 * s) h6 hnext w (by simpa using hw) i
                 (by simpa using hi)
 
+/-! ### Negation and variable-step rows (the MSB window's offset chain) -/
+
+/-- Negation check: `⟨rx,ry⟩ = −⟨tx,ty⟩`. -/
+def checkNeg (tx ty rx ry : ℕ) : Bool :=
+  tx < P && ty < P && rx < P && ry < P && rx == tx && ry == subm 0 ty
+
+theorem checkNeg_sound {tx ty rx ry : ℕ} (h : checkNeg tx ty rx ry = true) :
+    -(pointOf (tx, ty)) = pointOf (rx, ry) := by
+  simp only [checkNeg, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+  obtain ⟨⟨⟨⟨⟨htx, hty⟩, hrx⟩, hry⟩, hx⟩, hy⟩ := h
+  apply Orchard.Point.neg_of_witness
+  · show ((rx : ℕ) : Fp) = ((tx : ℕ) : Fp)
+    rw [hx]
+  · show ((ry : ℕ) : Fp) = -((ty : ℕ) : Fp)
+    have := congrArg (Nat.cast (R := Fp)) hy
+    rwa [cast_subm _ (Nat.le_of_lt hty), Nat.cast_zero, zero_sub] at this
+
+/-- Cancellation transport: if `p + q = 0` for valid points, `q = −p`. -/
+theorem eq_neg_of_add_eq_zero {p q : Orchard.Point Fp}
+    (hp : p.Valid) (hq : q.Valid) (h : p + q = 0) : q = -p := by
+  have hsw := (Orchard.Point.ext_toSW_iff (Orchard.Point.valid_add hp hq)
+    Orchard.Point.valid_zero).mp h
+  rw [Orchard.Point.toSW_add hp hq, Orchard.Point.toSW_zero] at hsw
+  rw [Orchard.Point.ext_toSW_iff hq (Orchard.Point.valid_neg hp),
+    Orchard.Point.toSW_neg hp]
+  exact eq_neg_of_add_eq_zero_right hsw
+
+/-- `m • B = −(n • B)` whenever `n + m ≡ 0` mod the group order. -/
+theorem nsmul_eq_neg_nsmul {B : Orchard.Point Fp} (hB : B.OnCurve) {n m : ℕ}
+    (h : (n + m) % CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD = 0) :
+    m • B = -(n • B) := by
+  have hz : (n + m) • B = 0 := by
+    rw [Orchard.Point.nsmul_eq_zero_iff hB]
+    exact Nat.dvd_of_mod_eq_zero h
+  rw [← Orchard.Point.nsmul_add_nsmul hB] at hz
+  exact eq_neg_of_add_eq_zero (Orchard.Point.valid_nsmul (.inl hB) n)
+    (Orchard.Point.valid_nsmul (.inl hB) m) hz
+
+/-- A row whose step point varies per entry: `prev + q_j = r_j` (the offset `T`-chain). -/
+def checkVarRow (prev : ℕ × ℕ) : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ) → Bool
+  | [] => true
+  | (q, r, l) :: rest =>
+      checkAdd prev.1 prev.2 q.1 q.2 l r.1 r.2 && checkVarRow r rest
+
+theorem checkVarRow_sound {B : Orchard.Point Fp} (hB : B.OnCurve)
+    (entries : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ)) :
+    ∀ (prev : ℕ × ℕ) (c : ℕ) (f : ℕ → ℕ),
+      pointOf prev = c • B →
+      (∀ j, (hj : j < entries.length) → pointOf entries[j].1 = f j • B) →
+      checkVarRow prev entries = true →
+      ∀ j, (hj : j < entries.length) →
+        pointOf entries[j].2.1 = (c + ∑ i ∈ Finset.range (j + 1), f i) • B := by
+  induction entries with
+  | nil => intro _ _ _ _ _ _ j hj; simp at hj
+  | cons e rest ih =>
+      obtain ⟨q, r, l⟩ := e
+      intro prev c f hprev hf h j hj
+      simp only [checkVarRow, Bool.and_eq_true] at h
+      have hr : pointOf r = (c + f 0) • B := by
+        rw [← Orchard.Point.nsmul_add_nsmul hB, ← hprev,
+          ← hf 0 (by simp)]
+        exact (checkAdd_sound h.1).symm
+      match j with
+      | 0 => simpa using hr
+      | Nat.succ j =>
+          simp only [List.getElem_cons_succ]
+          have := ih r (c + f 0) (fun i => f (i + 1)) hr
+            (fun i hi => by
+              have := hf (i + 1) (by simpa using hi)
+              simpa using this)
+            h.2 j (by simpa using hj)
+          rw [this]
+          congr 1
+          conv_rhs => rw [Finset.sum_range_succ']
+          ring
+
 end Chain
 
 end Orchard.Ecc.MulFixed.Cert
