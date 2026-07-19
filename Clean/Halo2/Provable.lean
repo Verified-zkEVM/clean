@@ -148,6 +148,12 @@ goals while `Unconstrained` reduces — the eval-lemma normal-form asymmetry. -/
 @[circuit_norm] lemma value_of_provableType (F) : Value M F = M F := rfl
 @[circuit_norm] lemma proverValue_of_provableType (F) : ProverValue M F = M F := rfl
 
+-- low priority: with a reducible `toCircuitType`, this head is close to universal;
+-- prefer direct instances (mirror of main Clean's forwarder, for `deriving CircuitType`'s
+-- `Value`-companion `ProvableStruct`)
+instance (priority := low) : ProvableType (Value M) :=
+  (inferInstance : ProvableType M)
+
 instance : Eval (Placed Environment F) (AssignedCell F) F := CircuitType.verifierEval field
 instance : Eval (Placed ProverEnvironment F) (AssignedCell F) F := CircuitType.proverEval field
 instance : Eval (Placed Environment F) (M (AssignedCell F)) (M F) := CircuitType.verifierEval M

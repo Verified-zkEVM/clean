@@ -89,6 +89,23 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
+## Per-field deriving for mixed hint structs — #31 DONE (2026-07-20)
+
+`deriving CircuitType` now works over the Halo2 environments. The record generator
+(`Clean/Utils/Tactics/ProvableStructDeriving.lean`) is parameterized by a
+`CircuitTypeProfile` (class/view/marker names); main Clean registers its profile as
+before, and `Clean/Halo2/CircuitTypeDeriving.lean` adds `Halo2.DerivedCircuitType`
+(+ circuit_norm eval bridges) and registers the halo2 profile at `Halo2.CircuitType` —
+inside a `Halo2.*` namespace, plain `deriving CircuitType` dispatches there. Support
+pieces: `ProvableType (Halo2.Value M)` forwarders (generic + per hint type),
+`Halo2.UnconstrainedIR` (WitgenIR-backed scalar hint, `Halo2/WitnessIR.lean`).
+Regression: `TestCircuitTypeDeriving`. Consumer: Action's `PrivateInputs` is now
+DERIVED per-field (components `UnconstrainedIR`, `Unconstrained Point`,
+`Unconstrained (fields 85)`, and the Action-local `UnconstrainedSibs`/
+`UnconstrainedSwaps` families); `Witnesses`/`WitnessData` are abbrevs for the
+generated `PrivateInputs.Var`/`.ProverValue` companions — bundle proofs unchanged.
+This also unblocks the `MulIncompleteRound.Inputs.alpha` hint-typing TODO.
+
 ## Witness programs are the circuit INPUT, Unconstrained-style (2026-07-20)
 
 Gregor's rulings: (1) private data enters through the circuit input like Clean/Orchard,
@@ -252,8 +269,8 @@ end-to-end theorem about the deployed circuit.
   (verify the whnf-derived RHS reduces as cleanly as the folded `reads` form).
 - **#30**: kernel deep-recursion root cause (explicitly owed to Gregor; memory-capped
   fail-fast repro only).
-- **#22** env-spelling unification; **#23** full-exercise pass; **#31** env-generic
-  `deriving CircuitType` for mixed hint structs; **#32** `Witgen.M` builder port +
+- **#22** env-spelling unification; **#23** full-exercise pass; **#31** DONE
+  2026-07-20 (see "Per-field deriving" section); **#32** `Witgen.M` builder port +
   `UnconstrainedNat`/vector IR hints (prereqs for non-native witgen; TODOs in
   `MulIncompleteRound.lean` name them).
 - Refactors that only shift code around stay on ice until the VK arc is done.
