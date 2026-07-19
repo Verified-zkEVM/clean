@@ -1,5 +1,5 @@
 import Clean.Ironwood.NoteCommit.Gates
-import Clean.Orchard.Action.Decompose
+import Clean.Ironwood.NoteCommit.DecomposeTheorems
 
 /-!
 Reference (ported from actual Rust, not memory):

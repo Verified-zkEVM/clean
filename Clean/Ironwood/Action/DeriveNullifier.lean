@@ -28,10 +28,10 @@ Phase-1 donor: `Clean/Orchard/Action/DeriveNullifier.lean`.
 namespace Halo2.Ironwood.Action.DeriveNullifier
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point Fq)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Poseidon
-open Orchard.Poseidon.Permute.P128Pow5T3 (roundConstants)
+open Halo2.Ironwood (Point Fq)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Poseidon
+open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (roundConstants)
 
 /-- The inputs of `derive_nullifier`: the already-assigned cells `nk`, `rho`, `psi`, and
 the note commitment point `cm`. -/

@@ -1,7 +1,7 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Poseidon.Hash
+import Clean.Ironwood.Poseidon.HashTheorems
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -26,9 +26,9 @@ composition are consumed directly from there.
 namespace Halo2.Ironwood.Poseidon
 
 open Halo2.Ironwood (Fp)
-open Orchard.Poseidon (pow5)
-open Orchard.Poseidon.Permute (State)
-open Orchard.Poseidon.Permute.P128Pow5T3 (mds mdsInv)
+open Halo2.Ironwood.Poseidon (pow5)
+open Halo2.Ironwood.Poseidon.Permute (State)
+open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv)
 
 /-- Rust `Pow5Config` (`pow5.rs:21-35`), width-3/rate-2: the three state advices, the
 `partial_sbox` advice, the `rc_a`/`rc_b` fixed triples, and the three round selectors. -/

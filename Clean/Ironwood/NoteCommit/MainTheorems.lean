@@ -227,17 +227,6 @@ boundary is the already-bundled `CopyCheck` and `YCanonicity` circuits, not a lo
 
 /-! ### `gadgets::note_commit` (note_commit.rs:1594) -/
 
-/-- Inputs of `gadgets::note_commit`: the note's `g_d`, `pk_d` points, the value/`rho`/`psi`
-field cells, and the prover-side commitment randomness `rcm`. -/
-structure Input (F : Type) where
-  gd : Point F
-  pkd : Point F
-  value : F
-  rho : F
-  psi : F
-  rcm : UnconstrainedNat F
-deriving CircuitType
-
 structure MessageCells (F : Type) where
   a : F
   b : F
@@ -527,22 +516,6 @@ structure Input (F : Type) where
   lsb : F
 deriving ProvableStruct
 
-/-- Only external precondition: the sign cell is Boolean (range-checked upstream). `IsLowBit`
-is derived, not assumed. -/
-def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  IsBool (show Fp from input.lsb)
-
-def ProverAssumptions (input : ProverValue Input Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  IsLowBit (show Fp from input.y) (show Fp from input.lsb)
-
-def Spec (input : Value Input Fp) (output : Fp) (_ : ProverData Fp) : Prop :=
-  output = input.lsb ∧ IsLowBit (show Fp from input.y) (show Fp from input.lsb)
-
-def ProverSpec (input : ProverValue Input Fp) (output : Fp)
-    (_ : ProverHint Fp) : Prop :=
-  output = input.lsb ∧ IsLowBit (show Fp from input.y) (show Fp from input.lsb)
-
 end YCanonicity
 
 /-- The note's seven field-element scalars, as `ℕ`, extracted from a circuit value.
@@ -737,45 +710,7 @@ def AssignedMessageFacts (cells : MessageCells Fp) : Prop :=
 def noteChunksOfScalars (gdX gdYbit pkdX pkdYbit v rho psi : ℕ) : List ℕ :=
   noteCommitChunks gdX gdYbit pkdX pkdYbit v rho psi
 
-def MessagePiecesEncode (input : Value Input Fp) (cells : Value MessageCells Fp) : Prop :=
-  Chain.PieceChunks messagePieceRounds (messagePieces cells)
-    (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
-
-def ProverMessagePiecesEncode (input : ProverValue Input Fp)
-    (cells : ProverValue MessageCells Fp) : Prop :=
-  Chain.honestChunks messagePieceRounds (messagePieces cells) =
-    (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
-
-/-- Breaks-as-data note-commitment relation (zcash/ironwood#45): either the honest
-Sinsemilla chain is defined and `cm` is the commitment `B + [rcm]R`, or the chain
-escaped and the break is exhibited (`ValidBreak`: the honest prefix chain plus the
-resolved incomplete-addition collision equation — a discrete-log relation among the
-domain generators with coefficients read off the break datum). Projecting the break
-branch to `⊥` recovers the protocol specification's `NoteCommit(…) ∈ {cm, ⊥}`
-(§4.17.4), via `getLeft?_hashToPointB`. -/
-def NoteCommitRelation (G : Generators) (Q : Point Fp)
-    (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
-  ∃ rcm : Fq,
-    SpecOrBreak G.S Q (fun B => cm = B + rcm • R)
-      (hashToPointB G.S Q
-        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks)
-
-def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
-    (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
-  ∀ B : Point Fp,
-    hashToPoint G.S Q
-        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + ((show ℕ from input.rcm : ℕ) : Fq) • R
-
 namespace AssignMessagePieces
-
-def Spec (_input : Value Input Fp) (cells : Value MessageCells Fp)
-    (_ : ProverData Fp) : Prop :=
-  AssignedMessageFacts cells
-
-def ProverSpec (input : ProverValue Input Fp)
-    (cells : ProverValue MessageCells Fp) (_ : ProverHint Fp) : Prop :=
-  MessageCellFacts input.gd input.pkd input.value input.rho input.psi cells
 
 /-- The honest 1-bit `bitrange` cast of `y` is its low (sign) bit. -/
 theorem isLowBit_bitrange (y : Fp) : IsLowBit y ((bitrange y.val 0 1 : ℕ) : Fp) := by
@@ -812,27 +747,6 @@ def Spec (input : Input Fp) : Prop :=
 end MessagePieceChecks
 
 namespace Commit
-
-abbrev Input (F : Type) :=
-  CommitDomain.Input 8 F
-
-abbrev Output (F : Type) :=
-  CommitDomain.Output messagePieceRounds F
-
-def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (input : Value Input Fp) (output : Value Output Fp) (data : ProverData Fp) : Prop :=
-  CommitDomain.Spec G Q R 24 messagePieceTailRounds
-    input output data
-
-def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (input : ProverValue Input Fp) (data : ProverData Fp)
-    (hint : ProverHint Fp) : Prop :=
-  CommitDomain.ProverAssumptions G Q 24 messagePieceTailRounds input data hint
-
-def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (output : ProverValue Output Fp) (hint : ProverHint Fp) :
-    Prop :=
-  CommitDomain.ProverSpec G Q R 24 messagePieceTailRounds input output hint
 
 end Commit
 
@@ -1300,40 +1214,6 @@ theorem honestChunks_eq_noteCommitChunks_of_cellFacts {cells : MessageCells Fp}
       (pieceBounds_of_cellFacts hMCF)) hMCF hv
 
 end PieceExtraction
-
-/-- `g_d` and `pk_d` enter the Halo2 gadget as already-assigned non-identity points. In
-Clean's point model this is the on-curve half of `NonIdentityEccPoint`; identity is not
-representable as an affine point in the source API at this boundary. -/
-def Assumptions (input : Value Input Fp) (_ : ProverData Fp) : Prop :=
-  input.gd.OnCurve ∧ input.pkd.OnCurve
-
-/-- `cm` is the Orchard note commitment of the note `(g_d, pk_d, value, rho, psi)` with
-randomness `rcm`: `cm = NoteCommit^Orchard_rcm(g★_d || pk★_d || v || rho || psi)`. The
-message is the `Sinsemilla` hash of the canonical 109-chunk encoding (the canonicity
-gates force the field inputs into that canonical bit-layout) translated by `[rcm] R`. -/
-def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (input : Value Input Fp) (cm : Point Fp) (_ : ProverData Fp) : Prop :=
-  NoteCommitRelation G Q R input cm
-
-def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (input : ProverValue Input Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  input.gd.OnCurve ∧
-  input.pkd.OnCurve ∧
-  -- the note's value is a `u64` (the prover commits to a valid note); the `value_canonicity`
-  -- gate's constraint `value = d2 + d3·2^8 + e0·2^58` is satisfiable only at such values.
-  (show Fp from input.value).val < 2 ^ 64 ∧
-  -- the commitment randomness hint is the canonical natural representative of `rcm : Fq`
-  (show ℕ from input.rcm) < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD ∧
-  let (gdX, gdYbit, pkdX, pkdYbit, v, rho, psi) :=
-    noteScalarsOf input.gd input.pkd input.value input.rho input.psi
-  ∃ B, hashToPoint G.S Q
-    (noteChunksOfScalars gdX gdYbit pkdX pkdYbit v rho psi) = some B
-
-def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (cm : ProverValue Point Fp)
-    (_ : ProverHint Fp) : Prop :=
-  ProverNoteCommitRelation G Q R input cm
 
 theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
     (hg0_bool : IsBool g0)

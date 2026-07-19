@@ -1,9 +1,9 @@
 import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
+import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Ecc.DoubleAndAdd
-import Clean.Orchard.Ecc.Mul.Incomplete
-import Clean.Orchard.Ecc.Mul.Assign
+import Clean.Ironwood.Ecc.DoubleAndAdd
+import Clean.Ironwood.Ecc.MulIncompleteTheorems
+import Clean.Ironwood.Ecc.MulAssignTheorems
 
 /-!
 Variable-base scalar multiplication, *incomplete* phase. For each scalar bit, one merged
@@ -15,7 +15,7 @@ Generic over the bit count `n + 1`: the `hi`/`lo` halves of `mul.rs` are two ins
 one `Config`, differing only in the advice columns and `NUM_BITS` (125 / 126).
 
 The value-level `Fp`/`Point` algebra is reused wholesale from the phase-one donor
-`Orchard.Ecc.Mul.Incomplete`; only the framework wiring (`Config`/gates/`configure`, the
+`Halo2.Ironwood.Ecc.Mul.Incomplete`; only the framework wiring (`Config`/gates/`configure`, the
 `synthesize` loop, the `FormalRegionCircuit` bundle) is new here.
 
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
@@ -23,10 +23,10 @@ Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 
 namespace Halo2.Ironwood.Ecc.MulIncomplete
 
-open Orchard (Point)
-open Orchard.Ecc (DoubleAndAddRow)
-open Orchard.Ecc.Mul (kBits kNat tQNat)
-open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc (DoubleAndAddRow)
+open Halo2.Ironwood.Ecc.Mul (kBits kNat tQNat)
+open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
    accScalar_two_le accScalar_le pow254_lt_card step_nsmul honest_step)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -467,7 +467,7 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
       linear_combination (norm := (field_simp; ring)) 4 * hg2 + 4 * hay
     have hstep' : Point.doubleAndAdd (m • P) (stepPoint P k)
         = some ((2 * m + (if k then 1 else 0) * 2 - 1) • P) := hstep
-    obtain ⟨hxB, hYB⟩ := Orchard.Ecc.DoubleAndAdd.coordinates_of_constraints
+    obtain ⟨hxB, hYB⟩ := Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints
       hstep' hYP hXP hYA hSec hYC
     -- assemble the output point
     have hyB : (ol1 + ol2) * (oxA - (ol1 * ol1 - oxA - P.x)) * (2 : Fp)⁻¹
@@ -754,7 +754,7 @@ theorem sound_last_step {z xA l1 l2 bx yb oz oxA oy : Fp}
       linear_combination (norm := (field_simp; ring)) 4 * hg2 + 4 * hay - 4 * l2 * hax
     have hstep' : Point.doubleAndAdd (m • P) (stepPoint P k)
         = some ((2 * m + (if k then 1 else 0) * 2 - 1) • P) := hstep
-    obtain ⟨hxB, hYB⟩ := Orchard.Ecc.DoubleAndAdd.coordinates_of_constraints
+    obtain ⟨hxB, hYB⟩ := Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints
       hstep' hYP hXP hYA hSec hYC
     have hyB : oy = ((2 * m + (if k then 1 else 0) * 2 - 1) • P).y := by
       field_simp at hYB

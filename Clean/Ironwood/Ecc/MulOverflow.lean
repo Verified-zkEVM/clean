@@ -1,9 +1,9 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Ecc.Defs
-import Clean.Orchard.Ecc.Mul.Overflow
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Ecc.Defs
+import Clean.Ironwood.Ecc.MulOverflowTheorems
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Utilities.LookupRangeCheck
 
@@ -59,7 +59,7 @@ the running sums `zs` belongs to the mul.rs assembly (out of scope; the running-
 
 ## Donor
 
-`Clean/Orchard/Ecc/Mul/Overflow.lean` (`Orchard.Ecc.Mul.Overflow`) — the phase-one donor.
+`Clean/Orchard/Ecc/Mul/Overflow.lean` (`Halo2.Ironwood.Ecc.Mul.Overflow`) — the phase-one donor.
 Its `OverflowCheck.Spec` is lifted wholesale as this file's `Spec`: the recovery equation, the
 `k_254 = 0 ∨ z_130 = 2^124` disjunction, and the existential low/high split of `s` with the
 two canonicity disjunctions. The value algebra (the `s = alpha + k_254·2^130` derivation, the
@@ -87,7 +87,7 @@ FRAMEWORK CANDIDATE: a lookup child that decomposes a value should expose that n
 
 namespace Halo2.Ironwood.Ecc.MulOverflow
 
-open Orchard.Ecc (tQ)
+open Halo2.Ironwood.Ecc (tQ)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-- The number of `K`-bit words decomposing the low 130 bits of `s` (`overflow.rs:196`:
@@ -174,7 +174,7 @@ def configure (K : ℕ) (lookupConfig : LookupRangeCheck.Config K)
 
 /-! ## Inputs / Output
 
-Mirrors the donor `Orchard.Ecc.Mul.Overflow.OverflowCheck.Input`: the original scalar cell
+Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Overflow.OverflowCheck.Input`: the original scalar cell
 `alpha` and the running-sum cells the check inspects — `z_0` (full sum), `z_130` (after the
 hi half), and `k_254 = z_254` (the top bit). All are already-assigned, verifier-visible
 input cells (produced by the mul.rs assembly). No output value is exposed (the gadget only

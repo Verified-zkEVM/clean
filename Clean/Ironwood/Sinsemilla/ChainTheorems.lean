@@ -109,21 +109,6 @@ structure Input (F : Type) where
   yA : UnconstrainedDepNative field F
 deriving CircuitType
 
-/-- Outputs of one piece: its first and last gate rows (the composing circuit emits
-the gates linking pieces), the exit `x_A` cell, and the exit accumulator
-`y`-coordinate hint. -/
-structure Output (n : ℕ) (F : Type) where
-  first : DoubleAndAddRow F
-  last : DoubleAndAddRow F
-  xANext : F
-  /-- The piece's running sum `[z_0, …, z_w]` (`z_0 = piece`; `z_{w+1} = 0` implicit).
-  Halo2's `hash_piece` returns this whole vector (`hash_to_point.rs::hash_piece`); the
-  composing circuits (`MerkleCRH`, `note_commit`, `commit_ivk`) read specific `z_r` cells
-  for their decomposition / canonicity gates. -/
-  zs : Vector F n
-  yANext : UnconstrainedDepNative field F
-deriving CircuitType
-
 private theorem two_ne_zero_Fp : (2 : Fp) ≠ 0 := by
   rw [show (2 : Fp) = ((2 : ℕ) : Fp) by norm_num, Ne, ZMod.natCast_eq_zero_iff]
   intro hdvd
@@ -395,58 +380,6 @@ private theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → �
     (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
-/-- The verifier-side contract of one piece, see `step_coordinates_of_constraints` for the chain step. The
-chain runs through the first `w` words; the last word's lookup facts are exposed so the
-composing circuit can finish the step with its boundary gate. -/
-def Spec (G : Generators) (w : ℕ) (input : Value Input Fp)
-    (output : Value (Output (w + 1)) Fp) (_ : ProverData Fp) : Prop :=
-  ∃ ms : ℕ → ℕ,
-    (∀ r, ms r < 2 ^ K) ∧
-    input.piece = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
-    output.zs = Vector.ofFn (fun r : Fin (w + 1) =>
-      ((∑ j ∈ Finset.range (w + 1 - r.val), ms (r.val + j) * 2 ^ (K * j) : ℕ) : Fp)) ∧
-    output.first.xA = input.xA ∧
-    output.last.xP = (G.S (ms w)).x ∧
-    DoubleAndAdd.yA output.last * (2 : Fp)⁻¹
-        - output.last.lambda1 * (output.last.xA - output.last.xP) = (G.S (ms w)).y ∧
-    ∀ A : Point Fp, A.OnCurve → A.x = input.xA →
-      2 * A.y = DoubleAndAdd.yA output.first →
-      ∀ B, Specs.Sinsemilla.hashToPoint G.S A
-          ((List.range w).map ms) = some B →
-        output.last.xA = B.x ∧ 2 * B.y = DoubleAndAdd.yA output.last
-
-/--
-The honest-prover contract of one piece. The entering accumulator hint must be a
-genuine non-identity curve point matching the `x_A` cell, the piece value must fit in
-`K·(w+1)` bits, and the spec-level chain over the piece's chunks must be defined
-(non-exceptional).
--/
-def ProverAssumptions (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  (show Fp from input.piece).val < 2 ^ (K * (w + 1)) ∧
-  ∃ (A B : Point Fp), A.OnCurve ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Specs.Sinsemilla.hashToPoint G.S A
-      ((List.range (w + 1)).map (pieceWord input.piece)) = some B
-
-/--
-What the honest prover guarantees to the composing circuit: the first row starts at the
-input accumulator with the `Y_A` invariant, the exit cell satisfies the secant equation
-of the following (boundary) gate by construction, and the exit accumulator is the
-spec-level chain point with its boundary-gate `Y_A` derivation.
--/
-def ProverSpec (G : Generators) (w : ℕ) (input : ProverValue Input Fp)
-    (output : ProverValue (Output (w + 1)) Fp) (_ : ProverHint Fp) : Prop :=
-  output.first.xA = input.xA ∧
-  output.xANext = output.last.lambda2 * output.last.lambda2
-    - output.last.xA - DoubleAndAdd.xR output.last ∧
-  output.zs = Vector.ofFn (fun r : Fin (w + 1) => pieceZ input.piece r.val) ∧
-  ∀ A : Point Fp, A ≠ 0 → A.x = input.xA → A.y = input.yA →
-    DoubleAndAdd.yA output.first = 2 * A.y ∧
-    ∀ B, Specs.Sinsemilla.hashToPoint G.S A
-        ((List.range (w + 1)).map (pieceWord input.piece)) = some B →
-      output.xANext = B.x ∧ output.yANext = B.y ∧
-      nextYA output.last output.xANext = 2 * B.y
-
 private theorem range_prefix_some (S : ℕ → Point Fp)
     (Q : Point Fp) (f : ℕ → ℕ) {n : ℕ} {B : Point Fp}
     (hn : Specs.Sinsemilla.hashToPoint S Q ((List.range n).map f) = some B)
@@ -681,31 +614,9 @@ the right entering-`Y_A` expression of the next level, captured by `enterYA`.
 
 namespace Chain
 
-/-- Inputs of the chain tail over `k` remaining pieces: the piece cells, the entering
-accumulator `x_A` cell, and the entering accumulator `y` as a prover hint. -/
-structure Input (k : ℕ) (F : Type) where
-  pieces : Vector F k
-  xA : F
-  yA : UnconstrainedDepNative field F
-deriving CircuitType
-
-instance (k : ℕ) : Inhabited (Var (Input k) Fp) :=
-  ⟨{ pieces := default, xA := default, yA := default }⟩
-
 /-- Per-piece running-sum lengths: piece `i` of width `nᵢ` produces `nᵢ + 1`
 running-sum cells (`z₀..z_{nᵢ}`). -/
 def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
-
-/-- Outputs: the hash point, the first gate row of this level (the previous level
-emits the gate pairing its last row with this row; at the end of the message this is
-the dummy row carrying the witnessed final `y_a` in its `λ₁` cell), and the full
-per-piece running sums `zs` (`hash_to_point` returns all running sums; consumers read
-specific cells, e.g. `MerkleCRH` projects each piece's `z_1` via `Z1s`). -/
-structure Output (ns : List ℕ) (F : Type) where
-  point : Point F
-  first : DoubleAndAddRow F
-  zs : HVec (zLengths ns) F
-deriving ProvableStruct
 
 /-- The entering accumulator `2·y` of a level, as derived by the preceding gate from
 the level's first row: the `Y_A` expression for in-message rows, twice the witnessed
@@ -897,62 +808,6 @@ theorem z1sHonest_of_zsHonest : (ns : List ℕ) → (pieces : Vector Fp ns.lengt
     · rw [z1sOfZs_tail]
       exact z1sHonest_of_zsHonest rest pieces.tail (HVec.tail zs) hbrest htail
 
-/-- `eval` commutes with the `z₁` projection (it is a pointwise selection of running-sum
-cells), letting a `zs`-projecting `hash_to_point` view bridge its evaluated output to the
-running sums. -/
-theorem eval_z1sOfZs {F : Type} [FiniteField F] (env : Environment F) : (ns : List ℕ) →
-    (zs : Var (HVec (zLengths ns)) F) →
-    (eval env (z1sOfZs ns zs) : Vector F ns.length) = z1sOfZs ns (eval env zs)
-  | [], zs => by
-    apply Vector.ext
-    intro i hi
-    simp at hi
-  | n :: rest, zs => by
-    have htail := eval_z1sOfZs env rest (HVec.tail zs)
-    rw [HVec.eval_tail] at htail
-    apply Vector.ext
-    intro i hi
-    rw [ProvableType.eval_fields, Vector.getElem_map]
-    rcases i with _ | k
-    · rw [z1sOfZs_getElem_zero, z1sOfZs_getElem_zero]
-      by_cases hn : 1 < n + 1
-      · simp only [dif_pos hn]
-        rw [ProvableType.getElem_eval_fields, HVec.eval_head]
-        rfl
-      · simp only [dif_neg hn]
-        rfl
-    · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ProvableType.getElem_eval_fields,
-        eval_z1sOfZs env rest (HVec.tail zs), HVec.eval_tail]
-      rfl
-
-def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Fp)
-    (output : Value (Output ns) Fp) (_ : ProverData Fp) : Prop :=
-  output.first.xA = input.xA ∧
-  ∃ chunks : List ℕ, PieceChunks ns input.pieces chunks ∧
-    ZsFacts ns chunks output.zs ∧
-    ∀ A : Point Fp, A.OnCurve → A.x = input.xA →
-      2 * A.y = enterYA ns.isEmpty output.first →
-      ∀ B, Specs.Sinsemilla.hashToPoint G.S A chunks = some B →
-        output.point.x = B.x ∧ output.point.y = B.y
-
-def ProverAssumptions (G : Generators) (ns : List ℕ)
-    (input : ProverValue (Input ns.length) Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  PieceBounds ns input.pieces ∧
-  ∃ (A B : Point Fp), A.OnCurve ∧ A.x = input.xA ∧ A.y = input.yA ∧
-    Specs.Sinsemilla.hashToPoint G.S A (honestChunks ns input.pieces) = some B
-
-def ProverSpec (G : Generators) (ns : List ℕ)
-    (input : ProverValue (Input ns.length) Fp)
-    (output : ProverValue (Output ns) Fp) (_ : ProverHint Fp) : Prop :=
-  output.first.xA = input.xA ∧
-  ZsHonest ns input.pieces output.zs ∧
-  ∀ A : Point Fp, A ≠ 0 → A.x = input.xA → A.y = input.yA →
-    enterYA ns.isEmpty output.first = 2 * A.y ∧
-    ∀ B, Specs.Sinsemilla.hashToPoint G.S A
-        (honestChunks ns input.pieces) = some B →
-      output.point.x = B.x ∧ output.point.y = B.y
-
 /-! #### The empty tail: the final dummy row -/
 
 namespace Nil
@@ -1121,93 +976,6 @@ The `MerkleCRH` path that only needs the `z₁` cells uses the `Z1s` projection 
 
 namespace HashToPoint
 
-/-- Outputs of `hash_to_point`: the hash point and the full per-piece running sums. -/
-structure Output (ns : List ℕ) (F : Type) where
-  point : Point F
-  zs : HVec (Chain.zLengths ns) F
-deriving ProvableStruct
-
-def Spec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : Value (fields (ns.length + 1)) Fp)
-    (output : Value (Output (n₀ :: ns)) Fp)
-    (_ : ProverData Fp) : Prop :=
-  ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
-    Chain.ZsFacts (n₀ :: ns) chunks output.zs ∧
-    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
-      output.point = B
-
-def ProverAssumptions (G : Generators) (Q : Point Fp) (n₀ : ℕ)
-    (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
-    (Chain.honestChunks (n₀ :: ns) pieces) = some B
-
-def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (output : ProverValue (Output (n₀ :: ns)) Fp)
-    (_ : ProverHint Fp) : Prop :=
-  Chain.ZsHonest (n₀ :: ns) pieces output.zs ∧
-  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
-      (Chain.honestChunks (n₀ :: ns) pieces) = some B →
-    output.point = B
-
-/-! ### `Z1s`: the `z₁`-only `hash_to_point` view (`MerkleCRH` path)
-
-`MerkleCRH` reads only each piece's `z₁` running-sum cell. This is the `z₁`-projecting
-view of `hash_to_point`: `z1s[i] = zs[i][1]` via `Chain.z1sOfZs`, so the single source of truth is
-`hash_to_point`'s running sums `zs`. The output is exposed through the named `output`
-definition, so parents (Merkle) see an opaque `Z1s.output …` reasoned about via the
-`Spec`, rather than the `Chain.z1sOfZs` projection internals. -/
-namespace Z1s
-
-/-- Outputs of the `z₁`-only `hash_to_point` view: the hash point and each piece's `z₁`
-running-sum cell. -/
-structure Output (ns : List ℕ) (F : Type) where
-  point : Point F
-  z1s : Vector F ns.length
-
-instance (ns : List ℕ) : ProvableStruct (Output ns) where
-  components := [Point, fields ns.length]
-  toComponents := fun { point, z1s } => .cons point (.cons z1s .nil)
-  fromComponents := fun (.cons point (.cons z1s .nil)) => { point, z1s }
-
-/-- Hand-written analogue of the `deriving ProvableStruct` handler's generated
-`fromComponents_cons` simp lemma (the instance above is hand-written, so none is
-generated): lets `simp` reduce `fromComponents` applications without going through the
-private match auxiliary, which no longer reduces at reducible transparency (4.30 bump). -/
-@[circuit_norm]
-theorem Output.fromComponents_cons (ns : List ℕ) {F : Type}
-    (point : Point F) (z1s : Vector F ns.length) :
-    fromComponents (α := Output ns) (F := F)
-      (.cons point (.cons z1s .nil)) = { point, z1s } := rfl
-
-def Spec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : Value (fields (ns.length + 1)) Fp)
-    (output : Value (Output (n₀ :: ns)) Fp)
-    (_ : ProverData Fp) : Prop :=
-  ∃ chunks : List ℕ, Chain.PieceChunks (n₀ :: ns) pieces chunks ∧
-    Chain.Z1Facts (n₀ :: ns) chunks output.z1s ∧
-    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
-      output.point = B
-
-def ProverAssumptions (G : Generators) (Q : Point Fp) (n₀ : ℕ)
-    (ns : List ℕ) (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (_ : ProverData Fp) (_ : ProverHint Fp) : Prop :=
-  Chain.PieceBounds (n₀ :: ns) pieces ∧
-  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
-    (Chain.honestChunks (n₀ :: ns) pieces) = some B
-
-def ProverSpec (G : Generators) (Q : Point Fp) (n₀ : ℕ) (ns : List ℕ)
-    (pieces : ProverValue (fields (ns.length + 1)) Fp)
-    (output : ProverValue (Output (n₀ :: ns)) Fp)
-    (_ : ProverHint Fp) : Prop :=
-  Chain.Z1sHonest (n₀ :: ns) pieces output.z1s ∧
-  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
-      (Chain.honestChunks (n₀ :: ns) pieces) = some B →
-    output.point = B
-
-end Z1s
 
 end HashToPoint
 

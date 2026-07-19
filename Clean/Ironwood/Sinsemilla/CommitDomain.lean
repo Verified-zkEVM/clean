@@ -1,9 +1,9 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
-import Clean.Orchard.Ecc.MulFixed.Short
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
+import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Add
 import Clean.Ironwood.Ecc.MulFixed.FullWidth
@@ -53,12 +53,12 @@ before the `Chain.circuit` call.
 
 namespace Halo2.Ironwood.Sinsemilla.CommitDomain
 
-open Orchard (Point Fq)
-open Orchard.Ecc (DoubleAndAddRow)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Specs.Sinsemilla (Generators hashToPoint)
-open Orchard.Specs (K)
-open Orchard.Sinsemilla (HVec)
+open Halo2.Ironwood (Point Fq)
+open Halo2.Ironwood.Ecc (DoubleAndAddRow)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint)
+open Halo2.Ironwood.Specs (K)
+open Halo2.Ironwood.Sinsemilla (HVec)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
 open Halo2.Ironwood.Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded)
@@ -144,7 +144,7 @@ end BlindBridges
 
 /-! ## The `commit` bundle -/
 
-open Orchard.Specs.Sinsemilla (hashToPoint)
+open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint)
 
 -- local contract bridges for the hash child (proof-typed binders)
 private theorem hashC_spec_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
@@ -328,8 +328,8 @@ def commit (G : Generators) (ns : List ℕ)
           : Value Point Fp) := by
       rw [ProvableStruct.eval_cells_eq_eval]
       with_unfolding_all rfl
-    have hpx := congrArg Orchard.Point.x hpoint
-    have hpy := congrArg Orchard.Point.y hpoint
+    have hpx := congrArg Halo2.Ironwood.Point.x hpoint
+    have hpy := congrArg Halo2.Ironwood.Point.y hpoint
     -- the hash point equals B
     have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
         : Value Point Fp) = B := by
@@ -341,7 +341,7 @@ def commit (G : Generators) (ns : List ℕ)
       rw [← hx, ← hy]
     -- B is a valid point (the chunks are generator indices)
     have hBvalid : B.Valid :=
-      Orchard.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
+      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound hPC) hB
     -- Add-input projection commutes (componentwise eval route — the flat eval is a
     -- whnf wall)
@@ -420,12 +420,12 @@ def commit (G : Generators) (ns : List ℕ)
     have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp)
         = (⟨bx, byv⟩ : Point Fp) := by
       have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp).x = bx := by
-        rw [← congrArg Orchard.Point.x hpointP]; exact hres.1
+        rw [← congrArg Halo2.Ironwood.Point.x hpointP]; exact hres.1
       have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp).y = byv := by
-        rw [← congrArg Orchard.Point.y hpointP]; exact hres.2
+        rw [← congrArg Halo2.Ironwood.Point.y hpointP]; exact hres.2
       rw [← hx, ← hy]
     have hB0valid : (⟨bx, byv⟩ : Point Fp).Valid :=
-      Orchard.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
+      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound
           (Sinsemilla.Chain.pieceChunks_honestChunks ns input.pieces hPBounds)) hB0
     -- Add-input projections (verifier eval over the hint-erased env)

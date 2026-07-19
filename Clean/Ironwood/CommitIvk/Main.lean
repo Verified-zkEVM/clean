@@ -1,8 +1,8 @@
 import Clean.Ironwood.CommitIvk.Composite
 import Clean.Ironwood.NoteCommit.Main
 import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Orchard.Action.CommitIvk
-import Clean.Orchard.Specs.SinsemillaBreak
+import Clean.Ironwood.CommitIvk.MainTheorems
+import Clean.Ironwood.Specs.SinsemillaBreak
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -31,10 +31,10 @@ namespace Halo2.Ironwood.CommitIvk.Main
 
 open Halo2.Ironwood (Fp)
 open Halo2.Ironwood.Sinsemilla.HashToPoint (witnessMessagePiece)
-open Orchard (Point)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Specs (bitrange)
-open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Specs (bitrange)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 open Halo2.Ironwood.NoteCommit.Main (brWit currentRegion)
 
 /-- Piece word counts minus one, per the chain convention: `a` = 25 words, `b` = 1,
@@ -204,7 +204,7 @@ theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
 
 /-! ## The bundle contract -/
 
-open Orchard.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
+open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
 instance elaborated (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
@@ -236,7 +236,7 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value field Fp)
     (rivk : Vector Fp 85 × Fq) : Prop :=
   SpecOrBreak G.S Q
-    (fun B => (output : Fp) = (B + (rivk.2 • R : Orchard.Point Fp)).x)
+    (fun B => (output : Fp) = (B + (rivk.2 • R : Halo2.Ironwood.Point Fp)).x)
     (hashToPointB G.S Q
       (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val))
 

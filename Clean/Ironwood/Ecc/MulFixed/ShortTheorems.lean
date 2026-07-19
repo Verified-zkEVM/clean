@@ -340,16 +340,6 @@ def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
   let k := s / (8 ^ w : ℕ) % 8
   return RowTail.mk (s / (8 ^ (w + 1) : ℕ)).toField xs[k] ys[k] us[k]
 
-def Spec (B : FixedBase) (input : MagnitudeSign Fp) (output : Point Fp)
-    (_ : ProverData Fp) : Prop :=
-  ∃ m : ℕ, m < 2 ^ 64 ∧ input.magnitude = (m : Fp) ∧
-    ((input.sign = 1 ∧ output = (m : Fq) • B) ∨
-      (input.sign = -1 ∧ output = ((-(m : Fq)) : Fq) • B))
-
-def ProverAssumptions (input : MagnitudeSign Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  input.magnitude.val < 2 ^ 64 ∧ (input.sign = 1 ∨ input.sign = -1)
-
 def ProverSpec (B : FixedBase) (input : MagnitudeSign Fp) (output : Point Fp)
     (_ : ProverHint Fp) : Prop :=
   (input.sign = 1 → output = (input.magnitude.val : Fq) • B) ∧

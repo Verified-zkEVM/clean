@@ -14,7 +14,7 @@ branch), all three stages, and therefore all VK CS fixtures.
 namespace Halo2.Ironwood.Action.CircuitPreIronwood
 
 open Halo2.Ironwood (Fp)
-open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 open Halo2.Ironwood.Action.Circuit
 
 /-- Rust `Circuit::synthesize` at `FixedPostNu6_2` (= `synthesize_base`,

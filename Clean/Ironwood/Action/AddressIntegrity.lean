@@ -31,7 +31,7 @@ Phase-1 donor: `Clean/Orchard/Action/AddressIntegrity.lean` (post-`CommitIvk` pa
 namespace Halo2.Ironwood.Action.AddressIntegrity
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point)
+open Halo2.Ironwood (Point)
 
 /-- The inputs of the address-integrity block: the committed incoming viewing key cell
 `ivk` (the `commit_ivk` output, coerced by the region-free `ScalarVar::from_base`) and
@@ -133,14 +133,14 @@ def circuit (pkD : Point (FExpr Fp)) : FormalCircuit Fp
     have hox : output_x
         = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
             : Value Point Fp).x :=
-      (congrArg Orchard.Point.x h_output).symm.trans
+      (congrArg Halo2.Ironwood.Point.x h_output).symm.trans
         ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
             x_gen_out_1 : Value Point Fp).x = _).trans
           (hCEx.symm.trans (by with_unfolding_all rfl)))
     have hoy : output_y
         = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
             : Value Point Fp).y :=
-      (congrArg Orchard.Point.y h_output).symm.trans
+      (congrArg Halo2.Ironwood.Point.y h_output).symm.trans
         ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
             x_gen_out_1 : Value Point Fp).y = _).trans
           (hCEy.symm.trans (by with_unfolding_all rfl)))
@@ -177,8 +177,8 @@ def circuit (pkD : Point (FExpr Fp)) : FormalCircuit Fp
               + x_gen_out_0.x.cell.rowOffset : ℕ) : ℤ)
             = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0
                 : Value Point Fp).x).trans
-        ((congrArg Orchard.Point.x hM).trans
-          ((congrArg Orchard.Point.x hPA.2).symm.trans
+        ((congrArg Halo2.Ironwood.Point.x hM).trans
+          ((congrArg Halo2.Ironwood.Point.x hPA.2).symm.trans
             (by with_unfolding_all rfl))))
     · -- the y-coordinate copy constraint in the honest environment
       rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
@@ -189,8 +189,8 @@ def circuit (pkD : Point (FExpr Fp)) : FormalCircuit Fp
               + x_gen_out_0.y.cell.rowOffset : ℕ) : ℤ)
             = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0
                 : Value Point Fp).y).trans
-        ((congrArg Orchard.Point.y hM).trans
-          ((congrArg Orchard.Point.y hPA.2).symm.trans
+        ((congrArg Halo2.Ironwood.Point.y hM).trans
+          ((congrArg Halo2.Ironwood.Point.y hPA.2).symm.trans
             (by with_unfolding_all rfl))))
 
 end Halo2.Ironwood.Action.AddressIntegrity

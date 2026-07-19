@@ -23,9 +23,9 @@ The value-level contract is the donor `Hash.HashPaddedBlock.value`
 namespace Halo2.Ironwood.Poseidon
 
 open Halo2.Ironwood (Fp)
-open Orchard.Poseidon
-open Orchard.Poseidon.Permute (State)
-open Orchard.Poseidon.Permute.P128Pow5T3 (roundConstants)
+open Halo2.Ironwood.Poseidon
+open Halo2.Ironwood.Poseidon.Permute (State)
+open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (roundConstants)
 
 /-- A constant witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]

@@ -7,7 +7,7 @@ Reference (ported from actual Rust, not memory):
 `canon_bitshift_130` for `a' = a + 2^130 - t_P` (13-word `witness_check`), the `b2_c'`
 shift `b_2 + 2^5·c + 2^140 - t_P` (14-word `witness_check`), then the
 `"Assign cells used in canonicity gate"` region (`CommitIvkChip::assign`,
-`commit_ivk.rs:519-660`). Phase-1 donor: `Orchard.Action.CommitIvk.Canonicity`
+`commit_ivk.rs:519-660`). Phase-1 donor: `Halo2.Ironwood.CommitIvk.Canonicity`
 (`Clean/Orchard/Action/CommitIvk.lean`).
 
 The composite is a three-child layouter `FormalCircuit` parameterized (like the gate
@@ -20,8 +20,8 @@ namespace Halo2.Ironwood.CommitIvk
 
 open Halo2.Ironwood (Fp)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Specs (bitrange)
-open Orchard.Action.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
+open Halo2.Ironwood.Specs (bitrange)
+open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
 /-! ## `witnessCheck` child bridges (`rfl`, child stays folded) -/
@@ -87,12 +87,12 @@ deriving ProvableStruct
 
 /-- The `a' = a + 2¹³⁰ − t_P` witness program (Rust `canon_bitshift_130`). -/
 def aPrimeWit (a : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP]
+  .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP]
 
 @[circuit_norm]
 theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
-    ((aPrimeWit a).eval env)[j] = readCell env a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := by
+    ((aPrimeWit a).eval env)[j] = readCell env a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [aPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -101,13 +101,13 @@ theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 /-- The `b2_c' = b_2 + 2⁵·c + 2¹⁴⁰ − t_P` witness program. -/
 def b2CPrimeWit (b2 c : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env b2 + ((2 ^ 5 : ℕ) : Fp) * readCell env c
-    + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP]
+    + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP]
 
 @[circuit_norm]
 theorem b2CPrimeWit_eval (b2 c : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
     ((b2CPrimeWit b2 c).eval env)[j] = readCell env b2 + ((2 ^ 5 : ℕ) : Fp) * readCell env c
-      + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := by
+      + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [b2CPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -140,7 +140,7 @@ theorem synth_regionCount (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config)
 
 private theorem gateChild_spec_eq (wb1 wd1 : WitgenIR Fp 1) :
     (gateChild wb1 wd1).Spec = fun input _ (wit : Fp × Fp) =>
-      Orchard.Action.CommitIvk.Gate.Spec
+      Halo2.Ironwood.CommitIvk.Gate.Spec
         (Halo2.Ironwood.CommitIvk.toDonor input wit.1 wit.2) := rfl
 
 private theorem gateChild_assumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
@@ -157,10 +157,10 @@ private theorem gateChild_assumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
 private theorem gateChild_proverAssumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
     (gateChild wb1 wd1).ProverAssumptions = fun input (wit : Fp × Fp) _ =>
       (wit.1 = 1 → input.z13APrime = 0) ∧ (wit.2 = 1 → input.z14B2CPrime = 0) ∧
-      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP ∧
+      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
       input.b2CPrime = input.b2 + input.c * ((2 ^ 5 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP ∧
-      Orchard.Action.CommitIvk.Gate.Spec
+        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
+      Halo2.Ironwood.CommitIvk.Gate.Spec
         (Halo2.Ironwood.CommitIvk.toDonor input wit.1 wit.2) := rfl
 
 private theorem gateChild_extract_eq (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
@@ -173,7 +173,7 @@ private theorem gateChild_extract_eq (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
 set_option maxRecDepth 4096 in
 /-- Rust `CommitIvkChip` canonicity flow: the two shift `witness_check`s, then the
 `"Assign cells used in canonicity gate"` region. `Spec` is the donor composite payoff
-(`Orchard.Action.CommitIvk.Canonicity.Spec`): the canonical bit slices of `ak`/`nk` and
+(`Halo2.Ironwood.CommitIvk.Canonicity.Spec`): the canonical bit slices of `ak`/`nk` and
 the `b`/`d` sub-piece decompositions, at the witnessed `(b_1, d_1)` readings. -/
 def circuit (wb1 wd1 : WitgenIR Fp 1) :
     FormalCircuit Fp (Config × LookupRangeCheck.Config 10)
@@ -263,7 +263,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
        by rw [hiz13c, hic]; exact hA.2.2.2.2.2.2,
        ⟨loB, hloB, by rw [hz0b]; exact htelB⟩⟩
     simp only [Halo2.Ironwood.CommitIvk.toDonor,
-      Orchard.Action.CommitIvk.Gate.Spec] at hGSpec
+      Halo2.Ironwood.CommitIvk.Gate.Spec] at hGSpec
     rw [hiak, hia, hib, hib0, hib2, hink, hic, hid, hid0] at hGSpec
     exact hGSpec
 
@@ -339,7 +339,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
         rw [shifted_high_zero (by norm_num) (by norm_num) hbase_lt]
         simp
       · -- the donor gate `Spec` at the witnessed `(b_1, d_1)` readings
-        simp only [Halo2.Ironwood.CommitIvk.toDonor, Orchard.Action.CommitIvk.Gate.Spec]
+        simp only [Halo2.Ironwood.CommitIvk.toDonor, Halo2.Ironwood.CommitIvk.Gate.Spec]
         exact ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩
 
 end Canonicity

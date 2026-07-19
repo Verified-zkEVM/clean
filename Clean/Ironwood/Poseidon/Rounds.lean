@@ -18,9 +18,9 @@ chains by `rfl`. Value-level contracts are the donor's `FullRound.value` /
 namespace Halo2.Ironwood.Poseidon
 
 open Halo2.Ironwood (Fp)
-open Orchard.Poseidon
-open Orchard.Poseidon.Permute (State)
-open Orchard.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
+open Halo2.Ironwood.Poseidon
+open Halo2.Ironwood.Poseidon.Permute (State)
+open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
 
 /-- The state row at region offset `o`: the three state cells. -/
 def stateRow (cfg : Config) (o : ℕ) (self : RegionIndex) : State (AssignedCell Fp) where
@@ -109,7 +109,7 @@ private theorem nextInv_cancel (j : Fin 3) (r0 r1 r2 : Fp) :
          (r0 * mds 1 0 + r1 * mds 1 1 + r2 * mds 1 2) * mdsInv j.val 1 +
          (r0 * mds 2 0 + r1 * mds 2 1 + r2 * mds 2 2) * mdsInv j.val 2) = 0 := by
   rw [sub_eq_zero, Eq.comm]
-  exact Orchard.Poseidon.Permute.P128Pow5T3.mdsInv_mul_mds_apply j r0 r1 r2
+  exact Halo2.Ironwood.Poseidon.Permute.P128Pow5T3.mdsInv_mul_mds_apply j r0 r1 r2
 
 /-- Rust `Pow5State::partial_round` at source round `r` (`pow5.rs:461-534`): one row
 checking two source rounds. Enable `s_partial` at `offset`, load `rc_a` (round `r`) and
@@ -166,15 +166,15 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
     have hInv1 := (sub_eq_zero.mp gl1).symm
     have hInv2 := (sub_eq_zero.mp gl2).symm
     refine ⟨?_, ?_, ?_⟩
-    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+    · have happ := Halo2.Ironwood.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨0, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
       simpa using happ.symm
-    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+    · have happ := Halo2.Ironwood.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨1, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
       simpa using happ.symm
-    · have happ := Orchard.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
+    · have happ := Halo2.Ironwood.Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨2, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
       simpa using happ.symm

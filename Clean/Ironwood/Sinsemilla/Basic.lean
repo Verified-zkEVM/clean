@@ -1,7 +1,8 @@
+import Clean.Ironwood.Sinsemilla.ChainTheorems
 import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
-import Clean.Orchard.Ecc.DoubleAndAdd
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
+import Clean.Ironwood.Ecc.DoubleAndAdd
 import Clean.Ironwood.Ecc.Basic
 
 /-!
@@ -23,7 +24,7 @@ chip. The action circuit instantiates it via `SinsemillaChip::load` in
 The generator table and the *pure value-level algebra* of one hash piece. Both are lifted
 essentially verbatim from the phase-one donor `Clean/Orchard/Sinsemilla/`:
 
-- `generatorTable.rs`: the donor `Orchard.Sinsemilla.generatorTable` is a
+- `generatorTable.rs`: the donor `Halo2.Ironwood.Sinsemilla.generatorTable` is a
   `Table Fp GeneratorTableRow` built on the OLD Clean `Table`/`.fromStatic` abstraction,
   which Halo2-Clean does **not** have. Halo2-Clean tables are raw `loadTable` ops on
   single `TableColumn`s. **Multi-column-table resolution** (the anticipated framework
@@ -39,16 +40,16 @@ essentially verbatim from the phase-one donor `Clean/Orchard/Sinsemilla/`:
 - The piece algebra (`pieceWord`, `pieceZ`, `rowValue`, `accAfter`, `nextYA`) and the pure
   chain lemmas (`pieceZ_succ`, `chain_eq_sum`, `piece_recombine`, `accAfter_eq_chain`, …)
   are framework-agnostic `Fp`/`Point`/spec-level facts, proven in full by the donor. They
-  reference only `Orchard.Specs.Sinsemilla` (the SHARED spec layer Ironwood already imports)
-  and `Orchard.Ecc.DoubleAndAdd`. Lifted here unchanged.
+  reference only `Halo2.Ironwood.Specs.Sinsemilla` (the SHARED spec layer Ironwood already imports)
+  and `Halo2.Ironwood.Ecc.DoubleAndAdd`. Lifted here unchanged.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla
 
-open Orchard (Point)
-open Orchard.Ecc (DoubleAndAddRow)
-open Orchard.Specs.Sinsemilla (Generators step hashToPoint)
-open Orchard.Specs (K)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc (DoubleAndAddRow)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
+open Halo2.Ironwood.Specs (K)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-! ## The generator table
@@ -225,39 +226,8 @@ theorem load_generatorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
 
 /-! ## Pure piece value-algebra (lifted from the donor `Clean/Orchard/Sinsemilla/HashToPoint.lean`)
 
-All framework-agnostic: `Fp` / `Point` / `Orchard.Specs.Sinsemilla` facts. Names kept
+All framework-agnostic: `Fp` / `Point` / `Halo2.Ironwood.Specs.Sinsemilla` facts. Names kept
 identical to the donor so slice 2+ can grep-map. -/
-
-/-- The honest word value `r` of a message piece (`K`-bit chunks, little-endian).
-Donor `HashPiece.pieceWord`. -/
-def pieceWord (p : Fp) (r : ℕ) : ℕ := p.val / 2 ^ (K * r) % 2 ^ K
-
-/-- The honest running sum value `z_r = ⌊piece / 2^(K·r)⌋`. Donor `HashPiece.pieceZ`. -/
-def pieceZ (p : Fp) (r : ℕ) : Fp := ((p.val / 2 ^ (K * r) : ℕ) : Fp)
-
-/-- Honest cell values of one double-and-add row, from the entering accumulator `(x_a, y_a)`
-and the generator `(x_p, y_p)` (Rust `hash_to_point.rs::hash_piece` assignment formulas;
-total via `0⁻¹ = 0`). Donor `HashPiece.rowValue`. -/
-def rowValue (acc : Fp × Fp) (gen : Fp × Fp) : Fp × Fp × (Fp × Fp) :=
-  let lambda1 := (acc.2 - gen.2) * (acc.1 - gen.1)⁻¹
-  let xR := lambda1 * lambda1 - acc.1 - gen.1
-  let lambda2 := 2 * acc.2 * (acc.1 - xR)⁻¹ - lambda1
-  let xANext := lambda2 * lambda2 - acc.1 - xR
-  let yANext := lambda2 * (acc.1 - xANext) - acc.2
-  (lambda1, lambda2, (xANext, yANext))
-
-/-- The honest accumulator after `r` words of a piece. Donor `HashPiece.accAfter`. -/
-def accAfter (G : Generators) (acc : Fp × Fp) (p : Fp) : ℕ → Fp × Fp
-  | 0 => acc
-  | r + 1 =>
-    let prev := accAfter G acc p r
-    (rowValue prev ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.2
-
-/-- Twice the exit `y`-coordinate as derived by the following boundary gate:
-`2·y_B = 2·λ₂·(x_A − x_B) − Y_A`. Donor `HashPiece.nextYA`. -/
-def nextYA {F : Type} [Add F] [Sub F] [Mul F] [OfNat F 2]
-    (row : DoubleAndAddRow F) (xNext : F) : F :=
-  2 * row.lambda2 * (row.xA - xNext) - Orchard.Ecc.DoubleAndAdd.yA row
 
 /-! ### Pure running-sum / recombination lemmas (donor-proven, lifted verbatim) -/
 
@@ -357,7 +327,7 @@ theorem step_coordinates_of_constraints (S : ℕ → Point Fp) {A B : Point Fp} 
     (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
     (hYCheck : 4 * lambda2 * (A.x - xa') = 4 * A.y + 2 * YA') :
     xa' = B.x ∧ YA' = 2 * B.y := by
-  exact Orchard.Ecc.DoubleAndAdd.coordinates_of_constraints (S := S m)
+  exact Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints (S := S m)
     (by simpa [step] using hstep) hYP hXP hYA hSecant hYCheck
 
 /-- The honest-prover counterpart of `step_coordinates_of_constraints`: the honest cell
@@ -469,13 +439,13 @@ theorem accAfter_eq_chain (G : Generators) {A : Point Fp} (p : Fp)
   induction r generalizing Ar with
   | zero =>
     rw [show ((List.range 0).map (pieceWord p)) = ([] : List ℕ) from rfl,
-      Orchard.Specs.Sinsemilla.hashToPoint_nil] at hchain
+      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil] at hchain
     obtain rfl : A = Ar := Option.some.inj hchain
     rfl
   | succ r ih =>
     rw [List.range_succ] at hchain
     simp only [List.map_append, List.map_cons, List.map_nil] at hchain
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hchain
+    rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat] at hchain
     cases hpre : hashToPoint G.S A ((List.range r).map (pieceWord p)) with
     | none =>
       rw [hpre] at hchain

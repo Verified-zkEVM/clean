@@ -36,14 +36,6 @@ open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 open Halo2.Ironwood.Ecc
 open Halo2.Ironwood.Sinsemilla
 
-/-- Inputs of `commit_ivk`: the already-assigned full viewing key cells `ak`, `nk`, and
-the prover-side full-width blinding scalar behind the `ScalarFixed` value `rivk`. -/
-structure Input (F : Type) where
-  ak : F
-  nk : F
-  rivk : UnconstrainedNat F
-deriving CircuitType
-
 open Halo2.Ironwood.Specs (bitrange bitrange_lt cast_bitrange_val)
 open Halo2.Ironwood.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
   hashToPointB SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
@@ -464,73 +456,7 @@ theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
     fromComponents (α := OutputGen ns) (F := F)
       (.cons cells (.cons zs .nil)) = { cells, zs } := rfl
 
-theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
-    (eval env out).cells = eval env out.cells := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
-  simp only [circuit_norm]
-
-theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
-    (eval env out).zs = eval env out.zs := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
-  simp only [circuit_norm]
-
-theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
-    (out : Var (CommitDomain.Output ns) Fp) :
-    (eval env out).point = eval env out.point := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
-  simp only [circuit_norm]
-
 @[reducible] def Output : TypeMap := OutputGen [24, 0, 23, 0]
-
-/-- The facts the entry needs from the hash: the short range bounds, the wide-piece bounds,
-the running-sum tail identities, and the existence of a chunk decomposition whose hash is the
-commitment point (blinded by some `rivk`). -/
-def Spec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (_input : Value Input Fp) (output : Value Output Fp) (_ : ProverData Fp) : Prop :=
-  output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
-    output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
-    (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-    (HVec.get _ output.zs ⟨2, by decide⟩)[13] = ((output.cells.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    ∃ (chunks : List ℕ) (rivk : Fq),
-      Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
-        #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, hashToPoint G.S Q chunks = some B →
-        output.cells.point = B + rivk • R)
-
-def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (_R : MulFixed.FixedBase) (input : ProverValue Input Fp) (_ : ProverData Fp)
-    (_ : ProverHint Fp) : Prop :=
-  let ak : Fp := input.ak
-  let nk : Fp := input.nk
-  (∃ B, hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B) ∧
-  -- the blinding-scalar hint is the canonical natural representative of `rivk : Fq`
-  (show ℕ from input.rivk) < PALLAS_SCALAR_CARD
-
-def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
-    (input : ProverValue Input Fp) (output : ProverValue Output Fp) (_ : ProverHint Fp) : Prop :=
-  let ak : Fp := input.ak
-  let nk : Fp := input.nk
-  output.cells.b0.val < 2 ^ 4 ∧ output.cells.b2.val < 2 ^ 5 ∧ output.cells.d0.val < 2 ^ 9 ∧
-    output.cells.a.val < 2 ^ 250 ∧ output.cells.c.val < 2 ^ 240 ∧
-    (HVec.get _ output.zs ⟨0, by decide⟩)[13] = ((output.cells.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-    (HVec.get _ output.zs ⟨2, by decide⟩)[13] = ((output.cells.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-    output.cells.a = ((bitrange ak.val 0 250 : ℕ) : Fp) ∧
-    output.cells.b0 = ((bitrange ak.val 250 4 : ℕ) : Fp) ∧
-    output.cells.b1 = ((bitrange ak.val 254 1 : ℕ) : Fp) ∧
-    output.cells.b2 = ((bitrange nk.val 0 5 : ℕ) : Fp) ∧
-    output.cells.c = ((bitrange nk.val 5 240 : ℕ) : Fp) ∧
-    output.cells.d0 = ((bitrange nk.val 245 9 : ℕ) : Fp) ∧
-    output.cells.d1 = ((bitrange nk.val 254 1 : ℕ) : Fp) ∧
-    output.cells.b = output.cells.b0 + output.cells.b1 * 16 + output.cells.b2 * 32 ∧
-    output.cells.d = output.cells.d0 + output.cells.d1 * 512 ∧
-    ∃ (chunks : List ℕ),
-      Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0]
-        #v[output.cells.a, output.cells.b, output.cells.c, output.cells.d] chunks ∧
-      (∀ B, hashToPoint G.S Q chunks = some B →
-        output.cells.point = B + ((show ℕ from input.rivk : ℕ) : Fq) • R)
 
 /-- The honest `commit_ivk` message pieces (canonical bit slices of `ak`/`nk`) satisfy the
 `PieceBounds` and their honest chunks are `commitIvkChunks ak.val nk.val`. Stated over the

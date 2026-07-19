@@ -1,7 +1,7 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
@@ -32,8 +32,8 @@ copy and the init gate against `Chain.circuit`'s entering-accumulator contract �
 
 namespace Halo2.Ironwood.Sinsemilla.HashToPoint
 
-open Orchard (Point)
-open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 
 /-- Constant single-cell witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]
@@ -67,7 +67,7 @@ collapses to the hash from `Q`. `toFormal "hash_to_point"` lifts it to the layou
 open Halo2.Ironwood.Sinsemilla.Chain in
 /-- The per-piece `z_1` values off the chain's running-sum extraction data (`HVec` is
 stored flat; piece `i`'s `z_1` sits at flat index `prefixRows ns i + 1`). -/
-def z1View (ns : List ℕ) (zs : Orchard.Sinsemilla.HVec (zLengths ns) Fp) :
+def z1View (ns : List ℕ) (zs : Halo2.Ironwood.Sinsemilla.HVec (zLengths ns) Fp) :
     Vector Fp ns.length :=
   Vector.ofFn fun i : Fin ns.length => zs.elems[prefixRows ns ↑i + 1]!
 
@@ -141,21 +141,21 @@ def Spec (G : Generators) (ns : List ℕ) (Q : Point Fp)
   ∃ chunks : List ℕ, Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
     Sinsemilla.Chain.ZsFacts ns chunks wit.zs ∧
     ((∀ x ∈ ns, 0 < x) → output.z1s = z1View ns wit.zs) ∧
-    ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
       output.point.x = B.x ∧ output.point.y = B.y
 
 /-- The honest-prover precondition: nonempty message, pieces in range, honest hash defined. -/
 def ProverAssumptions (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp) : Prop :=
   ns ≠ [] ∧ Sinsemilla.Chain.PieceBounds ns input.pieces ∧
-  ∃ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B
 
 /-- The honest-prover contract: the output point is the honest hash. -/
 def ProverSpec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
     (output : Value (Output ns.length) Fp) : Prop :=
-  ∀ B, Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y
 
@@ -329,8 +329,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           cases ns with
           | nil => exact absurd rfl hns
           | cons a l => rfl]
-        show 2 * Q.y = Orchard.Ecc.DoubleAndAdd.yA _
-        simp only [Orchard.Ecc.DoubleAndAdd.yA, Orchard.Ecc.DoubleAndAdd.xR]
+        show 2 * Q.y = Halo2.Ironwood.Ecc.DoubleAndAdd.yA _
+        simp only [Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR]
         linear_combination hGate - 2 * hYQ) B hB
       rw [← h_output]
       exact hres
@@ -401,7 +401,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             | nil => exact absurd rfl hns
             | cons a l => rfl] at henter
         simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, if_false,
-          Orchard.Ecc.DoubleAndAdd.yA, Orchard.Ecc.DoubleAndAdd.xR] at henter
+          Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR] at henter
         linear_combination 2 * hWyq - henter
       · -- the fixed y_Q load
         simp only [circuit_norm]

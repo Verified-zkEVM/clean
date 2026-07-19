@@ -495,15 +495,6 @@ open Gate
 /-- `t_p` as a natural number (`p = 2^254 + tPNat` for the Pallas base field). -/
 def tPNat : ℕ := 45560315531419706090280762371685220353
 
-/-- Preconditions: `α` is a canonical base-field element (always true for an actual
-`Fp` cell — `α.val < p` by definition). -/
-def Assumptions (_ : Fp) : Prop := True
-
-/-- The circuit computes `[α]·B`, the fixed-base multiplication of `B` by the base-field
-element `α` (reinterpreted as the scalar `α.val`, which is `< p < q`). -/
-def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
-  output = (alpha.val : Fq) • B
-
 /-- `p = 2^254 + t_p` for the Pallas base field. -/
 theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
   norm_num [PALLAS_BASE_CARD, tPNat]

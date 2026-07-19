@@ -1,7 +1,7 @@
 import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
-import Clean.Orchard.Ecc.DoubleAndAdd
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
+import Clean.Ironwood.Ecc.DoubleAndAdd
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Sinsemilla.Basic
 
@@ -29,11 +29,11 @@ accumulator). All gate/lookup references point backward; cells land at the same
 
 namespace Halo2.Ironwood.Sinsemilla.HashPiece
 
-open Orchard (Point)
-open Orchard.Ecc (DoubleAndAddRow)
-open Orchard.Ecc.DoubleAndAdd (xR yA)
-open Orchard.Specs.Sinsemilla (Generators step hashToPoint)
-open Orchard.Specs (K)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc (DoubleAndAddRow)
+open Halo2.Ironwood.Ecc.DoubleAndAdd (xR yA)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
+open Halo2.Ironwood.Specs (K)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open Halo2.Ironwood.Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
@@ -458,7 +458,7 @@ theorem range_prefix_some (S : ℕ → Point Fp) (Q : Point Fp) (f : ℕ → ℕ
     {r : ℕ} (hr : r ≤ n) :
     ∃ C, hashToPoint S Q ((List.range r).map f) = some C := by
   obtain ⟨k, rfl⟩ : ∃ k, n = r + k := ⟨n - r, by omega⟩
-  rw [List.range_add, List.map_append, Orchard.Specs.Sinsemilla.hashToPoint_append] at hn
+  rw [List.range_add, List.map_append, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hn
   cases hc : hashToPoint S Q ((List.range r).map f) with
   | none => rw [hc] at hn; simp at hn
   | some C => exact ⟨C, rfl⟩
@@ -471,7 +471,7 @@ theorem prefix_step_some (S : ℕ → Point Fp) (Q : Point Fp) (f : ℕ → ℕ)
     step S (f r) Ar = some Ar1 := by
   rw [List.range_succ] at hAr1
   simp only [List.map_append, List.map_cons, List.map_nil] at hAr1
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
+  rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
   exact hAr1
 
 /-- The step of an honest row lands on the honest next row (the round's chaining lemma),

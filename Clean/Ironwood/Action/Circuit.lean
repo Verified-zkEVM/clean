@@ -31,7 +31,7 @@ integrity, and the final `"Orchard circuit checks"` region (copies, the three
 namespace Halo2.Ironwood.Action.Circuit
 
 open Halo2.Ironwood (Fp)
-open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 
 /-- Rust `Config` (`circuit.rs:120-137`): everything `synthesize` consumes. The shared
 lookup config (`range_check`) is carried explicitly (Rust reaches it through the chips). -/
@@ -129,8 +129,8 @@ def configure (G : Generators) : Configure Fp Config := do
 
 /-! ## Synthesize -/
 
-open Orchard (Point)
-open Orchard.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
 /-- The public-input rows of the `primary` instance column (`circuit.rs:78-86`). -/
 def ANCHOR : ℕ := 0
@@ -148,7 +148,7 @@ def DISABLE_CROSS_ADDRESS : ℕ := 9
 (Rust reaches them through `OrchardFixedBases` / the domain constants). -/
 structure Bases where
   nullifierK : FixedBase
-  valueCommitV : Orchard.Ecc.MulFixed.Short.FixedBase
+  valueCommitV : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase
   valueCommitR : FixedBase
   spendAuthG : FixedBase
   commitIvkR : FixedBase

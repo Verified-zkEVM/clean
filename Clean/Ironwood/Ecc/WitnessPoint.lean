@@ -1,5 +1,5 @@
 import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
+import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
 
 namespace Halo2.Ironwood.Ecc
@@ -67,12 +67,12 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
   soundness := by
     circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Orchard.Point.Valid, Orchard.Point.OnCurve, Orchard.Point.zero_def]
+    grind [Halo2.Ironwood.Point.Valid, Halo2.Ironwood.Point.OnCurve, Halo2.Ironwood.Point.zero_def]
 
   completeness := by
     circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Orchard.Point.Valid, Orchard.Point.OnCurve, Orchard.Point.zero_def]
+    grind [Halo2.Ironwood.Point.Valid, Halo2.Ironwood.Point.OnCurve, Halo2.Ironwood.Point.zero_def]
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`,
 `witness_point.rs:167-186`). Mirrors `point`: enable the `pointNonId` gate at `offset` and
@@ -111,12 +111,12 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
   soundness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Orchard.Point.OnCurve]
+    grind [Halo2.Ironwood.Point.OnCurve]
 
   completeness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Orchard.Point.OnCurve]
+    grind [Halo2.Ironwood.Point.OnCurve]
 
 /-! ## Layouter-level bridges for `pointNonId.toFormal`, shared by the consumers
 (`rfl`, the bundle stays folded) -/

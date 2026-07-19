@@ -1,7 +1,7 @@
 import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Utilities
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Utilities.RunningSum
 
 /-!
 Reference:
@@ -33,7 +33,7 @@ namespace Halo2.Ironwood.DecomposeRunningSum
 
 open Halo2.Ironwood (Fp)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Utilities.RunningSum (rangeCheckPoly rangeCheckValues InRange
+open Halo2.Ironwood.Utilities.RunningSum (rangeCheckPoly rangeCheckValues InRange
   rangeCheckPoly_eq_zero_iff)
 
 /-- Rust `RunningSumConfig<F, WINDOW_NUM_BITS>` (lines 48-53): the shared `q_range_check`
@@ -67,7 +67,7 @@ private theorem rangeCheckValues_eq (range : ℕ) :
   simp [rangeCheckValues, List.map_eq_flatMap]
 
 /-- `rangeCheckExpr` evaluates to the donor's `rangeCheckPoly` of the evaluated word —
-the bridge to the `InRange` machinery (`Orchard.Utilities.RunningSum`). -/
+the bridge to the `InRange` machinery (`Halo2.Ironwood.Utilities.RunningSum`). -/
 theorem eval_rangeCheckExpr (range : ℕ) (word : Expression Fp Query) (f : Query → Fp) :
     (rangeCheckExpr range word).eval f = rangeCheckPoly range (word.eval f) := by
   unfold rangeCheckExpr rangeCheckPoly

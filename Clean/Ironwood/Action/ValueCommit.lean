@@ -25,8 +25,8 @@ Phase-1 donor: `Clean/Orchard/Action/ValueCommit.lean`.
 namespace Halo2.Ironwood.Action.ValueCommit
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point Fq)
-open Orchard.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood (Point Fq)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
 /-! ## Child contract bridges (`rfl`, children stay folded)
 
@@ -36,7 +36,7 @@ file as its only layouter-level consumer. -/
 
 section Bridges
 
-variable (V : Orchard.Ecc.MulFixed.Short.FixedBase)
+variable (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
 
 private theorem short_spec_eq :
     (Ecc.MulFixed.Short.circuit V).Spec
@@ -66,7 +66,7 @@ end Bridges
 
 /-- The region count of `value_commit_orchard`: two regions each for the short and
 full-width fixed-base muls, one for the final complete addition. -/
-private theorem valueCommit_regionCount (V : Orchard.Ecc.MulFixed.Short.FixedBase)
+private theorem valueCommit_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
     (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (scfg : Ecc.MulFixed.Short.Config) (fcfg : Ecc.MulFixed.FullWidth.Config)
     (ecfg : Ecc.Add.Config)
@@ -91,7 +91,7 @@ ValueCommitR` (full-width; the scalar is the child's extraction data), and the f
 complete addition. `Spec` is the donor contract: the commitment is
 `[±m] V + [rcv] R` at the sign-resolved magnitude `m < 2⁶⁴` and the extracted
 full-width scalar. -/
-def circuit (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) : FormalCircuit Fp
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)

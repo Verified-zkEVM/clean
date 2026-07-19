@@ -1,6 +1,6 @@
 import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Specs.Pallas
+import Clean.Ironwood.Specs.Pallas
 
 /-!
 Reference (ported from actual Rust, not memory):

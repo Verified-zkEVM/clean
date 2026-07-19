@@ -1,10 +1,11 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Halo2.Tactics.ContractBridges
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
-import Clean.Orchard.Ecc.DoubleAndAdd
-import Clean.Orchard.Sinsemilla.HVec
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
+import Clean.Ironwood.Ecc.DoubleAndAdd
+import Clean.Ironwood.Sinsemilla.HVec
+import Clean.Ironwood.Sinsemilla.ChainTheorems
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
@@ -24,12 +25,12 @@ materialized are gone).
 
 namespace Halo2.Ironwood.Sinsemilla.Chain
 
-open Orchard (Point)
-open Orchard.Ecc (DoubleAndAddRow)
-open Orchard.Ecc.DoubleAndAdd (xR yA)
-open Orchard.Specs.Sinsemilla (Generators step hashToPoint)
-open Orchard.Specs (K)
-open Orchard.Sinsemilla (HVec)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc (DoubleAndAddRow)
+open Halo2.Ironwood.Ecc.DoubleAndAdd (xR yA)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
+open Halo2.Ironwood.Specs (K)
+open Halo2.Ironwood.Sinsemilla (HVec)
 open Halo2.Ironwood.Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
    pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
@@ -39,88 +40,6 @@ open Halo2.Ironwood.Sinsemilla.HashPiece
    State reads readState cellAt cellVec)
 
 /-! ## Value-level chain algebra (donor-lifted, unchanged) -/
-
-/-- Per-piece running-sum lengths: piece `i` of width `nᵢ` produces `nᵢ + 1` running-sum cells
-(`z₀..z_{nᵢ}`). Donor `Chain.zLengths`. -/
-def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
-
-/-- The entering accumulator `2·y` of a level, as derived by the preceding gate from the level's
-first row: the `Y_A` expression for in-message rows, twice the witnessed `y_a` cell (held in `λ₁`)
-for the final dummy row. Donor `Chain.enterYA`. -/
-def enterYA {F : Type} [Add F] [Sub F] [Mul F] [OfNat F 2]
-    (isFinal : Bool) (row : DoubleAndAddRow F) : F :=
-  if isFinal then 2 * row.lambda1 else yA row
-
-/-- The pieces decompose into the given flat chunk list (`K`-bit words, little-endian within each
-piece, `ns[i] + 1` words for piece `i`). Donor `Chain.PieceChunks`. -/
-def PieceChunks : (ns : List ℕ) → Vector Fp ns.length → List ℕ → Prop
-  | [], _, chunks => chunks = []
-  | n :: rest, pieces, chunks => ∃ ms : ℕ → ℕ,
-      (∀ r, ms r < 2 ^ K) ∧
-      pieces[0] = ((∑ r ∈ Finset.range (n + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
-      ∃ tailChunks, chunks = (List.range (n + 1)).map ms ++ tailChunks ∧
-        PieceChunks rest pieces.tail tailChunks
-
-/-- The honest chunk values of the pieces. Donor `Chain.honestChunks`. -/
-def honestChunks : (ns : List ℕ) → Vector Fp ns.length → List ℕ
-  | [], _ => []
-  | n :: rest, pieces =>
-    (List.range (n + 1)).map (pieceWord pieces[0]) ++ honestChunks rest pieces.tail
-
-/-- Each piece value fits in `K·(ns[i] + 1)` bits. Donor `Chain.PieceBounds`. -/
-def PieceBounds : (ns : List ℕ) → Vector Fp ns.length → Prop
-  | [], _ => True
-  | n :: rest, pieces =>
-    ZMod.val pieces[0] < 2 ^ (K * (n + 1)) ∧
-      PieceBounds rest pieces.tail
-
-/-- The honest chunk values realize `PieceChunks` when the pieces are in range (each piece is the
-recombination of its `K`-bit words). Donor `Chain.pieceChunks_honestChunks`. -/
-theorem pieceChunks_honestChunks : (ns : List ℕ) → (pieces : Vector Fp ns.length) →
-    PieceBounds ns pieces → PieceChunks ns pieces (honestChunks ns pieces)
-  | [], _, _ => rfl
-  | n :: rest, pieces, hbounds => by
-    obtain ⟨hb0, hbrest⟩ := hbounds
-    refine ⟨pieceWord pieces[0], fun r => pieceWord_lt _ _, ?_,
-      honestChunks rest pieces.tail, rfl, pieceChunks_honestChunks rest pieces.tail hbrest⟩
-    exact piece_recombine pieces[0] (n + 1) hb0
-
-/-- Every chunk is a valid generator index. Donor `Chain.pieceChunks_bound`. -/
-theorem pieceChunks_bound {ns : List ℕ} {pieces : Vector Fp ns.length}
-    {chunks : List ℕ} (h : PieceChunks ns pieces chunks) :
-    ∀ m ∈ chunks, m < 2 ^ K := by
-  induction ns generalizing chunks with
-  | nil =>
-      intro m hm
-      simp only [PieceChunks] at h
-      subst h
-      simp at hm
-  | cons n rest ih =>
-      simp only [PieceChunks] at h
-      obtain ⟨ms, hms, _, tailChunks, hchunks, htail⟩ := h
-      intro m hm
-      rw [hchunks] at hm
-      simp only [List.mem_append, List.mem_map, List.mem_range] at hm
-      rcases hm with ⟨r, hr, rfl⟩ | hm
-      · exact hms r
-      · exact ih htail m hm
-
-/-- Each exposed running-sum vector is the per-row suffix recombination of its piece's chunks
-(anchored to the same flat chunk list as `PieceChunks`). Donor `Chain.ZsFacts`. -/
-def ZsFacts : (ns : List ℕ) → List ℕ → HVec (zLengths ns) Fp → Prop
-  | [], _, _ => True
-  | n :: rest, chunks, zs =>
-    HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
-      ((∑ j ∈ Finset.range (n + 1 - r.val),
-        chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Fp)) ∧
-      ZsFacts rest (chunks.drop (n + 1)) (HVec.tail zs)
-
-/-- The honest running-sum vectors: each piece's vector holds `z₀..z_{nᵢ}`. Donor `Chain.ZsHonest`. -/
-def ZsHonest : (ns : List ℕ) → Vector Fp ns.length → HVec (zLengths ns) Fp → Prop
-  | [], _, _ => True
-  | n :: rest, pieces, zs =>
-    HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) => pieceZ pieces[0] r.val) ∧
-      ZsHonest rest pieces.tail (HVec.tail zs)
 
 /-- `ZsFacts` introduction at a `cons` (stated abstractly — unfolding `ZsFacts` on a large
 concrete running-sum term whnf-explodes; this lemma unfolds it once, on abstract arguments). -/
@@ -132,17 +51,6 @@ theorem zsFacts_cons {n : ℕ} {rest : List ℕ} (chunks : List ℕ)
     ZsFacts (n :: rest) chunks (HVec.cons hd tl : HVec (zLengths (n :: rest)) Fp) := by
   simp only [ZsFacts, HVec.head_cons]
   exact ⟨h1, (HVec.tail_cons hd tl).symm ▸ h2⟩
-
-/-- A head-piece chunk index resolves to its word value. Donor `Chain.chunks_head_getD`. -/
-theorem chunks_head_getD {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) (k : ℕ) (hk : k < n + 1) :
-    ((List.range (n + 1)).map ms ++ tailChunks).getD k 0 = ms k := by
-  rw [List.getD_append _ _ _ _ (by simp; omega), List.getD_eq_getElem _ _ (by simp; omega)]
-  simp
-
-/-- The chunk tail after a head piece. Donor `Chain.chunks_drop_append`. -/
-theorem chunks_drop_append {n : ℕ} (ms : ℕ → ℕ) (tailChunks : List ℕ) :
-    ((List.range (n + 1)).map ms ++ tailChunks).drop (n + 1) = tailChunks :=
-  List.drop_left' (by simp)
 
 /-! ## Inputs / Output (region-level, whole message)
 
@@ -539,22 +447,22 @@ def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLength
 
 /-- `zsFam`'s head vector (the first piece's running sums). -/
 theorem zsFam_head (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
-    Orchard.Sinsemilla.HVec.head (zsFam zV (n :: rest) base)
+    Halo2.Ironwood.Sinsemilla.HVec.head (zsFam zV (n :: rest) base)
       = Vector.ofFn (fun r : Fin (n + 1) => zV (base + r.val)) :=
-  Orchard.Sinsemilla.HVec.head_cons _ _
+  Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _
 
 /-- `zsFam`'s tail (the remaining pieces' running sums). -/
 theorem zsFam_tail (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
-    Orchard.Sinsemilla.HVec.tail (zsFam zV (n :: rest) base)
+    Halo2.Ironwood.Sinsemilla.HVec.tail (zsFam zV (n :: rest) base)
       = zsFam zV rest (base + (n + 1)) :=
-  Orchard.Sinsemilla.HVec.tail_cons _ _
+  Halo2.Ironwood.Sinsemilla.HVec.tail_cons _ _
 
 /-- `zsFam`'s second piece's running sums (the composed tail-head view). -/
 theorem zsFam_tail_head (zV : ℕ → Fp) (n m : ℕ) (rest : List ℕ) (base : ℕ) :
-    Orchard.Sinsemilla.HVec.head
-        (Orchard.Sinsemilla.HVec.tail (zsFam zV (n :: m :: rest) base))
+    Halo2.Ironwood.Sinsemilla.HVec.head
+        (Halo2.Ironwood.Sinsemilla.HVec.tail (zsFam zV (n :: m :: rest) base))
       = Vector.ofFn (fun r : Fin (m + 1) => zV (base + (n + 1) + r.val)) :=
-  (congrArg Orchard.Sinsemilla.HVec.head (zsFam_tail zV n (m :: rest) base)).trans
+  (congrArg Halo2.Ironwood.Sinsemilla.HVec.head (zsFam_tail zV n (m :: rest) base)).trans
     (zsFam_head zV m rest (base + (n + 1)))
 
 /-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
@@ -681,8 +589,8 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         pointX = B.x ∧ pointY = B.y := by
   intro A hAon hAx hAyA B hB
   have hAvalid : A.Valid := Or.inl hAon
-  have hA0 : A ≠ 0 := Orchard.Point.ne_zero_of_onCurve hAon
-  rw [Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
+  have hA0 : A ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hAon
+  rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hB
   cases hpre : hashToPoint G.S A ((List.range (n + 1)).map ms) with
   | none => rw [hpre] at hB; simp at hB
   | some B₁ =>
@@ -690,7 +598,7 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
     replace hB : hashToPoint G.S B₁ tailChunks = some B := hB
     rw [List.range_succ] at hpre
     simp only [List.map_append, List.map_cons, List.map_nil] at hpre
-    rw [Orchard.Specs.Sinsemilla.hashToPoint_concat] at hpre
+    rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat] at hpre
     cases hpre0 : hashToPoint G.S A ((List.range n).map ms) with
     | none => rw [hpre0] at hpre; simp at hpre
     | some B₀ =>
@@ -718,15 +626,15 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         (by linear_combination hsec')
         (by linear_combination hyck - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
       have hB₀valid : B₀.Valid :=
-        Orchard.Specs.Sinsemilla.hashToPoint_valid hAvalid
+        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hAvalid
           (fun m hm => by
             rcases List.mem_map.mp hm with ⟨r, hr, rfl⟩
             exact hms r)
           hpre0
       have hB₁valid : B₁.Valid :=
-        Orchard.Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
+        Halo2.Ironwood.Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
       have hB₁0 : B₁ ≠ 0 :=
-        Orchard.Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
+        Halo2.Ironwood.Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
       have hB₁on : B₁.OnCurve := by
         rcases hB₁valid with h | h
         · exact h
@@ -890,7 +798,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
     refine ⟨rfl, trivial, ?_⟩
     intro A hAon hAx hAyA B hB
     rw [show chunksOf msF [] i0 = [] from rfl,
-      Orchard.Specs.Sinsemilla.hashToPoint_nil] at hB
+      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil] at hB
     obtain rfl : A = B := Option.some.inj hB
     simp only [List.isEmpty_nil, enterYA, if_true] at hAyA
     refine ⟨?_, ?_⟩
@@ -975,7 +883,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
         simpa only [List.isEmpty_cons, enterYA, Bool.false_eq_true, if_false] using hAyA
       rw [show chunksOf msF (n :: rest) i0
           = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
-        Orchard.Specs.Sinsemilla.hashToPoint_append] at hB
+        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hB
       cases hpre : hashToPoint G.S A ((List.range (n + 1)).map (msF i0)) with
       | none =>
         rw [hpre] at hB
@@ -984,15 +892,15 @@ private theorem chain_fold (G : Generators) (N : ℕ)
         rw [hpre] at hB
         replace hB : hashToPoint G.S B1 (chunksOf msF rest (i0 + 1)) = some B := hB
         have hAvalid : A.Valid := Or.inl hAon
-        have hA0 : A ≠ 0 := Orchard.Point.ne_zero_of_onCurve hAon
+        have hA0 : A ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hAon
         have hpre_lt : ∀ m ∈ (List.range (n + 1)).map (msF i0), m < 2 ^ K := by
           intro m hm
           rcases List.mem_map.mp hm with ⟨t, ht, rfl⟩
           exact hms i0 t
         have hB1valid : B1.Valid :=
-          Orchard.Specs.Sinsemilla.hashToPoint_valid hAvalid hpre_lt hpre
+          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hAvalid hpre_lt hpre
         have hB10 : B1 ≠ 0 :=
-          Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hpre_lt hpre
+          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hpre_lt hpre
         have hB1on : B1.OnCurve := by
           rcases hB1valid with h | h
           · exact h
@@ -1342,7 +1250,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         intro hm1
         obtain ⟨Cm, hCon, hCx, hCy, hCchain⟩ := ih (by omega)
         rw [sufChunks_drop_succ _ ns m (by omega),
-          Orchard.Specs.Sinsemilla.hashToPoint_append] at hCchain
+          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hCchain
         cases hsplit : hashToPoint G.S Cm ((List.range (ns.getD m 0 + 1)).map
             (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
               (input_var.pieces[m]!)))) with
@@ -1384,7 +1292,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           obtain ⟨hfy, hnx, hlsec, hlnyA⟩ := hfacts
           -- Dm is on-curve
           have hCmValid : Cm.Valid := Or.inl hCon
-          have hCm0 : Cm ≠ 0 := Orchard.Point.ne_zero_of_onCurve hCon
+          have hCm0 : Cm ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hCon
           have hwords_lt : ∀ w ∈ (List.range (ns.getD m 0 + 1)).map
               (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
                 (input_var.pieces[m]!))), w < 2 ^ K := by
@@ -1392,9 +1300,9 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             rcases List.mem_map.mp hw with ⟨t, ht, rfl⟩
             exact pieceWord_lt _ t
           have hDmValid : Dm.Valid :=
-            Orchard.Specs.Sinsemilla.hashToPoint_valid hCmValid hwords_lt hsplit
+            Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hCmValid hwords_lt hsplit
           have hDm0 : Dm ≠ 0 :=
-            Orchard.Specs.Sinsemilla.hashToPoint_ne_zero hCmValid hCm0 hwords_lt hsplit
+            Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_ne_zero hCmValid hCm0 hwords_lt hsplit
           have hDmOn : Dm.OnCurve := by
             rcases hDmValid with h | h
             · exact h
@@ -1449,7 +1357,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       simp only [Fin.val_mk]
       obtain ⟨Ci, hCon, hCx, hCy, hCchain⟩ := hthread m (le_of_lt hm)
       rw [sufChunks_drop_succ _ ns m hm,
-        Orchard.Specs.Sinsemilla.hashToPoint_append] at hCchain
+        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hCchain
       cases hsplit : hashToPoint G.S Ci
           ((List.range (ns.getD m 0 + 1)).map (pieceWord
             (AssignedCell.eval env.place env.env.toEnvironment

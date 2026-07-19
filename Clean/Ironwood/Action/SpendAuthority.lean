@@ -28,8 +28,8 @@ holds at that `alpha`, with no existential.
 namespace Halo2.Ironwood.Action.SpendAuthority
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point Fq)
-open Orchard.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood (Point Fq)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
 /-- The input of the spend-authority block: the already-assigned authorizing key point
 `ak_P`. (The randomizer `alpha` lives on the `FullWidth` child's witness boundary — the

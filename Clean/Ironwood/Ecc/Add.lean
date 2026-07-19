@@ -1,6 +1,6 @@
 import Clean.Halo2
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Ecc.Add
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Ecc.AddTheorems
 import Clean.Ironwood.Ecc.Basic
 
 namespace Halo2.Ironwood.Ecc
@@ -106,19 +106,19 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
 /-!
 ## Algebraic core lemmas
 
-The value-level mathematics, ported from the phase-one `Orchard.Ecc.Add`. Everything is
+The value-level mathematics, ported from the phase-one `Halo2.Ironwood.Ecc.Add`. Everything is
 stated over concrete field coordinates with the gate polynomials written out literally, so
 the lemmas do not depend on the gate's `Query`/`Expression` machinery. The complete group
-law is `Orchard.Point.add` and validity is `Orchard.Point.Valid` (on-curve, or the `(0,0)`
+law is `Halo2.Ironwood.Point.add` and validity is `Halo2.Ironwood.Point.Valid` (on-curve, or the `(0,0)`
 identity sentinel), reused from the Orchard Pallas specs.
 -/
 
-open Orchard (Point)
-open Orchard (pallasA pallasB two_ne_zero add_self_ne_zero)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood (pallasA pallasB two_ne_zero add_self_ne_zero)
 open CompElliptic.CurveForms
 
 /-- The intermediate "gate spec": the case-split characterization of the twelve
-complete-addition polynomials. Ported verbatim from `Orchard.Ecc.Add.Gate.Spec`, phrased
+complete-addition polynomials. Ported verbatim from `Halo2.Ironwood.Ecc.Add.Gate.Spec`, phrased
 over plain coordinates. Each conjunct is the "non-exceptional branch" implication guarded
 by the corresponding `inv0`-flag being nonzero. -/
 def Spec (px py qx qy rx ry lambda alpha beta gamma delta : Fp) : Prop :=
@@ -133,7 +133,7 @@ def Spec (px py qx qy rx ry lambda alpha beta gamma delta : Fp) : Prop :=
     ((qx - px) * alpha + (qy + py) * delta ≠ 1 → rx = 0 ∧ ry = 0)
 
 /-- The `λ` slope witness, over plain coordinates (Rust `assign_region`'s `lambda`
-closure). Ported from `Orchard.Ecc.Add.lambdaValue`: the tangent slope when `x_q = x_p`
+closure). Ported from `Halo2.Ironwood.Ecc.Add.lambdaValue`: the tangent slope when `x_q = x_p`
 (and `y_p ≠ 0`), the chord slope otherwise (with `inv0` semantics `0⁻¹ = 0` making the
 degenerate cases `0`). -/
 def lambdaValueRaw (px py qx qy : Fp) : Fp :=
@@ -143,7 +143,7 @@ def lambdaValueRaw (px py qx qy : Fp) : Fp :=
     (qy - py) * (qx - px)⁻¹
 
 /-- Soundness half of the gate: the twelve polynomials vanishing implies the `Spec`
-case-split. Ported from the soundness half of `Orchard.Ecc.Add.Gate.circuit`. -/
+case-split. Ported from the soundness half of `Halo2.Ironwood.Ecc.Add.Gate.circuit`. -/
 theorem spec_of_polysZero {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (h1 : (qx - px) * ((qx - px) * lambda - (qy - py)) = 0)
     (h2 : (1 - (qx - px) * alpha) * (2 * py * lambda - 3 * (px * px)) = 0)
@@ -169,7 +169,7 @@ theorem spec_of_polysZero {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
   · intros; and_intros <;> grind
 
 /-- Completeness half of the gate: `Spec` implies each of the twelve polynomials vanishes.
-Ported from the completeness half of `Orchard.Ecc.Add.Gate.circuit`. Returns the twelve
+Ported from the completeness half of `Halo2.Ironwood.Ecc.Add.Gate.circuit`. Returns the twelve
 equations as a conjunction (in the gate's constraint order). -/
 theorem polysZero_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (h : Spec px py qx qy rx ry lambda alpha beta gamma delta) :
@@ -205,22 +205,22 @@ corresponding `Gate.Input`. Both are the same seven-way case split; only the fie
 packaging differs. -/
 theorem spec_toGateInput {px py qx qy rx ry lambda alpha beta gamma delta : Fp} :
     Spec px py qx qy rx ry lambda alpha beta gamma delta ↔
-    Orchard.Ecc.Add.Gate.Spec
+    Halo2.Ironwood.Ecc.Add.Gate.Spec
       { x_p := px, y_p := py, x_qr := { curr := qx, next := rx },
         y_qr := { curr := qy, next := ry }, lambda, alpha, beta, gamma, delta } := by
-  simp only [Spec, Orchard.Ecc.Add.Gate.Spec,
-    Orchard.Ecc.Add.Gate.Input.p, Orchard.Ecc.Add.Gate.Input.q, Orchard.Ecc.Add.Gate.Input.r,
+  simp only [Spec, Halo2.Ironwood.Ecc.Add.Gate.Spec,
+    Halo2.Ironwood.Ecc.Add.Gate.Input.p, Halo2.Ironwood.Ecc.Add.Gate.Input.q, Halo2.Ironwood.Ecc.Add.Gate.Input.r,
     Point.mk.injEq]
 
 /-- Soundness core: given valid P, Q and the gate `Spec` at coordinates
 `(px,py) (qx,qy) (rx,ry)`, the result `R = (rx, ry)` is the complete sum `P + Q`.
-Delegates to the phase-one `Orchard.Ecc.Add.add_of_spec`. -/
+Delegates to the phase-one `Halo2.Ironwood.Ecc.Add.add_of_spec`. -/
 theorem add_eq_add_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (hp : ({ x := px, y := py } : Point Fp).Valid)
     (hq : ({ x := qx, y := qy } : Point Fp).Valid)
     (hrow : Spec px py qx qy rx ry lambda alpha beta gamma delta) :
     ({ x := rx, y := ry } : Point Fp) = { x := px, y := py } + { x := qx, y := qy } :=
-  Orchard.Ecc.Add.add_of_spec (row :=
+  Halo2.Ironwood.Ecc.Add.add_of_spec (row :=
     { x_p := px, y_p := py, x_qr := { curr := qx, next := rx },
       y_qr := { curr := qy, next := ry }, lambda, alpha, beta, gamma, delta })
     hp hq (spec_toGateInput.mp hrow)
@@ -236,7 +236,7 @@ prover's witnesses satisfy the gate `Spec`, hence the twelve polynomials
 
 /-- The complete `Spec` holds for the honest prover's witness values: `λ` = the slope
 hint, `α,β,γ` = the `inv0` hints, `δ` the conditional hint, and R the complete sum.
-Delegates to `Orchard.Ecc.Add.rowValue_spec`. -/
+Delegates to `Halo2.Ironwood.Ecc.Add.rowValue_spec`. -/
 theorem spec_of_valid {px py qx qy : Fp}
     (hp : ({ x := px, y := py } : Point Fp).Valid)
     (hq : ({ x := qx, y := qy } : Point Fp).Valid) :
@@ -246,7 +246,7 @@ theorem spec_of_valid {px py qx qy : Fp}
       (lambdaValueRaw px py qx qy)
       ((qx - px)⁻¹) (px⁻¹) (qx⁻¹)
       (if qx = px then (qy + py)⁻¹ else 0) := by
-  have hrow := Orchard.Ecc.Add.rowValue_spec
+  have hrow := Halo2.Ironwood.Ecc.Add.rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
   rw [spec_toGateInput]
   convert hrow using 2
@@ -255,7 +255,7 @@ theorem spec_of_valid {px py qx qy : Fp}
 ## Witness-program evaluation lemmas
 
 The evaluated `if`-trees of the R/λ/δ witness programs, in closed form. Ported from the
-private `ite_rX`/`ite_rY`/`ite_lambdaValue`/`ite_deltaValue` of `Orchard.Ecc.Add`. The
+private `ite_rX`/`ite_rY`/`ite_lambdaValue`/`ite_deltaValue` of `Halo2.Ironwood.Ecc.Add`. The
 `Decidable` instances are variables: `BExpr.feq`'s evaluation decides field equality
 through its own instance, not necessarily the canonical one, so an instance-generic
 statement lets `simp` match either spelling (after the compound `∧` conditions arrive

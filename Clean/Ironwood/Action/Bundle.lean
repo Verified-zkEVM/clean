@@ -16,9 +16,9 @@ incomplete-addition escapes carried as data (`SpecOrBreak`, zcash/ironwood#45):
 namespace Halo2.Ironwood.Action.Circuit
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
   commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
@@ -58,7 +58,7 @@ private theorem merkle_call_regionCount (G : Generators) (Q : Point Fp)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-private theorem vc_call_regionCount (V : Orchard.Ecc.MulFixed.Short.FixedBase)
+private theorem vc_call_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
     (R : FixedBase) (w : Vector (FExpr Fp) 85)
     (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (inp : Var Ecc.MulFixed.Short.Inputs Fp) (j : RegionIndex) :
@@ -268,7 +268,7 @@ def extract (cfg : Config) (_ : Var PrivateInputs Fp) (i₀ : RegionIndex)
 
 /-! ## The statement (§4.17.4, knowledge-sound, breaks-as-data) -/
 
-open Orchard.Action.NoteCommit (noteScalars)
+open Halo2.Ironwood.NoteCommit (noteScalars)
 
 /-- The Orchard Action statement over the extracted data: every §4.17.4 clause, with
 the Sinsemilla escapes exhibited as data and the fixed-base scalars knowledge-sound at
@@ -286,7 +286,7 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
           + (wit.rcv.2 • B.valueCommitR : Point Fp)))) ∧
   -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
   wit.nfOld = ((wit.cmOld +
-    ((Orchard.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
+    ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
       • B.nullifierK : Point Fp)).x ∧
   -- spend authority: `rk = [α] SpendAuthG + ak_P`
   (⟨wit.rkX, wit.rkY⟩ : Point Fp)
@@ -440,7 +440,7 @@ private theorem merkle_envAssumptions_eq (G : Generators) (Q : Point Fp)
           LookupRangeCheck.TableLoaded 10 c.2.2 env.env ∧
           c.2.2.qLookup.index ≠ c.2.2.qRunning.index) := rfl
 
-private theorem vc_spec_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+private theorem vc_spec_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) :
     (ValueCommit.circuit V R w).Spec
       = fun (input : Value Ecc.MulFixed.Short.Inputs Fp) (output : Value Point Fp)
@@ -452,7 +452,7 @@ private theorem vc_spec_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : Fixed
                 output = (((-(m : Fq)) : Fq) • V : Point Fp)
                   + (wit.2 • R : Point Fp))) := rfl
 
-private theorem vc_extract_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase)
+private theorem vc_extract_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
     (R : FixedBase) (w : Vector (FExpr Fp) 85)
     (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (inp : Var Ecc.MulFixed.Short.Inputs Fp) (i : RegionIndex)
@@ -464,7 +464,7 @@ private theorem dn_spec_eq (K : FixedBase) :
     (DeriveNullifier.circuit K).Spec
       = fun (input : Value DeriveNullifier.Input Fp) (output : Value field Fp) _ =>
           (output : Fp) = ((input.cm +
-            ((Orchard.Poseidon.Hash.ConstantLength.value #v[input.nk, input.rho]
+            ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[input.nk, input.rho]
               + input.psi).val : Fq) • K : Point Fp)).x := rfl
 
 private theorem sa_spec_eq (G : FixedBase) (w : Vector (FExpr Fp) 85) :
@@ -513,8 +513,8 @@ private theorem nc_assumptions_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
     (NoteCommit.Main.circuit G R w Q hQ).Assumptions
       = fun (input : Value NoteCommit.Main.Inputs Fp) =>
-          Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-          Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ := rfl
+          Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+          Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ := rfl
 
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) :
@@ -609,17 +609,17 @@ private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
 private theorem dn_assumptions_eq (K : FixedBase) :
     (DeriveNullifier.circuit K).Assumptions
       = fun (input : Value DeriveNullifier.Input Fp) =>
-          Orchard.Point.Valid input.cm := rfl
+          Halo2.Ironwood.Point.Valid input.cm := rfl
 
 private theorem sa_assumptions_eq (G : FixedBase) (w : Vector (FExpr Fp) 85) :
     (SpendAuthority.circuit G w).Assumptions
       = fun (input : Value SpendAuthority.Input Fp) =>
-          Orchard.Point.Valid input.akP := rfl
+          Halo2.Ironwood.Point.Valid input.akP := rfl
 
 private theorem ai_assumptions_eq (pkD : Point (FExpr Fp)) :
     (AddressIntegrity.circuit pkD).Assumptions
       = fun (input : Value AddressIntegrity.Input Fp) =>
-          Orchard.Point.OnCurve input.gDOld := rfl
+          Halo2.Ironwood.Point.OnCurve input.gDOld := rfl
 
 private theorem ai_pa_eq (pkD : Point (FExpr Fp)) :
     (AddressIntegrity.circuit pkD).ProverAssumptions
@@ -636,7 +636,7 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
   rw [ProvableStruct.eval_cells_eq_eval_prover]
   with_unfolding_all rfl
 
-private theorem vc_pa_eq (V : Orchard.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+private theorem vc_pa_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) :
     (ValueCommit.circuit V R w).ProverAssumptions
       = fun (input : ProverValue Ecc.MulFixed.Short.Inputs Fp)
@@ -887,13 +887,13 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   rw [vc_spec_eq, vc_extract_eq] at hVCS
   rw [vcInputs_eval_eq] at hVCS
   have hDNS := hDN (by exact hBf) (by
-    show Orchard.Point.Valid _
+    show Halo2.Ironwood.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact hCmS)
   rw [dn_spec_eq] at hDNS
   rw [dnInputs_eval_eq] at hDNS
   have hSAS := hSA (by exact hFw) (by
-    show Orchard.Point.Valid _
+    show Halo2.Ironwood.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact Or.inl hAkS)
   rw [sa_spec_eq, sa_extract_eq] at hSAS
@@ -903,7 +903,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   simp only [CommitIvk.Main.Spec] at hCIS
   rw [civkInputs_eval_eq] at hCIS
   have hAIS := hAI (by exact hMulE) (by
-    show Orchard.Point.OnCurve _
+    show Halo2.Ironwood.Point.OnCurve _
     simp only [circuit_norm, Point.eval_eq]
     exact hGdS)
   rw [ai_spec_eq, ai_output] at hAIS
@@ -966,9 +966,9 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hNCoS := hNCo (by exact ⟨hT1, hFw, hTL, hDist⟩)
     (by rw [nc_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
-        · show Orchard.Point.OnCurve _
+        · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hGdS
-        · show Orchard.Point.OnCurve _
+        · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hAIS.1)
   rw [nc_spec_eq, nc_extract_eq] at hNCoS
   simp only [NoteCommit.Main.Spec] at hNCoS
@@ -982,9 +982,9 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hNCnS := hNCn (by exact ⟨hT2, hFw, hTL, hDist⟩)
     (by rw [nc_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
-        · show Orchard.Point.OnCurve _
+        · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hGdNS
-        · show Orchard.Point.OnCurve _
+        · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hPkNS)
   rw [nc_spec_eq, nc_extract_eq] at hNCnS
   simp only [NoteCommit.Main.Spec] at hNCnS
@@ -1049,7 +1049,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · -- diversified-address integrity
     exact ⟨_, by with_unfolding_all exact hCIS, by with_unfolding_all exact hAIS.2⟩
   · -- old note-commitment integrity
-    refine Orchard.Specs.Sinsemilla.SpecOrBreak.mono ?_
+    refine Halo2.Ironwood.Specs.Sinsemilla.SpecOrBreak.mono ?_
       (by with_unfolding_all exact hNCoS)
     intro bp hbp
     have hcmP : ({ x := env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 2) : ℕ) : ℤ),
@@ -1077,7 +1077,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     exact hbp
   · -- new note-commitment integrity
     rw [← hInf]
-    refine Orchard.Specs.Sinsemilla.SpecOrBreak.mono ?_
+    refine Halo2.Ironwood.Specs.Sinsemilla.SpecOrBreak.mono ?_
       (by with_unfolding_all exact hNCnS)
     intro bp hbp
     rw [← hIcmx]
@@ -1143,11 +1143,11 @@ def ProverAssumptions (G : Generators) (B : Bases)
     wit.pkdOld = (((Bi + (wit.rivk.2 • B.commitIvkR : Point Fp)).x).val
       • wit.gdOld : Point Fp)) ∧
   (∃ Bo, hashToPoint G.S B.noteQ
-      (Orchard.Action.NoteCommit.noteScalars wit.gdOld wit.pkdOld wit.vOld
+      (Halo2.Ironwood.NoteCommit.noteScalars wit.gdOld wit.pkdOld wit.vOld
         wit.rhoOld wit.psiOld).chunks = some Bo ∧
     wit.cmOld = Bo + (wit.rcmOld.2 • B.noteCommitR : Point Fp)) ∧
   (∃ Bn, hashToPoint G.S B.noteQ
-      (Orchard.Action.NoteCommit.noteScalars wit.gdNew wit.pkdNew wit.vNew
+      (Halo2.Ironwood.NoteCommit.noteScalars wit.gdNew wit.pkdNew wit.vNew
         wit.nfOld wit.psiNew).chunks = some Bn ∧
     wit.cmx = (Bn + (wit.rcmNew.2 • B.noteCommitR : Point Fp)).x) ∧
   -- the public-input rows are the honestly computed values
@@ -1160,7 +1160,7 @@ def ProverAssumptions (G : Generators) (B : Bases)
         = (((-(wit.magnitude.val : Fq)) : Fq) • B.valueCommitV : Point Fp)
           + (wit.rcv.2 • B.valueCommitR : Point Fp))) ∧
   wit.nfOld = ((wit.cmOld +
-    ((Orchard.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld]
+    ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld]
       + wit.psiOld).val : Fq) • B.nullifierK : Point Fp)).x ∧
   (⟨wit.rkX, wit.rkY⟩ : Point Fp)
     = (wit.alpha.2 • B.spendAuthG : Point Fp) + wit.akP ∧
@@ -1265,8 +1265,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       ⟨(by rw [wpoint_envAssumptions_eq]; trivial),
        (by rw [wpoint_assumptions_eq]; trivial),
        (by rw [wpoint_proverAssumptions_eq]
-           show Orchard.Point.Valid _
-           have h : Orchard.Point.Valid
+           show Halo2.Ironwood.Point.Valid _
+           have h : Halo2.Ironwood.Point.Valid
                (⟨(Witgen.FExprOver.eval
                    { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
                    input_var.cmOld.x : Fp),
@@ -1282,7 +1282,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
        (by rw [wpointNonId_assumptions_eq]; trivial),
        (by rw [wpointNonId_proverAssumptions_eq]
-           show Orchard.Point.OnCurve _
+           show Halo2.Ironwood.Point.OnCurve _
            with_unfolding_all exact hVgd)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
@@ -1290,7 +1290,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
        (by rw [wpointNonId_assumptions_eq]; trivial),
        (by rw [wpointNonId_proverAssumptions_eq]
-           show Orchard.Point.OnCurve _
+           show Halo2.Ironwood.Point.OnCurve _
            with_unfolding_all exact hVak)⟩
   · -- ── stages B and C ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
@@ -1445,7 +1445,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
        cfg.eccConfig.add) (i₀ + 271) place env _ hWdn (by exact hBf)
       (by rw [dn_assumptions_eq, dnInputs_eval_eq]
-          show Orchard.Point.Valid _
+          show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
           with_unfolding_all exact hVcm)
       (by trivial)).1
@@ -1454,7 +1454,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
       (by exact hFw)
       (by rw [sa_assumptions_eq, saInputs_eval_eq]
-          show Orchard.Point.Valid _
+          show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
           with_unfolding_all exact Or.inl hVak)
       (by with_unfolding_all exact hWal)).1
@@ -1490,7 +1490,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
         Nat.add_zero] at hCIder
-      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+      rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.ivkQ _ = some Bi from by
           with_unfolding_all exact hBi)] at hCIder
       with_unfolding_all exact hCIder
@@ -1513,9 +1513,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by exact ⟨hT1, hFw, hTL, hDist⟩)
       (by rw [nc_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
-          · show Orchard.Point.OnCurve _
+          · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVgd
-          · show Orchard.Point.OnCurve _
+          · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVpk)
       (by rw [nc_pa_eq]
           simp only [NoteCommit.Main.ProverAssumptions]
@@ -1552,9 +1552,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by exact ⟨hT2, hFw, hTL, hDist⟩)
       (by rw [nc_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
-          · show Orchard.Point.OnCurve _
+          · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVgdn
-          · show Orchard.Point.OnCurve _
+          · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVpkn)
       (by rw [nc_pa_eq]
           simp only [NoteCommit.Main.ProverAssumptions]
@@ -1652,7 +1652,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       rw [nc_spec_eq, nc_extract_eq] at hNCoDer
       simp only [NoteCommit.Main.Spec] at hNCoDer
       rw [ncInputs_eval_eq] at hNCoDer
-      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+      rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bo from by
           with_unfolding_all exact hBo)] at hNCoDer
       rw [hCmo]
@@ -1700,7 +1700,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           = (extract cfg input_var i₀
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
           from by with_unfolding_all exact hDNval] at hNCnDer
-      rw [Orchard.Specs.Sinsemilla.hashToPointB_inl_of_some
+      rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bn from by
           with_unfolding_all exact hBn)] at hNCnDer
       with_unfolding_all exact hNCnDer
@@ -1778,7 +1778,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            cfg.eccConfig.add) (i₀ + 271) place env _ hWdn
           ⟨(by exact hBf),
            (by rw [dn_assumptions_eq, dnInputs_eval_eq]
-               show Orchard.Point.Valid _
+               show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
                with_unfolding_all exact hVcm),
            (by trivial)⟩
@@ -1788,7 +1788,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
           ⟨(by exact hFw),
            (by rw [sa_assumptions_eq, saInputs_eval_eq]
-               show Orchard.Point.Valid _
+               show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
                with_unfolding_all exact Or.inl hVak),
            (by with_unfolding_all exact hWal)⟩
@@ -1815,7 +1815,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           hWai
           ⟨(by exact hMulE),
            (by rw [ai_assumptions_eq, aiInputs_eval_eq]
-               show Orchard.Point.OnCurve _
+               show Halo2.Ironwood.Point.OnCurve _
                simp only [Point.eval_eq]
                with_unfolding_all exact hVgd),
            (by rw [ai_pa_eq, aiInputs_eval_eq_prover]
@@ -1839,9 +1839,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩),
            (by rw [nc_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
-               · show Orchard.Point.OnCurve _
+               · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVgd
-               · show Orchard.Point.OnCurve _
+               · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVpk),
            (by rw [nc_pa_eq]
                simp only [NoteCommit.Main.ProverAssumptions]
@@ -1862,7 +1862,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
            (by rw [wpointNonId_assumptions_eq]; trivial),
            (by rw [wpointNonId_proverAssumptions_eq]
-               show Orchard.Point.OnCurve _
+               show Halo2.Ironwood.Point.OnCurve _
                with_unfolding_all exact hVgdn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
@@ -1870,7 +1870,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
            (by rw [wpointNonId_assumptions_eq]; trivial),
            (by rw [wpointNonId_proverAssumptions_eq]
-               show Orchard.Point.OnCurve _
+               show Halo2.Ironwood.Point.OnCurve _
                with_unfolding_all exact hVpkn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR input_var.rcmNewWindows B.noteQ
@@ -1882,9 +1882,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           ⟨(by exact ⟨hT2, hFw, hTL, hDist⟩),
            (by rw [nc_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
-               · show Orchard.Point.OnCurve _
+               · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVgdn
-               · show Orchard.Point.OnCurve _
+               · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVpkn),
            (by rw [nc_pa_eq]
                simp only [NoteCommit.Main.ProverAssumptions]
@@ -2122,11 +2122,11 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.y :=
     sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e3)).resolve_left hdca)
   constructor
-  · apply Orchard.Point.ext_coords
+  · apply Halo2.Ironwood.Point.ext_coords
     show (_, _) = _
     rw [hgx, hgy]
     with_unfolding_all rfl
-  · apply Orchard.Point.ext_coords
+  · apply Halo2.Ironwood.Point.ext_coords
     show (_, _) = _
     rw [hpx, hpy]
     with_unfolding_all rfl
@@ -2172,7 +2172,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       · rw [show (env.advice cfg.eccConfig.witnessPoint.x
               ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
             = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 347) : ℕ) : ℤ)
-            from by with_unfolding_all exact congrArg Orchard.Point.x hg]
+            from by with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hg]
         ring
     have hdy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
         * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 3) : ℕ) : ℤ)
@@ -2185,7 +2185,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       · rw [show (env.advice cfg.eccConfig.witnessPoint.y
               ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
             = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 347) : ℕ) : ℤ)
-            from by with_unfolding_all exact congrArg Orchard.Point.y hg]
+            from by with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hg]
         ring
     have hpx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
         * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 301) : ℕ) : ℤ)
@@ -2198,7 +2198,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       · rw [show (env.advice cfg.eccConfig.witnessPoint.x
               ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
             = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 348) : ℕ) : ℤ)
-            from by with_unfolding_all exact congrArg Orchard.Point.x hp]
+            from by with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hp]
         ring
     have hpy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
         * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 301) : ℕ) : ℤ)
@@ -2211,7 +2211,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       · rw [show (env.advice cfg.eccConfig.witnessPoint.y
               ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
             = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 348) : ℕ) : ℤ)
-            from by with_unfolding_all exact congrArg Orchard.Point.y hp]
+            from by with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hp]
         ring
     intro i
     fin_cases i

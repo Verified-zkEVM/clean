@@ -2,8 +2,8 @@ import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Halo2.Tactics.SubcircuitRw
 import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Ecc.Mul.Complete
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Ecc.MulCompleteTheorems
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Add
 import Clean.Ironwood.Ecc.MulIncomplete
@@ -27,7 +27,7 @@ This is **the first real consumer of the subcircuit-composition machinery** (`Cl
 Subcircuit.lean`) and, in particular, the first *loop* consumer: each round invokes the proven
 child `Add.add` (`Clean/Ironwood/Ecc/Add.lean`) TWICE via `add.call`, at running offsets. The
 value-level round algebra is lifted from the phase-one donor
-`Clean/Orchard/Ecc/Mul/Complete.lean` (`Orchard.Ecc.Mul.Complete.AssignRegion`).
+`Clean/Orchard/Ecc/Mul/Complete.lean` (`Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion`).
 
 ## Config composition (first exercise)
 
@@ -59,8 +59,8 @@ needs); `round_complete`/`loop_complete` mirror the soundness ladder on the hone
 
 namespace Halo2.Ironwood.Ecc.MulComplete
 
-open Orchard (Point)
-open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
 open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits)
 
 /-! ## Config
@@ -122,7 +122,7 @@ def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure 
 
 /-! ## Inputs / Output
 
-Mirrors the donor `Orchard.Ecc.Mul.Complete.AssignRegion.Input`/`Output`. The base point, the
+Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion.Input`/`Output`. The base point, the
 accumulator cells `(x_a, y_a)` from incomplete addition, and the entering running sum `z` are
 verifier-visible; the complete-range bits are DERIVED from the scalar cell `alpha` (window
 offset `w` of `kBits alpha` — no prover-side `bits` parameter, per the "no prover information
@@ -173,14 +173,14 @@ theorem stepBasePoint_valid {base : Point Fp} (hbase : base.Valid) (bit : Bool) 
     (stepBasePoint base bit).Valid := by
   simp only [stepBasePoint]
   rcases Bool.dichotomy bit with hb | hb <;> rw [hb]
-  · simpa using Orchard.Point.valid_neg hbase
+  · simpa using Halo2.Ironwood.Point.valid_neg hbase
   · simpa using hbase
 
 /-- Validity is preserved by a complete round (the complete group law is total on valid points). -/
 theorem stepPoint_valid {base acc : Point Fp} (hbase : base.Valid) (hacc : acc.Valid)
     (bit : Bool) : (stepPoint base acc bit).Valid :=
-  Orchard.Point.valid_add hacc
-    (Orchard.Point.valid_add (stepBasePoint_valid hbase bit) hacc)
+  Halo2.Ironwood.Point.valid_add hacc
+    (Halo2.Ironwood.Point.valid_add (stepBasePoint_valid hbase bit) hacc)
 
 theorem accPoint_valid {base acc0 : Point Fp} (hbase : base.Valid) (hacc0 : acc0.Valid)
     (bits : BitsHint) (b : ℕ) : (accPoint base acc0 bits b).Valid := by
@@ -426,7 +426,7 @@ theorem round_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
       simpa [stepBasePoint] using stepBasePoint_valid hbase false
     obtain ⟨hV1, hE1⟩ := hSpec1 trivial ⟨hUv, hAvalid⟩
     rw [hE1] at hSpec2
-    obtain ⟨hV2, hE2⟩ := hSpec2 trivial ⟨hAvalid, Orchard.Point.valid_add hUv hAvalid⟩
+    obtain ⟨hV2, hE2⟩ := hSpec2 trivial ⟨hAvalid, Halo2.Ironwood.Point.valid_add hUv hAvalid⟩
     rw [hE2]
     simp [stepPoint, stepBasePoint]
   · -- bit 1: U = (base.x, base.y)
@@ -436,7 +436,7 @@ theorem round_acc_sound (cfg : Config) (input : Inputs (AssignedCell Fp))
       simpa [stepBasePoint] using stepBasePoint_valid hbase true
     obtain ⟨hV1, hE1⟩ := hSpec1 trivial ⟨hUv, hAvalid⟩
     rw [hE1] at hSpec2
-    obtain ⟨hV2, hE2⟩ := hSpec2 trivial ⟨hAvalid, Orchard.Point.valid_add hUv hAvalid⟩
+    obtain ⟨hV2, hE2⟩ := hSpec2 trivial ⟨hAvalid, Halo2.Ironwood.Point.valid_add hUv hAvalid⟩
     rw [hE2]
     simp [stepPoint, stepBasePoint]
 
@@ -678,7 +678,7 @@ theorem loop_complete (cfg : Config) (input : Inputs (AssignedCell Fp))
 /-! ## The bundle contract
 
 `Spec` exposes the complete-rounds invariant, mirroring the donor
-`Orchard.Ecc.Mul.Complete.AssignRegion.Spec`: the running-sum chain, and — for valid entering
+`Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion.Spec`: the running-sum chain, and — for valid entering
 accumulator and base — the output accumulator is `accValue`/`accPoint` after `numBits` rounds. -/
 
 /-- The complete-rounds invariant: the running-sum chain over `numBits` bits, and (for valid

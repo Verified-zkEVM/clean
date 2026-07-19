@@ -16,9 +16,9 @@ Reference (ported from actual Rust, not memory):
 namespace Halo2.Ironwood.Poseidon
 
 open Halo2.Ironwood (Fp)
-open Orchard.Poseidon
-open Orchard.Poseidon.Permute (State)
-open Orchard.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
+open Halo2.Ironwood.Poseidon
+open Halo2.Ironwood.Poseidon.Permute (State)
+open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
 
 -- contract bridges for the round chunks
 private theorem fullRound_spec_eq (r : ℕ) :

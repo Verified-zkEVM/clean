@@ -94,12 +94,6 @@ def rowValue (input : Input Fp) : Gate.Input Fp where
   gamma := input.q.x⁻¹
   delta := if input.q.x = input.p.x then (input.q.y + input.p.y)⁻¹ else 0
 
-def Assumptions (input : Input Fp) : Prop :=
-  input.p.Valid ∧ input.q.Valid
-
-def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  output.Valid ∧ output = input.p + input.q
-
 open Gate
 
 theorem rowValue_spec {input : Input Fp}

@@ -1,5 +1,5 @@
 import Clean.Ironwood.NoteCommit.Main
-import Clean.Orchard.Sinsemilla.HashToPoint
+import Clean.Ironwood.Sinsemilla.ChainTheorems
 
 /-!
 # NoteCommit bundle proofs (soundness / completeness / the `circuit` def)
@@ -11,10 +11,10 @@ part — the fully proven soundness/completeness theorems and the bundled `circu
 namespace Halo2.Ironwood.NoteCommit.Main
 
 open Halo2.Ironwood (Fp)
-open Orchard (Point)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Specs (bitrange)
-open Orchard.Specs.Sinsemilla (Generators hashToPoint)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Specs (bitrange)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-! ## Child contract bridges (`rfl`, children stay folded) -/
@@ -93,7 +93,7 @@ private theorem yc_spec_eq (w : WitgenIR Fp 1) :
     (YCanonicityCheck.circuit w).Spec
       = fun input (out : Fp) (wit : Fp) =>
           out = wit ∧
-          (IsBool out → Orchard.Action.NoteCommit.IsLowBit input.y out) := rfl
+          (IsBool out → Halo2.Ironwood.NoteCommit.IsLowBit input.y out) := rfl
 
 private theorem yc_assumptions_eq (w : WitgenIR Fp 1) :
     (YCanonicityCheck.circuit w).Assumptions = fun _ => True := rfl
@@ -144,7 +144,7 @@ private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
 private theorem yc_proverAssumptions_eq (w : WitgenIR Fp 1) :
     (YCanonicityCheck.circuit w).ProverAssumptions
       = fun input (wit : Fp) _ =>
-          Orchard.Action.NoteCommit.IsLowBit input.y wit := rfl
+          Halo2.Ironwood.NoteCommit.IsLowBit input.y wit := rfl
 
 private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
@@ -234,7 +234,7 @@ private theorem gd_assumptions_eq :
 
 private theorem gd_spec_eq :
     GdCanonicity.bundle.Spec = fun input _ _ =>
-      Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) := rfl
+      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) := rfl
 
 private theorem pkd_assumptions_eq :
     PkdCanonicity.bundle.Assumptions = fun input =>
@@ -245,7 +245,7 @@ private theorem pkd_assumptions_eq :
 
 private theorem pkd_spec_eq :
     PkdCanonicity.bundle.Spec = fun input _ _ =>
-      Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec
+      Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec
         (PkdCanonicity.toDonor input) := rfl
 
 private theorem value_assumptions_eq :
@@ -254,7 +254,7 @@ private theorem value_assumptions_eq :
 
 private theorem value_spec_eq :
     ValueCanonicity.bundle.Spec = fun input _ _ =>
-      Orchard.Action.NoteCommit.ValueCanonicity.Gate.Spec
+      Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Spec
         (ValueCanonicity.toDonor input) := rfl
 
 private theorem rho_assumptions_eq :
@@ -266,7 +266,7 @@ private theorem rho_assumptions_eq :
 
 private theorem rho_spec_eq :
     RhoCanonicity.bundle.Spec = fun input _ _ =>
-      Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec
+      Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec
         (RhoCanonicity.toDonor input) := rfl
 
 private theorem psi_assumptions_eq :
@@ -279,7 +279,7 @@ private theorem psi_assumptions_eq :
 
 private theorem psi_spec_eq :
     PsiCanonicity.bundle.Spec = fun input _ _ =>
-      Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec
+      Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec
         (PsiCanonicity.toDonor input) := rfl
 
 private theorem prefixRows_ns_0 : Sinsemilla.Chain.prefixRows ns 0 = 0 := rfl
@@ -293,12 +293,12 @@ donor's piece-value/chunk-equality connectors. -/
 private theorem pieceChunks_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length) (chunks : List ℕ),
       Sinsemilla.Chain.PieceChunks ms pieces chunks ↔
-      Orchard.Sinsemilla.Chain.PieceChunks ms pieces chunks := by
+      Halo2.Ironwood.Sinsemilla.Chain.PieceChunks ms pieces chunks := by
   intro ms
   induction ms with
   | nil =>
     intro pieces chunks
-    simp only [Sinsemilla.Chain.PieceChunks, Orchard.Sinsemilla.Chain.PieceChunks]
+    simp only [Sinsemilla.Chain.PieceChunks, Halo2.Ironwood.Sinsemilla.Chain.PieceChunks]
   | cons n rest ih =>
     intro pieces chunks
     constructor
@@ -373,14 +373,14 @@ private theorem peelGates (cfg : Config) (input : Inputs (AssignedCell Fp))
 /-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
 private theorem zsFacts_donor_iff :
     ∀ (ms : List ℕ) (chunks : List ℕ)
-      (zs : Orchard.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
+      (zs : Halo2.Ironwood.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
       Sinsemilla.Chain.ZsFacts ms chunks zs ↔
-      Orchard.Sinsemilla.Chain.ZsFacts ms chunks zs := by
+      Halo2.Ironwood.Sinsemilla.Chain.ZsFacts ms chunks zs := by
   intro ms
   induction ms with
   | nil =>
     intro chunks zs
-    simp only [Sinsemilla.Chain.ZsFacts, Orchard.Sinsemilla.Chain.ZsFacts]
+    simp only [Sinsemilla.Chain.ZsFacts, Halo2.Ironwood.Sinsemilla.Chain.ZsFacts]
   | cons n rest ih =>
     intro chunks zs
     constructor
@@ -400,75 +400,75 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
           (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
   show (eval (⟨place, env⟩ : Placed Environment Fp)
     (Sinsemilla.Chain.zsCellsVal cfg iH ns 0)
-    : Orchard.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
+    : Halo2.Ironwood.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
   exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
 
 /-- The six hash running-sum reads the gates copy, at the concrete `ns` layout
 (rows: piece starts `[0,25,26,51,57,58,83,108]`). -/
 private theorem zs_get_z13a (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
         Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1d (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 52 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[1]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13f (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 71 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1g (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 84 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[1]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13g (f : ℕ → Fp) :
-    (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
+    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 96 := by
-  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 /-- Witness-side projection through a `toFormal` call (the YComposite pattern,
 generic): the parent reads the child's in-region witness equations. -/
@@ -760,12 +760,12 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
 private theorem pieceBounds_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.PieceBounds ms pieces ↔
-      Orchard.Sinsemilla.Chain.PieceBounds ms pieces := by
+      Halo2.Ironwood.Sinsemilla.Chain.PieceBounds ms pieces := by
   intro ms
   induction ms with
   | nil =>
     intro pieces
-    simp only [Sinsemilla.Chain.PieceBounds, Orchard.Sinsemilla.Chain.PieceBounds]
+    simp only [Sinsemilla.Chain.PieceBounds, Halo2.Ironwood.Sinsemilla.Chain.PieceBounds]
   | cons n rest ih =>
     intro pieces
     constructor
@@ -777,17 +777,9 @@ private theorem pieceBounds_donor_iff :
 private theorem honestChunks_donor_eq :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.honestChunks ms pieces
-        = Orchard.Sinsemilla.Chain.honestChunks ms pieces := by
-  intro ms
-  induction ms with
-  | nil =>
-    intro pieces
-    simp only [Sinsemilla.Chain.honestChunks, Orchard.Sinsemilla.Chain.honestChunks]
-  | cons n rest ih =>
-    intro pieces
-    simp only [Sinsemilla.Chain.honestChunks, Orchard.Sinsemilla.Chain.honestChunks,
-      ih]
-    rfl
+        = Halo2.Ironwood.Sinsemilla.Chain.honestChunks ms pieces := by
+  intro ms pieces
+  rfl
 
 private theorem toFormal_proverAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
     [ProvableType In] [ProvableType Out]
@@ -851,14 +843,14 @@ private theorem z1g_div (a b c : ℕ) (h1 : a < 2) (h2 : b < 2 ^ 9) (_h3 : c < 2
 
 private theorem gd_pa_eq :
     GdCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) ∧
-      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := rfl
+      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) ∧
+      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
 
 private theorem pkd_pa_eq :
     PkdCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec (PkdCanonicity.toDonor input) ∧
+      Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec (PkdCanonicity.toDonor input) ∧
       input.b3CPrime = input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := rfl
+        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
 
 private theorem value_pa_eq :
     ValueCanonicity.bundle.ProverAssumptions = fun input _ _ =>
@@ -866,15 +858,15 @@ private theorem value_pa_eq :
 
 private theorem rho_pa_eq :
     RhoCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec (RhoCanonicity.toDonor input) ∧
+      Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec (RhoCanonicity.toDonor input) ∧
       input.e1FPrime = input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Orchard.tP := rfl
+        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
 
 private theorem psi_pa_eq :
     PsiCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec (PsiCanonicity.toDonor input) ∧
+      Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec (PsiCanonicity.toDonor input) ∧
       input.g1G2Prime = input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp)
-        + ((2 ^ 130 : ℕ) : Fp) - Orchard.tP := rfl
+        + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
 
 private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) := by
   interval_cases m
@@ -1144,22 +1136,22 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   rw [hashExtract_zs] at hZs
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
-  have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13a := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13a] at hz13a
-  have hz13c := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13c := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13c] at hz13c
-  have hz1d := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz1d := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨3, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
   rw [zs_get_z1d] at hz1d
-  have hz13f := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13f := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨5, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13f] at hz13f
-  have hz1g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz1g := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
   rw [zs_get_z1g] at hz1g
-  have hz13g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13g := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13g] at hz13g
   -- ── normalize region-index spellings ──
@@ -1168,15 +1160,15 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c hz1d hz13f hz1g hz13g
   simp only [Nat.add_assoc, Nat.reduceAdd] at hb0 hb3 hd2 he0 he1 hg1 hh0
   -- ── the piece-value bounds (from the chunk decompositions) ──
-  have hpieceA := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceA := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨0, by decide⟩ hPC' (by decide)
-  have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceC := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
-  have hpieceD := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceD := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨3, by decide⟩ hPC' (by decide)
-  have hpieceF := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceF := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨5, by decide⟩ hPC' (by decide)
-  have hpieceG := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceG := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨6, by decide⟩ hPC' (by decide)
   simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC hpieceD hpieceF hpieceG
   -- restate the vector-element facts on the piece reads (defeq transport)
@@ -1240,7 +1232,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
           Nat.add_zero]
         exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
   rw [toFormal_spec_eq, gd_spec_eq] at hGgdS
-  simp only [GdCanonicity.toDonor, Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec,
+  simp only [GdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
     circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1254,7 +1246,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
           Nat.add_zero]
         exact ⟨hGdS.1, hcval, hb3, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩)
   rw [toFormal_spec_eq, pkd_spec_eq] at hGpkdS
-  simp only [PkdCanonicity.toDonor, Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec,
+  simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_2,
     circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1268,7 +1260,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
           Nat.add_zero]
         exact ⟨hd2, by rw [hzd]; exact hzdval, he0⟩)
   rw [toFormal_spec_eq, value_spec_eq] at hGvalS
-  simp only [ValueCanonicity.toDonor, Orchard.Action.NoteCommit.ValueCanonicity.Gate.Spec,
+  simp only [ValueCanonicity.toDonor, Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Spec,
     synthPieces_output, zCell,
     prefixRows_ns_3, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1282,7 +1274,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
           Nat.add_zero]
         exact ⟨hGgS.1, hfval, he1, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩)
   rw [toFormal_spec_eq, rho_spec_eq] at hGrhoS
-  simp only [RhoCanonicity.toDonor, Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec,
+  simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_5, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1290,7 +1282,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   simp only [prefixRows_ns_3,
     prefixRows_ns_6, Nat.reduceAdd] at hGbS hGdS hGeS hGgS hGhS
   -- Psi: the z13G tail via the donor bridge over the DecomposeG facts
-  have hz13G_tail := Orchard.Action.NoteCommit.z13G_tail_of_decompose_g
+  have hz13G_tail := Halo2.Ironwood.NoteCommit.z13G_tail_of_decompose_g
     hGgS.1 hg1 (by rw [hzg1]; exact hzg1val) hGgS.2 hzg13
   have hGpsiS := hGpsi (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
@@ -1302,7 +1294,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
         exact ⟨hGhS.1, hg1, by rw [hzg1]; exact hzg1val, hh0, hz13G_tail,
           loG, hloG, by rw [← hgz0] at htelG; exact htelG⟩)
   rw [toFormal_spec_eq, psi_spec_eq] at hGpsiS
-  simp only [PsiCanonicity.toDonor, Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec,
+  simp only [PsiCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1310,9 +1302,9 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   -- ── the chunk-equality assembly ──
   have hLow1 := hY1S hGbS.2.1
   have hLow2 := hY2S hGdS.2.1
-  have hz1dEq := Orchard.Action.NoteCommit.cell_eq_of_val hGvalS.2.2.1
-  have hz1gEq := Orchard.Action.NoteCommit.cell_eq_of_val hGpsiS.2.1
-  have hchunksEq := Orchard.Action.NoteCommit.note_chunks_eq_of_cellFacts
+  have hz1dEq := Halo2.Ironwood.NoteCommit.cell_eq_of_val hGvalS.2.2.1
+  have hz1gEq := Halo2.Ironwood.NoteCommit.cell_eq_of_val hGpsiS.2.1
+  have hchunksEq := Halo2.Ironwood.NoteCommit.note_chunks_eq_of_cellFacts
     (gd := ⟨env.get input_var_gdX.cell.column
         ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ),
       env.get input_var_gdY.cell.column
@@ -1358,21 +1350,21 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     hGvalS.1
   -- ── land the Spec ──
   simp only [Spec]
-  refine Orchard.Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
-    (fun m hm => G.S_onCurve (Orchard.Specs.Sinsemilla.chunksOf_mem_lt (by
-      simpa [Orchard.Action.NoteCommit.NoteCommitScalars.chunks,
-        Orchard.Specs.Sinsemilla.noteCommitChunks] using hm))) ?_
+  refine Halo2.Ironwood.Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
+    (fun m hm => G.S_onCurve (Halo2.Ironwood.Specs.Sinsemilla.chunksOf_mem_lt (by
+      simpa [Halo2.Ironwood.NoteCommit.NoteCommitScalars.chunks,
+        Halo2.Ironwood.Specs.Sinsemilla.noteCommitChunks] using hm))) ?_
   intro B hB
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
   rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at hchunksEq
-  rw [show (Orchard.Action.NoteCommit.noteScalars ⟨input_gdX, input_gdY⟩
+  rw [show (Halo2.Ironwood.NoteCommit.noteScalars ⟨input_gdX, input_gdY⟩
       ⟨input_pkdX, input_pkdY⟩ input_value input_rho input_psi).chunks
-    = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
+    = Halo2.Ironwood.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
       input_pkdX.val (input_pkdY.val % 2) input_value.val input_rho.val input_psi.val
     from rfl] at hB
   rw [← hchunksEq] at hB
   obtain ⟨-, hOut⟩ := hContract B hB
-  have hOutVar : ({ x := output_x, y := output_y } : Orchard.Point Fp)
+  have hOutVar : ({ x := output_x, y := output_y } : Halo2.Ironwood.Point Fp)
       = eval (⟨place, env⟩ : Placed Environment Fp)
         ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
           (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
@@ -1451,7 +1443,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hwd0 := hWgd.2.1
   have hwg0 := hWgg.2.1
   have hwh1 := hWgh.2.2
-  have hMCF : Orchard.Action.NoteCommit.MessageCellFacts
+  have hMCF : Halo2.Ironwood.NoteCommit.MessageCellFacts
       ⟨env.get input_var_gdX.cell.column ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩
       ⟨env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩
       (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))
@@ -1469,28 +1461,28 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
         h1 := env.advice cfg.gates.h.colR ((place (i₀ + 37) : ℕ) : ℤ) } := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
       ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hwa]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwb0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwb1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
-      rw [hwb2, show Orchard.Specs.bitrange (ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+    · rw [hwa]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwb0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwb1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+      rw [hwb2, show Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
           = ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
-        simp [Orchard.Specs.bitrange]]
-    · rw [hwb3]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwc]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwd0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
-      rw [hwd1, show Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+        simp [Halo2.Ironwood.Specs.bitrange]]
+    · rw [hwb3]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwc]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwd0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+      rw [hwd1, show Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
           = ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
-        simp [Orchard.Specs.bitrange]]
-    · rw [hwd2]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwe0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwe1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwf]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwg0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwg1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwh0]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
-    · rw [hwh1]; exact Orchard.Specs.cast_bitrange_val (by norm_num) _
+        simp [Halo2.Ironwood.Specs.bitrange]]
+    · rw [hwd2]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwe0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwe1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwf]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwg0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwg1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwh0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+    · rw [hwh1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
     · rw [hwb, ← hwb0, ← hwb1, ← hwb2, ← hwb3]
       try ring
     · rw [hwd, ← hwd0, ← hwd1, ← hwd2]
@@ -1511,7 +1503,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ),
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ)] :=
     (pieceBounds_donor_iff _ _).mpr
-      (Orchard.Action.NoteCommit.pieceBounds_of_cellFacts hMCF)
+      (Halo2.Ironwood.NoteCommit.pieceBounds_of_cellFacts hMCF)
   have hHonest : Sinsemilla.Chain.honestChunks ns
       #v[env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ),
@@ -1521,11 +1513,11 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ),
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ),
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ)]
-      = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
+      = Halo2.Ironwood.Specs.Sinsemilla.noteCommitChunks input_gdX.val (input_gdY.val % 2)
         input_pkdX.val (input_pkdY.val % 2) input_value.val input_rho.val
         input_psi.val := by
     rw [honestChunks_donor_eq]
-    have := Orchard.Action.NoteCommit.honestChunks_eq_noteCommitChunks_of_cellFacts
+    have := Halo2.Ironwood.NoteCommit.honestChunks_eq_noteCommitChunks_of_cellFacts
       hMCF hVal64'
     rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at this
     exact this
@@ -1578,22 +1570,22 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     Nat.reduceAdd] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
-  have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13a := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13a] at hz13a
-  have hz13c := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13c := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13c] at hz13c
-  have hz1d := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz1d := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨3, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
   rw [zs_get_z1d] at hz1d
-  have hz13f := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13f := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨5, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13f] at hz13f
-  have hz1g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz1g := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 1) (by decide)
   rw [zs_get_z1g] at hz1g
-  have hz13g := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13g := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
     ⟨6, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13g] at hz13g
   have hWaSfull := Halo2.SubcircuitRw.region_completeness_derived
@@ -1657,15 +1649,15 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
   obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
   simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c hz1d hz13f hz1g hz13g
-  have hpieceA := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceA := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨0, by decide⟩ hPC' (by decide)
-  have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceC := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
-  have hpieceD := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceD := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨3, by decide⟩ hPC' (by decide)
-  have hpieceF := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceF := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨5, by decide⟩ hPC' (by decide)
-  have hpieceG := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceG := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨6, by decide⟩ hPC' (by decide)
   have haval : (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
       < 2 ^ 250 := by with_unfolding_all exact hpieceA
@@ -1697,52 +1689,52 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
         / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13g
   -- honest z1 cells are the canonical middle slices
   have hdnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
-      = Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 := by
-    rw [hwd, show ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
-        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 : ℕ) : Fp) * 2
-        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 : ℕ) : Fp) * (2 ^ 2 : Fp)
-        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) * (2 ^ 10 : Fp)
-      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 : ℕ) : Fp) from by
+      = Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 := by
+    rw [hwd, show ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
+        + ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 : ℕ) : Fp) * 2
+        + ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 : ℕ) : Fp) * (2 ^ 2 : Fp)
+        + ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 : ℕ) : Fp) from by
       push_cast; ring]
     rw [ZMod.val_natCast_of_lt (by
-      have h1 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-      have h2 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-      have h3 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
-      have h4 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50
+      have h1 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
+      have h2 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
+      have h3 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
+      have h4 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 h4 ⊢
       omega)]
   have hzdEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
-      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) := by
-    rw [hzd, hdnat, z1d_div _ _ _ _ (Orchard.Specs.bitrange_lt _ _ _)
-      (Orchard.Specs.bitrange_lt _ _ _) (Orchard.Specs.bitrange_lt _ _ _)
-      (Orchard.Specs.bitrange_lt _ _ _)]
+      = ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) := by
+    rw [hzd, hdnat, z1d_div _ _ _ _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
+      (Halo2.Ironwood.Specs.bitrange_lt _ _ _) (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
+      (Halo2.Ironwood.Specs.bitrange_lt _ _ _)]
   have hgnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
-      = Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 := by
-    rw [hwg, show ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
-        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 : ℕ) : Fp) * 2
-        + ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) * (2 ^ 10 : Fp)
-      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
-        + Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 : ℕ) : Fp) from by
+      = Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 := by
+    rw [hwg, show ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
+        + ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 : ℕ) : Fp) * 2
+        + ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
+        + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 : ℕ) : Fp) from by
       push_cast; ring]
     rw [ZMod.val_natCast_of_lt (by
-      have h1 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-      have h2 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9
-      have h3 := Orchard.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240
+      have h1 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
+      have h2 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9
+      have h3 := Halo2.Ironwood.Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 ⊢
       omega)]
   have hzgEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ)
-      = ((Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) := by
-    rw [hzg1, hgnat, z1g_div _ _ _ (Orchard.Specs.bitrange_lt _ _ _)
-      (Orchard.Specs.bitrange_lt _ _ _) (Orchard.Specs.bitrange_lt _ _ _)]
+      = ((Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) := by
+    rw [hzg1, hgnat, z1g_div _ _ _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
+      (Halo2.Ironwood.Specs.bitrange_lt _ _ _) (Halo2.Ironwood.Specs.bitrange_lt _ _ _)]
   have hMa := hMCF.1
   have hMb0 := hMCF.2.1
   have hMb1 := hMCF.2.2.1
@@ -1761,48 +1753,48 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   -- short-check value bounds (read language)
   have hb0lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ)).val
       < 2 ^ 4 := by
-    rw [hwb0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwb0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hb3lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ)).val
       < 2 ^ 4 := by
-    rw [hwb3, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwb3, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hd2lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ)).val
       < 2 ^ 8 := by
-    rw [hwd2, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwd2, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have he0lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 7) : ℕ) : ℤ)).val
       < 2 ^ 6 := by
-    rw [hwe0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwe0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have he1lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 8) : ℕ) : ℤ)).val
       < 2 ^ 4 := by
-    rw [hwe1, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwe1, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hg1lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 11) : ℕ) : ℤ)).val
       < 2 ^ 9 := by
-    rw [hwg1, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwg1, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hh0lt : (env.advice cfg.lookupConfig.runningSum ((place (i₀ + 13) : ℕ) : ℤ)).val
       < 2 ^ 5 := by
-    rw [hwh0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hwh0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hz1glt : (env.advice cfg.hashConfig.bits
       ((place (i₀ + 27) + 84 : ℕ) : ℤ)).val < 2 ^ 240 := by
-    rw [hzgEq, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hzgEq, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   have hz1dlt : (env.advice cfg.hashConfig.bits
       ((place (i₀ + 27) + 52 : ℕ) : ℤ)).val < 2 ^ 50 := by
-    rw [hzdEq, Orchard.Specs.cast_bitrange_val (by norm_num)]
-    exact Orchard.Specs.bitrange_lt _ _ _
+    rw [hzdEq, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+    exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
   -- the z13G tail at the honest values
-  have hz13Gt := Orchard.Action.NoteCommit.z13G_tail_of_decompose_g
+  have hz13Gt := Halo2.Ironwood.NoteCommit.z13G_tail_of_decompose_g
     (g := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ))
     (g0 := env.advice cfg.gates.g.colM ((place (i₀ + 36) : ℕ) : ℤ))
     (g1 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 11) : ℕ) : ℤ))
     (g2 := env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ))
     (z13G := env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 96 : ℕ) : ℤ))
-    (by rw [hwg0]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _))
+    (by rw [hwg0]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _))
     hg1lt hz1glt
     (by have h := hMgEq; simp only [] at h; rw [h, hzgEq])
     hzg13
@@ -1830,8 +1822,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 1) : ℕ) : ℤ)).val < 2 ^ 4
-           rw [hwb0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwb0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 2) place env ()
       hWrb3
@@ -1845,8 +1837,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 2) : ℕ) : ℤ)).val < 2 ^ 4
-           rw [hwb3, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwb3, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 8) cfg.lookupConfig 0 (i₀ + 5) place env ()
       hWrd2
@@ -1860,8 +1852,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 5) : ℕ) : ℤ)).val < 2 ^ 8
-           rw [hwd2, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwd2, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 6) cfg.lookupConfig 0 (i₀ + 7) place env ()
       hWre0
@@ -1875,8 +1867,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 7) : ℕ) : ℤ)).val < 2 ^ 6
-           rw [hwe0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwe0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 8) place env ()
       hWre1
@@ -1890,8 +1882,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 8) : ℕ) : ℤ)).val < 2 ^ 4
-           rw [hwe1, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwe1, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 9) cfg.lookupConfig 0 (i₀ + 11) place env ()
       hWrg1
@@ -1905,8 +1897,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 11) : ℕ) : ℤ)).val < 2 ^ 9
-           rw [hwg1, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwg1, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 5) cfg.lookupConfig 0 (i₀ + 13) place env ()
       hWrh0
@@ -1920,42 +1912,42 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 13) : ℕ) : ℤ)).val < 2 ^ 5
-           rw [hwh0, Orchard.Specs.cast_bitrange_val (by norm_num)]
-           exact Orchard.Specs.bitrange_lt _ _ _)⟩
+           rw [hwh0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
+           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (YCanonicityCheck.circuit (brWit input_var_gdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 15) place env _ hWy1
       ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [yc_assumptions_eq]; trivial),
        (by rw [yc_proverAssumptions_eq, yc_extract]
-           refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+           refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
            simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
              Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
              Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
-           rw [hwb2, show Orchard.Specs.bitrange (ZMod.val (env.get
+           rw [hwb2, show Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get
                input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex
                + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
              = ZMod.val (env.get input_var_gdY.cell.column
                ((place input_var_gdY.cell.regionIndex
                + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
-             simp [Orchard.Specs.bitrange]])⟩
+             simp [Halo2.Ironwood.Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (YCanonicityCheck.circuit (brWit input_var_pkdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 20) place env _ hWy2
       ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [yc_assumptions_eq]; trivial),
        (by rw [yc_proverAssumptions_eq, yc_extract]
-           refine Orchard.Action.NoteCommit.isLowBit_iff_mod_two.mpr ?_
+           refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
            simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
              Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
              Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
-           rw [hwd1, show Orchard.Specs.bitrange (ZMod.val (env.get
+           rw [hwd1, show Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get
                input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex
                + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
              = ZMod.val (env.get input_var_pkdY.cell.column
                ((place input_var_pkdY.cell.regionIndex
                + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
-             simp [Orchard.Specs.bitrange]])⟩
+             simp [Halo2.Ironwood.Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
@@ -1967,7 +1959,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              with_unfolding_all exact hPB
            · refine ⟨B0, ?_⟩
              rw [show (Sinsemilla.Chain.honestChunks ns _ : List ℕ)
-                 = Orchard.Specs.Sinsemilla.noteCommitChunks input_gdX.val
+                 = Halo2.Ironwood.Specs.Sinsemilla.noteCommitChunks input_gdX.val
                    (input_gdY.val % 2) input_pkdX.val (input_pkdY.val % 2)
                    input_value.val input_rho.val input_psi.val from by
                with_unfolding_all exact hHonest]
@@ -2013,9 +2005,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Nat.add_zero]
            refine ⟨?_, ?_, ?_⟩
            · rw [hwb1]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hwb2]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hwb, ← hwb0, ← hwb1, ← hwb2, ← hwb3]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2031,9 +2023,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Nat.add_zero]
            refine ⟨?_, ?_, ?_⟩
            · rw [hwd0]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hwd1]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hzdEq, hwd, ← hwd0, ← hwd1, ← hwd2]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2061,7 +2053,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwg0]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hzgEq, hwg, ← hwg0, ← hwg1]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2076,7 +2068,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwh1]
-             exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _)
+             exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _)
            · rw [hwh, ← hwh0, ← hwh1]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2088,7 +2080,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
-           exact ⟨by rw [hwb1]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
+           exact ⟨by rw [hwb1]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              haval, hb0lt, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩),
        (by rw [toFormal_proverAssumptions_eq, gd_pa_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
@@ -2096,15 +2088,15 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [GdCanonicity.toDonor,
-             Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec]
+             Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec]
            refine ⟨⟨hMa, hMb0, hMb1, fun h1 => ?_⟩, hWaP⟩
-           obtain ⟨-, hatp, -⟩ := Orchard.Action.NoteCommit.high_bit_canonical
-             (ZMod.val_lt _) (Orchard.Action.NoteCommit.bit_one_of_val_eq hMb1 h1)
+           obtain ⟨-, hatp, -⟩ := Halo2.Ironwood.NoteCommit.high_bit_canonical
+             (ZMod.val_lt _) (Halo2.Ironwood.NoteCommit.bit_one_of_val_eq hMb1 h1)
            have hloGd : (env.advice cfg.hashConfig.witnessPieces
-               ((place i₀ : ℕ) : ℤ)).val < Orchard.Action.NoteCommit.tPNat := by
+               ((place i₀ : ℕ) : ℤ)).val < Halo2.Ironwood.NoteCommit.tPNat := by
              rw [hMa]; exact hatp
            rw [hWaSPS, hWaP,
-             Orchard.Action.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
+             Halo2.Ironwood.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
                hloGd]
            simp)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2117,7 +2109,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
-           exact ⟨by rw [hwd0]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
+           exact ⟨by rw [hwd0]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hcval, hb3lt, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩),
        (by rw [toFormal_proverAssumptions_eq, pkd_pa_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
@@ -2126,13 +2118,13 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [PkdCanonicity.toDonor,
-             Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec]
+             Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec]
            refine ⟨⟨hMb3, hMc, hMd0, fun h1 => ?_⟩, by rw [hWbP]; try ring⟩
-           have hbase := Orchard.Action.NoteCommit.base_val_lt_tP_val hMb3 hMc
-             (ZMod.val_lt _) (Orchard.Action.NoteCommit.bit_one_of_val_eq hMd0 h1)
+           have hbase := Halo2.Ironwood.NoteCommit.base_val_lt_tP_val hMb3 hMc
+             (ZMod.val_lt _) (Halo2.Ironwood.NoteCommit.bit_one_of_val_eq hMd0 h1)
              (by norm_num)
            rw [hWbSPS, hWbP,
-             Orchard.Action.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
+             Halo2.Ironwood.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
                hbase]
            simp)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2156,17 +2148,17 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            have hvnat : (env.get input_var_value.cell.column
                ((place input_var_value.cell.regionIndex
                  + input_var_value.cell.rowOffset : ℕ) : ℤ)).val
-               = Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
+               = Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
                    ((place input_var_value.cell.regionIndex
                      + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
-                 + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
+                 + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
                    ((place input_var_value.cell.regionIndex
                      + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 2 ^ 8
-                 + Orchard.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
+                 + Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
                    ((place input_var_value.cell.regionIndex
                      + input_var_value.cell.rowOffset : ℕ) : ℤ))) 58 6 * 2 ^ 58 := by
              have h64 := hVal64'
-             simp only [Orchard.Specs.bitrange]
+             simp only [Halo2.Ironwood.Specs.bitrange]
              omega
            conv_lhs => rw [← ZMod.natCast_zmod_val (env.get input_var_value.cell.column
              ((place input_var_value.cell.regionIndex
@@ -2183,7 +2175,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
-           exact ⟨by rw [hwg0]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
+           exact ⟨by rw [hwg0]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hfval, he1lt, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩),
        (by rw [toFormal_proverAssumptions_eq, rho_pa_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
@@ -2192,13 +2184,13 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [RhoCanonicity.toDonor,
-             Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec]
+             Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec]
            refine ⟨⟨hMe1, hMf, hMg0, fun h1 => ?_⟩, by rw [hWeP]; try ring⟩
-           have hbase := Orchard.Action.NoteCommit.base_val_lt_tP_val hMe1 hMf
-             (ZMod.val_lt _) (Orchard.Action.NoteCommit.bit_one_of_val_eq hMg0 h1)
+           have hbase := Halo2.Ironwood.NoteCommit.base_val_lt_tP_val hMe1 hMf
+             (ZMod.val_lt _) (Halo2.Ironwood.NoteCommit.bit_one_of_val_eq hMg0 h1)
              (by norm_num)
            rw [hWeSPS, hWeP,
-             Orchard.Action.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
+             Halo2.Ironwood.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
                hbase]
            simp)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2211,7 +2203,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
-           exact ⟨by rw [hwh1]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
+           exact ⟨by rw [hwh1]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hg1lt, hz1glt, hh0lt, hz13Gt, loG, hloG,
              by rw [← hgz0] at htelG; exact htelG⟩),
        (by rw [toFormal_proverAssumptions_eq, psi_pa_eq]
@@ -2221,19 +2213,19 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [PsiCanonicity.toDonor,
-             Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec]
+             Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec]
            have hg2val : (env.advice cfg.hashConfig.bits
                ((place (i₀ + 27) + 84 : ℕ) : ℤ)).val
-               = Orchard.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column
+               = Halo2.Ironwood.Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column
                    ((place input_var_psi.cell.regionIndex
                      + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 := by
-             rw [hzgEq, Orchard.Specs.cast_bitrange_val (by norm_num)]
+             rw [hzgEq, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
            refine ⟨⟨hMg1, hg2val, hMh0, hMh1, fun h1 => ?_⟩, by rw [hWgP]; try ring⟩
-           have hbase := Orchard.Action.NoteCommit.base_val_lt_tP_val hMg1 hg2val
-             (ZMod.val_lt _) (Orchard.Action.NoteCommit.bit_one_of_val_eq hMh1 h1)
+           have hbase := Halo2.Ironwood.NoteCommit.base_val_lt_tP_val hMg1 hg2val
+             (ZMod.val_lt _) (Halo2.Ironwood.NoteCommit.bit_one_of_val_eq hMh1 h1)
              (by norm_num)
            rw [hWgSPS, hWgP,
-             Orchard.Action.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
+             Halo2.Ironwood.NoteCommit.shifted_high_zero (by norm_num) (by norm_num)
                hbase]
            simp)⟩
 

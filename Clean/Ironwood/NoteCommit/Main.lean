@@ -1,11 +1,11 @@
 import Clean.Ironwood.NoteCommit.Gates
 import Clean.Ironwood.NoteCommit.Decompose
 import Clean.Ironwood.NoteCommit.Canonicity
-import Clean.Orchard.Specs.SinsemillaBreak
+import Clean.Ironwood.Specs.SinsemillaBreak
 import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.NoteCommit.YComposite
 import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Orchard.Action.NoteCommit
+import Clean.Ironwood.NoteCommit.MainTheorems
 
 /-!
 # NoteCommit main circuit (Ironwood)
@@ -31,10 +31,10 @@ namespace Halo2.Ironwood.NoteCommit.Main
 
 open Halo2.Ironwood (Fp)
 open Halo2.Ironwood.Sinsemilla.HashToPoint (witnessMessagePiece)
-open Orchard (Point)
-open Orchard.Ecc.MulFixed (FixedBase)
-open Orchard.Specs (bitrange)
-open Orchard.Specs.Sinsemilla (Generators)
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2.Ironwood.Specs (bitrange)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 
 /-- The NoteCommit message piece lengths in `K = 10`-bit words:
 `a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)` — the chain
@@ -456,7 +456,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
-open Orchard.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
+open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
@@ -477,8 +477,8 @@ def EnvAssumptions (G : Generators) (cfg : Config)
   cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
 
 def Assumptions (input : Value Inputs Fp) : Prop :=
-  Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-  Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩
+  Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩
 
 /-- The extracted `rcm` window data: the fixed-base mul's window readings and the scalar
 they encode, inside the commit child (regions `i₀+25`/`i₀+26`). -/
@@ -489,24 +489,24 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
 /-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
 chain over the note's canonical chunks is defined and the output is the commitment
 `B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
-(`Orchard.Specs.Sinsemilla.ValidBreak`). -/
+(`Halo2.Ironwood.Specs.Sinsemilla.ValidBreak`). -/
 def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
-  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Orchard.Point Fp))
+  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Halo2.Ironwood.Point Fp))
     (hashToPointB G.S Q
-      (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+      (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
         ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Inputs Fp) (rcm : Vector Fp 85 × Fq)
     (_ : ProverHint Fp) : Prop :=
-  Orchard.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-  Orchard.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
+  Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
   (show Fp from input.value).val < 2 ^ 64 ∧
   (∀ w : Fin 85, (rcm.1[w.val]).val < 8) ∧
   (∃ B, hashToPoint G.S Q
-    (Orchard.Action.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+    (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
       ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B)
 
 end Halo2.Ironwood.NoteCommit.Main

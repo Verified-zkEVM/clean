@@ -1,8 +1,8 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Specs.Sinsemilla
-import Clean.Orchard.Specs.Bitrange
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Specs.Sinsemilla
+import Clean.Ironwood.Specs.Bitrange
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
@@ -41,7 +41,7 @@ right)` through the hash's own `z_1` running-sum cells.
   `zs` HVec as `zs[i][1]`) + the ported `LookupRangeCheck.shortRangeCheck` (b_1/b_2 range checks)
   + the `Gate`. Structure-complete; the value glue is the lifted `assemble`/`honest_*`.
 - **`Layer`** composes `CondSwap.Swap` + `HashLayer`. **`CondSwap` is NOT ported to the Ironwood
-  region tree** (only the phase-one `Orchard.Utilities.CondSwap` exists) → the swap is a **stated
+  region tree** (only the phase-one `Halo2.Ironwood.Utilities.CondSwap` exists) → the swap is a **stated
   boundary** (abstract child, cut line explicit), exactly as `MulFixed` is for `CommitDomain`.
 - **`CalculateRoot`** is the 32-layer fold of `Layer`. Structure + the `MerkleRoot`/`MerkleStep`
   value algebra (`merkleRoot_of_steps`, `honestNode`) lifted; the per-layer composition rides on
@@ -50,10 +50,10 @@ right)` through the hash's own `z_1` running-sum cells.
 
 namespace Halo2.Ironwood.Sinsemilla.Merkle
 
-open Orchard (Point)
+open Halo2.Ironwood (Point)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Orchard.Specs.Sinsemilla (Generators merkleChunks hashToPoint)
-open Orchard.Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
+open Halo2.Ironwood.Specs.Sinsemilla (Generators merkleChunks hashToPoint)
+open Halo2.Ironwood.Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
 open Halo2.Ironwood.Sinsemilla (pieceWord pieceZ)
 
 /-! ### MerkleCRH decomposition gate constants -/
@@ -1217,7 +1217,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       · show ZMod.val (env.advice cfg.1.sinsemilla.witnessPieces
           ((place (i₀ + 2 + 2) : ℕ) : ℤ)) < 2 ^ (K * 25)
         exact hbC
-      · show Orchard.Specs.Sinsemilla.hashToPoint G.S Q
+      · show Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
           ((List.range 25).map (pieceWord (env.advice cfg.1.sinsemilla.witnessPieces
               ((place i₀ : ℕ) : ℤ)))
             ++ ((List.range 2).map (pieceWord (env.advice

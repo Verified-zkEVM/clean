@@ -476,14 +476,6 @@ structure Input (F : Type) where
   base : Point F
 deriving ProvableStruct
 
-def Assumptions (input : Input Fp) : Prop :=
-  input.base.OnCurve
-
-/-- The circuit computes the variable-base scalar multiplication `[alpha] base`,
-with the identity encoded as `(0, 0)` coordinates. -/
-def Spec (input : Input Fp) (output : Point Fp) : Prop :=
-  output = input.alpha.val • input.base
-
 /-- The honest running-sum chains of `kBits` are the shifted values of `k`. -/
 theorem cells_kNat (alpha : Fp) :
     chainNat 0 (kBits alpha) 1 = kNat alpha / 2 ^ 254 ∧

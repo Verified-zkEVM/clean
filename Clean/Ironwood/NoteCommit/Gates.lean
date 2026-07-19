@@ -1,6 +1,6 @@
 import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
-import Clean.Orchard.Specs.Pallas
+import Clean.Ironwood.Specs.Pallas
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -25,7 +25,7 @@ bundle files; this file is the VK-facing surface only.
 namespace Halo2.Ironwood.NoteCommit
 
 open Halo2.Ironwood (Fp)
-open Orchard (tP)
+open Halo2.Ironwood (tP)
 
 /-- Rust `bool_check` (`utilities.rs:141-143`): `v · (1 − v)`. -/
 def boolCheck (v : Expression Fp Query) : Expression Fp Query :=

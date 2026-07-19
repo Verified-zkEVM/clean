@@ -1,9 +1,9 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Orchard.Specs.Pallas
-import Clean.Orchard.Ecc.Mul
-import Clean.Orchard.Ecc.Mul.Assign
+import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Ecc.MulTheorems
+import Clean.Ironwood.Ecc.MulAssignTheorems
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Add
 import Clean.Ironwood.Ecc.MulIncomplete
@@ -66,9 +66,9 @@ predicted "ConfigWF finally bites" location.
 
 ## Donor
 
-`Clean/Orchard/Ecc/Mul/Assign.lean` (`Orchard.Ecc.Mul`) — the phase-one donor. Its top-level
+`Clean/Orchard/Ecc/Mul/Assign.lean` (`Halo2.Ironwood.Ecc.Mul`) — the phase-one donor. Its top-level
 `Spec` (`output = alpha.val • base`), the `k = alpha + t_q` canonicity argument
-(`k_canonical`, `chainNat` machinery), the LSB `Gate` (`Orchard.Ecc.Mul.Gate`), and the whole
+(`k_canonical`, `chainNat` machinery), the LSB `Gate` (`Halo2.Ironwood.Ecc.Mul.Gate`), and the whole
 assembly algebra are lifted wholesale. The donor factors the middle three phases as a virtual
 `Decompose` subcircuit and the LSB as `ProcessLsb`; here the Ironwood children
 (`MulIncomplete`/`MulComplete`) already are those region-level factors, so we compose them
@@ -93,12 +93,12 @@ trust base (`pallas_natCard` + vendored CompElliptic `native_decide` curve facts
 
 namespace Halo2.Ironwood.Ecc.Mul
 
-open Orchard (Point)
-open Orchard.Ecc (tQ)
-open Orchard.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
+open Halo2.Ironwood (Point)
+open Halo2.Ironwood.Ecc (tQ)
+open Halo2.Ironwood.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
   chain_cast accScalar_closed k_canonical cells_kNat z0_cell_value)
-open Orchard.Ecc.Mul.Decompose (m_bounds)
-open Orchard.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
+open Halo2.Ironwood.Ecc.Mul.Decompose (m_bounds)
+open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
   kBitsWindow_as_kBits kBitsWindow_zero)
@@ -186,7 +186,7 @@ def configure (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 1
 
 /-! ## Inputs / Output
 
-Mirrors the donor `Orchard.Ecc.Mul.Input`: the scalar cell `alpha` and the (non-identity,
+Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Input`: the scalar cell `alpha` and the (non-identity,
 on-curve) base point, as already-assigned cells. Output is the result point `[alpha] base`. -/
 
 /-- Verifier-visible inputs: the scalar `alpha` and the non-identity base point. -/
@@ -377,7 +377,7 @@ def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
 
 /-- The circuit computes the variable-base scalar multiplication `[alpha] base`, with the
 identity encoded as `(0, 0)` coordinates. Lifted verbatim from the donor
-`Orchard.Ecc.Mul.Spec`. -/
+`Halo2.Ironwood.Ecc.Mul.Spec`. -/
 def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
   output = input.alpha.val • input.base
 
@@ -392,23 +392,23 @@ wrapper is a delegation. -/
 
 /-- The honest running-sum cells satisfy the overflow-check contract (the donor
 `overflow_spec_honest`, at the Ironwood `MulOverflow.Spec` record — same formula, defeq). -/
-private theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
+private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
     (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
     (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
     MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } :=
-  Orchard.Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
+  Halo2.Ironwood.Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
 
 /-! ## Point-level scalar-multiple algebra
 
 The donor's step/negation/identity algebra lived at the `SWPoint` level; the Ironwood children
 speak `Point Fp` `nsmul` directly, so the lemmas are transported through the `toSW` bridge
-(`Orchard.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
+(`Halo2.Ironwood.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
 
 section PointAlgebra
 open CompElliptic.CurveForms.ShortWeierstrass (SWPoint)
 open CompElliptic.Curves.Pasta
-open Orchard.Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
+open Halo2.Ironwood.Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
   valid_add valid_neg valid_zero valid_nsmul nsmul_add_nsmul nsmul_eq_zero_iff)
 
 /-- `P + P = 2 • P` at the `Point` level. -/
@@ -432,7 +432,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)),
       toSW_add (valid_neg hPv) (valid_nsmul hPv a), toSW_neg hPv,
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Orchard.Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
+    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
     simp only [if_true]
     apply (ext_toSW_iff
@@ -441,7 +441,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)),
       toSW_add hPv (valid_nsmul hPv a),
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Orchard.Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
+    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
 
 /-- `-P + m•P = (m−1)•P` at the `Point` level. -/
 private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (hm : 1 ≤ m) :
@@ -451,7 +451,7 @@ private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h
     (valid_nsmul hPv _)).mpr
   rw [toSW_add (valid_neg hPv) (valid_nsmul hPv m), toSW_neg hPv, toSW_nsmul hPv m,
     toSW_nsmul hPv]
-  exact Orchard.Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
+  exact Halo2.Ironwood.Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
 
 /-- `0 + Q = Q` at the `Point` level, for valid `Q`. -/
 private theorem point_zero_add {Q : Point Fp} (hQ : Q.Valid) : (0 : Point Fp) + Q = Q := by
@@ -1136,7 +1136,7 @@ def mul :
           ((env.place i₀ + (offLo + 125 + 2) : ℕ) : ℤ))) := by
       show (Point.mk _ _).Valid
       rw [hLoOut]
-      exact Orchard.Point.valid_nsmul hbaseV _
+      exact Halo2.Ironwood.Point.valid_nsmul hbaseV _
     -- `abstract_outputs` replaced the complete chunk's chained hi→lo INPUT projections by the lo
     -- output local `x_gen_out_2` (making the input shallow) and the complete OUTPUT by `x_gen_out_3`.
     -- Comp entering: recover the concrete lo output (`← h_gen_out_2`) to reduce its coords to cells;
@@ -1339,7 +1339,7 @@ def mul :
           rw [Point.eval_eq]
           simp only [output_assignAdvice, eval_of]
           rw [hcorr]
-          exact Orchard.Point.valid_neg hbaseV
+          exact Halo2.Ironwood.Point.valid_neg hbaseV
         · show Point.Valid (eval env _)
           rw [← h_gen_out_3]
           simp only [complete_output_eq]
@@ -1381,7 +1381,7 @@ def mul :
           rw [Point.eval_eq]
           simp only [output_assignAdvice, eval_of]
           rw [hcorr]
-          exact Orchard.Point.valid_zero
+          exact Halo2.Ironwood.Point.valid_zero
         · show Point.Valid (eval env _)
           rw [← h_gen_out_3]
           simp only [complete_output_eq]
@@ -1390,7 +1390,7 @@ def mul :
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
         complete_output_eq, ← h_gen_out_2, incomplete_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
-        point_zero_add (Orchard.Point.valid_nsmul hbaseV _)] at hResEq
+        point_zero_add (Halo2.Ironwood.Point.valid_nsmul hbaseV _)] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 1
       have hK := hKpart 1 (by omega) (by
         push_cast
@@ -1657,7 +1657,7 @@ def mul :
           ((env.place i₀ + (offLo + 125 + 2) : ℕ) : ℤ))) := by
       show (Point.mk _ _).Valid
       rw [hLoOut]
-      exact Orchard.Point.valid_nsmul hbaseV _
+      exact Halo2.Ironwood.Point.valid_nsmul hbaseV _
     -- comp's entering accumulator = lo output `x_gen_out_2`; recover concrete (`← h_gen_out_2`) to
     -- reduce its `.xA`/`.yA` to the lo output cells (matching `hLoOutV`).
     have hCompBoth := h_spec_3 trivial
@@ -1914,9 +1914,9 @@ def mul :
           -- equations (~1.5s failing path) before it recovers
           rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
                 = -{ x := input_base_x, y := input_base_y } from rfl]
-          exact Orchard.Point.valid_neg hbaseV
+          exact Halo2.Ironwood.Point.valid_neg hbaseV
         · simp only [if_true]
-          exact Orchard.Point.valid_zero
+          exact Halo2.Ironwood.Point.valid_zero
       · -- comp acc validity: recover the concrete comp output (`← h_gen_out_3`), land on `hCompAccVv`
         show Point.Valid (eval env.toEnvironment _)
         rw [← h_gen_out_3]
@@ -1941,7 +1941,7 @@ def mul :
       simp only [Vector.getElem_ofFn, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
       rw [hIalpha, hz0v, hHiZ124, hHiZtop]
-      exact overflow_spec_honest input_alpha rfl rfl rfl
+      exact overflow_spec_honest' input_alpha rfl rfl rfl
 
 /-! ## Bundle contract bridges, shared by the layouter-level consumers (`rfl`, the
 bundle stays folded) -/
