@@ -1,3 +1,4 @@
+import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic.NormNum.Basic
 -- Benchmark: kernel-decide cost of the FixedBase checker primitives (Pallas-size).
 
@@ -36,3 +37,14 @@ def eulerBulk (p : ℕ) : ℕ → Bool
 
 set_option maxRecDepth 100000 in
 example : eulerBulk P 40 = true := by decide +kernel
+
+-- rfl route: kernel Nat-literal reduction, no Decidable wrapper
+set_option maxRecDepth 4000 in
+example : powMod P 5 ((P - 1) / 2) = P - 1 := rfl
+
+-- ZMod-stated variants of the SAME algorithms (powModZ / chainZ over `ZMod P` with
+-- OfNat literals) were tried here and TIMED OUT (>10 min vs 3 s for the file above):
+-- although `ZMod P = Fin P` bottoms out in the same GMP Nat primitives, `rfl`-reduction
+-- through the numeral/instance layer (`ZMod P` unfolding per op, `OfNat`/cast towers)
+-- is >200x slower in practice. Hence the checker states its equations over Nat
+-- (`.val`-level) and bridges to the ZMod facts by once-proven cast lemmas.
