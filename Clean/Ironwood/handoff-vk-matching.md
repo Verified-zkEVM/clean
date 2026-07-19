@@ -89,7 +89,22 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
-## NEXT ARC (Gregor-directed, 2026-07-19): CONCRETE FixedBases — no workarounds
+## ARC COMPLETE (2026-07-19): CONCRETE FixedBases — DONE, no workarounds
+
+All six real orchard fixed bases are proof-carrying constants
+(`Orchard.Ecc.MulFixed.Certs.*`, via `CertCheck.ofCert/ofCertShort` from
+python-validated certificates; ~30s kernel verification each), `orchardBases` is the
+complete concrete `Bases` (+ the three Q points), the layout tests run the REAL
+circuits at it (mirror deleted), and `orchardActionCircuit` instantiates the proven
+Bundle at the deployed constants. Evaluation note FOR GREGOR'S REVIEW: `rfl` and the
+norm_num route both hit the heartbeat-counted ELABORATOR evaluator on the full
+certificate (maxHeartbeats is off-limits); the checks use `decide +kernel`, which
+delegates the whole evaluation to the GMP kernel (the fast path — syntactically
+`decide`, but none of the slow elaborator Decidable walking; the earlier 'avoid
+decide' concern was about plain elaborator decide).
+
+## (original plan, executed)
+
 
 Goal: construct the six real `FixedBase`s (nullifierK, valueCommitR, spendAuthG,
 commitIvkR, noteCommitR : `Orchard.Ecc.MulFixed.FixedBase`; valueCommitV :

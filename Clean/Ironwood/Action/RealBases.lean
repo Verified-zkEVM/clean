@@ -4,7 +4,7 @@ import Clean.Orchard.Ecc.MulFixed.Certs.SpendAuthG
 import Clean.Orchard.Ecc.MulFixed.Certs.CommitIvkR
 import Clean.Orchard.Ecc.MulFixed.Certs.NoteCommitR
 import Clean.Orchard.Ecc.MulFixed.Certs.ValueCommitV
-import Clean.Ironwood.Action.Circuit
+import Clean.Ironwood.Action.Bundle
 
 /-!
 # The real Orchard `Bases`
@@ -66,5 +66,13 @@ def orchardBases : Circuit.Bases where
   ivkQ_onCurve := ivkQ_onCurve
   noteQ := noteQ
   noteQ_onCurve := noteQ_onCurve
+
+/-- The PROVEN end-to-end Action circuit (soundness + completeness, the Bundle arc)
+instantiated at the real deployed constants — no hypothetical bases left. `G` (the
+Sinsemilla generator family) and the witness programs remain parameters. -/
+def orchardActionCircuit (G : Orchard.Specs.Sinsemilla.Generators)
+    (W : Circuit.Witnesses) :
+    FormalCircuit Halo2.Ironwood.Fp Unit Circuit.Config unit unit :=
+  Circuit.circuit G orchardBases W
 
 end Halo2.Ironwood.Action
