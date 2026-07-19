@@ -172,23 +172,6 @@ variable {Hint : Type}
   evalVerifier _ _ := ()
   evalProver env v := v env
 
-/-- `ProverParams` marks a circuit input that is a block of prover-side witness
-*programs* (witness IR / hint closures), carried opaquely: the `Var` view is the block
-itself, the verifier erases it, and the prover sees it. Unlike `UnconstrainedNative`,
-the carried data is not an environment closure — `synthesize` consumes it to emit
-witness ops, and facts about the honestly generated values are stated through the
-extractor. -/
-structure ProverParams (α : Type) (F : Type) where
-  value : α
-
-@[reducible] instance ProverParams.toCircuitType {Env PEnv : Type → Type} {α : Type} :
-    CircuitTypeOver Env PEnv (ProverParams α) where
-  Var _ := α
-  ProverValue _ := α
-  Value _ := Unit
-  evalVerifier _ _ := ()
-  evalProver _ v := v
-
 namespace CircuitType
 @[circuit_norm] lemma var_of_unconstrainedNative (Hint F) :
   Var (UnconstrainedNative Hint) F = (ProverEnvironment F → Hint) := rfl

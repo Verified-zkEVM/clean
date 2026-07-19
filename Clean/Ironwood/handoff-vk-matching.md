@@ -89,19 +89,6 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
-## Witness programs are now the circuit INPUT (2026-07-19)
-
-Gregor's ruling: private data enters through the circuit input (Clean/Orchard style),
-not as a definition-level parameter. New core combinator `ProverParams α`
-(`Clean/Circuit/CircuitType.lean`, next to `UnconstrainedNative`): `Var` carries the
-block itself, verifier value erases to `Unit`, prover value is the block. The exported
-Action bundles are `baseCircuit G B` / `circuit G B` :
-`FormalCircuit Fp Unit Config (ProverParams Witnesses) _` — thin adapters over the
-internal `∀ W` theorems (which stay as the engine; the parametric base bundle is
-renamed `baseCircuitP`, still used by `mainPost`'s subcircuit call). Soundness is
-W-independent knowledge soundness at the extractor; the input matters only for
-completeness. `orchardActionCircuit` is now a single parameterless constant.
-
 ## Concrete Sinsemilla generators — DONE (2026-07-19)
 
 The last hypothetical constant is gone: `Orchard.Specs.Sinsemilla.orchardGenerators`
