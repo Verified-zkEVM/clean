@@ -322,7 +322,8 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
 carrying the four witnessed address points (what the ironwood cross-address stage
 consumes). -/
 def Spec (G : Generators) (B : Bases)
-    (_ : Value unit Fp) (out : Value AddressPoints Fp) (wit : ActionData) : Prop :=
+    (_ : Value PrivateInputs Fp) (out : Value AddressPoints Fp) (wit : ActionData) :
+    Prop :=
   SpecBase G B wit ∧ out.gdOld = wit.gdOld ∧ out.pkdOld = wit.pkdOld ∧
   out.gdNew = wit.gdNew ∧ out.pkdNew = wit.pkdNew
 
@@ -2045,7 +2046,7 @@ instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
 cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
 note's diversified address to equal the old note's. -/
 def SpecPost (G : Generators) (B : Bases)
-    (_ : Value unit Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
+    (_ : Value PrivateInputs Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
   SpecBase G B wit ∧
   (wit.disableCrossAddress ≠ 0 → wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew)
 

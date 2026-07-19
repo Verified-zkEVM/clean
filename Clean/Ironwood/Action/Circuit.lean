@@ -1,3 +1,4 @@
+import Clean.Halo2.CircuitTypeDeriving
 import Clean.Ironwood.Ecc.Chip
 import Clean.Ironwood.Poseidon.Hash
 import Clean.Ironwood.Utilities.AddChip
@@ -160,98 +161,69 @@ structure Bases where
   noteQ : Point Fp
   noteQ_onCurve : noteQ.OnCurve
 
-/-- The private-input witness programs (the Rust `Circuit` struct fields; scalars enter
-through the fixed-base muls' window programs, per the lazy-witnessing rule). -/
-structure Witnesses (F : Type) where
-  psiOld : WitgenIR F 1
-  rhoOld : WitgenIR F 1
-  nk : WitgenIR F 1
-  vOld : WitgenIR F 1
-  vNew : WitgenIR F 1
-  psiNew : WitgenIR F 1
-  magnitude : WitgenIR F 1
-  sign : WitgenIR F 1
-  cmOld : Point (FExpr F)
-  gdOld : Point (FExpr F)
-  akP : Point (FExpr F)
-  pkDOld : Point (FExpr F)
-  gdNew : Point (FExpr F)
-  pkdNew : Point (FExpr F)
-  rcvWindows : Vector (FExpr F) 85
-  alphaWindows : Vector (FExpr F) 85
-  rivkWindows : Vector (FExpr F) 85
-  rcmOldWindows : Vector (FExpr F) 85
-  rcmNewWindows : Vector (FExpr F) 85
-  merkleSib : ℕ → WitgenIR F 1
-  merkleSwap : ℕ → Placed ProverEnvironment F → Bool
+/-- Prover-only ℕ-indexed family of Merkle sibling witness programs (one per layer). -/
+structure UnconstrainedSibs (F : Type) where
+  programs : ℕ → WitgenIR F 1
 
-/-- The evaluated (prover-view) private inputs: what the witness programs produce at
-the honest prover's environment. -/
-structure WitnessData (F : Type) where
-  psiOld : F
-  rhoOld : F
-  nk : F
-  vOld : F
-  vNew : F
-  psiNew : F
-  magnitude : F
-  sign : F
-  cmOld : Point F
-  gdOld : Point F
-  akP : Point F
-  pkDOld : Point F
-  gdNew : Point F
-  pkdNew : Point F
-  rcvWindows : Vector F 85
-  alphaWindows : Vector F 85
-  rivkWindows : Vector F 85
-  rcmOldWindows : Vector F 85
-  rcmNewWindows : Vector F 85
-  merkleSib : ℕ → F
-  merkleSwap : ℕ → Bool
-
-/-- The Action circuit's private inputs as a prover-only hint block — the
-`Unconstrained` pattern, assembled by hand for this mixed program record (witness-IR
-scalars, `FExpr` points and window vectors, ℕ-indexed Merkle families): the `Var` view
-is the witness programs (`Witnesses F`), the verifier value is erased, and the prover
-value is the evaluated `WitnessData F`. -/
-structure PrivateInputs (F : Type) where
-  program : Witnesses F
-
-@[reducible] instance : CircuitType PrivateInputs where
-  Var := Witnesses
+@[reducible] instance : CircuitType UnconstrainedSibs where
+  Var F := ℕ → WitgenIR F 1
   Value := unit
-  ProverValue := WitnessData
-  evalVerifier := fun _ _ => ()
-  evalProver := fun {F} _ pe W =>
-    { psiOld := (W.psiOld.eval pe)[0]
-      rhoOld := (W.rhoOld.eval pe)[0]
-      nk := (W.nk.eval pe)[0]
-      vOld := (W.vOld.eval pe)[0]
-      vNew := (W.vNew.eval pe)[0]
-      psiNew := (W.psiNew.eval pe)[0]
-      magnitude := (W.magnitude.eval pe)[0]
-      sign := (W.sign.eval pe)[0]
-      cmOld := Witgen.eval (M := Point) { env := pe } W.cmOld
-      gdOld := Witgen.eval (M := Point) { env := pe } W.gdOld
-      akP := Witgen.eval (M := Point) { env := pe } W.akP
-      pkDOld := Witgen.eval (M := Point) { env := pe } W.pkDOld
-      gdNew := Witgen.eval (M := Point) { env := pe } W.gdNew
-      pkdNew := Witgen.eval (M := Point) { env := pe } W.pkdNew
-      rcvWindows := Witgen.eval (M := fields 85) { env := pe } W.rcvWindows
-      alphaWindows := Witgen.eval (M := fields 85) { env := pe } W.alphaWindows
-      rivkWindows := Witgen.eval (M := fields 85) { env := pe } W.rivkWindows
-      rcmOldWindows := Witgen.eval (M := fields 85) { env := pe } W.rcmOldWindows
-      rcmNewWindows := Witgen.eval (M := fields 85) { env := pe } W.rcmNewWindows
-      merkleSib := fun i => ((W.merkleSib i).eval pe)[0]
-      merkleSwap := fun i => W.merkleSwap i pe }
+  ProverValue F := ℕ → F
+  evalVerifier _ _ := ()
+  evalProver pe f := fun i => ((f i).eval pe)[0]
 
-@[circuit_norm] lemma var_of_privateInputs {F : Type} :
-    Var PrivateInputs F = Witnesses F := rfl
-@[circuit_norm] lemma value_of_privateInputs {F : Type} :
-    Value PrivateInputs F = Unit := rfl
-@[circuit_norm] lemma proverValue_of_privateInputs {F : Type} :
-    ProverValue PrivateInputs F = WitnessData F := rfl
+instance : ProvableType (Halo2.Value UnconstrainedSibs) :=
+  (inferInstance : ProvableType unit)
+
+/-- Prover-only ℕ-indexed family of Merkle swap flags (native closures — the cond-swap
+choice is a `Bool` the prover computes from its environment). -/
+structure UnconstrainedSwaps (F : Type) where
+  flags : ℕ → Placed ProverEnvironment F → Bool
+
+@[reducible] instance : CircuitType UnconstrainedSwaps where
+  Var F := ℕ → Placed ProverEnvironment F → Bool
+  Value := unit
+  ProverValue _ := ℕ → Bool
+  evalVerifier _ _ := ()
+  evalProver pe f := fun i => f i pe
+
+instance : ProvableType (Halo2.Value UnconstrainedSwaps) :=
+  (inferInstance : ProvableType unit)
+
+/-- The Action circuit's private inputs as a prover-only hint block, derived per-field
+(the `Unconstrained` pattern): the `Var` view is the witness programs, the verifier
+value is erased, and the prover value is the evaluated data. Mirrors the Rust
+`Circuit` struct's `Value<_>` fields; scalars enter through the fixed-base muls'
+window programs, per the lazy-witnessing rule. -/
+structure PrivateInputs (F : Type) where
+  psiOld : UnconstrainedIR F
+  rhoOld : UnconstrainedIR F
+  nk : UnconstrainedIR F
+  vOld : UnconstrainedIR F
+  vNew : UnconstrainedIR F
+  psiNew : UnconstrainedIR F
+  magnitude : UnconstrainedIR F
+  sign : UnconstrainedIR F
+  cmOld : Unconstrained Point F
+  gdOld : Unconstrained Point F
+  akP : Unconstrained Point F
+  pkDOld : Unconstrained Point F
+  gdNew : Unconstrained Point F
+  pkdNew : Unconstrained Point F
+  rcvWindows : Unconstrained (fields 85) F
+  alphaWindows : Unconstrained (fields 85) F
+  rivkWindows : Unconstrained (fields 85) F
+  rcmOldWindows : Unconstrained (fields 85) F
+  rcmNewWindows : Unconstrained (fields 85) F
+  merkleSib : UnconstrainedSibs F
+  merkleSwap : UnconstrainedSwaps F
+deriving CircuitType
+
+/-- The witness-program view of the private inputs (the Rust `Circuit` struct). -/
+abbrev Witnesses (F : Type) := PrivateInputs.Var F
+
+/-- The evaluated (prover-view) private inputs. -/
+abbrev WitnessData (F : Type) := PrivateInputs.ProverValue F
 
 /-- Rust `assign_free_advice` (`circuit.rs:101-113`): the `"load private"` region, one
 advice cell at row 0. -/

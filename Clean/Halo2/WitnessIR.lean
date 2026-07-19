@@ -90,6 +90,9 @@ def unconstrained (program : value (FExpr F)) : Var (Unconstrained value) F := p
     Halo2.Var (Unconstrained value) F = value (FExpr F) := rfl
 @[circuit_norm] lemma value_of_unconstrained :
     Halo2.Value (Unconstrained value) F = Unit := rfl
+
+instance : ProvableType (Halo2.Value (Unconstrained value)) :=
+  (inferInstance : ProvableType unit)
 @[circuit_norm] lemma proverValue_of_unconstrained :
     Halo2.ProverValue (Unconstrained value) F = value F := rfl
 
@@ -127,6 +130,48 @@ through). -/
 end Unconstrained
 
 export Unconstrained (unconstrained)
+
+/-- IR-backed prover-only scalar input: the let-step `WitgenIR` form of
+`Unconstrained field`, for witness programs with shared intermediate values. -/
+structure UnconstrainedIR (F : Type) where
+  program : WitgenIR F 1
+
+namespace UnconstrainedIR
+
+@[reducible] instance : CircuitType UnconstrainedIR where
+  Var F := WitgenIR F 1
+  Value := unit
+  ProverValue := field
+  evalVerifier _ _ := ()
+  evalProver pe w := (w.eval pe)[0]
+
+@[circuit_norm] lemma var_of_unconstrainedIR {F : Type} :
+    Halo2.Var UnconstrainedIR F = WitgenIR F 1 := rfl
+@[circuit_norm] lemma value_of_unconstrainedIR {F : Type} :
+    Halo2.Value UnconstrainedIR F = Unit := rfl
+
+instance : ProvableType (Halo2.Value UnconstrainedIR) :=
+  (inferInstance : ProvableType unit)
+@[circuit_norm] lemma proverValue_of_unconstrainedIR {F : Type} :
+    Halo2.ProverValue UnconstrainedIR F = F := rfl
+
+variable {F : Type} [FiniteField F]
+
+@[reducible] instance : Eval (Placed Environment F) (WitgenIR F 1) Unit :=
+  CircuitType.verifierEval UnconstrainedIR
+@[reducible] instance : Eval (Placed ProverEnvironment F) (WitgenIR F 1) F :=
+  CircuitType.proverEval UnconstrainedIR
+
+@[circuit_norm] lemma eval_unconstrainedIR
+    (pe : Placed Environment F) (w : WitgenIR F 1) :
+    eval pe (w : Var UnconstrainedIR F) = () := rfl
+
+@[circuit_norm] lemma eval_unconstrainedIR_prover
+    (pe : Placed ProverEnvironment F) (w : WitgenIR F 1) :
+    eval pe (w : Var UnconstrainedIR F) = (w.eval pe)[0] := by
+  with_unfolding_all rfl
+
+end UnconstrainedIR
 
 end Halo2
 

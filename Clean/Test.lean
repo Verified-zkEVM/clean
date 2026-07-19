@@ -10,6 +10,7 @@ import Clean.Utils.Test.TestMixedCircuitType
 import Clean.Utils.Test.TestLookup
 import Clean.Utils.Test.SimpMatchRegression
 import Clean.Halo2.Tests.TestProvableTypeSimp
+import Clean.Halo2.Tests.TestCircuitTypeDeriving
 import Clean.Halo2.Tests.TestSubcircuit
 import Clean.Halo2.Tests.TestLayouterSubcircuit
 import Clean.Halo2.Tests.TestSubcircuitRw
