@@ -96,12 +96,11 @@ All six real orchard fixed bases are proof-carrying constants
 python-validated certificates; ~30s kernel verification each), `orchardBases` is the
 complete concrete `Bases` (+ the three Q points), the layout tests run the REAL
 circuits at it (mirror deleted), and `orchardActionCircuit` instantiates the proven
-Bundle at the deployed constants. Evaluation note FOR GREGOR'S REVIEW: `rfl` and the
-norm_num route both hit the heartbeat-counted ELABORATOR evaluator on the full
-certificate (maxHeartbeats is off-limits); the checks use `decide +kernel`, which
-delegates the whole evaluation to the GMP kernel (the fast path — syntactically
-`decide`, but none of the slow elaborator Decidable walking; the earlier 'avoid
-decide' concern was about plain elaborator decide).
+Bundle at the deployed constants. Evaluation (RULED by Gregor): the cert checks use
+`native_decide` (~0.2s/base; approved trust extension) — `decide +kernel` (fully
+kernel-checked, ~23s/base) was the original proof and remains a drop-in switch-back
+(noted in each cert file); `rfl`/norm_num hit the heartbeat-counted elaborator
+evaluator on this scale.
 
 ## (original plan, executed)
 

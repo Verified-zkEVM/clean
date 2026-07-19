@@ -960,11 +960,12 @@ def nullifierKCert : Cert.FullCert :=
     rows := rowsData, tChain := tChainData, msb := msbData,
     zs := zsData, coeffs := coeffsData, us := usData }
 
-set_option maxRecDepth 1000000 in
--- `decide +kernel`: the whole evaluation runs in the kernel's GMP Nat arithmetic
--- (plain `rfl`/`decide` hit the heartbeat-counted elaborator evaluator instead)
+-- `native_decide` (Gregor-approved trust extension): ~0.2s per base vs ~23s for the
+-- fully kernel-checked `decide +kernel` (which works and was the original proof —
+-- switch back by replacing the tactic and adding `set_option maxRecDepth 1000000`;
+-- plain `rfl`/`decide` hit the heartbeat-counted elaborator evaluator).
 theorem nullifierKCert_check : Cert.checkFull 84 nullifierKCert = true := by
-  decide +kernel
+  native_decide
 
 /-- The REAL orchard `nullifierK` fixed base, proofs and all. -/
 def nullifierK : Orchard.Ecc.MulFixed.FixedBase :=
