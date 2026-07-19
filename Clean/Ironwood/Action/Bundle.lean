@@ -110,7 +110,7 @@ private theorem nc_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-theorem synthWitness_regionCount (G : Generators) (W : Witnesses) (cfg : Config)
+theorem synthWitness_regionCount (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     Operations.regionCount ((synthWitness G W cfg).operations i) = 8 := by
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
@@ -119,7 +119,7 @@ theorem synthWitness_regionCount (G : Generators) (W : Witnesses) (cfg : Config)
   rw [wpoint_call_regionCount, wpointNonId_call_regionCount,
     wpointNonId_call_regionCount]
 
-theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses)
+theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
     Operations.regionCount ((synthChecks G B W cfg wc).operations i) = 295 := by
   simp only [synthChecks, loadPrivate, circuit_norm, Circuit.operations_bind,
@@ -129,7 +129,7 @@ theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     dn_call_regionCount, sa_call_regionCount, civk_call_regionCount,
     ai_call_regionCount]
 
-theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses)
+theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
     Operations.regionCount ((synthNotes G B W cfg wc cc).operations i) = 91 := by
   simp only [synthNotes, loadPrivate, circuit_norm, Circuit.operations_bind,
@@ -140,7 +140,7 @@ theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses)
 
 /-- The Action circuit's region count: the 8 witness regions, the 295-region check
 stage, the 91-region note stage — 394. -/
-theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
+theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (i : RegionIndex) :
     Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
       = 394 := by
@@ -148,20 +148,20 @@ theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     Circuit.operations_bind, Circuit.operations_pure, Operations.regionCount_append]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
-/-- The `FormalCircuit` entry: `unit → AddressPoints` — everything through the
-extraction, outputting the witnessed old/new-note address point cells. -/
-def main (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Var unit Fp → Circuit Fp (Var AddressPoints Fp) := fun _ =>
+/-- The `FormalCircuit` entry: the private witness programs in (`PrivateInputs`),
+the witnessed old/new-note address point cells out. -/
+def main (G : Generators) (B : Bases) (cfg : Config) :
+    Var PrivateInputs Fp → Circuit Fp (Var AddressPoints Fp) := fun W =>
   CircuitPreIronwood.synthesize G B W cfg
 
-theorem main_regionCount (G : Generators) (B : Bases) (W : Witnesses)
-    (cfg : Config) (inp : Var unit Fp) (i : RegionIndex) :
-    Operations.regionCount ((main G B W cfg inp).operations i) = 394 := by
+theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
+    (W : Witnesses Fp) (i : RegionIndex) :
+    Operations.regionCount ((main G B cfg W).operations i) = 394 := by
   simp only [main]
   rw [synthesize_regionCount]
 
-instance elaborated (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    ElaboratedCircuit Fp unit AddressPoints (main G B W cfg) where
+instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
+    ElaboratedCircuit Fp PrivateInputs AddressPoints (main G B cfg) where
   output _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
@@ -173,7 +173,7 @@ instance elaborated (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) 
                   y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
   regionCount _ := 394
   output_eq := by intro _ i₀; with_unfolding_all rfl
-  regionCount_eq := fun input i => (main_regionCount G B W cfg input i).symm
+  regionCount_eq := fun W i => (main_regionCount G B cfg W i).symm
 
 /-! ## The extracted data -/
 
@@ -221,7 +221,7 @@ private def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
 /-- The extraction: instance rows off `primary`, witness cells at their regions,
 the witnessed points, and the five `fwExtract` window readings (region map in
 `synthesize_regionCount`'s docstring). -/
-def extract (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
+def extract (cfg : Config) (_ : Var PrivateInputs Fp) (i₀ : RegionIndex)
     (env : Placed Environment Fp) : ActionData where
   anchor := env.env.get cfg.primary (ANCHOR : ℤ)
   cvX := env.env.get cfg.primary (CV_NET_X : ℤ)
@@ -683,12 +683,12 @@ private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
     (col : Column .instance) (row : ℕ) (i : RegionIndex) :
     (constrainInstance cell col row).nextRegionIndex i = i := rfl
 
-theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses) (cfg : Config)
+theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     (synthWitness G W cfg).nextRegionIndex i = i + 8 := by
   with_unfolding_all rfl
 
-theorem synthWitness_output (G : Generators) (W : Witnesses) (cfg : Config)
+theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     (synthWitness G W cfg).output i
       = { psiOld := .of i 0 (cfg.advices 0),
@@ -704,12 +704,12 @@ theorem synthWitness_output (G : Generators) (W : Witnesses) (cfg : Config)
           vNew := .of (i + 7) 0 (cfg.advices 0) } := by
   with_unfolding_all rfl
 
-theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses)
+theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
     (synthChecks G B W cfg wc).nextRegionIndex i = i + 295 := by
   with_unfolding_all rfl
 
-theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses)
+theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
     (synthChecks G B W cfg wc).output i
       = { root := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
@@ -738,9 +738,9 @@ theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses)
 open Halo2.Ironwood.Sinsemilla.Merkle (MerkleRoot)
 
 set_option maxRecDepth 8192 in
-theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (main G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (Spec G B) := by
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
@@ -1013,7 +1013,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     have hP : ({ x := env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
                  y := env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ) } : Point Fp)
         = eval (⟨place, env⟩ : Placed Environment Fp)
-            ((ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).output
+            ((ValueCommit.circuit B.valueCommitV B.valueCommitR input_var.rcvWindows).output
               (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
                cfg.eccConfig.add)
               { magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
@@ -1034,7 +1034,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     have hP : ({ x := env.inst cfg.primary ((RK_X : ℕ) : ℤ),
                  y := env.inst cfg.primary ((RK_Y : ℕ) : ℤ) } : Point Fp)
         = eval (⟨place, env⟩ : Placed Environment Fp)
-            ((SpendAuthority.circuit B.spendAuthG W.alphaWindows).output
+            ((SpendAuthority.circuit B.spendAuthG input_var.alphaWindows).output
               (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
               { akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
                          y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
@@ -1056,7 +1056,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
                    y := env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 2) : ℕ) : ℤ) }
                 : Point Fp)
         = eval (⟨place, env⟩ : Placed Environment Fp)
-            ((NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+            ((NoteCommit.Main.circuit G B.noteCommitR input_var.rcmOldWindows B.noteQ
               B.noteQ_onCurve).output
               { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
                 lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1121,7 +1121,7 @@ fixed-base scalars, a fully-defined Merkle path, defined Sinsemilla hashes for t
 commitment legs (with the honest commitment equations for the copies/instance rows),
 and the `q_orchard` value checks at the honest values. -/
 def ProverAssumptions (G : Generators) (B : Bases)
-    (_ : ProverValue unit Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
+    (_ : WitnessData Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
   wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
   wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
   (∀ w : Fin 85, (wit.rcv.1[w.val]).val < 8) ∧
@@ -1205,7 +1205,7 @@ private theorem wpointNonId_call_witnesses (name : String)
     assignRegion, ExtendsWitnesses, and_true]
   rfl
 
-private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
+private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (hT : Halo2.Constraints place env
       ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀)
@@ -1228,9 +1228,9 @@ private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
     h1, h2, h3⟩
 
 set_option maxRecDepth 8192 in
-theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (main G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (ProverAssumptions G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
@@ -1257,7 +1257,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
   rw [wpointNonId_call_witnesses] at hWgdE hWakE
   simp only [Ecc.WitnessPoint.point, Ecc.WitnessPoint.pointNonId,
     circuit_norm] at hWcmE hWgdE hWakE
-  refine ⟨buildWitness G W cfg i₀ place _
+  refine ⟨buildWitness G input_var cfg i₀ place _
     (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.point.toFormal "witness point")
@@ -1269,10 +1269,10 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
            have h : Orchard.Point.Valid
                (⟨(Witgen.FExprOver.eval
                    { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
-                   W.cmOld.x : Fp),
+                   input_var.cmOld.x : Fp),
                  (Witgen.FExprOver.eval
                    { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
-                   W.cmOld.y : Fp)⟩ : Point Fp) := by
+                   input_var.cmOld.y : Fp)⟩ : Point Fp) := by
              rw [← hWcmE.1, ← hWcmE.2]
              with_unfolding_all exact hVcm
            with_unfolding_all exact h)⟩
@@ -1308,7 +1308,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     -- ── the fold contracts: honest mid/root landings ──
     have hM1der := Halo2.SubcircuitRw.layouter_completeness_derived
       (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-        0 16 (by norm_num) W.merkleSib W.merkleSwap)
+        0 16 (by norm_num) input_var.merkleSib input_var.merkleSwap)
       (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) (i₀ + 8) place env _ hWm1
       (by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
       (by rw [merkle_assumptions_eq]; trivial)
@@ -1334,13 +1334,13 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     -- fold 1 lands on `mid`
     have hM1mid : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
         ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-          0 16 (by norm_num) W.merkleSib W.merkleSwap).output
+          0 16 (by norm_num) input_var.merkleSib input_var.merkleSwap).output
           (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
           { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
           (i₀ + 8)) : Fp) = mid := by
       refine hM1der.2 mid ?_
       rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-          0 16 (by norm_num) W.merkleSib W.merkleSwap).extract
+          0 16 (by norm_num) input_var.merkleSib input_var.merkleSwap).extract
           (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) _ (i₀ + 8)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
         = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
@@ -1370,8 +1370,8 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       exact hMid
     have hM2der := Halo2.SubcircuitRw.layouter_completeness_derived
       (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-        16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
-        (fun i => W.merkleSwap (16 + i)))
+        16 16 (by norm_num) (fun i => input_var.merkleSib (16 + i))
+        (fun i => input_var.merkleSwap (16 + i)))
       (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) (i₀ + 136) place env _
       hWm2
       (by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
@@ -1395,19 +1395,19 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     -- fold 2 lands on `root`
     have hM2root : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
         ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-          16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
-          (fun i => W.merkleSwap (16 + i))).output
+          16 16 (by norm_num) (fun i => input_var.merkleSib (16 + i))
+          (fun i => input_var.merkleSwap (16 + i))).output
           (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
           { node := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
-              B.merkleQ_onCurve 0 16 (by norm_num) W.merkleSib W.merkleSwap).output
+              B.merkleQ_onCurve 0 16 (by norm_num) input_var.merkleSib input_var.merkleSwap).output
               (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
               { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
               (i₀ + 8) }
           (i₀ + 136)) : Fp) = root := by
       refine hM2der.2 root ?_
       rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
-          16 16 (by norm_num) (fun i => W.merkleSib (16 + i))
-          (fun i => W.merkleSwap (16 + i))).extract
+          16 16 (by norm_num) (fun i => input_var.merkleSib (16 + i))
+          (fun i => input_var.merkleSwap (16 + i))).extract
           (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) _ (i₀ + 136)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
         = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
@@ -1432,7 +1432,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       exact hRootP
     -- ── the remaining child contracts (for the instance rows and the gate) ──
     have hVCder := (Halo2.SubcircuitRw.layouter_completeness_derived
-      (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows)
+      (ValueCommit.circuit B.valueCommitV B.valueCommitR input_var.rcvWindows)
       (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
       (i₀ + 266) place env _ hWvc (by exact ⟨hSh, hFw⟩) (by trivial)
       (by rw [vc_pa_eq, vcInputs_eval_eq_prover]
@@ -1450,7 +1450,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
           with_unfolding_all exact hVcm)
       (by trivial)).1
     have hSAder := (Halo2.SubcircuitRw.layouter_completeness_derived
-      (SpendAuthority.circuit B.spendAuthG W.alphaWindows)
+      (SpendAuthority.circuit B.spendAuthG input_var.alphaWindows)
       (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
       (by exact hFw)
       (by rw [sa_assumptions_eq, saInputs_eval_eq]
@@ -1459,7 +1459,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
           with_unfolding_all exact Or.inl hVak)
       (by with_unfolding_all exact hWal)).1
     have hCIder := (Halo2.SubcircuitRw.layouter_completeness_derived
-      (CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ B.ivkQ_onCurve)
+      (CommitIvk.Main.circuit G B.commitIvkR input_var.rivkWindows B.ivkQ B.ivkQ_onCurve)
       { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
         addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
@@ -1473,7 +1473,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
             with_unfolding_all exact hBi)).1
     -- the ivk output cell carries the honest commitment value
     have hIvkVal : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-        ((CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ
+        ((CommitIvk.Main.circuit G B.commitIvkR input_var.rivkWindows B.ivkQ
           B.ivkQ_onCurve).output
           { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
             lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1505,7 +1505,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     rw [nc_call_regionCount] at hWorch
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
     have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
-      (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+      (NoteCommit.Main.circuit G B.noteCommitR input_var.rcmOldWindows B.noteQ
         B.noteQ_onCurve)
       { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1544,7 +1544,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       rw [hNf]
       with_unfolding_all exact hDNder
     have hNCnDer := (Halo2.SubcircuitRw.layouter_completeness_derived
-      (NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+      (NoteCommit.Main.circuit G B.noteCommitR input_var.rcmNewWindows B.noteQ
         B.noteQ_onCurve)
       { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1583,7 +1583,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
             with_unfolding_all exact hBn)).1
     -- the honest instance-row values of the child outputs
     have hCVval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-        ((ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).output
+        ((ValueCommit.circuit B.valueCommitV B.valueCommitR input_var.rcvWindows).output
           (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
            cfg.eccConfig.add)
           { magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
@@ -1612,7 +1612,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
         rw [hmval] at h2
         with_unfolding_all exact h2.symm
     have hSAval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-        ((SpendAuthority.circuit B.spendAuthG W.alphaWindows).output
+        ((SpendAuthority.circuit B.spendAuthG input_var.alphaWindows).output
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
           { akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
                      y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
@@ -1634,7 +1634,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).akP from hRk]
       with_unfolding_all rfl
     have hNCoval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-        ((NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+        ((NoteCommit.Main.circuit G B.noteCommitR input_var.rcmOldWindows B.noteQ
           B.noteQ_onCurve).output
           { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
             lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1658,7 +1658,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       rw [hCmo]
       with_unfolding_all exact hNCoDer
     have hNCnval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-        ((NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+        ((NoteCommit.Main.circuit G B.noteCommitR input_var.rcmNewWindows B.noteQ
           B.noteQ_onCurve).output
           { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
             lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
@@ -1761,7 +1761,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
                rw [hRootP]
                rfl)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows)
+          (ValueCommit.circuit B.valueCommitV B.valueCommitR input_var.rcvWindows)
           (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
            cfg.eccConfig.add) (i₀ + 266) place env _ hWvc
           ⟨(by exact ⟨hSh, hFw⟩), (by trivial),
@@ -1784,7 +1784,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
            (by trivial)⟩
       · with_unfolding_all exact hDNval
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (SpendAuthority.circuit B.spendAuthG W.alphaWindows)
+          (SpendAuthority.circuit B.spendAuthG input_var.alphaWindows)
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
           ⟨(by exact hFw),
            (by rw [sa_assumptions_eq, saInputs_eval_eq]
@@ -1795,7 +1795,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       · with_unfolding_all exact congrArg Point.x hSAval
       · with_unfolding_all exact congrArg Point.y hSAval
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows B.ivkQ
+          (CommitIvk.Main.circuit G B.commitIvkR input_var.rivkWindows B.ivkQ
             B.ivkQ_onCurve)
           { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
             lookupConfig := cfg.lookupConfig,
@@ -1810,7 +1810,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
                · refine ⟨Bi, ?_⟩
                  with_unfolding_all exact hBi)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (AddressIntegrity.circuit W.pkDOld)
+          (AddressIntegrity.circuit input_var.pkDOld)
           (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) (i₀ + 297) place env _
           hWai
           ⟨(by exact hMulE),
@@ -1830,7 +1830,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       simp only [Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
+          (NoteCommit.Main.circuit G B.noteCommitR input_var.rcmOldWindows B.noteQ
             B.noteQ_onCurve)
           { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
             lookupConfig := cfg.lookupConfig,
@@ -1873,7 +1873,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
                show Orchard.Point.OnCurve _
                with_unfolding_all exact hVpkn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows B.noteQ
+          (NoteCommit.Main.circuit G B.noteCommitR input_var.rcmNewWindows B.noteQ
             B.noteQ_onCurve)
           { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
             lookupConfig := cfg.lookupConfig,
@@ -1957,12 +1957,12 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
 `circuit.rs:271-828`) as a proof-carrying bundle: the base §4.17.4 statement
 (breaks-as-data) over the extracted primary-instance rows and witness data,
 outputting the four witnessed address points. -/
-def baseCircuit (G : Generators) (B : Bases) (W : Witnesses) :
-    FormalCircuit Fp Unit Config unit AddressPoints where
+def baseCircuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config PrivateInputs AddressPoints where
   name := "OrchardActionBase"
   configure := fun _ => configure G
-  synthesize := main G B W
-  elaborated := fun cfg => elaborated G B W cfg
+  synthesize := main G B
+  elaborated := fun cfg => elaborated G B cfg
   Witness := fun _ => ActionData
   extract := extract
   EnvAssumptions := EnvAssumptions G
@@ -1970,8 +1970,8 @@ def baseCircuit (G : Generators) (B : Bases) (W : Witnesses) :
   Spec := Spec G B
   ProverAssumptions := ProverAssumptions G B
   ProverSpec := fun _ _ _ _ => True
-  soundness := soundness G B W
-  completeness := completeness G B W
+  soundness := soundness G B
+  completeness := completeness G B
 
 /-! ## The ironwood (post-NU 6.3) circuit bundle
 
@@ -1983,32 +1983,32 @@ private theorem aafi_output (instCol : Column .instance) (r : ℕ)
     ((assignAdviceFromInstance (F := Fp) instCol r col row).output self)
       = AssignedCell.of self row col := rfl
 
-private theorem base_call_regionCount (G : Generators) (B : Bases) (W : Witnesses)
-    (cfg : Config) (inp : Var unit Fp) (j : RegionIndex) :
-    Operations.regionCount (((baseCircuit G B W).call cfg inp).operations j)
+private theorem base_call_regionCount (G : Generators) (B : Bases)
+    (cfg : Config) (W : Witnesses Fp) (j : RegionIndex) :
+    Operations.regionCount (((baseCircuit G B).call cfg W).operations j)
       = 394 := by
   rw [FormalCircuit.call_regionCount]
   rfl
 
-private theorem base_spec_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).Spec = Spec G B := rfl
+private theorem base_spec_eq (G : Generators) (B : Bases) :
+    (baseCircuit G B).Spec = Spec G B := rfl
 
-private theorem base_assumptions_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).Assumptions = fun _ => True := rfl
+private theorem base_assumptions_eq (G : Generators) (B : Bases) :
+    (baseCircuit G B).Assumptions = fun _ => True := rfl
 
-private theorem base_envAssumptions_eq (G : Generators) (B : Bases) (W : Witnesses)
+private theorem base_envAssumptions_eq (G : Generators) (B : Bases)
     (cfg : Config) :
-    (baseCircuit G B W).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
+    (baseCircuit G B).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
 
-private theorem base_pa_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).ProverAssumptions = ProverAssumptions G B := rfl
+private theorem base_pa_eq (G : Generators) (B : Bases) :
+    (baseCircuit G B).ProverAssumptions = ProverAssumptions G B := rfl
 
-private theorem base_extract_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).extract = extract := rfl
+private theorem base_extract_eq (G : Generators) (B : Bases) :
+    (baseCircuit G B).extract = extract := rfl
 
-private theorem base_output (G : Generators) (B : Bases) (W : Witnesses)
-    (cfg : Config) (inp : Var unit Fp) (i₀ : RegionIndex) :
-    (baseCircuit G B W).output cfg inp i₀
+private theorem base_output (G : Generators) (B : Bases)
+    (cfg : Config) (W : Witnesses Fp) (i₀ : RegionIndex) :
+    (baseCircuit G B).output cfg W i₀
       = { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                      y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
           pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
@@ -2019,26 +2019,27 @@ private theorem base_output (G : Generators) (B : Bases) (W : Witnesses)
                       y := AssignedCell.of (i₀ + 348) 0
                         cfg.eccConfig.witnessPoint.y } } := rfl
 
-/-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region. -/
-def mainPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Var unit Fp → Circuit Fp (Var unit Fp) := fun input => do
-  let pts ← (baseCircuit G B W).call cfg input
+/-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region,
+the private witness programs flowing through as the input. -/
+def mainPost (G : Generators) (B : Bases) (cfg : Config) :
+    Var PrivateInputs Fp → Circuit Fp (Var unit Fp) := fun W => do
+  let pts ← (baseCircuit G B).call cfg W
   synthCrossAddressChecks cfg pts
   pure ()
 
-theorem mainPost_regionCount (G : Generators) (B : Bases) (W : Witnesses)
-    (cfg : Config) (inp : Var unit Fp) (i : RegionIndex) :
-    Operations.regionCount ((mainPost G B W cfg inp).operations i) = 395 := by
+theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
+    (W : Witnesses Fp) (i : RegionIndex) :
+    Operations.regionCount ((mainPost G B cfg W).operations i) = 395 := by
   simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
   rw [base_call_regionCount]
 
-instance elaboratedPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    ElaboratedCircuit Fp unit unit (mainPost G B W cfg) where
+instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
+    ElaboratedCircuit Fp PrivateInputs unit (mainPost G B cfg) where
   output _ _ := ()
   regionCount _ := 395
   output_eq := by intro _ _; rfl
-  regionCount_eq := fun input i => (mainPost_regionCount G B W cfg input i).symm
+  regionCount_eq := fun W i => (mainPost_regionCount G B cfg W i).symm
 
 /-- The ironwood Action statement: the base §4.17.4 statement, plus the post-NU 6.3
 cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
@@ -2052,14 +2053,14 @@ def SpecPost (G : Generators) (B : Bases)
 the cross-address rows hold at the honest values (the flag is off, or the addresses
 coincide). -/
 def ProverAssumptionsPost (G : Generators) (B : Bases)
-    (input : ProverValue unit Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
+    (input : WitnessData Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
   ProverAssumptions G B input wit hint ∧
   (wit.disableCrossAddress = 0 ∨ (wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew))
 
 set_option maxRecDepth 8192 in
-theorem soundnessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (mainPost G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (SpecPost G B) := by
   circuit_proof_start
   simp only [mainPost, circuit_norm] at hc
@@ -2131,9 +2132,9 @@ theorem soundnessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config
     with_unfolding_all rfl
 
 set_option maxRecDepth 8192 in
-theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (mainPost G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   obtain ⟨hPA, hDca⟩ := hPA
@@ -2142,7 +2143,7 @@ theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Con
   rw [base_call_regionCount] at hWx
   refine ⟨?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (baseCircuit G B W) cfg i₀ place env _ hWpre
+      (baseCircuit G B) cfg i₀ place env _ hWpre
       ⟨(by rw [base_envAssumptions_eq]; exact _hE),
        (by rw [base_assumptions_eq]; trivial),
        (by rw [base_pa_eq, base_extract_eq]; exact hPA)⟩
@@ -2270,12 +2271,12 @@ theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Con
 /-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
 proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
 binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
-def circuit (G : Generators) (B : Bases) (W : Witnesses) :
-    FormalCircuit Fp Unit Config unit unit where
+def circuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config PrivateInputs unit where
   name := "OrchardAction"
   configure := fun _ => configure G
-  synthesize := mainPost G B W
-  elaborated := fun cfg => elaboratedPost G B W cfg
+  synthesize := mainPost G B
+  elaborated := fun cfg => elaboratedPost G B cfg
   Witness := fun _ => ActionData
   extract := extract
   EnvAssumptions := EnvAssumptions G
@@ -2283,7 +2284,7 @@ def circuit (G : Generators) (B : Bases) (W : Witnesses) :
   Spec := SpecPost G B
   ProverAssumptions := ProverAssumptionsPost G B
   ProverSpec := fun _ _ _ _ => True
-  soundness := soundnessPost G B W
-  completeness := completenessPost G B W
+  soundness := soundnessPost G B
+  completeness := completenessPost G B
 
 end Halo2.Ironwood.Action.Circuit

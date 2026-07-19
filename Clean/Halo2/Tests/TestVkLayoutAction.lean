@@ -86,7 +86,7 @@ def unkWindows : Vector (FExpr Fp) 85 := Vector.replicate 85 (.const (0 : Fp))
 fixed-base-mul sites data-level) -/
 
 /-- The keygen witness set (all programs `Value::unknown()`-shaped). -/
-def aW : Ironwood.Action.Circuit.Witnesses :=
+def aW : Ironwood.Action.Circuit.Witnesses Fp :=
   { psiOld := unk, rhoOld := unk, nk := unk, vOld := unk, vNew := unk, psiNew := unk,
     magnitude := unk, sign := unk,
     cmOld := unkPoint, gdOld := unkPoint, akP := unkPoint, pkDOld := unkPoint,

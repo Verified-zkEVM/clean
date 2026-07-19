@@ -89,6 +89,23 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
+## Witness programs are the circuit INPUT, Unconstrained-style (2026-07-20)
+
+Gregor's rulings: (1) private data enters through the circuit input like Clean/Orchard,
+(2) with a real prover-hint type in the `Unconstrained` pattern — NOT an opaque
+type-marker (the interim `ProverParams` commit was reverted), and (3) no adapter
+wrappers — the bundle theorems themselves are stated input-style. Landed:
+`Witnesses` is `F`-generic; `WitnessData F` is the evaluated prover view;
+`PrivateInputs` (Circuit.lean) is the hint TypeMap — `Var = Witnesses F`,
+verifier value erased, `evalProver` genuinely runs the witness programs
+(WitgenIR eval for scalars/sibs, `Witgen.eval` for points/windows, closure
+application for swaps). `main`/`mainPost` take `Var PrivateInputs Fp`;
+`soundness`/`completeness`(`Post`) are restated at that main (proof bodies:
+`W` ↦ the introduced `input_var`); `baseCircuit G B` / `circuit G B` /
+`orchardActionCircuit` carry `PrivateInputs` as Input with no wrapper layer.
+`ProverAssumptions` still states honesty at the extracted witness (input-level
+PA via `WitnessData` is a possible later refinement).
+
 ## Concrete Sinsemilla generators — DONE (2026-07-19)
 
 The last hypothetical constant is gone: `Orchard.Specs.Sinsemilla.orchardGenerators`

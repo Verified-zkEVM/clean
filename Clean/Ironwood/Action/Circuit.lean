@@ -162,28 +162,96 @@ structure Bases where
 
 /-- The private-input witness programs (the Rust `Circuit` struct fields; scalars enter
 through the fixed-base muls' window programs, per the lazy-witnessing rule). -/
-structure Witnesses where
-  psiOld : WitgenIR Fp 1
-  rhoOld : WitgenIR Fp 1
-  nk : WitgenIR Fp 1
-  vOld : WitgenIR Fp 1
-  vNew : WitgenIR Fp 1
-  psiNew : WitgenIR Fp 1
-  magnitude : WitgenIR Fp 1
-  sign : WitgenIR Fp 1
-  cmOld : Point (FExpr Fp)
-  gdOld : Point (FExpr Fp)
-  akP : Point (FExpr Fp)
-  pkDOld : Point (FExpr Fp)
-  gdNew : Point (FExpr Fp)
-  pkdNew : Point (FExpr Fp)
-  rcvWindows : Vector (FExpr Fp) 85
-  alphaWindows : Vector (FExpr Fp) 85
-  rivkWindows : Vector (FExpr Fp) 85
-  rcmOldWindows : Vector (FExpr Fp) 85
-  rcmNewWindows : Vector (FExpr Fp) 85
-  merkleSib : ℕ → WitgenIR Fp 1
-  merkleSwap : ℕ → Placed ProverEnvironment Fp → Bool
+structure Witnesses (F : Type) where
+  psiOld : WitgenIR F 1
+  rhoOld : WitgenIR F 1
+  nk : WitgenIR F 1
+  vOld : WitgenIR F 1
+  vNew : WitgenIR F 1
+  psiNew : WitgenIR F 1
+  magnitude : WitgenIR F 1
+  sign : WitgenIR F 1
+  cmOld : Point (FExpr F)
+  gdOld : Point (FExpr F)
+  akP : Point (FExpr F)
+  pkDOld : Point (FExpr F)
+  gdNew : Point (FExpr F)
+  pkdNew : Point (FExpr F)
+  rcvWindows : Vector (FExpr F) 85
+  alphaWindows : Vector (FExpr F) 85
+  rivkWindows : Vector (FExpr F) 85
+  rcmOldWindows : Vector (FExpr F) 85
+  rcmNewWindows : Vector (FExpr F) 85
+  merkleSib : ℕ → WitgenIR F 1
+  merkleSwap : ℕ → Placed ProverEnvironment F → Bool
+
+/-- The evaluated (prover-view) private inputs: what the witness programs produce at
+the honest prover's environment. -/
+structure WitnessData (F : Type) where
+  psiOld : F
+  rhoOld : F
+  nk : F
+  vOld : F
+  vNew : F
+  psiNew : F
+  magnitude : F
+  sign : F
+  cmOld : Point F
+  gdOld : Point F
+  akP : Point F
+  pkDOld : Point F
+  gdNew : Point F
+  pkdNew : Point F
+  rcvWindows : Vector F 85
+  alphaWindows : Vector F 85
+  rivkWindows : Vector F 85
+  rcmOldWindows : Vector F 85
+  rcmNewWindows : Vector F 85
+  merkleSib : ℕ → F
+  merkleSwap : ℕ → Bool
+
+/-- The Action circuit's private inputs as a prover-only hint block — the
+`Unconstrained` pattern, assembled by hand for this mixed program record (witness-IR
+scalars, `FExpr` points and window vectors, ℕ-indexed Merkle families): the `Var` view
+is the witness programs (`Witnesses F`), the verifier value is erased, and the prover
+value is the evaluated `WitnessData F`. -/
+structure PrivateInputs (F : Type) where
+  program : Witnesses F
+
+@[reducible] instance : CircuitType PrivateInputs where
+  Var := Witnesses
+  Value := unit
+  ProverValue := WitnessData
+  evalVerifier := fun _ _ => ()
+  evalProver := fun {F} _ pe W =>
+    { psiOld := (W.psiOld.eval pe)[0]
+      rhoOld := (W.rhoOld.eval pe)[0]
+      nk := (W.nk.eval pe)[0]
+      vOld := (W.vOld.eval pe)[0]
+      vNew := (W.vNew.eval pe)[0]
+      psiNew := (W.psiNew.eval pe)[0]
+      magnitude := (W.magnitude.eval pe)[0]
+      sign := (W.sign.eval pe)[0]
+      cmOld := Witgen.eval (M := Point) { env := pe } W.cmOld
+      gdOld := Witgen.eval (M := Point) { env := pe } W.gdOld
+      akP := Witgen.eval (M := Point) { env := pe } W.akP
+      pkDOld := Witgen.eval (M := Point) { env := pe } W.pkDOld
+      gdNew := Witgen.eval (M := Point) { env := pe } W.gdNew
+      pkdNew := Witgen.eval (M := Point) { env := pe } W.pkdNew
+      rcvWindows := Witgen.eval (M := fields 85) { env := pe } W.rcvWindows
+      alphaWindows := Witgen.eval (M := fields 85) { env := pe } W.alphaWindows
+      rivkWindows := Witgen.eval (M := fields 85) { env := pe } W.rivkWindows
+      rcmOldWindows := Witgen.eval (M := fields 85) { env := pe } W.rcmOldWindows
+      rcmNewWindows := Witgen.eval (M := fields 85) { env := pe } W.rcmNewWindows
+      merkleSib := fun i => ((W.merkleSib i).eval pe)[0]
+      merkleSwap := fun i => W.merkleSwap i pe }
+
+@[circuit_norm] lemma var_of_privateInputs {F : Type} :
+    Var PrivateInputs F = Witnesses F := rfl
+@[circuit_norm] lemma value_of_privateInputs {F : Type} :
+    Value PrivateInputs F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_privateInputs {F : Type} :
+    ProverValue PrivateInputs F = WitnessData F := rfl
 
 /-- Rust `assign_free_advice` (`circuit.rs:101-113`): the `"load private"` region, one
 advice cell at row 0. -/
@@ -204,7 +272,7 @@ structure WitnessCells where
 
 /-- Stage A (8 regions after the table load): the shared witness regions
 (`circuit.rs:467-532`). -/
-def synthWitness (G : Generators) (W : Witnesses) (cfg : Config) :
+def synthWitness (G : Generators) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp WitnessCells := do
   Sinsemilla.load G cfg.sinsemilla1.generatorTable
   let psiOld ← loadPrivate (cfg.advices 0) W.psiOld
@@ -230,7 +298,7 @@ structure CheckCells where
 
 /-- Stage B (295 regions): the Merkle path, value-commit / nullifier / spend-authority /
 diversified-address integrity (`circuit.rs:535-693`). -/
-def synthChecks (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
+def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     (wc : WitnessCells) : Circuit Fp CheckCells := do
   -- circuit.rs:535-548 — the Merkle path (leaf = cm_old.extract_p); 16 layers per
   -- Sinsemilla instance (`merkle.rs:122-126`, `chips[i / layers_per_chip]`)
@@ -280,7 +348,7 @@ structure NoteCells where
 
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
 `"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
-def synthNotes (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
+def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     (wc : WitnessCells) (cc : CheckCells) : Circuit Fp NoteCells := do
   -- circuit.rs:696-729 — old note commitment integrity
   let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows
@@ -362,7 +430,7 @@ def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
 integrity-check / note-commitment composition, returning the `AddressPoints` the
 ironwood cross-address stage reads. This alone is the pre-ironwood (fixed post-NU 6.2)
 circuit — see `Action/CircuitPreIronwood.lean`. -/
-def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp (Var AddressPoints Fp) := do
   let wc ← synthWitness G W cfg
   let cc ← synthChecks G B W cfg wc
@@ -371,7 +439,7 @@ def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
 
 /-- The ironwood (post-NU 6.3) `Circuit::synthesize` — THE top-level circuit this repo
 targets: the base stages plus the cross-address checks region. -/
-def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+def synthesize (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp Unit := do
   let pts ← synthesizeBase G B W cfg
   synthCrossAddressChecks cfg pts

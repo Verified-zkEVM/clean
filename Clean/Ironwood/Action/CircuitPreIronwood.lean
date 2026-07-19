@@ -20,7 +20,7 @@ open Halo2.Ironwood.Action.Circuit
 /-- Rust `Circuit::synthesize` at `FixedPostNu6_2` (= `synthesize_base`,
 `circuit.rs:461-828`), in exact region-creation order, returning the witnessed
 old/new-note address points (the Rust `AddressPoints`). -/
-def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+def synthesize (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp (Var AddressPoints Fp) :=
   synthesizeBase G B W cfg
 
