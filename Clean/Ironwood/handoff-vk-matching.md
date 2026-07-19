@@ -89,6 +89,16 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
+## Concrete Sinsemilla generators — DONE (2026-07-19)
+
+The last hypothetical constant is gone: `Orchard.Specs.Sinsemilla.orchardGenerators`
+(`Clean/Orchard/Specs/SinsemillaGenerators.lean`, generated) carries the real 2^10-point
+`S` table (extracted from the `ActionLayout` dump's fixed cols 1/2, python-validated)
+with on-curve proofs via a linear list-walk checker + `decide +kernel`, reusing
+`CertCheck.checkOnCurve(_sound)`. `orchardActionCircuit` now takes ONLY the witness
+programs `W`; the layout tests' `aG` is the certified family, so the allFixed guard
+cross-validates the extracted table against the dump on every CI run.
+
 ## ARC COMPLETE (2026-07-19): CONCRETE FixedBases — DONE, no workarounds
 
 All six real orchard fixed bases are proof-carrying constants

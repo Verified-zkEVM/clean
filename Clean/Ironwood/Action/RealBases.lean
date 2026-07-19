@@ -4,6 +4,7 @@ import Clean.Orchard.Ecc.MulFixed.Certs.SpendAuthG
 import Clean.Orchard.Ecc.MulFixed.Certs.CommitIvkR
 import Clean.Orchard.Ecc.MulFixed.Certs.NoteCommitR
 import Clean.Orchard.Ecc.MulFixed.Certs.ValueCommitV
+import Clean.Orchard.Specs.SinsemillaGenerators
 import Clean.Ironwood.Action.Bundle
 
 /-!
@@ -68,11 +69,17 @@ def orchardBases : Circuit.Bases where
   noteQ_onCurve := noteQ_onCurve
 
 /-- The PROVEN end-to-end Action circuit (soundness + completeness, the Bundle arc)
-instantiated at the real deployed constants — no hypothetical bases left. `G` (the
-Sinsemilla generator family) and the witness programs remain parameters. -/
-def orchardActionCircuit (G : Orchard.Specs.Sinsemilla.Generators)
-    (W : Circuit.Witnesses) :
+instantiated at the real deployed constants — the certified fixed bases, the `Q`
+points, and the kernel-verified Sinsemilla generator table.
+
+The remaining parameter `W` is the honest prover's witness-generation programs and
+matters ONLY for completeness. Soundness is knowledge soundness at the constructive
+extractor: for ANY assignment satisfying the constraints, the `ActionData` read off
+the cells satisfies the §4.17.4 spec — `extract`/`Spec`/`EnvAssumptions` never mention
+`W`, and the constraint set is the same for every `W` (witness IR is invisible to
+`Constraints`). Verifier-side consumers may instantiate `W` arbitrarily. -/
+def orchardActionCircuit (W : Circuit.Witnesses) :
     FormalCircuit Halo2.Ironwood.Fp Unit Circuit.Config unit unit :=
-  Circuit.circuit G orchardBases W
+  Circuit.circuit Orchard.Specs.Sinsemilla.orchardGenerators orchardBases W
 
 end Halo2.Ironwood.Action
