@@ -137,6 +137,14 @@ tables — `FixedBase.ofBase B hB` smart constructor:
   witnessed square chains. ~680 facts/base dominates the budget.
   (e) All checks as a Nat-level straight-line program (avoid ZMod instance-unfolding
   whnf overhead) with once-proven Nat↔ZMod op bridges.
+  (h) DIRECTIVE (Gregor, final): AVOID `decide` — norm_num / simp-eval / reduce_mod_char
+  are faster for pure value equations. Consequences: NO Nat-level checker layer; Euler
+  facts via the existing `rw [ZMod.euler_criterion ..]; reduce_mod_char` pattern
+  (NormNum.PowMod, five_not_isSquare precedent); witnessed chain/slope/u checks stated
+  as ZMod equations over dumped literals, discharged by reduce_mod_char/norm_num
+  (generated files, batched `<;> reduce_mod_char`). The decide benchmark (g) stands
+  only as a feasibility floor; first implementation step: benchmark the norm_num route
+  the same way, then build the generators.
   (g) BENCHMARK DONE (Clean/Halo2/Tests/BenchFixedBase.lean, 2026-07-19): fuel-based
   binary `powMod` (structural, kernel-friendly) + 3000-step mulmod chain + 40-exp bulk
   all elaborate in ~3s TOTAL under kernel `decide +kernel`. ≈10-25ms per Euler exp →
