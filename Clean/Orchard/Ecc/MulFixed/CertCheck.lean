@@ -936,4 +936,6 @@ def ofCertShort (c : FullCert) (h : checkFull 21 c = true) :
 
 end Chain
 
+export Chain (BaseCert FullCert checkBase checkFull ofCert ofCertShort)
+
 end Orchard.Ecc.MulFixed.Cert
