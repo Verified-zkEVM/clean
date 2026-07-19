@@ -137,6 +137,12 @@ tables — `FixedBase.ofBase B hB` smart constructor:
   witnessed square chains. ~680 facts/base dominates the budget.
   (e) All checks as a Nat-level straight-line program (avoid ZMod instance-unfolding
   whnf overhead) with once-proven Nat↔ZMod op bridges.
+  (g) BENCHMARK DONE (Clean/Halo2/Tests/BenchFixedBase.lean, 2026-07-19): fuel-based
+  binary `powMod` (structural, kernel-friendly) + 3000-step mulmod chain + 40-exp bulk
+  all elaborate in ~3s TOTAL under kernel `decide +kernel`. ≈10-25ms per Euler exp →
+  ~7-17s per base for the 680 facts; table checks negligible. Kernel decide is
+  FEASIBLE — no comppoly escalation needed at this scale. Next: dumper window-table
+  emission + slope script, then the Nat-level checker + generic lemmas (task #16).
   (f) If Nat-level checking benchmarks too slow: Gregor's team has faster CERTIFIED
   field arithmetic in the upstream comppoly repo (only `PrattCertificate` is vendored
   under `Clean/Orchard/Specs/CompPoly` so far) — vendor and swap the checker's field
