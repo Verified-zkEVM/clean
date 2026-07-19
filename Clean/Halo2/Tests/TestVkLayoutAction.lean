@@ -270,7 +270,8 @@ def aProgramBase : Circuit Fp Unit := do
 `synthCrossAddressChecks` (shared with the main circuit, no mirror copy). -/
 def aProgram : Circuit Fp Unit := do
   let (wc, cc, nc) ← aProgramCore
-  Halo2.Ironwood.Action.Circuit.synthCrossAddressChecks aCfg wc cc nc
+  Halo2.Ironwood.Action.Circuit.synthCrossAddressChecks aCfg
+    { gdOld := wc.gdOld, pkdOld := cc.pkdOld, gdNew := nc.gdNew, pkdNew := nc.pkdNew }
 
 /-! ## The reconstructed layout products (ironwood) -/
 

@@ -320,17 +320,26 @@ def synthNotes (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     (orchardGate cfg.qOrchard cfg.advices).enable 0)
   pure { gdNew, pkdNew }
 
+/-- Rust `AddressPoints` (ironwood `circuit.rs`): the old/new-note diversified-address
+points the cross-address stage compares — the base circuit's output. -/
+structure AddressPoints (F : Type) where
+  gdOld : Point F
+  pkdOld : Point F
+  gdNew : Point F
+  pkdNew : Point F
+deriving ProvableStruct
+
 /-- Ironwood `Circuit::synthesize_cross_address_checks` (`circuit.rs:920-1035`): the
 `"post-NU 6.3 cross-address checks"` region — one row per address coordinate, reusing
 the `q_orchard` gate as `disableCrossAddress − 0 = disableCrossAddress · 1` (value
 row), `disableCrossAddress · (old − new) = 0` (root/anchor row), with both enable
 checks neutralized and the rightmost columns occupied against foreign gate rows. -/
-def synthCrossAddressChecks (cfg : Config) (wc : WitnessCells) (cc : CheckCells)
-    (nc : NoteCells) : Circuit Fp Unit :=
-  assignRegion "post-NU 6.3 cross-address checks" (do
-    let coords := [(wc.gdOld.x, nc.gdNew.x), (wc.gdOld.y, nc.gdNew.y),
-                   (cc.pkdOld.x, nc.pkdNew.x), (cc.pkdOld.y, nc.pkdNew.y)]
-    for h : row in [0:4] do
+def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
+    Circuit Fp Unit :=
+  assignRegion "post-NU 6.3 cross-address checks"
+    (RegionCircuit.forRange' 0 1 4 fun _ row => do
+      let coords := [(pts.gdOld.x, pts.gdNew.x), (pts.gdOld.y, pts.gdNew.y),
+                     (pts.pkdOld.x, pts.pkdNew.x), (pts.pkdOld.y, pts.pkdNew.y)]
       let (oldC, newC) := coords[row]!
       let dca ← assignAdviceFromInstance cfg.primary DISABLE_CROSS_ADDRESS
         (cfg.advices 0) row
@@ -349,14 +358,22 @@ def synthCrossAddressChecks (cfg : Config) (wc : WitnessCells) (cc : CheckCells)
       let _ ← copyAdvice dca (cfg.advices 9) row
       (orchardGate cfg.qOrchard cfg.advices).enable row)
 
-/-- The ironwood (post-NU 6.3) `Circuit::synthesize` — THE top-level circuit this repo
-targets: the base stages plus the cross-address checks region. The pre-ironwood
-(fixed post-NU 6.2) circuit lives in `Action/CircuitPreIronwood.lean`. -/
-def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Circuit Fp Unit := do
+/-- Rust `Circuit::synthesize_base` (`circuit.rs:461-828`): the staged witness /
+integrity-check / note-commitment composition, returning the `AddressPoints` the
+ironwood cross-address stage reads. This alone is the pre-ironwood (fixed post-NU 6.2)
+circuit — see `Action/CircuitPreIronwood.lean`. -/
+def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    Circuit Fp (Var AddressPoints Fp) := do
   let wc ← synthWitness G W cfg
   let cc ← synthChecks G B W cfg wc
   let nc ← synthNotes G B W cfg wc cc
-  synthCrossAddressChecks cfg wc cc nc
+  pure { gdOld := wc.gdOld, pkdOld := cc.pkdOld, gdNew := nc.gdNew, pkdNew := nc.pkdNew }
+
+/-- The ironwood (post-NU 6.3) `Circuit::synthesize` — THE top-level circuit this repo
+targets: the base stages plus the cross-address checks region. -/
+def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    Circuit Fp Unit := do
+  let pts ← synthesizeBase G B W cfg
+  synthCrossAddressChecks cfg pts
 
 end Halo2.Ironwood.Action.Circuit

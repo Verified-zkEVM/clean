@@ -483,7 +483,34 @@ Y-composite patterns worth reusing:
 NEXT (beyond the original steps 1-3 scope): the NoteCommit main circuit itself, composing
 the decompose bundles + these composites + Sinsemilla, per the donor
 Orchard.Action.NoteCommit top level.
-## E2E Action circuit bundle — COMPLETE (2026-07-19)
+## Ironwood (post-NU 6.3) Action bundle — COMPLETE (2026-07-19)
+
+The retargeted MAIN circuit (`Action.Circuit.synthesize` = base + cross-address) is now
+fully proven, layered on the base bundle **as a subcircuit**:
+
+- `synthCrossAddressChecks` retyped over `Var AddressPoints Fp` (the Rust
+  `AddressPoints`; new `ProvableStruct` in Circuit.lean) and its raw `for … in [0:4]`
+  loop swapped for `RegionCircuit.forRange'` — the `circuit_norm ↓` split lemmas then
+  hand both proof directions the per-row `∀ i : Fin 4` form for free.
+  `synthesizeBase` (the three stages, returning the points) is the shared base;
+  `CircuitPreIronwood.synthesize := synthesizeBase`. Region stream unchanged —
+  TestVkLayoutAction/Base both green, no fixture churn.
+- The pre bundle was reshaped to `baseCircuit : FormalCircuit … unit AddressPoints`:
+  concrete `elaborated` output (the four witnessed point cells at i₀+3/301/347/348,
+  `output_eq` by `with_unfolding_all rfl`), `Spec := SpecBase ∧ output-tie clauses`
+  (ties close by `congrArg … h_output` + rfl). `ActionData`/`extract` gained
+  `disableCrossAddress` (instance row 9) — additive, base proofs untouched otherwise.
+- The post bundle (`Action.Circuit.circuit`, the MAIN bundle) is small:
+  `mainPost = (baseCircuit …).call + synthCrossAddressChecks`. Soundness:
+  `subcircuit_rw` on the call delivers the whole base Spec in one step; the region
+  gives four `dca·(old−new) = 0` products → `SpecPost`'s clause
+  (`disableCrossAddress ≠ 0 → gdOld = gdNew ∧ pkdOld = pkdNew`) by
+  `mul_eq_zero`/`sub_eq_zero` + `Point.ext_coords`. Completeness: ONE
+  `layouter_completeness_leaf` on the base call (PA = base PA projected from
+  `ProverAssumptionsPost`), then per-row EW equations + `linear_combination` off the
+  honest products. Extractor composition is literal: post extract = base extract.
+
+## E2E Action circuit bundle (base stages) — COMPLETE (2026-07-19)
 
 `Clean/Ironwood/Action/Bundle.lean`: the whole-circuit `FormalCircuit Fp Unit Config
 unit unit` over the 394-region `synthesize`, soundness AND completeness fully proven,
