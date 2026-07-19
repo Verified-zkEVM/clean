@@ -121,6 +121,22 @@ tables — `FixedBase.ofBase B hB` smart constructor:
   kernel-computable (~2k curve adds per base).
 - Per base, only three concrete `decide`s: `B.OnCurve`; the search succeeds; derived
   `toData` values = the dumped fixture values (the VK-matching content).
+- REFINED (Gregor): witness everything, compute nothing in-kernel.
+  (a) Incremental table: entries step by ONE addition (`(k+3)·8^w·B = (k+2)·8^w·B +
+  [8^w]B`; step point 3 doublings/window) — ~930 curve ops/base, and NO smulFast needed
+  (the chain induction on `nsmul_add_nsmul` is the whole bridge).
+  (b) Witnessed slopes kill ALL inversions: per addition check `λ(qx−px)=qy−py`,
+  `rx=λ²−px−qx`, `ry=λ(px−rx)−py` (3 mulmods); distinctness via witnessed inverse
+  `t(qx−px)=1`. Dumper emits window tables (compute_window_table is pub) + a script
+  computes slopes.
+  (c) z SEARCH not re-run (dumped Z reach ~240k → ~1e5 Euler tests/window infeasible);
+  z/u are certified inputs checked by the verifier form of find_zs_and_us.
+  (d) Euler non-squareness is the ONLY surviving power (non-residuosity has no shorter
+  certificate): choose per benchmark between witnessed 255-step square chains (pure
+  literal checks, ~MB-scale fixtures) and in-kernel binary Nat powMod (small files,
+  ~255 GMP steps/fact). ~680 facts/base dominates the budget; benchmark FIRST.
+  (e) All checks as a Nat-level straight-line program (avoid ZMod instance-unfolding
+  whnf overhead) with once-proven Nat↔ZMod op bridges.
 
 Superseded original plan (bulk-checking framing, kept for reference):
 1. Window table in Lean by k-chains: start `(k+2)•B` (small, unary `nsmul` fine),
