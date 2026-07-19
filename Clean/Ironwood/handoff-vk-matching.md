@@ -156,6 +156,16 @@ tables — `FixedBase.ofBase B hB` smart constructor:
   slope/inverse-witness generation script (python: pow(x,-1,p)) + Lean fixture
   generation; then the generic lemmas (chain induction, eval-at-node, euler wrapper,
   zu-verifier postcondition); then ofBase + six bases.
+  (j) CHAIN DESIGN (checker shape the fixtures must match): step points come FREE from
+  the table — `S_w = [8^w]B = P_(w-1,6)` (k+2=8), `S_0 = B`. Checked ops per 85-window
+  base: doublings `P_(w,0) = 2·S_w` (λ = 3x²/2y form; y≠0 generic from
+  neg_five_not_isCube), in-window steps `P_(w,k+1) = P_(w,k) + S_w` (7×84), the MSB
+  offset chain `T_j = T_(j-1) + P_(j,0)` (83 adds, T points witnessed, reusing the
+  P_(j,0) entries; sum = Σ 2·8^j), `P_(84,0) = −T_83` (negation check, no slope), then
+  7 MSB steps with `S_84 = P_(83,6)`. ≈678 ops/base; witnesses = slopes per op + the
+  83 T points. Equations at .val level with `+p` for subtraction; lifted per-op by
+  nondegenerateAdd_eq_add / a doubling analogue, stitched by the nsmul_add_nsmul
+  induction. Short (22-window) analogous with its own MSB formula.
   (g) BENCHMARK DONE (Clean/Halo2/Tests/BenchFixedBase.lean, 2026-07-19): fuel-based
   binary `powMod` (structural, kernel-friendly) + 3000-step mulmod chain + 40-exp bulk
   all elaborate in ~3s TOTAL under kernel `decide +kernel`. ≈10-25ms per Euler exp →
