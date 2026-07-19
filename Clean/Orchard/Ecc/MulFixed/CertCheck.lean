@@ -349,6 +349,157 @@ theorem checkVarRow_sound {B : Orchard.Point Fp} (hB : B.OnCurve)
           conv_rhs => rw [Finset.sum_range_succ']
           ring
 
+/-! ### The whole-base certificate -/
+
+/-- A dumped window-table certificate: the base point, the lower windows (each 8
+entries with step slopes), the offset `T`-chain (addend, `T_j`, slope — addends must
+equal `rows[j+1][0]`), and the MSB row (entry 0 the negated offset with unused slope,
+then 7 steps). -/
+structure BaseCert where
+  base : ℕ × ℕ
+  rows : List (List ((ℕ × ℕ) × ℕ))
+  tChain : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ)
+  msb : List ((ℕ × ℕ) × ℕ)
+
+/-- Full chain check for a base with `numLower + 1` windows. -/
+def checkBase (numLower : ℕ) (c : BaseCert) : Bool :=
+  (c.rows.length == numLower) &&
+  c.rows.all (fun row => row.length == 8) &&
+  (c.msb.length == 8) &&
+  (c.tChain.length + 1 == numLower) &&
+  checkWindows c.base c.rows &&
+  checkVarRow (c.rows[0]!)[0]!.1 c.tChain &&
+  (List.range c.tChain.length).all (fun j =>
+    c.tChain[j]!.1 == (c.rows[j + 1]!)[0]!.1) &&
+  checkNeg (c.tChain[c.tChain.length - 1]!).2.1.1 (c.tChain[c.tChain.length - 1]!).2.1.2
+    (c.msb[0]!).1.1 (c.msb[0]!).1.2 &&
+  checkRow ((c.rows[numLower - 1]!)[6]!).1 (c.msb[0]!).1 (c.msb.drop 1)
+
+open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD) in
+/-- Chain soundness for the whole certificate: every lower-window entry is
+`((k+2)·8^w)·B`, and every MSB entry is `(a₀ + k·8^numLower)·B` where `a₀` represents
+`−(Σ_{j<numLower} 2·8^j)` mod the group order. -/
+theorem checkBase_sound {numLower : ℕ} (hnl : 6 < numLower) {c : BaseCert}
+    (hB : (pointOf c.base).OnCurve) (h : checkBase numLower c = true) :
+    (∀ w, (hw : w < numLower) → ∀ k, (hk : k < 8) →
+      ∃ (hw' : w < c.rows.length) (hk' : k < c.rows[w].length),
+        pointOf (c.rows[w][k]).1 = ((k + 2) * 8 ^ w) • pointOf c.base) ∧
+    (∀ k, (hk : k < 8) →
+      ∃ (hk' : k < c.msb.length),
+        pointOf (c.msb[k]).1 =
+          ((PALLAS_SCALAR_CARD -
+              (∑ j ∈ Finset.range numLower, 2 * 8 ^ j) % PALLAS_SCALAR_CARD)
+            + k * 8 ^ numLower) • pointOf c.base) := by
+  simp only [checkBase, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
+    List.mem_range] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hlen, hrow8⟩, hmsb8⟩, htlen⟩, hwins⟩, htv⟩, hmatch⟩, hneg⟩,
+    hmsbrow⟩ := h
+  set B := pointOf c.base with hBdef
+  have hB1 : pointOf c.base = (1 : ℕ) • B := (one_nsmul_point B).symm
+  have hlower : ∀ w, (hw : w < c.rows.length) → ∀ k, (hk : k < c.rows[w].length) →
+      pointOf (c.rows[w][k]).1 = ((k + 2) * 8 ^ w) • B := by
+    intro w hw k hk
+    have := checkWindows_sound hB c.rows c.base 1 hB1 hwins w hw k hk
+    simpa using this
+  have hrowlen : ∀ w, (hw : w < c.rows.length) → c.rows[w].length = 8 := by
+    intro w hw
+    exact hrow8 _ (c.rows.getElem_mem hw)
+  have card_pos : 0 < PALLAS_SCALAR_CARD := by
+    norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
+  refine ⟨?_, ?_⟩
+  · intro w hw k hk
+    have hw' : w < c.rows.length := by rw [hlen]; exact hw
+    exact ⟨hw', by rw [hrowlen w hw']; exact hk,
+      hlower w hw' k (by rw [hrowlen w hw']; exact hk)⟩
+  · -- ── the MSB window ──
+    have gpR : ∀ i, (h : i < c.rows.length) → c.rows[i]! = c.rows[i] :=
+      fun i h => getElem!_pos c.rows i h
+    have gpT : ∀ i, (h : i < c.tChain.length) → c.tChain[i]! = c.tChain[i] :=
+      fun i h => getElem!_pos c.tChain i h
+    have gpM : ∀ i, (h : i < c.msb.length) → c.msb[i]! = c.msb[i] :=
+      fun i h => getElem!_pos c.msb i h
+    have gpE : ∀ (l : List ((ℕ × ℕ) × ℕ)) i, (h : i < l.length) → l[i]! = l[i] :=
+      fun l i h => getElem!_pos l i h
+    set S : ℕ := ∑ j ∈ Finset.range numLower, 2 * 8 ^ j with hSdef
+    have h0r : 0 < c.rows.length := by rw [hlen]; omega
+    have h0r0 : 0 < c.rows[0].length := by rw [hrowlen 0 h0r]; omega
+    -- T-chain start = rows[0][0] = 2·B
+    have hp00 : pointOf ((c.rows[0]!)[0]!).1 = (2 : ℕ) • B := by
+      rw [gpR 0 h0r, gpE _ 0 h0r0]
+      have := hlower 0 h0r 0 h0r0
+      simpa using this
+    -- T-chain addend values
+    have hf : ∀ j, (hj : j < c.tChain.length) →
+        pointOf c.tChain[j].1 = (2 * 8 ^ (j + 1)) • B := by
+      intro j hj
+      have hm := hmatch j hj
+      have hjr : j + 1 < c.rows.length := by rw [hlen]; omega
+      have hjr0 : 0 < c.rows[j + 1].length := by rw [hrowlen _ hjr]; omega
+      rw [gpT j hj, gpR _ hjr, gpE _ 0 hjr0] at hm
+      rw [hm]
+      have := hlower (j + 1) hjr 0 hjr0
+      simpa using this
+    -- T-chain results
+    have htvr : checkVarRow ((c.rows[0]!)[0]!).1 c.tChain = true := htv
+    have hT := checkVarRow_sound hB c.tChain ((c.rows[0]!)[0]!).1 2
+      (fun j => 2 * 8 ^ (j + 1)) hp00 hf htvr
+    -- the last T is the whole offset sum
+    have hlpos : 0 < c.tChain.length := by omega
+    have hTlast : pointOf (c.tChain[c.tChain.length - 1]!).2.1 = S • B := by
+      rw [gpT _ (by omega)]
+      have := hT (c.tChain.length - 1) (by omega)
+      rw [this]
+      congr 1
+      rw [hSdef, ← htlen, show c.tChain.length - 1 + 1 = c.tChain.length from by omega,
+        Finset.sum_range_succ']
+      ring
+    -- msb[0] = −(S·B)
+    have hmod : (S + (PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD))
+        % PALLAS_SCALAR_CARD = 0 := by
+      have hd := Nat.div_add_mod S PALLAS_SCALAR_CARD
+      have hlt : S % PALLAS_SCALAR_CARD < PALLAS_SCALAR_CARD := Nat.mod_lt _ card_pos
+      have heq : S + (PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD)
+          = PALLAS_SCALAR_CARD * (S / PALLAS_SCALAR_CARD) + PALLAS_SCALAR_CARD := by
+        omega
+      rw [heq, ← Nat.mul_succ, Nat.mul_mod_right]
+    have hm0 : pointOf (c.msb[0]!).1
+        = (PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD) • B := by
+      have hn := checkNeg_sound hneg
+      have : pointOf (c.msb[0]!).1 = -(S • B) := by
+        rw [← hTlast]
+        exact hn.symm
+      rw [this]
+      exact (nsmul_eq_neg_nsmul hB hmod).symm
+    -- top step point = 8^numLower · B
+    have htoplen : numLower - 1 < c.rows.length := by rw [hlen]; omega
+    have htop6 : 6 < c.rows[numLower - 1].length := by rw [hrowlen _ htoplen]; omega
+    have htop : pointOf (((c.rows[numLower - 1]!)[6]!)).1 = (8 ^ numLower) • B := by
+      rw [gpR _ htoplen, gpE _ 6 htop6]
+      have := hlower (numLower - 1) htoplen 6 htop6
+      rw [this]
+      congr 1
+      rw [show (6 + 2 : ℕ) = 8 from rfl,
+        show 8 * 8 ^ (numLower - 1) = 8 ^ (numLower - 1 + 1) from by
+          rw [pow_succ]; ring,
+        show numLower - 1 + 1 = numLower from by omega]
+    -- the msb row
+    have hrow := checkRow_sound hB htop (c.msb.drop 1) (c.msb[0]!).1
+      (PALLAS_SCALAR_CARD - S % PALLAS_SCALAR_CARD) hm0 hmsbrow
+    intro k hk
+    have hk' : k < c.msb.length := by rw [hmsb8]; exact hk
+    refine ⟨hk', ?_⟩
+    match k with
+    | 0 =>
+        rw [← gpM 0 hk']
+        simpa using hm0
+    | Nat.succ k =>
+        have hkd : k < (c.msb.drop 1).length := by
+          rw [List.length_drop, hmsb8]
+          omega
+        have := hrow k hkd
+        simp only [List.getElem_drop, show 1 + k = k + 1 from by omega] at this
+        rw [this]
+
 end Chain
 
 end Orchard.Ecc.MulFixed.Cert
