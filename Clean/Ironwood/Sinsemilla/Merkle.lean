@@ -954,7 +954,6 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
     simp only [Operations.regionCount]]
   simp only [Circuit.operations_pure, Operations.regionCount]
 
-set_option linter.unusedSimpArgs false in
 /-- One Merkle layer hash as a layouter-level formal circuit (Rust
 `MerkleInstructions::hash_layer`, `merkle/chip.rs:229-436`), on the proven children
 (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition `Gate`). -/
@@ -1254,8 +1253,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     rw [HashToPoint.hashCircuit_output_eval] at hSpecH
     obtain ⟨chunksH, hPCH, hZsH, -, -⟩ := hSpecH
     -- normalize the verifier-view spellings to the prover reads
-    try simp only [Placed.toEnvironment_mk, Placed.toEnvironment_place, Placed.toEnvironment_env,
-      ProverEnvironment.toEnvironment_advice] at hPCH hZsH
+    try simp only [Placed.toEnvironment_mk] at hPCH hZsH
     -- the running-sum families and the z_1 sums (the soundness-side extraction)
     rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
           HashLayer.synthesize._proof_1).extract
@@ -1268,7 +1266,6 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
             (Sinsemilla.Chain.zsCellsVal cfg.1.sinsemilla (i₀ + 3 + 2)
               HashLayer.merkleNs 0) from rfl,
       Sinsemilla.Chain.eval_zsCellsVal] at hZsH
-    simp only [Placed.toEnvironment_mk, Placed.toEnvironment_place, Placed.toEnvironment_env] at hZsH
     rw [show HashLayer.merkleNs = 24 :: 1 :: 24 :: ([] : List ℕ) from rfl] at hZsH
     obtain ⟨hzAH, hzBH, -⟩ := hZsH
     simp only [Sinsemilla.Chain.zsFam_head] at hzAH

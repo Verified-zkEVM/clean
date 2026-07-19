@@ -362,13 +362,12 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-set_option linter.unusedSimpArgs false in
 theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
     Operations.regionCount ((synthPieces cfg input).operations i) = 15 := by
   simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
     Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, Circuit.operations_bind,
-    operations_assignRegion, Operations.regionCount_append, Operations.regionCount]
+    operations_assignRegion, Operations.regionCount]
 
 theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -381,27 +380,25 @@ theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
     Operations.regionCount]
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
 
-set_option linter.unusedSimpArgs false in
 theorem synthGates_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
     Operations.regionCount
       ((synthGates cfg input pcs ccs iHash).operations i) = 10 := by
   simp only [synthGates, circuit_norm, Circuit.operations_bind,
-    Operations.regionCount_append, Operations.regionCount]
+    Operations.regionCount_append]
   rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
     toFormal_call_regionCount]
 
-set_option linter.unusedSimpArgs false in
 /-- The region count of the flow: 15 piece/short regions, the 18-region check stage,
 the 10 gate regions — 43. -/
 theorem synth_regionCount (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
     Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 43 := by
-  simp only [synth, currentRegion, circuit_norm, Circuit.operations_bind,
-    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+  simp only [synth, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append]
   rw [synthPieces_regionCount, synthChecks_regionCount, synthGates_regionCount]
 
 theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))

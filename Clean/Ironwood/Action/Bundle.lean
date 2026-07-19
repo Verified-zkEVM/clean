@@ -110,7 +110,6 @@ private theorem nc_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-set_option linter.unusedSimpArgs false in
 theorem synthWitness_regionCount (G : Generators) (W : Witnesses) (cfg : Config)
     (i : RegionIndex) :
     Operations.regionCount ((synthWitness G W cfg).operations i) = 8 := by
@@ -120,7 +119,6 @@ theorem synthWitness_regionCount (G : Generators) (W : Witnesses) (cfg : Config)
   rw [wpoint_call_regionCount, wpointNonId_call_regionCount,
     wpointNonId_call_regionCount]
 
-set_option linter.unusedSimpArgs false in
 theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
     Operations.regionCount ((synthChecks G B W cfg wc).operations i) = 295 := by
@@ -131,7 +129,6 @@ theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     dn_call_regionCount, sa_call_regionCount, civk_call_regionCount,
     ai_call_regionCount]
 
-set_option linter.unusedSimpArgs false in
 theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
     Operations.regionCount ((synthNotes G B W cfg wc cc).operations i) = 91 := by
@@ -141,7 +138,6 @@ theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses)
   rw [nc_call_regionCount, wpointNonId_call_regionCount,
     wpointNonId_call_regionCount, nc_call_regionCount]
 
-set_option linter.unusedSimpArgs false in
 /-- The Action circuit's region count: the 8 witness regions, the 295-region check
 stage, the 91-region note stage — 394. -/
 theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
@@ -149,7 +145,7 @@ theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
       = 394 := by
   simp only [CircuitPreIronwood.synthesize, circuit_norm, Circuit.operations_bind,
-    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+    Operations.regionCount_append]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
 /-- The `FormalCircuit` entry: `unit → unit`, everything through the extraction. -/
@@ -158,7 +154,6 @@ def main (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   let _ ← CircuitPreIronwood.synthesize G B W cfg
   pure ()
 
-set_option linter.unusedSimpArgs false in
 theorem main_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (inp : Var unit Fp) (i : RegionIndex) :
     Operations.regionCount ((main G B W cfg inp).operations i) = 394 := by
@@ -323,7 +318,6 @@ def GeneratorTableExact (G : Generators) (cfg : Sinsemilla.GeneratorTableConfig)
   Halo2.Constraints (fun _ => 0) env
     ((Sinsemilla.load G cfg).operations 0) 0
 
-set_option linter.unusedSimpArgs false in
 private theorem generatorTableExact_constraints (G : Generators)
     (cfg : Sinsemilla.GeneratorTableConfig) (env : Environment Fp)
     (h : GeneratorTableExact G cfg env) (place : RegionIndex → ℕ) (i : RegionIndex) :
@@ -727,7 +721,6 @@ theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses)
 
 open Halo2.Ironwood.Sinsemilla.Merkle (MerkleRoot)
 
-set_option linter.unusedSimpArgs false in
 set_option maxRecDepth 8192 in
 theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
@@ -767,7 +760,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     Nat.add_zero] at hCmS hGdS hAkS
   -- ── stage B: the integrity checks ──
   simp only [synthWitness_output, synthWitness_nextRegionIndex, synthWitness_regionCount,
-    Nat.add_assoc, Nat.reduceAdd] at hCk hN
+    Nat.add_assoc] at hCk hN
   simp only [synthChecks, loadPrivate, circuit_norm] at hCk
   have hM1 := hCk.1
   have hM2 := hCk.2.1
@@ -919,7 +912,6 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   try rw [wpointNonId_call_regionCount] at hEqR
   try rw [wpointNonId_call_regionCount] at hEqR
   try rw [nc_call_regionCount] at hEqR
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hEqR
   try rw [nc_call_regionCount] at hGdN
   try rw [wpointNonId_call_regionCount] at hGdN
   try rw [wpointNonId_call_regionCount] at hGdN
@@ -939,8 +931,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   try rw [wpointNonId_call_regionCount] at hIcmx
   try rw [wpointNonId_call_regionCount] at hIcmx
   try rw [nc_call_regionCount] at hIcmx
-  try simp only [nextRegionIndex_constrainInstance, circuit_norm, Nat.add_assoc,
-    Nat.reduceAdd] at hIcmx
+  try simp only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] at hIcmx
   try rw [nc_call_regionCount] at hOrch
   try rw [wpointNonId_call_regionCount] at hOrch
   try rw [wpointNonId_call_regionCount] at hOrch
@@ -992,7 +983,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   -- ── assemble the statement ──
   simp only [Spec, extract, cellRead, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-    Nat.add_zero, Nat.add_assoc, Nat.reduceAdd]
+    Nat.add_zero, Nat.add_assoc]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · with_unfolding_all exact hCmS
   · with_unfolding_all exact hGdS
@@ -1079,14 +1070,12 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S hM2S
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.2.1
-    simp only [if_pos rfl] at h
     rw [hOv, hOr, hOa] at h
     exact ⟨_, by with_unfolding_all exact hRoot, by with_unfolding_all exact h⟩
   · -- `v_old − v_new = magnitude · sign`
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.1
-    simp only [if_pos rfl] at h
     rw [hOv, hOn, hOm, hOs] at h
     linear_combination h
   · -- the enable-flag checks
@@ -1094,11 +1083,9 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
     refine ⟨?_, ?_⟩
     · have h := hGate.2.2.1
-      simp only [if_pos rfl] at h
       rw [hOv, hOes] at h
       linear_combination h
     · have h := hGate.2.2.2
-      simp only [if_pos rfl] at h
       rw [hOn, hOeo] at h
       linear_combination h
 
@@ -1192,7 +1179,6 @@ private theorem wpointNonId_call_witnesses (name : String)
     assignRegion, ExtendsWitnesses, and_true]
   rfl
 
-set_option linter.unusedSimpArgs false in
 private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (hT : Halo2.Constraints place env
@@ -1211,11 +1197,10 @@ private theorem buildWitness (G : Generators) (W : Witnesses) (cfg : Config)
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
     Nat.add_assoc, Nat.reduceAdd]
   rw [wpoint_call_regionCount, wpointNonId_call_regionCount]
-  simp only [Nat.add_assoc, Nat.reduceAdd]
+  simp only [Nat.reduceAdd]
   exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
     h1, h2, h3⟩
 
-set_option linter.unusedSimpArgs false in
 set_option maxRecDepth 8192 in
 theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
@@ -1233,8 +1218,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
   have hWn := hwit.2.2
   clear hwit
   -- ── stage A witnesses: the shared cells are the programs' honest values ──
-  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
-    readCell] at hWw
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hWw
   obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
   rw [wpoint_call_regionCount] at hWgd hWak
   rw [wpointNonId_call_regionCount] at hWak
@@ -1244,8 +1228,8 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
   have hWakE := hWak
   rw [wpoint_call_witnesses] at hWcmE
   rw [wpointNonId_call_witnesses] at hWgdE hWakE
-  simp only [Ecc.WitnessPoint.point, Ecc.WitnessPoint.pointNonId, circuit_norm,
-    readCell, Nat.add_assoc, Nat.reduceAdd] at hWcmE hWgdE hWakE
+  simp only [Ecc.WitnessPoint.point, Ecc.WitnessPoint.pointNonId,
+    circuit_norm] at hWcmE hWgdE hWakE
   refine ⟨buildWitness G W cfg i₀ place _
     (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -1283,8 +1267,8 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
            with_unfolding_all exact hVak)⟩
   · -- ── stages B and C ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
-      synthWitness_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWc hWn
-    simp only [synthChecks, loadPrivate, circuit_norm, readCell] at hWc
+      synthWitness_regionCount, Nat.add_assoc] at hWc hWn
+    simp only [synthChecks, loadPrivate, circuit_norm] at hWc
     obtain ⟨hWm1, hWm2, hwMag, hwSign, hWvc, hWdn, hWsa, hWci, hWai⟩ := hWc
     -- offset-normalize the stage-B witness chunks
     rw [merkle_call_regionCount] at hWm2 hWvc hWdn hWsa hWci hWai
@@ -1486,7 +1470,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     -- ── stage C witnesses and contracts ──
     simp only [synthChecks_output, synthChecks_nextRegionIndex,
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
-    simp only [synthNotes, loadPrivate, circuit_norm, readCell] at hWn
+    simp only [synthNotes, loadPrivate, circuit_norm] at hWn
     obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
     rw [nc_call_regionCount] at hWgdn hWpkn hWncn hWorch
     rw [wpointNonId_call_regionCount] at hWpkn hWncn hWorch
@@ -1698,11 +1682,10 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
       synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
     refine ⟨?_, ?_⟩
-    · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc,
-        Nat.reduceAdd]
+    · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc]
       rw [merkle_call_regionCount, merkle_call_regionCount, vc_call_regionCount,
         dn_call_regionCount, sa_call_regionCount, civk_call_regionCount]
-      simp only [Nat.add_assoc, Nat.reduceAdd]
+      simp only [Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           _ _ (i₀ + 8) place env _ hWm1
@@ -1814,11 +1797,10 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
                · have h := hPkd
                  rw [← hIvkVal] at h
                  with_unfolding_all exact h)⟩
-    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc,
-        Nat.reduceAdd]
+    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc]
       rw [nc_call_regionCount, wpointNonId_call_regionCount,
         wpointNonId_call_regionCount, nc_call_regionCount]
-      simp only [Nat.add_assoc, Nat.reduceAdd]
+      simp only [Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows B.noteQ
@@ -1904,9 +1886,8 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
                  with_unfolding_all exact hBn)⟩
       · with_unfolding_all exact (congrArg Point.x hNCnval).trans hCmx.symm
       · -- the final `"Orchard circuit checks"` region
-        simp only [nextRegionIndex_constrainInstance, Nat.add_assoc, Nat.reduceAdd]
-        simp only [nextRegionIndex_constrainInstance, Nat.add_assoc,
-          Nat.reduceAdd] at hWorch
+        simp only [nextRegionIndex_constrainInstance]
+        simp only [nextRegionIndex_constrainInstance] at hWorch
         obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo⟩ := hWorch
         have hOr' : env.advice (cfg.advices 4) ((place (i₀ + 393) : ℕ) : ℤ)
             = root := hOr.trans (by with_unfolding_all exact hM2root)
@@ -1920,7 +1901,7 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
         · with_unfolding_all exact hOes
         · with_unfolding_all exact hOeo
         · simp only [orchardGate, Constraints.withSelector, circuit_norm,
-            List.Forall, if_pos rfl]
+            List.Forall]
           refine ⟨?_, ?_, ?_, ?_⟩
           · rw [hOv, hOn, hOm, hOs]
             have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
