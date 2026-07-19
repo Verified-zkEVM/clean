@@ -146,6 +146,16 @@ tables — `FixedBase.ofBase B hB` smart constructor:
   (generated files, batched `<;> reduce_mod_char`). The decide benchmark (g) stands
   only as a feasibility floor; first implementation step: benchmark the norm_num route
   the same way, then build the generators.
+  (i) PROGRESS (2026-07-19, task #16 in flight): tactic benchmark SETTLED — rfl on
+  Nat-stated fuel-based powMod ≈ free (~50ms/exp); ZMod-stated SAME algorithm times
+  out >10min (>200x cliff: OfNat/cast towers + per-op ZMod-unfolding — see
+  BenchFixedBase.lean) → checker equations at .val/Nat level, once-proven cast bridges
+  to the ZMod facts. Window tables DUMPED: orchard local commit a9a9069
+  (dump_fixed_base_tables → scratchpad base_tables.log, 3576 WPT lines, six bases,
+  format `WPT w k (x-limbs) (y-limbs)`; GEN lines carry the base points). NEXT:
+  slope/inverse-witness generation script (python: pow(x,-1,p)) + Lean fixture
+  generation; then the generic lemmas (chain induction, eval-at-node, euler wrapper,
+  zu-verifier postcondition); then ofBase + six bases.
   (g) BENCHMARK DONE (Clean/Halo2/Tests/BenchFixedBase.lean, 2026-07-19): fuel-based
   binary `powMod` (structural, kernel-friendly) + 3000-step mulmod chain + 40-exp bulk
   all elaborate in ~3s TOTAL under kernel `decide +kernel`. ≈10-25ms per Euler exp →
