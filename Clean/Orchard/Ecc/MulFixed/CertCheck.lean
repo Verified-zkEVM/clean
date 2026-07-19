@@ -18,7 +18,7 @@ open Orchard (Point Fp pallasA)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-- The Pallas base-field modulus (the checker's `ℕ` world). -/
-def P : ℕ := PALLAS_BASE_CARD
+abbrev P : ℕ := PALLAS_BASE_CARD
 
 /-- `a·b mod P`. -/
 def mulm (a b : ℕ) : ℕ := a * b % P
@@ -28,11 +28,7 @@ def subm (a b : ℕ) : ℕ := (a + P - b) % P
 
 /-! ## Cast bridges (ℕ checks → `Fp` equations) -/
 
-theorem cast_mod (a : ℕ) : ((a % P : ℕ) : Fp) = (a : Fp) := by
-  conv_rhs => rw [← Nat.div_add_mod a P]
-  push_cast
-  rw [show ((P : ℕ) : Fp) = 0 from ZMod.natCast_self P]
-  ring
+theorem cast_mod (a : ℕ) : ((a % P : ℕ) : Fp) = (a : Fp) := ZMod.natCast_mod a P
 
 theorem cast_mulm (a b : ℕ) : ((mulm a b : ℕ) : Fp) = (a : Fp) * (b : Fp) := by
   rw [mulm, cast_mod]
@@ -41,9 +37,8 @@ theorem cast_mulm (a b : ℕ) : ((mulm a b : ℕ) : Fp) = (a : Fp) * (b : Fp) :=
 
 theorem cast_subm {b : ℕ} (a : ℕ) (hb : b ≤ P) :
     ((subm a b : ℕ) : Fp) = (a : Fp) - (b : Fp) := by
-  rw [subm, cast_mod, Nat.cast_sub (Nat.le_add_left b a |>.trans (by omega))]
-  push_cast
-  rw [show ((P : ℕ) : Fp) = 0 from ZMod.natCast_self P]
+  rw [subm, cast_mod, Nat.cast_sub (by omega), Nat.cast_add,
+    show ((P : ℕ) : Fp) = 0 from ZMod.natCast_self P]
   ring
 
 theorem cast_inj {a b : ℕ} (ha : a < P) (hb : b < P) (h : (a : Fp) = (b : Fp)) :
@@ -566,6 +561,142 @@ theorem cert_windowPoint_eq {c : BaseCert}
       rw [Orchard.Ecc.MulFixed.windowScalar, if_pos rfl, offsetAcc_eq_sum, hSdef]
     rw [← hws]
     exact (ZMod.natCast_rightInverse _).symm
+
+/-! ### Interpolation, u-table, Euler, and on-curve checks -/
+
+/-- Horner evaluation of the 8 Lagrange coefficients at `k`, mod `P`. -/
+def evalInterp (cs : List ℕ) (k : ℕ) : ℕ :=
+  cs.foldr (fun ci acc => (ci + k * acc) % P) 0
+
+/-- `CoordsParams` from dumped `ℕ` literals (`z`, then the 8 coefficients). -/
+def mkParams (z : ℕ) (cs : List ℕ) : Orchard.Ecc.MulFixed.CoordsParams Fp :=
+  { z := (z : Fp), lagrange0 := (cs[0]! : Fp), lagrange1 := (cs[1]! : Fp),
+    lagrange2 := (cs[2]! : Fp), lagrange3 := (cs[3]! : Fp),
+    lagrange4 := (cs[4]! : Fp), lagrange5 := (cs[5]! : Fp),
+    lagrange6 := (cs[6]! : Fp), lagrange7 := (cs[7]! : Fp) }
+
+theorem evalInterp_cast (z c0 c1 c2 c3 c4 c5 c6 c7 k : ℕ) :
+    ((evalInterp [c0, c1, c2, c3, c4, c5, c6, c7] k : ℕ) : Fp)
+      = Orchard.Ecc.MulFixed.interpolate
+          (mkParams z [c0, c1, c2, c3, c4, c5, c6, c7]) (k : Fp) := by
+  simp only [evalInterp, List.foldr, cast_mod, Orchard.Ecc.MulFixed.interpolate,
+    mkParams, List.getElem!_cons_zero, List.getElem!_cons_succ]
+  push_cast [cast_mod]
+  ring
+
+/-- Interpolation check for one window: the polynomial hits all 8 table x-coords. -/
+def checkInterp (cs : List ℕ) (xs : List ℕ) : Bool :=
+  cs.length == 8 && xs.length == 8 &&
+  (List.range 8).all fun k => evalInterp cs k == xs[k]! % P
+
+/-- u-table check for one window: `u_k² = y_k + z`. -/
+def checkU (z : ℕ) (us : List ℕ) (ys : List ℕ) : Bool :=
+  us.length == 8 && ys.length == 8 &&
+  (List.range 8).all fun k => mulm us[k]! us[k]! == (ys[k]! + z) % P
+
+/-- Fuel-based binary modular exponentiation (kernel-friendly). -/
+def powModAux (a : ℕ) : ℕ → ℕ → ℕ
+  | 0, _ => 1 % P
+  | fuel + 1, e =>
+    if e = 0 then 1 % P
+    else
+      let h := powModAux a fuel (e / 2)
+      let h2 := h * h % P
+      if e % 2 = 1 then h2 * a % P else h2
+
+def powMod (a e : ℕ) : ℕ := powModAux a 256 e
+
+theorem powModAux_cast (a : ℕ) :
+    ∀ fuel e, e < 2 ^ fuel → ((powModAux a fuel e : ℕ) : Fp) = (a : Fp) ^ e := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro e he
+      interval_cases e
+      simp [powModAux, cast_mod]
+  | succ fuel ih =>
+      intro e he
+      rw [powModAux]
+      by_cases he0 : e = 0
+      · simp [he0, cast_mod]
+      · rw [if_neg he0]
+        have hdiv : e / 2 < 2 ^ fuel := by
+          have := Nat.div_lt_of_lt_mul (by
+            rw [← pow_succ']
+            exact he)
+          omega
+        have hh := ih (e / 2) hdiv
+        by_cases hodd : e % 2 = 1
+        · rw [if_pos hodd]
+          rw [cast_mod]
+          push_cast [cast_mod]
+          rw [hh, ← pow_add, ← pow_succ]
+          congr 1
+          omega
+        · rw [if_neg hodd]
+          rw [cast_mod]
+          push_cast
+          rw [hh, ← pow_add]
+          congr 1
+          omega
+
+theorem powMod_cast (a e : ℕ) (he : e < 2 ^ 256) :
+    ((powMod a e : ℕ) : Fp) = (a : Fp) ^ e :=
+  powModAux_cast a 256 e he
+
+/-- Euler check: `x` is a quadratic non-residue. -/
+def checkNonSquare (x : ℕ) : Bool :=
+  x < P && powMod x ((P - 1) / 2) == P - 1
+
+theorem checkNonSquare_sound {x : ℕ} (h : checkNonSquare x = true) :
+    ¬ IsSquare ((x : ℕ) : Fp) := by
+  simp only [checkNonSquare, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+  obtain ⟨hx, hpow⟩ := h
+  have hP2 : (P : ℕ) / 2 = (P - 1) / 2 := by
+    norm_num [P, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  have hebound : (P - 1) / 2 < 2 ^ 256 := by
+    norm_num [P, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+  have hcast := powMod_cast x ((P - 1) / 2) hebound
+  rw [hpow] at hcast
+  have hm1 : ((P - 1 : ℕ) : Fp) = -1 := by
+    rw [Nat.cast_sub (by norm_num [P, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])]
+    rw [ZMod.natCast_self]
+    push_cast
+    ring
+  rw [hm1] at hcast
+  have hxne : ((x : ℕ) : Fp) ≠ 0 := by
+    intro h0
+    rw [h0] at hcast
+    have hne : ((P - 1 : ℕ) : ℕ) / 2 ≠ 0 := by
+      norm_num [P, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
+    rw [zero_pow hne] at hcast
+    have : (1 : Fp) = 0 := by
+      have := congrArg (· + 1) hcast
+      simpa using this.symm
+    exact one_ne_zero this
+  intro hsq
+  have := (ZMod.euler_criterion _ hxne).mp hsq
+  rw [hP2.symm] at hcast
+  rw [this] at hcast
+  have : (2 : Fp) = 0 := by linear_combination -hcast
+  exact Orchard.two_ne_zero this
+
+/-- On-curve check for a `ℕ` point (`y² = x³ + 5`). -/
+def checkOnCurve (x y : ℕ) : Bool :=
+  x < P && y < P && mulm y y == (mulm (mulm x x) x + 5) % P
+
+theorem checkOnCurve_sound {x y : ℕ} (h : checkOnCurve x y = true) :
+    (pointOf (x, y)).OnCurve := by
+  simp only [checkOnCurve, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+  obtain ⟨⟨hx, hy⟩, hc⟩ := h
+  have := congrArg (Nat.cast (R := Fp)) hc
+  rw [cast_mulm, cast_mod] at this
+  push_cast [cast_mulm] at this
+  show ((y : ℕ) : Fp) ^ 2 = ((x : ℕ) : Fp) ^ 3 + Orchard.pallasB
+  rw [Orchard.pallasB]
+  rw [show ((y : ℕ) : Fp) ^ 2 = ((y : ℕ) : Fp) * ((y : ℕ) : Fp) from sq _]
+  rw [this]
+  ring
 
 end Chain
 
