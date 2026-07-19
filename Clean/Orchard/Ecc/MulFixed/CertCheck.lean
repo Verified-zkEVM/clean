@@ -160,7 +160,6 @@ theorem checkDouble_sound {px py l rx ry : ℕ}
     have := congrArg (Nat.cast (R := Fp)) h3
     rwa [cast_subm _ (hPle hpy), cast_mulm, cast_subm _ (hPle hrx)] at this
 
-
 /-! ## Chain checkers (row / window fold) and their soundness -/
 
 namespace Chain
@@ -615,12 +614,12 @@ theorem powModAux_cast (a : ℕ) :
   | zero =>
       intro e he
       interval_cases e
-      simp [powModAux, cast_mod]
+      simp [powModAux]
   | succ fuel ih =>
       intro e he
       rw [powModAux]
       by_cases he0 : e = 0
-      · simp [he0, cast_mod]
+      · simp [he0]
       · rw [if_neg he0]
         have hdiv : e / 2 < 2 ^ fuel := by
           have := Nat.div_lt_of_lt_mul (by

@@ -42,18 +42,10 @@ def aTblCol (c : ℕ) : Array ℕ := Id.run do
 def aTblX : Array ℕ := aTblCol 1
 def aTblY : Array ℕ := aTblCol 2
 
-/-- The dump-derived generator family (on-curve fallback `S(0)`, never taken on the
-real data — the guards would catch it as a value mismatch). -/
-def aG : Generators where
-  S m :=
-    let p : Orchard.Point Fp := { x := (aTblX[m]! : Fp), y := (aTblY[m]! : Fp) }
-    if p.y ^ 2 = p.x ^ 3 + Orchard.pallasB then p else sinsemillaS0
-  S_onCurve {m} _ := by
-    show Orchard.Point.OnCurve _
-    dsimp only
-    split
-    · next h => exact h
-    · exact sinsemillaS0_onCurve
+/-- The real proof-carrying generator family; the layout guards below cross-validate
+its table (extracted into `SinsemillaGenerators.lean`) against the dump's fixed
+columns. -/
+def aG : Generators := Orchard.Specs.Sinsemilla.orchardGenerators
 
 /-- `Q_MERKLE_CRH` (orchard `constants/sinsemilla.rs:56`). -/
 def merkleQ : Orchard.Point Fp :=
