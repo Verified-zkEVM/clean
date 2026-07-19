@@ -9,8 +9,6 @@ bundled `circuit`. Mirrors `Clean/Ironwood/NoteCommit/MainBundle.lean` at a thir
 of the scale (10 children, one canonicity composite called as a unit).
 -/
 
-set_option linter.unusedSimpArgs false
-
 namespace Halo2.Ironwood.CommitIvk.Main
 
 open Halo2.Ironwood (Fp)
@@ -199,22 +197,21 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 private theorem zs_get_z13a (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+        Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
@@ -230,7 +227,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
       (rivkExtract cfg) (EnvAssumptions G cfg) (fun _ => True) (Spec G Q R) := by
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
-  simp only [synth, currentRegion, circuit_norm] at hc
+  simp only [synth, circuit_norm] at hc
   have hP := hc.1
   have hCm := hc.2.1
   have hCan := hc.2.2
@@ -263,18 +260,16 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   clear hSb0 hSb2 hSd0
   -- ── the commitment ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
-    synthPieces_regionCount, Nat.add_assoc, Nat.reduceAdd] at hCm hCan
+    synthPieces_regionCount, Nat.add_assoc] at hCm hCan
   rw [commit_call_regionCount] at hCan
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hCan
+  simp only [Nat.reduceAdd] at hCan
   subcircuit_rw at hCm
   have hCmS := hCm
     (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     (by rw [commit_assumptions_eq]; trivial)
   rw [commit_spec_eq, commit_extract_eq] at hCmS
   clear hCm
-  simp only [synthPieces_output, circuit_norm, zCell, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-    Environment.get_advice] at hCmS
+  simp only [circuit_norm] at hCmS
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
@@ -292,14 +287,13 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     ⟨0, by decide⟩ hPC' (by decide)
   have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC
   -- ── the canonicity composite ──
   subcircuit_rw at hCan
   have hCanS := hCan (by rw [canon_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
     (by rw [canon_assumptions_eq]
-        simp only [synthPieces_output, circuit_norm, zCell, prefixRows_ns_2,
+        simp only [circuit_norm, zCell, prefixRows_ns_2,
           AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Cell.of_column, Environment.get_advice, Nat.reduceAdd,
           Nat.add_zero]
         refine ⟨?_, hb0, hb2, ?_, hd0, ?_, ?_⟩
         · with_unfolding_all exact hpieceA
@@ -308,7 +302,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
         · with_unfolding_all exact hz13c)
   rw [canon_spec_eq, canon_extract_eq] at hCanS
   clear hCan
-  simp only [synthPieces_output, circuit_norm, AssignedCell.of_cell,
+  simp only [circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd] at hCanS
   obtain ⟨hSa, hSb0v, hSb1, hSb2v, hSc, hSd0v, hSd1, hSbW, hSdW⟩ := hCanS
@@ -592,7 +586,6 @@ private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
   try simp only [Nat.add_assoc, Nat.reduceAdd]
   exact ⟨hg.2.2.2.2.1, hg.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
 
-set_option linter.unusedSimpArgs false in
 /-- Build direction for stage 1: the three short-check chunks give the stage. -/
 private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
@@ -625,7 +618,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
   obtain ⟨hWin, B0, hB0⟩ := hPA
-  simp only [synth, currentRegion, circuit_norm] at hwit ⊢
+  simp only [synth, circuit_norm] at hwit ⊢
   have hWP := hwit.1
   have hWcm := hwit.2.1
   have hWCan := hwit.2.2
@@ -635,9 +628,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   obtain ⟨hwa, ⟨hwb0, hWrb0⟩, ⟨hwb2, hWrb2⟩, hwb, hwc, ⟨hwd0, hWrd0⟩, hwd⟩ := hWP
   simp only [Nat.add_assoc, Nat.reduceAdd] at hwa hwb0 hwb2 hwb hwc hwd0 hwd
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
-    synthPieces_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWcm hWCan
+    synthPieces_regionCount, Nat.add_assoc] at hWcm hWCan
   rw [commit_call_regionCount] at hWCan
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hWCan
+  simp only [Nat.reduceAdd] at hWCan
   obtain ⟨hiak, hink⟩ := h_input
   -- ── honest piece facts ──
   have hHF := Orchard.Action.CommitIvk.Commit.honest_pieces_facts
@@ -705,8 +698,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   rw [hashExtract_zs] at hZs
   rw [pieces_eval_eq_env] at hPC
   try simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero,
-    Nat.add_assoc, Nat.reduceAdd] at hPC
+    Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   have hz13a := Orchard.Action.NoteCommit.zsFacts_cell ns _ chunks _
@@ -720,7 +712,6 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     ⟨0, by decide⟩ hPC' (by decide)
   have hpieceC := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC
   -- the b1/d1 gate-internal witnesses
   have hbits := canon_bit_witness (brWit input_var_ak 254 1) (brWit input_var_nk 254 1)
     (cfg.gate, cfg.lookupConfig) _ (i₀ + 11) place env hWCan
@@ -729,9 +720,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hwd1 := hbits.2
   -- ── assemble ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
-    synthPieces_regionCount, Nat.add_assoc, Nat.reduceAdd]
+    synthPieces_regionCount, Nat.add_assoc]
   rw [commit_call_regionCount]
-  simp only [Nat.add_assoc, Nat.reduceAdd]
+  simp only [Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_⟩, ?_, ?_⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 1) place env ()
@@ -799,9 +790,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (cfg.gate, cfg.lookupConfig) (i₀ + 11) place env _ hWCan
       ⟨(by rw [canon_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [canon_assumptions_eq]
-           simp only [synthPieces_output, circuit_norm, zCell, prefixRows_ns_2,
+           simp only [circuit_norm, zCell, prefixRows_ns_2,
              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
            · with_unfolding_all exact hpieceA
@@ -815,7 +806,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            · with_unfolding_all exact hz13a
            · with_unfolding_all exact hz13c),
        (by rw [canon_proverAssumptions_eq, canon_extract_eq]
-           simp only [synthPieces_output, circuit_norm, zCell, prefixRows_ns_2,
+           simp only [circuit_norm, zCell, prefixRows_ns_2,
              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]

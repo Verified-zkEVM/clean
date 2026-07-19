@@ -8,8 +8,6 @@ Kept separate from `Main.lean` (the defs/contract layer): this file is the kerne
 part — the fully proven soundness/completeness theorems and the bundled `circuit`.
 -/
 
-set_option linter.unusedSimpArgs false
-
 namespace Halo2.Ironwood.NoteCommit.Main
 
 open Halo2.Ironwood (Fp)
@@ -223,7 +221,7 @@ private theorem decomposeH_output (w : WitgenIR Fp 1) (name : String)
     ((DecomposeH.bundle w).toFormal name).output cfg inp i
       = AssignedCell.of i 0 cfg.colR := by
   show (((DecomposeH.bundle w).synthesize cfg 0 inp)).output i = _
-  simp only [DecomposeH.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+  simp only [DecomposeH.bundle, circuit_norm, RegionCircuit.output_bind]
 
 end ChildBridges
 
@@ -309,7 +307,6 @@ private theorem pieceChunks_donor_iff :
     · rintro ⟨msf, h1, h2, tailChunks, h3, h4⟩
       exact ⟨msf, h1, h2, tailChunks, h3, (ih _ _).mpr h4⟩
 
-set_option linter.unusedSimpArgs false in
 /-- Stage-3 peel, standalone (kernel-checked alone): the ten folded gate-call chunks at
 clean relative indices. -/
 private theorem peelGates (cfg : Config) (input : Inputs (AssignedCell Fp))
@@ -411,66 +408,65 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 private theorem zs_get_z13a (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+        Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1d (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 52 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[1]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13f (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 71 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z1g (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 84 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[1]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13g (f : ℕ → Fp) :
     (Orchard.Sinsemilla.HVec.get (Orchard.Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 96 := by
-  simp only [ns, Sinsemilla.Chain.zLengths, Orchard.Sinsemilla.Chain.zLengths,
+  simp only [ns, Orchard.Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
     Sinsemilla.Chain.zsFam, Orchard.Sinsemilla.HVec.get,
-    Orchard.Sinsemilla.HVec.head_cons, Orchard.Sinsemilla.HVec.tail_cons,
-    Vector.getElem_ofFn, Nat.reduceAdd, Nat.zero_add, Nat.add_zero]
+    Orchard.Sinsemilla.HVec.tail_cons,
+    Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Orchard.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
@@ -488,7 +484,6 @@ private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
     assignRegion, ExtendsWitnesses, and_true]
   rfl
 
-set_option linter.unusedSimpArgs false in
 /-- Build direction of `peelGates` (kernel-checked alone). -/
 private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
@@ -582,7 +577,6 @@ private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
   simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_zero]
 
-set_option linter.unusedSimpArgs false in
 /-- Build direction for stage 1: the seven short-check chunks give the stage. -/
 private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
@@ -614,7 +608,6 @@ private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
     Nat.reduceAdd]
   exact h
 
-set_option linter.unusedSimpArgs false in
 /-- Build direction for stage 2: the y-flows, the commit, the four witness_checks. -/
 private theorem buildChecks (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -652,7 +645,6 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
   simp only [Nat.add_assoc, Nat.reduceAdd]
   exact h
 
-set_option linter.unusedSimpArgs false in
 /-- Assemble the three stage constraint blocks into the whole flow. -/
 private theorem buildSynth (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -668,12 +660,11 @@ private theorem buildSynth (G : Generators) (R : FixedBase)
           (i₀ + 27)).output (i₀ + 15)) (i₀ + 27)).operations (i₀ + 33)) (i₀ + 33)) :
     Constraints place env
       ((synth G R windows Q hQ cfg input).operations i₀) i₀ := by
-  simp only [synth, currentRegion, circuit_norm, synthPieces_nextRegionIndex,
+  simp only [synth, circuit_norm, synthPieces_nextRegionIndex,
     synthChecks_nextRegionIndex, synthPieces_regionCount, synthChecks_regionCount,
     Nat.add_assoc, Nat.reduceAdd]
   exact ⟨h1, h2, h3⟩
 
-set_option linter.unusedSimpArgs false in
 /-- Witness-side stage-3 peel (kernel-checked alone): the ten gate-call witness chunks. -/
 private theorem peelGatesW (cfg : Config) (input : Inputs (AssignedCell Fp))
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
@@ -738,7 +729,6 @@ private theorem peelGatesW (cfg : Config) (input : Inputs (AssignedCell Fp))
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
   exact h
 
-set_option linter.unusedSimpArgs false in
 /-- The `lsb` cell witnessed inside a y-canonicity flow's gate region reads the
 caller's program (two-level witness projection). -/
 private theorem yc_lsb_witness (w : WitgenIR Fp 1)
@@ -977,7 +967,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (Spec G Q R) := by
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
-  simp only [synth, currentRegion, circuit_norm] at hc
+  simp only [synth, circuit_norm] at hc
   have hP := hc.1
   have hCk := hc.2.1
   have hGt := hc.2.2
@@ -1245,68 +1235,67 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   have hGgdS := hGgd (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+                    circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
   rw [toFormal_spec_eq, gd_spec_eq] at hGgdS
   simp only [GdCanonicity.toDonor, Orchard.Action.NoteCommit.GdCanonicity.Gate.Spec,
-    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
-    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
+    circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGgdS
   have hGpkdS := hGpkd (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, pkd_assumptions_eq]
-        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+        simp only [synthPieces_output, synthChecks_output, zCell,
+          prefixRows_ns_2,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGdS.1, hcval, hb3, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩)
   rw [toFormal_spec_eq, pkd_spec_eq] at hGpkdS
   simp only [PkdCanonicity.toDonor, Orchard.Action.NoteCommit.PkdCanonicity.Gate.Spec,
-    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
-    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_2,
+    circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpkdS
   have hGvalS := hGval (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, value_assumptions_eq]
-        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+        simp only [synthPieces_output, zCell,
+          prefixRows_ns_3,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          Cell.of_column, Environment.get_advice, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hd2, by rw [hzd]; exact hzdval, he0⟩)
   rw [toFormal_spec_eq, value_spec_eq] at hGvalS
   simp only [ValueCanonicity.toDonor, Orchard.Action.NoteCommit.ValueCanonicity.Gate.Spec,
-    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
-    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    synthPieces_output, zCell,
+    prefixRows_ns_3, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-    Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGvalS
+    Nat.reduceAdd, Nat.add_zero] at hGvalS
   have hGrhoS := hGrho (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, rho_assumptions_eq]
-        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+        simp only [synthPieces_output, synthChecks_output, zCell,
+          prefixRows_ns_5,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGgS.1, hfval, he1, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩)
   rw [toFormal_spec_eq, rho_spec_eq] at hGrhoS
   simp only [RhoCanonicity.toDonor, Orchard.Action.NoteCommit.RhoCanonicity.Gate.Spec,
-    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
-    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_5, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGrhoS
-  simp only [prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5,
+  simp only [prefixRows_ns_3,
     prefixRows_ns_6, Nat.reduceAdd] at hGbS hGdS hGeS hGgS hGhS
   -- Psi: the z13G tail via the donor bridge over the DecomposeG facts
   have hz13G_tail := Orchard.Action.NoteCommit.z13G_tail_of_decompose_g
     hGgS.1 hg1 (by rw [hzg1]; exact hzg1val) hGgS.2 hzg13
   have hGpsiS := hGpsi (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
-        simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-          prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+        simp only [synthPieces_output, synthChecks_output, zCell,
+          prefixRows_ns_6,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
@@ -1314,8 +1303,8 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
           loG, hloG, by rw [← hgz0] at htelG; exact htelG⟩)
   rw [toFormal_spec_eq, psi_spec_eq] at hGpsiS
   simp only [PsiCanonicity.toDonor, Orchard.Action.NoteCommit.PsiCanonicity.Gate.Spec,
-    synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0, prefixRows_ns_2,
-    prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
+    synthPieces_output, synthChecks_output, zCell,
+    prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpsiS
   -- ── the chunk-equality assembly ──
@@ -1411,7 +1400,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
   obtain ⟨hOnGd, hOnPkd, hVal64, hWin, B0, hB0⟩ := hPA
-  simp only [synth, currentRegion, circuit_norm] at hwit ⊢
+  simp only [synth, circuit_norm] at hwit ⊢
   have hWP := hwit.1
   have hWCk := hwit.2.1
   have hWGt := hwit.2.2
@@ -1441,21 +1430,19 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hWgg := hGW.2.2.2.1
   have hWgh := hGW.2.2.2.2.1
   rw [toFormal_call_witnesses] at hWgb hWgd hWgg hWgh
-  simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+  simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output,
+        circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb
   simp only [DecomposeD.bundle, synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+    prefixRows_ns_3,
     circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgd
-  simp only [DecomposeG.bundle, synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+  simp only [DecomposeG.bundle, synthPieces_output, zCell,
+    prefixRows_ns_6,
     circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgg
-  simp only [DecomposeH.bundle, synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+  simp only [DecomposeH.bundle, synthPieces_output,
+        circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
   have hwb2 := yc_lsb_witness (brWit input_var_gdY 0 1) _ _ _ place env hWy1
   have hwd1 := yc_lsb_witness (brWit input_var_pkdY 0 1) _ _ _ place env hWy2
@@ -1680,7 +1667,6 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     ⟨5, by decide⟩ hPC' (by decide)
   have hpieceG := Orchard.Action.NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨6, by decide⟩ hPC' (by decide)
-  simp only [Nat.add_assoc, Nat.reduceAdd] at hpieceA hpieceC hpieceD hpieceF hpieceG
   have haval : (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
       < 2 ^ 250 := by with_unfolding_all exact hpieceA
   have hcval : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
@@ -1820,8 +1806,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     hg1lt hz1glt
     (by have h := hMgEq; simp only [] at h; rw [h, hzgEq])
     hzg13
-  simp only [] at hMa hMb0 hMb1 hMb3 hMc hMd0 hMd2 hMe0 hMe1 hMf hMg0 hMg1 hMh0 hMh1
-  simp only [zCell, prefixRows_ns_0, prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5,
+  simp only [zCell,
     prefixRows_ns_6, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_assoc,
     Nat.reduceAdd, Nat.add_zero] at hWaP hWbP hWeP hWgP
@@ -2022,9 +2007,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, decomposeB_pa_eq, decomposeB_extract_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+           simp only [synthPieces_output, synthChecks_output,
+                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_⟩
@@ -2040,8 +2024,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, decomposeD_pa_eq, decomposeD_extract_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
@@ -2058,10 +2042,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, decomposeE_pa_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+           simp only [synthPieces_output,
+                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice,
              Nat.add_zero]
            rw [hwe, ← hwe0, ← hwe1]
            try ring)⟩
@@ -2071,10 +2054,10 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, decomposeG_pa_eq, decomposeG_extract_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, zCell,
+             prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwg0]
@@ -2087,10 +2070,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, decomposeH_pa_eq, decomposeH_extract_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+           simp only [synthPieces_output,
+                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+             Cell.of_column, Environment.get_advice,
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwh1]
@@ -2103,16 +2085,14 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwb1]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
              haval, hb0lt, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩),
        (by rw [toFormal_proverAssumptions_eq, gd_pa_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [GdCanonicity.toDonor,
@@ -2132,16 +2112,16 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (i₀ + 39) place env _ hGW.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, pkd_assumptions_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_2,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwd0]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
              hcval, hb3lt, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩),
        (by rw [toFormal_proverAssumptions_eq, pkd_pa_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_2,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
@@ -2160,17 +2140,17 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (i₀ + 40) place env _ hGW.2.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, value_assumptions_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, zCell,
+             prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨hd2lt, hz1dlt, he0lt⟩),
        (by rw [toFormal_proverAssumptions_eq, value_pa_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, zCell,
+             prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
              Nat.add_zero]
            rw [hwd2, hwe0, hzdEq]
            have hvnat : (env.get input_var_value.cell.column
@@ -2198,16 +2178,16 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (i₀ + 41) place env _ hGW.2.2.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, rho_assumptions_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_5,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwg0]; exact bit_cast_isBool _ (Orchard.Specs.bitrange_lt _ _ _),
              hfval, he1lt, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩),
        (by rw [toFormal_proverAssumptions_eq, rho_pa_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_5,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
@@ -2226,8 +2206,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       (i₀ + 42) place env _ hGW.2.2.2.2.2.2.2.2.2
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
@@ -2235,8 +2215,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
              hg1lt, hz1glt, hh0lt, hz13Gt, loG, hloG,
              by rw [← hgz0] at htelG; exact htelG⟩),
        (by rw [toFormal_proverAssumptions_eq, psi_pa_eq]
-           simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-             prefixRows_ns_2, prefixRows_ns_3, prefixRows_ns_5, prefixRows_ns_6,
+           simp only [synthPieces_output, synthChecks_output, zCell,
+             prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]

@@ -168,23 +168,21 @@ theorem composite_call_regionCount (wb1 wd1 : WitgenIR Fp 1)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-set_option linter.unusedSimpArgs false in
 theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
     Operations.regionCount ((synthPieces cfg input).operations i) = 7 := by
   simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
     Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, Circuit.operations_bind,
-    operations_assignRegion, Operations.regionCount_append, Operations.regionCount]
+    operations_assignRegion, Operations.regionCount]
 
-set_option linter.unusedSimpArgs false in
 /-- The region count of the flow: 7 piece/short regions, the 4-region commit, the
 3-region canonicity composite — 14. -/
 theorem synth_regionCount (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
     Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 14 := by
-  simp only [synth, currentRegion, circuit_norm, Circuit.operations_bind,
-    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+  simp only [synth, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append]
   rw [synthPieces_regionCount, commit_call_regionCount, composite_call_regionCount]
 
 theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
