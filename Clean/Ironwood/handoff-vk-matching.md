@@ -89,6 +89,49 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
+## NEXT ARC (Gregor-directed, 2026-07-19): CONCRETE FixedBases — no workarounds
+
+Goal: construct the six real `FixedBase`s (nullifierK, valueCommitR, spendAuthG,
+commitIvkR, noteCommitR : `Orchard.Ecc.MulFixed.FixedBase`; valueCommitV :
+`Short.FixedBase`) with all proof fields discharged, so the layout tests call the REAL
+circuits and the Action bundle instantiates at the real Orchard constants.
+
+The generation procedure (halo2_gadgets/src/ecc/chip/constants.rs):
+- window table: `W[w][k] = [(k+2)·8^w]B` for w < N−1; MSB window
+  `[k·8^(N−1) − Σ_{j<N−1} 2^(3j+1)]B` (mod q) — `compute_window_table`.
+- Lagrange coeffs: degree-7 interpolation of the x-coords over k=0..7
+  (`compute_lagrange_coeffs`); z/u: `find_zs_and_us` searches z per window with
+  `u_k² = y_k + z` and `z − y_k` a NON-square for all k.
+- The u tables and base points are Rust constants (orchard/src/constants/fixed_bases/*.rs
+  — `GENERATOR`, `U`, `Z` arrays); dump them like the Q points (byte-array parse).
+
+Proof plan, ALL kernel-checkable (no native_decide), all ingredients already in-repo:
+1. Window table in Lean by k-chains: start `(k+2)•B` (small, unary `nsmul` fine),
+   then 3 complete-addition doublings per window step (2·n•P = n•P + n•P via
+   `Point.nsmul_add_nsmul hOnCurve` — Pallas.lean:306). Generic lemma
+   `chainTable_eq : chainTable B hB w k = windowPoint B w k` by induction (ONE shared
+   proof, both 85- and 22-window and MSB variants). MSB window: compute
+   `[k·8^(N−1)]B − [sum]B` via chains + `Point.neg`; bridge the mod-q `.val` scalar with
+   `Point.nsmul_eq_zero_iff hOnCurve` (Pallas.lean:404 — prime-order curve, no
+   per-base order proof needed).
+2. `interpolate_eq` / `u_mul_u`: single bulk `decide` per base over a Bool program that
+   computes the chain table ONCE (fold) and checks all 8·N equalities (ZMod eq on Fin p
+   — GMP-fast; complete-add inversions via `ZMod.inv` = xgcd, also GMP).
+3. `z_sub_y_not_square`: Euler's criterion — the repo's OWN pattern at
+   `CompElliptic/Curves/Pasta.lean:62-65` (`five_not_isSquare`):
+   `rw [ZMod.euler_criterion CARD (by decide : c ≠ 0)]; reduce_mod_char; decide`, where
+   `reduce_mod_char` uses Mathlib `NormNum.PowMod` (fast modular pow). For bulk (680 per
+   base ×6): either generate per-window lemmas, or (faster builds) a structurally
+   recursive `powMod` + `powMod_eq_pow` bridge lemma + `euler_criterion` wrapper →
+   ONE bulk `decide` per base. (`PrattCertificate.powMod` exists but is Id.run/while —
+   not kernel-friendly; write the binary-recursive one, ~30 lines.)
+4. `point.OnCurve`: `decide` (as `merkleQ_onCurve` already does).
+Cost estimate: table ≈ 2k complete adds per base; Euler ≈ 680×255 mulmods per base —
+seconds-to-minutes kernel time per base; fixture-style slow files are accepted.
+Payoff: drop the data-level mirror from TestVkLayoutAction[Base] (call the real
+synthesize), and instantiate the proven Action bundle at the real constants — the
+end-to-end theorem about the deployed circuit.
+
 ## Queued follow-ups (after the mul arc)
 
 - **#34**: add `output` to `derive_contract_bridges`' fields so `circuit_proof_start`'s
