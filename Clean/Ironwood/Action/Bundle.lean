@@ -144,28 +144,35 @@ theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (i : RegionIndex) :
     Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
       = 394 := by
-  simp only [CircuitPreIronwood.synthesize, circuit_norm, Circuit.operations_bind,
-    Operations.regionCount_append]
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm,
+    Circuit.operations_bind, Circuit.operations_pure, Operations.regionCount_append]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
-/-- The `FormalCircuit` entry: `unit → unit`, everything through the extraction. -/
+/-- The `FormalCircuit` entry: `unit → AddressPoints` — everything through the
+extraction, outputting the witnessed old/new-note address point cells. -/
 def main (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Var unit Fp → Circuit Fp (Var unit Fp) := fun _ => do
-  let _ ← CircuitPreIronwood.synthesize G B W cfg
-  pure ()
+    Var unit Fp → Circuit Fp (Var AddressPoints Fp) := fun _ =>
+  CircuitPreIronwood.synthesize G B W cfg
 
 theorem main_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (inp : Var unit Fp) (i : RegionIndex) :
     Operations.regionCount ((main G B W cfg inp).operations i) = 394 := by
-  simp only [main, Circuit.operations_bind, Circuit.operations_pure,
-    Operations.regionCount_append, Operations.regionCount]
+  simp only [main]
   rw [synthesize_regionCount]
 
 instance elaborated (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    ElaboratedCircuit Fp unit unit (main G B W cfg) where
-  output _ _ := ()
+    ElaboratedCircuit Fp unit AddressPoints (main G B W cfg) where
+  output _ i₀ :=
+    { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
+      pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
+      gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
+      pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
   regionCount _ := 394
-  output_eq := by intro _ _; rfl
+  output_eq := by intro _ i₀; with_unfolding_all rfl
   regionCount_eq := fun input i => (main_regionCount G B W cfg input i).symm
 
 /-! ## The extracted data -/
@@ -183,6 +190,7 @@ structure ActionData where
   cmx : Fp
   enableSpend : Fp
   enableOutput : Fp
+  disableCrossAddress : Fp
   psiOld : Fp
   rhoOld : Fp
   nk : Fp
@@ -224,6 +232,7 @@ def extract (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
   cmx := env.env.get cfg.primary (CMX : ℤ)
   enableSpend := env.env.get cfg.primary (ENABLE_SPEND : ℤ)
   enableOutput := env.env.get cfg.primary (ENABLE_OUTPUT : ℤ)
+  disableCrossAddress := env.env.get cfg.primary (DISABLE_CROSS_ADDRESS : ℤ)
   psiOld := cellRead env i₀ 0 (cfg.advices 0)
   rhoOld := cellRead env (i₀ + 1) 0 (cfg.advices 0)
   nk := cellRead env (i₀ + 5) 0 (cfg.advices 0)
@@ -264,8 +273,7 @@ open Orchard.Action.NoteCommit (noteScalars)
 /-- The Orchard Action statement over the extracted data: every §4.17.4 clause, with
 the Sinsemilla escapes exhibited as data and the fixed-base scalars knowledge-sound at
 the extracted window readings. -/
-def Spec (G : Generators) (B : Bases)
-    (_ : Value unit Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
+def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   -- the witnessed points are well-formed
   wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
   wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
@@ -309,6 +317,14 @@ def Spec (G : Generators) (B : Bases)
   wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
   wit.vOld * (1 - wit.enableSpend) = 0 ∧
   wit.vNew * (1 - wit.enableOutput) = 0
+
+/-- The pre-ironwood bundle's contract: the base statement, plus the output cells
+carrying the four witnessed address points (what the ironwood cross-address stage
+consumes). -/
+def Spec (G : Generators) (B : Bases)
+    (_ : Value unit Fp) (out : Value AddressPoints Fp) (wit : ActionData) : Prop :=
+  SpecBase G B wit ∧ out.gdOld = wit.gdOld ∧ out.pkdOld = wit.pkdOld ∧
+  out.gdNew = wit.gdNew ∧ out.pkdNew = wit.pkdNew
 
 /-- The generator table holds *exactly* the `load` contents (block + default fill) —
 the completeness-side strengthening of `GeneratorTableLoaded` (the honest env is one
@@ -728,7 +744,7 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
       (Spec G B) := by
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
-  simp only [main, CircuitPreIronwood.synthesize, circuit_norm] at hc
+  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
   have hN := hc.2.2
@@ -981,10 +997,11 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
   try simp only [circuit_norm] at hEqR
   try simp only [circuit_norm] at hOrch
   -- ── assemble the statement ──
-  simp only [Spec, extract, cellRead, circuit_norm, AssignedCell.of_cell,
+  simp only [Spec, SpecBase, extract, cellRead, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_zero, Nat.add_assoc]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+    ?_, ?_, ?_, ?_⟩
   · with_unfolding_all exact hCmS
   · with_unfolding_all exact hGdS
   · with_unfolding_all exact hAkS
@@ -1088,6 +1105,15 @@ theorem soundness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     · have h := hGate.2.2.2
       rw [hOn, hOeo] at h
       linear_combination h
+  · -- output ties: the four witnessed address points
+    exact (congrArg AddressPoints.gdOld h_output).symm.trans
+      (by with_unfolding_all rfl)
+  · exact (congrArg AddressPoints.pkdOld h_output).symm.trans
+      (by with_unfolding_all rfl)
+  · exact (congrArg AddressPoints.gdNew h_output).symm.trans
+      (by with_unfolding_all rfl)
+  · exact (congrArg AddressPoints.pkdNew h_output).symm.trans
+      (by with_unfolding_all rfl)
 
 open Sinsemilla.Merkle.CalculateRoot (pathNode) in
 /-- Honest-prover preconditions: well-formed witness points, 3-bit windows for the five
@@ -1212,7 +1238,8 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
     hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hAnch, hVanch⟩,
     ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmo⟩, ⟨Bn, hBn, hCmx⟩,
     ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
-  simp only [main, CircuitPreIronwood.synthesize, circuit_norm] at hwit ⊢
+  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    circuit_norm] at hwit ⊢
   have hWw := hwit.1
   have hWc := hwit.2.1
   have hWn := hwit.2.2
@@ -1926,12 +1953,13 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
               with_unfolding_all exact hVeo
             linear_combination h
 
-/-- Rust `impl Circuit for Circuit` (`circuit.rs:271-828`) as a proof-carrying bundle:
-the e2e Orchard Action statement (§4.17.4, breaks-as-data) over the extracted
-primary-instance rows and witness data. -/
-def circuit (G : Generators) (B : Bases) (W : Witnesses) :
-    FormalCircuit Fp Unit Config unit unit where
-  name := "OrchardAction"
+/-- Rust `impl Circuit for Circuit` at `FixedPostNu6_2` (`synthesize_base`,
+`circuit.rs:271-828`) as a proof-carrying bundle: the base §4.17.4 statement
+(breaks-as-data) over the extracted primary-instance rows and witness data,
+outputting the four witnessed address points. -/
+def baseCircuit (G : Generators) (B : Bases) (W : Witnesses) :
+    FormalCircuit Fp Unit Config unit AddressPoints where
+  name := "OrchardActionBase"
   configure := fun _ => configure G
   synthesize := main G B W
   elaborated := fun cfg => elaborated G B W cfg
@@ -1944,5 +1972,318 @@ def circuit (G : Generators) (B : Bases) (W : Witnesses) :
   ProverSpec := fun _ _ _ _ => True
   soundness := soundness G B W
   completeness := completeness G B W
+
+/-! ## The ironwood (post-NU 6.3) circuit bundle
+
+The main circuit: the proven base circuit called as a subcircuit, then the
+`"post-NU 6.3 cross-address checks"` region on its output cells. -/
+
+private theorem aafi_output (instCol : Column .instance) (r : ℕ)
+    (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    ((assignAdviceFromInstance (F := Fp) instCol r col row).output self)
+      = AssignedCell.of self row col := rfl
+
+private theorem base_call_regionCount (G : Generators) (B : Bases) (W : Witnesses)
+    (cfg : Config) (inp : Var unit Fp) (j : RegionIndex) :
+    Operations.regionCount (((baseCircuit G B W).call cfg inp).operations j)
+      = 394 := by
+  rw [FormalCircuit.call_regionCount]
+  rfl
+
+private theorem base_spec_eq (G : Generators) (B : Bases) (W : Witnesses) :
+    (baseCircuit G B W).Spec = Spec G B := rfl
+
+private theorem base_assumptions_eq (G : Generators) (B : Bases) (W : Witnesses) :
+    (baseCircuit G B W).Assumptions = fun _ => True := rfl
+
+private theorem base_envAssumptions_eq (G : Generators) (B : Bases) (W : Witnesses)
+    (cfg : Config) :
+    (baseCircuit G B W).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
+
+private theorem base_pa_eq (G : Generators) (B : Bases) (W : Witnesses) :
+    (baseCircuit G B W).ProverAssumptions = ProverAssumptions G B := rfl
+
+private theorem base_extract_eq (G : Generators) (B : Bases) (W : Witnesses) :
+    (baseCircuit G B W).extract = extract := rfl
+
+private theorem base_output (G : Generators) (B : Bases) (W : Witnesses)
+    (cfg : Config) (inp : Var unit Fp) (i₀ : RegionIndex) :
+    (baseCircuit G B W).output cfg inp i₀
+      = { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
+          pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
+          gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
+          pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 348) 0
+                        cfg.eccConfig.witnessPoint.y } } := rfl
+
+/-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region. -/
+def mainPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    Var unit Fp → Circuit Fp (Var unit Fp) := fun input => do
+  let pts ← (baseCircuit G B W).call cfg input
+  synthCrossAddressChecks cfg pts
+  pure ()
+
+theorem mainPost_regionCount (G : Generators) (B : Bases) (W : Witnesses)
+    (cfg : Config) (inp : Var unit Fp) (i : RegionIndex) :
+    Operations.regionCount ((mainPost G B W cfg inp).operations i) = 395 := by
+  simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+  rw [base_call_regionCount]
+
+instance elaboratedPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    ElaboratedCircuit Fp unit unit (mainPost G B W cfg) where
+  output _ _ := ()
+  regionCount _ := 395
+  output_eq := by intro _ _; rfl
+  regionCount_eq := fun input i => (mainPost_regionCount G B W cfg input i).symm
+
+/-- The ironwood Action statement: the base §4.17.4 statement, plus the post-NU 6.3
+cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
+note's diversified address to equal the old note's. -/
+def SpecPost (G : Generators) (B : Bases)
+    (_ : Value unit Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
+  SpecBase G B wit ∧
+  (wit.disableCrossAddress ≠ 0 → wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew)
+
+/-- Honest-prover preconditions for the ironwood circuit: the base preconditions, and
+the cross-address rows hold at the honest values (the flag is off, or the addresses
+coincide). -/
+def ProverAssumptionsPost (G : Generators) (B : Bases)
+    (input : ProverValue unit Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
+  ProverAssumptions G B input wit hint ∧
+  (wit.disableCrossAddress = 0 ∨ (wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew))
+
+set_option maxRecDepth 8192 in
+theorem soundnessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    FormalCircuit.Soundness (Witness := fun _ => ActionData)
+      (mainPost G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (SpecPost G B) := by
+  circuit_proof_start
+  simp only [mainPost, circuit_norm] at hc
+  have hPre := hc.1
+  have hX := hc.2
+  clear hc
+  rw [base_call_regionCount] at hX
+  subcircuit_rw at hPre
+  have hS := hPre (by rw [base_envAssumptions_eq]; exact _hE)
+    (by rw [base_assumptions_eq]; trivial)
+  rw [base_spec_eq, base_extract_eq, base_output] at hS
+  simp only [Spec] at hS
+  obtain ⟨hSB, -, -, -, -⟩ := hS
+  -- ── the cross-address region: four `dca · (old − new) = 0` rows ──
+  rw [base_output] at hX
+  simp only [synthCrossAddressChecks, circuit_norm] at hX
+  have h0 := hX 0
+  have h1 := hX 1
+  have h2 := hX 2
+  have h3 := hX 3
+  clear hX
+  simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
+    Fin.val_zero, Fin.val_one, Nat.reduceMod, Nat.mul_one,
+    Nat.add_zero, AssignedCell.of_cell,
+    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+    Environment.get_advice] at h0 h1 h2 h3
+  obtain ⟨ha00, -, -, -, ha04, ha05, -, -, -, -, hG0⟩ := h0
+  obtain ⟨ha10, -, -, -, ha14, ha15, -, -, -, -, hG1⟩ := h1
+  obtain ⟨ha20, -, -, -, ha24, ha25, -, -, -, -, hG2⟩ := h2
+  obtain ⟨ha30, -, -, -, ha34, ha35, -, -, -, -, hG3⟩ := h3
+  simp only [orchardGate, Constraints.withSelector, circuit_norm,
+    List.Forall] at hG0 hG1 hG2 hG3
+  have e0 := hG0.2.1
+  have e1 := hG1.2.1
+  have e2 := hG2.2.1
+  have e3 := hG3.2.1
+  rw [ha00, ha04, ha05] at e0
+  rw [ha10, ha14, ha15] at e1
+  rw [ha20, ha24, ha25] at e2
+  rw [ha30, ha34, ha35] at e3
+  -- ── assemble ──
+  simp only [SpecPost]
+  refine ⟨hSB, ?_⟩
+  intro hdca
+  have hgx : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).gdOld.x
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.x :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e0)).resolve_left hdca)
+  have hgy : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).gdOld.y
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.y :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e1)).resolve_left hdca)
+  have hpx : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).pkdOld.x
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.x :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e2)).resolve_left hdca)
+  have hpy : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).pkdOld.y
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.y :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e3)).resolve_left hdca)
+  constructor
+  · apply Orchard.Point.ext_coords
+    show (_, _) = _
+    rw [hgx, hgy]
+    with_unfolding_all rfl
+  · apply Orchard.Point.ext_coords
+    show (_, _) = _
+    rw [hpx, hpy]
+    with_unfolding_all rfl
+
+set_option maxRecDepth 8192 in
+theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
+    FormalCircuit.Completeness (Witness := fun _ => ActionData)
+      (mainPost G B W cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
+  circuit_proof_start
+  obtain ⟨hPA, hDca⟩ := hPA
+  simp only [mainPost, circuit_norm] at hwit ⊢
+  obtain ⟨hWpre, hWx⟩ := hwit
+  rw [base_call_regionCount] at hWx
+  refine ⟨?_, ?_⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      (baseCircuit G B W) cfg i₀ place env _ hWpre
+      ⟨(by rw [base_envAssumptions_eq]; exact _hE),
+       (by rw [base_assumptions_eq]; trivial),
+       (by rw [base_pa_eq, base_extract_eq]; exact hPA)⟩
+  · -- the cross-address region at the honest values
+    rw [base_call_regionCount, base_output]
+    rw [base_output] at hWx
+    simp only [synthCrossAddressChecks, circuit_norm] at hWx ⊢
+    have hw0 := hWx 0
+    have hw1 := hWx 1
+    have hw2 := hWx 2
+    have hw3 := hWx 3
+    clear hWx
+    simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
+      Fin.val_zero, Nat.mul_one, Nat.add_zero,
+      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+      Cell.of_column, Environment.get_advice] at hw0 hw1 hw2 hw3
+    -- the four honest `dca · (old − new) = 0` products
+    have hdx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 3) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 347) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨hg, -⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by with_unfolding_all exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.x
+              ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 347) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Orchard.Point.x hg]
+        ring
+    have hdy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 3) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 347) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨hg, -⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by with_unfolding_all exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.y
+              ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 347) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Orchard.Point.y hg]
+        ring
+    have hpx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 301) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 348) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨-, hp⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by with_unfolding_all exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.x
+              ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 348) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Orchard.Point.x hp]
+        ring
+    have hpy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 301) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 348) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨-, hp⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by with_unfolding_all exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.y
+              ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 348) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Orchard.Point.y hp]
+        ring
+    intro i
+    fin_cases i
+    all_goals simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
+      Nat.mul_one, Nat.add_zero,
+      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+      Cell.of_column, Environment.get_advice]
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hdx
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw1
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hdy
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw2
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hpx
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw3
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hpy
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+
+/-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
+proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
+binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
+def circuit (G : Generators) (B : Bases) (W : Witnesses) :
+    FormalCircuit Fp Unit Config unit unit where
+  name := "OrchardAction"
+  configure := fun _ => configure G
+  synthesize := mainPost G B W
+  elaborated := fun cfg => elaboratedPost G B W cfg
+  Witness := fun _ => ActionData
+  extract := extract
+  EnvAssumptions := EnvAssumptions G
+  Assumptions := fun _ => True
+  Spec := SpecPost G B
+  ProverAssumptions := ProverAssumptionsPost G B
+  ProverSpec := fun _ _ _ _ => True
+  soundness := soundnessPost G B W
+  completeness := completenessPost G B W
 
 end Halo2.Ironwood.Action.Circuit

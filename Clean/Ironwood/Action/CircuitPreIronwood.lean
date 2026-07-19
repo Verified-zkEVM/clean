@@ -18,11 +18,10 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Halo2.Ironwood.Action.Circuit
 
 /-- Rust `Circuit::synthesize` at `FixedPostNu6_2` (= `synthesize_base`,
-`circuit.rs:461-828`), in exact region-creation order. -/
+`circuit.rs:461-828`), in exact region-creation order, returning the witnessed
+old/new-note address points (the Rust `AddressPoints`). -/
 def synthesize (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
-    Circuit Fp NoteCells := do
-  let wc ← synthWitness G W cfg
-  let cc ← synthChecks G B W cfg wc
-  synthNotes G B W cfg wc cc
+    Circuit Fp (Var AddressPoints Fp) :=
+  synthesizeBase G B W cfg
 
 end Halo2.Ironwood.Action.CircuitPreIronwood
