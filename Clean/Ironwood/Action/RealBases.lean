@@ -72,14 +72,14 @@ def orchardBases : Circuit.Bases where
 instantiated at the real deployed constants — the certified fixed bases, the `Q`
 points, and the kernel-verified Sinsemilla generator table.
 
-The remaining parameter `W` is the honest prover's witness-generation programs and
-matters ONLY for completeness. Soundness is knowledge soundness at the constructive
-extractor: for ANY assignment satisfying the constraints, the `ActionData` read off
-the cells satisfies the §4.17.4 spec — `extract`/`Spec`/`EnvAssumptions` never mention
-`W`, and the constraint set is the same for every `W` (witness IR is invisible to
-`Constraints`). Verifier-side consumers may instantiate `W` arbitrarily. -/
-def orchardActionCircuit (W : Circuit.Witnesses) :
-    FormalCircuit Halo2.Ironwood.Fp Unit Circuit.Config unit unit :=
-  Circuit.circuit Orchard.Specs.Sinsemilla.orchardGenerators orchardBases W
+The prover's witness programs are the circuit INPUT (hint-typed `ProverParams`, so
+the verifier erases them): soundness is knowledge soundness at the constructive
+extractor — for ANY assignment satisfying the constraints, the `ActionData` read off
+the cells satisfies the §4.17.4 spec — and the input matters only for completeness
+(the honest prover running those programs satisfies the constraints). -/
+def orchardActionCircuit :
+    FormalCircuit Halo2.Ironwood.Fp Unit Circuit.Config
+      (ProverParams Circuit.Witnesses) unit :=
+  Circuit.circuit Orchard.Specs.Sinsemilla.orchardGenerators orchardBases
 
 end Halo2.Ironwood.Action

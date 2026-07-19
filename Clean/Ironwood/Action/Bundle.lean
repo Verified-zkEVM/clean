@@ -1953,11 +1953,9 @@ theorem completeness (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config)
               with_unfolding_all exact hVeo
             linear_combination h
 
-/-- Rust `impl Circuit for Circuit` at `FixedPostNu6_2` (`synthesize_base`,
-`circuit.rs:271-828`) as a proof-carrying bundle: the base §4.17.4 statement
-(breaks-as-data) over the extracted primary-instance rows and witness data,
-outputting the four witnessed address points. -/
-def baseCircuit (G : Generators) (B : Bases) (W : Witnesses) :
+/-- The pre-ironwood bundle at a fixed witness-program block (the internal engine;
+the exported `baseCircuit` takes `W` as the circuit input). -/
+def baseCircuitP (G : Generators) (B : Bases) (W : Witnesses) :
     FormalCircuit Fp Unit Config unit AddressPoints where
   name := "OrchardActionBase"
   configure := fun _ => configure G
@@ -1985,30 +1983,30 @@ private theorem aafi_output (instCol : Column .instance) (r : ℕ)
 
 private theorem base_call_regionCount (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (inp : Var unit Fp) (j : RegionIndex) :
-    Operations.regionCount (((baseCircuit G B W).call cfg inp).operations j)
+    Operations.regionCount (((baseCircuitP G B W).call cfg inp).operations j)
       = 394 := by
   rw [FormalCircuit.call_regionCount]
   rfl
 
 private theorem base_spec_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).Spec = Spec G B := rfl
+    (baseCircuitP G B W).Spec = Spec G B := rfl
 
 private theorem base_assumptions_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).Assumptions = fun _ => True := rfl
+    (baseCircuitP G B W).Assumptions = fun _ => True := rfl
 
 private theorem base_envAssumptions_eq (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) :
-    (baseCircuit G B W).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
+    (baseCircuitP G B W).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
 
 private theorem base_pa_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).ProverAssumptions = ProverAssumptions G B := rfl
+    (baseCircuitP G B W).ProverAssumptions = ProverAssumptions G B := rfl
 
 private theorem base_extract_eq (G : Generators) (B : Bases) (W : Witnesses) :
-    (baseCircuit G B W).extract = extract := rfl
+    (baseCircuitP G B W).extract = extract := rfl
 
 private theorem base_output (G : Generators) (B : Bases) (W : Witnesses)
     (cfg : Config) (inp : Var unit Fp) (i₀ : RegionIndex) :
-    (baseCircuit G B W).output cfg inp i₀
+    (baseCircuitP G B W).output cfg inp i₀
       = { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                      y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
           pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
@@ -2022,7 +2020,7 @@ private theorem base_output (G : Generators) (B : Bases) (W : Witnesses)
 /-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region. -/
 def mainPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Config) :
     Var unit Fp → Circuit Fp (Var unit Fp) := fun input => do
-  let pts ← (baseCircuit G B W).call cfg input
+  let pts ← (baseCircuitP G B W).call cfg input
   synthCrossAddressChecks cfg pts
   pure ()
 
@@ -2142,7 +2140,7 @@ theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Con
   rw [base_call_regionCount] at hWx
   refine ⟨?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (baseCircuit G B W) cfg i₀ place env _ hWpre
+      (baseCircuitP G B W) cfg i₀ place env _ hWpre
       ⟨(by rw [base_envAssumptions_eq]; exact _hE),
        (by rw [base_assumptions_eq]; trivial),
        (by rw [base_pa_eq, base_extract_eq]; exact hPA)⟩
@@ -2267,23 +2265,72 @@ theorem completenessPost (G : Generators) (B : Bases) (W : Witnesses) (cfg : Con
       · rw [w7, w1]
         ring
 
-/-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
-proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
-binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
-def circuit (G : Generators) (B : Bases) (W : Witnesses) :
-    FormalCircuit Fp Unit Config unit unit where
-  name := "OrchardAction"
+/-! ## The exported bundles: witness programs as the circuit INPUT
+
+Clean/Orchard style: the private data enters through the circuit input (hint-typed
+via `ProverParams` — the verifier erases it, the prover supplies it), not as a
+definition-level parameter. Soundness is knowledge soundness at the extractor and is
+`W`-independent; the internal `∀ W` theorems above are the engine. -/
+
+/-- Rust `impl Circuit for Circuit` at `FixedPostNu6_2` (`synthesize_base`) as a
+proof-carrying bundle, the witness programs as input: the base §4.17.4 statement
+(breaks-as-data) over the extracted primary-instance rows and witness data,
+outputting the four witnessed address points. -/
+def baseCircuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config (ProverParams Witnesses) AddressPoints where
+  name := "OrchardActionBase"
   configure := fun _ => configure G
-  synthesize := mainPost G B W
-  elaborated := fun cfg => elaboratedPost G B W cfg
+  synthesize := fun cfg W => CircuitPreIronwood.synthesize G B W cfg
+  elaborated := fun cfg =>
+    { output := fun _ i₀ =>
+        { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
+          pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
+          gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
+          pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 348) 0
+                        cfg.eccConfig.witnessPoint.y } },
+      regionCount := fun _ => 394,
+      output_eq := by intro _ i₀; with_unfolding_all rfl,
+      regionCount_eq := fun W i => (synthesize_regionCount G B W cfg i).symm }
   Witness := fun _ => ActionData
-  extract := extract
+  extract := fun cfg _ i₀ env => extract cfg () i₀ env
   EnvAssumptions := EnvAssumptions G
   Assumptions := fun _ => True
-  Spec := SpecPost G B
-  ProverAssumptions := ProverAssumptionsPost G B
+  Spec := fun _ => Spec G B ()
+  ProverAssumptions := fun _ => ProverAssumptions G B ()
   ProverSpec := fun _ _ _ _ => True
-  soundness := soundnessPost G B W
-  completeness := completenessPost G B W
+  soundness := fun cfg i₀ env W hE _ hc =>
+    soundness G B W cfg i₀ env () hE trivial hc
+  completeness := fun cfg i₀ env W hwit hE _ hPA =>
+    completeness G B W cfg i₀ env () hwit hE trivial hPA
+
+/-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
+proof-carrying bundle, the witness programs as input: the e2e Orchard Action
+statement (§4.17.4 + cross-address binding, breaks-as-data) over the extracted
+primary-instance rows and witness data. -/
+def circuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config (ProverParams Witnesses) unit where
+  name := "OrchardAction"
+  configure := fun _ => configure G
+  synthesize := fun cfg W => mainPost G B W cfg ()
+  elaborated := fun cfg =>
+    { output := fun _ _ => (),
+      regionCount := fun _ => 395,
+      output_eq := by intro _ _; rfl,
+      regionCount_eq := fun W i => (mainPost_regionCount G B W cfg () i).symm }
+  Witness := fun _ => ActionData
+  extract := fun cfg _ i₀ env => extract cfg () i₀ env
+  EnvAssumptions := EnvAssumptions G
+  Assumptions := fun _ => True
+  Spec := fun _ => SpecPost G B ()
+  ProverAssumptions := fun _ => ProverAssumptionsPost G B ()
+  ProverSpec := fun _ _ _ _ => True
+  soundness := fun cfg i₀ env W hE _ hc =>
+    soundnessPost G B W cfg i₀ env () hE trivial hc
+  completeness := fun cfg i₀ env W hwit hE _ hPA =>
+    completenessPost G B W cfg i₀ env () hwit hE trivial hPA
 
 end Halo2.Ironwood.Action.Circuit
