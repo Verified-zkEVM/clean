@@ -305,7 +305,7 @@ def mainRegion (cfg : Config) (input : Var Inputs Fp) :
   --    (Rust `assign_advice_from_constant`). The hi half copies this same cell into its own `z`
   --    at `offHi` — the "assign the same value to the same cell twice" no-op (mul.rs:198-200).
   let zInit ← assignAdvice cfg.hiConfig.z offHi
-    (.native fun _ => #v[(0 : Fp)])
+    (.ofFExpr (.const 0))
   constrainConstant zInit 0
   -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0  (mul.rs:209-216)
   let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
@@ -320,20 +320,21 @@ def mainRegion (cfg : Config) (input : Var Inputs Fp) :
   -- 6. the LSB step k_0 = kBits alpha 254, derived from the scalar cell
   --    (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
-  -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row
+  -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row (the bit condition is
+  -- the LSB's reading program on the scalar cell, `MulComplete.kBitWindowExpr` at 254)
   let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
-    (.native fun env => #v[2 * readCell env z1
-      + (if kBitsWindow (readCell env input.alpha) 254 0 then 1 else 0)])
+    (.ofFExpr (.add (.mul (.const 2) (.expr z1))
+      (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0) (.const 1) (.const 0))))
   -- copy base_x, base_y into the LSB gate window (next row)
   let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
   let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
   -- the correction point (base_x, ±base_y) or identity, witnessed on add.xP/add.yP (cur row)
   let corrX ← assignAdvice cfg.addConfig.xP offLsb
-    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
-      else readCell env input.base.x])
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (.expr input.base.x)))
   let corrY ← assignAdvice cfg.addConfig.yP offLsb
-    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
-      else -(readCell env input.base.y)])
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (Witgen.FExprOver.neg (.expr input.base.y))))
   -- the q_mul_lsb gate at the LSB base row
   (lsbGate cfg).enable offLsb
   -- the final complete addition: result = corr + acc
@@ -765,6 +766,16 @@ private theorem hiInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
 private theorem fexpr_expr_eval_prover (env : Placed ProverEnvironment Fp)
     (c : AssignedCell Fp) :
     Witgen.FExprOver.eval { env := env } (.expr c : FExpr Fp) = eval env c := by
+  with_unfolding_all rfl
+
+/-- The LSB bit program's prover value: `kBitsWindow` of the scalar cell's value. -/
+private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
+    (c : AssignedCell Fp) (w i : ℕ) :
+    Witgen.BExprOver.eval { env := env } (MulComplete.kBitWindowExpr (.expr c) w i)
+      = kBitsWindow (readCell env c) w i := by
+  have h := congrFun (MulComplete.ebitsVal_kBitWindowExpr (.expr c) w env) i
+  simp only [MulComplete.ebitsVal] at h
+  rw [h]
   with_unfolding_all rfl
 
 /-- Prover-side componentwise eval of `MulComplete.Inputs` (the scalar slot holds the
@@ -1527,7 +1538,7 @@ def mul :
     -- ── z_init honest value (the witness) ──
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval] at hWZi
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval] at hWZi
     -- ── init add: verifier Spec (acc = base + base = [2]base) via h_spec_0 ──
     have hSpecInit := (h_spec_0 trivial
       (by
@@ -1740,8 +1751,9 @@ def mul :
     simp only [← h_gen_out_3] at hWZ0
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell,
-      complete_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval,
+      kBitWindowExpr_expr_eval, readCell,
+      complete_output_eq, Vector.getElem_ofFn] at hWZ0
     -- the LSB bit landing: rewrite the closure's scalar-cell read to `input_alpha`, then the
     -- derived bit to `bits 254`
     have haevalv : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha
@@ -1766,7 +1778,9 @@ def mul :
     -- ── the honest correction-point cells ──
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell, AssignedCell.eval] at hWCx hWCy
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval,
+      Witgen.FExprOver.neg, kBitWindowExpr_expr_eval, neg_one_mul, readCell,
+      AssignedCell.eval] at hWCx hWCy
     simp only [hIalpha, hlsb0] at hWCx hWCy
     have hCxv : env.env.toEnvironment.advice cfg.addConfig.xP
         ((env.place i₀ + (offLsb) : ℕ) : ℤ)
