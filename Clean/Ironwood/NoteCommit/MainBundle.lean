@@ -953,7 +953,8 @@ private theorem synth_output_eq_commit_output
                 AssignedCell.of (i + 7 + 2) 0 cfg.hashConfig.witnessPieces,
                 AssignedCell.of (i + 8 + 2) 0 cfg.hashConfig.witnessPieces,
                 AssignedCell.of (i + 10 + 2) 0 cfg.hashConfig.witnessPieces,
-                AssignedCell.of (i + 12 + 2) 0 cfg.hashConfig.witnessPieces] }
+                AssignedCell.of (i + 12 + 2) 0 cfg.hashConfig.witnessPieces],
+            r := input.rcm }
           (i + 15 + 5 + 5) := by
   -- kernel-light shape: the output walk to the folded `synthChecks` stage is pure defeq
   -- (the opaque calls inside `synthPieces`/`synthGates` are beta-discarded by the

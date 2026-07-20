@@ -440,7 +440,8 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
   -- three call boundaries.
   show (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }).nextRegionIndex
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+          r := input.rcm }).nextRegionIndex
       (((YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
           (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }).nextRegionIndex
         (((YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
