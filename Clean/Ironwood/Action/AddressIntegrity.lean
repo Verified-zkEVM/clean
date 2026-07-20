@@ -132,18 +132,18 @@ def circuit : FormalCircuit Fp
     refine ⟨hP, ?_⟩
     -- the copy constraints pin the output to the derived point, componentwise
     have hox : output_x
-        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
+        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
             : Value Point Fp).x :=
       (congrArg Halo2.Ironwood.Point.x h_output).symm.trans
         ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
-            x_gen_out_1 : Value Point Fp).x = _).trans
+            x_gen_out_0 : Value Point Fp).x = _).trans
           (hCEx.symm.trans (by with_unfolding_all rfl)))
     have hoy : output_y
-        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
+        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
             : Value Point Fp).y :=
       (congrArg Halo2.Ironwood.Point.y h_output).symm.trans
         ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
-            x_gen_out_1 : Value Point Fp).y = _).trans
+            x_gen_out_0 : Value Point Fp).y = _).trans
           (hCEy.symm.trans (by with_unfolding_all rfl)))
     rw [← hM, hox, hoy]
 
@@ -167,8 +167,7 @@ def circuit : FormalCircuit Fp
       exact hPA.1)).2
     rw [Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq, hPkdE] at hPS
     -- land the child's output on its concrete cells
-    rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
-      Ecc.Mul.mul_call_regionCount] at hPS
+    rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output] at hPS
     refine ⟨⟨by rw [Ecc.Mul.mul_envAssumptions_eq]; exact _hE,
       by rw [Ecc.Mul.mul_assumptions_eq]; exact hA,
       by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hA⟩,
@@ -176,8 +175,7 @@ def circuit : FormalCircuit Fp
     · rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
       exact hPA.1
     · -- the x-coordinate copy constraint in the honest environment
-      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
-        Ecc.Mul.mul_call_regionCount]
+      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
       exact ((by with_unfolding_all rfl :
           env.get x_gen_out_0.x.cell.column
             ((place x_gen_out_0.x.cell.regionIndex
@@ -189,8 +187,7 @@ def circuit : FormalCircuit Fp
             ((congrArg Halo2.Ironwood.Point.x hPS.symm).trans
               (by with_unfolding_all rfl)))))
     · -- the y-coordinate copy constraint in the honest environment
-      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
-        Ecc.Mul.mul_call_regionCount]
+      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
       exact ((by with_unfolding_all rfl :
           env.get x_gen_out_0.y.cell.column
             ((place x_gen_out_0.y.cell.regionIndex

@@ -214,8 +214,7 @@ def commit (G : Generators) (ns : List ℕ)
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
     -- the hash child's contract
     have hHashS := hHash (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE) trivial
-    rw [HashToPoint.hashCircuit_spec_eq,
-      Ecc.MulFixed.FullWidth.circuit_call_regionCount R cfg.1 input_var.r i₀] at hHashS
+    rw [HashToPoint.hashCircuit_spec_eq] at hHashS
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
     -- input eval landing: hPC is in the componentwise normal form; bridge to the
     -- whole-struct `h_input` by unfolding defeq

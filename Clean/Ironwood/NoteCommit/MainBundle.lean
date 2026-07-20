@@ -167,9 +167,6 @@ private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
           z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
   simp only [synthGates, circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output] at h
-  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
   exact h
 
 /-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
@@ -330,9 +327,6 @@ private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
     Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀ := by
   simp only [synthGates, circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output]
-  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount]
   exact h
 
 private theorem rangeCheckAt_extract_cells (n : ℕ) (cfg : LookupRangeCheck.Config 10)
@@ -416,7 +410,6 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
     Constraints place env
       ((synthChecks G R Q hQ cfg input pcs iHash).operations i₀) i₀ := by
   simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm]
-  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount]
   simp only [Nat.add_assoc, Nat.reduceAdd]
   exact h
 
@@ -499,9 +492,6 @@ private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
           z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
   simp only [synthGates, circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output] at h
-  rw [toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount,
-    toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount] at h
   exact h
 
 /-- The `lsb` cell witnessed inside a y-canonicity flow's gate region reads the
@@ -720,7 +710,6 @@ theorem soundness (G : Generators) (R : FixedBase)
     LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
     circuit_norm] at hCk
   simp only [Operations.regionCount] at hCk
-  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount] at hCk
 
   -- ── stage 1: the seven sub-piece short checks ──
   have hSb0 := hP.1
@@ -1161,7 +1150,6 @@ theorem completeness (G : Generators) (R : FixedBase)
     LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
     circuit_norm, readCell] at hWCk
   simp only [Operations.regionCount] at hWCk
-  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
   -- ── prover-side MessageCellFacts at the read cells ──
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input

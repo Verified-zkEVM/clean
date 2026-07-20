@@ -115,8 +115,6 @@ theorem synthWitness_regionCount (G : Generators) (W : Witnesses Fp) (cfg : Conf
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
     Circuit.operations_bind, Circuit.operations_pure, operations_assignRegion,
     operations_loadTable, Operations.regionCount_append, Operations.regionCount]
-  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
 
 theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
@@ -124,9 +122,6 @@ theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
   simp only [synthChecks, loadPrivate, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
     Operations.regionCount_append, Operations.regionCount]
-  rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, ValueCommit.circuit_call_regionCount,
-    DeriveNullifier.circuit_call_regionCount, SpendAuthority.circuit_call_regionCount, CommitIvk.Main.circuit_call_regionCount,
-    AddressIntegrity.circuit_call_regionCount]
 
 theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
@@ -134,8 +129,6 @@ theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
   simp only [synthNotes, loadPrivate, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
     Operations.regionCount_append, Operations.regionCount]
-  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount, NoteCommit.Main.circuit_call_regionCount]
 
 /-- The Action circuit's region count: the 8 witness regions, the 295-region check
 stage, the 91-region note stage — 394. -/
@@ -561,12 +554,10 @@ private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
 theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     (synthWitness G W cfg).nextRegionIndex i = i + 8 := by
-  simp only [synthWitness, Sinsemilla.load, loadPrivate,
+  simp only [synthWitness, Sinsemilla.load, loadPrivate, circuit_norm,
     Circuit.nextRegionIndex_bind, Circuit.nextRegionIndex_pure,
     nextRegionIndex_loadTable, nextRegionIndex_assignRegion,
     FormalCircuit.nextRegionIndex_call']
-  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
 
 theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
@@ -729,8 +720,6 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hGd := hW.2.2.2.2.2.2.2.1
   have hAk := hW.2.2.2.2.2.2.2.2
   clear hW
-  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount] at hGd hAk
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hAk
   simp only [Nat.add_assoc, Nat.reduceAdd] at hGd hAk
   subcircuit_rw at hCm
   subcircuit_rw at hGd
@@ -765,82 +754,16 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hCI := hCk.2.2.2.2.2.2.2.2.2.2.1
   have hAI := hCk.2.2.2.2.2.2.2.2.2.2.2
   clear hCk
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hM2
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hM2
-  try rw [ValueCommit.circuit_call_regionCount] at hM2
-  try rw [DeriveNullifier.circuit_call_regionCount] at hM2
-  try rw [SpendAuthority.circuit_call_regionCount] at hM2
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hM2
   try simp only [Nat.add_assoc] at hM2
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hVC
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hVC
-  try rw [ValueCommit.circuit_call_regionCount] at hVC
-  try rw [DeriveNullifier.circuit_call_regionCount] at hVC
-  try rw [SpendAuthority.circuit_call_regionCount] at hVC
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hVC
   try simp only [Nat.add_assoc] at hVC
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvx
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvx
-  try rw [ValueCommit.circuit_call_regionCount] at hIcvx
-  try rw [DeriveNullifier.circuit_call_regionCount] at hIcvx
-  try rw [SpendAuthority.circuit_call_regionCount] at hIcvx
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hIcvx
   try simp only [Nat.add_assoc] at hIcvx
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvy
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvy
-  try rw [ValueCommit.circuit_call_regionCount] at hIcvy
-  try rw [DeriveNullifier.circuit_call_regionCount] at hIcvy
-  try rw [SpendAuthority.circuit_call_regionCount] at hIcvy
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hIcvy
   try simp only [Nat.add_assoc] at hIcvy
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hDN
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hDN
-  try rw [ValueCommit.circuit_call_regionCount] at hDN
-  try rw [DeriveNullifier.circuit_call_regionCount] at hDN
-  try rw [SpendAuthority.circuit_call_regionCount] at hDN
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hDN
   try simp only [Nat.add_assoc] at hDN
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hInf
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hInf
-  try rw [ValueCommit.circuit_call_regionCount] at hInf
-  try rw [DeriveNullifier.circuit_call_regionCount] at hInf
-  try rw [SpendAuthority.circuit_call_regionCount] at hInf
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hInf
   try simp only [Nat.add_assoc] at hInf
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hSA
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hSA
-  try rw [ValueCommit.circuit_call_regionCount] at hSA
-  try rw [DeriveNullifier.circuit_call_regionCount] at hSA
-  try rw [SpendAuthority.circuit_call_regionCount] at hSA
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hSA
   try simp only [Nat.add_assoc] at hSA
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrkx
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrkx
-  try rw [ValueCommit.circuit_call_regionCount] at hIrkx
-  try rw [DeriveNullifier.circuit_call_regionCount] at hIrkx
-  try rw [SpendAuthority.circuit_call_regionCount] at hIrkx
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hIrkx
   try simp only [Nat.add_assoc] at hIrkx
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrky
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrky
-  try rw [ValueCommit.circuit_call_regionCount] at hIrky
-  try rw [DeriveNullifier.circuit_call_regionCount] at hIrky
-  try rw [SpendAuthority.circuit_call_regionCount] at hIrky
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hIrky
   try simp only [Nat.add_assoc] at hIrky
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hCI
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hCI
-  try rw [ValueCommit.circuit_call_regionCount] at hCI
-  try rw [DeriveNullifier.circuit_call_regionCount] at hCI
-  try rw [SpendAuthority.circuit_call_regionCount] at hCI
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hCI
   try simp only [Nat.add_assoc] at hCI
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hAI
-  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hAI
-  try rw [ValueCommit.circuit_call_regionCount] at hAI
-  try rw [DeriveNullifier.circuit_call_regionCount] at hAI
-  try rw [SpendAuthority.circuit_call_regionCount] at hAI
-  try rw [CommitIvk.Main.circuit_call_regionCount] at hAI
   try simp only [Nat.add_assoc] at hAI
   subcircuit_rw at hM1
   subcircuit_rw at hM2
@@ -897,34 +820,10 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hIcmx := hN.2.2.2.2.2.1
   have hOrch := hN.2.2.2.2.2.2
   clear hN
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hEqR
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hEqR
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hEqR
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hEqR
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hGdN
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hGdN
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hGdN
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hGdN
   try simp only [Nat.add_assoc] at hGdN
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hPkN
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hPkN
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hPkN
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hPkN
   try simp only [Nat.add_assoc] at hPkN
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hNCn
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hNCn
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hNCn
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hNCn
   try simp only [Nat.add_assoc] at hNCn
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hIcmx
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hIcmx
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hIcmx
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hIcmx
   try simp only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] at hIcmx
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hOrch
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hOrch
-  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hOrch
-  try rw [NoteCommit.Main.circuit_call_regionCount] at hOrch
   try simp only [nextRegionIndex_constrainInstance, circuit_norm, Nat.add_assoc,
     Nat.reduceAdd] at hOrch
   rw [wpointNonId_output] at hNCn
@@ -1172,8 +1071,6 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
   simp only [Sinsemilla.load, circuit_norm] at hT
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
     Nat.add_assoc, Nat.reduceAdd]
-  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
-  simp only [Nat.reduceAdd]
   exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
     h1, h2, h3⟩
 
@@ -1210,8 +1107,6 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   -- ── stage A witnesses: the shared cells are the programs' honest values ──
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hWw
   obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
-  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount] at hWgd hWak
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWak
   simp only [Nat.add_assoc, Nat.reduceAdd] at hWgd hWak
   refine ⟨buildWitness G ⟨input_var_psiOld, input_var_rhoOld, input_var_nk, input_var_vOld,
       input_var_vNew, input_var_psiNew, input_var_magnitude, input_var_sign,
@@ -1252,13 +1147,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       synthWitness_regionCount, Nat.add_assoc] at hWc hWn
     simp only [synthChecks, loadPrivate, circuit_norm] at hWc
     obtain ⟨hWm1, hWm2, hwMag, hwSign, hWvc, hWdn, hWsa, hWci, hWai⟩ := hWc
-    -- offset-normalize the stage-B witness chunks
-    rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hWm2 hWvc hWdn hWsa hWci hWai
-    rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hWvc hWdn hWsa hWci hWai
-    rw [ValueCommit.circuit_call_regionCount] at hWdn hWsa hWci hWai
-    rw [DeriveNullifier.circuit_call_regionCount] at hWsa hWci hWai
-    rw [SpendAuthority.circuit_call_regionCount] at hWci hWai
-    rw [CommitIvk.Main.circuit_call_regionCount] at hWai
+    -- offsets are already folded (`circuit_norm` region-count bridges)
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWm2 hWvc hWdn hWsa hWci hWai
     -- ── the fold contracts: honest mid/root landings ──
     have hM1der := Halo2.SubcircuitRw.layouter_completeness_derived
@@ -1449,10 +1338,6 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
     simp only [synthNotes, loadPrivate, circuit_norm] at hWn
     obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
-    rw [NoteCommit.Main.circuit_call_regionCount] at hWgdn hWpkn hWncn hWorch
-    rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWpkn hWncn hWorch
-    rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWncn hWorch
-    rw [NoteCommit.Main.circuit_call_regionCount] at hWorch
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
     have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
       (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1657,10 +1542,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
     refine ⟨?_, ?_⟩
-    · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc]
-      rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, ValueCommit.circuit_call_regionCount,
-        DeriveNullifier.circuit_call_regionCount, SpendAuthority.circuit_call_regionCount, CommitIvk.Main.circuit_call_regionCount]
-      simp only [Nat.reduceAdd]
+    · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc, Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           _ _ (i₀ + 8) place env _ hWm1
@@ -1783,10 +1665,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                · have h := hPkd
                  rw [← hIvkVal] at h
                  with_unfolding_all exact h)⟩
-    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc]
-      rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-        Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount, NoteCommit.Main.circuit_call_regionCount]
-      simp only [Nat.reduceAdd]
+    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc, Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1967,7 +1846,6 @@ theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
     Operations.regionCount ((mainPost G B cfg W).operations i) = 395 := by
   simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
-  rw [base_call_regionCount]
 
 instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
     ElaboratedCircuit Fp PrivateInputs unit (mainPost G B cfg) where
@@ -2013,7 +1891,6 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   have hPre := hc.1
   have hX := hc.2
   clear hc
-  rw [base_call_regionCount] at hX
   subcircuit_rw at hPre
   have hS := hPre (by rw [base_envAssumptions_eq]; exact _hE)
     (by rw [base_assumptions_eq]; trivial)
@@ -2085,7 +1962,6 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
   obtain ⟨hPA, hDca⟩ := hPA
   simp only [mainPost, circuit_norm] at hwit ⊢
   obtain ⟨hWpre, hWx⟩ := hwit
-  rw [base_call_regionCount] at hWx
   refine ⟨?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (baseCircuit G B) cfg i₀ place env _ hWpre
@@ -2093,7 +1969,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
        (by rw [base_assumptions_eq]; trivial),
        (by rw [base_proverAssumptions_eq, base_extract_eq]; exact hPA)⟩
   · -- the cross-address region at the honest values
-    rw [base_call_regionCount, base_output]
+    rw [base_output]
     rw [base_output] at hWx
     simp only [synthCrossAddressChecks, circuit_norm] at hWx ⊢
     have hw0 := hWx 0

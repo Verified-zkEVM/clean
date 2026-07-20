@@ -139,7 +139,6 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
       rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _)
     rw [Ecc.Add.toFormal_spec_eq] at hAddS
-    rw [Ecc.MulFixed.Short.circuit_call_regionCount] at hBl
     refine ⟨m, hm_lt, hmag, ?_⟩
     rcases hcases with ⟨hsign, hC⟩ | ⟨hsign, hC⟩
     · exact Or.inl ⟨hsign, by rw [hAddS.2, hC, hBl]⟩

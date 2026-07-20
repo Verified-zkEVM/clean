@@ -203,8 +203,6 @@ theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
   simp only [synth, LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
     LookupRangeCheck.witnessCheckDecomposed, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 set_option maxRecDepth 4096 in
 /-- Rust `y_canonicity` (`note_commit.rs:1962-2032`). Output is the witnessed `lsb` cell;

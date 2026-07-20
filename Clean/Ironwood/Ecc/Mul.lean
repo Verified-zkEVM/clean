@@ -803,15 +803,6 @@ private theorem synthesize_regionCount (cfg : Config)
     Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
   simp only [synthesize, circuit_norm, operations_assignRegion,
     Operations.regionCount]
-  -- the MulOverflow layouter child contributes 3 regions (its three sibling regions)
-  rw [show ∀ (j : RegionIndex), Operations.regionCount
-      (((MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
-        ⟨input.alpha, (mainRegion cfg input).output i |>.2.1,
-          (mainRegion cfg input).output i |>.2.2.1,
-          (mainRegion cfg input).output i |>.2.2.2⟩).operations j) = 3
-    from fun j => by
-      rw [FormalCircuit.call_operations]
-      exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
 -- The main region's composed do-block is one nested-bind term ~5 children deep; naive `.output`
 -- reduction can explode the unifier at the complete-phase/final-add value-bookkeeping sites. Both

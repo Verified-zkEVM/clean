@@ -106,8 +106,6 @@ theorem synth_regionCount (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config)
     Operations.regionCount ((synth wb1 wd1 gcfg lcfg input).operations i) = 3 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 private theorem gateChild_extract_cells (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
     (inp : Var Halo2.Ironwood.CommitIvk.Inputs Fp) (i : RegionIndex)

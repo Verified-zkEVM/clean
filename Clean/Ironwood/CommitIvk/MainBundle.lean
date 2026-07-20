@@ -152,7 +152,6 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   -- ── the commitment ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc] at hCm hCan
-  rw [Sinsemilla.CommitDomain.commit_call_regionCount] at hCan
   simp only [Nat.reduceAdd] at hCan
   subcircuit_rw at hCm
   have hCmS := hCm
@@ -543,7 +542,6 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [Nat.add_assoc, Nat.reduceAdd] at hwa hwb0 hwb2 hwb hwc hwd0 hwd
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc] at hWcm hWCan
-  rw [Sinsemilla.CommitDomain.commit_call_regionCount] at hWCan
   simp only [Nat.reduceAdd] at hWCan
   obtain ⟨hiak, hink, -⟩ := h_input
   -- ── honest piece facts ──
@@ -635,7 +633,6 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   -- ── assemble ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc]
-  rw [Sinsemilla.CommitDomain.commit_call_regionCount]
   simp only [Nat.reduceAdd]
   refine ⟨buildPieces cfg input_var_ak input_var_nk i₀ place _ ⟨?_, ?_, ?_⟩, ?_, ?_⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf

@@ -96,8 +96,6 @@ theorem synth_regionCount (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.
     Operations.regionCount ((synth gcfg lcfg input).operations i) = 2 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 /-- Rust `gd_x_canonicity` (`note_commit.rs`): `witness_check(a', 13)` then the
 `"NoteCommit input g_d"` gate region. `Spec` is the donor composite payoff:
@@ -254,8 +252,6 @@ theorem synth_regionCount (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck
     Operations.regionCount ((synth gcfg lcfg input).operations i) = 2 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 def circuit :
     FormalCircuit Fp (PkdCanonicity.Config × LookupRangeCheck.Config 10)
@@ -402,8 +398,6 @@ theorem synth_regionCount (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck
     Operations.regionCount ((synth gcfg lcfg input).operations i) = 2 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 def circuit :
     FormalCircuit Fp (RhoCanonicity.Config × LookupRangeCheck.Config 10)
@@ -551,8 +545,6 @@ theorem synth_regionCount (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck
     Operations.regionCount ((synth gcfg lcfg input).operations i) = 2 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 def circuit :
     FormalCircuit Fp (PsiCanonicity.Config × LookupRangeCheck.Config 10)
