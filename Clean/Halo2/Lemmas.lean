@@ -239,12 +239,6 @@ theorem RegionOperation.constraints_constrainInstance (place : RegionIndex → �
         place self env
       = (cell.eval place env = env.get instCol (instRow : ℤ)) := rfl
 
-@[circuit_norm]
-theorem RegionOperation.constraints_subcircuit (place : RegionIndex → ℕ) (self : RegionIndex)
-    (env : Environment F) (ops : RegionOperations F) :
-    (RegionOperation.subcircuit ops).Constraints place self env
-      = RegionOperations.Constraints place self env ops := rfl
-
 -- `RegionCircuit.operations` of the bind chain distributes over `++`, and the region-op
 -- `Constraints` distributes over `++` — needed so a `constrainConstant`/`enableGate`
 -- suffix decomposes rather than staying a folded `Constraints (… ++ …)` chunk.
@@ -446,7 +440,7 @@ theorem constraints_append (place : RegionIndex → ℕ) (env : Environment F)
   | cons op ops ih =>
     cases op <;>
       simp only [List.cons_append, Halo2.Constraints, Operations.regionCount, ih,
-        and_assoc, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+        and_assoc, Nat.add_assoc]
 
 /-- Layouter `ExtendsWitnesses` distributes over `++` (completeness counterpart of
 `constraints_append`). -/
@@ -461,21 +455,13 @@ theorem extendsWitnesses_append (place : RegionIndex → ℕ) (env : ProverEnvir
   | cons op ops ih =>
     cases op <;>
       simp only [List.cons_append, Halo2.ExtendsWitnesses, Operations.regionCount, ih,
-        and_assoc, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+        and_assoc, Nat.add_assoc]
 
 @[circuit_norm]
 theorem constraints_region (place : RegionIndex → ℕ) (env : Environment F)
     (name : String) (ops' : RegionOperations F) (ops : Operations F) (i : RegionIndex) :
     Halo2.Constraints place env (.region name ops' :: ops) i
       = (RegionOperations.Constraints place i env ops' ∧ Halo2.Constraints place env ops (i + 1)) := by
-  simp only [Halo2.Constraints]
-
-@[circuit_norm]
-theorem constraints_subcircuit (place : RegionIndex → ℕ) (env : Environment F)
-    (ops' ops : Operations F) (i : RegionIndex) :
-    Halo2.Constraints place env (.subcircuit ops' :: ops) i
-      = (Halo2.Constraints place env ops' i ∧
-         Halo2.Constraints place env ops (i + Operations.regionCount ops')) := by
   simp only [Halo2.Constraints]
 
 @[circuit_norm]
@@ -497,14 +483,6 @@ theorem extendsWitnesses_region (place : RegionIndex → ℕ) (env : ProverEnvir
     Halo2.ExtendsWitnesses place env (.region name ops' :: ops) i
       = (RegionOperations.ExtendsWitnesses place i env ops'
           ∧ Halo2.ExtendsWitnesses place env ops (i + 1)) := by
-  simp only [Halo2.ExtendsWitnesses]
-
-@[circuit_norm]
-theorem extendsWitnesses_subcircuit (place : RegionIndex → ℕ) (env : ProverEnvironment F)
-    (ops' ops : Operations F) (i : RegionIndex) :
-    Halo2.ExtendsWitnesses place env (.subcircuit ops' :: ops) i
-      = (Halo2.ExtendsWitnesses place env ops' i ∧
-         Halo2.ExtendsWitnesses place env ops (i + Operations.regionCount ops')) := by
   simp only [Halo2.ExtendsWitnesses]
 
 @[circuit_norm]

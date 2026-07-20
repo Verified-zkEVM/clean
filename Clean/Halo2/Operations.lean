@@ -20,28 +20,28 @@ operations, mirroring Rust's two synthesize APIs:
 
 **The subcircuit mechanism** exists at *both* levels — it is what makes parent proofs
 scale by isolating them from child circuit internals. Unlike main Clean (and per issue
-Verified-zkEVM/clean#358), there is no `Subcircuit` type at all: a subcircuit call is
-the `subcircuit` constructor carrying the child's operations, and the operation types
-are **recursive** — which #358 unlocked, since main Clean's flat/structured split
-exists only to let the `Subcircuit` package carry proofs about its ops without a
-recursion knot. Consequences:
+Verified-zkEVM/clean#358), there is no `Subcircuit` type and no dedicated operation: a
+subcircuit call simply *appends the child's operation list* (the monad's `bind` produces
+`++`), so the operation enums are plain non-recursive lists. The proof boundary is not a
+constructor but a *folded term*: the child ops appear in parent hypotheses as
+`Constraints … ((child.call …).operations i)` with the list folded behind the
+formal-circuit constant, isolated by the `constraints_append`/`regionCount_append`
+lemma family. Consequences:
 
 - There is a single ground-truth `Constraints` predicate. A subcircuit's constraints
-  appear in parent hypotheses as one *opaque chunk* — `Constraints … <named child ops>`
-  with the child ops folded behind the formal-circuit constant — never spilled into the
-  parent's conjunction.
+  appear in parent hypotheses as one *opaque chunk* — never spilled into the parent's
+  conjunction, because the folded call constant blocks list reduction.
 - The contracts (`Spec`/`Assumptions`/prover variants) live on the formal-circuit
   packages, which provide per-circuit *forward lemmas*
   (`Constraints chunk → (Assumptions → Spec)` for soundness; the reverse direction for
-  completeness). A custom tactic applies them — rewriting hypotheses to the weaker but
-  higher-level spec form, which simp fundamentally cannot do. This replaces main
-  Clean's `ConstraintsHold.Soundness`/`.Completeness` predicate variants.
-- Layouter-level subcircuits advance the region counter by their (computed, recursive)
-  `regionCount`; region-level subcircuits live in the ambient region.
+  completeness). A custom tactic (`subcircuit_rw`) applies them — rewriting hypotheses
+  to the weaker but higher-level spec form, which simp fundamentally cannot do. This
+  replaces main Clean's `ConstraintsHold.Soundness`/`.Completeness` predicate variants.
+- A layouter-level call advances the region counter by the child list's `regionCount`
+  (per-circuit lemmas evaluate it to a literal); a region-level call contributes ops in
+  the ambient region.
   TODO: the `SubcircuitsConsistent` discipline (cells in child ops reference the
   ambient region, by construction of the monad) ports with the formal-circuit layer.
-  TODO: a `name` argument on `subcircuit` (like `region`'s) when serialization lands —
-  subcircuit names are load-bearing for VK recovery.
 
 Other key design points:
 
@@ -64,8 +64,8 @@ namespace Halo2
 
 variable {F : Type}
 
-/-- An operation inside a region, at region-local rows. Recursive: a `subcircuit` call
-carries the child fragment's operations (sharing the caller's region). Consistency of
+/-- An operation inside a region, at region-local rows. A region-level subcircuit call
+appends the child fragment's operations (sharing the caller's region). Consistency of
 subcircuit cells with the ambient region (`SubcircuitsConsistent` in main Clean) is
 maintained by the circuit monad and ported with the formal-circuit layer. -/
 inductive RegionOperation (F : Type) where
@@ -101,14 +101,11 @@ inductive RegionOperation (F : Type) where
   is absolute. Rust's fused `assign_advice_from_instance` is monad sugar — an
   `assignAdvice` witnessing the instance value plus this copy; see `Basic.lean`. -/
   | constrainInstance : Cell → Column .instance → ℕ → RegionOperation F
-  /-- A region-level subcircuit call: a packaged fragment's operations, in the ambient
-  region. The proof boundary at row granularity. -/
-  | subcircuit : List (RegionOperation F) → RegionOperation F
 
 abbrev RegionOperations (F : Type) := List (RegionOperation F)
 
-/-- A layouter-level operation: regions, instance copies, and layouter-level subcircuit
-calls (recursive: the child gadget's operations). -/
+/-- A layouter-level operation: regions, instance copies, table loads. Subcircuit calls
+contribute no operation of their own — they append the child gadget's operations. -/
 inductive Operation (F : Type) where
   /-- A named region containing region-level operations. The region's index is not
   stored: like Clean's offsets, indices are recomputed by the semantics while folding. -/
@@ -122,19 +119,14 @@ inductive Operation (F : Type) where
   `fill_from_row` default-fill (`single_pass.rs:176-182`). Addresses absolute rows, so it
   is a layouter-level op, not a region op. See `lookup-design.md` §2.4. -/
   | loadTable : TableColumn → List F → Operation F
-  /-- A layouter-level subcircuit call: a whole multi-region gadget's operations.
-  The proof boundary at gadget granularity. -/
-  | subcircuit : List (Operation F) → Operation F
 
 abbrev Operations (F : Type) := List (Operation F)
 
 /-- Number of region indices a list of operations consumes (the `localLength`
-analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal.
-Counts through nested subcircuits. -/
+analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal. -/
 def Operations.regionCount : Operations F → ℕ
   | [] => 0
   | .region _ _ :: ops => 1 + Operations.regionCount ops
-  | .subcircuit ops' :: ops => Operations.regionCount ops' + Operations.regionCount ops
   | .constrainInstance _ _ _ :: ops => Operations.regionCount ops
   | .loadTable _ _ :: ops => Operations.regionCount ops
 
@@ -148,12 +140,10 @@ they line up with the query/assigned-cell paths without a manual unfold. -/
 def Cell.eval (place : RegionIndex → ℕ) (env : Environment F) (c : Cell) : F :=
   env.get c.column ((place c.regionIndex + c.rowOffset : ℕ) : ℤ)
 
-mutual
-
-/-- Constraints of one region operation, for a region with index `self`. For a
-subcircuit call this is the *opaque chunk* over the child's named op list — the proof
-boundary: parent hypotheses keep the chunk folded, and the per-circuit forward lemmas
-(formal-circuit layer) rewrite it to the child's `Assumptions → Spec`. -/
+/-- Constraints of one region operation, for a region with index `self`. A subcircuit
+call's constraints are the *opaque chunk* `RegionOperations.Constraints … <folded child
+ops>` — the proof boundary: parent hypotheses keep the chunk folded, and the per-circuit
+forward lemmas (formal-circuit layer) rewrite it to the child's `Assumptions → Spec`. -/
 def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionIndex)
     (env : Environment F) : RegionOperation F → Prop
   | .assignAdvice _ _ _ => True
@@ -185,7 +175,6 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
   | .constrainConstant a v => a.eval place env = v
   | .constrainInstance cell instCol instRow =>
       cell.eval place env = env.get instCol (instRow : ℤ)
-  | .subcircuit ops => RegionOperations.Constraints place self env ops
 
 /-- Constraints of a list of region operations. -/
 def RegionOperations.Constraints (place : RegionIndex → ℕ) (self : RegionIndex)
@@ -194,16 +183,15 @@ def RegionOperations.Constraints (place : RegionIndex → ℕ) (self : RegionInd
   | op :: ops =>
       op.Constraints place self env ∧ RegionOperations.Constraints place self env ops
 
-end
-
 /--
 Ground truth: what it means that "constraints hold" on a sequence of operations,
-*including* all constraints inside subcircuits. The single satisfaction predicate
-(issue #358 — no separate `Soundness`/`Completeness` views): `place` is the region
-placement (the analogue of main Clean's `offset`, instantiated at top level with the
-floor planner's output), `i` the index of the next region (threaded like Clean's
-offset); subcircuits contribute their constraints as one opaque chunk, advancing the
-region counter by their `regionCount`.
+*including* all constraints inside subcircuits (their ops are appended into the list).
+The single satisfaction predicate (issue #358 — no separate `Soundness`/`Completeness`
+views): `place` is the region placement (the analogue of main Clean's `offset`,
+instantiated at top level with the floor planner's output), `i` the index of the next
+region (threaded like Clean's offset). A folded subcircuit chunk in the middle of a
+parent's list is isolated by `constraints_append`, advancing the region counter by the
+chunk's `regionCount`.
 -/
 def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
     Operations F → (i : RegionIndex) → Prop
@@ -220,10 +208,6 @@ def Constraints (place : RegionIndex → ℕ) (env : Environment F) :
       (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
         env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
       Constraints place env ops i
-  | .subcircuit ops' :: ops, i =>
-      Constraints place env ops' i ∧ Constraints place env ops (i + Operations.regionCount ops')
-
-mutual
 
 /-- The witness condition for completeness: the environment assigns each advice cell
 the value computed by its witness program (main Clean: `ExtendsVector`), and each fixed
@@ -237,7 +221,6 @@ def RegionOperation.ExtendsWitness (place : RegionIndex → ℕ) (self : RegionI
   | .assignAdvice col row compute =>
       env.get col (place self + row : ℕ) = (compute.eval ⟨place, env⟩)[0]
   | .assignFixed col row v => env.get col (place self + row : ℕ) = v
-  | .subcircuit ops => RegionOperations.ExtendsWitnesses place self env ops
   | _ => True
 
 /-- Witness condition for a list of region operations. -/
@@ -246,8 +229,6 @@ def RegionOperations.ExtendsWitnesses (place : RegionIndex → ℕ) (self : Regi
   | [] => True
   | op :: ops =>
       op.ExtendsWitness place self env ∧ RegionOperations.ExtendsWitnesses place self env ops
-
-end
 
 /-- All-regions witness condition, threading the region counter like `Constraints`. -/
 def ExtendsWitnesses (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
@@ -264,8 +245,6 @@ def ExtendsWitnesses (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
       (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
         env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
       ExtendsWitnesses place env ops i
-  | .subcircuit ops' :: ops, i =>
-      ExtendsWitnesses place env ops' i ∧ ExtendsWitnesses place env ops (i + Operations.regionCount ops')
 end Semantics
 
 end Halo2

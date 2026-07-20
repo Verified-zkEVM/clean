@@ -17,10 +17,8 @@ two levels of `Operations.lean`.
   Region *placement* is not decided here: it is the `place` semantics parameter,
   computed by the floor planner at top level.
 
-TODO (deferred to the formal-circuit port): FormalCircuit-style packages at both levels
-and their `toSubcircuit` conversions (the `.subcircuit` operations and their semantics
-already exist in `Operations.lean`), `ElaboratedCircuit` analogue, witgen-IR witness
-values, `circuit_norm` lemma set for the monad operations.
+The formal-circuit packages at both levels live in `Formal.lean`; their `call`s append
+the child's operations (see `Subcircuit.lean` for the call-boundary opacity contract).
 
 **Simp philosophy** (deliberate normal forms, unlike main Clean's tag-everything
 approach): monadic composition, `Circuit.output`/`operations`/`nextRegionIndex`, and DSL

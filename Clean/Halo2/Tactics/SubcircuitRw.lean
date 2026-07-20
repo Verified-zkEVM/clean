@@ -142,9 +142,7 @@ theorem region_soundness_leaf
       ((child.call config offset input).operations self)
       = RegionOperations.Constraints place self env
           ((child.synthesize config offset input).operations self) := by
-    simp only [FormalRegionCircuit.call, RegionCircuit.operations,
-      RegionOperations.constraints_cons, RegionOperations.constraints_nil,
-      RegionOperation.constraints_subcircuit, and_true]
+    rw [FormalRegionCircuit.call_operations]
   rw [hcall]
   intro hc hE hA
   exact child.soundness config offset self ⟨place, env⟩ input hE hA hc
@@ -161,7 +159,7 @@ theorem layouter_soundness_leaf
           (child.extract config input i₀ (⟨place, env⟩ : Placed Environment F))) := by
   have hcall : Halo2.Constraints place env ((child.call config input).operations i₀) i₀
       = Halo2.Constraints place env ((child.synthesize config input).operations i₀) i₀ := by
-    simp only [FormalCircuit.call, Circuit.operations, Halo2.Constraints, and_true]
+    rw [FormalCircuit.call_operations]
   rw [hcall]
   intro hc hE hA
   exact child.soundness config i₀ ⟨place, env⟩ input hE hA hc
@@ -179,9 +177,7 @@ theorem FormalRegionCircuit.extendsWitnesses_call {F : Type} [FiniteField F]
         ((child.call config offset input).operations self)
       ↔ RegionOperations.ExtendsWitnesses place self env
         ((child.synthesize config offset input).operations self) := by
-  simp only [FormalRegionCircuit.call, RegionCircuit.operations,
-    RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-    RegionOperation.extendsWitness_subcircuit, and_true]
+  rw [FormalRegionCircuit.call_operations]
 
 /-- Region completeness derived statement: from the located `ExtendsWitnesses`, the child's
 `EnvA → A → PA → (Spec ∧ ProverSpec)` (soundness at the verifier view, ProverSpec from
@@ -213,9 +209,7 @@ theorem region_completeness_derived
         ((child.call config offset input).operations self)
         = RegionOperations.ExtendsWitnesses place self env
             ((child.synthesize config offset input).operations self) := by
-      simp only [FormalRegionCircuit.call, RegionCircuit.operations,
-        RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-        RegionOperation.extendsWitness_subcircuit, and_true]
+      rw [FormalRegionCircuit.call_operations]
     rwa [this] at hw
   intro hE hA hpa
   obtain ⟨hcons, hps⟩ :=
@@ -247,17 +241,13 @@ theorem region_completeness_leaf
         ((child.call config offset input).operations self)
         = RegionOperations.ExtendsWitnesses place self env
             ((child.synthesize config offset input).operations self) := by
-      simp only [FormalRegionCircuit.call, RegionCircuit.operations,
-        RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
-        RegionOperation.extendsWitness_subcircuit, and_true]
+      rw [FormalRegionCircuit.call_operations]
     rwa [this] at hw
   have hcall : RegionOperations.Constraints place self env
       ((child.call config offset input).operations self)
       = RegionOperations.Constraints place self env
           ((child.synthesize config offset input).operations self) := by
-    simp only [FormalRegionCircuit.call, RegionCircuit.operations,
-      RegionOperations.constraints_cons, RegionOperations.constraints_nil,
-      RegionOperation.constraints_subcircuit, and_true]
+    rw [FormalRegionCircuit.call_operations]
   rw [hcall]
   intro ⟨hE, hA, hpa⟩
   exact (child.completeness config offset self (⟨place, env⟩ : Placed ProverEnvironment F)
@@ -284,7 +274,7 @@ theorem layouter_completeness_derived
       ((child.synthesize config input).operations i₀) i₀ := by
     have : Halo2.ExtendsWitnesses place env ((child.call config input).operations i₀) i₀
         = Halo2.ExtendsWitnesses place env ((child.synthesize config input).operations i₀) i₀ := by
-      simp only [FormalCircuit.call, Circuit.operations, Halo2.ExtendsWitnesses, and_true]
+      rw [FormalCircuit.call_operations]
     rwa [this] at hw
   intro hE hA hpa
   obtain ⟨hcons, hps⟩ :=
@@ -307,11 +297,11 @@ theorem layouter_completeness_leaf
       ((child.synthesize config input).operations i₀) i₀ := by
     have : Halo2.ExtendsWitnesses place env ((child.call config input).operations i₀) i₀
         = Halo2.ExtendsWitnesses place env ((child.synthesize config input).operations i₀) i₀ := by
-      simp only [FormalCircuit.call, Circuit.operations, Halo2.ExtendsWitnesses, and_true]
+      rw [FormalCircuit.call_operations]
     rwa [this] at hw
   have hcall : Halo2.Constraints place env ((child.call config input).operations i₀) i₀
       = Halo2.Constraints place env ((child.synthesize config input).operations i₀) i₀ := by
-    simp only [FormalCircuit.call, Circuit.operations, Halo2.Constraints, and_true]
+    rw [FormalCircuit.call_operations]
   rw [hcall]
   intro ⟨hE, hA, hpa⟩
   exact (child.completeness config i₀ (⟨place, env⟩ : Placed ProverEnvironment F)

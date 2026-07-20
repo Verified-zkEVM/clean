@@ -470,20 +470,6 @@ private theorem zs_get_z13g (f : ℕ → Fp) :
   exact (congrArg (fun v => v[13]'(by norm_num))
     (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
-/-- Witness-side projection through a `toFormal` call (the YComposite pattern,
-generic): the parent reads the child's in-region witness equations. -/
-private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
-    (env : ProverEnvironment Fp) :
-    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
-      = RegionOperations.ExtendsWitnesses place i env
-          ((b.synthesize cfg 0 inp).operations i) := by
-  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
-    assignRegion, ExtendsWitnesses, and_true]
-  rfl
-
 /-- Build direction of `peelGates` (kernel-checked alone). -/
 private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
@@ -743,7 +729,7 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
         (((YCanonicityCheck.circuit w).call c inp).operations i) i
       = ExtendsWitnesses place env
         (((YCanonicityCheck.circuit w).synthesize c inp).operations i) i from by
-    simp only [FormalCircuit.call, Circuit.operations, ExtendsWitnesses, and_true]] at h
+    simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]] at h
   simp only [YCanonicityCheck.circuit] at h
   simp only [YCanonicityCheck.synth, LookupRangeCheck.witnessShortCheck,
     LookupRangeCheck.witnessCheckDecomposed, LookupRangeCheck.witnessCheck,
@@ -1422,7 +1408,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   have hWgd := hGW.2.1
   have hWgg := hGW.2.2.2.1
   have hWgh := hGW.2.2.2.2.1
-  rw [toFormal_call_witnesses] at hWgb hWgd hWgg hWgh
+  rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hWgb hWgd hWgg hWgh
   simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output,
         circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb

@@ -4,7 +4,7 @@ import Clean.Halo2.Lemmas
 /-!
 # Subcircuit composition: the call-boundary opacity contract
 
-A subcircuit call emits `.subcircuit ops` carrying the child's raw op list; the child does not
+A subcircuit call appends the child's raw op list; the child does not
 store its `Spec`. In a parent proof the child appears as one folded
 `(child.call config offset input).operations self` chunk (region level) or
 `(child.call config input).operations i₀` (layouter level). This file establishes the *call
@@ -80,10 +80,10 @@ theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input 
   show i + self.regionCount config input
     = i + Operations.regionCount ((self.call config input).operations i)
   congr 1
-  -- `regionCount = ((synthesize …).operations i).regionCount` (elaborated metadata), and the
-  -- `call`'s single `.subcircuit` op has exactly that `Operations.regionCount`.
-  rw [FormalCircuit.regionCount, (self.elaborated config).regionCount_eq input i]
-  simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount, Nat.add_zero]
+  -- `regionCount = ((synthesize …).operations i).regionCount` (elaborated metadata), and
+  -- `call_operations` opens the chunk to exactly the `synthesize` ops.
+  rw [FormalCircuit.regionCount, (self.elaborated config).regionCount_eq input i,
+    FormalCircuit.call_operations]
 
 /-- Concrete-`α` restatement of `output_call` (the `Circuit.output`/`operations` element type
 is rewritten to the concrete `Output (AssignedCell F)` by `var_of_provableType`; the generic
@@ -94,6 +94,23 @@ theorem FormalCircuit.output_call' {Output : TypeMap} [ProvableType Output]
     (input : Var Input F) (i : RegionIndex) :
     (@Circuit.output F _ (Output (AssignedCell F)) (self.call config input) i)
       = self.output config input i := rfl
+
+/-- Witness-side toFormal boundary crossing: `ExtendsWitnesses` of a `toFormal`-lifted
+call's layouter chunk is the underlying region circuit's witness condition (the lifted
+wrapper region contributes nothing else). Completeness proofs open lifted chunks with
+this to reach per-cell witness equations. NOT `@[circuit_norm]` — chunks open only
+deliberately. -/
+theorem FormalRegionCircuit.toFormal_call_extendsWitnesses {CI Cfg : Type}
+    (b : FormalRegionCircuit F CI Cfg Input Output) (name : String) (cfg : Cfg)
+    (inp : Var Input F) (i : RegionIndex) (place : RegionIndex → ℕ)
+    (env : ProverEnvironment F) :
+    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
+      = RegionOperations.ExtendsWitnesses place i env
+          ((b.synthesize cfg 0 inp).operations i) := by
+  rw [FormalCircuit.call_operations]
+  simp only [FormalRegionCircuit.toFormal, Circuit.operations, assignRegion,
+    ExtendsWitnesses, and_true]
+  rfl
 
 /-- Concrete-`α` restatement of `nextRegionIndex_call`, needed for the same reason: inside a
 parent's `operations_bind`-produced chunk the `Circuit.nextRegionIndex` element type is the
@@ -106,14 +123,6 @@ theorem FormalCircuit.nextRegionIndex_call' {Output : TypeMap} [ProvableType Out
       = i + Operations.regionCount
           (@Circuit.operations F _ (Output (AssignedCell F)) (self.call config input) i) :=
   FormalCircuit.nextRegionIndex_call self config input i
-
-/-- `ExtendsWitness` of a region-level subcircuit op is the child's `ExtendsWitnesses`.
-The completeness dual of `RegionOperation.constraints_subcircuit`; used by the `subcircuit_rw`
-engine's completeness leaves to reach the child's witness condition. -/
-theorem RegionOperation.extendsWitness_subcircuit (place : RegionIndex → ℕ)
-    (self : RegionIndex) (env : ProverEnvironment F) (ops : RegionOperations F) :
-    (RegionOperation.subcircuit ops).ExtendsWitness place self env
-      = RegionOperations.ExtendsWitnesses place self env ops := rfl
 
 end
 
@@ -135,11 +144,18 @@ theorem FormalCircuit.call_regionCount (self : FormalCircuit F CI Cfg Input Outp
     (config : Cfg) (input : Var Input F) (i : RegionIndex) :
     Operations.regionCount ((self.call config input).operations i)
       = self.regionCount config input := by
-  simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
-  rw [show self.regionCount config input
-      = Operations.regionCount ((self.synthesize config input).operations i) from
-    ((self.elaborated config).regionCount_eq input i)]
-  rfl
+  rw [FormalCircuit.call_operations]
+  exact ((self.elaborated config).regionCount_eq input i).symm
+
+/-- Concrete-`α` restatement of `call_regionCount` (same discr-tree-key reason as
+`output_call'`); the `ElaboratedCircuit.regionCount_eq` default tactic uses both. -/
+theorem FormalCircuit.call_regionCount' {Output : TypeMap} [ProvableType Output]
+    {CI Cfg : Type} (self : FormalCircuit F CI Cfg Input Output)
+    (config : Cfg) (input : Var Input F) (i : RegionIndex) :
+    Operations.regionCount
+        (@Circuit.operations F _ (Output (AssignedCell F)) (self.call config input) i)
+      = self.regionCount config input :=
+  FormalCircuit.call_regionCount self config input i
 
 /-- The closed-form fold state: the accumulator input var and the base region index
 *entering* round `m`. -/

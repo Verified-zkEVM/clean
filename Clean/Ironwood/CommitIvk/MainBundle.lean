@@ -439,18 +439,6 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
 
 /-! ## Completeness infrastructure -/
 
-private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
-    (env : ProverEnvironment Fp) :
-    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
-      = RegionOperations.ExtendsWitnesses place i env
-          ((b.synthesize cfg 0 inp).operations i) := by
-  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
-    assignRegion, ExtendsWitnesses, and_true]
-  rfl
-
 private theorem pieceBounds_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.PieceBounds ms pieces ↔
@@ -566,13 +554,13 @@ private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
         (((Canonicity.circuit wb1 wd1).call c inp).operations i) i
       = ExtendsWitnesses place env
         (((Canonicity.circuit wb1 wd1).synthesize c inp).operations i) i from by
-    simp only [FormalCircuit.call, Circuit.operations, ExtendsWitnesses, and_true]] at h
+    simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]] at h
   simp only [Canonicity.circuit] at h
   simp only [Canonicity.synth, Canonicity.gateChild, LookupRangeCheck.witnessCheck,
     Circuit.operations_bind, operations_assignRegion, RegionCircuit.operations_bind,
     circuit_norm] at h
   have hg := h.2.2
-  rw [toFormal_call_witnesses] at hg
+  rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hg
   simp only [Halo2.Ironwood.CommitIvk.bundle, circuit_norm] at hg
   try simp only [Nat.add_assoc, Nat.reduceAdd] at hg
   try simp only [Nat.add_assoc, Nat.reduceAdd]

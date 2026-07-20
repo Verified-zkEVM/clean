@@ -359,8 +359,9 @@ theorem synthesize_regionCount (K : ℕ) (cfg : Config K) (input : Inputs (Assig
       Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
         cfg.lookupConfig { element := AssignedCell.of i 0 cfg.adv0 }).operations j) = 1
       from fun j => by
-        simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount,
-          LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal, assignRegion, Nat.add_zero]]
+        simp only [FormalCircuit.call, FormalCircuit.callOps_eq, FormalCircuit.callOps_eq, Circuit.operations,
+          Operations.regionCount, LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal,
+          assignRegion, Nat.add_zero]]
 
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
@@ -401,7 +402,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- reduce the gate-region's index `i₀ + 1 + regionCount(copyCheck call)` to `i₀ + 2`
     rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
         cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
-      from by simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount,
+      from by simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations, Operations.regionCount,
         LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal, assignRegion, Nat.add_zero]] at hc
     -- hc : copyCheck chunk (region i₀+1) ∧ gate-region constraints (region i₀+2). The witness-s
     -- region (i₀) has no constraints (bare assignAdvice → True), dropped by simp.
@@ -485,7 +486,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- reduce the copyCheck call's regionCount to 1, so the gate region is at i₀+2
     rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
         cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
-      from by simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount,
+      from by simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations, Operations.regionCount,
         LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal, assignRegion, Nat.add_zero]]
       at hwit ⊢
     obtain ⟨hWs, hWchild, hWgate⟩ := hwit

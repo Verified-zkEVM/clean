@@ -263,10 +263,8 @@ theorem gateChild_call_witnesses (wlsb : WitgenIR Fp 1)
     ExtendsWitnesses place env (((gateChild wlsb input).call cfg row).operations i) i
       = RegionOperations.ExtendsWitnesses place i env
           (((YCanonicity.bundle wlsb (k3Wit input.y)).synthesize cfg 0 row).operations i)
-      := by
-  simp only [gateChild, FormalRegionCircuit.toFormal, FormalCircuit.call,
-    Circuit.operations, assignRegion, ExtendsWitnesses, and_true]
-  rfl
+ :=
+  FormalRegionCircuit.toFormal_call_extendsWitnesses _ _ cfg row i place env
 
 private theorem gateChild_extract_eq (wlsb : WitgenIR Fp 1)
     (input : Inputs (AssignedCell Fp)) (cfg : YCanonicity.Config)

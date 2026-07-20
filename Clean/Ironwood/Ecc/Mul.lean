@@ -921,7 +921,7 @@ private theorem synthesize_regionCount (cfg : Config)
           (mainRegion cfg input).output i |>.2.2.1,
           (mainRegion cfg input).output i |>.2.2.2⟩).operations j) = 3
     from fun j => by
-      simp only [FormalCircuit.call, Circuit.operations, Operations.regionCount]
+      simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
 -- Depth note: the main region's composed do-block is one nested-bind term ~5 children deep, and its

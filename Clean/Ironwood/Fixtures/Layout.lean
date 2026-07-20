@@ -74,15 +74,13 @@ only `region`s carry a Halo2-Clean region index. The result is the start row per
 `assignRegion`-index. -/
 
 /-- The ordered stream of "region slots" (a `region` or a table load) as the fixture's
-`enter_region` enumeration sees them. Recurses into layouter-level subcircuits. `true` marks
-a real `assignRegion` (carries a Halo2-Clean index), `false` a `loadTable`/table slot. -/
+`enter_region` enumeration sees them. `true` marks a real `assignRegion` (carries a
+Halo2-Clean index), `false` a `loadTable`/table slot. -/
 def regionSlots : Operations F → List (Bool × String)
   | [] => []
   | .region name _ :: rest => (true, name) :: regionSlots rest
   | .loadTable _ _ :: rest => (false, "") :: regionSlots rest
   | .constrainInstance _ _ _ :: rest => regionSlots rest
-  | .subcircuit sub :: rest => regionSlots sub ++ regionSlots rest
-termination_by ops => sizeOf ops
 
 /-- Start rows indexed by Halo2-Clean `assignRegion` index, obtained by zipping the region
 slots with the fixture's `regions` (in index order): each slot consumes one placement; only
@@ -102,30 +100,17 @@ def resolveCell (permCols : List ColRef) (starts : List ℕ) (c : Cell) : ℕ ×
 
 /-! ## Indexed region walk
 
-Pairs each `assignRegion` body with its Halo2-Clean region index, threading the index
-through subcircuits (region-level subcircuits stay in the ambient region; only `region`
-increments). Everything downstream (copies, activations) is a fold over this list. -/
+Pairs each `assignRegion` body with its Halo2-Clean region index (only `region`
+increments; subcircuit calls appear pre-appended in the op list). Everything downstream
+(copies, activations) is a fold over this list. -/
 
 def indexedRegions : Operations F → ℕ → List (ℕ × RegionOperations F) × ℕ
   | [], i => ([], i)
   | .region _ body :: rest, i =>
       let (rs, i') := indexedRegions rest (i + 1)
       ((i, body) :: rs, i')
-  | .subcircuit sub :: rest, i =>
-      let (rs1, i1) := indexedRegions sub i
-      let (rs2, i2) := indexedRegions rest i1
-      (rs1 ++ rs2, i2)
   | .constrainInstance _ _ _ :: rest, i => indexedRegions rest i
   | .loadTable _ _ :: rest, i => indexedRegions rest i
-termination_by ops => sizeOf ops
-
-/-- Flatten a region body into its ordered leaf operations (recursing region-level
-subcircuits, which share the ambient region). -/
-def flattenRegion : RegionOperations F → List (RegionOperation F)
-  | [] => []
-  | .subcircuit sub :: rest => flattenRegion sub ++ flattenRegion rest
-  | op :: rest => op :: flattenRegion rest
-termination_by ops => sizeOf ops
 
 /-! ## Ordered copy extraction — the two halo2 floor planners
 
@@ -158,8 +143,7 @@ when debugging a mismatch check the fixture's `constants` length first. -/
 def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
     (body : RegionOperations F) (consts : List (ℕ × ℕ × ℕ)) :
     List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
-  let leaves := flattenRegion body
-  let eqCopies : List (ℕ × ℕ × ℕ × ℕ) := leaves.filterMap fun op =>
+  let eqCopies : List (ℕ × ℕ × ℕ × ℕ) := body.filterMap fun op =>
     match op with
     | .constrainEqual a b =>
         let (lc, lr) := resolveCell permCols starts a
@@ -180,7 +164,7 @@ def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
         -- left = constants cell (fixed col `cc`, row `cr`), right = the advice cell
         ((permIndex permCols (ColRef.toAny (.fixed cc)), cr, rc, rr) :: rest', cs')
     | _ :: rest, cs => go rest cs
-  let (constCopies, consts') := go leaves consts
+  let (constCopies, consts') := go body consts
   (eqCopies, constCopies, consts')
 
 namespace SimpleFloorPlanner
@@ -201,12 +185,7 @@ def go (permCols : List ColRef) (starts : List ℕ) :
       let (rc, rr) := resolveCell permCols starts cell
       let (r, cs') := go permCols starts rest cs
       ((rc, rr, permIndex permCols col.toAny, row) :: r, cs')
-  | .subcircuit sub :: rest, cs =>
-      let (s, cs') := go permCols starts sub cs
-      let (r, cs'') := go permCols starts rest cs'
-      (s ++ r, cs'')
   | .loadTable _ _ :: rest, cs => go permCols starts rest cs
-termination_by ops => sizeOf ops
 
 /-- The keygen copy list under `SimpleFloorPlanner` (`single_pass.rs`). -/
 def copyList (permCols : List ColRef) (starts : List ℕ)
@@ -233,12 +212,7 @@ def go (permCols : List ColRef) (starts : List ℕ) :
       let (rc, rr) := resolveCell permCols starts cell
       let ((r1, r2), cs') := go permCols starts rest cs
       (((rc, rr, permIndex permCols col.toAny, row) :: r1, r2), cs')
-  | .subcircuit sub :: rest, cs =>
-      let ((s1, s2), cs') := go permCols starts sub cs
-      let ((r1, r2), cs'') := go permCols starts rest cs'
-      ((s1 ++ r1, s2 ++ r2), cs'')
   | .loadTable _ _ :: rest, cs => go permCols starts rest cs
-termination_by ops => sizeOf ops
 
 /-- The keygen copy list under the `V1` floor planner (`v1.rs`): the equality/instance
 stream, then ALL deferred constants. The planner the orchard `Circuit` declares — the
@@ -323,7 +297,7 @@ def sigmaEntries (mapping : Array (Array (ℕ × ℕ))) : List (ℕ × ℕ × �
 selector) and `enableLookup` (each enabled selector) across all regions. -/
 def activations (starts : List ℕ) (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ) :=
   regions.flatMap fun (idx, body) =>
-    (flattenRegion body).flatMap fun op =>
+    body.flatMap fun op =>
       match op with
       | .enableGate gate row => [(gate.selector.index, place starts idx + row)]
       | .enableLookup _ enabled row =>
@@ -352,9 +326,7 @@ def tableFixed [Inhabited F] (toNat : F → ℕ) (usable : ℕ) : Operations F �
         else (List.range (usable - values.length)).map fun r =>
           (col, values.length + r, toNat values[0]!)
       block ++ fill ++ tableFixed toNat usable rest
-  | .subcircuit sub :: rest => tableFixed toNat usable sub ++ tableFixed toNat usable rest
   | _ :: rest => tableFixed toNat usable rest
-termination_by ops => sizeOf ops
 
 /-- Packed selector-column fixed entries: for each selector activation, look its index up in
 the compression map and write `assignedRoot` into its packed column at that row. The
@@ -372,7 +344,7 @@ boundary values and the `fixed_y_q` load), at their placed absolute rows. -/
 def regionAssignFixed {F : Type} (toNat : F → ℕ) (starts : List ℕ)
     (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ × ℕ) :=
   regions.flatMap fun (idx, body) =>
-    (flattenRegion body).filterMap fun op =>
+    body.filterMap fun op =>
       match op with
       | .assignFixed col row v => some (col.index, place starts idx + row, toNat v)
       | _ => none

@@ -181,8 +181,12 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
     (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
     Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 14 := by
-  simp only [synth, circuit_norm, Circuit.operations_bind,
-    Circuit.operations_pure, Operations.regionCount_append]
+  -- lean explicit set: `circuit_norm`'s dsimp-normalization of op payloads is
+  -- kernel-expensive now that call chunks are kernel-transparent (no constructor head)
+  simp only [synth, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.regionCount_append, Operations.regionCount,
+    FormalCircuit.nextRegionIndex_call', FormalCircuit.output_call',
+    NoteCommit.Main.currentRegion_operations]
   rw [synthPieces_regionCount, commit_call_regionCount, composite_call_regionCount]
 
 theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
