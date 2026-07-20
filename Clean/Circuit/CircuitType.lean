@@ -156,6 +156,12 @@ theorem eval_prover (env : ProverEnvironment F) :
     = CircuitType.evalProver env := by rfl'
 end DerivedCircuitType
 
+/-- Marker for record types the struct-decomposition tactics may destructure
+componentwise beyond `ProvableStruct`: generated for `deriving CircuitType`'s
+`Var`/`Value`/`ProverValue` view companions (mixed provable/hint records have no
+`ProvableStruct` instance, but their views are plain structures `cases` can split). -/
+class DecomposableStruct (M : Type → Type) : Prop where
+
 /--
 `UnconstrainedNative` acts as a type marker for circuit inputs that should only be hints to the prover.
 -/

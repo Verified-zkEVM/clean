@@ -54,11 +54,20 @@ def validatedDefEq (a b : Expr) : MetaM Bool :=
 `.instances` whnf). This is the gate for destructuring, projection lift and equality split:
 `ProvableStruct` types qualify too (they have a `ProvableType` instance), and are handled
 at higher priority by the struct-eval bridges. -/
-def isProvableTypeLike (type : Expr) : MetaM Bool :=
+def isProvableTypeLike (type : Expr) (allowDecomposable : Bool := true) : MetaM Bool :=
   speculative (α := Bool) (do
     let type' ← withTransparency .instances <| whnf type
     let .app tycon _ := type' | return false
-    return (← trySynthInstance (← mkAppM ``ProvableType #[tycon])) matches .some _) false
+    if (← trySynthInstance (← mkAppM ``ProvableType #[tycon])) matches .some _ then
+      return true
+    unless allowDecomposable do return false
+    -- `deriving CircuitType` view companions of mixed provable/hint records: no
+    -- `ProvableType`, but componentwise decomposable by the simprocs (the deriver marks
+    -- them). The variable DESTRUCTURE gate passes `allowDecomposable := false`: a mixed
+    -- record variable stays whole (its componentwise normal form comes from the derived
+    -- `eval_*_raw` lemmas over its projections, not from `cases`).
+    return (← trySynthInstance (← mkAppM ``DecomposableStruct #[tycon])) matches .some _)
+    false
 
 /-- View an expression as a structure projection `base.field`, returning the base and a
 function that rebuilds the same projection on a new base. Handles both `.proj` nodes and
@@ -237,10 +246,13 @@ def evalProjectionLiftProc : Simproc := fun e => do
   let some (base, mkRhs) ← projectionView? projected | return .continue
   unless ← isProvableTypeLike (← inferType base) do return .continue
   -- rebuild `head envArgs base` via `mkAppM` so implicits/instances are re-inferred for the
-  -- new base type (raw arg replacement would keep the projected field's stale implicits)
-  let evalOfBase ← try withTransparency .default <| mkAppM hname (envArgs.push base)
+  -- new base type (raw arg replacement would keep the projected field's stale implicits).
+  -- The rebuild can fail for mixed (`deriving CircuitType`) bases whose eval type stays
+  -- view-headed — those keep the componentwise form (the derived unfolding lemmas' RHS).
+  let rhs ← try
+      let evalOfBase ← withTransparency .default <| mkAppM hname (envArgs.push base)
+      mkRhs evalOfBase
     catch _ => return .continue
-  let rhs ← mkRhs evalOfBase
   unless ← validatedDefEq rhs e do return .continue
   return .done { expr := rhs, proof? := none }
 

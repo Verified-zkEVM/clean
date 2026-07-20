@@ -58,6 +58,9 @@ def halo2CircuitTypeProfile : CircuitTypeProfile where
   valueConst := ``Halo2.Value
   proverValueConst := ``Halo2.ProverValue
   derivedConst := ``Halo2.DerivedCircuitType
+  varCarrierConst := ``Halo2.AssignedCell
+  verifierEvalConst := ``Halo2.CircuitType.verifierEval
+  proverEvalConst := ``Halo2.CircuitType.proverEval
 
 /-- Halo2's `deriving CircuitType`. -/
 def halo2CircuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool :=

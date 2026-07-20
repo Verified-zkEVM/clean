@@ -412,7 +412,17 @@ def Halo2.unconstrainedEvalProc : Simproc := fun e => do
   let isExprCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedExpr
   let isNatCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedNat
   let isBoolCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedBool
-  unless isIRCarrier || isExprCarrier || isNatCarrier || isBoolCarrier do
+  if !(isIRCarrier || isExprCarrier || isNatCarrier || isBoolCarrier) then
+    -- `deriving CircuitType` records: apply the generated componentwise unfolding lemma
+    -- by name (keyed simp matching does not survive the instance-arg spellings)
+    if let .const mName _ := m.getAppFn then
+      let lemmaName := mName ++ (if isProver then `eval_prover_raw else `eval_verifier_raw)
+      if (← getEnv).contains lemmaName then
+        try
+          let pf ← mkAppM lemmaName #[pe, v]
+          let some (_, _, rhs) := (← inferType pf).eq? | return .continue
+          return .visit { expr := rhs, proof? := some pf }
+        catch _ => return .continue
     return .continue
   if isVerifier then
     let rhs := mkConst ``Unit.unit
