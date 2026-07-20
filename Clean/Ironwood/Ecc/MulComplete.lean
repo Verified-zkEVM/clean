@@ -791,7 +791,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       by_cases hb0 : b.val = 0
       · rw [if_pos hb0, hstep]
         rw [show offset + 2 * b.val = offset from by omega]
-        rw [hCopyZ.trans hIz]
+        rw [hCopyZ]
       · rw [if_neg hb0]
         rw [hOutZs (b.val - 1) (by have := b.isLt; omega)]
         rw [show offset + 2 * (b.val - 1) + 2 = offset + 2 * b.val from by omega]
@@ -837,7 +837,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by with_unfolding_all exact hIyA)
         (by with_unfolding_all exact hibx)
         (by with_unfolding_all exact hiby)
-        (by rw [hWz]; rfl)
+        (by rw [hWz]; exact hzread.symm)
         numBits hWloop
     rw [hbits] at hAccOut
     simp only [hbits] at hZs
@@ -854,7 +854,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
       simpa only [circuit_norm] using this
     -- ── assemble: copy constraint + loop constraints + `RoundInvariant` ──
-    refine ⟨⟨hWz, hCloop⟩, ?_, fun _ _ => ⟨?_, ?_⟩⟩
+    refine ⟨hCloop, ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain on the honest values
       intro b
       rw [hOutZs b.val b.isLt, hZs b.val b.isLt, hzread, zRunValue_step input_z bits b.val]

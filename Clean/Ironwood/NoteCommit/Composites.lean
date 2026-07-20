@@ -229,7 +229,7 @@ def circuit :
       simp
     · -- the gate child's rely-conditions (verifier view)
       rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm]
+      simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · -- the gate child's honest-prover precondition: the donor gate `Spec` + the shift
       rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
@@ -389,7 +389,7 @@ def circuit :
     · rw [rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, PkdCanonicity.bundle]
+      simp only [gateChild_assumptions_eq, circuit_norm, PkdCanonicity.bundle, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm, PkdCanonicity.bundle]
@@ -546,7 +546,7 @@ def circuit :
     · rw [rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, RhoCanonicity.bundle]
+      simp only [gateChild_assumptions_eq, circuit_norm, RhoCanonicity.bundle, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm, RhoCanonicity.bundle]
@@ -708,7 +708,7 @@ def circuit :
     · rw [rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, PsiCanonicity.bundle]
+      simp only [gateChild_assumptions_eq, circuit_norm, PsiCanonicity.bundle, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm, PsiCanonicity.bundle]

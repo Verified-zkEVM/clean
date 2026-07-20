@@ -375,7 +375,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
        by rw [hjz0]; exact hz1v, by rw [hjz0]; exact hz13v,
        lo, hlo, by rw [hpz0]; exact htel⟩
     rw [show (i₀ + 2 + 2 : ℕ) = i₀ + 4 from rfl] at hGSpec
-    refine ⟨by rw [← h_output], fun hb => ?_⟩
+    refine ⟨trivial, fun hb => ?_⟩
     have hb' : IsBool (env.advice (cfg.1.advices 6) ((place (i₀ + 4) : ℕ) : ℤ)) := by
       rw [← h_output] at hb; exact hb
     have hD := hGSpec hb'

@@ -568,12 +568,15 @@ def clearConsumed (d : Direction) : TacticM Unit := do
 
 Steps (a)–(e) are universal (intro / peel / `provable_type_simp` / `abstract_outputs` /
 `subcircuit_rw`); they are idempotent or no-op-tolerant and never mangle a composite gadget's
-constraints. The leaf-only finish — row-fact chaining (f) and the consumed-equation cleanup — runs
-ONLY when the state is not composite (`stateIsComposite` is `false`, i.e. the constraints hyp/goal
-holds no unpeeled constraint predicate): on a **leaf** (Add) it lands the copied cells and drops
-the spent equations, closing the prefix; on a **composite** (MulComplete, Mul) it is skipped so
-`hc`/`h_input`/`h_output`/`hwit` survive for the manual continuation (the partial-prefix +
-manual-rest shape). -/
+constraints. The row-fact chaining (f) — the VALUE-REPLACEMENT half — also runs universally:
+it rewrites the constraint/witness hypotheses and the goal with the `h_input`/`h_output`/`hwit`
+equations, so every hint-program eval and copied-cell read lands on its prover-value variable.
+On a composite this is safe (folded child chunks are operations-data, not eval atoms) and is
+what lets the manual continuation live at VALUES instead of hand-bridging framework spellings.
+Only the destructive cleanup — clearing the spent equations — stays leaf-gated: on a **leaf**
+(Add) it drops them, closing the prefix; on a **composite** (MulComplete, Mul) they survive for
+the manual continuation (and `clearConsumed`'s own folded-contract/`h_spec_*`/reference guards
+protect them besides). -/
 def run (terms : Option (Array Term)) : TacticM Unit := do
   let d ← introBundleBindersAndDetect
   rwIffAndIntro d
@@ -583,8 +586,8 @@ def run (terms : Option (Array Term)) : TacticM Unit := do
   abstractOutputs
   consumeChunks d
   normalizeEmitted d unfold bridges
+  rowFactChaining d
   unless (← stateIsComposite d) do
-    rowFactChaining d
     clearConsumed d
 
 end CircuitProofStart

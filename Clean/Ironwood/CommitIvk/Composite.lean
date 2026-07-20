@@ -312,7 +312,8 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     · -- the gate child's rely-conditions (verifier view)
       rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
         rangeCheckAt_output, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm]
+      simp only [gateChild_assumptions_eq, circuit_norm, hia, hib0, hib2, hic, hid0,
+        hiz13a, hiz13c]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1, hA.2.2.2.2.2.1,
         ⟨loA, hloA, by rw [hz0a]; exact htelA⟩, hA.2.2.2.2.2.2,
         ⟨loB, hloB, by rw [hz0b]; exact htelB⟩⟩

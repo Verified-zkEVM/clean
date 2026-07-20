@@ -341,7 +341,7 @@ def copyDecompose (W numWindows : ℕ) :
     refine ⟨V, hV, ?_, fun w => ?_⟩
     · have h0 := hshifts 0 (by omega)
       simp only [hf, Nat.mul_zero, pow_zero, Nat.div_one, Nat.add_zero] at h0
-      rw [← h_input, ← hCopy]
+      rw [← hCopy]
       exact h0
     · rw [← h_output_zs w.val w.isLt]
       exact hshifts w.val (by omega)
@@ -357,13 +357,13 @@ def copyDecompose (W numWindows : ℕ) :
       intro j hj
       rcases Nat.eq_zero_or_pos j with rfl | hjpos
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, Nat.add_zero]
-        rw [hCopyWit, h_input, ZMod.natCast_zmod_val]
+        rw [hCopyWit, ZMod.natCast_zmod_val]
       · have h := hAssignWit ⟨j - 1, by omega⟩
         simp only [h_input] at h
         rw [show offset + (j - 1) + 1 = offset + j from by omega,
           show W * (j - 1 + 1) = W * j from by rw [Nat.sub_add_cancel hjpos]] at h
         exact h
-    refine ⟨⟨hCopyWit, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · -- the range-check gate holds on every row: the honest word is `↑(b % 2^W)`
       simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul]
       intro i

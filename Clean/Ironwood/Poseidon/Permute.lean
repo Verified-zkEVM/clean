@@ -221,7 +221,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
             x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
             x2 := env.advice (cfg.state 2) ((place self + offset : ℕ) : ℤ) }
         from by with_unfolding_all rfl]
-      rw [hw0, hw1, hw2, h_input.1, h_input.2.1, h_input.2.2]
+      rw [hw0, hw1, hw2]
     have h36 : st 36 = { x0 := output_x0, x1 := output_x1, x2 := output_x2 } := h_output
     have hA := foldl_of_steps
       (fun i => FullRound.value (FullRound.params roundConstants mds i)) st 0 4 hstepA
@@ -231,7 +231,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     have hC := foldl_of_steps
       (fun i => FullRound.value (FullRound.params roundConstants mds (60 + i))) st 32 4
       hstepC
-    refine ⟨⟨hw0, hw1, hw2, ?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
     · intro i
       have hleaf := SubcircuitRw.region_completeness_leaf_placed (fullRound ↑i) cfg
         (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) () (hwA i)

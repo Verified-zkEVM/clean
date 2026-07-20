@@ -786,7 +786,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       offset hTableLt numWords hLoop
     -- z_0 = element (copy)
     have hz0 : f 0 = input_element := by
-      simp only [hf_def, zChain, add_zero]; rw [hCopy]; exact h_input
+      simp only [hf_def, zChain, add_zero]; rw [hCopy]
     -- the telescoping decomposition (soundly available regardless of `strict`)
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     -- resolve the output cells (case on `strict` to compute the tail ops)
@@ -826,7 +826,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     have heInput : eCell = input_element := h_input
     -- z_0 = element cell (from the copy's assignAdvice witness)
     have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
-      simp only [zChain, add_zero, heCell, hCopyWit]
+      simp only [zChain, add_zero, heInput, hCopyWit]
     -- the honest z-chain up to numWords: `z_j = ↑(eCell.val ≫ (K·j))`
     have hz : ∀ j, j ≤ numWords → zChain K cfg place self env.toEnvironment offset j
         = ((eCell.val / 2 ^ (K * j) : ℕ) : Fp) := by
@@ -835,7 +835,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       · simp only [Nat.mul_zero, pow_zero, Nat.div_one, hz0, ZMod.natCast_zmod_val]
       · exact rangeCheck_loop_zvalues K cfg input_var_element place self env offset
           numWords hLoopWit j hjpos hj
-    refine ⟨⟨hCopyWit, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- the loop's Constraints (membership at each round), via the completeness loop lemma
       exact rangeCheck_loop_constraints_complete K cfg input_var_element place self
         env.toEnvironment offset eCell.val hKcard hUsable hTableEq numWords hz
@@ -1046,10 +1046,8 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
     obtain ⟨hOz0, hOz1, hOz13⟩ := h_output
     rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
       show output_z1 = f 1 from by rw [← hOz1]; simp only [hf_def, zChain],
-      show output_z13 = f 13 from by rw [← hOz13]; simp only [hf_def, zChain],
-      show env.advice cfg.runningSum ((place self + offset : ℕ) : ℤ) = f 0
-        from by simp only [hf_def, zChain, add_zero]]
-    refine ⟨rfl, ?_, ?_, ?_⟩
+      show output_z13 = f 13 from by rw [← hOz13]; simp only [hf_def, zChain]]
+    refine ⟨trivial, ?_, ?_, ?_⟩
     · exact chain_element_lt 10 numWords hCard f hwords hzLast0
     · simpa only [show (10 * 1 : ℕ) = 10 from by norm_num] using
         chain_read 10 numWords hpow f hwords hzLast0 1 (by omega)
