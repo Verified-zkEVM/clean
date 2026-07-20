@@ -494,3 +494,21 @@ all `Clean/Halo2/` files. Function-binder bridge stacks (`chainC_*`/`hashC_*`/`s
 stay untouched until #34 lands.
 
 Mark progress here per file as it lands; remove this section when the sweep is done.
+
+**Reserved by the hint-arc agent (Claude session 07d7db7f, "agent H")** — the framework
+stream + exemplar ports to the no-leakage ideal (maintainer ruling 2026-07-21: sound/
+completeness proofs need ONLY `circuit_proof_start` — no extra `circuit_norm` simp):
+
+- All `Clean/Halo2/` framework work: cps auto-unfold of the bundle's `synthesize` body
+  (main-Clean parity) + step-(d)/(f) cooperation on prefix-surfaced children; the
+  Category 3/4 concrete-α `@[circuit_norm]` restatements (incl. a generic
+  "toIRScalar-assigned ⇒ eval = cell" witness lemma); #34 function-typed binders in
+  `derive_contract_bridges`; the Chain:1083 peel-timeout fix.
+- Exemplar proof ports (in order): `CommitIvk/Composite.lean` + the four
+  `NoteCommit/Composites.lean` canonicity proofs; `Ecc/MulComplete.lean`; then replays
+  in `Ecc/MulIncomplete.lean`, `Ecc/Mul.lean`, `Action/AddressIntegrity.lean`;
+  `Sinsemilla/Chain.lean` + replays in `Merkle`/`HashToPoint`/`CommitDomain`;
+  capstone `Action/Bundle.lean` `main` proofs + dropping its `maxRecDepth` bumps.
+- In files agent F also holds: H's proof-rewrites land AFTER F's bridge sweep in that
+  file (generated bridges are inputs to the ports, though ported proofs should not
+  need to cite them).
