@@ -149,32 +149,10 @@ def ProverSpec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y
 
--- contract bridges for the chain child (`derive_contract_bridges` chokes on the
--- function-typed `yaIn` binder — hand-written, the `slotC_*` pattern)
-private theorem chainC_spec_eq (G : Generators) (ns : List ℕ) (Q : Point Fp) :
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).Spec
-      = fun input output wit => Sinsemilla.Chain.Spec G ns input output wit := rfl
-
-private theorem chainC_assumptions_eq (G : Generators) (ns : List ℕ) (Q : Point Fp) :
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).Assumptions = fun _ => True := rfl
-
-private theorem chainC_envAssumptions_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (cfg : Sinsemilla.HashPiece.Config) (env : Placed Environment Fp) :
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).EnvAssumptions cfg env
-      = Halo2.Ironwood.Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env := rfl
-
-private theorem chainC_proverAssumptions_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
-    (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).ProverAssumptions input wit hint
-      = Sinsemilla.Chain.ProverAssumptions G ns input wit := rfl
-
-private theorem chainC_proverSpec_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
-    (output : Value Sinsemilla.Chain.Output Fp)
-    (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).ProverSpec input output wit hint
-      = Sinsemilla.Chain.ProverSpec G ns input output wit := rfl
+-- contract bridges for the chain child (generated; the `fun _ => Q.y` accumulator seed
+-- is a closed term under the binders)
+derive_contract_bridges chainC (G : Generators) (ns : List ℕ) (Q : Point Fp) :=
+  Sinsemilla.Chain.circuit G ns (fun _ => Q.y)
 
 /-- Literal-eval bridge for the output record. -/
 private theorem out_eval_lit {k : ℕ} (env : Placed Environment Fp)
@@ -522,5 +500,11 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
   ext j hj
   simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+
+/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
+folded). Single home for the `hashC_*` stacks formerly copy-pasted per consumer file. -/
+
+derive_contract_bridges hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp)
+  (hQ : Q.OnCurve) (hns : ns ≠ []) := hashCircuit G ns Q hQ hns
 
 end Halo2.Ironwood.Sinsemilla.HashToPoint

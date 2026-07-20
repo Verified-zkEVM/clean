@@ -92,33 +92,8 @@ def blindingFactor (R : FixedBase) :
 
 open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint)
 
--- local contract bridges for the hash child (proof-typed binders)
-private theorem hashC_spec_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ []) :
-    (HashToPoint.hashCircuit G ns Q hQ hns).Spec
-      = fun input output wit => HashToPoint.Spec G ns Q input output wit := rfl
-
-private theorem hashC_envAssumptions_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ [])
-    (cfg : HashPiece.Config) (env : Placed Environment Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns).EnvAssumptions cfg env
-      = Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env := rfl
-
-private theorem hashC_proverAssumptions_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ [])
-    (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
-    (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions input wit hint
-      = HashToPoint.ProverAssumptions G ns Q input := rfl
-
-private theorem hashC_proverSpec_eq' (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (hQ : Q.OnCurve) (hns : ns ≠ [])
-    (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
-    (output : Value (HashToPoint.Output ns.length) Fp)
-    (wit : Sinsemilla.Chain.ChainWit ns Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G ns Q hQ hns).ProverSpec input output wit hint
-      = HashToPoint.ProverSpec G ns Q input output := rfl
-
+-- contract bridges for the hash child come from the generated
+-- `HashToPoint.hashCircuit_*` home stack
 /-- The region count of `commit`: the blinding child's two regions, the hash region, the
 final complete addition. -/
 private theorem commit_regionCount
@@ -238,8 +213,8 @@ def commit (G : Generators) (ns : List ℕ)
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
     -- the hash child's contract
-    have hHashS := hHash (by rw [hashC_envAssumptions_eq']; exact hTableE) trivial
-    rw [hashC_spec_eq',
+    have hHashS := hHash (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE) trivial
+    rw [HashToPoint.hashCircuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_call_regionCount R cfg.1 input_var.r i₀] at hHashS
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
     -- input eval landing: hPC is in the componentwise normal form; bridge to the
@@ -312,13 +287,13 @@ def commit (G : Generators) (ns : List ℕ)
             i₀).regionCount)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
         env.hint := by
-      rw [hashC_proverAssumptions_eq']
+      rw [HashToPoint.hashCircuit_proverAssumptions_eq]
       simp only [hpe]
       exact ⟨hns, hPBounds, ⟨bx, byv⟩, hB0⟩
     -- the hash child's honest contract (prover side: the output point IS the honest hash)
-    have hPSHash := (h_spec_1 (by rw [hashC_envAssumptions_eq']; exact hTableE)
+    have hPSHash := (h_spec_1 (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE)
       trivial (by with_unfolding_all exact hPAhash)).2
-    rw [hashC_proverSpec_eq'] at hPSHash
+    rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by
       simp only [hpe]; exact hB0)
     -- the prover contract's output is the verifier eval over the hint-erased env;
@@ -343,7 +318,7 @@ def commit (G : Generators) (ns : List ℕ)
     refine ⟨⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE,
       by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
-      ⟨by rw [hashC_envAssumptions_eq']; exact hTableE, trivial,
+      ⟨by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE, trivial,
         by with_unfolding_all exact hPAhash⟩,
       trivial, ?_, trivial⟩
     show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point

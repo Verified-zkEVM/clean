@@ -20,46 +20,8 @@ open Halo2.Ironwood.Poseidon
 open Halo2.Ironwood.Poseidon.Permute (State)
 open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
 
--- contract bridges for the round chunks
-private theorem fullRound_spec_eq (r : ℕ) :
-    (fullRound r).Spec = fun _ out w =>
-      out = FullRound.value (FullRound.params roundConstants mds r) w := rfl
-
-private theorem fullRound_assumptions_eq (r : ℕ) :
-    (fullRound r).Assumptions = fun _ => True := rfl
-
-private theorem fullRound_envAssumptions_eq (r : ℕ) (cfg : Config)
-    (env : Placed Environment Fp) :
-    (fullRound r).EnvAssumptions cfg env = True := rfl
-
-private theorem fullRound_extract_eq (r : ℕ) (cfg : Config) (offset : ℕ)
-    (input : Var unit Fp) (self : RegionIndex) (env : Placed Environment Fp) :
-    (fullRound r).extract cfg offset input self env
-      = eval env (stateRow cfg offset self) := rfl
-
-private theorem partialRound_spec_eq (r : ℕ) :
-    (partialRound r).Spec = fun _ out w =>
-      out = PartialRounds.value (PartialRounds.paramsP128 roundConstants r) w := rfl
-
-private theorem partialRound_assumptions_eq (r : ℕ) :
-    (partialRound r).Assumptions = fun _ => True := rfl
-
-private theorem partialRound_envAssumptions_eq (r : ℕ) (cfg : Config)
-    (env : Placed Environment Fp) :
-    (partialRound r).EnvAssumptions cfg env = True := rfl
-
-private theorem partialRound_extract_eq (r : ℕ) (cfg : Config) (offset : ℕ)
-    (input : Var unit Fp) (self : RegionIndex) (env : Placed Environment Fp) :
-    (partialRound r).extract cfg offset input self env
-      = eval env (stateRow cfg offset self) := rfl
-
-private theorem fullRound_proverAssumptions_eq (r : ℕ) (input : ProverValue unit Fp)
-    (w : State Fp) (hint : ProverHint Fp) :
-    (fullRound r).ProverAssumptions input w hint = True := rfl
-
-private theorem partialRound_proverAssumptions_eq (r : ℕ) (input : ProverValue unit Fp)
-    (w : State Fp) (hint : ProverHint Fp) :
-    (partialRound r).ProverAssumptions input w hint = True := rfl
+/- Contract bridges for the round chunks come from the generated `fullRound_*` /
+`partialRound_*` home stacks (Rounds.lean); only the applied output-cell bridges stay. -/
 
 private theorem fullRound_output_eq (r : ℕ) (cfg : Config) (o : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
@@ -254,5 +216,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     show st (32 + 4) = Permute.value roundConstants (st 0)
     rw [hC, show (32 : ℕ) = 4 + 28 from rfl, hB, show (4 : ℕ) = 0 + 4 from rfl, hA]
     rfl
+
+derive_contract_bridges permuteRegion := permuteRegion
 
 end Halo2.Ironwood.Poseidon

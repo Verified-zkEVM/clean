@@ -866,37 +866,8 @@ derive_contract_bridges shortC (K : ℕ) (numBits : ℕ) :=
 
 derive_contract_bridges gateC (lv : Fp) := Gate.circuit lv
 
--- contract bridges for the children (hand-written for the proof-typed binders)
-private theorem hashC_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : HashLayer.merkleNs ≠ []) :
-    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns).Spec
-      = fun input output wit => HashToPoint.Spec G HashLayer.merkleNs Q input output wit := rfl
-
-private theorem hashC_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : HashLayer.merkleNs ≠ []) :
-    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns).Assumptions = fun _ => True := rfl
-
-private theorem hashC_envAssumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : HashLayer.merkleNs ≠ [])
-    (cfg : Sinsemilla.HashPiece.Config) (env : Placed Environment Fp) :
-    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns).EnvAssumptions cfg env
-      = Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env := rfl
-
-private theorem hashC_proverAssumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : HashLayer.merkleNs ≠ [])
-    (input : Value (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp)
-    (wit : Sinsemilla.Chain.ChainWit HashLayer.merkleNs Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns).ProverAssumptions input wit hint
-      = HashToPoint.ProverAssumptions G HashLayer.merkleNs Q input := rfl
-
-private theorem hashC_proverSpec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (hns : HashLayer.merkleNs ≠ [])
-    (input : Value (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp)
-    (output : Value (HashToPoint.Output HashLayer.merkleNs.length) Fp)
-    (wit : Sinsemilla.Chain.ChainWit HashLayer.merkleNs Fp) (hint : ProverHint Fp) :
-    (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ hns).ProverSpec input output wit hint
-      = HashToPoint.ProverSpec G HashLayer.merkleNs Q input output := rfl
-
+-- contract bridges for the hash child come from the generated
+-- `HashToPoint.hashCircuit_*` home stack
 /-- The suffix sum of bounded digits is the `pieceZ` of the recombined value (digit
 canonicity: the value's `val` is the digit sum, and dividing by `2^K` drops the head). -/
 private theorem sum_z1_eq_pieceZ {n : ℕ} (hn : K * (n + 1) ≤ 250) {ms : ℕ → ℕ}
@@ -984,7 +955,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     subcircuit_rw at hc
     simp only [shortC_spec_eq, shortC_assumptions_eq, shortC_envAssumptions_eq,
       gateC_spec_eq, gateC_assumptions_eq, gateC_envAssumptions_eq,
-      hashC_spec_eq, hashC_assumptions_eq, hashC_envAssumptions_eq] at hc
+      HashToPoint.hashCircuit_spec_eq, HashToPoint.hashCircuit_assumptions_eq, HashToPoint.hashCircuit_envAssumptions_eq] at hc
     obtain ⟨hB1, hB2, hHash, hGate⟩ := hc
     obtain ⟨hEgen, hEtab, hEdist⟩ := _hE
     have hAshort : (5 : ℕ) ≤ 10 ∧ 2 ^ 10 * 2 ^ 10 < PALLAS_BASE_CARD := by
@@ -1182,7 +1153,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
               AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
           (i₀ + 3 + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
-      rw [hashC_proverAssumptions_eq]
+      rw [HashToPoint.hashCircuit_proverAssumptions_eq]
       rw [ProvableStruct.eval_cells_eq_eval_prover, Sinsemilla.Chain.inputs_eval_literal,
         show ProvableType.eval (M := fields HashLayer.merkleNs.length) place
           env.toEnvironment
@@ -1236,8 +1207,8 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
       hWhash _hE.1 trivial hPAhash
     obtain ⟨hSpecH, hPSH⟩ := hder
-    rw [hashC_spec_eq] at hSpecH
-    rw [hashC_proverSpec_eq] at hPSH
+    rw [HashToPoint.hashCircuit_spec_eq] at hSpecH
+    rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSH
     rw [HashToPoint.hashCircuit_output_eval] at hSpecH
     obtain ⟨chunksH, hPCH, hZsH, -, -⟩ := hSpecH
     -- normalize the verifier-view spellings to the prover reads
@@ -1632,38 +1603,9 @@ deriving ProvableStruct
 
 end Layer
 
--- contract bridges for the layer's children (hand-written for the proof-typed binders)
-private theorem hashLayerC_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) :
-    (HashLayer.circuit G Q hQ l hl).Spec
-      = fun input output _ => HashLayer.Spec G Q l input output () := rfl
-
-private theorem hashLayerC_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) :
-    (HashLayer.circuit G Q hQ l hl).Assumptions = fun _ => True := rfl
-
-private theorem hashLayerC_envAssumptions_eq (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (cfg : Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (HashLayer.circuit G Q hQ l hl).EnvAssumptions cfg env
-      = (Sinsemilla.GeneratorTableLoaded G cfg.1.sinsemilla.generatorTable env.env ∧
-        Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 cfg.2 env.env ∧
-        cfg.2.qLookup.index ≠ cfg.2.qRunning.index) := rfl
-
-private theorem hashLayerC_proverAssumptions_eq (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (input : Value HashLayer.Input Fp) (wit : Value unit Fp) (hint : ProverHint Fp) :
-    (HashLayer.circuit G Q hQ l hl).ProverAssumptions input wit hint
-      = HashLayer.ProverAssumptions G Q l input := rfl
-
-private theorem hashLayerC_proverSpec_eq (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (input : Value HashLayer.Input Fp) (output : Value field Fp)
-    (wit : Value unit Fp) (hint : ProverHint Fp) :
-    (HashLayer.circuit G Q hQ l hl).ProverSpec input output wit hint
-      = ∀ B, hashToPoint G.S Q (merkleChunks l (ZMod.val (show Fp from input.left))
-          (ZMod.val (show Fp from input.right))) = some B → output = B.x := rfl
+-- contract bridges for the layer's hash child (generated)
+derive_contract_bridges HashLayer.circuit (G : Generators) (Q : Point Fp)
+  (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10) := HashLayer.circuit G Q hQ l hl
 
 /-- The region count of the layer: the swap region + the hash layer's 7. -/
 private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -1761,7 +1703,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         = (ProvableStruct.eval place env x_gen_out_0).bSwapped := by
       with_unfolding_all rfl
     have hHashS := hHash ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
-    rw [hashLayerC_spec_eq] at hHashS
+    rw [HashLayer.circuit_spec_eq] at hHashS
     obtain ⟨lv, rv, hlv, hrv, hleftEq, hrightEq, hcontract⟩ := hHashS
     rw [show ({ left := env.get x_gen_out_0.aSwapped.cell.column
                   ((place x_gen_out_0.aSwapped.cell.regionIndex
@@ -1829,7 +1771,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         ((HashLayer.circuit G Q hQ l hl).extract (cfg.2.1, cfg.2.2)
           { left := x_gen_out_0.aSwapped, right := x_gen_out_0.bSwapped } (i₀ + 1)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
-      rw [hashLayerC_proverAssumptions_eq]
+      rw [HashLayer.circuit_proverAssumptions_eq]
       refine ⟨B0, ?_⟩
       show hashToPoint G.S Q (merkleChunks l
           (ZMod.val (env.get x_gen_out_0.aSwapped.cell.column
@@ -1852,7 +1794,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     -- the honest-prover contract
     intro B hB
     have hPShash := (h_spec_1 ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial hPAhash).2
-    rw [hashLayerC_proverSpec_eq] at hPShash
+    rw [HashLayer.circuit_proverSpec_eq] at hPShash
     have hres := hPShash B (by
       show hashToPoint G.S Q (merkleChunks l
           (ZMod.val (env.get x_gen_out_0.aSwapped.cell.column

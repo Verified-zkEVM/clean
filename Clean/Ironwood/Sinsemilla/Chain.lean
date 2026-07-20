@@ -388,34 +388,13 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         (by rw [h_input]; exact hchain')
       exact hres
 
-/-! Contract bridges for the slot child (hand-written rfl — `derive_contract_bridges`
-chokes on the function-typed `yaIn` binder). -/
+/-! Contract bridges for the slot child (generated — including over the function-typed
+`yaIn` binder); only the applied deep-extract bridge stays hand-written. -/
 
-private theorem slotC_spec_eq (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
-    (slot G ns yaIn i).Spec = fun piece _ w => SlotSpec G (ns.getD i 0) piece w := rfl
+derive_contract_bridges slotC (G : Generators) (ns : List ℕ)
+  (yaIn : Placed Environment Fp → Fp) (i : ℕ) := slot G ns yaIn i
 
-private theorem slotC_assumptions_eq (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
-    (slot G ns yaIn i).Assumptions = fun _ => True := rfl
-
-private theorem slotC_envAssumptions_eq (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
-    (env : Placed Environment Fp) :
-    (slot G ns yaIn i).EnvAssumptions cfg env
-      = GeneratorTableLoaded G cfg.generatorTable env.env := rfl
-
-private theorem slotC_proverAssumptions_eq (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
-    (slot G ns yaIn i).ProverAssumptions
-      = fun piece w _ => SlotPA G (ns.getD i 0) piece w := rfl
-
-private theorem slotC_proverSpec_eq (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
-    (slot G ns yaIn i).ProverSpec
-      = fun piece _ w _ => SlotPS G (ns.getD i 0) piece w := rfl
-
-private theorem slotC_extract_eq (G : Generators) (ns : List ℕ)
+private theorem slotC_extract_cells (G : Generators) (ns : List ℕ)
     (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config) (base : ℕ)
     (iv : AssignedCell Fp) (self : RegionIndex) (env : Placed Environment Fp) :
     (slot G ns yaIn i).extract cfg base iv self env
@@ -1090,7 +1069,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       RegionCircuit.forRangeVar'_constraints, HashPiece.operations_readState] at hc
     subcircuit_rw at hc
     simp only [slotC_spec_eq, slotC_assumptions_eq, slotC_envAssumptions_eq,
-      slotC_extract_eq, sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
+      slotC_extract_cells, sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
       HashPiece.xRExpr, Constraints.withSelector, SlotSpec, slotReads,
       circuit_norm] at hc
     -- per-slot facts and the totalized word family
@@ -1258,7 +1237,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
               (eval env (input_var.pieces[m]! : Var field Fp))
               ((slot G ns yaIn m).extract cfg (offset + prefixRows ns m)
                 (input_var.pieces[m]!) self env.toEnvironment) := by
-            rw [slotC_extract_eq, slotReads_eval]
+            rw [slotC_extract_cells, slotReads_eval]
             simp only [AssignedCell.eval, eval_field_cell]
             refine ⟨?_, Cm, Dm, hCon, ?_, ?_, ?_⟩
             · have hb := pieceBounds_getElem ns input.pieces hbounds ⟨m, by omega⟩
@@ -1276,7 +1255,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             (by rw [slotC_proverAssumptions_eq]; exact hPAm)
           rw [slotC_proverSpec_eq] at hder
           obtain ⟨-, hPS⟩ := hder
-          rw [SlotPS, slotC_extract_eq, slotReads_eval] at hPS
+          rw [SlotPS, slotC_extract_cells, slotReads_eval] at hPS
           simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
             Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
           have hfacts := hPS Cm Dm hCx hCy (by
@@ -1365,7 +1344,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             (eval env (input_var.pieces[m]! : Var field Fp))
             ((slot G ns yaIn m).extract cfg (offset + prefixRows ns m)
               (input_var.pieces[m]!) self env.toEnvironment) := by
-          rw [slotC_extract_eq, slotReads_eval]
+          rw [slotC_extract_cells, slotReads_eval]
           simp only [AssignedCell.eval, eval_field_cell]
           refine ⟨?_, Ci, Di, hCon, ?_, ?_, ?_⟩
           · have hb := pieceBounds_getElem ns input.pieces hbounds ⟨m, hm⟩
@@ -1382,7 +1361,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           (by rw [slotC_proverAssumptions_eq]; exact hPAi)
         rw [slotC_proverSpec_eq] at hder
         obtain ⟨-, hPS⟩ := hder
-        rw [SlotPS, slotC_extract_eq, slotReads_eval] at hPS
+        rw [SlotPS, slotC_extract_cells, slotReads_eval] at hPS
         simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
           Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
         have hfacts := hPS Ci Di hCx hCy (by

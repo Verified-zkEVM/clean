@@ -127,17 +127,10 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
--- contract bridges for the hash children
-private theorem initRegion_spec_eq (capacity : Fp) :
-    (initRegion capacity).Spec = fun _ out _ =>
-      out = ({ x0 := 0, x1 := 0, x2 := capacity } : State Fp) := rfl
+-- contract bridges for the hash children (generated at the bundle defs)
+derive_contract_bridges initRegion (capacity : Fp) := initRegion capacity
 
-private theorem addInputRegion_spec_eq :
-    addInputRegion.Spec = fun input out _ => out = Sponge.AddInput.value input := rfl
-
-private theorem permuteRegion_spec_eq :
-    permuteRegion.Spec = fun input out _ =>
-      out = Permute.value roundConstants input := rfl
+derive_contract_bridges addInputRegion := addInputRegion
 
 /-- The region count of `hash`: three regions. -/
 private theorem hash_regionCount (capacity : Fp) (cfg : Config)
