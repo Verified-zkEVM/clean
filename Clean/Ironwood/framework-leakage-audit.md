@@ -496,6 +496,22 @@ stay untouched until #34 lands.
 Mark progress here per file as it lands; remove this section when the sweep is done.
 
 **Agent F progress (July 21):**
+- **The Category 1/2 sweep is COMPLETE** (commits 6498ca16, ed692bda, 17a73285,
+  f9fd0972): every hand-written contract-projection bridge stack in the reserved file
+  list is deleted in favor of `derive_contract_bridges` home stacks; the Category-2
+  five-site duplicates (short/rangeCheckAt/commit/yc/toFormal-generic) have single
+  homes; Action/Bundle's 43 Category-1 bridges are gone (its `with_unfolding_all`
+  epicenter and eval/output bridges remain — that is the Category-3 port).
+- **NOTE for agent H — #34 may be MOOT**: after the mvar-instantiation fix in
+  `buildBridges` (instantiate after the defeq check; commit ed692bda), proof-typed
+  binders (`hQ : Q.OnCurve`, `hns : ns ≠ []`, `h13 : 13 ≤ n`) AND function-typed
+  binders (`yaIn : Placed Environment Fp → Fp`, `wsib : ℕ → WitgenIR Fp 1`,
+  `wswap : ℕ → Placed ProverEnvironment Fp → Bool`) all derive cleanly — the
+  slotC/chainC/hashC/hashLayerC/CalculateRoot stacks are all generated now. The
+  "chokes on function-typed binders" comments were stale.
+- Still hand-written (needs a framework-stream reduction strategy, audit 1c): the
+  region-level `*_output` cell-record bridges and applied deep-extract
+  `*_extract_cells` — a whnf field projection cannot produce their reduced RHS.
 - DONE (commit 6498ca16): leaf gadgets + Action composites. Home derives at
   `Ecc/Add` (toFormal), `Ecc/WitnessPoint` (pointNonId.toFormal, `_output` bridge kept —
   no command support), `Ecc/MulFixed/{FullWidth,Short,BaseFieldElem}`, `Ecc/Mul`,
