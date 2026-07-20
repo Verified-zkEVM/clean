@@ -93,11 +93,16 @@ def buildBridges (baseName : Name) (bundle : Expr) :
     -- form a Π type over a proof — the latent bug that surfaced once binders were allowed).
     let proof? ← try
       let pf ← mkLambdaFVars fvars (← mkEqRefl lhs)
-      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then pure (some pf)
+      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then
+        -- re-instantiate AFTER the defeq check (it may assign remaining mvars, e.g. from
+        -- instance synthesis under Prop-typed binders); a decl with mvars is kernel-rejected
+        let genTy ← instantiateMVars genTy
+        let pf ← instantiateMVars pf
+        if genTy.hasMVar || pf.hasMVar then pure none else pure (some (genTy, pf))
       else pure none
     catch _ => pure none
     match proof? with
-    | some pf =>
+    | some (genTy, pf) =>
       -- single-component name `<base>_<suffix>_eq`, in the base's namespace
       let thmName := match baseName with
         | .str p s => p ++ Name.mkSimple (s ++ "_" ++ suffix ++ "_eq")
@@ -149,11 +154,14 @@ def buildRegionCountBridge (baseName : Name) (bundle : Expr) :
     let proof? ← try
       let pf ← mkLambdaFVars fvars
         (← mkAppM ``Halo2.FormalCircuit.call_regionCount #[bundle, config, input, j])
-      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then pure (some pf)
+      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then
+        let genTy ← instantiateMVars genTy
+        let pf ← instantiateMVars pf
+        if genTy.hasMVar || pf.hasMVar then pure none else pure (some (genTy, pf))
       else pure none
     catch _ => pure none
     match proof? with
-    | some pf =>
+    | some (genTy, pf) =>
       let thmName := match baseName with
         | .str p s => p ++ Name.mkSimple (s ++ "_call_regionCount")
         | _ => baseName ++ Name.mkSimple "call_regionCount"

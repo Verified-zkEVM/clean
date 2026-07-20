@@ -21,122 +21,14 @@ open CompElliptic.Fields.Pasta (Fq)
 open Halo2.Ironwood.NoteCommit.Main (brWit currentRegion)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
-/-! ## Child contract bridges (`rfl`, children stay folded) -/
-
-private theorem short_spec_eq (b : ℕ) :
-    (LookupRangeCheck.shortRangeCheck 10 b).Spec
-      = fun _ (elt : Fp) _ => elt.val < 2 ^ b := rfl
-
-private theorem short_assumptions_eq (b : ℕ) :
-    (LookupRangeCheck.shortRangeCheck 10 b).Assumptions
-      = fun _ => b ≤ 10 ∧ 2 ^ 10 * 2 ^ 10 < PALLAS_BASE_CARD := rfl
-
-private theorem short_envAssumptions_eq (b : ℕ) (cfg : LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (LookupRangeCheck.shortRangeCheck 10 b).EnvAssumptions cfg env
-      = (LookupRangeCheck.TableLoaded 10 cfg env.env ∧
-          cfg.qLookup.index ≠ cfg.qRunning.index) := rfl
+/-! ## Child contract bridges — the contract projections come from the generated home
+stacks (`LookupRangeCheck.shortRangeCheck_*`, `Sinsemilla.CommitDomain.commit_*`,
+`Canonicity.circuit_*`); only the region-level output-cell bridge stays hand-written. -/
 
 private theorem short_output (b : ℕ) (cfg : LookupRangeCheck.Config 10)
     (i : RegionIndex) :
     (LookupRangeCheck.shortRangeCheck 10 b).output cfg 0 () i
       = AssignedCell.of i 0 cfg.runningSum := rfl
-
-private theorem short_proverAssumptions_eq (b : ℕ) :
-    (LookupRangeCheck.shortRangeCheck 10 b).ProverAssumptions
-      = fun _ (wit : Fp) _ => wit.val < 2 ^ b := rfl
-
-private theorem commit_spec_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Spec
-      = fun input (output : Value Point Fp) wit =>
-          ∃ chunks : List ℕ,
-            Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
-            Sinsemilla.Chain.ZsFacts ns chunks wit.1.zs ∧
-            ∀ B, hashToPoint G.S Q chunks = some B →
-              output.Valid ∧ output = B + (wit.2.2 • R : Point Fp) := rfl
-
-private theorem commit_assumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Assumptions
-      = fun _ => True := rfl
-
-private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).EnvAssumptions
-        c env
-      = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
-          Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
-
-private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).ProverAssumptions
-      = fun input _ _ =>
-          Sinsemilla.Chain.PieceBounds ns input.pieces ∧
-          (∃ B, hashToPoint G.S Q
-            (Sinsemilla.Chain.honestChunks ns input.pieces) = some B) := rfl
-
-private theorem commit_extract_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).extract
-        c inp i env
-      = ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
-          { pieces := inp.pieces } (i + 2) env,
-         Ecc.MulFixed.FullWidth.fwExtract c.1 i env) := rfl
-
-private theorem canon_spec_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (Canonicity.circuit wb1 wd1).Spec
-      = fun input _ (wit : Fp × Fp) =>
-          input.a.val = bitrange input.ak.val 0 250 ∧
-          input.b0.val = bitrange input.ak.val 250 4 ∧
-          wit.1.val = bitrange input.ak.val 254 1 ∧
-          input.b2.val = bitrange input.nk.val 0 5 ∧
-          input.c.val = bitrange input.nk.val 5 240 ∧
-          input.d0.val = bitrange input.nk.val 245 9 ∧
-          wit.2.val = bitrange input.nk.val 254 1 ∧
-          input.bWhole = input.b0 + wit.1 * 16 + input.b2 * 32 ∧
-          input.dWhole = input.d0 + wit.2 * 512 := rfl
-
-private theorem canon_assumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (Canonicity.circuit wb1 wd1).Assumptions
-      = fun input =>
-          input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧ input.b2.val < 2 ^ 5 ∧
-          input.c.val < 2 ^ 240 ∧ input.d0.val < 2 ^ 9 ∧
-          input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-          input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) := rfl
-
-private theorem canon_extract_eq (wb1 wd1 : WitgenIR Fp 1)
-    (c : CommitIvk.Config × LookupRangeCheck.Config 10)
-    (inp : Var Canonicity.Inputs Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (Canonicity.circuit wb1 wd1).extract c inp i env
-      = (eval env (AssignedCell.of (i + 2) 0 (c.1.advices 4) : Var field Fp),
-         eval env (AssignedCell.of (i + 2) 1 (c.1.advices 4) : Var field Fp)) := rfl
-
-private theorem canon_envAssumptions_eq (wb1 wd1 : WitgenIR Fp 1)
-    (c : CommitIvk.Config × LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (Canonicity.circuit wb1 wd1).EnvAssumptions c env
-      = (LookupRangeCheck.TableLoaded 10 c.2 env.env ∧
-          c.2.qLookup.index ≠ c.2.qRunning.index) := rfl
-
-private theorem canon_proverAssumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (Canonicity.circuit wb1 wd1).ProverAssumptions
-      = fun input (wit : Fp × Fp) _ =>
-          input.a.val = bitrange input.ak.val 0 250 ∧
-          input.b0.val = bitrange input.ak.val 250 4 ∧
-          wit.1.val = bitrange input.ak.val 254 1 ∧
-          input.b2.val = bitrange input.nk.val 0 5 ∧
-          input.c.val = bitrange input.nk.val 5 240 ∧
-          input.d0.val = bitrange input.nk.val 245 9 ∧
-          wit.2.val = bitrange input.nk.val 254 1 ∧
-          input.bWhole = input.b0 + wit.1 * 16 + input.b2 * 32 ∧
-          input.dWhole = input.d0 + wit.2 * 512 := rfl
 
 /-! ## Value-level infrastructure -/
 
@@ -241,32 +133,32 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   subcircuit_rw at hSb0
   subcircuit_rw at hSb2
   subcircuit_rw at hSd0
-  have hb0 := hSb0 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hb0 := hSb0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hb0
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hb0
   simp only [circuit_norm] at hb0
-  have hb2 := hSb2 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hb2 := hSb2 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hb2
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hb2
   simp only [circuit_norm] at hb2
-  have hd0 := hSd0 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hd0 := hSd0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hd0
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hd0
   simp only [circuit_norm] at hd0
   clear hSb0 hSb2 hSd0
   -- ── the commitment ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc] at hCm hCan
-  rw [commit_call_regionCount] at hCan
+  rw [Sinsemilla.CommitDomain.commit_call_regionCount] at hCan
   simp only [Nat.reduceAdd] at hCan
   subcircuit_rw at hCm
   have hCmS := hCm
-    (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
-    (by rw [commit_assumptions_eq]; trivial)
-  rw [commit_spec_eq, commit_extract_eq] at hCmS
+    (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
+    (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial)
+  rw [Sinsemilla.CommitDomain.commit_spec_eq, Sinsemilla.CommitDomain.commit_extract_eq] at hCmS
   clear hCm
   simp only [circuit_norm] at hCmS
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
@@ -288,8 +180,8 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     ⟨2, by decide⟩ hPC' (by decide)
   -- ── the canonicity composite ──
   subcircuit_rw at hCan
-  have hCanS := hCan (by rw [canon_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [canon_assumptions_eq]
+  have hCanS := hCan (by rw [Canonicity.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [Canonicity.circuit_assumptions_eq]
         simp only [circuit_norm, zCell, prefixRows_ns_2,
           AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.reduceAdd,
@@ -299,7 +191,7 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
         · with_unfolding_all exact hpieceC
         · with_unfolding_all exact hz13a
         · with_unfolding_all exact hz13c)
-  rw [canon_spec_eq, canon_extract_eq] at hCanS
+  rw [Canonicity.circuit_spec_eq, Canonicity.circuit_extract_eq] at hCanS
   clear hCan
   simp only [circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -567,15 +459,15 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
     with_unfolding_all rfl
   have h := (Halo2.SubcircuitRw.layouter_completeness_derived
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil) c i place env inp hw
-    hEnvA (by rw [commit_assumptions_eq]; trivial)
-    (by rw [commit_proverAssumptions_eq]
+    hEnvA (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial)
+    (by rw [Sinsemilla.CommitDomain.commit_proverAssumptions_eq]
         change Sinsemilla.Chain.PieceBounds ns
             (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces ∧
           ∃ B, hashToPoint G.S Q (Sinsemilla.Chain.honestChunks ns
             (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces) = some B
         rw [hpeP]
         exact ⟨hPB', hHon'⟩)).1
-  rw [commit_spec_eq, commit_extract_eq] at h
+  rw [Sinsemilla.CommitDomain.commit_spec_eq, Sinsemilla.CommitDomain.commit_extract_eq] at h
   rw [hpeE] at h
   simp only at h
   exact h
@@ -651,7 +543,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [Nat.add_assoc, Nat.reduceAdd] at hwa hwb0 hwb2 hwb hwc hwd0 hwd
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc] at hWcm hWCan
-  rw [commit_call_regionCount] at hWCan
+  rw [Sinsemilla.CommitDomain.commit_call_regionCount] at hWCan
   simp only [Nat.reduceAdd] at hWCan
   obtain ⟨hiak, hink, -⟩ := h_input
   -- ── honest piece facts ──
@@ -714,7 +606,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
     exact hB0
   have hCmS := commit_derived_spec G R Q hQ
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 7) place env _ hWcm
-    (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
+    (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     hPB2 hHon2
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
@@ -743,16 +635,16 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   -- ── assemble ──
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc]
-  rw [commit_call_regionCount]
+  rw [Sinsemilla.CommitDomain.commit_call_regionCount]
   simp only [Nat.reduceAdd]
   refine ⟨buildPieces cfg input_var_ak input_var_nk i₀ place _ ⟨?_, ?_, ?_⟩, ?_, ?_⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 1) place env ()
       hWrb0
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
              cfg.lookupConfig 0 ()
              (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
@@ -764,10 +656,10 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 5) cfg.lookupConfig 0 (i₀ + 2) place env ()
       hWrb2
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 5).extract
              cfg.lookupConfig 0 ()
              (i₀ + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 5
@@ -779,10 +671,10 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 9) cfg.lookupConfig 0 (i₀ + 5) place env ()
       hWrd0
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 9).extract
              cfg.lookupConfig 0 ()
              (i₀ + 5) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 9
@@ -794,9 +686,9 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 7) place env _ hWcm
-      ⟨(by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
-       (by rw [commit_assumptions_eq]; trivial),
-       (by rw [commit_proverAssumptions_eq]
+      ⟨(by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
+       (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial),
+       (by rw [Sinsemilla.CommitDomain.commit_proverAssumptions_eq]
            refine ⟨?_, ?_⟩
            · show Sinsemilla.Chain.PieceBounds ns _
              with_unfolding_all exact hPB
@@ -809,8 +701,8 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Canonicity.circuit (brWit input_var_ak 254 1) (brWit input_var_nk 254 1))
       (cfg.gate, cfg.lookupConfig) (i₀ + 11) place env _ hWCan
-      ⟨(by rw [canon_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [canon_assumptions_eq]
+      ⟨(by rw [Canonicity.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [Canonicity.circuit_assumptions_eq]
            simp only [circuit_norm, zCell, prefixRows_ns_2,
              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.reduceAdd,
@@ -826,7 +718,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
              exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
            · with_unfolding_all exact hz13a
            · with_unfolding_all exact hz13c),
-       (by rw [canon_proverAssumptions_eq, canon_extract_eq]
+       (by rw [Canonicity.circuit_proverAssumptions_eq, Canonicity.circuit_extract_eq]
            simp only [circuit_norm, zCell, prefixRows_ns_2,
              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,

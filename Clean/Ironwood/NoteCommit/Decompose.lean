@@ -78,6 +78,8 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · rcases hpa2 with h | h <;> rw [h] <;> ring
     · linear_combination hpa3
 
+derive_contract_bridges bundle (wb1 : WitgenIR Fp 1) := bundle wb1
+
 end DecomposeB
 
 namespace DecomposeD
@@ -132,6 +134,8 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · rcases hpa2 with h | h <;> rw [h] <;> ring
     · linear_combination hpa3
 
+derive_contract_bridges bundle (wd0 : WitgenIR Fp 1) := bundle wd0
+
 end DecomposeD
 
 namespace DecomposeE
@@ -167,6 +171,8 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
   completeness := by
     circuit_proof_start [gate]
     linear_combination hPA
+
+derive_contract_bridges bundle := bundle
 
 end DecomposeE
 
@@ -217,6 +223,8 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · linear_combination hpa2
 
+derive_contract_bridges bundle (wg0 : WitgenIR Fp 1) := bundle wg0
+
 end DecomposeG
 
 namespace DecomposeH
@@ -261,6 +269,8 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     refine ⟨⟨?_, ?_⟩, h_output.symm⟩
     · rcases hpa1 with h | h <;> rw [h] <;> ring
     · linear_combination hpa2
+
+derive_contract_bridges bundle (wh1 : WitgenIR Fp 1) := bundle wh1
 
 end DecomposeH
 

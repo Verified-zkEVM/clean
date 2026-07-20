@@ -354,4 +354,10 @@ def commit (G : Generators) (ns : List ℕ)
     · rw [hPB0]; exact hB0valid
     · rw [hBl]; exact R.smul_valid _
 
+/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
+folded). Single home for the `commit_*` stacks formerly copy-pasted per consumer file. -/
+
+derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
+  (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns
+
 end Halo2.Ironwood.Sinsemilla.CommitDomain

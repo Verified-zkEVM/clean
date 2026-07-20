@@ -25,84 +25,21 @@ open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 variable (n b : ℕ)
 
-private theorem short_spec_eq :
-    (LookupRangeCheck.shortRangeCheck 10 b).Spec
-      = fun _ (out : Fp) _ => out.val < 2 ^ b := rfl
-
-private theorem short_assumptions_eq :
-    (LookupRangeCheck.shortRangeCheck 10 b).Assumptions
-      = fun _ => b ≤ 10 ∧ 2 ^ 10 * 2 ^ 10 < PALLAS_BASE_CARD := rfl
-
-private theorem short_envAssumptions_eq (cfg : LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (LookupRangeCheck.shortRangeCheck 10 b).EnvAssumptions cfg env
-      = (LookupRangeCheck.TableLoaded 10 cfg env.env ∧
-          cfg.qLookup.index ≠ cfg.qRunning.index) := rfl
-
-private theorem short_output (cfg : LookupRangeCheck.Config 10) (i : RegionIndex) :
+private theorem short_output (b : ℕ) (cfg : LookupRangeCheck.Config 10)
+    (i : RegionIndex) :
     (LookupRangeCheck.shortRangeCheck 10 b).output cfg 0 () i
       = .of i 0 cfg.runningSum := by
   show ((LookupRangeCheck.shortRangeCheck 10 b).synthesize cfg 0 ()).output i = _
   simp only [LookupRangeCheck.shortRangeCheck, circuit_norm, RegionCircuit.output_bind,
     output_cellAt, Nat.zero_add]
 
-private theorem rangeCheckAt_spec_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Spec
-      = fun _ output (elt : Fp) =>
-          output.z0 = elt ∧
-          (∃ lo : ℕ, lo < 2 ^ (10 * n) ∧
-            elt = (lo : Fp) + ((2 ^ (10 * n) : ℕ) : Fp) * output.zLast) ∧
-          (false = true → output.zLast = 0 ∧ elt.val < 2 ^ (10 * n)) := rfl
-
-private theorem rangeCheckAt_assumptions_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Assumptions
-      = fun _ => 2 ^ (10 * n) ≤ PALLAS_BASE_CARD ∧ 2 ^ 10 ≤ PALLAS_BASE_CARD := rfl
-
-private theorem rangeCheckAt_envAssumptions_eq (cfg : LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (LookupRangeCheck.rangeCheckAt 10 n false).EnvAssumptions cfg env
-      = (LookupRangeCheck.TableLoaded 10 cfg env.env ∧
-          cfg.qLookup.index ≠ cfg.qRunning.index) := rfl
-
-private theorem rangeCheckAt_output (cfg : LookupRangeCheck.Config 10) (i : RegionIndex) :
+private theorem rangeCheckAt_output (n : ℕ) (cfg : LookupRangeCheck.Config 10)
+    (i : RegionIndex) :
     (LookupRangeCheck.rangeCheckAt 10 n false).output cfg 0 () i
       = { z0 := .of i 0 cfg.runningSum, zLast := .of i n cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheckAt 10 n false).synthesize cfg 0 ()).output i = _
   simp only [LookupRangeCheck.rangeCheckAt, circuit_norm, RegionCircuit.output_bind,
     output_cellAt, Bool.false_eq_true, if_false, Nat.zero_add]
-
-private theorem yc_call_regionCount (w : WitgenIR Fp 1)
-    (c : YCanonicity.Config × LookupRangeCheck.Config 10)
-    (inp : Var YCanonicityCheck.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((YCanonicityCheck.circuit w).call c inp).operations j) = 5 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
-        c inp).operations j) = 4 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem yc_spec_eq (w : WitgenIR Fp 1) :
-    (YCanonicityCheck.circuit w).Spec
-      = fun input (out : Fp) (wit : Fp) =>
-          out = wit ∧
-          (IsBool out → Halo2.Ironwood.NoteCommit.IsLowBit input.y out) := rfl
-
-private theorem yc_assumptions_eq (w : WitgenIR Fp 1) :
-    (YCanonicityCheck.circuit w).Assumptions = fun _ => True := rfl
-
-private theorem yc_envAssumptions_eq (w : WitgenIR Fp 1)
-    (c : YCanonicity.Config × LookupRangeCheck.Config 10) (env : Placed Environment Fp) :
-    (YCanonicityCheck.circuit w).EnvAssumptions c env
-      = (LookupRangeCheck.TableLoaded 10 c.2 env.env ∧
-          c.2.qLookup.index ≠ c.2.qRunning.index) := rfl
 
 private theorem yc_output (w : WitgenIR Fp 1)
     (c : YCanonicity.Config × LookupRangeCheck.Config 10)
@@ -116,83 +53,6 @@ private theorem yc_extract (w : WitgenIR Fp 1)
     (env : Placed Environment Fp) :
     (YCanonicityCheck.circuit w).extract c inp i env
       = eval env (AssignedCell.of (i + 4) 0 (c.1.advices 6) : Var field Fp) := rfl
-
-private theorem commit_spec_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Spec
-      = fun input (output : Value Point Fp) wit =>
-          ∃ chunks : List ℕ,
-            Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
-            Sinsemilla.Chain.ZsFacts ns chunks wit.1.zs ∧
-            ∀ B, hashToPoint G.S Q chunks = some B →
-              output.Valid ∧ output = B + (wit.2.2 • R : Point Fp) := rfl
-
-private theorem commit_assumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Assumptions
-      = fun _ => True := rfl
-
-private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).EnvAssumptions
-        c env
-      = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
-          Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
-
-private theorem yc_proverAssumptions_eq (w : WitgenIR Fp 1) :
-    (YCanonicityCheck.circuit w).ProverAssumptions
-      = fun input (wit : Fp) _ =>
-          Halo2.Ironwood.NoteCommit.IsLowBit input.y wit := rfl
-
-private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).ProverAssumptions
-      = fun input _ _ =>
-          Sinsemilla.Chain.PieceBounds ns input.pieces ∧
-          ∃ B, hashToPoint G.S Q
-            (Sinsemilla.Chain.honestChunks ns input.pieces) = some B := rfl
-
-private theorem commit_extract_eq (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).extract
-        c inp i env
-      = ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
-          { pieces := inp.pieces } (i + 2) env,
-         Ecc.MulFixed.FullWidth.fwExtract c.1 i env) := rfl
-
-private theorem toFormal_call_regionCount {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (j : RegionIndex) :
-    Operations.regionCount (((b.toFormal name).call cfg inp).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem toFormal_spec_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).Spec = b.Spec := rfl
-
-private theorem toFormal_assumptions_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).Assumptions = b.Assumptions := rfl
-
-private theorem toFormal_envAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).EnvAssumptions = b.EnvAssumptions := rfl
-
-private theorem toFormal_extract_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (i : RegionIndex) (env : Placed Environment Fp) :
-    (b.toFormal name).extract cfg inp i env = b.extract cfg 0 inp i env := rfl
 
 private theorem decomposeB_output (w : WitgenIR Fp 1) (name : String)
     (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex) :
@@ -223,63 +83,6 @@ private theorem decomposeH_output (w : WitgenIR Fp 1) (name : String)
   simp only [DecomposeH.bundle, circuit_norm, RegionCircuit.output_bind]
 
 end ChildBridges
-
-private theorem gd_assumptions_eq :
-    GdCanonicity.bundle.Assumptions = fun input =>
-      IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧
-      input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-      ∃ lo : ℕ, lo < 2 ^ 130 ∧
-        input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime := rfl
-
-private theorem gd_spec_eq :
-    GdCanonicity.bundle.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) := rfl
-
-private theorem pkd_assumptions_eq :
-    PkdCanonicity.bundle.Assumptions = fun input =>
-      IsBool input.d0 ∧ input.c.val < 2 ^ 250 ∧ input.b3.val < 2 ^ 4 ∧
-      input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-      ∃ lo : ℕ, lo < 2 ^ 140 ∧
-        input.b3CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14B3CPrime := rfl
-
-private theorem pkd_spec_eq :
-    PkdCanonicity.bundle.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec
-        (PkdCanonicity.toDonor input) := rfl
-
-private theorem value_assumptions_eq :
-    ValueCanonicity.bundle.Assumptions = fun input =>
-      input.d2.val < 2 ^ 8 ∧ input.d3.val < 2 ^ 50 ∧ input.e0.val < 2 ^ 6 := rfl
-
-private theorem value_spec_eq :
-    ValueCanonicity.bundle.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Spec
-        (ValueCanonicity.toDonor input) := rfl
-
-private theorem rho_assumptions_eq :
-    RhoCanonicity.bundle.Assumptions = fun input =>
-      IsBool input.g0 ∧ input.f.val < 2 ^ 250 ∧ input.e1.val < 2 ^ 4 ∧
-      input.z13F = ((input.f.val / 2 ^ 130 : ℕ) : Fp) ∧
-      ∃ lo : ℕ, lo < 2 ^ 140 ∧
-        input.e1FPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14E1FPrime := rfl
-
-private theorem rho_spec_eq :
-    RhoCanonicity.bundle.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec
-        (RhoCanonicity.toDonor input) := rfl
-
-private theorem psi_assumptions_eq :
-    PsiCanonicity.bundle.Assumptions = fun input =>
-      IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧ input.g2.val < 2 ^ 240 ∧
-      input.h0.val < 2 ^ 5 ∧
-      input.z13G = (((input.g1.val + input.g2.val * 2 ^ 9) / 2 ^ 129 : ℕ) : Fp) ∧
-      ∃ lo : ℕ, lo < 2 ^ 130 ∧
-        input.g1G2Prime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13G1G2Prime := rfl
-
-private theorem psi_spec_eq :
-    PsiCanonicity.bundle.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec
-        (PsiCanonicity.toDonor input) := rfl
 
 private theorem prefixRows_ns_0 : Sinsemilla.Chain.prefixRows ns 0 = 0 := rfl
 private theorem prefixRows_ns_2 : Sinsemilla.Chain.prefixRows ns 2 = 26 := rfl
@@ -532,27 +335,13 @@ private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
     toFormal_call_regionCount, toFormal_call_regionCount, toFormal_call_regionCount]
   exact h
 
-private theorem rangeCheckAt_proverSpec_eq (n : ℕ) :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverSpec
-      = fun _ output (elt : Fp) _ =>
-          output.z0 = elt ∧
-          output.zLast = ((elt.val / 2 ^ (10 * n) : ℕ) : Fp) := rfl
-
-private theorem rangeCheckAt_extract_eq (n : ℕ) (cfg : LookupRangeCheck.Config 10)
+private theorem rangeCheckAt_extract_cells (n : ℕ) (cfg : LookupRangeCheck.Config 10)
     (i : RegionIndex) (env : Placed Environment Fp) :
     (LookupRangeCheck.rangeCheckAt 10 n false).extract cfg 0 () i env
       = (env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) : Fp) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
   simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_zero]
-
-private theorem rangeCheckAt_proverAssumptions_eq (n : ℕ) :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverAssumptions
-      = fun _ (elt : Fp) _ => (false = true → elt.val < 2 ^ (10 * n)) := rfl
-
-private theorem short_proverAssumptions_eq (b : ℕ) :
-    (LookupRangeCheck.shortRangeCheck 10 b).ProverAssumptions
-      = fun _ (wit : Fp) _ => wit.val < 2 ^ b := rfl
 
 private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
     (i : RegionIndex) (env : Placed Environment Fp) :
@@ -627,7 +416,7 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
     Constraints place env
       ((synthChecks G R Q hQ cfg input pcs iHash).operations i₀) i₀ := by
   simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm]
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount]
   simp only [Nat.add_assoc, Nat.reduceAdd]
   exact h
 
@@ -767,34 +556,6 @@ private theorem honestChunks_donor_eq :
   intro ms pieces
   rfl
 
-private theorem toFormal_proverAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).ProverAssumptions = b.ProverAssumptions := rfl
-
-private theorem decomposeB_pa_eq (w : WitgenIR Fp 1) :
-    (DecomposeB.bundle w).ProverAssumptions
-      = fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.b2 ∧
-          input.b = input.b0 + wit * 16 + input.b2 * 32 + input.b3 * 64 := rfl
-
-private theorem decomposeD_pa_eq (w : WitgenIR Fp 1) :
-    (DecomposeD.bundle w).ProverAssumptions
-      = fun input (wit : Fp) _ => IsBool wit ∧ IsBool input.d1 ∧
-          input.d = wit + input.d1 * 2 + input.d2 * 4 + input.d3 * 1024 := rfl
-
-private theorem decomposeE_pa_eq :
-    DecomposeE.bundle.ProverAssumptions
-      = fun input _ _ => input.e = input.e0 + input.e1 * 64 := rfl
-
-private theorem decomposeG_pa_eq (w : WitgenIR Fp 1) :
-    (DecomposeG.bundle w).ProverAssumptions
-      = fun input (wit : Fp) _ => IsBool wit ∧
-          input.g = wit + input.g1 * 2 + input.g2 * 1024 := rfl
-
-private theorem decomposeH_pa_eq (w : WitgenIR Fp 1) :
-    (DecomposeH.bundle w).ProverAssumptions
-      = fun input (wit : Fp) _ => IsBool wit ∧ input.h = input.h0 + wit * 32 := rfl
-
 private theorem decomposeB_extract_eq (w : WitgenIR Fp 1) (name : String)
     (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
@@ -826,33 +587,6 @@ private theorem z1d_div (a b c d : ℕ) (h1 : a < 2) (h2 : b < 2) (h3 : c < 2 ^ 
 private theorem z1g_div (a b c : ℕ) (h1 : a < 2) (h2 : b < 2 ^ 9) (_h3 : c < 2 ^ 240) :
     (a + b * 2 + c * 1024) / 2 ^ 10 = c := by
   omega
-
-private theorem gd_pa_eq :
-    GdCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) ∧
-      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
-
-private theorem pkd_pa_eq :
-    PkdCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec (PkdCanonicity.toDonor input) ∧
-      input.b3CPrime = input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
-
-private theorem value_pa_eq :
-    ValueCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      input.value = input.d2 + input.d3 * (2 ^ 8 : Fp) + input.e0 * (2 ^ 58 : Fp) := rfl
-
-private theorem rho_pa_eq :
-    RhoCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec (RhoCanonicity.toDonor input) ∧
-      input.e1FPrime = input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
-
-private theorem psi_pa_eq :
-    PsiCanonicity.bundle.ProverAssumptions = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec (PsiCanonicity.toDonor input) ∧
-      input.g1G2Prime = input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp)
-        + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
 
 private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) := by
   interval_cases m
@@ -929,10 +663,10 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).2 • R) : Point Fp) := by
   have h := (Halo2.SubcircuitRw.layouter_completeness_derived
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil) c i place env inp hw
-    hEnvA (by rw [commit_assumptions_eq]; trivial)
-    (by rw [commit_proverAssumptions_eq, commit_extract_eq]
+    hEnvA (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial)
+    (by rw [Sinsemilla.CommitDomain.commit_proverAssumptions_eq, Sinsemilla.CommitDomain.commit_extract_eq]
         exact ⟨hPB', hHon'⟩)).1
-  rw [commit_spec_eq, commit_extract_eq] at h
+  rw [Sinsemilla.CommitDomain.commit_spec_eq, Sinsemilla.CommitDomain.commit_extract_eq] at h
   exact h
 
 /-- The bundle output is the commit child's output. Kept outside `soundness` so the
@@ -986,7 +720,7 @@ theorem soundness (G : Generators) (R : FixedBase)
     LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
     circuit_norm] at hCk
   simp only [Operations.regionCount] at hCk
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hCk
+  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount] at hCk
 
   -- ── stage 1: the seven sub-piece short checks ──
   have hSb0 := hP.1
@@ -1004,40 +738,40 @@ theorem soundness (G : Generators) (R : FixedBase)
   subcircuit_rw at hSe1
   subcircuit_rw at hSg1
   subcircuit_rw at hSh0
-  have hb0 := hSb0 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hb0 := hSb0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hb0
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hb0
   simp only [circuit_norm] at hb0
-  have hb3 := hSb3 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hb3 := hSb3 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hb3
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hb3
   simp only [circuit_norm] at hb3
-  have hd2 := hSd2 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hd2 := hSd2 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hd2
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hd2
   simp only [circuit_norm] at hd2
-  have he0 := hSe0 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have he0 := hSe0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at he0
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at he0
   simp only [circuit_norm] at he0
-  have he1 := hSe1 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have he1 := hSe1 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at he1
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at he1
   simp only [circuit_norm] at he1
-  have hg1 := hSg1 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hg1 := hSg1 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hg1
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hg1
   simp only [circuit_norm] at hg1
-  have hh0 := hSh0 (by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [short_assumptions_eq]
+  have hh0 := hSh0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [short_spec_eq, short_output] at hh0
+  rw [LookupRangeCheck.shortRangeCheck_spec_eq, short_output] at hh0
   simp only [circuit_norm] at hh0
   clear hSb0 hSb3 hSd2 hSe0 hSe1 hSg1 hSh0
   -- ── stage 2: the y-canonicity flows, the commitment, the shift witness_checks ──
@@ -1056,43 +790,43 @@ theorem soundness (G : Generators) (R : FixedBase)
   subcircuit_rw at hWb
   subcircuit_rw at hWe
   subcircuit_rw at hWg
-  have hY1S := hY1 (by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [yc_assumptions_eq]; trivial)
-  rw [yc_spec_eq, yc_output, yc_extract] at hY1S
+  have hY1S := hY1 (by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial)
+  rw [YCanonicityCheck.circuit_spec_eq, yc_output, yc_extract] at hY1S
   simp only [circuit_norm] at hY1S
-  have hY2S := hY2 (by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [yc_assumptions_eq]; trivial)
-  rw [yc_spec_eq, yc_output, yc_extract] at hY2S
+  have hY2S := hY2 (by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial)
+  rw [YCanonicityCheck.circuit_spec_eq, yc_output, yc_extract] at hY2S
   simp only [circuit_norm] at hY2S
   clear hY1 hY2
   have hCmS := hCm
-    (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
-    (by rw [commit_assumptions_eq]; trivial)
-  rw [commit_spec_eq, commit_extract_eq] at hCmS
+    (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
+    (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial)
+  rw [Sinsemilla.CommitDomain.commit_spec_eq, Sinsemilla.CommitDomain.commit_extract_eq] at hCmS
   clear hCm
   -- the four shift `witness_check`s: telescoped decompositions
-  have hWaS := hWa (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+  have hWaS := hWa (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWaS
   obtain ⟨haz0, loA, hloA, htelA⟩ := hWaS
-  have hWbS := hWb (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+  have hWbS := hWb (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
   simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWbS
   obtain ⟨hbz0, loB, hloB, htelB⟩ := hWbS
-  have hWeS := hWe (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+  have hWeS := hWe (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
   simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWeS
   obtain ⟨hez0, loE, hloE, htelE⟩ := hWeS
-  have hWgS := hWg (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+  have hWgS := hWg (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
   obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
   clear hWa hWb hWe hWg
@@ -1241,55 +975,55 @@ theorem soundness (G : Generators) (R : FixedBase)
     exact Nat.div_lt_of_lt_mul (by omega)
   -- ── the five canonicity gates ──
   have hGgdS := hGgd (by rw [toFormal_envAssumptions_eq]; trivial)
-    (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
+    (by rw [toFormal_assumptions_eq, GdCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
                     circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
-  rw [toFormal_spec_eq, gd_spec_eq] at hGgdS
+  rw [toFormal_spec_eq, GdCanonicity.bundle_spec_eq] at hGgdS
   simp only [GdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
     circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGgdS
   have hGpkdS := hGpkd (by rw [toFormal_envAssumptions_eq]; trivial)
-    (by rw [toFormal_assumptions_eq, pkd_assumptions_eq]
+    (by rw [toFormal_assumptions_eq, PkdCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_2,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGdS.1, hcval, hb3, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩)
-  rw [toFormal_spec_eq, pkd_spec_eq] at hGpkdS
+  rw [toFormal_spec_eq, PkdCanonicity.bundle_spec_eq] at hGpkdS
   simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_2,
     circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpkdS
   have hGvalS := hGval (by rw [toFormal_envAssumptions_eq]; trivial)
-    (by rw [toFormal_assumptions_eq, value_assumptions_eq]
+    (by rw [toFormal_assumptions_eq, ValueCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, zCell,
           prefixRows_ns_3,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hd2, by rw [hzd]; exact hzdval, he0⟩)
-  rw [toFormal_spec_eq, value_spec_eq] at hGvalS
+  rw [toFormal_spec_eq, ValueCanonicity.bundle_spec_eq] at hGvalS
   simp only [ValueCanonicity.toDonor, Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Spec,
     synthPieces_output, zCell,
     prefixRows_ns_3, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.reduceAdd, Nat.add_zero] at hGvalS
   have hGrhoS := hGrho (by rw [toFormal_envAssumptions_eq]; trivial)
-    (by rw [toFormal_assumptions_eq, rho_assumptions_eq]
+    (by rw [toFormal_assumptions_eq, RhoCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_5,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
           Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGgS.1, hfval, he1, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩)
-  rw [toFormal_spec_eq, rho_spec_eq] at hGrhoS
+  rw [toFormal_spec_eq, RhoCanonicity.bundle_spec_eq] at hGrhoS
   simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_5, circuit_norm, AssignedCell.of_cell,
@@ -1301,7 +1035,7 @@ theorem soundness (G : Generators) (R : FixedBase)
   have hz13G_tail := Halo2.Ironwood.NoteCommit.z13G_tail_of_decompose_g
     hGgS.1 hg1 (by rw [hzg1]; exact hzg1val) hGgS.2 hzg13
   have hGpsiS := hGpsi (by rw [toFormal_envAssumptions_eq]; trivial)
-    (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
+    (by rw [toFormal_assumptions_eq, PsiCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_6,
           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -1309,7 +1043,7 @@ theorem soundness (G : Generators) (R : FixedBase)
           Nat.add_zero]
         exact ⟨hGhS.1, hg1, by rw [hzg1]; exact hzg1val, hh0, hz13G_tail,
           loG, hloG, by rw [← hgz0] at htelG; exact htelG⟩)
-  rw [toFormal_spec_eq, psi_spec_eq] at hGpsiS
+  rw [toFormal_spec_eq, PsiCanonicity.bundle_spec_eq] at hGpsiS
   simp only [PsiCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
@@ -1427,7 +1161,7 @@ theorem completeness (G : Generators) (R : FixedBase)
     LookupRangeCheck.witnessCheck, Sinsemilla.HashToPoint.witnessMessagePiece,
     circuit_norm, readCell] at hWCk
   simp only [Operations.regionCount] at hWCk
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
+  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
   -- ── prover-side MessageCellFacts at the read cells ──
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input
@@ -1584,7 +1318,7 @@ theorem completeness (G : Generators) (R : FixedBase)
     exact hB0
   have hCmS := commit_derived_spec G R Q hQ
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
-    (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
+    (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     hPB2 hHon2
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
@@ -1615,61 +1349,61 @@ theorem completeness (G : Generators) (R : FixedBase)
   have hWaSfull := Halo2.SubcircuitRw.region_completeness_derived
     (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
     place env () hWra
-    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+    (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
+    (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
   have hWaS := hWaSfull.1
   have hWaSPS := hWaSfull.2
-  rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWaSPS
-  simp only [rangeCheckAt_extract_eq, circuit_norm, show (10 * 13 : ℕ) = 130 from by
+  rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWaSPS
+  simp only [rangeCheckAt_extract_cells, circuit_norm, show (10 * 13 : ℕ) = 130 from by
     norm_num] at hWaSPS
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWaS
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWaS
   obtain ⟨haz0, loA, hloA, htelA⟩ := hWaS
   have hWbSfull := Halo2.SubcircuitRw.region_completeness_derived
     (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 30)
     place env () hWrb
-    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+    (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
+    (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
   have hWbS := hWbSfull.1
   have hWbSPS := hWbSfull.2
-  rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWbSPS
-  simp only [rangeCheckAt_extract_eq, circuit_norm, show (10 * 14 : ℕ) = 140 from by
+  rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWbSPS
+  simp only [rangeCheckAt_extract_cells, circuit_norm, show (10 * 14 : ℕ) = 140 from by
     norm_num] at hWbSPS
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWbS
   simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWbS
   obtain ⟨hbz0, loB, hloB, htelB⟩ := hWbS
   have hWeSfull := Halo2.SubcircuitRw.region_completeness_derived
     (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 31)
     place env () hWre
-    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+    (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
+    (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
   have hWeS := hWeSfull.1
   have hWeSPS := hWeSfull.2
-  rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWeSPS
-  simp only [rangeCheckAt_extract_eq, circuit_norm, show (10 * 14 : ℕ) = 140 from by
+  rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWeSPS
+  simp only [rangeCheckAt_extract_cells, circuit_norm, show (10 * 14 : ℕ) = 140 from by
     norm_num] at hWeSPS
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWeS
   simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWeS
   obtain ⟨hez0, loE, hloE, htelE⟩ := hWeS
   have hWgSfull := Halo2.SubcircuitRw.region_completeness_derived
     (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 32)
     place env () hWrg
-    (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
-    (by rw [rangeCheckAt_assumptions_eq]
+    (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
+    (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
         norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
+    (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
   have hWgS := hWgSfull.1
   have hWgSPS := hWgSfull.2
-  rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWgSPS
-  simp only [rangeCheckAt_extract_eq, circuit_norm, show (10 * 13 : ℕ) = 130 from by
+  rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hWgSPS
+  simp only [rangeCheckAt_extract_cells, circuit_norm, show (10 * 13 : ℕ) = 130 from by
     norm_num] at hWgSPS
-  rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
+  rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWgS
   simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWgS
   obtain ⟨hgz0, loG, hloG, htelG⟩ := hWgS
   simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c hz1d hz13f hz1g hz13g
@@ -1836,10 +1570,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 1) place env ()
       hWrb0
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
              cfg.lookupConfig 0 ()
              (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
@@ -1851,10 +1585,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 2) place env ()
       hWrb3
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
              cfg.lookupConfig 0 ()
              (i₀ + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
@@ -1866,10 +1600,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 8) cfg.lookupConfig 0 (i₀ + 5) place env ()
       hWrd2
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 8).extract
              cfg.lookupConfig 0 ()
              (i₀ + 5) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 8
@@ -1881,10 +1615,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 6) cfg.lookupConfig 0 (i₀ + 7) place env ()
       hWre0
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 6).extract
              cfg.lookupConfig 0 ()
              (i₀ + 7) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 6
@@ -1896,10 +1630,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 4) cfg.lookupConfig 0 (i₀ + 8) place env ()
       hWre1
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 4).extract
              cfg.lookupConfig 0 ()
              (i₀ + 8) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 4
@@ -1911,10 +1645,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 9) cfg.lookupConfig 0 (i₀ + 11) place env ()
       hWrg1
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 9).extract
              cfg.lookupConfig 0 ()
              (i₀ + 11) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 9
@@ -1926,10 +1660,10 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 5) cfg.lookupConfig 0 (i₀ + 13) place env ()
       hWrh0
-      ⟨(by rw [short_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [short_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [short_proverAssumptions_eq]
+       (by rw [LookupRangeCheck.shortRangeCheck_proverAssumptions_eq]
            show (show Fp from (LookupRangeCheck.shortRangeCheck 10 5).extract
              cfg.lookupConfig 0 ()
              (i₀ + 13) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).val < 2 ^ 5
@@ -1941,9 +1675,9 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (YCanonicityCheck.circuit (brWit input_var_gdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 15) place env _ hWy1
-      ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [yc_assumptions_eq]; trivial),
-       (by rw [yc_proverAssumptions_eq, yc_extract]
+      ⟨(by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
+       (by rw [YCanonicityCheck.circuit_proverAssumptions_eq, yc_extract]
            refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
            simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
              Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1958,9 +1692,9 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (YCanonicityCheck.circuit (brWit input_var_pkdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 20) place env _ hWy2
-      ⟨(by rw [yc_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [yc_assumptions_eq]; trivial),
-       (by rw [yc_proverAssumptions_eq, yc_extract]
+      ⟨(by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
+       (by rw [YCanonicityCheck.circuit_proverAssumptions_eq, yc_extract]
            refine Halo2.Ironwood.NoteCommit.isLowBit_iff_mod_two.mpr ?_
            simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
              Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1975,9 +1709,9 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
-      ⟨(by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
-       (by rw [commit_assumptions_eq]; trivial),
-       (by rw [commit_proverAssumptions_eq]
+      ⟨(by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
+       (by rw [Sinsemilla.CommitDomain.commit_assumptions_eq]; trivial),
+       (by rw [Sinsemilla.CommitDomain.commit_proverAssumptions_eq]
            refine ⟨?_, ?_⟩
            · show Sinsemilla.Chain.PieceBounds ns _
              with_unfolding_all exact hPB
@@ -1991,37 +1725,37 @@ theorem completeness (G : Generators) (R : FixedBase)
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
       place env () hWra
-      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [rangeCheckAt_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+       (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 30)
       place env () hWrb
-      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [rangeCheckAt_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+       (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 14 false) cfg.lookupConfig 0 (i₀ + 31)
       place env () hWre
-      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [rangeCheckAt_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+       (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 32)
       place env () hWrg
-      ⟨(by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
-       (by rw [rangeCheckAt_assumptions_eq]
+      ⟨(by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
+       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
-       (by rw [rangeCheckAt_proverAssumptions_eq]; simp)⟩
+       (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       ((DecomposeB.bundle (brWit input_var_gdX 254 1)).toFormal
         "NoteCommit MessagePiece b") cfg.gates.b (i₀ + 33) place env _ hGW.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
-       (by rw [toFormal_proverAssumptions_eq, decomposeB_pa_eq, decomposeB_extract_eq]
+       (by rw [toFormal_proverAssumptions_eq, DecomposeB.bundle_proverAssumptions_eq, decomposeB_extract_eq]
            simp only [synthPieces_output, synthChecks_output,
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
@@ -2038,7 +1772,7 @@ theorem completeness (G : Generators) (R : FixedBase)
         "NoteCommit MessagePiece d") cfg.gates.d (i₀ + 34) place env _ hGW.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
-       (by rw [toFormal_proverAssumptions_eq, decomposeD_pa_eq, decomposeD_extract_eq]
+       (by rw [toFormal_proverAssumptions_eq, DecomposeD.bundle_proverAssumptions_eq, decomposeD_extract_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2056,7 +1790,7 @@ theorem completeness (G : Generators) (R : FixedBase)
       (i₀ + 35) place env _ hGW.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
-       (by rw [toFormal_proverAssumptions_eq, decomposeE_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, DecomposeE.bundle_proverAssumptions_eq]
            simp only [synthPieces_output,
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice,
@@ -2068,7 +1802,7 @@ theorem completeness (G : Generators) (R : FixedBase)
         "NoteCommit MessagePiece g") cfg.gates.g (i₀ + 36) place env _ hGW.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
-       (by rw [toFormal_proverAssumptions_eq, decomposeG_pa_eq, decomposeG_extract_eq]
+       (by rw [toFormal_proverAssumptions_eq, DecomposeG.bundle_proverAssumptions_eq, decomposeG_extract_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2084,7 +1818,7 @@ theorem completeness (G : Generators) (R : FixedBase)
         "NoteCommit MessagePiece h") cfg.gates.h (i₀ + 37) place env _ hGW.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
-       (by rw [toFormal_proverAssumptions_eq, decomposeH_pa_eq, decomposeH_extract_eq]
+       (by rw [toFormal_proverAssumptions_eq, DecomposeH.bundle_proverAssumptions_eq, decomposeH_extract_eq]
            simp only [synthPieces_output,
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice,
@@ -2098,14 +1832,14 @@ theorem completeness (G : Generators) (R : FixedBase)
       (GdCanonicity.bundle.toFormal "NoteCommit input g_d") cfg.gates.gd
       (i₀ + 38) place env _ hGW.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
-       (by rw [toFormal_assumptions_eq, gd_assumptions_eq]
+       (by rw [toFormal_assumptions_eq, GdCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwb1]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              haval, hb0lt, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩),
-       (by rw [toFormal_proverAssumptions_eq, gd_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, GdCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
                           circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
@@ -2126,7 +1860,7 @@ theorem completeness (G : Generators) (R : FixedBase)
       (PkdCanonicity.bundle.toFormal "NoteCommit input pk_d") cfg.gates.pkd
       (i₀ + 39) place env _ hGW.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
-       (by rw [toFormal_assumptions_eq, pkd_assumptions_eq]
+       (by rw [toFormal_assumptions_eq, PkdCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_2,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2134,7 +1868,7 @@ theorem completeness (G : Generators) (R : FixedBase)
              Nat.add_zero]
            exact ⟨by rw [hwd0]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hcval, hb3lt, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩),
-       (by rw [toFormal_proverAssumptions_eq, pkd_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, PkdCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_2,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2154,14 +1888,14 @@ theorem completeness (G : Generators) (R : FixedBase)
       (ValueCanonicity.bundle.toFormal "NoteCommit input value") cfg.gates.value
       (i₀ + 40) place env _ hGW.2.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
-       (by rw [toFormal_assumptions_eq, value_assumptions_eq]
+       (by rw [toFormal_assumptions_eq, ValueCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
              Cell.of_column, Environment.get_advice, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨hd2lt, hz1dlt, he0lt⟩),
-       (by rw [toFormal_proverAssumptions_eq, value_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, ValueCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_3,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2192,7 +1926,7 @@ theorem completeness (G : Generators) (R : FixedBase)
       (RhoCanonicity.bundle.toFormal "NoteCommit input rho") cfg.gates.rho
       (i₀ + 41) place env _ hGW.2.2.2.2.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
-       (by rw [toFormal_assumptions_eq, rho_assumptions_eq]
+       (by rw [toFormal_assumptions_eq, RhoCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_5,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2200,7 +1934,7 @@ theorem completeness (G : Generators) (R : FixedBase)
              Nat.add_zero]
            exact ⟨by rw [hwg0]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hfval, he1lt, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩),
-       (by rw [toFormal_proverAssumptions_eq, rho_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, RhoCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_5,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2220,7 +1954,7 @@ theorem completeness (G : Generators) (R : FixedBase)
       (PsiCanonicity.bundle.toFormal "NoteCommit input psi") cfg.gates.psi
       (i₀ + 42) place env _ hGW.2.2.2.2.2.2.2.2.2
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
-       (by rw [toFormal_assumptions_eq, psi_assumptions_eq]
+       (by rw [toFormal_assumptions_eq, PsiCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2229,7 +1963,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            exact ⟨by rw [hwh1]; exact bit_cast_isBool _ (Halo2.Ironwood.Specs.bitrange_lt _ _ _),
              hg1lt, hz1glt, hh0lt, hz13Gt, loG, hloG,
              by rw [← hgz0] at htelG; exact htelG⟩),
-       (by rw [toFormal_proverAssumptions_eq, psi_pa_eq]
+       (by rw [toFormal_proverAssumptions_eq, PsiCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_6,
              circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,

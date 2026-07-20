@@ -26,7 +26,9 @@ open Halo2.Ironwood.Specs (bitrange)
 open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
-/-! ## Shared `witnessCheck` child bridges (`rfl`, child stays folded)
+/-! ## Shared `witnessCheck` child bridges — the contract projections come from the
+generated `LookupRangeCheck.rangeCheckAt_*` home stack; only the region-level
+output-cell bridge (deeper than a whnf projection) stays hand-written.
 
 The canonicity flows all use `witness_check(elt', 13, false)` with `K = 10`. -/
 
@@ -34,40 +36,12 @@ section WitnessCheckBridges
 
 variable (n : ℕ)
 
-private theorem rangeCheckAt_spec_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Spec
-      = fun _ output (elt : Fp) =>
-          output.z0 = elt ∧
-          (∃ lo : ℕ, lo < 2 ^ (10 * n) ∧
-            elt = (lo : Fp) + ((2 ^ (10 * n) : ℕ) : Fp) * output.zLast) ∧
-          (false = true → output.zLast = 0 ∧ elt.val < 2 ^ (10 * n)) := rfl
-
-private theorem rangeCheckAt_assumptions_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Assumptions
-      = fun _ => 2 ^ (10 * n) ≤ PALLAS_BASE_CARD ∧ 2 ^ 10 ≤ PALLAS_BASE_CARD := rfl
-
-private theorem rangeCheckAt_envAssumptions_eq (cfg : LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (LookupRangeCheck.rangeCheckAt 10 n false).EnvAssumptions cfg env
-      = (LookupRangeCheck.TableLoaded 10 cfg env.env ∧
-          cfg.qLookup.index ≠ cfg.qRunning.index) := rfl
-
-private theorem rangeCheckAt_proverAssumptions_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverAssumptions
-      = fun _ (elt : Fp) _ => (false = true → elt.val < 2 ^ (10 * n)) := rfl
-
 private theorem rangeCheckAt_output (cfg : LookupRangeCheck.Config 10) (i : RegionIndex) :
     (LookupRangeCheck.rangeCheckAt 10 n false).output cfg 0 () i
       = { z0 := .of i 0 cfg.runningSum, zLast := .of i n cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheckAt 10 n false).synthesize cfg 0 ()).output i = _
   simp only [LookupRangeCheck.rangeCheckAt, circuit_norm, RegionCircuit.output_bind,
     output_cellAt, Bool.false_eq_true, if_false, Nat.zero_add]
-
-private theorem rangeCheckAt_proverSpec_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverSpec
-      = fun _ output (elt : Fp) _ =>
-          output.z0 = elt ∧
-          output.zLast = ((elt.val / 2 ^ (10 * n) : ℕ) : Fp) := rfl
 
 end WitnessCheckBridges
 
@@ -104,21 +78,7 @@ theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 def gateChild : FormalCircuit Fp GdCanonicity.Config GdCanonicity.Config GdCanonicity.Row unit :=
   GdCanonicity.bundle.toFormal "NoteCommit input g_d"
 
-private theorem gateChild_spec_eq :
-    gateChild.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) := rfl
-
-private theorem gateChild_assumptions_eq :
-    gateChild.Assumptions = fun input =>
-      IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧
-      input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-      ∃ lo : ℕ, lo < 2 ^ 130 ∧
-        input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime := rfl
-
-private theorem gateChild_proverAssumptions_eq :
-    gateChild.ProverAssumptions = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec (GdCanonicity.toDonor input) ∧
-      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := rfl
+derive_contract_bridges gateChild := gateChild
 
 /-- The synthesize body (Rust `gd_x_canonicity` flow): the `witness_check` of `a'`, then
 the gate region with `a' = z_0` and `z13_a' = z_13` wired in. -/
@@ -183,10 +143,10 @@ def circuit :
     subcircuit_rw at hGate
     -- the witnessCheck child: `z_0 = a'`-cell and the 130-bit telescoped decomposition
     have hWSpec := hWC
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
     -- the gate child: discharge its rely-conditions, harvest the donor gate `Spec`
@@ -210,22 +170,22 @@ def circuit :
     subcircuit_rw
     -- replay the witnessCheck child's contract for the gate child's preconditions
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num]
       at hChildSpec hChildPS
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hChildSpec
     obtain ⟨hz0eqP, hzLast⟩ := hChildPS
     refine ⟨⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · -- the gate child's rely-conditions (verifier view)
       rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
@@ -279,15 +239,7 @@ theorem b3CPrimeWit_eval (b3 c : AssignedCell Fp) (env : Placed ProverEnvironmen
 def gateChild : FormalCircuit Fp PkdCanonicity.Config PkdCanonicity.Config PkdCanonicity.Row unit :=
   PkdCanonicity.bundle.toFormal "NoteCommit input pk_d"
 
-private theorem gateChild_spec_eq :
-    gateChild.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec (PkdCanonicity.toDonor input) := rfl
-
-private theorem gateChild_assumptions_eq :
-    gateChild.Assumptions = PkdCanonicity.bundle.Assumptions := rfl
-
-private theorem gateChild_proverAssumptions_eq :
-    gateChild.ProverAssumptions = PkdCanonicity.bundle.ProverAssumptions := rfl
+derive_contract_bridges gateChild := gateChild
 
 def synth (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
@@ -345,15 +297,14 @@ def circuit :
     subcircuit_rw at hWC
     subcircuit_rw at hGate
     have hWSpec := hWC
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
-    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm,
-      PkdCanonicity.bundle] at hGate
+    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨by rw [h_input.2.2.2.1]; exact hA.1,
        by rw [h_input.2.2.1]; exact hA.2.1,
@@ -371,28 +322,28 @@ def circuit :
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num]
       at hChildSpec hChildPS
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hChildSpec
     obtain ⟨hz0eqP, hzLast⟩ := hChildPS
     refine ⟨⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, PkdCanonicity.bundle, h_input]
+      simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_proverAssumptions_eq, circuit_norm, PkdCanonicity.bundle]
+      simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
       simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec]
@@ -436,15 +387,7 @@ theorem e1FPrimeWit_eval (e1 f : AssignedCell Fp) (env : Placed ProverEnvironmen
 def gateChild : FormalCircuit Fp RhoCanonicity.Config RhoCanonicity.Config RhoCanonicity.Row unit :=
   RhoCanonicity.bundle.toFormal "NoteCommit input rho"
 
-private theorem gateChild_spec_eq :
-    gateChild.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec (RhoCanonicity.toDonor input) := rfl
-
-private theorem gateChild_assumptions_eq :
-    gateChild.Assumptions = RhoCanonicity.bundle.Assumptions := rfl
-
-private theorem gateChild_proverAssumptions_eq :
-    gateChild.ProverAssumptions = RhoCanonicity.bundle.ProverAssumptions := rfl
+derive_contract_bridges gateChild := gateChild
 
 def synth (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
@@ -502,15 +445,14 @@ def circuit :
     subcircuit_rw at hWC
     subcircuit_rw at hGate
     have hWSpec := hWC
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
-    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm,
-      RhoCanonicity.bundle] at hGate
+    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨by rw [h_input.2.2.2.1]; exact hA.1,
        by rw [h_input.2.2.1]; exact hA.2.1,
@@ -528,28 +470,28 @@ def circuit :
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num]
       at hChildSpec hChildPS
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hChildSpec
     obtain ⟨hz0eqP, hzLast⟩ := hChildPS
     refine ⟨⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, RhoCanonicity.bundle, h_input]
+      simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_proverAssumptions_eq, circuit_norm, RhoCanonicity.bundle]
+      simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
       simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec]
@@ -594,15 +536,7 @@ theorem g1G2PrimeWit_eval (g1 g2 : AssignedCell Fp) (env : Placed ProverEnvironm
 def gateChild : FormalCircuit Fp PsiCanonicity.Config PsiCanonicity.Config PsiCanonicity.Row unit :=
   PsiCanonicity.bundle.toFormal "NoteCommit input psi"
 
-private theorem gateChild_spec_eq :
-    gateChild.Spec = fun input _ _ =>
-      Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec (PsiCanonicity.toDonor input) := rfl
-
-private theorem gateChild_assumptions_eq :
-    gateChild.Assumptions = PsiCanonicity.bundle.Assumptions := rfl
-
-private theorem gateChild_proverAssumptions_eq :
-    gateChild.ProverAssumptions = PsiCanonicity.bundle.ProverAssumptions := rfl
+derive_contract_bridges gateChild := gateChild
 
 def synth (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
@@ -663,15 +597,14 @@ def circuit :
     subcircuit_rw at hWC
     subcircuit_rw at hGate
     have hWSpec := hWC
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
-    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm,
-      PsiCanonicity.bundle] at hGate
+    simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨by rw [h_input.2.2.2.1]; exact hA.1,
        by rw [h_input.2.2.1]; exact hA.2.1,
@@ -690,28 +623,28 @@ def circuit :
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hChildSpec
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hChildPS
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num]
       at hChildSpec hChildPS
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hChildSpec
     obtain ⟨hz0eqP, hzLast⟩ := hChildPS
     refine ⟨⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_assumptions_eq, circuit_norm, PsiCanonicity.bundle, h_input]
+      simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
-      simp only [gateChild_proverAssumptions_eq, circuit_norm, PsiCanonicity.bundle]
+      simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.2.1, h_input.2.2.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2.1,
         h_input.2.2.2.2.2]

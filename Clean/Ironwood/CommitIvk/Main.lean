@@ -152,24 +152,6 @@ def synth (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
 
 /-! ## Region counts and stage outputs -/
 
-theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
-        c inp).operations j) = 4 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-theorem composite_call_regionCount (wb1 wd1 : WitgenIR Fp 1)
-    (c : CommitIvk.Config × LookupRangeCheck.Config 10)
-    (inp : Var Canonicity.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Halo2.Ironwood.CommitIvk.Canonicity.circuit wb1 wd1).call c inp).operations j) = 3 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
 theorem synthPieces_regionCount (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
     Operations.regionCount ((synthPieces cfg ak nk).operations i) = 7 := by
@@ -189,7 +171,7 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
     Operations.regionCount_append, Operations.regionCount,
     FormalCircuit.nextRegionIndex_call', FormalCircuit.output_call',
     NoteCommit.Main.currentRegion_operations]
-  rw [synthPieces_regionCount, commit_call_regionCount, composite_call_regionCount]
+  rw [synthPieces_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount, Canonicity.circuit_call_regionCount]
 
 theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :

@@ -24,48 +24,17 @@ open Halo2.Ironwood.Specs (bitrange)
 open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
-/-! ## `witnessCheck` child bridges (`rfl`, child stays folded) -/
+/-! ## `witnessCheck` child bridges — the contract projections come from the generated
+`LookupRangeCheck.rangeCheckAt_*` home stack; only the region-level output-cell bridge
+(deeper than a whnf projection) stays hand-written. -/
 
-section WitnessCheckBridges
-
-variable (n : ℕ)
-
-private theorem rangeCheckAt_spec_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Spec
-      = fun _ output (elt : Fp) =>
-          output.z0 = elt ∧
-          (∃ lo : ℕ, lo < 2 ^ (10 * n) ∧
-            elt = (lo : Fp) + ((2 ^ (10 * n) : ℕ) : Fp) * output.zLast) ∧
-          (false = true → output.zLast = 0 ∧ elt.val < 2 ^ (10 * n)) := rfl
-
-private theorem rangeCheckAt_assumptions_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).Assumptions
-      = fun _ => 2 ^ (10 * n) ≤ PALLAS_BASE_CARD ∧ 2 ^ 10 ≤ PALLAS_BASE_CARD := rfl
-
-private theorem rangeCheckAt_envAssumptions_eq (cfg : LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (LookupRangeCheck.rangeCheckAt 10 n false).EnvAssumptions cfg env
-      = (LookupRangeCheck.TableLoaded 10 cfg env.env ∧
-          cfg.qLookup.index ≠ cfg.qRunning.index) := rfl
-
-private theorem rangeCheckAt_proverAssumptions_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverAssumptions
-      = fun _ (elt : Fp) _ => (false = true → elt.val < 2 ^ (10 * n)) := rfl
-
-private theorem rangeCheckAt_output (cfg : LookupRangeCheck.Config 10) (i : RegionIndex) :
+private theorem rangeCheckAt_output (n : ℕ) (cfg : LookupRangeCheck.Config 10)
+    (i : RegionIndex) :
     (LookupRangeCheck.rangeCheckAt 10 n false).output cfg 0 () i
       = { z0 := .of i 0 cfg.runningSum, zLast := .of i n cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheckAt 10 n false).synthesize cfg 0 ()).output i = _
   simp only [LookupRangeCheck.rangeCheckAt, circuit_norm, RegionCircuit.output_bind,
     output_cellAt, Bool.false_eq_true, if_false, Nat.zero_add]
-
-private theorem rangeCheckAt_proverSpec_eq :
-    (LookupRangeCheck.rangeCheckAt 10 n false).ProverSpec
-      = fun _ output (elt : Fp) _ =>
-          output.z0 = elt ∧
-          output.zLast = ((elt.val / 2 ^ (10 * n) : ℕ) : Fp) := rfl
-
-end WitnessCheckBridges
 
 namespace Canonicity
 
@@ -118,6 +87,8 @@ def gateChild (wb1 wd1 : WitgenIR Fp 1) :
     FormalCircuit Fp Config Config Halo2.Ironwood.CommitIvk.Inputs unit :=
   (bundle wb1 wd1).toFormal "Assign cells used in canonicity gate"
 
+derive_contract_bridges gateChild (wb1 wd1 : WitgenIR Fp 1) := gateChild wb1 wd1
+
 def synth (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false lcfg (aPrimeWit input.a)
@@ -138,32 +109,7 @@ theorem synth_regionCount (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-private theorem gateChild_spec_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (gateChild wb1 wd1).Spec = fun input _ (wit : Fp × Fp) =>
-      Halo2.Ironwood.CommitIvk.Gate.Spec
-        (Halo2.Ironwood.CommitIvk.toDonor input wit.1 wit.2) := rfl
-
-private theorem gateChild_assumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (gateChild wb1 wd1).Assumptions = fun input =>
-      input.a.val < 2 ^ 250 ∧ input.b0.val < 2 ^ 4 ∧ input.b2.val < 2 ^ 5 ∧
-      input.c.val < 2 ^ 240 ∧ input.d0.val < 2 ^ 9 ∧
-      input.z13A = ((input.a.val / 2 ^ 130 : ℕ) : Fp) ∧
-      (∃ lo : ℕ, lo < 2 ^ 130 ∧
-        input.aPrime = ((lo : ℕ) : Fp) + ((2 ^ 130 : ℕ) : Fp) * input.z13APrime) ∧
-      input.z13C = ((input.c.val / 2 ^ 130 : ℕ) : Fp) ∧
-      (∃ lo : ℕ, lo < 2 ^ 140 ∧
-        input.b2CPrime = ((lo : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) * input.z14B2CPrime) := rfl
-
-private theorem gateChild_proverAssumptions_eq (wb1 wd1 : WitgenIR Fp 1) :
-    (gateChild wb1 wd1).ProverAssumptions = fun input (wit : Fp × Fp) _ =>
-      (wit.1 = 1 → input.z13APrime = 0) ∧ (wit.2 = 1 → input.z14B2CPrime = 0) ∧
-      input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
-      input.b2CPrime = input.b2 + input.c * ((2 ^ 5 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
-      Halo2.Ironwood.CommitIvk.Gate.Spec
-        (Halo2.Ironwood.CommitIvk.toDonor input wit.1 wit.2) := rfl
-
-private theorem gateChild_extract_eq (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
+private theorem gateChild_extract_cells (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
     (inp : Var Halo2.Ironwood.CommitIvk.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     (gateChild wb1 wd1).extract cfg inp i env
@@ -236,23 +182,23 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     subcircuit_rw at hGate
     -- the two witnessCheck children: telescoped decompositions of `a'` and `b2_c'`
     have hWSa := hWCa
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSa
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSa
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWSa
     obtain ⟨hz0a, loA, hloA, htelA⟩ := hWSa
     have hWSb := hWCb
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSb
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSb
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSb
     obtain ⟨hz0b, loB, hloB, htelB⟩ := hWSb
     -- the gate child: discharge its rely-conditions, harvest the donor gate `Spec`
     rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
       rangeCheckAt_output, rangeCheckAt_output] at hGate
-    simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_eq,
+    simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
       circuit_norm] at hGate
     obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
     have hGSpec := hGate trivial
@@ -275,39 +221,39 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     subcircuit_rw
     -- replay both witnessCheck children's contracts for the gate child's preconditions
     obtain ⟨hCSa, hCPa⟩ := h_spec_0
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hCSa
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hCPa
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hCSa
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hCPa
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hCSa hCPa
     obtain ⟨hz0a, loA, hloA, htelA⟩ := hCSa
     obtain ⟨hz0aP, hzLastA⟩ := hCPa
     obtain ⟨hCSb, hCPb⟩ := h_spec_1
-      (by rw [rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
-      (by rw [rangeCheckAt_assumptions_eq]
+      (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
+      (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
           norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-      (by rw [rangeCheckAt_proverAssumptions_eq]; simp)
-    rw [rangeCheckAt_spec_eq, rangeCheckAt_output] at hCSb
-    rw [rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hCPb
+      (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)
+    rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hCSb
+    rw [LookupRangeCheck.rangeCheckAt_proverSpec_eq, rangeCheckAt_output] at hCPb
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hCSb hCPb
     obtain ⟨hz0b, loB, hloB, htelB⟩ := hCSb
     obtain ⟨hz0bP, hzLastB⟩ := hCPb
     obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
     obtain ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩ := hPA
     refine ⟨⟨?_, ?_, ?_⟩, ⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
-    · rw [rangeCheckAt_envAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
       exact ⟨hTable, hDistinct⟩
-    · rw [rangeCheckAt_assumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
-    · rw [rangeCheckAt_proverAssumptions_eq]
+    · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · -- the gate child's rely-conditions (verifier view)
       rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
@@ -320,7 +266,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     · -- the gate child's honest-prover precondition: tails + shifts + the donor `Spec`
       rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
         rangeCheckAt_output, rangeCheckAt_output]
-      simp only [gateChild_proverAssumptions_eq, gateChild_extract_eq, circuit_norm]
+      simp only [gateChild_proverAssumptions_eq, gateChild_extract_cells, circuit_norm]
       rw [hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c]
       rw [hia] at hWaP
       rw [hib2, hic] at hWbP
@@ -342,6 +288,11 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
       · -- the donor gate `Spec` at the witnessed `(b_1, d_1)` readings
         simp only [Halo2.Ironwood.CommitIvk.toDonor, Halo2.Ironwood.CommitIvk.Gate.Spec]
         exact ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩
+
+/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
+folded) -/
+
+derive_contract_bridges circuit (wb1 wd1 : WitgenIR Fp 1) := circuit wb1 wd1
 
 end Canonicity
 

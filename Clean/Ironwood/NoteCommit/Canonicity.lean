@@ -73,6 +73,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     circuit_proof_start [gate]
     linear_combination -hPA
 
+derive_contract_bridges bundle := bundle
+
 end ValueCanonicity
 
 namespace GdCanonicity
@@ -156,6 +158,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he3
     · linear_combination he4
     · linear_combination he5
+
+derive_contract_bridges bundle := bundle
 
 end GdCanonicity
 
@@ -241,6 +245,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he3
     · linear_combination he4
 
+derive_contract_bridges bundle := bundle
+
 end PkdCanonicity
 
 namespace RhoCanonicity
@@ -324,6 +330,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       linear_combination he2
     · linear_combination he3
     · linear_combination he4
+
+derive_contract_bridges bundle := bundle
 
 end RhoCanonicity
 
@@ -413,6 +421,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he3
     · linear_combination he4
     · linear_combination he5
+
+derive_contract_bridges bundle := bundle
 
 end PsiCanonicity
 
@@ -535,6 +545,8 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     · linear_combination he5
     · linear_combination he6
     · linear_combination he7
+
+derive_contract_bridges bundle (wlsb wk3 : WitgenIR Fp 1) := bundle wlsb wk3
 
 end YCanonicity
 

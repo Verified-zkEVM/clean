@@ -337,8 +337,12 @@ def synth (G : Generators) (R : FixedBase)
 
 /-! ## Region counts -/
 
+/-! The generic `toFormal` contract-transfer bridges, generic over the lifted bundle —
+the single userland home (the per-file copies were Category-2 duplicates); their final
+home should be framework-side (`Clean/Halo2/Subcircuit.lean`). -/
+
 /-- A `toFormal`-lifted region bundle's call chunk is exactly one region. -/
-private theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMap}
+theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMap}
     [ProvableType Input] [ProvableType Output]
     (b : FormalRegionCircuit Fp CI Cfg Input Output) (name : String) (cfg : Cfg)
     (inp : Var Input Fp) (j : RegionIndex) :
@@ -346,25 +350,31 @@ private theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMa
   rw [FormalCircuit.call_regionCount]
   rfl
 
-/-- The y-canonicity flow's call chunk spans its five regions. -/
-private theorem yc_call_regionCount (w : WitgenIR Fp 1)
-    (c : YCanonicity.Config × LookupRangeCheck.Config 10)
-    (inp : Var YCanonicityCheck.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((YCanonicityCheck.circuit w).call c inp).operations j) = 5 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
+theorem toFormal_spec_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).Spec = b.Spec := rfl
 
-/-- The commit call chunk spans its four regions. -/
-private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
-    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
-        c inp).operations j) = 4 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
+theorem toFormal_assumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).Assumptions = b.Assumptions := rfl
+
+theorem toFormal_envAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).EnvAssumptions = b.EnvAssumptions := rfl
+
+theorem toFormal_proverAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
+    (b.toFormal name).ProverAssumptions = b.ProverAssumptions := rfl
+
+theorem toFormal_extract_eq {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
+    (inp : Var In Fp) (i : RegionIndex) (env : Placed Environment Fp) :
+    (b.toFormal name).extract cfg inp i env = b.extract cfg 0 inp i env := rfl
 
 /-- `nextRegionIndex` of a y-canonicity call, closed form (for the symbolic `nextRegionIndex`/
 `output` walks — the opaque `call` barrier is not evaluable). -/
@@ -372,7 +382,7 @@ private theorem yc_call_nextRegionIndex (w : WitgenIR Fp 1)
     (c : YCanonicity.Config × LookupRangeCheck.Config 10)
     (inp : Var YCanonicityCheck.Inputs Fp) (j : RegionIndex) :
     ((YCanonicityCheck.circuit w).call c inp).nextRegionIndex j = j + 5 := by
-  rw [FormalCircuit.nextRegionIndex_call, yc_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, YCanonicityCheck.circuit_call_regionCount]
 
 /-- `nextRegionIndex` of the commit call, closed form. -/
 private theorem commit_call_nextRegionIndex (G : Generators) (R : FixedBase)
@@ -381,7 +391,7 @@ private theorem commit_call_nextRegionIndex (G : Generators) (R : FixedBase)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
       c inp).nextRegionIndex j = j + 4 := by
-  rw [FormalCircuit.nextRegionIndex_call, commit_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, Sinsemilla.CommitDomain.commit_call_regionCount]
 
 theorem synthPieces_regionCount (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
@@ -399,7 +409,7 @@ theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
   simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm,
     Circuit.operations_bind, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount]
 
 theorem synthGates_regionCount (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
@@ -497,7 +507,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
     Circuit.output_pure, output_assignRegion, nextRegionIndex_assignRegion,
     RegionCircuit.output_bind, FormalCircuit.output_call',
     FormalRegionCircuit.output_call', FormalCircuit.nextRegionIndex_call']
-  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+  rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount]
   rfl
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
