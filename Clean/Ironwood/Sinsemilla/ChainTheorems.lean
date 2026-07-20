@@ -976,7 +976,6 @@ The `MerkleCRH` path that only needs the `z₁` cells uses the `Z1s` projection 
 
 namespace HashToPoint
 
-
 end HashToPoint
 
 end Halo2.Ironwood.Sinsemilla

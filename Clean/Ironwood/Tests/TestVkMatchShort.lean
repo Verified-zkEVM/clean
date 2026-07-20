@@ -27,7 +27,7 @@ def program : Configure Fp Config := do
     let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
     let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
     let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
-    let a9 ← adviceColumn
+    let _a9 ← adviceColumn
     let l0 ← fixedColumn; let l1 ← fixedColumn; let l2 ← fixedColumn
     let l3 ← fixedColumn; let l4 ← fixedColumn; let l5 ← fixedColumn
     let l6 ← fixedColumn; let l7 ← fixedColumn

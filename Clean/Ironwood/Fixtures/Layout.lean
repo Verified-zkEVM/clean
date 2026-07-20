@@ -179,7 +179,6 @@ def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
     (body : RegionOperations F) (consts : List (ℕ × ℕ × ℕ)) :
     List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
   let (cps, consts') := regionCopies permCols starts body consts
-  let isConst : (ℕ × ℕ × ℕ × ℕ) → Bool := fun _ => false
   -- `regionCopies` returns eq-copies first, then exactly the consumed constants
   let nEq := cps.length - (consts.length - consts'.length)
   (cps.take nEq, cps.drop nEq, consts')
