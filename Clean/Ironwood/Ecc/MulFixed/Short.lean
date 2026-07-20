@@ -1003,7 +1003,8 @@ private theorem addc_call_out (cfgA : Add.Config) (row : ℕ)
     (input : Var Add.Inputs Fp) (self : RegionIndex) :
     (Add.add.call cfgA row input).output self
       = { x := AssignedCell.of self (row + 1) cfgA.xQR,
-          y := AssignedCell.of self (row + 1) cfgA.yQR } := rfl
+          y := AssignedCell.of self (row + 1) cfgA.yQR } :=
+  (FormalRegionCircuit.output_call Add.add cfgA row input self).trans rfl
 
 /-- The complete-addition child's output cells (`rfl`). -/
 private theorem addc_output_cells (cfgA : Add.Config) (row : ℕ)
@@ -1018,7 +1019,9 @@ private theorem mswRegion_output (cfg : Config) (acc mulB : Point (AssignedCell 
     (sign z21 : AssignedCell Fp) (self : RegionIndex) :
     (mswRegion cfg acc mulB sign z21).output self
       = { x := AssignedCell.of self 1 cfg.superConfig.addConfig.xQR,
-          y := AssignedCell.of self 1 cfg.superConfig.addConfig.yP } := rfl
+          y := AssignedCell.of self 1 cfg.superConfig.addConfig.yP } := by
+  simp only [mswRegion, circuit_norm, RegionCircuit.output_bind, RegionCircuit.output_pure,
+    FormalRegionCircuit.output_call', addc_output_cells]
 
 /-- Env-level preconditions: the `EccChip` wiring asserts the inner region consumes. -/
 def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=

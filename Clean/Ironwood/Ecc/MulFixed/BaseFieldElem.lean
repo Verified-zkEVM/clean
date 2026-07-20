@@ -1093,7 +1093,8 @@ with `rca_output`). -/
 private theorem rca_call_zLast (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
     (self : RegionIndex) :
     (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfgL offset ()).output self).zLast
-      = AssignedCell.of self (offset + 13) cfgL.runningSum := rfl
+      = AssignedCell.of self (offset + 13) cfgL.runningSum := by
+  rw [FormalRegionCircuit.output_call, rca_output]
 
 /-- The range-check chunk's extraction data: the positional element cell's value. -/
 private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)

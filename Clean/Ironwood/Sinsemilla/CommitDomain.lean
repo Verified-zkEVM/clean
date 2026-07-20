@@ -180,7 +180,8 @@ private theorem commit_regionCount
       Operations.regionCount
         (((HashToPoint.hashCircuit G ns Q hQ hns).call hcfg inp).operations j) = 1
     from fun j inp => by
-      simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]
+      rw [FormalCircuit.call_operations]
+      simp only [Circuit.operations]
       rw [show ((HashToPoint.hashCircuit G ns Q hQ hns).synthesize hcfg inp j).2.1
           = ((assignRegion (HashToPoint.hashRegion G ns Q hQ hns).name
               ((HashToPoint.hashRegion G ns Q hQ hns).synthesize hcfg 0
@@ -191,7 +192,8 @@ private theorem commit_regionCount
       Operations.regionCount
         (((Ecc.Add.add.toFormal "complete point addition").call acfg inp).operations j) = 1
     from fun j inp => by
-      simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]
+      rw [FormalCircuit.call_operations]
+      simp only [Circuit.operations]
       rw [show ((Ecc.Add.add.toFormal "complete point addition").synthesize acfg inp j).2.1
           = ((assignRegion "complete point addition"
               (Ecc.Add.add.synthesize acfg 0 inp)).operations j) from rfl,

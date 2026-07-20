@@ -362,6 +362,23 @@ private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
+/-- `nextRegionIndex` of a y-canonicity call, closed form (for the symbolic `nextRegionIndex`/
+`output` walks — the opaque `call` barrier is not evaluable). -/
+private theorem yc_call_nextRegionIndex (w : WitgenIR Fp 1)
+    (c : YCanonicity.Config × LookupRangeCheck.Config 10)
+    (inp : Var YCanonicityCheck.Inputs Fp) (j : RegionIndex) :
+    ((YCanonicityCheck.circuit w).call c inp).nextRegionIndex j = j + 5 := by
+  rw [FormalCircuit.nextRegionIndex_call, yc_call_regionCount]
+
+/-- `nextRegionIndex` of the commit call, closed form. -/
+private theorem commit_call_nextRegionIndex (G : Generators) (R : FixedBase)
+    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
+    (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
+    ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      c inp).nextRegionIndex j = j + 4 := by
+  rw [FormalCircuit.nextRegionIndex_call, commit_call_regionCount]
+
 theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
     Operations.regionCount ((synthPieces cfg input).operations i) = 15 := by
@@ -411,7 +428,21 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
     (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
     (i : RegionIndex) :
     (synthChecks G R windows Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
-  with_unfolding_all rfl
+  -- The opaque `call` barrier is not evaluable, so this is no longer a pure defeq walk — but
+  -- no call OUTPUT feeds the index chain, so the goal defeq-reduces (binds/assignRegions/pure,
+  -- structure-eta through the folded calls) to the three calls' `nextRegionIndex` compositions
+  -- plus the four witnessCheck regions. `show` that spelling (single kernel defeq, the
+  -- `synthPieces` grade — a simp walk here blows the kernel's timeout), then rewrite only the
+  -- three call boundaries.
+  show (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }).nextRegionIndex
+      (((YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
+          (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }).nextRegionIndex
+        (((YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
+            (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }).nextRegionIndex i)))
+      + 1 + 1 + 1 + 1 = i + 18
+  rw [yc_call_nextRegionIndex, yc_call_nextRegionIndex, commit_call_nextRegionIndex]
 
 theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
@@ -452,7 +483,16 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
                    zLast := .of (i + 16) 14 cfg.lookupConfig.runningSum },
           gZs := { z0 := .of (i + 17) 0 cfg.lookupConfig.runningSum,
                    zLast := .of (i + 17) 13 cfg.lookupConfig.runningSum } } := by
-  with_unfolding_all rfl
+  -- symbolic walk (the opaque `call` barrier is not evaluable): the accessor algebra lands
+  -- each call component on its `output` metadata (`output_call`/`output_call'`) at its
+  -- threaded region index; the final `rfl` reduces the (non-opaque) metadata to the cells.
+  -- Minimal lemma set — the full `circuit_norm` bloats past the kernel's timeout here.
+  simp only [synthChecks, LookupRangeCheck.witnessCheck, Circuit.output_bind,
+    Circuit.output_pure, output_assignRegion, nextRegionIndex_assignRegion,
+    RegionCircuit.output_bind, FormalCircuit.output_call',
+    FormalRegionCircuit.output_call', FormalCircuit.nextRegionIndex_call']
+  rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
+  rfl
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 

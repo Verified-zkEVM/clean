@@ -181,10 +181,50 @@ where
     | .proj s i b => return .proj s i (← canonicalizeExpr b)
     | _ => return e
 
+/-- The simp context that canonicalizes call-form outputs to output form: the four `output_call`
+lemmas (generic + concrete-`α`, both levels). Under full-`call` opacity `(child.call …).output`
+is no longer *definitionally* equal to `child.output …`, so canonicalization must carry a genuine
+`output_call` congruence proof — the syntactic-replace-plus-`rfl` route the custom
+`canonicalizeExpr` used is a kernel-invalid `rfl` now. simp with these lemmas produces both the
+canonicalized type and its proof. -/
+def outputCallSimpContext : MetaM Simp.Context := do
+  let mut thms : SimpTheorems := {}
+  thms ← thms.addConst ``FormalRegionCircuit.output_call
+  thms ← thms.addConst ``FormalRegionCircuit.output_call'
+  thms ← thms.addConst ``FormalCircuit.output_call
+  thms ← thms.addConst ``FormalCircuit.output_call'
+  -- rewrites ONLY: no beta/eta/iota/zeta/proj/etc. so the *only* change to a target is the
+  -- `output_call` canonicalization — other subterms keep their exact spelling, matching what
+  -- the custom syntactic pass produced (downstream tactics `generalize`/`subcircuit_rw` are
+  -- shape-sensitive).
+  Simp.mkContext
+    { beta := false, eta := false, etaStruct := .none, iota := false, zeta := false,
+      zetaDelta := false, proj := false, decide := false, arith := false, ground := false,
+      dsimp := false, failIfUnchanged := false }
+    (simpTheorems := #[thms])
+
+/-- Prove `ty = ty'`, where `ty'` is the custom-syntactic canonicalization of `ty` (call-form
+outputs rewritten to output form via `mkAppM`). Under full-`call` opacity the two are no longer
+`rfl`-equal, so we discharge the equation with the `output_call` lemmas (simp), falling back to a
+definitional `rfl` on any residual (the custom `mkAppM` output spelling and simp's lemma-guided
+spelling are defeq). Keeping `ty'` = the *custom* form (not simp's) is what preserves the exact
+output-local spelling downstream tactics (`cases`/`generalize` over `Vector`/`Fin` goals) depend on. -/
+def proveCanonEq (ty ty' : Expr) : MetaM Expr := do
+  let eqTy ← mkEq ty ty'
+  let mv ← mkFreshExprSyntheticOpaqueMVar eqTy
+  let ctx ← outputCallSimpContext
+  let (res?, _) ← simpGoal mv.mvarId! ctx
+  match res? with
+  | none => pure ()
+  | some (_, mv') => mv'.refl
+  instantiateMVars mv
+
 /-- Canonicalize call-form outputs to output form in the goal + every non-implementation
-hypothesis, via `Eq.mpr`/`replaceLocalDecl` with a `rfl`-proved equation. No-op when everything is
-already canonical (the replacement equals the original ⇒ we skip). Returns the number of
-targets changed. -/
+hypothesis, via `replaceTargetEq`/`replaceLocalDecl`. The canonical form is computed by the custom
+syntactic pass (`canonicalizeExpr`, exact `mkAppM` spelling), and the justifying equation by
+`proveCanonEq` (valid `output_call` congruence proof — the syntactic-replace-plus-bare-`rfl` route
+was the kernel-invalid defeq dependency under full opacity). No-op when everything is already
+canonical. Returns the number of targets changed. -/
 def canonicalizePass : TacticM Nat := withMainContext do
   let mut changed := 0
   -- goal
@@ -192,7 +232,7 @@ def canonicalizePass : TacticM Nat := withMainContext do
   let goalTy' ← canonicalizeExpr goalTy
   unless goalTy' == goalTy do
     let g ← getMainGoal
-    let eqPf ← mkExpectedTypeHint (← mkEqRefl goalTy) (← mkEq goalTy goalTy')
+    let eqPf ← proveCanonEq goalTy goalTy'
     let g' ← g.replaceTargetEq goalTy' eqPf
     replaceMainGoal [g']
     changed := changed + 1
@@ -206,7 +246,7 @@ def canonicalizePass : TacticM Nat := withMainContext do
       let ty' ← canonicalizeExpr ty
       if ty' == ty then return false
       let g ← getMainGoal
-      let eqPf ← mkExpectedTypeHint (← mkEqRefl ty) (← mkEq ty ty')
+      let eqPf ← proveCanonEq ty ty'
       let r ← g.replaceLocalDecl fvarId ty' eqPf
       replaceMainGoal [r.mvarId]
       return true

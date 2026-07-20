@@ -397,7 +397,7 @@ private theorem incomplete_call_output (n : ℕ) (w : ℕ)
       = { acc := { x := .of self (off + n + 2) cfg.xA,
                    y := .of self (off + n + 2) cfg.lambda1 },
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := by
-  rw [FormalRegionCircuit.output_call]
+  rw [FormalRegionCircuit.output_call]; rfl
 
 /-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
 never reduced, per the whnf discipline). -/
@@ -405,14 +405,14 @@ private theorem complete_call_output_zs (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     (((MulComplete.assign_region 3 w).call cfg off inp).output self).zs
       = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := by
-  rw [FormalRegionCircuit.output_call]
+  rw [FormalRegionCircuit.output_call]; rfl
 
 /-- The `Add` bundle's output point cells (`x_qr`/`y_qr` at `offset + 1`). -/
 private theorem add_call_output (cfg : Add.Config) (off : ℕ) (inp : Var Add.Inputs Fp)
     (self : RegionIndex) :
     (Add.add.call cfg off inp).output self
       = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := by
-  rw [FormalRegionCircuit.output_call]
+  rw [FormalRegionCircuit.output_call]; rfl
 
 /-- Literal-eval bridge for `MulIncomplete.Output` (verifier view). -/
 private theorem incompleteOutput_eval_literal {n : ℕ} (place : RegionIndex → ℕ)
@@ -493,7 +493,7 @@ private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     ((MulComplete.assign_region 3 w).call cfg off inp).output self
       = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := by
-  rw [FormalRegionCircuit.output_call]
+  rw [FormalRegionCircuit.output_call]; rfl
 
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
 private theorem complete_output_zs_eq (w : ℕ) (cfg : MulComplete.Config)
@@ -806,7 +806,7 @@ private theorem synthesize_regionCount (cfg : Config)
           (mainRegion cfg input).output i |>.2.2.1,
           (mainRegion cfg input).output i |>.2.2.2⟩).operations j) = 3
     from fun j => by
-      simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]
+      rw [FormalCircuit.call_operations]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
 -- The main region's composed do-block is one nested-bind term ~5 children deep; naive `.output`
@@ -1231,7 +1231,9 @@ def mul :
           = 2 ^ 254 + ZMod.val input_alpha + tQNat := by
         rw [hm3]; omega
       rw [hM3v, hfin _ rfl] at hResEq
-      exact hResEq
+      convert hResEq using 1;
+        simp only [synthesize, mainRegion, circuit_norm, FormalRegionCircuit.output_call',
+          incomplete_output_eq, complete_output_eq, add_output_eq, Vector.getElem_ofFn]
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       have hcx : env.env.advice cfg.addConfig.xP
           ((env.place i₀ + (offLsb) : ℕ) : ℤ) = 0 := by
@@ -1273,7 +1275,9 @@ def mul :
           = 2 ^ 254 + ZMod.val input_alpha + tQNat := by
         rw [hm3]; omega
       rw [hM3v, hfin _ rfl] at hResEq
-      exact hResEq
+      convert hResEq using 1;
+        simp only [synthesize, mainRegion, circuit_norm, FormalRegionCircuit.output_call',
+          incomplete_output_eq, complete_output_eq, add_output_eq, Vector.getElem_ofFn]
 
   -- ══ Completeness ══
   -- Honest-side mirror on the faithful layouter structure: the six child chunks discharged via

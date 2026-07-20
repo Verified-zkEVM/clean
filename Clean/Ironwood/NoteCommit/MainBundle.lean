@@ -729,7 +729,7 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
         (((YCanonicityCheck.circuit w).call c inp).operations i) i
       = ExtendsWitnesses place env
         (((YCanonicityCheck.circuit w).synthesize c inp).operations i) i from by
-    simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]] at h
+    rw [FormalCircuit.call_operations]] at h
   simp only [YCanonicityCheck.circuit] at h
   simp only [YCanonicityCheck.synth, LookupRangeCheck.witnessShortCheck,
     LookupRangeCheck.witnessCheckDecomposed, LookupRangeCheck.witnessCheck,
@@ -937,6 +937,37 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
         exact ⟨hPB', hHon', hWin'⟩)).1
   rw [commit_spec_eq, commit_extract_eq] at h
   exact h
+
+/-- The bundle output is the commit child's output. Kept outside `soundness` so the
+symbolic stage-output walk is kernel-checked once instead of enlarging the already-heavy
+soundness proof term. -/
+private theorem synth_output_eq_commit_output
+    (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
+    (synth G R windows Q hQ cfg input).output i
+      = (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+          { pieces :=
+              #v[AssignedCell.of i 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 1 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 2 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 4 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 7 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 8 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 10 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (i + 12 + 2) 0 cfg.hashConfig.witnessPieces] }
+          (i + 15 + 5 + 5) := by
+  -- kernel-light shape: the output walk to the folded `synthChecks` stage is pure defeq
+  -- (the opaque calls inside `synthPieces`/`synthGates` are beta-discarded by the
+  -- projections, never reduced), so `show` it in one step — a simp walk over the whole
+  -- `synth` term replays a congruence chain past the kernel's timeout — then open the
+  -- stage with the single recorded `synthChecks_output` rewrite and close by metadata defeq.
+  show ((synthChecks G R windows Q hQ cfg input
+      ((synthPieces cfg input).output i) (i + 27)).output
+    ((synthPieces cfg input).nextRegionIndex i)).cm = _
+  rw [synthChecks_output]
+  rfl
 
 theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
@@ -1366,7 +1397,10 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
                 AssignedCell.of (i₀ + 12 + 2) 0 cfg.hashConfig.witnessPieces] }
           (i₀ + 15 + 5 + 5)) := by
     rw [← h_output]
-    with_unfolding_all rfl
+    change eval (⟨place, env⟩ : Placed Environment Fp)
+      ((synth G R windows Q hQ cfg _).output i₀) = _
+    exact congrArg (eval (⟨place, env⟩ : Placed Environment Fp))
+      (synth_output_eq_commit_output G R windows Q hQ cfg _ i₀)
   rw [hOutVar]
   exact hOut
 

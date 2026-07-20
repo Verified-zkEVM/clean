@@ -247,45 +247,79 @@ def regionCount (self : FormalCircuit F ConfigInput Config Input Output) (config
     (input : Var Input F) : ℕ :=
   (self.elaborated config).regionCount input
 
-/-- The `call` operation-list function, packaged with its defining equation behind an
-`opaque` (kernel-level!) reduction barrier. `@[irreducible]` would not suffice: the
-kernel ignores reducibility attributes, so defeq-replayed simp steps in big parent
-proofs would evaluate straight through `synthesize` into the whole child op tree — the
-job the retired `.subcircuit` constructor head used to do. `opaque` is neutral for the
-kernel too; the packaged `property` re-exposes the equation as a *recorded* rewrite
-(`call_operations` below). -/
-private opaque callOpsPacked (F : Type) [FiniteField F] (CI Cfg : Type)
+/-- The whole `call` runtime triple, packaged with its defining equation behind an
+`opaque` reduction barrier. One mechanism, two jobs:
+
+* **Runtime (the perf fix).** The implementation applies the child monad `synthesize`
+  **exactly once** (`let r := self.synthesize config input i`) and reads all three
+  components off that single application. `opaque` initializers still *run* at runtime, so
+  this sharing — not the opacity — is what stops a call node from re-materializing its
+  child: no bundle's metadata shape (e.g. a spine bundle's recompute-shaped `output`
+  field, which re-runs the whole child monad) can ever cause re-evaluation, because the
+  runtime never reads the metadata fields at all (they are proof-side only). This kills the
+  ~2^depth blow-up where each nesting level materialized its child 2–3×.
+* **Proofs (the reduction barrier).** `@[irreducible]` would not suffice: the kernel
+  ignores reducibility attributes, so defeq-replayed simp steps in big parent proofs would
+  evaluate straight through `synthesize` into the whole child op tree (the job the retired
+  `.subcircuit` constructor head used to do). `opaque` is neutral for the kernel *and* the
+  elaborator across all three components; the packaged `property` re-exposes the defining
+  equation as a *recorded* rewrite (`call_eq`/`call_operations` below). -/
+private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalCircuit F CI Cfg Input Output → Cfg → Var Input F → RegionIndex →
-        Operations F //
-      ∀ self config input i,
-        f self config input i = (self.synthesize config input).operations i } :=
-  ⟨fun self config input i => (self.synthesize config input).operations i,
-   fun _ _ _ _ => rfl⟩
-
-/-- The operation list a `call` contributes: the child's own operations, behind the
-`callOpsPacked` reduction barrier. Consumers never unfold this; they rewrite with
-`call_operations`. -/
-def callOps (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
-    (input : Var Input F) (i : RegionIndex) : Operations F :=
-  (callOpsPacked F ConfigInput Config Input Output).val self config input i
+        Var Output F × Operations F × RegionIndex //
+      ∀ self config input i, f self config input i
+        = (self.output config input i, (self.synthesize config input).operations i,
+           i + self.regionCount config input) } :=
+  ⟨fun self config input i =>
+      let r := self.synthesize config input i
+      (r.1, r.2.1, i + self.regionCount config input),
+   fun self config input i => by
+      -- componentwise: `output` component is exactly the elaborated `output_eq`, the
+      -- other two are the `Circuit.operations`/`Circuit.nextRegionIndex` projections
+      have h : (self.synthesize config input i).1 = self.output config input i :=
+        ((self.elaborated config).output_eq input i).symm
+      show ((self.synthesize config input i).1, (self.synthesize config input i).2.1,
+          i + self.regionCount config input)
+        = (self.output config input i, (self.synthesize config input).operations i,
+           i + self.regionCount config input)
+      rw [h, Circuit.operations]⟩
 
 /-- Call this circuit as a subcircuit from a parent layouter circuit: append the child's
 operations, return the child's output, advance the region counter by `regionCount`. The
-child list stays a folded chunk in parent proofs (the proof boundary, isolated by
-`constraints_append`); `callOps` is the reduction barrier. Rust: calling a chip method. -/
+runtime is the `callPacked` shared-application implementation (one child monad application
+per call node); the child list stays a folded chunk in parent proofs (the proof boundary,
+isolated by `constraints_append`), with `callPacked` the reduction barrier for all three
+components. Rust: calling a chip method. -/
 def call (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
     (input : Var Input F) : Circuit F (Var Output F) :=
-  fun i =>
-    (self.output config input i, self.callOps config input i,
-      i + self.regionCount config input)
+  fun i => (callPacked F ConfigInput Config Input Output).val self config input i
+
+/-- The operation list a `call` contributes: the child's own operations, read off the
+`callPacked` shared application (so no metadata re-materialization) behind its reduction
+barrier. Consumers never unfold this; they rewrite with `call_operations`. NO attribute —
+the opaque underneath is the barrier. -/
+def callOps (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
+    (input : Var Input F) (i : RegionIndex) : Operations F :=
+  ((callPacked F ConfigInput Config Input Output).val self config input i).2.1
+
+/-- The full `call` triple, re-exposed from the packed `property`: output, operations, and
+next region index of a single `call` node. The public handle downstream proofs use to open
+any component of the (otherwise opaque) `call`. -/
+theorem call_eq (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    self.call config input i
+      = (self.output config input i, (self.synthesize config input).operations i,
+         i + self.regionCount config input) :=
+  (callPacked F ConfigInput Config Input Output).property self config input i
 
 /-- The chunk-opening equation, `callOps`-spelled (for sites that unfolded
 `call`/`operations` first). NOT `@[circuit_norm]`. -/
 theorem callOps_eq (self : FormalCircuit F ConfigInput Config Input Output)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
     self.callOps config input i = (self.synthesize config input).operations i :=
-  (callOpsPacked F ConfigInput Config Input Output).property self config input i
+  congrArg (fun t => t.2.1)
+    ((callPacked F ConfigInput Config Input Output).property self config input i)
 
 /-- The chunk-opening equation: a `call`'s operations are the child's `synthesize`
 operations. Deliberately NOT `@[circuit_norm]` — chunks stay folded in parent proofs;
@@ -508,42 +542,64 @@ def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (confi
     (offset : ℕ) (input : Var Input F) (region : RegionIndex) : Var Output F :=
   (self.elaborated config offset).output input region
 
-/-- The packaged opaque for region-level `callOps` — the kernel-level reduction barrier;
-see `FormalCircuit.callOpsPacked`. -/
-private opaque callOpsPacked (F : Type) [FiniteField F] (CI Cfg : Type)
+/-- The whole region-level `call` runtime pair, packaged with its defining equation behind
+an `opaque` reduction barrier; see `FormalCircuit.callPacked` for the two-jobs design. The
+implementation applies the child monad `synthesize` **exactly once** and reads both the
+output and the operations off that single application (runtime: no metadata
+re-materialization); the `opaque` is the kernel + elaborator reduction barrier, and the
+packaged `property` re-exposes the equation (`call_eq`/`call_operations`). -/
+private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalRegionCircuit F CI Cfg Input Output → Cfg → ℕ → Var Input F →
-        RegionIndex → RegionOperations F //
-      ∀ self config offset input region,
-        f self config offset input region
-          = (self.synthesize config offset input).operations region } :=
+        RegionIndex → Var Output F × RegionOperations F //
+      ∀ self config offset input region, f self config offset input region
+        = (self.output config offset input region,
+           (self.synthesize config offset input).operations region) } :=
   ⟨fun self config offset input region =>
-    (self.synthesize config offset input).operations region,
-   fun _ _ _ _ _ => rfl⟩
-
-/-- The operation list a region-level `call` contributes — behind the reduction barrier;
-see `FormalCircuit.callOps`. -/
-def callOps (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
-    (offset : ℕ) (input : Var Input F) (region : RegionIndex) : RegionOperations F :=
-  (callOpsPacked F ConfigInput Config Input Output).val self config offset input region
+      let r := self.synthesize config offset input region
+      (r.1, r.2),
+   fun self config offset input region => by
+      have h : (self.synthesize config offset input region).1
+          = self.output config offset input region :=
+        ((self.elaborated config offset).output_eq input region).symm
+      show ((self.synthesize config offset input region).1,
+          (self.synthesize config offset input region).2)
+        = (self.output config offset input region,
+           (self.synthesize config offset input).operations region)
+      rw [h, RegionCircuit.operations]⟩
 
 /-- Call this region circuit as a subcircuit from a parent region circuit: append the
 child's operations (in the *same* ambient region), returning the child's output. The
-child list stays a folded chunk in parent proofs (the proof boundary); `callOps` is the
-reduction barrier. Rust: calling an `assign_region` helper with the parent's
-`region`/`offset`. -/
+runtime is the `callPacked` shared-application implementation (one child monad application
+per call node); the child list stays a folded chunk in parent proofs (the proof boundary),
+with `callPacked` the reduction barrier. Rust: calling an `assign_region` helper with the
+parent's `region`/`offset`. -/
 def call (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
     (offset : ℕ) (input : Var Input F) : RegionCircuit F (Var Output F) :=
-  fun region =>
-    (self.output config offset input region,
-      self.callOps config offset input region)
+  fun region => (callPacked F ConfigInput Config Input Output).val self config offset input region
+
+/-- The operation list a region-level `call` contributes — read off the `callPacked`
+shared application behind its reduction barrier; see `FormalCircuit.callOps`. NO attribute. -/
+def callOps (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) : RegionOperations F :=
+  ((callPacked F ConfigInput Config Input Output).val self config offset input region).2
+
+/-- The full region-level `call` pair, re-exposed from the packed `property`: the output
+and operations of a single `call` node; see `FormalCircuit.call_eq`. -/
+theorem call_eq (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    self.call config offset input region
+      = (self.output config offset input region,
+         (self.synthesize config offset input).operations region) :=
+  (callPacked F ConfigInput Config Input Output).property self config offset input region
 
 /-- The chunk-opening equation, `callOps`-spelled. NOT `@[circuit_norm]`. -/
 theorem callOps_eq (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
     self.callOps config offset input region
       = (self.synthesize config offset input).operations region :=
-  (callOpsPacked F ConfigInput Config Input Output).property self config offset input region
+  congrArg (fun t => t.2)
+    ((callPacked F ConfigInput Config Input Output).property self config offset input region)
 
 /-- The chunk-opening equation for region-level calls; see
 `FormalCircuit.call_operations`. NOT `@[circuit_norm]`. -/

@@ -430,7 +430,27 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
                 AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
                 AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces] }
           (i₀ + 7)) : Point Fp).x := by
-    rw [← h_output]
+    -- the output walk crosses the commit call (opaque): land the walk on the folded call's
+    -- output projection (defeq), open it with `output_call`, then the rest is metadata defeq
+    rw [← h_output, ElaboratedCircuit.output_eq,
+      show (synth G R windows Q hQ cfg { ak := input_var_ak, nk := input_var_nk }).output i₀
+        = ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+            { pieces :=
+                #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces] }
+            (i₀ + 7)).x from by
+        show (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+            { pieces :=
+                #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
+                  AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces] }).output
+          (i₀ + 7)).x = _
+        rw [FormalCircuit.output_call]]
     with_unfolding_all rfl
   show (output : Fp) = _
   rw [show (output : Fp) = ({ x := output, y := 0 } : Point Fp).x from rfl, hOutVar,
@@ -554,7 +574,7 @@ private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
         (((Canonicity.circuit wb1 wd1).call c inp).operations i) i
       = ExtendsWitnesses place env
         (((Canonicity.circuit wb1 wd1).synthesize c inp).operations i) i from by
-    simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]] at h
+    rw [FormalCircuit.call_operations]] at h
   simp only [Canonicity.circuit] at h
   simp only [Canonicity.synth, Canonicity.gateChild, LookupRangeCheck.witnessCheck,
     Circuit.operations_bind, operations_assignRegion, RegionCircuit.operations_bind,

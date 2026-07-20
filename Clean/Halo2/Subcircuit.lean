@@ -55,7 +55,10 @@ variable [CircuitType Input] [CircuitType Output]
 @[circuit_norm]
 theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :
-    (self.call config input).output i = self.output config input i := rfl
+    (self.call config input).output i = self.output config input i :=
+  -- no longer `rfl`: the full `call` triple is opaque, so project the `output` component
+  -- out of the packed `call_eq`
+  congrArg (fun t => t.1) (self.call_eq config input i)
 
 /-- `output` of a region-level `call` (the child's elaborated output) — the region-level
 analogue of `FormalCircuit.output_call`. `@[circuit_norm]`. -/
@@ -64,7 +67,24 @@ theorem FormalRegionCircuit.output_call {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
     (self.call config offset input).output region
-      = self.output config offset input region := rfl
+      = self.output config offset input region :=
+  congrArg (fun t => t.1) (self.call_eq config offset input region)
+
+/-- Concrete-`α` restatement of `FormalRegionCircuit.output_call` (the `RegionCircuit.output`
+element type is rewritten to the concrete `Output (AssignedCell F)` by `var_of_provableType`;
+the generic lemma's discr-tree key then misses under `simp`), the region-level analogue of
+`FormalCircuit.output_call'`.
+
+Deliberately NOT `@[circuit_norm]` (unlike the layouter `output_call'`): region gadget proofs
+`rw [FormalRegionCircuit.output_call]` the concrete-`α` occurrence *by hand* after a
+`simp only [circuit_norm]`, so canonicalizing it inside `circuit_norm` would steal their rewrite
+target. It exists for `abstract_outputs`, which lists it explicitly in its canonicalization set. -/
+theorem FormalRegionCircuit.output_call' {Output : TypeMap} [ProvableType Output] {CI Cfg : Type}
+    (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
+    (input : Var Input F) (region : RegionIndex) :
+    (@RegionCircuit.output F _ (Output (AssignedCell F)) (self.call config offset input) region)
+      = self.output config offset input region :=
+  FormalRegionCircuit.output_call self config offset input region
 
 /-- `nextRegionIndex` of a layouter `call`, spelled as the append offset
 `Operations.regionCount ((self.call …).operations i)` — so that when a parent's
@@ -77,8 +97,11 @@ theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input 
     (config : Cfg) (input : Var Input F) (i : RegionIndex) :
     (self.call config input).nextRegionIndex i
       = i + Operations.regionCount ((self.call config input).operations i) := by
-  show i + self.regionCount config input
-    = i + Operations.regionCount ((self.call config input).operations i)
+  -- the `nextRegionIndex` component is opaque now: project it out of `call_eq` first
+  have hnext : (self.call config input).nextRegionIndex i = i + self.regionCount config input := by
+    show (self.call config input i).2.2 = i + self.regionCount config input
+    rw [self.call_eq config input i]
+  rw [hnext]
   congr 1
   -- `regionCount = ((synthesize …).operations i).regionCount` (elaborated metadata), and
   -- `call_operations` opens the chunk to exactly the `synthesize` ops.
@@ -93,7 +116,8 @@ theorem FormalCircuit.output_call' {Output : TypeMap} [ProvableType Output]
     (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :
     (@Circuit.output F _ (Output (AssignedCell F)) (self.call config input) i)
-      = self.output config input i := rfl
+      = self.output config input i :=
+  FormalCircuit.output_call self config input i
 
 /-- Witness-side toFormal boundary crossing: `ExtendsWitnesses` of a `toFormal`-lifted
 call's layouter chunk is the underlying region circuit's witness condition (the lifted
@@ -202,9 +226,10 @@ theorem FormalCircuit.foldCall_run (m : ℕ) :
   | succ m ih =>
     show (FormalCircuit.foldCall c toInput config init m >>= fun acc =>
       (c m).call config acc >>= fun out => pure (toInput out)) i₀ = _
-    simp only [Bind.bind, ih]
-    simp only [FormalCircuit.foldOps, FormalCircuit.foldState, List.append_nil]
-    rfl
+    -- `call`'s triple shape is opaque now: open the round-`m` call application with
+    -- `call_eq` (and reconcile the ops spelling via `call_operations`) rather than `rfl`
+    simp only [Bind.bind, ih, FormalCircuit.foldOps, FormalCircuit.foldState,
+      FormalCircuit.call_eq, FormalCircuit.call_operations, List.append_nil]
 
 theorem FormalCircuit.foldCall_operations (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).operations i₀
