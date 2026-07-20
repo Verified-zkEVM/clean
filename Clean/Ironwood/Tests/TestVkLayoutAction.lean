@@ -77,7 +77,8 @@ def aCfg : Config := (configure aG {}).1
 
 /-- Keygen never evaluates witness programs (`Value::unknown()`). -/
 def unk : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
-def unkPoint : Halo2.Ironwood.Point (FExpr Fp) := { x := .const 0, y := .const 0 }
+def unkPoint : Halo2.Ironwood.Point (WitgenIR Fp 1) :=
+  { x := .ofFExpr (.const 0), y := .ofFExpr (.const 0) }
 def unkWindows : Vector (FExpr Fp) 85 := Vector.replicate 85 (.const (0 : Fp))
 
 /-! ## The synthesize mirror (identical region stream to `Action.Circuit.synthesize`,

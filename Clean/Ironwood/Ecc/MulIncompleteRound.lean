@@ -179,7 +179,7 @@ instance : Inhabited BitsHint := ⟨fun _ => false⟩
 
 /-- The bundle inputs. The working scalar's bits are derived from the cell `alpha`
 (`decompose_for_scalar_mul(alpha.value())`); the `round`/`loop` children receive only its
-reading *program* (`.expr alpha` — their scalar input is `Unconstrained field`, matching
+reading *program* (`.expr alpha` — their scalar input is `UnconstrainedExpr field`, matching
 the Rust `Value` dataflow). -/
 structure Inputs (F : Type) where
   -- Scalar cell the working scalar's bits are decomposed from.
@@ -612,7 +612,7 @@ private theorem step_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest
 
 /-- One interior double-and-add round at global bit index `i`. Enables `q_mul_2` at its gate
 row `offset + 1`; assigns this row's running sum and the next row's state cells. -/
-def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) State where
+def round (i : ℕ) : FormalRegionCircuit Fp Config Config (UnconstrainedExpr field) State where
   configure := pure
 
   synthesize cfg offset (alpha : FExpr Fp) := do

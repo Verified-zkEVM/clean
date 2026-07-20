@@ -56,7 +56,15 @@ def parent :
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ _ := input.Valid
+  -- both children's witnessed cells (regions `i₀` and `i₀ + 1`), so each child's
+  -- extract-level `ProverAssumptions` is discharged definitionally
+  Witness := ProvablePair Point Point
+  extract := fun config _ i₀ env =>
+    (eval env ({ x := AssignedCell.of i₀ 0 config.x,
+                 y := AssignedCell.of i₀ 0 config.y } : Var Point Fp),
+     eval env ({ x := AssignedCell.of (i₀ + 1) 0 config.x,
+                 y := AssignedCell.of (i₀ + 1) 0 config.y } : Var Point Fp))
+  ProverAssumptions _ wit _ := wit.1.Valid ∧ wit.2.Valid
 
   soundness := by
     intro config
@@ -79,8 +87,12 @@ def parent :
     -- both goal chunks strengthen in place (op order): the goal becomes the AND of the two
     -- `EnvA ∧ A ∧ PA` bundles, with premised `h_spec_0`/`h_spec_1` in context.
     subcircuit_rw
-    exact ⟨⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩,
-      ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩⟩
+    have hrc : ((witnessPointL.call config input_var).operations i₀).regionCount = 1 := by
+      rw [FormalCircuit.call_regionCount]
+      rfl
+    simp only [hrc]
+    exact ⟨⟨trivial, trivial, by with_unfolding_all exact hpa.1⟩,
+      ⟨trivial, trivial, by with_unfolding_all exact hpa.2⟩⟩
 
 /-! ## Bare-`place`/`env` engine firing
 
@@ -91,7 +103,7 @@ regardless (no discrimination tree). -/
 -- Region bare context: firing must expose the child's `Spec` (here `Point.Valid` of the output),
 -- so the conclusion genuinely depends on the rewrite having happened.
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp))
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
     (h : RegionOperations.Constraints place i₀ env
         ((WitnessPoint.point.call config 0 input).operations i₀)) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -101,7 +113,7 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
 
 -- Layouter bare context: same, at the layouter level.
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp))
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
     (h : Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
         (witnessPointR.output config input i₀)).Valid := by

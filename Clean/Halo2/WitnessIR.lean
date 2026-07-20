@@ -55,39 +55,58 @@ lemma eval_ofFExpr_zero [FiniteField F] (e : FExpr F) (env : Placed ProverEnviro
 ## Prover-only inputs
 
 `Unconstrained value` is a prover-only circuit input (halo2's `Value<T>`): the verifier
-view is erased to `Unit`, the prover view is a witness program producing `value F`,
-supplied by the caller for the honest prover to evaluate. Port of main Clean's
+view is erased to `Unit`, the prover view is the evaluated `value F`, supplied by the
+caller as witness IR for the honest prover to evaluate. Port of main Clean's
 `Unconstrained`. Used for `Value<Affine>`-style inputs that the gadget witnesses
 internally.
 
-Minimal version: the program is a plain `value (FExpr F)` (a provable value of witness
-expressions). The `let`-step builder monad (`Witgen.M`, for shared intermediate values)
-is not yet ported — a follow-up when complex witness programs land; for a `Value<Affine>`
-input the plain form suffices.
+The `Var` view is one `WitgenIR F 1` program per component (`value (WitgenIR F 1)`),
+so components carry full let-step witness programs and plug directly into the
+per-cell witness ops. For `field` this is exactly `WitgenIR F 1` — what `loadPrivate`
+and friends consume.
+
+`UnconstrainedExpr value` is the plain-expression variant: its `Var` is
+`value (FExpr F)`, for inputs a gadget *embeds inside* its own witness expressions
+(e.g. the variable-base mul children's scalar-cell reading) rather than assigning to
+cells.
 -/
 
-/-- Marker `TypeMap` for a prover-only input carrying a `value`. -/
+/-- Marker `TypeMap` for a prover-only input carrying a `value` as per-component
+witness-IR programs. -/
 structure Unconstrained (value : TypeMap) (F : Type) where
-  program : value (FExpr F)
+  program : value (WitgenIR F 1)
 
 namespace Unconstrained
 variable {value : TypeMap} [ProvableType value]
 
+/-- Componentwise witness-program evaluation: the prover view of an `Unconstrained`
+input (the engine's canonical spelling, produced by the eval-dispatch simproc below). -/
+def evalIR {F : Type} [FiniteField F] {value : TypeMap} [ProvableType value]
+    (pe : Placed ProverEnvironment F) (v : value (WitgenIR F 1)) : value F :=
+  fromElements ((toElements v).map fun w => (w.eval pe)[0])
+
 @[reducible] instance : CircuitType (Unconstrained value) where
-  Var F := value (FExpr F)
+  Var F := value (WitgenIR F 1)
   Value := unit
   ProverValue := value
   evalVerifier _ _ := ()
-  evalProver pe program := Witgen.eval { env := pe } program
+  evalProver pe program := evalIR pe program
 
-/-- Construct a prover-only input from its witness program. -/
+/-- Construct a prover-only input from per-component witness programs. -/
 @[circuit_norm]
-def unconstrained (program : value (FExpr F)) : Var (Unconstrained value) F := program
+def unconstrained (program : value (WitgenIR F 1)) : Var (Unconstrained value) F :=
+  program
+
+/-- Construct a prover-only input from plain per-component expressions. -/
+@[circuit_norm]
+def ofFExprs (program : value (FExpr F)) : Var (Unconstrained value) F :=
+  (fromElements ((toElements program).map Witgen.WitgenIROver.ofFExpr)
+    : value (WitgenIR F 1))
 
 -- note: these being in `circuit_norm` mean that we often have to target the
 -- simplified way of writing the Var/Value/ProverValue types
 @[circuit_norm] lemma var_of_unconstrained :
-    Halo2.Var (Unconstrained value) F = value (FExpr F) := rfl
+    Halo2.Var (Unconstrained value) F = value (WitgenIR F 1) := rfl
 @[circuit_norm] lemma value_of_unconstrained :
     Halo2.Value (Unconstrained value) F = Unit := rfl
 
@@ -96,24 +115,28 @@ instance : ProvableType (Halo2.Value (Unconstrained value)) :=
 @[circuit_norm] lemma proverValue_of_unconstrained :
     Halo2.ProverValue (Unconstrained value) F = value F := rfl
 
+instance [Field F] : Inhabited (WitgenIR F 1) :=
+  ⟨Witgen.WitgenIROver.ofFExpr default⟩
+
 instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
-  ⟨(fromElements default : value (FExpr F))⟩
+  ⟨(fromElements default : value (WitgenIR F 1))⟩
 
 variable [FiniteField F]
 
-@[reducible] instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
+@[reducible] instance : Eval (Placed Environment F) (value (WitgenIR F 1)) Unit :=
   CircuitType.verifierEval (Unconstrained value)
-@[reducible] instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
+@[reducible] instance :
+    Eval (Placed ProverEnvironment F) (value (WitgenIR F 1)) (value F) :=
   CircuitType.proverEval (Unconstrained value)
 
 @[circuit_norm] lemma eval_unconstrained
-    (pe : Placed Environment F) (v : value (FExpr F)) :
+    (pe : Placed Environment F) (v : value (WitgenIR F 1)) :
     eval pe v = () := rfl
 
 @[circuit_norm] lemma eval_unconstrained_prover
-    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
+    (pe : Placed ProverEnvironment F) (v : value (WitgenIR F 1)) :
     eval pe v
-      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
+      = evalIR ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) v := by
   with_unfolding_all rfl
 
 /-- The same reduction keyed on the raw `CircuitType.proverEval` instance application — the
@@ -121,57 +144,76 @@ spelling `completeness_iff`'s generic `eval env input_var = input` hypothesis ca
 named forwarder instance above is a different constant, which keyed matching does not see
 through). -/
 @[circuit_norm] lemma eval_unconstrained_prover_raw
-    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
-    @Eval.eval (Placed ProverEnvironment F) (value (FExpr F)) (value F)
+    (pe : Placed ProverEnvironment F) (v : value (WitgenIR F 1)) :
+    @Eval.eval (Placed ProverEnvironment F) (value (WitgenIR F 1)) (value F)
         (CircuitType.proverEval (Unconstrained value)) pe v
-      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
+      = evalIR ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) v := by
+  with_unfolding_all rfl
+
+/-- Scalar (`field`) reduction of the componentwise evaluator. -/
+@[circuit_norm] lemma evalIR_field
+    (pe : Placed ProverEnvironment F) (w : WitgenIR F 1) :
+    evalIR (value := field) pe w = (w.eval pe)[0] := by
   with_unfolding_all rfl
 
 end Unconstrained
 
 export Unconstrained (unconstrained)
 
-/-- IR-backed prover-only scalar input: the let-step `WitgenIR` form of
-`Unconstrained field`, for witness programs with shared intermediate values. -/
-structure UnconstrainedIR (F : Type) where
-  program : WitgenIR F 1
+/-- Marker `TypeMap` for a prover-only input carried as plain per-component witness
+*expressions* — for inputs a gadget embeds inside its own witness programs rather than
+assigning to cells. -/
+structure UnconstrainedExpr (value : TypeMap) (F : Type) where
+  program : value (FExpr F)
 
-namespace UnconstrainedIR
+namespace UnconstrainedExpr
+variable {value : TypeMap} [ProvableType value]
 
-@[reducible] instance : CircuitType UnconstrainedIR where
-  Var F := WitgenIR F 1
+@[reducible] instance : CircuitType (UnconstrainedExpr value) where
+  Var F := value (FExpr F)
   Value := unit
-  ProverValue := field
+  ProverValue := value
   evalVerifier _ _ := ()
-  evalProver pe w := (w.eval pe)[0]
+  evalProver pe program := Witgen.eval { env := pe } program
 
-@[circuit_norm] lemma var_of_unconstrainedIR {F : Type} :
-    Halo2.Var UnconstrainedIR F = WitgenIR F 1 := rfl
-@[circuit_norm] lemma value_of_unconstrainedIR {F : Type} :
-    Halo2.Value UnconstrainedIR F = Unit := rfl
-
-instance : ProvableType (Halo2.Value UnconstrainedIR) :=
+instance : ProvableType (Halo2.Value (UnconstrainedExpr value)) :=
   (inferInstance : ProvableType unit)
-@[circuit_norm] lemma proverValue_of_unconstrainedIR {F : Type} :
-    Halo2.ProverValue UnconstrainedIR F = F := rfl
+
+@[circuit_norm] lemma var_of_unconstrainedExpr {F : Type} :
+    Halo2.Var (UnconstrainedExpr value) F = value (FExpr F) := rfl
+@[circuit_norm] lemma value_of_unconstrainedExpr {F : Type} :
+    Halo2.Value (UnconstrainedExpr value) F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedExpr {F : Type} :
+    Halo2.ProverValue (UnconstrainedExpr value) F = value F := rfl
+
+instance {F : Type} [Field F] : Inhabited (Var (UnconstrainedExpr value) F) :=
+  ⟨(fromElements default : value (FExpr F))⟩
 
 variable {F : Type} [FiniteField F]
 
-@[reducible] instance : Eval (Placed Environment F) (WitgenIR F 1) Unit :=
-  CircuitType.verifierEval UnconstrainedIR
-@[reducible] instance : Eval (Placed ProverEnvironment F) (WitgenIR F 1) F :=
-  CircuitType.proverEval UnconstrainedIR
+@[reducible] instance : Eval (Placed Environment F) (value (FExpr F)) Unit :=
+  CircuitType.verifierEval (UnconstrainedExpr value)
+@[reducible] instance : Eval (Placed ProverEnvironment F) (value (FExpr F)) (value F) :=
+  CircuitType.proverEval (UnconstrainedExpr value)
 
-@[circuit_norm] lemma eval_unconstrainedIR
-    (pe : Placed Environment F) (w : WitgenIR F 1) :
-    eval pe (w : Var UnconstrainedIR F) = () := rfl
+@[circuit_norm] lemma eval_unconstrainedExpr
+    (pe : Placed Environment F) (v : value (FExpr F)) :
+    eval pe v = () := rfl
 
-@[circuit_norm] lemma eval_unconstrainedIR_prover
-    (pe : Placed ProverEnvironment F) (w : WitgenIR F 1) :
-    eval pe (w : Var UnconstrainedIR F) = (w.eval pe)[0] := by
+@[circuit_norm] lemma eval_unconstrainedExpr_prover
+    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
+    eval pe v
+      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
   with_unfolding_all rfl
 
-end UnconstrainedIR
+@[circuit_norm] lemma eval_unconstrainedExpr_prover_raw
+    (pe : Placed ProverEnvironment F) (v : value (FExpr F)) :
+    @Eval.eval (Placed ProverEnvironment F) (value (FExpr F)) (value F)
+        (CircuitType.proverEval (UnconstrainedExpr value)) pe v
+      = Witgen.eval { env := ({ place := pe.place, env := pe.env } : Placed ProverEnvironment F) } v := by
+  with_unfolding_all rfl
+
+end UnconstrainedExpr
 
 end Halo2
 
@@ -253,7 +295,9 @@ def Halo2.unconstrainedEvalProc : Simproc := fun e => do
   let some instW := instW | return .continue
   let isVerifier := !isProver
   let some m := instW.getAppArgs[2]? | return .continue
-  unless m.getAppFn.isConstOf ``Halo2.Unconstrained do return .continue
+  let isIRCarrier := m.getAppFn.isConstOf ``Halo2.Unconstrained
+  let isExprCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedExpr
+  unless isIRCarrier || isExprCarrier do return .continue
   if isVerifier then
     let rhs := mkConst ``Unit.unit
     let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
@@ -269,8 +313,11 @@ def Halo2.unconstrainedEvalProc : Simproc := fun e => do
   -- `M := value` must be supplied explicitly: higher-order unification cannot recover it
   -- from the folded `Var (Unconstrained value) F` type of `v`
   let some value := m.getAppArgs[0]? | return .continue
-  let rhs ← withTransparency .default <| mkAppOptM ``Witgen.eval
-    #[none, none, none, none, none, some value, none, some ctx, some v]
+  let rhs ← withTransparency .default <|
+    if isIRCarrier then
+      mkAppOptM ``Halo2.Unconstrained.evalIR #[none, none, some value, none, some pe', some v]
+    else
+      mkAppOptM ``Witgen.eval #[none, none, none, none, none, some value, none, some ctx, some v]
   let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
   return .visit { expr := rhs, proof? := some pf }
 

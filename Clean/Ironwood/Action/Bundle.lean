@@ -33,14 +33,14 @@ private theorem toFormal_call_regionCount {CI Cfg : Type} {In Out : TypeMap}
   rfl
 
 private theorem wpoint_call_regionCount (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (j : RegionIndex) :
+    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (j : RegionIndex) :
     Operations.regionCount
       (((Ecc.WitnessPoint.point.toFormal name).call c inp).operations j) = 1 := by
   rw [FormalCircuit.call_regionCount]
   rfl
 
 private theorem wpointNonId_call_regionCount (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (j : RegionIndex) :
+    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (j : RegionIndex) :
     Operations.regionCount
       (((Ecc.WitnessPoint.pointNonId.toFormal name).call c inp).operations j) = 1 := by
   rw [FormalCircuit.call_regionCount]
@@ -93,7 +93,7 @@ private theorem civk_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-private theorem ai_call_regionCount (pkD : Point (FExpr Fp))
+private theorem ai_call_regionCount (pkD : Point (WitgenIR Fp 1))
     (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (inp : Var AddressIntegrity.Input Fp) (j : RegionIndex) :
     Operations.regionCount
@@ -406,13 +406,13 @@ private theorem wpointNonId_spec_eq (name : String) :
       = fun _ (output : Value Point Fp) _ => output.OnCurve := rfl
 
 private theorem wpoint_output (name : String) (c : Ecc.WitnessPoint.Config)
-    (inp : Point (FExpr Fp)) (i : RegionIndex) :
+    (inp : Point (WitgenIR Fp 1)) (i : RegionIndex) :
     (Ecc.WitnessPoint.point.toFormal name).output c inp i
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
 
 private theorem wpointNonId_output (name : String) (c : Ecc.WitnessPoint.Config)
-    (inp : Point (FExpr Fp)) (i : RegionIndex) :
+    (inp : Point (WitgenIR Fp 1)) (i : RegionIndex) :
     (Ecc.WitnessPoint.pointNonId.toFormal name).output c inp i
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
@@ -493,12 +493,12 @@ private theorem civk_extract_eq (G : Generators) (R : FixedBase)
     (CommitIvk.Main.circuit G R w Q hQ).extract c inp i env
       = Ecc.MulFixed.FullWidth.fwExtract c.mulConfig (i + 7) env := rfl
 
-private theorem ai_spec_eq (pkD : Point (FExpr Fp)) :
+private theorem ai_spec_eq (pkD : Point (WitgenIR Fp 1)) :
     (AddressIntegrity.circuit pkD).Spec
       = fun (input : Value AddressIntegrity.Input Fp) (output : Value Point Fp) _ =>
           output.OnCurve ∧ output = (input.ivk.val • input.gDOld : Point Fp) := rfl
 
-private theorem ai_output (pkD : Point (FExpr Fp))
+private theorem ai_output (pkD : Point (WitgenIR Fp 1))
     (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (inp : Var AddressIntegrity.Input Fp) (i : RegionIndex) :
     (AddressIntegrity.circuit pkD).output c inp i
@@ -617,12 +617,12 @@ private theorem sa_assumptions_eq (G : FixedBase) (w : Vector (FExpr Fp) 85) :
       = fun (input : Value SpendAuthority.Input Fp) =>
           Halo2.Ironwood.Point.Valid input.akP := rfl
 
-private theorem ai_assumptions_eq (pkD : Point (FExpr Fp)) :
+private theorem ai_assumptions_eq (pkD : Point (WitgenIR Fp 1)) :
     (AddressIntegrity.circuit pkD).Assumptions
       = fun (input : Value AddressIntegrity.Input Fp) =>
           Halo2.Ironwood.Point.OnCurve input.gDOld := rfl
 
-private theorem ai_pa_eq (pkD : Point (FExpr Fp)) :
+private theorem ai_pa_eq (pkD : Point (WitgenIR Fp 1)) :
     (AddressIntegrity.circuit pkD).ProverAssumptions
       = fun (input : ProverValue AddressIntegrity.Input Fp) (wit : Point Fp) _ =>
           wit.OnCurve ∧ wit = (input.ivk.val • input.gDOld : Point Fp) := rfl
@@ -1185,7 +1185,7 @@ private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
   rfl
 
 private theorem wpoint_call_witnesses (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (i : RegionIndex)
+    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (i : RegionIndex)
     (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
     ExtendsWitnesses place env
       (((Ecc.WitnessPoint.point.toFormal name).call c inp).operations i) i
@@ -1196,7 +1196,7 @@ private theorem wpoint_call_witnesses (name : String)
   rfl
 
 private theorem wpointNonId_call_witnesses (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (FExpr Fp)) (i : RegionIndex)
+    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (i : RegionIndex)
     (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
     ExtendsWitnesses place env
       (((Ecc.WitnessPoint.pointNonId.toFormal name).call c inp).operations i) i
@@ -1251,13 +1251,6 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   rw [wpoint_call_regionCount] at hWgd hWak
   rw [wpointNonId_call_regionCount] at hWak
   simp only [Nat.add_assoc, Nat.reduceAdd] at hWgd hWak
-  have hWcmE := hWcm
-  have hWgdE := hWgd
-  have hWakE := hWak
-  rw [wpoint_call_witnesses] at hWcmE
-  rw [wpointNonId_call_witnesses] at hWgdE hWakE
-  simp only [Ecc.WitnessPoint.point, Ecc.WitnessPoint.pointNonId,
-    circuit_norm] at hWcmE hWgdE hWakE
   refine ⟨buildWitness G input_var cfg i₀ place _
     (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -1267,16 +1260,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
        (by rw [wpoint_assumptions_eq]; trivial),
        (by rw [wpoint_proverAssumptions_eq]
            show Halo2.Ironwood.Point.Valid _
-           have h : Halo2.Ironwood.Point.Valid
-               (⟨(Witgen.FExprOver.eval
-                   { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
-                   input_var.cmOld.x : Fp),
-                 (Witgen.FExprOver.eval
-                   { env := (⟨place, env⟩ : Placed ProverEnvironment Fp) }
-                   input_var.cmOld.y : Fp)⟩ : Point Fp) := by
-             rw [← hWcmE.1, ← hWcmE.2]
-             with_unfolding_all exact hVcm
-           with_unfolding_all exact h)⟩
+           with_unfolding_all exact hVcm)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
       cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd

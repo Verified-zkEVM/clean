@@ -37,7 +37,11 @@ def parent :
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ _ := input.Valid
+  Witness := Point
+  extract := fun config offset _ self env =>
+    eval env ({ x := AssignedCell.of self offset config.x,
+                y := AssignedCell.of self offset config.y } : Var Point Fp)
+  ProverAssumptions _ wit _ := wit.Valid
 
   soundness := by
     intro config offset
@@ -58,7 +62,7 @@ def parent :
     -- premised `h_spec_0` enters the context, unused here).
     simp only [circuit_norm] at h_input hpa ⊢
     subcircuit_rw
-    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    exact ⟨trivial, trivial, by with_unfolding_all exact hpa⟩
 
 /-! ## Realistic parent: own op + subcircuit call -/
 
@@ -69,10 +73,14 @@ def parentWithOp :
       (Unconstrained Point) Point where
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := do
-    let _ ← assignAdvice config.x (offset + 1) (.ofFExpr input.x)
+    let _ ← assignAdvice config.x (offset + 1) input.x
     WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
-  ProverAssumptions input _ _ := input.Valid
+  Witness := Point
+  extract := fun config offset _ self env =>
+    eval env ({ x := AssignedCell.of self offset config.x,
+                y := AssignedCell.of self offset config.y } : Var Point Fp)
+  ProverAssumptions _ wit _ := wit.Valid
 
   soundness := by
     intro config offset
@@ -94,6 +102,6 @@ def parentWithOp :
     -- the engine strengthens the goal chunk in place (locating the witness from `hwit`).
     simp only [circuit_norm] at hwit h_input hpa ⊢
     subcircuit_rw
-    exact ⟨trivial, trivial, by simpa only [circuit_norm, h_input] using hpa⟩
+    exact ⟨trivial, trivial, by with_unfolding_all exact hpa⟩
 
 end Halo2.Ironwood.Ecc.TestSubcircuit
