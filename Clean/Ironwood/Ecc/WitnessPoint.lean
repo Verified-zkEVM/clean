@@ -48,34 +48,21 @@ def configure (x y : Column .advice) : Configure Fp Config := do
   createGate (pointNonIdGate qPointNonId x y)
   return { qPoint, qPointNonId, x, y }
 
-/-- `Point`-literal reduction of the componentwise `Unconstrained` evaluator, keyed for
-`h_input` reduction after the input var is destructured into components. -/
-@[circuit_norm] lemma evalIR_point
-    (pe : Placed ProverEnvironment Fp) (a b : WitgenIR Fp 1) :
-    Unconstrained.evalIR pe ({ x := a, y := b } : Point (WitgenIR Fp 1))
-      = ({ x := (a.eval pe)[0], y := (b.eval pe)[0] } : Point Fp) := by
-  with_unfolding_all rfl
-
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
 
-  synthesize config offset (point : Point (WitgenIR Fp 1)) := do
+  synthesize config offset (point : Var (Unconstrained Point) Fp) := do
     -- enable "witness point" gate
     (pointGate config.qPoint config.x config.y).enable offset
-    -- assign the x and y values
-    let xVar ← assignAdvice config.x offset point.x
-    let yVar ← assignAdvice config.y offset point.y
+    -- assign the x and y values (per-cell scalar programs off the hint program)
+    let xVar ← assignAdvice config.x offset (Witgen.MOver.toIRScalar (Point.x <$> point))
+    let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
 
   Spec _ output _ := output.Valid
-  -- the witnessed point, published as extraction data (positional cells) so parents can
-  -- state honest-prover conditions on the value actually assigned
-  Witness := Point
-  extract := fun cfg offset _ self env =>
-    eval env ({ x := AssignedCell.of self offset cfg.x,
-                y := AssignedCell.of self offset cfg.y } : Var Point Fp)
-  ProverAssumptions _ wit _ := wit.Valid
+  ProverAssumptions input _ _ := input.Valid
+  ProverSpec input output _ _ := output = input
 
   soundness := by
     circuit_proof_start [pointGate, curveEqn]
@@ -84,18 +71,18 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 
   completeness := by
     circuit_proof_start [pointGate, curveEqn]
-    rcases hPA with hc | h0
-    · have hc' : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hc
-      constructor
-      · linear_combination
-          (Witgen.WitgenIROver.eval input_var_x { place := place, env := env })[0] * hc'
-      · linear_combination
-          (Witgen.WitgenIROver.eval input_var_y { place := place, env := env })[0] * hc'
-    · have hx := congrArg Halo2.Ironwood.Point.x h0
-      have hy := congrArg Halo2.Ironwood.Point.y h0
-      simp only [Halo2.Ironwood.Point.zero_def] at hx hy
-      rw [hx, hy]
-      constructor <;> ring
+    constructor
+    · rcases hPA with hc | h0
+      · have hc' : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hc
+        constructor
+        · linear_combination input_x * hc'
+        · linear_combination input_y * hc'
+      · have hx := congrArg Halo2.Ironwood.Point.x h0
+        have hy := congrArg Halo2.Ironwood.Point.y h0
+        simp only [Halo2.Ironwood.Point.zero_def] at hx hy
+        rw [hx, hy]
+        constructor <;> ring
+    · exact ⟨h_output.1.symm, h_output.2.symm⟩
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -108,27 +95,20 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
 
-  synthesize config offset (point : Point (WitgenIR Fp 1)) := do
+  synthesize config offset (point : Var (Unconstrained Point) Fp) := do
     -- enable "witness non-identity point" gate
     (pointNonIdGate config.qPointNonId config.x config.y).enable offset
-    -- assign the x and y values
-    let xVar ← assignAdvice config.x offset point.x
-    let yVar ← assignAdvice config.y offset point.y
+    -- assign the x and y values (per-cell scalar programs off the hint program)
+    let xVar ← assignAdvice config.x offset (Witgen.MOver.toIRScalar (Point.x <$> point))
+    let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
 
   Spec _ output _ := output.OnCurve
-  -- the witnessed point, published as extraction data (positional cells) so parents can
-  -- state honest-prover conditions on the value actually assigned
-  Witness := Point
-  extract := fun cfg offset _ self env =>
-    eval env ({ x := AssignedCell.of self offset cfg.x,
-                y := AssignedCell.of self offset cfg.y } : Var Point Fp)
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
   -- on the identity; an on-curve point is automatically non-identity (`ne_zero_of_onCurve`),
   -- so a single `OnCurve` hint captures both the non-id error path and the curve constraint.
-  -- Stated at the extracted cell values (not the program), so parents discharge it from
-  -- their own extract-level assumptions.
-  ProverAssumptions _ wit _ := wit.OnCurve
+  ProverAssumptions input _ _ := input.OnCurve
+  ProverSpec input output _ _ := output = input
 
   soundness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
@@ -138,7 +118,9 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
   completeness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     have hc : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hPA
-    linear_combination hc
+    constructor
+    · linear_combination hc
+    · exact ⟨h_output.1.symm, h_output.2.symm⟩
 
 /-! ## Layouter-level bridges for `pointNonId.toFormal`, shared by the consumers
 (`rfl`, the bundle stays folded) -/
@@ -149,22 +131,18 @@ variable (name : String)
 
 theorem pointNonId_toFormal_spec_eq :
     (pointNonId.toFormal name).Spec
-      = fun _ (output : Point Fp) (_ : Point Fp) => output.OnCurve := rfl
+      = fun _ (output : Point Fp) (_ : Unit) => output.OnCurve := rfl
 
 theorem pointNonId_toFormal_assumptions_eq :
     (pointNonId.toFormal name).Assumptions = fun _ => True := rfl
 
 theorem pointNonId_toFormal_proverAssumptions_eq :
     (pointNonId.toFormal name).ProverAssumptions
-      = fun _ (wit : Point Fp) _ => wit.OnCurve := rfl
+      = fun (input : Point Fp) (_ : Unit) _ => input.OnCurve := rfl
 
-theorem pointNonId_toFormal_extract_eq (cfg : Config)
-    (input : Var (Unconstrained Point) Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (pointNonId.toFormal name).extract cfg input i env
-      = (eval env ({ x := AssignedCell.of i 0 cfg.x,
-                     y := AssignedCell.of i 0 cfg.y } : Var Point Fp)
-          : Value Point Fp) := rfl
+theorem pointNonId_toFormal_proverSpec_eq :
+    (pointNonId.toFormal name).ProverSpec
+      = fun (input output : Point Fp) (_ : Unit) _ => output = input := rfl
 
 /-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
 theorem pointNonId_toFormal_output (cfg : Config)

@@ -6,6 +6,7 @@ import Clean.Ironwood.NoteCommit.Composites
 import Clean.Ironwood.NoteCommit.YComposite
 import Clean.Ironwood.Sinsemilla.CommitDomain
 import Clean.Ironwood.NoteCommit.MainTheorems
+import Clean.Halo2.CircuitTypeDeriving
 
 /-!
 # NoteCommit main circuit (Ironwood)
@@ -44,8 +45,9 @@ def ns : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
 /-- The circuit inputs: the note's field-element cells (`x/y(g_d)`, `x/y(pk_d)`, the
-64-bit value, `rho`, `psi`). The blinding scalar `rcm` enters through the fixed-base
-mul's window programs (a `Main` parameter, like the child bundle). -/
+64-bit value, `rho`, `psi`) and the blinding scalar's nat-valued reading program `rcm`
+(a prover hint — Rust `Value<pallas::Scalar>`; the fixed-base mul child derives its 85
+window witnesses from it and the scalar it encodes is extraction data). -/
 structure Inputs (F : Type) where
   gdX : F
   gdY : F
@@ -54,7 +56,8 @@ structure Inputs (F : Type) where
   value : F
   rho : F
   psi : F
-deriving ProvableStruct
+  rcm : UnconstrainedNat F
+deriving CircuitType
 
 /-! ## Witness programs
 
@@ -224,7 +227,7 @@ structure PieceCells where
 
 /-- Stage 1 (15 regions): the eight message pieces interleaved with the seven
 sub-piece short checks (`note_commit.rs:1608-1653`). -/
-def synthPieces (cfg : Config) (input : Inputs (AssignedCell Fp)) :
+def synthPieces (cfg : Config) (input : Var Inputs Fp) :
     Circuit Fp PieceCells := do
   let a ← witnessMessagePiece cfg.hashConfig (brWit input.gdX 0 250)
   let b0 ← LookupRangeCheck.witnessShortCheck 10 4 cfg.lookupConfig
@@ -262,16 +265,17 @@ structure CheckCells where
 
 /-- Stage 2 (18 regions): the two y-canonicity flows, `CommitDomain::commit`, and the
 four canonicity `witness_check`s (`note_commit.rs:1654-1737`). -/
-def synthChecks (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) (input : Inputs (AssignedCell Fp))
+def synthChecks (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (iHash : RegionIndex) : Circuit Fp CheckCells := do
   let b2 ← (YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }
   let d1 ← (YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
     (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }
-  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+  let cm ← (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm }
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false cfg.lookupConfig
     (GdCanonicityCheck.aPrimeWit pcs.a)
   let bZs ← LookupRangeCheck.witnessCheck 10 14 false cfg.lookupConfig
@@ -283,7 +287,7 @@ def synthChecks (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85
   pure { b2, d1, cm, aZs, bZs, eZs, gZs }
 
 /-- Stage 3 (10 regions): the gate regions (`note_commit.rs:1739-1795`). -/
-def synthGates (cfg : Config) (input : Inputs (AssignedCell Fp)) (pcs : PieceCells)
+def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
     (ccs : CheckCells) (iHash : RegionIndex) : Circuit Fp Unit := do
   let b1 ← ((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
     "NoteCommit MessagePiece b").call cfg.gates.b
@@ -317,17 +321,17 @@ def synthGates (cfg : Config) (input : Inputs (AssignedCell Fp)) (pcs : PieceCel
   pure ()
 
 /-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
-Parameterized (like the fixed-base mul bundle) by the `rcm` window programs. -/
-def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+The `rcm` blinding scalar enters as the input's nat-valued reading program. -/
+def synth (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) : Circuit Fp (Var Point Fp) := do
+    (input : Var Inputs Fp) : Circuit Fp (Var Point Fp) := do
   let i₀ ← currentRegion
   -- the `hash_to_point` region of the `CommitDomain::commit` in stage 2 (region 28 of
   -- the flow: 15 piece/short regions, two 5-region y-canonicity flows, the 2-region
   -- blind)
   let iHash := i₀ + 27
   let pcs ← synthPieces cfg input
-  let ccs ← synthChecks G R windows Q hQ cfg input pcs iHash
+  let ccs ← synthChecks G R Q hQ cfg input pcs iHash
   synthGates cfg input pcs ccs iHash
   pure ccs.cm
 
@@ -353,11 +357,11 @@ private theorem yc_call_regionCount (w : WitgenIR Fp 1)
 
 /-- The commit call chunk spans its four regions. -/
 private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -372,14 +376,14 @@ private theorem yc_call_nextRegionIndex (w : WitgenIR Fp 1)
 
 /-- `nextRegionIndex` of the commit call, closed form. -/
 private theorem commit_call_nextRegionIndex (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
-    ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+    ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
       c inp).nextRegionIndex j = j + 4 := by
   rw [FormalCircuit.nextRegionIndex_call, commit_call_regionCount]
 
-theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_regionCount (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     Operations.regionCount ((synthPieces cfg input).operations i) = 15 := by
   simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
@@ -387,17 +391,17 @@ theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp)
     operations_assignRegion, Operations.regionCount]
 
 theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash : RegionIndex)
     (i : RegionIndex) :
     Operations.regionCount
-      ((synthChecks G R windows Q hQ cfg input pcs iHash).operations i) = 18 := by
+      ((synthChecks G R Q hQ cfg input pcs iHash).operations i) = 18 := by
   simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm,
     Circuit.operations_bind, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
 
-theorem synthGates_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthGates_regionCount (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
     Operations.regionCount
       ((synthGates cfg input pcs ccs iHash).operations i) = 10 := by
@@ -411,30 +415,30 @@ theorem synthGates_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
 /-- The region count of the flow: 15 piece/short regions, the 18-region check stage,
 the 10 gate regions — 43. -/
 theorem synth_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
-    Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 43 := by
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    Operations.regionCount ((synth G R Q hQ cfg input).operations i) = 43 := by
   simp only [synth, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append]
   rw [synthPieces_regionCount, synthChecks_regionCount, synthGates_regionCount]
 
-theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_nextRegionIndex (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     (synthPieces cfg input).nextRegionIndex i = i + 15 := by
   with_unfolding_all rfl
 
 theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash : RegionIndex)
     (i : RegionIndex) :
-    (synthChecks G R windows Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
+    (synthChecks G R Q hQ cfg input pcs iHash).nextRegionIndex i = i + 18 := by
   -- The opaque `call` barrier is not evaluable, so this is no longer a pure defeq walk — but
   -- no call OUTPUT feeds the index chain, so the goal defeq-reduces (binds/assignRegions/pure,
   -- structure-eta through the folded calls) to the three calls' `nextRegionIndex` compositions
   -- plus the four witnessCheck regions. `show` that spelling (single kernel defeq, the
   -- `synthPieces` grade — a simp walk here blows the kernel's timeout), then rewrite only the
   -- three call boundaries.
-  show (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+  show (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
         { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }).nextRegionIndex
       (((YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
@@ -444,7 +448,7 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
       + 1 + 1 + 1 + 1 = i + 18
   rw [yc_call_nextRegionIndex, yc_call_nextRegionIndex, commit_call_nextRegionIndex]
 
-theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     (synthPieces cfg input).output i
       = { a := .of i 0 cfg.hashConfig.witnessPieces,
@@ -465,15 +469,16 @@ theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
   with_unfolding_all rfl
 
 theorem synthChecks_output (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash : RegionIndex)
     (i : RegionIndex) :
-    (synthChecks G R windows Q hQ cfg input pcs iHash).output i
+    (synthChecks G R Q hQ cfg input pcs iHash).output i
       = { b2 := .of (i + 4) 0 (cfg.gates.y.advices 6),
           d1 := .of (i + 5 + 4) 0 (cfg.gates.y.advices 6),
-          cm := (Sinsemilla.CommitDomain.commit G ns R windows Q hQ
+          cm := (Sinsemilla.CommitDomain.commit G ns R Q hQ
             ns_ne_nil).output (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-            { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }
+            { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+              r := input.rcm }
             (i + 10),
           aZs := { z0 := .of (i + 14) 0 cfg.lookupConfig.runningSum,
                    zLast := .of (i + 14) 13 cfg.lookupConfig.runningSum },
@@ -501,13 +506,13 @@ open CompElliptic.Fields.Pasta (Fq)
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
 instance). -/
-instance elaborated (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+instance elaborated (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs Point (synth G R windows Q hQ cfg) where
-  output input i := (synth G R windows Q hQ cfg input).output i
+    ElaboratedCircuit Fp Inputs Point (synth G R Q hQ cfg) where
+  output input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 43
   output_eq := by intro _ _; rfl
-  regionCount_eq input i := (synth_regionCount G R windows Q hQ cfg input i).symm
+  regionCount_eq input i := (synth_regionCount G R Q hQ cfg input i).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=
@@ -544,12 +549,11 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
         ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (input : ProverValue Inputs Fp) (rcm : Vector Fp 85 × Fq)
+    (input : ProverValue Inputs Fp) (_ : Vector Fp 85 × Fq)
     (_ : ProverHint Fp) : Prop :=
   Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
   Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
   (show Fp from input.value).val < 2 ^ 64 ∧
-  (∀ w : Fin 85, (rcm.1[w.val]).val < 8) ∧
   (∃ B, hashToPoint G.S Q
     (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
       ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B)

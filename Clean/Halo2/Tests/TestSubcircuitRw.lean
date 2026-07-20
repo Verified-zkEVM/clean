@@ -48,7 +48,7 @@ def regionParent :
   extract := fun config offset _ self env =>
     eval env ({ x := AssignedCell.of self offset config.x,
                 y := AssignedCell.of self offset config.y } : Var Point Fp)
-  ProverAssumptions _ wit _ := wit.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset
@@ -70,7 +70,10 @@ def regionParent :
     simp only [circuit_norm] at h_input hpa ⊢
     subcircuit_rw
     -- one goal: `EnvA ∧ A ∧ PA` (default `True`s + the parent's `ProverAssumptions`)
-    exact ⟨trivial, trivial, by with_unfolding_all exact hpa⟩
+    refine ⟨trivial, trivial, ?_⟩
+    change (eval env input_var).Valid
+    convert hpa using 2
+    with_unfolding_all exact h_input
 
 /-! ## Region parent with its OWN op + subcircuit call -/
 
@@ -81,14 +84,14 @@ def regionParentWithOp :
       (Unconstrained Point) Point where
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := do
-    let _ ← assignAdvice config.x (offset + 1) input.x
+    let _ ← assignAdvice config.x (offset + 1) (Witgen.MOver.toIRScalar (Point.x <$> input))
     WitnessPoint.point.call config offset input
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
     eval env ({ x := AssignedCell.of self offset config.x,
                 y := AssignedCell.of self offset config.y } : Var Point Fp)
-  ProverAssumptions _ wit _ := wit.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config offset
@@ -107,7 +110,10 @@ def regionParentWithOp :
     refine ⟨?_, trivial⟩
     simp only [circuit_norm] at hwit h_input hpa ⊢
     subcircuit_rw
-    exact ⟨trivial, trivial, by with_unfolding_all exact hpa⟩
+    refine ⟨trivial, trivial, ?_⟩
+    change (eval env input_var).Valid
+    convert hpa using 2
+    with_unfolding_all exact h_input
 
 /-! ## Layouter parent: native child + `toFormal`-lifted region child -/
 
@@ -139,7 +145,7 @@ def layouterParent :
                  y := AssignedCell.of i₀ 0 config.y } : Var Point Fp),
      eval env ({ x := AssignedCell.of (i₀ + 1) 0 config.x,
                  y := AssignedCell.of (i₀ + 1) 0 config.y } : Var Point Fp))
-  ProverAssumptions _ wit _ := wit.1.Valid ∧ wit.2.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config
@@ -165,8 +171,10 @@ def layouterParent :
       rw [FormalCircuit.call_regionCount]
       rfl
     simp only [hrc]
-    exact ⟨⟨trivial, trivial, by with_unfolding_all exact hpa.1⟩,
-      trivial, trivial, by with_unfolding_all exact hpa.2⟩
+    have key : (eval env input_var).Valid := by
+      convert hpa using 2
+      with_unfolding_all exact h_input
+    exact ⟨⟨trivial, trivial, key⟩, trivial, trivial, key⟩
 
 /-! ## Chained children (second input = first output), consuming the derived statement
 
@@ -260,7 +268,7 @@ matching (no discrimination tree) rewrites the chunk regardless. -/
 
 /-- Region bare context: firing must expose the child's `Spec` (`Point.Valid` of the output). -/
 example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
+    (env : Environment Fp) (input : Var (Unconstrained Point) Fp)
     (h : RegionOperations.Constraints place self env
         ((WitnessPoint.point.call config 0 input).operations self)) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -270,7 +278,7 @@ example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex
 
 /-- Layouter bare context, same scenario at the layouter level. -/
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
+    (env : Environment Fp) (input : Var (Unconstrained Point) Fp)
     (h : Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
         (witnessPointR.output config input i₀)).Valid := by
@@ -282,7 +290,7 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
 -- nothing` linter is expected here — the no-op is exactly what this case asserts.
 set_option linter.unusedTactic false in
 example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
+    (env : Environment Fp) (input : Var (Unconstrained Point) Fp)
     (h : (RegionOperations.Constraints place self env
         ((WitnessPoint.point.call config 0 input).operations self) → False) → False) :
     (RegionOperations.Constraints place self env

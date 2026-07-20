@@ -642,6 +642,11 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
   unless ← withDefault <| isDefEq rhsSimp.expr e do
+    -- custom-`ProvableType` route (e.g. `Point`): the internal `ProvableStruct` set cannot
+    -- reduce the candidate, but the rewrite is still definitionally sound — accept by
+    -- unrestricted defeq, the kernel re-checks (cf. `evalStructLiteral`'s custom route).
+    if ← withTransparency .all (isDefEq rhs e) then
+      return .done { expr := rhs, proof? := none }
     return Simp.Step.continue
 
   -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.

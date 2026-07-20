@@ -190,12 +190,17 @@ theorem VExpr.range_def (n : ℕ) (body : NExpr F → FExpr F) :
 
 /-! ## Builder monad for stepped programs -/
 
-/-- Witness-program builder: accumulates `let`-steps, so shared values are written
-in `do`-notation via `letF` / `letN`. -/
-def M (F : Type) (α : Type) : Type :=
-  Array (Step F) → α × Array (Step F)
+/-- Witness-program builder, generic over the variable atom `V`: accumulates
+`let`-steps, so shared values are written in `do`-notation via `letF` / `letN`.
+Main Clean's `M` instantiates `V := Expression F`; Halo2-Clean instantiates
+`V := AssignedCell F`. -/
+def MOver (F V : Type) (α : Type) : Type :=
+  Array (StepOver F V) → α × Array (StepOver F V)
 
-instance : Monad (M F) where
+/-- Main Clean's witness-program builder (variables are circuit `Expression`s). -/
+abbrev M (F : Type) : Type → Type := MOver F (Expression F)
+
+instance {V : Type} : Monad (MOver F V) where
   pure a := fun s => (a, s)
   bind m f := fun s => let (a, s') := m s; f a s'
   map f m := fun s => let (a, s') := m s; (f a, s')
@@ -203,35 +208,35 @@ instance : Monad (M F) where
 attribute [circuit_norm] Array.size_empty Array.getElem?_push
 
 @[circuit_norm]
-theorem M.pure_def (a : α) :
-    (pure a : M F α) = fun s => (a, s) := rfl
+theorem M.pure_def {V : Type} (a : α) :
+    (pure a : MOver F V α) = fun s => (a, s) := rfl
 
 @[circuit_norm]
-theorem M.bind_def (m : M F α) (f : α → M F β) :
+theorem M.bind_def {V : Type} (m : MOver F V α) (f : α → MOver F V β) :
     (m >>= f) = fun s => let (a, s') := m s; f a s' := rfl
 
 @[circuit_norm]
-theorem M.map_def (f : α → β) (m : M F α) :
+theorem M.map_def {V : Type} (f : α → β) (m : MOver F V α) :
     (f <$> m) = fun s => let (a, s') := m s; (f a, s') := rfl
 
 /-- Bind a Nat-sorted value as a shared step; returns a reference to it. -/
-def letN (e : NExpr F) : M F (NExpr F) :=
+def letN {V : Type} (e : NExprOver F V) : MOver F V (NExprOver F V) :=
   fun s => (.localVar s.size, s.push (.letN e))
 
-instance : CoeOut (NExpr F) (M F (NExpr F)) := ⟨letN⟩
+instance {V : Type} : CoeOut (NExprOver F V) (MOver F V (NExprOver F V)) := ⟨letN⟩
 
 @[circuit_norm]
-theorem letN_def (e : NExpr F) :
+theorem letN_def {V : Type} (e : NExprOver F V) :
     letN e = fun s => (.localVar s.size, s.push (.letN e)) := rfl
 
 /-- Bind a field-sorted value as a shared step; returns a reference to it. -/
-def letF (e : FExpr F) : M F (FExpr F) :=
+def letF {V : Type} (e : FExprOver F V) : MOver F V (FExprOver F V) :=
   fun s => (.localVar s.size, s.push (.letF e))
 
-instance : CoeOut (FExpr F) (M F (FExpr F)) := ⟨letF⟩
+instance {V : Type} : CoeOut (FExprOver F V) (MOver F V (FExprOver F V)) := ⟨letF⟩
 
 @[circuit_norm]
-theorem letF_def (e : FExpr F) :
+theorem letF_def {V : Type} (e : FExprOver F V) :
     letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
 
 instance {F: Type} [Field F] : Inhabited (FExpr F) where
@@ -240,51 +245,67 @@ instance {F: Type} [Field F] : Inhabited (FExpr F) where
 instance [Field F] {value : TypeMap} [ProvableType value] : Inhabited (value (FExpr F)) where
   default := fromElements default
 
-namespace M
+namespace MOver
 variable [FiniteField F] {value : TypeMap} [ProvableType value]
+variable {V Env : Type} [WitgenEnv F Env V]
 
 -- TODO WITGENIR the simp behavior currently takes an ugly low-level path because we were
 -- too lazy to craft a high-level path that works in all cases
 
 @[circuit_norm]
-def eval (env : ProverEnvironment F) (program : M F (value (FExpr F))) : value F :=
+def eval (env : Env) (program : MOver F V (value (FExprOver F V))) : value F :=
   let (out, steps) := program #[]
   Witgen.eval { env, locals := evalSteps env steps.toList } out
 
 @[circuit_norm]
-def evalBool (env : ProverEnvironment F) (program : M F (BExpr F)) : Bool :=
+def evalBool (env : Env) (program : MOver F V (BExprOver F V)) : Bool :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
 @[circuit_norm]
-def evalNat (env : ProverEnvironment F) (program : M F (NExpr F)) : ℕ :=
+def evalNat (env : Env) (program : MOver F V (NExprOver F V)) : ℕ :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
-theorem eval_pure (out : value (FExpr F)) (env : ProverEnvironment F) :
+theorem eval_pure (out : value (FExprOver F V)) (env : Env) :
     eval env (fun s => (out, s)) = Witgen.eval { env } out := by
   rfl
 
 /-- Assemble a witness program from a builder computation returning the output vector. -/
 @[circuit_norm]
-def toIR {n : ℕ} (program : M F (VExpr F n)) : WitgenIR F n :=
+def toIR {n : ℕ} (program : MOver F V (VExprOver F V n)) : WitgenIROver F Env V n :=
   let (out, steps) := program #[]
   .ir steps.toList out
+
+/-- Assemble a single-scalar witness program from a builder computation — the per-cell
+form (halo2's `assignAdvice` and friends consume one scalar per cell). Irreducible so
+whnf walking an ops list does not repeatedly unfold into the (stuck) program run —
+`circuit_norm` still unfolds it via the equation, `with_unfolding_all` still sees through. -/
+@[circuit_norm]
+irreducible_def toIRScalar (program : MOver F V (FExprOver F V)) : WitgenIROver F Env V 1 :=
+  toIR ((fun e => .lit #v[e]) <$> program)
 
 /-- Not tagged `@[circuit_norm]`: `toIRLiteral` must stay intact inside `.witness`
 operations so that `witnessProgram`'s completeness obligation can be recognized and
 rewritten at the level of provable values (`ProverEnvironment.extendsVector_toIRLiteral`
 in `Clean.Circuit.Basic`), instead of unfolding element-wise into `toElements` internals. -/
-def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
+def toIRLiteral (program : MOver F V (value (FExprOver F V))) :
+    WitgenIROver F Env V (size value) :=
   let (out, steps) := program #[]
   .ir steps.toList (.lit (toElements out))
 
-theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
-    program.toIRLiteral.eval env = toElements (program.eval env) := by
+theorem eval_toIRLiteral (program : MOver F V (value (FExprOver F V))) (env : Env) :
+    (program.toIRLiteral (Env := Env)).eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIROver.eval, Witgen.eval, ProvableType.toElements_fromElements, VExprOver.eval]
 
-instance {α : Type} [Inhabited α] : Inhabited (M F α) where
+instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where
   default := pure default
+end MOver
+
+-- Main Clean spellings (`Witgen.M.eval` &c.) — aliases into the `V`-generic
+-- `MOver` namespace, so existing call sites keep working.
+namespace M
+export MOver (eval evalBool evalNat eval_pure toIR toIRScalar toIRLiteral eval_toIRLiteral)
 end M
 end Witgen
 
@@ -306,7 +327,7 @@ open Witgen
   ProverValue := value
   Value _ := Unit
   evalVerifier _ _ := ()
-  evalProver env program := program.eval env
+  evalProver env program := Witgen.MOver.eval env program
 
 instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
   inferInstanceAs (Inhabited (M F (value (FExpr F))))
@@ -354,7 +375,7 @@ open Witgen
   ProverValue _ := Bool
   Value _ := Unit
   evalVerifier _ _ := ()
-  evalProver env program := program.evalBool env
+  evalProver env program := Witgen.MOver.evalBool env program
 
 instance : Inhabited (Var UnconstrainedBool F) :=
   inferInstanceAs (Inhabited (M F (BExpr F)))
@@ -402,7 +423,7 @@ open Witgen
   ProverValue _ := ℕ
   Value _ := Unit
   evalVerifier _ _ := ()
-  evalProver env program := program.evalNat env
+  evalProver env program := Witgen.MOver.evalNat env program
 
 instance : Inhabited (Var UnconstrainedNat F) :=
   inferInstanceAs (Inhabited (M F (NExpr F)))

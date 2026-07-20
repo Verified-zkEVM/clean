@@ -206,8 +206,20 @@ def structEvalLiteralProc : Simproc := fun e => do
     -- fallbacks (when present) are aligned with the constructor's fields (in order)
     if let some fbs := fallbacks? then
       unless fbs.size == info.numFields do return .continue
+    -- Rebuild with the constructor of the eval's RESULT type: for a pure provable struct
+    -- that is `fn` itself at the value-side parameters (re-inferred), but a derived mixed
+    -- record has a DIFFERENT companion structure per view (`Inputs.Var` vs `Inputs.Value` /
+    -- `Inputs.ProverValue`), so the target constructor must come from the result type, not
+    -- from the literal.
+    let targetInfo ← (do
+      let resultTy ← withTransparency .instances <| whnf (← inferType e)
+      let .const resultTyName _ := resultTy.getAppFn | return info
+      unless isStructure (← getEnv) resultTyName do return info
+      let ctor := getStructureCtor (← getEnv) resultTyName
+      unless ctor.numFields == info.numFields do return info
+      pure ctor)
     let mut newArgs : Array (Option Expr) := #[]
-    for _ in [0:info.numParams] do
+    for _ in [0:targetInfo.numParams] do
       newArgs := newArgs.push none
     for i in [0:info.numFields] do
       let a := ctorArgs[info.numParams + i]!
@@ -215,7 +227,7 @@ def structEvalLiteralProc : Simproc := fun e => do
       newArgs := newArgs.push (some (← buildFieldEval placedEnv a fallback?))
     -- `.default` transparency to see through the reducible `CircuitType` instance behind
     -- `Value M F`-spelled field types (cf. the witgen simproc)
-    let rhs ← withTransparency .default <| mkAppOptM fn newArgs
+    let rhs ← withTransparency .default <| mkAppOptM targetInfo.name newArgs
     unless ← validatedDefEq e rhs do
       trace[Meta.Tactic.simp.rewrite] "structEvalLiteral: defeq validation failed {e} vs {rhs}"
       return .continue

@@ -351,11 +351,6 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     simp only [HashPiece.Spec, circuit_norm] at hc
     obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hc _hE
     refine ⟨ms, hms, ?_, hzs, hlxP, hlyP, hchainP⟩
-    have hgi : (eval (⟨place, env⟩ : Placed Environment Fp) input_var : Fp)
-        = env.get input_var.cell.column
-          ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
-      with_unfolding_all rfl
-    rw [← h_input, hgi]
     exact hrecomb
 
   completeness := by

@@ -566,11 +566,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
           rw [if_neg (by omega)])
       beta_reduce at hkey ⊢
       rw [if_pos (by omega : 0 ≤ w), Nat.add_zero] at hkey
-      have hgi : (eval (⟨place, env⟩ : Placed Environment Fp) input_var : Fp)
-          = env.get input_var.cell.column
-            ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ) := by
-        with_unfolding_all rfl
-      rw [← h_input, hgi, ← hZ0]
+      rw [← hZ0]
       exact hkey
     · -- the running sums are the suffix recombinations
       apply Vector.ext

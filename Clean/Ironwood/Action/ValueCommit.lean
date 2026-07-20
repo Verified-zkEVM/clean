@@ -4,6 +4,7 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Add
 import Clean.Ironwood.Ecc.MulFixed.FullWidth
+import Clean.Halo2.CircuitTypeDeriving
 import Clean.Ironwood.Ecc.MulFixed.Short
 
 /-!
@@ -64,17 +65,27 @@ private theorem short_call_regionCount (scfg : Ecc.MulFixed.Short.Config)
 
 end Bridges
 
+/-- The inputs: the short child's magnitude/sign cells and the blinding scalar's
+nat-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
+full-width child derives its window witnesses from it, the scalar is extraction data). -/
+structure Inputs (F : Type) where
+  rcv : UnconstrainedNat F
+  magnitude : F
+  sign : F
+deriving CircuitType
+
 /-- The region count of `value_commit_orchard`: two regions each for the short and
 full-width fixed-base muls, one for the final complete addition. -/
 private theorem valueCommit_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
-    (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+    (R : FixedBase)
     (scfg : Ecc.MulFixed.Short.Config) (fcfg : Ecc.MulFixed.FullWidth.Config)
     (ecfg : Ecc.Add.Config)
-    (input : Var Ecc.MulFixed.Short.Inputs Fp) (i : RegionIndex) :
+    (input : Var Inputs Fp) (i : RegionIndex) :
     Operations.regionCount
       ((do
-        let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg input
-        let blind ← (Ecc.MulFixed.FullWidth.circuit R windows).call fcfg ()
+        let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
+          ⟨input.magnitude, input.sign⟩
+        let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
         let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
           { p := commitment, q := blind }
         pure cv : Circuit Fp (Var Point Fp)).operations i)
@@ -91,17 +102,18 @@ ValueCommitR` (full-width; the scalar is the child's extraction data), and the f
 complete addition. `Spec` is the donor contract: the commitment is
 `[±m] V + [rcv] R` at the sign-resolved magnitude `m < 2⁶⁴` and the extracted
 full-width scalar. -/
-def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) : FormalCircuit Fp
+def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
+    FormalCircuit Fp
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
-    Ecc.MulFixed.Short.Inputs Point where
+    Inputs Point where
   name := "value commit"
   configure := pure
 
   synthesize := fun (scfg, fcfg, ecfg) input => do
-    let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg input
-    let blind ← (Ecc.MulFixed.FullWidth.circuit R windows).call fcfg ()
+    let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
+      ⟨input.magnitude, input.sign⟩
+    let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
     let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
       { p := commitment, q := blind }
     pure cv
@@ -109,15 +121,16 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
   elaborated := fun (scfg, fcfg, ecfg) =>
     { output := fun input i =>
         ((do
-          let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg input
-          let blind ← (Ecc.MulFixed.FullWidth.circuit R windows).call fcfg ()
+          let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
+            ⟨input.magnitude, input.sign⟩
+          let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
           let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
             { p := commitment, q := blind }
           pure cv : Circuit Fp (Var Point Fp)).output i)
       regionCount := fun _ => 5
       output_eq := by intro _ _; rfl
       regionCount_eq := fun input i =>
-        (valueCommit_regionCount V R windows scfg fcfg ecfg input i).symm }
+        (valueCommit_regionCount V R scfg fcfg ecfg input i).symm }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧
@@ -130,15 +143,15 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     Ecc.MulFixed.FullWidth.fwExtract fcfg (i₀ + 2) env
 
   Spec input output wit :=
-    ∃ m : ℕ, m < 2 ^ 64 ∧ input.magnitude = (m : Fp) ∧
-      ((input.sign = 1 ∧
+    ∃ m : ℕ, m < 2 ^ 64 ∧ (show Fp from input.magnitude) = (m : Fp) ∧
+      (((show Fp from input.sign) = 1 ∧
           output = ((m : Fq) • V : Point Fp) + (wit.2 • R : Point Fp)) ∨
-        (input.sign = -1 ∧
+        ((show Fp from input.sign) = -1 ∧
           output = (((-(m : Fq)) : Fq) • V : Point Fp) + (wit.2 • R : Point Fp)))
 
-  ProverAssumptions input wit _ :=
-    input.magnitude.val < 2 ^ 64 ∧ (input.sign = 1 ∨ input.sign = -1) ∧
-    ∀ w : Fin 85, (wit.1[w.val]).val < 8
+  ProverAssumptions input _ _ :=
+    (show Fp from input.magnitude).val < 2 ^ 64 ∧
+      ((show Fp from input.sign) = 1 ∨ (show Fp from input.sign) = -1)
 
   soundness := by
     circuit_proof_start
@@ -171,8 +184,8 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
   completeness := by
     circuit_proof_start
     obtain ⟨hSEnv, hFEnv⟩ := _hE
-    obtain ⟨hmag, hsign, hWin⟩ := hPA
-    obtain ⟨hIn1, hIn2⟩ := h_input
+    obtain ⟨hmag, hsign⟩ := hPA
+    obtain ⟨-, hIn1, hIn2⟩ := h_input
     have hmagE := hmag
     rw [← hIn1] at hmagE
     have hsignE := hsign
@@ -188,9 +201,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     have hBl := (h_spec_1
       (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv)
       (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
-            Ecc.MulFixed.FullWidth.circuit_extract_eq, short_call_regionCount]
-          exact hWin)).1
+      (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial)).1
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
     refine ⟨⟨by rw [short_envAssumptions_eq]; exact hSEnv,
@@ -198,10 +209,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
       by rw [short_proverAssumptions_eq]; exact ⟨hmag, hsign⟩⟩,
       ⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv,
        by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
-       by
-         rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
-           Ecc.MulFixed.FullWidth.circuit_extract_eq, short_call_regionCount]
-         exact hWin⟩,
+       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
       trivial, ?_, trivial⟩
     rw [Ecc.Add.toFormal_assumptions_eq]
     refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩

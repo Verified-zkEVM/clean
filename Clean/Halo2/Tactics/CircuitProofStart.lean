@@ -499,17 +499,25 @@ def exprHasFoldedContract (e : Expr) : Bool :=
     | some ``FormalCircuit.ProverSpec => true
     | _ => false) |>.isSome
 
-/-- Whether the goal or any hypothesis — other than the fvar's own declaration and the
-`exclude`d hypotheses — mentions the fvar named `name`. `false` when no such fvar exists. -/
+/-- Whether the goal or any hypothesis — other than the `exclude`d hypotheses and the
+vars' own declarations — mentions a var whose name is `name` or starts with `name_`
+(the destructure pass renames `input_var` to `input_var_<field>` components, which must
+count as references for the cleanup's load-bearing check). `false` when none exists. -/
 def stateReferencesFVar (name : Name) (exclude : List Name) : TacticM Bool := withMainContext do
-  let some decl := (← getLCtx).findFromUserName? name | return false
-  let fv := decl.fvarId
-  if (← instantiateMVars (← getMainTarget)).containsFVar fv then
+  let prefixStr := name.toString ++ "_"
+  let vars := (← getLCtx).foldl (init := (#[] : Array FVarId)) fun acc d =>
+    if !d.isImplementationDetail &&
+        (d.userName == name || (d.userName.toString.startsWith prefixStr)) then
+      acc.push d.fvarId
+    else acc
+  if vars.isEmpty then return false
+  let refs := fun (e : Expr) => vars.any e.containsFVar
+  if refs (← instantiateMVars (← getMainTarget)) then
     return true
   for d in ← getLCtx do
-    if d.isImplementationDetail || d.fvarId == fv || exclude.contains d.userName then
+    if d.isImplementationDetail || vars.contains d.fvarId || exclude.contains d.userName then
       continue
-    if (← instantiateMVars d.type).containsFVar fv then
+    if refs (← instantiateMVars d.type) then
       return true
   return false
 

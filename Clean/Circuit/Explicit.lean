@@ -356,7 +356,7 @@ instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} : ExplicitCir
 
 instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
     ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=
-  inferInstanceAs (ExplicitCircuit (witnessIR (fields m) c.toIR))
+  inferInstanceAs (ExplicitCircuit (witnessIR (fields m) (Witgen.M.toIR c)))
 
 /-- Bridge for scalar `witness` call sites (the family instance is keyed at
 `field (FExpr F)` / `size field`, while call sites elaborate at the literal). -/
@@ -453,7 +453,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var]
     {c : Witgen.M F (value (Witgen.FExpr F))} :
     ExplicitCircuit (witnessProgram (F:=F) (value:=value) (var:=var) c) :=
-  inferInstanceAs (ExplicitCircuit (inst.witnessIR (F:=F) (var:=var) (value := value) c.toIRLiteral))
+  inferInstanceAs (ExplicitCircuit (inst.witnessIR (F:=F) (var:=var) (value := value) (Witgen.M.toIRLiteral c)))
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witnessNative (F:=F) (value:=value) (var:=var)) where

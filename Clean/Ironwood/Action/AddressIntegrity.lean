@@ -1,6 +1,7 @@
 import Clean.Halo2
 import Clean.Halo2.Subcircuit
 import Clean.Utils.Tactics.ProvableStructDeriving
+import Clean.Halo2.CircuitTypeDeriving
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.Mul
 import Clean.Ironwood.Ecc.WitnessPoint
@@ -40,18 +41,21 @@ explicit `pk_d_old` is witnessed *inside* the block. -/
 structure Input (F : Type) where
   ivk : F
   gDOld : Point F
-deriving ProvableStruct
+  -- the explicit `pk_d_old`'s reading program — a prover hint (Rust passes it as
+  -- `Value<pallas::Affine>`); witnessed inside the block by the `pointNonId` region
+  pkDOld : Unconstrained Point F
+deriving CircuitType
 
 /-- The region count of the address-integrity block: four regions for the variable-base
 mul, the `pk_d_old` witness region, the constrain-equal region. -/
-private theorem addressIntegrity_regionCount (pkD : Point (WitgenIR Fp 1))
+private theorem addressIntegrity_regionCount
     (mcfg : Ecc.Mul.Config) (wcfg : Ecc.WitnessPoint.Config)
     (input : Var Input Fp) (i : RegionIndex) :
     Operations.regionCount
       ((do
         let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
         let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-          "witness non-identity point").call wcfg pkD
+          "witness non-identity point").call wcfg input.pkDOld
         assignRegion "constrain equal" (do
           constrainEqual derived.x pkDOld.x
           constrainEqual derived.y pkDOld.y)
@@ -66,7 +70,7 @@ private theorem addressIntegrity_regionCount (pkD : Point (WitgenIR Fp 1))
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality
 constraint between them. `Spec` is knowledge soundness at the input `ivk` cell:
 `pk_d_old = [ivk] g_d_old`, on-curve — no existential. -/
-def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
+def circuit : FormalCircuit Fp
     (Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     Input Point where
@@ -76,7 +80,7 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
   synthesize := fun (mcfg, wcfg) input => do
     let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
     let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").call wcfg pkD
+      "witness non-identity point").call wcfg input.pkDOld
     assignRegion "constrain equal" (do
       constrainEqual derived.x pkDOld.x
       constrainEqual derived.y pkDOld.y)
@@ -87,7 +91,7 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
         ((do
           let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
           let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-            "witness non-identity point").call wcfg pkD
+            "witness non-identity point").call wcfg input.pkDOld
           assignRegion "constrain equal" (do
             constrainEqual derived.x pkDOld.x
             constrainEqual derived.y pkDOld.y)
@@ -95,27 +99,24 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
       regionCount := fun _ => 6
       output_eq := by intro _ _; rfl
       regionCount_eq := fun input i =>
-        (addressIntegrity_regionCount pkD mcfg wcfg input i).symm }
+        (addressIntegrity_regionCount mcfg wcfg input i).symm }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 
   -- `g_d_old` is witnessed by `NonIdentityPoint::new` before this block
   Assumptions input := input.gDOld.OnCurve
 
-  Witness := Point
-  extract := fun (_, wcfg) _ i₀ env =>
-    eval env ({ x := AssignedCell.of (i₀ + 4) 0 wcfg.x,
-                y := AssignedCell.of (i₀ + 4) 0 wcfg.y } : Var Point Fp)
-
   Spec input output _ :=
-    output.OnCurve ∧ output = input.ivk.val • input.gDOld
+    output.OnCurve ∧ output = (show Fp from input.ivk).val • (show Point Fp from input.gDOld)
 
-  -- honest proving requires the explicit `pk_d_old` witness (the extracted cell values)
-  -- to be the derived address — otherwise the equality constraint is unsatisfiable — and
-  -- a genuine curve point (protocol-side, `ivk ≠ 0`: the derived address is never the
-  -- identity; the non-identity witness gate is unsatisfiable otherwise)
-  ProverAssumptions input wit _ :=
-    wit.OnCurve ∧ wit = (input.ivk.val • input.gDOld : Point Fp)
+  -- honest proving requires the explicit `pk_d_old` hint value to be the derived
+  -- address — otherwise the equality constraint is unsatisfiable — and a genuine curve
+  -- point (protocol-side, `ivk ≠ 0`: the derived address is never the identity; the
+  -- non-identity witness gate is unsatisfiable otherwise)
+  ProverAssumptions input _ _ :=
+    (show Point Fp from input.pkDOld).OnCurve ∧
+      (show Point Fp from input.pkDOld)
+        = ((show Fp from input.ivk).val • (show Point Fp from input.gDOld) : Point Fp)
 
   soundness := by
     circuit_proof_start
@@ -148,7 +149,7 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
 
   completeness := by
     circuit_proof_start
-    obtain ⟨hIvkE, hGxE, hGyE⟩ := h_input
+    obtain ⟨hIvkE, ⟨hGxE, hGyE⟩, hPkdE⟩ := h_input
     -- `g_d_old`'s on-curve assumption, respelled at the input cells
     have hAE := hA
     rw [← hGxE, ← hGyE] at hAE
@@ -160,14 +161,20 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
     simp only [Ecc.Mul.Spec] at hM
     -- the mul contract at the input cell values
     rw [hIvkE, hGxE, hGyE] at hM
+    -- the witness child's honest contract: the assigned cells carry the hint's value
+    have hPS := (h_spec_1 trivial trivial (by
+      rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq, hPkdE]
+      exact hPA.1)).2
+    rw [Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq, hPkdE] at hPS
+    -- land the child's output on its concrete cells
+    rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
+      Ecc.Mul.mul_call_regionCount] at hPS
     refine ⟨⟨by rw [Ecc.Mul.mul_envAssumptions_eq]; exact _hE,
       by rw [Ecc.Mul.mul_assumptions_eq]; exact hA,
       by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hA⟩,
       ⟨trivial, trivial, ?_⟩, ?_, ?_⟩
-    · rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq,
-        Ecc.WitnessPoint.pointNonId_toFormal_extract_eq,
-        Ecc.Mul.mul_call_regionCount]
-      with_unfolding_all exact hPA.1
+    · rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
+      exact hPA.1
     · -- the x-coordinate copy constraint in the honest environment
       rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
         Ecc.Mul.mul_call_regionCount]
@@ -179,7 +186,8 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
                 : Value Point Fp).x).trans
         ((congrArg Halo2.Ironwood.Point.x hM).trans
           ((congrArg Halo2.Ironwood.Point.x hPA.2).symm.trans
-            (by with_unfolding_all rfl))))
+            ((congrArg Halo2.Ironwood.Point.x hPS.symm).trans
+              (by with_unfolding_all rfl)))))
     · -- the y-coordinate copy constraint in the honest environment
       rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output,
         Ecc.Mul.mul_call_regionCount]
@@ -191,6 +199,7 @@ def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
                 : Value Point Fp).y).trans
         ((congrArg Halo2.Ironwood.Point.y hM).trans
           ((congrArg Halo2.Ironwood.Point.y hPA.2).symm.trans
-            (by with_unfolding_all rfl))))
+            ((congrArg Halo2.Ironwood.Point.y hPS.symm).trans
+              (by with_unfolding_all rfl)))))
 
 end Halo2.Ironwood.Action.AddressIntegrity

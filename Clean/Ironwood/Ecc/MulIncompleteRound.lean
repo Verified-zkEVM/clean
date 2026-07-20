@@ -179,13 +179,13 @@ instance : Inhabited BitsHint := ⟨fun _ => false⟩
 
 /-- The bundle inputs. The working scalar's bits are derived from the cell `alpha`
 (`decompose_for_scalar_mul(alpha.value())`); the `round`/`loop` children receive only its
-reading *program* (`.expr alpha` — their scalar input is `UnconstrainedExpr field`, matching
-the Rust `Value` dataflow). -/
+reading *program* (their scalar input is `Unconstrained field`, matching the Rust
+`Value` dataflow). -/
 structure Inputs (F : Type) where
   -- The scalar's reading program — a prover hint (the Rust source passes it as `Value`);
   -- the scalar cell is NOT constrained by this phase, its bits only enter the running-sum
   -- witnesses.
-  alpha : UnconstrainedExpr field F
+  alpha : Unconstrained field F
   -- The (non-identity, on-curve) base point.
   base : Point F
   -- The accumulator entering the phase.
@@ -327,14 +327,16 @@ theorem output_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
 
 /-- Bit `i` of the working scalar, from the scalar's witness program (the prover-only
 `Value` the Rust source decomposes). -/
-def bitWit (alpha : FExpr Fp) (i : ℕ) (env : Placed ProverEnvironment Fp) : Bool :=
-  kBitsWindow (Witgen.FExprOver.eval { env } alpha) 0 i
+def bitWit (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (i : ℕ)
+    (env : Placed ProverEnvironment Fp) : Bool :=
+  kBitsWindow (Witgen.MOver.eval (value := field) env alpha) 0 i
 
 /-- The bit closure, over the program's evaluation (the spelling `h_input` lands on). -/
 @[circuit_norm]
-theorem bitWit_eval (alpha : FExpr Fp) (i : ℕ) (env : Placed ProverEnvironment Fp) :
+theorem bitWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (i : ℕ)
+    (env : Placed ProverEnvironment Fp) :
     bitWit alpha i env
-      = kBitsWindow (Witgen.FExprOver.eval { env } alpha) 0 i := rfl
+      = kBitsWindow (Witgen.MOver.eval (value := field) env alpha) 0 i := rfl
 
 /-- The neighborhood values in a prover environment. -/
 @[circuit_norm]
@@ -373,7 +375,8 @@ theorem readWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
 
 /-- Honest witness for one output cell of round `i`: the corresponding field of
 `State.step` over the neighborhood readings. -/
-def stepWit (alpha : FExpr Fp) (w : State (AssignedCell Fp)) (i : ℕ)
+def stepWit (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
+    (w : State (AssignedCell Fp)) (i : ℕ)
     (f : State Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[f ((readsValue w env).step (bitWit alpha i env) (bitWit alpha (i + 1) env))]
@@ -382,7 +385,8 @@ def stepWit (alpha : FExpr Fp) (w : State (AssignedCell Fp)) (i : ℕ)
 native-eval plumbing: the peel reduces every assigned value directly to a folded
 `step`-projection. (Keyed on `getElem`, per the lazy-vector convention.) -/
 @[circuit_norm]
-theorem stepWit_eval (alpha : FExpr Fp) (w : State (AssignedCell Fp)) (i : ℕ)
+theorem stepWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
+    (w : State (AssignedCell Fp)) (i : ℕ)
     (f : State Fp → Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((stepWit alpha w i f).eval env)[j]
       = f ((readsValue w env).step (bitWit alpha i env) (bitWit alpha (i + 1) env)) := by
@@ -609,10 +613,10 @@ private theorem step_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest
 
 /-- One interior double-and-add round at global bit index `i`. Enables `q_mul_2` at its gate
 row `offset + 1`; assigns this row's running sum and the next row's state cells. -/
-def round (i : ℕ) : FormalRegionCircuit Fp Config Config (UnconstrainedExpr field) State where
+def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) State where
   configure := pure
 
-  synthesize cfg offset (alpha : FExpr Fp) := do
+  synthesize cfg offset (alpha : Var (Unconstrained field) Fp) := do
     let w ← readState cfg offset
     (qMul2Gate cfg).enable (offset + 1)
     let _z ← assignAdvice cfg.z (offset + 1) (stepWit alpha w i (·.z))
@@ -782,8 +786,8 @@ theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
-theorem round_output (i : ℕ) (cfg : Config) (o : ℕ) (iv : FExpr Fp)
-    (self : RegionIndex) :
+theorem round_output (i : ℕ) (cfg : Config) (o : ℕ)
+    (iv : Var (Unconstrained field) Fp) (self : RegionIndex) :
     (Halo2.Ironwood.Ecc.MulIncomplete.round i).output cfg o iv self
       = reads cfg (o + 1) self := rfl
 
