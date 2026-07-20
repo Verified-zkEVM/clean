@@ -61,7 +61,10 @@ Then, **only if the state is not composite** (`stateIsComposite` — see below),
 (g) **cleanup** — soundness `clear`s the spent `h_input`/`h_output`. Completeness `clear`s the spent
     `h_input`/`hwit` but KEEPS `h_output` (now the value equation), which the user half references
     (Add's user half does not, but there `h_output` stays in its `eval … = output` form, counted as
-    used by the gadget's return, so no unused-hyp lint fires).
+    used by the gadget's return, so no unused-hyp lint fires). When the state still reads the
+    input var's cells outside the equations (the mixed hint+provable input record shape, where
+    (f)'s landing can be partial), the equations are KEPT — they are the only tie between the
+    remaining cell reads and the input values, and the user half consumes them manually.
 
 Each step is its own function and is **total / no-op-tolerant**. The leaf/composite discriminator
 (`stateIsComposite`) is whether the soundness constraints hyp `hc` (or, at completeness, the goal)
@@ -496,6 +499,20 @@ def exprHasFoldedContract (e : Expr) : Bool :=
     | some ``FormalCircuit.ProverSpec => true
     | _ => false) |>.isSome
 
+/-- Whether the goal or any hypothesis — other than the fvar's own declaration and the
+`exclude`d hypotheses — mentions the fvar named `name`. `false` when no such fvar exists. -/
+def stateReferencesFVar (name : Name) (exclude : List Name) : TacticM Bool := withMainContext do
+  let some decl := (← getLCtx).findFromUserName? name | return false
+  let fv := decl.fvarId
+  if (← instantiateMVars (← getMainTarget)).containsFVar fv then
+    return true
+  for d in ← getLCtx do
+    if d.isImplementationDetail || d.fvarId == fv || exclude.contains d.userName then
+      continue
+    if (← instantiateMVars d.type).containsFVar fv then
+      return true
+  return false
+
 /-- `true` when any hypothesis or the goal still carries a folded child contract. -/
 def stateHasFoldedContract : TacticM Bool := withMainContext do
   if exprHasFoldedContract (← instantiateMVars (← getMainTarget)) then
@@ -509,12 +526,21 @@ def stateHasFoldedContract : TacticM Bool := withMainContext do
 /-- Cleanup: drop the input/output (and, for completeness, witness) equations that steps (b)/(f)
 have already fully consumed — matching the reference proofs' `clear` after row-fact chaining. Kept
 `try`-guarded and total: if a hypothesis is still referenced (a diverging gadget's manual half may
-need it), `clear` fails and is silently skipped, leaving it in scope. -/
+need it), `clear` fails and is silently skipped, leaving it in scope.
+
+When the state still reads the input var's cells outside the equations themselves, the input
+equations are kept even if step (f) fired — a PARTIAL landing (the mixed hint+provable input
+record shape: direct fields land, nested/hint components may not) leaves them as the only tie
+between the remaining cell reads and the input values, and the user half must consume them
+manually. A leaf whose state ended in normal form (no `input_var` reference outside the
+equations) still drops them, as before. -/
 def clearConsumed (d : Direction) : TacticM Unit := do
   -- a consumer of child contracts — folded, or already opened by (e′)'s bridges but with the
   -- engine-emitted `h_spec_*` hypotheses still to consume — needs the input/output equations
   -- in its manual continuation; keep them (the linter treats them as used via the return)
   if (← stateHasFoldedContract) || !(← specHypIdents).isEmpty then
+    return
+  if ← stateReferencesFVar `input_var [`h_input, `h_output, `hwit] then
     return
   if d.isSoundness then
     if ← hypExists `h_output then

@@ -241,11 +241,11 @@ theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : FExpr Fp)
 
 /-- What `numBits` constrained double-and-add rounds guarantee: some bit sequence enters the
 running sums, and an in-range accumulator `[m]·base` exits as `[accScalar m bits numBits]·base`. -/
-def RoundInvariant (numBits : ℕ) (input : Inputs Fp) (output : Output numBits Fp)
-    (bits : ℕ → Bool) : Prop :=
-  zChain input.z output.zs bits ∧
-  ∀ m : ℕ, input.acc = m • input.base → 2 ≤ m → 2 ^ (numBits + 1) * (m + 1) ≤ 2 ^ 254 →
-    output.acc = accScalar m bits numBits • input.base
+def RoundInvariant (numBits : ℕ) (z : Fp) (base acc : Point Fp)
+    (output : Output numBits Fp) (bits : ℕ → Bool) : Prop :=
+  zChain z output.zs bits ∧
+  ∀ m : ℕ, acc = m • base → 2 ≤ m → 2 ^ (numBits + 1) * (m + 1) ≤ 2 ^ 254 →
+    output.acc = accScalar m bits numBits • base
 
 /-- Honest witnesses for the init row's slopes (round 0's λ's), from the input cells. -/
 def initLambdaWit (alpha : FExpr Fp) (base acc : Point (AssignedCell Fp)) (w : ℕ)
@@ -273,7 +273,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
   configure := fun (z, xA, xP, yP, lambda1, lambda2) =>
     configure z xA xP yP lambda1 lambda2
 
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+  synthesize cfg offset (input : Var Inputs Fp) := do
     -- start copies (Rust execution order), materializing round 0's neighborhood
     let _z ← copyAdvice input.z cfg.z offset
     let _xA ← copyAdvice input.acc.x cfg.xA (offset + 1)
@@ -281,42 +281,60 @@ def double_and_add (n : ℕ) (w : ℕ) :
     let _xP ← copyAdvice input.base.x cfg.xP (offset + 1)
     let _yP ← copyAdvice input.base.y cfg.yP (offset + 1)
     let _l1 ← assignAdvice cfg.lambda1 (offset + 1)
-      (initLambdaWit (.expr input.alpha) input.base input.acc w (·.lambda1))
+      (initLambdaWit input.alpha input.base input.acc w (·.lambda1))
     let _l2 ← assignAdvice cfg.lambda2 (offset + 1)
-      (initLambdaWit (.expr input.alpha) input.base input.acc w (·.lambda2))
+      (initLambdaWit input.alpha input.base input.acc w (·.lambda2))
     (qMul1Gate cfg).enable offset
     -- the interior rounds
-    let _lp ← (loop n w).call cfg offset (.expr input.alpha)
+    let _lp ← (loop n w).call cfg offset input.alpha
     -- the final `q_mul_3` round on the exit neighborhood
     let ex ← readState cfg (offset + n)
     (qMul3Gate cfg).enable (offset + n + 1)
-    let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit (.expr input.alpha) ex (w + n) (·.z))
-    let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit (.expr input.alpha) ex (w + n) (·.xA))
+    let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit input.alpha ex (w + n) (·.z))
+    let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit input.alpha ex (w + n) (·.xA))
     let yf ← assignAdvice cfg.lambda1 (offset + n + 2) (readWit ex State.stepY)
     let xf ← cellAt cfg.xA (offset + n + 2)
     let zs ← cellVec cfg.z (fun j => offset + 1 + j) (n + 1)
     return { acc := { x := xf, y := yf }, zs }
 
   -- base is a non-identity on-curve point (Rust exceptional-case check).
-  Assumptions input := input.base.OnCurve
+  Assumptions input := (input.base : Point Fp).OnCurve
 
   Spec input output _ :=
-    ∃ bits : ℕ → Bool, RoundInvariant (n + 1) input output bits
+    ∃ bits : ℕ → Bool,
+      RoundInvariant (n + 1) input.z input.base input.acc output bits
 
   -- honest-prover precondition: the accumulator is a small positive multiple of the base
   -- in the exceptional-case-free range.
   ProverAssumptions input _ _ :=
-    input.base.OnCurve ∧ ∃ m : ℕ,
-      input.acc = m • input.base ∧ 2 ≤ m ∧ 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
+    (input.base : Point Fp).OnCurve ∧ ∃ m : ℕ,
+      (input.acc : Point Fp) = m • (input.base : Point Fp) ∧ 2 ≤ m ∧
+      2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254
 
   -- honest bits are derived from the scalar cell.
   ProverSpec input output _ _ :=
-    RoundInvariant (n + 1) input output (bitsFrom input.alpha w)
+    RoundInvariant (n + 1) input.z input.base input.acc output (bitsFrom input.alpha w)
 
   soundness := by
     circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
     obtain ⟨hcz, hcx, hcy, hcbx, hcby, hq1, hloop, hb3, hg13, hs3, hg23⟩ := hc
+    -- land the nested-point input reads on the destructured coordinates: the row-fact
+    -- chaining lands only the mixed hint record's direct fields (`z`), the point
+    -- conjuncts of `h_input` stay at whole-point level
+    obtain ⟨-, hib, hiac, -⟩ := h_input
+    replace hcbx : env.advice cfg.xP ((place self + (offset + 1) : ℕ) : ℤ)
+        = input_base_x := by
+      rw [hcbx]; with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hib
+    replace hcby : env.advice cfg.yP ((place self + (offset + 1) : ℕ) : ℤ)
+        = input_base_y := by
+      rw [hcby]; with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hib
+    replace hcx : env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ)
+        = input_acc_x := by
+      rw [hcx]; with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hiac
+    replace hcy : env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ)
+        = input_acc_y := by
+      rw [hcy]; with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hiac
     provable_type_simp
     obtain ⟨bits, hchain, hfold⟩ := hloop
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
@@ -412,13 +430,31 @@ def double_and_add (n : ℕ) (w : ℕ) :
       loop]
     obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := hPA
     obtain ⟨hz0, hxa0, hy0, hxp0, hyp0, hl1w, hl2w, -, hzl, hxal, hyl⟩ := hwit
-    obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := h_input
+    obtain ⟨hia, hib, hiac, -⟩ := h_input
+    -- the point conjuncts of `h_input` stay at whole-point level; land them
+    -- coordinatewise on the input cell reads
+    have hibx : env.get input_var.base.x.cell.column
+        ((place input_var.base.x.cell.regionIndex + input_var.base.x.cell.rowOffset : ℕ) : ℤ)
+        = input_base_x := by
+      with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hib
+    have hiby : env.get input_var.base.y.cell.column
+        ((place input_var.base.y.cell.regionIndex + input_var.base.y.cell.rowOffset : ℕ) : ℤ)
+        = input_base_y := by
+      with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hib
+    have hiax : env.get input_var.acc.x.cell.column
+        ((place input_var.acc.x.cell.regionIndex + input_var.acc.x.cell.rowOffset : ℕ) : ℤ)
+        = input_acc_x := by
+      with_unfolding_all exact congrArg Halo2.Ironwood.Point.x hiac
+    have hiay : env.get input_var.acc.y.cell.column
+        ((place input_var.acc.y.cell.regionIndex + input_var.acc.y.cell.rowOffset : ℕ) : ℤ)
+        = input_acc_y := by
+      with_unfolding_all exact congrArg Halo2.Ironwood.Point.y hiac
     -- the init λ witnesses, over the honest multiple's coordinates
     have hacx : input_acc_x = (m • Point.mk input_base_x input_base_y).x :=
       congrArg Point.x haccm
     have hacy : input_acc_y = (m • Point.mk input_base_x input_base_y).y :=
       congrArg Point.y haccm
-    simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay] at hl1w hl2w
+    simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay] at hxa0 hy0 hxp0 hyp0 hl1w hl2w
     have hl1m := hl1w
     have hl2m := hl2w
     rw [hacx, hacy] at hl1m hl2m

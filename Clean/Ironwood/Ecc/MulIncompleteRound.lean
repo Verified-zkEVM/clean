@@ -4,6 +4,7 @@ import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Ecc.DoubleAndAdd
 import Clean.Ironwood.Ecc.MulIncompleteTheorems
 import Clean.Ironwood.Ecc.MulAssignTheorems
+import Clean.Halo2.CircuitTypeDeriving
 
 /-!
 Variable-base scalar multiplication, *incomplete* phase. For each scalar bit, one merged
@@ -182,20 +183,17 @@ instance : Inhabited BitsHint := ⟨fun _ => false⟩
 reading *program* (`.expr alpha` — their scalar input is `UnconstrainedExpr field`, matching
 the Rust `Value` dataflow). -/
 structure Inputs (F : Type) where
-  -- Scalar cell the working scalar's bits are decomposed from.
-  -- TODO this is a prover hint (Rust source passes it as `Value`), so it should be a variant of Unconstrained,
-  -- NOT an Expression-level input, otherwise makes it look like this is constrained by the circuit, which it isn't.
-  -- (Done for the `round`/`loop` children; at this level blocked on `deriving CircuitType`
-  -- being main-Clean-only — no handler for mixed hint+provable structs over the Halo2
-  -- environments yet, see task #31.)
-  alpha : F
+  -- The scalar's reading program — a prover hint (the Rust source passes it as `Value`);
+  -- the scalar cell is NOT constrained by this phase, its bits only enter the running-sum
+  -- witnesses.
+  alpha : UnconstrainedExpr field F
   -- The (non-identity, on-curve) base point.
   base : Point F
   -- The accumulator entering the phase.
   acc : Point F
   -- The running sum entering the phase.
   z : F
-deriving ProvableStruct
+deriving CircuitType
 
 /-- The final accumulator cells and the `numBits` interstitial running sums. -/
 structure Output (numBits : ℕ) (F : Type) where
