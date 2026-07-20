@@ -2,7 +2,7 @@ import Clean.Ironwood.Fixtures.Project
 import Clean.Ironwood.Fixtures.ActionPre
 import Clean.Ironwood.Fixtures.ActionPost
 import Clean.Ironwood.Fixtures.ActionSelMap
-import Clean.Ironwood.Tests.TestVkLayoutSinsemilla
+import Clean.Ironwood.Specs.SinsemillaGenerators
 import Clean.Ironwood.Action.Circuit
 
 /-!
@@ -20,10 +20,8 @@ post-`compress_selectors` (the dumped 56-selector map applied mechanically).
 namespace Halo2.Ironwood.Fixtures.Test.MatchAction
 
 open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Fixtures.Test.LayoutSinsemilla (layoutG)
-
 def actionCS : ConstraintSystem Fp :=
-  (Halo2.Ironwood.Action.Circuit.configure layoutG {}).2
+  (Halo2.Ironwood.Action.Circuit.configure Halo2.Ironwood.Specs.Sinsemilla.orchardGenerators {}).2
 
 /-- Registration-order query seed from the dumped pre layouts. -/
 def seed : List Query :=

@@ -18,6 +18,13 @@ dumped from the actual Rust circuit (`AddPre.lean` / `AddPost.lean`).
 
 The comparison is `#guard` on `DecidableEq CsFixture`, so CI fails on any drift between the
 Lean Add port and the Rust constraint system.
+
+This file and `TestVkLayoutPoseidon` are kept as the small, readable **documentation**
+of the VK-matching approach (one CS-side test, one layout-side test) and as framework
+sanity checks. The check that the real circuit is correct is the top-level suite:
+`TestVkMatchAction` (configure, both versions) + `TestVkLayoutAction` (ironwood
+synthesize) + `TestVkLayoutActionBase` (pre-ironwood synthesize) — the per-gadget
+tests this file once sat among were subsumed by those and retired (see git history).
 -/
 
 namespace Halo2.Ironwood.Fixtures.Test

@@ -16,6 +16,12 @@ the proven `Poseidon.hash` bundle (its region sequence: initial state, add input
 permute; the squeeze is region-free).
 
 `#guard` equality is fine (D1).
+
+Together with `TestVkMatchAdd` this is the kept small **documentation** of the
+VK-matching approach — the layout half: region starts/names, the copy list, the
+replayed permutation σ, and the full fixed-column contents (table + constants +
+packed selectors + assigned cells). Whole-circuit correctness is checked by the
+top-level `TestVkMatchAction`/`TestVkLayoutAction`/`TestVkLayoutActionBase`.
 -/
 
 namespace Halo2.Ironwood.Fixtures.Test.LayoutPoseidon

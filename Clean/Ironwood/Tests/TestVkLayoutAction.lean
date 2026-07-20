@@ -3,7 +3,6 @@ import Clean.Ironwood.Fixtures.ActionSelMap
 import Clean.Ironwood.Action.RealBases
 import Clean.Ironwood.Action.CircuitPreIronwood
 import Clean.Ironwood.Fixtures.Layout
-import Clean.Ironwood.Tests.TestVkMatchSinsemilla
 import Clean.Ironwood.Action.Circuit
 
 /-!
@@ -26,7 +25,6 @@ namespace Halo2.Ironwood.Fixtures.Test.LayoutAction
 open Halo2 Halo2.Ironwood.Fixtures Halo2.Ironwood.Fixtures.Layout
 open Halo2.Ironwood (Fp)
 open Halo2.Ironwood.Specs.Sinsemilla (Generators)
-open Halo2.Ironwood.Fixtures.Test (sinsemillaS0 sinsemillaS0_onCurve)
 open Halo2.Ironwood.Action.Circuit (Config configure orchardGate loadPrivate
   ANCHOR ENABLE_SPEND ENABLE_OUTPUT CV_NET_X CV_NET_Y NF_OLD RK_X RK_Y CMX)
 

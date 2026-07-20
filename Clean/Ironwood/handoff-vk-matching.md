@@ -936,3 +936,16 @@ Where things landed:
   `Clean/Halo2` is now Ironwood-free except its framework tests' toy usages.
   The LOCAL-ONLY Rust dumper commits (this machine, /root/code/halo2) emit the new
   `Clean.Ironwood.Fixtures`/`Halo2.Ironwood.Fixtures` header (commit a6964d4).
+
+## VK test suite pruned to top-level + doc tests (July 20, 2026, Gregor's directive)
+
+With the whole-circuit fixtures in place, the per-gadget VK tests were subsumed by the
+top-level suite and retired (with their fixtures — ~2.3 MB of generated data; recover
+from git history or re-dump if a gadget ever needs isolated debugging). What remains:
+- Correctness: `TestVkMatchAction` (configure Pre+Post, shared 6.2/6.3; now runs on the
+  real `orchardGenerators`), `TestVkLayoutAction` (6.3 synthesize), and
+  `TestVkLayoutActionBase` (6.2 synthesize).
+- Documentation/sanity: `TestVkMatchAdd` (the CS half of the approach) and
+  `TestVkLayoutPoseidon` (the layout half) — chosen as the two smallest fully
+  self-contained examples; their headers say so.
+- `BenchFixedBase` stays (kernel-evaluation benchmark evidence, not a VK test).
