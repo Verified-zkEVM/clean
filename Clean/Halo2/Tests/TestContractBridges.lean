@@ -28,7 +28,7 @@ example : Ironwood.Ecc.Add.add.ProverSpec = fun _ _ _ _ => True := addTest_prove
 -- 2. the generated bridge fires under `simp only`, rewriting the folded projection (the consumer
 -- pattern), exactly like a hand-written `rfl`-bridge.
 example (input : Value Ironwood.Ecc.Add.Inputs Ironwood.Fp)
-    (output : Value Orchard.Point Ironwood.Fp) (w : Unit)
+    (output : Value Halo2.Ironwood.Point Ironwood.Fp) (w : Unit)
     (h : Ironwood.Ecc.Add.add.Spec input output w) :
     output.Valid ∧ output = input.p + input.q := by
   simp only [addTest_spec_eq] at h

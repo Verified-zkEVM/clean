@@ -24,7 +24,7 @@ Acceptance pins for the native loop support (`Clean/Halo2/Loops.lean`):
 
 namespace Halo2.LoopsTest
 
-open Halo2 Halo2.RegionCircuit Halo2.Ironwood.Ecc Orchard
+open Halo2 Halo2.RegionCircuit Halo2.Ironwood.Ecc Halo2.Ironwood
 
 variable {F : Type} [FiniteField F]
 

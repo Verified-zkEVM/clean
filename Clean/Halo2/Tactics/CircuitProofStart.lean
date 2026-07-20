@@ -104,7 +104,7 @@ per-projection `rfl` equations) are built and fed to step (e′), so the child's
 open without the consumer declaring or naming any bridge lemmas.
 
 A shared **spec** unfold that the gadget's user half genuinely needs (e.g.
-`Orchard.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
+`Halo2.Ironwood.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
 one legitimate non-own-file entry — it is neither `circuit_norm` noise nor another gadget's circuit
 internals, but the same category as the gadget's own `Spec`. It is not linted (it is not a
 `circuit_norm` member).
