@@ -1,4 +1,5 @@
-import Clean.Ironwood.Specs.CompElliptic.Curves.Pasta
+import CompElliptic.Curves.Pasta
+import Clean.Ironwood.Specs.CompEllipticExtras
 
 /-!
 # Orchard-facing Pallas vocabulary
@@ -7,6 +8,49 @@ The vendored CompElliptic layer states curve facts over coordinate pairs. This m
 defines the predicates in the point language we want to use for Orchard protocol specs,
 and provides bridge lemmas back to CompElliptic when theorem support is needed.
 -/
+
+/-! ### Pallas-side curve facts missing from CompElliptic
+
+CompElliptic proves `neg_five_not_isCube`/`no_onCurve_y_zero` for the VESTA base field
+(its verifier works over Vesta); Orchard needs the same pair on the PALLAS side. Stated
+in CompElliptic's own namespace so they read as the natural twins — candidates for
+upstreaming to `daira/CompElliptic` (they were part of the formerly vendored copy). -/
+
+namespace CompElliptic.Curves.Pasta.Pallas
+
+open CompElliptic.CurveForms.ShortWeierstrass
+
+/-- `-5` is not a cube in the Pallas base field, so `y = 0` is impossible for a curve point. -/
+theorem neg_five_not_isCube : ¬ ∃ x : Fields.Pasta.PallasBaseField, x ^ 3 = -(5 : Fields.Pasta.PallasBaseField) := by
+  rintro ⟨x, hx⟩
+  have hx0 : x ≠ 0 := by
+    intro hzero
+    have hneg : (-(5 : Fields.Pasta.PallasBaseField)) = 0 := by
+      rw [← hx, hzero]
+      norm_num
+    exact (by decide : (-(5 : Fields.Pasta.PallasBaseField)) ≠ 0) hneg
+  have hfermat : x ^ (Fields.Pasta.PALLAS_BASE_CARD - 1) = 1 := by
+    simpa [ZMod.card] using FiniteField.pow_card_sub_one_eq_one x hx0
+  have hpow : (-(5 : Fields.Pasta.PallasBaseField)) ^ ((Fields.Pasta.PALLAS_BASE_CARD - 1) / 3) = 1 := by
+    rw [← hx, ← pow_mul]
+    have hm : 3 * ((Fields.Pasta.PALLAS_BASE_CARD - 1) / 3) = Fields.Pasta.PALLAS_BASE_CARD - 1 := by
+      native_decide
+    rw [hm]
+    exact hfermat
+  have hnon : (-(5 : Fields.Pasta.PallasBaseField)) ^ ((Fields.Pasta.PALLAS_BASE_CARD - 1) / 3) ≠ 1 := by
+    native_decide
+  exact hnon hpow
+
+/-- No point on the Pallas curve has `y`-coordinate `0`. -/
+theorem no_onCurve_y_zero (x : Fields.Pasta.PallasBaseField) : ¬ OnCurve a b (x, 0) := by
+  intro h
+  have hsum : x ^ 3 + 5 = 0 := by
+    simpa [OnCurve, a, b] using h.symm
+  have h' : x ^ 3 = -(5 : Fields.Pasta.PallasBaseField) := by
+    linear_combination hsum
+  exact neg_five_not_isCube ⟨x, h'⟩
+
+end CompElliptic.Curves.Pasta.Pallas
 
 namespace Halo2.Ironwood
 

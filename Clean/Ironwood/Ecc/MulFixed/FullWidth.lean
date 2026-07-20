@@ -910,13 +910,13 @@ scalar they encode; `Spec` is literally `output = s • B`. -/
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
 /-- The scalar read off the 85 window cells (the constructive extractor). -/
-def windowsScalar (ws : Vector Fp 85) : CompElliptic.Fields.Pasta.Fq :=
-  ((∑ w ∈ Finset.range 85, (ws[w]!).val * 8 ^ w : ℕ) : CompElliptic.Fields.Pasta.Fq)
+def windowsScalar (ws : Vector Fp 85) : Halo2.Ironwood.Fq :=
+  ((∑ w ∈ Finset.range 85, (ws[w]!).val * 8 ^ w : ℕ) : Halo2.Ironwood.Fq)
 
 /-- The top-level extraction data: the window cells and the scalar they encode
 (a named def keeps the pair opaque during proof setup). -/
 def fwExtract (cfg : Config) (i₀ : RegionIndex) (env : Placed Environment Fp) :
-    Vector Fp 85 × CompElliptic.Fields.Pasta.Fq :=
+    Vector Fp 85 × Halo2.Ironwood.Fq :=
   let ws := eval env (windowCells cfg 0 i₀)
   (ws, windowsScalar ws)
 
@@ -953,7 +953,7 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
 
   Assumptions _ := True
 
-  Witness := fun F => Vector F 85 × CompElliptic.Fields.Pasta.Fq
+  Witness := fun F => Vector F 85 × Halo2.Ironwood.Fq
   extract cfg _ i₀ env := fwExtract cfg i₀ env
 
   Spec _ output s := output = (s.2 • B : Point Fp)
@@ -1017,13 +1017,13 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
     -- ── the extracted scalar is the digit sum ──
     have hchain : (t84 + S83) • B.point
         = (((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
-            CompElliptic.Fields.Pasta.Fq)).val • B.point := by
+            Halo2.Ironwood.Fq)).val • B.point := by
       rw [ht84_def, hS83_def, ← Halo2.Ironwood.Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
         Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
     have hsum : windowsScalar
         (eval (⟨env.place, env.env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀))
         = ((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
-            CompElliptic.Fields.Pasta.Fq) := by
+            Halo2.Ironwood.Fq) := by
       unfold windowsScalar
       refine congrArg Nat.cast (Finset.sum_congr rfl ?_)
       intro w hw

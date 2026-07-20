@@ -1,5 +1,5 @@
 import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Specs.CompElliptic.CurveForms.ShortWeierstrass
+import CompElliptic.CurveForms.ShortWeierstrass
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.

@@ -1,7 +1,7 @@
 import Clean.Ironwood.Ecc.Defs
 import Clean.Ironwood.Ecc.MulIncompleteTheorems
 import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Specs.CompElliptic.CurveForms.ShortWeierstrass
+import CompElliptic.CurveForms.ShortWeierstrass
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.

@@ -1,6 +1,6 @@
 import Mathlib.Tactic
 import Clean.Circuit.WitnessIRSugar
-import Clean.Ironwood.Specs.CompElliptic.Fields.Pasta
+import Clean.Ironwood.Specs.CompEllipticExtras
 
 open CompElliptic.Fields.Pasta (Fp)
 

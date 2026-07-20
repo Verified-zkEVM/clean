@@ -1,5 +1,5 @@
 import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.CompElliptic.Curves.Pasta
+import CompElliptic.Curves.Pasta
 import Clean.Ironwood.Specs.Bitrange
 
 /-!
