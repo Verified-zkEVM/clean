@@ -1,5 +1,5 @@
 import Clean.Circuit
-import Clean.Ironwood.Specs.CompElliptic.CurveForms.ShortWeierstrass
+import CompElliptic.CurveForms.ShortWeierstrass
 import Clean.Ironwood.Specs.Pallas
 import Clean.Utils.Tactics
 import Mathlib.Tactic

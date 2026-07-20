@@ -1,3 +1,4 @@
+import Clean.Ironwood.Specs.CompEllipticExtras
 import Clean.Ironwood.Specs.Types
 import Clean.Ironwood.Specs.Bitrange
 import Clean.Ironwood.Specs.Pallas
