@@ -51,6 +51,9 @@ def parent :
     -- the engine then weakens the folded chunk to the child's `EnvA → A → Spec`.
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
+    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
+      RegionCircuit.output_pure, output_assignAdvice,
+      FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by
@@ -94,6 +97,9 @@ def parentWithOp :
     -- never unfolded.
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
+    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
+      RegionCircuit.output_pure, output_assignAdvice,
+      FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by

@@ -58,6 +58,9 @@ def regionParent :
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
     -- `hc : EnvA → A → Spec`; feed the (trivial) preconditions to expose `output.Valid`
+    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
+      RegionCircuit.output_pure, output_assignAdvice,
+      FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by
@@ -101,6 +104,9 @@ def regionParentWithOp :
     -- rewrites the folded call chunk. The child is never unfolded.
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
+    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
+      RegionCircuit.output_pure, output_assignAdvice,
+      FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by
@@ -236,7 +242,16 @@ def chainedParent :
     subcircuit_rw at hc2
     intro hv
     rw [← h_output]
-    exact hc2 trivial trivial (hc1 trivial trivial (h_input ▸ hv))
+    have hout : (passthrough.call config offset input_var).output self
+        = passthrough.output config offset input_var self := by
+      rw [FormalRegionCircuit.output_call]
+    have hout2 : (passthrough.call config offset
+          ((passthrough.call config offset input_var).output self)).output self
+        = passthrough.output config offset
+          ((passthrough.call config offset input_var).output self) self := by
+      rw [FormalRegionCircuit.output_call]
+    exact hout2.symm ▸ hc2 trivial trivial
+      (hout.symm ▸ hc1 trivial trivial (h_input ▸ hv))
 
   completeness := by
     intro config offset
@@ -256,7 +271,8 @@ def chainedParent :
     -- discharged from `h_spec_0`'s ProverSpec (`first_output = first_input`), fed by `pre₀`.
     have hps0 := (h_spec_0 pre₀.1 pre₀.2.1 pre₀.2.2).2
     have hout : (passthrough.call config offset input_var).output self
-        = passthrough.output config offset input_var self := rfl
+        = passthrough.output config offset input_var self := by
+      rw [FormalRegionCircuit.output_call]
     rw [hout] at *
     rw [hps0]; exact h_input ▸ hpa
 

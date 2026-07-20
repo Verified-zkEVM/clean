@@ -634,7 +634,7 @@ private theorem ai_output
   change ((do
     let derived ← Ecc.Mul.mul.call c.1 { alpha := inp.ivk, base := inp.gDOld }
     let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").call c.2 pkD
+      "witness non-identity point").call c.2 inp.pkDOld
     assignRegion "constrain equal" (do
       constrainEqual derived.x pkDOld.x
       constrainEqual derived.y pkDOld.y)
@@ -2051,7 +2051,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                  simp only [AddressIntegrity.circuit, Circuit.operations_bind,
                    Circuit.operations_pure, operations_assignRegion,
                    Halo2.extendsWitnesses_append, Halo2.extendsWitnesses_nil,
-                   Ecc.Mul.mul_call_regionCount, and_true] at h
+                   FormalCircuit.nextRegionIndex_call,
+                   Ecc.Mul.mul_call_regionCount, Nat.add_assoc, Nat.reduceAdd,
+                   and_true] at h
                  exact h.2.1
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hAiPkW]
                refine ⟨?_, ?_⟩
