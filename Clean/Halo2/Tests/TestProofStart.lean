@@ -130,7 +130,7 @@ A hand-built composite state mirroring what a composite gadget's context looks l
 `h_input` in place, so the manual continuation (`subcircuit_rw at hc`) works. On a leaf the same
 tactic would instead have cleared these — the point of the discriminator. -/
 example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp))
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
     (_h_input : True)  -- a spectator equation the composite path leaves untouched
     (hc : RegionOperations.Constraints place self env
         ((WitnessPoint.point.call config 0 input).operations self)) :

@@ -96,7 +96,7 @@ private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool
     rw [hstep, ihb]
     rfl
 
-def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
+def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (UnconstrainedExpr field) (LoopOut n) where
   configure := pure
 
   synthesize cfg offset (alpha : FExpr Fp) := do

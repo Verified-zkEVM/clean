@@ -196,25 +196,25 @@ value is erased, and the prover value is the evaluated data. Mirrors the Rust
 `Circuit` struct's `Value<_>` fields; scalars enter through the fixed-base muls'
 window programs, per the lazy-witnessing rule. -/
 structure PrivateInputs (F : Type) where
-  psiOld : UnconstrainedIR F
-  rhoOld : UnconstrainedIR F
-  nk : UnconstrainedIR F
-  vOld : UnconstrainedIR F
-  vNew : UnconstrainedIR F
-  psiNew : UnconstrainedIR F
-  magnitude : UnconstrainedIR F
-  sign : UnconstrainedIR F
+  psiOld : Unconstrained field F
+  rhoOld : Unconstrained field F
+  nk : Unconstrained field F
+  vOld : Unconstrained field F
+  vNew : Unconstrained field F
+  psiNew : Unconstrained field F
+  magnitude : Unconstrained field F
+  sign : Unconstrained field F
   cmOld : Unconstrained Point F
   gdOld : Unconstrained Point F
   akP : Unconstrained Point F
   pkDOld : Unconstrained Point F
   gdNew : Unconstrained Point F
   pkdNew : Unconstrained Point F
-  rcvWindows : Unconstrained (fields 85) F
-  alphaWindows : Unconstrained (fields 85) F
-  rivkWindows : Unconstrained (fields 85) F
-  rcmOldWindows : Unconstrained (fields 85) F
-  rcmNewWindows : Unconstrained (fields 85) F
+  rcvWindows : UnconstrainedExpr (fields 85) F
+  alphaWindows : UnconstrainedExpr (fields 85) F
+  rivkWindows : UnconstrainedExpr (fields 85) F
+  rcmOldWindows : UnconstrainedExpr (fields 85) F
+  rcmNewWindows : UnconstrainedExpr (fields 85) F
   merkleSib : UnconstrainedSibs F
   merkleSwap : UnconstrainedSwaps F
 deriving CircuitType

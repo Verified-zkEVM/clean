@@ -13,8 +13,8 @@ variable {F : Type} [FiniteField F]
 structure Inputs (F : Type) where
   x : F
   ys : Vector F 4
-  hint : Unconstrained field F
-  ir : UnconstrainedIR F
+  hint : UnconstrainedExpr field F
+  ir : Unconstrained field F
 deriving CircuitType
 
 -- the derived instance is the halo2 one, and `Var` is the companion structure

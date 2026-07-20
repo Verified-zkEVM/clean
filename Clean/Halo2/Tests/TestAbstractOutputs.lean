@@ -32,7 +32,7 @@ A bare-context lemma with the child's output in call form inside `eval`. After `
 the goal is `(eval env x_gen_out_0).Valid` and `h_gen_out_0 : <output> = x_gen_out_0` is in
 context; `subcircuit_rw at h` + the local close it. -/
 example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp))
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
     (h : RegionOperations.Constraints place self env
         ((WitnessPoint.point.call config 0 input).operations self)) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -47,7 +47,7 @@ example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex
 
 Same, but the output already in output form (`WitnessPoint.point.output …`). -/
 example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp))
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
     (h : RegionOperations.Constraints place self env
         ((WitnessPoint.point.call config 0 input).operations self)) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -60,7 +60,7 @@ example (config : WitnessPoint.Config) (self : RegionIndex) (place : RegionIndex
 
 Call form and output form of the SAME output collapse to one local. -/
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (FExpr Fp)) :
+    (env : Environment Fp) (input : Point (WitgenIR Fp 1)) :
     eval (⟨place, env⟩ : Placed Environment Fp)
         (((WitnessPoint.point.toFormal "wp").call config input).output i₀)
       = eval (⟨place, env⟩ : Placed Environment Fp)
@@ -73,7 +73,7 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
 
 The output projected (`.x`). After abstraction the projection reads the opaque local
 (`x_gen_out_0.x`); both call form and output form collapse to `x_gen_out_0.x`. -/
-example (config : WitnessPoint.Config) (self : RegionIndex) (input : Point (FExpr Fp)) :
+example (config : WitnessPoint.Config) (self : RegionIndex) (input : Point (WitgenIR Fp 1)) :
     ((WitnessPoint.point.call config 0 input).output self).x
       = (WitnessPoint.point.output config 0 input self).x := by
   abstract_outputs

@@ -44,7 +44,7 @@ deriving ProvableStruct
 
 /-- The region count of the address-integrity block: four regions for the variable-base
 mul, the `pk_d_old` witness region, the constrain-equal region. -/
-private theorem addressIntegrity_regionCount (pkD : Point (FExpr Fp))
+private theorem addressIntegrity_regionCount (pkD : Point (WitgenIR Fp 1))
     (mcfg : Ecc.Mul.Config) (wcfg : Ecc.WitnessPoint.Config)
     (input : Var Input Fp) (i : RegionIndex) :
     Operations.regionCount
@@ -66,7 +66,7 @@ private theorem addressIntegrity_regionCount (pkD : Point (FExpr Fp))
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality
 constraint between them. `Spec` is knowledge soundness at the input `ivk` cell:
 `pk_d_old = [ivk] g_d_old`, on-curve — no existential. -/
-def circuit (pkD : Point (FExpr Fp)) : FormalCircuit Fp
+def circuit (pkD : Point (WitgenIR Fp 1)) : FormalCircuit Fp
     (Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     Input Point where

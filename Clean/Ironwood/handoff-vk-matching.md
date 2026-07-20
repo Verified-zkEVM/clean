@@ -90,7 +90,28 @@ summary); completed narrative sections were retired 2026-07-18.
 - Sinsemilla/Merkle layout tests belong to the agent porting those files — coordinate,
   don't collide.
 
-## Per-field deriving for mixed hint structs — #31 DONE (2026-07-20)
+## `Unconstrained` is the real thing: witness-IR hint inputs (2026-07-20)
+
+Gregor's ruling (and the queued-list deletion that came with it): halo2's
+`Unconstrained value` now carries genuine witness IR — `Var = value (WitgenIR F 1)`
+(one let-step program per component), prover value = the evaluated `value F` via
+`Unconstrained.evalIR`, verifier value erased. `Unconstrained field` IS the scalar
+hint (the interim `UnconstrainedIR` is deleted); `Unconstrained Point` feeds
+`WitnessPoint` directly (no `.ofFExpr` in synthesize). The plain-expression variant
+survives as `UnconstrainedExpr` for inputs a gadget *embeds inside its own witness
+expressions* (mul `round`/`loop` scalar-cell reading; the mul-fixed window vectors in
+`PrivateInputs`). KEY MECHANISM: the hint-eval dispatch simproc at the bottom of
+`Halo2/WitnessIR.lean` is name-keyed on the carrier — it now dispatches BOTH
+(`Unconstrained` → `evalIR`, `UnconstrainedExpr` → `Witgen.eval`); renaming a hint
+type without updating it silently breaks `h_input` processing. `evalIR` reduces via
+`evalIR_field` (generic) and per-value literal lemmas (`evalIR_point` in
+WitnessPoint.lean). WitnessPoint's `point` now also publishes its witnessed cells
+(`Witness := Point`, extract-based PA like `pointNonId`; the dead `output = input`
+ProverSpecs dropped) — parent PA discharges are defeq at the extract
+(`with_unfolding_all exact hV…`), which simplified the Action stage-A leaf and the
+subcircuit test parents (pair-extracts where two children are consumed).
+
+## Per-field deriving for mixed hint structs — DONE (2026-07-20)
 
 `deriving CircuitType` now works over the Halo2 environments. The record generator
 (`Clean/Utils/Tactics/ProvableStructDeriving.lean`) is parameterized by a
@@ -262,19 +283,6 @@ seconds-to-minutes kernel time per base; fixture-style slow files are accepted.
 Payoff: drop the data-level mirror from TestVkLayoutAction[Base] (call the real
 synthesize), and instantiate the proven Action bundle at the real constants — the
 end-to-end theorem about the deployed circuit.
-
-## Queued follow-ups (after the mul arc)
-
-- **#34**: add `output` to `derive_contract_bridges`' fields so `circuit_proof_start`'s
-  on-the-fly bridges subsume hand-written `round_output`/`loop_output`-style lemmas
-  (verify the whnf-derived RHS reduces as cleanly as the folded `reads` form).
-- **#30**: kernel deep-recursion root cause (explicitly owed to Gregor; memory-capped
-  fail-fast repro only).
-- **#22** env-spelling unification; **#23** full-exercise pass; **#31** DONE
-  2026-07-20 (see "Per-field deriving" section); **#32** `Witgen.M` builder port +
-  `UnconstrainedNat`/vector IR hints (prereqs for non-native witgen; TODOs in
-  `MulIncompleteRound.lean` name them).
-- Refactors that only shift code around stay on ice until the VK arc is done.
 
 ## Style contract
 
