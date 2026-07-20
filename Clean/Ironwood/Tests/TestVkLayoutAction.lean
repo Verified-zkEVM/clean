@@ -104,51 +104,46 @@ def aProgramBase : Circuit Fp Unit := do
     Ironwood.Action.orchardBases aW aCfg
   pure ()
 
-/-! ## The reconstructed layout products (ironwood) -/
+/-! ## The reconstructed layout products vs the ported Action stack (ironwood)
 
-def aOps : Operations Fp := aProgram.operations
-def aRegions : List (ℕ × RegionOperations Fp) := (indexedRegions aOps 0).1
-
-/-- Region starts from the fixture placements (the single `generator_table` slot is the
-three `loadTable`s' — filtered). -/
-def aStarts : List ℕ :=
-  ((actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
-
-def aPermCols : List ColRef := actionLayout.permColumns
-
-def aCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  V1.copyList aPermCols aStarts aOps actionLayout.constants
-def aSigma : List (ℕ × ℕ × ℕ × ℕ) :=
-  sigmaEntries (runAssembly actionLayout.n aPermCols.length aCopyList)
-/-- Usable rows `n − (blindingFactors + 1)` (blinding = 5, dump META). -/
-def aUsable : ℕ := 2042
-def aFixed : List (ℕ × ℕ × ℕ) :=
-  sortFixed (dedupFixed
-    (tableFixed (ZMod.val : Fp → ℕ) aUsable aOps
-      ++ constantsFixed actionLayout.constants
-      ++ selectorFixed actionSelMap (activations aStarts aRegions)
-      ++ regionAssignFixed (ZMod.val : Fp → ℕ) aStarts aRegions))
-
-/-! ## Machinery validation -/
-
--- keygen `Assembly` σ replay from the fixture's OWN ordered copy list.
-#guard sigmaEntries (runAssembly actionLayout.n aPermCols.length
-  actionLayout.copyList) = actionLayout.sigma
-
--- Region lockstep: the fixture's non-table region names, in order, are this side's
--- assignRegion sequence.
-#guard (actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.name)
-  = (regionSlots aOps).filterMap fun (isRegion, nm) => if isRegion then some nm else none
-
-/-! ## End-to-end reconstruction vs the ported Action stack -/
-
--- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
-#guard aCopyList = actionLayout.copyList
-
--- the keygen permutation σ
-#guard aSigma = actionLayout.sigma
-
--- the full fixed contents
-#guard aFixed = sortFixed actionLayout.fixed
+All checks live in ONE `#guard` so the shared reconstruction (ops → regions → copy list →
+σ → fixed) evaluates exactly once: each `#guard` re-runs its whole `def` dependency chain
+(defs are not memoized across commands), so the previous five separate guards materialised
+the full circuit ops ~4× over. The intermediate values are bound with `let` INSIDE the guard
+so the interpreter shares them across the conjuncts. Split back into per-product guards
+temporarily when debugging a mismatch. -/
+#guard
+  let ops : Operations Fp := aProgram.operations
+  let regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
+  -- Region starts from the fixture placements (the single `generator_table` slot is the
+  -- three `loadTable`s' — filtered).
+  let starts : List ℕ :=
+    ((actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
+  let permCols : List ColRef := actionLayout.permColumns
+  let copyList : List (ℕ × ℕ × ℕ × ℕ) :=
+    V1.copyList permCols starts ops actionLayout.constants
+  let sigma : List (ℕ × ℕ × ℕ × ℕ) :=
+    sigmaEntries (runAssembly actionLayout.n permCols.length copyList)
+  -- Usable rows `n − (blindingFactors + 1)` (blinding = 5, dump META).
+  let usable : ℕ := 2042
+  let fixed : List (ℕ × ℕ × ℕ) :=
+    sortFixed (dedupFixed
+      (tableFixed (ZMod.val : Fp → ℕ) usable ops
+        ++ constantsFixed actionLayout.constants
+        ++ selectorFixed actionSelMap (activations starts regions)
+        ++ regionAssignFixed (ZMod.val : Fp → ℕ) starts regions))
+  -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list
+  decide (sigmaEntries (runAssembly actionLayout.n permCols.length
+      actionLayout.copyList) = actionLayout.sigma)
+  -- Region lockstep: the fixture's non-table region names, in order, are this side's
+  -- assignRegion sequence.
+  && decide ((actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.name)
+      = (regionSlots ops).filterMap fun (isRegion, nm) => if isRegion then some nm else none)
+  -- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
+  && decide (copyList = actionLayout.copyList)
+  -- the keygen permutation σ
+  && decide (sigma = actionLayout.sigma)
+  -- the full fixed contents
+  && decide (fixed = sortFixed actionLayout.fixed)
 
 end Halo2.Ironwood.Fixtures.Test.LayoutAction

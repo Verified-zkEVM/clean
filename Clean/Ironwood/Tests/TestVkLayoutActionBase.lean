@@ -16,37 +16,38 @@ open Halo2 Halo2.Ironwood.Fixtures Halo2.Ironwood.Fixtures.Layout
 open Halo2.Ironwood (Fp)
 open Halo2.Ironwood.Fixtures.Test.LayoutAction (aProgramBase)
 
-def bOps : Operations Fp := aProgramBase.operations
-def bRegions : List (ℕ × RegionOperations Fp) := (indexedRegions bOps 0).1
-
-def bStarts : List ℕ :=
-  ((actionBaseLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
-
-def bPermCols : List ColRef := actionBaseLayout.permColumns
-
-def bCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  V1.copyList bPermCols bStarts bOps actionBaseLayout.constants
-def bSigma : List (ℕ × ℕ × ℕ × ℕ) :=
-  sigmaEntries (runAssembly actionBaseLayout.n bPermCols.length bCopyList)
-def bUsable : ℕ := 2042
-def bFixed : List (ℕ × ℕ × ℕ) :=
-  sortFixed (dedupFixed
-    (tableFixed (ZMod.val : Fp → ℕ) bUsable bOps
-      ++ constantsFixed actionBaseLayout.constants
-      ++ selectorFixed actionSelMap (activations bStarts bRegions)
-      ++ regionAssignFixed (ZMod.val : Fp → ℕ) bStarts bRegions))
-
--- keygen `Assembly` σ replay from the fixture's OWN ordered copy list.
-#guard sigmaEntries (runAssembly actionBaseLayout.n bPermCols.length
-  actionBaseLayout.copyList) = actionBaseLayout.sigma
-
--- Region lockstep.
-#guard (actionBaseLayout.regions.filter (·.name ≠ "generator_table")).map (·.name)
-  = (regionSlots bOps).filterMap fun (isRegion, nm) => if isRegion then some nm else none
-
--- the ordered copy list, σ, and the full fixed contents
-#guard bCopyList = actionBaseLayout.copyList
-#guard bSigma = actionBaseLayout.sigma
-#guard bFixed = sortFixed actionBaseLayout.fixed
+/-! All checks live in ONE `#guard` so the shared reconstruction (ops → regions → copy list
+→ σ → fixed) evaluates exactly once: each `#guard` re-runs its whole `def` dependency chain
+(defs are not memoized across commands), so the previous five separate guards materialised
+the full circuit ops ~4× over. The intermediate values are bound with `let` INSIDE the guard
+so the interpreter shares them across the conjuncts. Split back into per-product guards
+temporarily when debugging a mismatch. -/
+#guard
+  let ops : Operations Fp := aProgramBase.operations
+  let regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
+  let starts : List ℕ :=
+    ((actionBaseLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
+  let permCols : List ColRef := actionBaseLayout.permColumns
+  let copyList : List (ℕ × ℕ × ℕ × ℕ) :=
+    V1.copyList permCols starts ops actionBaseLayout.constants
+  let sigma : List (ℕ × ℕ × ℕ × ℕ) :=
+    sigmaEntries (runAssembly actionBaseLayout.n permCols.length copyList)
+  let usable : ℕ := 2042
+  let fixed : List (ℕ × ℕ × ℕ) :=
+    sortFixed (dedupFixed
+      (tableFixed (ZMod.val : Fp → ℕ) usable ops
+        ++ constantsFixed actionBaseLayout.constants
+        ++ selectorFixed actionSelMap (activations starts regions)
+        ++ regionAssignFixed (ZMod.val : Fp → ℕ) starts regions))
+  -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list
+  decide (sigmaEntries (runAssembly actionBaseLayout.n permCols.length
+      actionBaseLayout.copyList) = actionBaseLayout.sigma)
+  -- Region lockstep.
+  && decide ((actionBaseLayout.regions.filter (·.name ≠ "generator_table")).map (·.name)
+      = (regionSlots ops).filterMap fun (isRegion, nm) => if isRegion then some nm else none)
+  -- the ordered copy list, σ, and the full fixed contents
+  && decide (copyList = actionBaseLayout.copyList)
+  && decide (sigma = actionBaseLayout.sigma)
+  && decide (fixed = sortFixed actionBaseLayout.fixed)
 
 end Halo2.Ironwood.Fixtures.Test.LayoutActionBase

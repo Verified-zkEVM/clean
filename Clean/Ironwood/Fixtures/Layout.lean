@@ -333,9 +333,16 @@ the compression map and write `assignedRoot` into its packed column at that row.
 activation list is deduped first: a selector shared by several gates is enabled once per
 gate object per row (e.g. `mul_fixed`'s `q_range_check` under both the range-check and the
 coords gate, matching Rust's two `enable` calls), and Rust's `enable_selector` is
-idempotent per cell. -/
+idempotent per cell.
+
+Dedup is by `Std.HashSet` (O(n)) rather than `List.dedup` (O(n²) over thousands of
+activations). Set-semantics is exact: duplicate activations are the SAME `(sel, row)` pair,
+so they map to identical output entries; the resulting output order is arbitrary but every
+call site immediately sorts with `sortFixed` (verified: `selectorFixed` is only ever used
+inside a `sortFixed (…)`), so order-freedom is safe. -/
 def selectorFixed (selMap : SelCompressMap) (acts : List (ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
-  acts.dedup.filterMap fun (sel, row) =>
+  let uniq : Std.HashSet (ℕ × ℕ) := acts.foldl (·.insert ·) ∅
+  uniq.toList.filterMap fun (sel, row) =>
     (selMap.entries.find? (·.1 = sel)).map fun (_, sc) => (sc.packedCol, row, sc.assignedRoot)
 
 /-- Fixed entries from region-level `assignFixed` ops (Rust `region.assign_fixed` —
@@ -352,14 +359,17 @@ def regionAssignFixed {F : Type} (toNat : F → ℕ) (starts : List ℕ)
 /-- Deduplicate fixed entries by cell, keeping the LAST write (Rust `assign_fixed` on the
 same cell overwrites; Halo2-Clean re-pins — e.g. a piece boundary's `q_s2` — are idempotent
 same-value double writes, and a selector enabled by both a gate and a lookup at the same row
-activates once). -/
+activates once).
+
+Implemented with `Std.HashMap` keyed on the cell `(col, row)` — O(n) rather than the O(n²)
+of the previous `rest.any`-per-element scan (the fixed list runs to 17.5k+ entries). Folding
+left with `insert` keeps the LAST value per key (later writes overwrite), which is exactly
+the overwrite semantics above. The output order is arbitrary but every call site immediately
+sorts with `sortFixed` (verified: `dedupFixed` is only ever used inside a `sortFixed (…)`),
+so order-freedom is safe. -/
 def dedupFixed (l : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ) :=
-  let rec go : List (ℕ × ℕ × ℕ) → List (ℕ × ℕ × ℕ)
-    | [] => []
-    | (c, r, v) :: rest =>
-        if rest.any fun (c', r', _) => c' = c ∧ r' = r then go rest
-        else (c, r, v) :: go rest
-  go l
+  let m : Std.HashMap (ℕ × ℕ) ℕ := l.foldl (fun m (c, r, v) => m.insert (c, r) v) ∅
+  m.toList.map fun ((c, r), v) => (c, r, v)
 
 /-- The constants column's fixed entries, straight from the fixture's allocation map:
 `(value, col, row) ↦ (col, row, value)`. -/
