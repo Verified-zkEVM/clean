@@ -80,11 +80,11 @@ private theorem yc_call_regionCount (w : WitgenIR Fp 1)
   rfl
 
 private theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -118,8 +118,8 @@ private theorem yc_extract (w : WitgenIR Fp 1)
       = eval env (AssignedCell.of (i + 4) 0 (c.1.advices 6) : Var field Fp) := rfl
 
 private theorem commit_spec_eq (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).Spec
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Spec
       = fun input (output : Value Point Fp) wit =>
           ∃ chunks : List ℕ,
             Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
@@ -128,15 +128,15 @@ private theorem commit_spec_eq (G : Generators) (R : FixedBase)
               output.Valid ∧ output = B + (wit.2.2 • R : Point Fp) := rfl
 
 private theorem commit_assumptions_eq (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).Assumptions
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Assumptions
       = fun _ => True := rfl
 
 private theorem commit_envAssumptions_eq (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).EnvAssumptions
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).EnvAssumptions
         c env
       = (Sinsemilla.GeneratorTableLoaded G c.2.1.generatorTable env.env ∧
           Ecc.MulFixed.FullWidth.EnvAssumptions c.1 env) := rfl
@@ -147,20 +147,19 @@ private theorem yc_proverAssumptions_eq (w : WitgenIR Fp 1) :
           Halo2.Ironwood.NoteCommit.IsLowBit input.y wit := rfl
 
 private theorem commit_proverAssumptions_eq (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).ProverAssumptions
-      = fun input wit _ =>
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).ProverAssumptions
+      = fun input _ _ =>
           Sinsemilla.Chain.PieceBounds ns input.pieces ∧
-          (∃ B, hashToPoint G.S Q
-            (Sinsemilla.Chain.honestChunks ns input.pieces) = some B) ∧
-          ∀ w : Fin 85, (wit.2.1[w.val]).val < 8 := rfl
+          ∃ B, hashToPoint G.S Q
+            (Sinsemilla.Chain.honestChunks ns input.pieces) = some B := rfl
 
 private theorem commit_extract_eq (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).extract
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).extract
         c inp i env
       = ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
           { pieces := inp.pieces } (i + 2) env,
@@ -309,7 +308,7 @@ private theorem pieceChunks_donor_iff :
 
 /-- Stage-3 peel, standalone (kernel-checked alone): the ten folded gate-call chunks at
 clean relative indices. -/
-private theorem peelGates (cfg : Config) (input : Inputs (AssignedCell Fp))
+private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h : Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
@@ -471,7 +470,7 @@ private theorem zs_get_z13g (f : ℕ → Fp) :
     (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 /-- Build direction of `peelGates` (kernel-checked alone). -/
-private theorem buildGates (cfg : Config) (input : Inputs (AssignedCell Fp))
+private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h : 
@@ -564,7 +563,7 @@ private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
     Cell.of_column, Environment.get_advice, Nat.add_zero]
 
 /-- Build direction for stage 1: the seven short-check chunks give the stage. -/
-private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
+private theorem buildPieces (cfg : Config) (input : Var Inputs Fp)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h :
     RegionOperations.Constraints place (i₀ + 1) env
@@ -596,8 +595,8 @@ private theorem buildPieces (cfg : Config) (input : Inputs (AssignedCell Fp))
 
 /-- Build direction for stage 2: the y-flows, the commit, the four witness_checks. -/
 private theorem buildChecks (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (pcs : PieceCells) (iHash : RegionIndex)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash : RegionIndex)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h :
     Constraints place env
@@ -608,9 +607,10 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
         (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }).operations (i₀ + 5))
       (i₀ + 5) ∧
     Constraints place env
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h] }).operations
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+          r := input.rcm }).operations
         (i₀ + 10)) (i₀ + 10) ∧
     RegionOperations.Constraints place (i₀ + 14) env
       (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfg.lookupConfig 0 ()).operations
@@ -625,7 +625,7 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
       (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfg.lookupConfig 0 ()).operations
         (i₀ + 17))) :
     Constraints place env
-      ((synthChecks G R windows Q hQ cfg input pcs iHash).operations i₀) i₀ := by
+      ((synthChecks G R Q hQ cfg input pcs iHash).operations i₀) i₀ := by
   simp only [synthChecks, LookupRangeCheck.witnessCheck, circuit_norm]
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount]
   simp only [Nat.add_assoc, Nat.reduceAdd]
@@ -633,26 +633,26 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
 
 /-- Assemble the three stage constraint blocks into the whole flow. -/
 private theorem buildSynth (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
     (env : Environment Fp)
     (h1 : Constraints place env ((synthPieces cfg input).operations i₀) i₀)
     (h2 : Constraints place env
-      ((synthChecks G R windows Q hQ cfg input
+      ((synthChecks G R Q hQ cfg input
         ((synthPieces cfg input).output i₀) (i₀ + 27)).operations (i₀ + 15)) (i₀ + 15))
     (h3 : Constraints place env
       ((synthGates cfg input ((synthPieces cfg input).output i₀)
-        ((synthChecks G R windows Q hQ cfg input ((synthPieces cfg input).output i₀)
+        ((synthChecks G R Q hQ cfg input ((synthPieces cfg input).output i₀)
           (i₀ + 27)).output (i₀ + 15)) (i₀ + 27)).operations (i₀ + 33)) (i₀ + 33)) :
     Constraints place env
-      ((synth G R windows Q hQ cfg input).operations i₀) i₀ := by
+      ((synth G R Q hQ cfg input).operations i₀) i₀ := by
   simp only [synth, circuit_norm, synthPieces_nextRegionIndex,
     synthChecks_nextRegionIndex, synthPieces_regionCount, synthChecks_regionCount,
     Nat.add_assoc, Nat.reduceAdd]
   exact ⟨h1, h2, h3⟩
 
 /-- Witness-side stage-3 peel (kernel-checked alone): the ten gate-call witness chunks. -/
-private theorem peelGatesW (cfg : Config) (input : Inputs (AssignedCell Fp))
+private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (h : ExtendsWitnesses place env
@@ -862,10 +862,10 @@ private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) 
 /-- Prover-eval of the commit input record over opaque cells (doc pattern 1: the
 transport lemma is checked once over abstract variables). -/
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) :
-    (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-      ({ pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇] }
-        : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
+      (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
     = #v[readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₀,
         readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₁,
         readCell (⟨place, env⟩ : Placed ProverEnvironment Fp) c₂,
@@ -878,10 +878,10 @@ private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnviro
 
 /-- Environment-side sibling of `pieces_eval_eq`. -/
 private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) :
-    (eval (⟨place, env⟩ : Placed Environment Fp)
-      ({ pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇] }
-        : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
+      (⟨place, env⟩ : Placed Environment Fp)
+      { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
     = #v[env.get c₀.cell.column ((place c₀.cell.regionIndex + c₀.cell.rowOffset : ℕ) : ℤ),
         env.get c₁.cell.column ((place c₁.cell.regionIndex + c₁.cell.rowOffset : ℕ) : ℤ),
         env.get c₂.cell.column ((place c₂.cell.regionIndex + c₂.cell.rowOffset : ℕ) : ℤ),
@@ -897,23 +897,20 @@ private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environm
 (the inline `layouter_completeness_derived` application hits a whnf wall in the main
 proof's context). -/
 private theorem commit_derived_spec (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
     (hw : ExtendsWitnesses place env
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         c inp).operations i) i)
-    (hEnvA : (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).EnvAssumptions
+    (hEnvA : (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).EnvAssumptions
       c (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
     (hPB' : Sinsemilla.Chain.PieceBounds ns
       (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces)
     (hHon' : ∃ B, hashToPoint G.S Q
       (Sinsemilla.Chain.honestChunks ns
-        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces) = some B)
-    (hWin' : ∀ w : Fin 85,
-      (((Ecc.MulFixed.FullWidth.fwExtract c.1 i
-        (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).1)[w.val]).val < 8) :
+        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces) = some B) :
     ∃ chunks : List ℕ,
       Sinsemilla.Chain.PieceChunks ns
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp).pieces chunks ∧
@@ -923,27 +920,28 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).zs ∧
       ∀ B, hashToPoint G.S Q chunks = some B →
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-          ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+          ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
             c inp i) : Value Point Fp).Valid ∧
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-          ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+          ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
             c inp i) : Value Point Fp)
           = B + (((Ecc.MulFixed.FullWidth.fwExtract c.1 i
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).2 • R) : Point Fp) := by
   have h := (Halo2.SubcircuitRw.layouter_completeness_derived
-    (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil) c i place env inp hw
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil) c i place env inp hw
     hEnvA (by rw [commit_assumptions_eq]; trivial)
     (by rw [commit_proverAssumptions_eq, commit_extract_eq]
-        exact ⟨hPB', hHon', hWin'⟩)).1
+        exact ⟨hPB', hHon'⟩)).1
   rw [commit_spec_eq, commit_extract_eq] at h
   exact h
 
-theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+theorem soundness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R windows Q hQ cfg)
+      (synth G R Q hQ cfg)
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (Spec G Q R) := by
   circuit_proof_start
+  change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
   simp only [synth, circuit_norm] at hc
   have hP := hc.1
@@ -1336,7 +1334,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     hGvalS.1
   -- ── land the Spec ──
   simp only [Spec]
-  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
+  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input
   refine ⟨hival ▸ hGvalS.1, ?_⟩
   refine Halo2.Ironwood.Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
     (fun m hm => G.S_onCurve (Halo2.Ironwood.Specs.Sinsemilla.chunksOf_mem_lt (by
@@ -1353,7 +1351,7 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
   obtain ⟨-, hOut⟩ := hContract B hB
   have hOutVar : ({ x := output_x, y := output_y } : Halo2.Ironwood.Point Fp)
       = eval (⟨place, env⟩ : Placed Environment Fp)
-        ((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).output
+        ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
           (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
           { pieces :=
               #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
@@ -1363,22 +1361,24 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
                 AssignedCell.of (i₀ + 7 + 2) 0 cfg.hashConfig.witnessPieces,
                 AssignedCell.of (i₀ + 8 + 2) 0 cfg.hashConfig.witnessPieces,
                 AssignedCell.of (i₀ + 10 + 2) 0 cfg.hashConfig.witnessPieces,
-                AssignedCell.of (i₀ + 12 + 2) 0 cfg.hashConfig.witnessPieces] }
+                AssignedCell.of (i₀ + 12 + 2) 0 cfg.hashConfig.witnessPieces],
+            r := input_var_rcm }
           (i₀ + 15 + 5 + 5)) := by
     rw [← h_output]
     with_unfolding_all rfl
   rw [hOutVar]
   exact hOut
 
-theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+theorem completeness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R windows Q hQ cfg)
+      (synth G R Q hQ cfg)
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (ProverAssumptions G Q)
       (fun _ _ _ _ => True) := by
   circuit_proof_start
+  change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
-  obtain ⟨hOnGd, hOnPkd, hVal64, hWin, B0, hB0⟩ := hPA
+  obtain ⟨hOnGd, hOnPkd, hVal64, B0, hB0⟩ := hPA
   simp only [synth, circuit_norm] at hwit ⊢
   have hWP := hwit.1
   have hWCk := hwit.2.1
@@ -1395,7 +1395,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   rw [yc_call_regionCount, yc_call_regionCount, commit_call_regionCount] at hWCk
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
   -- ── prover-side MessageCellFacts at the read cells ──
-  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
+  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input
   have hVal64' : (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ 64 := by
     rw [hival]; exact hVal64
   -- gate-internal witnesses (the b1/d0/g0/h1 bit cells)
@@ -1510,8 +1510,9 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
     exact this
   -- ── derived child contracts for the gate rely-conditions ──
   have hPB2 : Sinsemilla.Chain.PieceBounds ns
-      (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-        ({ pieces :=
+      (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
+        (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        { pieces :=
           #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
             AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
             AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
@@ -1519,16 +1520,17 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
             AssignedCell.of (i₀ + 9) 0 cfg.hashConfig.witnessPieces,
             AssignedCell.of (i₀ + 10) 0 cfg.hashConfig.witnessPieces,
             AssignedCell.of (i₀ + 12) 0 cfg.hashConfig.witnessPieces,
-            AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces] }
-          : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces := by
+            AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces],
+          r := input_var_rcm }).pieces := by
     rw [pieces_eval_eq]
     simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
     exact hPB
   have hHon2 : ∃ B, hashToPoint G.S Q
       (Sinsemilla.Chain.honestChunks ns
-        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          ({ pieces :=
+        (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
+          (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          { pieces :=
             #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
               AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
               AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
@@ -1536,8 +1538,8 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
               AssignedCell.of (i₀ + 9) 0 cfg.hashConfig.witnessPieces,
               AssignedCell.of (i₀ + 10) 0 cfg.hashConfig.witnessPieces,
               AssignedCell.of (i₀ + 12) 0 cfg.hashConfig.witnessPieces,
-              AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces] }
-            : Var (Sinsemilla.CommitDomain.Input ns.length) Fp)).pieces)
+              AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces],
+            r := input_var_rcm }).pieces)
       = some B := by
     refine ⟨B0, ?_⟩
     rw [pieces_eval_eq]
@@ -1545,10 +1547,10 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
     rw [hHonest]
     exact hB0
-  have hCmS := commit_derived_spec G R windows Q hQ
+  have hCmS := commit_derived_spec G R Q hQ
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
     (by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
-    hPB2 hHon2 hWin
+    hPB2 hHon2
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
   rw [pieces_eval_eq_env] at hPC
@@ -1792,7 +1794,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
   refine ⟨buildPieces cfg _ i₀ place _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
-    buildChecks G R windows Q hQ cfg _ _ _ (i₀ + 15) place _
+    buildChecks G R Q hQ cfg _ _ _ (i₀ + 15) place _
       ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     buildGates cfg _ _ _ _ (i₀ + 33) place _
       ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
@@ -1936,12 +1938,12 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
                + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
              simp [Halo2.Ironwood.Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil)
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 25) place env _ hWcm
       ⟨(by rw [commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩),
        (by rw [commit_assumptions_eq]; trivial),
        (by rw [commit_proverAssumptions_eq]
-           refine ⟨?_, ?_, ?_⟩
+           refine ⟨?_, ?_⟩
            · show Sinsemilla.Chain.PieceBounds ns _
              with_unfolding_all exact hPB
            · refine ⟨B0, ?_⟩
@@ -1950,8 +1952,7 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
                    (input_gdY.val % 2) input_pkdX.val (input_pkdY.val % 2)
                    input_value.val input_rho.val input_psi.val from by
                with_unfolding_all exact hHonest]
-             exact hB0
-           · exact hWin)⟩
+             exact hB0)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 29)
       place env () hWra
@@ -2217,13 +2218,13 @@ theorem completeness (G : Generators) (R : FixedBase) (windows : Vector (FExpr F
            simp)⟩
 
 /-- Rust `NoteCommitChip::commit` as a proof-carrying bundle. -/
-def circuit (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
+def circuit (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) :
     FormalCircuit Fp Config Config Inputs Point where
   name := "NoteCommit"
   configure := pure
-  synthesize := synth G R windows Q hQ
-  elaborated := elaborated G R windows Q hQ
+  synthesize := synth G R Q hQ
+  elaborated := elaborated G R Q hQ
   Witness := fun _ => Vector Fp 85 × Fq
   extract := rcmExtract
   EnvAssumptions := EnvAssumptions G
@@ -2231,7 +2232,7 @@ def circuit (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
   Spec := Spec G Q R
   ProverAssumptions := ProverAssumptions G Q
   ProverSpec := fun _ _ _ _ => True
-  soundness := soundness G R windows Q hQ
-  completeness := completeness G R windows Q hQ
+  soundness := soundness G R Q hQ
+  completeness := completeness G R Q hQ
 
 end Halo2.Ironwood.NoteCommit.Main

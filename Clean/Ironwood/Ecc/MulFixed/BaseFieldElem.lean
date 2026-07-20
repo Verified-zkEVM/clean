@@ -1351,7 +1351,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         omega
     have hinput : input = ((V : ℕ) : Fp) := by
       rw [← h_input]
-      simp only [circuit_norm, AssignedCell.eval]
+      simp only [circuit_norm]
       exact hαV
     -- ── the output value: `mul_b + acc = [V]B` ──
     obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,

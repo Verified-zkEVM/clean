@@ -3,6 +3,7 @@ import Clean.Ironwood.NoteCommit.Main
 import Clean.Ironwood.Sinsemilla.CommitDomain
 import Clean.Ironwood.CommitIvk.MainTheorems
 import Clean.Ironwood.Specs.SinsemillaBreak
+import Clean.Halo2.CircuitTypeDeriving
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -43,11 +44,13 @@ def ns : List ℕ := [24, 0, 23, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
-/-- The main circuit's inputs: the `ak`/`nk` field-element cells. -/
+/-- The main circuit's inputs: the `ak`/`nk` field-element cells and the blinding
+scalar's nat-valued reading program `rivk` (a prover hint). -/
 structure Inputs (F : Type) where
   ak : F
   nk : F
-deriving ProvableStruct
+  rivk : UnconstrainedNat F
+deriving CircuitType
 
 /-! ## Witness programs (the canonical bit-slice values; Rust computes the same from
 the corresponding `Value`s) -/
@@ -115,31 +118,30 @@ structure PieceCells where
 
 /-- Stage 1 (7 regions): the four message pieces interleaved with the three
 sub-piece short checks (`commit_ivk.rs:289-350`). -/
-def synthPieces (cfg : Config) (input : Inputs (AssignedCell Fp)) :
+def synthPieces (cfg : Config) (ak nk : AssignedCell Fp) :
     Circuit Fp PieceCells := do
-  let a ← witnessMessagePiece cfg.hashConfig (brWit input.ak 0 250)
+  let a ← witnessMessagePiece cfg.hashConfig (brWit ak 0 250)
   let b0 ← LookupRangeCheck.witnessShortCheck 10 4 cfg.lookupConfig
-    (brWit input.ak 250 4)
+    (brWit ak 250 4)
   let b2 ← LookupRangeCheck.witnessShortCheck 10 5 cfg.lookupConfig
-    (brWit input.nk 0 5)
-  let b ← witnessMessagePiece cfg.hashConfig (bWit input.ak input.nk)
-  let c ← witnessMessagePiece cfg.hashConfig (brWit input.nk 5 240)
+    (brWit nk 0 5)
+  let b ← witnessMessagePiece cfg.hashConfig (bWit ak nk)
+  let c ← witnessMessagePiece cfg.hashConfig (brWit nk 5 240)
   let d0 ← LookupRangeCheck.witnessShortCheck 10 9 cfg.lookupConfig
-    (brWit input.nk 245 9)
-  let d ← witnessMessagePiece cfg.hashConfig (dWit input.nk)
+    (brWit nk 245 9)
+  let d ← witnessMessagePiece cfg.hashConfig (dWit nk)
   pure { a, b, c, d, b0, b2, d0 }
 
 /-- The full flow: pieces, the 4-region commit, the 3-region canonicity composite.
 Output: the extracted `x`-coordinate (`ivk`). -/
-def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) : Circuit Fp (Var field Fp) := do
+def synth (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) : Circuit Fp (Var field Fp) := do
   let i₀ ← currentRegion
   let iHash := i₀ + 9
-  let pcs ← synthPieces cfg input
-  let cm ← (Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+  let pcs ← synthPieces cfg input.ak input.nk
+  let cm ← (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d] }
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d], r := input.rivk }
   let _ ← (Halo2.Ironwood.CommitIvk.Canonicity.circuit (brWit input.ak 254 1) (brWit input.nk 254 1)).call
     (cfg.gate, cfg.lookupConfig)
     { ak := input.ak, a := pcs.a, bWhole := pcs.b, b0 := pcs.b0, b2 := pcs.b2,
@@ -151,11 +153,11 @@ def synth (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
 /-! ## Region counts and stage outputs -/
 
 theorem commit_call_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (Q : Point Fp) (hQ : Q.OnCurve)
     (c : Ecc.MulFixed.FullWidth.Config × Sinsemilla.HashPiece.Config × Ecc.Add.Config)
     (inp : Var (Sinsemilla.CommitDomain.Input ns.length) Fp) (j : RegionIndex) :
     Operations.regionCount
-      (((Sinsemilla.CommitDomain.commit G ns R windows Q hQ ns_ne_nil).call
+      (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
         c inp).operations j) = 4 := by
   rw [FormalCircuit.call_regionCount]
   rfl
@@ -168,9 +170,9 @@ theorem composite_call_regionCount (wb1 wd1 : WitgenIR Fp 1)
   rw [FormalCircuit.call_regionCount]
   rfl
 
-theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_regionCount (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
-    Operations.regionCount ((synthPieces cfg input).operations i) = 7 := by
+    Operations.regionCount ((synthPieces cfg ak nk).operations i) = 7 := by
   simp only [synthPieces, LookupRangeCheck.witnessShortCheck,
     Sinsemilla.HashToPoint.witnessMessagePiece, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
@@ -178,9 +180,9 @@ theorem synthPieces_regionCount (cfg : Config) (input : Inputs (AssignedCell Fp)
 /-- The region count of the flow: 7 piece/short regions, the 4-region commit, the
 3-region canonicity composite — 14. -/
 theorem synth_regionCount (G : Generators) (R : FixedBase)
-    (windows : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
-    (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
-    Operations.regionCount ((synth G R windows Q hQ cfg input).operations i) = 14 := by
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    Operations.regionCount ((synth G R Q hQ cfg input).operations i) = 14 := by
   -- lean explicit set: `circuit_norm`'s dsimp-normalization of op payloads is
   -- kernel-expensive now that call chunks are kernel-transparent (no constructor head)
   simp only [synth, Circuit.operations_bind, Circuit.operations_pure,
@@ -189,14 +191,14 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
     NoteCommit.Main.currentRegion_operations]
   rw [synthPieces_regionCount, commit_call_regionCount, composite_call_regionCount]
 
-theorem synthPieces_nextRegionIndex (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
-    (synthPieces cfg input).nextRegionIndex i = i + 7 := by
+    (synthPieces cfg ak nk).nextRegionIndex i = i + 7 := by
   with_unfolding_all rfl
 
-theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
+theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
-    (synthPieces cfg input).output i
+    (synthPieces cfg ak nk).output i
       = { a := .of i 0 cfg.hashConfig.witnessPieces,
           b := .of (i + 3) 0 cfg.hashConfig.witnessPieces,
           c := .of (i + 4) 0 cfg.hashConfig.witnessPieces,
@@ -211,13 +213,13 @@ theorem synthPieces_output (cfg : Config) (input : Inputs (AssignedCell Fp))
 open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
-instance elaborated (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 85)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs field (synth G R windows Q hQ cfg) where
-  output input i := (synth G R windows Q hQ cfg input).output i
+instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
+    (hQ : Q.OnCurve) (cfg : Config) :
+    ElaboratedCircuit Fp Inputs field (synth G R Q hQ cfg) where
+  output input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 14
   output_eq := by intro _ _; rfl
-  regionCount_eq input i := (synth_regionCount G R windows Q hQ cfg input i).symm
+  regionCount_eq input i := (synth_regionCount G R Q hQ cfg input i).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=
@@ -244,12 +246,12 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (hashToPointB G.S Q
       (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val))
 
-/-- Honest-prover preconditions: 3-bit windows and a defined honest hash. -/
+/-- Honest-prover precondition: the canonical message hash is defined. The full-width
+child derives and proves the 3-bit bounds for its scalar windows. -/
 def ProverAssumptions (G : Generators) (Q : Point Fp)
-    (input : ProverValue Inputs Fp) (rivk : Vector Fp 85 × Fq)
+    (input : ProverValue Inputs Fp) (_ : Vector Fp 85 × Fq)
     (_ : ProverHint Fp) : Prop :=
-  (∀ w : Fin 85, (rivk.1[w.val]).val < 8) ∧
-  (∃ B, hashToPoint G.S Q
-    (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val) = some B)
+  ∃ B, hashToPoint G.S Q
+    (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val) = some B
 
 end Halo2.Ironwood.CommitIvk.Main

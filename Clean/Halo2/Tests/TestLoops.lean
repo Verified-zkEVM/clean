@@ -87,14 +87,14 @@ must fire there — traversing the binder and reading the bound index off the ba
 /-- Bundle-bodied loop: round `i` calls `witness_point` at base row `offset + i*stride`, with the
 per-round input `inputs i`. -/
 def bundleLoop (cfg : WitnessPoint.Config) (offset stride m : ℕ)
-    (inputs : ℕ → Point (WitgenIR Fp 1)) : RegionCircuit Fp Unit :=
+    (inputs : ℕ → Var (Unconstrained Point) Fp) : RegionCircuit Fp Unit :=
   forRange' offset stride m fun i row => do
     let _ ← WitnessPoint.point.call cfg row (inputs i)
     pure ()
 
 -- SOUNDNESS: the loop's constraints, split to `∀ i`, then `subcircuit_rw` under the binder
 -- exposes each round's `witness_point` `Spec` (`(output i).Valid`).
-example (cfg : WitnessPoint.Config) (offset stride m : ℕ) (inputs : ℕ → Point (WitgenIR Fp 1))
+example (cfg : WitnessPoint.Config) (offset stride m : ℕ) (inputs : ℕ → Var (Unconstrained Point) Fp)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
     (h : RegionOperations.Constraints place self env
         ((bundleLoop cfg offset stride m inputs).operations self)) :

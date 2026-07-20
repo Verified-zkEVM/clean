@@ -64,7 +64,7 @@ def parent :
                  y := AssignedCell.of i₀ 0 config.y } : Var Point Fp),
      eval env ({ x := AssignedCell.of (i₀ + 1) 0 config.x,
                  y := AssignedCell.of (i₀ + 1) 0 config.y } : Var Point Fp))
-  ProverAssumptions _ wit _ := wit.1.Valid ∧ wit.2.Valid
+  ProverAssumptions input _ _ := input.Valid
 
   soundness := by
     intro config
@@ -91,8 +91,10 @@ def parent :
       rw [FormalCircuit.call_regionCount]
       rfl
     simp only [hrc]
-    exact ⟨⟨trivial, trivial, by with_unfolding_all exact hpa.1⟩,
-      ⟨trivial, trivial, by with_unfolding_all exact hpa.2⟩⟩
+    have key : (eval env input_var).Valid := by
+      convert hpa using 2
+      with_unfolding_all exact h_input
+    exact ⟨⟨trivial, trivial, key⟩, ⟨trivial, trivial, key⟩⟩
 
 /-! ## Bare-`place`/`env` engine firing
 
@@ -103,7 +105,7 @@ regardless (no discrimination tree). -/
 -- Region bare context: firing must expose the child's `Spec` (here `Point.Valid` of the output),
 -- so the conclusion genuinely depends on the rewrite having happened.
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
+    (env : Environment Fp) (input : Var (Unconstrained Point) Fp)
     (h : RegionOperations.Constraints place i₀ env
         ((WitnessPoint.point.call config 0 input).operations i₀)) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
@@ -113,7 +115,7 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
 
 -- Layouter bare context: same, at the layouter level.
 example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex → ℕ)
-    (env : Environment Fp) (input : Point (WitgenIR Fp 1))
+    (env : Environment Fp) (input : Var (Unconstrained Point) Fp)
     (h : Constraints place env ((witnessPointR.call config input).operations i₀) i₀) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
         (witnessPointR.output config input i₀)).Valid := by

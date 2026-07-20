@@ -193,8 +193,8 @@ instance : ProvableType (Halo2.Value UnconstrainedSwaps) :=
 /-- The Action circuit's private inputs as a prover-only hint block, derived per-field
 (the `Unconstrained` pattern): the `Var` view is the witness programs, the verifier
 value is erased, and the prover value is the evaluated data. Mirrors the Rust
-`Circuit` struct's `Value<_>` fields; scalars enter through the fixed-base muls'
-window programs, per the lazy-witnessing rule. -/
+`Circuit` struct's `Value<_>` fields; the fixed-base-mul scalars are nat-valued
+reading programs, their 85 window witnesses derived inside the mul bundles. -/
 structure PrivateInputs (F : Type) where
   psiOld : Unconstrained field F
   rhoOld : Unconstrained field F
@@ -210,11 +210,11 @@ structure PrivateInputs (F : Type) where
   pkDOld : Unconstrained Point F
   gdNew : Unconstrained Point F
   pkdNew : Unconstrained Point F
-  rcvWindows : UnconstrainedExpr (fields 85) F
-  alphaWindows : UnconstrainedExpr (fields 85) F
-  rivkWindows : UnconstrainedExpr (fields 85) F
-  rcmOldWindows : UnconstrainedExpr (fields 85) F
-  rcmNewWindows : UnconstrainedExpr (fields 85) F
+  rcv : UnconstrainedNat F
+  alpha : UnconstrainedNat F
+  rivk : UnconstrainedNat F
+  rcmOld : UnconstrainedNat F
+  rcmNew : UnconstrainedNat F
   merkleSib : UnconstrainedSibs F
   merkleSwap : UnconstrainedSwaps F
 deriving CircuitType
@@ -247,17 +247,17 @@ structure WitnessCells where
 def synthWitness (G : Generators) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp WitnessCells := do
   Sinsemilla.load G cfg.sinsemilla1.generatorTable
-  let psiOld ← loadPrivate (cfg.advices 0) W.psiOld
-  let rhoOld ← loadPrivate (cfg.advices 0) W.rhoOld
+  let psiOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.psiOld)
+  let rhoOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.rhoOld)
   let cmOld ← (Ecc.WitnessPoint.point.toFormal "witness point").call
     cfg.eccConfig.witnessPoint W.cmOld
   let gdOld ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
     cfg.eccConfig.witnessPoint W.gdOld
   let akP ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
     cfg.eccConfig.witnessPoint W.akP
-  let nk ← loadPrivate (cfg.advices 0) W.nk
-  let vOld ← loadPrivate (cfg.advices 0) W.vOld
-  let vNew ← loadPrivate (cfg.advices 0) W.vNew
+  let nk ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.nk)
+  let vOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.vOld)
+  let vNew ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.vNew)
   pure { psiOld, rhoOld, cmOld, gdOld, akP, nk, vOld, vNew }
 
 /-- Stage B's outputs. -/
@@ -282,11 +282,11 @@ def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
       (fun i => W.merkleSwap (16 + i))).call
     (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) { node := half }
   -- circuit.rs:551-605 — value-commit integrity
-  let magnitude ← loadPrivate (cfg.advices 9) W.magnitude
-  let sign ← loadPrivate (cfg.advices 9) W.sign
-  let cvNet ← (ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).call
+  let magnitude ← loadPrivate (cfg.advices 9) (Witgen.MOver.toIRScalar W.magnitude)
+  let sign ← loadPrivate (cfg.advices 9) (Witgen.MOver.toIRScalar W.sign)
+  let cvNet ← (ValueCommit.circuit B.valueCommitV B.valueCommitR).call
     (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
-    { magnitude := magnitude, sign := sign }
+    { rcv := W.rcv, magnitude := magnitude, sign := sign }
   constrainInstance cvNet.x cfg.primary CV_NET_X
   constrainInstance cvNet.y cfg.primary CV_NET_Y
   -- circuit.rs:608-624 — nullifier integrity
@@ -296,20 +296,21 @@ def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     { nk := wc.nk, rho := wc.rhoOld, psi := wc.psiOld, cm := wc.cmOld }
   constrainInstance nfOld cfg.primary NF_OLD
   -- circuit.rs:627-644 — spend authority
-  let rk ← (SpendAuthority.circuit B.spendAuthG W.alphaWindows).call
-    (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) { akP := wc.akP }
+  let rk ← (SpendAuthority.circuit B.spendAuthG).call
+    (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) { alpha := W.alpha, akP := wc.akP }
   constrainInstance rk.x cfg.primary RK_X
   constrainInstance rk.y cfg.primary RK_Y
   -- circuit.rs:647-693 — diversified address integrity
   -- (`ak = ak_P.extract_p()`; `ScalarVar::from_base` is region-free)
-  let ivk ← (CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows
+  let ivk ← (CommitIvk.Main.circuit G B.commitIvkR
       B.ivkQ B.ivkQ_onCurve).call
     { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
-    { ak := wc.akP.x, nk := wc.nk }
-  let pkdOld ← (AddressIntegrity.circuit W.pkDOld).call
-    (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) { ivk := ivk, gDOld := wc.gdOld }
+    { ak := wc.akP.x, nk := wc.nk, rivk := W.rivk }
+  let pkdOld ← (AddressIntegrity.circuit).call
+    (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)
+    { ivk := ivk, gDOld := wc.gdOld, pkDOld := W.pkDOld }
   pure { root, magnitude, sign, nfOld, pkdOld }
 
 /-- Stage C's outputs: the new-note diversified-address cells (the Rust `AddressPoints`
@@ -323,13 +324,13 @@ structure NoteCells where
 def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     (wc : WitnessCells) (cc : CheckCells) : Circuit Fp NoteCells := do
   -- circuit.rs:696-729 — old note commitment integrity
-  let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR W.rcmOldWindows
+  let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR
       B.noteQ B.noteQ_onCurve).call
     { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
     { gdX := wc.gdOld.x, gdY := wc.gdOld.y, pkdX := cc.pkdOld.x, pkdY := cc.pkdOld.y,
-      value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld }
+      value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld, rcm := W.rcmOld }
   assignRegion "constrain equal" (do
     constrainEqual derivedCmOld.x wc.cmOld.x
     constrainEqual derivedCmOld.y wc.cmOld.y)
@@ -338,14 +339,14 @@ def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     cfg.eccConfig.witnessPoint W.gdNew
   let pkdNew ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
     cfg.eccConfig.witnessPoint W.pkdNew
-  let psiNew ← loadPrivate (cfg.advices 0) W.psiNew
-  let cmNew ← (NoteCommit.Main.circuit G B.noteCommitR W.rcmNewWindows
+  let psiNew ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.psiNew)
+  let cmNew ← (NoteCommit.Main.circuit G B.noteCommitR
       B.noteQ B.noteQ_onCurve).call
     { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
       lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
     { gdX := gdNew.x, gdY := gdNew.y, pkdX := pkdNew.x, pkdY := pkdNew.y,
-      value := wc.vNew, rho := cc.nfOld, psi := psiNew }
+      value := wc.vNew, rho := cc.nfOld, psi := psiNew, rcm := W.rcmNew }
   constrainInstance cmNew.x cfg.primary CMX
   -- circuit.rs:781-826 — the final `"Orchard circuit checks"` region
   assignRegion "Orchard circuit checks" (do

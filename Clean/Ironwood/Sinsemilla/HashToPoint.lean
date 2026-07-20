@@ -473,6 +473,7 @@ theorem hashCircuit_output_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
   rw [← hashCircuit_output_point_x G ns Q hQ hns cfg pieces i,
     ← hashCircuit_output_point_y G ns Q hQ hns cfg pieces i,
     ← hashCircuit_output_z1s G ns Q hQ hns cfg pieces i]
+  rfl
 
 /-- The hash bundle's eval'd output (verifier view), landed on raw advice reads. -/
 theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)

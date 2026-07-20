@@ -171,6 +171,24 @@ lemma eval_field_prover (env : Placed ProverEnvironment F) (x : AssignedCell F) 
     Eval.eval env x = AssignedCell.eval env.place env.env.toEnvironment x := by
   with_unfolding_all rfl
 
+/-- `Var field`-keyed spelling of `eval_field` (cf. the hint carriers' `eval_*_prover'`
+keying lemmas): a scalar-cell eval synthesized from the `Var field F` type spelling — as
+the struct-literal simproc builds for a derived mixed record's scalar field — carries the
+`CircuitType.verifierEval field` instance at `Var field F`, whose simp keys stop at the
+`field` head and so never match `eval_field`'s `AssignedCell F` pattern. -/
+@[circuit_norm]
+lemma eval_field' (env : Placed Environment F) (x : Var field F) :
+    @Eval.eval _ _ _ (CircuitType.verifierEval field) env x
+      = AssignedCell.eval env.place env.env x := by
+  with_unfolding_all rfl
+
+/-- Prover-side companion of `eval_field'`. -/
+@[circuit_norm]
+lemma eval_field_prover' (env : Placed ProverEnvironment F) (x : Var field F) :
+    @Eval.eval _ _ _ (CircuitType.proverEval field) env x
+      = AssignedCell.eval env.place env.env.toEnvironment x := by
+  with_unfolding_all rfl
+
 /-!
 General struct-eval bridges (main Clean's `eval_var`/`eval_expression`): rewrite the
 `Eval.eval` of a provable variable to `ProvableType.eval`, which `explicit_provable_type`

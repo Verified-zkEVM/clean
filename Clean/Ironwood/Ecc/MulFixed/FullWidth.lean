@@ -2,14 +2,35 @@ import Clean.Ironwood.Ecc.MulFixed
 import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
 
 /-!
-Fixed-base scalar multiplication by a full-width scalar: the windows are witnessed
-directly (not derived from a running sum, and allowed to be non-canonical), constrained
-3-bit by a per-window gate, and fed into the shared incomplete-addition window chain
-plus a closing complete addition. The scalar is prover-side only, so the bundle's
-witness is the 85 three-bit windows and the extracted scalar they encode; `Spec` is the
-extractor-form `output = s • B`.
+Reference (ported from actual Rust, not memory):
+`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`
+(read in full) — fixed-base scalar multiplication by a full-width scalar.
 
-Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`.
+- `Config` (lines 13-17): the `q_mul_fixed_full` selector and the shared `mul_fixed`
+  super config.
+- `configure` (lines 19-32) + the "Full-width fixed-base scalar mul" gate (lines 34-51):
+  on `q_mul_fixed_full`, the shared `coords_check` over the RAW `window` query (the
+  windows are witnessed directly, not derived from a running sum) plus the 3-bit
+  "window range check".
+- `assign` (lines 115-177), two regions:
+  1. "Full-width fixed-base mul (incomplete addition)": `witness` (lines 55-70 →
+     `decompose_scalar_fixed`, lines 75-114: enable `q_mul_fixed_full` on all 85 rows,
+     witness `k[w]` into the `window` column), then the shared `assign_region_inner`
+     with `q_mul_fixed_full` as the coords toggle;
+  2. "Full-width fixed-base mul (last window, complete addition)": `add(mul_b, acc)`.
+
+The scalar is prover-side only (`Value<pallas::Scalar>`, witnessed inside — "allowed to
+be non-canonical"): per the no-prover-info rule the bundle input is `Unconstrained`
+hint data. The hint is the 85 three-bit windows themselves (each fits `Fp`); the
+`Fq`-valued scalar has no `Fp`-cell representation, and the nat-valued IR hint
+(`UnconstrainedNat`, queued follow-up #32) is not yet ported.
+
+Phase-2 spec note (vs the phase-1 donor `Orchard/Ecc/MulFixed/FullWidth.lean`): the
+donor's verifier spec is the existential `∃ s : Fq, output = s • B` — the scalar exists
+only as window cells, so input/output soundness can say nothing stronger. The
+requirements doc upgrades exactly this family to extractor form
+(`Witness := Fq` read off the window cells, `Spec _ output s := output = s • B`);
+that lands with this file's proof arc.
 -/
 
 -- The variable-name style linter whnf-walks the chunk-typed statements of the proof
@@ -25,14 +46,14 @@ open Halo2.Ironwood.DecomposeRunningSum (rangeCheckExpr)
 open Halo2.Ironwood (Point)
 open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
+/-- Rust `full_width::Config` (lines 13-17). -/
 structure Config where
-  -- Selector for the "Full-width fixed-base scalar mul" gate.
   qMulFixedFull : Selector
-  -- The shared fixed-base multiplication config.
   superConfig : MulFixed.Config
 
-/-- The "Full-width fixed-base scalar mul" gate: the shared `coords_check` over the raw
-`window` query, plus the 3-bit window range check — all on `q_mul_fixed_full`. -/
+/-- The "Full-width fixed-base scalar mul" gate (lines 34-51): the shared `coords_check`
+over the raw `window` query, plus the 3-bit window range check — all on
+`q_mul_fixed_full`. -/
 def fullWidthGate (cfg : Config) : Gate Fp where
   name := "Full-width fixed-base scalar mul"
   selector := cfg.qMulFixedFull
@@ -42,77 +63,78 @@ def fullWidthGate (cfg : Config) : Gate Fp where
       (coordsCheck cfg.superConfig window
         ++ [("window range check", rangeCheckExpr 8 window)])
 
-/-- Allocate a fresh selector, register the gate. -/
+/-- Rust `full_width::Config::configure` (lines 19-32). -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   let qMulFixedFull ← selector
   let cfg : Config := { qMulFixedFull, superConfig }
   createGate (fullWidthGate cfg)
   return cfg
 
-/-- `decompose_scalar_fixed`: enable `q_mul_fixed_full` on all `numWindows` rows, then
-witness the scalar's 3-bit windows `k[w]` into the `window` column — from the window
-hints. Returns nothing; the window cells are read positionally (the coords rows consume
-them via queries, `process_window` via the hint values). -/
-def witnessScalarLoop (cfg : Config) (windows : Vector (FExpr Fp) 85) (offset : ℕ) :
+/-- `decompose_scalar_fixed` (lines 75-114): enable `q_mul_fixed_full` on all
+`numWindows` rows, then witness the scalar's 3-bit windows `k[w]` into the `window`
+column — from the window hints. Returns nothing; the window cells are read positionally
+(the coords rows consume them via queries, `process_window` via the hint values). -/
+def witnessScalarLoop (cfg : Config) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (offset : ℕ) :
     RegionCircuit Fp Unit := do
   RegionCircuit.forRange' offset 1 85 (fun _ row =>
     (fullWidthGate cfg).enable row)
   RegionCircuit.forRange' offset 1 85 (fun w row => do
-    let _k ← assignAdvice cfg.superConfig.window row (.ofFExpr windows[w]!)
+    let _k ← assignAdvice cfg.superConfig.window row (Witgen.MOver.toIRScalar windows[w]!)
     return ())
 
 /-- The full-width `process_window` witness values, driven by the WINDOW HINTS (not a
 scalar cell): `x_p`/`y_p`/`u` of window `w` at hint value `k_w`. -/
-def hintWindowVal (env : Placed ProverEnvironment Fp) (windows : Vector (FExpr Fp) 85)
+def hintWindowVal (env : Placed ProverEnvironment Fp) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (w : ℕ) : ℕ :=
-  (Witgen.FExprOver.eval { env } windows[w]!).val % 8
+  (Witgen.MOver.eval (value := field) env windows[w]!).val % 8
 
-def xPWitH (B : FixedBaseData) (windows : Vector (FExpr Fp) 85) (w : ℕ) : WitgenIR Fp 1 :=
+def xPWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w k.val).x)[
       hintWindowVal env windows w]!)]
 
-def yPWitH (B : FixedBaseData) (windows : Vector (FExpr Fp) 85) (w : ℕ) : WitgenIR Fp 1 :=
+def yPWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w k.val).y)[
       hintWindowVal env windows w]!)]
 
-def uWitH (B : FixedBaseData) (windows : Vector (FExpr Fp) 85) (w : ℕ) : WitgenIR Fp 1 :=
+def uWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => B.u w k.val)[hintWindowVal env windows w]!)]
 
 /-- `process_window` over the window hints. -/
-def processWindowH (B : FixedBaseData) (cfg : Config) (windows : Vector (FExpr Fp) 85)
+def processWindowH (B : FixedBaseData) (cfg : Config) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (w row : ℕ) : RegionCircuit Fp (Point (AssignedCell Fp)) := do
   let x ← assignAdvice cfg.superConfig.addConfig.xP row (xPWitH B windows w)
   let y ← assignAdvice cfg.superConfig.addConfig.yP row (yPWitH B windows w)
   let _u ← assignAdvice cfg.superConfig.u row (uWitH B windows w)
   return { x, y }
 
+/-- Output of the inner region: the exit accumulator (windows 0..83) and the MSB window
+point. -/
 structure InnerOut (F : Type) where
-  -- The exit accumulator after windows 0..83.
   acc : Point F
-  -- The MSB window (84) point.
   mulB : Point F
 deriving ProvableStruct
 
-/-- Region 1, "Full-width fixed-base mul (incomplete addition)": witness the scalar
-windows, then the shared inner body — fixed constants (toggle = `q_mul_fixed_full`),
-window-0 accumulator, the incomplete-addition loop over windows 1..83, the most
-significant window 84. -/
+/-- Region 1, "Full-width fixed-base mul (incomplete addition)" (lines 126-147): witness
+the scalar windows, then the shared inner body — fixed constants (toggle =
+`q_mul_fixed_full`), window-0 accumulator, the incomplete-addition loop over windows
+1..83, the most significant window 84. -/
 def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
-    (windows : Vector (FExpr Fp) 85) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) :
     RegionCircuit Fp (InnerOut (AssignedCell Fp)) := do
-  -- witness the scalar
+  -- witness the scalar (lines 132-136)
   witnessScalarLoop cfg windows offset
-  -- `assign_fixed_constants` with `q_mul_fixed_full` as the coords toggle
+  -- `assign_fixed_constants` with `q_mul_fixed_full` as the coords toggle (line 143)
   fixedConstantsLoop (fullWidthGate cfg) B cfg.superConfig offset 85
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows) offset 85
   return { acc := r.1, mulB := r.2 }
 
-/-- The two regions. Returns the result point `[scalar]B`. -/
-def synthesize (B : FixedBaseData) (cfg : Config) (windows : Vector (FExpr Fp) 85) :
+/-- Rust `full_width::Config::assign` (lines 115-177): the two regions. Returns the
+result point `[scalar]B`. -/
+def synthesize (B : FixedBaseData) (cfg : Config) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) :
     Circuit Fp (Var Point Fp) := do
   let inn ←
     assignRegion "Full-width fixed-base mul (incomplete addition)"
@@ -128,7 +150,7 @@ each window cell to a 3-bit value via the gate's range check), and `ProverSpec` 
 the honest exit values at the witnessed digits. -/
 
 private theorem innerRegion_output_acc (B : FixedBaseData) (cfg : Config) (offset : ℕ)
-    (windows : Vector (FExpr Fp) 85) (self : RegionIndex) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (self : RegionIndex) :
     ((innerRegion B cfg offset windows).output self).acc
       = { x := AssignedCell.of self (offset + 84) cfg.superConfig.addIncompleteConfig.xQR,
           y := AssignedCell.of self (offset + 84)
@@ -136,7 +158,7 @@ private theorem innerRegion_output_acc (B : FixedBaseData) (cfg : Config) (offse
   simp only [innerRegion, MulFixed.windowChain, circuit_norm]
 
 private theorem innerRegion_output_mulB (B : FixedBaseData) (cfg : Config) (offset : ℕ)
-    (windows : Vector (FExpr Fp) 85) (self : RegionIndex) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (self : RegionIndex) :
     ((innerRegion B cfg offset windows).output self).mulB
       = { x := AssignedCell.of self (offset + 84) cfg.superConfig.addConfig.xP,
           y := AssignedCell.of self (offset + 84) cfg.superConfig.addConfig.yP } := by
@@ -145,7 +167,7 @@ private theorem innerRegion_output_mulB (B : FixedBaseData) (cfg : Config) (offs
 /-- The whole inner-region output as a cell literal (structure eta over the
 projections). -/
 private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : ℕ)
-    (windows : Vector (FExpr Fp) 85) (self : RegionIndex) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (self : RegionIndex) :
     (innerRegion B cfg offset windows).output self
       = { acc := { x := AssignedCell.of self (offset + 84)
                      cfg.superConfig.addIncompleteConfig.xQR,
@@ -189,15 +211,18 @@ def InnerSpec (B : FixedBase) (_ : Value unit Fp) (out : Value InnerOut Fp)
                 y := ((Halo2.Ironwood.Ecc.MulFixed.partialSum ks 83) • B.point).y } ∧
     out.mulB = Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (ks 84)
 
-/-- Honest-prover precondition: the witnessed windows are genuine 3-bit digits (Rust's
-`decompose_scalar_fixed` guarantee on the hint programs). -/
-def InnerProverAssumptions (_ : ProverValue unit Fp) (ws : Vector Fp 85)
+/-- Honest-prover precondition: trivial — the window programs the bundle instantiates are
+3-bit by construction (`scalarWindows`), so the digit bound is proved, not assumed
+(`fw_inner_completeness` takes it as a side hypothesis on the programs). -/
+def InnerProverAssumptions (_ : ProverValue unit Fp) (_ : Vector Fp 85)
     (_ : ProverHint Fp) : Prop :=
-  ∀ w : Fin 85, (ws[w.val]).val < 8
+  True
 
-/-- Honest-prover postcondition: the exit cells at the witnessed digits. -/
+/-- Honest-prover postcondition: the witnessed windows are genuine 3-bit digits, and the
+exit cells hold the ladder values at those digits. -/
 def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
     (out : ProverValue InnerOut Fp) (ws : Vector Fp 85) (_ : ProverHint Fp) : Prop :=
+  (∀ t : ℕ, t < 85 → (ws[t]!).val < 8) ∧
   out.acc.x = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).x ∧
   out.acc.y = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).y ∧
   out.mulB.x = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).x ∧
@@ -206,7 +231,7 @@ def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
 /-- The elaborated-metadata instance for the inner region's synthesize lambda, with the
 output cells in explicit reduced form (`innerOutCells`) — computing the default output
 projection runs the whole region monad (a `List.append` whnf storm). -/
-instance innerElab (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
+instance innerElab (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (config : Config) (offset : ℕ) :
     ElaboratedRegionCircuit Fp unit InnerOut
       (fun _ : Var unit Fp => innerRegion B config offset windows) where
@@ -217,7 +242,7 @@ instance innerElab (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
 
 /-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
 private theorem ofFn8_get_hint (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
-    (windows : Vector (FExpr Fp) 85) (w : ℕ) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) :
     (Vector.ofFn f)[hintWindowVal env windows w]!
       = f ⟨hintWindowVal env windows w, Nat.mod_lt _ (by norm_num)⟩ := by
   have hlt : hintWindowVal env windows w < 8 := Nat.mod_lt _ (by norm_num)
@@ -229,7 +254,7 @@ set_option linter.all false in
 window-table coordinates and `u` values at each window row, at the HINT digits. -/
 private theorem fw_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
-    (windows : Vector (FExpr Fp) 85)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
         85).operations self)) :
@@ -278,7 +303,7 @@ set_option linter.all false in
 from their completeness leaves on the honest ladder, plus the honest exit values. -/
 private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
-    (windows : Vector (FExpr Fp) 85)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig (processWindowH B.toData cfg windows) offset
         85).operations self))
@@ -508,7 +533,7 @@ pinned to the hint digits (`hWin` — the honest-prover `< 8` guarantee, threade
 `ProverAssumptions`). -/
 private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
-    (windows : Vector (FExpr Fp) 85)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((fixedConstantsLoop (fullWidthGate cfg) B.toData cfg.superConfig offset
         85).operations self))
@@ -607,7 +632,7 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
           ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
 
 /-- The elaborated output projection, reduced (`rfl` via `innerElab`). -/
-private theorem innerElab_output (B : FixedBaseData) (windows : Vector (FExpr Fp) 85)
+private theorem innerElab_output (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (config : Config) (offset : ℕ) (input : Var unit Fp) (self : RegionIndex) :
     ElaboratedRegionCircuit.output
         (fun _ : Var unit Fp => innerRegion B config offset windows) input self
@@ -615,7 +640,7 @@ private theorem innerElab_output (B : FixedBaseData) (windows : Vector (FExpr Fp
 
 set_option linter.all false in
 /-- The inner region's soundness, standalone (own declaration budget). -/
-private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (FExpr Fp) 85)
+private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Soundness (Input := unit) (Output := InnerOut)
       (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
@@ -786,8 +811,10 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (FExpr Fp) 
 
 set_option linter.all false in
 /-- The inner region's completeness, standalone (own declaration budget). -/
-private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (FExpr Fp) 85)
-    (cfg : Config) (offset : ℕ) :
+private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (cfg : Config) (offset : ℕ)
+    (hbound : ∀ (env : Placed ProverEnvironment Fp) (w : Fin 85),
+      (Witgen.MOver.eval (value := field) env windows[w.val]!).val < 8) :
     FormalRegionCircuit.Completeness (Input := unit) (Output := InnerOut)
       (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
       (fun _ self env => eval env (windowCells cfg offset self))
@@ -803,20 +830,29 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (FExpr F
     at hwit ⊢
   obtain ⟨hWwsl, hWfix, hWchain, -⟩ := hwit
   obtain ⟨hXPeq, hYPeq⟩ := _hE
-  -- the honest `< 8` bound, landed on the advice reads
-  simp only [windowCells, Vector.getElem_ofFn, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-    at hPA
   -- the window cells hold the hint digits (the witness loop's assign clauses).
   -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
   simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
+  -- fold the assigned advice back to the hint program's evaluation (`toIRScalar` unfolds
+  -- to the low-level `FExprOver.eval`; `Witgen.MOver.eval` is its high-level spelling)
+  have hWwslM : ∀ i : Fin 85, env.env.advice cfg.superConfig.window
+      ((env.place self + (offset + i.val) : ℕ) : ℤ)
+      = Witgen.MOver.eval (value := field) env windows[i.val]! := by
+    intro i
+    rw [hWwsl i]
+    simp only [Witgen.MOver.eval, Witgen.eval_field]
+  -- the honest `< 8` bound on the advice reads, from the program bound
+  have hPA' : ∀ w : Fin 85, (env.env.advice cfg.superConfig.window
+      ((env.place self + (offset + w.val) : ℕ) : ℤ)).val < 8 := by
+    intro w
+    rw [hWwslM w]
+    exact hbound env w
   have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)
     = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
     intro w
-    have hclause := hWwsl w
     simp only [hintWindowVal]
-    rw [hclause, Nat.mod_eq_of_lt (by rw [← hclause]; exact hPA w)]
+    rw [hWwslM w, Nat.mod_eq_of_lt (by rw [← hWwslM w]; exact hPA' w)]
     exact (ZMod.natCast_zmod_val _).symm
   refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
   · with_reducible
@@ -848,7 +884,7 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (FExpr F
         (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     have hax := (fw_completeness_chain B cfg offset self env windows hWchain
       hXPeq hYPeq).2
-    refine ⟨?_, ?_, ?_, ?_⟩
+    refine ⟨fun t ht => by rw [hws t ht]; exact Nat.mod_lt _ (by norm_num), ?_, ?_, ?_, ?_⟩
     · rw [← hOax, hax.1,
         MulFixed.partialSum_congr 83 (fun t ht => hws t (by omega))]
     · rw [← hOay, hax.2.1,
@@ -856,35 +892,38 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (FExpr F
     · rw [← hOmx, hax.2.2.1, hws 84 (by norm_num)]
     · rw [← hOmy, hax.2.2.2, hws 84 (by norm_num)]
 
-set_option linter.constructorNameAsVariable false in
-/-- The inner-region bundle: region 1 with the extractor-form contract. -/
-def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
-    FormalRegionCircuit Fp Config Config unit InnerOut where
-  configure := pure
+/-! ## The gadget bundle (`FixedPoint::mul`, `full_width.rs::assign`)
 
-  synthesize cfg offset _ := innerRegion B.toData cfg offset windows
+Extractor form per the requirements doc: `Witness` carries the window cells AND the
+scalar they encode; `Spec` is literally `output = s • B`. The scalar hint enters as a
+nat-valued witness-IR program (`UnconstrainedNat` — Rust's `Value<pallas::Scalar>`
+dataflow), and the 85 three-bit window programs are DERIVED from it. -/
 
-  Assumptions _ := True
+/-- The 85 three-bit window programs derived from the scalar's Nat-hint program:
+window `w` reads `(scalar >>> 3w) &&& 7`, as a field-valued witness program.
+Irreducible: the concrete 85-entry `ofFn` of bind-programs must stay opaque to whnf
+(cf. doc/performance-problems.md — parents' whole-stage defeq lemmas walk every child's
+ops; materializing the windows per touchpoint blows the heartbeat budget). Proofs unfold
+via the `scalarWindows_def` equation. -/
+irreducible_def scalarWindows (scalar : Var UnconstrainedNat Fp) :
+    Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85 :=
+  Vector.ofFn fun w =>
+    (do let n ← scalar
+        pure (.ofNat (.land (.shiftR n (.const (3 * w.val))) (.const 7))) :
+      Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
 
-  EnvAssumptions := InnerEnvAssumptions
-
-  Witness := fields 85
-  extract cfg offset _ self env := eval env (windowCells cfg offset self)
-
-  Spec := InnerSpec B
-
-  ProverAssumptions := InnerProverAssumptions
-
-  ProverSpec := InnerProverSpec B
-
-  soundness := fun cfg offset => fw_inner_soundness B windows cfg offset
-
-  completeness := fun cfg offset => fw_inner_completeness B windows cfg offset
-
-/-! ## The gadget bundle (`FixedPoint::mul`)
-
-Extractor form: `Witness` carries the window cells AND the scalar they encode; `Spec` is
-literally `output = s • B`. -/
+/-- The derived window programs are 3-bit by construction. -/
+theorem scalarWindows_eval_lt (scalar : Var UnconstrainedNat Fp)
+    (env : Placed ProverEnvironment Fp) (w : Fin 85) :
+    (Witgen.MOver.eval (value := field) env (scalarWindows scalar)[w.val]!).val < 8 := by
+  rw [getElem!_pos _ w.val w.isLt]
+  simp only [scalarWindows, Vector.getElem_ofFn]
+  simp only [Witgen.MOver.eval, circuit_norm, Witgen.eval_field, Witgen.FExprOver.eval,
+    Witgen.NExprOver.eval, FiniteField.fromNat_F]
+  rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
+  · exact Nat.lt_succ_of_le Nat.and_le_right
+  · exact lt_of_lt_of_le (Nat.lt_succ_of_le Nat.and_le_right)
+      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
 /-- The scalar read off the 85 window cells (the constructive extractor). -/
@@ -905,27 +944,30 @@ def EnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
 
 /-- The region count of `synthesize`: inner mul + complete addition. -/
 private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
-    (windows : Vector (FExpr Fp) 85) (i : RegionIndex) :
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg windows).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
 
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
-/-- Rust `FixedPoint::mul`: `[s]B` for the full-width scalar the witnessed windows
-encode. -/
-def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
-    FormalCircuit Fp MulFixed.Config Config unit Point where
+/-- Rust `FixedPoint::mul` (`full_width.rs::assign`): `[s]B` for the full-width scalar
+the witnessed windows encode. The input is the scalar's nat-valued reading program
+(a prover hint — Rust `Value<pallas::Scalar>`); the window programs derive from it, so
+their 3-bit honesty is proved, not assumed. -/
+def circuit (B : FixedBase) :
+    FormalCircuit Fp MulFixed.Config Config UnconstrainedNat Point where
   name := "fixed-base mul (full width)"
 
   configure := configure
 
-  synthesize cfg _ := synthesize B.toData cfg windows
+  synthesize cfg scalar := synthesize B.toData cfg (scalarWindows scalar)
 
   elaborated cfg :=
-    { output := fun _ i => (synthesize B.toData cfg windows).output i
+    { output := fun scalar i => (synthesize B.toData cfg (scalarWindows scalar)).output i
       regionCount := fun _ => 2
       output_eq := by intro _ _; rfl
-      regionCount_eq := fun _ i => (synthesize_regionCount B.toData cfg windows i).symm }
+      regionCount_eq := fun scalar i =>
+        (synthesize_regionCount B.toData cfg (scalarWindows scalar) i).symm }
 
   EnvAssumptions := EnvAssumptions
 
@@ -936,7 +978,7 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
 
   Spec _ output s := output = (s.2 • B : Point Fp)
 
-  ProverAssumptions _ s _ := ∀ w : Fin 85, (s.1[w.val]).val < 8
+  ProverAssumptions _ _ _ := True
 
   ProverSpec _ _ _ _ := True
 
@@ -951,12 +993,12 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
     -- the chunk spelling: the raw application's expected-type check unfolds
     -- `innerRegion` instead of beta-reducing the synthesize lambda (16s whnf storm).
     change RegionOperations.Constraints env.place i₀ env.env
-      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 windows)
-        input_var).operations i₀) at hInner
-    have hIS : InnerSpec B (eval env input_var)
+      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 (scalarWindows input_var))
+        default).operations i₀) at hInner
+    have hIS : InnerSpec B (eval env (default : Var unit Fp))
         (eval env (innerOutCells cfg 0 i₀))
         (eval env (windowCells cfg 0 i₀)) :=
-      fw_inner_soundness B windows cfg 0 i₀ env input_var _hE trivial hInner
+      fw_inner_soundness B (scalarWindows input_var) cfg 0 i₀ env default _hE trivial hInner
     simp only [InnerSpec, innerOutCells, windowCells, circuit_norm] at hIS
     obtain ⟨ks, hks_lt', hws, hAcc, hMulB⟩ := hIS
     -- ── region 2: the complete addition `mul_b + acc` ──
@@ -1027,29 +1069,24 @@ def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
     simp only [synthesize, circuit_norm] at hwit ⊢
     obtain ⟨hWInner, hWAdd⟩ := hwit
     change RegionOperations.ExtendsWitnesses env.place i₀ env.env
-      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 windows)
-        input_var).operations i₀) at hWInner
-    simp only [fwExtract] at hPA
-    have hIC := fw_inner_completeness B windows cfg 0 i₀ env input_var hWInner _hE
-      trivial hPA
+      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 (scalarWindows input_var))
+        default).operations i₀) at hWInner
+    have hIC := fw_inner_completeness B (scalarWindows input_var) cfg 0
+      (scalarWindows_eval_lt input_var) i₀ env default hWInner _hE
+      trivial trivial
     refine And.intro ?_ ?_
     · with_reducible exact hIC.1
     · -- the complete addition on the honest exit points
       have hPS := hIC.2
       rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at hPS
       simp only [InnerProverSpec, circuit_norm] at hPS
-      obtain ⟨hax, hay, hmx, hmy⟩ := hPS
-      -- the digit bounds, in the `getElem!` spelling the honest facts use
-      have hkv : ∀ t : ℕ, t < 85 →
-          (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val < 8 := by
-        intro t ht
-        rw [getElem!_pos _ t (by simpa using ht)]
-        exact hPA ⟨t, ht⟩
+      -- the digit bounds arrive as the honest contract's first conjunct, already in the
+      -- `getElem!` spelling the honest facts use
+      obtain ⟨hkv, hax, hay, hmx, hmy⟩ := hPS
       have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
         cfg.superConfig.addConfig 0 (i₀ + 1) env
-        ⟨((innerRegion B.toData cfg 0 windows).output i₀).mulB,
-         ((innerRegion B.toData cfg 0 windows).output i₀).acc⟩ hWAdd
+        ⟨((innerRegion B.toData cfg 0 (scalarWindows input_var)).output i₀).mulB,
+         ((innerRegion B.toData cfg 0 (scalarWindows input_var)).output i₀).acc⟩ hWAdd
       simp only [addc_assumptions_eq, addc_envAssumptions_eq,
         addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
         Nat.zero_add, circuit_norm] at hC
@@ -1090,33 +1127,33 @@ section Bridges
 
 open CompElliptic.Fields.Pasta (Fq)
 
-variable (B : FixedBase) (windows : Vector (FExpr Fp) 85)
+variable (B : FixedBase)
 
 theorem circuit_spec_eq :
-    (circuit B windows).Spec
+    (circuit B).Spec
       = fun _ (output : Point Fp) (s : Vector Fp 85 × Fq) =>
           output = (s.2 • B : Point Fp) := rfl
 
 theorem circuit_assumptions_eq :
-    (circuit B windows).Assumptions = fun _ => True := rfl
+    (circuit B).Assumptions = fun _ => True := rfl
 
 theorem circuit_envAssumptions_eq :
-    (circuit B windows).EnvAssumptions = EnvAssumptions := rfl
+    (circuit B).EnvAssumptions = EnvAssumptions := rfl
 
 theorem circuit_proverAssumptions_eq :
-    (circuit B windows).ProverAssumptions
-      = fun _ (s : Vector Fp 85 × Fq) _ => ∀ w : Fin 85, (s.1[w.val]).val < 8 := rfl
+    (circuit B).ProverAssumptions = fun _ _ _ => True := rfl
 
 theorem circuit_proverSpec_eq :
-    (circuit B windows).ProverSpec = fun _ _ _ _ => True := rfl
+    (circuit B).ProverSpec = fun _ _ _ _ => True := rfl
 
-theorem circuit_extract_eq (cfg : Config) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (circuit B windows).extract cfg () i env = fwExtract cfg i env := rfl
+theorem circuit_extract_eq (cfg : Config) (scalar : Var UnconstrainedNat Fp)
+    (i : RegionIndex) (env : Placed Environment Fp) :
+    (circuit B).extract cfg scalar i env = fwExtract cfg i env := rfl
 
 /-- The bundle's call chunk spans its two regions. -/
-theorem circuit_call_regionCount (cfg : Config) (j : RegionIndex) :
-    Operations.regionCount (((circuit B windows).call cfg ()).operations j) = 2 := by
+theorem circuit_call_regionCount (cfg : Config) (scalar : Var UnconstrainedNat Fp)
+    (j : RegionIndex) :
+    Operations.regionCount (((circuit B).call cfg scalar).operations j) = 2 := by
   rw [FormalCircuit.call_regionCount]
   rfl
 

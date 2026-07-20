@@ -162,7 +162,7 @@ Use this when the vector witness has shared `let` computations or compact loops.
 @[circuit_norm]
 def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
     Circuit F (Vector (Expression F) m) :=
-  witnessIR (fields m) program.toIR
+  witnessIR (fields m) (Witgen.M.toIR program)
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -294,7 +294,7 @@ This is `witness`, but with shared `let` computations. -/
 def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
     [inst : Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
     Circuit F (var F) :=
-  inst.witnessIR (value := value) program.toIRLiteral
+  inst.witnessIR (value := value) (Witgen.M.toIRLiteral program)
 
 /-- The completeness obligation of `witnessProgram`, stated at the level of provable
 values: the witnessed variable evaluates to the program's value. Tagged `↓ high` so it
@@ -303,9 +303,9 @@ proofs connect hint programs to witnessed outputs without ever seeing `toElement
 @[circuit_norm ↓ high]
 theorem ProverEnvironment.extendsVector_toIRLiteral {value : TypeMap} [ProvableType value]
     (env : ProverEnvironment F) (program : Witgen.M F (value (Witgen.FExpr F))) (n : ℕ) :
-    env.ExtendsVector (program.toIRLiteral.eval env) n ↔
+    env.ExtendsVector ((Witgen.M.toIRLiteral program).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
-        = program.eval env := by
+        = Witgen.M.eval env program := by
   rw [Witgen.M.eval_toIRLiteral, ProvableType.eval_varFromOffset, ProvableType.ext_iff]
   simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
     ProverEnvironment.ExtendsVector]

@@ -76,10 +76,10 @@ theorem noteQ_onCurve : noteQ.OnCurve := by
 def aCfg : Config := (configure aG {}).1
 
 /-- Keygen never evaluates witness programs (`Value::unknown()`). -/
-def unk : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
-def unkPoint : Halo2.Ironwood.Point (WitgenIR Fp 1) :=
-  { x := .ofFExpr (.const 0), y := .ofFExpr (.const 0) }
-def unkWindows : Vector (FExpr Fp) 85 := Vector.replicate 85 (.const (0 : Fp))
+def unk : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp) := pure (.const 0)
+def unkPoint : Witgen.MOver Fp (AssignedCell Fp) (Halo2.Ironwood.Point (FExpr Fp)) :=
+  pure { x := .const 0, y := .const 0 }
+def unkNat : Witgen.MOver Fp (AssignedCell Fp) (NExpr Fp) := pure (.const 0)
 
 /-! ## The synthesize mirror (identical region stream to `Action.Circuit.synthesize`,
 fixed-base-mul sites data-level) -/
@@ -90,9 +90,10 @@ def aW : Ironwood.Action.Circuit.Witnesses Fp :=
     magnitude := unk, sign := unk,
     cmOld := unkPoint, gdOld := unkPoint, akP := unkPoint, pkDOld := unkPoint,
     gdNew := unkPoint, pkdNew := unkPoint,
-    rcvWindows := unkWindows, alphaWindows := unkWindows, rivkWindows := unkWindows,
-    rcmOldWindows := unkWindows, rcmNewWindows := unkWindows,
-    merkleSib := fun _ => unk, merkleSwap := fun _ _ => false }
+    rcv := unkNat, alpha := unkNat, rivk := unkNat,
+    rcmOld := unkNat, rcmNew := unkNat,
+    merkleSib := fun _ => .native fun _ => #v[(0 : Fp)],
+    merkleSwap := fun _ _ => false }
 
 /-- THE REAL ironwood (post-NU 6.3) circuit, at the REAL certified bases. -/
 def aProgram : Circuit Fp Unit :=
