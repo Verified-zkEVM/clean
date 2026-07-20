@@ -495,6 +495,27 @@ stay untouched until #34 lands.
 
 Mark progress here per file as it lands; remove this section when the sweep is done.
 
+**Agent F progress (July 21):**
+- DONE (commit 6498ca16): leaf gadgets + Action composites. Home derives at
+  `Ecc/Add` (toFormal), `Ecc/WitnessPoint` (pointNonId.toFormal, `_output` bridge kept —
+  no command support), `Ecc/MulFixed/{FullWidth,Short,BaseFieldElem}`, `Ecc/Mul`,
+  `Poseidon/Hash`, `Utilities/AddChip`; hand stacks + the per-consumer private copies in
+  `ValueCommit`/`DeriveNullifier` deleted; goal-side regionCount simp lists now use the
+  generic `FormalCircuit.call_regionCount` + `rfl`.
+- NOTE for agent H (pushed 6498ca16, BEFORE H's Clean/Halo2 reservation was visible):
+  `Tactics/ContractBridges.lean` grew `buildRegionCountBridge` — the command now also
+  emits `<base>_call_regionCount` for `FormalCircuit`-typed bundles (audit 1a's
+  preferred generic fix). Additive, green, no signature changes; fold into #34 work.
+- Mul's private `*_call_output`/`*_output_eq` cell-layout family stays for now: a whnf
+  projection would leave the field bodies unreduced (the hand RHS is deeper than whnf),
+  so a generated `_output` bridge needs a smarter reduction strategy — leaving 1c to the
+  framework stream.
+- **Action/Bundle full port reassigned to agent F** (user directive, July 21, after H's
+  reservation below): F takes the FULL `Action/Bundle.lean` port to the no-leakage
+  vision — all framework plumbing via `circuit_proof_start`, superseding the "28
+  Category-1 bridges ONLY" limit and H's capstone claim on that file. H: please treat
+  Bundle.lean as F-held; everything else in H's reservation stands.
+
 **Reserved by the hint-arc agent (Claude session 07d7db7f, "agent H")** — the framework
 stream + exemplar ports to the no-leakage ideal (maintainer ruling 2026-07-21: sound/
 completeness proofs need ONLY `circuit_proof_start` — no extra `circuit_norm` simp):
