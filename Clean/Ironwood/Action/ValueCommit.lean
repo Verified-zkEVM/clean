@@ -179,4 +179,9 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
 
+/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
+
+derive_contract_bridges circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
+  (R : FixedBase) := circuit V R
+
 end Halo2.Ironwood.Action.ValueCommit

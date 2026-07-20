@@ -202,4 +202,8 @@ def circuit : FormalCircuit Fp
             ((congrArg Halo2.Ironwood.Point.y hPS.symm).trans
               (by with_unfolding_all rfl)))))
 
+/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
+
+derive_contract_bridges circuit := circuit
+
 end Halo2.Ironwood.Action.AddressIntegrity

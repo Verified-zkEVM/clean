@@ -134,4 +134,8 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     rw [Ecc.Add.toFormal_assumptions_eq]
     exact ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
 
+/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
+
+derive_contract_bridges circuit (G : FixedBase) := circuit G
+
 end Halo2.Ironwood.Action.SpendAuthority

@@ -24,92 +24,6 @@ open CompElliptic.Fields.Pasta (Fq)
 
 /-! ## Region counts -/
 
-private theorem toFormal_call_regionCount {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (j : RegionIndex) :
-    Operations.regionCount (((b.toFormal name).call cfg inp).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem wpoint_call_regionCount (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Var (Unconstrained Point) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Ecc.WitnessPoint.point.toFormal name).call c inp).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem wpointNonId_call_regionCount (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Var (Unconstrained Point) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Ecc.WitnessPoint.pointNonId.toFormal name).call c inp).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem merkle_call_regionCount (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10)
-    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
-    (c : CondSwap.Config × Sinsemilla.Merkle.Config ×
-      LookupRangeCheck.Config 10)
-    (inp : Var Sinsemilla.Merkle.Layer.Input Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).call
-        c inp).operations j) = 128 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem vc_call_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
-    (R : FixedBase)
-    (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
-    (inp : Var ValueCommit.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((ValueCommit.circuit V R).call c inp).operations j) = 5 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem dn_call_regionCount (K : FixedBase)
-    (c : Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
-      Ecc.Add.Config)
-    (inp : Var DeriveNullifier.Input Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((DeriveNullifier.circuit K).call c inp).operations j) = 9 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem sa_call_regionCount (G : FixedBase)
-    (c : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
-    (inp : Var SpendAuthority.Input Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((SpendAuthority.circuit G).call c inp).operations j) = 3 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem civk_call_regionCount (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : CommitIvk.Main.Config) (inp : Var CommitIvk.Main.Inputs Fp)
-    (j : RegionIndex) :
-    Operations.regionCount
-      (((CommitIvk.Main.circuit G R Q hQ).call c inp).operations j) = 14 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem ai_call_regionCount
-    (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
-    (inp : Var AddressIntegrity.Input Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((AddressIntegrity.circuit).call c inp).operations j) = 6 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem nc_call_regionCount (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : NoteCommit.Main.Config) (inp : Var NoteCommit.Main.Inputs Fp)
-    (j : RegionIndex) :
-    Operations.regionCount
-      (((NoteCommit.Main.circuit G R Q hQ).call c inp).operations j) = 43 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
 /-! ### Per-call `nextRegionIndex` advances
 
 Each of these isolates the `Operations.regionCount ((call).operations j)` reduction into a
@@ -126,40 +40,40 @@ private theorem merkle_call_nextRegionIndex (G : Generators) (Q : Point Fp)
     (inp : Var Sinsemilla.Merkle.Layer.Input Fp) (j : RegionIndex) :
     (((Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).call
         c inp).nextRegionIndex j) = j + 128 := by
-  rw [FormalCircuit.nextRegionIndex_call, merkle_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount]
 
 private theorem vc_call_nextRegionIndex (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
     (R : FixedBase)
     (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (inp : Var ValueCommit.Inputs Fp) (j : RegionIndex) :
     (((ValueCommit.circuit V R).call c inp).nextRegionIndex j) = j + 5 := by
-  rw [FormalCircuit.nextRegionIndex_call, vc_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, ValueCommit.circuit_call_regionCount]
 
 private theorem dn_call_nextRegionIndex (K : FixedBase)
     (c : Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
       Ecc.Add.Config)
     (inp : Var DeriveNullifier.Input Fp) (j : RegionIndex) :
     (((DeriveNullifier.circuit K).call c inp).nextRegionIndex j) = j + 9 := by
-  rw [FormalCircuit.nextRegionIndex_call, dn_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, DeriveNullifier.circuit_call_regionCount]
 
 private theorem sa_call_nextRegionIndex (G : FixedBase)
     (c : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (inp : Var SpendAuthority.Input Fp) (j : RegionIndex) :
     (((SpendAuthority.circuit G).call c inp).nextRegionIndex j) = j + 3 := by
-  rw [FormalCircuit.nextRegionIndex_call, sa_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, SpendAuthority.circuit_call_regionCount]
 
 private theorem civk_call_nextRegionIndex (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve)
     (c : CommitIvk.Main.Config) (inp : Var CommitIvk.Main.Inputs Fp)
     (j : RegionIndex) :
     (((CommitIvk.Main.circuit G R Q hQ).call c inp).nextRegionIndex j) = j + 14 := by
-  rw [FormalCircuit.nextRegionIndex_call, civk_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, CommitIvk.Main.circuit_call_regionCount]
 
 private theorem ai_call_nextRegionIndex
     (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (inp : Var AddressIntegrity.Input Fp) (j : RegionIndex) :
     (((AddressIntegrity.circuit).call c inp).nextRegionIndex j) = j + 6 := by
-  rw [FormalCircuit.nextRegionIndex_call, ai_call_regionCount]
+  rw [FormalCircuit.nextRegionIndex_call, AddressIntegrity.circuit_call_regionCount]
 
 /-- Compose two `nextRegionIndex` advances across a `bind`, over **opaque** `x`/`f`. Proven
 once (the `nextRegionIndex_bind` `rfl` is checked with `x`/`f` variables, so the kernel never
@@ -201,8 +115,8 @@ theorem synthWitness_regionCount (G : Generators) (W : Witnesses Fp) (cfg : Conf
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
     Circuit.operations_bind, Circuit.operations_pure, operations_assignRegion,
     operations_loadTable, Operations.regionCount_append, Operations.regionCount]
-  rw [wpoint_call_regionCount, wpointNonId_call_regionCount,
-    wpointNonId_call_regionCount]
+  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
 
 theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
@@ -210,9 +124,9 @@ theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
   simp only [synthChecks, loadPrivate, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
     Operations.regionCount_append, Operations.regionCount]
-  rw [merkle_call_regionCount, merkle_call_regionCount, vc_call_regionCount,
-    dn_call_regionCount, sa_call_regionCount, civk_call_regionCount,
-    ai_call_regionCount]
+  rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, ValueCommit.circuit_call_regionCount,
+    DeriveNullifier.circuit_call_regionCount, SpendAuthority.circuit_call_regionCount, CommitIvk.Main.circuit_call_regionCount,
+    AddressIntegrity.circuit_call_regionCount]
 
 theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
@@ -220,8 +134,8 @@ theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
   simp only [synthNotes, loadPrivate, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
     Operations.regionCount_append, Operations.regionCount]
-  rw [nc_call_regionCount, wpointNonId_call_regionCount,
-    wpointNonId_call_regionCount, nc_call_regionCount]
+  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount, NoteCommit.Main.circuit_call_regionCount]
 
 /-- The Action circuit's region count: the 8 witness regions, the 295-region check
 stage, the 91-region note stage — 394. -/
@@ -435,44 +349,6 @@ def EnvAssumptions (G : Generators) (cfg : Config)
 
 /-! ## Child contract bridges (`rfl`, children stay folded) -/
 
-private theorem toFormal_spec_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).Spec = b.Spec := rfl
-
-private theorem toFormal_assumptions_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
-    (b.toFormal name).Assumptions = b.Assumptions := rfl
-
-private theorem toFormal_envAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (env : Placed Environment Fp) :
-    (b.toFormal name).EnvAssumptions cfg env = b.EnvAssumptions cfg env := rfl
-
-private theorem wpoint_envAssumptions_eq (name : String)
-    (c : Ecc.WitnessPoint.Config) (env : Placed Environment Fp) :
-    (Ecc.WitnessPoint.point.toFormal name).EnvAssumptions c env = True := rfl
-
-private theorem wpointNonId_envAssumptions_eq (name : String)
-    (c : Ecc.WitnessPoint.Config) (env : Placed Environment Fp) :
-    (Ecc.WitnessPoint.pointNonId.toFormal name).EnvAssumptions c env = True := rfl
-
-private theorem wpoint_assumptions_eq (name : String) :
-    (Ecc.WitnessPoint.point.toFormal name).Assumptions = fun _ => True := rfl
-
-private theorem wpointNonId_assumptions_eq (name : String) :
-    (Ecc.WitnessPoint.pointNonId.toFormal name).Assumptions = fun _ => True := rfl
-
-private theorem wpoint_proverAssumptions_eq (name : String) :
-    (Ecc.WitnessPoint.point.toFormal name).ProverAssumptions
-      = Ecc.WitnessPoint.point.ProverAssumptions := rfl
-
-private theorem wpointNonId_proverAssumptions_eq (name : String) :
-    (Ecc.WitnessPoint.pointNonId.toFormal name).ProverAssumptions
-      = Ecc.WitnessPoint.pointNonId.ProverAssumptions := rfl
-
 /-- Witness-consistency bridge: the honest prover's evaluated point hint equals the point
 read from the witnessed output cells. From the region's `ExtendsWitnesses` alone (no gate
 constraints), so it is available to discharge the value-level `ProverAssumptions` of the
@@ -523,14 +399,6 @@ private theorem wpointNonId_eval_eq_cells (name : String)
   simp only [Halo2.Ironwood.Point.coords, hx, hy, hw.1, hw.2]
   with_unfolding_all rfl
 
-private theorem wpoint_spec_eq (name : String) :
-    (Ecc.WitnessPoint.point.toFormal name).Spec
-      = fun _ (output : Value Point Fp) _ => output.Valid := rfl
-
-private theorem wpointNonId_spec_eq (name : String) :
-    (Ecc.WitnessPoint.pointNonId.toFormal name).Spec
-      = fun _ (output : Value Point Fp) _ => output.OnCurve := rfl
-
 private theorem wpoint_output (name : String) (c : Ecc.WitnessPoint.Config)
     (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
     (Ecc.WitnessPoint.point.toFormal name).output c inp i
@@ -542,88 +410,6 @@ private theorem wpointNonId_output (name : String) (c : Ecc.WitnessPoint.Config)
     (Ecc.WitnessPoint.pointNonId.toFormal name).output c inp i
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
-
-private theorem merkle_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
-    (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :
-    (Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).Spec
-      = fun input (output : Value field Fp) _ =>
-          Sinsemilla.Merkle.MerkleRoot G Q l₀ (input.node : Fp) 16 output ∧
-            (Sinsemilla.Merkle.MerkleRootStrict G Q l₀ (input.node : Fp) 16 output ∨
-              Sinsemilla.Merkle.MerkleBreakAt G Q l₀ 16) := rfl
-
-private theorem merkle_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
-    (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :
-    (Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).Assumptions
-      = fun _ => True := rfl
-
-private theorem merkle_envAssumptions_eq (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
-    (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
-    (c : CondSwap.Config × Sinsemilla.Merkle.Config × LookupRangeCheck.Config 10)
-    (env : Placed Environment Fp) :
-    (Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib
-        wswap).EnvAssumptions c env
-      = (Sinsemilla.GeneratorTableLoaded G c.2.1.sinsemilla.generatorTable env.env ∧
-          LookupRangeCheck.TableLoaded 10 c.2.2 env.env ∧
-          c.2.2.qLookup.index ≠ c.2.2.qRunning.index) := rfl
-
-private theorem vc_spec_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
-    (ValueCommit.circuit V R).Spec
-      = fun (input : Value ValueCommit.Inputs Fp) (output : Value Point Fp)
-          (wit : Vector Fp 85 × Fq) =>
-          ∃ m : ℕ, m < 2 ^ 64 ∧ (show Fp from input.magnitude) = (m : Fp) ∧
-            (((show Fp from input.sign) = 1 ∧
-                output = ((m : Fq) • V : Point Fp) + (wit.2 • R : Point Fp)) ∨
-              ((show Fp from input.sign) = -1 ∧
-                output = (((-(m : Fq)) : Fq) • V : Point Fp)
-                  + (wit.2 • R : Point Fp))) := rfl
-
-private theorem vc_extract_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
-    (R : FixedBase)
-    (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
-    (inp : Var ValueCommit.Inputs Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (ValueCommit.circuit V R).extract c inp i env
-      = Ecc.MulFixed.FullWidth.fwExtract c.2.1 (i + 2) env := rfl
-
-private theorem dn_spec_eq (K : FixedBase) :
-    (DeriveNullifier.circuit K).Spec
-      = fun (input : Value DeriveNullifier.Input Fp) (output : Value field Fp) _ =>
-          (output : Fp) = ((input.cm +
-            ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[input.nk, input.rho]
-              + input.psi).val : Fq) • K : Point Fp)).x := rfl
-
-private theorem sa_spec_eq (G : FixedBase) :
-    (SpendAuthority.circuit G).Spec
-      = fun (input : Value SpendAuthority.Input Fp) (output : Value Point Fp)
-          (wit : Vector Fp 85 × Fq) =>
-          output = (wit.2 • G : Point Fp) + input.akP := rfl
-
-private theorem sa_extract_eq (G : FixedBase)
-    (c : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
-    (inp : Var SpendAuthority.Input Fp) (i : RegionIndex)
-    (env : Placed Environment Fp) :
-    (SpendAuthority.circuit G).extract c inp i env
-      = Ecc.MulFixed.FullWidth.fwExtract c.1 i env := rfl
-
-private theorem civk_spec_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (CommitIvk.Main.circuit G R Q hQ).Spec
-      = CommitIvk.Main.Spec G Q R := rfl
-
-private theorem civk_extract_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : CommitIvk.Main.Config) (inp : Var CommitIvk.Main.Inputs Fp)
-    (i : RegionIndex) (env : Placed Environment Fp) :
-    (CommitIvk.Main.circuit G R Q hQ).extract c inp i env
-      = Ecc.MulFixed.FullWidth.fwExtract c.mulConfig (i + 7) env := rfl
-
-private theorem ai_spec_eq :
-    (AddressIntegrity.circuit).Spec
-      = fun (input : Value AddressIntegrity.Input Fp) (output : Value Point Fp) _ =>
-          output.OnCurve ∧
-          output = ((show Fp from input.ivk).val
-            • (show Point Fp from input.gDOld) : Point Fp) := rfl
 
 private theorem ai_output
     (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
@@ -642,16 +428,6 @@ private theorem ai_output
   simp only [Circuit.output_bind, Circuit.output_pure,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call']
   rw [Ecc.Mul.mul_call_regionCount, wpointNonId_output]
-
-private theorem nc_spec_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (NoteCommit.Main.circuit G R Q hQ).Spec
-      = NoteCommit.Main.Spec G Q R := rfl
-
-private theorem nc_assumptions_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (NoteCommit.Main.circuit G R Q hQ).Assumptions
-      = fun (input : Value NoteCommit.Main.Inputs Fp) =>
-          Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-          Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ := rfl
 
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
@@ -746,29 +522,6 @@ private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (r : Var UnconstrainedNat Fp) } := by
   with_unfolding_all rfl
 
-private theorem dn_assumptions_eq (K : FixedBase) :
-    (DeriveNullifier.circuit K).Assumptions
-      = fun (input : Value DeriveNullifier.Input Fp) =>
-          Halo2.Ironwood.Point.Valid input.cm := rfl
-
-private theorem sa_assumptions_eq (G : FixedBase) :
-    (SpendAuthority.circuit G).Assumptions
-      = fun (input : Value SpendAuthority.Input Fp) =>
-          Halo2.Ironwood.Point.Valid input.akP := rfl
-
-private theorem ai_assumptions_eq :
-    (AddressIntegrity.circuit).Assumptions
-      = fun (input : Value AddressIntegrity.Input Fp) =>
-          Halo2.Ironwood.Point.OnCurve input.gDOld := rfl
-
-private theorem ai_pa_eq :
-    (AddressIntegrity.circuit).ProverAssumptions
-      = fun (input : ProverValue AddressIntegrity.Input Fp) _ _ =>
-          (show Point Fp from input.pkDOld).OnCurve ∧
-          (show Point Fp from input.pkDOld)
-            = ((show Fp from input.ivk).val
-              • (show Point Fp from input.gDOld) : Point Fp) := rfl
-
 private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp))
     (pk : Var (Unconstrained Point) Fp) :
@@ -780,21 +533,6 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
         pkDOld := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (pk : Var (Unconstrained Point) Fp) } := by
   with_unfolding_all rfl
-
-private theorem vc_pa_eq (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
-    (ValueCommit.circuit V R).ProverAssumptions
-      = fun (input : ProverValue ValueCommit.Inputs Fp)
-          (_wit : Vector Fp 85 × Fq) _ =>
-          (show Fp from input.magnitude).val < 2 ^ 64 ∧
-          ((show Fp from input.sign) = 1 ∨ (show Fp from input.sign) = -1) := rfl
-
-private theorem civk_pa_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (CommitIvk.Main.circuit G R Q hQ).ProverAssumptions
-      = CommitIvk.Main.ProverAssumptions G Q := rfl
-
-private theorem nc_pa_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
-    (NoteCommit.Main.circuit G R Q hQ).ProverAssumptions
-      = NoteCommit.Main.ProverAssumptions G Q := rfl
 
 private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
@@ -814,12 +552,6 @@ private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (r : Var UnconstrainedNat Fp) } := by
   with_unfolding_all rfl
 
-private theorem nc_extract_eq (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
-    (c : NoteCommit.Main.Config) (inp : Var NoteCommit.Main.Inputs Fp)
-    (i : RegionIndex) (env : Placed Environment Fp) :
-    (NoteCommit.Main.circuit G R Q hQ).extract c inp i env
-      = Ecc.MulFixed.FullWidth.fwExtract c.mulConfig (i + 25) env := rfl
-
 /-! ## Stage outputs and offsets -/
 
 private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
@@ -833,8 +565,8 @@ theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses Fp) (cfg : 
     Circuit.nextRegionIndex_bind, Circuit.nextRegionIndex_pure,
     nextRegionIndex_loadTable, nextRegionIndex_assignRegion,
     FormalCircuit.nextRegionIndex_call']
-  rw [wpoint_call_regionCount, wpointNonId_call_regionCount,
-    wpointNonId_call_regionCount]
+  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
 
 theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
@@ -855,9 +587,9 @@ theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     nextRegionIndex_loadTable, output_assignRegion, nextRegionIndex_assignRegion,
     output_assignAdvice, FormalCircuit.output_call',
     FormalCircuit.nextRegionIndex_call']
-  rw [wpointNonId_output, wpointNonId_call_regionCount,
-    wpointNonId_output, wpointNonId_call_regionCount,
-    wpoint_output, wpoint_call_regionCount]
+  rw [wpointNonId_output, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+    wpointNonId_output, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+    wpoint_output, Ecc.WitnessPoint.point_toFormal_call_regionCount]
 
 theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
@@ -952,7 +684,7 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     output_assignRegion, nextRegionIndex_assignRegion,
     nextRegionIndex_constrainInstance, output_assignAdvice, FormalCircuit.output_call',
     FormalCircuit.nextRegionIndex_call']
-  rw [nc_call_regionCount, wpointNonId_call_regionCount,
+  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
     wpointNonId_output, wpointNonId_output]
 
 instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
@@ -997,21 +729,21 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hGd := hW.2.2.2.2.2.2.2.1
   have hAk := hW.2.2.2.2.2.2.2.2
   clear hW
-  rw [wpoint_call_regionCount] at hGd hAk
-  rw [wpointNonId_call_regionCount] at hAk
+  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount] at hGd hAk
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hAk
   simp only [Nat.add_assoc, Nat.reduceAdd] at hGd hAk
   subcircuit_rw at hCm
   subcircuit_rw at hGd
   subcircuit_rw at hAk
-  have hCmS := hCm (by rw [wpoint_envAssumptions_eq]; trivial)
-    (by rw [wpoint_assumptions_eq]; trivial)
-  rw [wpoint_spec_eq, wpoint_output] at hCmS
-  have hGdS := hGd (by rw [wpointNonId_envAssumptions_eq]; trivial)
-    (by rw [wpointNonId_assumptions_eq]; trivial)
-  rw [wpointNonId_spec_eq, wpointNonId_output] at hGdS
-  have hAkS := hAk (by rw [wpointNonId_envAssumptions_eq]; trivial)
-    (by rw [wpointNonId_assumptions_eq]; trivial)
-  rw [wpointNonId_spec_eq, wpointNonId_output] at hAkS
+  have hCmS := hCm (by rw [Ecc.WitnessPoint.point_toFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.point_toFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.point_toFormal_spec_eq, wpoint_output] at hCmS
+  have hGdS := hGd (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hGdS
+  have hAkS := hAk (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hAkS
   clear hCm hGd hAk
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1033,83 +765,83 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hCI := hCk.2.2.2.2.2.2.2.2.2.2.1
   have hAI := hCk.2.2.2.2.2.2.2.2.2.2.2
   clear hCk
-  try rw [merkle_call_regionCount] at hM2
-  try rw [merkle_call_regionCount] at hM2
-  try rw [vc_call_regionCount] at hM2
-  try rw [dn_call_regionCount] at hM2
-  try rw [sa_call_regionCount] at hM2
-  try rw [civk_call_regionCount] at hM2
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hM2
-  try rw [merkle_call_regionCount] at hVC
-  try rw [merkle_call_regionCount] at hVC
-  try rw [vc_call_regionCount] at hVC
-  try rw [dn_call_regionCount] at hVC
-  try rw [sa_call_regionCount] at hVC
-  try rw [civk_call_regionCount] at hVC
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hVC
-  try rw [merkle_call_regionCount] at hIcvx
-  try rw [merkle_call_regionCount] at hIcvx
-  try rw [vc_call_regionCount] at hIcvx
-  try rw [dn_call_regionCount] at hIcvx
-  try rw [sa_call_regionCount] at hIcvx
-  try rw [civk_call_regionCount] at hIcvx
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIcvx
-  try rw [merkle_call_regionCount] at hIcvy
-  try rw [merkle_call_regionCount] at hIcvy
-  try rw [vc_call_regionCount] at hIcvy
-  try rw [dn_call_regionCount] at hIcvy
-  try rw [sa_call_regionCount] at hIcvy
-  try rw [civk_call_regionCount] at hIcvy
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIcvy
-  try rw [merkle_call_regionCount] at hDN
-  try rw [merkle_call_regionCount] at hDN
-  try rw [vc_call_regionCount] at hDN
-  try rw [dn_call_regionCount] at hDN
-  try rw [sa_call_regionCount] at hDN
-  try rw [civk_call_regionCount] at hDN
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hDN
-  try rw [merkle_call_regionCount] at hInf
-  try rw [merkle_call_regionCount] at hInf
-  try rw [vc_call_regionCount] at hInf
-  try rw [dn_call_regionCount] at hInf
-  try rw [sa_call_regionCount] at hInf
-  try rw [civk_call_regionCount] at hInf
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hInf
-  try rw [merkle_call_regionCount] at hSA
-  try rw [merkle_call_regionCount] at hSA
-  try rw [vc_call_regionCount] at hSA
-  try rw [dn_call_regionCount] at hSA
-  try rw [sa_call_regionCount] at hSA
-  try rw [civk_call_regionCount] at hSA
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hSA
-  try rw [merkle_call_regionCount] at hIrkx
-  try rw [merkle_call_regionCount] at hIrkx
-  try rw [vc_call_regionCount] at hIrkx
-  try rw [dn_call_regionCount] at hIrkx
-  try rw [sa_call_regionCount] at hIrkx
-  try rw [civk_call_regionCount] at hIrkx
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIrkx
-  try rw [merkle_call_regionCount] at hIrky
-  try rw [merkle_call_regionCount] at hIrky
-  try rw [vc_call_regionCount] at hIrky
-  try rw [dn_call_regionCount] at hIrky
-  try rw [sa_call_regionCount] at hIrky
-  try rw [civk_call_regionCount] at hIrky
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hIrky
-  try rw [merkle_call_regionCount] at hCI
-  try rw [merkle_call_regionCount] at hCI
-  try rw [vc_call_regionCount] at hCI
-  try rw [dn_call_regionCount] at hCI
-  try rw [sa_call_regionCount] at hCI
-  try rw [civk_call_regionCount] at hCI
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hCI
-  try rw [merkle_call_regionCount] at hAI
-  try rw [merkle_call_regionCount] at hAI
-  try rw [vc_call_regionCount] at hAI
-  try rw [dn_call_regionCount] at hAI
-  try rw [sa_call_regionCount] at hAI
-  try rw [civk_call_regionCount] at hAI
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hAI
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hM2
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hM2
+  try rw [ValueCommit.circuit_call_regionCount] at hM2
+  try rw [DeriveNullifier.circuit_call_regionCount] at hM2
+  try rw [SpendAuthority.circuit_call_regionCount] at hM2
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hM2
+  try simp only [Nat.add_assoc] at hM2
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hVC
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hVC
+  try rw [ValueCommit.circuit_call_regionCount] at hVC
+  try rw [DeriveNullifier.circuit_call_regionCount] at hVC
+  try rw [SpendAuthority.circuit_call_regionCount] at hVC
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hVC
+  try simp only [Nat.add_assoc] at hVC
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvx
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvx
+  try rw [ValueCommit.circuit_call_regionCount] at hIcvx
+  try rw [DeriveNullifier.circuit_call_regionCount] at hIcvx
+  try rw [SpendAuthority.circuit_call_regionCount] at hIcvx
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hIcvx
+  try simp only [Nat.add_assoc] at hIcvx
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvy
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIcvy
+  try rw [ValueCommit.circuit_call_regionCount] at hIcvy
+  try rw [DeriveNullifier.circuit_call_regionCount] at hIcvy
+  try rw [SpendAuthority.circuit_call_regionCount] at hIcvy
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hIcvy
+  try simp only [Nat.add_assoc] at hIcvy
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hDN
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hDN
+  try rw [ValueCommit.circuit_call_regionCount] at hDN
+  try rw [DeriveNullifier.circuit_call_regionCount] at hDN
+  try rw [SpendAuthority.circuit_call_regionCount] at hDN
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hDN
+  try simp only [Nat.add_assoc] at hDN
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hInf
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hInf
+  try rw [ValueCommit.circuit_call_regionCount] at hInf
+  try rw [DeriveNullifier.circuit_call_regionCount] at hInf
+  try rw [SpendAuthority.circuit_call_regionCount] at hInf
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hInf
+  try simp only [Nat.add_assoc] at hInf
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hSA
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hSA
+  try rw [ValueCommit.circuit_call_regionCount] at hSA
+  try rw [DeriveNullifier.circuit_call_regionCount] at hSA
+  try rw [SpendAuthority.circuit_call_regionCount] at hSA
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hSA
+  try simp only [Nat.add_assoc] at hSA
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrkx
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrkx
+  try rw [ValueCommit.circuit_call_regionCount] at hIrkx
+  try rw [DeriveNullifier.circuit_call_regionCount] at hIrkx
+  try rw [SpendAuthority.circuit_call_regionCount] at hIrkx
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hIrkx
+  try simp only [Nat.add_assoc] at hIrkx
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrky
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hIrky
+  try rw [ValueCommit.circuit_call_regionCount] at hIrky
+  try rw [DeriveNullifier.circuit_call_regionCount] at hIrky
+  try rw [SpendAuthority.circuit_call_regionCount] at hIrky
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hIrky
+  try simp only [Nat.add_assoc] at hIrky
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hCI
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hCI
+  try rw [ValueCommit.circuit_call_regionCount] at hCI
+  try rw [DeriveNullifier.circuit_call_regionCount] at hCI
+  try rw [SpendAuthority.circuit_call_regionCount] at hCI
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hCI
+  try simp only [Nat.add_assoc] at hCI
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hAI
+  try rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hAI
+  try rw [ValueCommit.circuit_call_regionCount] at hAI
+  try rw [DeriveNullifier.circuit_call_regionCount] at hAI
+  try rw [SpendAuthority.circuit_call_regionCount] at hAI
+  try rw [CommitIvk.Main.circuit_call_regionCount] at hAI
+  try simp only [Nat.add_assoc] at hAI
   subcircuit_rw at hM1
   subcircuit_rw at hM2
   subcircuit_rw at hVC
@@ -1117,38 +849,37 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   subcircuit_rw at hSA
   subcircuit_rw at hCI
   subcircuit_rw at hAI
-  have hM1S := hM1 (by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
-    (by rw [merkle_assumptions_eq]; trivial)
-  rw [merkle_spec_eq] at hM1S
+  have hM1S := hM1 (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
+    (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+  rw [Sinsemilla.Merkle.CalculateRoot.circuit_spec_eq] at hM1S
   rw [layerInput_eval_eq] at hM1S
-  have hM2S := hM2 (by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
-    (by rw [merkle_assumptions_eq]; trivial)
-  rw [merkle_spec_eq] at hM2S
+  have hM2S := hM2 (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
+    (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+  rw [Sinsemilla.Merkle.CalculateRoot.circuit_spec_eq] at hM2S
   try rw [layerInput_eval_eq] at hM2S
   have hVCS := hVC (by exact ⟨hSh, hFw⟩) (by trivial)
-  rw [vc_spec_eq, vc_extract_eq] at hVCS
+  rw [ValueCommit.circuit_spec_eq, ValueCommit.circuit_extract_eq] at hVCS
   rw [vcInputs_eval_eq] at hVCS
   have hDNS := hDN (by exact hBf) (by
     show Halo2.Ironwood.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact hCmS)
-  rw [dn_spec_eq] at hDNS
+  rw [DeriveNullifier.circuit_spec_eq] at hDNS
   rw [dnInputs_eval_eq] at hDNS
   have hSAS := hSA (by exact hFw) (by
     show Halo2.Ironwood.Point.Valid _
     simp only [circuit_norm, Point.eval_eq]
     exact Or.inl hAkS)
-  rw [sa_spec_eq, sa_extract_eq] at hSAS
+  rw [SpendAuthority.circuit_spec_eq, SpendAuthority.circuit_extract_eq] at hSAS
   rw [saInputs_eval_eq] at hSAS
   have hCIS := hCI (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
-  rw [civk_spec_eq, civk_extract_eq] at hCIS
-  simp only [CommitIvk.Main.Spec] at hCIS
+  rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIS
   rw [civkInputs_eval_eq] at hCIS
   have hAIS := hAI (by exact hMulE) (by
     show Halo2.Ironwood.Point.OnCurve _
     simp only [circuit_norm, Point.eval_eq]
     exact hGdS)
-  rw [ai_spec_eq, ai_output] at hAIS
+  rw [AddressIntegrity.circuit_spec_eq, ai_output] at hAIS
   rw [aiInputs_eval_eq] at hAIS
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero,
@@ -1166,34 +897,34 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   have hIcmx := hN.2.2.2.2.2.1
   have hOrch := hN.2.2.2.2.2.2
   clear hN
-  try rw [nc_call_regionCount] at hEqR
-  try rw [wpointNonId_call_regionCount] at hEqR
-  try rw [wpointNonId_call_regionCount] at hEqR
-  try rw [nc_call_regionCount] at hEqR
-  try rw [nc_call_regionCount] at hGdN
-  try rw [wpointNonId_call_regionCount] at hGdN
-  try rw [wpointNonId_call_regionCount] at hGdN
-  try rw [nc_call_regionCount] at hGdN
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hGdN
-  try rw [nc_call_regionCount] at hPkN
-  try rw [wpointNonId_call_regionCount] at hPkN
-  try rw [wpointNonId_call_regionCount] at hPkN
-  try rw [nc_call_regionCount] at hPkN
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hPkN
-  try rw [nc_call_regionCount] at hNCn
-  try rw [wpointNonId_call_regionCount] at hNCn
-  try rw [wpointNonId_call_regionCount] at hNCn
-  try rw [nc_call_regionCount] at hNCn
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hNCn
-  try rw [nc_call_regionCount] at hIcmx
-  try rw [wpointNonId_call_regionCount] at hIcmx
-  try rw [wpointNonId_call_regionCount] at hIcmx
-  try rw [nc_call_regionCount] at hIcmx
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hEqR
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hEqR
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hEqR
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hEqR
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hGdN
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hGdN
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hGdN
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hGdN
+  try simp only [Nat.add_assoc] at hGdN
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hPkN
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hPkN
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hPkN
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hPkN
+  try simp only [Nat.add_assoc] at hPkN
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hNCn
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hNCn
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hNCn
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hNCn
+  try simp only [Nat.add_assoc] at hNCn
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hIcmx
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hIcmx
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hIcmx
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hIcmx
   try simp only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] at hIcmx
-  try rw [nc_call_regionCount] at hOrch
-  try rw [wpointNonId_call_regionCount] at hOrch
-  try rw [wpointNonId_call_regionCount] at hOrch
-  try rw [nc_call_regionCount] at hOrch
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hOrch
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hOrch
+  try rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hOrch
+  try rw [NoteCommit.Main.circuit_call_regionCount] at hOrch
   try simp only [nextRegionIndex_constrainInstance, circuit_norm, Nat.add_assoc,
     Nat.reduceAdd] at hOrch
   rw [wpointNonId_output] at hNCn
@@ -1206,30 +937,28 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   subcircuit_rw at hPkN
   subcircuit_rw at hNCn
   have hNCoS := hNCo (by exact ⟨hT1, hFw, hTL, hDist⟩)
-    (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+    (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
         · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hGdS
         · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hAIS.1)
-  rw [nc_spec_eq, nc_extract_eq] at hNCoS
-  simp only [NoteCommit.Main.Spec] at hNCoS
+  rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoS
   rw [ncInputs_eval_eq] at hNCoS
-  have hGdNS := hGdN (by rw [wpointNonId_envAssumptions_eq]; trivial)
-    (by rw [wpointNonId_assumptions_eq]; trivial)
-  rw [wpointNonId_spec_eq, wpointNonId_output] at hGdNS
-  have hPkNS := hPkN (by rw [wpointNonId_envAssumptions_eq]; trivial)
-    (by rw [wpointNonId_assumptions_eq]; trivial)
-  rw [wpointNonId_spec_eq, wpointNonId_output] at hPkNS
+  have hGdNS := hGdN (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hGdNS
+  have hPkNS := hPkN (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hPkNS
   have hNCnS := hNCn (by exact ⟨hT2, hFw, hTL, hDist⟩)
-    (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+    (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
         · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hGdNS
         · show Halo2.Ironwood.Point.OnCurve _
           with_unfolding_all exact hPkNS)
-  rw [nc_spec_eq, nc_extract_eq] at hNCnS
-  simp only [NoteCommit.Main.Spec] at hNCnS
+  rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnS
   rw [ncInputs_eval_eq] at hNCnS
   clear hNCo hGdN hPkN hNCn
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
@@ -1443,7 +1172,7 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
   simp only [Sinsemilla.load, circuit_norm] at hT
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
     Nat.add_assoc, Nat.reduceAdd]
-  rw [wpoint_call_regionCount, wpointNonId_call_regionCount]
+  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
   simp only [Nat.reduceAdd]
   exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
     h1, h2, h3⟩
@@ -1481,8 +1210,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   -- ── stage A witnesses: the shared cells are the programs' honest values ──
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hWw
   obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
-  rw [wpoint_call_regionCount] at hWgd hWak
-  rw [wpointNonId_call_regionCount] at hWak
+  rw [Ecc.WitnessPoint.point_toFormal_call_regionCount] at hWgd hWak
+  rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWak
   simp only [Nat.add_assoc, Nat.reduceAdd] at hWgd hWak
   refine ⟨buildWitness G ⟨input_var_psiOld, input_var_rhoOld, input_var_nk, input_var_vOld,
       input_var_vNew, input_var_psiNew, input_var_magnitude, input_var_sign,
@@ -1494,27 +1223,27 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.point.toFormal "witness point")
       cfg.eccConfig.witnessPoint (i₀ + 2) place env _ hWcm
-      ⟨(by rw [wpoint_envAssumptions_eq]; trivial),
-       (by rw [wpoint_assumptions_eq]; trivial),
-       (by rw [wpoint_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.point_toFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.point_toFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.point_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.Valid _
            rw [wpoint_eval_eq_cells _ _ _ _ _ _ hWcm]
            with_unfolding_all exact hVcm)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
       cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd
-      ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
-       (by rw [wpointNonId_assumptions_eq]; trivial),
-       (by rw [wpointNonId_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
            rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgd]
            with_unfolding_all exact hVgd)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
       cfg.eccConfig.witnessPoint (i₀ + 4) place env _ hWak
-      ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
-       (by rw [wpointNonId_assumptions_eq]; trivial),
-       (by rw [wpointNonId_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
            rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWak]
            with_unfolding_all exact hVak)⟩
@@ -1524,20 +1253,20 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     simp only [synthChecks, loadPrivate, circuit_norm] at hWc
     obtain ⟨hWm1, hWm2, hwMag, hwSign, hWvc, hWdn, hWsa, hWci, hWai⟩ := hWc
     -- offset-normalize the stage-B witness chunks
-    rw [merkle_call_regionCount] at hWm2 hWvc hWdn hWsa hWci hWai
-    rw [merkle_call_regionCount] at hWvc hWdn hWsa hWci hWai
-    rw [vc_call_regionCount] at hWdn hWsa hWci hWai
-    rw [dn_call_regionCount] at hWsa hWci hWai
-    rw [sa_call_regionCount] at hWci hWai
-    rw [civk_call_regionCount] at hWai
+    rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hWm2 hWvc hWdn hWsa hWci hWai
+    rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount] at hWvc hWdn hWsa hWci hWai
+    rw [ValueCommit.circuit_call_regionCount] at hWdn hWsa hWci hWai
+    rw [DeriveNullifier.circuit_call_regionCount] at hWsa hWci hWai
+    rw [SpendAuthority.circuit_call_regionCount] at hWci hWai
+    rw [CommitIvk.Main.circuit_call_regionCount] at hWai
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWm2 hWvc hWdn hWsa hWci hWai
     -- ── the fold contracts: honest mid/root landings ──
     have hM1der := Halo2.SubcircuitRw.layouter_completeness_derived
       (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
         0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap)
       (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) (i₀ + 8) place env _ hWm1
-      (by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
-      (by rw [merkle_assumptions_eq]; trivial)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
       (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0 _ _ 16).isSome)
           rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
             (w' := fun j => (extract cfg input_var i₀
@@ -1600,8 +1329,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         (fun i => input_var_merkleSwap (16 + i)))
       (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) (i₀ + 136) place env _
       hWm2
-      (by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
-      (by rw [merkle_assumptions_eq]; trivial)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
       (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
             _ _ 16).isSome)
           rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
@@ -1661,7 +1390,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (ValueCommit.circuit B.valueCommitV B.valueCommitR)
       (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
       (i₀ + 266) place env _ hWvc (by exact ⟨hSh, hFw⟩) (by trivial)
-      (by rw [vc_pa_eq, vcInputs_eval_eq_prover]
+      (by rw [ValueCommit.circuit_proverAssumptions_eq, vcInputs_eval_eq_prover]
           refine ⟨?_, ?_⟩
           · with_unfolding_all exact hMag
           · with_unfolding_all exact hSign)).1
@@ -1669,7 +1398,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (DeriveNullifier.circuit B.nullifierK)
       (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
        cfg.eccConfig.add) (i₀ + 271) place env _ hWdn (by exact hBf)
-      (by rw [dn_assumptions_eq, dnInputs_eval_eq]
+      (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
           show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
           with_unfolding_all exact hVcm)
@@ -1678,7 +1407,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (SpendAuthority.circuit B.spendAuthG)
       (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
       (by exact hFw)
-      (by rw [sa_assumptions_eq, saInputs_eval_eq]
+      (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
           show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
           with_unfolding_all exact Or.inl hVak)
@@ -1689,8 +1418,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
         addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
       (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
-      (by rw [civk_pa_eq]
-          simp only [CommitIvk.Main.ProverAssumptions]
+      (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
           rw [civkInputs_eval_eq_prover]
           exact ⟨Bi, by with_unfolding_all exact hBi⟩)).1
     -- the ivk output cell carries the honest commitment value
@@ -1707,8 +1435,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         = (Bi + ((extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rivk.2
               • B.commitIvkR : Point Fp)).x := by
-      rw [civk_spec_eq, civk_extract_eq] at hCIder
-      simp only [CommitIvk.Main.Spec] at hCIder
+      rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIder
       rw [civkInputs_eval_eq] at hCIder
       simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -1722,10 +1449,10 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
     simp only [synthNotes, loadPrivate, circuit_norm] at hWn
     obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
-    rw [nc_call_regionCount] at hWgdn hWpkn hWncn hWorch
-    rw [wpointNonId_call_regionCount] at hWpkn hWncn hWorch
-    rw [wpointNonId_call_regionCount] at hWncn hWorch
-    rw [nc_call_regionCount] at hWorch
+    rw [NoteCommit.Main.circuit_call_regionCount] at hWgdn hWpkn hWncn hWorch
+    rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWpkn hWncn hWorch
+    rw [Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount] at hWncn hWorch
+    rw [NoteCommit.Main.circuit_call_regionCount] at hWorch
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
     have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
       (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1734,14 +1461,13 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
         addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
       (by exact ⟨hT1, hFw, hTL, hDist⟩)
-      (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+      (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
           · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVgd
           · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVpk)
-      (by rw [nc_pa_eq]
-          simp only [NoteCommit.Main.ProverAssumptions]
+      (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
           rw [ncInputs_eval_eq_prover]
           refine ⟨?_, ?_, ?_, ?_⟩
           · with_unfolding_all exact hVgd
@@ -1762,7 +1488,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (i₀ + 271)) : Fp)
         = (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld := by
-      rw [dn_spec_eq, dnInputs_eval_eq] at hDNder
+      rw [DeriveNullifier.circuit_spec_eq, dnInputs_eval_eq] at hDNder
       rw [hNf]
       with_unfolding_all exact hDNder
     have hNCnDer := (Halo2.SubcircuitRw.layouter_completeness_derived
@@ -1772,14 +1498,13 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
         addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
       (by exact ⟨hT2, hFw, hTL, hDist⟩)
-      (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+      (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
           · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVgdn
           · show Halo2.Ironwood.Point.OnCurve _
             with_unfolding_all exact hVpkn)
-      (by rw [nc_pa_eq]
-          simp only [NoteCommit.Main.ProverAssumptions]
+      (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
           rw [ncInputs_eval_eq_prover]
           refine ⟨?_, ?_, ?_, ?_⟩
           · with_unfolding_all exact hVgdn
@@ -1815,7 +1540,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvX,
            (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvY⟩ := by
-      rw [vc_spec_eq, vc_extract_eq, vcInputs_eval_eq] at hVCder
+      rw [ValueCommit.circuit_spec_eq, ValueCommit.circuit_extract_eq, vcInputs_eval_eq] at hVCder
       obtain ⟨m, hm, hmag, hdisj⟩ := hVCder
       have hmval : (extract cfg input_var i₀
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude.val = m := by
@@ -1844,7 +1569,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
            (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ := by
-      rw [sa_spec_eq, sa_extract_eq, saInputs_eval_eq] at hSAder
+      rw [SpendAuthority.circuit_spec_eq, SpendAuthority.circuit_extract_eq, saInputs_eval_eq] at hSAder
       rw [hSAder]
       rw [show ((⟨(extract cfg input_var i₀
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
@@ -1873,8 +1598,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (i₀ + 303)) : Point Fp)
         = (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld := by
-      rw [nc_spec_eq, nc_extract_eq] at hNCoDer
-      simp only [NoteCommit.Main.Spec] at hNCoDer
+      rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoDer
       rw [ncInputs_eval_eq] at hNCoDer
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bo from by
@@ -1908,8 +1632,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         = Bn + ((extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rcmNew.2
               • B.noteCommitR : Point Fp) := by
-      rw [nc_spec_eq, nc_extract_eq] at hNCnDer
-      simp only [NoteCommit.Main.Spec] at hNCnDer
+      rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnDer
       rw [ncInputs_eval_eq] at hNCnDer
       rw [show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           ((DeriveNullifier.circuit B.nullifierK).output
@@ -1935,14 +1658,14 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
     refine ⟨?_, ?_⟩
     · simp only [synthChecks, loadPrivate, circuit_norm, Nat.add_assoc]
-      rw [merkle_call_regionCount, merkle_call_regionCount, vc_call_regionCount,
-        dn_call_regionCount, sa_call_regionCount, civk_call_regionCount]
+      rw [Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount, ValueCommit.circuit_call_regionCount,
+        DeriveNullifier.circuit_call_regionCount, SpendAuthority.circuit_call_regionCount, CommitIvk.Main.circuit_call_regionCount]
       simp only [Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           _ _ (i₀ + 8) place env _ hWm1
-          ⟨(by rw [merkle_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩),
-           (by rw [merkle_assumptions_eq]; trivial),
+          ⟨(by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩),
+           (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial),
            (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
                  _ _ 16).isSome)
                rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
@@ -1967,8 +1690,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                rfl)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           _ _ (i₀ + 136) place env _ hWm2
-          ⟨(by rw [merkle_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩),
-           (by rw [merkle_assumptions_eq]; trivial),
+          ⟨(by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩),
+           (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial),
            (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
                  _ _ 16).isSome)
                rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
@@ -1990,7 +1713,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
            cfg.eccConfig.add) (i₀ + 266) place env _ hWvc
           ⟨(by exact ⟨hSh, hFw⟩), (by trivial),
-           (by rw [vc_pa_eq, vcInputs_eval_eq_prover]
+           (by rw [ValueCommit.circuit_proverAssumptions_eq, vcInputs_eval_eq_prover]
                refine ⟨?_, ?_⟩
                · with_unfolding_all exact hMag
                · with_unfolding_all exact hSign)⟩
@@ -2001,7 +1724,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
            cfg.eccConfig.add) (i₀ + 271) place env _ hWdn
           ⟨(by exact hBf),
-           (by rw [dn_assumptions_eq, dnInputs_eval_eq]
+           (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
                show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
                with_unfolding_all exact hVcm),
@@ -2011,7 +1734,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (SpendAuthority.circuit B.spendAuthG)
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
           ⟨(by exact hFw),
-           (by rw [sa_assumptions_eq, saInputs_eval_eq]
+           (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
                show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
                with_unfolding_all exact Or.inl hVak),
@@ -2026,8 +1749,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             mulConfig := cfg.eccConfig.mulFixedFull,
             addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
           ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩), (by trivial),
-           (by rw [civk_pa_eq]
-               simp only [CommitIvk.Main.ProverAssumptions]
+           (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
                rw [civkInputs_eval_eq_prover]
                exact ⟨Bi, by with_unfolding_all exact hBi⟩)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2035,11 +1757,11 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) (i₀ + 297) place env _
           hWai
           ⟨(by exact hMulE),
-           (by rw [ai_assumptions_eq, aiInputs_eval_eq]
+           (by rw [AddressIntegrity.circuit_assumptions_eq, aiInputs_eval_eq]
                show Halo2.Ironwood.Point.OnCurve _
                simp only [Point.eval_eq]
                with_unfolding_all exact hVgd),
-           (by rw [ai_pa_eq, aiInputs_eval_eq_prover]
+           (by rw [AddressIntegrity.circuit_proverAssumptions_eq, aiInputs_eval_eq_prover]
                -- the honest `pk_d_old` hint equals the cells the AddressIntegrity witness
                -- point assigns (region `i₀+301`), bridging it to the extract-level facts
                have hAiPkW : Halo2.ExtendsWitnesses place env
@@ -2062,8 +1784,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                  rw [← hIvkVal] at h
                  with_unfolding_all exact h)⟩
     · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc]
-      rw [nc_call_regionCount, wpointNonId_call_regionCount,
-        wpointNonId_call_regionCount, nc_call_regionCount]
+      rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+        Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount, NoteCommit.Main.circuit_call_regionCount]
       simp only [Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -2074,14 +1796,13 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             mulConfig := cfg.eccConfig.mulFixedFull,
             addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
           ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩),
-           (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+           (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
                · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVgd
                · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVpk),
-           (by rw [nc_pa_eq]
-               simp only [NoteCommit.Main.ProverAssumptions]
+           (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
                rw [ncInputs_eval_eq_prover]
                refine ⟨?_, ?_, ?_, ?_⟩
                · with_unfolding_all exact hVgd
@@ -2095,18 +1816,18 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
           cfg.eccConfig.witnessPoint (i₀ + 347) place env _ hWgdn
-          ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
-           (by rw [wpointNonId_assumptions_eq]; trivial),
-           (by rw [wpointNonId_proverAssumptions_eq]
+          ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgdn]
                with_unfolding_all exact hVgdn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
           cfg.eccConfig.witnessPoint (i₀ + 348) place env _ hWpkn
-          ⟨(by rw [wpointNonId_envAssumptions_eq]; trivial),
-           (by rw [wpointNonId_assumptions_eq]; trivial),
-           (by rw [wpointNonId_proverAssumptions_eq]
+          ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWpkn]
                with_unfolding_all exact hVpkn)⟩
@@ -2118,14 +1839,13 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             mulConfig := cfg.eccConfig.mulFixedFull,
             addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
           ⟨(by exact ⟨hT2, hFw, hTL, hDist⟩),
-           (by rw [nc_assumptions_eq, ncInputs_eval_eq]
+           (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
                · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVgdn
                · show Halo2.Ironwood.Point.OnCurve _
                  with_unfolding_all exact hVpkn),
-           (by rw [nc_pa_eq]
-               simp only [NoteCommit.Main.ProverAssumptions]
+           (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
                rw [ncInputs_eval_eq_prover]
                refine ⟨?_, ?_, ?_, ?_⟩
                · with_unfolding_all exact hVgdn
@@ -2219,28 +1939,7 @@ private theorem aafi_output (instCol : Column .instance) (r : ℕ)
     ((assignAdviceFromInstance (F := Fp) instCol r col row).output self)
       = AssignedCell.of self row col := rfl
 
-private theorem base_call_regionCount (G : Generators) (B : Bases)
-    (cfg : Config) (W : Witnesses Fp) (j : RegionIndex) :
-    Operations.regionCount (((baseCircuit G B).call cfg W).operations j)
-      = 394 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-private theorem base_spec_eq (G : Generators) (B : Bases) :
-    (baseCircuit G B).Spec = Spec G B := rfl
-
-private theorem base_assumptions_eq (G : Generators) (B : Bases) :
-    (baseCircuit G B).Assumptions = fun _ => True := rfl
-
-private theorem base_envAssumptions_eq (G : Generators) (B : Bases)
-    (cfg : Config) :
-    (baseCircuit G B).EnvAssumptions cfg = EnvAssumptions G cfg := rfl
-
-private theorem base_pa_eq (G : Generators) (B : Bases) :
-    (baseCircuit G B).ProverAssumptions = ProverAssumptions G B := rfl
-
-private theorem base_extract_eq (G : Generators) (B : Bases) :
-    (baseCircuit G B).extract = extract := rfl
+derive_contract_bridges base (G : Generators) (B : Bases) := baseCircuit G B
 
 private theorem base_output (G : Generators) (B : Bases)
     (cfg : Config) (W : Witnesses Fp) (i₀ : RegionIndex) :
@@ -2319,7 +2018,6 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   have hS := hPre (by rw [base_envAssumptions_eq]; exact _hE)
     (by rw [base_assumptions_eq]; trivial)
   rw [base_spec_eq, base_extract_eq, base_output] at hS
-  simp only [Spec] at hS
   obtain ⟨hSB, -, -, -, -⟩ := hS
   -- ── the cross-address region: four `dca · (old − new) = 0` rows ──
   rw [base_output] at hX
@@ -2393,7 +2091,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       (baseCircuit G B) cfg i₀ place env _ hWpre
       ⟨(by rw [base_envAssumptions_eq]; exact _hE),
        (by rw [base_assumptions_eq]; trivial),
-       (by rw [base_pa_eq, base_extract_eq]; exact hPA)⟩
+       (by rw [base_proverAssumptions_eq, base_extract_eq]; exact hPA)⟩
   · -- the cross-address region at the honest values
     rw [base_call_regionCount, base_output]
     rw [base_output] at hWx

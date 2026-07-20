@@ -134,6 +134,8 @@ theorem pointNonId_toFormal_output (name : String) (cfg : Config)
     (pointNonId.toFormal name).output cfg input i
       = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
 
+derive_contract_bridges point_toFormal (name : String) := point.toFormal name
+
 end WitnessPoint
 
 end Halo2.Ironwood.Ecc

@@ -2276,6 +2276,13 @@ def circuit :
         have := i.isLt; omega)]
     exact ⟨B, hB⟩
 
+/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
+
+derive_contract_bridges circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+  (l₀ d : ℕ) (hld : l₀ + d ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
+  (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :=
+  circuit G Q hQ l₀ d hld wsib wswap
+
 end CalculateRoot
 
 end Halo2.Ironwood.Sinsemilla.Merkle
