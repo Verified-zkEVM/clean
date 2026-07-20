@@ -37,9 +37,10 @@ REMAINING:
    region-FREE (lazy witnessing) — no regions for rcv/alpha/rivk/rcm/ivk wrappers.
 3. STATUS 2026-07-19: ARC COMPLETE — TestVkMatchAction (CS pre+post) AND
    TestVkLayoutAction (regions/copies/σ/allFixed, 17566 cells) ALL GREEN against the
-   real orchard Circuit. Layout-machinery additions: copyListDeferred (halo2-0.5
-   planner order: constants deferred past the whole synthesis, constrain_instance
-   copies inline advice-left), assign_advice_from_instance copies advice-left.
+   real orchard Circuit. Layout-machinery additions: V1.copyList (the `floor_planner::V1`
+   order orchard declares — halo2_proofs 0.3.2 v1.rs: constants deferred past the whole
+   synthesis, constrain_instance copies inline advice-left; the per-region flush is
+   SimpleFloorPlanner.copyList), assign_advice_from_instance copies advice-left.
    Assembly merged onto the Bundle arc's stage-split Circuit.lean (abb981de).
    (superseded interim status: CS half DONE GREEN (TestVkMatchAction, both guards, first
    run). synthesize assembly DONE (region count 395 == dump exactly). ActionLayout.lean

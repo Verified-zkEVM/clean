@@ -98,11 +98,18 @@ def constrainConstant (a : AssignedCell F) (value : F) : RegionCircuit F Unit :=
   fun _ => ((), [.constrainConstant a.cell value])
 
 /-- Assign an advice cell from an instance value (absolute `instRow`) and constrain them
-equal. Rust: `region.assign_advice_from_instance(instance, row, advice, offset)`. -/
+equal. Rust: `region.assign_advice_from_instance(instance, row, advice, offset)`.
+
+Monad sugar (not a core op): emits `assignAdvice` — witnessing the instance value via
+`instanceGet` (assignments are witness-only) — followed by the region-level
+`constrainInstance` copy against the instance column. The copy sits at the same position
+in the region body stream as the fused Rust call, so σ/VK copy order is preserved. -/
 def assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
     (col : Column .advice) (row : ℕ) : RegionCircuit F (AssignedCell F) :=
   fun self =>
-    (.of self row col, [.assignAdviceFromInstance instCol instRow (Cell.of self row col)])
+    (.of self row col,
+      [.assignAdvice col row (instanceGet instCol instRow),
+       .constrainInstance (Cell.of self row col) instCol instRow])
 
 /-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
 `synthesize` name output cells that live at fixed rows rather than being threaded through

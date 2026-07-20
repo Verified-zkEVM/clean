@@ -24,13 +24,14 @@ the four layout products the fixture pins, so a test can `#guard` them EQUAL:
   Halo2-Clean monad matches both (`Basic.lean`: `copyAdvice` emits
   `.constrainEqual (new) (src)`). So a copy tuple is `(leftCol, leftRow, rightCol, rightRow)`
   with `left` = the FIRST argument of `constrain_equal`.
-* **Constants are deferred to the end of each `assign_region`** — `SingleChipLayouter::
-  assign_region` runs the region body (emitting all its `constrain_equal` copies in order),
-  THEN, after `exit_region`, assigns+copies the region's collected constants
-  (`single_pass.rs`). Each `constrain_constant` therefore contributes ONE copy
-  `cs.copy(constants_col, next_const_row, advice.col, advice.row)` — `left` = the constants
-  cell — appended AFTER that region's `constrain_equal` copies. The constants-column cell
-  `(col, row)` is not derivable Lean-side (the planner picks the row), so it is read from the
+* **Constants-copy timing is the floor planner's ONE degree of freedom** — each
+  `constrain_constant` contributes ONE copy
+  `cs.copy(constants_col, next_const_row, advice.col, advice.row)` — `left` = the
+  constants cell — but WHEN it enters the stream depends on the planner:
+  `SimpleFloorPlanner` flushes per `assign_region`, `V1` (what orchard declares) once at
+  the end of synthesis. See the "Ordered copy extraction" section; the two planner
+  namespaces there mirror the Rust module split. The constants-column cell `(col, row)`
+  is not derivable Lean-side (the planner picks the row), so it is read from the
   fixture's `constants` allocation map, consumed in region-then-body order.
 * **loadTable default-fill** starts at `values.length` and fills every remaining usable row
   with the row-0 value (`single_pass.rs` `fill_from_row` via `SimpleTableLayouter`); usable
@@ -126,15 +127,37 @@ def flattenRegion : RegionOperations F → List (RegionOperation F)
   | op :: rest => op :: flattenRegion rest
 termination_by ops => sizeOf ops
 
-/-! ## Ordered copy extraction -/
+/-! ## Ordered copy extraction — the two halo2 floor planners
 
-/-- Copies of ONE region, in Rust order: all `constrain_equal` copies in body order, THEN
-the region's `constrain_constant` copies (deferred to the end of `assign_region`), each
-consuming the next entry of the fixture's constants allocation map. Returns the copies and
-the unconsumed constants tail. -/
-def regionCopies (permCols : List ColRef) (starts : List ℕ)
+`halo2_proofs 0.3.2` (github.com/zcash/halo2) ships two floor planners, and for the
+copy stream they differ ONLY in when the `constrain_constant` copies collected during
+a region are handed to keygen:
+
+* **`SimpleFloorPlanner`** (`floor_planner/single_pass.rs:115-138`): at the end of EACH
+  `assign_region` — the stream interleaves per region. Used by the isolated-chip dump
+  harnesses (the Add/Mul fixtures).
+* **`V1`** (`floor_planner/v1.rs:118-122`): once at the very end of synthesis — every
+  equality/instance copy first (region creation order), then all constants copies.
+  This is the planner the real orchard `Circuit` declares (`orchard/src/circuit.rs:1044`,
+  VK-stable via the `floor-planner-v1-legacy-pdqsort` feature), so the Action fixtures
+  follow it.
+
+Everything else is planner-independent: `constrain_equal` and in-region instance copies
+are recorded in body order during the region closures, layouter-level
+`constrain_instance` copies inline between regions. `regionCopiesSplit` extracts one
+region's (equality, constants) streams; each planner namespace below is just its flush
+policy, mirroring the Rust module split. Constants-column rows are read from the
+fixture's allocation map — the planner picks them, Lean does not re-derive placement. -/
+
+/-- One region's copies, split into the `constrain_equal`/instance copies (body order)
+and the `constrain_constant` copies (body order, each consuming the next entry of the
+fixture's constants allocation map); also returns the unconsumed constants tail.
+If the allocation map runs out, remaining `constrain_constant` copies are dropped —
+the copy-list `#guard` then fails against the fixture, so a truncated map is loud, but
+when debugging a mismatch check the fixture's `constants` length first. -/
+def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
     (body : RegionOperations F) (consts : List (ℕ × ℕ × ℕ)) :
-    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
+    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
   let leaves := flattenRegion body
   let eqCopies : List (ℕ × ℕ × ℕ × ℕ) := leaves.filterMap fun op =>
     match op with
@@ -142,13 +165,12 @@ def regionCopies (permCols : List ColRef) (starts : List ℕ)
         let (lc, lr) := resolveCell permCols starts a
         let (rc, rr) := resolveCell permCols starts b
         some (lc, lr, rc, rr)
-    | .assignAdviceFromInstance icol irow cell =>
+    | .constrainInstance cell icol irow =>
         -- Rust `assign_advice_from_instance`: the advice-left copy against the
         -- instance cell at its absolute row
         let (rc, rr) := resolveCell permCols starts cell
         some (rc, rr, permIndex permCols icol.toAny, irow)
     | _ => none
-  -- deferred constants, in body order, consuming the fixture's allocation map
   let rec go : List (RegionOperation F) → List (ℕ × ℕ × ℕ) →
       List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ)
     | [], cs => ([], cs)
@@ -159,60 +181,74 @@ def regionCopies (permCols : List ColRef) (starts : List ℕ)
         ((permIndex permCols (ColRef.toAny (.fixed cc)), cr, rc, rr) :: rest', cs')
     | _ :: rest, cs => go rest cs
   let (constCopies, consts') := go leaves consts
-  (eqCopies ++ constCopies, consts')
+  (eqCopies, constCopies, consts')
 
-/-- The whole ordered copy list, folding `regionCopies` over regions in region order and
-threading the fixture's constants allocation map. -/
-def copyList (permCols : List ColRef) (starts : List ℕ)
-    (regions : List (ℕ × RegionOperations F)) (consts : List (ℕ × ℕ × ℕ)) :
-    List (ℕ × ℕ × ℕ × ℕ) :=
-  let rec go : List (ℕ × RegionOperations F) → List (ℕ × ℕ × ℕ) → List (ℕ × ℕ × ℕ × ℕ)
-    | [], _ => []
-    | (_, body) :: rest, cs =>
-        let (cps, cs') := regionCopies permCols starts body cs
-        cps ++ go rest cs'
-  go regions consts
+namespace SimpleFloorPlanner
 
-/-- Like `regionCopies`, but with the equality and deferred-constants copies returned
-separately (for planners that defer constants past the whole synthesis). -/
-def regionCopiesSplit (permCols : List ColRef) (starts : List ℕ)
-    (body : RegionOperations F) (consts : List (ℕ × ℕ × ℕ)) :
-    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ) :=
-  let (cps, consts') := regionCopies permCols starts body consts
-  -- `regionCopies` returns eq-copies first, then exactly the consumed constants
-  let nEq := cps.length - (consts.length - consts'.length)
-  (cps.take nEq, cps.drop nEq, consts')
-
-/-- The whole-synthesis copy stream in the halo2-0.5 `SimpleFloorPlanner` order: region
-equality copies in creation order with the layouter-level `constrain_instance` copies
-inline (advice-left, instance-right), and ALL deferred `constrain_constant` copies at
-the very end of synthesis (in region/collection order). -/
-def copyStreamDeferred (permCols : List ColRef) (starts : List ℕ) :
+/-- The op-stream walk in `SimpleFloorPlanner` order: each region flushes its constants
+copies immediately after its equality copies (`assign_region` assigns
+`constants_to_assign` on exit, `single_pass.rs:115-138`). Returns the copies and the
+unconsumed constants tail. -/
+def go (permCols : List ColRef) (starts : List ℕ) :
     Operations F → List (ℕ × ℕ × ℕ) →
-    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ)
-  | [], _ => ([], [])
+    List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ)
+  | [], cs => ([], cs)
   | .region _ body :: rest, cs =>
       let (eqs, cnsts, cs') := regionCopiesSplit permCols starts body cs
-      let (r1, r2) := copyStreamDeferred permCols starts rest cs'
-      (eqs ++ r1, cnsts ++ r2)
-  | .subcircuit sub :: rest, cs =>
-      let (s1, s2) := copyStreamDeferred permCols starts sub cs
-      -- thread the constants tail by count (sub consumed `cs.length - ?` — recompute)
-      let consumed := s2.length
-      let (r1, r2) := copyStreamDeferred permCols starts rest (cs.drop consumed)
-      (s1 ++ r1, s2 ++ r2)
+      let (r, cs'') := go permCols starts rest cs'
+      (eqs ++ cnsts ++ r, cs'')
   | .constrainInstance cell col row :: rest, cs =>
       let (rc, rr) := resolveCell permCols starts cell
-      let (r1, r2) := copyStreamDeferred permCols starts rest cs
-      ((rc, rr, permIndex permCols col.toAny, row) :: r1, r2)
-  | .loadTable _ _ :: rest, cs => copyStreamDeferred permCols starts rest cs
+      let (r, cs') := go permCols starts rest cs
+      ((rc, rr, permIndex permCols col.toAny, row) :: r, cs')
+  | .subcircuit sub :: rest, cs =>
+      let (s, cs') := go permCols starts sub cs
+      let (r, cs'') := go permCols starts rest cs'
+      (s ++ r, cs'')
+  | .loadTable _ _ :: rest, cs => go permCols starts rest cs
 termination_by ops => sizeOf ops
 
-/-- `copyStreamDeferred`, concatenated (the actual keygen copy order). -/
-def copyListDeferred (permCols : List ColRef) (starts : List ℕ)
+/-- The keygen copy list under `SimpleFloorPlanner` (`single_pass.rs`). -/
+def copyList (permCols : List ColRef) (starts : List ℕ)
     (ops : Operations F) (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ × ℕ) :=
-  let (eqs, cnsts) := copyStreamDeferred permCols starts ops consts
+  (go permCols starts ops consts).1
+
+end SimpleFloorPlanner
+
+namespace V1
+
+/-- The op-stream walk in `V1` order: the equality/instance stream and the
+whole-synthesis constants stream, kept separate (`v1.rs` collects `plan.constants`
+across all regions and assigns them at the end, `v1.rs:118-122`). Returns both streams
+and the unconsumed constants tail. -/
+def go (permCols : List ColRef) (starts : List ℕ) :
+    Operations F → List (ℕ × ℕ × ℕ) →
+    (List (ℕ × ℕ × ℕ × ℕ) × List (ℕ × ℕ × ℕ × ℕ)) × List (ℕ × ℕ × ℕ)
+  | [], cs => (([], []), cs)
+  | .region _ body :: rest, cs =>
+      let (eqs, cnsts, cs') := regionCopiesSplit permCols starts body cs
+      let ((r1, r2), cs'') := go permCols starts rest cs'
+      ((eqs ++ r1, cnsts ++ r2), cs'')
+  | .constrainInstance cell col row :: rest, cs =>
+      let (rc, rr) := resolveCell permCols starts cell
+      let ((r1, r2), cs') := go permCols starts rest cs
+      (((rc, rr, permIndex permCols col.toAny, row) :: r1, r2), cs')
+  | .subcircuit sub :: rest, cs =>
+      let ((s1, s2), cs') := go permCols starts sub cs
+      let ((r1, r2), cs'') := go permCols starts rest cs'
+      ((s1 ++ r1, s2 ++ r2), cs'')
+  | .loadTable _ _ :: rest, cs => go permCols starts rest cs
+termination_by ops => sizeOf ops
+
+/-- The keygen copy list under the `V1` floor planner (`v1.rs`): the equality/instance
+stream, then ALL deferred constants. The planner the orchard `Circuit` declares — the
+Action fixtures' order. -/
+def copyList (permCols : List ColRef) (starts : List ℕ)
+    (ops : Operations F) (consts : List (ℕ × ℕ × ℕ)) : List (ℕ × ℕ × ℕ × ℕ) :=
+  let ((eqs, cnsts), _) := go permCols starts ops consts
   eqs ++ cnsts
+
+end V1
 
 /-! ## Permutation σ — keygen `Assembly` replay (`permutation/keygen.rs`)
 
@@ -330,20 +366,10 @@ def selectorFixed (selMap : SelCompressMap) (acts : List (ℕ × ℕ)) : List (�
   acts.dedup.filterMap fun (sel, row) =>
     (selMap.entries.find? (·.1 = sel)).map fun (_, sc) => (sc.packedCol, row, sc.assignedRoot)
 
-/-- Fixed entries from region-level `assignFixed` ops (e.g. `mul_fixed`'s per-window
-Lagrange/`z` constants), at their placed absolute rows. -/
+/-- Fixed entries from region-level `assignFixed` ops (Rust `region.assign_fixed` —
+e.g. `mul_fixed`'s per-window Lagrange/`z` constants, Sinsemilla's per-row `q_s2`
+boundary values and the `fixed_y_q` load), at their placed absolute rows. -/
 def regionAssignFixed {F : Type} (toNat : F → ℕ) (starts : List ℕ)
-    (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ × ℕ) :=
-  regions.flatMap fun (idx, body) =>
-    (flattenRegion body).filterMap fun op =>
-      match op with
-      | .assignFixed col row v => some (col.index, place starts idx + row, toNat v)
-      | _ => none
-
-/-- Fixed entries from in-region `assignFixed` ops (Rust `region.assign_fixed` — e.g.
-Sinsemilla's per-row `q_s2` boundary values and the `fixed_y_q` load), resolved to
-absolute rows. -/
-def assignedFixed (toNat : F → ℕ) (starts : List ℕ)
     (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ × ℕ) :=
   regions.flatMap fun (idx, body) =>
     (flattenRegion body).filterMap fun op =>

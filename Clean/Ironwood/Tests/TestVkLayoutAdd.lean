@@ -73,7 +73,7 @@ def regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
 def permCols : List ColRef := addLayout.permColumns
 
 def myCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  copyList permCols starts regions addLayout.constants
+  SimpleFloorPlanner.copyList permCols starts ops addLayout.constants
 def mySigma : List (ℕ × ℕ × ℕ × ℕ) :=
   sigmaEntries (runAssembly addLayout.n permCols.length myCopyList)
 def myUsable : ℕ := usableRows addLayout.n addPost.adviceQueryLayout

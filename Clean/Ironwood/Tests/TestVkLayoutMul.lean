@@ -106,7 +106,7 @@ def regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
 def permCols : List ColRef := mulLayout.permColumns
 
 def myCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  copyList permCols starts regions mulLayout.constants
+  SimpleFloorPlanner.copyList permCols starts ops mulLayout.constants
 def mySigma : List (ℕ × ℕ × ℕ × ℕ) :=
   sigmaEntries (runAssembly mulLayout.n permCols.length myCopyList)
 def myUsable : ℕ := usableRows mulLayout.n mulPost.adviceQueryLayout

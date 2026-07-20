@@ -116,7 +116,7 @@ def aStarts : List ℕ :=
 def aPermCols : List ColRef := actionLayout.permColumns
 
 def aCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  copyListDeferred aPermCols aStarts aOps actionLayout.constants
+  V1.copyList aPermCols aStarts aOps actionLayout.constants
 def aSigma : List (ℕ × ℕ × ℕ × ℕ) :=
   sigmaEntries (runAssembly actionLayout.n aPermCols.length aCopyList)
 /-- Usable rows `n − (blindingFactors + 1)` (blinding = 5, dump META). -/
@@ -126,7 +126,7 @@ def aFixed : List (ℕ × ℕ × ℕ) :=
     (tableFixed (ZMod.val : Fp → ℕ) aUsable aOps
       ++ constantsFixed actionLayout.constants
       ++ selectorFixed actionSelMap (activations aStarts aRegions)
-      ++ assignedFixed (ZMod.val : Fp → ℕ) aStarts aRegions))
+      ++ regionAssignFixed (ZMod.val : Fp → ℕ) aStarts aRegions))
 
 /-! ## Machinery validation -/
 

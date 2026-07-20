@@ -25,7 +25,7 @@ def bStarts : List ℕ :=
 def bPermCols : List ColRef := actionBaseLayout.permColumns
 
 def bCopyList : List (ℕ × ℕ × ℕ × ℕ) :=
-  copyListDeferred bPermCols bStarts bOps actionBaseLayout.constants
+  V1.copyList bPermCols bStarts bOps actionBaseLayout.constants
 def bSigma : List (ℕ × ℕ × ℕ × ℕ) :=
   sigmaEntries (runAssembly actionBaseLayout.n bPermCols.length bCopyList)
 def bUsable : ℕ := 2042
@@ -34,7 +34,7 @@ def bFixed : List (ℕ × ℕ × ℕ) :=
     (tableFixed (ZMod.val : Fp → ℕ) bUsable bOps
       ++ constantsFixed actionBaseLayout.constants
       ++ selectorFixed actionSelMap (activations bStarts bRegions)
-      ++ assignedFixed (ZMod.val : Fp → ℕ) bStarts bRegions))
+      ++ regionAssignFixed (ZMod.val : Fp → ℕ) bStarts bRegions))
 
 -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list.
 #guard sigmaEntries (runAssembly actionBaseLayout.n bPermCols.length

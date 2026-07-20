@@ -232,10 +232,10 @@ theorem RegionOperation.constraints_constrainConstant (place : RegionIndex → �
       = (a.eval place env = v) := rfl
 
 @[circuit_norm]
-theorem RegionOperation.constraints_assignAdviceFromInstance (place : RegionIndex → ℕ)
-    (self : RegionIndex) (env : Environment F) (instCol : Column .instance)
-    (instRow : ℕ) (cell : Cell) :
-    (RegionOperation.assignAdviceFromInstance instCol instRow cell).Constraints
+theorem RegionOperation.constraints_constrainInstance (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : Environment F) (cell : Cell) (instCol : Column .instance)
+    (instRow : ℕ) :
+    (RegionOperation.constrainInstance cell instCol instRow).Constraints
         place self env
       = (cell.eval place env = env.get instCol (instRow : ℤ)) := rfl
 
@@ -277,7 +277,8 @@ theorem operations_constrainConstant (a : AssignedCell F) (v : F) (self : Region
 theorem operations_assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
     (col : Column .advice) (row : ℕ) (self : RegionIndex) :
     (assignAdviceFromInstance (F := F) instCol instRow col row).operations self
-      = [.assignAdviceFromInstance instCol instRow (Cell.of self row col)] := rfl
+      = [.assignAdvice col row (instanceGet instCol instRow),
+         .constrainInstance (Cell.of self row col) instCol instRow] := rfl
 
 -- `List.Forall` over a concrete list decomposes into a conjunction; `add_zero` clears
 -- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.
@@ -383,12 +384,12 @@ theorem RegionOperation.extendsWitness_constrainConstant (place : RegionIndex �
     (RegionOperation.constrainConstant a v).ExtendsWitness place self env = True := rfl
 
 @[circuit_norm]
-theorem RegionOperation.extendsWitness_assignAdviceFromInstance (place : RegionIndex → ℕ)
-    (self : RegionIndex) (env : ProverEnvironment F) (instCol : Column .instance)
-    (instRow : ℕ) (cell : Cell) :
-    (RegionOperation.assignAdviceFromInstance instCol instRow cell).ExtendsWitness
+theorem RegionOperation.extendsWitness_constrainInstance (place : RegionIndex → ℕ)
+    (self : RegionIndex) (env : ProverEnvironment F) (cell : Cell)
+    (instCol : Column .instance) (instRow : ℕ) :
+    (RegionOperation.constrainInstance cell instCol instRow).ExtendsWitness
         place self env
-      = (cell.eval place env.toEnvironment = env.get instCol (instRow : ℤ)) := rfl
+      = True := rfl
 
 @[circuit_norm]
 theorem RegionOperation.extendsWitness_assignFixed (place : RegionIndex → ℕ)

@@ -1915,7 +1915,6 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       · with_unfolding_all exact (congrArg Point.x hNCnval).trans hCmx.symm
       · -- the final `"Orchard circuit checks"` region
         simp only [nextRegionIndex_constrainInstance]
-        simp only [nextRegionIndex_constrainInstance] at hWorch
         obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo⟩ := hWorch
         have hOr' : env.advice (cfg.advices 4) ((place (i₀ + 393) : ℕ) : ℤ)
             = root := hOr.trans (by with_unfolding_all exact hM2root)

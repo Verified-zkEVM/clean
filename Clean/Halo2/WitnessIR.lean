@@ -51,6 +51,24 @@ lemma eval_ofFExpr_zero [FiniteField F] (e : FExpr F) (env : Placed ProverEnviro
     ((Witgen.WitgenIROver.ofFExpr e).eval env)[0] = Witgen.FExprOver.eval { env } e := by
   with_unfolding_all rfl
 
+/-- Instance-read witness atom: a single-scalar witness program reading instance column
+`instCol` at absolute row `instRow`. The witgen half of the `assign_advice_from_instance`
+sugar (`Basic.lean`) — the paired `assignAdvice` witnesses the public input this program
+returns, and the region's `constrainInstance` then copies the advice cell against it.
+Instance columns are absolute, so this cannot be a cell atom (`.expr`); it reads the
+placed prover environment directly via a `.native` closure. -/
+def instanceGet (instCol : Column .instance) (instRow : ℕ) : WitgenIR F 1 :=
+  .native fun pe => #v[pe.env.get instCol (instRow : ℤ)]
+
+/-- The `instanceGet` witness reduces to the instance read `env.get instCol instRow` (which
+`Environment.get_inst` further normalizes to `env.inst`), so a paired `assignAdvice`'s
+`ExtendsWitness` equation lines up with the `constrainInstance` copy target. -/
+@[circuit_norm]
+lemma eval_instanceGet [FiniteField F] (instCol : Column .instance) (instRow : ℕ)
+    (pe : Placed ProverEnvironment F) :
+    ((instanceGet instCol instRow).eval pe)[0] = pe.env.get instCol (instRow : ℤ) := by
+  with_unfolding_all rfl
+
 /-!
 ## Prover-only inputs
 
