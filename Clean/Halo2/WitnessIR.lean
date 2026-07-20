@@ -233,6 +233,101 @@ variable {F : Type} [FiniteField F]
 
 end UnconstrainedExpr
 
+/-- Prover-only Nat-sorted scalar input (a value the prover knows, entering witgen at
+Nat sort — halo2's `Value<pallas::Scalar>`-style, e.g. a fixed-base mul scalar): the
+`Var` view is a Nat-sorted witness expression, the prover value is the number. -/
+structure UnconstrainedNat (F : Type) where
+  program : NExpr F
+
+namespace UnconstrainedNat
+
+@[reducible] instance : CircuitType UnconstrainedNat where
+  Var F := NExpr F
+  Value := unit
+  ProverValue _ := ℕ
+  evalVerifier _ _ := ()
+  evalProver pe e := e.eval { env := pe }
+
+instance : ProvableType (Halo2.Value UnconstrainedNat) :=
+  (inferInstance : ProvableType unit)
+
+@[circuit_norm] lemma var_of_unconstrainedNat {F : Type} :
+    Halo2.Var UnconstrainedNat F = NExpr F := rfl
+@[circuit_norm] lemma value_of_unconstrainedNat {F : Type} :
+    Halo2.Value UnconstrainedNat F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedNat {F : Type} :
+    Halo2.ProverValue UnconstrainedNat F = ℕ := rfl
+
+instance {F : Type} : Inhabited (Var UnconstrainedNat F) := ⟨.const 0⟩
+
+variable {F : Type} [FiniteField F]
+
+@[reducible] instance : Eval (Placed Environment F) (NExpr F) Unit :=
+  CircuitType.verifierEval UnconstrainedNat
+@[reducible] instance : Eval (Placed ProverEnvironment F) (NExpr F) ℕ :=
+  CircuitType.proverEval UnconstrainedNat
+
+@[circuit_norm] lemma eval_unconstrainedNat
+    (pe : Placed Environment F) (e : NExpr F) :
+    eval pe (e : Var UnconstrainedNat F) = () := rfl
+
+@[circuit_norm] lemma eval_unconstrainedNat_prover_raw
+    (pe : Placed ProverEnvironment F) (e : NExpr F) :
+    @Eval.eval (Placed ProverEnvironment F) (NExpr F) ℕ
+        (CircuitType.proverEval UnconstrainedNat) pe e
+      = e.eval { env := ({ place := pe.place, env := pe.env }
+          : Placed ProverEnvironment F) } := by
+  with_unfolding_all rfl
+
+end UnconstrainedNat
+
+/-- Prover-only Bool-sorted input (halo2's `Value<bool>`-style, e.g. a swap flag): the
+`Var` view is a Bool-sorted witness expression, the prover value is the `Bool`. -/
+structure UnconstrainedBool (F : Type) where
+  program : BExpr F
+
+namespace UnconstrainedBool
+
+@[reducible] instance : CircuitType UnconstrainedBool where
+  Var F := BExpr F
+  Value := unit
+  ProverValue _ := Bool
+  evalVerifier _ _ := ()
+  evalProver pe e := e.eval { env := pe }
+
+instance : ProvableType (Halo2.Value UnconstrainedBool) :=
+  (inferInstance : ProvableType unit)
+
+@[circuit_norm] lemma var_of_unconstrainedBool {F : Type} :
+    Halo2.Var UnconstrainedBool F = BExpr F := rfl
+@[circuit_norm] lemma value_of_unconstrainedBool {F : Type} :
+    Halo2.Value UnconstrainedBool F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedBool {F : Type} :
+    Halo2.ProverValue UnconstrainedBool F = Bool := rfl
+
+instance {F : Type} : Inhabited (Var UnconstrainedBool F) := ⟨.false⟩
+
+variable {F : Type} [FiniteField F]
+
+@[reducible] instance : Eval (Placed Environment F) (BExpr F) Unit :=
+  CircuitType.verifierEval UnconstrainedBool
+@[reducible] instance : Eval (Placed ProverEnvironment F) (BExpr F) Bool :=
+  CircuitType.proverEval UnconstrainedBool
+
+@[circuit_norm] lemma eval_unconstrainedBool
+    (pe : Placed Environment F) (e : BExpr F) :
+    eval pe (e : Var UnconstrainedBool F) = () := rfl
+
+@[circuit_norm] lemma eval_unconstrainedBool_prover_raw
+    (pe : Placed ProverEnvironment F) (e : BExpr F) :
+    @Eval.eval (Placed ProverEnvironment F) (BExpr F) Bool
+        (CircuitType.proverEval UnconstrainedBool) pe e
+      = e.eval { env := ({ place := pe.place, env := pe.env }
+          : Placed ProverEnvironment F) } := by
+  with_unfolding_all rfl
+
+end UnconstrainedBool
+
 end Halo2
 
 /-! ## Honest-witness IR reduction over an arbitrary `WitgenEnv`
@@ -315,7 +410,10 @@ def Halo2.unconstrainedEvalProc : Simproc := fun e => do
   let some m := instW.getAppArgs[2]? | return .continue
   let isIRCarrier := m.getAppFn.isConstOf ``Halo2.Unconstrained
   let isExprCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedExpr
-  unless isIRCarrier || isExprCarrier do return .continue
+  let isNatCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedNat
+  let isBoolCarrier := m.getAppFn.isConstOf ``Halo2.UnconstrainedBool
+  unless isIRCarrier || isExprCarrier || isNatCarrier || isBoolCarrier do
+    return .continue
   if isVerifier then
     let rhs := mkConst ``Unit.unit
     let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
@@ -328,13 +426,18 @@ def Halo2.unconstrainedEvalProc : Simproc := fun e => do
   let locals ← mkAppOptM ``List.toArray
     #[some sumTy, some (← mkAppOptM ``List.nil #[some sumTy])]
   let ctx ← withTransparency .default <| mkAppM ``Witgen.CtxOver.mk #[pe', locals, mkNatLit 0]
-  -- `M := value` must be supplied explicitly: higher-order unification cannot recover it
-  -- from the folded `Var (Unconstrained value) F` type of `v`
-  let some value := m.getAppArgs[0]? | return .continue
   let rhs ← withTransparency .default <|
-    if isIRCarrier then
+    if isNatCarrier then
+      mkAppM ``Witgen.NExprOver.eval #[ctx, v]
+    else if isBoolCarrier then
+      mkAppM ``Witgen.BExprOver.eval #[ctx, v]
+    else if isIRCarrier then do
+      -- `M := value` must be supplied explicitly: higher-order unification cannot
+      -- recover it from the folded `Var (Unconstrained value) F` type of `v`
+      let some value := m.getAppArgs[0]? | failure
       mkAppOptM ``Halo2.Unconstrained.evalIR #[none, none, some value, none, some pe', some v]
-    else
+    else do
+      let some value := m.getAppArgs[0]? | failure
       mkAppOptM ``Witgen.eval #[none, none, none, none, none, some value, none, some ctx, some v]
   let pf ← withTransparency .all <| mkExpectedTypeHint (← mkEqRefl e) (← mkEq e rhs)
   return .visit { expr := rhs, proof? := some pf }
