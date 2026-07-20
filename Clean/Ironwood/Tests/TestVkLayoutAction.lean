@@ -1,5 +1,5 @@
-import Clean.Ironwood.Fixtures.ActionLayout
 import Clean.Ironwood.Fixtures.ActionSelMap
+import Clean.Ironwood.Fixtures.Json
 import Clean.Ironwood.Action.RealBases
 import Clean.Ironwood.Action.CircuitPreIronwood
 import Clean.Ironwood.Fixtures.Layout
@@ -12,7 +12,8 @@ Reconstructs the keygen-view layout of the REAL orchard `Circuit` — region pla
 the ordered copy list, σ, and the complete fixed columns (generator table, constants,
 packed selectors, `q_s2`/`fixed_y_q`, the six fixed-base window tables) — from the
 ported `Action.Circuit.configure` (already CS-matched by `TestVkMatchAction`) plus a
-synthesize mirror, and checks them against the `dump_layout_action` fixture.
+synthesize mirror, and checks them against the `dump_layout_action` fixture
+(`actionLayout.json`, loaded at `#eval` time — see `Fixtures/Json.lean`).
 
 The mirror is the `TestVkLayoutNoteCommit` pattern: identical region stream to
 `Action.Circuit.synthesize`, with the six `FixedBase`-parameterized fixed-base-mul
@@ -28,49 +29,12 @@ open Halo2.Ironwood.Specs.Sinsemilla (Generators)
 open Halo2.Ironwood.Action.Circuit (Config configure orchardGate loadPrivate
   ANCHOR ENABLE_SPEND ENABLE_OUTPUT CV_NET_X CV_NET_Y NF_OLD RK_X RK_Y CMX)
 
-/-! ## Dump-derived generators, domain points, config -/
-
-/-- The generator-table x/y columns read back from the dump (fixed cols 1/2). -/
-def aTblCol (c : ℕ) : Array ℕ := Id.run do
-  let mut arr : Array ℕ := Array.replicate 1024 0
-  for (c', r, v) in actionLayout.fixed do
-    if c' = c ∧ r < 1024 then arr := arr.set! r v
-  return arr
-
-def aTblX : Array ℕ := aTblCol 1
-def aTblY : Array ℕ := aTblCol 2
+/-! ## Generators and config -/
 
 /-- The real proof-carrying generator family; the layout guards below cross-validate
 its table (extracted into `SinsemillaGenerators.lean`) against the dump's fixed
 columns. -/
 def aG : Generators := Halo2.Ironwood.Specs.Sinsemilla.orchardGenerators
-
-/-- `Q_MERKLE_CRH` (orchard `constants/sinsemilla.rs:56`). -/
-def merkleQ : Halo2.Ironwood.Point Fp :=
-  { x := (9991206725476878888751475603038274618448000607209514551456795194094072219296 : Fp),
-    y := (24209798415301550423396126020228723009317736024280831393239261884225294625378 : Fp) }
-
-theorem merkleQ_onCurve : merkleQ.OnCurve := by
-  show merkleQ.y ^ 2 = merkleQ.x ^ 3 + Halo2.Ironwood.pallasB
-  decide
-
-/-- `Q_COMMIT_IVK_M_GENERATOR` (orchard `constants/sinsemilla.rs:44`). -/
-def ivkQ : Halo2.Ironwood.Point Fp :=
-  { x := (2593820817260930114322133467408868473290945477826616247349533151445648376562 : Fp),
-    y := (12214744946019415453501880094709511126888074367290315326445800415816181472958 : Fp) }
-
-theorem ivkQ_onCurve : ivkQ.OnCurve := by
-  show ivkQ.y ^ 2 = ivkQ.x ^ 3 + Halo2.Ironwood.pallasB
-  decide
-
-/-- `Q_NOTE_COMMITMENT_M_GENERATOR` (orchard `constants/sinsemilla.rs:32`). -/
-def noteQ : Halo2.Ironwood.Point Fp :=
-  { x := (10629404576683096409262958701336170057000067777256141967953463442979689100381 : Fp),
-    y := (22898949290933268079297281211505753011910178734473470279111609228438645877859 : Fp) }
-
-theorem noteQ_onCurve : noteQ.OnCurve := by
-  show noteQ.y ^ 2 = noteQ.x ^ 3 + Halo2.Ironwood.pallasB
-  decide
 
 /-- The REAL ported configure (CS-matched by `TestVkMatchAction`). -/
 def aCfg : Config := (configure aG {}).1
@@ -107,44 +71,44 @@ def aProgramBase : Circuit Fp Unit := do
 
 /-! ## The reconstructed layout products vs the ported Action stack (ironwood)
 
-All checks live in ONE `#guard` so the shared reconstruction (ops → regions → copy list →
-σ → fixed) evaluates exactly once: each `#guard` re-runs its whole `def` dependency chain
-(defs are not memoized across commands), so the previous five separate guards materialised
-the full circuit ops ~4× over. The intermediate values are bound with `let` INSIDE the guard
-so the interpreter shares them across the conjuncts. Split back into per-product guards
+All checks live in ONE `#eval` so the shared reconstruction (ops → regions → copy list →
+σ → fixed) evaluates exactly once; the fixture is loaded from `actionLayout.json`
+(pinned content hash — see `Fixtures/Json.lean`). Split into per-product checks
 temporarily when debugging a mismatch. -/
-#guard
+#eval show IO Unit from do
+  let fx ← Json.loadLayoutFixture "Clean/Ironwood/Fixtures/actionLayout.json"
+    0x51cd2f7ce66a8c7
   let ops : Operations Fp := aProgram.operations
   let regions : List (ℕ × RegionOperations Fp) := (indexedRegions ops 0).1
   -- Region starts from the fixture placements (the single `generator_table` slot is the
   -- three `loadTable`s' — filtered).
-  let starts : List ℕ :=
-    ((actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.start))
-  let permCols : List ColRef := actionLayout.permColumns
-  let copyList : List (ℕ × ℕ × ℕ × ℕ) :=
-    V1.copyList permCols starts ops actionLayout.constants
+  let starts : List ℕ := ((fx.regions.filter (·.name ≠ "generator_table")).map (·.start))
+  let permCols : List ColRef := fx.permColumns
+  let copyList : List (ℕ × ℕ × ℕ × ℕ) := V1.copyList permCols starts ops fx.constants
   let sigma : List (ℕ × ℕ × ℕ × ℕ) :=
-    sigmaEntries (runAssembly actionLayout.n permCols.length copyList)
+    sigmaEntries (runAssembly fx.n permCols.length copyList)
   -- Usable rows `n − (blindingFactors + 1)` (blinding = 5, dump META).
   let usable : ℕ := 2042
   let fixed : List (ℕ × ℕ × ℕ) :=
     sortFixed (dedupFixed
       (tableFixed (ZMod.val : Fp → ℕ) usable ops
-        ++ constantsFixed actionLayout.constants
+        ++ constantsFixed fx.constants
         ++ selectorFixed actionSelMap (activations starts regions)
         ++ regionAssignFixed (ZMod.val : Fp → ℕ) starts regions))
-  -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list
-  decide (sigmaEntries (runAssembly actionLayout.n permCols.length
-      actionLayout.copyList) = actionLayout.sigma)
-  -- Region lockstep: the fixture's non-table region names, in order, are this side's
-  -- assignRegion sequence.
-  && decide ((actionLayout.regions.filter (·.name ≠ "generator_table")).map (·.name)
-      = (regionSlots ops).filterMap fun (isRegion, nm) => if isRegion then some nm else none)
-  -- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
-  && decide (copyList = actionLayout.copyList)
-  -- the keygen permutation σ
-  && decide (sigma = actionLayout.sigma)
-  -- the full fixed contents
-  && decide (fixed = sortFixed actionLayout.fixed)
+  Json.runChecks [
+    -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list
+    ("σ replay from fixture copyList",
+      decide (sigmaEntries (runAssembly fx.n permCols.length fx.copyList) = fx.sigma)),
+    -- Region lockstep: the fixture's non-table region names, in order, are this side's
+    -- assignRegion sequence.
+    ("region-name lockstep",
+      decide ((fx.regions.filter (·.name ≠ "generator_table")).map (·.name)
+        = (regionSlots ops).filterMap fun (isRegion, nm) => if isRegion then some nm else none)),
+    -- the ordered copy list (order-sensitive — σ's cycle rotations depend on it)
+    ("copyList", decide (copyList = fx.copyList)),
+    -- the keygen permutation σ
+    ("σ", decide (sigma = fx.sigma)),
+    -- the full fixed contents
+    ("fixed contents", decide (fixed = sortFixed fx.fixed))]
 
 end Halo2.Ironwood.Fixtures.Test.LayoutAction

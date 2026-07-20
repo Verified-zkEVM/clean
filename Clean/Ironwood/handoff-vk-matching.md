@@ -982,3 +982,21 @@ CompElliptic's namespaces, all upstream candidates. The dep's `nsmul = binNsmul`
 vendor's `nsmulRec`) was transparent to every proof, and unlocks `native_decide` on
 `n • P` goals. zcash/ironwood's `Fp` (`ZMod PALLAS_BASE_CARD`) is now defeq to ours
 through the shared dep. Full Clean + CleanTests green.
+
+## Action fixtures are JSON now (July 20, 2026, Gregor's directive)
+
+Clean-rebuild measurement of the Action VK suite showed 95% of the ~66s wall was
+ELABORATING the generated fixture literals (ActionLayout/ActionBaseLayout ~37-53s each,
+23.5s of pure elaboration + 7s compilation + 4s linters per file; the actual guard
+checks: ~1.5s). The four Action fixtures (Pre/Post/Layout/BaseLayout) are now
+`.json` data files; `Fixtures/Json.lean` has the codecs (tagged-array `Expr`, decimal
+strings for field elements) and a checked loader that pins each file's FNV-1a-64
+content hash in the consuming test (lake can't track .json inputs — the pinned hash IS
+the tracked input; regen → hash mismatch error prints the new hash to pin). Tests
+switched from `#guard` to `#eval` IO checks (same trust: both run the compiled
+evaluator; failure = build failure). Suite clean rebuild: 66s → 12.9s.
+
+Regen flow until the Rust dumper emits JSON directly: drop the dumper's Lean output in
+a scratch module and dump via `jCsFixture`/`jLayoutFixture` + `hex (fnv1a bytes)` (the
+session's DumpJson.lean pattern, with roundtrip check). ActionSelMap and the Add/Mul
+doc-pair fixtures stay as readable Lean literals.
