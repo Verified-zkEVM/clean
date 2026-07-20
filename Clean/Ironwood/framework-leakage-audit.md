@@ -1,11 +1,7 @@
 # Framework-Leakage Audit — Clean/Ironwood
 
-**Anchor commit:** `4d922b1a` (branch `halo2-clean-2`). All line numbers are from this
-working tree. Files marked **⚠ in-flux** are being edited concurrently (packed-call
-refactor) — re-grep the symbol name before trusting a line number there:
-`Clean/Halo2/Formal.lean`, `Subcircuit.lean`, `Tactics/AbstractOutputs.lean`,
-`Clean/Ironwood/Ecc/Mul.lean`, `Ecc/MulOverflow.lean`, `Ecc/MulFixed/Short.lean`,
-`Ecc/MulFixed/BaseFieldElem.lean`, `Sinsemilla/HashToPoint.lean`.
+**Anchor commit:** `4d922b1a` (branch `halo2-clean-2`). All line numbers are from that
+tree — re-grep the symbol name before trusting a line number.
 
 This is a standalone handoff for a cleanup agent with **no other context**. Read the
 "Design contract" and "Rules" sections first, then work the "Cleanup order".
@@ -115,7 +111,7 @@ Body is uniformly `rw [FormalCircuit.call_regionCount]; rfl` (or `.foldOps_regio
 | NoteCommit/MainBundle.lean | 82 | `commit_call_regionCount` | |
 | NoteCommit/MainBundle.lean | 169 | `toFormal_call_regionCount` | |
 | CommitDomain.lean | 151 | `blind_call_regionCount` | |
-| Ecc/Mul.lean ⚠ | 1834 | `mul_call_regionCount` | |
+| Ecc/Mul.lean | 1834 | `mul_call_regionCount` | |
 | Ecc/Add.lean | 414 | `toFormal_call_regionCount` | |
 | Ecc/WitnessPoint.lean | 176 | `pointNonId_toFormal_call_regionCount` | |
 | Ecc/MulFixed/FullWidth.lean | 1118 | `circuit_call_regionCount` | |
@@ -144,11 +140,11 @@ output** — every one should be deleted and replaced by a single
 
 | File | Line | Name |
 |---|---|---|
-| Ecc/Mul.lean ⚠ | 393 | `incomplete_call_output` |
-| Ecc/Mul.lean ⚠ | 404 | `complete_call_output_zs` |
-| Ecc/Mul.lean ⚠ | 411 | `add_call_output` |
-| Ecc/Mul.lean ⚠ | 473/491/504 | plain-`.output` restatements of the above |
-| Sinsemilla/HashToPoint.lean ⚠ | 461 | `hashCircuit_output_eq` |
+| Ecc/Mul.lean | 393 | `incomplete_call_output` |
+| Ecc/Mul.lean | 404 | `complete_call_output_zs` |
+| Ecc/Mul.lean | 411 | `add_call_output` |
+| Ecc/Mul.lean | 473/491/504 | plain-`.output` restatements of the above |
+| Sinsemilla/HashToPoint.lean | 461 | `hashCircuit_output_eq` |
 | Poseidon/Permute.lean | 64/68 | `fullRound_output_eq` / `partialRound_output_eq` |
 
 Mul.lean's `private *_call_output` family is the exemplar the task brief already flagged
@@ -228,11 +224,11 @@ should not need to spell anything at all — not a hand-cited lemma at each site
 | File | count | | File | count |
 |---|---|---|---|---|
 | Action/Bundle.lean | 164 | | Ecc/MulComplete.lean | 12 |
-| NoteCommit/MainBundle.lean | 28 | | Action/AddressIntegrity.lean ⚠(Mul dep) | 9 |
-| Sinsemilla/Merkle.lean | 26 | | Ecc/Mul.lean ⚠ | 8 |
+| NoteCommit/MainBundle.lean | 28 | | Action/AddressIntegrity.lean | 9 |
+| Sinsemilla/Merkle.lean | 26 | | Ecc/Mul.lean | 8 |
 | CommitIvk/MainBundle.lean | 17 | | Ecc/MulIncomplete.lean | 8 |
 | Sinsemilla/Chain.lean | 12 | | NoteCommit/Main.lean | 7 |
-| (others: CommitDomain 6, HashToPoint⚠ 3, Basic 3, HashPiece 2, Permute 2, Hash 2, CommitIvk/Main 2, WitnessPoint 1, CommitIvk/Bundle 1, DeriveNullifier 1) | | | | |
+| (others: CommitDomain 6, HashToPoint 3, Basic 3, HashPiece 2, Permute 2, Hash 2, CommitIvk/Main 2, WitnessPoint 1, CommitIvk/Bundle 1, DeriveNullifier 1) | | | | |
 
 Most are `by with_unfolding_all rfl` (a spelling bridge) or
 `by with_unfolding_all exact h<...>` (re-typing a hypothesis whose type differs only by an
