@@ -468,3 +468,29 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
   (`foldState`/`foldCall`/`foldOps` + `_regionCount`/`_constraints`/`_extendsWitnesses`/
   `_output`); the correct tool for loop-body gadgets (Merkle `fold_regionCount:1986` already
   uses `foldOps_regionCount`).
+
+---
+
+## Work reservation (July 21, 2026)
+
+The cleanup is being parallelized. **Reserved by the fixtures/ironwood-move agent
+(Claude session c5344d2b, "agent F")** — the userland Category 1/2 sweep, i.e.
+`derive_contract_bridges` adoption and deletion of the hand-written
+`*_spec_eq` / `*_extract_eq` / `*_output` / `*_call_regionCount` bridges (+ the
+Category 2 cross-file dedup and the step-6 relocations), over:
+
+- `Ecc/Add.lean`, `Ecc/WitnessPoint.lean`, `Ecc/MulFixed/FullWidth.lean`, `Ecc/Mul.lean`
+- `Action/{DeriveNullifier,ValueCommit,SpendAuthority,AddressIntegrity}.lean`
+- `NoteCommit/{Main,MainBundle,Composites,YComposite}.lean`,
+  `CommitIvk/{Main,MainBundle,Composite}.lean`
+- `Sinsemilla/{Chain,Merkle,CommitDomain,HashToPoint}.lean`, `Poseidon/{Permute,Hash}.lean`,
+  `Action/Bundle.lean` (its 28 Category-1 bridges ONLY — the `with_unfolding_all`
+  epicenter/Category 3 in that file is NOT claimed)
+
+NOT claimed (free for the other stream): the framework-side steps — #34
+(function-typed binders in `derive_contract_bridges`), the Category 3/4 `circuit_norm` /
+`subcircuit_rw` gap-filling, the function-family whnf fix (cleanup steps 1, 3, 4), and
+all `Clean/Halo2/` files. Function-binder bridge stacks (`chainC_*`/`hashC_*`/`shortC_*`)
+stay untouched until #34 lands.
+
+Mark progress here per file as it lands; remove this section when the sweep is done.
