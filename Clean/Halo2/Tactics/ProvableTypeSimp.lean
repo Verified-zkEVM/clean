@@ -60,6 +60,11 @@ def structEvalSimpLemmas : Array Name := #[
   ``Halo2.Cell.of_column,
   ``Halo2.Environment.get_advice, ``Halo2.Environment.get_fixed, ``Halo2.Environment.get_inst,
   ``Halo2.WitgenEnv.readVar_halo2,
+  -- the hint-type dispatch simproc: reduces `Eval.eval` of the `Unconstrained*` hint
+  -- carriers AND of `deriving CircuitType` mixed records (via their generated
+  -- `eval_*_raw` lemmas) — without it, a mixed record's `h_input` stays folded and the
+  -- destructure/split fixpoint below never sees its components
+  ``Halo2.unconstrainedEvalProc,
   -- the (verifier-side) struct-eval simprocs
   ``Halo2.StructEval.structEvalLiteralStructProc, ``Halo2.StructEval.structEvalLiteralTypeProc,
   ``Halo2.StructEval.structEvalLiteralEvalProc,
@@ -71,11 +76,25 @@ def structEvalSimpLemmas : Array Name := #[
 ]
 
 /-- Whether a variable should be destructured: its type is a `ProvableType` (behind
-`Var`/`Value` synonyms, hence `.instances` whnf). -/
+`Var`/`Value` synonyms, hence `.instances` whnf) — OR a **value-view companion** of a
+`deriving CircuitType` mixed hint+provable record (`<M>.Value` / `<M>.ProverValue`,
+marked `DecomposableStruct` by the deriver). The `Var` view is deliberately NOT
+destructurable: a mixed record *variable* stays whole — its componentwise normal form
+comes from the derived `eval_*_raw` lemmas over its projections, and parent proofs
+reference it whole (`extract cfg input_var i₀`). The value views are plain data records
+(possibly with non-provable hint components like `ℕ`), safe to `cases` componentwise. -/
 private def isDestructurableVar (fvarId : FVarId) : MetaM Bool := do
   if (← fvarId.findDecl?).isNone then return false
   let type ← instantiateMVars (← inferType (.fvar fvarId))
-  Halo2.StructEval.isProvableTypeLike type (allowDecomposable := false)
+  if ← Halo2.StructEval.isProvableTypeLike type (allowDecomposable := false) then
+    return true
+  let type' ← withTransparency .instances <| whnf type
+  let .app tycon _ := type' | return false
+  let .const tyName _ := tycon.getAppFn | return false
+  let isValueView := tyName.isStr &&
+    (tyName.getString! == "Value" || tyName.getString! == "ProverValue")
+  unless isValueView do return false
+  Halo2.StructEval.isProvableTypeLike type (allowDecomposable := true)
 
 /-- Evaluation heads whose equations/arguments drive destructuring (verifier + witgen). -/
 private def evalHeads : Array Name :=

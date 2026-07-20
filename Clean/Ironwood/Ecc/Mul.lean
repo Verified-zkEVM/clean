@@ -305,35 +305,36 @@ def mainRegion (cfg : Config) (input : Var Inputs Fp) :
   --    (Rust `assign_advice_from_constant`). The hi half copies this same cell into its own `z`
   --    at `offHi` — the "assign the same value to the same cell twice" no-op (mul.rs:198-200).
   let zInit ← assignAdvice cfg.hiConfig.z offHi
-    (.native fun _ => #v[(0 : Fp)])
+    (.ofFExpr (.const 0))
   constrainConstant zInit 0
   -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0  (mul.rs:209-216)
   let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
-    ⟨input.alpha, input.base, acc, zInit⟩
+    ⟨.expr input.alpha, input.base, acc, zInit⟩
   -- 4. lo half: 126 double-and-add bits k_129..k_4, bit window 125 (the donor's
   --    `input.bits env (125 + i)` shift), running sum chained  (mul.rs:220-227)
   let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig
-    offLo ⟨input.alpha, input.base, hi.acc, hi.zs[124]⟩
+    offLo ⟨.expr input.alpha, input.base, hi.acc, hi.zs[124]⟩
   -- 5. complete rounds: k_3..k_1, bit window 251  (mul.rs:239-253)
   let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig
-    offComp ⟨input.alpha, input.base, lo.acc.x, lo.acc.y, lo.zs[125]⟩
+    offComp ⟨.expr input.alpha, input.base, lo.acc.x, lo.acc.y, lo.zs[125]⟩
   -- 6. the LSB step k_0 = kBits alpha 254, derived from the scalar cell
   --    (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
-  -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row
+  -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row (the bit condition is
+  -- the LSB's reading program on the scalar cell, `MulComplete.kBitWindowExpr` at 254)
   let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
-    (.native fun env => #v[2 * readCell env z1
-      + (if kBitsWindow (readCell env input.alpha) 254 0 then 1 else 0)])
+    (.ofFExpr (.add (.mul (.const 2) (.expr z1))
+      (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0) (.const 1) (.const 0))))
   -- copy base_x, base_y into the LSB gate window (next row)
   let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
   let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
   -- the correction point (base_x, ±base_y) or identity, witnessed on add.xP/add.yP (cur row)
   let corrX ← assignAdvice cfg.addConfig.xP offLsb
-    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
-      else readCell env input.base.x])
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (.expr input.base.x)))
   let corrY ← assignAdvice cfg.addConfig.yP offLsb
-    (.native fun env => #v[if kBitsWindow (readCell env input.alpha) 254 0 then 0
-      else -(readCell env input.base.y)])
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (Witgen.FExprOver.neg (.expr input.base.y))))
   -- the q_mul_lsb gate at the LSB base row
   (lsbGate cfg).enable offLsb
   -- the final complete addition: result = corr + acc
@@ -606,14 +607,14 @@ never-reduced) loop output, the `zs` are the fixed-row cells. -/
 private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     (MulComplete.assign_region 3 w).output cfg off inp self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
+      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- `.call` spelling of `complete_output_eq`. -/
 private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     ((MulComplete.assign_region 3 w).call cfg off inp).output self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
+      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
@@ -716,13 +717,16 @@ private theorem completeOutput_zs_getElem (env : Placed Environment Fp)
   show (ProvableType.eval (M := fields 3) env.place env.env zs)[i] = _
   rw [fieldsEval_getElem env.place env.env zs i hi, ProvableType.eval_field]
 
-/-- Componentwise eval of a `MulComplete.Inputs` record literal. -/
+/-- Componentwise eval of a `MulComplete.Inputs` record (the scalar slot is a prover hint,
+its verifier value is trivial). Stated over a whole var — a mixed-record literal admits no
+`Eval`-synthesizable ascription — so use sites `rw` it and the literal's projections reduce
+definitionally. -/
 private theorem compInputs_eval_eq (env : Placed Environment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
-          yA := eval env yA, z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells]
+    (v : Var MulComplete.Inputs Fp) :
+    eval env v
+      = { alpha := (), base := eval env v.base, xA := eval env v.xA,
+          yA := eval env v.yA, z := eval env v.z } :=
+  MulComplete.Inputs.eval_verifier_raw env v
 
 /-- Componentwise eval of a `MulOverflow.Inputs` record literal. -/
 private theorem ovInputs_eval_eq (env : Placed Environment Fp)
@@ -746,35 +750,60 @@ private theorem eval_of_prover (env : Placed ProverEnvironment Fp) (self : Regio
       = env.env.toEnvironment.advice col ((env.place self + row : ℕ) : ℤ) := by
   rw [ProvableType.eval_field_prover, assignedCell_eval_of]
 
-/-- Prover-side componentwise eval of `MulIncomplete.Inputs`. -/
+/-- Prover-side componentwise eval of `MulIncomplete.Inputs` (the scalar slot holds the
+reading program; its prover value is the program's evaluation). Stated over a whole var —
+a mixed-record literal admits no `Eval`-synthesizable ascription — so use sites `rw` it
+and the literal's projections reduce definitionally. -/
 private theorem hiInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base acc : Point (AssignedCell Fp)) (z : AssignedCell Fp) :
-    eval env (⟨alpha, base, acc, z⟩ : Var MulIncomplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, acc := eval env acc,
-          z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+    (v : Var MulIncomplete.Inputs Fp) :
+    eval env v
+      = { alpha := (Witgen.FExprOver.eval { env := env } v.alpha : Fp),
+          base := eval env v.base, acc := eval env v.acc, z := eval env v.z } := by
+  rw [MulIncomplete.Inputs.eval_prover_raw]
+  with_unfolding_all rfl
 
-/-- Prover-side componentwise eval of `MulComplete.Inputs`. -/
+/-- The cell-reading scalar program's prover value is the cell's value. -/
+private theorem fexpr_expr_eval_prover (env : Placed ProverEnvironment Fp)
+    (c : AssignedCell Fp) :
+    Witgen.FExprOver.eval { env := env } (.expr c : FExpr Fp) = eval env c := by
+  with_unfolding_all rfl
+
+/-- The LSB bit program's prover value: `kBitsWindow` of the scalar cell's value. -/
+private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
+    (c : AssignedCell Fp) (w i : ℕ) :
+    Witgen.BExprOver.eval { env := env } (MulComplete.kBitWindowExpr (.expr c) w i)
+      = kBitsWindow (readCell env c) w i := by
+  have h := congrFun (MulComplete.ebitsVal_kBitWindowExpr (.expr c) w env) i
+  simp only [MulComplete.ebitsVal] at h
+  rw [h]
+  with_unfolding_all rfl
+
+/-- Prover-side componentwise eval of `MulComplete.Inputs` (the scalar slot holds the
+reading program; its prover value is the program's evaluation). Whole-var, like
+`hiInputs_eval_eq_prover`. -/
 private theorem compInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
-          yA := eval env yA, z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+    (v : Var MulComplete.Inputs Fp) :
+    eval env v
+      = { alpha := (Witgen.FExprOver.eval { env := env } v.alpha : Fp),
+          base := eval env v.base, xA := eval env v.xA,
+          yA := eval env v.yA, z := eval env v.z } := by
+  rw [MulComplete.Inputs.eval_prover_raw]
+  with_unfolding_all rfl
 
-/-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the landing
-for the children's derived-bit facts (`kBitsWindow (…).alpha w` → `kBitsWindow (alpha value) w`). -/
+/-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the
+scalar program's evaluation, the landing for the children's derived-bit facts
+(`kBitsWindow (…).alpha w` → `kBitsWindow (alpha value) w`, via `fexpr_expr_eval_prover`
+once the projection reduces on a `.expr`-wrapped cell). -/
 private theorem hiInputs_alpha_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base acc : Point (AssignedCell Fp)) (z : AssignedCell Fp) :
-    (eval env (⟨alpha, base, acc, z⟩ : Var MulIncomplete.Inputs Fp)).alpha
-      = eval env alpha := by
+    (v : Var MulIncomplete.Inputs Fp) :
+    (eval env v).alpha = Witgen.FExprOver.eval { env := env } v.alpha := by
   rw [hiInputs_eval_eq_prover]
 
-/-- Prover-side `alpha`-projection of an evaluated `MulComplete.Inputs` record. -/
+/-- Prover-side `alpha`-projection of an evaluated `MulComplete.Inputs` record — the
+scalar program's evaluation. -/
 private theorem compInputs_alpha_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    (eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)).alpha
-      = eval env alpha := by
+    (v : Var MulComplete.Inputs Fp) :
+    (eval env v).alpha = Witgen.FExprOver.eval { env := env } v.alpha := by
   rw [compInputs_eval_eq_prover]
 
 /-- Prover-side componentwise eval of `MulOverflow.Inputs`. -/
@@ -879,13 +908,15 @@ theorem addInputs_eval_eq (env : Placed Environment Fp) (p q : Point (AssignedCe
     eval env (⟨p, q⟩ : Add.Inputs (AssignedCell Fp)) = { p := eval env p, q := eval env q } := by
   simp only [circuit_norm, ProvableType.eval_cells]
 
-/-- Eval of a `MulIncomplete.Inputs` record (componentwise). -/
-theorem hiInputs_eval_eq (env : Placed Environment Fp) (alpha : AssignedCell Fp)
-    (base acc : Point (AssignedCell Fp)) (z : AssignedCell Fp) :
-    eval env (⟨alpha, base, acc, z⟩ : Var MulIncomplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, acc := eval env acc,
-          z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells]
+/-- Eval of a `MulIncomplete.Inputs` record (componentwise; the scalar slot is a prover
+hint, its verifier value is trivial). Stated over a whole var — a mixed-record literal
+admits no `Eval`-synthesizable ascription — so use sites `rw` it and the literal's
+projections reduce definitionally. -/
+theorem hiInputs_eval_eq (env : Placed Environment Fp) (v : Var MulIncomplete.Inputs Fp) :
+    eval env v
+      = { alpha := (), base := eval env v.base, acc := eval env v.acc,
+          z := eval env v.z } :=
+  MulIncomplete.Inputs.eval_verifier_raw env v
 
 /-- Verifier: an abstract point-output var's coordinate-evals reassemble to its whole-point eval
 (`Point.ofCoords (eval env o.x, eval env o.y) ≡ eval env o`), so an entering accumulator threaded
@@ -1507,7 +1538,7 @@ def mul :
     -- ── z_init honest value (the witness) ──
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval] at hWZi
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval] at hWZi
     -- ── init add: verifier Spec (acc = base + base = [2]base) via h_spec_0 ──
     have hSpecInit := (h_spec_0 trivial
       (by
@@ -1555,7 +1586,8 @@ def mul :
           rw [hbaseEvalP]
           exact hAcc2P)).2
     simp only [hi_proverSpec_eq, MulIncomplete.RoundInvariant] at hHiPS
-    rw [hiInputs_alpha_prover, halphap, hBF0] at hHiPS
+    rw [hiInputs_alpha_prover] at hHiPS
+    simp only [fexpr_expr_eval_prover, halphap, hBF0] at hHiPS
     obtain ⟨hHiChain, hHiAccCl⟩ := hHiPS
     obtain ⟨hHiZ0, hHiZstep⟩ := zChain_split hHiChain
     -- the honest hi chain, as chainNat casts
@@ -1616,7 +1648,8 @@ def mul :
           rw [Point.eval_eq_prover, eval_of_prover, eval_of_prover, hbaseEvalP]
           exact hHiOut)).2
     simp only [lo_proverSpec_eq, MulIncomplete.RoundInvariant] at hLoPS
-    rw [hiInputs_alpha_prover, halphap, hBF125] at hLoPS
+    rw [hiInputs_alpha_prover] at hLoPS
+    simp only [fexpr_expr_eval_prover, halphap, hBF125] at hLoPS
     obtain ⟨hLoChain, hLoAccCl⟩ := hLoPS
     obtain ⟨hLoZ0, hLoZstep⟩ := zChain_split hLoChain
     -- the honest lo chain, continued from the hi chain (hi z-cell 124, via `← h_gen_out_1`)
@@ -1675,7 +1708,8 @@ def mul :
         exact ⟨hLoOutV, hbaseV⟩)
     have hCompPS := hCompBoth.2
     simp only [comp_proverSpec_eq, MulComplete.RoundInvariant] at hCompPS
-    rw [compInputs_alpha_prover, halphap, hW251] at hCompPS
+    rw [compInputs_alpha_prover] at hCompPS
+    simp only [fexpr_expr_eval_prover, halphap, hW251] at hCompPS
     obtain ⟨hCompChain, hCompAccCl⟩ := hCompPS
     -- the honest complete-phase accumulator validity
     obtain ⟨hCompAccV, -⟩ := hCompAccCl
@@ -1717,8 +1751,9 @@ def mul :
     simp only [← h_gen_out_3] at hWZ0
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell,
-      complete_output_eq, Vector.getElem_ofFn, assignedCell_eval_of] at hWZ0
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval,
+      kBitWindowExpr_expr_eval, readCell,
+      complete_output_eq, Vector.getElem_ofFn] at hWZ0
     -- the LSB bit landing: rewrite the closure's scalar-cell read to `input_alpha`, then the
     -- derived bit to `bits 254`
     have haevalv : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha
@@ -1743,7 +1778,9 @@ def mul :
     -- ── the honest correction-point cells ──
     simp only [RegionOperations.extendsWitnesses_cons, RegionOperations.extendsWitnesses_nil,
       RegionOperation.extendsWitness_assignAdvice, and_true,
-      Witgen.WitgenIROver.eval, readCell, AssignedCell.eval] at hWCx hWCy
+      Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval,
+      Witgen.FExprOver.neg, kBitWindowExpr_expr_eval, neg_one_mul, readCell,
+      AssignedCell.eval] at hWCx hWCy
     simp only [hIalpha, hlsb0] at hWCx hWCy
     have hCxv : env.env.toEnvironment.advice cfg.addConfig.xP
         ((env.place i₀ + (offLsb) : ℕ) : ℤ)
