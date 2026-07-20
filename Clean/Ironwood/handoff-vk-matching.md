@@ -902,3 +902,37 @@ the ten gate leaves discharge with:
   shift (hWaP/hWbP/hWeP/hWgP witness equations)⟩.
 Then `def circuit` (already written) + import MainBundle in Clean/Ironwood.lean + full
 build → NoteCommit bundle DONE. Then the VK fixture (orchard dump harness) remains.
+
+## Ironwood self-contained — Clean/Orchard dependency removed (July 20, 2026)
+
+Gregor's directive: Clean/Orchard has served its purpose and is about to be removed;
+Ironwood must depend only on the framework (Clean/Halo2). DONE — `lake build Clean` and
+`lake build CleanTests` are green with ZERO `Clean.Orchard` references outside
+`Clean/Orchard` (which is now fully orphaned: `Clean.lean` no longer imports it; the
+tree itself is left for whoever performs the deletion).
+
+Where things landed:
+- `Clean/Ironwood/Specs/` = the old `Clean/Orchard/Specs` (verbatim copy), namespaces
+  `Orchard.*` → `Halo2.Ironwood.*` (so `Fp`/`Fq`/`Point`/`pallasB` are now defined in
+  `Specs/Pallas.lean` under `Halo2.Ironwood` — `Ecc/Basic.lean`'s abbrevs are gone).
+  The vendored `CompElliptic`/`CompPoly` namespaces are unchanged.
+- Phase-1 donor files' pure layers live as theorems files next to their consuming
+  circuits (`XTheorems.lean` / folder `Theorems.lean` pattern): Ecc `Defs`,
+  `DoubleAndAdd`, `AddTheorems`, `AddIncompleteTheorems`, `Mul*Theorems`,
+  `MulFixed/{Theorems,BaseFieldElemTheorems,ShortTheorems,CertCheck,Certs/*}`;
+  Sinsemilla `HVec`, `ChipTheorems`, `ChainTheorems`, `CommitDomainTheorems`;
+  Poseidon `Constants`, `Pow5Theorems`, `SpongeTheorems`, `HashTheorems`; NoteCommit
+  `CanonicityTheorems` (incl. the five gate specs), `DecomposeTheorems`,
+  `MainTheorems`; CommitIvk `GateTheorems`, `ChunkTheorems`, `MainTheorems`;
+  `Utilities/RunningSum`. Old-DSL circuit bundles and Var/Environment-level glue were
+  pruned — these files are value-level theory only.
+- Dedup (per Gregor's no-private-copies rule): the hand-copied Chain value layer in
+  `Sinsemilla/Chain.lean` and the `pieceWord`/`accAfter`/... copies in
+  `Sinsemilla/Basic.lean` are deleted in favor of `ChainTheorems`; the
+  `honestChunks_donor_eq` bridges in the two MainBundles are now `rfl`.
+- VK fixtures + tests moved: `Clean/Ironwood/Fixtures/*` (incl. FixtureTypes/Layout/
+  Project — they are Fp-specialized) and `Clean/Ironwood/Tests/TestVk*` +
+  `BenchFixedBase`; namespace `Halo2.Fixtures` → `Halo2.Ironwood.Fixtures`.
+  `Clean/Halo2` is now Ironwood-free except its framework tests' toy usages.
+  The LOCAL-ONLY Rust dumper commits (this machine, /root/code/halo2) emit the new
+  `Clean.Ironwood.Fixtures`/`Halo2.Ironwood.Fixtures` header (commit a6964d4).
