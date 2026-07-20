@@ -496,7 +496,7 @@ theorem checkBase_sound {numLower : ℕ} (hnl : 6 < numLower) {c : BaseCert}
         simp only [List.getElem_drop, show 1 + k = k + 1 from by omega] at this
         rw [this]
 
-/-! ### The `windowPoint` bridge (85-window donor scalars) -/
+/-! ### The `windowPoint` bridge (85-window scalars) -/
 
 /-- The certified table entry for window `w`, value `k` (of a base with
 `numLower + 1` windows). -/
@@ -528,7 +528,7 @@ theorem offsetAcc_eq_sum :
 
 open Halo2.Ironwood.Point in
 /-- The full 85-window bridge: a passed `checkBase 84` certificate's entries ARE the
-donor `windowPoint`s of its base. -/
+`windowPoint`s of its base. -/
 theorem cert_windowPoint_eq {c : BaseCert}
     (hB : (pointOf c.base).OnCurve) (h : checkBase 84 c = true) :
     ∀ w, (hw : w < 85) → ∀ k, (hk : k < 8) →
@@ -782,8 +782,7 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     rwa [cast_subm _ (Nat.le_of_lt (of_decide_eq_true hylt))] at this
 
 open Halo2.Ironwood.Point in
-/-- Construct a proof-carrying donor `FixedBase` (85 windows) from a passed
-certificate. -/
+/-- Construct a proof-carrying `FixedBase` (85 windows) from a passed certificate. -/
 def ofCert (c : FullCert) (h : checkFull 84 c = true) :
     Halo2.Ironwood.Ecc.MulFixed.FixedBase where
   point := pointOf c.base
@@ -855,8 +854,8 @@ theorem short_windowScalar_val_lower {w k : ℕ} (hw : w < 21) (hk : k < 8) :
         norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 open Halo2.Ironwood.Point in
-/-- The 22-window bridge: a passed `checkBase 21` certificate's entries ARE the donor
-Short `windowPoint`s of its base. -/
+/-- The 22-window bridge: a passed `checkBase 21` certificate's entries ARE the Short
+`windowPoint`s of its base. -/
 theorem cert_windowPoint_eq_short {c : BaseCert}
     (hB : (pointOf c.base).OnCurve) (h : checkBase 21 c = true) :
     ∀ (w : ℕ), (hw : w < 22) → ∀ (k : ℕ), (hk : k < 8) →
@@ -894,8 +893,7 @@ theorem cert_windowPoint_eq_short {c : BaseCert}
     exact (ZMod.natCast_rightInverse _).symm
 
 open Halo2.Ironwood.Point in
-/-- Construct a proof-carrying donor `Short.FixedBase` (22 windows) from a passed
-certificate. -/
+/-- Construct a proof-carrying `Short.FixedBase` (22 windows) from a passed certificate. -/
 def ofCertShort (c : FullCert) (h : checkFull 21 c = true) :
     Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase where
   point := pointOf c.base

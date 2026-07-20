@@ -5,57 +5,39 @@ import Clean.Ironwood.Ecc.Basic
 
 namespace Halo2.Ironwood.Ecc
 /-!
-Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add.rs`
-- `complete addition`
+Complete point addition `P + Q = R`, valid for ALL Pallas points including the identity. The gate's
+twelve polynomials implement the complete group law, selecting the branch (`P = Q`, `P = −Q`, either
+point at infinity, or generic) via the `inv0` hints `α, β, γ, δ` and the slope `λ`. `x_qr`/`y_qr`
+carry `Q` at the current row and `R` at the next row.
 
-Port of the complete point-addition gadget. Mirrors `AddIncomplete.lean` but for the
-*complete* group law, valid for ALL Pallas points (identity included).
-
-The Rust chip's `EccConfig` hands `Config::configure` four advice columns `x_p, y_p,
-x_qr, y_qr` (P coords at the current row; Q at the current row and R at the next row of
-`x_qr, y_qr`) plus five auxiliary advice columns `lambda, alpha, beta, gamma, delta`
-holding the `inv0` hints. `configure` enables equality on the four point columns and
-allocates one simple selector `q_add`. The gate (12 polynomials) is queried at
-`Rotation::cur()` for everything except `x_r, y_r` which are `Rotation::next()` on
-`x_qr, y_qr`. `assign_region` copies P/Q into the current row, then witnesses `α = inv0(x_q
-− x_p)`, `β = inv0(x_p)`, `γ = inv0(x_q)`, `δ = inv0(y_q+y_p) if x_q=x_p else 0`, `λ`, and
-the complete-addition result `R` into the next row.
+Reference: `halo2_gadgets/src/ecc/chip/add.rs`.
 -/
 
 namespace Add
 
-/-- The Rust `add::Config`: one simple selector, the four point columns, and the five
-auxiliary hint columns. `x_qr`/`y_qr` carry Q at the current row and R at the next row. -/
 structure Config where
   qAdd : Selector
+  -- lambda
   lambda : Column .advice
+  -- x-coordinate of P in P + Q = R
   xP : Column .advice
+  -- y-coordinate of P in P + Q = R
   yP : Column .advice
+  -- x-coordinate of Q or R in P + Q = R
   xQR : Column .advice
+  -- y-coordinate of Q or R in P + Q = R
   yQR : Column .advice
+  -- α = inv0(x_q − x_p)
   alpha : Column .advice
+  -- β = inv0(x_p)
   beta : Column .advice
+  -- γ = inv0(x_q)
   gamma : Column .advice
+  -- δ = inv0(y_p + y_q) if x_q = x_p, 0 otherwise
   delta : Column .advice
 
-/-- The twelve "complete addition" gate polynomials, as a pure function of the columns —
-ported verbatim from the Rust `create_gate` closure. `x_p, y_p, x_q, y_q, λ, α, β, γ, δ`
-are read at `Rotation::cur()` (0); `x_r, y_r` are read on `x_qr, y_qr` at
-`Rotation::next()` (1).
-
-- poly1:  `(x_q − x_p)·((x_q − x_p)·λ − (y_q − y_p))`
-- poly2:  `(1 − (x_q − x_p)·α)·(2y_p·λ − 3x_p²)`
-- poly3a: `x_p·x_q·(x_q − x_p)·(λ² − x_p − x_q − x_r)`
-- poly3b: `x_p·x_q·(x_q − x_p)·(λ·(x_p − x_r) − y_p − y_r)`
-- poly3c: `x_p·x_q·(y_q + y_p)·(λ² − x_p − x_q − x_r)`
-- poly3d: `x_p·x_q·(y_q + y_p)·(λ·(x_p − x_r) − y_p − y_r)`
-- poly4a: `(1 − x_p·β)·(x_r − x_q)`
-- poly4b: `(1 − x_p·β)·(y_r − y_q)`
-- poly5a: `(1 − x_q·γ)·(x_r − x_p)`
-- poly5b: `(1 − x_q·γ)·(y_r − y_p)`
-- poly6a: `(1 − (x_q − x_p)·α − (y_q + y_p)·δ)·x_r`
-- poly6b: `(1 − (x_q − x_p)·α − (y_q + y_p)·δ)·y_r` -/
+/-- The twelve complete-addition gate polynomials, a pure function of the columns.
+`x_p, y_p, x_q, y_q, λ, α, β, γ, δ` are read at the current row; `x_r, y_r` at the next row. -/
 def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column .advice) :
     Gate Fp where
   name := "complete addition"
@@ -106,21 +88,19 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
 /-!
 ## Algebraic core lemmas
 
-The value-level mathematics, ported from the phase-one `Halo2.Ironwood.Ecc.Add`. Everything is
-stated over concrete field coordinates with the gate polynomials written out literally, so
-the lemmas do not depend on the gate's `Query`/`Expression` machinery. The complete group
-law is `Halo2.Ironwood.Point.add` and validity is `Halo2.Ironwood.Point.Valid` (on-curve, or the `(0,0)`
-identity sentinel), reused from the Orchard Pallas specs.
+The value-level mathematics. Everything is stated over concrete field coordinates with the gate
+polynomials written out literally, so the lemmas do not depend on the gate's `Query`/`Expression`
+machinery. The complete group law is `Halo2.Ironwood.Point.add` and validity is
+`Halo2.Ironwood.Point.Valid` (on-curve, or the `(0,0)` identity sentinel).
 -/
 
 open Halo2.Ironwood (Point)
 open Halo2.Ironwood (pallasA pallasB two_ne_zero add_self_ne_zero)
 open CompElliptic.CurveForms
 
-/-- The intermediate "gate spec": the case-split characterization of the twelve
-complete-addition polynomials. Ported verbatim from `Halo2.Ironwood.Ecc.Add.Gate.Spec`, phrased
-over plain coordinates. Each conjunct is the "non-exceptional branch" implication guarded
-by the corresponding `inv0`-flag being nonzero. -/
+/-- The gate spec: the case-split characterization of the twelve complete-addition polynomials over
+plain coordinates. Each conjunct is the non-exceptional-branch implication guarded by the
+corresponding `inv0`-flag being nonzero. -/
 def Spec (px py qx qy rx ry lambda alpha beta gamma delta : Fp) : Prop :=
   (qx - px ≠ 0 → (qx - px) * lambda = qy - py) ∧
     ((qx - px) * alpha ≠ 1 → 2 * py * lambda = 3 * px * px) ∧
@@ -200,9 +180,8 @@ theorem polysZero_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
   · by_cases hz : (qx - px) * alpha + (qy + py) * delta = 1 <;> grind
   · by_cases hz : (qx - px) * alpha + (qy + py) * delta = 1 <;> grind
 
-/-- Bridge: our plain-coordinate `Spec` is exactly the donor's `Gate.Spec` on the
-corresponding `Gate.Input`. Both are the same seven-way case split; only the field
-packaging differs. -/
+/-- Bridge: our plain-coordinate `Spec` is exactly `Gate.Spec` on the corresponding
+`Gate.Input`. Both are the same seven-way case split; only the field packaging differs. -/
 theorem spec_toGateInput {px py qx qy rx ry lambda alpha beta gamma delta : Fp} :
     Spec px py qx qy rx ry lambda alpha beta gamma delta ↔
     Halo2.Ironwood.Ecc.Add.Gate.Spec
@@ -214,7 +193,7 @@ theorem spec_toGateInput {px py qx qy rx ry lambda alpha beta gamma delta : Fp} 
 
 /-- Soundness core: given valid P, Q and the gate `Spec` at coordinates
 `(px,py) (qx,qy) (rx,ry)`, the result `R = (rx, ry)` is the complete sum `P + Q`.
-Delegates to the phase-one `Halo2.Ironwood.Ecc.Add.add_of_spec`. -/
+Delegates to `Halo2.Ironwood.Ecc.Add.add_of_spec`. -/
 theorem add_eq_add_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp}
     (hp : ({ x := px, y := py } : Point Fp).Valid)
     (hq : ({ x := qx, y := qy } : Point Fp).Valid)
@@ -229,9 +208,8 @@ theorem add_eq_add_of_spec {px py qx qy rx ry lambda alpha beta gamma delta : Fp
 ## Witness values (the honest prover's hints)
 
 The five auxiliary hints and the output R, over plain coordinates. Together with
-`rowValue_spec` (delegated to the donor) they give the completeness direction: the honest
-prover's witnesses satisfy the gate `Spec`, hence the twelve polynomials
-(`polysZero_of_spec`).
+`rowValue_spec` they give the completeness direction: the honest prover's witnesses satisfy
+the gate `Spec`, hence the twelve polynomials (`polysZero_of_spec`).
 -/
 
 /-- The complete `Spec` holds for the honest prover's witness values: `λ` = the slope
@@ -309,9 +287,10 @@ incomplete addition, complete addition works for **all** valid points (identity 
 so the assumptions are just `P, Q` valid, with no `x_p ≠ x_q` restriction.
 -/
 
-/-- The pair of input points P and Q. -/
 structure Inputs (F : Type) where
+  -- The point P in P + Q = R.
   p : Point F
+  -- The point Q in P + Q = R.
   q : Point F
 deriving ProvableStruct
 

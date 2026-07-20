@@ -3,30 +3,13 @@ import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
 import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/short.rs` (read in
-full) — fixed-base scalar multiplication by a short signed exponent
-(`|magnitude| < 2^64`, sign ∈ {1, −1}); `L_SCALAR_SHORT = 64`,
-`NUM_WINDOWS_SHORT = ⌈64/3⌉ = 22` (`constants.rs:22-27`).
+Fixed-base scalar multiplication by a short *signed* exponent: `output = [sign · magnitude] B`
+with `|magnitude| < 2^64` (`L_SCALAR_SHORT = 64`, decomposed into `NUM_WINDOWS_SHORT = 22`
+3-bit windows, the same windowing as the shared `MulFixed`). The last window's bit `z_21` and
+the sign are checked by the `q_mul_fixed_short` gate, which also conditionally negates the
+accumulated `y`-coordinate to fold in the sign.
 
-- `Config` (lines 13-18): the `q_mul_fixed_short` selector and the shared super config.
-- `configure` (lines 20-33) + the "Short fixed-base mul gate" (lines 35-77): on
-  `q_mul_fixed_short` — `last_window_check` (bool check of `z_21`, copied into the `u`
-  column), `sign_check` (`sign² − 1`, sign on the `window` column), the redundant
-  `y_check` (`(y_p − y_a)(y_p + y_a)`), and `negation_check` (`sign·y_p − y_a`), with
-  `y_p` on `add.y_p` and `y_a` on `add.y_qr`, all at `cur`.
-- `assign` (lines 108-199), two regions:
-  1. "Short fixed-base mul (incomplete addition)": `decompose` (lines 84-106: strict
-     `copy_decompose` of the magnitude, 64 bits in 22 windows), then the shared
-     `assign_region_inner` with the running-sum `q_range_check` as the coords toggle;
-  2. "Short fixed-base mul (most significant word)": `add(mul_b, acc)` at offset 0;
-     at offset 1 — copy `sign` into `window`, copy `z_21` into `u`, enable
-     `q_mul_fixed_short`, witness the conditionally-negated `y` into `add.y_p`.
-     Result = `(magnitude_mul.x, y_var)`.
-
-Phase-1 donor: `Orchard/Ecc/MulFixed/Short.lean` (Gate spec, the signed-magnitude value
-algebra). Donor spec shape: `∃ m < 2^64, magnitude = ↑m ∧ (sign = 1 ∧ output = ↑m • B
-∨ sign = −1 ∧ output = −(↑m • B) …)`.
+Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
 -/
 
 -- The variable-name style linter whnf-walks chunk-typed statements below; disabled
@@ -48,20 +31,21 @@ def _root_.Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase.toData (B : FixedBase) :
     FixedBaseData :=
   { params := B.params, point := B.point, u := B.u }
 
-/-- Rust `short::Config` (lines 13-18). -/
 structure Config where
+  -- Selector used for fixed-base scalar mul with short signed exponent.
   qMulFixedShort : Selector
+  -- The shared fixed-base mul config.
   superConfig : MulFixed.Config
 
-/-- The "Short fixed-base mul gate" (lines 35-77), the exact Rust AST and constraint
-order. -/
+/-- The "Short fixed-base mul gate", in the Rust constraint order (matches the compiled
+AST). -/
 def shortGate (cfg : Config) : Gate Fp where
   name := "Short fixed-base mul gate"
   selector := cfg.qMulFixedShort
   constraints :=
     let yP : Expression Fp Query := queryAdvice cfg.superConfig.addConfig.yP 0
     let yA : Expression Fp Query := queryAdvice cfg.superConfig.addConfig.yQR 0
-    -- z_21 = k_21, copied into the `u` column (line 44)
+    -- z_21 = k_21, copied into the `u` column
     let lastWindow : Expression Fp Query := queryAdvice cfg.superConfig.u 0
     let sign : Expression Fp Query := queryAdvice cfg.superConfig.window 0
     -- bool_check(last_window) = range_check(last_window, 2)
@@ -78,44 +62,45 @@ def shortGate (cfg : Config) : Gate Fp where
         ("y_check", yCheck),
         ("negation_check", negationCheck) ]
 
-/-- Rust `short::Config::configure` (lines 20-33). -/
+/-- Allocate the `q_mul_fixed_short` selector and register the gate. -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   let qMulFixedShort ← selector
   let cfg : Config := { qMulFixedShort, superConfig }
   createGate (shortGate cfg)
   return cfg
 
-/-- The magnitude-sign input pair (Rust `MagnitudeSign`, both already-assigned cells). -/
 structure Inputs (F : Type) where
+  -- The unsigned magnitude, already assigned.
   magnitude : F
+  -- The sign, already assigned (constrained to ±1 by the gate).
   sign : F
 deriving ProvableStruct
 
 /-- The conditionally-negated final `y` witness: `sign = −1 ? −y : y` over the sign cell
-and the magnitude-mul `y` cell (lines 177-183). -/
+and the magnitude-mul `y` cell. -/
 def yVarWit (sign yMag : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[if readCell env sign = -1 then -(readCell env yMag) else readCell env yMag]
 
-/-- Output of the inner region: the exit accumulator (windows 0..20), the MSB window
-point, and the running sums (`z_21` feeds the sign row's last-window check). -/
 structure InnerOut (F : Type) where
+  -- The exit accumulator after windows 0..20.
   acc : Point F
+  -- The MSB (window 21) table point.
   mulB : Point F
+  -- The running sums; `z_21` feeds the sign row's last-window check.
   zs : Vector F 23
 deriving ProvableStruct
 
-/-- Region 1, "Short fixed-base mul (incomplete addition)" (lines 117-145): the strict
-22-window running-sum decomposition of the magnitude, then the shared inner body over
-the magnitude cell (fixed constants with the running-sum coords toggle; the window
-chain). -/
+/-- Region 1, "Short fixed-base mul (incomplete addition)": the strict 22-window
+running-sum decomposition of the magnitude, then the shared inner body (fixed constants
+with the running-sum coords toggle; the window chain). -/
 def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (magnitude : AssignedCell Fp) :
     RegionCircuit Fp (InnerOut (AssignedCell Fp)) := do
-  -- `decompose` (lines 84-106): strict copy_decompose, 64 bits in 22 windows
+  -- strict copy_decompose, 64 bits in 22 windows
   let zsOut ← (copyDecompose 3 22).call cfg.superConfig.runningSumConfig offset
     ⟨magnitude⟩
-  -- `assign_fixed_constants` with the running-sum coords gate as toggle (line 140)
+  -- assign the fixed constants, with the running-sum coords gate as toggle
   fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 22
   -- the window chain over the magnitude cell
   let r ← windowChain cfg.superConfig
@@ -123,28 +108,27 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
       magnitude) offset 22
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
-/-- Region 2, "Short fixed-base mul (most significant word)" (lines 148-198): the
-complete addition at offset 0, then the sign row at offset 1. Returns the result point
-(`magnitude_mul.x`, conditionally-negated `y`). -/
+/-- Region 2, "Short fixed-base mul (most significant word)": the complete addition at
+offset 0, then the sign row at offset 1. Returns the result point (`magnitude_mul.x`,
+conditionally-negated `y`). -/
 def mswRegion (cfg : Config) (acc mulB : Point (AssignedCell Fp))
     (sign z21 : AssignedCell Fp) : RegionCircuit Fp (Point (AssignedCell Fp)) := do
-  -- [magnitude]B by complete addition (lines 152-158)
+  -- [magnitude]B by complete addition
   let magnitudeMul ← Add.add.call cfg.superConfig.addConfig 0 ⟨mulB, acc⟩
-  -- offset 1: copy sign into `window` (lines 163-169)
+  -- offset 1: copy sign into `window`
   let _s ← copyAdvice sign cfg.superConfig.window 1
-  -- copy z_21 into `u` (lines 171-175)
+  -- copy z_21 into `u`
   let _z ← copyAdvice z21 cfg.superConfig.u 1
-  -- enable the short gate (line 186)
+  -- enable the short gate
   (shortGate cfg).enable 1
-  -- witness the conditionally-negated y into `add.y_p` (lines 188-194)
+  -- witness the conditionally-negated y into `add.y_p`
   let yVar ← assignAdvice cfg.superConfig.addConfig.yP 1 (yVarWit sign magnitudeMul.y)
   return { x := magnitudeMul.x, y := yVar }
 
-/-! ## The inner-region bundle (proof boundary for region 1)
+/-! ## The inner-region bundle
 
-BFE-shaped contracts at 22 windows: the strict 66-bit decomposition of the magnitude
-cell, the standard lower-window ladder (windows 0..20), and the short MSB
-(`Short.windowPoint 21`, the `offset_acc`-corrected scalar). -/
+BFE-shaped contracts at 22 windows: the strict 66-bit decomposition, the lower-window
+ladder (windows 0..20), and the short MSB (`Short.windowPoint 21`). -/
 
 /-- The inner region's output cells, reduced (the explicit `elaborated` output). -/
 def innerOutCells (cfg : Config) (offset : ℕ) (self : RegionIndex) :
@@ -202,14 +186,13 @@ theorem shortWindowPoint_lower (point : Point Fp) {w k : ℕ} (hw : w < 21) (hk 
   unfold Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint
   rw [Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_val hw hk]
 
-/-- The shared-config asserts the inner proofs consume (Rust `configure`-time asserts). -/
+/-- The shared-config assumptions the inner proofs consume. -/
 def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
   cfg.superConfig.runningSumConfig.z = cfg.superConfig.window ∧
   cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP ∧
   cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
 
-/-- The inner bundle's soundness contract (donor short value model, split at the
-region boundary). -/
+/-- The inner bundle's soundness contract, split at the region boundary. -/
 def InnerSpec (B : FixedBase)
     (input : Value Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
     (out : Value InnerOut Fp) (_ : unit Fp) : Prop :=
@@ -996,8 +979,7 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
   soundness := fun cfg offset => short_inner_soundness B cfg offset
   completeness := fun cfg offset => short_inner_completeness B cfg offset
 
-/-- Rust `short::Config::assign` (lines 108-199): the two regions. Returns the result
-point `[sign·magnitude]B`. -/
+/-- The two regions of `assign`. Returns the result point `[sign·magnitude]B`. -/
 def synthesize (B : FixedBaseData) (cfg : Config) (input : Inputs (AssignedCell Fp)) :
     Circuit Fp (Var Point Fp) := do
   let inn ←
@@ -1006,7 +988,7 @@ def synthesize (B : FixedBaseData) (cfg : Config) (input : Inputs (AssignedCell 
   assignRegion "Short fixed-base mul (most significant word)"
     (mswRegion cfg inn.acc inn.mulB input.sign inn.zs[21])
 
-/-! ## The gadget bundle (`FixedPointShort::mul`, `short.rs::assign`) -/
+/-! ## The gadget bundle -/
 
 /-- The conditionally-negated `y` witness value (single-element vector, `rfl` tail). -/
 private theorem yVarWit_eval (env : Placed ProverEnvironment Fp)
@@ -1042,8 +1024,8 @@ private theorem mswRegion_output (cfg : Config) (acc mulB : Point (AssignedCell 
 def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
   InnerEnvAssumptions cfg env
 
-/-- The gadget's semantic contract (donor `Short.Spec`): the output is the fixed base
-scaled by the SIGNED short exponent. -/
+/-- The gadget's semantic contract: the output is the fixed base scaled by the signed
+short exponent. -/
 def Spec (B : FixedBase) (input : Inputs Fp) (output : Point Fp) : Prop :=
   ∃ m : ℕ, m < 2 ^ 64 ∧ input.magnitude = (m : Fp) ∧
     ((input.sign = 1 ∧ output = ((m : Fq) • B : Point Fp)) ∨
@@ -1057,7 +1039,7 @@ private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
 
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
-/-- Rust `FixedPointShort::mul` (`short.rs::assign`): `[sign·magnitude]B`. -/
+/-- `[sign·magnitude]B`. -/
 def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Point where
   name := "fixed-base mul (short signed)"
 

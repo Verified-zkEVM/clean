@@ -5,7 +5,7 @@ import Clean.Ironwood.Ecc.Basic
 namespace Halo2.Ironwood.Ecc
 /-!
 Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/witness_point.rs`
+`halo2_gadgets/src/ecc/chip/witness_point.rs`
 - `witness point`
 - `witness non-identity point`
 -/
@@ -97,8 +97,8 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
       rw [hx, hy]
       constructor <;> ring
 
-/-- The "witness non-identity point" bundle (Rust `Config::point_non_id`,
-`witness_point.rs:167-186`). Mirrors `point`: enable the `pointNonId` gate at `offset` and
+/-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
+enable the `pointNonId` gate at `offset` and
 assign x/y; but the gate has no identity escape hatch, so the `Spec` is *strictly* on-curve
 (`OnCurve`, not merely `Valid`), matching the Rust guarantee that the witnessed point is a
 valid curve point. The Rust additionally errors when the value is known to be the identity;

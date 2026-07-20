@@ -9,7 +9,7 @@ open CompElliptic.CurveForms
 
 /-!
 Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add.rs`
+`halo2_gadgets/src/ecc/chip/add.rs`
 - `complete addition`
 
 This ports the complete-addition custom gate over the Halo2 advice columns `x_p`, `y_p`,

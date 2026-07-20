@@ -31,10 +31,10 @@ bundle at consecutive offsets. The entering neighborhood is positional (`Witness
 exit neighborhood and the interstitial running sums are the output. The round-to-round
 induction lives in this bundle's proofs and nowhere else. -/
 
-/-- The loop's output: the exit neighborhood (the last round's output state, which the
-caller's final `q_mul_3` row consumes positionally) and the `n` interstitial running sums. -/
 structure LoopOut (n : ℕ) (F : Type) where
+  -- The last round's output state, consumed positionally by the caller's final `q_mul_3` row.
   exit : State F
+  -- The `n` interstitial running sums.
   zs : Vector F n
 deriving ProvableStruct
 
@@ -584,7 +584,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay]
       exact hHV
     · -- the accumulator fold, for any in-range multiple entering the region:
-      -- replay the constraints (loop spec + final-row donor identities), which hold
+      -- replay the constraints (loop spec + final-row identities), which hold
       -- for the honest witness and quantify over every multiple
       intro m' hacc' h2' hbud'
       obtain ⟨bits', hchain', hfold'⟩ := hSpec

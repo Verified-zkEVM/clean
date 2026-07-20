@@ -3,27 +3,13 @@ import Clean.Ironwood.Utilities.LookupRangeCheck
 import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`
-(read in full) — fixed-base scalar multiplication by a base-field element
-(gadget API `FixedPointBaseField::mul`), the NullifierK path of the Orchard circuit.
+Fixed-base scalar multiplication by a base-field element α (`FixedPointBaseField::mul`),
+the NullifierK path of the Orchard circuit: the strict 85-window running-sum
+decomposition of α feeds the shared incomplete-addition window chain, a complete
+addition closes the last window, and a canonicity gate proves `0 ≤ α < p` (the Pallas
+base-field modulus) — so the result is exactly `[α]B`, embedded into the scalar field.
 
-- `Config` (lines 20-29): the `q_mul_fixed_base_field` selector, the three
-  `canon_advices`, the lookup config, and the shared `mul_fixed` super config.
-- `configure` (lines 31-60): equality on the canon advices, the "Canonicity checks"
-  gate (lines 62-163).
-- `assign` (lines 165-378), four layouter pieces in order:
-  1. region "Base-field elem fixed-base mul (incomplete addition)": the strict
-     85-window running-sum `copy_decompose` of α, then the shared
-     `assign_region_inner` (fixed constants + window-0 accumulator + the
-     incomplete-addition window loop + the most significant window);
-  2. region "Base-field elem fixed-base mul (complete addition)": `add(mul_b, acc)`;
-  3. `witness_check(α₀' = α₀ + 2¹³⁰ − t_p, 13 words, strict = false)` — the
-     "Witness element" region (`lookup_range_check.rs:142-162`);
-  4. region "Canonicity checks": the three-row copy/witness block, gate at offset 1.
-
-The proof-content donor is `Clean/Orchard/Ecc/MulFixed/BaseFieldElem.lean`
-(`Gate` specs, `RunningSumMul` value algebra, the canonicity argument).
+Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
 -/
 
 -- The variable-name style linter whnf-walks the chunk-typed hypothesis statements of
@@ -40,23 +26,25 @@ open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 open Halo2.Ironwood.Ecc.MulFixed (FixedBaseData)
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 
-/-- Rust `base_field_elem::Config` (lines 20-29). -/
 structure Config where
+  -- Selector for the canonicity-checks gate.
   qMulFixedBaseField : Selector
+  -- The three advice columns used for canonicity checks.
   canonAdvices : Fin 3 → Column .advice
+  -- Lookup config for the 13-word range check on α₀'.
   lookupConfig : LookupRangeCheck.Config 10
+  -- The shared fixed-base multiplication config.
   superConfig : MulFixed.Config
 
-/-! ## The "Canonicity checks" gate (`base_field_elem.rs:62-163`)
+/-! ## The canonicity-checks gate
 
-Cell layout, relative to the gate row (selector at `Rotation::cur`, enabled at region
-offset 1):
+Cell layout, relative to the gate row (selector enabled at region offset 1):
 
-    |   canon_advices[0]  | canon_advices[1] | canon_advices[2] |
-    -------------------------------------------------------------
-    |          α          |                  |    z_84_alpha    |   ← Rotation::prev
-    |     α_0_prime       |       α_1        |       α_2        |   ← Rotation::cur
-    | z_13_alpha_0_prime  |    z_44_alpha    |    z_43_alpha    |   ← Rotation::next
+    | canon_advices[0]   | canon_advices[1] | canon_advices[2] |
+    ------------------------------------------------------------
+    | α                  |                  | z_84_alpha       |   ← prev
+    | α_0_prime          | α_1              | α_2              |   ← cur
+    | z_13_alpha_0_prime | z_44_alpha       | z_43_alpha       |   ← next
 -/
 
 /-- The "Canonicity checks" gate, the exact Rust AST (constraint order: the four
@@ -68,7 +56,7 @@ def canonGate (cfg : Config) : Gate Fp where
   constraints :=
     let alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) (-1)
     let z84Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) (-1)
-    -- α_0 is derived, not witnessed (lines 76-79): α − z_84·2^252 (scale on the right)
+    -- α_0 is derived, not witnessed: α − z_84·2^252 (scale on the right)
     let alpha0 := alpha - z84Alpha * (((2 ^ 252 : ℕ) : Fp) : Expression Fp Query)
     let alpha1 : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 0
     let alpha2 : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 0
@@ -76,16 +64,16 @@ def canonGate (cfg : Config) : Gate Fp where
     let z13Alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 1
     let z44Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 1
     let z43Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 1
-    -- decomposition checks (lines 88-101)
+    -- decomposition checks
     let alpha1RangeCheck := rangeCheckExpr 4 alpha1
     let alpha2RangeCheck := rangeCheckExpr 2 alpha2
     let z84AlphaCheck :=
       z84Alpha - (alpha1 + alpha2 * (((1 <<< 2 : ℕ) : Fp) : Expression Fp Query))
-    -- α_0_prime = α_0 + 2^130 − t_p (lines 103-108)
+    -- α_0_prime = α_0 + 2^130 − t_p
     let alpha0PrimeCheck :=
       alpha0Prime - (alpha0 + (((2 ^ 130 : ℕ) : Fp) : Expression Fp Query)
         - ((tP : Fp) : Expression Fp Query))
-    -- canonicity checks for MSB = 1 (lines 130-154)
+    -- canonicity checks for MSB = 1
     -- Rust multiplies by an `Expression::Constant` here (a `Product` node, unlike the
     -- `Scaled` field-mul used everywhere else in this gate) — `mulConstant` keeps the
     -- erased AST byte-identical (VK matching).
@@ -102,10 +90,10 @@ def canonGate (cfg : Config) : Gate Fp where
         ("z_84_alpha_check", z84AlphaCheck),
         ("alpha_0_prime check", alpha0PrimeCheck) ]
 
-/-- Rust `base_field_elem::Config::configure` (lines 31-60): equality on the three canon
-advices, a fresh selector, the canonicity gate. (The canon-advice/incomplete-addition
-column deconfliction assert, lines 49-55, holds by construction at the `EccChip` wiring:
-canon = advices 6/7/8, add_incomplete = advices 0..3.) -/
+/-- Enable equality on the three canon advices, allocate a fresh selector, register the
+canonicity gate. (The canon-advice/incomplete-addition column deconfliction assert holds
+by construction at the `EccChip` wiring: canon = advices 6/7/8, add_incomplete =
+advices 0..3.) -/
 def configure (canonAdvices : Fin 3 → Column .advice)
     (lookupConfig : LookupRangeCheck.Config 10) (superConfig : MulFixed.Config) :
     Configure Fp Config := do
@@ -117,26 +105,26 @@ def configure (canonAdvices : Fin 3 → Column .advice)
   createGate (canonGate cfg)
   return cfg
 
-/-! ## Synthesize (`base_field_elem.rs::assign`, lines 165-378) -/
+/-! ## Synthesize -/
 
-/-- Output of the inner region: the exit accumulator (windows 0..83), the MSB window
-point, and the running sums (`z_0 = α`; `z_43/z_44/z_84` feed the canonicity check). -/
 structure InnerOut (F : Type) where
+  -- The exit accumulator after windows 0..83.
   acc : Point F
+  -- The MSB window (84) point.
   mulB : Point F
+  -- The running sums (`z_0 = α`; `z_43/z_44/z_84` feed the canonicity check).
   zs : Vector F 86
 deriving ProvableStruct
 
-/-- Region 1, "Base-field elem fixed-base mul (incomplete addition)" (lines 174-205):
-the strict running-sum decomposition of α (85 3-bit windows over 255 bits), the fixed
-constants, the window-0 accumulator, the incomplete-addition loop over windows 1..83,
-and the most significant window 84. -/
+/-- Region 1, "Base-field elem fixed-base mul (incomplete addition)": the strict
+running-sum decomposition of α (85 3-bit windows over 255 bits), the fixed constants,
+the window-0 accumulator, the incomplete-addition loop over windows 1..83, and the most
+significant window 84. -/
 def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : AssignedCell Fp) :
     RegionCircuit Fp (InnerOut (AssignedCell Fp)) := do
-  -- scalar decomposition (lines 179-193): strict `copy_decompose`
+  -- scalar decomposition: strict `copy_decompose`
   let zsOut ← (copyDecompose 3 85).call cfg.superConfig.runningSumConfig offset ⟨alpha⟩
-  -- `assign_fixed_constants` (mul_fixed.rs:181, 195-252); the coords toggle is the
-  -- running-sum selector's coords gate
+  -- `assign_fixed_constants`; the coords toggle is the running-sum selector's coords gate
   fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 85
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig
@@ -145,16 +133,16 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : Assig
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
 /-- The honest `α₀' = (α − z_84·2^252) + 2^130 − t_p` witness, from the α and `z_84`
-cells (`base_field_elem.rs:262-277`). -/
+cells. -/
 def alphaZeroPrimeWit (alpha z84 : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[readCell env alpha - readCell env z84 * ((2 ^ 252 : ℕ) : Fp)
       + ((2 ^ 130 : ℕ) : Fp) - tP]
 
-/-- Rust `witness_check(value, 13, strict = false)` (`lookup_range_check.rs:142-162`):
-the "Witness element" region — witness `z_0` from the given program at offset 0, then
-the positional 13-round lookup range check (no strict tail). Returns `(z_0, z_13)` —
-`α₀'` and its high tail, both copied into the canonicity check. -/
+/-- Rust `witness_check(value, 13, strict = false)`: the "Witness element" region —
+witness `z_0` from the given program at offset 0, then the positional 13-round lookup
+range check (no strict tail). Returns `(z_0, z_13)` — `α₀'` and its high tail, both
+copied into the canonicity check. -/
 def witnessCheck13 (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1) :
     Circuit Fp (AssignedCell Fp × AssignedCell Fp) :=
   assignRegion "Witness element" (do
@@ -162,16 +150,16 @@ def witnessCheck13 (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1) :
     let out ← (LookupRangeCheck.rangeCheckAt 10 13 false).call cfg 0 ()
     return (z0, out.zLast))
 
-/-- The honest `α_1 = α[252..=253]` witness (`bitrange_subset`, line 327). -/
+/-- The honest `α_1 = α[252..=253]` witness (`bitrange_subset`). -/
 def alpha1Wit (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[(((readCell env alpha).val / 2 ^ 252 % 4 : ℕ) : Fp)]
 
-/-- The honest `α_2 = α[254]` witness (line 336). -/
+/-- The honest `α_2 = α[254]` witness. -/
 def alpha2Wit (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[(((readCell env alpha).val / 2 ^ 254 % 2 : ℕ) : Fp)]
 
-/-- Region 4, "Canonicity checks" (lines 289-375): selector at offset 1, then the
-three-row copy/witness block (see the gate's cell layout). -/
+/-- Region 4, "Canonicity checks": selector at offset 1, then the three-row copy/witness
+block (see the gate's cell layout). -/
 def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp) :
     RegionCircuit Fp Unit := do
   (canonGate cfg).enable 1
@@ -190,12 +178,10 @@ def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : Assigned
 
 /-! ## The inner-region bundle (proof boundary for region 1)
 
-The donor proof unit is `Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul`; here the
-bundle covers exactly Rust's first region (up to but excluding the complete addition),
-so the Spec exposes `acc` (windows 0..83 accumulated) and `mul_b` (the MSB window
-point) separately, plus the running sums. The parent's complete addition combines them:
-`partialSum ks 83 + windowScalar 84 (ks 84) = V` in `Fq` (the `+2` paddings telescope
-against `offsetAcc`). -/
+The bundle covers exactly the first region (up to but excluding the complete addition):
+the Spec exposes `acc` (windows 0..83 accumulated) and `mul_b` (the MSB window point)
+separately, plus the running sums; the parent's complete addition combines them via
+`partialSum ks 83 + windowScalar 84 (ks 84) = V` in `Fq`. -/
 
 /-! ### `innerRegion` output projections (lazy `rfl`/`simp` — the `mainRegion_output_*`
 pattern; the loop bodies never force) -/
@@ -243,15 +229,14 @@ private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : 
 derive_contract_bridges dec := Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 85
 derive_contract_bridges addinc := Halo2.Ironwood.Ecc.AddIncomplete.add
 
-/-- The inner bundle's config facts — exactly Rust's `configure`-time asserts
-(`mul_fixed.rs:81-99` + running-sum column sharing). -/
+/-- The inner bundle's config facts: the `configure`-time asserts plus running-sum
+column sharing. -/
 def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
   cfg.superConfig.runningSumConfig.z = cfg.superConfig.window ∧
   cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP ∧
   cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
 
-/-- The inner bundle's soundness contract (donor `RunningSumMul.Spec`, split at the
-region boundary). -/
+/-- The inner bundle's soundness contract, split at the region boundary. -/
 def InnerSpec (B : FixedBase)
     (input : Value Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
     (out : Value InnerOut Fp) (_ : unit Fp) : Prop :=
@@ -269,10 +254,9 @@ def InnerProverAssumptions
     (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
   input.alpha.val < 2 ^ 255
 
-/-- Honest-prover postcondition (donor `RunningSumMul.ProverSpec`, region-split): the
-exit cells hold the honest ladder values at α's own digits, and the running sums hold
-α's 3-bit shifts. What the parent's completeness needs to discharge the complete
-addition's assumptions and the canonicity gate. -/
+/-- Honest-prover postcondition: the exit cells hold the honest ladder values at α's own
+digits, and the running sums hold α's 3-bit shifts — what the parent's completeness
+needs to discharge the complete addition's assumptions and the canonicity gate. -/
 def InnerProverSpec (B : FixedBase)
     (input : ProverValue Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
     (out : ProverValue InnerOut Fp) (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
@@ -786,7 +770,7 @@ private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
   exact hZs
 
 /-- The inner bundle's completeness, standalone (its own declaration/heartbeat budget —
-the shared-budget split; body per the donor `RunningSumMul.completeness`). -/
+the shared-budget split). -/
 private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
       (Input := Halo2.Ironwood.DecomposeRunningSum.Inputs) (Output := InnerOut)
@@ -845,7 +829,7 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
         exact hDC.2 w
 
 set_option linter.constructorNameAsVariable false in
-/-- The inner-region bundle: `innerRegion` with the donor-shaped contract. -/
+/-- The inner-region bundle: `innerRegion` with its soundness/completeness contract. -/
 def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut where
   configure := pure
@@ -863,8 +847,8 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
   ProverAssumptions := InnerProverAssumptions
 
   soundness := by
-    -- PROOF ARC recipe per Mul.lean:982-1002: NO structural unfolds in the list
-    -- (innerRegion at h_output/goal whnf-cliffs); contract defs only.
+    -- PROOF ARC recipe (per Mul.lean): NO structural unfolds in the list (innerRegion
+    -- at h_output/goal whnf-cliffs); contract defs only.
     circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
@@ -1043,8 +1027,7 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
 
   completeness := fun cfg offset => inner_completeness B cfg offset
 
-/-- Rust `base_field_elem::Config::assign` (lines 165-378): the four layouter pieces in
-source order. Returns the result point `[α]B`. -/
+/-- The four layouter pieces in source order. Returns the result point `[α]B`. -/
 def synthesize (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) :
     Circuit Fp (Var Point Fp) := do
   -- 1. the incomplete-addition region
@@ -1052,26 +1035,25 @@ def synthesize (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) :
     assignRegion "Base-field elem fixed-base mul (incomplete addition)"
       (innerRegion B cfg 0 alpha)
   let zs := inn.zs
-  -- 2. the complete addition `mul_b + acc` (lines 207-218)
+  -- 2. the complete addition `mul_b + acc`
   let result ←
     assignRegion "Base-field elem fixed-base mul (complete addition)"
       (Add.add.call cfg.superConfig.addConfig 0 ⟨inn.mulB, inn.acc⟩)
-  -- Rust binds `alpha := scalar.base_field_elem = running_sum[0]` (line 189/257): every
-  -- downstream α reference — the canonicity copy AND the witness programs — uses the
-  -- z_0 CELL, not the original α cell.
+  -- Rust binds `alpha := scalar.base_field_elem = running_sum[0]`: every downstream α
+  -- reference — the canonicity copy AND the witness programs — uses the z_0 CELL, not
+  -- the original α cell.
   let alphaZ0 := zs[0]
-  -- 3. the 13-word lookup range check of α₀' (lines 271-287)
+  -- 3. the 13-word lookup range check of α₀'
   let (alphaPrime, z13) ← witnessCheck13 cfg.lookupConfig (alphaZeroPrimeWit alphaZ0 zs[84])
-  -- 4. the canonicity checks (lines 289-375)
+  -- 4. the canonicity checks
   assignRegion "Canonicity checks"
     (canonicityRegion cfg alphaZ0 zs[84] alphaPrime z13 zs[44] zs[43])
   return result
 
-/-! ## The gadget bundle (`FixedPointBaseField::mul`, `base_field_elem.rs:165-378`)
+/-! ## The gadget bundle (`FixedPointBaseField::mul`)
 
 The layouter-level `FormalCircuit`: four regions (inner mul, complete addition, the
-13-word witness check, the canonicity checks). Donor: the top-level
-`Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.{Spec, soundness, completeness}`. -/
+13-word witness check, the canonicity checks). -/
 
 derive_contract_bridges addc := Halo2.Ironwood.Ecc.Add.add
 derive_contract_bridges rca := Halo2.Ironwood.LookupRangeCheck.rangeCheckAt 10 13 false
@@ -1084,9 +1066,9 @@ def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
   LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env ∧
   cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
 
-/-- The gadget's semantic contract (donor `BaseFieldElem.Spec`): the output is the
-fixed base scaled by the base-field element α, embedded into the scalar field — full
-scalar multiplication, canonical in α (that is what the canonicity checks buy). -/
+/-- The gadget's semantic contract: the output is the fixed base scaled by the
+base-field element α, embedded into the scalar field — full scalar multiplication,
+canonical in α (that is what the canonicity checks buy). -/
 def Spec (B : FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
   output = (alpha.val : Fq) • B
 
@@ -1131,8 +1113,7 @@ private theorem alphaZeroPrimeWit_eval (env : Placed ProverEnvironment Fp)
   simp only [alphaZeroPrimeWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
-/-- The eight canonicity-gate polynomial identities from the donor `Gate.Spec` facts
-(the donor `Gate.circuit.completeness` algebra, value-level and context-free). -/
+/-- The eight canonicity-gate polynomial identities, value-level and context-free. -/
 private theorem canon_gate_polys {row : Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.Gate.Input Fp}
     (hA1 : Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1 row.alpha1)
     (hA2 : IsBool row.alpha2)
@@ -1193,8 +1174,7 @@ private theorem canon_gate_polys {row : Halo2.Ironwood.Ecc.MulFixed.BaseFieldEle
     push_cast [Halo2.Ironwood.tP]
     ring
 
-/-- Rust `FixedPointBaseField::mul` (`base_field_elem.rs::assign`): `[α]B` for a
-base-field element α, canonically. -/
+/-- Rust `FixedPointBaseField::mul`: `[α]B` for a base-field element α, canonically. -/
 def circuit (B : FixedBase) : FormalCircuit Fp
     ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config)
     Config field Point where
@@ -1284,7 +1264,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     rw [hz84V] at hCpZ84
     rw [hz44V] at hCpZ44
     rw [hz43V] at hCpZ43
-    -- ── the gate facts (donor `Gate.soundness` algebra) ──
+    -- ── the gate facts ──
     obtain ⟨a1n, ha1n_lt, ha1n⟩ :=
       (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 4 (by norm_num) _).mp
         ((Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 4 _).mp hG5)
@@ -1294,7 +1274,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     rw [sub_eq_zero] at hG7 hG8
     rw [hCpZ84, ha1n, ha2n,
       show ((1 <<< 2 : ℕ) : Fp) = ((4 : ℕ) : Fp) from by norm_num [Nat.shiftLeft_eq]] at hG7
-    -- ── the crux (donor transplant): V is the canonical representative ──
+    -- ── the crux: V is the canonical representative ──
     have hVlt : V < 8 ^ 85 :=
       Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.sum_lt_of_windows hks_lt
     set A0 : ℕ := V / 8 ^ 84 with hA0
@@ -1373,7 +1353,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       rw [← h_input]
       simp only [circuit_norm, AssignedCell.eval]
       exact hαV
-    -- ── the output value: `mul_b + acc = [V]B` (donor final algebra) ──
+    -- ── the output value: `mul_b + acc = [V]B` ──
     obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
         t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
     have hwp84 : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (ks 84) = t84 • B.point := by
@@ -1484,7 +1464,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
     · -- the canonicity region: copies by their witness clauses, the gate on the
-      -- honest values (donor `honest_canon_spec` + `canon_gate_polys`)
+      -- honest values (`honest_canon_spec` + `canon_gate_polys`)
       simp only [innerRegion_output_zs] at hWCanon ⊢
       simp only [Vector.getElem_ofFn] at hWCanon ⊢
       simp only [canonicityRegion, canonGate, alpha1Wit, alpha2Wit,
@@ -1530,7 +1510,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       rw [← hA_def] at hz0 hz84 hz44 hz43
       have hz0A : env.env.advice cfg.superConfig.runningSumConfig.z
           ((env.place i₀ : ℕ) : ℤ) = A := hz0.trans (ZMod.natCast_zmod_val A)
-      -- the gate-row facts (donor `honest_canon_spec` hypotheses)
+      -- the gate-row facts (`honest_canon_spec` hypotheses)
       rw [hz0A] at hWa1 hWa2 hWap
       rw [hz84] at hWap
       rw [show (2:ℕ) ^ 252 = 8 ^ 84 from by norm_num] at hWa1

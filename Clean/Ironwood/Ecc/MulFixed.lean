@@ -8,31 +8,18 @@ import Clean.Ironwood.Ecc.AddIncomplete
 import Clean.Ironwood.Utilities.DecomposeRunningSum
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed.rs` (read in full) —
-the shared core of fixed-base scalar multiplication (`H = 8`, 3-bit windows).
+The shared core of fixed-base scalar multiplication (`H = 8`, 3-bit windows): `[scalar]B` for a
+fixed base `B`, by decomposing the scalar into 3-bit windows. Per window, the window point's `x`
+is interpolated by a degree-7 Lagrange polynomial in the window value over 8 fixed columns, its
+`y` sign is fixed by `u² = y_p + z`, and the accumulator advances by incomplete addition; the most
+significant window uses complete addition. The `full_width` / `short` / `base_field_elem` wrappers
+compose this core.
 
-- `Config` (lines 35-52): the running-sum config, the 8 Lagrange-coefficient fixed
-  columns, the `fixed_z` column, the `window`/`u` advices, and the `add`/`add_incomplete`
-  child configs.
-- `configure` (lines 54-104): equality on `window`/`u`, the running-sum config on a fresh
-  selector, a fresh `fixed_z` column, then the "Running sum coordinates check" gate
-  registered on the running sum's OWN `q_range_check` selector (lines 115-129) — so
-  enabling a running-sum row fires both the range check and the coords check.
-- `coords_check` (lines 131-169): per window row, the interpolated `x_p` (degree-7
-  Lagrange polynomial in the window value over the 8 fixed columns), the `u² = y_p + z`
-  sign fix, and the curve equation.
-- The region body `assign_region_inner` (lines 171-193): `assign_fixed_constants` (the
-  per-window fixed columns + coords-gate enables, lines 195-252), the window-0
-  accumulator initialization, the incomplete-addition window loop (lines 323-360), and
-  the most significant window (lines 378-405). Realized here as region-relative
-  `RegionCircuit` pieces consumed by the wrappers (`base_field_elem`, later
-  `full_width`/`short`); the wrapper bundles own the composed proofs.
+`coords_check` is the per-window-row constraint: the interpolated `x_p`, the `u² = y_p + z` sign
+fix, and the curve equation. It is registered on the running sum's own range-check selector, so
+enabling a running-sum row fires both the range check and the coordinates check.
 
-The proof-content donor is `Clean/Orchard/Ecc/MulFixed.lean`: `CoordsParams`,
-`interpolate`, `FixedBase` (the fixed-base data + the halo2 out-of-circuit invariants)
-and its window-point algebra (`windowScalar`/`windowPoint`/`partialSum`/
-`coords_eq_windowPoint`) are consumed directly from there.
+Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/
 
 namespace Halo2.Ironwood.Ecc.MulFixed
@@ -44,47 +31,56 @@ open Halo2.Ironwood.Ecc.MulFixed (CoordsParams interpolate FixedBase windowPoint
 open Halo2.Ironwood (pallasB)
 open Halo2.Ironwood.DecomposeRunningSum (copyDecompose)
 
-/-- Rust `H = 2^3` (`constants.rs:15`): the window size. -/
+/-- The window size, `H = 2^3`. -/
 def H : ℕ := 8
 
-/-- Rust `NUM_WINDOWS = 85` (`constants.rs:18`): windows of a full-width decomposition. -/
+/-- The number of windows in a full-width decomposition. -/
 def NUM_WINDOWS : ℕ := 85
 
-/-- The fixed-base DATA a synthesize needs (no invariants): the per-window fixed-column
-values (`params`), and the window tables feeding the witness programs (the generator
-point and the `u` square roots). The donor `FixedBase` (data + the halo2 out-of-circuit
-invariants) lowers to this via `toData`; proof-free consumers (the VK layout tests, which
-only need concrete `params` values in the keygen view) construct it directly from dumped
-tables. -/
+/-- The fixed-base data a synthesize needs (no invariants): the per-window fixed-column values,
+and the window tables feeding the witness programs. `FixedBase` (data + the halo2 out-of-circuit
+invariants) lowers to this via `toData`; proof-free consumers (the VK layout tests, which only
+need concrete `params` values in the keygen view) construct it directly from dumped tables. -/
 structure FixedBaseData where
+  -- Per-window Lagrange-coefficient and z fixed-column values.
   params : ℕ → CoordsParams Fp
+  -- The base's generator point.
   point : Point Fp
+  -- Per-window, per-index u square roots (u² = y_p + z).
   u : ℕ → ℕ → Fp
 
 /-- The data of a proven fixed base. -/
 def _root_.Halo2.Ironwood.Ecc.MulFixed.FixedBase.toData (B : FixedBase) : FixedBaseData :=
   { params := B.params, point := B.point, u := B.u }
 
-/-- Rust `mul_fixed::Config` (`mul_fixed.rs:35-52`). -/
+/-! ## Config -/
+
 structure Config where
+  -- The running-sum config for decomposing the scalar into windows.
   runningSumConfig : DecomposeRunningSum.Config
+  -- The fixed Lagrange interpolation coefficients for `x_p`.
   lagrangeCoeffs : Fin 8 → Column .fixed
+  -- The fixed `z` for each window such that `y + z = u²`.
   fixedZ : Column .fixed
+  -- Decomposition of an `n − 1`-bit scalar into `k`-bit windows:
+  -- `a = a_0 + 2^k·a_1 + 2^{2k}·a_2 + … + 2^{(n−1)k}·a_{n−1}`.
   window : Column .advice
+  -- `u` such that `u² = y_p + z`.
   u : Column .advice
+  -- Configuration for `add`.
   addConfig : Add.Config
+  -- Configuration for `add_incomplete`.
   addIncompleteConfig : AddIncomplete.Config
 
-/-! ## The "Running sum coordinates check" gate (`mul_fixed.rs:106-169`) -/
+/-! ## The "Running sum coordinates check" gate -/
 
-/-- `window_pow[k] = (0..k).fold(Const 1, |acc,_| acc * window)` — the exact Rust AST
-(`mul_fixed.rs:143-149`): `1`, `1·w`, `(1·w)·w`, …. -/
+/-- `window_pow[k] = (0..k).fold(Const 1, |acc,_| acc * window)` — the exact Rust AST: `1`,
+`1·w`, `(1·w)·w`, …. -/
 def windowPow (word : Expression Fp Query) (k : ℕ) : Expression Fp Query :=
   (List.range k).foldl (fun acc _ => acc * word) (Expression.const 1)
 
-/-- The interpolated `x_p` (`mul_fixed.rs:151-154`): fold from `Const 0`,
-`acc + window_pow[k] · lagrange_coeffs[k]` — the 8-iteration fold written out (identical
-AST; keeps the eval bridge fold-free). -/
+/-- The interpolated `x_p`: fold from `Const 0`, `acc + window_pow[k] · lagrange_coeffs[k]` — the
+8-iteration fold written out (identical AST; keeps the eval bridge fold-free). -/
 def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Query :=
   Expression.const 0
     + windowPow word 0 * queryFixed (cfg.lagrangeCoeffs 0)
@@ -96,28 +92,27 @@ def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Qu
     + windowPow word 6 * queryFixed (cfg.lagrangeCoeffs 6)
     + windowPow word 7 * queryFixed (cfg.lagrangeCoeffs 7)
 
-/-- Rust `coords_check` (`mul_fixed.rs:131-169`): the shared per-window-row constraint
-list over a given window-value expression. Reads `x_p`/`y_p` on the add config's columns
-at `cur`, `u` at `cur`, `fixed_z` and the 8 Lagrange columns as rotation-0 fixed queries.
-Used by BOTH the running-sum coords gate (word = `z_cur − z_next·8`) and the full-width
-gate (word = the raw `window` query). -/
+/-- The shared per-window-row constraint list over a given window-value expression. Reads
+`x_p`/`y_p` on the add config's columns at `cur`, `u` at `cur`, `fixed_z` and the 8 Lagrange
+columns as rotation-0 fixed queries. Used by BOTH the running-sum coords gate (word = `z_cur −
+z_next·8`) and the full-width gate (word = the raw `window` query). -/
 def coordsCheck (cfg : Config) (word : Expression Fp Query) :
     List (String × Expression Fp Query) :=
   let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0
   let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0
   let z : Expression Fp Query := queryFixed cfg.fixedZ
   let u : Expression Fp Query := queryAdvice cfg.u 0
-  -- check x: interpolated_x − x_p   (`mul_fixed.rs:156-157`)
+  -- check x: interpolated_x − x_p
   let xCheck := interpolatedX cfg word - xP
-  -- check y: u² − y_p − z           (`mul_fixed.rs:158-159`)
+  -- check y: u² − y_p − z
   let yCheck := u * u - yP - z
-  -- on-curve: y_p² − x_p²·x_p − b   (`mul_fixed.rs:160-162`)
+  -- on-curve: y_p² − x_p²·x_p − b
   let onCurve := yP * yP - xP * xP * xP - (pallasB : Expression Fp Query)
   [("check x", xCheck), ("check y", yCheck), ("on-curve", onCurve)]
 
-/-- The "Running sum coordinates check" gate (`mul_fixed.rs:115-129`), registered on the
-running sum's `q_range_check` selector. The window value is derived:
-`word = z_cur − z_next·8` (`mul_fixed.rs:120-125`, constant scale on the right). -/
+/-- The "Running sum coordinates check" gate, registered on the running sum's `q_range_check`
+selector. The window value is derived: `word = z_cur − z_next·8` (constant scale on the
+right). -/
 def coordsGate (cfg : Config) : Gate Fp where
   name := "Running sum coordinates check"
   selector := cfg.runningSumConfig.qRangeCheck
@@ -140,8 +135,8 @@ def readParams (cfg : Config) (f : Query → Fp) : CoordsParams Fp where
   lagrange6 := f (.fixed (cfg.lagrangeCoeffs 6) 0)
   lagrange7 := f (.fixed (cfg.lagrangeCoeffs 7) 0)
 
-/-- `interpolatedX` evaluates to the donor `interpolate` over the read-back params — the
-bridge from the gate AST to the donor's coordinate algebra. -/
+/-- `interpolatedX` evaluates to `interpolate` over the read-back params — the bridge from the
+gate AST to the coordinate algebra. -/
 theorem eval_interpolatedX (cfg : Config) (word : Expression Fp Query) (f : Query → Fp) :
     (interpolatedX cfg word).eval f
       = Halo2.Ironwood.Ecc.MulFixed.interpolate (readParams cfg f) (word.eval f) := by
@@ -160,13 +155,11 @@ theorem interpolate_congr_params {p q : CoordsParams Fp}
   unfold Halo2.Ironwood.Ecc.MulFixed.interpolate
   rw [h0, h1, h2, h3, h4, h5, h6, h7]
 
-/-- Rust `mul_fixed::Config::configure` (`mul_fixed.rs:54-104`): equality on `window` and
-`u`, a fresh selector for the running-sum config (whose `configure` registers the "range
-check" gate and re-enables equality on `window` — a dedup no-op, as in Rust), a fresh
-`fixed_z` column, then the coords gate on the same selector. The cross-config column
-identities Rust asserts (`add.x_p = add_incomplete.x_p` etc., lines 81-99) hold by
-construction at the call site (`EccChip::configure` hands both configs the same
-columns). -/
+/-- Equality on `window` and `u`, a fresh selector for the running-sum config (whose `configure`
+registers the "range check" gate and re-enables equality on `window` — a dedup no-op), a fresh
+`fixed_z` column, then the coords gate on the same selector. The cross-config column identities
+Rust asserts (`add.x_p = add_incomplete.x_p` etc.) hold by construction at the call site
+(`EccChip::configure` hands both configs the same columns). -/
 def configure (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
     (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config) :
     Configure Fp Config := do
@@ -180,39 +173,35 @@ def configure (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .adv
   createGate (coordsGate cfg)
   return cfg
 
-/-! ## Region-relative synthesize pieces (`assign_region_inner`, `mul_fixed.rs:171-405`)
+/-! ## Region-relative synthesize pieces
 
-All pieces are offset-generic `RegionCircuit`s; the wrapper bundles compose them inside
-one region. The fixed-base data comes from the donor `FixedBase` (its `params w` are the
-window-`w` fixed-column values; `windowPoint`/`u` feed the witness programs). -/
+Offset-generic `RegionCircuit`s; the wrapper bundles compose them inside one region. -/
 
 /-- The `k = ⌊α/8^w⌋ mod 8` window value of the scalar cell, inside a witness closure. -/
 def windowVal (env : Placed ProverEnvironment Fp) (alpha : AssignedCell Fp) (w : ℕ) : ℕ :=
   (readCell env alpha).val / 8 ^ w % 8
 
 /-- Witness program for `x_p` of window `w`: the window-table point's x-coordinate at the
-scalar's window value (`process_window`, `mul_fixed.rs:268-283`). The 8 candidate
-coordinates are precomputed per window (Rust precomputes the whole window table, from
-the base's own scalar-kind-specific window formula — hence the table parameter `tbl`:
-`windowPoint point` for the 85-window kinds, `Short.windowPoint point` for short). -/
+scalar's window value. The 8 candidate coordinates are precomputed per window (from the base's
+own scalar-kind-specific window formula — hence the table parameter `tbl`: `windowPoint point`
+for the 85-window kinds, `Short.windowPoint point` for short). -/
 def xPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (tbl w k.val).x)[windowVal env alpha w]!)]
 
-/-- Witness program for `y_p` of window `w` (`mul_fixed.rs:285-295`). -/
+/-- Witness program for `y_p` of window `w`. -/
 def yPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => (tbl w k.val).y)[windowVal env alpha w]!)]
 
-/-- Witness program for `u` of window `w`: `u² = y_p + z` (`mul_fixed.rs:300-302`). -/
+/-- Witness program for `u` of window `w`: `u² = y_p + z`. -/
 def uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => B.u w k.val)[windowVal env alpha w]!)]
 
-/-- One window row of `assign_fixed_constants` (`mul_fixed.rs:214-249`): enable the
-coords-check toggle gate (Rust's `coords_check_toggle` selector parameter — the coords
-gate for the running-sum wrappers, the full-width gate for `full_width`), then the 8
-Lagrange coefficients and the `z` value into the fixed columns. -/
+/-- One window row: enable the coords-check toggle gate (the coords gate for the running-sum
+wrappers, the full-width gate for `full_width`), then the 8 Lagrange coefficients and the `z`
+value into the fixed columns. -/
 def fixedConstantsWindow (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config) (w row : ℕ) :
     RegionCircuit Fp Unit := do
   toggle.enable row
@@ -228,16 +217,15 @@ def fixedConstantsWindow (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config) (
   let _ ← assignFixed cfg.fixedZ row p.z
   return ()
 
-/-- `assign_fixed_constants` (`mul_fixed.rs:195-252`): the per-window fixed columns and
-coords-toggle enables, one row per window, before any advice assignment. -/
+/-- The per-window fixed columns and coords-toggle enables, one row per window, before any
+advice assignment. -/
 def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (offset numWindows : ℕ) : RegionCircuit Fp Unit :=
   RegionCircuit.forRange' offset 1 numWindows
     (fun w row => fixedConstantsWindow toggle B cfg w row)
 
-/-- `process_window` (`mul_fixed.rs:254-305`): witness `[window_scalar]B`'s coordinates
-into the add config's `x_p`/`y_p` at the window row, and the `u` value. Returns the
-window-point cells. -/
+/-- Witness `[window_scalar]B`'s coordinates into the add config's `x_p`/`y_p` at the window row,
+and the `u` value. Returns the window-point cells. -/
 def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Config)
     (alpha : AssignedCell Fp) (w row : ℕ) :
     RegionCircuit Fp (Point (AssignedCell Fp)) := do
@@ -246,13 +234,11 @@ def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Co
   let _u ← assignAdvice cfg.u row (uWit B alpha w)
   return { x, y }
 
-/-- The shared window chain of `assign_region_inner` (`mul_fixed.rs:183-192`):
-`initialize_accumulator` (window 0), the incomplete-addition loop over windows
-`1..numWindows−2` (window 1's accumulator q-copy is REAL — the window-0 point; later
-windows' are the Rust "copied into themselves" self-copies of the previous round's
-output), and `process_msb` (window `numWindows−1`, no addition). Generic over the
-per-window witness function (cell-scalar for the running-sum wrappers, hint-driven for
-`full_width`). Returns `(acc, mul_b)`. -/
+/-- The shared window chain: `initialize_accumulator` (window 0), the incomplete-addition loop
+over windows `1..numWindows−2` (window 1's accumulator q-copy is REAL — the window-0 point; later
+windows' are self-copies of the previous round's output), and `process_msb` (window
+`numWindows−1`, no addition). Generic over the per-window witness function (cell-scalar for the
+running-sum wrappers, hint-driven for `full_width`). Returns `(acc, mul_b)`. -/
 def windowChain (cfg : Config)
     (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
     (offset numWindows : ℕ) :
@@ -274,9 +260,9 @@ def windowChain (cfg : Config)
 
 /-! ## Shared proof helpers for the wrapper bundles
 
-Context-free value lemmas the sibling proof arcs (`base_field_elem`, `full_width`,
-`short`) all consume. File-level so in-proof uses run in an empty context (`omega`
-whnf-scans every hypothesis; see `doc/performance-problems.md`). -/
+Context-free value lemmas the sibling proof arcs (`base_field_elem`, `full_width`, `short`) all
+consume, kept file-level so in-proof uses run in an empty context (`omega` whnf-scans every
+hypothesis). -/
 
 /-- Structure eta for `Point` as an equation. -/
 theorem point_eta (P : Point Fp) : ({ x := P.x, y := P.y } : Point Fp) = P := rfl
@@ -305,8 +291,7 @@ theorem base_bounds {a b : ℕ} (ha : a < 8) (hb : b < 8) :
   norm_num
   omega
 
-/-- Pure-ℕ bounds for a ladder step (self-contained; the donor `step_sum_lt`/
-`inv_lt_card` content). -/
+/-- Pure-ℕ bounds for a ladder step. -/
 theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
     (_hS_pos : 0 < S) (hj : j ≤ 82) :
     0 < (k + 2) * 8 ^ (j + 1) ∧ S < (k + 2) * 8 ^ (j + 1) ∧

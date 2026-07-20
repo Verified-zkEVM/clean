@@ -8,81 +8,19 @@ import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Utilities.LookupRangeCheck
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul/overflow.rs` (read in full),
-invoked from `mul.rs:298-302` as `overflow_config.overflow_check(alpha, &zs)` where `zs =
-[z_0, z_1, …, z_254, z_255]` are the running sums of the whole variable-base scalar mul.
-
-This is the OVERFLOW CHECK of variable-base scalar mul: given the scalar `alpha` and the
-running sums, it enforces the two facts that make the mul sound against overflow of the
-254-bit scalar decomposition (`overflow.rs:50-98`):
+The overflow check of variable-base scalar multiplication: given the scalar `alpha` and the
+running sums `zs = [z_0, z_1, …, z_254, z_255]`, enforces the two facts that make the mul sound
+against overflow of the 254-bit scalar decomposition:
 - `recovery`: `z_0 = alpha + t_q` (the full running sum recovers the scalar plus the field
   modulus offset `t_q`);
 - `canonicity`: witnessing `s = alpha + k_254·2^130` and decomposing its low 130 bits, the
   high tail `s_minus_lo_130` vanishes in the appropriate cases (`k_254 = 0`, or `z_130` is
   the top bit `2^124`), ruling out a non-canonical `alpha`.
 
-## What's distinctive: first LOOKUP-USING child composition
+The low 130 bits of `s` are decomposed by a `LookupRangeCheck` child (thirteen `K = 10`-bit
+lookups).
 
-The parent calls `LookupRangeCheck.rangeCheck K numWords strict=false` (fully proven) to
-decompose the low 130 bits of `s` with thirteen `K = 10`-bit lookups (`overflow.rs:190-208`,
-`s_minus_lo_130` → `copy_check(s, num_words = 13, strict = false)`). This is the first
-subcircuit-composition consumer whose child *uses a lookup*, so the child's `EnvAssumptions`
-is a genuinely non-trivial derived fact:
-
-    rangeCheck.EnvAssumptions cfg env = TableLoaded K cfg env.env ∧ (selector distinctness)
-
-over the CHILD's `LookupRangeCheck.Config K` — a *derived sub-config* (unlike Chain, where
-parent and child share `Config` and the discharge is `rfl`/`id`). The parent stores the
-child's `LookupRangeCheck.Config K` inside its own `Config` (as `lookupConfig`), and its
-own `EnvAssumptions` states the table fact over that *projected* sub-config. The parent then
-discharges the child's env-assumption by PROJECTION — reading its own `EnvAssumptions` and
-handing the projected `TableLoaded`/distinctness onto the child call. See the verdict note
-at `circuit.child_envAssumptions_of_parent`.
-
-## Config composition (mirrors Rust `overflow::Config`)
-
-Rust `overflow::Config<Lookup>` (`overflow.rs:18-26`) holds `q_mul_overflow: Selector`,
-`lookup_config: Lookup`, and `advices: [Column<Advice>; 3]`, and `configure` takes the
-`lookup_config` as a parameter (built once in `mul.rs:78-79`). We mirror this exactly: the
-parent `Config` stores `qOverflow`, the child's `lookupConfig : LookupRangeCheck.Config K`,
-and the three advice columns `adv0/adv1/adv2`.
-
-## Boundary
-
-The overflow gate (`create_gate`, `overflow.rs:49-99`) is this file's responsibility, ported
-verbatim as a standalone def at its verbatim rotations. The witnessing of `s` and `η`, the
-copies of `z_0/z_130/k_254/alpha/s_minus_lo_130`, and the rangeCheck call are the
-`overflow_check`/`s_minus_lo_130` bodies (`overflow.rs:101-208`). The upstream computation of
-the running sums `zs` belongs to the mul.rs assembly (out of scope; the running-sum cells
-`z_0`, `z_130`, `k_254 = z_254` arrive as verifier-visible input cells).
-
-## Donor
-
-`Clean/Orchard/Ecc/Mul/Overflow.lean` (`Halo2.Ironwood.Ecc.Mul.Overflow`) — the phase-one donor.
-Its `OverflowCheck.Spec` is lifted wholesale as this file's `Spec`: the recovery equation, the
-`k_254 = 0 ∨ z_130 = 2^124` disjunction, and the existential low/high split of `s` with the
-two canonicity disjunctions. The value algebra (the `s = alpha + k_254·2^130` derivation, the
-`recovery`/`lo_zero`/`canonicity` gate polynomials) is lifted from the donor's `Overflow.Spec`
-and `OverflowCheck.soundness`.
-
-## Proof status
-
-Fully proven, no sorries (`#print axioms circuit` = `propext, Classical.choice, Quot.sound`).
-Soundness peels the copies + the folded rangeCheck child chunk (consumed via `subcircuit_rw at
-hChild`, weakening it to the child's `EnvA → A → Spec`), discharges the child's derived-sub-config
-`EnvAssumptions` BY PROJECTION from the parent's, reduces the overflow gate to its five value-level
-polynomials, and assembles the donor `Spec`. Completeness mirrors it on the honest witnesses via
-`subcircuit_rw` (the goal chunk strengthens to its precondition bundle and the engine
-introduces the premised `h_spec_0`, exposing the child's verifier `Spec` + honest `ProverSpec`).
-
-One genuine composition finding surfaced (see the `hzLast_zero` note in `completeness`): the
-canonicity gate needs the child's honest NATURAL-NUMBER decomposition `zLast = ↑(s.val / 2^130)`,
-which `rangeCheck`'s verifier `Spec` (a field equation) does not expose. Resolved by a minimal
-additive child-side lemma `LookupRangeCheck.rangeCheck_call_zLast_value` (reads it off the loop
-witnesses `rangeCheck_loop_zvalues` that the bundle Spec does not surface — no bundle change).
-FRAMEWORK CANDIDATE: a lookup child that decomposes a value should expose that nat decomposition
-(a `ProverSpec` carrying it) so composition consumers need not peel the child's internals.
+Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
 -/
 
 namespace Halo2.Ironwood.Ecc.MulOverflow
@@ -90,27 +28,24 @@ namespace Halo2.Ironwood.Ecc.MulOverflow
 open Halo2.Ironwood.Ecc (tQ)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
-/-- The number of `K`-bit words decomposing the low 130 bits of `s` (`overflow.rs:196`:
-`num_words = 130 / K`). With `K = 10`, `numWords = 13`. Kept as a def so the layout rows and
-the `2^{K·numWords} = 2^130` arithmetic read symbolically. -/
+/-- The number of `K`-bit words decomposing the low 130 bits of `s`. With `K = 10`,
+`numWords = 13`. Kept as a def so the layout rows and the `2^{K·numWords} = 2^130` arithmetic
+read symbolically. -/
 def numWords (K : ℕ) : ℕ := 130 / K
 
-/-! ## Config
+/-! ## Config -/
 
-Rust `overflow::Config<Lookup>` (`overflow.rs:18-26`): the `q_mul_overflow` selector, the
-delegated lookup config, and three advice columns. -/
-
-/-- The parent config. Stores the child's `LookupRangeCheck.Config K` (the *derived sub-config*
-whose table the parent's `EnvAssumptions` references), the overflow selector, and the three
-advice columns `advices[0..3]`. -/
 structure Config (K : ℕ) where
+  -- Selector to check z_0 = alpha + t_q (mod p).
   qOverflow : Selector
+  -- 10-bit lookup table.
   lookupConfig : LookupRangeCheck.Config K
+  -- Advice columns.
   adv0 : Column .advice
   adv1 : Column .advice
   adv2 : Column .advice
 
-/-! ## The `q_mul_overflow` gate (`overflow.rs:49-99`)
+/-! ## The `q_mul_overflow` gate
 
 Layout relative to the gate row `g` (`q_mul_overflow` enabled at `Rotation::cur`):
 
@@ -120,7 +55,7 @@ Layout relative to the gate row `g` (`q_mul_overflow` enabled at `Rotation::cur`
     | z_130 (g,   cur)  | alpha (g,   cur)  | s (g, cur) |
     | eta   (g+1, next) | s_minus_lo_130 (g+1, next)     |
 
-The five constraints (`overflow.rs:71-96`), verbatim:
+The five constraints, verbatim:
 - `s_check`      : `s − (alpha + k_254·2^130)`
 - `recovery`     : `z_0 − alpha − t_q`
 - `lo_zero`      : `k_254·(z_130 − 2^124)`
@@ -142,11 +77,11 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp where
     let sMinusLo130 : Expression Fp Query := queryAdvice cfg.adv1 1  -- s_minus_lo_130 (next)
     let s : Expression Fp Query := queryAdvice cfg.adv2 0        -- s (cur)
     let twoPow124 : Expression Fp Query := (2 ^ 124 : Fp)
-    -- Rust builds `two_pow_130 = two_pow_124 * Constant(1 << 6)` (`overflow.rs:57-58`): a
-    -- PRODUCT of two `Constant` expressions, NOT a single `2^130` constant. We reproduce that
-    -- AST exactly (`k_254 * two_pow_130` is then `product(k_254, product(2^124, 64))`), so the
-    -- VK fixture matches. Both factors are `Expression.const`, so the `*` is an
-    -- expression product (`mul`), erasing to `.product` — not `.scaled`.
+    -- Rust builds `two_pow_130 = two_pow_124 * Constant(1 << 6)`: a PRODUCT of two `Constant`
+    -- expressions, NOT a single `2^130` constant. We reproduce that AST exactly (`k_254 *
+    -- two_pow_130` is then `product(k_254, product(2^124, 64))`), so the VK fixture matches. Both
+    -- factors are `Expression.const`, so the `*` is an expression product (`mul`), erasing to
+    -- `.product` — not `.scaled`.
     let twoPow130 : Expression Fp Query :=
       twoPow124 * (Expression.const (2 ^ 6 : Fp) : Expression Fp Query)
     let sCheck := s - (alpha + k254 * twoPow130)
@@ -158,9 +93,8 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp where
       [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
         ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ]
 
-/-- Rust `Config::configure` (`overflow.rs:29-47`): enable equality on the three advice
-columns, allocate the `q_mul_overflow` selector, register the overflow gate. The
-`lookup_config` is handed down by the chip assembly (`mul.rs`), already configured by
+/-- Enable equality on the three advice columns, allocate the `q_mul_overflow` selector, register
+the overflow gate. The `lookup_config` is handed down by the chip assembly, already configured by
 `LookupRangeCheck.configure`. -/
 def configure (K : ℕ) (lookupConfig : LookupRangeCheck.Config K)
     (adv0 adv1 adv2 : Column .advice) : Configure Fp (Config K) := do
@@ -172,99 +106,90 @@ def configure (K : ℕ) (lookupConfig : LookupRangeCheck.Config K)
   createGate (overflowGate K cfg)
   return cfg
 
-/-! ## Inputs / Output
-
-Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Overflow.OverflowCheck.Input`: the original scalar cell
-`alpha` and the running-sum cells the check inspects — `z_0` (full sum), `z_130` (after the
-hi half), and `k_254 = z_254` (the top bit). All are already-assigned, verifier-visible
-input cells (produced by the mul.rs assembly). No output value is exposed (the gadget only
-enforces constraints — like the donor's `FormalAssertion`), so `Output` is `unit`. -/
+/-! ## Inputs / Output -/
 
 /-- Verifier-visible inputs: the scalar `alpha` and the running-sum cells `z_0`, `z_130`,
 `k_254 = z_254`, as already-assigned cells. -/
 structure Inputs (F : Type) where
+  -- The original scalar.
   alpha : F
+  -- z_0, the full running sum.
   z0 : F
+  -- z_130, the running sum after the high half.
   z130 : F
+  -- k_254 = z_254, the top bit.
   k254 : F
 deriving ProvableStruct
 
 /-! ## Witness programs
 
-`s` and `η` are the two witnessed cells (`overflow.rs:111-129, 150-159`), spelled over the
-Halo2-Clean witgen IR (`FExpr Fp`). -/
+`s` and `η` are the two witnessed cells, spelled over the Halo2-Clean witgen IR (`FExpr Fp`). -/
 
-/-- The witness value of `s = alpha + k_254·2^130` (`overflow.rs:113-116`: `alpha + k_254 ·
-(2^65)² = alpha + k_254·2^130`). -/
+/-- The witness value of `s = alpha + k_254·2^130`. -/
 def sWit (input : Inputs (AssignedCell Fp)) : WitgenIR Fp 1 :=
   .ofFExpr ((.expr input.alpha) + (.expr input.k254) * (.const (2 ^ 130 : Fp)))
 
-/-- The witness value of `η = inv0(z_130)` (`overflow.rs:150-158`: `Assigned::from(z_130).
-invert()`, i.e. the `0⁻¹ = 0` field inverse). -/
+/-- The witness value of `η = inv0(z_130)`, the `0⁻¹ = 0` field inverse. -/
 def etaWit (input : Inputs (AssignedCell Fp)) : WitgenIR Fp 1 :=
   .ofFExpr (.inv (.expr input.z130))
 
-/-! ## Faithful region structure (`overflow_check`, `overflow.rs:101-208`)
+/-! ## Faithful region structure
 
-Rust `overflow_check` runs at the LAYOUTER level in THREE sibling regions
-(`overflow.rs:118-185`), plus the copyCheck child called via `s_minus_lo_130`
-(`overflow.rs:200-205`, a layouter-level `lookup_config.copy_check`). We mirror this exactly:
+Three sibling regions at the layouter level, plus the copyCheck child call:
 
-1. **witness-s region** (`overflow.rs:118-129`, "s = alpha + k_254 ⋅ 2^130"): witness `s` at
-   `advices[0]` row 0 of its own region.
-2. **the copyCheck child** (`overflow.rs:200-205`): `lookup_config.copy_check(s, num_words, false)`
-   — a layouter-level range check that copies `s` into the running-sum column and decomposes its
-   low 130 bits; its `zLast` output is `s_minus_lo_130`.
-3. **the gate region** (`overflow.rs:136-185`, "overflow check"): enables `q_mul_overflow` and
-   COPIES the six participating cells across regions — `z_0`, `z_130`, `k_254`, `alpha` (from the
-   parent mul's running-sum region), `s` (from region 1), `s_minus_lo_130` (from the copyCheck
-   child). `η = inv0(z_130)` is witnessed here (`overflow.rs:150-158`).
+1. **witness-s region**: witness `s` at `advices[0]` row 0 of its own region.
+2. **the copyCheck child**: `lookup_config.copy_check(s, num_words, false)` — a layouter-level
+   range check that copies `s` into the running-sum column and decomposes its low 130 bits; its
+   `zLast` output is `s_minus_lo_130`.
+3. **the gate region**: enables `q_mul_overflow` and COPIES the six participating cells across
+   regions — `z_0`, `z_130`, `k_254`, `alpha` (from the parent mul's running-sum region), `s`
+   (from region 1), `s_minus_lo_130` (from the copyCheck child). `η = inv0(z_130)` is witnessed
+   here.
 
 The cross-region copies are `copyAdvice` of cells whose `regionIndex` is a *different* region —
 the model supports this directly (`Cell` carries its region index; `copyAdvice`'s
 `constrainEqual` reads the source at its own region's placement). -/
 
-/-- The gate region body (`overflow.rs:136-185`), a region-level circuit at row offset 0 of its
-own region. Enables the overflow gate at row 1 (so the gate's prev/cur/next are rows 0/1/2) and
-copies in the six cells + witnesses `η`. The `s` cell (region 1) and `sMinusLo130` cell (the
-copyCheck child) arrive as arguments; the four running-sum cells come from `input`. -/
+/-- The gate region body, a region-level circuit at row offset 0 of its own region. Enables the
+overflow gate at row 1 (so the gate's prev/cur/next are rows 0/1/2) and copies in the six cells +
+witnesses `η`. The `s` cell (region 1) and `sMinusLo130` cell (the copyCheck child) arrive as
+arguments; the four running-sum cells come from `input`. -/
 def gateRegion (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp))
     (sCell sMinusLo130 : AssignedCell Fp) : RegionCircuit Fp Unit := do
-  -- z_0 (adv0 @ 0, gate prev), z_130 (adv0 @ 1, gate cur)   (overflow.rs:145,148)
+  -- z_0 (adv0 @ 0, gate prev), z_130 (adv0 @ 1, gate cur)
   let _z0 ← copyAdvice input.z0 cfg.adv0 0
   let _z130 ← copyAdvice input.z130 cfg.adv0 1
-  -- η = inv0(z_130) at adv0 @ 2 (gate next)                 (overflow.rs:150-158)
+  -- η = inv0(z_130) at adv0 @ 2 (gate next)
   let _eta ← assignAdvice cfg.adv0 2 (etaWit input)
-  -- k_254 (adv1 @ 0, gate prev), alpha (adv1 @ 1, gate cur) (overflow.rs:162,165-170)
+  -- k_254 (adv1 @ 0, gate prev), alpha (adv1 @ 1, gate cur)
   let _k254 ← copyAdvice input.k254 cfg.adv1 0
   let _alpha ← copyAdvice input.alpha cfg.adv1 1
-  -- s_minus_lo_130 (adv1 @ 2, gate next)                    (overflow.rs:173-178)
+  -- s_minus_lo_130 (adv1 @ 2, gate next)
   let _sMinusLo130 ← copyAdvice sMinusLo130 cfg.adv1 2
-  -- s (adv2 @ 1, gate cur)                                  (overflow.rs:181)
+  -- s (adv2 @ 1, gate cur)
   let _s ← copyAdvice sCell cfg.adv2 1
-  -- enable the overflow gate at the middle row (offset+1 = 1)   (overflow.rs:142)
+  -- enable the overflow gate at the middle row (offset+1 = 1)
   (overflowGate K cfg).enable 1
   return ()
 
-/-- The layouter-level `overflow_check` body (`overflow.rs:101-208`): the three faithful sibling
-regions plus the copyCheck child. -/
+/-- The layouter-level `overflow_check` body: the three faithful sibling regions plus the
+copyCheck child. -/
 def synthesize (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp)) :
     Circuit Fp Unit := do
-  -- region 1: witness s = alpha + k_254·2^130 at advices[0] row 0   (overflow.rs:118-129)
+  -- region 1: witness s = alpha + k_254·2^130 at advices[0] row 0
   let sCell ← assignRegion "s = alpha + k_254 ⋅ 2^130"
     (assignAdvice cfg.adv0 0 (sWit input))
-  -- child copyCheck: decompose the low 130 bits of s   (overflow.rs:200-205)
+  -- child copyCheck: decompose the low 130 bits of s
   let dec ← (LookupRangeCheck.copyCheck K (numWords K) false).call cfg.lookupConfig
     { element := sCell }
-  -- region 3: the overflow-check gate region with cross-region copies   (overflow.rs:136-185)
+  -- region 3: the overflow-check gate region with cross-region copies
   let _ ← assignRegion "overflow check" (gateRegion K cfg input sCell dec.zLast)
   return ()
 
 /-! ## Contract
 
 `EnvAssumptions` states the table fact + selector distinctness over the *projected* child
-sub-config `cfg.lookupConfig` — exactly the copyCheck child's `EnvAssumptions` on that config.
-`Spec` is the donor `OverflowCheck.Spec`, lifted wholesale. -/
+sub-config `cfg.lookupConfig` — exactly the copyCheck child's `EnvAssumptions` on that config. -/
 
 /-- The parent `EnvAssumptions`: the child's `TableLoaded` over the projected `lookupConfig`,
 plus the selector distinctness the child needs. Definitionally the copyCheck child's
@@ -273,9 +198,9 @@ def EnvAssumptions (K : ℕ) (cfg : Config K) (env : Placed Environment Fp) : Pr
   LookupRangeCheck.TableLoaded K cfg.lookupConfig env.env ∧
     cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
 
-/-- The overflow-check contract (donor `OverflowCheck.Spec`), verifier view. `z_0` recovers
-`alpha + t_q`; `z_130` is `2^124` unless `k_254 = 0`; and some split `s = s_lo + 2^130·s_hi`
-with `s_lo < 2^130` satisfies the two canonicity disjunctions. -/
+/-- The overflow-check contract, verifier view. `z_0` recovers `alpha + t_q`; `z_130` is `2^124`
+unless `k_254 = 0`; and some split `s = s_lo + 2^130·s_hi` with `s_lo < 2^130` satisfies the two
+canonicity disjunctions. -/
 def Spec (input : Inputs Fp) : Prop :=
   input.z0 = input.alpha + (tQ : Fp) ∧
   (input.k254 = 0 ∨ input.z130 = (2 ^ 124 : Fp)) ∧
@@ -344,8 +269,8 @@ private theorem copyCheckInputs_eval_eq_prover (env : Placed ProverEnvironment F
 
 /-! ## The gadget bundle
 
-`overflow_check` at the LAYOUTER level (`overflow.rs:101-208`), three faithful sibling regions.
-Parameterized by `K` and the arithmetic bridge `K · numWords K = 130`. -/
+`overflow_check` at the layouter level, three faithful sibling regions. Parameterized by `K` and
+the arithmetic bridge `K · numWords K = 130`. -/
 
 /-- The region count of `synthesize`: region 1 (witness s), the copyCheck child (1 region), and
 region 3 (gate) — three regions, independent of the starting index. -/
@@ -389,15 +314,12 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Soundness ══
   soundness := by
-    -- composite layouter gadget: `circuit_proof_start` runs the universal prefix (intro `cfg`,
-    -- `soundness_iff`, house names, provable-type normalization); the folded `synthesize` keeps the
-    -- goal composite, so the leaf-only finish is skipped and `hc`/`h_input` survive for the manual
-    -- layouter peel below.
+    -- composite layouter gadget: the universal prefix runs; `hc`/`h_input` survive for the
+    -- manual layouter peel below.
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
     -- peel the three-region layouter structure: region 1 (witness s) at i₀, the copyCheck child
-    -- at i₀+1, region 3 (gate) at i₀+2. `circuit_norm` splits the binds into the region/subcircuit
-    -- chunks with the region counter threaded.
+    -- at i₀+1, region 3 (gate) at i₀+2.
     simp only [synthesize, circuit_norm] at hc
     -- reduce the gate-region's index `i₀ + 1 + regionCount(copyCheck call)` to `i₀ + 2`
     rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
@@ -430,7 +352,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     rw [copyCheck_output] at hCsml
     simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
       Cell.of_column, Environment.get_advice] at hDecomp hCs hCsml
-    -- assemble the donor `Spec`
+    -- assemble `Spec`
     simp only [Spec]
     provable_type_simp
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
@@ -476,9 +398,8 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Completeness ══
   completeness := by
-    -- composite layouter gadget: the universal prefix (intro `cfg`, `completeness_iff`, house names,
-    -- provable-type normalization) runs; the folded `synthesize` keeps the goal composite, so the
-    -- leaf-only finish is skipped and `hwit`/`h_input`/`hPA` survive for the manual peel below.
+    -- composite layouter gadget: the universal prefix runs; `hwit`/`h_input`/`hPA` survive for
+    -- the manual peel below.
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
     -- peel the witness list: region 1 (witness s) ++ copyCheck child ++ gate region.
@@ -493,9 +414,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
       WitgenEnv.readVar_halo2, AssignedCell.eval] at hWs
-    -- consume the copyCheck child via the engine's completeness mode. This gate's downstream value
-    -- algebra reads the gate-window cells through the (prover-env) goal spelling that the
-    -- whole-goal strengthening produces.
+    -- consume the copyCheck child via the engine's completeness mode.
     subcircuit_rw
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
     refine ⟨?_, ?_⟩
@@ -556,8 +475,8 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       simp only [hIalpha, hIz0, hIz130, hIk254] at hWs hWz0 hWz130 hWeta hWk254 hWalpha ⊢
       -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`)
       -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling. The
-      -- engine's Placed-view derived statement (finding #1) spells the child-Spec decomposition
-      -- (`hDecompV`) without the `+ 0`, so only `hChildPS` needs it now.
+      -- engine's Placed-view derived statement spells the child-Spec decomposition (`hDecompV`)
+      -- without the `+ 0`, so only `hChildPS` needs it now.
       rw [show ((place i₀ + 0 : ℕ) : ℤ) = ((place i₀ : ℕ) : ℤ) from by norm_num]
         at hChildPS
       rw [hKW] at hDecompV hlo hChildPS

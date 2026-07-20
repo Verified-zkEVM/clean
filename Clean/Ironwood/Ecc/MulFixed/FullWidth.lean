@@ -2,35 +2,14 @@ import Clean.Ironwood.Ecc.MulFixed
 import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`
-(read in full) — fixed-base scalar multiplication by a full-width scalar.
+Fixed-base scalar multiplication by a full-width scalar: the windows are witnessed
+directly (not derived from a running sum, and allowed to be non-canonical), constrained
+3-bit by a per-window gate, and fed into the shared incomplete-addition window chain
+plus a closing complete addition. The scalar is prover-side only, so the bundle's
+witness is the 85 three-bit windows and the extracted scalar they encode; `Spec` is the
+extractor-form `output = s • B`.
 
-- `Config` (lines 13-17): the `q_mul_fixed_full` selector and the shared `mul_fixed`
-  super config.
-- `configure` (lines 19-32) + the "Full-width fixed-base scalar mul" gate (lines 34-51):
-  on `q_mul_fixed_full`, the shared `coords_check` over the RAW `window` query (the
-  windows are witnessed directly, not derived from a running sum) plus the 3-bit
-  "window range check".
-- `assign` (lines 115-177), two regions:
-  1. "Full-width fixed-base mul (incomplete addition)": `witness` (lines 55-70 →
-     `decompose_scalar_fixed`, lines 75-114: enable `q_mul_fixed_full` on all 85 rows,
-     witness `k[w]` into the `window` column), then the shared `assign_region_inner`
-     with `q_mul_fixed_full` as the coords toggle;
-  2. "Full-width fixed-base mul (last window, complete addition)": `add(mul_b, acc)`.
-
-The scalar is prover-side only (`Value<pallas::Scalar>`, witnessed inside — "allowed to
-be non-canonical"): per the no-prover-info rule the bundle input is `Unconstrained`
-hint data. The hint is the 85 three-bit windows themselves (each fits `Fp`); the
-`Fq`-valued scalar has no `Fp`-cell representation, and the nat-valued IR hint
-(`UnconstrainedNat`, queued follow-up #32) is not yet ported.
-
-Phase-2 spec note (vs the phase-1 donor `Orchard/Ecc/MulFixed/FullWidth.lean`): the
-donor's verifier spec is the existential `∃ s : Fq, output = s • B` — the scalar exists
-only as window cells, so input/output soundness can say nothing stronger. The
-requirements doc upgrades exactly this family to extractor form
-(`Witness := Fq` read off the window cells, `Spec _ output s := output = s • B`);
-that lands with this file's proof arc.
+Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`.
 -/
 
 -- The variable-name style linter whnf-walks the chunk-typed statements of the proof
@@ -46,14 +25,14 @@ open Halo2.Ironwood.DecomposeRunningSum (rangeCheckExpr)
 open Halo2.Ironwood (Point)
 open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
-/-- Rust `full_width::Config` (lines 13-17). -/
 structure Config where
+  -- Selector for the "Full-width fixed-base scalar mul" gate.
   qMulFixedFull : Selector
+  -- The shared fixed-base multiplication config.
   superConfig : MulFixed.Config
 
-/-- The "Full-width fixed-base scalar mul" gate (lines 34-51): the shared `coords_check`
-over the raw `window` query, plus the 3-bit window range check — all on
-`q_mul_fixed_full`. -/
+/-- The "Full-width fixed-base scalar mul" gate: the shared `coords_check` over the raw
+`window` query, plus the 3-bit window range check — all on `q_mul_fixed_full`. -/
 def fullWidthGate (cfg : Config) : Gate Fp where
   name := "Full-width fixed-base scalar mul"
   selector := cfg.qMulFixedFull
@@ -63,17 +42,17 @@ def fullWidthGate (cfg : Config) : Gate Fp where
       (coordsCheck cfg.superConfig window
         ++ [("window range check", rangeCheckExpr 8 window)])
 
-/-- Rust `full_width::Config::configure` (lines 19-32). -/
+/-- Allocate a fresh selector, register the gate. -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   let qMulFixedFull ← selector
   let cfg : Config := { qMulFixedFull, superConfig }
   createGate (fullWidthGate cfg)
   return cfg
 
-/-- `decompose_scalar_fixed` (lines 75-114): enable `q_mul_fixed_full` on all
-`numWindows` rows, then witness the scalar's 3-bit windows `k[w]` into the `window`
-column — from the window hints. Returns nothing; the window cells are read positionally
-(the coords rows consume them via queries, `process_window` via the hint values). -/
+/-- `decompose_scalar_fixed`: enable `q_mul_fixed_full` on all `numWindows` rows, then
+witness the scalar's 3-bit windows `k[w]` into the `window` column — from the window
+hints. Returns nothing; the window cells are read positionally (the coords rows consume
+them via queries, `process_window` via the hint values). -/
 def witnessScalarLoop (cfg : Config) (windows : Vector (FExpr Fp) 85) (offset : ℕ) :
     RegionCircuit Fp Unit := do
   RegionCircuit.forRange' offset 1 85 (fun _ row =>
@@ -110,30 +89,29 @@ def processWindowH (B : FixedBaseData) (cfg : Config) (windows : Vector (FExpr F
   let _u ← assignAdvice cfg.superConfig.u row (uWitH B windows w)
   return { x, y }
 
-/-- Output of the inner region: the exit accumulator (windows 0..83) and the MSB window
-point. -/
 structure InnerOut (F : Type) where
+  -- The exit accumulator after windows 0..83.
   acc : Point F
+  -- The MSB window (84) point.
   mulB : Point F
 deriving ProvableStruct
 
-/-- Region 1, "Full-width fixed-base mul (incomplete addition)" (lines 126-147): witness
-the scalar windows, then the shared inner body — fixed constants (toggle =
-`q_mul_fixed_full`), window-0 accumulator, the incomplete-addition loop over windows
-1..83, the most significant window 84. -/
+/-- Region 1, "Full-width fixed-base mul (incomplete addition)": witness the scalar
+windows, then the shared inner body — fixed constants (toggle = `q_mul_fixed_full`),
+window-0 accumulator, the incomplete-addition loop over windows 1..83, the most
+significant window 84. -/
 def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (windows : Vector (FExpr Fp) 85) :
     RegionCircuit Fp (InnerOut (AssignedCell Fp)) := do
-  -- witness the scalar (lines 132-136)
+  -- witness the scalar
   witnessScalarLoop cfg windows offset
-  -- `assign_fixed_constants` with `q_mul_fixed_full` as the coords toggle (line 143)
+  -- `assign_fixed_constants` with `q_mul_fixed_full` as the coords toggle
   fixedConstantsLoop (fullWidthGate cfg) B cfg.superConfig offset 85
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows) offset 85
   return { acc := r.1, mulB := r.2 }
 
-/-- Rust `full_width::Config::assign` (lines 115-177): the two regions. Returns the
-result point `[scalar]B`. -/
+/-- The two regions. Returns the result point `[scalar]B`. -/
 def synthesize (B : FixedBaseData) (cfg : Config) (windows : Vector (FExpr Fp) 85) :
     Circuit Fp (Var Point Fp) := do
   let inn ←
@@ -903,10 +881,10 @@ def inner (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
 
   completeness := fun cfg offset => fw_inner_completeness B windows cfg offset
 
-/-! ## The gadget bundle (`FixedPoint::mul`, `full_width.rs::assign`)
+/-! ## The gadget bundle (`FixedPoint::mul`)
 
-Extractor form per the requirements doc: `Witness` carries the window cells AND the
-scalar they encode; `Spec` is literally `output = s • B`. -/
+Extractor form: `Witness` carries the window cells AND the scalar they encode; `Spec` is
+literally `output = s • B`. -/
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
 /-- The scalar read off the 85 window cells (the constructive extractor). -/
@@ -933,8 +911,8 @@ private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
 
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
-/-- Rust `FixedPoint::mul` (`full_width.rs::assign`): `[s]B` for the full-width scalar
-the witnessed windows encode. -/
+/-- Rust `FixedPoint::mul`: `[s]B` for the full-width scalar the witnessed windows
+encode. -/
 def circuit (B : FixedBase) (windows : Vector (FExpr Fp) 85) :
     FormalCircuit Fp MulFixed.Config Config unit Point where
   name := "fixed-base mul (full width)"

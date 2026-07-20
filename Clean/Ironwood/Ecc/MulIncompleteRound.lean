@@ -15,9 +15,9 @@ rotations, a running `z` column (`z_i = 2·z_{i+1} + k_i`), and the round relati
 Generic over the bit count `n + 1`: the `hi`/`lo` halves of `mul.rs` are two instantiations of this
 one `Config`, differing only in the advice columns and `NUM_BITS` (125 / 126).
 
-The value-level `Fp`/`Point` algebra is reused wholesale from the phase-one donor
-`Halo2.Ironwood.Ecc.Mul.Incomplete`; only the framework wiring (`Config`/gates/`configure`, the
-`synthesize` loop, the `FormalRegionCircuit` bundle) is new here.
+The value-level `Fp`/`Point` algebra lives in `Halo2.Ironwood.Ecc.Mul.Incomplete`; the framework
+wiring (`Config`/gates/`configure`, the `synthesize` loop, the `FormalRegionCircuit` bundle) is
+here.
 
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
@@ -170,8 +170,7 @@ def configure (z xA xP yP lambda1 lambda2 : Column .advice) : Configure Fp Confi
 
 /-! ## Inputs / Output
 
-Mirrors the donor `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits derive
-from. -/
+Mirrors `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits derive from. -/
 
 /-- Prover-side scalar bits, MSB-first, indexed from the first processed bit. -/
 def BitsHint : Type := ℕ → Bool
@@ -203,31 +202,31 @@ structure Output (numBits : ℕ) (F : Type) where
   zs : Vector F numBits
 deriving ProvableStruct
 
--- `readCell` (reading an input cell in a prover env) now lives in the framework (`Basic.lean`).
+-- `readCell` (reading an input cell in a prover env) lives in the framework (`Basic.lean`).
 
 /-- The `w`-shifted window of the working scalar's bits: `kBitsWindow a w i = kBits a (w + i)`,
 i.e. bit `k_{254-(w+i)}` of the unreduced working scalar `k = a.val + t_q`.
 
-KERNEL-SAFETY (load-bearing spelling): `t_q` is added on the LEFT (`tQNat + a.val`, flipped vs the
-donor's `kNat`). `Nat.add` recurses on its SECOND argument, so with the ~2^125 literal on the left
-kernel whnf is stuck immediately on the abstract `a.val` — the donor spelling would unfold the
-literal unarily ("(kernel) deep recursion detected"). Bridge to the donor's `kBits` via
+KERNEL-SAFETY (load-bearing spelling): `t_q` is added on the LEFT (`tQNat + a.val`, flipped vs
+`kNat`). `Nat.add` recurses on its SECOND argument, so with the ~2^125 literal on the left
+kernel whnf is stuck immediately on the abstract `a.val` — the `kNat` spelling would unfold the
+literal unarily ("(kernel) deep recursion detected"). Bridge to `kBits` via
 `kBitsWindow_eq_kBits`, a rewrite, never a defeq. -/
 def kBitsWindow (a : Fp) (w : ℕ) : BitsHint :=
   fun i => (tQNat + a.val).testBit (254 - (w + i))
 
-/-- `kBitsWindow` is the `w`-shifted window of the donor's `kBits`. -/
+/-- `kBitsWindow` is the `w`-shifted window of `kBits`. -/
 theorem kBitsWindow_eq_kBits (a : Fp) (w i : ℕ) :
     kBitsWindow a w i = kBits a (w + i) := by
   unfold kBitsWindow kBits kNat
   rw [Nat.add_comm]
 
-/-- `kBitsWindow` as a donor-`kBits` lambda. -/
+/-- `kBitsWindow` as a `kBits` lambda. -/
 theorem kBitsWindow_as_kBits (a : Fp) (w : ℕ) :
     kBitsWindow a w = fun i => kBits a (w + i) :=
   funext fun i => kBitsWindow_eq_kBits a w i
 
-/-- The zero-offset window is exactly the donor's `kBits`. -/
+/-- The zero-offset window is exactly `kBits`. -/
 theorem kBitsWindow_zero (a : Fp) : kBitsWindow a 0 = kBits a :=
   funext fun i => by rw [kBitsWindow_eq_kBits, Nat.zero_add]
 
@@ -398,8 +397,8 @@ theorem readCell_of (env : Placed ProverEnvironment Fp) (self : RegionIndex) (ro
     readCell env (AssignedCell.of self row col)
       = env.env.advice col ((env.place self + row : ℕ) : ℤ) := rfl
 
-/-- The gate identities of one row force the double-and-add step, in point form: the donor
-lift (`step_nsmul` + `coordinates_of_constraints`) applied to a single constrained row.
+/-- The gate identities of one row force the double-and-add step, in point form:
+`step_nsmul` + `coordinates_of_constraints` applied to a single constrained row.
 Stated over the raw cell values so the bundle's peeled soundness goal unifies with it. -/
 private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
     (hxpc : bx - obx = 0) (hypc : yb - oby = 0)
@@ -432,7 +431,7 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
             : Point Fp)
           = (2 * m + (if k then 1 else 0) * 2 - 1) • { x := bx, y := yb } := by
     intro k hkv m hOn hacc h2m hMb
-    -- abstract the base point: all algebra below is over `P.x`/`P.y` atoms (donor-style)
+    -- abstract the base point: all algebra below is over `P.x`/`P.y` atoms
     obtain ⟨P, hPx, hPy⟩ : ∃ P : Point Fp, P.x = bx ∧ P.y = yb :=
       ⟨{ x := bx, y := yb }, rfl, rfl⟩
     subst hPx hPy
@@ -501,7 +500,7 @@ theorem honest_yA2 {w : State Fp} {m : ℕ} {k : Bool} (hH : w.Honest m k) :
   rw [hxA, hl1, hl2]
   linear_combination -hs2
 
-/-- The step's cells land on the stepped accumulator's coordinates: the donor identities
+/-- The step's cells land on the stepped accumulator's coordinates: the identities
 (3)/(4) routed through the step formulas. -/
 private theorem step_coords {w : State Fp} {m : ℕ} {k : Bool} (k' : Bool)
     (hH : w.Honest m k) :

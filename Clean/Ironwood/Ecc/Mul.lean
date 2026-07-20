@@ -11,84 +11,18 @@ import Clean.Ironwood.Ecc.MulComplete
 import Clean.Ironwood.Ecc.MulOverflow
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul.rs` (read in full), the
-convergence assembly of variable-base scalar multiplication.
-
-This is the top-level `mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`):
-computes `[alpha] base` where `alpha : Fp` is a Pallas base-field element. The working
-scalar is `k = alpha.val + t_q`, decomposed MSB-first into 255 bits and processed as
-(`mul.rs:171-305`, one `layouter.assign_region`):
-
-1. `acc = [2]base` via complete addition (`Add.add`, `mul.rs:188-190`);
-2. `z_init = 0`, the running-sum start (`mul.rs:201-206`);
-3. the `hi` incomplete half — 125 double-and-add steps for bits `k_254..k_130`
-   (`MulIncomplete.double_and_add 124`, `mul.rs:209-216`);
-4. the `lo` incomplete half — 126 double-and-add steps for bits `k_129..k_4`
-   (`MulIncomplete.double_and_add 125`, `mul.rs:220-227`);
-5. three complete-addition bits `k_3..k_1` (`MulComplete.assign_region 3`, `mul.rs:239-253`);
-6. the LSB step `k_0` — the `q_mul_lsb` gate (`mul.rs:129-161`, ported here as a standalone
-   def) and a final complete addition (`Add.add`, `mul.rs:324-385`);
-7. the overflow check on `z_0`, `z_130`, `k_254` (`MulOverflow.circuit 10`, `mul.rs:298-302`).
+Variable-base scalar multiplication: computes `[alpha] base` where `alpha : Fp` is a Pallas
+base-field element. The working scalar `k = alpha.val + t_q` is decomposed MSB-first into 255
+bits and processed as: `acc = [2]base` via complete addition; the running sum `z` starts at 0;
+the `hi` incomplete half (125 double-and-add steps, bits `k_254..k_130`); the `lo` incomplete
+half (126 steps, bits `k_129..k_4`); three complete-addition bits `k_3..k_1`; the LSB step `k_0`
+(the `q_mul_lsb` gate) and a final complete addition; and the overflow check on `z_0`, `z_130`,
+`k_254`.
 
 Soundness rests on `2^254 + t_q ≡ 0 (mod q)`: the double-and-add accumulates
 `[2^254 + k] base = [alpha] base`.
 
-## Config assembly (mul.rs:64-127) — the ConfigWF verdict
-
-Rust `mul::Config` (`mul.rs:48-62`) stores the `q_mul_lsb` selector plus the five child
-configs (`add`, `hi_config`, `lo_config`, `complete`, `overflow`). `Config::configure`
-(`mul.rs:65-127`) instantiates the two incomplete configs from the shared 10-advice bundle,
-then registers the LSB gate and asserts a set of column non-overlap facts (`mul.rs:92-124`):
-
-- `hi_config.x_p = lo_config.x_p` and `hi_config.y_p = lo_config.y_p` (the two halves share
-  `advices[0]`/`advices[1]`) — automatic by construction here (we build both incomplete
-  configs from the same `xP`/`yP` columns; see `configure`).
-- `hi/lo`'s `z` and `lambda_1` columns must be DISJOINT from the complete-addition output
-  columns `add_config.output_columns() = {x_qr, y_qr}` (`mul.rs:104-124`). Reason: in Rust's
-  single region, `z` and `lambda_1` are assigned on the *same row* as the complete-addition
-  output; sharing a column would alias two distinct logical cells.
-
-**ConfigWF verdict.** In the Halo2-Clean model every advice cell read is keyed by
-`(column.index, row)` (`Environment.advice`). This port is VK-faithful: hi and lo run at the
-SAME rows on DISJOINT column sets (bar the shared `xP=a0`/`yP=a1`), and the complete/LSB
-phases follow below. Non-overlap thus holds by `(column, row)` disjointness, exactly as Rust
-intends — `hi.z`/`hi.lambda_1` (a9/a4) and `lo.z`/`lo.lambda_1` (a6/a8) are all distinct from
-the complete-addition output columns `{x_qr=a2, y_qr=a3}`, so the cross-sub-config column
-asserts are discharged by the concrete column wiring and are NOT needed as soundness
-hypotheses. The one place hi and lo DO share cells is `xP`/`yP`: there both halves write the
-SAME base coordinate at each overlapping row (Rust re-`assign_advice`s the base per row in
-each half), so the environment value at those cells is unambiguous — the "assign the same
-value to the same cell twice" no-op, the same mechanism `z_init`'s self-copy already uses.
-The one genuinely load-bearing config fact that surfaces is the overflow child's selector
-distinctness, carried (per the MulOverflow projection pattern) in `EnvAssumptions` — the
-predicted "ConfigWF finally bites" location.
-
-## Donor
-
-`Clean/Orchard/Ecc/Mul/Assign.lean` (`Halo2.Ironwood.Ecc.Mul`) — the phase-one donor. Its top-level
-`Spec` (`output = alpha.val • base`), the `k = alpha + t_q` canonicity argument
-(`k_canonical`, `chainNat` machinery), the LSB `Gate` (`Halo2.Ironwood.Ecc.Mul.Gate`), and the whole
-assembly algebra are lifted wholesale. The donor factors the middle three phases as a virtual
-`Decompose` subcircuit and the LSB as `ProcessLsb`; here the Ironwood children
-(`MulIncomplete`/`MulComplete`) already are those region-level factors, so we compose them
-directly in one region.
-
-## Proof status (post-R1b)
-
-FULLY PROVEN, no sorries — soundness AND completeness, on the FAITHFUL layouter structure.
-This file was restructured (R1) from a single flat `FormalRegionCircuit` region (which had
-flattened Rust's layouter-level overflow check into the main region — a VK bug) into the
-faithful LAYOUTER-level `FormalCircuit`: ONE main double-and-add region (`mainRegion`,
-`mul.rs:171-296`, the region-relative init/hi/lo/complete/LSB helpers, faithful as before)
-followed by the layouter-level `MulOverflow.circuit` child running AFTER the main region
-closes (`mul.rs:299`), with `z_0`/`z_130`/`k_254` crossing into the overflow regions as
-copies. R1b refilled both proofs: the six child-consumption sites go through `subcircuit_rw`
-(soundness `at h` weakening; completeness goal mode with the `h_spec_i` derived statements —
-no absorption iffs, no `call_constraints_and_specs` copies), and the value algebra is the
-fdee7ac4 donor ladder verbatim modulo the region-faithful cell addresses
-(`env.place i₀ + X`). `#print axioms` on the bundle: the standard three plus the donor Pallas
-trust base (`pallas_natCard` + vendored CompElliptic `native_decide` curve facts).
+Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
 
 namespace Halo2.Ironwood.Ecc.Mul
@@ -103,28 +37,28 @@ open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
   kBitsWindow_as_kBits kBitsWindow_zero)
 
-/-! ## Config
+/-! ## Config -/
 
-Rust `mul::Config` (`mul.rs:48-62`): the `q_mul_lsb` selector plus the five child configs. -/
-
-/-- The parent config. Mirrors Rust `mul::Config`: the LSB selector and the five child
-configs (`add`, `hi`, `lo`, `complete`, `overflow`), threaded verbatim to the child calls. -/
 structure Config where
+  -- Selector used to check switching logic on LSB.
   qMulLsb : Selector
+  -- Configuration used in complete addition.
   addConfig : Add.Config
+  -- Configuration used for the `hi` bits of the scalar.
   hiConfig : MulIncomplete.Config
+  -- Configuration used for the `lo` bits of the scalar.
   loConfig : MulIncomplete.Config
+  -- Configuration used for the complete-addition part of the double-and-add algorithm.
   completeConfig : MulComplete.Config
+  -- Configuration used to check for overflow.
   overflowConfig : MulOverflow.Config 10
 
-/-! ## The `q_mul_lsb` gate (`mul.rs:129-161`)
+/-! ## The `q_mul_lsb` gate
 
-Layout (relative to the LSB region base row `g`, selector enabled at `Rotation::cur`):
-
-    | x_p (add.xP) | y_p (add.yP) |   z_complete    |
-    -------------------------------------------------
-    | x_p    (g)   | y_p    (g)   | z_1  (g)          ← q_mul_lsb enabled here
-    | base_x (g+1) | base_y (g+1) | z_0  (g+1)        ← Rotation::next
+    | x_p    | y_p    | z_complete |
+    -----------------------------------
+    | x_p    | y_p    | z_1        |   ← q_mul_lsb enabled here
+    | base_x | base_y | z_0        |
 
 `k_0 = z_0 − 2·z_1`, `bool_check = k_0(k_0−1)`, and the correction point is pinned by
 `lsb_x = ternary(k_0, x_p, x_p − base_x)`, `lsb_y = ternary(k_0, y_p, y_p + base_y)`:
@@ -132,51 +66,43 @@ Layout (relative to the LSB region base row `g`, selector enabled at `Rotation::
 
 /-- The `q_mul_lsb` gate, a pure function of the config columns. Reads `z_complete` at
 `cur`/`next` (`z_1`, `z_0`), `add.xP`/`add.yP` at `cur` (`x_p`, `y_p`) and `next`
-(`base_x`, `base_y`). Ported verbatim from `mul.rs:132-161` (donor `Mul.Gate`). -/
+(`base_x`, `base_y`). -/
 def lsbGate (cfg : Config) : Gate Fp where
   name := "LSB check"
   selector := cfg.qMulLsb
   constraints :=
-    let z1 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 0   -- z_1 (cur)
-    let z0 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 1   -- z_0 (next)
-    let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0               -- x_p (cur)
-    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0               -- y_p (cur)
-    let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x (next)
-    let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y (next)
+    let z1 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 0   -- z_1
+    let z0 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 1   -- z_0
+    let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0               -- x_p
+    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0               -- y_p
+    let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x
+    let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y
     let lsb := z0 - z1 * (2 : Fp)
-    -- `bool_check(lsb) = lsb · (1 − lsb)` verbatim (Rust `bool_check`, `mul.rs:150`): the
-    -- constant `1` on the LEFT (AST `product(lsb, sum(const 1, negated lsb))`), matching the
-    -- VK fixture. (`lsb·(lsb−1)` is algebraically equal but a different AST.)
+    -- `lsb · (1 − lsb)`, with the `1` on the left of the subtraction to match the compiled gate
+    -- AST.
     let boolCheck := lsb * ((1 : Fp) - lsb)
-    -- ternary(lsb, x_p, x_p − base_x) = lsb·x_p + (1 − lsb)·(x_p − base_x)
     let lsbX := lsb * xP + ((1 : Fp) - lsb) * (xP - baseX)
-    -- ternary(lsb, y_p, y_p + base_y) = lsb·y_p + (1 − lsb)·(y_p + base_y)
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
     Constraints.withSelector cfg.qMulLsb
       [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
 
-/-! ## Configure (`mul.rs:65-127`)
+/-! ## Configure -/
 
-Instantiate the two incomplete configs from the shared advice bundle, delegate to each child's
-`configure`, allocate `q_mul_lsb`, register the LSB gate. The 10-advice column bundle mirrors
-Rust's `advices : [Column<Advice>; 10]`; the exact index-to-column wiring (`mul.rs:71-79`) is
-reproduced. The complete config's `zComplete` is `advices[9]` and its `add_config` is the shared
-`addConfig`; the overflow config takes `advices[6..9]` and the lookup config. -/
-
-/-- Rust `Config::configure` (`mul.rs:65-127`). `advices i` is `advices[i]` of Rust's 10-column
-bundle; `lookupConfig` is the range-check config built once in `mul.rs:78`. The `addConfig` is
+/-- Instantiates the two incomplete configs from the shared 10-advice bundle, delegates to each
+child's `configure`, allocates `q_mul_lsb`, and registers the LSB gate. `advices i` is
+`advices[i]` of the 10-column bundle; `lookupConfig` is the range-check config; `addConfig` is
 built by the chip and handed down. -/
 def configure (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 10)
     (advices : Fin 10 → Column .advice) : Configure Fp Config := do
-  -- hi_config: (z=9, xA=3, xP=0, yP=1, λ1=4, λ2=5)   (mul.rs:71-73)
+  -- hi_config: z=9, xA=3, xP=0, yP=1, λ1=4, λ2=5
   let hiConfig ← MulIncomplete.configure (advices 9) (advices 3) (advices 0) (advices 1)
     (advices 4) (advices 5)
-  -- lo_config: (z=6, xA=7, xP=0, yP=1, λ1=8, λ2=2)   (mul.rs:74-76)
+  -- lo_config: z=6, xA=7, xP=0, yP=1, λ1=8, λ2=2
   let loConfig ← MulIncomplete.configure (advices 6) (advices 7) (advices 0) (advices 1)
     (advices 8) (advices 2)
-  -- complete_config: zComplete=9, shared addConfig   (mul.rs:77)
+  -- complete_config: zComplete=9, shared addConfig
   let completeConfig ← MulComplete.configure (advices 9) addConfig
-  -- overflow_config: adv 6,7,8, lookupConfig          (mul.rs:78-79)
+  -- overflow_config: advices 6,7,8, lookupConfig
   let overflowConfig ← MulOverflow.configure 10 lookupConfig (advices 6) (advices 7) (advices 8)
   let qMulLsb ← selector
   let cfg : Config :=
@@ -184,141 +110,100 @@ def configure (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 1
   createGate (lsbGate cfg)
   return cfg
 
-/-! ## Inputs / Output
+/-! ## Inputs / Output -/
 
-Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Input`: the scalar cell `alpha` and the (non-identity,
-on-curve) base point, as already-assigned cells. Output is the result point `[alpha] base`. -/
-
-/-- Verifier-visible inputs: the scalar `alpha` and the non-identity base point. -/
 structure Inputs (F : Type) where
+  -- The scalar to multiply by.
   alpha : F
+  -- The non-identity base point.
   base : Point F
 deriving ProvableStruct
 
-/-! ## Row-span offsets (`mul.rs::assign` — the MAIN region's phase threading)
+/-! ## Row-span offsets
 
-The children of the MAIN region are composed at Rust's exact region-local base offsets,
-VK-faithfully: hi and lo run SIDE BY SIDE (both `double_and_add` at the same starting row, on
-their disjoint column sets — sharing only `x_p`/`y_p` = the base point, written with EQUAL
-values by both halves). These offsets are region-relative to the main region's placement,
-which the floor planner fixes (the `SimpleFloorPlanner` puts the main region at absolute
-row 2, below the base/alpha witness rows on `advices[0]`/`advices[1]`). The scheme, exactly
-`mul.rs:171-296`:
+The main region's phases (init, hi, lo, complete, LSB) are composed at fixed region-relative
+row offsets. Hi and lo run side by side: both `double_and_add` start at the same row, on
+disjoint column sets, sharing only `x_p`/`y_p` (the base point, written with equal values by
+both halves). The complete-round phase follows, and the LSB step's base row is the last
+complete round's row. The overflow check is not in the main region: it runs at the layouter
+level in three sibling regions after the main region closes. -/
 
-- `Add.add` init at `offInit = 0`: complete addition writes rows `0..1`.
-- `z_init = 0` on the hi `z` column at `offHi = 1` (Rust `offset + 1` after the init add).
-  The hi half copies this same cell into its own `z` at `offHi` — the "assign the same value
-  to the same cell twice" no-op (`mul.rs:196-206`).
-- `MulIncomplete.double_and_add 124` (hi) at `offHi = 1`: `z` copy at `offHi`, loop rows
-  `offHi + 1 .. offHi + 125`, exit `x_a`/`y_a` at `offHi + 126`. Columns `z=a9, xA=a3,
-  xP=a0, yP=a1, λ1=a4, λ2=a5`.
-- `MulIncomplete.double_and_add 125` (lo) at `offLo = offHi` (SAME rows): columns `z=a6,
-  xA=a7, xP=a0, yP=a1, λ1=a8, λ2=a2` — disjoint from hi EXCEPT the shared `xP=a0`/`yP=a1`,
-  where both halves write the base coordinates (equal values; row 0 of each half
-  `copy_advice`s the base anchor, so BOTH anchor copies appear in the ordered copy list,
-  hi's before lo's).
-- `MulComplete.assign_region 3` (complete) at `offComp = offLo + loSpan` (Rust
-  `offset + INCOMPLETE_LO_RANGE.len() + 2 = 129`): rows `offComp .. offComp + 6`.
-- the LSB step: its base row IS the last complete-round row (`offLsb = offComp + 6`,
-  Rust `mul.rs:256`: the row holding `z_1 = comp.zs[2]` and the last round's accumulator).
-  `q_mul_lsb` at `offLsb` (reads `z_1` at cur, `z_0` at next); `z_0` at `offLsb + 1`;
-  the final `Add.add` at `offLsb` (its `q`-copy of `comp.acc` is a cell self-copy, the
-  Rust "copied into themselves" no-op).
-
-The OVERFLOW CHECK (`MulOverflow.circuit 10`) is NOT in the main region: it runs at the
-layouter level in three sibling regions AFTER the main region closes (`mul.rs:299`). -/
-
-/-- The offset advance from the shared incomplete-half start row to the complete phase
-(Rust `INCOMPLETE_LO_RANGE.len() + 2 = 126 + 2`, `mul.rs:236` — the lo half is the taller
-of the two side-by-side halves). -/
+/-- The offset advance from the shared incomplete-half start row to the complete phase (the lo
+half is the taller of the two side-by-side halves). -/
 def loSpan : ℕ := 128
 /-- Rows from `offComp` to the LSB base row: the last complete round's `z` cell
 (`comp.zs[2]`) sits at `offComp + 2·2 + 2 = offComp + 6`, and the LSB step is based there. -/
 def compSpan : ℕ := 6
 
-/-- Init complete addition at the region's first row (Rust `offset = 0`). -/
+/-- Init complete addition at the region's first row. -/
 def offInit : ℕ := 0
-/-- Hi half, one row after the init add's input row (`z_init` and the hi `z` copy live here;
-Rust `offset + 1`, `mul.rs:193`). -/
+/-- Hi half, one row after the init add's input row (`z_init` and the hi `z` copy live here). -/
 def offHi : ℕ := 1
-/-- Lo half — SIDE BY SIDE with hi (same starting row, disjoint columns bar `xP`/`yP`). -/
+/-- Lo half — side by side with hi (same starting row, disjoint columns bar `xP`/`yP`). -/
 def offLo : ℕ := offHi
-/-- Complete rounds (Rust `offset + INCOMPLETE_LO_RANGE.len() + 2`, `mul.rs:236`). -/
+/-- Complete rounds. -/
 def offComp : ℕ := offLo + loSpan
 /-- LSB step. -/
 def offLsb : ℕ := offComp + compSpan
 
-/-! ## Child contract-projection bridges (`rfl`, child stays folded)
+/-! ## Child contract-projection bridges
 
-The MulComplete/MulOverflow pattern: expose each child's contract fields as `rfl`-bridges,
-so the composition consumes them without unfolding the child bundle literal. FRAMEWORK
-CANDIDATE: a deriving-style projection mechanism. -/
+Exposes each child's contract fields (`Spec`, `Assumptions`, etc.) as `rfl`-bridges, so the
+composition consumes them without unfolding the child bundle literal. -/
 
--- ACCEPTANCE (C2a #2): the six contract-projection `rfl`-bridges for the `Add.add` child,
--- generated mechanically by `derive_contract_bridges` (produces `add_spec_eq`,
--- `add_assumptions_eq`, `add_envAssumptions_eq`, `add_proverAssumptions_eq`, `add_proverSpec_eq`)
--- in place of the hand-written stack. The consumers below (`simp only [add_spec_eq, …]`) are
--- unchanged.
+-- The six contract-projection bridges for the `Add.add` child (`add_spec_eq`,
+-- `add_assumptions_eq`, `add_envAssumptions_eq`, `add_proverAssumptions_eq`, `add_proverSpec_eq`).
 derive_contract_bridges add := Add.add
 
--- ACCEPTANCE (finding #4): the hi/lo/comp bundles are *parametrized* (`double_and_add 124 w` —
--- a function of the bit-window offset); `derive_contract_bridges` takes explicit binders for
--- those parameters and generalizes the emitted bridges over them.
+-- The hi/lo/comp bundles are parametrized by the bit-window offset `w`; `derive_contract_bridges`
+-- takes an explicit binder and generalizes the emitted bridges over it.
 derive_contract_bridges hi (w : ℕ) := MulIncomplete.double_and_add 124 w
 derive_contract_bridges lo (w : ℕ) := MulIncomplete.double_and_add 125 w
 derive_contract_bridges comp (w : ℕ) := MulComplete.assign_region 3 w
 
-/-- `K · numWords K = 130` at `K = 10` (`10 · 13 = 130`). Discharges the MulOverflow bridge. -/
+/-- `K · numWords K = 130` at `K = 10`. Discharges the MulOverflow bridge. -/
 theorem hKW10 : (10 : ℕ) * MulOverflow.numWords 10 = 130 := by
   simp only [MulOverflow.numWords]
 
 derive_contract_bridges ov := MulOverflow.circuit 10 hKW10
 
-/-! ## The scalar bits — derived from the alpha cell, no prover hint
+/-! ## The scalar bits
 
-The working scalar `k = alpha.val + t_q`, MSB-first, exactly the donor `kBits` (Rust
-`decompose_for_scalar_mul(alpha.value())`). There is NO `BitsHint` parameter anywhere: the
-children receive the `alpha` cell in their `Inputs` plus a window offset (`hi` = 0, `lo` = 125,
-`complete` = 251 — the global index of each phase's first bit), and derive their bits from the
-cell inside their witness closures (`MulIncomplete.bitsOf`/`kBitsWindow`, kernel-safe spelling).
-The LSB step below derives `k_0 = kBits alpha 254` the same way. The verifier `Spec`
-existentially recovers a matching sequence per child. -/
+The working scalar `k = alpha.val + t_q`, MSB-first (`kBits`). There is no `BitsHint` parameter:
+the children receive the `alpha` cell in their `Inputs` plus a window offset (`hi` = 0, `lo` = 125,
+`complete` = 251 — the global index of each phase's first bit) and derive their bits from the cell
+inside their witness closures. The LSB step below derives `k_0 = kBits alpha 254` the same way. The
+verifier `Spec` existentially recovers a matching sequence per child. -/
 
-/-! ## Synthesize (`mul.rs::Config::assign`, one region)
+/-! ## Synthesize
 
-The `assign_region` body (`mul.rs:171-305`) as a sequence of child `.call`s at the threaded
-phase offsets, plus `z_init`, the LSB step, and the final recombination. -/
+The `assign_region` body as a sequence of child `.call`s at the threaded phase offsets, plus
+`z_init`, the LSB step, and the final recombination. -/
 
-/-- The MAIN REGION body (`mul.rs:171-296`, everything before the layouter-level overflow check):
-the init add, hi/lo/complete double-and-adds, the LSB step, and the final recombination — all
-genuinely region-relative helpers, faithful to Rust's single `assign_region`. Returns the result
-point together with the three running-sum cells the overflow check copies across into its own
-region: `z0` (the LSB row full sum), `hi.zs[124]` (= z_130), `hi.zs[0]` (= k_254 = z_254 top bit).
-Placed at row offset 0 of its own region (Rust's single `assign_region`). -/
+/-- The main-region body (everything before the layouter-level overflow check): the init add,
+hi/lo/complete double-and-adds, the LSB step, and the final recombination, in one `assign_region`.
+Returns the result point together with the three running-sum cells the overflow check copies into
+its own region: `z0` (the LSB row full sum), `hi.zs[124]` (= z_130), `hi.zs[0]` (= k_254). -/
 def mainRegion (cfg : Config) (input : Var Inputs Fp) :
     RegionCircuit Fp (Var Point Fp × AssignedCell Fp × AssignedCell Fp × AssignedCell Fp) := do
-  -- 1. acc = [2]base  (init complete addition, mul.rs:188-190)
+  -- 1. acc = [2]base  (init complete addition)
   let acc ← Add.add.call cfg.addConfig offInit
     ⟨input.base, input.base⟩
-  -- 2. z_init = 0  (mul.rs:201-206): the running-sum start, assigned as the constant 0 on the
-  --    hi config's `z` column at the hi phase's start row, constrained via `constrainConstant`
-  --    (Rust `assign_advice_from_constant`). The hi half copies this same cell into its own `z`
-  --    at `offHi` — the "assign the same value to the same cell twice" no-op (mul.rs:198-200).
+  -- 2. z_init = 0: the running-sum start, the constant 0 on the hi config's `z` column at the hi
+  --    phase's start row. The hi half copies this same cell into its own `z` at `offHi`.
   let zInit ← assignAdvice cfg.hiConfig.z offHi
     (.ofFExpr (.const 0))
   constrainConstant zInit 0
-  -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0  (mul.rs:209-216)
+  -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0
   let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
     ⟨.expr input.alpha, input.base, acc, zInit⟩
-  -- 4. lo half: 126 double-and-add bits k_129..k_4, bit window 125 (the donor's
-  --    `input.bits env (125 + i)` shift), running sum chained  (mul.rs:220-227)
+  -- 4. lo half: 126 double-and-add bits k_129..k_4, bit window 125, running sum chained
   let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig
     offLo ⟨.expr input.alpha, input.base, hi.acc, hi.zs[124]⟩
-  -- 5. complete rounds: k_3..k_1, bit window 251  (mul.rs:239-253)
+  -- 5. complete rounds: k_3..k_1, bit window 251
   let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig
     offComp ⟨.expr input.alpha, input.base, lo.acc.x, lo.acc.y, lo.zs[125]⟩
   -- 6. the LSB step k_0 = kBits alpha 254, derived from the scalar cell
-  --    (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
   -- z_0 = 2·z_1 + k_0 on the z_complete column at the LSB base row (the bit condition is
   -- the LSB's reading program on the scalar cell, `MulComplete.kBitWindowExpr` at 254)
@@ -342,27 +227,24 @@ def mainRegion (cfg : Config) (input : Var Inputs Fp) :
     ⟨{ x := corrX, y := corrY }, comp.acc⟩
   return (result, z0, hi.zs[124], hi.zs[0])
 
-/-- The scalar-decomposition and recombination assembly, at the LAYOUTER level. Faithful to
-`mul.rs::assign`: the whole double-and-add convergence runs in ONE `layouter.assign_region`
-(`main`), and the overflow check runs AFTER that region closes (`mul.rs:299`) as a SEPARATE
-layouter-level `overflow_check` — three of its own sibling regions. The `z_0`/`z_130`/`k_254`
-cells cross into the overflow regions as copies (Rust copies them across region boundaries).
-Returns the result point `[alpha] base`. -/
+/-- The scalar-decomposition and recombination assembly, at the layouter level: the whole
+double-and-add convergence runs in one `assign_region`, and the overflow check runs after that
+region closes as a separate layouter-level `overflow_check` of three sibling regions. The
+`z_0`/`z_130`/`k_254` cells cross into the overflow regions as copies. Returns `[alpha] base`. -/
 def synthesize (cfg : Config) (input : Var Inputs Fp) :
     Circuit Fp (Var Point Fp) := do
-  -- the main double-and-add region (mul.rs:171-296)
+  -- the main double-and-add region
   let ⟨result, z0, z130, k254⟩ ← assignRegion "variable-base scalar mul" (mainRegion cfg input)
-  -- the overflow check AFTER the main region closes (mul.rs:299), at layouter level
+  -- the overflow check after the main region closes, at layouter level
   let _ov ← (MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
     ⟨input.alpha, z0, z130, k254⟩
   return result
 
 /-! ## Contract
 
-`Assumptions` is the donor's: the base is on-curve (hence a non-identity Pallas point).
-`EnvAssumptions` aggregates the children's env-facts (only the overflow lookup has a
-nontrivial one) over the parent's stored sub-config — the MulOverflow projection pattern.
-`Spec` is the donor's top-level: `output = alpha.val • base`. -/
+`Assumptions`: the base is on-curve (hence a non-identity Pallas point). `EnvAssumptions`
+aggregates the children's env-facts (only the overflow lookup has a nontrivial one) over the
+parent's stored sub-config. `Spec`: `output = alpha.val • base`. -/
 
 /-- The base is on-curve. (The overflow child additionally needs the field-capacity bound
 `2^130·2^130 < |Fp|`, which is discharged by `norm_num` at `K = 10`, so it is not carried as
@@ -377,22 +259,17 @@ def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
   MulOverflow.EnvAssumptions 10 cfg.overflowConfig env
 
 /-- The circuit computes the variable-base scalar multiplication `[alpha] base`, with the
-identity encoded as `(0, 0)` coordinates. Lifted verbatim from the donor
-`Halo2.Ironwood.Ecc.Mul.Spec`. -/
+identity encoded as `(0, 0)` coordinates. -/
 def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
   output = input.alpha.val • input.base
 
-/-! ## Donor value algebra
+/-! ## Value algebra
 
 The running-sum/canonicity machinery (`chainNat_*`, `chain_cast`, `accScalar_closed`,
-`k_canonical`, `m_bounds`, `cells_kNat`, `z0_cell_value`, `nsmul_step`, `neg_add_nsmul`) is
-consumed directly from the donor `Clean/Orchard/Ecc/Mul/Assign.lean` (made public there for
-this port). The one adaptation kept here: `overflow_spec_honest` retargeted at the Ironwood
-`MulOverflow.Spec` record — definitionally the donor's `Overflow.OverflowCheck.Spec`, so the
-wrapper is a delegation. -/
+`k_canonical`, `m_bounds`, `cells_kNat`, `z0_cell_value`, `nsmul_step`, `neg_add_nsmul`). -/
 
-/-- The honest running-sum cells satisfy the overflow-check contract (the donor
-`overflow_spec_honest`, at the Ironwood `MulOverflow.Spec` record — same formula, defeq). -/
+/-- The honest running-sum cells satisfy the overflow-check contract (`overflow_spec_honest` at
+the `MulOverflow.Spec` record — same formula, defeq). -/
 private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
     (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
@@ -402,9 +279,8 @@ private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
 
 /-! ## Point-level scalar-multiple algebra
 
-The donor's step/negation/identity algebra lived at the `SWPoint` level; the Ironwood children
-speak `Point Fp` `nsmul` directly, so the lemmas are transported through the `toSW` bridge
-(`Halo2.Ironwood.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
+The `SWPoint`-level step/negation/identity algebra, transported to `Point Fp` `nsmul` through the
+`toSW` bridge (`Halo2.Ironwood.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
 
 section PointAlgebra
 open CompElliptic.CurveForms.ShortWeierstrass (SWPoint)
@@ -489,8 +365,8 @@ private theorem stepBasePoint_eq (P : Point Fp) (bit : Bool) :
   cases bit <;> rfl
 
 /-- The complete-rounds accumulator chain computes double-and-add on `Point` multiples:
-starting from `[m]P`, after `b` rounds it holds `[accScalar m bits b]P` (the donor
-`accValue_nsmul`, at the `Point` level via `point_step_nsmul`). -/
+starting from `[m]P`, after `b` rounds it holds `[accScalar m bits b]P` (at the `Point` level
+via `point_step_nsmul`). -/
 private theorem accPoint_nsmul {P : Point Fp} (hP : P.OnCurve) (m : ℕ) (hm : 1 ≤ m)
     (bits : ℕ → Bool) :
     ∀ b, MulComplete.accPoint P (m • P) bits b = accScalar m bits b • P
@@ -509,10 +385,8 @@ end PointAlgebra
 
 /-! ## Output-record and cell-eval bridges
 
-The children's `.call … .output self` records reduce (lazily, by `rfl` — structure
-projections do not force the loop outputs) to record literals of `AssignedCell.of` cells;
-eval decomposes componentwise on those literals (the Chain `hp_output_eval_literal`
-pattern: `ProvableStruct.eval` on a literal, `with_unfolding_all rfl`). -/
+The children's `.call … .output self` records reduce lazily, by `rfl`, to record literals of
+`AssignedCell.of` cells; eval decomposes componentwise on those literals. -/
 
 /-- The `MulIncomplete` bundle's output record, reduced (`cellAt`/`cellVec` cells at their
 fixed region-local rows). -/
@@ -522,20 +396,23 @@ private theorem incomplete_call_output (n : ℕ) (w : ℕ)
     ((MulIncomplete.double_and_add n w).call cfg off inp).output self
       = { acc := { x := .of self (off + n + 2) cfg.xA,
                    y := .of self (off + n + 2) cfg.lambda1 },
-          zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := rfl
+          zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := by
+  rw [FormalRegionCircuit.output_call]
 
 /-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
 never reduced, per the whnf discipline). -/
 private theorem complete_call_output_zs (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     (((MulComplete.assign_region 3 w).call cfg off inp).output self).zs
-      = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := rfl
+      = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := by
+  rw [FormalRegionCircuit.output_call]
 
 /-- The `Add` bundle's output point cells (`x_qr`/`y_qr` at `offset + 1`). -/
 private theorem add_call_output (cfg : Add.Config) (off : ℕ) (inp : Var Add.Inputs Fp)
     (self : RegionIndex) :
     (Add.add.call cfg off inp).output self
-      = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := rfl
+      = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := by
+  rw [FormalRegionCircuit.output_call]
 
 /-- Literal-eval bridge for `MulIncomplete.Output` (verifier view). -/
 private theorem incompleteOutput_eval_literal {n : ℕ} (place : RegionIndex → ℕ)
@@ -615,7 +492,8 @@ private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     ((MulComplete.assign_region 3 w).call cfg off inp).output self
       = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
-          zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
+          zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := by
+  rw [FormalRegionCircuit.output_call]
 
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
 private theorem complete_output_zs_eq (w : ℕ) (cfg : MulComplete.Config)
@@ -629,11 +507,11 @@ private theorem add_output_eq (cfg : Add.Config) (off : ℕ) (inp : Var Add.Inpu
     Add.add.output cfg off inp self
       = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := rfl
 
-/-! ## `mainRegion` output projections (lazy `rfl`/`simp`, the loop bodies never force)
+/-! ## `mainRegion` output projections
 
 The main region returns `(result, z0, z_130, k_254)`; the layouter-level MulOverflow call's
 input record carries the last three as `.output` projections. These bridges land them on their
-named cells so `ovInputs_eval_eq`-style decomposition proceeds as before. -/
+named cells. -/
 
 /-- The main region's `z0` output cell: the LSB-row full-sum assign
 (`zComplete @ offLsb + 1`). -/
@@ -643,13 +521,9 @@ private theorem mainRegion_output_z0 (cfg : Config) (input : Var Inputs Fp)
       = AssignedCell.of i (offLsb + 1) cfg.completeConfig.zComplete := rfl
 
 /-- The main region's `z_130` output cell: the hi half's `zs[124]` (`z @ offHi + 1 + 124`).
-
-Reduced LAZILY: `simp only [mainRegion, circuit_norm]` walks the composed do-block bind-by-bind
-via the `output_bind`/`output_pure` `circuit_norm` rfl-lemmas (a controlled simp rewrite, not a
-whole-term kernel defeq), landing on the `hi` child's `.output`; `incomplete_call_output` reduces
-that to the cell vector, then the `zs[124]` index. This never forces the whole nested-bind term at
-once, so no unifier-recursion-depth allowance is needed (was the old `show`-then-`simp` route's
-cost). -/
+Reduced lazily via `circuit_norm`, landing on the `hi` child's `.output`, then
+`incomplete_call_output` and the `zs[124]` index — this never forces the whole nested-bind term
+at once. -/
 private theorem mainRegion_output_z130 (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     ((mainRegion cfg input).output i).2.2.1
@@ -878,30 +752,11 @@ private theorem completeOutput_zs_getElem_prover (env : Placed ProverEnvironment
   rw [fieldsEval_getElem env.place env.env.toEnvironment zs i hi,
     ProvableType.eval_field_prover]
 
-/-! ## Composition ergonomics (the research artifacts)
+/-! ## Composition ergonomics
 
-Both directions are FULLY PROVEN in the bundle below; the load-bearing findings:
-
-1. The composition demonstrations live INSIDE `soundness`/`completeness`, never as standalone
-   lemmas: writing `(double_and_add 124 bits).call … .operations self` in a lemma *statement*
-   forces whnf of the 125-round `synthesize` loop during elaboration (the documented
-   ZsFacts-style-unfolding trap). Inside the bundle proofs the chunks arrive already-opaque
-   from `soundness_iff`/`completeness_iff`, and the `subcircuit_rw` engine consumes them on the
-   opaque `.operations` boundary without re-elaboration.
-2. Input-record eval decompositions (`hiInputs_eval_eq` &c.) fire under `rw` (full
-   unification) but NOT under `simp only` on engine-produced eval terms — the instance spelling
-   differs from a locally-elaborated one, so the discr-tree key misses. Every decomposition
-   site below is a `rw`; value-record projections then reduce by simp/defeq.
-3. Output records reduce to cell literals *lazily* by plain `rfl` (`incomplete_call_output`
-   &c.) — structure projections never force the loop bodies, even at generic bit counts.
-4. On the honest side, the engine's completeness mode introduces one premised
-   `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec` per child chunk (the derived leaf that replaced
-   the hand-rolled `call_constraints_and_specs` helper), exposing constraints + verifier `Spec` +
-   honest `ProverSpec`; the six chunks (init/hi/lo/comp/fin/overflow) are all consumed this way in
-   one `subcircuit_rw` pass, the deepest (overflow) included.
-5. The honest side is what catches bit-indexing bugs: the lo/complete windows must be the
-   SHIFTED `fun i => bits (125 + i)`/`fun i => bits (251 + i)` (donor `Decompose.main`);
-   soundness alone was satisfied by the existential per-child bit sequences. -/
+Input-record eval decompositions (`hiInputs_eval_eq` &c.) fire under `rw` but not under
+`simp only` on engine-produced eval terms — the instance spelling differs from a
+locally-elaborated one, so every decomposition site below is a `rw`. -/
 
 /-- Eval of an `Add.Inputs` pair built from two points (componentwise). -/
 theorem addInputs_eval_eq (env : Placed Environment Fp) (p q : Point (AssignedCell Fp)) :
@@ -933,10 +788,9 @@ theorem point_var_eval_eq_prover (env : Placed ProverEnvironment Fp) (o : Var Po
 
 /-! ## The gadget bundle
 
-`mul.rs::Config::assign` (`CircuitVersion::AnchoredBase`). The working-scalar bits are derived
-from the `alpha` cell (`kBitsWindow`, windows 0/125/251 for hi/lo/complete and the LSB read);
-the verifier `Spec` recovers a matching sequence via the children's existential specs + the
-donor canonicity argument. -/
+The working-scalar bits are derived from the `alpha` cell (`kBitsWindow`, windows 0/125/251 for
+hi/lo/complete and the LSB read); the verifier `Spec` recovers a matching sequence via the
+children's existential specs plus the canonicity argument. -/
 
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
@@ -955,21 +809,18 @@ private theorem synthesize_regionCount (cfg : Config)
       simp only [FormalCircuit.call, FormalCircuit.callOps_eq, Circuit.operations]
       exact (MulOverflow.synthesize_regionCount 10 cfg.overflowConfig _ j)]
 
--- Depth note: the main region's composed do-block is one nested-bind term ~5 children deep, and its
--- child `.output` reductions used to explode the default-512 unifier at the complete-phase/final-add
--- value-bookkeeping sites. Both bundle proofs now run `abstract_outputs` (after `provable_type_simp`,
--- before `subcircuit_rw`): every child output becomes an opaque `x_gen_out_j` local, so each chained
--- chunk input (the complete chunk's hi→lo input, the final add's complete-output input) is shallow by
--- construction. Downstream `rw`/`simp` sees the shallow local; the concrete child output is recovered
--- via the `h_gen_out_j` equations only where a SINGLE child `.output` must be reduced. The raw
--- main-region output feeding the overflow chunk (`(mainRegion …).output`, unfolded by the goal peel)
--- is abstracted too (guise 8, `x_gen_out_4` in completeness), so NO `maxRecDepth` allowance exists
--- anywhere — neither in these proofs nor inside the engine.
+-- The main region's composed do-block is one nested-bind term ~5 children deep; naive `.output`
+-- reduction can explode the unifier at the complete-phase/final-add value-bookkeeping sites. Both
+-- bundle proofs run `abstract_outputs` (after `provable_type_simp`, before `subcircuit_rw`): every
+-- child output becomes an opaque `x_gen_out_j` local, so each chained chunk input (the complete
+-- chunk's hi→lo input, the final add's complete-output input) is shallow by construction.
+-- Downstream `rw`/`simp` sees the shallow local; the concrete child output is recovered via the
+-- `h_gen_out_j` equations only where a single child `.output` must be reduced. The raw main-region
+-- output feeding the overflow chunk is abstracted too (`x_gen_out_4` in completeness).
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
-LAYOUTER-level `FormalCircuit` (`mul.rs::assign`): the main double-and-add region plus the
-overflow check's three sibling regions after it (`mul.rs:299`). No `BitsHint` parameter: the
-working-scalar bits are derived from the `alpha` cell inside the witness IR (the "no prover
-information at synthesis time" rule). -/
+layouter-level `FormalCircuit`: the main double-and-add region plus the overflow check's three
+sibling regions after it. No `BitsHint` parameter — the working-scalar bits are derived from the
+`alpha` cell inside the witness IR. -/
 def mul :
     FormalCircuit Fp
       (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
@@ -1006,24 +857,17 @@ def mul :
   ProverSpec _ _ _ _ := True
 
   -- ══ Soundness ══
-  -- Faithful layouter peel (main region at i₀ + the MulOverflow layouter chunk), the six child
-  -- chunks consumed via `subcircuit_rw` (the engine replaces the delimited iff rw sites), the
-  -- LSB gate, and the donor canonicity finish — the value algebra is byte-identical to the
-  -- pre-restructure proof modulo the region-faithful cell addresses (`env.place i₀ + X`).
+  -- Layouter peel (main region + the MulOverflow chunk), the six child chunks consumed via
+  -- `subcircuit_rw`, the LSB gate, and the canonicity finish.
   soundness := by
-    -- `circuit_proof_start` (no unfold list): intro + `soundness_iff` + house names, then
-    -- `provable_type_simp` (destructures `output`, and — since this layouter's own output is the
-    -- opaque composed `synthesize.output`, not a cell literal — leaves `h_output` as the whole-point
-    -- equation the manual peel below consumes). The `synthesize`/`mainRegion` defs are deliberately
-    -- NOT passed as unfold lemmas: step (b) would unfold them at `h_output`/the goal, inflating the
-    -- state into the deep composed term (and tangling with the abstracted child outputs); we unfold
-    -- `synthesize` manually at `hc` only, below. The folded `synthesize` keeps the goal composite, so
-    -- the leaf-only finish is skipped and `hc`/`h_input` survive for the manual layouter peel.
+    -- `circuit_proof_start` intros + destructures `output`; since this layouter's own output is
+    -- the opaque composed `synthesize.output`, not a cell literal, it leaves `h_output` as the
+    -- whole-point equation the manual peel below consumes. `synthesize`/`mainRegion` are
+    -- deliberately not unfolded here — that would inflate the state into the deep composed term;
+    -- `synthesize` is unfolded manually at `hc` only, below.
     circuit_proof_start
-    -- `circuit_proof_start` splits the placed environment into `place`/`env`; this manual composite
-    -- peels the layouter structure and drives `subcircuit_rw` by hand, whose `*_placed` leaves key
-    -- on a single common `penv : Placed …` (`SubcircuitRw.placedEnv?`). Reassemble it (naming it
-    -- `env` again) so the peel + engine see the Placed-view chunk shape.
+    -- Reassemble the split `place`/`env` into a `Placed` value (named `env` again), since
+    -- `subcircuit_rw`'s `*_placed` lemmas key on a single common `penv : Placed …`.
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env := ⟨⟨place, env⟩, rfl, rfl⟩
     -- ── peel the faithful layouter structure: the MAIN REGION (index i₀) and the layouter-level
@@ -1037,11 +881,9 @@ def mul :
       operations_constrainConstant, RegionOperations.constraints_append] at hMain
     obtain ⟨hInit, _hZinitW, hZconst, hHi, hLo, hComp, _hZ0W, hBxC, hByC, _hCxW, _hCyW,
       hGate, hFin, -⟩ := hMain
-    -- (provable-type eval normalization already ran inside `circuit_proof_start`, step (c))
-    -- ▸▸ make every child output opaque: the chained chunk INPUTS (comp's hi→lo entering, the final
-    --    add's comp-acc entering) become shallow locals `x_gen_out_j`, and each weakened chunk's
-    --    Spec (emitted by `subcircuit_rw at h` via Stage-1 cooperation) speaks the local. This
-    --    replaces the engine's threshold-gated deep-input abstraction. ◂◂
+    -- ▸▸ make every child output opaque: the chained chunk inputs (comp's hi→lo entering, the
+    --    final add's comp-acc entering) become shallow locals `x_gen_out_j`, and each weakened
+    --    chunk's Spec speaks the local. ◂◂
     abstract_outputs
     obtain ⟨hIalpha, hBxIn, hByIn⟩ := h_input
     -- ── the base point: cells and value ──
@@ -1238,7 +1080,7 @@ def mul :
     -- ▸▸ engine site 5: the final complete addition ◂◂
     subcircuit_rw at hFin
     simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hFin
-    -- ▸▸ engine site 6: the overflow check (the LAYOUTER child, mul.rs:299) ◂◂
+    -- ▸▸ engine site 6: the overflow check (the layouter child) ◂◂
     subcircuit_rw at hOv
     simp only [EnvAssumptions] at _hE
     have hOvSpec := hOv (by rw [ov_envAssumptions_eq]; exact _hE)
@@ -1252,13 +1094,13 @@ def mul :
           (input.k254 = 0 ∨ sHi = 0) ∧
           (input.k254 = 1 ∨ input.z130 ≠ 0 ∨ sHi = 0)) from rfl,
       ovInputs_eval_eq] at hOvSpec
-    -- the z-cell projections reduce under `rw` (full unification; the concrete-α spelling
-    -- misses the simp discr key — the documented finding #2, now for tuple projections)
+    -- the z-cell projections reduce under `rw` (full unification) — the concrete-α spelling
+    -- misses the simp discr key
     rw [mainRegion_output_z0, mainRegion_output_z130, mainRegion_output_k254] at hOvSpec
     simp only [eval_of] at hOvSpec
     rw [halpha] at hOvSpec
     obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOvSpec
-    -- ── the canonicity ladder (donor `soundness` finish) ──
+    -- ── the canonicity ladder ──
     have hZhiLt : chainNat 0 bitsHi 125 < 2 ^ 125 :=
       lt_of_lt_of_le (chainNat_lt 0 bitsHi 125) (by norm_num)
     have hCloLt : chainNat 0 bitsLo 126 < 2 ^ 126 :=
@@ -1436,21 +1278,16 @@ def mul :
   -- ══ Completeness ══
   -- Honest-side mirror on the faithful layouter structure: the six child chunks discharged via
   -- `subcircuit_rw` (completeness mode — the goal chunks strengthen to `EnvA ∧ A ∧ PA` and the
-  -- engine introduces `h_spec_0..h_spec_5`, replacing the old `call_constraints_and_specs`
-  -- copies), the honest accumulator threaded `[2]base → hi → lo → complete`, the honest chains
-  -- `kBits`-driven, and the overflow child's honest `Spec` landed via `overflow_spec_honest` —
-  -- consumed at the LAYOUTER level.
+  -- engine introduces `h_spec_0..h_spec_5`), the honest accumulator threaded
+  -- `[2]base → hi → lo → complete`, the honest chains `kBits`-driven, and the overflow child's
+  -- honest `Spec` landed via `overflow_spec_honest` — consumed at the layouter level.
   completeness := by
     circuit_proof_start
-    -- `circuit_proof_start` splits the placed environment into `place`/`env`; this manual composite
-    -- peels the layouter structure and drives `subcircuit_rw` by hand, whose `*_placed` completeness
-    -- leaf keys on a single common `penv : Placed …` (`SubcircuitRw.placedEnv?`) to locate all six
-    -- child contracts. Reassemble it (naming it `env` again) so the engine sees the Placed-view.
+    -- Reassemble the split `place`/`env` into a `Placed` value (named `env` again), so
+    -- `subcircuit_rw`'s completeness leaf can locate all six child contracts via a single
+    -- `penv : Placed …`.
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env := ⟨⟨place, env⟩, rfl, rfl⟩
-    -- composite layouter gadget: step (a) + provable-eval normalization bundled; the folded
-    -- `synthesize` keeps the goal composite, so the leaf-only finish is skipped and
-    -- `hwit`/`h_input`/`⊢` survive for the manual layouter peel below.
     have hOnC0 := hPA
     -- ── peel the faithful layouter structure (witnesses AND goal): the MAIN REGION at i₀ and
     -- the layouter-level MulOverflow chunk at i₀+1 ──
@@ -1469,8 +1306,7 @@ def mul :
     -- exposed as conjuncts), then strengthen them via the engine: `subcircuit_rw` turns each
     -- chunk into its `EnvA ∧ A ∧ PA` precondition bundle (ExtendsWitnesses located from the
     -- peeled hW* context facts) and introduces the derived contract statements
-    -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow —
-    -- they replace the old `call_constraints_and_specs` copies) ──
+    -- `h_spec_0..h_spec_5 : EnvA → A → PA → Spec ∧ ProverSpec` (init/hi/lo/comp/fin/overflow) ──
     simp only [mainRegion,
       RegionCircuit.operations_bind, RegionCircuit.operations_pure,
       operations_assignAdvice, operations_copyAdvice, operations_enable,
@@ -1481,15 +1317,14 @@ def mul :
     -- unify the overflow chunk's raw main-region output spelling: the goal peel above unfolded
     -- `mainRegion` into the bind chain inside the overflow chunk's input, while `hWOv` still
     -- carries the folded `(mainRegion …).output`. Unfold it in `hWOv` too, so `abstract_outputs`
-    -- mints ONE local (guise 8) for the raw output and the engine's witness lookup matches the two
-    -- chunk inputs on that shared local.
+    -- mints one local for the raw output and the engine's witness lookup matches the two chunk
+    -- inputs on that shared local.
     simp only [mainRegion] at hWOv
     -- ▸▸ make every output opaque before the engine runs: the chained chunk inputs (hi's
     --    entering [2]base, lo's/comp's entering accumulators) speak the child locals `x_gen_out_j`
     --    (0=init, 1=hi, 2=lo, 3=comp), and the raw main-region output feeding the overflow chunk
-    --    becomes `x_gen_out_4` (guise 8) — each with `h_gen_out_j : <output> = x_gen_out_j`. The
-    --    engine then EMITS `h_spec_j` over those locals (Stage-1 cooperation) — nothing deep ever
-    --    reaches the walker, and no rec-depth raise is needed anywhere. ◂◂
+    --    becomes `x_gen_out_4`, each with `h_gen_out_j : <output> = x_gen_out_j`. The engine then
+    --    emits `h_spec_j` over those locals. ◂◂
     abstract_outputs
     -- Engine completeness mode: strengthen the whole main-region goal to the AND of the six
     -- children's `EnvA ∧ A ∧ PA` preconditions and introduce the premised derived statements
@@ -1510,9 +1345,9 @@ def mul :
       rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hByIn
     have halphap : eval env input_var_alpha = input_alpha := by
       rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hIalpha
-    -- the honest working-scalar bits, derived from the scalar value (the old bundle parameter
-    -- + `hbits` hypothesis, now a local OPAQUE constant — `obtain`, not `set`: a delta-accessible
-    -- `kBits` body would let elaborator defeq unfold into the `tQNat` numeral landmine)
+    -- the honest working-scalar bits, as a local opaque constant (`obtain`, not `set`: a
+    -- delta-accessible `kBits` body would let the elaborator's defeq unfold into the `tQNat`
+    -- numeral landmine)
     obtain ⟨bits, hbits⟩ : ∃ b : BitsHint, b = kBits input_alpha := ⟨_, rfl⟩
     -- window landings: the children's derived families in `bits` vocabulary
     have hW0 : kBitsWindow input_alpha 0 = bits := by
@@ -1551,7 +1386,7 @@ def mul :
     obtain ⟨-, hAccEq⟩ := hSpecInit
     -- init output on the local (verifier view). `hAccEq : eval env.toEnvironment x_gen_out_0 = …`
     -- (the engine emitted `h_spec_0` over `x_gen_out_0`); recover the concrete init output and
-    -- reduce it to the add's output cells (env reads), as before.
+    -- reduce it to the add's output cells (env reads).
     have hAcc2 : eval env.toEnvironment x_gen_out_0
         = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
       rw [← point_two_nsmul hOnC]; exact hAccEq
@@ -1768,7 +1603,7 @@ def mul :
             ((env.place i₀ + (offComp + 2 * 2 + 2) : ℕ) : ℤ)
           + (if bits 254 then 1 else 0) := hWZ0
     rw [hz1cast] at hWZ0'
-    -- z₀ = ↑(kNat α) (the donor `z0_cell_value`)
+    -- z₀ = ↑(kNat α)  (`z0_cell_value`)
     have hz0v : env.env.toEnvironment.advice cfg.completeConfig.zComplete
         ((env.place i₀ + (offLsb + 1) : ℕ) : ℤ)
         = ((kNat input_alpha : ℕ) : Fp) := by
@@ -1802,8 +1637,7 @@ def mul :
       RegionOperation.extendsWitness_constrainEqual, and_true,
       eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
       AssignedCell.eval] at hWbx hWby
-    -- ── the complete-phase verifier Spec (the same h_spec_3, `.1` — the old second
-    -- `call_constraints_and_specs` copy collapses) ──
+    -- ── the complete-phase verifier Spec (`h_spec_3.1`) ──
     have hCompSpecV := hCompBoth.1
     simp only [comp_spec_eq] at hCompSpecV
     obtain ⟨bitsC', hCompRIv⟩ := hCompSpecV
@@ -1966,11 +1800,10 @@ def mul :
     · -- overflow Assumptions (field-capacity bounds at K = 10)
       rw [ov_assumptions_eq]
       constructor <;> norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]
-    · -- overflow ProverAssumptions: the honest running-sum cells satisfy the overflow Spec.
-      -- The input's z-cells are projections of the raw main-region output local (`x_gen_out_4`,
-      -- guise 8); recover the concrete bind-chain output (`← h_gen_out_4`), then reduce the
-      -- projections lazily via `circuit_norm` (outputs never force the loop bodies) and land the
-      -- cells on env reads, as before.
+    · -- overflow ProverAssumptions: the honest running-sum cells satisfy the overflow Spec. The
+      -- input's z-cells are projections of the raw main-region output local (`x_gen_out_4`);
+      -- recover the concrete bind-chain output (`← h_gen_out_4`), then reduce the projections
+      -- lazily via `circuit_norm` and land the cells on env reads.
       simp only [ov_proverAssumptions_eq]
       rw [ovInputs_eval_eq_prover, ← h_gen_out_4]
       simp only [circuit_norm, eval_of_prover]

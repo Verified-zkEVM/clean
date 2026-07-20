@@ -6,31 +6,34 @@ import Clean.Ironwood.Specs.Pallas
 /-!
 # Double-and-add row (incomplete addition)
 
-The `(x_A, x_P, λ₁, λ₂)` cells of one incomplete-addition double-and-add step and the
-derived `x_R`/`Y_A` formulas. This is shared ECC machinery used by both scalar
-multiplication and the Sinsemilla hash, so it lives under `Halo2.Ironwood.Ecc` rather than
-inside Sinsemilla.
+The `(x_A, x_P, λ₁, λ₂)` cells of one incomplete-addition double-and-add step and the derived
+`x_R`/`Y_A` formulas. Shared ECC machinery used by both variable-base scalar multiplication and
+the Sinsemilla hash.
 
-Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul/incomplete.rs`
-- `DoubleAndAdd::x_r`
-- `DoubleAndAdd::Y_A`
+Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
 namespace Halo2.Ironwood.Ecc
 
+-- A helper struct for single-row double-and-add using incomplete addition.
 structure DoubleAndAddRow (F : Type) where
+  -- x-coordinate of the accumulator in each double-and-add iteration.
   xA : F
+  -- x-coordinate of the point being added in each double-and-add iteration.
   xP : F
+  -- lambda1 in each double-and-add iteration.
   lambda1 : F
+  -- lambda2 in each double-and-add iteration.
   lambda2 : F
 deriving ProvableStruct
 
 namespace DoubleAndAdd
 
+/-- The expression `x_r = lambda_1² - x_a - x_p`. -/
 def xR {K : Type} [Sub K] [Mul K] (row : DoubleAndAddRow K) : K :=
   row.lambda1 * row.lambda1 - row.xA - row.xP
 
+/-- The expression `Y_A = (lambda_1 + lambda_2) * (x_a - x_r)`. -/
 def yA {K : Type} [Add K] [Sub K] [Mul K] (row : DoubleAndAddRow K) : K :=
   (row.lambda1 + row.lambda2) * (row.xA - xR row)
 

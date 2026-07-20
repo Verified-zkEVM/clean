@@ -9,7 +9,7 @@ open CompElliptic.CurveForms
 
 /-!
 Reference:
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add_incomplete.rs`
+`halo2_gadgets/src/ecc/chip/add_incomplete.rs`
 - `incomplete addition`
 
 The Rust assignment takes non-identity input points, rejects `x_p = x_q`, and assigns the
