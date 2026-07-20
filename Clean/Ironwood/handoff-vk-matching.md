@@ -945,7 +945,11 @@ from git history or re-dump if a gadget ever needs isolated debugging). What rem
 - Correctness: `TestVkMatchAction` (configure Pre+Post, shared 6.2/6.3; now runs on the
   real `orchardGenerators`), `TestVkLayoutAction` (6.3 synthesize), and
   `TestVkLayoutActionBase` (6.2 synthesize).
-- Documentation/sanity: `TestVkMatchAdd` (the CS half of the approach) and
-  `TestVkLayoutPoseidon` (the layout half) — chosen as the two smallest fully
-  self-contained examples; their headers say so.
+- Documentation/sanity (revised per Gregor: both sides per leaf + lookup coverage):
+  two leaf pairs — Add (`TestVkMatchAdd` + the NEW `TestVkLayoutAdd`, minimal: two
+  regions, four copies, one packed selector; fixtures from the new `dump_layout_add`
+  Rust harness, local halo2 commit — its CS dump reproduces `AddPre`/`AddPost`
+  byte-identically) and Mul (`TestVkMatchMul` + `TestVkLayoutMul`, restored from git:
+  the LOOKUP + selector-compression + table/constants-fixed showcase). The Poseidon
+  layout test and its fixtures were dropped in exchange.
 - `BenchFixedBase` stays (kernel-evaluation benchmark evidence, not a VK test).

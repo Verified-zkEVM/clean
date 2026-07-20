@@ -21,7 +21,9 @@ import Clean.Halo2.Tests.TestLookupMembership
 import Clean.Halo2.Tests.TestProofStart
 import Clean.Halo2.Tests.TestTupleLookup
 import Clean.Ironwood.Tests.TestVkMatchAdd
+import Clean.Ironwood.Tests.TestVkLayoutAdd
+import Clean.Ironwood.Tests.TestVkMatchMul
+import Clean.Ironwood.Tests.TestVkLayoutMul
 import Clean.Ironwood.Tests.TestVkMatchAction
 import Clean.Ironwood.Tests.TestVkLayoutAction
 import Clean.Ironwood.Tests.TestVkLayoutActionBase
-import Clean.Ironwood.Tests.TestVkLayoutPoseidon
