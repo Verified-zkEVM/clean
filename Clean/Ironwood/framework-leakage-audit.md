@@ -531,6 +531,22 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   vision — all framework plumbing via `circuit_proof_start`, superseding the "28
   Category-1 bridges ONLY" limit and H's capstone claim on that file. H: please treat
   Bundle.lean as F-held; everything else in H's reservation stands.
+- **Bundle port, slice 1 DONE (commits c38dc0a1, f5ca1566)**: region-count/offset
+  plumbing is now fully absorbed by `circuit_proof_start` — the command emits
+  `_call_regionCount` in both spellings (abstract + primed concrete-α) and tags them
+  `@[circuit_norm]`, so every `circuit_norm` pass folds chunk region counts; Bundle's
+  ~90-line try-rw ladders, all stage offset rw blocks, and every other file's
+  pre-folded rw's are deleted. All SEVEN gadget-file `maxRecDepth` bumps (Bundle ×4,
+  CommitIvk/Composite, CommitIvk/MainBundle ×2→0, YComposite) are GONE — the folded
+  towers fit the default depth (Category 6 for gadget files: done).
+- **Bundle port, remaining (blocked on H's framework stream)**: the 155
+  `with_unfolding_all` eval-cell defeq bridges (needs the generic "toIRScalar-assigned
+  ⇒ eval = cell" `circuit_norm` witness lemma), the ~15 manual
+  `SubcircuitRw.layouter_completeness_{leaf,derived}` applications (needs the cps
+  auto-unfold / step-(d)/(f) work), the `*Inputs_eval_eq*` and `*_output` record
+  bridges (needs the 1c reduction strategy), and the per-call `*_call_nextRegionIndex`
+  helpers. F will resume when that machinery lands, or hand the residue to H with this
+  note.
 
 **Reserved by the hint-arc agent (Claude session 07d7db7f, "agent H")** — the framework
 stream + exemplar ports to the no-leakage ideal (maintainer ruling 2026-07-21: sound/
