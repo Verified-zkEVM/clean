@@ -277,6 +277,9 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   -- the witnessed points are well-formed
   wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
   wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
+  -- the note values are 64-bit, as §4.17.4 types them (exported from the NoteCommit
+  -- value decompositions; the commitment clauses alone can't bound the field elements)
+  wit.vOld.val < 2 ^ 64 ∧ wit.vNew.val < 2 ^ 64 ∧
   -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
   (∃ m : ℕ, m < 2 ^ 64 ∧ wit.magnitude = (m : Fp) ∧
     ((wit.sign = 1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
@@ -1001,7 +1004,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   simp only [Spec, SpecBase, extract, cellRead, circuit_norm, AssignedCell.of_cell,
     Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
     Nat.add_zero, Nat.add_assoc]
-  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ?_, ?_, ?_, ?_⟩
   · with_unfolding_all exact hCmS
   · with_unfolding_all exact hGdS
@@ -1009,6 +1012,10 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · with_unfolding_all exact hAIS.1
   · with_unfolding_all exact hGdNS
   · with_unfolding_all exact hPkNS
+  · -- `v_old < 2^64` (old NoteCommit's value decomposition)
+    with_unfolding_all exact hNCoS.1
+  · -- `v_new < 2^64` (new NoteCommit's value decomposition)
+    with_unfolding_all exact hNCnS.1
   · -- value-commitment integrity
     obtain ⟨m, hm, hmag, hdisj⟩ := hVCS
     have hP : ({ x := env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
@@ -1051,7 +1058,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     exact ⟨_, by with_unfolding_all exact hCIS, by with_unfolding_all exact hAIS.2⟩
   · -- old note-commitment integrity
     refine Halo2.Ironwood.Specs.Sinsemilla.SpecOrBreak.mono ?_
-      (by with_unfolding_all exact hNCoS)
+      (by with_unfolding_all exact hNCoS.2)
     intro bp hbp
     have hcmP : ({ x := env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 2) : ℕ) : ℤ),
                    y := env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 2) : ℕ) : ℤ) }
@@ -1079,7 +1086,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · -- new note-commitment integrity
     rw [← hInf]
     refine Halo2.Ironwood.Specs.Sinsemilla.SpecOrBreak.mono ?_
-      (by with_unfolding_all exact hNCnS)
+      (by with_unfolding_all exact hNCnS.2)
     intro bp hbp
     rw [← hIcmx]
     with_unfolding_all exact congrArg Point.x hbp
@@ -1136,7 +1143,8 @@ def ProverAssumptions (G : Generators) (B : Bases)
   (∃ mid, pathNode G B.merkleQ 0 wit.merklePath wit.cmOld.x 16 = some mid ∧
     ∃ root, pathNode G B.merkleQ 16 (fun j => wit.merklePath (16 + j)) mid 16
       = some root ∧
-    wit.anchor = root ∧
+    -- NOT `anchor = root`: an honest dummy spend has `v_old = 0` with an arbitrary
+    -- path, so only the product form holds (§4.17.4 "either v_old = 0 or …").
     wit.vOld * (root - wit.anchor) = 0) ∧
   -- the three Sinsemilla legs are defined, with the honest commitment equations
   (∃ Bi, hashToPoint G.S B.ivkQ
@@ -1236,7 +1244,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
   obtain ⟨hVcm, hVgd, hVak, hVpk, hVgdn, hVpkn, hWrcv, hWal, hWri, hWro, hWrn,
-    hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hAnch, hVanch⟩,
+    hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hVanch⟩,
     ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmo⟩, ⟨Bn, hBn, hCmx⟩,
     ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
   simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
@@ -1641,7 +1649,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         (show hashToPoint G.S B.noteQ _ = some Bo from by
           with_unfolding_all exact hBo)] at hNCoDer
       rw [hCmo]
-      with_unfolding_all exact hNCoDer
+      with_unfolding_all exact hNCoDer.2
     have hNCnval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ((NoteCommit.Main.circuit G B.noteCommitR input_var.rcmNewWindows B.noteQ
           B.noteQ_onCurve).output
@@ -1688,7 +1696,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bn from by
           with_unfolding_all exact hBn)] at hNCnDer
-      with_unfolding_all exact hNCnDer
+      with_unfolding_all exact hNCnDer.2
     -- ── assemble the stage-B and stage-C constraints ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
       synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,

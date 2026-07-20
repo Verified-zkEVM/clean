@@ -1350,12 +1350,13 @@ theorem soundness (G : Generators) (R : FixedBase) (windows : Vector (FExpr Fp) 
     hGvalS.1
   -- ── land the Spec ──
   simp only [Spec]
+  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
+  refine ⟨hival ▸ hGvalS.1, ?_⟩
   refine Halo2.Ironwood.Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
     (fun m hm => G.S_onCurve (Halo2.Ironwood.Specs.Sinsemilla.chunksOf_mem_lt (by
       simpa [Halo2.Ironwood.NoteCommit.NoteCommitScalars.chunks,
         Halo2.Ironwood.Specs.Sinsemilla.noteCommitChunks] using hm))) ?_
   intro B hB
-  obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi⟩ := h_input
   rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at hchunksEq
   rw [show (Halo2.Ironwood.NoteCommit.noteScalars ⟨input_gdX, input_gdY⟩
       ⟨input_pkdX, input_pkdY⟩ input_value input_rho input_psi).chunks
