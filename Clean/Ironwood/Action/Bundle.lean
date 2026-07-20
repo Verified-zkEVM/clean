@@ -312,9 +312,12 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
     (fun bp => wit.cmx = (bp + (wit.rcmNew.2 • B.noteCommitR : Point Fp)).x)
     (hashToPointB G.S B.noteQ
       (noteScalars wit.gdNew wit.pkdNew wit.vNew wit.nfOld wit.psiNew).chunks) ∧
-  -- Merkle path validity, tied through the `q_orchard` anchor check
+  -- Merkle path validity, tied through the `q_orchard` anchor check. The strict-or-break
+  -- refinement exhibits any Sinsemilla escape as data, as requested by zcash/ironwood#45.
   (∃ root : Fp,
     Sinsemilla.Merkle.MerkleRoot G B.merkleQ 0 wit.cmOld.x 32 root ∧
+    (Sinsemilla.Merkle.MerkleRootStrict G B.merkleQ 0 wit.cmOld.x 32 root ∨
+      Sinsemilla.Merkle.MerkleBreakAt G B.merkleQ 0 32) ∧
     wit.vOld * (root - wit.anchor) = 0) ∧
   -- the remaining `q_orchard` value checks
   wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
@@ -425,7 +428,9 @@ private theorem merkle_spec_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :
     (Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).Spec
       = fun input (output : Value field Fp) _ =>
-          Sinsemilla.Merkle.MerkleRoot G Q l₀ (input.node : Fp) 16 output := rfl
+          Sinsemilla.Merkle.MerkleRoot G Q l₀ (input.node : Fp) 16 output ∧
+            (Sinsemilla.Merkle.MerkleRootStrict G Q l₀ (input.node : Fp) 16 output ∨
+              Sinsemilla.Merkle.MerkleBreakAt G Q l₀ 16) := rfl
 
 private theorem merkle_assumptions_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
@@ -1092,11 +1097,16 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     with_unfolding_all exact congrArg Point.x hbp
   · -- Merkle path validity + the anchor check
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
-    have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S hM2S
+    have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S.1 hM2S.1
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.2.1
     rw [hOv, hOr, hOa] at h
-    exact ⟨_, by with_unfolding_all exact hRoot, by with_unfolding_all exact h⟩
+    refine ⟨_, by with_unfolding_all exact hRoot, ?_, by with_unfolding_all exact h⟩
+    rcases hM1S.2 with hM1Strict | hM1Break
+    · rcases hM2S.2 with hM2Strict | hM2Break
+      · with_unfolding_all exact Or.inl (Sinsemilla.Merkle.MerkleRootStrict.trans G B.merkleQ hM1Strict hM2Strict)
+      · with_unfolding_all exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.shift G B.merkleQ (l := 0) (k := 16) (k' := 16) hM2Break)
+    · with_unfolding_all exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
   · -- `v_old − v_new = magnitude · sign`
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
@@ -1179,40 +1189,6 @@ def ProverAssumptions (G : Generators) (B : Bases)
   wit.vNew * (1 - wit.enableOutput) = 0
 
 /-! ## Completeness -/
-
-private theorem toFormal_call_witnesses {CI Cfg : Type} {In Out : TypeMap}
-    [ProvableType In] [ProvableType Out]
-    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
-    (inp : Var In Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
-    (env : ProverEnvironment Fp) :
-    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
-      = RegionOperations.ExtendsWitnesses place i env
-          ((b.synthesize cfg 0 inp).operations i) := by
-  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
-    assignRegion, ExtendsWitnesses, and_true]
-  rfl
-
-private theorem wpoint_call_witnesses (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (i : RegionIndex)
-    (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
-    ExtendsWitnesses place env
-      (((Ecc.WitnessPoint.point.toFormal name).call c inp).operations i) i
-      = RegionOperations.ExtendsWitnesses place i env
-          ((Ecc.WitnessPoint.point.synthesize c 0 inp).operations i) := by
-  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
-    assignRegion, ExtendsWitnesses, and_true]
-  rfl
-
-private theorem wpointNonId_call_witnesses (name : String)
-    (c : Ecc.WitnessPoint.Config) (inp : Point (WitgenIR Fp 1)) (i : RegionIndex)
-    (place : RegionIndex → ℕ) (env : ProverEnvironment Fp) :
-    ExtendsWitnesses place env
-      (((Ecc.WitnessPoint.pointNonId.toFormal name).call c inp).operations i) i
-      = RegionOperations.ExtendsWitnesses place i env
-          ((Ecc.WitnessPoint.pointNonId.synthesize c 0 inp).operations i) := by
-  simp only [FormalRegionCircuit.toFormal, FormalCircuit.call, Circuit.operations,
-    assignRegion, ExtendsWitnesses, and_true]
-  rfl
 
 private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
