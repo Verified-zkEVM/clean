@@ -114,7 +114,6 @@ private theorem gateChild_extract_cells (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
       = (eval env (AssignedCell.of i 0 (cfg.advices 4) : Var field Fp),
          eval env (AssignedCell.of i (0 + 1) (cfg.advices 4) : Var field Fp)) := rfl
 
-set_option maxRecDepth 4096 in
 /-- Rust `CommitIvkChip` canonicity flow: the two shift `witness_check`s, then the
 `"Assign cells used in canonicity gate"` region. `Spec` is the donor composite payoff
 (`Halo2.Ironwood.CommitIvk.Canonicity.Spec`): the canonical bit slices of `ak`/`nk` and

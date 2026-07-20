@@ -702,7 +702,6 @@ instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
 
 open Halo2.Ironwood.Sinsemilla.Merkle (MerkleRoot)
 
-set_option maxRecDepth 8192 in
 theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
       (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
@@ -1074,7 +1073,6 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
   exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
     h1, h2, h3⟩
 
-set_option maxRecDepth 8192 in
 theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
       (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
@@ -1870,7 +1868,6 @@ def ProverAssumptionsPost (G : Generators) (B : Bases)
   ProverAssumptions G B input wit hint ∧
   (wit.disableCrossAddress = 0 ∨ (wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew))
 
-set_option maxRecDepth 8192 in
 theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
       (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
@@ -1953,7 +1950,6 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
     rw [hpx, hpy]
     with_unfolding_all rfl
 
-set_option maxRecDepth 8192 in
 theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
       (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)

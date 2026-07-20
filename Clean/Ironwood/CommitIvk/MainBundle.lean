@@ -110,7 +110,6 @@ private theorem prefixRows_ns_2 : Sinsemilla.Chain.prefixRows ns 2 = 26 := rfl
 
 /-! ## Soundness -/
 
-set_option maxRecDepth 4096 in
 theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
@@ -521,7 +520,6 @@ private theorem buildPieces (cfg : Config) (ak nk : AssignedCell Fp)
 
 /-! ## Completeness -/
 
-set_option maxRecDepth 4096 in
 theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)

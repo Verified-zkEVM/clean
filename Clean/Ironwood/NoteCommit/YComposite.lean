@@ -204,7 +204,6 @@ theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
     LookupRangeCheck.witnessCheckDecomposed, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
 
-set_option maxRecDepth 4096 in
 /-- Rust `y_canonicity` (`note_commit.rs:1962-2032`). Output is the witnessed `lsb` cell;
 its reading is the extraction data. `Spec`: given the lsb cell's booleanity (constrained
 outside, by the decompose gates on the copied cell), `lsb` is the low bit of `y` — the
