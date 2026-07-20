@@ -56,77 +56,7 @@ theorem constantLength_value_two (a b : Fp) :
     Hash.ConstantLength.blockValue, Hash.ConstantLength.paddedWord,
     Fin.foldl_succ, Fin.foldl_zero]
 
-/-! ## Child contract bridges (`rfl`, children stay folded) -/
-
-section Bridges
-
-variable (K : FixedBase)
-
-private theorem hash_spec_eq :
-    (Poseidon.hash (Hash.ConstantLength.capacity 2)).Spec
-      = fun input output _ =>
-          output = Hash.HashPaddedBlock.value roundConstants
-            (Hash.ConstantLength.capacity 2) input := rfl
-
-private theorem hash_proverSpec_eq :
-    (Poseidon.hash (Hash.ConstantLength.capacity 2)).ProverSpec
-      = fun input output _ _ =>
-          output = Hash.HashPaddedBlock.value roundConstants
-            (Hash.ConstantLength.capacity 2) input := rfl
-
-private theorem addChip_spec_eq :
-    (AddChip.add.toFormal "c = a + b").Spec
-      = fun (input : Value AddChip.Inputs Fp) output (_ : Unit) =>
-          output = input.a + input.b := rfl
-
-private theorem addChip_proverSpec_eq :
-    (AddChip.add.toFormal "c = a + b").ProverSpec
-      = fun (input : ProverValue AddChip.Inputs Fp) output (_ : Unit) _ =>
-          output = input.a + input.b := rfl
-
-private theorem bfe_spec_eq :
-    (Ecc.MulFixed.BaseFieldElem.circuit K).Spec
-      = fun alpha output _ => Ecc.MulFixed.BaseFieldElem.Spec K alpha output := rfl
-
-private theorem bfe_assumptions_eq :
-    (Ecc.MulFixed.BaseFieldElem.circuit K).Assumptions = fun _ => True := rfl
-
-private theorem bfe_envAssumptions_eq :
-    (Ecc.MulFixed.BaseFieldElem.circuit K).EnvAssumptions
-      = Ecc.MulFixed.BaseFieldElem.EnvAssumptions := rfl
-
-private theorem bfe_proverAssumptions_eq :
-    (Ecc.MulFixed.BaseFieldElem.circuit K).ProverAssumptions
-      = fun _ _ _ => True := rfl
-
-end Bridges
-
 /-! ## Region counts -/
-
-/-- The Poseidon child's call chunk spans its three regions. -/
-private theorem hash_call_regionCount (pcfg : Poseidon.Config)
-    (input : Var Sponge.Rate2 Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg input).operations j)
-      = 3 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-/-- The add-chip child's call chunk is one region. -/
-private theorem addChip_call_regionCount (acfg : AddChip.Config)
-    (input : Var AddChip.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((AddChip.add.toFormal "c = a + b").call acfg input).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-/-- The fixed-base-mul child's call chunk spans its four regions. -/
-private theorem bfe_call_regionCount (K : FixedBase)
-    (bcfg : Ecc.MulFixed.BaseFieldElem.Config) (input : Var field Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg input).operations j) = 4 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
 
 /-- The region count of `derive_nullifier`: the Poseidon child's three regions, the
 add-chip region, the fixed-base mul's four regions, the final complete addition. -/
@@ -147,8 +77,8 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
       = 9 := by
   simp only [Circuit.operations_bind, Circuit.operations_pure,
     Operations.regionCount_append, Operations.regionCount,
-    hash_call_regionCount, addChip_call_regionCount, bfe_call_regionCount,
-    Ecc.Add.toFormal_call_regionCount]
+    FormalCircuit.call_regionCount]
+  rfl
 
 /-! ## The `derive_nullifier` bundle -/
 
@@ -208,14 +138,14 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     obtain ⟨hHash, hScalar, hBfe, hAdd⟩ := hc
     -- the Poseidon child: the output cell is the one-block hash of `(nk, rho)`
     have hH := hHash trivial trivial
-    rw [hash_spec_eq] at hH
+    rw [Poseidon.hash_spec_eq] at hH
     -- the add-chip child: the scalar cell is `hash + psi`
     have hS := hScalar trivial trivial
-    rw [addChip_spec_eq] at hS
+    rw [AddChip.add_toFormal_spec_eq] at hS
     -- the fixed-base mul child: the product is `[scalar] K`
-    have hB := hBfe (by rw [bfe_envAssumptions_eq]; exact _hE)
-      (by rw [bfe_assumptions_eq]; trivial)
-    rw [bfe_spec_eq] at hB
+    have hB := hBfe (by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE)
+      (by rw [Ecc.MulFixed.BaseFieldElem.circuit_assumptions_eq]; trivial)
+    rw [Ecc.MulFixed.BaseFieldElem.circuit_spec_eq] at hB
     simp only [Ecc.MulFixed.BaseFieldElem.Spec] at hB
     -- the complete addition: `nf = cm + product` (both summands valid)
     have hAddS := hAdd trivial (by
@@ -238,11 +168,11 @@ def circuit (K : FixedBase) : FormalCircuit Fp
   completeness := by
     circuit_proof_start
     -- the fixed-base mul child's honest contract: the product is `[scalar] K`
-    have hB := (h_spec_2 (by rw [bfe_envAssumptions_eq]; exact _hE) trivial trivial).1
-    rw [bfe_spec_eq] at hB
+    have hB := (h_spec_2 (by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE) trivial trivial).1
+    rw [Ecc.MulFixed.BaseFieldElem.circuit_spec_eq] at hB
     simp only [Ecc.MulFixed.BaseFieldElem.Spec] at hB
     refine ⟨⟨trivial, trivial, trivial⟩, ⟨trivial, trivial, trivial⟩,
-      ⟨by rw [bfe_envAssumptions_eq]; exact _hE, trivial, trivial⟩,
+      ⟨by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE, trivial, trivial⟩,
       trivial, ?_, trivial⟩
     rw [Ecc.Add.toFormal_assumptions_eq]
     exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩

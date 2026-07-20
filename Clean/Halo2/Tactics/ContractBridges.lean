@@ -1,5 +1,6 @@
 import Lean.Elab.Command
 import Clean.Halo2.Formal
+import Clean.Halo2.Subcircuit
 
 /-!
 # `derive_contract_bridges`
@@ -34,6 +35,22 @@ variables of `<bundle-term>` (the section variables and explicit arguments it me
 command elaborates `<bundle-term>`, projects each contract field, `whnf`-reduces the projection
 to its assigned value, and emits the equality theorem. Any field whose projection does not reduce
 by `rfl` is skipped with a warning (e.g. a bundle that leaves a default).
+
+For a **layouter-level** bundle (`FormalCircuit`) it additionally generates the call-chunk
+region-count bridge
+
+```
+myChild_call_regionCount : ∀ config input j,
+  Operations.regionCount ((<bundle>.call config input).operations j) = <n>
+```
+
+with `<n>` the `whnf`-reduced elaborated metadata (`<bundle>.regionCount config input`), proved
+by the generic `FormalCircuit.call_regionCount` — the kernel closes the metadata-to-literal gap
+definitionally, the same obligation the hand-written wrappers discharged with
+`rw [FormalCircuit.call_regionCount]; rfl`. This is the bridge Category 1a of the
+framework-leakage audit replaces: consumers fold a child chunk's region count inside offset
+hypotheses (`rw [myChild_call_regionCount] at h`) without a hand-written per-child wrapper.
+Skipped silently for region-level bundles (their calls are row-, not region-, indexed).
 -/
 
 open Lean Elab Command Meta Term
@@ -99,6 +116,52 @@ where
         acc := acc.push (.fvar decl.fvarId)
     return acc
 
+/-- The call-chunk region-count bridge for a layouter-level bundle (see the module
+docstring): `<base>_call_regionCount : Operations.regionCount ((bundle.call config
+input).operations j) = <whnf of bundle.regionCount config input>`, proved by the generic
+`FormalCircuit.call_regionCount` (the kernel closes the metadata gap definitionally).
+Returns `none` for non-`FormalCircuit` bundles. -/
+def buildRegionCountBridge (baseName : Name) (bundle : Expr) :
+    MetaM (Option (Name × Expr × Expr)) := do
+  let bundleTy ← whnf (← inferType bundle)
+  let .const structName _ := bundleTy.getAppFn | return none
+  unless structName == ``Halo2.FormalCircuit do return none
+  -- FormalCircuit F [FiniteField F] CI Cfg Input Output [CircuitType Input] [CircuitType Output]
+  let args := bundleTy.getAppArgs
+  let some cfgTy := args[3]? | return none
+  let some inputM := args[4]? | return none
+  let some instIn := args[6]? | return none
+  let F := args[0]!
+  let varInputTy := mkApp (← mkAppOptM ``Halo2.Var #[some inputM, some instIn]) F
+  withLocalDeclD `config cfgTy fun config =>
+  withLocalDeclD `input varInputTy fun input =>
+  withLocalDeclD `j (mkConst ``Halo2.RegionIndex) fun j => do
+    let call ← mkAppM ``Halo2.FormalCircuit.call #[bundle, config, input]
+    let ops ← mkAppM ``Halo2.Circuit.operations #[call, j]
+    let lhs ← mkAppM ``Halo2.Operations.regionCount #[ops]
+    let rhs ← withTransparency .default
+      (whnf (← mkAppM ``Halo2.FormalCircuit.regionCount #[bundle, config, input]))
+    let eqTy ← mkEq lhs rhs
+    let fvars ← buildBridges.getFVars eqTy
+    let genTy ← mkForallFVars fvars eqTy
+    -- the proof's stated RHS is the reduced metadata; `call_regionCount`'s is the folded
+    -- projection — defeq, validated here and re-checked by the kernel
+    let proof? ← try
+      let pf ← mkLambdaFVars fvars
+        (← mkAppM ``Halo2.FormalCircuit.call_regionCount #[bundle, config, input, j])
+      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then pure (some pf)
+      else pure none
+    catch _ => pure none
+    match proof? with
+    | some pf =>
+      let thmName := match baseName with
+        | .str p s => p ++ Name.mkSimple (s ++ "_call_regionCount")
+        | _ => baseName ++ Name.mkSimple "call_regionCount"
+      return some (thmName, genTy, pf)
+    | none =>
+      logWarning m!"derive_contract_bridges: call_regionCount bridge did not validate; skipped"
+      return none
+
 /-- `derive_contract_bridges name (binder)* := bundle`.
 
 The optional `bracketedBinder`s (e.g. `(bits : BitsHint)`) let the command handle
@@ -122,7 +185,9 @@ def elabDeriveContractBridges : CommandElab := fun stx => do
       -- `buildBridges` sees them as local fvars and generalizes the emitted equalities over them.
       Term.elabBinders binders fun _ => do
         let bundle ← Term.elabTermAndSynthesize t none
-        let bridges ← buildBridges baseName bundle
+        let mut bridges ← buildBridges baseName bundle
+        if let some rc ← buildRegionCountBridge baseName bundle then
+          bridges := bridges.push rc
         for (thmName, ty, pf) in bridges do
           addDecl (.thmDecl {
             name := thmName, levelParams := [], type := ty, value := pf })

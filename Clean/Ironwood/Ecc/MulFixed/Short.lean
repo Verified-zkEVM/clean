@@ -1308,4 +1308,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
           rw [hWyVar, hs]
           ring
 
+/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
+bundle stays folded) -/
+
+derive_contract_bridges circuit (B : FixedBase) := circuit B
+
 end Halo2.Ironwood.Ecc.MulFixed.Short

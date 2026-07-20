@@ -63,8 +63,8 @@ private theorem addressIntegrity_regionCount
       = 6 := by
   simp only [Circuit.operations_bind, Circuit.operations_pure, operations_assignRegion,
     Operations.regionCount_append, Operations.regionCount,
-    Ecc.Mul.mul_call_regionCount,
-    Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount]
+    FormalCircuit.call_regionCount]
+  rfl
 
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality

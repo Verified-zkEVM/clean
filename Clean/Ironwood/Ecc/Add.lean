@@ -399,23 +399,10 @@ def add : FormalRegionCircuit Fp
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
 /-! ## Layouter-level contract bridges (`add.toFormal`), shared by the gadget.rs-level
-composites (`rfl`, the bundle stays folded) -/
+composites (generated; the bundle stays folded). Call-chunk region counts come from the
+generic `FormalCircuit.call_regionCount` at the use sites. -/
 
-theorem toFormal_spec_eq (name : String) :
-    (add.toFormal name).Spec
-      = fun (input : Value Inputs Fp) (output : Point Fp) (_ : Unit) =>
-          output.Valid ∧ output = input.p + input.q := rfl
-
-theorem toFormal_assumptions_eq (name : String) :
-    (add.toFormal name).Assumptions
-      = fun (input : Value Inputs Fp) => input.p.Valid ∧ input.q.Valid := rfl
-
-/-- The lifted complete addition's call chunk is one region. -/
-theorem toFormal_call_regionCount (name : String) (cfg : Config)
-    (input : Var Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount (((add.toFormal name).call cfg input).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
+derive_contract_bridges toFormal (name : String) := add.toFormal name
 
 end Add
 

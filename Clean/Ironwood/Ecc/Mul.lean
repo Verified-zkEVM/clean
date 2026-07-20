@@ -1822,29 +1822,9 @@ def mul :
       rw [hIalpha, hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest' input_alpha rfl rfl rfl
 
-/-! ## Bundle contract bridges, shared by the layouter-level consumers (`rfl`, the
+/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
 bundle stays folded) -/
 
-section Bridges
-
-theorem mul_spec_eq : mul.Spec = fun input output _ => Spec input output := rfl
-
-theorem mul_assumptions_eq : mul.Assumptions = Assumptions := rfl
-
-theorem mul_envAssumptions_eq : mul.EnvAssumptions = EnvAssumptions := rfl
-
-theorem mul_proverAssumptions_eq :
-    mul.ProverAssumptions
-      = fun (input : Inputs Fp) _ _ => (input.base : Point Fp).OnCurve := rfl
-
-theorem mul_proverSpec_eq : mul.ProverSpec = fun _ _ _ _ => True := rfl
-
-/-- The bundle's call chunk spans its four regions. -/
-theorem mul_call_regionCount (cfg : Config) (input : Var Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount ((mul.call cfg input).operations j) = 4 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-end Bridges
+derive_contract_bridges mul := mul
 
 end Halo2.Ironwood.Ecc.Mul

@@ -55,8 +55,8 @@ private theorem spendAuthority_regionCount (G : FixedBase)
       = 3 := by
   simp only [Circuit.operations_bind, Circuit.operations_pure,
     Operations.regionCount_append, Operations.regionCount,
-    Ecc.MulFixed.FullWidth.circuit_call_regionCount,
-    Ecc.Add.toFormal_call_regionCount]
+    FormalCircuit.call_regionCount]
+  rfl
 
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted

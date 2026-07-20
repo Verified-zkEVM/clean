@@ -1577,4 +1577,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         Cell.of_column, Environment.get_advice, Nat.zero_add]
       exact ⟨hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
 
+/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
+bundle stays folded) -/
+
+derive_contract_bridges circuit (B : FixedBase) := circuit B
+
 end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem

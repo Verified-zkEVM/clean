@@ -123,42 +123,16 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     · exact ⟨h_output.1.symm, h_output.2.symm⟩
 
 /-! ## Layouter-level bridges for `pointNonId.toFormal`, shared by the consumers
-(`rfl`, the bundle stays folded) -/
+(generated; the bundle stays folded). Call-chunk region counts come from the generic
+`FormalCircuit.call_regionCount` at the use sites. -/
 
-section Bridges
-
-variable (name : String)
-
-theorem pointNonId_toFormal_spec_eq :
-    (pointNonId.toFormal name).Spec
-      = fun _ (output : Point Fp) (_ : Unit) => output.OnCurve := rfl
-
-theorem pointNonId_toFormal_assumptions_eq :
-    (pointNonId.toFormal name).Assumptions = fun _ => True := rfl
-
-theorem pointNonId_toFormal_proverAssumptions_eq :
-    (pointNonId.toFormal name).ProverAssumptions
-      = fun (input : Point Fp) (_ : Unit) _ => input.OnCurve := rfl
-
-theorem pointNonId_toFormal_proverSpec_eq :
-    (pointNonId.toFormal name).ProverSpec
-      = fun (input output : Point Fp) (_ : Unit) _ => output = input := rfl
+derive_contract_bridges pointNonId_toFormal (name : String) := pointNonId.toFormal name
 
 /-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
-theorem pointNonId_toFormal_output (cfg : Config)
+theorem pointNonId_toFormal_output (name : String) (cfg : Config)
     (input : Var (Unconstrained Point) Fp) (i : RegionIndex) :
     (pointNonId.toFormal name).output cfg input i
       = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
-
-/-- The lifted `pointNonId`'s call chunk is one region. -/
-theorem pointNonId_toFormal_call_regionCount (cfg : Config)
-    (input : Var (Unconstrained Point) Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((pointNonId.toFormal name).call cfg input).operations j) = 1 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-end Bridges
 
 end WitnessPoint
 

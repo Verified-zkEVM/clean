@@ -234,4 +234,9 @@ def hash (capacity : Fp) :
     rw [h_input.1, h_input.2]
     rfl
 
+/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
+bundle stays folded) -/
+
+derive_contract_bridges hash (capacity : Fp) := hash capacity
+
 end Halo2.Ironwood.Poseidon

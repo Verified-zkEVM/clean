@@ -29,42 +29,6 @@ open Halo2.Ironwood (Fp)
 open Halo2.Ironwood (Point Fq)
 open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
 
-/-! ## Child contract bridges (`rfl`, children stay folded)
-
-The `FullWidth` and `Ecc.Add` bridges are the shared ones
-(`Ecc.MulFixed.FullWidth.circuit_*`, `Ecc.Add.toFormal_*`); the `Short` bundle has this
-file as its only layouter-level consumer. -/
-
-section Bridges
-
-variable (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
-
-private theorem short_spec_eq :
-    (Ecc.MulFixed.Short.circuit V).Spec
-      = fun input output _ => Ecc.MulFixed.Short.Spec V input output := rfl
-
-private theorem short_assumptions_eq :
-    (Ecc.MulFixed.Short.circuit V).Assumptions = fun _ => True := rfl
-
-private theorem short_envAssumptions_eq :
-    (Ecc.MulFixed.Short.circuit V).EnvAssumptions
-      = Ecc.MulFixed.Short.EnvAssumptions := rfl
-
-private theorem short_proverAssumptions_eq :
-    (Ecc.MulFixed.Short.circuit V).ProverAssumptions
-      = fun (input : Value Ecc.MulFixed.Short.Inputs Fp) _ _ =>
-          input.magnitude.val < 2 ^ 64 ∧ (input.sign = 1 ∨ input.sign = -1) := rfl
-
-/-- The short-mul child's call chunk spans its two regions. -/
-private theorem short_call_regionCount (scfg : Ecc.MulFixed.Short.Config)
-    (input : Var Ecc.MulFixed.Short.Inputs Fp) (j : RegionIndex) :
-    Operations.regionCount
-      (((Ecc.MulFixed.Short.circuit V).call scfg input).operations j) = 2 := by
-  rw [FormalCircuit.call_regionCount]
-  rfl
-
-end Bridges
-
 /-- The inputs: the short child's magnitude/sign cells and the blinding scalar's
 nat-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
 full-width child derives its window witnesses from it, the scalar is extraction data). -/
@@ -92,8 +56,8 @@ private theorem valueCommit_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.F
       = 5 := by
   simp only [Circuit.operations_bind, Circuit.operations_pure,
     Operations.regionCount_append, Operations.regionCount,
-    short_call_regionCount, Ecc.MulFixed.FullWidth.circuit_call_regionCount,
-    Ecc.Add.toFormal_call_regionCount]
+    FormalCircuit.call_regionCount]
+  rfl
 
 /-! ## The `value_commit_orchard` bundle -/
 
@@ -158,9 +122,9 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     obtain ⟨hSEnv, hFEnv⟩ := _hE
     obtain ⟨hShort, hFw, hAdd⟩ := hc
     -- the short child: the commitment is `[±m] V` at some `m < 2⁶⁴`
-    have hSh := hShort (by rw [short_envAssumptions_eq]; exact hSEnv)
-      (by rw [short_assumptions_eq]; trivial)
-    rw [short_spec_eq] at hSh
+    have hSh := hShort (by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv)
+      (by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial)
+    rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
     simp only [Ecc.MulFixed.Short.Spec] at hSh
     obtain ⟨m, hm_lt, hmag, hcases⟩ := hSh
     -- the full-width child: the blind is the extracted scalar times `R`
@@ -175,7 +139,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
       rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _)
     rw [Ecc.Add.toFormal_spec_eq] at hAddS
-    rw [short_call_regionCount] at hBl
+    rw [Ecc.MulFixed.Short.circuit_call_regionCount] at hBl
     refine ⟨m, hm_lt, hmag, ?_⟩
     rcases hcases with ⟨hsign, hC⟩ | ⟨hsign, hC⟩
     · exact Or.inl ⟨hsign, by rw [hAddS.2, hC, hBl]⟩
@@ -191,10 +155,10 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     have hsignE := hsign
     rw [← hIn2] at hsignE
     -- the short child's contract: the commitment is `[±m] V`
-    have hSh := (h_spec_0 (by rw [short_envAssumptions_eq]; exact hSEnv)
-      (by rw [short_assumptions_eq]; trivial)
-      (by rw [short_proverAssumptions_eq]; exact ⟨hmagE, hsignE⟩)).1
-    rw [short_spec_eq] at hSh
+    have hSh := (h_spec_0 (by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv)
+      (by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial)
+      (by rw [Ecc.MulFixed.Short.circuit_proverAssumptions_eq]; exact ⟨hmagE, hsignE⟩)).1
+    rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
     simp only [Ecc.MulFixed.Short.Spec] at hSh
     obtain ⟨m, -, -, hcases⟩ := hSh
     -- the full-width child's contract: the blind is the extracted scalar times `R`
@@ -204,9 +168,9 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial)).1
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
-    refine ⟨⟨by rw [short_envAssumptions_eq]; exact hSEnv,
-      by rw [short_assumptions_eq]; trivial,
-      by rw [short_proverAssumptions_eq]; exact ⟨hmag, hsign⟩⟩,
+    refine ⟨⟨by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv,
+      by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial,
+      by rw [Ecc.MulFixed.Short.circuit_proverAssumptions_eq]; exact ⟨hmag, hsign⟩⟩,
       ⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv,
        by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
        by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
