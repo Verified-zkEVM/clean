@@ -13,40 +13,22 @@ import Clean.Ironwood.Utilities.CondSwap
 import Clean.Ironwood.Sinsemilla.HashToPoint
 
 /-!
-# Sinsemilla MerkleCRH (Ironwood)
+# Sinsemilla MerkleCRH
 
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
-- `MerkleInstructions::hash_layer` (`chip.rs:225-380`) and the `Decomposition check`
-  gate (`chip.rs:136-207`).
-
-`MerkleCRH^Orchard(l, left, right) = SinsemillaHash(Q, l⋆ || left⋆ || right⋆)`: the 520-bit
-message is witnessed as three Sinsemilla pieces
+`MerkleCRH^Orchard(l, left, right) = SinsemillaHash(Q, l⋆ || left⋆ || right⋆)`: the 520-bit message
+is witnessed as three Sinsemilla pieces
 - `a = a_0 || a_1` = `l` (10 bits) `||` bits 0..240 of `left` (25 words),
-- `b = b_0 || b_1 || b_2` = bits 240..250 of `left` `||` bits 250..255 of `left` `||`
-  bits 0..5 of `right` (2 words),
+- `b = b_0 || b_1 || b_2` = bits 240..250 of `left` `||` bits 250..255 of `left` `||` bits 0..5 of
+  `right` (2 words),
 - `c` = bits 5..255 of `right` (25 words),
-with the short sub-pieces `b_1`, `b_2` witnessed separately and range-checked to 5 bits. The
-`q_decompose` gate (`Merkle.Gate`, the `Decomposition check`) ties the pieces to `(l, left,
-right)` through the hash's own `z_1` running-sum cells.
+with the short sub-pieces `b_1`, `b_2` range-checked to 5 bits. The `q_decompose` gate ties the
+pieces to `(l, left, right)` through the hash's own `z_1` running-sum cells.
 
-## Slice-3 scope / port map
+Composition: `HashLayer` = the hash (`Chain.circuit`, `z_1` read as `zs[i][1]`) + the `b_1`/`b_2`
+range checks + the decomposition `Gate`. `Layer` = `CondSwap` + `HashLayer` (the swap is a stated
+boundary — an abstract child). `CalculateRoot` is the 32-layer fold of `Layer`.
 
-- **Pure value algebra** (`Gate.Spec`-supporting digit toolkit, `merkleChunks_eq`, `assemble`,
-  `honest_*`) is framework-agnostic (`Fp`/`ℕ`/shared spec-layer `merkleChunks`/`bitrange`), lifted
-  **verbatim** from the donor `Clean/Orchard/Sinsemilla/Merkle.lean`. Names kept identical.
-- **`Gate`** (`Decomposition check`, `q_decompose`) — ported as a region-level `createGate` +
-  enable pure-assertion `FormalRegionCircuit` (the `MulOverflow.overflowGate` pattern), fully
-  proven both directions.
-- **`HashLayer`** composes the ported `Chain.circuit` (the hash; `z_1` cells read off its exposed
-  `zs` HVec as `zs[i][1]`) + the ported `LookupRangeCheck.shortRangeCheck` (b_1/b_2 range checks)
-  + the `Gate`. Structure-complete; the value glue is the lifted `assemble`/`honest_*`.
-- **`Layer`** composes `CondSwap.Swap` + `HashLayer`. **`CondSwap` is NOT ported to the Ironwood
-  region tree** (only the phase-one `Halo2.Ironwood.Utilities.CondSwap` exists) → the swap is a **stated
-  boundary** (abstract child, cut line explicit), exactly as `MulFixed` is for `CommitDomain`.
-- **`CalculateRoot`** is the 32-layer fold of `Layer`. Structure + the `MerkleRoot`/`MerkleStep`
-  value algebra (`merkleRoot_of_steps`, `honestNode`) lifted; the per-layer composition rides on
-  `Layer`.
+Reference: `halo2_gadgets/src/sinsemilla/merkle/chip.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.Merkle
@@ -64,7 +46,7 @@ def twoPow5 {R : Type} [OfNat R (2 ^ 5)] : R := OfNat.ofNat (2 ^ 5)
 def twoPow10 {R : Type} [OfNat R (2 ^ 10)] : R := OfNat.ofNat (2 ^ 10)
 def twoPow240 {R : Type} [OfNat R (2 ^ 240)] : R := OfNat.ofNat (2 ^ 240)
 
-/-! ### The `q_decompose` gate (`chip.rs:136-207`)
+/-! ### The `q_decompose` gate
 
 Layout relative to the gate row `g` (`q_decompose` enabled at `Rotation::cur`):
 
@@ -91,7 +73,7 @@ structure Config where
   b2 : Column .advice
   lWhole : Column .advice
 
-/-- The four decomposition polynomials (`chip.rs:159-193`), verbatim. `a_whole/…/right_node` at
+/-- The four decomposition polynomials. `a_whole/…/right_node` at
 `Rotation::cur`, `z1_a/z1_b/b_1/b_2/l` at `Rotation::next`.
 - `l_check`   : `a_0 − l = (a_whole − z1_a·2^10) − l`
 - `left_check`: `z1_a + (b_0 + b_1·2^10)·2^240 − left`, with `b_0 = b_whole − z1_b·2^10`
@@ -124,7 +106,7 @@ def decomposeGate (cfg : Config) : Gate Fp where
       [ ("l_check", lCheck), ("left_check", leftCheck),
         ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ]
 
-/-- The value-level decomposition spec (donor `Merkle.Gate.Spec`), over the ten cell values.
+/-- The value-level decomposition spec, over the ten cell values.
 Uses the plain `(2^k : Fp)` literals (definitionally the `twoPow*` constants). -/
 def Spec (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole : Fp) : Prop :=
   lWhole = aWhole - z1A * (2 ^ 10 : Fp) ∧
@@ -160,12 +142,11 @@ theorem polysZero_of_spec {aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2
   · linear_combination -hright
   · linear_combination hb
 
-/-- The `q_decompose` slice of Rust `MerkleChip::configure` (`merkle/chip.rs:118-204`),
-VK-exact: allocate the `q_decompose` selector, register the gate — NO equality enabling
-(the five underlying advice columns are already equality-enabled by
-`SinsemillaChip::configure`; `merkle/chip.rs:113`). The ten config fields are instantiated
-column-coincident by the chip-level `configure` (`aWhole`/`z1A` share `advices[0]`, … —
-the gate reads the same five columns at rotations 0/1). -/
+/-- The `q_decompose` slice of `MerkleChip::configure`: allocate the `q_decompose` selector and
+register the gate — no equality enabling (the five underlying advice columns are already
+equality-enabled by `SinsemillaChip::configure`). The ten config fields are instantiated
+column-coincident by the chip-level `configure` (`aWhole`/`z1A` share `advices[0]`, … — the gate
+reads the same five columns at rotations 0/1). -/
 def configure (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole : Column .advice) :
     Configure Fp Config := do
   let qDecompose ← selector
@@ -180,28 +161,36 @@ Verifier-visible inputs are the ten already-assigned cells; no output (`unit`), 
 `MulOverflow.circuit`. The body copies the ten cells into the gate window and enables
 `q_decompose`. -/
 
-/-- The nine already-assigned input cells (row `g`: whole pieces + nodes; row `g+1`: `z_1`
-cells, sub-pieces). `l` is NOT an input — Rust assigns it from a constant
-(`merkle/chip.rs:349-354`, `assign_advice_from_constant`). -/
+/-- The nine already-assigned input cells (row `g`: whole pieces + nodes; row `g+1`: `z_1` cells,
+sub-pieces). `l` is not an input — it is assigned from a constant. -/
 structure Inputs (F : Type) where
+  -- Piece `a` (`l ‖ left[0..240]`).
   aWhole : F
+  -- Piece `b` (`left[240..255] ‖ right[0..5]`).
   bWhole : F
+  -- Piece `c` (`right[5..255]`).
   cWhole : F
+  -- The left child node.
   leftNode : F
+  -- The right child node.
   rightNode : F
+  -- Running sum `z_1` of piece `a`.
   z1A : F
+  -- Running sum `z_1` of piece `b`.
   z1B : F
+  -- Sub-piece `b_1` (`left[240..250]`).
   b1 : F
+  -- Sub-piece `b_2` (`left[250..255]`).
   b2 : F
 deriving ProvableStruct
 
-/-- The decomposition-gate body, in Rust's exact op order (`merkle/chip.rs:344-396`):
-enable `q_decompose` at `g`, assign `l` from a constant at `(l, g+1)`, then the nine
-copies (row `g`: pieces + nodes; row `g+1`: `z_1` cells, sub-pieces). Returns `unit`. -/
+/-- The decomposition-gate body, in Rust's op order: enable `q_decompose` at `g`, assign `l` from
+a constant at `(l, g+1)`, then the nine copies (row `g`: pieces + nodes; row `g+1`: `z_1` cells,
+sub-pieces). Returns `unit`. -/
 def body (cfg : Config) (l : Fp) (input : Inputs (AssignedCell Fp)) (offset : ℕ) :
     RegionCircuit Fp Unit := do
   (decomposeGate cfg).enable offset
-  -- `l` from a constant (assign_advice_from_constant, chip.rs:349-354)
+  -- `l` from a constant
   let lCell ← assignAdvice cfg.lWhole (offset + 1) (.native fun _ => #v[l])
   constrainConstant lCell l
   -- row g: the whole pieces + the two nodes
@@ -217,7 +206,7 @@ def body (cfg : Config) (l : Fp) (input : Inputs (AssignedCell Fp)) (offset : �
   let _b2 ← copyAdvice input.b2 cfg.b2 (offset + 1)
   return ()
 
-/-- The value-level spec on the input cells' evaluations (donor `Merkle.Gate.Spec`), at the
+/-- The value-level spec on the input cells' evaluations, at the
 constant `l`. -/
 def GateSpec (l : Fp) (input : Inputs Fp) : Prop :=
   Spec input.aWhole input.bWhole input.cWhole input.leftNode input.rightNode
@@ -255,17 +244,17 @@ def circuit (l : Fp) :
 
 end Gate
 
-/-! ### The chip-level configure (Rust `MerkleChip::configure`, `merkle/chip.rs:109-212`)
+/-! ### The chip-level configure
 
-`CondSwapChip::configure` on the five Sinsemilla hash advices (`sinsemilla_config.advices()`
-= `[x_a, x_p, bits, λ₁, λ₂]`, `chip.rs:82-90`), then the `q_decompose` selector + the
-decomposition gate over the same five columns at rotations 0/1. -/
+`CondSwapChip::configure` on the five Sinsemilla hash advices (`[x_a, x_p, bits, λ₁, λ₂]`), then
+the `q_decompose` selector + the decomposition gate over the same five columns at rotations 0/1. -/
 
-/-- Rust `MerkleConfig` (`merkle/chip.rs:57-67`): the cond-swap child, the decomposition
-gate slice, and the underlying Sinsemilla config. -/
 structure Config where
+  -- The cond-swap child config.
   condSwap : CondSwap.Config
+  -- The decomposition-gate slice.
   gate : Gate.Config
+  -- The underlying Sinsemilla hash config.
   sinsemilla : HashPiece.Config
 
 /-- Rust `MerkleChip::configure`: CondSwap first (on `advices()` order), then
@@ -277,7 +266,7 @@ def configure (scfg : HashPiece.Config) : Configure Fp Config := do
     scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
   return { condSwap, gate, sinsemilla := scfg }
 
-/-! ### Digit toolkit (lifted verbatim from the donor)
+/-! ### Digit toolkit
 
 `K`-bit little-endian digit sums: extraction, recombination, bounds. Framework-agnostic `ℕ`
 arithmetic. -/
@@ -760,14 +749,15 @@ via the `Gate`. Structure-complete; the value glue is the lifted `assemble`/`hon
 
 namespace HashLayer
 
-/-- Inputs of one Merkle layer hash: the two child nodes. The layer index `l` is a circuit
-parameter (a fixed column in the source). -/
+/-- The layer index `l` is a circuit parameter (a fixed column in the source). -/
 structure Input (F : Type) where
+  -- The left child node.
   left : F
+  -- The right child node.
   right : F
 deriving ProvableStruct
 
-/-- The layer spec (donor `HashLayer.Spec`): some 255-bit encodings of `left`/`right` whose
+/-- The layer spec: some 255-bit encodings of `left`/`right` whose
 `MerkleCRH` message hashes (over `Q`) to a point whose `x` is the output. -/
 def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : Value Input Fp) (output : Value field Fp) (_ : Unit) : Prop :=
@@ -806,15 +796,14 @@ def wcWit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
 /-- The MerkleCRH piece widths (25/2/25 words). -/
 def merkleNs : List ℕ := [24, 1, 24]
 
-/-- Rust `MerkleInstructions::hash_layer` (`merkle/chip.rs:229-436`), layouter-level, in the
-Rust region sequence: witness `a`, short-range-check `b_1`/`b_2` (5 bits), witness `b`/`c`,
-`hash_to_point` (the `hashMessage` region), the `"Check piece decomposition"` gate region.
-Output: the hash point's `x` cell. -/
+/-- `MerkleInstructions::hash_layer`, layouter-level, in the Rust region sequence: witness `a`,
+short-range-check `b_1`/`b_2` (5 bits), witness `b`/`c`, `hash_to_point` (the `hashMessage`
+region), the `"Check piece decomposition"` gate region. Output: the hash point's `x` cell. -/
 def synthesize (G : Generators) (cfg : Config)
     (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
-  -- chip.rs:255-306 — witness a; range-check b1/b2; witness b, c
+  -- witness a; range-check b1/b2; witness b, c
   let pa ← HashToPoint.witnessMessagePiece cfg.sinsemilla (waWit l input.left)
   let b1 ← Halo2.Ironwood.LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
     (wb1Wit input.left)
@@ -822,10 +811,10 @@ def synthesize (G : Generators) (cfg : Config)
     (wb2Wit input.right)
   let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
   let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
-  -- chip.rs:322-330 — the hash (the formal hash_to_point bundle)
+  -- the hash (the formal hash_to_point bundle)
   let out ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q hQ (by decide)
     ⟨#v[pa, pb, pc]⟩
-  -- chip.rs:337-397 — the decomposition-gate region
+  -- the decomposition-gate region
   let _ ← assignRegion "Check piece decomposition"
     ((Gate.circuit (l : Fp)).call cfg.gate 0
       { aWhole := pa, bWhole := pb, cWhole := pc,
@@ -950,9 +939,9 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
     rfl]
   simp only [Circuit.operations_pure, Operations.regionCount]
 
-/-- One Merkle layer hash as a layouter-level formal circuit (Rust
-`MerkleInstructions::hash_layer`, `merkle/chip.rs:229-436`), on the proven children
-(`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition `Gate`). -/
+/-- One Merkle layer hash as a layouter-level formal circuit (`MerkleInstructions::hash_layer`),
+on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition
+`Gate`). -/
 def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (hl : l < 2 ^ 10) :
     FormalCircuit Fp (Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
@@ -1630,8 +1619,8 @@ def proverChunks (l : ℕ) (node sibling : Fp) (posBit : Bool) : List ℕ :=
 
 namespace Layer
 
-/-- The layer input: the running node cell (the sibling and position bit are witnesses). -/
 structure Input (F : Type) where
+  -- The running node cell (the sibling and position bit are witnesses).
   node : F
 deriving ProvableStruct
 

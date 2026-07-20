@@ -11,16 +11,16 @@ import Clean.Ironwood.Sinsemilla.Basic
 import Clean.Ironwood.Sinsemilla.HashPiece
 
 /-!
-`hash_all_pieces` (`hash_to_point.rs`:218-290) as a native variable-stride loop over the
-piece list (the loop-composition restructure — `sinsemilla-loop-design.md`): one
-`HashPiece.circuit` call per piece at the running offset, the piece-linking
-`sinsemillaGate` at each piece's last row (rotation +1 crosses the boundary), and the
-trailing dummy row (the final `y_a` materialized into `λ₁`, dummy `λ₂`/`x_p`).
+`hash_all_pieces` as a native variable-stride loop over the piece list: one `HashPiece.circuit`
+call per piece at the running offset, the piece-linking `sinsemillaGate` at each piece's last row
+(rotation +1 crosses the boundary), and the trailing dummy row (the final `y_a` materialized into
+`λ₁`, dummy `λ₂`/`x_p`).
 
-Rust-faithfulness: the accumulator threads POSITIONALLY (piece `i+1`'s entering `x_a` is
-piece `i`'s exit cell — same position; the entering `y_a` is a pure value thread,
-`boundaryYA`, derived from the previous piece's cells — the scratch cells the old port
-materialized are gone).
+The accumulator threads positionally: piece `i+1`'s entering `x_a` is piece `i`'s exit cell (same
+position); the entering `y_a` is a pure value thread (`boundaryYA`) derived from the previous
+piece's cells.
+
+Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.Chain
@@ -39,7 +39,7 @@ open Halo2.Ironwood.Sinsemilla.HashPiece
   (Config sinsemillaGate qS3Expr yAExpr xRExpr qS2Boundary qS2Boundary_run
    State reads readState cellAt cellVec)
 
-/-! ## Value-level chain algebra (donor-lifted, unchanged) -/
+/-! ## Value-level chain algebra -/
 
 /-- `ZsFacts` introduction at a `cons` (stated abstractly — unfolding `ZsFacts` on a large
 concrete running-sum term whnf-explodes; this lemma unfolds it once, on abstract arguments). -/
@@ -58,18 +58,17 @@ The message pieces are the only verifier-visible inputs: the entering accumulato
 positional (`x_a` at the chain's first row) and the entering `y` a derivation program —
 matching Rust, where `hash_all_pieces` receives the init's `X`/`Y` and never copies. -/
 
-/-- Verifier-visible inputs of the whole chain: the piece values. -/
 structure Inputs (len : ℕ) (F : Type) where
+  -- The message piece values.
   pieces : Vector F len
 deriving ProvableStruct
 
-/-- Outputs: the hash point and the message's first double-and-add row (the init gate /
-`Spec` anchor). The per-piece running sums are NOT output data: they are extraction
-data — `ChainWit.zs` in the `Witness` slot (which never routes through the eval-of-var
-machinery, so its list-indexed `HVec` shape is harmless) — and consumers read the `z`
-CELLS positionally (the `zs[i][1]` reads of Merkle/NoteCommit). -/
+/-- The per-piece running sums are not output data — they are extraction data (`ChainWit.zs`),
+and consumers read the `z` cells positionally. -/
 structure Output (F : Type) where
+  -- The hash point.
   point : Point F
+  -- The message's first double-and-add row (the init-gate / `Spec` anchor).
   first : DoubleAndAddRow F
 deriving ProvableStruct
 
@@ -231,9 +230,9 @@ def slotEnterY {m : ℕ} (yaIn : Placed Environment Fp → Fp) (i : ℕ) (w : Sl
     (env : Placed Environment Fp) : Fp :=
   if i = 0 then yaIn env else nextYA w.prev w.first.xA * (2 : Fp)⁻¹
 
-/-- The gate's y-check RHS at the boundary `q_s2` value reduces to `2·enterYA` of the next row
-(donor `Cons.gate_yRhs_enterYA`): `q_s3 = 0` between pieces selects the next row's `Y_A`,
-`q_s3 = 2` on the final piece selects twice the witnessed `y_a` in `λ₁`. -/
+/-- The gate's y-check RHS at the boundary `q_s2` value reduces to `2·enterYA` of the next row:
+`q_s3 = 0` between pieces selects the next row's `Y_A`, `q_s3 = 2` on the final piece selects
+twice the witnessed `y_a` in `λ₁`. -/
 private theorem qS3_yRhs (b : Bool) (row : DoubleAndAddRow Fp) :
     (2 - qS2Boundary b * (qS2Boundary b - 1)) * yA row
       + qS2Boundary b * (qS2Boundary b - 1) * 2 * row.lambda1
@@ -289,7 +288,7 @@ private theorem link_step (G : Generators) (n : ℕ) (isFinal : Bool) (ms : ℕ 
     (by linear_combination hyck - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
   exact ⟨hpin.1, hpin.2.symm⟩
 
-/-- The slot's piece contract, positional (the donor `HashPiece.Spec` over the slot's
+/-- The slot's piece contract, positional (`HashPiece.Spec` over the slot's
 neighborhood; the linking gate is chain-owned, so the chain completes the last word via
 `link_step`). -/
 def SlotSpec (G : Generators) (n : ℕ) (piece : Fp) (w : SlotReads (n + 1) Fp) : Prop :=
@@ -535,7 +534,7 @@ theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
 
 /-! ## The chain contract -/
 
-/-- The chain `Spec` (donor `Chain.Spec`), verifier view, anchored on the first row
+/-- The chain `Spec`, verifier view, anchored on the first row
 (positional — no input accumulator cells); the running-sum facts are stated on the
 extraction data. -/
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Inputs ns.length) Fp)

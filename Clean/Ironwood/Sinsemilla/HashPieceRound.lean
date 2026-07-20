@@ -6,25 +6,18 @@ import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Sinsemilla.Basic
 
 /-!
-Sinsemilla hash: one word round of `hash_to_point.rs::hash_piece`, as a formal circuit
-(the round bundle of the loop-composition design — `sinsemilla-loop-design.md`).
+Sinsemilla hash: one word round of `hash_piece`, as a formal circuit. The per-word row assigns
+`x_p, λ₁, λ₂` and the next-row `x_a`/`z`, runs the generator lookup, and enables the Sinsemilla
+gate on adjacent pairs.
 
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/`
-- `chip.rs` — `SinsemillaConfig` (columns/selectors) and `configure` (gates + the 3-tuple
-  lookup registration).
-- `chip/hash_to_point.rs::hash_piece` — the per-word row: assign `x_p, λ₁, λ₂` and the
-  next-row `x_a`/`z`, run the generator lookup, the Sinsemilla gate on adjacent pairs.
+The round's input state is row `r`'s cells (`z`, `x_a`, `x_p`, `λ₁`, `λ₂` — the accumulator's `y`
+is virtual: `2·acc.y = Y_A(row)`); its outputs are row `r+1`'s. So the round assigns row `r+1`'s
+running sum `z_{r+1}`, the stepped accumulator's `x_a`, and — as in `MulIncomplete` — the next
+word's slope cells `x_p, λ₁, λ₂` (the virtual-y representation makes them part of this round's
+output). Cells land at the same (column, row) as the Rust iteration; only assignment attribution
+moves, which is VK-neutral.
 
-## Ownership principle (from `loop-composition-design.md`)
-
-The round's natural input state is row `r`'s cells (`z`, `x_a`, `x_p`, `λ₁`, `λ₂` — the
-accumulator's y is *virtual*: `2·acc.y = Y_A(row)`), and its outputs are row `r+1`'s.
-The round therefore assigns row `r+1`'s cells: the running sum `z_{r+1}`, the stepped
-accumulator's `x_a`, and — the same quirk as `MulIncomplete` — the *next* word's slope
-cells `x_p, λ₁, λ₂` (the virtual-y representation makes them part of this round's output
-accumulator). All gate/lookup references point backward; cells land at the same
-(column, row) as the Rust iteration, only assignment *attribution* moves (VK-neutral).
+Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.HashPiece
@@ -40,32 +33,37 @@ open Halo2.Ironwood.Sinsemilla
    pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
    chain_eq_suffix_sum step_coordinates_of_constraints step_honest accAfter_eq_chain)
 
-/-! ## Config
+/-! ## Config -/
 
-Rust `SinsemillaConfig` (`chip.rs:37-72`), flattened. `q_sinsemilla1`, `q_sinsemilla4` are
-`Selector`s; `q_sinsemilla2` is a `Column .fixed` (it takes values `0/1/2`, queried inside
-gate polynomials and the lookup input). `fixed_y_q` loads `y_Q` for the init gate. The
-`double_and_add` columns are `x_a, x_p, λ₁, λ₂`; `bits` is the running-sum `z` column;
-`witnessPieces` is the advice column message pieces are witnessed in
-(`chip.rs:60-62` — may or may not coincide with `bits`). The generator table columns are
-held in `generatorTable`. -/
 structure Config where
+  -- `q_sinsemilla1`: the Sinsemilla gate selector.
   qS1 : Selector
+  -- `q_sinsemilla2`: a fixed column taking values `0/1/2`, queried inside gate polynomials and the
+  -- lookup input.
   qS2 : Column .fixed
+  -- `q_sinsemilla4`: the init-gate selector.
   qS4 : Selector
+  -- Loads `y_Q` for the init gate.
   fixedYQ : Column .fixed
+  -- x-coordinate of the accumulator in each double-and-add row.
   xA : Column .advice
+  -- x-coordinate of the generator point being added.
   xP : Column .advice
+  -- λ₁ in each double-and-add row.
   lambda1 : Column .advice
+  -- λ₂ in each double-and-add row.
   lambda2 : Column .advice
+  -- The running-sum `z` column.
   bits : Column .advice
+  -- The advice column message pieces are witnessed in.
   witnessPieces : Column .advice
+  -- The generator table columns.
   generatorTable : GeneratorTableConfig
 
-/-! ## Gate expression builders (verbatim at the Rust rotations)
+/-! ## Gate expression builders
 
-`x_r`, `Y_A` are pure functions of the double-and-add columns at a rotation
-(`chip.rs:214-221`). We inline them as `Expression` builders over the config columns. -/
+`x_r`, `Y_A` are pure functions of the double-and-add columns at a rotation, inlined as
+`Expression` builders over the config columns. -/
 
 /-- `x_r = λ₁² − x_a − x_p` at `rot` (Rust `DoubleAndAdd::x_r`). -/
 def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
@@ -81,8 +79,7 @@ def yAExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let l2 : Expression Fp Query := queryAdvice cfg.lambda2 rot
   (l1 + l2) * (xA - xRExpr cfg rot)
 
-/-- The `y_p` derivation used in the lookup input (`generator_table.rs:64-70`):
-`y_p = Y_A/2 − λ₁·(x_a − x_p)`, at rotation 0. -/
+/-- The `y_p` derivation used in the lookup input: `y_p = Y_A/2 − λ₁·(x_a − x_p)`, at rotation 0. -/
 def yPExpr (cfg : Config) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA 0
   let xP : Expression Fp Query := queryAdvice cfg.xP 0
@@ -91,9 +88,9 @@ def yPExpr (cfg : Config) : Expression Fp Query :=
 
 /-! ## The two gates as standalone defs
 
-`Initial y_Q` (`chip.rs:225-240`) and the `Sinsemilla gate` (`chip.rs:243-285`). -/
+`Initial y_Q` and the `Sinsemilla gate`. -/
 
-/-- Rust `"Initial y_Q"` gate (`chip.rs:225-240`), gated by `q_sinsemilla4`: initializes the
+/-- The `"Initial y_Q"` gate, gated by `q_sinsemilla4`: initializes the
 accumulator `y` to `y_Q` via `2·y_Q − Y_{A,cur} = 0`. Here `y_Q` is the `fixed_y_q` column at
 rotation 0 (the non-`allow_init_from_private_point` branch, which the action circuit uses). -/
 def initialYQGate (cfg : Config) : Gate Fp where
@@ -104,16 +101,16 @@ def initialYQGate (cfg : Config) : Gate Fp where
     Constraints.withSelector cfg.qS4
       [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
 
-/-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)` (`chip.rs:49`, `98-102`): `0` when
-`q_s2 ∈ {0,1}`, `2` when `q_s2 = 2` (final piece). -/
+/-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)`: `0` when `q_s2 ∈ {0,1}`, `2` when
+`q_s2 = 2` (final piece). -/
 def qS3Expr (cfg : Config) : Expression Fp Query :=
   let qS2 : Expression Fp Query := queryFixed cfg.qS2
   qS2 * (qS2 - (1 : Fp))
 
-/-- Rust `"Sinsemilla gate"` (`chip.rs:243-285`), gated by `q_sinsemilla1`. Two constraints:
+/-- The `"Sinsemilla gate"`, gated by `q_sinsemilla1`. Two constraints:
 
-- **secant line** (`chip.rs:262-263`): `λ₂² − (x_{a,next} + x_r + x_{a,cur}) = 0`.
-- **y check** (`chip.rs:268-282`):
+- **secant line**: `λ₂² − (x_{a,next} + x_r + x_{a,cur}) = 0`.
+- **y check**:
   `4·λ₂·(x_{a,cur} − x_{a,next}) − [2·Y_{A,cur} + (2 − q_s3)·Y_{A,next} + 2·q_s3·λ₁_next] = 0`. -/
 def sinsemillaGate (cfg : Config) : Gate Fp where
   name := "Sinsemilla gate"
@@ -134,8 +131,7 @@ def sinsemillaGate (cfg : Config) : Gate Fp where
 
 /-! ## The 3-tuple generator lookup
 
-Rust `generator_table.rs:46-82`. The input tuple (gated by `q_s1` and
-`q_run = q_s2 − q_s3`):
+The input tuple (gated by `q_s1` and `q_run = q_s2 − q_s3`):
 
   `[ q_s1·word,                       ↦ table_idx
      q_s1·x_p + (1 − q_s1)·init_x,    ↦ table_x
@@ -163,31 +159,28 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
 
 /-! ## Configure
 
-Rust `SinsemillaChip::configure` (`chip.rs:170-286`), VK-exact in registration order:
-equality-enable all five double-and-add advices (`advices[0..5]` = `x_a, x_p, bits, λ₁,
-λ₂` — chip.rs:180-182), allocate `q_sinsemilla1` (complex), `q_sinsemilla2` (a FIXED
-column, allocated here), `q_sinsemilla4` (simple) in struct-literal order (chip.rs:185-187),
-then register the 3-tuple lookup (`GeneratorTableConfig::configure`, chip.rs:208) BEFORE
-the `Initial y_Q` and `Sinsemilla` gates (chip.rs:225, 243). `fixed_y_q` and the generator
-table columns are handed down (the table is loaded separately by `Basic.load`); the
-`allow_init_from_private_point = false` branch is the one ported (orchard's). -/
+VK-exact registration order: equality-enable all five double-and-add advices, allocate
+`q_sinsemilla1` (complex), `q_sinsemilla2` (a fixed column), `q_sinsemilla4` (simple), register the
+3-tuple lookup BEFORE the `Initial y_Q` and `Sinsemilla` gates. `fixed_y_q` and the generator table
+columns are handed down (the table is loaded separately by `Basic.load`); the
+`allow_init_from_private_point = false` branch is the one ported. -/
 def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) : Configure Fp Config := do
-  -- chip.rs:180-182 — equality on all advice columns, `advices` index order
+  -- equality on all advice columns, `advices` index order
   enableEquality xA.toAny
   enableEquality xP.toAny
   enableEquality bits.toAny
   enableEquality lambda1.toAny
   enableEquality lambda2.toAny
-  -- chip.rs:185-187 — q_s1 complex, q_s2 a fresh fixed column, q_s4 simple
+  -- q_s1 complex, q_s2 a fresh fixed column, q_s4 simple
   let qS1 ← complexSelector
   let qS2 ← fixedColumn
   let qS4 ← selector
   let cfg : Config :=
     { qS1, qS2, qS4, fixedYQ, xA, xP, lambda1, lambda2, bits, witnessPieces,
       generatorTable := genTable }
-  -- chip.rs:208 — the 3-tuple generator lookup, registered before the gates
+  -- the 3-tuple generator lookup, registered before the gates
   lookup [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
@@ -298,8 +291,8 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
   row := { xA := readCell env w.row.xA, xP := readCell env w.row.xP,
            lambda1 := readCell env w.row.lambda1, lambda2 := readCell env w.row.lambda2 }
 
-/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (donor `pieceZ` as a witgen
-program): cast to ℕ, shift right by `K·r` bits, cast back. -/
+/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (`pieceZ` as a witgen program):
+cast to ℕ, shift right by `K·r` bits, cast back. -/
 def zWit (piece : AssignedCell Fp) (r : ℕ) : WitgenIR Fp 1 :=
   .ofFExpr (.ofNat (.div (.val (.expr piece)) (.const (2 ^ (K * r)))))
 
@@ -347,10 +340,9 @@ theorem stepWit_eval (G : Generators) (piece : AssignedCell Fp) (w : State (Assi
 
 /-! ## The value-level round lemmas
 
-`sound_step` routes the row's constraint equations into the round `Spec` (via the donor
-`step_coordinates_of_constraints`); `honest_yA`, `step_honest_state` and `step_gates` are
-the completeness counterparts over an honest row (donor `rowValue`/`accAfter` algebra +
-`step_honest`). -/
+`sound_step` routes the row's constraint equations into the round `Spec` (via
+`step_coordinates_of_constraints`); `honest_yA`, `step_honest_state` and `step_gates` are the
+completeness counterparts over an honest row (`rowValue`/`accAfter` algebra + `step_honest`). -/
 
 /-- `rowValue` projection identities (definitional): the next-row coordinates and the
 slopes, spelled over the projections themselves so proofs can treat them as atoms. -/
@@ -533,7 +525,7 @@ private theorem step_gates (G : Generators) {s : State Fp} {p : Fp} {A B : Point
     exact hyA_r
   obtain ⟨hz, hxA, hxP, hl1, hl2⟩ := hH
   rw [hAcc_r] at hxA hl1 hl2
-  -- the donor honest-step facts at word r, over the `rowValue` slopes
+  -- the honest-step facts at word r, over the `rowValue` slopes
   have hhr := step_honest G.S hstep_r
     (l1 := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).1)
     (l2 := (rowValue (Ar.x, Ar.y) ((G.S (pieceWord p r)).x, (G.S (pieceWord p r)).y)).2.1)
@@ -595,7 +587,7 @@ private theorem step_gates (G : Generators) {s : State Fp} {p : Fp} {A B : Point
     rw [hl1next, hl2next, hxAnew, step_row_xP]
     exact hhr1.2.1.symm
   refine ⟨?_, hHnext, ?_, ?_⟩
-  · -- the `y_p` derivation: the halved Y_A invariant + the donor's line fact
+  · -- the `y_p` derivation: the halved Y_A invariant + the line fact
     have hhalf : (s.row.lambda1 + s.row.lambda2)
         * (s.row.xA - (s.row.lambda1 * s.row.lambda1 - s.row.xA - s.row.xP)) * (2 : Fp)⁻¹
         = Ar.y := by

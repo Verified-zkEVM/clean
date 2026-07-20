@@ -6,42 +6,15 @@ import Clean.Ironwood.Ecc.DoubleAndAdd
 import Clean.Ironwood.Ecc.Basic
 
 /-!
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/`
-- `chip/generator_table.rs` — the `GeneratorTableConfig` (columns `table_idx`, `table_x`,
-  `table_y`), the `load()` that fills them with the `2^K` Sinsemilla generators, and the
-  3-tuple lookup registration.
-- `primitives.rs` — `K = 10`, `C = 253`, the spec-level `hash_to_point` fold
-  `Acc ← (Acc ⸭ S(mᵢ)) ⸭ Acc`.
+The Sinsemilla generator table — the `2^K` independent generators `S(r)` in three fixed columns
+`(table_idx, table_x, table_y)` — and the value-level algebra of one hash piece (`pieceWord`,
+`pieceZ`, `rowValue`, `accAfter`, `nextYA` and the chain lemmas). `K = 10`, Pallas.
 
-Orchard `feat/ironwood` uses **vanilla** halo2_gadgets 0.5.0 Sinsemilla unchanged (same
-gates, same generator table, same `K = 10`, Pallas) — so this port targets the vanilla
-chip. The action circuit instantiates it via `SinsemillaChip::load` in
-`orchard/src/circuit.rs`.
+The table is loaded as three per-column `loadTable` ops (idx, x, y), each of length `2^K`, with
+row `r` holding `(r, S(r).x, S(r).y)`; a combined `GeneratorTableLoaded` predicate bundles the
+three columns at a shared row.
 
-## Slice-1 scope (this file)
-
-The generator table and the *pure value-level algebra* of one hash piece. Both are lifted
-essentially verbatim from the phase-one donor `Clean/Orchard/Sinsemilla/`:
-
-- `generatorTable.rs`: the donor `Halo2.Ironwood.Sinsemilla.generatorTable` is a
-  `Table Fp GeneratorTableRow` built on the OLD Clean `Table`/`.fromStatic` abstraction,
-  which Halo2-Clean does **not** have. Halo2-Clean tables are raw `loadTable` ops on
-  single `TableColumn`s. **Multi-column-table resolution** (the anticipated framework
-  question): the S table is three columns of *equal length* `2^K` — real halo2 loads them
-  in one `assign_table` closure but as three separate column fills, and errors on uneven
-  lengths (`table_layouter.rs:138-146`, `UnevenColumnLengths`). Halo2-Clean's per-column
-  `loadTable` already models exactly one such column (dense block `[0, len)` + row-0
-  default-fill). So the faithful port is **three `loadTable` ops** (idx, x, y) plus a
-  combined `GeneratorTableLoaded` predicate that bundles the three per-column contents at
-  a *shared* row — no new multi-column op is warranted. (This mirrors
-  `LookupRangeCheck.TableLoaded`, generalized to three columns.)
-
-- The piece algebra (`pieceWord`, `pieceZ`, `rowValue`, `accAfter`, `nextYA`) and the pure
-  chain lemmas (`pieceZ_succ`, `chain_eq_sum`, `piece_recombine`, `accAfter_eq_chain`, …)
-  are framework-agnostic `Fp`/`Point`/spec-level facts, proven in full by the donor. They
-  reference only `Halo2.Ironwood.Specs.Sinsemilla` (the SHARED spec layer Ironwood already imports)
-  and `Halo2.Ironwood.Ecc.DoubleAndAdd`. Lifted here unchanged.
+Reference: `halo2_gadgets/src/sinsemilla/chip/generator_table.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla
@@ -57,22 +30,21 @@ open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 Three single-column `loadTable` ops, one per S-table column (`table_idx`, `table_x`,
 `table_y`), all of length `2^K`. Row `r < 2^K` holds `(r, S(r).x, S(r).y)`. -/
 
-/-- Rust `GeneratorTableConfig` (`generator_table.rs:18-22`): the three fixed lookup
-columns of the Sinsemilla generator table. -/
+/-- The three fixed lookup columns of the Sinsemilla generator table (independent generators
+`S[0 .. 2^K)`). -/
 structure GeneratorTableConfig where
+  -- Generator index `r`.
   tableIdx : TableColumn
+  -- x-coordinate of `S(r)`.
   tableX : TableColumn
+  -- y-coordinate of `S(r)`.
   tableY : TableColumn
 
-/-- The generator table loader (Rust `GeneratorTableConfig::load`, `generator_table.rs:86-96`,
-which fills all three columns over `[0, 2^K)` from `SINSEMILLA_S`). Three `loadTable` ops,
-one per column, sharing the row index `r`:
+/-- The generator table loader: three `loadTable` ops filling all three columns over `[0, 2^K)`
+from `SINSEMILLA_S`, sharing the row index `r`:
 - `tableIdx` ← `[0, 1, …, 2^K−1]`
 - `tableX`   ← `[S(0).x, S(1).x, …]`
-- `tableY`   ← `[S(0).y, S(1).y, …]`
-
-This is the three-`loadTable` route (see module docs); it is a plain `Circuit … Unit`,
-mirroring `LookupRangeCheck.load`. -/
+- `tableY`   ← `[S(0).y, S(1).y, …]` -/
 def load (G : Generators) (cfg : GeneratorTableConfig) : Circuit Fp Unit := do
   loadTable cfg.tableIdx ((List.range (2 ^ K)).map (Nat.cast : ℕ → Fp))
   loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x))
@@ -87,8 +59,8 @@ references — the three-column analogue of `LookupRangeCheck.TableLoaded`. Thre
 2. **Usable-rows spec** — *every* usable row holds a generator triple `(m, S(m).x, S(m).y)`
    for some `m < 2^K`. Soundness consumes this: the membership existential's witness row is
    bounded only by `env.usableRows`, and rows in `[2^K, usableRows)` carry the default-fill
-   (row 0's `(0, S(0).x, S(0).y)` — still a generator triple). This is the donor
-   `generatorTable.Spec` (`∃ m < 2^K, row = (m, S(m).x, S(m).y)`), over the whole domain.
+   (row 0's `(0, S(0).x, S(0).y)` — still a generator triple): `∃ m < 2^K,
+   row = (m, S(m).x, S(m).y)`, over the whole domain.
 3. **Block exact contents** — row `r ∈ [0, 2^K)` holds exactly `(r, S(r).x, S(r).y)`.
    Completeness consumes this to witness the membership at the honest word's own row. -/
 def GeneratorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
@@ -224,12 +196,11 @@ theorem load_generatorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
   · obtain ⟨hIdx0, hX0, hY0⟩ := load_fill_eq G cfg place env i h t (by omega) ht
     exact ⟨0, pow_two_pos K, hIdx0, hX0, hY0⟩
 
-/-! ## Pure piece value-algebra (lifted from the donor `Clean/Orchard/Sinsemilla/HashToPoint.lean`)
+/-! ## Pure piece value-algebra
 
-All framework-agnostic: `Fp` / `Point` / `Halo2.Ironwood.Specs.Sinsemilla` facts. Names kept
-identical to the donor so slice 2+ can grep-map. -/
+Framework-agnostic `Fp` / `Point` / `Halo2.Ironwood.Specs.Sinsemilla` facts. -/
 
-/-! ### Pure running-sum / recombination lemmas (donor-proven, lifted verbatim) -/
+/-! ### Pure running-sum / recombination lemmas -/
 
 theorem pieceWord_lt (p : Fp) (r : ℕ) : pieceWord p r < 2 ^ K :=
   Nat.mod_lt _ (by norm_num [K])
@@ -256,7 +227,7 @@ theorem pieceZ_last {p : Fp} {w : ℕ} (hp : p.val < 2 ^ (K * (w + 1))) :
   rw [← pow_add, show K * w + K = K * (w + 1) by ring]
   exact hp
 
-/-- Telescoped base-`2^K` running sum (donor `HashPiece.chain_eq_sum`). -/
+/-- Telescoped base-`2^K` running sum. -/
 theorem chain_eq_sum {n : ℕ} (z : ℕ → Fp) (ms : ℕ → ℕ)
     (hword : ∀ r < n, z r = (ms r : Fp) + 2 ^ K * z (r + 1))
     (hzn : z n = 0) :
@@ -307,14 +278,13 @@ theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → ℕ)
     (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
-/-! ### The Sinsemilla step bridges (donor-proven, lifted verbatim)
+/-! ### The Sinsemilla step bridges
 
 Pure `Point`/`Fp` facts routing the double-and-add row equations to the spec-level step
-`(A ⸭ S(m)) ⸭ A = B`. `step_coordinates_of_constraints` is the soundness bridge (from gate
-constraints to output coordinates), `step_honest` the completeness bridge (from the honest
-`rowValue` assignments to the gate invariants and the chain point), and `accAfter_eq_chain`
-lifts a whole honest piece to the spec-level `hashToPoint` chain. All lifted from the donor
-`Clean/Orchard/Sinsemilla/HashToPoint.lean`. -/
+`(A ⸭ S(m)) ⸭ A = B`. `step_coordinates_of_constraints` is the soundness bridge (gate
+constraints → output coordinates), `step_honest` the completeness bridge (honest `rowValue`
+assignments → gate invariants and chain point), and `accAfter_eq_chain` lifts a whole honest
+piece to the spec-level `hashToPoint` chain. -/
 
 /-- For one Sinsemilla step, the row equations determine the output coordinates.
 Donor `HashPiece.step_coordinates_of_constraints`. -/

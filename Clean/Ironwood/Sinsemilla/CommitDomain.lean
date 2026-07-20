@@ -13,42 +13,18 @@ import Clean.Ironwood.Sinsemilla.Chain
 import Clean.Ironwood.Sinsemilla.HashToPoint
 
 /-!
-# Sinsemilla commit domain (Ironwood)
+# Sinsemilla commit domain
 
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla.rs`
-- `CommitDomain::commit` (`sinsemilla.rs:488-509`):
-  ```
-  let (blind, _) = self.R.mul(layouter.namespace(|| "[r] R"), r)?;   // 501
-  let (p, zs)    = self.M.hash_to_point(layouter.namespace(|| "M"), message)?;  // 502
-  let commitment = p.add(layouter.namespace(|| "complete point addition"), &blind)?;          // 503
-  Ok((commitment, zs))
-  ```
-  i.e. `commit(msg, r) = hash_to_point(Q, msg) + [r]·R`, keeping the per-piece running
-  sums `zs` (`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells).
-- `CommitDomain::blinding_factor` (`sinsemilla.rs:471-486`) is the bare `[r]·R`.
+`commit(msg, r) = hash_to_point(Q, msg) + [r]·R`, keeping the per-piece running sums `zs`
+(`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells). The `[r]·R` leg is full-width
+fixed-base scalar mul (`Ecc.MulFixed.FullWidth.circuit R windows`), parameterized by the caller's
+85 window witness programs; the scalar they encode is extraction data, so the commitment `Spec` is
+stated at the extracted scalar.
 
-## The `[r]R` leg
+The `Chain.circuit` enters at an accumulator seeded from the domain point `Q`: the wrapper assigns
+`Q`'s coordinates into the entering cells as constrained constants, so soundness pins `A = Q`.
 
-`R : ecc::FixedPoint<C, EccChip>` (`sinsemilla.rs:417`), and `self.R.mul(..)` (`sinsemilla.rs:501`)
-resolves to `FixedPoint::mul` — full-width fixed-base scalar multiplication, the Ironwood
-`Ecc.MulFixed.FullWidth.circuit R windows` bundle (parameterized by the caller's 85 window
-witness programs; the scalar the windows encode is the child's extraction data, so the
-commitment `Spec` is stated at the extracted scalar).
-
-## Donor lifting
-
-Value algebra (`Chain.PieceChunks`, `Chain.ZsFacts`, `Chain.honestChunks`, `Chain.PieceBounds`)
-is reused from `Clean/Ironwood/Sinsemilla/Chain.lean` (itself donor-lifted). The `Spec` /
-`ProverAssumptions` mirror the donor `CommitDomain.*`, re-expressed over the region-level
-`Chain.circuit` output (which exposes the full `zs` HVec + the message's first double-and-add row).
-
-## The `Q`-seed wrapper
-
-The Ironwood `Chain.circuit` enters at an accumulator `(xA, yA)` seeded from the domain point `Q`
-(its `Spec` quantifies `∀ A, A.OnCurve → A.x = input.xA → 2·A.y = enterYA → …`). The wrapper
-assigns `Q`'s coordinates into the entering cells (constrained-constant, so soundness pins `A = Q`)
-before the `Chain.circuit` call.
+Reference: `halo2_gadgets/src/sinsemilla.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.CommitDomain
@@ -72,39 +48,37 @@ The parent config bundles the shared `Chain`/`HashPiece.Config` (the hash leg), 
 child config (the final sum), the blinding child's config `BCfg`, and the constant-seed columns
 for `Q`. -/
 
-/-- The `commit` config, parameterized by the blinding child's config type `BCfg`: the hash leg's
-`HashPiece.Config`, the complete-addition child's `Add.Config`, the blinding child's config, and
-the constant-seed columns for `Q`. -/
+/-- The `commit` config, parameterized by the blinding child's config type `BCfg`. -/
 structure Config (BCfg : Type) where
+  -- The hash leg's config.
   hashConfig : HashPiece.Config
+  -- The final complete-addition child's config.
   addConfig : Ecc.Add.Config
+  -- The blinding child's config.
   blindConfig : BCfg
 
-/-! ## Inputs / Output (donor-mirrored) -/
+/-! ## Inputs / Output -/
 
-/-- Inputs of `commit`: the message pieces (whole message, `k` pieces). The full-width blinding
-scalar `r` (canonical `Fq` representative) lives on the abstract blinding child's boundary — it is
-threaded as a separate `Var BInput Fp` (the child's own input type) so the CommitDomain `Input`
-record stays a plain `ProvableStruct` (no old-Clean `UnconstrainedNat` provable in the region
-tree). -/
+/-- The blinding scalar `r` lives on the abstract blinding child's boundary (threaded as a separate
+`Var BInput Fp`), so this record stays a plain `ProvableStruct`. -/
 structure Input (k : ℕ) (F : Type) where
+  -- The message pieces (the whole `k`-piece message).
   pieces : Vector F k
 deriving ProvableStruct
 
-/-- Outputs of `commit`: the commitment point and the hash running sums, mirroring halo2's
-`commit` returning `(CommitmentPoint, Vec<RunningSum>)`. -/
 structure Output (ns : List ℕ) (F : Type) where
+  -- The commitment point.
   point : Point F
+  -- The hash running sums.
   zs : HVec (zLengths ns) F
 deriving ProvableStruct
 
 /-! ## The commit body
 
-`commit = hash_to_point(Q, msg) + [r]R` (`sinsemilla.rs:488-509`), on the faithful
-`hash_message` bundle (`HashToPoint.hashCircuit` — the Q-init is inside its region). The
-`[r]R` leg is the `Ecc.MulFixed.FullWidth` bundle. -/
+`commit = hash_to_point(Q, msg) + [r]R` on the `hash_message` bundle (Q-init inside its region);
+the `[r]R` leg is the `Ecc.MulFixed.FullWidth` bundle. -/
 
-/-- `CommitDomain::blinding_factor` (`sinsemilla.rs:471-486`) is the bare `[r]R`. -/
+/-- `CommitDomain::blinding_factor` is the bare `[r]R`. -/
 def blindingFactor (R : FixedBase) (windows : Vector (FExpr Fp) 85) :
     FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config unit Point :=
   Ecc.MulFixed.FullWidth.circuit R windows
@@ -225,9 +199,8 @@ private theorem commit_regionCount
       simp only [Operations.regionCount]]
   rw [blind_call_regionCount R windows bcfg i]
 
-/-- Rust `CommitDomain::commit` (`sinsemilla.rs:488-509`): `[r]R` (the
-`Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)` (the proven hash bundle), and
-the final complete addition `M + [r]R`. `Spec`: the commitment is
+/-- `CommitDomain::commit`: `[r]R` (the `Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)`
+(the hash bundle), and the final complete addition `M + [r]R`. `Spec`: the commitment is
 `SinsemillaHashToPoint(Q, chunks) + s·R` at the extracted window scalar `s`, whenever the
 hash is defined, with the message chunking and running-sum facts exposed. -/
 def commit (G : Generators) (ns : List ℕ)

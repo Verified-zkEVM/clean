@@ -7,27 +7,17 @@ import Clean.Ironwood.Sinsemilla.HashPiece
 import Clean.Ironwood.Sinsemilla.Chain
 
 /-!
-# Sinsemilla `hash_message` — the layouter-level hash region (Ironwood)
+# Sinsemilla `hash_message` — the layouter-level hash region
 
-Reference (ported from actual Rust, not memory):
-`halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`
-- `hash_message` (`hash_to_point.rs:37-67`) = `public_q_initialization` (`:122-175`, the
-  `allow_init_from_private_point = false` branch) + `hash_all_pieces` (`:218-286`), in ONE
-  `"hash_to_point"` region;
-- `witness_message_piece` (`chip.rs:105-127` via `SinsemillaInstructions`): each message
-  piece witnessed in its own `"witness message piece"` region, `witness_pieces` column,
-  row 0.
+`hash_message` is `public_q_initialization` + `hash_all_pieces` in one `"hash_to_point"` region;
+each message piece is witnessed in its own `"witness message piece"` region.
 
-`public_q_initialization` (public `Q`, the orchard branch): enable `q_sinsemilla4` on the
-FIRST row, load `y_Q` into the `fixed_y_q` column at that row, and assign `x_Q` into `x_a`
-from a constant (`assign_advice_from_constant` — an equality-constrained constants-column
-copy). The hash (`Chain.circuit` = `hash_all_pieces`) starts at the SAME offset: the init
-row is the first word row, and the `Initial y_Q` gate checks `2·y_Q = Y_A(row 0)` against
-the first word's slopes.
+`public_q_initialization` (public `Q`, the Orchard branch): enable `q_sinsemilla4` on the first
+row, load `y_Q` into the `fixed_y_q` column there, and assign `x_Q` into `x_a` from a constant.
+The hash (`Chain.circuit`) starts at the same offset: the init row is the first word row, and the
+`Initial y_Q` gate checks `2·y_Q = Y_A(row 0)` against the first word's slopes.
 
-The formal (proof-carrying) bundling of this wrapper — pinning `A = Q` through the constant
-copy and the init gate against `Chain.circuit`'s entering-accumulator contract — is the
-`CommitDomain`/`Merkle.HashLayer` composition layer.
+Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.HashToPoint
@@ -246,12 +236,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
   configure := pure
 
   synthesize cfg offset (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) := do
-    -- public_q_initialization (hash_to_point.rs:148-175)
+    -- public_q_initialization
     (Sinsemilla.HashPiece.initialYQGate cfg).enable offset
     let _yq ← assignFixed cfg.fixedYQ offset Q.y
     let xa ← assignAdvice cfg.xA offset (constWit Q.x)
     constrainConstant xa Q.x
-    -- hash_all_pieces (hash_to_point.rs:218-286)
+    -- hash_all_pieces
     let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
     -- name the z_1 cells (no ops)
     let z1s ← (fun self =>
@@ -297,10 +287,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     rw [ElaboratedRegionCircuit.output_eq] at h_output
     simp only [RegionCircuit.output_bind, RegionCircuit.output_pure] at h_output
     rw [out_eval_lit,
-      show (((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call cfg offset input_var).output
-          self)
-        = (Sinsemilla.Chain.circuit G ns fun _ => Q.y).output cfg offset input_var self
-        from rfl,
+      FormalRegionCircuit.output_call (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset
+        input_var self,
       Sinsemilla.Chain.output_point_x, Sinsemilla.Chain.output_point_y] at h_output
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
@@ -380,10 +368,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     rw [ElaboratedRegionCircuit.output_eq] at h_output
     simp only [RegionCircuit.output_bind, RegionCircuit.output_pure] at h_output
     rw [out_eval_lit_prover,
-      show (((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call cfg offset input_var).output
-          self)
-        = (Sinsemilla.Chain.circuit G ns fun _ => Q.y).output cfg offset input_var self
-        from rfl,
+      FormalRegionCircuit.output_call (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset
+        input_var self,
       Sinsemilla.Chain.output_point_x, Sinsemilla.Chain.output_point_y] at h_output
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
@@ -455,7 +441,9 @@ theorem hashCircuit_output_point_x (G : Generators) (ns : List ℕ) (Q : Point F
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
     ((hashCircuit G ns Q hQ hns).output cfg pieces i).point.x
-      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA := rfl
+      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA := by
+  show (((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call cfg 0 pieces).output i).point.x = _
+  rw [FormalRegionCircuit.output_call, Sinsemilla.Chain.output_point_x]
 
 /-- The hash bundle's output `point.y` cell (positional, rfl). -/
 theorem hashCircuit_output_point_y (G : Generators) (ns : List ℕ) (Q : Point Fp)
@@ -463,7 +451,28 @@ theorem hashCircuit_output_point_y (G : Generators) (ns : List ℕ) (Q : Point F
     (cfg : Sinsemilla.HashPiece.Config)
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
     ((hashCircuit G ns Q hQ hns).output cfg pieces i).point.y
-      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 := rfl
+      = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 := by
+  show (((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call cfg 0 pieces).output i).point.y = _
+  rw [FormalRegionCircuit.output_call, Sinsemilla.Chain.output_point_y]
+
+/-- The hash bundle's output record, reassembled from its cell projections (was a `rfl`; under
+full-`call` opacity the child point cells no longer reduce through the output walk, so we rebuild
+from `hashCircuit_output_point_x`/`_y`/`_z1s`). -/
+theorem hashCircuit_output_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Sinsemilla.HashPiece.Config)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
+    (hashCircuit G ns Q hQ hns).output cfg pieces i
+      = ({ point :=
+             { x := AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
+               y := AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
+           z1s :=
+             Vector.ofFn (fun j : Fin ns.length => AssignedCell.of i
+               (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) }
+        : Output ns.length (AssignedCell Fp)) := by
+  rw [← hashCircuit_output_point_x G ns Q hQ hns cfg pieces i,
+    ← hashCircuit_output_point_y G ns Q hQ hns cfg pieces i,
+    ← hashCircuit_output_z1s G ns Q hQ hns cfg pieces i]
 
 /-- The hash bundle's eval'd output (verifier view), landed on raw advice reads. -/
 theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
@@ -481,17 +490,7 @@ theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
           z1s :=
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
-  rw [show (hashCircuit G ns Q hQ hns).output cfg pieces i
-      = ({ point :=
-              { x := AssignedCell.of i
-                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
-                y := AssignedCell.of i
-                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
-            z1s :=
-              Vector.ofFn (fun j : Fin ns.length => AssignedCell.of i
-                (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) }
-        : Output ns.length (AssignedCell Fp)) from rfl,
-    out_eval_lit]
+  rw [hashCircuit_output_eq G ns Q hQ hns cfg pieces i, out_eval_lit]
   simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
   congr 1
@@ -515,17 +514,7 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
           z1s :=
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
-  rw [show (hashCircuit G ns Q hQ hns).output cfg pieces i
-      = ({ point :=
-              { x := AssignedCell.of i
-                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
-                y := AssignedCell.of i
-                  (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
-            z1s :=
-              Vector.ofFn (fun j : Fin ns.length => AssignedCell.of i
-                (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) cfg.bits) }
-        : Output ns.length (AssignedCell Fp)) from rfl,
-    out_eval_lit_prover]
+  rw [hashCircuit_output_eq G ns Q hQ hns cfg pieces i, out_eval_lit_prover]
   simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
   congr 1

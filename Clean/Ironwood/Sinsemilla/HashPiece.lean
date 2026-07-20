@@ -3,15 +3,12 @@ import Clean.Ironwood.Sinsemilla.HashPieceRound
 
 /-!
 The Sinsemilla hash-word loop and the `hash_piece` bundle over the round gadget
-(`HashPieceRound.lean`) — the loop-composition restructure (`sinsemilla-loop-design.md`).
+(`HashPieceRound.lean`): a piece of `w + 1` words at rows `offset .. offset + w`. The `z_0` piece
+copy is the only copy constraint — the entering `x_a` is positional (already assigned at the
+offset, not copied) and the entering `y_a` is a pure `Value` thread (`yaIn`, a cell-derivation
+program, never a cell).
 
-Reference: `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`,
-`hash_piece` (:295-493): a piece of `w + 1` words at rows `offset .. offset + w`; the
-`z_0` piece copy is the only copy constraint (the entering `x_a` "MUST have been already
-assigned within this region at the correct offset" — positional, NOT copied); the
-entering `y_a` is a pure `Value` thread (`yaIn`, a cell-derivation program — never a
-cell). The piece-linking gate at the last row belongs to the composing circuit
-(`hash_all_pieces`), as does the trailing dummy row.
+Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
 namespace Halo2.Ironwood.Sinsemilla.HashPiece
@@ -408,7 +405,7 @@ structure Output (numWords : ℕ) (F : Type) where
   zs : Vector F numWords
 deriving ProvableStruct
 
-/-- The piece `Spec` (donor-shaped): the piece is the base-`2^K` recombination of its
+/-- The piece `Spec`: the piece is the base-`2^K` recombination of its
 `< 2^K` words, the running sums are the suffix recombinations, the last row's `x_p`/`y_p`
 land on `S(m_w)`, and — for any on-curve entering accumulator matching the first row —
 the exit `x_a`/`Y_A` are the spec-level chain point over the first `w` words. The entering
