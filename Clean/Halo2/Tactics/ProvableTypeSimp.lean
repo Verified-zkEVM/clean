@@ -75,7 +75,7 @@ def structEvalSimpLemmas : Array Name := #[
 private def isDestructurableVar (fvarId : FVarId) : MetaM Bool := do
   if (← fvarId.findDecl?).isNone then return false
   let type ← instantiateMVars (← inferType (.fvar fvarId))
-  Halo2.StructEval.isProvableTypeLike type
+  Halo2.StructEval.isProvableTypeLike type (allowDecomposable := false)
 
 /-- Evaluation heads whose equations/arguments drive destructuring (verifier + witgen). -/
 private def evalHeads : Array Name :=

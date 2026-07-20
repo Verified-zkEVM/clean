@@ -488,6 +488,16 @@ structure CircuitTypeProfile where
   valueConst : Name
   proverValueConst : Name
   derivedConst : Name
+  /-- The `Var` element carrier of provable components (`Expression` for main Clean,
+  `AssignedCell` for halo2): provable components' view fields are emitted at their
+  REDUCED types (`M (carrier F)` / `M F`), so instance search and user-facing contracts
+  see the concrete heads; hint components keep the view spelling (normalized by their
+  own `circuit_norm` lemmas). -/
+  varCarrierConst : Name
+  /-- The `Eval` instance heads (`CircuitType.verifierEval`/`proverEval`), for the
+  generated raw eval-unfolding lemmas that let `h_input` reduce componentwise. -/
+  verifierEvalConst : Name
+  proverEvalConst : Name
 
 /-- Main Clean's profile (`Environment`/`ProverEnvironment`). -/
 def mainCircuitTypeProfile : CircuitTypeProfile where
@@ -496,6 +506,9 @@ def mainCircuitTypeProfile : CircuitTypeProfile where
   valueConst := ``CircuitType.Value
   proverValueConst := ``CircuitType.ProverValue
   derivedConst := ``DerivedCircuitType
+  varCarrierConst := ``Expression
+  verifierEvalConst := ``CircuitType.verifierEval
+  proverEvalConst := ``CircuitType.proverEval
 
 /--
   Generate a companion structure for one of the `CircuitType` views of a
@@ -534,6 +547,7 @@ def mkCircuitViewStruct (profile : CircuitTypeProfile) (viewName : Name) (paramI
     let ty ← viewType component
     let field ← `(Lean.Parser.Command.structSimpleBinder| $fname:ident : $ty)
     fieldSyntaxes := fieldSyntaxes.push field
+  let _ := profile
 
   let viewIdent := mkIdent (← relativeToCurrentNamespace viewName)
   let cmd ← `(
@@ -541,6 +555,49 @@ def mkCircuitViewStruct (profile : CircuitTypeProfile) (viewName : Name) (paramI
       $fieldSyntaxes:structSimpleBinder*
   )
   elabCommand cmd
+
+  -- mark the view as decomposable for the struct-decomposition tactics (mixed records
+  -- have no `ProvableStruct`, but the view is a plain structure `cases` can split)
+  let mut instBinderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent n) : ℕ}))
+    | .typeMap m =>
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent m) : TypeMap}))
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| [$(mkCIdent profile.classConst):term $(mkIdent m)]))
+    | .other n ty =>
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent n) : $tySyntax}))
+  let appliedView : TSyntax `term ←
+    if paramInfos.isEmpty then
+      `($viewIdent)
+    else
+      (paramInfos.map (fun p => mkIdent p.name)).foldlM
+        (init := (viewIdent : TSyntax `term)) fun acc paramIdent => `($acc $paramIdent)
+  let instCmd ←
+    if instBinderSyntaxes.isEmpty then
+      `(instance : DecomposableStruct $appliedView := ⟨⟩)
+    else
+      `(instance $instBinderSyntaxes:bracketedBinder* :
+          DecomposableStruct $appliedView := ⟨⟩)
+  elabCommand instCmd
+
+/-- Whether a (constant, param-free) component term has a `ProvableType` instance —
+provable components' view fields are emitted at their reduced types. -/
+def isProvableComponent (component : TSyntax `term) : CommandElabM Bool := do
+  try
+    liftTermElabM do
+      let ty ← Term.elabTerm (← `(ProvableType $component)) none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      match ← trySynthInstance ty with
+      | .some _ => pure true
+      | _ => pure false
+  catch _ => return false
 
 /--
   Generate a `ProvableStruct` instance for the verifier `Value` companion of a
@@ -555,8 +612,11 @@ def mkCircuitValueProvableStructInstance (profile : CircuitTypeProfile)
     (valueStructName : Name) (paramInfos : Array ParamInfo)
     (fieldNameIdents : Array (TSyntax `ident)) (componentSyntaxes : Array (TSyntax `term)) :
     CommandElabM Unit := do
-  let valueComponents ← componentSyntaxes.mapM fun component =>
-    `($(mkCIdent profile.valueConst) $component)
+  let valueComponents ← componentSyntaxes.mapM fun component => do
+    if ← isProvableComponent component then
+      pure component
+    else
+      `($(mkCIdent profile.valueConst) $component)
   let componentsListSyntax ← `([$[$valueComponents],*])
 
   let mut toCompBody : TSyntax `term ← `(.nil)
@@ -690,12 +750,19 @@ def mkCircuitTypeInstance (profile : CircuitTypeProfile) (structName : Name) :
   let proverValueStructName := structName ++ `ProverValue
 
   let fIdent := mkIdent `F
+  let carrier := mkCIdent profile.varCarrierConst
   mkCircuitViewStruct profile varStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `($(mkCIdent profile.varConst) $component $fIdent))
+    (fun component => do
+      if ← isProvableComponent component then `($component ($carrier $fIdent))
+      else `($(mkCIdent profile.varConst) $component $fIdent))
   mkCircuitViewStruct profile valueStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `($(mkCIdent profile.valueConst) $component $fIdent))
+    (fun component => do
+      if ← isProvableComponent component then `($component $fIdent)
+      else `($(mkCIdent profile.valueConst) $component $fIdent))
   mkCircuitViewStruct profile proverValueStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `($(mkCIdent profile.proverValueConst) $component $fIdent))
+    (fun component => do
+      if ← isProvableComponent component then `($component $fIdent)
+      else `($(mkCIdent profile.proverValueConst) $component $fIdent))
   mkCircuitValueProvableStructInstance profile valueStructName paramInfos fieldNameIdents
     componentSyntaxes
 
@@ -771,6 +838,39 @@ def mkCircuitTypeInstance (profile : CircuitTypeProfile) (structName : Name) :
       )
 
   elabCommand cmd
+
+  -- componentwise `injEq`s and raw eval-unfolding lemmas: these let the generic
+  -- `eval env input_var = input` hypotheses reduce to per-field equations
+  let injAttrCmd ← `(attribute [circuit_norm]
+    $(mkIdent (← relativeToCurrentNamespace (varStructName ++ `mk ++ `injEq))):ident
+    $(mkIdent (← relativeToCurrentNamespace (valueStructName ++ `mk ++ `injEq))):ident
+    $(mkIdent (← relativeToCurrentNamespace (proverValueStructName ++ `mk ++ `injEq))):ident)
+  elabCommand injAttrCmd
+
+  let vIdent := mkIdent `v
+  let mut verifierRhs : TSyntax `term := valueMk
+  let mut proverRhs : TSyntax `term := proverValueMk
+  for fname in fieldNameIdents do
+    verifierRhs ← `($verifierRhs (Eval.eval $envIdent ($vIdent.$fname:ident)))
+    proverRhs ← `($proverRhs (Eval.eval $envIdent ($vIdent.$fname:ident)))
+  let evalVerifierLemmaName :=
+    mkIdent (← relativeToCurrentNamespace (structName ++ `eval_verifier_raw))
+  let evalProverLemmaName :=
+    mkIdent (← relativeToCurrentNamespace (structName ++ `eval_prover_raw))
+  let lemmaCmd1 ← `(
+    @[circuit_norm] theorem $evalVerifierLemmaName $instanceBinders:bracketedBinder*
+        {$fIdent : Type} [FiniteField $fIdent] ($envIdent : _) ($vIdent : $varType $fIdent) :
+        @Eval.eval _ _ _ ($(mkCIdent profile.verifierEvalConst) $appliedStructType)
+            $envIdent $vIdent
+          = $verifierRhs := by with_unfolding_all rfl)
+  elabCommand lemmaCmd1
+  let lemmaCmd2 ← `(
+    @[circuit_norm] theorem $evalProverLemmaName $instanceBinders:bracketedBinder*
+        {$fIdent : Type} [FiniteField $fIdent] ($envIdent : _) ($vIdent : $varType $fIdent) :
+        @Eval.eval _ _ _ ($(mkCIdent profile.proverEvalConst) $appliedStructType)
+            $envIdent $vIdent
+          = $proverRhs := by with_unfolding_all rfl)
+  elabCommand lemmaCmd2
 
 /-- The deriving handler for record-shaped `CircuitType`s, generic over the
 environment profile. Frameworks register this at their own `CircuitType` abbrev with

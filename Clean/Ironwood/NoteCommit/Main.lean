@@ -489,10 +489,15 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
 /-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
 chain over the note's canonical chunks is defined and the output is the commitment
 `B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
-(`Halo2.Ironwood.Specs.Sinsemilla.ValidBreak`). -/
+(`Halo2.Ironwood.Specs.Sinsemilla.ValidBreak`).
+
+The 64-bit value bound is exported (from the `ValueCanonicity` gate): without it the
+statement can't type `v` as §4.17.4 does — `noteScalars` bitranges truncate `v` at 64
+bits, so the commitment equation alone does not bound the field element. -/
 def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
+  (show Fp from input.value).val < 2 ^ 64 ∧
   SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Halo2.Ironwood.Point Fp))
     (hashToPointB G.S Q
       (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
