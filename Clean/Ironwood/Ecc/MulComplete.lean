@@ -10,52 +10,14 @@ import Clean.Ironwood.Ecc.MulIncomplete
 import Clean.Halo2.CircuitTypeDeriving
 
 /-!
-Reference: `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/mul/complete.rs` (read in full),
-plus the complete-region call site in `mul.rs:238-256`.
+Variable-base scalar multiplication, *complete* phase: the final three bits (`COMPLETE_RANGE`),
+processed with the complete group law, which is exceptional-case-free on all Pallas points. Per
+bit: extend the running sum `z` (`z_next = 2·z_cur + k`) in the `z_complete` column, conditionally
+negate the base `y` (`y_p = if k then base_y else −base_y`, checked by the `q_mul_decompose_var`
+gate), and perform two chained complete additions `tmp = U + acc`, `acc' = acc + tmp` with
+`U = (base.x, ±base.y)` — the `(acc + U) + acc` double-and-add step.
 
-This is variable-base scalar multiplication's *complete* phase: the final `NUM_COMPLETE_BITS = 3`
-bits (`COMPLETE_RANGE`), processed with the **complete** group law (which is exceptional-case-free
-for all Pallas points). Per bit (`complete.rs:129-190`):
-
-- extend the running sum `z` (`z_next = 2·z_cur + k`), stored in the `z_complete` column;
-- conditionally negate the base `y` (`y_p = if k then base_y else −base_y`), checked by the
-  `q_mul_decompose_var` "decompose scalar" gate (`complete.rs:46-82`);
-- perform **two chained complete additions** via the delegated `add::Config`:
-  `tmp = U + acc` at `row + offset`, then `acc' = acc + tmp` at `row + offset + 1`,
-  where `U = (base.x, ±base.y)` (the `(acc + U) + acc` double-and-add step).
-
-This is **the first real consumer of the subcircuit-composition machinery** (`Clean/Halo2/
-Subcircuit.lean`) and, in particular, the first *loop* consumer: each round invokes the proven
-child `Add.add` (`Clean/Ironwood/Ecc/Add.lean`) TWICE via `add.call`, at running offsets. The
-value-level round algebra is lifted from the phase-one donor
-`Clean/Orchard/Ecc/Mul/Complete.lean` (`Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion`).
-
-## Config composition (first exercise)
-
-`complete::Config` holds the `z_complete` column, its own `q_mul_decompose_var` selector, and
-delegates to an `add::Config` (`complete.rs:14-21`). We mirror this: the parent `Config` stores
-`addConfig : Add.Config` alongside its own `zComplete` column and `qDecompose` selector. The
-child config is threaded down verbatim to `add.call addConfig …`. The parent's
-`ConfigInput`/`configure` receives the `add::Config` from the chip assembly (`mul.rs` builds it
-once and hands it to both `incomplete` and `complete`), exactly as Rust's
-`Config::configure(meta, z_complete, add_config)` takes `add_config` as a parameter.
-
-## Boundary (what belongs here vs. mul.rs assembly)
-
-The `q_mul_decompose_var` decomposition gate is complete.rs's own responsibility and is ported
-here. The `q_mul_lsb` "LSB check" gate (`mul.rs:129-160`) handles the *least-significant* bit
-`k_0` *after* the complete region and belongs to the mul.rs assembly port — out of scope here.
-
-## Proof status
-
-Fully proven, no sorries. Soundness: per-round `round_acc_sound` consumes the two folded
-`add.call` chunks via the `subcircuit_rw` engine (`subcircuit_rw at h`, weakening each chunk to
-the child's `EnvA → A → Spec`) and the decomposition gate; `loop_sound` inducts over rounds
-threading each round's output validity into the next round's entering-accumulator assumption.
-Completeness: `round_complete` consumes the two chunks via the engine's completeness mode (the
-goal chunks strengthen to their preconditions and the engine introduces `h_spec_0`/`h_spec_1`,
-exposing each add's Spec at the prover's verifier view — what the honest output-value bookkeeping
-needs); `round_complete`/`loop_complete` mirror the soundness ladder on the honest witnesses.
+Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 -/
 
 namespace Halo2.Ironwood.Ecc.MulComplete
@@ -64,56 +26,46 @@ open Halo2.Ironwood (Point)
 open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
 open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits)
 
-/-! ## Config
-
-Rust `complete::Config` (`complete.rs:13-21`): the `z_complete` advice column, the
-`q_mul_decompose_var` selector, and the delegated `add::Config`. -/
+/-! ## Config -/
 
 structure Config where
+  -- Selector used to constrain the cells used in complete addition.
   qDecompose : Selector
+  -- Advice column used to decompose the scalar in complete addition.
   zComplete : Column .advice
+  -- Configuration used in complete addition.
   addConfig : Add.Config
 
-/-! ## The `q_mul_decompose_var` gate (`complete.rs:46-82`)
+/-! ## The `q_mul_decompose_var` gate
 
-Layout (relative to the round's base row `r`, which is `offset + 2·iter`):
+    | y_p | z_complete |
+    --------------------
+    | y_p | z_{i + 1}  |
+    |     | base_y     |   ← selector enabled here
+    |     | z_i        |
+-/
 
-    | y_p        | z_complete |
-    ------------------------------
-    | y_p (r)    | z_{i+1} (r)      ← Rotation::prev of the selector row
-    |            | base_y  (r+1)    ← selector enabled here (Rotation::cur)
-    |            | z_i     (r+2)    ← Rotation::next
-
-`k = z_i − 2·z_{i+1}`, `bool_check = k(1−k)`, and `y_switch = ternary(k, base_y − y_p,
-base_y + y_p)` (`k=1 ⇒ y_p = base_y`, `k=0 ⇒ y_p = −base_y`). The `y_p` cell read is on the
-`add::Config`'s `y_p` column at `Rotation::prev` of the selector row (`complete.rs:68-70`). -/
-
-/-- The `q_mul_decompose_var` gate, a pure function of the columns. Enabled at the middle row
-of the three-row window (`base_y` at `Rotation::cur`; `z_{i+1}`, `y_p` at `Rotation::prev`;
-`z_i` at `Rotation::next`). -/
+/-- Checks that the scalar decomposition is correct for the complete-addition bits (the
+incomplete-addition gate `q_mul` already checks it for the other bits): `k = z_i − 2·z_{i+1}` is a
+bit, and `y_p` is `base_y` conditionally negated by it (`k = 1 ⇒ y_p = base_y`, `k = 0 ⇒
+y_p = −base_y`). -/
 def decomposeGate (cfg : Config) : Gate Fp where
   name := "Decompose scalar for complete bits of variable-base mul"
   selector := cfg.qDecompose
   constraints :=
     let zPrev : Expression Fp Query := queryAdvice cfg.zComplete (-1)   -- z_{i+1}
     let zNext : Expression Fp Query := queryAdvice cfg.zComplete 1      -- z_i
-    let baseY : Expression Fp Query := queryAdvice cfg.zComplete 0      -- base_y (cur)
-    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP (-1)   -- y_p (prev)
+    let baseY : Expression Fp Query := queryAdvice cfg.zComplete 0      -- base_y
+    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP (-1)   -- y_p
     let k := zNext - (2 : Fp) * zPrev
-    -- `bool_check(k) = k · (1 − k)` verbatim (Rust `bool_check`/`range_check(·,2)`,
-    -- `utilities.rs:133`): the constant `1` on the LEFT of the subtraction, so the AST is
-    -- `product(k, sum(const 1, negated k))` — matching the VK fixture. (`k·(k−1)` is
-    -- algebraically equal but a different AST.)
+    -- `k · (1 − k)`, with the `1` on the left of the subtraction to match the compiled gate AST.
     let boolCheck := k * ((1 : Fp) - k)
-    -- ternary(k, base_y − y_p, base_y + y_p) = k·(base_y − y_p) + (1 − k)·(base_y + y_p)
     let ySwitch := k * (baseY - yP) + ((1 : Fp) - k) * (baseY + yP)
     Constraints.withSelector cfg.qDecompose
       [ ("bool_check", boolCheck), ("y_switch", ySwitch) ]
 
-/-- Rust `Config::configure` (`complete.rs:24-40`): enable equality on `z_complete`, allocate the
-`q_mul_decompose_var` selector, register the decomposition gate. The `add::Config` is handed down
-by the chip assembly (`mul.rs`) — different columns are already equality-enabled by `add`'s own
-`configure`, so we only enable equality on `z_complete` here. -/
+/-- Enable equality on `z_complete`, allocate the selector, register the gate. The `add::Config`'s
+columns are already equality-enabled by `add`'s own `configure`. -/
 def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure Fp Config := do
   enableEquality zComplete.toAny
   let qDecompose ← selector
@@ -121,46 +73,36 @@ def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure 
   createGate (decomposeGate cfg)
   return cfg
 
-/-! ## Inputs / Output
+/-! ## Inputs / Output -/
 
-Mirrors the donor `Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion.Input`/`Output`. The base point, the
-accumulator cells `(x_a, y_a)` from incomplete addition, and the entering running sum `z` are
-verifier-visible; the complete-range bits are DERIVED from the scalar cell `alpha` (window
-offset `w` of `kBits alpha` — no prover-side `bits` parameter, per the "no prover information
-at synthesis" rule). Output is the final accumulator point and the `numBits` interstitial
-running sums. -/
-
-/-- The inputs: the scalar's reading *program* `alpha` — a prover hint (the Rust source
-passes it as `Value`; the complete-range bits are derived from it as the `w`-shifted window
-of `kBits alpha`, faithful to `decompose_for_scalar_mul(alpha.value())`, and only enter the
-witnesses — this phase does not constrain the scalar cell) — the base point, the entering
-accumulator `(x_a, y_a)`, and the entering running sum `z`, as already-assigned cells. -/
 structure Inputs (F : Type) where
+  -- Scalar reading program (prover hint); the complete-range bits are the `w`-shifted window of
+  -- its bits, derived into the witnesses without constraining the scalar cell.
   alpha : Unconstrained field F
+  -- The base point.
   base : Point F
+  -- x-coordinate of the entering accumulator, from incomplete addition.
   xA : F
+  -- y-coordinate of the entering accumulator, from incomplete addition.
   yA : F
+  -- The entering running sum.
   z : F
 deriving CircuitType
 
-/-- The output: the final accumulator point and the `numBits` interstitial running sums. -/
 structure Output (numBits : ℕ) (F : Type) where
+  -- The final accumulator point.
   acc : Point F
+  -- The interstitial running sums, one per bit.
   zs : Vector F numBits
 deriving ProvableStruct
 
-/-! ## Value-level round algebra (lifted from the donor)
-
-`stepValue`/`accValue` are the donor's, re-exposed here over `Point` so the `Spec` and the loop
-invariant read in Ironwood spelling. `stepPointValue b acc = acc + (U_b + acc)` with
-`U_b = (base.x, ±base.y)` — exactly the two chained complete additions of one round. -/
+/-! ## Value-level round algebra -/
 
 /-- The conditionally-negated per-bit point `U = (base.x, if bit then base.y else −base.y)`. -/
 def stepBasePoint (base : Point Fp) (bit : Bool) : Point Fp :=
   { x := base.x, y := if bit then base.y else -base.y }
 
-/-- One complete-addition round on `Point`s: `acc + (U + acc)` (`complete.rs:181-189`:
-`tmp = U + acc`, `acc' = acc + tmp`). Matches the donor's `accValuePoint` recursion. -/
+/-- One complete-addition round on `Point`s: `acc + (U + acc)` (`tmp = U + acc`, `acc' = acc + tmp`). -/
 def stepPoint (base : Point Fp) (acc : Point Fp) (bit : Bool) : Point Fp :=
   acc + (stepBasePoint base bit + acc)
 
@@ -198,38 +140,29 @@ theorem accPoint_congr {base acc0 : Point Fp} {bits₁ bits₂ : BitsHint} (n : 
   | succ k ih =>
     simp only [accPoint, ih (fun j hj => h j (by omega)), h k (by omega)]
 
-/-! ## The per-bit round loop, in the `MulIncomplete` recursive shape
+/-! ## The per-bit round loop
 
-Following `Clean/Ironwood/Ecc/MulIncomplete.lean` (itself in the `LookupRangeCheck.rangeCheckLoop`
-shape): a structurally recursive `RegionCircuit` over the round count, addressing cells by
-*absolute* region-local rows. The loop's `operations` is — by `rfl` from the monad's append-bind —
-the concatenation of per-round op lists, and each round's op list contains the round's own ops
-plus the TWO folded `add.call` chunks. That concatenation is what the loop induction consumes,
-and the `subcircuit_rw` engine fires on each round's two child chunks.
+Each iteration uses two rows (two complete additions). Row layout relative to the ambient `offset`,
+with round `iter` at base row `r := offset + 2·iter`:
 
-Row layout (relative to the ambient `offset`, faithful to Rust `assign_region`):
-- row `offset`               : the `z` copy from incomplete addition (`complete.rs:115-123`).
-- round `iter` base row `r := offset + 2·iter`:
-  - `z_i` assigned at `r + 2` (`complete.rs:140-147`);
-  - `base_y` copied to `z_complete` at `r + 1`, `q_mul_decompose_var` enabled at `r + 1`
-    (`complete.rs:108`, `152-157`);
-  - `y_p` assigned to `add.yP` at `r` (`complete.rs:175`);
-  - two `add.call`s: `U + acc` at `r`, `acc + tmp` at `r + 1`. -/
+    | x_p | y_p | x_qr    | y_qr    | z_complete |
+    ---------------------------------------------
+    | U_x | U_y | acc_x   | acc_y   | z_{i + 1}  |   r
+    |acc_x|acc_y| acc+U_x | acc+U_y | base_y     |   r + 1  ← q_mul_decompose_var enabled
+    |     |     | res_x   | res_y   | z_i        |   r + 2
+
+`z` is copied in from incomplete addition at row `offset`. Each round assigns `z_i`, copies `base_y`
+into `z_complete`, assigns the conditionally-negated `y_p`, and calls `add` twice: `U + acc` at `r`,
+`acc + tmp` at `r + 1`. -/
 
 /-- The working-scalar bit expressions for this phase: bit `i` is `kBitsWindow (alpha value)
-w i`, i.e. bit `254 − (w + i)` of `t_q + alpha.val` — the `w`-shifted window of the working
-scalar's MSB-first bits (Rust `decompose_for_scalar_mul(alpha.value())`). The `t_q + ·`
-spelling mirrors `kBitsWindow`'s kernel-safe left-literal addition. The loop plumbing below
-is abstract in a bit-family *program* `ebits : Witgen.MOver Fp (AssignedCell Fp) (ℕ →
-BExpr Fp)` — ONE builder program (sharing the scalar program's let-steps) yielding the whole
-family as plain expressions; the bundle instantiates `ebits := kBitWindowProg input.alpha w`,
-which binds the scalar's reading program once. -/
+ w i`, i.e. bit `254 − (w + i)` of `t_q + alpha.val`. A single bit-family program binds the
+scalar's reading program once and yields the window as plain expressions. -/
 def kBitWindowExpr (alpha : FExpr Fp) (w i : ℕ) : BExpr Fp :=
   .neq ((Witgen.NExprOver.add (.const Mul.tQNat) (.val alpha)).testBit
     (.const (254 - (w + i)))) (.const 1)
 
-/-- The bit-family program: bind the scalar's reading program once, then the pure per-round
-window expressions over its output. -/
+/-- Binds the scalar's reading program once, then produces the per-round window expressions. -/
 def kBitWindowProg (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (w : ℕ) :
     Witgen.MOver Fp (AssignedCell Fp) (ℕ → BExpr Fp) :=
   (fun a i => kBitWindowExpr a w i) <$> alpha
@@ -269,8 +202,8 @@ theorem ebitsVal_kBitWindowProg (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExp
     Witgen.M.map_def, h, this]
   with_unfolding_all rfl
 
-/-- The witness-IR value of the conditionally-negated `y_p` at round `iter` (`complete.rs:160-165`:
-`if k then base_y else −base_y`). The bit condition is the round's bit from the family program. -/
+/-- The conditionally-negated `y_p` at round `iter`: `if k then base_y else −base_y`, with the
+bit `k` selected from the family program. -/
 def yPWit (input : Var Inputs Fp) (ebits : Witgen.MOver Fp (AssignedCell Fp) (ℕ → BExpr Fp))
     (iter : ℕ) : WitgenIR Fp 1 :=
   Witgen.MOver.toIRScalar ((fun bs => .ite (bs iter) (.expr input.base.y)
@@ -290,20 +223,20 @@ theorem yPWit_eval (input : Var Inputs Fp)
   rcases (bs iter).eval { env, locals := Witgen.evalSteps env steps.toList }
     |>.dichotomy with hb | hb <;> simp [hb, readCell, circuit_norm]
 
-/-- The running-sum expression at round `iter` (`complete.rs:141-145`: `z_next = 2·z_cur + k`),
-the per-round unrolling of the donor's `zRunValue` recursion over the entering-`z` expression. -/
+/-- The running-sum expression at round `iter`: `z_next = 2·z_cur + k`, unrolled over the entering
+`z`. -/
 def zWitExpr (z : FExpr Fp) (ebits : ℕ → BExpr Fp) : ℕ → FExpr Fp
   | 0 => .add (.mul (.const 2) z) (.ite (ebits 0) (.const 1) (.const 0))
   | i + 1 => .add (.mul (.const 2) (zWitExpr z ebits i))
       (.ite (ebits (i + 1)) (.const 1) (.const 0))
 
-/-- The witness-IR value of the running-sum cell `z_i` at round `iter`. Round `iter`'s cell is
-`zRunValue z bits iter` (the donor's convention: `zRunValue z bits 0 = 2·z + k₀`). -/
+/-- The witness-IR value of the running-sum cell `z_i` at round `iter`: `zRunValue z bits iter`
+(with `zRunValue z bits 0 = 2·z + k₀`). -/
 def zWit (input : Var Inputs Fp) (ebits : Witgen.MOver Fp (AssignedCell Fp) (ℕ → BExpr Fp))
     (iter : ℕ) : WitgenIR Fp 1 :=
   Witgen.MOver.toIRScalar ((fun bs => zWitExpr (.expr input.z) bs iter) <$> ebits)
 
-/-- `zWitExpr`'s prover value is the donor's `zRunValue` at the bit family's values. -/
+/-- `zWitExpr`'s prover value is `zRunValue` at the bit family's values. -/
 theorem zWitExpr_eval (z : FExpr Fp) (ebits : ℕ → BExpr Fp) (iter : ℕ)
     (ctx : Witgen.CtxOver Fp (Placed ProverEnvironment Fp)) :
     Witgen.FExprOver.eval ctx (zWitExpr z ebits iter)
@@ -354,7 +287,7 @@ def round (cfg : Config) (input : Var Inputs Fp) (ebits : Witgen.MOver Fp (Assig
   let _baseY ← copyAdvice input.base.y cfg.zComplete (r + 1)
   -- conditionally-negated y_p, assigned on add.yP at r
   let yP ← assignAdvice cfg.addConfig.yP r (yPWit input ebits iter)
-  -- the q_mul_decompose_var gate at the middle row r + 1 (`complete.rs:108`)
+  -- the q_mul_decompose_var gate at the middle row r + 1
   (decomposeGate cfg).enable (r + 1)
   -- U = (base.x, y_p)
   let U : Point (AssignedCell Fp) := { x := input.base.x, y := yP }
@@ -408,42 +341,26 @@ theorem loop_output_succ (cfg : Config) (input : Var Inputs Fp)
       = (round cfg input ebits offset k ((loop cfg input ebits offset k).output self)).output self := by
   simp only [loop, RegionCircuit.output_bind]
 
-/-! ## Contract-projection bridges and eval landings
+/-! ## Contract-projection bridges
 
-The parent consumes the child by its *contract projections* (`Add.add.Spec` etc.). These are
-structure-literal projections, `rfl`-reducible — but `simp only [Add.add]` would unfold the whole
-literal (synthesize body and all) into the proof state. The bridges below expose exactly the
-contract fields, keeping the child folded, generated mechanically by `derive_contract_bridges`
-(emits `add_spec_eq`, `add_assumptions_eq`, `add_envAssumptions_eq`,
-`add_proverAssumptions_eq`, `add_proverSpec_eq`). -/
+Expose the child's contract fields (`Add.add.Spec` etc.) while keeping its synthesize body folded.
+Generated by `derive_contract_bridges`. -/
 
 derive_contract_bridges add := Add.add
 
-/-- Componentwise eval of the child's input struct. Note: this does NOT fire (by `simp` or `rw`)
-on eval terms produced by instantiating the *generic* composition iffs — their `Eval` instance
-spelling differs from a locally-elaborated one. It is used only on locally-stated equations,
-where all spellings are elaborated at the same site (see `round_complete`). The soundness path
-avoids the issue entirely via `provable_type_simp`, which normalizes both spellings. -/
+/-- Componentwise eval of the child's input struct. Only fires on locally-stated equations (see
+`round_complete`); the soundness path normalizes spellings via `provable_type_simp` instead. -/
 private theorem addInputs_eval_eq (env : Placed Environment Fp)
     (p q : Point (AssignedCell Fp)) :
     eval env (⟨p, q⟩ : Add.Inputs (AssignedCell Fp)) = { p := eval env p, q := eval env q } := by
   simp only [circuit_norm, ProvableType.eval_cells]
 
-/-! ## Per-round composition lemma (the research artifact)
+/-! ## Per-round composition lemma
 
-`round_acc_sound` is the concrete demonstration that the `subcircuit_rw` engine works inside a
-round that makes TWO chained child calls with the output→next-precondition threading. It is the
-per-round core the loop induction invokes.
-
-Soundness produces the round's *constraint-forced* bit `b` (read off the running-sum cells by
-the decomposition gate), the z-chain step, and the accumulator step — so bundle soundness does
-not depend on the derived witness bit family `ebits` at all.
-
-The engine handles the bare-`place`/`env` loop spelling natively: `subcircuit_rw at hC1`/`hC2`
-weakens each folded `add.call` chunk to the child's `EnvA → A → Spec` implication via `isDefEq`
-matching on the opaque `call` boundary (no `Placed`-projection discr-tree dependence — that was
-the friction the historical absorption iffs had in loop lemmas, which the engine's own matching
-retires). -/
+The per-round core the loop induction invokes: one round with its two chained `add` calls,
+output-of-first threaded into the precondition of the second. Soundness produces the round's
+constraint-forced bit `b` (read off the running-sum cells by the decomposition gate), so bundle
+soundness does not depend on the derived witness bit family. -/
 
 /-- One round's soundness. If the round's constraints hold, the entering accumulator `acc` reads
 a valid point `A`, and the base is valid, then there is a bit `b` (forced by the decomposition
@@ -487,13 +404,12 @@ theorem round_acc_sound (cfg : Config) (input : Var Inputs Fp)
   -- normalize every provable-type eval to the shared normal form (destructures input/acc/A/base
   -- into coordinates; the folded `Add.add.output` evals stay atoms)
   provable_type_simp
-  -- ▸▸ make every child-add output opaque: the goal's output, both Specs' outputs, and the FIRST
+  -- ▸▸ make every child-add output opaque: the goal's output, both Specs' outputs, and the first
   --    add's output threaded into the SECOND's input all become `x_gen_out_0`/`x_gen_out_1` locals
-  --    (with `h_gen_out_0`/`h_gen_out_1 : <output> = x_gen_out_i`). Replaces the hand-rolled
-  --    `hout1`/`hout2` rfl bridges + the `call.output → output` alignments. ◂◂
+  --    (with `h_gen_out_0`/`h_gen_out_1 : <output> = x_gen_out_i`). ◂◂
   abstract_outputs
   obtain ⟨hAx, hAy⟩ := hAcc
-  -- the copied base_y cell: copy constraint + input eval (now in the same normal form)
+  -- the copied base_y cell: copy constraint + input eval in the same normal form
   have hzy : env.advice cfg.zComplete ((place self + (offset + 2 * iter + 1) : ℕ) : ℤ)
       = base_y := hz.trans hBaseY
   rw [hzy] at hswitch
@@ -503,12 +419,12 @@ theorem round_acc_sound (cfg : Config) (input : Var Inputs Fp)
   set yPv := env.advice cfg.addConfig.yP ((place self + (offset + 2 * iter) : ℕ) : ℤ) with hyPv
   -- land the child Specs' input coordinates on the abstract values
   simp only [hAx, hAy, hBaseX] at hSpec1 hSpec2
-  -- ── the constraint-forced bit + conditionally-negated y_p (donor `bit_facts` algebra) ──
+  -- ── the constraint-forced bit + conditionally-negated y_p ──
   have hb : (zN = 2 * zP ∧ yPv = -base_y) ∨ (zN = 2 * zP + 1 ∧ yPv = base_y) := by
     rcases mul_eq_zero.mp hbool with hk | hk
     · exact Or.inl ⟨by linear_combination hk,
         by linear_combination hswitch + 2 * yPv * hk⟩
-    · -- `bool_check = k·(1−k)`, so the second factor is now `1 − k` (was `k − 1`): flip signs.
+    · -- `bool_check = k·(1−k)`, so the second factor is `1 − k`: flip signs.
       exact Or.inr ⟨by linear_combination -hk,
         by linear_combination -hswitch + 2 * yPv * hk⟩
   -- ── consume the two child Specs, threading tmp.Valid into add 2's precondition ──
@@ -590,15 +506,10 @@ theorem loop_sound (cfg : Config) (input : Var Inputs Fp)
 
 /-! ## Completeness ladder
 
-The honest-prover side. Each round's two `add` chunks are consumed by the `subcircuit_rw`
-engine's completeness mode: it strengthens the goal's folded chunk positions to their
-`EnvA ∧ A ∧ PA` preconditions (ExtendsWitnesses located from the peeled witness context) and
-introduces the derived contract statements `h_spec_i : EnvA → A → PA → Spec ∧ ProverSpec`. The
-round's honest-value bookkeeping — round `k`'s add outputs feed round `k+1`'s honest values, and
-add 1's output validity feeds add 2's precondition — reads those Specs off `h_spec_0`/`h_spec_1`
-(the old `call_constraints_and_spec` composition, now the engine's internal derived leaf). -/
+The honest-prover side: round `k`'s add outputs feed round `k+1`'s honest values, and the first
+add's output validity feeds the second add's precondition. -/
 
-/-- The honest running-sum step, in the `RoundInvariant` shape (donor `zRunValue` algebra). -/
+/-- The honest running-sum step, in the `RoundInvariant` shape. -/
 private theorem zRunValue_step (z : Fp) (bits : BitsHint) (j : ℕ) :
     zRunValue z bits j
       = 2 * (if j = 0 then z else zRunValue z bits (j - 1)) + (if bits j then 1 else 0) := by
@@ -664,8 +575,8 @@ theorem round_complete (cfg : Config) (input : Var Inputs Fp)
   -- ▸▸ make every child-add output opaque BEFORE the engine runs: the goal's output equation and
   --    the first add's output threaded into the second add's chunk input become `x_gen_out_0`
   --    (first) / `x_gen_out_1` (second) opaque locals, with `h_gen_out_i : <output> = x_gen_out_i`.
-  --    Replaces the hand-rolled `hout1`/`hout2` rfl bridges. The engine then EMITS `h_spec_i` OVER
-  --    these locals (it consults the `h_gen_out_i` equations before materializing each output), so
+  --    The engine emits `h_spec_i` over these locals (it consults the `h_gen_out_i` equations
+  --    before materializing each output), so
   --    `hSpec1.2`/`hSpec2.2` speak `x_gen_out_i` directly — no post-hoc bridging needed. ◂◂
   abstract_outputs
   -- ▸▸ engine (completeness): strengthen the goal's two folded add chunks to their
@@ -707,7 +618,7 @@ theorem round_complete (cfg : Config) (input : Var Inputs Fp)
       rcases Bool.dichotomy (ebitsVal ebits env iter) with hb | hb <;> rw [hb] <;> simp
     · -- y_switch: `k = 1 ⇒ y_p = base_y`, `k = 0 ⇒ y_p = −base_y`, on the honest value
       rcases Bool.dichotomy (ebitsVal ebits env iter) with hb | hb <;> rw [hb] <;> simp
-  · -- output value: the goal's output is now the opaque `x_gen_out_1`
+  · -- output value: the goal's output is the opaque `x_gen_out_1`
     rw [hxout1]
     simp [stepPoint, stepBasePoint]
   · -- z cell value: the honest running sum
@@ -769,15 +680,11 @@ theorem loop_complete (cfg : Config) (input : Var Inputs Fp)
       · exact hZk j hj'
       · exact hZr
 
-/-! ## The bundle contract
+/-! ## The bundle contract -/
 
-`Spec` exposes the complete-rounds invariant, mirroring the donor
-`Halo2.Ironwood.Ecc.Mul.Complete.AssignRegion.Spec`: the running-sum chain, and — for valid entering
-accumulator and base — the output accumulator is `accValue`/`accPoint` after `numBits` rounds. -/
-
-/-- The complete-rounds invariant: the running-sum chain over `numBits` bits, and (for valid
-inputs) the output accumulator equals `accPoint … numBits`, valid throughout. Mirrors the donor's
-`Spec`. (At explicit entering-value args — the input record's provable components.) -/
+/-- The complete-rounds invariant: the running-sum chain over `numBits` bits, and — for a valid
+entering accumulator and base — the output accumulator equals `accPoint … numBits`, valid
+throughout. -/
 def RoundInvariant (numBits : ℕ) (z xA yA : Fp) (base : Point Fp)
     (output : Output numBits Fp) (bits : BitsHint) : Prop :=
   (∀ b : Fin numBits, output.zs[b.val]
@@ -789,14 +696,12 @@ def RoundInvariant (numBits : ℕ) (z xA yA : Fp) (base : Point Fp)
 
 /-! ## The gadget bundle
 
-`complete::Config::assign_region` (`complete.rs:87-192`) over `COMPLETE_RANGE.len() =
-NUM_COMPLETE_BITS = 3` bits, generalized to `numBits`. Parameterized by the window offset `w`
-(the global index of this phase's first bit; 251 in `mul.rs`); the witness closures derive each
-round's bit from `input.alpha` as `kBitsWindow (alpha value) w`. The verifier-facing `Spec`
-existentially quantifies a matching sequence. -/
+`assign_region` over the three complete bits, generalized to `numBits`. Parameterized by the window
+offset `w` (this phase's first bit, 251 in `mul.rs`); the witness closures derive each round's bit
+from `input.alpha`. The verifier-facing `Spec` existentially quantifies a matching bit sequence. -/
 
-/-- The `z` copy emitted before the loop (`complete.rs:115-123`): the entering running sum into
-`cfg.zComplete` at `offset`. -/
+/-- The `z` copy emitted before the loop: the entering running sum into `cfg.zComplete` at
+`offset`. -/
 def startCopy (cfg : Config) (input : Var Inputs Fp) (offset : ℕ) :
     RegionCircuit Fp Unit := do
   let _z ← copyAdvice input.z cfg.zComplete offset
