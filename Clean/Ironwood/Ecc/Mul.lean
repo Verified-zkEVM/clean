@@ -316,7 +316,7 @@ def mainRegion (cfg : Config) (input : Var Inputs Fp) :
     offLo ⟨.expr input.alpha, input.base, hi.acc, hi.zs[124]⟩
   -- 5. complete rounds: k_3..k_1, bit window 251  (mul.rs:239-253)
   let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig
-    offComp ⟨input.alpha, input.base, lo.acc.x, lo.acc.y, lo.zs[125]⟩
+    offComp ⟨.expr input.alpha, input.base, lo.acc.x, lo.acc.y, lo.zs[125]⟩
   -- 6. the LSB step k_0 = kBits alpha 254, derived from the scalar cell
   --    (mul.rs:258-260, process_lsb, mul.rs:324-385)
   let z1 := comp.zs[2]
@@ -606,14 +606,14 @@ never-reduced) loop output, the `zs` are the fixed-row cells. -/
 private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     (MulComplete.assign_region 3 w).output cfg off inp self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
+      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- `.call` spelling of `complete_output_eq`. -/
 private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     ((MulComplete.assign_region 3 w).call cfg off inp).output self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.bitsOf inp w) off 3).output self,
+      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowExpr inp.alpha w) off 3).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
@@ -716,13 +716,16 @@ private theorem completeOutput_zs_getElem (env : Placed Environment Fp)
   show (ProvableType.eval (M := fields 3) env.place env.env zs)[i] = _
   rw [fieldsEval_getElem env.place env.env zs i hi, ProvableType.eval_field]
 
-/-- Componentwise eval of a `MulComplete.Inputs` record literal. -/
+/-- Componentwise eval of a `MulComplete.Inputs` record (the scalar slot is a prover hint,
+its verifier value is trivial). Stated over a whole var — a mixed-record literal admits no
+`Eval`-synthesizable ascription — so use sites `rw` it and the literal's projections reduce
+definitionally. -/
 private theorem compInputs_eval_eq (env : Placed Environment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
-          yA := eval env yA, z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells]
+    (v : Var MulComplete.Inputs Fp) :
+    eval env v
+      = { alpha := (), base := eval env v.base, xA := eval env v.xA,
+          yA := eval env v.yA, z := eval env v.z } :=
+  MulComplete.Inputs.eval_verifier_raw env v
 
 /-- Componentwise eval of a `MulOverflow.Inputs` record literal. -/
 private theorem ovInputs_eval_eq (env : Placed Environment Fp)
@@ -764,13 +767,17 @@ private theorem fexpr_expr_eval_prover (env : Placed ProverEnvironment Fp)
     Witgen.FExprOver.eval { env := env } (.expr c : FExpr Fp) = eval env c := by
   with_unfolding_all rfl
 
-/-- Prover-side componentwise eval of `MulComplete.Inputs`. -/
+/-- Prover-side componentwise eval of `MulComplete.Inputs` (the scalar slot holds the
+reading program; its prover value is the program's evaluation). Whole-var, like
+`hiInputs_eval_eq_prover`. -/
 private theorem compInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)
-      = { alpha := eval env alpha, base := eval env base, xA := eval env xA,
-          yA := eval env yA, z := eval env z } := by
-  simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+    (v : Var MulComplete.Inputs Fp) :
+    eval env v
+      = { alpha := (Witgen.FExprOver.eval { env := env } v.alpha : Fp),
+          base := eval env v.base, xA := eval env v.xA,
+          yA := eval env v.yA, z := eval env v.z } := by
+  rw [MulComplete.Inputs.eval_prover_raw]
+  with_unfolding_all rfl
 
 /-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the
 scalar program's evaluation, the landing for the children's derived-bit facts
@@ -781,11 +788,11 @@ private theorem hiInputs_alpha_prover (env : Placed ProverEnvironment Fp)
     (eval env v).alpha = Witgen.FExprOver.eval { env := env } v.alpha := by
   rw [hiInputs_eval_eq_prover]
 
-/-- Prover-side `alpha`-projection of an evaluated `MulComplete.Inputs` record. -/
+/-- Prover-side `alpha`-projection of an evaluated `MulComplete.Inputs` record — the
+scalar program's evaluation. -/
 private theorem compInputs_alpha_prover (env : Placed ProverEnvironment Fp)
-    (alpha : AssignedCell Fp) (base : Point (AssignedCell Fp)) (xA yA z : AssignedCell Fp) :
-    (eval env (⟨alpha, base, xA, yA, z⟩ : Var MulComplete.Inputs Fp)).alpha
-      = eval env alpha := by
+    (v : Var MulComplete.Inputs Fp) :
+    (eval env v).alpha = Witgen.FExprOver.eval { env := env } v.alpha := by
   rw [compInputs_eval_eq_prover]
 
 /-- Prover-side componentwise eval of `MulOverflow.Inputs`. -/
@@ -1690,7 +1697,8 @@ def mul :
         exact ⟨hLoOutV, hbaseV⟩)
     have hCompPS := hCompBoth.2
     simp only [comp_proverSpec_eq, MulComplete.RoundInvariant] at hCompPS
-    rw [compInputs_alpha_prover, halphap, hW251] at hCompPS
+    rw [compInputs_alpha_prover] at hCompPS
+    simp only [fexpr_expr_eval_prover, halphap, hW251] at hCompPS
     obtain ⟨hCompChain, hCompAccCl⟩ := hCompPS
     -- the honest complete-phase accumulator validity
     obtain ⟨hCompAccV, -⟩ := hCompAccCl
