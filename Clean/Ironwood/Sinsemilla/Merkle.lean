@@ -1118,7 +1118,10 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           { left := input_var_left, right := input_var_right }).output i₀)
         = AssignedCell.of (i₀ + 3 + 2)
             (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
-            cfg.1.sinsemilla.xA from rfl] at h_output
+            cfg.1.sinsemilla.xA from by
+        show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
+            cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
+        rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
       simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
         Cell.of_column, Environment.get_advice] at h_output
       rw [← h_output]
@@ -1419,7 +1422,10 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           { left := input_var_left, right := input_var_right }).output i₀)
         = AssignedCell.of (i₀ + 3 + 2)
             (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
-            cfg.1.sinsemilla.xA from rfl] at h_output
+            cfg.1.sinsemilla.xA from by
+        show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
+            cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
+        rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
       simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
         Cell.of_column, Environment.get_advice] at h_output
       rw [← h_output]

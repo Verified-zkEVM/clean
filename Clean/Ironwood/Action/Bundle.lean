@@ -110,6 +110,49 @@ private theorem nc_call_regionCount (G : Generators) (R : FixedBase)
   rw [FormalCircuit.call_regionCount]
   rfl
 
+private theorem merkle_call_nextRegionIndex (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10)
+    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+    (c : CondSwap.Config × Sinsemilla.Merkle.Config × LookupRangeCheck.Config 10)
+    (inp : Var Sinsemilla.Merkle.Layer.Input Fp) (j : RegionIndex) :
+    ((Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).call
+      c inp).nextRegionIndex j = j + 128 := by
+  rw [FormalCircuit.nextRegionIndex_call, merkle_call_regionCount]
+
+private theorem vc_call_nextRegionIndex
+    (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (w : Vector (FExpr Fp) 85)
+    (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (inp : Var Ecc.MulFixed.Short.Inputs Fp) (j : RegionIndex) :
+    ((ValueCommit.circuit V R w).call c inp).nextRegionIndex j = j + 5 := by
+  rw [FormalCircuit.nextRegionIndex_call, vc_call_regionCount]
+
+private theorem dn_call_nextRegionIndex (K : FixedBase)
+    (c : Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
+      Ecc.Add.Config)
+    (inp : Var DeriveNullifier.Input Fp) (j : RegionIndex) :
+    ((DeriveNullifier.circuit K).call c inp).nextRegionIndex j = j + 9 := by
+  rw [FormalCircuit.nextRegionIndex_call, dn_call_regionCount]
+
+private theorem sa_call_nextRegionIndex (G : FixedBase) (w : Vector (FExpr Fp) 85)
+    (c : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (inp : Var SpendAuthority.Input Fp) (j : RegionIndex) :
+    ((SpendAuthority.circuit G w).call c inp).nextRegionIndex j = j + 3 := by
+  rw [FormalCircuit.nextRegionIndex_call, sa_call_regionCount]
+
+private theorem civk_call_nextRegionIndex (G : Generators) (R : FixedBase)
+    (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve)
+    (c : CommitIvk.Main.Config) (inp : Var CommitIvk.Main.Inputs Fp)
+    (j : RegionIndex) :
+    ((CommitIvk.Main.circuit G R w Q hQ).call c inp).nextRegionIndex j = j + 14 := by
+  rw [FormalCircuit.nextRegionIndex_call, civk_call_regionCount]
+
+private theorem ai_call_nextRegionIndex (pkD : Point (WitgenIR Fp 1))
+    (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (inp : Var AddressIntegrity.Input Fp) (j : RegionIndex) :
+    ((AddressIntegrity.circuit pkD).call c inp).nextRegionIndex j = j + 6 := by
+  rw [FormalCircuit.nextRegionIndex_call, ai_call_regionCount]
+
 theorem synthWitness_regionCount (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     Operations.regionCount ((synthWitness G W cfg).operations i) = 8 := by
@@ -159,21 +202,6 @@ theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
     Operations.regionCount ((main G B cfg W).operations i) = 394 := by
   simp only [main]
   rw [synthesize_regionCount]
-
-instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedCircuit Fp PrivateInputs AddressPoints (main G B cfg) where
-  output _ i₀ :=
-    { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
-                 y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
-      pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
-                  y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
-      gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
-                 y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
-      pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
-                  y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
-  regionCount _ := 394
-  output_eq := by intro _ i₀; with_unfolding_all rfl
-  regionCount_eq := fun W i => (main_regionCount G B cfg W i).symm
 
 /-! ## The extracted data -/
 
@@ -511,7 +539,18 @@ private theorem ai_output (pkD : Point (WitgenIR Fp 1))
     (inp : Var AddressIntegrity.Input Fp) (i : RegionIndex) :
     (AddressIntegrity.circuit pkD).output c inp i
       = ({ x := AssignedCell.of (i + 4) 0 c.2.x, y := AssignedCell.of (i + 4) 0 c.2.y }
-        : Var Point Fp) := rfl
+        : Var Point Fp) := by
+  change ((do
+    let derived ← Ecc.Mul.mul.call c.1 { alpha := inp.ivk, base := inp.gDOld }
+    let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
+      "witness non-identity point").call c.2 pkD
+    assignRegion "constrain equal" (do
+      constrainEqual derived.x pkDOld.x
+      constrainEqual derived.y pkDOld.y)
+    pure pkDOld : Circuit Fp (Var Point Fp)).output i) = _
+  simp only [Circuit.output_bind, Circuit.output_pure,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call']
+  rw [Ecc.Mul.mul_call_regionCount, wpointNonId_output]
 
 private theorem nc_spec_eq (G : Generators) (R : FixedBase)
     (w : Vector (FExpr Fp) 85) (Q : Point Fp) (hQ : Q.OnCurve) :
@@ -695,7 +734,12 @@ private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
 theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
     (synthWitness G W cfg).nextRegionIndex i = i + 8 := by
-  with_unfolding_all rfl
+  simp only [synthWitness, Sinsemilla.load, loadPrivate,
+    Circuit.nextRegionIndex_bind, Circuit.nextRegionIndex_pure,
+    nextRegionIndex_loadTable, nextRegionIndex_assignRegion,
+    FormalCircuit.nextRegionIndex_call']
+  rw [wpoint_call_regionCount, wpointNonId_call_regionCount,
+    wpointNonId_call_regionCount]
 
 theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (i : RegionIndex) :
@@ -711,12 +755,35 @@ theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
           nk := .of (i + 5) 0 (cfg.advices 0),
           vOld := .of (i + 6) 0 (cfg.advices 0),
           vNew := .of (i + 7) 0 (cfg.advices 0) } := by
-  with_unfolding_all rfl
+  simp only [synthWitness, Sinsemilla.load, loadPrivate,
+    Circuit.output_bind, Circuit.output_pure, Circuit.nextRegionIndex_bind,
+    nextRegionIndex_loadTable, output_assignRegion, nextRegionIndex_assignRegion,
+    output_assignAdvice, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call']
+  rw [wpointNonId_output, wpointNonId_call_regionCount,
+    wpointNonId_output, wpointNonId_call_regionCount,
+    wpoint_output, wpoint_call_regionCount]
 
 theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
     (synthChecks G B W cfg wc).nextRegionIndex i = i + 295 := by
-  with_unfolding_all rfl
+  show ((AddressIntegrity.circuit W.pkDOld).call _ _).nextRegionIndex
+      (((CommitIvk.Main.circuit G B.commitIvkR W.rivkWindows
+          B.ivkQ B.ivkQ_onCurve).call _ _).nextRegionIndex
+        (((SpendAuthority.circuit B.spendAuthG W.alphaWindows).call _ _).nextRegionIndex
+          (((DeriveNullifier.circuit B.nullifierK).call _ _).nextRegionIndex
+            (((ValueCommit.circuit B.valueCommitV B.valueCommitR W.rcvWindows).call
+              _ _).nextRegionIndex
+              (((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+                  B.merkleQ_onCurve 16 16 (by norm_num)
+                  (fun j => W.merkleSib (16 + j))
+                  (fun j => W.merkleSwap (16 + j))).call _ _).nextRegionIndex
+                (((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+                    B.merkleQ_onCurve 0 16 (by norm_num) W.merkleSib
+                    W.merkleSwap).call _ _).nextRegionIndex i) + 1 + 1))))) = i + 295
+  rw [ai_call_nextRegionIndex, civk_call_nextRegionIndex,
+    sa_call_nextRegionIndex, dn_call_nextRegionIndex, vc_call_nextRegionIndex,
+    merkle_call_nextRegionIndex, merkle_call_nextRegionIndex]
 
 theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
@@ -740,7 +807,46 @@ theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses Fp)
           pkdOld := { x := AssignedCell.of (i + 293) 0 cfg.eccConfig.witnessPoint.x,
                       y := AssignedCell.of (i + 293) 0 cfg.eccConfig.witnessPoint.y } }
       := by
-  with_unfolding_all rfl
+  simp only [synthChecks, loadPrivate, Circuit.output_bind, Circuit.output_pure,
+    output_assignRegion, nextRegionIndex_assignRegion,
+    nextRegionIndex_constrainInstance, output_assignAdvice, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call']
+  rw [merkle_call_regionCount, merkle_call_regionCount, vc_call_regionCount,
+    dn_call_regionCount, sa_call_regionCount, civk_call_regionCount, ai_output]
+
+theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    (synthNotes G B W cfg wc cc).output i
+      = { gdNew := { x := AssignedCell.of (i + 44) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i + 44) 0 cfg.eccConfig.witnessPoint.y },
+          pkdNew := { x := AssignedCell.of (i + 45) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i + 45) 0 cfg.eccConfig.witnessPoint.y } } := by
+  simp only [synthNotes, loadPrivate, Circuit.output_bind, Circuit.output_pure,
+    output_assignRegion, nextRegionIndex_assignRegion,
+    nextRegionIndex_constrainInstance, output_assignAdvice, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call']
+  rw [nc_call_regionCount, wpointNonId_call_regionCount,
+    wpointNonId_output, wpointNonId_output]
+
+instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
+    ElaboratedCircuit Fp PrivateInputs AddressPoints (main G B cfg) where
+  output _ i₀ :=
+    { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
+      pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
+      gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
+      pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
+  regionCount _ := 394
+  output_eq := by
+    intro W i₀
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.output_bind, Circuit.output_pure,
+      synthWitness_output, synthWitness_nextRegionIndex, synthChecks_output,
+      synthChecks_nextRegionIndex, synthNotes_output]
+  regionCount_eq := fun W i => (main_regionCount G B cfg W i).symm
 
 /-! ## Soundness -/
 
