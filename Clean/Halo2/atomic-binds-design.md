@@ -87,7 +87,12 @@ binders mint nothing. A bare `AssignedCell` binder does not mint either: `.of se
 col` is already the minimal atom — the spelling leaf gates and witness facts match on —
 and minting it aliases the gate facts away from the cell (found by breaking the
 WitnessPoint leaf port). Only compound cell-valued outputs (records, vectors)
-metastasize and mint.
+metastasize and mint. And LAYOUTER level only: region-level raw binds are
+readState-class naming helpers whose outputs feed row-local gates spelled at concrete
+cells — minting them aliases the gate facts (found by breaking the MulIncompleteRound
+port); the metastasis the mint prevents is a layouter-composition phenomenon. Loop
+chunks share the raw `region_<k>` naming (the registry's spine-atomicity and
+auto-unfold exclusion are the substantive protections, not the name).
 
 **Loop outputs mint as ONE atom**: a used map-style loop generalizes its whole
 `(loop …).output i` to a single binder-named atom; the defining equation is reduced

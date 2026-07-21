@@ -204,13 +204,11 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   let nm := binderNameOf f
   let isCall := x.isAppOf ``Halo2.FormalCircuit.call
     || x.isAppOf ``Halo2.FormalRegionCircuit.call
-  -- loop-combinator steps (registry heads) are atomic raw steps: never spine-split
-  -- (they are single application nodes — the registry also keeps them out of the
-  -- auto-unfolds), chunk named for readability, rounds split by the canonical tagged
-  -- lemmas when the raw open runs
-  let isLoop := CircuitProofStart.circuitLoopHeads.any x.isAppOf
+  -- loop-combinator steps (registry heads) are atomic raw steps: never spine-split —
+  -- they are single application nodes, and the registry keeps them out of the
+  -- auto-unfolds (the actual protection); their chunks share the raw `region_<k>`
+  -- naming and their rounds split via the canonical tagged lemmas at raw-open time
   let chunkName := if isCall then Name.mkSimple s!"{nm}_spec"
-    else if isLoop then Name.mkSimple s!"loop_{regionIdx}"
     else Name.mkSimple s!"region_{regionIdx}"
   -- peel the constraint/witness/goal sides + the output side
   if region then
@@ -258,7 +256,11 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   -- equation to its concrete boundary fact (for loops: the closed-form output via the
   -- tagged loop lemmas) — the continuation keeps the atom. Index-valued binders
   -- (`currentRegion`) never mint: their arithmetic must stay literal for the folds.
-  if !isCall && binderUsed f then
+  -- LAYOUTER level only: region-level raw binds are readState-class naming helpers
+  -- whose outputs feed row-local gates spelled at concrete cells — minting them
+  -- aliases the gate facts (broke the MulIncompleteRound port); the metastasis this
+  -- exists to prevent is a layouter-composition phenomenon
+  if !region && !isCall && binderUsed f then
     if ← binderTypeMints f then
       let mut outs : Array Expr := #[]
       if let some tyC ← hypType? chunkHyp then
