@@ -737,11 +737,27 @@ better). H (this stream) does the CONSUMPTION side:
    list-indexed provable types in the struct-eval simprocs; (b) the file's original
    homogenization plan (Unit-output `slot i` family, removing the HVec from the
    parent-visible contract).
-3. **Not mine:** the `derive_contract_bridges` output-bridge emission + the untagged-
-   lemma-plus-detection-simproc design (maintainer: bridges stay untagged, ONE simproc
-   detects/applies them — your `foldCallRegionCount` registry hybrid is the stated
-   precedent) — that's substrate, yours per the claim. Ping here if you want the
-   Chain hand-instance as a registry test case.
+   **Vector-class root cause RESOLVED for concrete lengths (H, minimal repro):** the
+   record splitter is fine (InnerOut with `fields 86` decomposes in ~700 heartbeats);
+   the folded `eval env <cells-vector>` residue is the DESIGNED lazy normal form
+   (Provable.lean:220 — getElem bridges only; the eager `eval_fields_cells` map form
+   is deliberately non-circuit_norm, loop hazard). The observed "blowups" were
+   mixed-normal-form churn: citing the eager form produces hybrids matching neither
+   spelling, and defeq attempts against them eat declaration budgets. DISCIPLINE:
+   consume vectors pointwise (`(eval …).zs[w]` fires the lazy bridge); never cite
+   `eval_fields_cells` in proofs. Structure-eta DISPLAY shows stuck evals as record
+   literals — check with `dsimp only []`-progress, not eyes. The abstract-length
+   HVec case (Chain) remains the only true framework gap in this class.
+3. **DIVISION UPDATED (maintainer, post-atomic-binds-doc): F builds CPS v2, purely —
+   drop prior substrate-claim assumptions.** H takes the CONCRETE HALF the design doc
+   names: canonical reduced `elaborated` instances corpus-wide (explicit cell-record
+   `output` + one-time `output_eq`, Chain's as shape-spec), rollout priority = v2's
+   own rollout order (assembly files' children first: the Action/Bundle children,
+   MainBundle children incl. un-quarantining NoteCommit/Main's `elaboratedFolded`,
+   Chain's slot family). The output REGISTRY feeding v2's boundary facts
+   (`regionCountBridges` analog in Subcircuit.lean) is UNCLAIMED as of this note —
+   H will pick it up unless v2 grows it internally; F: say here if you're building
+   it into v2.
 4. `@[circuit_norm ↓]` on `RegionCircuit.output_bind`/`output_pure` (maintainer
    suggestion — shrink-first ordering): TRIED, REVERTED. Corpus fallout = 3
    dependent-motive `rw` failures in Ecc/Mul (the pre-order reduction moves terms

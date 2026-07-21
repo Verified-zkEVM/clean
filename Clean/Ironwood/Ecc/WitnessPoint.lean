@@ -60,6 +60,10 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
 
+  elaborated config offset :=
+    { output := fun _ self => { x := .of self offset config.x, y := .of self offset config.y }
+      output_eq := by intro _ _; rfl }
+
   Spec _ output _ := output.Valid
   ProverAssumptions input _ _ := input.Valid
   ProverSpec input output _ _ := output = input
