@@ -837,3 +837,45 @@ cps + subcircuit_rw deliver contracts, derive bridges at source, drop re-spellin
 linter suppressions, let output normalization flow through the framework — then
 `inner_output`, `innerC`, and most of both outer proofs collapse. Timing to be decided
 against CPS v2 (atomic binds), which changes how the rewritten proofs would be spelled.
+
+---
+
+## Maintainer review: MulIncomplete vs the vision (2026-07-21, raw feedback)
+
+Maintainer verdict: far from the vision, but MUCH closer than BFE — and, despite the
+bespoke loop/round treatment, a fairly cleanly written file. Combined review (H's
+checklist findings, agreed by maintainer, then the maintainer's additions):
+
+H's findings:
+
+> - `derive_contract_bridges roundC (i : ℕ) := round i` at line 25 is consumer-side
+>   again — `round` lives in MulIncompleteRound.lean; the bridges belong there, once,
+>   not re-derived by each parent.
+> - `loop_output` (line 236) is a hand output lemma — `loop` and the outer bundle both
+>   run on default `elaborated` instances, so output normalization doesn't flow through
+>   the framework; the reduced-instance treatment (and eventually the substrate) should
+>   replace it.
+> - Line 193 names a framework lemma in a gadget proof
+>   (`rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call]`) — a
+>   cps/simp-set gap by the audit's own rule.
+
+Maintainer's additions:
+
+> - ugly spelling of WitnessIR: `.add (.mul (.const 2) z) (.ite (ebits 0) (.const 1)
+>   (.const 0))` instead of using +, * and other type classes. in several places
+> - evaluation of witnessIR is hand-proved per occurence, instead of left to CPS to
+>   simplify. named framework-level lemmas used in that process, e.g.
+>   `Witgen.FExprOver.eval`, instead of simple circuit_norm in all cases
+> - `loop` is a recursive function instead of a built-in loop, leading to custom
+>   lemmas like `loop_output_succ`
+> - both round and loop are subcircuits without a bundle that are not immediately
+>   unfolded. bespoke soundness/completeness theorems stated that could just be bundle
+>   soundness/completeness.
+> - their proofs cannot use CPS (due to not using the canonical soundness/completeness
+>   interface)
+> - their proofs are naming framework lemmas all over the place
+> - `ProverAssumptions` unnecessarily repeats `Assumptions`. it's supposed to be
+>   additive, for ADDITIONAL assumptions only a prover has to make
+> - there seem to be two competing normal forms of env.get present: env.get and
+>   env.advice, definitions are essentially the same
+
