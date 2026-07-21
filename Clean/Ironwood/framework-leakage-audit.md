@@ -778,3 +778,104 @@ better). H (this stream) does the CONSUMPTION side:
    unproven for the remaining Chain burn (which lives in TYPE-level instance
    synthesis, not term traversal — pre-order rewriting doesn't touch it). Re-evaluate
    after the substrate lands, when the manual rw ladders it breaks are gone anyway.
+
+---
+
+## Maintainer review: BaseFieldElem vs the vision (2026-07-21, raw feedback)
+
+Verbatim from the maintainer's first read of BFE, after agent H's port — appended as a
+sanity check against grading files by local metrics (defeq-bridge count) instead of the
+structural vision. H's port cleared the `with_unfolding_all` layer only; the file's
+architecture remains off-vision as follows (maintainer notes some items predate H's
+scope):
+
+> - `fixedConstantsLoop`, `windowChain` and `processWindow` are all subcircuits without
+>   a bundle, bypassing the subcircuit mechanism. This leads you to state and prove
+>   long, bespoke lemmas that should naturally just be soundness/completeness of these
+>   as subcircuits
+> - we use .native prover hints for no apparent reason
+> - `witnessCheck` and `canonicityRegion` are subcircuits without bundles, for reasons
+>   not clear to me
+> - instead of wrapping canonGate in a nice FormalRegionCircuit, large bespoke lemmas
+>   about it are proved (`canon_gate_polys`)
+> - you instantiate derive_contract_bridges for child circuits, instead of doing so at
+>   the source (every parent using the same circuits would have to repeat this)
+> - the `innerRegion_output_zs` needs a bespoke `show ..` clause instead of working
+>   with plain circuit_norm, pointing to normal form mismatch
+> - `set_option linter.all false in` is used for no apparent reason
+> - the inner completeness proof is split into large bespoke sublemmas that use
+>   CPS-foreign spelling (env.env etc) which has to be undone at the beginning of that
+>   proof
+> - `set_option linter.constructorNameAsVariable false in` used
+> - for no apparent reason, inner soundness uses the same env.env re-spelling, making
+>   its own proof state more complicated-looking
+> - for no apparent reason, inner soundness does not pass constants like dec_spec_eq,
+>   dec_assumptions_eq, dec_envAssumptions_eq to CPS, causing it to need separate
+>   circuit_norm passes after unfolding these, in several places.
+> - `Halo2.Ironwood.Ecc` qualifiers used pervasively although the entire file is
+>   already in that namespace
+> - in synthesize, instead of using `inner` as a subcircuit call (strong rule in
+>   AGENTS.md), the innerRegion circuit is inlined, causing the proofs to have to
+>   introduce (inner ..).soundness and completeness as extra have terms instead of just
+>   getting them out of circuit_proof_start + subcircuit_rw
+> - the `synthesize` proof keeps its own main circuit `synthesize` unfolded in CPS,
+>   causing CPS to do basically nothing, instead opting for long-winded custom
+>   circuit_norm unfolding and even naming explicit framework lemmas
+>   (`Cell.of_regionIndex` and many others).
+> - the synthesize soundness proof relies on bespoke lemmas about innerRegion_output,
+>   violating one of the main rules the audit doc established on a topic you
+>   specifically worked on: output normalization should flow through the framework
+> - both of the last two points also apply to completeness
+> - main bundle uses a default elaborated
+
+H's accounting against this list: `derive_contract_bridges innerC` at the consumer, the
+`inner_output` interim projection lemma, the copied-forward `env.env` re-bundling, and
+working around the inlined `innerRegion` (rather than bundling the call) were introduced
+or entrenched by H's port; the rest predates it. The real BFE port = this list: bundle
+the loop families and the canon gate, call `inner`/the region families as subcircuits so
+cps + subcircuit_rw deliver contracts, derive bridges at source, drop re-spellings and
+linter suppressions, let output normalization flow through the framework — then
+`inner_output`, `innerC`, and most of both outer proofs collapse. Timing to be decided
+against CPS v2 (atomic binds), which changes how the rewritten proofs would be spelled.
+
+---
+
+## Maintainer review: MulIncomplete vs the vision (2026-07-21, raw feedback)
+
+Maintainer verdict: far from the vision, but MUCH closer than BFE — and, despite the
+bespoke loop/round treatment, a fairly cleanly written file. Combined review (H's
+checklist findings, agreed by maintainer, then the maintainer's additions):
+
+H's findings:
+
+> - `derive_contract_bridges roundC (i : ℕ) := round i` at line 25 is consumer-side
+>   again — `round` lives in MulIncompleteRound.lean; the bridges belong there, once,
+>   not re-derived by each parent.
+> - `loop_output` (line 236) is a hand output lemma — `loop` and the outer bundle both
+>   run on default `elaborated` instances, so output normalization doesn't flow through
+>   the framework; the reduced-instance treatment (and eventually the substrate) should
+>   replace it.
+> - Line 193 names a framework lemma in a gadget proof
+>   (`rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call]`) — a
+>   cps/simp-set gap by the audit's own rule.
+
+Maintainer's additions:
+
+> - ugly spelling of WitnessIR: `.add (.mul (.const 2) z) (.ite (ebits 0) (.const 1)
+>   (.const 0))` instead of using +, * and other type classes. in several places
+> - evaluation of witnessIR is hand-proved per occurence, instead of left to CPS to
+>   simplify. named framework-level lemmas used in that process, e.g.
+>   `Witgen.FExprOver.eval`, instead of simple circuit_norm in all cases
+> - `loop` is a recursive function instead of a built-in loop, leading to custom
+>   lemmas like `loop_output_succ`
+> - both round and loop are subcircuits without a bundle that are not immediately
+>   unfolded. bespoke soundness/completeness theorems stated that could just be bundle
+>   soundness/completeness.
+> - their proofs cannot use CPS (due to not using the canonical soundness/completeness
+>   interface)
+> - their proofs are naming framework lemmas all over the place
+> - `ProverAssumptions` unnecessarily repeats `Assumptions`. it's supposed to be
+>   additive, for ADDITIONAL assumptions only a prover has to make
+> - there seem to be two competing normal forms of env.get present: env.get and
+>   env.advice, definitions are essentially the same
+
