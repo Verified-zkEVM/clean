@@ -807,14 +807,9 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
   -- the window cells hold the hint digits (the witness loop's assign clauses).
   -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
   simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
-  -- fold the assigned advice back to the hint program's evaluation (`toIRScalar` unfolds
-  -- to the low-level `FExprOver.eval`; `Witgen.MOver.eval` is its high-level spelling)
-  have hWwslM : ∀ i : Fin 85, env.env.advice cfg.superConfig.window
-      ((env.place self + (offset + i.val) : ℕ) : ℤ)
-      = Witgen.MOver.eval (value := field) env windows[i.val]! := by
-    intro i
-    rw [hWwsl i]
-    simp only [Witgen.MOver.eval, Witgen.eval_field]
+  -- `eval_toIRScalar` (circuit_norm) already lands the assigned advice on the hint
+  -- program's `MOver.eval` — `hWwsl` IS the high-level fact
+  have hWwslM := hWwsl
   -- the honest `< 8` bound on the advice reads, from the program bound
   have hPA' : ∀ w : Fin 85, (env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)).val < 8 := by

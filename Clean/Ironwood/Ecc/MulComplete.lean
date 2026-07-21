@@ -825,7 +825,6 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (⟨place, env⟩ : Placed ProverEnvironment Fp) = bits := by
       rw [ebitsVal_kBitWindowProg, hbitsdef]
       congr 1
-      with_unfolding_all exact hIalpha
     -- ── the loop: constraints + honest accumulator/z values, via `loop_complete` ──
     obtain ⟨hCloop, hAccOut, hZs⟩ :=
       loop_complete cfg ({ alpha := input_var_alpha, base := { x := input_var_base_x, y := input_var_base_y }, xA := input_var_xA, yA := input_var_yA, z := input_var_z } : Var Inputs Fp)

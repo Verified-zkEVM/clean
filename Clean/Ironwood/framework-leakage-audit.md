@@ -385,6 +385,37 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
 4. **Fix the `circuit_proof_start` / `subcircuit_rw` whnf-timeout on function-family
    bundles** (Chain:1083 gap). Removes the manual `output_eq` fallbacks in Chain / Merkle /
    HashToPoint.
+   **ROOT-CAUSED (H, 2026-07-21, scratch repro on Chain's bundle):** the Chain:1055
+   "engine wall" comment is STALE — plain cps now completes the whole prefix in ~2.5k
+   heartbeats (per-slot ∀-facts split, gate facts landed). The one remaining burn is
+   `h_output`: mixing `ElaboratedRegionCircuit.output_eq` into a full `circuit_norm`
+   simp at `h_output` times out (>9 min; diagnostics: 207k `Eq.rec`/111k `List.rec`
+   unfolds — the capped struct-eval simprocs + `Circuit.bind_def` unification retries
+   traverse the un-shrunk loop innards at every subterm, and the caps only bound each
+   attempt, not the sum). The narrow ladder (`output_eq` + `output_bind`/`output_pure`
+   + leaf `output_*`) is instant — beta drops the loop body wholesale. FIX STAGED: cps
+   step (b) gets a structural PRE-pass at `h_output`
+   (`simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
+   RegionCircuit.output_pure] at h_output`) before the main `circuit_norm` pass;
+   lands after the concrete-program sweep commits (to avoid invalidating in-flight
+   builds). Expected fallout: the manual `output_eq` ladders in Chain (1151, 1465) and
+   HashToPoint (265, 346) go dead → delete; `hPS`/`hIS`-named ladders are untouched.
+   **FullWidth outer-peel ALSO root-caused (H, same session, scratch repro):** the
+   "cps deep-recurses on the 85-window synthesize" comment is imprecise — steps (a)–(e′)
+   all complete in ~1.5k heartbeats (innerRegion's `seal` holds through the peel; the
+   auto-unfold's equation for it never fires). The killer is step (f) rowFactChaining's
+   `simp only [h_input, h_output] at hc ⊢`: matching h_output's LHS (which spells
+   `(innerRegion …).output i₀` inside the add-call record) forces isDefEq through the
+   sealed 85-window body — >512 recursion depth (Prod.rec nest). The step IS
+   `try`-guarded, but Lean's tactic `try` RETHROWS runtime exceptions (maxRecDepth), so
+   the guard is porous and cps dies instead of degrading. FIX STAGED (same batch): a
+   `bestEffort` wrapper for cps's guarded steps — `Core.withCatchingRuntimeEx` +
+   saved-state restore, catching depth/stack (rethrow heartbeats: those mean the whole
+   decl's budget is gone and continuing would only move the error). With it, plain cps
+   completes on FullWidth's outer proofs (step (f) no-ops away) — the manual intro
+   prefixes there can then collapse. The DEEP fix (later, port work): bundle
+   `innerRegion` as a `FormalRegionCircuit` per CLAUDE.md's proof-boundary rule; then
+   abstract_outputs opaques its output spelling and step (f) fires for real.
 
 5. **Drop the now-unneeded `set_option maxRecDepth` bumps** in the four bundle files
    (Category 6) and confirm they build at default depth. This is the *verification* that

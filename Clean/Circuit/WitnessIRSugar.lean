@@ -207,15 +207,12 @@ instance {V : Type} : Monad (MOver F V) where
 
 attribute [circuit_norm] Array.size_empty Array.getElem?_push
 
-@[circuit_norm]
 theorem M.pure_def {V : Type} (a : α) :
     (pure a : MOver F V α) = fun s => (a, s) := rfl
 
-@[circuit_norm]
 theorem M.bind_def {V : Type} (m : MOver F V α) (f : α → MOver F V β) :
     (m >>= f) = fun s => let (a, s') := m s; f a s' := rfl
 
-@[circuit_norm]
 theorem M.map_def {V : Type} (f : α → β) (m : MOver F V α) :
     (f <$> m) = fun s => let (a, s') := m s; (f a, s') := rfl
 
@@ -225,7 +222,6 @@ def letN {V : Type} (e : NExprOver F V) : MOver F V (NExprOver F V) :=
 
 instance {V : Type} : CoeOut (NExprOver F V) (MOver F V (NExprOver F V)) := ⟨letN⟩
 
-@[circuit_norm]
 theorem letN_def {V : Type} (e : NExprOver F V) :
     letN e = fun s => (.localVar s.size, s.push (.letN e)) := rfl
 
@@ -235,7 +231,6 @@ def letF {V : Type} (e : FExprOver F V) : MOver F V (FExprOver F V) :=
 
 instance {V : Type} : CoeOut (FExprOver F V) (MOver F V (FExprOver F V)) := ⟨letF⟩
 
-@[circuit_norm]
 theorem letF_def {V : Type} (e : FExprOver F V) :
     letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
 
@@ -252,17 +247,14 @@ variable {V Env : Type} [WitgenEnv F Env V]
 -- TODO WITGENIR the simp behavior currently takes an ugly low-level path because we were
 -- too lazy to craft a high-level path that works in all cases
 
-@[circuit_norm]
 def eval (env : Env) (program : MOver F V (value (FExprOver F V))) : value F :=
   let (out, steps) := program #[]
   Witgen.eval { env, locals := evalSteps env steps.toList } out
 
-@[circuit_norm]
 def evalBool (env : Env) (program : MOver F V (BExprOver F V)) : Bool :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
-@[circuit_norm]
 def evalNat (env : Env) (program : MOver F V (NExprOver F V)) : ℕ :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
@@ -281,7 +273,6 @@ def toIR {n : ℕ} (program : MOver F V (VExprOver F V n)) : WitgenIROver F Env 
 form (halo2's `assignAdvice` and friends consume one scalar per cell). Irreducible so
 whnf walking an ops list does not repeatedly unfold into the (stuck) program run —
 `circuit_norm` still unfolds it via the equation, `with_unfolding_all` still sees through. -/
-@[circuit_norm]
 irreducible_def toIRScalar (program : MOver F V (FExprOver F V)) : WitgenIROver F Env V 1 :=
   toIR ((fun e => .lit #v[e]) <$> program)
 
@@ -312,6 +303,71 @@ theorem eval_toIRScalar (program : MOver F V (FExprOver F V)) (env : Env) :
 
 instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where
   default := pure default
+
+end MOver
+
+section EvalMapProj
+open Lean Meta Simp
+
+/-- `MOver.eval env (Point.x <$> p)  ~~>  (MOver.eval env p).x` — a projected hint
+program evaluates to the projection of the whole program's evaluation, so projected
+programs stay compositions of the WHOLE program's `MOver.eval` atom and meet the
+row-level `h_input` facts. A simproc because a lemma cannot quantify over an arbitrary
+structure projection; validated by `.all`-transparency defeq (the kernel re-checks). -/
+private def evalMapProjSimproc (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.MOver.eval && args.size >= 2 do
+    return .continue
+  let env := args[args.size - 2]!
+  let prog ← instantiateMVars args[args.size - 1]!
+  -- view `prog` as `f <$> p`
+  unless prog.getAppFn.isConstOf ``Functor.map do return .continue
+  let pargs := prog.getAppArgs
+  unless pargs.size ≥ 2 do return .continue
+  let f ← instantiateMVars pargs[pargs.size - 2]!
+  let p := pargs[pargs.size - 1]!
+  -- view `f` as a structure projection: the projection constant (possibly η-expanded)
+  let fromApp : Expr → MetaM (Option Name) := fun body => do
+    let .const pn _ := body.getAppFn | pure none
+    let some pinfo ← getProjectionFnInfo? pn | pure none
+    let bargs := body.getAppArgs
+    if bargs.size == pinfo.numParams + 1 && bargs.back? == some (.bvar 0) then
+      pure (some pn)
+    else pure none
+  let projName? : Option Name ←
+    match f with
+    | .lam _ _ body _ =>
+      match body with
+      | .proj sName idx (.bvar 0) => do
+        let genv ← getEnv
+        let fields := getStructureFields genv sName
+        if h : idx < fields.size then
+          pure (some (sName ++ fields[idx]))
+        else pure none
+      | _ => fromApp body
+    | _ => fromApp (mkApp f (.bvar 0))
+  let some projName := projName? | return .continue
+  -- the parent value TypeMap, read off the `Functor.map` application's source type
+  -- `α = Ty (FExprOver F V)` (the program's own type may arrive view-spelled)
+  unless pargs.size ≥ 4 do return .continue
+  let tyArg ← instantiateMVars pargs[pargs.size - 4]!
+  let parent := tyArg.getAppFn
+  unless parent.isConst do return .continue
+  try
+    let evalWhole ← withTransparency .all <| mkAppOptM ``Witgen.MOver.eval
+      #[none, none, some parent, none, none, none, none, some env, some p]
+    let rhs ← mkProjection evalWhole (Name.mkSimple projName.getString!)
+    if ← withTransparency .all (isDefEq e rhs) then
+      return .done { expr := rhs, proof? := none }
+    return .continue
+  catch _ => return .continue
+
+simproc evalMapProj (Witgen.MOver.eval _ _) := evalMapProjSimproc
+attribute [circuit_norm] evalMapProj
+
+end EvalMapProj
+
+namespace MOver
 end MOver
 
 -- Main Clean spellings (`Witgen.M.eval` &c.) — aliases into the `V`-generic

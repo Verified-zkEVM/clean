@@ -49,7 +49,7 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     fail_if_success (exact input)
     guard_hyp h_input :
       input_var.x.eval env.toEnvironment = input_x ∧
-        (Witgen.FExprOver.eval (Env := ProverEnvironment F) (V := Expression F) _ _ : F) = input_inverse
+        Witgen.MOver.eval env input_var.inverse = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
@@ -72,7 +72,11 @@ def parent : GeneralFormalCircuit F field field where
   completeness := by
     circuit_proof_start [circuit]
     -- The child prover assumptions should reduce to the parent input and the
-    -- inline inverse hint.
+    -- inline inverse hint. The hint is a `pure` program, so its `MOver.eval` is
+    -- evaluated by citing the folded-away IR equations.
+    unfold Witgen.MOver.eval
+    simp only [Witgen.evalSteps, Witgen.eval_field, Witgen.FExprOver.eval,
+      Witgen.WitgenEnv.readVar_main, h_input]
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
 
@@ -118,5 +122,10 @@ def boolNatParent : GeneralFormalCircuit F field field where
 
   completeness := by
     circuit_proof_start [boolNatCircuit]
+    -- The `isZero`/`xNat` hints are `pure` programs; evaluate their folded-away
+    -- `evalBool`/`evalNat` atoms by citing the IR equations.
+    unfold Witgen.MOver.evalBool Witgen.MOver.evalNat
+    simp only [Witgen.BExprOver.eval, Witgen.NExprOver.eval, Witgen.FExprOver.eval,
+      Witgen.WitgenEnv.readVar_main, h_input, Bool.and_true, decide_eq_true_eq, and_self]
 
 end TestMixedCircuitType
