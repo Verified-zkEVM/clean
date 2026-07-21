@@ -215,7 +215,7 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
           z14B2CPrime := env.env.get input_var.z14B2CPrime.cell.column
             ((env.place input_var.z14B2CPrime.cell.regionIndex
               + input_var.z14B2CPrime.cell.rowOffset : ℕ) : ℤ) } from by
-        with_unfolding_all rfl] at h_input hA
+        provable_type_simp] at h_input hA
     rw [h_input] at hA
     have hiak : env.env.get input_var.ak.cell.column
         ((env.place input_var.ak.cell.regionIndex
