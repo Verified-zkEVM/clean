@@ -339,6 +339,10 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   if sound then
     for c in callChunks do
       run? (← `(tactic| subcircuit_rw at $(mkIdent c):ident))
+    -- raw chunks can carry ∀-bound `.call` constraints (loop combinators over child
+    -- calls); the engine supports those, and is a silent no-op on call-free chunks
+    for k in [0:regionIdx] do
+      run? (← `(tactic| subcircuit_rw at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
   else
     run? (← `(tactic| subcircuit_rw))
   -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
@@ -360,9 +364,12 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   -- (main Clean's `circuit_proof_start` treats `h_env` the same way).
   let ruleSources : Array Name := #[`input_eq, `output_eq]
   -- pass 1: normalize ONLY the rule-sources, so their equations fire on the
-  -- normalized spellings everywhere else
+  -- normalized spellings everywhere else. The caller's unfold list rides along
+  -- (main Clean's CPS normalizes `h_input` with its extras too): a metadata
+  -- `output` spelled via a helper def (e.g. `reads`) needs the unfold to expose
+  -- its per-cell component equations.
   for g in ruleSources do
-    run? (← `(tactic| simp only [circuit_norm] at $(mkIdent g):ident))
+    run? (← `(tactic| simp only [circuit_norm, $(bridges ++ unfolds),*] at $(mkIdent g):ident))
   -- pass 2: derived hypotheses + goal, with input_eq/output_eq as rules
   let mut rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
     #[← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ bridges ++ unfolds

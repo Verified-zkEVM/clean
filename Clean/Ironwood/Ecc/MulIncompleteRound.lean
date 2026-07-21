@@ -650,16 +650,20 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     out = w.step (kBitsWindow alpha 0 i) (kBitsWindow alpha 0 (i + 1))
 
   soundness := by
-    circuit_proof_start [qMul2Gate, forLoopPolys, yA, xRExpr, reads,
+    circuit_proof_start2 [qMul2Gate, forLoopPolys, yA, xRExpr, reads,
       State.acc, State.yA2, State.xR]
-    obtain ⟨hxpc, hypc, hbool, hg1, hsec, hg2⟩ := hc
+    obtain ⟨hxpc, hypc, hbool, hg1, hsec, hg2⟩ := region_0
+    -- state the polys and the Spec back at the raw out-row cells (`sound_step`'s spelling)
+    simp only [← output_eq, Point.mk.injEq] at hbool hg1 hsec hg2 ⊢
     exact sound_step hxpc hypc hbool hg1 hsec hg2
 
   completeness := by
-    circuit_proof_start [qMul2Gate, forLoopPolys, yA, xRExpr, reads]
-    obtain ⟨m, hH⟩ := hPA
-    refine ⟨step_gates hH, ?_⟩
-    simp [← h_output]
+    circuit_proof_start2 [qMul2Gate, forLoopPolys, yA, xRExpr, reads]
+    obtain ⟨m, hH⟩ := prover_assumptions
+    obtain ⟨-, -, -, -, hbase⟩ := output_eq
+    -- substitute the witnessed cells: every out-row cell is a field of `w.step`
+    simp only [region_0, region_1, region_2, region_3, region_4, region_5, ← hbase]
+    exact ⟨step_gates hH, trivial⟩
 
 /-- Witness equations chain into the iterated step. -/
 theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)

@@ -129,9 +129,15 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
     ∀ j : Fin n, out.zs[j] = (ws.iter (bitsFrom alpha w) (j.val + 1)).z
 
   soundness := by
-    circuit_proof_start [zChain, reads, round, mul_one]
-    provable_type_simp
-    choose k hk using hc
+    circuit_proof_start2 [zChain, reads, round, mul_one]
+    choose k hk using region_0
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
     refine ⟨fun j => if h : j < n then k ⟨j, h⟩ else false, ?_, ?_⟩
     · -- the running-sum chain, from the per-round z-steps
       intro j
@@ -150,8 +156,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         exact hz
     · -- the accumulator fold
       intro m hOn hacc0 h2m hbudget
-      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
-        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hfold := loop_fold
         (fun r => { z := env.advice cfg.z ((place self + (offset + r) : ℕ) : ℤ),
                     xA := env.advice cfg.xA ((place self + (offset + r + 1) : ℕ) : ℤ),
@@ -179,19 +184,25 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
           exact ha)
         m (by simpa using hOn) (by simpa using hacc0) h2m hbudget
       simpa using hfold
-
   completeness := by
-    circuit_proof_start [reads]
-    obtain ⟨m, hH0, hbudget⟩ := hPA
+    circuit_proof_start2 [reads]
+    obtain ⟨m, hH0, hbudget⟩ := prover_assumptions
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
     -- the per-round witness equations, as steps of the row family
     have hsteps : ∀ i : Fin n,
         (rowFam cfg place env self offset) (i.val + 1)
           = ((rowFam cfg place env self offset) i.val).step
             (bitsFrom input w i.val) (bitsFrom input w (i.val + 1)) := by
       intro i
-      have hw := hwit i
+      have hw := region_0 i
       rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call] at hw
-      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, h_input] at hw
+      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, input_eq] at hw
       obtain ⟨hz, hxa, hl1, hl2, hxp, hyp⟩ := hw
       simp only [rowFam, bitsFrom]
       rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega,
@@ -207,7 +218,8 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
     · -- each round's constraints, via the engine leaf and the chained honesty
       intro i
       have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round (w + ↑i)) cfg
-        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var (hwit i)
+        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var
+        (region_0 i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
         roundC_extract_eq] at hleaf
       refine hleaf ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
@@ -215,11 +227,10 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       simp only [rowFam, bitsFrom] at hH
       simp only [reads, mul_one]
       provable_type_simp
-      simp only [circuit_norm, h_input]
+      simp only [circuit_norm, input_eq]
       exact hH
     · -- the exit state is the iterated step
-      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
-        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hn := hIter n le_rfl
       simp only [rowFam] at hn
       simpa using hn
