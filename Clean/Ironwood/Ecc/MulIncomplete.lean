@@ -331,6 +331,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
   soundness := by
     circuit_proof_start2 [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
+    simp only [← zs_eq, ← xf_eq, ← yf_eq, circuit_norm] at output_eq
     obtain ⟨⟨hax, hay⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
@@ -413,7 +414,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
         (by rw [hbx, hby]; exact hbOn)
         (by rw [hbx, hby]; exact hexit_acc)
         h2n hMb
-      rw [hbx, hby] at hlast
+      rw [hbx, hby, hax, hay] at hlast
       rw [hlast]
       congr 1
       have hext : accScalar m (fun j => if j < n then bits j else kl) n
@@ -430,7 +431,10 @@ def double_and_add (n : ℕ) (w : ℕ) :
       loop]
     obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := prover_assumptions
     obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := input_eq
-    obtain ⟨-, hzs⟩ := output_eq
+    -- orient the minted cell atoms onto the concrete cells the helper lemmas speak
+    simp only [← ex_eq, ← zs_eq, ← xf_eq, ← yf_eq, circuit_norm]
+      at region_7 region_8 region_9 h_spec_0 output_eq ⊢
+    obtain ⟨⟨hax, hay⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -635,7 +639,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
             exact hbOn)
         hexAcc hM2 hMb
       rw [hkl, hbx, hby] at hlast
-      rw [hbx, hby]
+      rw [← hax, ← hay, region_8, region_9, hbx, hby]
       exact hlast
 
 end Halo2.Ironwood.Ecc.MulIncomplete
