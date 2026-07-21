@@ -243,30 +243,6 @@ private theorem copyCheck_proverSpec_eq (K : ℕ) :
           output.zLast = ((input.element.val / 2 ^ (K * numWords K) : ℕ) : Fp) :=
   rfl
 
-/-- The child call's output record (`copyCheck = rangeCheck.toFormal`, so the layouter output at
-region `i` is `rangeCheck`'s region output at offset 0): `z0` at row 0, `zLast` at row `numWords`. -/
-private theorem copyCheck_output (K : ℕ) (cfg : LookupRangeCheck.Config K)
-    (inp : Var LookupRangeCheck.Inputs Fp) (i : RegionIndex) :
-    (LookupRangeCheck.copyCheck K (numWords K) false).output cfg inp i
-      = { z0 := .of i 0 cfg.runningSum,
-          zLast := .of i (numWords K) cfg.runningSum } := by
-  show ((LookupRangeCheck.rangeCheck K (numWords K) false).synthesize cfg 0 inp).output i = _
-  simp only [LookupRangeCheck.rangeCheck, circuit_norm, RegionCircuit.output_bind,
-    output_cellAt,
-    Bool.false_eq_true, if_false, Nat.zero_add]
-
-/-- Eval of the child's single-field input struct `{ element := c }`. -/
-private theorem copyCheckInputs_eval_eq (env : Placed Environment Fp) (c : AssignedCell Fp) :
-    eval env ({ element := c } : LookupRangeCheck.Inputs (AssignedCell Fp))
-      = { element := eval env c } := by
-  simp only [circuit_norm]
-
-private theorem copyCheckInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
-    (c : AssignedCell Fp) :
-    eval env ({ element := c } : LookupRangeCheck.Inputs (AssignedCell Fp))
-      = { element := eval env c } := by
-  simp only [circuit_norm]
-
 /-! ## The gadget bundle
 
 `overflow_check` at the layouter level, three faithful sibling regions. Parameterized by `K` and
@@ -306,62 +282,32 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Soundness ══
   soundness := by
-    -- composite layouter gadget: the universal prefix runs; `hc`/`h_input` survive for the
-    -- manual layouter peel below.
-    circuit_proof_start
-    obtain ⟨hTable, hDistinct⟩ := _hE
-    -- circuit_proof_start already peeled the three-region layouter structure (region 1 witness s at
-    -- i₀, copyCheck child at i₀+1, gate at i₀+2) and abstracted the child output; restore the
-    -- concrete `copyCheck.output` term so the child-output bridges below fire.
-    subst x_gen_out_0
-    -- hc : copyCheck child contract (region i₀+1) ∧ gate-region constraints (region i₀+2); the
-    -- copyCheck chunk was consumed by circuit_proof_start, so `hChild` is its EnvA → A → Spec
-    -- implication. The witness-s region (i₀) has no constraints (bare assignAdvice → True).
-    obtain ⟨hChild, hGate⟩ := hc
-    -- discharge the child's EnvAssumptions (BY PROJECTION from the parent's) and Assumptions
-    have hChildE : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
-        cfg.lookupConfig (⟨place, env⟩ : Placed Environment Fp) := by
-      rw [copyCheck_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩
-    have hChildA : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
-        (eval (⟨place, env⟩ : Placed Environment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-          : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
-      rw [copyCheck_assumptions_eq]; exact hA
-    have hSpec := hChild hChildE hChildA
-    rw [copyCheck_spec_eq, copyCheck_output] at hSpec
+    circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
+      EnvAssumptions]
     -- the child decomposition: s = lo + 2^{K·numWords}·zLast, lo < 2^{K·numWords}
-    obtain ⟨-, ⟨lo, hlo, hDecomp⟩, -⟩ := hSpec
-    -- reduce the gate region constraints (5 gate polys + the copies). The gate is at region i₀+2.
-    simp only [gateRegion, circuit_norm, overflowGate, Constraints.withSelector] at hGate
+    have hSpec := dec_spec env_assumptions assumptions
+    rw [dec_eq] at hSpec
+    simp only [circuit_norm] at hSpec
+    obtain ⟨-, lo, hlo, hDecomp⟩ := hSpec
     obtain ⟨hCz0, hCz130, hCk254, hCalpha, hCsml, hCs,
-      hSCheck, hRecovery, hLoZero, hSMLcheck, hCanon⟩ := hGate
-    -- reduce the copyCheck child's output cell in the `s_minus_lo_130` copy, then land all
-    -- copies + the child decomposition on `env.advice` reads
-    rw [copyCheck_output] at hCsml
-    -- assemble `Spec`
-    simp only [Spec]
-    provable_type_simp
-    obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
-    rw [hIalpha] at hCalpha; rw [hIz0] at hCz0
-    rw [hIz130] at hCz130; rw [hIk254] at hCk254
-    have h2124 : (2 ^ 124 : Fp) = (2 : Fp) ^ 124 := by norm_num
+      hSCheck, hRecovery, hLoZero, hSMLcheck, hCanon⟩ := region_0
     rw [hKW] at hDecomp hlo
     rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecomp
     refine ⟨?_, ?_, ?_⟩
     · -- recovery: z_0 = alpha + t_q
-      rw [← hCz0, ← hCalpha, ← sub_eq_zero]; linear_combination hRecovery
+      rw [← hCz0, ← hCalpha, ← sub_eq_zero]
+      linear_combination hRecovery
     · -- k_254 = 0 ∨ z_130 = 2^124
       rw [← hCk254, ← hCz130]
       rcases mul_eq_zero.mp hLoZero with h | h
       · exact Or.inl h
-      · exact Or.inr (by rw [h2124]; linear_combination sub_eq_zero.mp h)
-    · -- the canonicity existential: sHi = zLast, sLo = lo
-      refine ⟨env.advice cfg.lookupConfig.runningSum
-        ((place (i₀ + 1) + numWords K : ℕ) : ℤ), lo, hlo, ?_, ?_, ?_⟩
-      · -- alpha + k_254·2^130 = lo + 2^130·zLast, chaining:
-        --   gate alpha/k254 → s cell (s_check) → original s (s copy) → decomposition
+      · exact Or.inr (by
+          rw [show (2 ^ 124 : Fp) = (2 : Fp) ^ 124 from by norm_num]
+          linear_combination sub_eq_zero.mp h)
+    · -- the canonicity existential: sHi = the child's zLast value, sLo = lo
+      refine ⟨AssignedCell.eval place env dec_zLast, lo, hlo, ?_, ?_, ?_⟩
+      · -- alpha + k_254·2^130 = lo + 2^130·zLast, via s_check + the s copy + the decomposition
         rw [← hCalpha, ← hCk254]
-        -- s_check gives adv2@(gate cur) = alpha_gate + k254_gate·2^130; hCs gives adv2@(gate cur) =
-        -- adv0@(place i₀) = s_original; hDecomp splits s_original. Chain by linear_combination.
         linear_combination -hSCheck + hCs + hDecomp
       · -- k_254 = 0 ∨ zLast = 0
         rw [← hCk254]
@@ -381,114 +327,82 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   -- ══ Completeness ══
   completeness := by
-    -- composite layouter gadget: the universal prefix runs; `hwit`/`h_input`/`hPA` survive for
-    -- the manual peel below.
-    circuit_proof_start
-    obtain ⟨hTable, hDistinct⟩ := _hE
-    -- circuit_proof_start peeled the witness list (region 1 witness s ++ copyCheck child ++ gate
-    -- region), consumed the copyCheck chunk (emitting `h_spec_0`) and split the goal; restore the
-    -- concrete child output term so the output bridges below fire.
-    subst x_gen_out_0
-    obtain ⟨hWs, hWchild, hWgate⟩ := hwit
-    -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
-    simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
-      WitgenEnv.readVar_halo2] at hWs
-    -- the copyCheck child chunk is consumed by circuit_proof_start's completeness prefix (`h_spec_0`)
-    obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
-    refine ⟨?_, ?_⟩
-    · -- copyCheck child preconditions: EnvA (projection) ∧ A (field card) ∧ PA (vacuous, non-strict)
-      refine ⟨?_, ?_, ?_⟩
-      · rw [copyCheck_envAssumptions_eq]
-        simp only [Placed.toEnvironment_env] at hTable ⊢
-        exact ⟨hTable, hDistinct⟩
-      · rw [copyCheck_assumptions_eq]; exact hA
-      · rw [copyCheck_proverAssumptions_eq]; simp
-    · -- the gate region constraints, from the honest values + the child's derived contract
-      -- (`h_spec_0`, verifier `Spec` + honest `ProverSpec`) + the honest `Spec` premise (`hpa`).
-      have hChildE : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
-          cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
-        rw [copyCheck_envAssumptions_eq]
-        simp only [Placed.toEnvironment_env] at hTable ⊢
-        exact ⟨hTable, hDistinct⟩
-      have hChildA : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
-          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-            : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
-        rw [copyCheck_assumptions_eq]; exact hA
-      have hChildPA : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
-          ({ element := env.advice cfg.adv0 ↑(place i₀) } : LookupRangeCheck.Inputs Fp)
-          ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
-            ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-              : LookupRangeCheck.Inputs (AssignedCell Fp)) (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
-          env.hint := by
-        rw [copyCheck_proverAssumptions_eq]; simp
-      obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hChildE hChildA hChildPA
-      rw [copyCheck_spec_eq, copyCheck_output] at hChildSpec
-      rw [copyCheck_proverSpec_eq, copyCheck_output] at hChildPS
-      obtain ⟨-, ⟨lo, hlo, hDecompV⟩, -⟩ := hChildSpec
-      -- reduce the gate region constraints to the 6 copies + 5 gate polys
-      simp only [gateRegion, circuit_norm, overflowGate, Constraints.withSelector]
-      rw [copyCheck_output]
-      -- honest Spec facts from `hpa` (the honest-caller precondition = the overflow `Spec`)
-      simp only [Spec] at hPA
-      provable_type_simp
-      obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := hPA
-      -- peel the gate region witnesses: the 6 copy assignAdvice witnesses + η + s copy
-      simp only [gateRegion, circuit_norm, Halo2.operations_copyAdvice, operations_assignAdvice,
-        RegionOperations.extendsWitnesses_cons,
-        RegionOperations.extendsWitnesses_nil, RegionOperation.extendsWitness_assignAdvice,
-        RegionOperation.extendsWitness_constrainEqual] at hWgate
-      -- reduce the copyCheck child output cell in the s_minus_lo_130 copy witness
-      rw [copyCheck_output] at hWgate
-      -- the copy witnesses: each gate-window cell = its source (the `.expr src` assignAdvice value)
-      simp only [etaWit, eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
-        circuit_norm] at hWgate
-      obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := hWgate
-      -- the prefix's `provable_type_simp` normalized the honest-`Spec` facts (`hkey`/`hHiZ`/…) to
-      -- the verifier `input_*` value spelling; land the input-copy equations on the witness cells
-      -- (`hWs`/copies) so both sides speak `input_*` for the value algebra below.
-      simp only [hIalpha, hIz0, hIz130, hIk254] at hWs hWz0 hWz130 hWeta hWk254 hWalpha ⊢
-      -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`) and
-      -- the child tail nat value (`hChildPS`); the prefix's value-replacement already landed both
-      -- on the `place i₀` spelling, so the `K · numWords K` bridge is the only rewrite left.
-      rw [hKW] at hDecompV hlo hChildPS
-      rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecompV
-      -- `sHi = 0 → child zLast = 0` (the only direction the canonicity gate needs). With `sHi = 0`
-      -- the honest `Spec` pins `s = ↑sLo < 2^130`, so `s.val < 2^130` and the shift is 0.
-      have hCard130 : 2 ^ 130 < PALLAS_BASE_CARD := by
-        norm_num [PALLAS_BASE_CARD]
-      have hzLastZero : sHi = 0 → env.advice cfg.lookupConfig.runningSum
-          ((place (i₀ + 1) + numWords K : ℕ) : ℤ) = 0 := by
-        intro hsHi0
-        rw [hChildPS]
-        have hsVal : (env.advice cfg.adv0 ((place i₀ : ℕ) : ℤ)).val < 2 ^ 130 := by
-          have hs_eq : env.advice cfg.adv0 ((place i₀ : ℕ) : ℤ) = (sLo : Fp) := by
-            rw [hWs, hkey, hsHi0]; ring
-          rw [hs_eq, ZMod.val_natCast_of_lt (lt_trans hsLo_lt hCard130)]; exact hsLo_lt
-        rw [Nat.div_eq_of_lt hsVal, Nat.cast_zero]
-      have h2124 : (2 ^ 124 : Fp) = (2 : Fp) ^ 124 := by norm_num
-      -- assemble: the 6 copies (from the witnesses) + the 5 gate polys
-      refine ⟨hWz0, hWz130, hWk254, hWalpha, hWsml, hWs2, ?_, ?_, ?_, ?_, ?_⟩
-      · -- s_check: honest s cell (adv2@gate cur, copied from region i₀) = alpha_gate + k254_gate·2^130
-        rw [hWs2, hWs, hWalpha, hWk254]; ring
-      · -- recovery: z_0 − alpha − t_q = 0
-        rw [hWz0, hWalpha]
-        rw [← sub_eq_zero] at hRec; linear_combination hRec
-      · -- lo_zero: k254·(z130 − 2^124) = 0
-        rw [hWk254, hWz130]
-        rcases hLoZ with h | h
-        · rw [h]; ring
-        · rw [h, h2124]; ring
-      · -- s_minus_lo_130_check: k254·s_minus_lo_130 = 0 (s_minus_lo_130 = child zLast)
-        rw [hWk254, hWsml]
-        rcases hHiZ with h | h
-        · rw [h]; ring
-        · rw [hzLastZero h]; ring
-      · -- canonicity: (1 − k254)·(1 − z130·η)·s_minus_lo_130 = 0, η = inv0(z130)
-        rw [hWk254, hWz130, hWeta, hWsml]
-        rcases hEtaSpec with h | hz | h
-        · rw [h]; ring
-        · rw [mul_inv_cancel₀ hz]; ring
-        · rw [hzLastZero h]; ring
+    circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
+      EnvAssumptions, sWit, etaWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
+      WitgenEnv.readVar_halo2]
+    -- the child's constraints and honest facts, via the engine leaves on the witness chunk
+    have hleaf := Halo2.SubcircuitRw.layouter_completeness_leaf
+      (LookupRangeCheck.copyCheck K (numWords K) false) cfg.lookupConfig (i₀ + 1)
+      place env { element := sCell } dec_spec
+    have hder := Halo2.SubcircuitRw.layouter_completeness_derived
+      (LookupRangeCheck.copyCheck K (numWords K) false) cfg.lookupConfig (i₀ + 1)
+      place env { element := sCell } dec_spec
+    have hE' : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
+        cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
+      rw [copyCheck_envAssumptions_eq]; exact env_assumptions
+    have hA' : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
+      rw [copyCheck_assumptions_eq]; exact assumptions
+    have hPA' : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
+        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp)))
+        ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
+          { element := sCell } (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+        env.hint := by
+      rw [copyCheck_proverAssumptions_eq]; simp
+    obtain ⟨hChildSpec, hChildPS⟩ := hder hE' hA' hPA'
+    rw [copyCheck_spec_eq, dec_eq] at hChildSpec
+    rw [copyCheck_proverSpec_eq, dec_eq] at hChildPS
+    simp only [circuit_norm] at hChildSpec hChildPS
+    obtain ⟨-, lo, hlo, hDecompV⟩ := hChildSpec
+    obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := region_1
+    obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := prover_assumptions
+    rw [hKW] at hDecompV hlo hChildPS
+    rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecompV
+    -- the honest s cell: `sCell`'s eval is the region-i₀ advice read, with the witnessed value
+    have hsval : AssignedCell.eval place env.toEnvironment sCell
+        = input_alpha + input_k254 * 2 ^ 130 := by
+      rw [← sCell_eq]
+      simp only [circuit_norm]
+      rw [region_0]
+    -- `sHi = 0 → child zLast = 0`: with `sHi = 0` the honest `Spec` pins `s = ↑sLo < 2^130`
+    have hCard130 : 2 ^ 130 < PALLAS_BASE_CARD := by
+      norm_num [PALLAS_BASE_CARD]
+    have hzLastZero : sHi = 0 → AssignedCell.eval place env.toEnvironment dec_zLast = 0 := by
+      intro hsHi0
+      rw [hChildPS]
+      have hsVal : (AssignedCell.eval place env.toEnvironment sCell).val < 2 ^ 130 := by
+        have hs_eq : AssignedCell.eval place env.toEnvironment sCell = (sLo : Fp) := by
+          rw [hsval, hkey, hsHi0]; ring
+        rw [hs_eq, ZMod.val_natCast_of_lt (lt_trans hsLo_lt hCard130)]
+        exact hsLo_lt
+      rw [Nat.div_eq_of_lt hsVal, Nat.cast_zero]
+    have h2124 : (2 ^ 124 : Fp) = (2 : Fp) ^ 124 := by norm_num
+    refine ⟨hleaf ⟨hE', hA', hPA'⟩,
+      hWz0, hWz130, hWk254, hWalpha, hWsml, hWs2, ?_, ?_, ?_, ?_, ?_⟩
+    · -- s_check: the s cell = alpha_gate + k254_gate·2^130
+      rw [hWs2, hsval, hWalpha, hWk254]; ring
+    · -- recovery: z_0 − alpha − t_q = 0
+      rw [hWz0, hWalpha]
+      rw [← sub_eq_zero] at hRec
+      linear_combination hRec
+    · -- lo_zero: k254·(z130 − 2^124) = 0
+      rw [hWk254, hWz130]
+      rcases hLoZ with h | h
+      · rw [h]; ring
+      · rw [h, h2124]; ring
+    · -- s_minus_lo_130_check: k254·zLast = 0
+      rw [hWk254, hWsml]
+      rcases hHiZ with h | h
+      · rw [h]; ring
+      · rw [hzLastZero h]; ring
+    · -- canonicity: (1 − k254)·(1 − z130·η)·zLast = 0, η = inv0(z130)
+      rw [hWk254, hWz130, hWeta, hWsml]
+      rcases hEtaSpec with h | hz | h
+      · rw [h]; ring
+      · rw [mul_inv_cancel₀ hz]; ring
+      · rw [hzLastZero h]; ring
 
 end MulOverflow
 

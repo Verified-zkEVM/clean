@@ -534,10 +534,13 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   -- left-to-right: circuit spelling → declared output) together with the caller's
   -- bridge list, over every derived hypothesis and the goal ──
   if !sound then
-    -- the engine consumed the call chunks' witness sides; drop the raw leftovers
+    -- the engine consumed the call chunks' witness sides; drop the raw leftovers —
+    -- but only when it actually emitted the derived `h_spec_*` statements (an engine
+    -- miss must keep the witness material for the user half's manual leaf application)
     -- (TODO: subcircuit_rw should replace them itself)
-    for c in callChunks do
-      run? (← `(tactic| clear $(mkIdent c):ident))
+    unless (← specHyps).isEmpty do
+      for c in callChunks do
+        run? (← `(tactic| clear $(mkIdent c):ident))
   run? (← `(tactic| provable_type_simp))
   -- rule-sources: ONLY the naming equations `input_eq`/`output_eq` (cell spelling ↦
   -- declared value; that rewrite direction is forced). Row/witness equations
