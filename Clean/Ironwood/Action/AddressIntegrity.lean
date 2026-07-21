@@ -171,63 +171,20 @@ def circuit : FormalCircuit Fp
       Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq
     ] at h_call_mul h_call_pkd h_copies
     -- ═══ USER half ═══
-    -- because our framework did the right thing throughout, a trivially composing parent is trivial to sound
+    -- because our framework did the right thing throughout, a trivially composing parent is trivially sound
     simp_all
 
   completeness := by
-    -- ═══ v2-manual FRAMEWORK prefix ═══
-    rintro ⟨mcfg, wcfg⟩
-    rw [FormalCircuit.completeness_iff]
-    intro i₀ env input_var input output h_input h_output hW hE hA hPA
-    obtain ⟨place, env⟩ := env
-    dsimp only [] at *
-    simp only [ElaboratedCircuit.output_eq] at h_output
-    -- bind 1
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_mul, hW⟩ := hW
-    simp only [FormalCircuit.output_call'] at hW h_output ⊢
-    revert hW h_output
-    generalize h_derived : Ecc.Mul.mul.output mcfg
-      { alpha := input_var.ivk, base := input_var.gDOld } i₀ = derived
-    intro hW h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
-    -- bind 2
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_pkd, hW⟩ := hW
-    simp only [FormalCircuit.output_call'] at hW h_output ⊢
-    revert hW h_output
-    generalize h_pkd : (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").output wcfg input_var.pkDOld (i₀ + 4) = pkDOld
-    intro hW h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
-    -- bind 3 (raw copy-constraint region)
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_copies, hW⟩ := hW
-    -- terminal `pure pkDOld`
-    rw [Circuit.operations_pure, constraints_nil]
-    rw [Circuit.output_pure] at h_output
-    clear hW
-    -- strengthen the goal chunks + emit the children's completeness implications
-    subcircuit_rw
-    -- value landing on component atoms
-    obtain ⟨input_var_ivk, input_var_gd, input_var_pkd⟩ := input_var
-    obtain ⟨input_ivk, input_gd, input_pkd⟩ := input
-    simp only [circuit_norm] at h_input hA hPA h_derived h_pkd h_spec_0 h_spec_1 ⊢
-    obtain ⟨h_ivk, h_gd, h_pkd_in⟩ := h_input
+    circuit_proof_start2
     -- (h′) prover/verifier eval coincidence for the hint-free point var (v2 TODO: this
     -- should be a circuit_norm law; cell reads already coincide via toEnvironment_get)
-    have h_gdV : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_gd
-        : Value Point Fp) = input_gd := by
-      rw [← h_gd]
+    have h_gdV : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_gDOld
+        : Value Point Fp) = input_gDOld := by
+      rw [← h_input_gDOld]
       simp only [circuit_norm, explicit_provable_type]
-    -- (h) value replacement: land every input-var eval on its value name
-    simp only [h_ivk, h_gdV, h_pkd_in] at h_spec_0 h_spec_1 hA ⊢
+    -- residual value replacement with the coincidence law (the tactic already landed
+    -- the field-typed components)
+    simp only [h_gdV] at h_spec_0 h_spec_1 hA ⊢
     -- ═══ USER half ═══
     -- `g_d_old`'s on-curve assumption, respelled at the input value
     -- the mul child's honest contract: the derived point is `[ivk] g_d_old`

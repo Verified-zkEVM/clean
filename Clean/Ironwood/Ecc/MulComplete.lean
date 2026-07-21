@@ -777,20 +777,17 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         numBits hLoop
     -- ── the output components: `provable_type_simp` destructured `output` and split `h_output`
     -- component-wise into `⟨eval loop.output = ⟨acc_x, acc_y⟩, eval ⟨zs cells⟩ = output_zs⟩` (the
-    -- `acc` leaf is opaque-eval-vs-Point-literal, the `zs` leaf a whole-vector eval; the pass keeps
-    -- them as this conjunction). Read each off. ──
-    obtain ⟨hOaccEval, hOzsEval⟩ := h_output
+    -- `acc` leaf arrives whole (`h_output_0`), the `zs` leaf already formed per-index
+    -- (`h_output_zs`, advice-atom-left) by `provable_type_simp`'s vector pass. ──
     have hOutAcc : (⟨output_acc_x, output_acc_y⟩ : Point Fp)
         = eval (⟨place, env⟩ : Placed Environment Fp)
           ((loop cfg ({ alpha := input_var_alpha, base := { x := input_var_base_x, y := input_var_base_y }, xA := input_var_xA, yA := input_var_yA, z := input_var_z } : Var Inputs Fp)
             (kBitWindowProg input_var_alpha w) offset numBits).output self) :=
-      hOaccEval.symm
+      h_output_0.symm
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
         output_zs[i] = env.advice cfg.zComplete
-          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
-      intro i hi
-      have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
-      simpa only [circuit_norm] using this
+          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) :=
+      fun i hi => (h_output_zs i hi).symm
     -- ── assemble `RoundInvariant` ──
     refine ⟨bits', ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain: the loop's per-round steps, re-indexed onto the output cells
@@ -846,18 +843,15 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         numBits hWloop
     rw [hbits] at hAccOut
     simp only [hbits] at hZs
-    -- ── the output components: `h_output` (prover view) as the `⟨acc-eval, zs-eval⟩` conjunction ──
-    obtain ⟨hOaccEval, hOzsEval⟩ := h_output
+    -- ── the output components, pre-formed by the vector pass (prover view) ──
     have hOutAcc : (⟨output_acc_x, output_acc_y⟩ : Point Fp)
         = accPoint { x := input_base_x, y := input_base_y }
             { x := input_xA, y := input_yA } bits numBits :=
-      hOaccEval.symm.trans hAccOut
+      h_output_0.symm.trans hAccOut
     have hOutZs : ∀ (i : ℕ) (hi : i < numBits),
         output_zs[i] = env.advice cfg.zComplete
-          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) := by
-      intro i hi
-      have := (congrArg (fun v => v[i]'hi) hOzsEval).symm
-      simpa only [circuit_norm] using this
+          ((place self + (offset + 2 * i + 2) : ℕ) : ℤ) :=
+      fun i hi => (h_output_zs i hi).symm
     -- ── assemble: copy constraint + loop constraints + `RoundInvariant` ──
     refine ⟨hCloop, ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain on the honest values

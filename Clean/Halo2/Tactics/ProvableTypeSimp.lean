@@ -197,11 +197,14 @@ private def isVectorType (ty : Expr) : MetaM Bool := do
 `Eval.eval env ⟨cells⟩ = v` (or reversed): one side a `fields n` vector value under an `Eval.eval`
 head, the other a free variable. Returns `(evalSide, var)` when so. -/
 private def asVectorEvalEq (lhs rhs : Expr) : MetaM (Option (Expr × Expr)) := do
-  if (← isVectorType (← inferType lhs)) && rhs.consumeMData.isFVar
-      && lhs.getAppFn.isConstOf ``Eval.eval then
+  -- The value side may be ANY vector expression (not just a bare variable): the formed
+  -- per-index fact projects both sides, and the follow-up `circuit_norm` pass normalizes
+  -- each (lazy getElem bridge on the eval side, `Vector.getElem_ofFn`-class rules on the
+  -- value side). Generalized from the fvar-only gate so child-spec vector equations
+  -- (the BFE `InnerSpec.zs` class) form automatically, not just `h_output` splits.
+  if (← isVectorType (← inferType lhs)) && lhs.getAppFn.isConstOf ``Eval.eval then
     return some (lhs, rhs.consumeMData)
-  if (← isVectorType (← inferType rhs)) && lhs.consumeMData.isFVar
-      && rhs.getAppFn.isConstOf ``Eval.eval then
+  if (← isVectorType (← inferType rhs)) && rhs.getAppFn.isConstOf ``Eval.eval then
     return some (rhs, lhs.consumeMData)
   return none
 
@@ -263,12 +266,12 @@ private def formVectorEqFacts (fvarId : FVarId) : TacticM Bool := withMainContex
   -- *opaque-eval* component (`MulComplete.Output {acc : Point, zs}`, `HashPiece.Output` with
   -- `DoubleAndAddRow` rows) leaves a literal/opaque-sided leaf; those `h_output`s are consumed
   -- whole by their user halves (this pass is a clean no-op on them, so the split stays predictable).
+  -- Non-vector leaves pass through whole (kept as named facts) regardless of shape —
+  -- the previous every-leaf-must-be-var-sided gate blocked child-spec conjunctions
+  -- (mixed scalar/vector spec facts) from forming their vector components.
   let mut hasVector := false
-  let mut allOk := true
   for (lhs, rhs) in eqs do
     if (← asVectorEvalEq lhs rhs).isSome then hasVector := true
-    else unless lhs.consumeMData.isFVar || rhs.consumeMData.isFVar do allOk := false
-  unless allOk do return false
   unless hasVector do return false
   let hName := decl.userName
   -- final fact name `h_<field>`, after the value variable each leaf constrains (`output_xA` →

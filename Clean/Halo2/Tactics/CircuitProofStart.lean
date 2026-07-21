@@ -460,8 +460,13 @@ def unfoldCanonicalElaborated : TacticM Unit := do
     if isInst then insts := insts.push c
   if insts.isEmpty then return
   let ids := insts.map mkIdent
+  -- `at *` was measurably costly on files where the name newly resolves (a full
+  -- +instances dsimp traversal of every hypothesis); the projections we exist to
+  -- reduce only ever appear in the statement-provided equations and the goal.
   bestEffort <| evalTactic (← `(tactic|
-    dsimp +instances only [$[$ids:ident],*] at *))
+    dsimp +instances only [$[$ids:ident],*] at $(mkIdent `h_output):ident ⊢))
+  bestEffort <| evalTactic (← `(tactic|
+    dsimp +instances only [$[$ids:ident],*] at $(mkIdent `h_input):ident))
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
 target set. Soundness peels `hc`, `h_output` and the goal (the constraints hyp, the output-value

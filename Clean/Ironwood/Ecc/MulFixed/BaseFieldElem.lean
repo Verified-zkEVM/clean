@@ -273,10 +273,20 @@ def InnerProverSpec (B : FixedBase)
 /-- The elaborated-metadata instance for the inner region's synthesize lambda (the
 bundle's default `{}`), local so the standalone proofs can state
 `Soundness`/`Completeness` over it. -/
-instance innerElab (B : FixedBaseData) (config : Config) (offset : ℕ) :
+instance elaborated (B : FixedBaseData) (config : Config) (offset : ℕ) :
     ElaboratedRegionCircuit Fp Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut
       (fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
-        innerRegion B config offset input.alpha) := {}
+        innerRegion B config offset input.alpha) where
+  output _ self :=
+    { acc := { x := .of self (offset + 84) config.superConfig.addIncompleteConfig.xQR,
+               y := .of self (offset + 84) config.superConfig.addIncompleteConfig.yQR },
+      mulB := { x := .of self (offset + 84) config.superConfig.addConfig.xP,
+                y := .of self (offset + 84) config.superConfig.addConfig.yP },
+      zs := Vector.ofFn (fun j => .of self (offset + j.val)
+              config.superConfig.runningSumConfig.z) }
+  output_eq := by
+    intro input self
+    simp only [circuit_norm, innerRegion_output]
 
 set_option linter.all false in
 /-- The honest per-window point values (shared by the fixed-rows and chain completeness
@@ -802,29 +812,24 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
     · with_reducible
         exact (inner_completeness_chain B cfg offset self env input_var_alpha
           input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).1
-    · -- the honest-prover contract (`InnerProverSpec`)
+    · -- the honest-prover contract (`InnerProverSpec`) — the reduced instance + the
+      -- vector pass deliver the per-coordinate/per-index output facts directly
       simp only [InnerProverSpec]
-      change ProvableStruct.eval env.place env.env.toEnvironment
-        ((innerRegion B.toData cfg offset input_var_alpha).output self) = _ at h_output
-      rw [innerRegion_output] at h_output
-      provable_type_simp
-      obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
       refine ⟨?_, ?_, ?_, ?_, ?_⟩
-      · rw [← hOax]
+      · rw [← h_output_acc_x]
         with_reducible exact (inner_completeness_chain B cfg offset self env
           input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.1
-      · rw [← hOay]
+      · rw [← h_output_acc_y]
         with_reducible exact (inner_completeness_chain B cfg offset self env
           input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.1
-      · rw [← hOmx]
+      · rw [← h_output_mulB_x]
         with_reducible exact (inner_completeness_chain B cfg offset self env
           input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.1
-      · rw [← hOmy]
+      · rw [← h_output_mulB_y]
         with_reducible exact (inner_completeness_chain B cfg offset self env
           input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.2
       · intro w
-        rw [← congrArg (fun v => v[w.val]'w.isLt) hOzs]
-        simp only [circuit_norm]
+        rw [← h_output_zs w.val w.isLt]
         exact hDC.2 w
 
 set_option linter.constructorNameAsVariable false in
@@ -856,17 +861,11 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     -- circuit_proof_start consumed the copyDecompose chunk into its contract (assumptions `True`);
     -- discharge and unfold to the running-sum decomposition.
     simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq] at hDec
-    -- circuit_proof_start unfolded `innerRegion` in `h_output`; refold to the region output (defeq
-    -- via the default elaborated instance), then project to the reduced cells.
-    change ProvableStruct.eval env.place env.env
-      ((innerRegion B.toData cfg offset input_var_alpha).output self)
-      = { acc := output_acc, mulB := output_mulB, zs := output_zs } at h_output
-    rw [innerRegion_output] at h_output
-    provable_type_simp
+    -- the reduced instance + the vector pass deliver the per-coordinate/per-index
+    -- output facts directly (no refold ladder)
     -- the decompose spec, landed on cells
     simp only [circuit_norm] at hDec
     obtain ⟨V, hVlt, hAlphaV, hZs⟩ := hDec
-    obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
     -- ── the digit sequence and its reconstruction ──
     have hVlt' : V < 8 ^ 85 := by
       have : (2 : ℕ) ^ (3 * 85) = 8 ^ 85 := by rw [pow_mul]; norm_num
@@ -1009,21 +1008,21 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
       dsimp only at hI83
       rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
         show offset + 83 + 1 = offset + 84 from by omega] at hI83
-      rw [← hOax, ← hOay]
+      rw [← h_output_acc_x, ← h_output_acc_y]
       rcases hP : Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 83
           • B.point with ⟨px, py⟩
       rw [hP] at hI83
       rw [hI83.1, hI83.2]
     · -- mulB = windowPoint 84 k₈₄  (the MSB coords row)
       obtain ⟨hwx, hwy⟩ := hWP ⟨84, by norm_num⟩
-      rw [← hOmx, ← hOmy]
+      rw [← h_output_mulB_x, ← h_output_mulB_y]
       rcases hW : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (V / 2 ^ (3 * 84) % 8)
         with ⟨wx, wy⟩
       rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl, hW] at hwx hwy
       rw [hwx, hwy]
     · -- the running sums are the shifts of the digit sum
       intro w
-      rw [hSum, ← congrArg (fun v => v[w.val]'w.isLt) hOzs]
+      rw [hSum, ← h_output_zs w.val w.isLt]
       simp only [circuit_norm, hZW]
       exact hZs w
 
@@ -1177,6 +1176,22 @@ private theorem canon_gate_polys {row : Halo2.Ironwood.Ecc.MulFixed.BaseFieldEle
     push_cast [Halo2.Ironwood.tP]
     ring
 
+derive_contract_bridges innerC (B : FixedBase) := inner B
+
+/-- The inner bundle's output projection at the call spelling, reduced (`rfl` through
+the canonical `elaborated` instance). INTERIM hand bridge: the metadata substrate's
+`derive_contract_bridges` output emission will generate this. -/
+private theorem inner_output (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp) (self : RegionIndex) :
+    @ElaboratedRegionCircuit.output Fp _ Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut
+        _ _ _ ((inner B).elaborated cfg offset) input self
+      = ({ acc := { x := .of self (offset + 84) cfg.superConfig.addIncompleteConfig.xQR,
+                    y := .of self (offset + 84) cfg.superConfig.addIncompleteConfig.yQR },
+           mulB := { x := .of self (offset + 84) cfg.superConfig.addConfig.xP,
+                     y := .of self (offset + 84) cfg.superConfig.addConfig.yP },
+           zs := Vector.ofFn (fun j => .of self (offset + j.val)
+                   cfg.superConfig.runningSumConfig.z) } : InnerOut (AssignedCell Fp)) := rfl
+
 /-- Rust `FixedPointBaseField::mul`: `[α]B` for a base-field element α, canonically. -/
 def circuit (B : FixedBase) : FormalCircuit Fp
     ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config)
@@ -1214,13 +1229,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     obtain ⟨hEI, hTable, hDistinct⟩ := _hE
     -- ── region 1: the inner windowed mul, consumed through the bundle's soundness ──
     have hIS := (inner B).soundness cfg 0 i₀ env ⟨input_var⟩ hEI trivial hInner
-    have hIS' : InnerSpec B
-        (eval env ({ alpha := input_var } :
-          Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp))
-        (eval env ((innerRegion B.toData cfg 0 input_var).output i₀)) () := hIS
-    rw [innerRegion_output] at hIS'
-    simp only [InnerSpec, circuit_norm] at hIS'
-    obtain ⟨ks, hks_lt, hαV, hAcc, hMulB, hZs⟩ := hIS'
+    simp only [innerC_spec_eq, inner_output, circuit_norm] at hIS
+    obtain ⟨ks, hks_lt, hαV, hAcc, hMulB, hZs⟩ := hIS
     -- ── region 2: the complete addition `mul_b + acc` ──
     subcircuit_rw at hAdd
     simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
@@ -1404,14 +1414,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       lt_of_lt_of_le (ZMod.val_lt x)
         (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
     -- the inner bundle's honest-prover facts (exit accumulator/MSB, running sums)
-    have hIPS : InnerProverSpec B
-        (eval env ({ alpha := input_var } :
-          Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp))
-        (eval env ((innerRegion B.toData cfg 0 input_var).output i₀))
-        default env.env.hint :=
-      ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
-        trivial (hval255 _)).2
-    simp only [InnerProverSpec, innerRegion_output, circuit_norm] at hIPS
+    have hIPS := ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
+      trivial (hval255 _)).2
+    simp only [innerC_proverSpec_eq, inner_output, circuit_norm] at hIPS
     refine ⟨?_, ?_, ?_, ?_⟩
     · exact ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
         trivial (hval255 _)).1
