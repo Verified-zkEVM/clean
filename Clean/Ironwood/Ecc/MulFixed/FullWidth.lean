@@ -948,27 +948,23 @@ def circuit (B : FixedBase) :
   ProverSpec _ _ _ _ := True
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    obtain ⟨hInner, hAdd⟩ := hc
-    -- region 1: the inner windowed mul (whole-region bundle). The `change` pre-betas
-    -- the chunk spelling: the raw application's expected-type check unfolds
-    -- `innerRegion` instead of beta-reducing the synthesize lambda (16s whnf storm).
-    change RegionOperations.Constraints env.place i₀ env.env
-      (((fun _ : Var unit Fp => innerRegion B.toData cfg 0 (scalarWindows input_var))
-        default).operations i₀) at hInner
-    have hIS : InnerSpec B (eval env (default : Var unit Fp))
-        (eval env (innerOutCells cfg 0 i₀))
-        (eval env (windowCells cfg 0 i₀)) :=
-      fw_inner_soundness B (scalarWindows input_var) cfg 0 i₀ env default _hE trivial hInner
+    circuit_proof_start2
+    -- region 1: the inner windowed mul, consumed through the family soundness on the
+    -- folded chunk (cps2 delivers it beta-reduced — no change pre-beta needed)
+    have hIS : InnerSpec B (eval (⟨place, env⟩ : Placed Environment Fp) (default : Var unit Fp))
+        (eval (⟨place, env⟩ : Placed Environment Fp) (innerOutCells cfg 0 i₀))
+        (eval (⟨place, env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) :=
+      fw_inner_soundness B (scalarWindows input_var) cfg 0 i₀
+        ⟨place, env⟩ default env_assumptions trivial region_0
     simp only [InnerSpec, innerOutCells, windowCells, circuit_norm] at hIS
     obtain ⟨ks, hks_lt', hws, hAcc, hMulB⟩ := hIS
-    -- ── region 2: the complete addition `mul_b + acc` ──
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
+    -- ── region 2: the complete addition `mul_b + acc` (the terminal chunk's contract) ──
     simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
-      innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add, circuit_norm]
-      at hAdd
+      Nat.zero_add, circuit_norm] at region_1
+    have hAdd := region_1
     -- ── the honest scalars, opaque ──
     obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
         t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
@@ -998,7 +994,7 @@ def circuit (B : FixedBase) :
       rw [ht84_def, hS83_def, ← Halo2.Ironwood.Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
         Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
     have hsum : windowsScalar
-        (eval (⟨env.place, env.env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀))
+        (eval (⟨place, env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀))
         = ((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
             Halo2.Ironwood.Fq) := by
       unfold windowsScalar
@@ -1013,45 +1009,44 @@ def circuit (B : FixedBase) :
         Nat.mod_eq_of_lt (lt_of_lt_of_le (hks_lt' w hwlt)
           (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
     show ({ x := output_x, y := output_y } : Point Fp)
-      = (fwExtract cfg i₀ ⟨env.place, env.env⟩).2 • B
+      = (fwExtract cfg i₀ ⟨place, env⟩).2 • B
     simp only [fwExtract]
     rw [hsum, hOutEq, hchain]
     exact (MulFixed.point_eta _).symm
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    obtain ⟨hWInner, hWAdd⟩ := hwit
+    circuit_proof_start2
+    -- region 1 honest: the inner windowed mul, via the family completeness
     have hIC := fw_inner_completeness B (scalarWindows input_var) cfg 0
-      (scalarWindows_eval_lt input_var) i₀ env default hWInner _hE
-      trivial trivial
+      (scalarWindows_eval_lt input_var) i₀ ⟨place, env⟩ default region_0
+      env_assumptions trivial trivial
     have hPS := hIC.2
     rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at hPS
     simp only [InnerProverSpec, circuit_norm] at hPS
     -- the digit bounds arrive as the honest contract's first conjunct, already in the
     -- `getElem!` spelling the honest facts use
     obtain ⟨hkv, hax, hay, hmx, hmy⟩ := hPS
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
     simp only [addc_assumptions_eq, addc_envAssumptions_eq,
-      addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
-      Nat.zero_add, circuit_norm]
+      addc_proverAssumptions_eq, Nat.zero_add, circuit_norm]
     refine ⟨hIC.1, ?_, ?_⟩
     · -- mulB honest: window-84 point on curve
       have hOn : (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
           (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval env.toEnvironment (windowCells cfg 0 i₀)) 84).val).OnCurve :=
+            (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) 84).val).OnCurve :=
         B.windowPoint_onCurve (hkv 84 (by norm_num))
       rcases hWp : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
           (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval env.toEnvironment (windowCells cfg 0 i₀)) 84).val with ⟨wx, wy⟩
+            (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) 84).val with ⟨wx, wy⟩
       rw [hWp] at hOn hmx hmy
       rw [hmx, hmy]
       exact Or.inl hOn
     · -- acc honest: partialSum point on curve
       have hOn : ((Halo2.Ironwood.Ecc.MulFixed.partialSum
           (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val) 83)
+            (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) t).val) 83)
             • B.point).OnCurve :=
         B.nsmul_onCurve (Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _)
           (Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
@@ -1059,7 +1054,7 @@ def circuit (B : FixedBase) :
             (by norm_num))
       rcases hSp : Halo2.Ironwood.Ecc.MulFixed.partialSum
           (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
-            (eval env.toEnvironment (windowCells cfg 0 i₀)) t).val) 83
+            (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) t).val) 83
           • B.point with ⟨sx, sy⟩
       rw [hSp] at hOn hax hay
       rw [hax, hay]

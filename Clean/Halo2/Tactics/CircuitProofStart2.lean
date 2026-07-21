@@ -312,6 +312,42 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
       return some (Name.anonymous, false)  -- consumed, nothing to track
   return some (chunkName, isCall)
 
+/-- Fully-applied `FormalCircuit.extract`/`FormalRegionCircuit.extract` subterms of `e`
+(closed, no loose bvars — ∀-bound loop contracts are skipped: `generalize` cannot
+abstract open terms). The extract-side analogue of the canonical call outputs (design
+doc: "the extract value gets the same treatment — `wit_<binder>` atom"). -/
+partial def extractTermsOf (e : Expr) : Array Expr :=
+  go e #[]
+where
+  go (e : Expr) (acc : Array Expr) : Array Expr :=
+    let isExtract :=
+      (e.isAppOfArity ``Halo2.FormalCircuit.extract 13
+        || e.isAppOfArity ``Halo2.FormalRegionCircuit.extract 14)
+      && !e.hasLooseBVars
+    let acc := if isExtract then (if acc.contains e then acc else acc.push e) else acc
+    match e with
+    | .app f a => go a (go f acc)
+    | .lam _ d b _ => go b (go d acc)
+    | .forallE _ d b _ => go b (go d acc)
+    | .letE _ t v b _ => go b (go v (go t acc))
+    | .mdata _ b => go b acc
+    | .proj _ _ b => go b acc
+    | _ => acc
+
+/-- Mint `wit_<binder>` atoms for the child-extract terms appearing in hypothesis
+`src` (post-engine: the opened contract speaks the child's extract). Skips Unit-like
+witnesses. The defining equations reduce in the landing pass via the child's
+`_extract_eq` bridge, landing them on the concrete extract spelling. -/
+def mintExtracts (src : Name) (binder : Name) : TacticM (Array Name) := do
+  let some ty ← hypType? src | return #[]
+  let mut outs : Array Expr := #[]
+  for e in extractTermsOf ty do
+    let wty ← withTransparency .instances <| whnf (← instantiateMVars (← inferType e))
+    let whead := wty.getAppFn.constName?
+    unless whead == some ``Unit || whead == some ``PUnit do
+      outs := outs.push e
+  return (← mintAtoms outs (Name.mkSimple s!"wit_{binder}") #[src]).map (·.2)
+
 /-- The names of engine-emitted `h_spec_<k>` hypotheses currently in context. -/
 def specHyps : TacticM (Array Name) := withMainContext do
   let mut out := #[]
@@ -406,33 +442,92 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
       else if isCall then callChunks := callChunks.push nm
       else regionIdx := regionIdx + 1
     | none => break
-  -- ── (d) terminal pure ──
-  if region then
-    if sound then
-      run? (← `(tactic| rw [RegionCircuit.operations_pure, RegionOperations.constraints_nil]
-        at $(mkIdent `constraints):ident))
+  -- ── (d) terminal step ──
+  -- A chain may end in a REAL step instead of `pure` (`do …; assignRegion "…" body`):
+  -- the remaining chunk hypothesis IS that step's chunk and must be kept and
+  -- registered, not cleared (clearing it silently dropped the final step's
+  -- constraints — found porting FullWidth, whose add region is the terminal step).
+  let terminalStep? ← do
+    let some ty ← hypType? chunkHyp | pure none
+    let some body := bodyOfChunkType? ty | pure none
+    if body.isAppOf ``Pure.pure then pure none else pure (some body)
+  match terminalStep? with
+  | some body =>
+    let isCall := body.isAppOf ``Halo2.FormalCircuit.call
+      || body.isAppOf ``Halo2.FormalRegionCircuit.call
+    let chunkName := if isCall then Name.mkSimple "out_spec"
+      else Name.mkSimple s!"region_{regionIdx}"
+    run? (← `(tactic| have $(mkIdent chunkName):ident := $(mkIdent chunkHyp):ident))
+    run? (← `(tactic| clear $(mkIdent chunkHyp):ident))
+    -- the terminal step's output IS the bundle output: canonicalize its spelling in
+    -- output_eq (the bind peel does this per step; the terminal must too)
+    run? (← `(tactic| simp only [FormalCircuit.output_call',
+      FormalRegionCircuit.output_call, FormalRegionCircuit.output_call',
+      output_assignRegion] at $(mkIdent `output_eq):ident))
+    if isCall then callChunks := callChunks.push chunkName
     else
-      run? (← `(tactic| rw [RegionCircuit.operations_pure,
-        RegionOperations.constraints_nil]))
-    run? (← `(tactic| rw [RegionCircuit.output_pure] at $(mkIdent `output_eq):ident))
-  else
-    if sound then
-      run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]
-        at $(mkIdent `constraints):ident))
+      -- completeness also opens the GOAL's terminal conjunct: a raw region whose body
+      -- is a region-level call (`assignRegion "…" (X.call …)`) must expose
+      -- `RegionOperations.Constraints` of the call BEFORE the goal-mode engine runs,
+      -- or the engine cannot strengthen the chunk (found porting FullWidth; the same
+      -- gap exists for mid-chain raw regions with embedded calls — unfixed until a
+      -- circuit needs it)
+      if sound then
+        run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+      else
+        -- fold the raw-step region counts here too (they normally materialize only in
+        -- landing pass 2): the engine's witness locator compares region indexes at
+        -- `.reducible`, so the goal must spell `i₀ + 1`, not `i₀ + regionCount [...]`
+        run? (← `(tactic| simp only [circuit_norm, Operations.regionCount,
+          foldCallRegionCount, $unfolds,*] at $(mkIdent chunkName):ident ⊢))
+      regionIdx := regionIdx + 1
+  | none =>
+    if region then
+      if sound then
+        run? (← `(tactic| rw [RegionCircuit.operations_pure, RegionOperations.constraints_nil]
+          at $(mkIdent `constraints):ident))
+      else
+        run? (← `(tactic| rw [RegionCircuit.operations_pure,
+          RegionOperations.constraints_nil]))
+      run? (← `(tactic| rw [RegionCircuit.output_pure] at $(mkIdent `output_eq):ident))
     else
-      run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]))
-    run? (← `(tactic| rw [Circuit.output_pure] at $(mkIdent `output_eq):ident))
-  run? (← `(tactic| clear $(mkIdent chunkHyp):ident))
+      if sound then
+        run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]
+          at $(mkIdent `constraints):ident))
+      else
+        run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]))
+      run? (← `(tactic| rw [Circuit.output_pure] at $(mkIdent `output_eq):ident))
+    run? (← `(tactic| clear $(mkIdent chunkHyp):ident))
   -- ── (e) engine ──
+  let mut witEqs : Array Name := #[]
   if sound then
     for c in callChunks do
       run? (← `(tactic| subcircuit_rw at $(mkIdent c):ident))
+      -- the opened contract is the first time the child's EXTRACT is spelled — mint
+      -- it to the `wit_<binder>` atom (design doc: extract mirrors the output
+      -- treatment at every call bind); its defining equation reduces in the landing
+      -- pass via the child's `_extract_eq` bridge
+      witEqs := witEqs ++ (← mintExtracts c
+        (c.getString!.dropSuffix "_spec" |> Name.mkSimple ∘ ToString.toString))
     -- raw chunks can carry ∀-bound `.call` constraints (loop combinators over child
     -- calls); the engine supports those, and is a silent no-op on call-free chunks
     for k in [0:regionIdx] do
       run? (← `(tactic| subcircuit_rw at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
   else
     run? (← `(tactic| subcircuit_rw))
+    -- h_spec_<k> arrives in call order — name the witness atom from the k-th call's
+    -- do-binder (`wit_<binder>`), falling back to the index for excess spec hyps
+    let hs ← specHyps
+    for i in [0:hs.size] do
+      let h := hs[i]!
+      let binder :=
+        if hcc : i < callChunks.size then
+          (callChunks[i].getString!.dropSuffix "_spec" |> ToString.toString)
+        -- no matching call bind: the spec belongs to a call embedded in a raw
+        -- step (e.g. a terminal `assignRegion "…" (X.call …)`) — its output is the
+        -- bundle output, so name the witness after it
+        else "out"
+      witEqs := witEqs ++ (← mintExtracts h (Name.mkSimple binder))
   -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
   -- with provable_type_simp, normalize the GIVENS, then one pass that uses `input_eq`
   -- and `output_eq` AS REWRITE RULES (component equations; `output_eq` fires
@@ -481,6 +576,13 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   for t in targets do
     run? (← `(tactic| simp only [$rules,*] at $(mkIdent t):ident))
   run? (← `(tactic| simp only [$rules,*]))
+  -- extract atoms: the GOAL joins the contracts' witness language — a parent whose
+  -- extract forwards child witnesses meets the child contracts at the `wit_*` atoms
+  -- (hypotheses keep their spelling: opacity stays the user's decision there)
+  unless witEqs.isEmpty do
+    let witLemmas ← witEqs.mapM fun n =>
+      `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
+    run? (← `(tactic| simp only [$witLemmas,*]))
 
 end CircuitProofStart2
 

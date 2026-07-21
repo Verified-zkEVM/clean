@@ -122,13 +122,33 @@ find nothing); minted defining equations join the pass-2 rules so contracts land
 atom-spelled end-to-end. Known cleanup: a fully-consumed defining equation degrades to
 `h_<x> : True` and should be cleared.
 
-**Extract (later):** treat identically to output at every call bind — mint
-`wit_<binder>` alongside the output atom, defining equation in context. For the few
-bundles with expensive extracts (FullWidth's `fwExtract` 85-vector, Chain's HVec), a
-reduced-form `extract` slot + `extract_eq` in `ElaboratedCircuit` (defaulted, like
-`output`) would pay the reduction once at the instance instead of per consumer — the
-same reduce-once argument as the output field. Would make the hand
+**Extract (implemented):** treated identically to output at every call bind — after
+the engine opens a contract (`subcircuit_rw`), the child's `extract` spelling is
+collected from the contract hypothesis and minted to a `wit_<binder>` atom
+(`wit_out` for a call embedded in a terminal raw step, which has no do-binder);
+the defining equation stays in context and a goal-only pass at the end of landing
+rewrites the goal into the contracts' witness language (validated: SpendAuthority's
+goal reads `{output_x, output_y} = wit_alphaCommitment.2 • G + akP` — pure witness
+terms). Unit-typed witnesses skip minting. Still open: for the few bundles with
+expensive extracts (FullWidth's `fwExtract` 85-vector, Chain's HVec), a reduced-form
+`extract` slot + `extract_eq` in `ElaboratedCircuit` (defaulted, like `output`)
+would pay the reduction once at the instance instead of per consumer — the same
+reduce-once argument as the output field. Would make the hand
 `*_extract_eq`/`*_extract_cells` bridge family deletable.
+
+**Terminal real steps:** a do-chain may end in a real step instead of `pure`
+(`do let inn ← …; assignRegion "…" (X.call …)` — FullWidth's shape). The terminal
+chunk is that step's chunk and must be kept and registered (`out_spec` for a bare
+call, `region_<k>` for a raw step), not cleared — clearing silently dropped the
+final step's constraints. The terminal step's output is the bundle output, so its
+output spelling is canonicalized in `output_eq` like every peeled bind. In
+completeness, the GOAL's terminal raw conjunct is opened (with region counts
+folded) before the engine runs: a region-level call embedded in the terminal raw
+step (`assignRegion "…" (X.call …)`) is only visible to the goal-mode engine as a
+strengthenable chunk once `RegionOperations.Constraints` of the call is exposed and
+its region index spells `i₀ + k` literally (the witness locator compares indexes at
+reducible transparency). The same embedded-call gap exists for mid-chain raw
+regions — unfixed until a circuit needs it.
 
 ## Rollout
 

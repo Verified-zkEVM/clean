@@ -336,6 +336,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
       intro j hj
       rw [← hzs]
       simp [circuit_norm]
+    -- re-concretize the loop witness: this proof's fold helpers speak the advice rows
+    simp only [← wit_lp_eq] at lp_spec
     obtain ⟨bits, hchain, hfold⟩ := lp_spec
     obtain ⟨hb3, hg13, hs3, hg23⟩ := region_6
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
@@ -403,6 +405,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
         have h254 := pow254_lt_card
         have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
         omega
+      simp only [Halo2.Ironwood.Point.mk.injEq] at hexit_base
       obtain ⟨hbx, hby⟩ := hexit_base
       rw [region_3] at hbx
       rw [region_4] at hby
@@ -468,6 +471,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
       · show env.advice cfg.lambda2 _ = _
         rw [region_3, region_4]
         exact hl2m
+    -- re-concretize the loop-witness contract: this proof's helpers speak advice rows
+    simp only [← wit_lp_eq] at h_spec_0
     obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
     have hstepz : ∀ (s : State Fp) (k k' : Bool),
@@ -567,8 +572,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
     · -- the `q_mul_1` boundary: the witnessed init y_a is the accumulator's y
       simp only [region_1, region_2, region_3, region_5, region_6]
       linear_combination -hyv2
-    · -- the loop's honest entry
-      exact hH0
+    · -- the loop's honest entry (the obligation speaks the minted witness atom)
+      exact wit_lp_eq ▸ hH0
     · -- the accumulator fold, for any in-range multiple entering the region:
       -- replay the constraints (loop spec + final-row identities), which hold
       -- for the honest witness and quantify over every multiple
@@ -582,6 +587,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
             rw [region_1, region_3, region_4, region_5, region_6, hyv2]
             exact hacc')
         h2' hbud'
+      simp only [Halo2.Ironwood.Point.mk.injEq] at hexit
       obtain ⟨hexAcc, hbpx, hbpy⟩ := hexit
       have hbx := hbpx.trans region_3
       have hby := hbpy.trans region_4
