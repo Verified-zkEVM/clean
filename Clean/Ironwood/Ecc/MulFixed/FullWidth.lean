@@ -627,10 +627,11 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
   obtain ⟨env, rfl, rfl⟩ :
       ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
     ⟨⟨place, env⟩, rfl, rfl⟩
-  simp only [innerRegion, RegionCircuit.operations_bind,
-    RegionOperations.constraints_append] at hc
-  obtain ⟨-, hFixed, hChain, -⟩ := hc
-  rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+  obtain ⟨-, hFixed, hChain⟩ := hc
+  -- circuit_proof_start unfolded `innerRegion` in `h_output`; it is defeq to the reduced cells.
+  change ProvableStruct.eval env.place env.env (innerOutCells cfg offset self)
+    = { acc := output_acc, mulB := output_mulB } at h_output
+  simp only [innerOutCells] at h_output
   provable_type_simp
   obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
   obtain ⟨hXPeq, hYPeq⟩ := _hE
@@ -801,10 +802,7 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
   obtain ⟨env, rfl, rfl⟩ :
       ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
     ⟨⟨place, env⟩, rfl, rfl⟩
-  simp only [innerRegion, RegionCircuit.operations_bind,
-    RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
-    at hwit ⊢
-  obtain ⟨hWwsl, hWfix, hWchain, -⟩ := hwit
+  obtain ⟨hWwsl, hWfix, hWchain⟩ := hwit
   obtain ⟨hXPeq, hYPeq⟩ := _hE
   -- the window cells hold the hint digits (the witness loop's assign clauses).
   -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
@@ -830,7 +828,8 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
     simp only [hintWindowVal]
     rw [hWwslM w, Nat.mod_eq_of_lt (by rw [← hWwslM w]; exact hPA' w)]
     exact (ZMod.natCast_zmod_val _).symm
-  refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
+  -- the trailing `pure` region auto-discharged, so the constraint block is the three loops only.
+  refine And.intro (And.intro ?_ (And.intro ?_ ?_)) ?_
   · with_reducible
       exact (fw_completeness_fixed B cfg offset self env windows hWfix hWchain hWin).1
   · with_reducible
@@ -838,10 +837,10 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
   · with_reducible
       exact (fw_completeness_chain B cfg offset self env windows hWchain
         hXPeq hYPeq).1
-  · rw [RegionCircuit.operations_pure]
-    exact trivial
   · -- the honest-prover contract (`InnerProverSpec`)
-    rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+    change ProvableStruct.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
+      = _ at h_output
+    simp only [innerOutCells] at h_output
     provable_type_simp
     obtain ⟨⟨hOax, hOay⟩, hOmx, hOmy⟩ := h_output
     have hws : ∀ t : ℕ, t < 85 →
@@ -954,7 +953,14 @@ def circuit (B : FixedBase) :
   ProverSpec _ _ _ _ := True
 
   soundness := by
-    circuit_proof_start
+    -- circuit_proof_start's universal peel (`simp only [circuit_norm, synthesize …]`) deep-recurses
+    -- on this 85-window `synthesize`; run only its intro prefix by hand (the manual peel below is
+    -- what the composite continuation needs anyway).
+    intro cfg
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_input h_output _hE hA hc
+    obtain ⟨place, env⟩ := env
+    obtain ⟨output_x, output_y⟩ := output
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩
@@ -1033,7 +1039,13 @@ def circuit (B : FixedBase) :
     exact (MulFixed.point_eta _).symm
 
   completeness := by
-    circuit_proof_start
+    -- circuit_proof_start's universal peel (`simp only [circuit_norm, synthesize …]`) deep-recurses
+    -- on this 85-window `synthesize`; run only its intro prefix by hand (the manual peel below is
+    -- what the composite continuation needs anyway).
+    intro cfg
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_input h_output hwit _hE hA hPA
+    obtain ⟨place, env⟩ := env
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩

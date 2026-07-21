@@ -172,11 +172,10 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWCa, hWCb, hGate⟩ := hc
     subcircuit_rw at hWCa
     subcircuit_rw at hWCb
-    subcircuit_rw at hGate
     -- the two witnessCheck children: telescoped decompositions of `a'` and `b2_c'`
     have hWSa := hWCa
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
@@ -198,22 +197,20 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
       circuit_norm] at hGate
     obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
+    rw [← hz0a] at htelA
+    rw [← hz0b] at htelB
     have hGSpec := hGate trivial
-      ⟨by rw [hia]; exact hA.1, by rw [hib0]; exact hA.2.1, by rw [hib2]; exact hA.2.2.1,
-       by rw [hic]; exact hA.2.2.2.1, by rw [hid0]; exact hA.2.2.2.2.1,
-       by rw [hiz13a, hia]; exact hA.2.2.2.2.2.1,
-       ⟨loA, hloA, by rw [hz0a]; exact htelA⟩,
-       by rw [hiz13c, hic]; exact hA.2.2.2.2.2.2,
-       ⟨loB, hloB, by rw [hz0b]; exact htelB⟩⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1, hA.2.2.2.2.2.1,
+       ⟨loA, hloA, htelA⟩, hA.2.2.2.2.2.2, ⟨loB, hloB, htelB⟩⟩
     simp only [Halo2.Ironwood.CommitIvk.toDonor,
       Halo2.Ironwood.CommitIvk.Gate.Spec] at hGSpec
-    rw [hiak, hia, hib, hib0, hib2, hink, hic, hid, hid0] at hGSpec
     exact hGSpec
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrca⟩, ⟨hWbP, hWrcb⟩, hWgate⟩ := hwit
     subcircuit_rw
     -- replay both witnessCheck children's contracts for the gate child's preconditions

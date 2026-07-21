@@ -318,20 +318,20 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- manual layouter peel below.
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    -- peel the three-region layouter structure: region 1 (witness s) at i₀, the copyCheck child
-    -- at i₀+1, region 3 (gate) at i₀+2.
-    simp only [synthesize, circuit_norm] at hc
+    -- circuit_proof_start already peeled the three-region layouter structure (region 1 witness s at
+    -- i₀, copyCheck child at i₀+1, gate at i₀+2) and abstracted the child output; restore the
+    -- concrete `copyCheck.output` term so the child-output bridges below fire.
+    subst x_gen_out_0
     -- reduce the gate-region's index `i₀ + 1 + regionCount(copyCheck call)` to `i₀ + 2`
     rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
         cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
       from by rw [FormalCircuit.call_operations]; simp only [LookupRangeCheck.copyCheck,
         FormalRegionCircuit.toFormal, Circuit.operations, assignRegion, Operations.regionCount,
         Nat.add_zero]] at hc
-    -- hc : copyCheck chunk (region i₀+1) ∧ gate-region constraints (region i₀+2). The witness-s
-    -- region (i₀) has no constraints (bare assignAdvice → True), dropped by simp.
+    -- hc : copyCheck child contract (region i₀+1) ∧ gate-region constraints (region i₀+2); the
+    -- copyCheck chunk was consumed by circuit_proof_start, so `hChild` is its EnvA → A → Spec
+    -- implication. The witness-s region (i₀) has no constraints (bare assignAdvice → True).
     obtain ⟨hChild, hGate⟩ := hc
-    -- consume the copyCheck child via the engine → its EnvA → A → Spec implication
-    subcircuit_rw at hChild
     -- discharge the child's EnvAssumptions (BY PROJECTION from the parent's) and Assumptions
     have hChildE : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
         cfg.lookupConfig (⟨place, env⟩ : Placed Environment Fp) := by
@@ -341,7 +341,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
           : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
       rw [copyCheck_assumptions_eq]; exact hA
     have hSpec := hChild hChildE hChildA
-    rw [copyCheck_spec_eq, copyCheck_output, copyCheckInputs_eval_eq] at hSpec
+    rw [copyCheck_spec_eq, copyCheck_output] at hSpec
     -- the child decomposition: s = lo + 2^{K·numWords}·zLast, lo < 2^{K·numWords}
     obtain ⟨-, ⟨lo, hlo, hDecomp⟩, -⟩ := hSpec
     -- reduce the gate region constraints (5 gate polys + the copies). The gate is at region i₀+2.
@@ -376,8 +376,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       · -- alpha + k_254·2^130 = lo + 2^130·zLast, chaining:
         --   gate alpha/k254 → s cell (s_check) → original s (s copy) → decomposition
         rw [← hCalpha, ← hCk254]
-        -- normalize hDecomp's `place i₀ + 0` to `place i₀` (defeq) so hCs lines up
-        rw [show ((place i₀ + 0 : ℕ) : ℤ) = ((place i₀ : ℕ) : ℤ) from by norm_num] at hDecomp
         -- s_check gives adv2@(gate cur) = alpha_gate + k254_gate·2^130; hCs gives adv2@(gate cur) =
         -- adv0@(place i₀) = s_original; hDecomp splits s_original. Chain by linear_combination.
         linear_combination -hSCheck + hCs + hDecomp
@@ -403,8 +401,10 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- the manual peel below.
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    -- peel the witness list: region 1 (witness s) ++ copyCheck child ++ gate region.
-    simp only [synthesize, circuit_norm] at hwit ⊢
+    -- circuit_proof_start peeled the witness list (region 1 witness s ++ copyCheck child ++ gate
+    -- region), consumed the copyCheck chunk (emitting `h_spec_0`) and split the goal; restore the
+    -- concrete child output term so the output bridges below fire.
+    subst x_gen_out_0
     -- reduce the copyCheck call's regionCount to 1, so the gate region is at i₀+2
     rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
         cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
@@ -416,8 +416,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
       WitgenEnv.readVar_halo2, AssignedCell.eval] at hWs
-    -- consume the copyCheck child via the engine's completeness mode.
-    subcircuit_rw
+    -- the copyCheck child chunk is consumed by circuit_proof_start's completeness prefix (`h_spec_0`)
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
     refine ⟨?_, ?_⟩
     · -- copyCheck child preconditions: EnvA (projection) ∧ A (field card) ∧ PA (vacuous, non-strict)
@@ -439,16 +438,15 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
             : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
         rw [copyCheck_assumptions_eq]; exact hA
       have hChildPA : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
-          (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-            : LookupRangeCheck.Inputs (AssignedCell Fp)))
+          ({ element := env.advice cfg.adv0 ↑(place i₀) } : LookupRangeCheck.Inputs Fp)
           ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
             ({ element := AssignedCell.of i₀ 0 cfg.adv0 }
-              : LookupRangeCheck.Inputs (AssignedCell Fp)) i₀ (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+              : LookupRangeCheck.Inputs (AssignedCell Fp)) (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
           env.hint := by
         rw [copyCheck_proverAssumptions_eq]; simp
       obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hChildE hChildA hChildPA
-      rw [copyCheck_spec_eq, copyCheck_output, copyCheckInputs_eval_eq] at hChildSpec
-      rw [copyCheck_proverSpec_eq, copyCheck_output, copyCheckInputs_eval_eq_prover] at hChildPS
+      rw [copyCheck_spec_eq, copyCheck_output] at hChildSpec
+      rw [copyCheck_proverSpec_eq, copyCheck_output] at hChildPS
       obtain ⟨-, ⟨lo, hlo, hDecompV⟩, -⟩ := hChildSpec
       -- reduce the gate region constraints to the 6 copies + 5 gate polys
       simp only [gateRegion, circuit_norm, overflowGate, Constraints.withSelector]
@@ -475,12 +473,9 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       -- the verifier `input_*` value spelling; land the input-copy equations on the witness cells
       -- (`hWs`/copies) so both sides speak `input_*` for the value algebra below.
       simp only [hIalpha, hIz0, hIz130, hIk254] at hWs hWz0 hWz130 hWeta hWk254 hWalpha ⊢
-      -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`)
-      -- and the child tail nat value (`hChildPS`) — normalize the `place i₀ + 0` spelling. The
-      -- engine's Placed-view derived statement spells the child-Spec decomposition (`hDecompV`)
-      -- without the `+ 0`, so only `hChildPS` needs it now.
-      rw [show ((place i₀ + 0 : ℕ) : ℤ) = ((place i₀ : ℕ) : ℤ) from by norm_num]
-        at hChildPS
+      -- the honest s cell value (region i₀) = alpha + k254·2^130 (from the `s` witness `hWs`) and
+      -- the child tail nat value (`hChildPS`); the prefix's value-replacement already landed both
+      -- on the `place i₀` spelling, so the `K · numWords K` bridge is the only rewrite left.
       rw [hKW] at hDecompV hlo hChildPS
       rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecompV
       -- `sHi = 0 → child zLast = 0` (the only direction the canonicity gate needs). With `sHi = 0`

@@ -317,9 +317,9 @@ def copyDecompose (W numWindows : ℕ) :
 
   soundness := by
     circuit_proof_start
-    obtain ⟨hCopy, hEnables, -, hLast⟩ := hc
+    obtain ⟨hCopy, hEnables, hLast⟩ := hc
     -- the enable chunk → per-row range-poly facts
-    simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul] at hEnables
+    simp only [rangeCheckGate, circuit_norm, mul_one, one_mul] at hEnables
     -- the running sum read off the env
     set f : ℕ → Fp := fun j =>
       env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ) with hf
@@ -348,8 +348,8 @@ def copyDecompose (W numWindows : ℕ) :
 
   completeness := by
     circuit_proof_start
-    obtain ⟨hCopyWit, -, hAssignWit⟩ := hwit
-    simp only [assignLoop, circuit_norm, zWitness, mul_one] at hAssignWit
+    obtain ⟨hCopyWit, hAssignWit⟩ := hwit
+    simp only [circuit_norm, zWitness, mul_one] at hAssignWit
     -- the honest z-chain: `z_j = ↑(α.val ≫ (W·j))`
     have hz : ∀ j, j ≤ numWindows →
         env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ)
@@ -363,9 +363,9 @@ def copyDecompose (W numWindows : ℕ) :
         rw [show offset + (j - 1) + 1 = offset + j from by omega,
           show W * (j - 1 + 1) = W * j from by rw [Nat.sub_add_cancel hjpos]] at h
         exact h
-    refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+    refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- the range-check gate holds on every row: the honest word is `↑(b % 2^W)`
-      simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul]
+      simp only [rangeCheckGate, circuit_norm, mul_one, one_mul]
       intro i
       rw [eval_rangeCheckExpr, rangeCheckPoly_eq_zero_iff,
         inRange_iff_exists_lt _ (Nat.two_pow_pos W)]
@@ -385,8 +385,6 @@ def copyDecompose (W numWindows : ℕ) :
       push_cast at hzi hzi1 hcast ⊢
       rw [hzi, hzi1, ← hb]
       linear_combination -hcast
-    · -- the assignment ops carry no constraints
-      simp only [assignLoop, circuit_norm]
     · -- strict tail: `z_last = ↑(α.val / 2^{W·n}) = 0` since `α.val < 2^{W·n}`
       rw [hz numWindows le_rfl, Nat.div_eq_of_lt hPA, Nat.cast_zero]
     · -- ProverSpec: the honest shifts

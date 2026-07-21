@@ -321,6 +321,54 @@ def isBundleConst (n : Name) : MetaM Bool := do
     | some ``FormalCircuit => return true
     | _ => return false
 
+/-- Auto-unfold candidates from the goal's `main` argument (main-Clean parity: "any `main`
+in scope unfolds automatically"). After the bundle binders are introduced, the goal is one
+of the four proof heads applied to `main` (the bundle's `synthesize` body, substituted).
+A factored body (`synth`, `startCopy`, …) appears there as a plain definition whose result
+type is a circuit; collect those, excluding bundles (their contracts stay folded for the
+chunk engine), projections, and `circuit_norm` members (already in the peel set). An
+inline-do `main` contributes no constants — the structural `circuit_norm` lemmas walk it
+without unfolding, as before. -/
+def autoUnfoldsOfMain : TacticM (Array Name) := withMainContext do
+  let goal ← instantiateMVars (← getMainTarget)
+  -- `main` is the first explicit argument of the proof head: the unique arg of
+  -- one-binder function type into `Circuit`/`RegionCircuit`.
+  let mut mainArg? : Option Expr := none
+  for a in goal.getAppArgs do
+    -- syntactic one-binder check: `Circuit`/`RegionCircuit` are themselves function-type
+    -- defs, so a reducing telescope would see through them and miscount the binders
+    let ty ← instantiateMVars (← inferType a)
+    let ok := match ty with
+      | .forallE _ _ body _ =>
+        body.getAppFn.constName? == some ``Halo2.Circuit ||
+        body.getAppFn.constName? == some ``Halo2.RegionCircuit
+      | _ => false
+    if ok then
+      mainArg? := some a
+      break
+  let some mainArg := mainArg? | return #[]
+  let members ← circuitNormMembers
+  let env ← getEnv
+  let mut out : Array Name := #[]
+  for c in mainArg.foldConsts (#[] : Array Name) (fun n acc => acc.push n) do
+    if out.contains c || members.contains c then continue
+    let some (.defnInfo di) := env.find? c | continue
+    if (← getProjectionFnInfo? c).isSome then continue
+    if ← isBundleConst c then continue
+    let isCircuitTy ← forallTelescope di.type fun _ body =>
+      pure (body.getAppFn.constName? == some ``Halo2.Circuit ||
+            body.getAppFn.constName? == some ``Halo2.RegionCircuit)
+    unless isCircuitTy do continue
+    -- LOOPS stay folded (like bundles): a structurally/WF-recursive circuit def has its
+    -- own induction lemmas stated over the folded spelling; unfolding it in the peel
+    -- would sever that interface. Detect recursion by the compiled value's constants.
+    let isRecursive := di.value.foldConsts false fun n acc => acc ||
+      n == c || n.isInternal && (n.getPrefix == c) ||
+      n == ``WellFounded.fix || (`brecOn).isSuffixOf n || (`rec).isSuffixOf n
+    if isRecursive then continue
+    out := out.push c
+  return out
+
 /-- Contract bridges for a bundle constant, as inline `simpLemma` terms: bind the bundle's
 parameters, run `ContractBridges.buildBridges` on the applied bundle (yielding the closed
 `∀ params, (bundle params).Spec = <reduced>` equations and their `rfl` proofs), and quote each
@@ -449,7 +497,21 @@ def stateIsComposite (d : Direction) : TacticM Bool := withMainContext do
     | some decl => return exprHasCircuitStructure (← instantiateMVars decl.type)
     | none => return false
   else
-    return exprHasCircuitStructure (← instantiateMVars (← getMainTarget))
+    if exprHasCircuitStructure (← instantiateMVars (← getMainTarget)) then
+      return true
+    -- a loop gadget's goal can be fully unfolded (bare gate polys under a ∀-round binder)
+    -- while `hwit` still carries per-round witness facts (∀-bound over `Fin`) that the
+    -- manual chain induction consumes — value replacement cannot instantiate a symbolic
+    -- round index, so that state is composite for cleanup purposes: keep `hwit`.
+    let hasFinForall (e : Expr) : Bool :=
+      e.find? (fun sub => match sub with
+        | .forallE _ t _ _ => t.getAppFn.constName? == some ``Fin
+        | _ => false) |>.isSome
+    match (← getLCtx).findFromUserName? `hwit with
+    | some decl =>
+      let ty ← instantiateMVars decl.type
+      return exprHasCircuitStructure ty || hasFinForall ty
+    | none => return false
 
 /-- Whether a hypothesis with the given user name exists (the splitter in
 `provable_type_simp` may have consumed `h_output` into per-component facts). -/
@@ -579,8 +641,14 @@ the manual continuation (and `clearConsumed`'s own folded-contract/`h_spec_*`/re
 protect them besides). -/
 def run (terms : Option (Array Term)) : TacticM Unit := do
   let d ← introBundleBindersAndDetect
+  -- main-Clean parity: the bundle's factored `synthesize` body (and its circuit-shaped
+  -- helpers) unfold automatically; capture them while the goal still shows `main`.
+  let autos ← autoUnfoldsOfMain
   rwIffAndIntro d
   let (unfold, bridges) ← mkUnfoldLemmas terms
+  let unfold := unfold ++ (← autos.filterMapM fun n => do
+    if unfold.any (fun t => t.raw.isIdent && t.raw.getId == n) then return none
+    return some (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)))
   peelConstraints d unfold
   normalizeProvable
   abstractOutputs
