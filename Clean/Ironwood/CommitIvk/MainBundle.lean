@@ -180,9 +180,7 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   subcircuit_rw at hCan
   have hCanS := hCan (by rw [Canonicity.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩)
     (by rw [Canonicity.circuit_assumptions_eq]
-        simp only [circuit_norm, zCell, prefixRows_ns_2,
-          AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+        simp only [circuit_norm, zCell, prefixRows_ns_2, Nat.reduceAdd,
           Nat.add_zero]
         refine ⟨?_, hb0, hb2, ?_, hd0, ?_, ?_⟩
         · with_unfolding_all exact hpieceA
@@ -191,106 +189,73 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
         · with_unfolding_all exact hz13c)
   rw [Canonicity.circuit_spec_eq, Canonicity.circuit_extract_eq] at hCanS
   clear hCan
-  simp only [circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+  simp only [circuit_norm,
     Nat.add_assoc, Nat.reduceAdd] at hCanS
   obtain ⟨hSa, hSb0v, hSb1, hSb2v, hSc, hSd0v, hSd1, hSbW, hSdW⟩ := hCanS
   obtain ⟨hiak, hink, -⟩ := h_input
   -- ── field-level canonical piece values ──
   have haF : env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_ak.cell.column
-          ((place input_var_ak.cell.regionIndex
-            + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val 0 250 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_ak).val 0 250 : ℕ) : Fp) := by
     rw [show env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)
         = ((env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSa]
   have hb0F : env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_ak.cell.column
-          ((place input_var_ak.cell.regionIndex
-            + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val 250 4 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_ak).val 250 4 : ℕ) : Fp) := by
     rw [show env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ)
         = ((env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSb0v]
   have hb1F : env.advice (cfg.gate.advices 4) ((place (i₀ + 13) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_ak.cell.column
-          ((place input_var_ak.cell.regionIndex
-            + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val 254 1 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_ak).val 254 1 : ℕ) : Fp) := by
     rw [show env.advice (cfg.gate.advices 4) ((place (i₀ + 13) : ℕ) : ℤ)
         = ((env.advice (cfg.gate.advices 4) ((place (i₀ + 13) : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSb1]
   have hb2F : env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_nk.cell.column
-          ((place input_var_nk.cell.regionIndex
-            + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 0 5 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_nk).val 0 5 : ℕ) : Fp) := by
     rw [show env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ)
         = ((env.advice cfg.lookupConfig.runningSum ((place (i₀ + 2) : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSb2v]
   have hcF : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_nk.cell.column
-          ((place input_var_nk.cell.regionIndex
-            + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 5 240 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_nk).val 5 240 : ℕ) : Fp) := by
     rw [show env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)
         = ((env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSc]
   have hd0F : env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_nk.cell.column
-          ((place input_var_nk.cell.regionIndex
-            + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 245 9 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_nk).val 245 9 : ℕ) : Fp) := by
     rw [show env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ)
         = ((env.advice cfg.lookupConfig.runningSum ((place (i₀ + 5) : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSd0v]
   have hd1F : env.advice (cfg.gate.advices 4) ((place (i₀ + 13) + 1 : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_nk.cell.column
-          ((place input_var_nk.cell.regionIndex
-            + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 254 1 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_nk).val 254 1 : ℕ) : Fp) := by
     rw [show env.advice (cfg.gate.advices 4) ((place (i₀ + 13) + 1 : ℕ) : ℤ)
         = ((env.advice (cfg.gate.advices 4) ((place (i₀ + 13) + 1 : ℕ) : ℤ)).val
           : Fp) from (ZMod.natCast_rightInverse _).symm, hSd1]
   -- ── the honest chunks are the canonical `commit_ivk` chunks ──
-  have hak : (env.get input_var_ak.cell.column
-      ((place input_var_ak.cell.regionIndex
-        + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ 255 :=
+  have hak : (AssignedCell.eval place env input_var_ak).val < 2 ^ 255 :=
     lt_trans (ZMod.val_lt _)
       (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-  have hnk : (env.get input_var_nk.cell.column
-      ((place input_var_nk.cell.regionIndex
-        + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ 255 :=
+  have hnk : (AssignedCell.eval place env input_var_nk).val < 2 ^ 255 :=
     lt_trans (ZMod.val_lt _)
       (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
   have hAv : env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)
-      = (((env.get input_var_ak.cell.column
-          ((place input_var_ak.cell.regionIndex
-            + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val
+      = (((AssignedCell.eval place env input_var_ak).val
           % 2 ^ (Halo2.Ironwood.Specs.K * 25) : ℕ) : Fp) := by
     rw [haF]
     norm_num [Halo2.Ironwood.Specs.bitrange, Halo2.Ironwood.Specs.K]
   have hBv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_ak.cell.column
-            ((place input_var_ak.cell.regionIndex
-              + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val 250 4
-          + bitrange (env.get input_var_ak.cell.column
-            ((place input_var_ak.cell.regionIndex
-              + input_var_ak.cell.rowOffset : ℕ) : ℤ)).val 254 1 * 16
-          + bitrange (env.get input_var_nk.cell.column
-            ((place input_var_nk.cell.regionIndex
-              + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 0 5 * 32 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_ak).val 250 4
+          + bitrange (AssignedCell.eval place env input_var_ak).val 254 1 * 16
+          + bitrange (AssignedCell.eval place env input_var_nk).val 0 5 * 32 : ℕ) : Fp) := by
     rw [hSbW, hb0F, hb1F, hb2F]
     push_cast
     ring
   have hCv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)
-      = ((((env.get input_var_nk.cell.column
-          ((place input_var_nk.cell.regionIndex
-            + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val / 2 ^ 5)
+      = ((((AssignedCell.eval place env input_var_nk).val / 2 ^ 5)
           % 2 ^ (Halo2.Ironwood.Specs.K * 24) : ℕ) : Fp) := by
     rw [hcF]
     norm_num [Halo2.Ironwood.Specs.bitrange, Halo2.Ironwood.Specs.K]
   have hDv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)
-      = ((bitrange (env.get input_var_nk.cell.column
-            ((place input_var_nk.cell.regionIndex
-              + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 245 9
-          + bitrange (env.get input_var_nk.cell.column
-            ((place input_var_nk.cell.regionIndex
-              + input_var_nk.cell.rowOffset : ℕ) : ℤ)).val 254 1 * 512 : ℕ) : Fp) := by
+      = ((bitrange (AssignedCell.eval place env input_var_nk).val 245 9
+          + bitrange (AssignedCell.eval place env input_var_nk).val 254 1 * 512 : ℕ) : Fp) := by
     rw [hSdW, hd0F, hd1F]
     push_cast
     ring
@@ -381,8 +346,7 @@ private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
     (LookupRangeCheck.shortRangeCheck 10 b).extract cfg 0 () i env
       = (env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) : Fp) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
-  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero]
+  simp only [circuit_norm, Nat.add_zero]
 
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (c₀ c₁ c₂ c₃ : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
@@ -544,12 +508,8 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   obtain ⟨hiak, hink, -⟩ := h_input
   -- ── honest piece facts ──
   have hHF := Halo2.Ironwood.CommitIvk.Commit.honest_pieces_facts
-    (env.get input_var_ak.cell.column
-      ((place input_var_ak.cell.regionIndex
-        + input_var_ak.cell.rowOffset : ℕ) : ℤ))
-    (env.get input_var_nk.cell.column
-      ((place input_var_nk.cell.regionIndex
-        + input_var_nk.cell.rowOffset : ℕ) : ℤ))
+    (AssignedCell.eval place env input_var_ak)
+    (AssignedCell.eval place env input_var_nk)
     (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ))
     (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ))
     (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ))
@@ -581,8 +541,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
           : Var (Sinsemilla.CommitDomain.Input ns.length) Fp).pieces)
         : Value (fields ns.length) Fp) := by
     rw [pieces_eval_eq]
-    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    simp only [readCell, circuit_norm, Nat.add_zero]
     exact hPB
   have hHon2 : ∃ B, hashToPoint G.S Q
       (Sinsemilla.Chain.honestChunks ns
@@ -596,8 +555,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
       = some B := by
     refine ⟨B0, ?_⟩
     rw [pieces_eval_eq]
-    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    simp only [readCell, circuit_norm, Nat.add_zero]
     rw [hHonest]
     exact hB0
   have hCmS := commit_derived_spec G R Q hQ
@@ -607,8 +565,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
   rw [pieces_eval_eq_env] at hPC
-  try simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero] at hPC
+  try simp only [circuit_norm, Nat.add_zero] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   have hz13a := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
@@ -698,9 +655,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
       (cfg.gate, cfg.lookupConfig) (i₀ + 11) place env _ hWCan
       ⟨(by rw [Canonicity.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [Canonicity.circuit_assumptions_eq]
-           simp only [circuit_norm, zCell, prefixRows_ns_2,
-             AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+           simp only [circuit_norm, zCell, prefixRows_ns_2, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
            · with_unfolding_all exact hpieceA
@@ -714,9 +669,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
            · with_unfolding_all exact hz13a
            · with_unfolding_all exact hz13c),
        (by rw [Canonicity.circuit_proverAssumptions_eq, Canonicity.circuit_extract_eq]
-           simp only [circuit_norm, zCell, prefixRows_ns_2,
-             AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+           simp only [circuit_norm, zCell, prefixRows_ns_2, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
            · rw [hwa]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _

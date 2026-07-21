@@ -879,3 +879,32 @@ Maintainer's additions:
 > - there seem to be two competing normal forms of env.get present: env.get and
 >   env.advice, definitions are essentially the same
 
+---
+
+## DONE (H): env.get → env.advice normal-form unification (maintainer-assigned)
+
+Maintainer ruling: `env.advice` is the preferred spelling (no `col.toAny`). Landed in
+Clean/Halo2 (uncommitted, wave in progress):
+- `AssignedCell.eval` / `Cell.eval` defs UNTAGGED from circuit_norm — an ABSTRACT
+  cell's read stays folded as the readable `AssignedCell.eval place env c` atom.
+- Typed reductions `AssignedCell.eval_of_advice/fixed/inst` + `Cell.eval_of_*`
+  (@[circuit_norm], rfl): known-kind `.of self row col` cells go STRAIGHT to
+  `env.advice col ((place self + row : ℕ) : ℤ)` etc. Raw `env.get` is gone from the
+  user-facing normal form (the `get_advice`-family bridges remain for residual toAny
+  spellings).
+- `Cell.eval_cell` (@[circuit_norm]): `Cell.eval place env x.cell` canonicalizes onto
+  the AssignedCell atom — copy-constraint and assign paths meet at ONE folded atom
+  (this single rule healed ~70 of the initial ~106 fallout errors).
+- `provable_type_simp`'s internal lemma list: the `AssignedCell.eval` def-unfold
+  replaced by the typed rules + unifier (it was re-introducing raw gets into h_input);
+  ProvableTypeSimp now imports Operations.
+- Fallout waves: round 1 ~106 errors (leaf families) → healed by the unifier; round 3
+  residue = raw-get-pinned SIGNATURES from the earlier atom ports (MulComplete loop
+  lemmas, MulOverflow, Short, BFE) + dead-step warnings — two sweep agents on it
+  (MulFixed families | CommitIvk-Bundle/Poseidon-Hash/HashPieceRound/YComposite),
+  re-spelling signatures at the folded atom and deleting dead lines.
+- COMPLETE: both sweep agents landed (MulFixed families; CommitIvk-Bundle/Poseidon-
+  Hash/HashPieceRound/YComposite), H fixed the stragglers (Mul, HashPiece witness
+  lemmas, DeriveNullifier, Chain's hCPA). Full trio green, zero warnings corpus-wide.
+  Signatures at the FOLDED atom spelling (`AssignedCell.eval place env c = value`) are
+  the house form for abstract cells; known-kind cells read as `env.advice` everywhere.

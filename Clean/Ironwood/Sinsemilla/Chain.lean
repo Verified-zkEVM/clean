@@ -359,8 +359,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_proverAssumptions_eq,
       pieceC_extract_eq] at h_spec_0
     have hCPA : HashPiece.ProverAssumptions G (ns.getD i 0)
-        (env.get input_var.cell.column
-          ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ))
+        (AssignedCell.eval place env.toEnvironment input_var)
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of self offset cfg.xA : Var field Fp),
           (if i = 0 then yaIn

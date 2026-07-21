@@ -337,8 +337,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- reduce the copyCheck child's output cell in the `s_minus_lo_130` copy, then land all
     -- copies + the child decomposition on `env.advice` reads
     rw [copyCheck_output] at hCsml
-    simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice] at hDecomp hCs hCsml
     -- assemble `Spec`
     simp only [Spec]
     provable_type_simp
@@ -394,7 +392,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     obtain ⟨hWs, hWchild, hWgate⟩ := hwit
     -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
-      WitgenEnv.readVar_halo2, AssignedCell.eval] at hWs
+      WitgenEnv.readVar_halo2] at hWs
     -- the copyCheck child chunk is consumed by circuit_proof_start's completeness prefix (`h_spec_0`)
     obtain ⟨hIalpha, hIz0, hIz130, hIk254⟩ := h_input
     refine ⟨?_, ?_⟩
@@ -430,8 +428,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       -- reduce the gate region constraints to the 6 copies + 5 gate polys
       simp only [gateRegion, circuit_norm, overflowGate, Constraints.withSelector]
       rw [copyCheck_output]
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice]
       -- honest Spec facts from `hpa` (the honest-caller precondition = the overflow `Spec`)
       simp only [Spec] at hPA
       provable_type_simp
@@ -445,8 +441,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       rw [copyCheck_output] at hWgate
       -- the copy witnesses: each gate-window cell = its source (the `.expr src` assignAdvice value)
       simp only [etaWit, eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
-        AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice] at hWgate
+        circuit_norm] at hWgate
       obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := hWgate
       -- the prefix's `provable_type_simp` normalized the honest-`Spec` facts (`hkey`/`hHiZ`/…) to
       -- the verifier `input_*` value spelling; land the input-copy equations on the witness cells

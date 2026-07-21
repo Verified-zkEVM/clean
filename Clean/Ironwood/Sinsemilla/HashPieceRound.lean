@@ -297,13 +297,13 @@ def zWit (piece : AssignedCell Fp) (r : ℕ) : WitgenIR Fp 1 :=
   .ofFExpr (.ofNat (.div (.val (.expr piece)) (.const (2 ^ (K * r)))))
 
 /-- The running-sum witness evaluates to the honest `pieceZ` of the piece cell's value —
-spelled over the raw cell read, the form `h_input` lands on (the `bitWit_eval` pattern). -/
+spelled over the folded `AssignedCell.eval` cell read, the form `h_input` lands on (the
+`bitWit_eval` pattern). -/
 @[circuit_norm]
 theorem zWit_eval (piece : AssignedCell Fp) (r : ℕ) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
     ((zWit piece r).eval env)[j]
-      = pieceZ (env.env.get piece.cell.column
-          ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) r := by
+      = pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) r := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr]
@@ -327,12 +327,9 @@ theorem stepWit_eval (G : Generators) (piece : AssignedCell Fp) (w : State (Assi
     (i : ℕ) (f : State Fp → Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((stepWit G piece w i f).eval env)[j]
       = f ((readsValue w env).step
-          ((G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))).x,
-           (G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))).y)
-          (pieceZ (env.env.get piece.cell.column
-            ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))) := by
+          ((G.S (pieceWord (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))).x,
+           (G.S (pieceWord (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))).y)
+          (pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))) := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [stepWit, Witgen.WitgenIROver.eval_native_apply]

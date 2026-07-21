@@ -348,8 +348,8 @@ def initXPWit (G : Generators) (piece : AssignedCell Fp) : WitgenIR Fp 1 :=
 theorem initXPWit_eval (G : Generators) (piece : AssignedCell Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initXPWit G piece).eval env)[j]
-      = (G.S (pieceWord (env.env.get piece.cell.column
-          ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x := by
+      = (G.S (pieceWord
+          (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).x := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [initXPWit, Witgen.WitgenIROver.eval_native_apply]
@@ -370,13 +370,12 @@ theorem initLWit_eval (G : Generators) (piece xAcell : AssignedCell Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initLWit G piece xAcell yaIn f).eval env)[j]
       = f (rowValue
-          (env.env.get xAcell.cell.column
-            ((env.place xAcell.cell.regionIndex + xAcell.cell.rowOffset : ℕ) : ℤ),
+          (AssignedCell.eval env.place env.env.toEnvironment xAcell,
            yaIn env.toEnvironment)
-          ((G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x,
-           (G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).y)) := by
+          ((G.S (pieceWord
+              (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).x,
+           (G.S (pieceWord
+              (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).y)) := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [initLWit, Witgen.WitgenIROver.eval_native_apply]

@@ -425,9 +425,7 @@ each window row. -/
 private theorem short_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
         (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
@@ -500,9 +498,7 @@ constraints from its completeness leaf, on the honest partialSum ladder. -/
 private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 22).operations self))
@@ -745,9 +741,7 @@ gate holds by the fixed-base invariants at the honest digits. -/
 private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 22).operations self))
@@ -874,9 +868,7 @@ the honest running-sum values. -/
 private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hPA : input_alpha.val < 2 ^ 66)
     (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
       (((Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22).call
@@ -899,9 +891,7 @@ private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
     dec_proverAssumptions_eq, dec_proverSpec_eq,
     Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output, circuit_norm]
     at hDecC hDecS
-  have hPA' : (env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ (3 * 22) := by
+  have hPA' : (AssignedCell.eval env.place env.env.toEnvironment input_var_alpha).val < 2 ^ (3 * 22) := by
     rw [h_input]
     exact lt_of_lt_of_le hPA (by norm_num)
   refine And.intro (hDecC hPA') ?_
@@ -1247,9 +1237,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         Nat.zero_add, circuit_norm] at hC
       -- honest values at the sign row
       rw [yVarWit_eval, addc_call_out] at hWyVar
-      simp only [readCell, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-        Nat.zero_add] at hWyVar
+      simp only [readCell, circuit_norm, Nat.zero_add] at hWyVar
       rw [hISign] at hWyVar
       have h2ne : (2 : Fp) ≠ 0 := by
         have h : ((2 : ℕ) : Fp) ≠ 0 := by

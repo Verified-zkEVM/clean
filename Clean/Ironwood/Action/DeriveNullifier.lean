@@ -158,9 +158,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
           + (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_2
             : Value Point Fp) := hAddS.2
     rw [← h_output]
-    rw [show env.get x_gen_out_3.x.cell.column
-        ((place x_gen_out_3.x.cell.regionIndex
-          + x_gen_out_3.x.cell.rowOffset : ℕ) : ℤ)
+    rw [show AssignedCell.eval place env x_gen_out_3.x
       = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
           : Value Point Fp).x from by simp only [Point.eval_eq, circuit_norm]]
     rw [hSum, hB, hS, hH, constantLength_value_two]

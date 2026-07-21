@@ -731,8 +731,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
   rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hAkS
   clear hCm hGd hAk
-  simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+  simp only [Point.eval_eq, circuit_norm,
     Nat.add_zero] at hCmS hGdS hAkS
   -- ── stage B: the integrity checks ──
   simp only [synthWitness_output, synthWitness_nextRegionIndex, synthWitness_regionCount,
@@ -801,8 +800,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     exact hGdS)
   rw [AddressIntegrity.circuit_spec_eq, ai_output] at hAIS
   rw [aiInputs_eval_eq] at hAIS
-  simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero,
+  simp only [Point.eval_eq, circuit_norm, Nat.add_zero,
     Nat.add_assoc, Nat.reduceAdd] at hAIS
   clear hM1 hM2 hVC hDN hSA hCI hAI
   -- ── stage C: the note commitments and the final checks ──
@@ -857,15 +855,13 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnS
   rw [ncInputs_eval_eq] at hNCnS
   clear hNCo hGdN hPkN hNCn
-  simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+  simp only [Point.eval_eq, circuit_norm,
     Nat.add_zero] at hGdNS hPkNS
   -- the "constrain equal" region: derived cm_old = witnessed cm_old
   try simp only [circuit_norm] at hEqR
   try simp only [circuit_norm] at hOrch
   -- ── assemble the statement ──
-  simp only [Spec, SpecBase, extract, cellRead, circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+  simp only [Spec, SpecBase, extract, cellRead, circuit_norm,
     Nat.add_zero, Nat.add_assoc]
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ?_, ?_, ?_, ?_⟩
@@ -1318,8 +1314,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
               • B.commitIvkR).x := by
       rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIder
       rw [civkInputs_eval_eq] at hCIder
-      simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+      simp only [circuit_norm,
         Nat.add_zero] at hCIder
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.ivkQ _ = some Bi from by
@@ -1889,9 +1884,7 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   clear hX
   simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
     Fin.val_zero, Fin.val_one, Nat.reduceMod, Nat.mul_one,
-    Nat.add_zero, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-    Environment.get_advice] at h0 h1 h2 h3
+    Nat.add_zero] at h0 h1 h2 h3
   obtain ⟨ha00, -, -, -, ha04, ha05, -, -, -, -, hG0⟩ := h0
   obtain ⟨ha10, -, -, -, ha14, ha15, -, -, -, -, hG1⟩ := h1
   obtain ⟨ha20, -, -, -, ha24, ha25, -, -, -, -, hG2⟩ := h2
@@ -1963,9 +1956,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     have hw3 := hWx 3
     clear hWx
     simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
-      Fin.val_zero, Nat.mul_one, Nat.add_zero,
-      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice] at hw0 hw1 hw2 hw3
+      Fin.val_zero, Nat.mul_one, Nat.add_zero] at hw0 hw1 hw2 hw3
     -- the four honest `dca · (old − new) = 0` products
     have hdx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
         * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 3) : ℕ) : ℤ)
@@ -2022,9 +2013,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     intro i
     fin_cases i
     all_goals simp only [circuit_norm, aafi_output, List.get!Internal, Fin.isValue,
-      Nat.mul_one, Nat.add_zero,
-      AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice]
+      Nat.mul_one, Nat.add_zero]
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
       simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]

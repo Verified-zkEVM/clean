@@ -459,14 +459,10 @@ theorem loop_sound (cfg : Config) (input : Var Inputs Fp)
     (ebits : Witgen.MOver Fp (AssignedCell Fp) (ℕ → BExpr Fp))
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ)
     (A0 base : Point Fp) (hA0 : A0.Valid) (hbase : base.Valid)
-    (hIxA : env.get input.xA.cell.column
-      ((place input.xA.cell.regionIndex + input.xA.cell.rowOffset : ℕ) : ℤ) = A0.x)
-    (hIyA : env.get input.yA.cell.column
-      ((place input.yA.cell.regionIndex + input.yA.cell.rowOffset : ℕ) : ℤ) = A0.y)
-    (hBaseX : env.get input.base.x.cell.column
-      ((place input.base.x.cell.regionIndex + input.base.x.cell.rowOffset : ℕ) : ℤ) = base.x)
-    (hBaseY : env.get input.base.y.cell.column
-      ((place input.base.y.cell.regionIndex + input.base.y.cell.rowOffset : ℕ) : ℤ) = base.y)
+    (hIxA : AssignedCell.eval place env input.xA = A0.x)
+    (hIyA : AssignedCell.eval place env input.yA = A0.y)
+    (hBaseX : AssignedCell.eval place env input.base.x = base.x)
+    (hBaseY : AssignedCell.eval place env input.base.y = base.y)
     (n : ℕ) :
     RegionOperations.Constraints place self env
       ((loop cfg input ebits offset n).operations self) →
@@ -615,8 +611,7 @@ theorem round_complete (cfg : Config) (input : Var Inputs Fp)
   · -- the decomposition gate holds on the honest values
     simp only [decomposeGate, Constraints.withSelector, circuit_norm]
     rw [hWz, hzPrev, hWby, hWyP]
-    rw [show env.env.get input.base.y.cell.column
-        ((env.place input.base.y.cell.regionIndex + input.base.y.cell.rowOffset : ℕ) : ℤ)
+    rw [show AssignedCell.eval env.place env.env.toEnvironment input.base.y
         = readCell env input.base.y from rfl]
     rw [zRunValue_step (readCell env input.z) (ebitsVal ebits env) iter]
     constructor
@@ -638,14 +633,10 @@ theorem loop_complete (cfg : Config) (input : Var Inputs Fp)
     (ebits : Witgen.MOver Fp (AssignedCell Fp) (ℕ → BExpr Fp))
     (self : RegionIndex) (env : Placed ProverEnvironment Fp) (offset : ℕ)
     (A0 base : Point Fp) (hA0 : A0.Valid) (hbase : base.Valid)
-    (hIxA : env.env.toEnvironment.get input.xA.cell.column
-      ((env.place input.xA.cell.regionIndex + input.xA.cell.rowOffset : ℕ) : ℤ) = A0.x)
-    (hIyA : env.env.toEnvironment.get input.yA.cell.column
-      ((env.place input.yA.cell.regionIndex + input.yA.cell.rowOffset : ℕ) : ℤ) = A0.y)
-    (hBaseX : env.env.toEnvironment.get input.base.x.cell.column
-      ((env.place input.base.x.cell.regionIndex + input.base.x.cell.rowOffset : ℕ) : ℤ) = base.x)
-    (hBaseY : env.env.toEnvironment.get input.base.y.cell.column
-      ((env.place input.base.y.cell.regionIndex + input.base.y.cell.rowOffset : ℕ) : ℤ) = base.y)
+    (hIxA : AssignedCell.eval env.place env.env.toEnvironment input.xA = A0.x)
+    (hIyA : AssignedCell.eval env.place env.env.toEnvironment input.yA = A0.y)
+    (hBaseX : AssignedCell.eval env.place env.env.toEnvironment input.base.x = base.x)
+    (hBaseY : AssignedCell.eval env.place env.env.toEnvironment input.base.y = base.y)
     (hzStart : env.env.advice cfg.zComplete ((env.place self + offset : ℕ) : ℤ)
       = readCell env input.z)
     (n : ℕ) :

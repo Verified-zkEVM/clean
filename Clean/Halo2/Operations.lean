@@ -133,12 +133,43 @@ def Operations.regionCount : Operations F → ℕ
 section Semantics
 variable [FiniteField F]
 
-/-- Read a (possibly foreign) cell. `@[circuit_norm]` (mirroring `AssignedCell.eval`): copy
-constraints carry `Cell.eval`, so this reduces them to the shared `env.get` row form and
-they line up with the query/assigned-cell paths without a manual unfold. -/
-@[circuit_norm]
+/-- Read a (possibly foreign) cell. NOT `@[circuit_norm]` (normal-form unification,
+mirroring `AssignedCell.eval`): abstract cell reads stay folded; known-kind cells
+reduce to the typed accessors via the `eval_of_*` rules below, so copy constraints
+line up with the query/assigned-cell paths at the `env.advice` spelling. -/
 def Cell.eval (place : RegionIndex → ℕ) (env : Environment F) (c : Cell) : F :=
   env.get c.column ((place c.regionIndex + c.rowOffset : ℕ) : ℤ)
+
+omit [FiniteField F] in
+/-- An assigned cell's `Cell.eval` is its `AssignedCell.eval` — ONE canonical folded
+atom for abstract cell reads (copy constraints arrive at `Cell.eval x.cell`,
+witness/assign facts at `AssignedCell.eval x`; without this they are separate folded
+spellings that simp cannot cross). -/
+@[circuit_norm]
+lemma Cell.eval_cell [Field F] (place : RegionIndex → ℕ) (env : Environment F)
+    (c : AssignedCell F) :
+    Cell.eval place env c.cell = AssignedCell.eval place env c := rfl
+
+omit [FiniteField F] in
+@[circuit_norm]
+lemma Cell.eval_of_advice (place : RegionIndex → ℕ) (env : Environment F)
+    (self : RegionIndex) (row : ℕ) (col : Column .advice) :
+    Cell.eval place env (.of self row col)
+      = env.advice col ((place self + row : ℕ) : ℤ) := rfl
+
+omit [FiniteField F] in
+@[circuit_norm]
+lemma Cell.eval_of_fixed (place : RegionIndex → ℕ) (env : Environment F)
+    (self : RegionIndex) (row : ℕ) (col : Column .fixed) :
+    Cell.eval place env (.of self row col)
+      = env.fixed col ((place self + row : ℕ) : ℤ) := rfl
+
+omit [FiniteField F] in
+@[circuit_norm]
+lemma Cell.eval_of_inst (place : RegionIndex → ℕ) (env : Environment F)
+    (self : RegionIndex) (row : ℕ) (col : Column .instance) :
+    Cell.eval place env (.of self row col)
+      = env.inst col ((place self + row : ℕ) : ℤ) := rfl
 
 /-- Constraints of one region operation, for a region with index `self`. A subcircuit
 call's constraints are the *opaque chunk* `RegionOperations.Constraints … <folded child

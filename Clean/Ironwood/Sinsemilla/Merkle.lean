@@ -1091,8 +1091,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
             cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
         rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice] at h_output
+      simp only [AssignedCell.eval_of_advice] at h_output
       rw [← h_output]
       exact hres.1
 
@@ -1340,8 +1339,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       rw [gateC_proverAssumptions_eq]
       simp only [HashToPoint.hashCircuit_output_z1s]
       rw [gateInputs_eval_literal_prover]
-      simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+      simp only [AssignedCell.eval_of_advice,
         Vector.getElem_ofFn,
         show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 0 = 0 from rfl,
         show Sinsemilla.Chain.prefixRows HashLayer.merkleNs 1 = 25 from rfl,
@@ -1395,8 +1393,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
             cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
         rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice] at h_output
+      simp only [AssignedCell.eval_of_advice] at h_output
       rw [← h_output]
       exact hpx
 
@@ -1689,40 +1686,24 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           i₀ ⟨place, env⟩) := hSwap trivial trivial
     obtain ⟨hbool, hASw, hBSw⟩ := hSw
     -- the swapped cells' reads are the eval'd swap-output components
-    have hAread : (env.get x_gen_out_0.aSwapped.cell.column
-          ((place x_gen_out_0.aSwapped.cell.regionIndex
-            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+    have hAread : AssignedCell.eval place env x_gen_out_0.aSwapped
         = (ProvableStruct.eval place env x_gen_out_0).aSwapped := by
       provable_type_simp
-    have hBread : (env.get x_gen_out_0.bSwapped.cell.column
-          ((place x_gen_out_0.bSwapped.cell.regionIndex
-            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+    have hBread : AssignedCell.eval place env x_gen_out_0.bSwapped
         = (ProvableStruct.eval place env x_gen_out_0).bSwapped := by
       provable_type_simp
     have hHashS := hHash ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
     rw [HashLayer.circuit_spec_eq] at hHashS
     obtain ⟨lv, rv, hlv, hrv, hleftEq, hrightEq, hcontract⟩ := hHashS
-    rw [show ({ left := env.get x_gen_out_0.aSwapped.cell.column
-                  ((place x_gen_out_0.aSwapped.cell.regionIndex
-                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
-                right := env.get x_gen_out_0.bSwapped.cell.column
-                  ((place x_gen_out_0.bSwapped.cell.regionIndex
-                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+    rw [show ({ left := AssignedCell.eval place env x_gen_out_0.aSwapped,
+                right := AssignedCell.eval place env x_gen_out_0.bSwapped }
         : Value HashLayer.Input Fp).left
-      = (env.get x_gen_out_0.aSwapped.cell.column
-          ((place x_gen_out_0.aSwapped.cell.regionIndex
-            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      = AssignedCell.eval place env x_gen_out_0.aSwapped from rfl,
       hAread, hASw] at hleftEq
-    rw [show ({ left := env.get x_gen_out_0.aSwapped.cell.column
-                  ((place x_gen_out_0.aSwapped.cell.regionIndex
-                    + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
-                right := env.get x_gen_out_0.bSwapped.cell.column
-                  ((place x_gen_out_0.bSwapped.cell.regionIndex
-                    + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+    rw [show ({ left := AssignedCell.eval place env x_gen_out_0.aSwapped,
+                right := AssignedCell.eval place env x_gen_out_0.bSwapped }
         : Value HashLayer.Input Fp).right
-      = (env.get x_gen_out_0.bSwapped.cell.column
-          ((place x_gen_out_0.bSwapped.cell.regionIndex
-            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp) from rfl,
+      = AssignedCell.eval place env x_gen_out_0.bSwapped from rfl,
       hBread, hBSw] at hrightEq
     refine ⟨lv, rv, hlv, hrv, ?_, hcontract⟩
     rcases hbool with h0 | h1
@@ -1747,36 +1728,24 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     obtain ⟨-, hASw, hBSw⟩ := hSwPS
     rw [hwit1, hwit2, h_input] at hASw hBSw
     -- the swapped cells' reads are the eval'd swap-output components
-    have hAread : (env.get x_gen_out_0.aSwapped.cell.column
-          ((place x_gen_out_0.aSwapped.cell.regionIndex
-            + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+    have hAread : AssignedCell.eval place env.toEnvironment x_gen_out_0.aSwapped
         = (ProvableStruct.eval place env.toEnvironment x_gen_out_0).aSwapped := by
       provable_type_simp
-    have hBread : (env.get x_gen_out_0.bSwapped.cell.column
-          ((place x_gen_out_0.bSwapped.cell.regionIndex
-            + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
+    have hBread : AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped
         = (ProvableStruct.eval place env.toEnvironment x_gen_out_0).bSwapped := by
       provable_type_simp
     -- the hash child's honest-prover precondition
     have hPAhash : (HashLayer.circuit G Q hQ l hl).ProverAssumptions
-        { left := env.get x_gen_out_0.aSwapped.cell.column
-            ((place x_gen_out_0.aSwapped.cell.regionIndex
-              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ),
-          right := env.get x_gen_out_0.bSwapped.cell.column
-            ((place x_gen_out_0.bSwapped.cell.regionIndex
-              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) }
+        { left := AssignedCell.eval place env.toEnvironment x_gen_out_0.aSwapped,
+          right := AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped }
         ((HashLayer.circuit G Q hQ l hl).extract (cfg.2.1, cfg.2.2)
           { left := x_gen_out_0.aSwapped, right := x_gen_out_0.bSwapped } (i₀ + 1)
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
       rw [HashLayer.circuit_proverAssumptions_eq]
       refine ⟨B0, ?_⟩
       show hashToPoint G.S Q (merkleChunks l
-          (ZMod.val (env.get x_gen_out_0.aSwapped.cell.column
-            ((place x_gen_out_0.aSwapped.cell.regionIndex
-              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
-          (ZMod.val (env.get x_gen_out_0.bSwapped.cell.column
-            ((place x_gen_out_0.bSwapped.cell.regionIndex
-              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B0
+          (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.aSwapped))
+          (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped))) = some B0
       rw [hAread, hBread, hASw, hBSw]
       by_cases hs : env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1
       · rw [if_pos hs, if_pos hs]
@@ -1794,12 +1763,8 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     rw [HashLayer.circuit_proverSpec_eq] at hPShash
     have hres := hPShash B (by
       show hashToPoint G.S Q (merkleChunks l
-          (ZMod.val (env.get x_gen_out_0.aSwapped.cell.column
-            ((place x_gen_out_0.aSwapped.cell.regionIndex
-              + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ)))
-          (ZMod.val (env.get x_gen_out_0.bSwapped.cell.column
-            ((place x_gen_out_0.bSwapped.cell.regionIndex
-              + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ)))) = some B
+          (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.aSwapped))
+          (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped))) = some B
       rw [hAread, hBread, hASw, hBSw]
       by_cases hs : env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1
       · rw [if_pos hs, if_pos hs]
@@ -2086,9 +2051,7 @@ def circuit :
       rw [input_eval_node]
       rw [show (eval (⟨place, env⟩ : Placed Environment Fp)
           (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
-        = env.get input_var_node.cell.column
-          ((place input_var_node.cell.regionIndex
-            + input_var_node.cell.rowOffset : ℕ) : ℤ) from by simp only [circuit_norm]]
+        = AssignedCell.eval place env input_var_node from by simp only [circuit_norm]]
       exact h_input
     have hfd : (eval (⟨place, env⟩ : Placed Environment Fp)
         (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
@@ -2097,12 +2060,8 @@ def circuit :
       rw [show (eval (⟨place, env⟩ : Placed Environment Fp)
           ((FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
             { node := input_var_node } i₀ d).1.node) : Fp)
-        = env.get (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ d).1.node.cell.column
-          ((place (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ d).1.node.cell.regionIndex
-            + (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ d).1.node.cell.rowOffset : ℕ) : ℤ)
+        = AssignedCell.eval place env (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+            toInput cfg { node := input_var_node } i₀ d).1.node
           from by simp only [circuit_norm]]
       exact h_output
     rw [← hf0, ← hfd]
@@ -2158,9 +2117,7 @@ def circuit :
           = ({ node := input_var_node } : Var Layer.Input Fp) from rfl]
         rw [input_eval_node_prover]
         rw [show (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (({ node := input_var_node } : Var Layer.Input Fp).node) : Fp)
-          = env.get input_var_node.cell.column
-            ((place input_var_node.cell.regionIndex
-              + input_var_node.cell.rowOffset : ℕ) : ℤ) from by simp only [circuit_norm]]
+          = AssignedCell.eval place env.toEnvironment input_var_node from by simp only [circuit_norm]]
         rw [← hn]
         exact h_input
       | succ k ih =>

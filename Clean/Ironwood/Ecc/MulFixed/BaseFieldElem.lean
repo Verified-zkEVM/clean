@@ -295,9 +295,7 @@ each window row. -/
 private theorem inner_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
         (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
@@ -370,9 +368,7 @@ constraints from its completeness leaf, on the honest partialSum ladder. -/
 private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 85).operations self))
@@ -615,9 +611,7 @@ gate holds by the fixed-base invariants at the honest digits. -/
 private theorem inner_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 85).operations self))
@@ -744,9 +738,7 @@ the honest running-sum values. -/
 private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hPA : input_alpha.val < 2 ^ 255)
     (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
       (((Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 85).call
@@ -769,9 +761,7 @@ private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
     dec_proverAssumptions_eq, dec_proverSpec_eq,
     Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output, circuit_norm]
     at hDecC hDecS
-  have hPA' : (env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ (3 * 85) := by
+  have hPA' : (AssignedCell.eval env.place env.env.toEnvironment input_var_alpha).val < 2 ^ (3 * 85) := by
     rw [h_input]
     exact lt_of_lt_of_le hPA (by norm_num)
   refine And.intro (hDecC hPA') ?_
@@ -1249,8 +1239,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     obtain ⟨⟨hG1, hG2, hG3, hG4, hG5, hG6, hG7, hG8⟩,
       hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := hCanon
     rw [rca_call_zLast] at hCpZ13
-    simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice, Nat.zero_add] at hCpZ13
+    simp only [circuit_norm, Nat.zero_add] at hCpZ13
     -- ── the range-check contract, landed on advice reads ──
     have hRCS := hRC ⟨hTable, hDistinct⟩
       ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
@@ -1421,9 +1410,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     · exact ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
         trivial (hval255 _)).1
     · -- the complete addition `mul_b + acc` on the honest exit points
-      have hks_lt : ∀ t : ℕ, ZMod.val (env.env.get input_var.cell.column
-            ((env.place input_var.cell.regionIndex
-              + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8 < 8 :=
+      have hks_lt : ∀ t : ℕ, ZMod.val (AssignedCell.eval env.place env.env.toEnvironment input_var) / 2 ^ (3 * t) % 8 < 8 :=
         fun t => Nat.mod_lt _ (by norm_num)
       obtain ⟨hax, hay, hmx, hmy, -⟩ := hIPS
       have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
@@ -1435,30 +1422,22 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         Nat.zero_add, circuit_norm] at hC
       refine hC ⟨?_, ?_⟩
       · have hOn : (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
-            (ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8)).OnCurve :=
+            (ZMod.val (AssignedCell.eval env.place env.env.toEnvironment input_var) / 2 ^ (3 * 84) % 8)).OnCurve :=
           B.windowPoint_onCurve (hks_lt 84)
         rcases hWp : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
-            (ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8) with ⟨wx, wy⟩
+            (ZMod.val (AssignedCell.eval env.place env.env.toEnvironment input_var) / 2 ^ (3 * 84) % 8) with ⟨wx, wy⟩
         rw [hWp] at hOn hmx hmy
         rw [hmx, hmy]
         exact Or.inl hOn
       · have hOn : ((Halo2.Ironwood.Ecc.MulFixed.partialSum
-            (fun t => ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
+            (fun t => ZMod.val (AssignedCell.eval env.place env.env.toEnvironment input_var) / 2 ^ (3 * t) % 8) 83
             • B.point)).OnCurve :=
           B.nsmul_onCurve (Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _)
             (Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
               (Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ 83 (fun j _ => hks_lt j))
               (by norm_num))
         rcases hSp : Halo2.Ironwood.Ecc.MulFixed.partialSum
-            (fun t => ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
+            (fun t => ZMod.val (AssignedCell.eval env.place env.env.toEnvironment input_var) / 2 ^ (3 * t) % 8) 83
             • B.point with ⟨sx, sy⟩
         rw [hSp] at hOn hax hay
         rw [hax, hay]
@@ -1480,8 +1459,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         at hWCanon ⊢
       obtain ⟨hWcA, hWcZ84, hWcAP, hWa1, hWa2, hWcZ13, hWcZ44, hWcZ43⟩ := hWCanon
       rw [rca_call_zLast] at hWcZ13
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, Nat.zero_add] at hWcZ13
+      simp only [circuit_norm, Nat.zero_add] at hWcZ13
       obtain ⟨-, -, -, -, hZs⟩ := hIPS
       -- the α₀' witness value, on the honest running sums
       simp only [innerRegion_output_zs, Vector.getElem_ofFn] at hWap
@@ -1512,9 +1490,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43
       simp only [Nat.add_zero, Nat.mul_zero, pow_zero, Nat.div_one] at hz0
       -- the α value: `z_0 = α` (the copied base-field element)
-      obtain ⟨A, hA_def⟩ : ∃ a : Fp, a = env.env.get input_var.cell.column
-          ((env.place input_var.cell.regionIndex
-            + input_var.cell.rowOffset : ℕ) : ℤ) := ⟨_, rfl⟩
+      obtain ⟨A, hA_def⟩ : ∃ a : Fp, a = AssignedCell.eval env.place env.env.toEnvironment input_var := ⟨_, rfl⟩
       rw [← hA_def] at hz0 hz84 hz44 hz43
       have hz0A : env.env.advice cfg.superConfig.runningSumConfig.z
           ((env.place i₀ : ℕ) : ℤ) = A := hz0.trans (ZMod.natCast_zmod_val A)
@@ -1580,8 +1556,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       rw [← hWa2] at hA2
       have hPolys := canon_gate_polys hA1 hA2 hDecR hCanonR
       rw [rca_call_zLast]
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, Nat.zero_add]
+      simp only [circuit_norm, Nat.zero_add]
       exact ⟨hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B

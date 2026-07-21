@@ -58,16 +58,14 @@ private theorem short_extract_cells (cfg : LookupRangeCheck.Config 10) (i : Regi
     (LookupRangeCheck.shortRangeCheck 10 b).extract cfg 0 () i env
       = env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
-  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero]
+  simp only [circuit_norm, Nat.add_zero]
 
 private theorem decomposed_extract_cells (h13 : 13 ≤ n) (hpow : 10 * n ≤ 254)
     (cfg : LookupRangeCheck.Config 10) (i : RegionIndex) (env : Placed Environment Fp) :
     (LookupRangeCheck.rangeCheckAtDecomposed n h13 hpow).extract cfg 0 () i env
       = env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
-  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero]
+  simp only [circuit_norm, Nat.add_zero]
 
 end ChildBridges
 
@@ -303,8 +301,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     obtain ⟨hgy, hglsb, hgk0, hgk2, hgk3, hgj, hgz1, hgz13, hgjp, hgz13p⟩ := hWgate'
     rw [h_input] at hWk0 hWk2 hWj hgk3
     rw [FormalRegionCircuit.output_call, decomposed_output] at hWjp
-    simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice] at hWjp
+    simp only [circuit_norm] at hWjp
     -- the honest short-check values are genuine bit slices
     have hk0lt : (env.advice cfg.2.runningSum ((place i₀ : ℕ) : ℤ)).val < 2 ^ 9 := by
       rw [hWk0, cast_bitrange_val (by norm_num)]

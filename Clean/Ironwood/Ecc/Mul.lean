@@ -1614,7 +1614,7 @@ def mul :
       RegionOperation.extendsWitness_assignAdvice, and_true,
       Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval,
       Witgen.FExprOver.neg, kBitWindowExpr_expr_eval, neg_one_mul, readCell,
-      AssignedCell.eval] at hWCx hWCy
+      circuit_norm] at hWCx hWCy
     simp only [hIalpha, hlsb0] at hWCx hWCy
     have hCxv : env.env.toEnvironment.advice cfg.addConfig.xP
         ((env.place i₀ + (offLsb) : ℕ) : ℤ)
@@ -1808,8 +1808,7 @@ def mul :
       rw [← h_gen_out_4]
       simp only [circuit_norm]
       rw [incomplete_call_output]
-      simp only [Vector.getElem_ofFn, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+      simp only [Vector.getElem_ofFn, circuit_norm]
       rw [hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest' input_alpha rfl rfl rfl
 
