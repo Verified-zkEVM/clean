@@ -122,6 +122,14 @@ find nothing); minted defining equations join the pass-2 rules so contracts land
 atom-spelled end-to-end. Known cleanup: a fully-consumed defining equation degrades to
 `h_<x> : True` and should be cleared.
 
+**Extract (later):** treat identically to output at every call bind — mint
+`wit_<binder>` alongside the output atom, defining equation in context. For the few
+bundles with expensive extracts (FullWidth's `fwExtract` 85-vector, Chain's HVec), a
+reduced-form `extract` slot + `extract_eq` in `ElaboratedCircuit` (defaulted, like
+`output`) would pay the reduction once at the instance instead of per consumer — the
+same reduce-once argument as the output field. Would make the hand
+`*_extract_eq`/`*_extract_cells` bridge family deletable.
+
 ## Rollout
 
 1. **CPS v2, wholesale.** A new version of the `circuit_proof_start` pipeline adopting
