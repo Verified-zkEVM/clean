@@ -54,6 +54,53 @@ Net effect: the proof state is isomorphic to the do-block. Hypotheses read `out_
 during peeling becomes linear. Concrete cell spellings appear exactly once each, on the
 supplied-equation side, and `with_unfolding_all`/hand bridges have nothing left to do.
 
+## Raw binds, loops, and the mint gate (H, agreed with maintainer, July 21)
+
+**Detection invariant:** the peel classifies and splits ONLY the top-level `Bind.bind`
+spine that do-elaboration produced. It never whnf/unfolds a step term to find binds —
+so loop safety is a property of the UNFOLD PIPELINE, not the matcher: nothing may open
+a loop combinator before the peel sees it.
+
+**Three-way step classification, by head:**
+- **call** — `FormalCircuit.call` (later the region-level call): chunk `h_call_<binder>`,
+  contract via the engine, canonical output minted (as shipped).
+- **loop** — head carries the `circuit_loop` attribute, an explicit registry on the
+  combinator defs (`forRange`/`forRange'`/`forRangeVar'`, the `foldOps`/`foldCall`
+  serial-fold API). The attribute does double duty: `autoUnfoldsOfMain` EXCLUDES
+  attributed combinators (closing the real hole — the self-recursion detector already
+  keeps `loopAux`-style cores folded, but the non-recursive WRAPPERS passed the filter,
+  and unfolding one would let the peel eat loop iterations as top-level steps,
+  destroying the folded induction interface); `peelOneBind` treats an attributed head
+  as an ATOMIC step whose chunk gets the canonical ∀-round split (the tagged
+  `forRange*_constraints` lemmas, from `circuit_norm`), never a spine decomposition.
+- **primitive** — everything else (`assignRegion`, `currentRegion`, table ops): chunk
+  `h_region_<k>`, opened with `circuit_norm`.
+
+**The mint gate is TYPE-directed, not class-directed.** A used binder mints iff its
+output is CELL-VALUED (an `AssignedCell`, a `Var` record, a vector of cells — the
+things whose concrete spellings metastasize through continuations). Index-valued
+outputs (`currentRegion`'s `RegionIndex`, ℕ) must NOT mint: they feed offset
+arithmetic that has to stay literal for the region-count folding — atomizing them
+would re-hide what `foldCallRegionCount` exists to expose (the same judgment this doc
+already makes for region counts, generalized into the detector). Unit/discarded
+binders mint nothing.
+
+**Loop outputs mint as ONE atom**: a used map-style loop generalizes its whole
+`(loop …).output i` to a single binder-named atom; the defining equation is reduced
+separately to the closed-form boundary fact (`Vector.ofFn …`, via the loop's tagged
+output lemma), and consumers project the atom pointwise through the lazy
+`getElem_eval_fields_cells` bridges — atomic binds, loop closed-forms, and the lazy
+vector normal form composing instead of fighting.
+
+**Raw-mint mechanics (validated in `Clean/Halo2/Tests/TestRawBind.lean`):** mint from
+the still-shared `(x).output i` spelling BEFORE any reduction (all occurrences
+converge); reduce ONLY the defining equation to the concrete boundary fact; region
+counts of raw steps fold in the LANDING fixpoint (they only materialize there —
+`circuit_norm` unfolds the folded `nextRegionIndex` during pass 2, so peel-time folds
+find nothing); minted defining equations join the pass-2 rules so contracts land
+atom-spelled end-to-end. Known cleanup: a fully-consumed defining equation degrades to
+`h_<x> : True` and should be cleared.
+
 ## Rollout
 
 1. **CPS v2, wholesale.** A new version of the `circuit_proof_start` pipeline adopting
