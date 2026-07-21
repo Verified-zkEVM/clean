@@ -193,6 +193,49 @@ the kernel closing the metadata-to-literal gap definitionally — the same oblig
 the historical hand-written `rw [FormalCircuit.call_regionCount]; rfl` wrappers
 discharged. -/
 
+/-- Per-bundle region-count bridge registry: bundle head constant ↦ proven
+`<base>_call_regionCount` lemma. Populated by `derive_contract_bridges` (and the
+`ElaboratedCircuit` autogenerator); consumed by `foldCallRegionCount`, which
+instantiates the registered lemma by unification instead of re-deriving the fold —
+per-use cost drops to a lookup + `isDefEq`, and the kernel checks each bundle's
+metadata defeq ONCE (at derive time) instead of at every fold site. -/
+initialize regionCountBridges :
+    Lean.SimplePersistentEnvExtension (Lean.Name × Lean.Name)
+      (Lean.NameMap Lean.Name) ←
+  Lean.registerSimplePersistentEnvExtension {
+    addEntryFn := fun m (k, v) => m.insert k v
+    addImportedFn := fun as => as.foldl (fun m es => es.foldl (fun m (k, v) => m.insert k v) m) {}
+  }
+
+open Lean in
+/-- The registry key for a bundle term: its head constant — except for
+`toFormal`-lifted bundles, where every lift shares the `toFormal` head, so the key is
+the lifted CHILD's head constant (else all lifts would collide on one entry). -/
+def bundleRegistryKey (self : Expr) : Option Name := do
+  let .const head _ := self.getAppFn | none
+  if head == ``Halo2.FormalRegionCircuit.toFormal then
+    let args := self.getAppArgs
+    -- toFormal (child) (name := …): child is the second-to-last argument
+    let some child := args[args.size - 2]? | none
+    let .const childHead _ := child.getAppFn | none
+    return childHead
+  return head
+
+open Lean Meta Simp in
+/-- Instantiate a registered per-bundle bridge against the matched term `e`:
+metavarize the lemma's binders, unify its LHS with `e`, return the instantiated
+literal + proof. `none` if the lemma does not unify (e.g. a different instantiation
+shape) — the caller falls back to the generic whnf route. -/
+def tryRegisteredBridge (lemmaName : Name) (e : Expr) : MetaM (Option Step) := do
+  let some info := (← getEnv).find? lemmaName | return none
+  let (mvars, _, concl) ← forallMetaTelescope info.type
+  let some (_, lhs, rhs) := concl.eq? | return none
+  unless ← isDefEq lhs e do return none
+  let proof ← instantiateMVars (mkAppN (mkConst lemmaName) mvars)
+  let rhs ← instantiateMVars rhs
+  if proof.hasExprMVar || rhs.hasExprMVar then return none
+  return some (.visit { expr := rhs, proof? := some proof })
+
 open Lean Meta Simp in
 /-- See the section docstring. -/
 def foldCallRegionCountProc : Simproc := fun e => do
@@ -207,6 +250,11 @@ def foldCallRegionCountProc : Simproc := fun e => do
   unless circuit.getAppFn.isConstOf ``Halo2.FormalCircuit.call do return .continue
   let cargs := circuit.getAppArgs
   unless cargs.size ≥ 3 do return .continue
+  -- registered-bridge fast path: amortized per-bundle proof, no whnf, no fresh defeq
+  if let some key := bundleRegistryKey cargs[cargs.size - 3]! then
+    if let some lemmaName := (regionCountBridges.getState (← getEnv)).find? key then
+      if let some step ← tryRegisteredBridge lemmaName e then
+        return step
   try
     -- `call` and `regionCount` share the `FormalCircuit` section telescope
     -- (F instFF Input Output instIn instOut CI Cfg self config input), so the call's own

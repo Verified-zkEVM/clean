@@ -196,7 +196,8 @@ def elabDeriveContractBridges : CommandElab := fun stx => do
       Term.elabBinders binders fun _ => do
         let bundle ← Term.elabTermAndSynthesize t none
         let mut bridges ← buildBridges baseName bundle
-        if let some rc ← buildRegionCountBridge baseName bundle then
+        let rc? ← buildRegionCountBridge baseName bundle
+        if let some rc := rc? then
           bridges := bridges.push rc
         -- NOTHING is tagged into a simp set: simp-side region-count folding is the
         -- generic `foldCallRegionCount` simproc, and auto-rewriting the CONTRACT
@@ -204,6 +205,11 @@ def elabDeriveContractBridges : CommandElab := fun stx => do
         for (thmName, ty, pf) in bridges do
           addDecl (.thmDecl {
             name := thmName, levelParams := [], type := ty, value := pf })
+        -- register the region-count bridge so the simproc's fast path instantiates the
+        -- once-proven equation instead of re-deriving the fold per use site
+        if let some (rcName, _, _) := rc? then
+          if let some key := Halo2.bundleRegistryKey bundle then
+            modifyEnv fun env => Halo2.regionCountBridges.addEntry env (key, rcName)
   | _ => throwUnsupportedSyntax
 
 end Halo2.ContractBridges
