@@ -278,6 +278,25 @@ def foldCallRegionCountProc : Simproc := fun e => do
 simproc foldCallRegionCount (Halo2.Operations.regionCount _) := foldCallRegionCountProc
 attribute [circuit_norm] foldCallRegionCount
 
+open Lean Meta Simp in
+/-- Companion to `foldCallRegionCount` for the METADATA spelling: folds
+`FormalCircuit.regionCount self config input` to its literal (after
+`call_regionCount`-style rewrites leave the projection form, e.g. in the
+`ElaboratedCircuit.regionCount_eq` default tactic). Same closed-literal guard; the
+kernel closes the projection defeq. -/
+def foldRegionCountMetaProc : Simproc := fun e => do
+  unless e.isAppOf ``Halo2.FormalCircuit.regionCount do return .continue
+  try
+    let count ← withTransparency .default (whnf e)
+    let some _ ← (Meta.evalNat count).run | return .continue
+    if count == e then return .continue
+    let proof ← mkExpectedTypeHint (← mkEqRefl e) (← mkEq e count)
+    return .visit { expr := count, proof? := some proof }
+  catch _ => return .continue
+
+simproc foldRegionCountMeta (Halo2.FormalCircuit.regionCount _ _ _) := foldRegionCountMetaProc
+attribute [circuit_norm] foldRegionCountMeta
+
 /-- The closed-form fold state: the accumulator input var and the base region index
 *entering* round `m`. -/
 def FormalCircuit.foldState (c : ℕ → FormalCircuit F CI Cfg Input Output)

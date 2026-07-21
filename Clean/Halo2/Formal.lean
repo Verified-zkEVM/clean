@@ -61,7 +61,8 @@ class ElaboratedCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
     | rfl
     | simp only [circuit_norm, Circuit.operations_bind, Circuit.operations_pure,
         Operations.regionCount_append, Operations.regionCount,
-        FormalCircuit.call_regionCount, FormalCircuit.call_regionCount']
+        FormalCircuit.call_regionCount, FormalCircuit.call_regionCount',
+        Nat.add_assoc, Nat.reduceAdd]
 
 section Statements
 variable [CircuitType Input] [CircuitType Output]

@@ -46,26 +46,6 @@ structure Input (F : Type) where
   pkDOld : Unconstrained Point F
 deriving CircuitType
 
-/-- The region count of the address-integrity block: four regions for the variable-base
-mul, the `pk_d_old` witness region, the constrain-equal region. -/
-private theorem addressIntegrity_regionCount
-    (mcfg : Ecc.Mul.Config) (wcfg : Ecc.WitnessPoint.Config)
-    (input : Var Input Fp) (i : RegionIndex) :
-    Operations.regionCount
-      ((do
-        let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
-        let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-          "witness non-identity point").call wcfg input.pkDOld
-        assignRegion "constrain equal" (do
-          constrainEqual derived.x pkDOld.x
-          constrainEqual derived.y pkDOld.y)
-        pure pkDOld : Circuit Fp (Var Point Fp)).operations i)
-      = 6 := by
-  simp only [Circuit.operations_bind, Circuit.operations_pure, operations_assignRegion,
-    Operations.regionCount_append, Operations.regionCount,
-    FormalCircuit.call_regionCount]
-  rfl
-
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality
 constraint between them. `Spec` is knowledge soundness at the input `ivk` cell:
@@ -86,20 +66,7 @@ def circuit : FormalCircuit Fp
       constrainEqual derived.y pkDOld.y)
     pure pkDOld
 
-  elaborated := fun (mcfg, wcfg) =>
-    { output := fun input i =>
-        ((do
-          let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
-          let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-            "witness non-identity point").call wcfg input.pkDOld
-          assignRegion "constrain equal" (do
-            constrainEqual derived.x pkDOld.x
-            constrainEqual derived.y pkDOld.y)
-          pure pkDOld : Circuit Fp (Var Point Fp)).output i)
-      regionCount := fun _ => 6
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
-        (addressIntegrity_regionCount mcfg wcfg input i).symm }
+  elaborated := fun _ => { regionCount := fun _ => 6 }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 

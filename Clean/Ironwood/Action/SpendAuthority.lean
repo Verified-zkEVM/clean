@@ -41,23 +41,6 @@ structure Input (F : Type) where
   akP : Point F
 deriving CircuitType
 
-/-- The region count of the spend-authority block: two regions for the full-width
-fixed-base mul, one for the final complete addition. -/
-private theorem spendAuthority_regionCount (G : FixedBase)
-    (fcfg : Ecc.MulFixed.FullWidth.Config) (ecfg : Ecc.Add.Config)
-    (input : Var Input Fp) (i : RegionIndex) :
-    Operations.regionCount
-      ((do
-        let alphaCommitment ← (Ecc.MulFixed.FullWidth.circuit G).call fcfg input.alpha
-        let rk ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
-          { p := alphaCommitment, q := input.akP }
-        pure rk : Circuit Fp (Var Point Fp)).operations i)
-      = 3 := by
-  simp only [Circuit.operations_bind, Circuit.operations_pure,
-    Operations.regionCount_append, Operations.regionCount,
-    FormalCircuit.call_regionCount]
-  rfl
-
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted
 randomizer: `rk = [alpha] SpendAuthG + ak_P` for the `alpha` read off the witnessed
@@ -75,17 +58,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       { p := alphaCommitment, q := input.akP }
     pure rk
 
-  elaborated := fun (fcfg, ecfg) =>
-    { output := fun input i =>
-        ((do
-          let alphaCommitment ← (Ecc.MulFixed.FullWidth.circuit G).call fcfg input.alpha
-          let rk ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
-            { p := alphaCommitment, q := input.akP }
-          pure rk : Circuit Fp (Var Point Fp)).output i)
-      regionCount := fun _ => 3
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
-        (spendAuthority_regionCount G fcfg ecfg input i).symm }
+  elaborated := fun _ => { regionCount := fun _ => 3 }
 
   EnvAssumptions := fun (fcfg, _) env =>
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env

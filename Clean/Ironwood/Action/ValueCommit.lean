@@ -38,27 +38,6 @@ structure Inputs (F : Type) where
   sign : F
 deriving CircuitType
 
-/-- The region count of `value_commit_orchard`: two regions each for the short and
-full-width fixed-base muls, one for the final complete addition. -/
-private theorem valueCommit_regionCount (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
-    (R : FixedBase)
-    (scfg : Ecc.MulFixed.Short.Config) (fcfg : Ecc.MulFixed.FullWidth.Config)
-    (ecfg : Ecc.Add.Config)
-    (input : Var Inputs Fp) (i : RegionIndex) :
-    Operations.regionCount
-      ((do
-        let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
-          ⟨input.magnitude, input.sign⟩
-        let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
-        let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
-          { p := commitment, q := blind }
-        pure cv : Circuit Fp (Var Point Fp)).operations i)
-      = 5 := by
-  simp only [Circuit.operations_bind, Circuit.operations_pure,
-    Operations.regionCount_append, Operations.regionCount,
-    FormalCircuit.call_regionCount]
-  rfl
-
 /-! ## The `value_commit_orchard` bundle -/
 
 /-- Rust `gadget.rs::value_commit_orchard`: `[v] ValueCommitV` (short signed), `[rcv]
@@ -82,19 +61,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       { p := commitment, q := blind }
     pure cv
 
-  elaborated := fun (scfg, fcfg, ecfg) =>
-    { output := fun input i =>
-        ((do
-          let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
-            ⟨input.magnitude, input.sign⟩
-          let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
-          let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
-            { p := commitment, q := blind }
-          pure cv : Circuit Fp (Var Point Fp)).output i)
-      regionCount := fun _ => 5
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
-        (valueCommit_regionCount V R scfg fcfg ecfg input i).symm }
+  elaborated := fun _ => { regionCount := fun _ => 5 }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧
