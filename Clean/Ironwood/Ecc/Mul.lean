@@ -492,19 +492,6 @@ private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
               pure out.acc)).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
-/-- `.call` spelling of `complete_output_eq`. -/
-private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
-    (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    ((MulComplete.assign_region 3 w).call cfg off inp).output self
-      = { acc := (RegionCircuit.foldRange off 2 3
-            ({ x := inp.xA, y := inp.yA } : Point (AssignedCell Fp))
-            (fun i r acc => do
-              let out ← (MulComplete.round w i).call cfg r
-                { alpha := inp.alpha, base := inp.base, z := inp.z, acc := acc }
-              pure out.acc)).output self,
-          zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := by
-  rw [FormalRegionCircuit.output_call]; rfl
-
 /-- Plain-`.output` spelling of `complete_call_output_zs`. -/
 private theorem complete_output_zs_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
@@ -539,8 +526,7 @@ private theorem mainRegion_output_z130 (cfg : Config) (input : Var Inputs Fp)
     ((mainRegion cfg input).output i).2.2.1
       = AssignedCell.of i (offHi + 1 + 124) cfg.hiConfig.z := by
   simp only [mainRegion, circuit_norm]
-  rw [incomplete_call_output]
-  simp only [Vector.getElem_ofFn]
+  simp only [incomplete_output_eq, Vector.getElem_ofFn]
 
 /-- The main region's `k_254` output cell: the hi half's `zs[0]` (the top bit,
 `z @ offHi + 1 + 0`). Same lazy bind-by-bind route as `mainRegion_output_z130`. -/
@@ -549,8 +535,7 @@ private theorem mainRegion_output_k254 (cfg : Config) (input : Var Inputs Fp)
     ((mainRegion cfg input).output i).2.2.2
       = AssignedCell.of i (offHi + 1 + 0) cfg.hiConfig.z := by
   simp only [mainRegion, circuit_norm]
-  rw [incomplete_call_output]
-  simp only [Vector.getElem_ofFn]
+  simp only [incomplete_output_eq, Vector.getElem_ofFn]
 
 /-- Eval of an `AssignedCell.of` cell (`Eval` level): the advice read at its row. -/
 private theorem eval_of (env : Placed Environment Fp) (self : RegionIndex) (row : ℕ)
@@ -1817,8 +1802,7 @@ def mul :
       try rw [ovInputs_eval_eq_prover]
       rw [← h_gen_out_4]
       simp only [circuit_norm]
-      rw [incomplete_call_output]
-      simp only [Vector.getElem_ofFn, circuit_norm]
+      simp only [incomplete_output_eq, Vector.getElem_ofFn, circuit_norm]
       rw [hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest' input_alpha rfl rfl rfl
 

@@ -188,8 +188,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSb
     obtain ⟨hz0b, loB, hloB, htelB⟩ := hWSb
     -- the gate child: discharge its rely-conditions, harvest the donor gate `Spec`
-    rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-      rangeCheckAt_output, rangeCheckAt_output] at hGate
+    rw [rangeCheckAt_output, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
       circuit_norm] at hGate
     obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
@@ -246,16 +245,14 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · -- the gate child's rely-conditions (verifier view)
-      rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-        rangeCheckAt_output, rangeCheckAt_output]
+      rw [rangeCheckAt_output, rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm, hia, hib0, hib2, hic, hid0,
         hiz13a, hiz13c]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2.1, hA.2.2.2.2.2.1,
         ⟨loA, hloA, by rw [hz0a]; exact htelA⟩, hA.2.2.2.2.2.2,
         ⟨loB, hloB, by rw [hz0b]; exact htelB⟩⟩
     · -- the gate child's honest-prover precondition: tails + shifts + the donor `Spec`
-      rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-        rangeCheckAt_output, rangeCheckAt_output]
+      rw [rangeCheckAt_output, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, gateChild_extract_cells, circuit_norm]
       rw [hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c]
       rw [hia] at hWaP

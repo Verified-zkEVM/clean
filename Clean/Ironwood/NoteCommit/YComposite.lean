@@ -267,8 +267,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hJpS
     obtain ⟨hpz0, lo, hlo, htel⟩ := hJpS
     -- the gate child
-    rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-      decomposed_output, rangeCheckAt_output] at hGate
+    rw [decomposed_output, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
       gateChild_output, circuit_norm] at hGate
     have hGSpec := hGate trivial
@@ -300,7 +299,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     simp only [YCanonicity.bundle, YCanonicity.gate, circuit_norm, readCell] at hWgate'
     obtain ⟨hgy, hglsb, hgk0, hgk2, hgk3, hgj, hgz1, hgz13, hgjp, hgz13p⟩ := hWgate'
     rw [h_input] at hWk0 hWk2 hWj hgk3
-    rw [FormalRegionCircuit.output_call, decomposed_output] at hWjp
+    rw [decomposed_output] at hWjp
     simp only [circuit_norm] at hWjp
     -- the honest short-check values are genuine bit slices
     have hk0lt : (env.advice cfg.2.runningSum ((place i₀ : ℕ) : ℤ)).val < 2 ^ 9 := by
@@ -412,15 +411,13 @@ def circuit (wlsb : WitgenIR Fp 1) :
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · -- the gate child's rely-conditions (verifier view)
-      rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-        decomposed_output, rangeCheckAt_output]
+      rw [decomposed_output, rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm]
       exact ⟨by rw [hjz0]; exact hjlt', hK0S, hK2S,
         by rw [hjz0]; exact hz1v, by rw [hjz0]; exact hz13v,
         lo, hlo, by rw [hpz0]; exact htel⟩
     · -- the gate child's honest-prover precondition
-      rw [FormalRegionCircuit.output_call, FormalRegionCircuit.output_call,
-        decomposed_output, rangeCheckAt_output]
+      rw [decomposed_output, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, gateChild_extract_cells, circuit_norm]
       rw [h_input]
       refine ⟨?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, hWjp⟩

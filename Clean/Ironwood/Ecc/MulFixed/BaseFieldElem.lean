@@ -1078,15 +1078,6 @@ private theorem rca_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
       = { z0 := AssignedCell.of self offset cfgL.runningSum,
           zLast := AssignedCell.of self (offset + 13) cfgL.runningSum } := rfl
 
-/-- The `zLast` output cell of the range-check chunk, through the `call` wrapper (the
-`output_call` rewrite does not fire inside cell projections; this is its `rfl` fusion
-with `rca_output`). -/
-private theorem rca_call_zLast (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
-    (self : RegionIndex) :
-    (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfgL offset ()).output self).zLast
-      = AssignedCell.of self (offset + 13) cfgL.runningSum := by
-  rw [FormalRegionCircuit.output_call, rca_output]
-
 /-- The range-check chunk's extraction data: the positional element cell's value. -/
 private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
     (self : RegionIndex) (env : Placed Environment Fp) :
@@ -1238,7 +1229,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       circuit_norm] at hCanon
     obtain ⟨⟨hG1, hG2, hG3, hG4, hG5, hG6, hG7, hG8⟩,
       hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := hCanon
-    rw [rca_call_zLast] at hCpZ13
+    rw [rca_output] at hCpZ13
     simp only [circuit_norm, Nat.zero_add] at hCpZ13
     -- ── the range-check contract, landed on advice reads ──
     have hRCS := hRC ⟨hTable, hDistinct⟩
@@ -1379,7 +1370,6 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
     simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add,
       circuit_norm] at h_output
-    rw [FormalRegionCircuit.output_call] at h_output
     rw [h_output] at hOutEq
     rw [Halo2.Ironwood.Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- (t84 + S83) • B = [(V : Fq).val] • B = the Spec's scalar mul
@@ -1458,7 +1448,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, circuit_norm]
         at hWCanon ⊢
       obtain ⟨hWcA, hWcZ84, hWcAP, hWa1, hWa2, hWcZ13, hWcZ44, hWcZ43⟩ := hWCanon
-      rw [rca_call_zLast] at hWcZ13
+      rw [rca_output] at hWcZ13
       simp only [circuit_norm, Nat.zero_add] at hWcZ13
       obtain ⟨-, -, -, -, hZs⟩ := hIPS
       -- the α₀' witness value, on the honest running sums
@@ -1555,7 +1545,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       rw [← hWa1] at hA1
       rw [← hWa2] at hA2
       have hPolys := canon_gate_polys hA1 hA2 hDecR hCanonR
-      rw [rca_call_zLast]
+      rw [rca_output]
       simp only [circuit_norm, Nat.zero_add]
       exact ⟨hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
 

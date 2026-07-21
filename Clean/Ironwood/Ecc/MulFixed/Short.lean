@@ -989,14 +989,6 @@ private theorem yVarWit_eval (env : Placed ProverEnvironment Fp)
   simp only [yVarWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
-/-- The complete-addition child's output cells through the `call` wrapper (`rfl`). -/
-private theorem addc_call_out (cfgA : Add.Config) (row : ℕ)
-    (input : Var Add.Inputs Fp) (self : RegionIndex) :
-    (Add.add.call cfgA row input).output self
-      = { x := AssignedCell.of self (row + 1) cfgA.xQR,
-          y := AssignedCell.of self (row + 1) cfgA.yQR } :=
-  (FormalRegionCircuit.output_call Add.add cfgA row input self).trans rfl
-
 /-- The complete-addition child's output cells (`rfl`). -/
 private theorem addc_output_cells (cfgA : Add.Config) (row : ℕ)
     (input : Var Add.Inputs Fp) (self : RegionIndex) :
@@ -1236,7 +1228,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
         Nat.zero_add, circuit_norm] at hC
       -- honest values at the sign row
-      rw [yVarWit_eval, addc_call_out] at hWyVar
+      rw [yVarWit_eval, addc_output_cells] at hWyVar
       simp only [readCell, circuit_norm, Nat.zero_add] at hWyVar
       rw [hISign] at hWyVar
       have h2ne : (2 : Fp) ≠ 0 := by
