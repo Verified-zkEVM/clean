@@ -83,10 +83,10 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   soundness := by
     circuit_proof_start2 [Ecc.MulFixed.Short.circuit, Ecc.MulFixed.FullWidth.circuit,
       Ecc.Add.addFormal, Ecc.MulFixed.Short.Spec]
-    obtain ⟨hSEnv, hFEnv⟩ := hE
-    obtain ⟨hm_lt, hcases⟩ := h_call_commitment hSEnv
-    have hBl := h_call_blind hFEnv
-    have hAddS := h_call_cv ⟨by
+    obtain ⟨hSEnv, hFEnv⟩ := env_assumptions
+    obtain ⟨hm_lt, hcases⟩ := commitment_spec hSEnv
+    have hBl := blind_spec hFEnv
+    have hAddS := cv_spec ⟨by
         rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
       by rw [hBl]; exact R.smul_valid _⟩
     refine ⟨hm_lt, ?_⟩
@@ -97,8 +97,8 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   completeness := by
     circuit_proof_start2 [Ecc.MulFixed.Short.circuit, Ecc.MulFixed.FullWidth.circuit,
       Ecc.Add.addFormal, Ecc.MulFixed.Short.Spec]
-    obtain ⟨hSEnv, hFEnv⟩ := hE
-    obtain ⟨hmag, hsign⟩ := hPA
+    obtain ⟨hSEnv, hFEnv⟩ := env_assumptions
+    obtain ⟨hmag, hsign⟩ := prover_assumptions
     obtain ⟨hm_lt, hcases⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
     have hBl := h_spec_1 hFEnv
     refine ⟨⟨hSEnv, hmag, hsign⟩, hFEnv, ?_, by rw [hBl]; exact R.smul_valid _⟩

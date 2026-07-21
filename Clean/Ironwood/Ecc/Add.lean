@@ -376,26 +376,26 @@ def add : FormalRegionCircuit Fp
   Spec input output _ := output.Valid ∧ output = input.p + input.q
 
   soundness := by
-    circuit_proof_start [gate]
-    -- ══ user-facing half: pure field values + curve math ══
-    obtain ⟨⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩,
-      hcpx, hcpy, hcqx, hcqy⟩ := hc
-    -- the copy equations rewrite the gate's P/Q cells to the input coordinates
-    simp_all only
-    obtain ⟨hpValid, hqValid⟩ := hA
+    circuit_proof_start2 [gate]
+    -- land the copied P/Q cells on the input coordinates in the gate polynomials
+    simp only [region_1, region_2, region_3, region_4] at region_0
+    obtain ⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩ := region_0
+    obtain ⟨hpValid, hqValid⟩ := assumptions
     -- the five witness cells (λ,α,β,γ,δ) have no copy equation, so they stay as
-    -- `env.env.advice config.λ …` terms — but they are only ever passed *positionally* to
-    -- the coordinate-generic `spec_of_polysZero`, never reasoned about, so no framework
-    -- object is manipulated in the user half.
+    -- `env.advice cfg.λ …` terms — but they are only ever passed *positionally* to
+    -- the coordinate-generic `spec_of_polysZero`, never reasoned about.
     have hspec := spec_of_polysZero h1 h2 h3a h3b h3c h3d h4a h4b h5a h5b h6a h6b
     rw [add_eq_add_of_spec hpValid hqValid hspec]
     use Point.valid_add hpValid hqValid
   completeness := by
-    circuit_proof_start [gate, lambdaProgram, rXProgram, rYProgram]
-    -- ══ user-facing half ══
-    obtain ⟨hpValid, hqValid⟩ := hA
-    -- the witness R cells equal the complete sum; λ/δ equal their closed-form values
-    rw [ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
+    circuit_proof_start2 [gate, lambdaProgram, rXProgram, rYProgram]
+    obtain ⟨hpValid, hqValid⟩ := assumptions
+    -- substitute the copied/witnessed cells, with the R/λ programs in closed form
+    -- (one simp call: the closed-form ite lemmas must fire as the programs are exposed,
+    -- before ite-congruence can rewrite inside their branches)
+    simp only [and_true, region_0, region_1, region_2, region_3, region_4, region_5,
+      region_6, region_7, region_8, region_9, region_10,
+      ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
 /-- The layouter-level complete addition: `add` in its own region, named once here as

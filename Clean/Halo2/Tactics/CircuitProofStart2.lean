@@ -17,23 +17,23 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
   the `synthesize` pattern-match), enter the `soundness_iff`/`completeness_iff` form
   with the house binder names, split the placed env into `place`/`env`;
 - **(b)** `dsimp only [] at *` (iota-reduces the destructured-config matches), then land
-  `h_output` on the raw do-block output via `ElaboratedCircuit.output_eq`;
+  `output_eq` on the raw do-block output via `ElaboratedCircuit.output_eq`;
 - **(c)** per bind, one block: single `operations_bind` peel (`constraints_append` at
-  `hC`, plus `extendsWitnesses_append` at `hW` and the goal's constraints side in the
-  completeness direction), `output_bind` at `h_output`, split off the chunk as
-  `h_call_<name>` (call binds) / `h_region_<k>` (raw binds, immediately
+  `constraints`, plus `extendsWitnesses_append` at `witnesses` and the goal's constraints side in the
+  completeness direction), `output_bind` at `output_eq`, split off the chunk as
+  `<name>_spec` (call binds) / `region_<k>` (raw binds, immediately
   `circuit_norm`-opened), canonicalize the output spelling (`output_call'`), then mint
-  the atom by `generalize h_<name> : <canonical output> = <name>` under a
-  `revert hC h_output` — BEFORE the continuation's occurrences diverge — and fold the
+  the atom by `generalize <name>_eq : <canonical output> = <name>` under a
+  `revert constraints output_eq` — BEFORE the continuation's occurrences diverge — and fold the
   offsets (`nextRegionIndex_call` + the `foldCallRegionCount` simproc);
-- **(d)** terminal `pure`: close the op list, land `h_output` on the final atom;
+- **(d)** terminal `pure`: close the op list, land `output_eq` on the final atom;
 - **(e)** `subcircuit_rw` — per chunk hypothesis (soundness) / goal-mode once
   (completeness, emitting `h_spec_<k>` over the atoms);
 - **(f)** landing (maintainer model, AddressIntegrity 90912413): `provable_type_simp`
   decomposes types into the components that actually occur; normalize ONLY the
-  rule-sources `h_input`/`h_output` (so their equations fire on normalized spellings);
+  rule-sources `input_eq`/`output_eq` (so their equations fire on normalized spellings);
   then ONE pass over every other hypothesis and the goal that uses
-  `h_input` and `h_output` themselves AS REWRITE RULES — `h_output` firing
+  `input_eq` and `output_eq` themselves AS REWRITE RULES — `output_eq` firing
   left-to-right (circuit spelling → declared output) — together with the CALLER'S
   LEMMA LIST (`circuit_proof_start2 [<child bridges, Spec/Assumptions unfolds>]`).
   With a complete list, trivially-composing parents close by `simp_all`/`grind`.
@@ -67,15 +67,18 @@ def hypType? (n : Name) : TacticM (Option Expr) := withMainContext do
   let some decl := (← getLCtx).findFromUserName? n | return none
   instantiateMVars decl.type
 
-/-- From a `Constraints place env ((body).operations i) i` /
-`ExtendsWitnesses place env ((body).operations i) i` type, the `body` circuit term. -/
+/-- From a layouter `Constraints place env ((body).operations i) i` /
+`ExtendsWitnesses place env ((body).operations i) i` type (ops second-to-last), or a
+region `RegionOperations.Constraints place self env ((body).operations self)` /
+`.ExtendsWitnesses …` type (ops last), the `body` circuit term. -/
 def bodyOfChunkType? (ty : Expr) : Option Expr := do
-  -- Constraints/ExtendsWitnesses: (place) (env) (ops) (i) — ops = Circuit.operations … body i
   let args := ty.getAppArgs
   guard (args.size ≥ 2)
-  let ops := args[args.size - 2]!
-  guard (ops.isAppOfArity ``Halo2.Circuit.operations 5)
-  return ops.getArg! 3
+  let pick (ops : Expr) : Option Expr := do
+    if ops.isAppOfArity ``Halo2.Circuit.operations 5 then return ops.getArg! 3
+    else if ops.isAppOfArity ``Halo2.RegionCircuit.operations 5 then return ops.getArg! 3
+    else none
+  pick args[args.size - 2]! <|> pick args[args.size - 1]!
 
 /-- Decompose a monadic bind application: `(x >>= f)` → `(x, f)`. -/
 def bindParts? (body : Expr) : Option (Expr × Expr) :=
@@ -127,7 +130,7 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) : TacticM Unit 
       let xn := if lctx.findFromUserName? base |>.isSome then
         Name.mkSimple s!"{base}'" else base
       args := args.push { expr := o, xName? := xn,
-                          hName? := Name.mkSimple s!"h_{xn}" }
+                          hName? := Name.mkSimple s!"{xn}_eq" }
       k := k + 1
     let g ← getMainGoal
     let (_, g') ← g.generalize args
@@ -136,9 +139,11 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) : TacticM Unit 
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))
 
-/-- One per-bind block. `sound := true` for the soundness direction. Returns `false`
+/-- One per-bind block. `sound := true` for the soundness direction; `region := true`
+for region-level bundles (region append lemmas, no offset folding). Returns `none`
 when the chunk hypothesis no longer holds a bind (terminal reached). -/
-def peelOneBind (sound : Bool) (chunkHyp : Name) (regionIdx : Nat) :
+def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
+    (unfolds : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM (Option (Name × Bool)) := do
   let ty? ← hypType? chunkHyp
   let some ty := ty? | do
@@ -155,40 +160,68 @@ def peelOneBind (sound : Bool) (chunkHyp : Name) (regionIdx : Nat) :
     return none
   let nm := binderNameOf f
   let isCall := x.isAppOf ``Halo2.FormalCircuit.call
-  let chunkName := if isCall then Name.mkSimple s!"h_call_{nm}"
-    else Name.mkSimple s!"h_region_{regionIdx}"
+    || x.isAppOf ``Halo2.FormalRegionCircuit.call
+  let chunkName := if isCall then Name.mkSimple s!"{nm}_spec"
+    else Name.mkSimple s!"region_{regionIdx}"
   -- peel the constraint/witness/goal sides + the output side
-  if sound then
+  if region then
+    if sound then
+      run? (← `(tactic| rw [RegionCircuit.operations_bind,
+        RegionOperations.constraints_append] at $(mkIdent chunkHyp):ident))
+    else
+      run? (← `(tactic| rw [RegionCircuit.operations_bind,
+        RegionOperations.extendsWitnesses_append] at $(mkIdent chunkHyp):ident))
+      run? (← `(tactic| rw [RegionCircuit.operations_bind,
+        RegionOperations.constraints_append]))
+    run? (← `(tactic| rw [RegionCircuit.output_bind] at $(mkIdent `output_eq):ident))
+  else if sound then
     run? (← `(tactic| rw [Circuit.operations_bind, constraints_append]
       at $(mkIdent chunkHyp):ident))
+    run? (← `(tactic| rw [Circuit.output_bind] at $(mkIdent `output_eq):ident))
   else
     run? (← `(tactic| rw [Circuit.operations_bind, extendsWitnesses_append]
       at $(mkIdent chunkHyp):ident))
     run? (← `(tactic| rw [Circuit.operations_bind, constraints_append]))
-  run? (← `(tactic| rw [Circuit.output_bind] at $(mkIdent `h_output):ident))
+    run? (← `(tactic| rw [Circuit.output_bind] at $(mkIdent `output_eq):ident))
   run? (← `(tactic| obtain ⟨$(mkIdent chunkName):ident, $(mkIdent chunkHyp):ident⟩
     := $(mkIdent chunkHyp):ident))
   -- canonicalize output spellings, then mint the atom for a used binder
+  let canon : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
+    if region then
+      #[``FormalRegionCircuit.output_call, ``FormalRegionCircuit.output_call'].mapM
+        fun n => `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
+    else
+      #[``FormalCircuit.output_call'].mapM
+        fun n => `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
   if sound then
-    run? (← `(tactic| simp only [FormalCircuit.output_call']
-      at $(mkIdent chunkHyp):ident $(mkIdent `h_output):ident))
+    run? (← `(tactic| simp only [$canon,*]
+      at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident))
   else
-    run? (← `(tactic| simp only [FormalCircuit.output_call']
-      at $(mkIdent chunkHyp):ident $(mkIdent `h_output):ident ⊢))
+    run? (← `(tactic| simp only [$canon,*]
+      at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident ⊢))
   if isCall && binderUsed f then
     let some ty' ← hypType? chunkHyp | return some (chunkName, isCall)
     let outs ← newCanonicalOutputs ty'
-    mintAtoms outs nm #[chunkHyp, `h_output]
-  -- fold the offsets
-  if sound then
-    run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
-      at $(mkIdent chunkHyp):ident $(mkIdent `h_output):ident))
-  else
-    run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
-      at $(mkIdent chunkHyp):ident $(mkIdent `h_output):ident ⊢))
-  -- raw (non-call) chunks open immediately
+    mintAtoms outs nm #[chunkHyp, `output_eq]
+  -- fold the offsets (layouter only; region binds share one region index)
+  unless region do
+    if sound then
+      run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
+        at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident))
+    else
+      run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
+        at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident ⊢))
+  -- raw (non-call) chunks open immediately; content-free ones (assignments) vanish
   unless isCall do
-    run? (← `(tactic| simp only [circuit_norm] at $(mkIdent chunkName):ident))
+    run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+    let cleared ← withMainContext do
+      let some decl := (← getLCtx).findFromUserName? chunkName | return true
+      if (← instantiateMVars decl.type).isConstOf ``True then
+        return true
+      return false
+    if cleared then
+      run? (← `(tactic| clear $(mkIdent chunkName):ident))
+      return some (Name.anonymous, false)  -- consumed, nothing to track
   return some (chunkName, isCall)
 
 /-- The names of engine-emitted `h_spec_<k>` hypotheses currently in context. -/
@@ -203,16 +236,21 @@ def specHyps : TacticM (Array Name) := withMainContext do
 contract bridges (`mkBundleBridges`), everything else is an unfold lemma (linted for
 `circuit_norm` redundancy). Factored circuit defs in `main` (synth wrappers) unfold
 automatically (`autoUnfoldsOfMain`), so the bind loop sees the do-block. -/
-def run (sound : Bool) (terms : Option (Array Term)) : TacticM Unit := do
+def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   -- ── (a) intro the config through products; binder names come out of the pattern
   -- matches via the dsimp in (b), so positional names suffice here ──
+  let heads : List Name :=
+    [``FormalCircuit.Soundness, ``FormalCircuit.Completeness,
+     ``FormalRegionCircuit.Soundness, ``FormalRegionCircuit.Completeness]
+  let bundleBinderNames : Array Name := #[`cfg, `offset]
   let mut guard := 0
   while guard < 8 do
     let ty ← withMainContext do instantiateMVars (← getMainTarget)
-    if ty.isAppOf ``FormalCircuit.Soundness || ty.isAppOf ``FormalCircuit.Completeness then
+    if heads.any ty.isAppOf then
       break
     unless ty.isForall do break
-    run? (← `(tactic| intro $(mkIdent `cfg):ident))
+    let nm := bundleBinderNames.getD guard (Name.mkSimple s!"cfg_binder_{guard}")
+    run? (← `(tactic| intro $(mkIdent nm):ident))
     -- destructure through PRODUCTS only (a config tuple); never into structures
     let mut inner := 0
     while inner < 8 do
@@ -234,46 +272,68 @@ def run (sound : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   let autoUnfolds ← CircuitProofStart.autoUnfoldsOfMain
   let unfolds := userUnfolds ++ (← autoUnfolds.mapM fun n =>
     `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term))
+  let iffName : Name :=
+    if region then
+      if sound then ``FormalRegionCircuit.soundness_iff
+      else ``FormalRegionCircuit.completeness_iff
+    else
+      if sound then ``FormalCircuit.soundness_iff else ``FormalCircuit.completeness_iff
+  let idx : Name := if region then `self else `i₀
   if sound then
-    run? (← `(tactic| rw [FormalCircuit.soundness_iff]))
-    run? (← `(tactic| intro $(mkIdent `i₀):ident $(mkIdent `env):ident
+    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
+    run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
-      $(mkIdent `h_input):ident $(mkIdent `h_output):ident $(mkIdent `hE):ident
-      $(mkIdent `hA):ident $(mkIdent `hC):ident))
+      $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `env_assumptions):ident
+      $(mkIdent `assumptions):ident $(mkIdent `constraints):ident))
   else
-    run? (← `(tactic| rw [FormalCircuit.completeness_iff]))
-    run? (← `(tactic| intro $(mkIdent `i₀):ident $(mkIdent `env):ident
+    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
+    run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
-      $(mkIdent `h_input):ident $(mkIdent `h_output):ident $(mkIdent `hW):ident
-      $(mkIdent `hE):ident $(mkIdent `hA):ident $(mkIdent `hPA):ident))
+      $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `witnesses):ident
+      $(mkIdent `env_assumptions):ident $(mkIdent `assumptions):ident $(mkIdent `prover_assumptions):ident))
   run? (← `(tactic| obtain ⟨$(mkIdent `place):ident, $(mkIdent `env):ident⟩
     := $(mkIdent `env):ident))
   -- ── (b) definitional cleanup + output landing ──
   run? (← `(tactic| dsimp only [] at *))
-  run? (← `(tactic| simp only [ElaboratedCircuit.output_eq] at $(mkIdent `h_output):ident))
+  if region then
+    run? (← `(tactic| simp only [ElaboratedRegionCircuit.output_eq]
+      at $(mkIdent `output_eq):ident))
+  else
+    run? (← `(tactic| simp only [ElaboratedCircuit.output_eq] at $(mkIdent `output_eq):ident))
   -- open factored circuit defs (synth wrappers etc.) so the bind chain is visible
   unless unfolds.isEmpty do
-    let chunk := if sound then `hC else `hW
+    let chunk := if sound then `constraints else `witnesses
     run? (← `(tactic| simp only [$unfolds,*]
-      at $(mkIdent chunk):ident $(mkIdent `h_output):ident))
+      at $(mkIdent chunk):ident $(mkIdent `output_eq):ident))
     unless sound do
       run? (← `(tactic| simp only [$unfolds,*]))
   -- ── (c) the bind loop ──
-  let chunkHyp := if sound then `hC else `hW
+  let chunkHyp := if sound then `constraints else `witnesses
   let mut callChunks : Array Name := #[]
   let mut regionIdx := 0
   for _ in [0:32] do
-    match ← peelOneBind sound chunkHyp regionIdx with
+    match ← peelOneBind sound region chunkHyp regionIdx unfolds with
     | some (nm, isCall) =>
-      if isCall then callChunks := callChunks.push nm else regionIdx := regionIdx + 1
+      if nm == Name.anonymous then pure ()
+      else if isCall then callChunks := callChunks.push nm
+      else regionIdx := regionIdx + 1
     | none => break
   -- ── (d) terminal pure ──
-  if sound then
-    run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]
-      at $(mkIdent `hC):ident))
+  if region then
+    if sound then
+      run? (← `(tactic| rw [RegionCircuit.operations_pure, RegionOperations.constraints_nil]
+        at $(mkIdent `constraints):ident))
+    else
+      run? (← `(tactic| rw [RegionCircuit.operations_pure,
+        RegionOperations.constraints_nil]))
+    run? (← `(tactic| rw [RegionCircuit.output_pure] at $(mkIdent `output_eq):ident))
   else
-    run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]))
-  run? (← `(tactic| rw [Circuit.output_pure] at $(mkIdent `h_output):ident))
+    if sound then
+      run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]
+        at $(mkIdent `constraints):ident))
+    else
+      run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]))
+    run? (← `(tactic| rw [Circuit.output_pure] at $(mkIdent `output_eq):ident))
   run? (← `(tactic| clear $(mkIdent chunkHyp):ident))
   -- ── (e) engine ──
   if sound then
@@ -282,8 +342,8 @@ def run (sound : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   else
     run? (← `(tactic| subcircuit_rw))
   -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
-  -- with provable_type_simp, normalize the GIVENS, then one pass that uses `h_input`
-  -- and `h_output` AS REWRITE RULES (component equations; `h_output` fires
+  -- with provable_type_simp, normalize the GIVENS, then one pass that uses `input_eq`
+  -- and `output_eq` AS REWRITE RULES (component equations; `output_eq` fires
   -- left-to-right: circuit spelling → declared output) together with the caller's
   -- bridge list, over every derived hypothesis and the goal ──
   if !sound then
@@ -292,17 +352,24 @@ def run (sound : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     for c in callChunks do
       run? (← `(tactic| clear $(mkIdent c):ident))
   run? (← `(tactic| provable_type_simp))
+  -- rule-sources: ONLY the naming equations `input_eq`/`output_eq` (cell spelling ↦
+  -- declared value; that rewrite direction is forced). Row/witness equations
+  -- (`region_*`) are normalized like every other hypothesis in pass 2 but are never
+  -- fired by the tactic: whether to keep an output atom opaque or dissolve it into its
+  -- witnessed value is a proof-dependent decision that belongs to the user half
+  -- (main Clean's `circuit_proof_start` treats `h_env` the same way).
+  let ruleSources : Array Name := #[`input_eq, `output_eq]
   -- pass 1: normalize ONLY the rule-sources, so their equations fire on the
   -- normalized spellings everywhere else
-  for g in [`h_input, `h_output] do
+  for g in ruleSources do
     run? (← `(tactic| simp only [circuit_norm] at $(mkIdent g):ident))
-  -- pass 2: derived hypotheses + goal, with h_input/h_output as rules
-  let rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
-    #[← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_input):term),
-      ← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_output):term),
-      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ bridges ++ unfolds
+  -- pass 2: derived hypotheses + goal, with input_eq/output_eq as rules
+  let mut rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
+    #[← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ bridges ++ unfolds
+  for g in ruleSources do
+    rules := rules.push (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent g):term))
   -- pass-2 targets: everything except the rule-sources
-  let pass2Excluded : Array Name := #[`h_input, `h_output]
+  let pass2Excluded : Array Name := ruleSources
   let targets ← withMainContext do
     let mut ts : Array Name := #[]
     for decl in ← getLCtx do
@@ -338,9 +405,6 @@ def evalCircuitProofStart2 : Tactic := fun stx => do
   -- direction via CPS1's detector (all four heads); region-level is not ported yet
   let some d ← CircuitProofStart.detectDirection?
     | throwError "circuit_proof_start2: goal is not a bundle Soundness/Completeness proof"
-  if d.isRegion then
-    throwError "circuit_proof_start2: region-level bundles are not supported yet — use \
-circuit_proof_start (v1) for region gadgets"
-  CircuitProofStart2.run d.isSoundness terms
+  CircuitProofStart2.run d.isSoundness d.isRegion terms
 
 end Halo2
