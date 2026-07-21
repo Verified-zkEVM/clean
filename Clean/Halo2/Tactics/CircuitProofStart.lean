@@ -466,31 +466,48 @@ AFTER the main peel (and only when the output is still folded) keeps every alrea
 landing shape byte-identical; and running the full `circuit_norm` set directly over the
 UN-shrunk structural term instead is a six-figure whnf burn — the sum of the
 (individually capped) eval-simproc attempts over every subterm position is unbounded
-(Chain's bundle was the reproducer). -/
+(Chain's bundle was the reproducer).
+
+PARKED (not wired into `run`): enabling this on the corpus showed the two regimes
+conflict — proofs in the abstracted-outputs regime (`x_gen_out_*`/`h_gen_out_*` from
+`abstract_outputs`/`subcircuit_rw`, e.g. the BaseFieldElem inner families) consume
+outputs through the gen-out equations and BREAK when `h_output` reduces under them,
+and on 85-window loop families the structural pass itself is an 85-unroll that can
+blow a proof's heartbeat budget. The Chain-class beneficiaries are 4 manual-ladder
+sites; wiring this in needs a per-proof opt-in (cps argument) or a cost-bounded
+reduction. Kept for that follow-up, with the working `unfold`-of-instance mechanics. -/
 def rescueFoldedOutput (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do
   let insts ← foldedOutputInstances
   if insts.isEmpty then return
-  let instLemmas ← insts.mapM fun n =>
-    `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)
+  -- Abstracted-outputs regime: when `abstract_outputs` has already opaqued child-call
+  -- outputs (`x_gen_out_*` vars in scope), the proof consumes outputs through the
+  -- `h_gen_out_*` equations — reducing `h_output` structurally here would fight that
+  -- abstraction (the BaseFieldElem inner bundles' hand ladders sit in this regime).
+  -- The rescue is for the OTHER regime: loop-composed bundles with no abstractable
+  -- child outputs (Sinsemilla Chain's slot children are Unit-output).
+  let hasGenOuts ← withMainContext do
+    pure <| (← getLCtx).any fun d =>
+      !d.isImplementationDetail && d.userName.getString!.startsWith "x_gen_out"
+  if hasGenOuts then return
+  let instIds := insts.map mkIdent
   bestEffort do
-    -- NO `output_eq` here: it would fire before the instance unfold and send an
-    -- explicit-output instance down the structural route (the wrong direction — that
-    -- regressed FullWidth's inner proofs when tried). Projection-of-literal reduction
-    -- on the unfolded instance covers both cases.
-    --
-    -- STATUS: currently fails closed corpus-wide — `simp only [<instance const>]` does
-    -- not rewrite an instance-def occurrence (`unfold … at h_output` does; switching to
-    -- it is pending a kernel-cost audit: on a loop-composed bundle the structural
-    -- output reduction elaborates fast but the produced rfl-steps hand the KERNEL an
-    -- uncapped defeq over the composed term, which is why Chain's manual ladder uses
-    -- its careful narrow `rw` spelling). Until then, gadgets in the folded-output class
-    -- keep their manual ladders and this step is a silent no-op.
+    -- `unfold` (not a simp citation — instance-def occurrences don't rewrite via simp
+    -- equations), then the NARROW structural + leaf output set. NO `output_eq` (it
+    -- would fire before the instance unfold and send an explicit-output instance down
+    -- the structural route — the wrong direction; that regressed FullWidth's inner
+    -- proofs when tried), and NO full `circuit_norm` re-land (running the eval
+    -- simprocs over the composed-output residue hands the kernel an uncapped defeq —
+    -- the >8-min wall hang in the Chain scratch audit). The narrow set beta-drops
+    -- discarded loop innards and lands h_output on the cell record; the gadget's own
+    -- literal-eval steps continue from there.
+    evalTactic (← `(tactic| unfold $[$instIds:ident]* at $(mkIdent `h_output):ident))
     evalTactic (← `(tactic|
-      simp only [$instLemmas,*, RegionCircuit.output_bind,
-        RegionCircuit.output_pure] at $(mkIdent `h_output):ident))
-    evalTactic (← `(tactic|
-      simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `h_output):ident))
+      simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+        Circuit.output_bind, Circuit.output_pure, output_assignRegion,
+        output_assignAdvice, output_assignFixed, output_copyAdvice,
+        FormalRegionCircuit.output_call, FormalCircuit.output_call',
+        $unfold,*] at $(mkIdent `h_output):ident))
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
 target set. Soundness peels `hc`, `h_output` and the goal (the constraints hyp, the output-value
@@ -742,7 +759,6 @@ def run (terms : Option (Array Term)) : TacticM Unit := do
     if unfold.any (fun t => t.raw.isIdent && t.raw.getId == n) then return none
     return some (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)))
   peelConstraints d unfold
-  rescueFoldedOutput unfold
   normalizeProvable
   abstractOutputs
   consumeChunks d

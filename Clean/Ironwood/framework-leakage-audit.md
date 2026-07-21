@@ -404,7 +404,16 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
    + a follow-up full `circuit_norm at h_output` hangs past 8 min WALL with simp capped
    at 100k heartbeats, i.e. the cost is in kernel checking, not elaboration. Chain's
    manual ladder (narrow rw + targeted simps, Chain:1151) is the kernel-friendly
-   spelling; subsuming it into the rescue = the Chain port task. Designs REJECTED en
+   spelling; subsuming it into the rescue = the Chain port task.
+   **RESCUE PARKED (H, end of second wave):** wiring the working unfold-of-instance
+   rescue into `run` (tried at two pipeline positions) conflicts with the
+   abstracted-outputs regime — proofs consuming outputs via `x_gen_out_*`/`h_gen_out_*`
+   (BaseFieldElem inner families) break when h_output reduces under them, and on
+   85-window loop families the structural pass is itself an 85-unroll that blows
+   heartbeat budgets (BFE:848). The mechanics stay in `rescueFoldedOutput` (unwired)
+   with the full analysis; next design: per-proof opt-in via a cps argument, or a
+   cost-bounded reduction. The 4 Chain/HashToPoint manual ladders stay for now.
+   Designs REJECTED en
    route (both regressed green files before the conditional fail-closed form): an
    unconditional structural pre-pass (changed 4 files' destructure shapes) and an
    `output_eq`-first rescue (sends explicit-output instances down the structural route,
