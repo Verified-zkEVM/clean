@@ -85,8 +85,8 @@ import Clean.Ironwood.Action.RealBases
 /-!
 # Ironwood circuits
 
-Aggregator for the Ironwood (halo2-native) circuit modules, so they're built and
-warning-checked (`--wfail`) as part of the main `Clean` library in CI.
+Aggregator for the Ironwood (halo2-native) circuit modules. Ironwood is kept separate
+from the main `Clean` library export and can be built with `lake build Ironwood`.
 
 `Clean.Ironwood.Sinsemilla.CommitDomain` and `Clean.Ironwood.Sinsemilla.Merkle` are
 intentionally excluded: they carry stated `sorry`s pending the `MulFixed`/`CondSwap`
