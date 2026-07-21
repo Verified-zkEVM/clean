@@ -1796,19 +1796,6 @@ private theorem aafi_output (instCol : Column .instance) (r : ℕ)
 
 derive_contract_bridges base (G : Generators) (B : Bases) := baseCircuit G B
 
-private theorem base_output (G : Generators) (B : Bases)
-    (cfg : Config) (W : Witnesses Fp) (i₀ : RegionIndex) :
-    (baseCircuit G B).output cfg W i₀
-      = { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
-                     y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
-          pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
-                      y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
-          gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
-                     y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
-          pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
-                      y := AssignedCell.of (i₀ + 348) 0
-                        cfg.eccConfig.witnessPoint.y } } := rfl
-
 /-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region,
 the private witness programs flowing through as the input. -/
 def mainPost (G : Generators) (B : Bases) (cfg : Config) :

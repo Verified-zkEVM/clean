@@ -131,12 +131,6 @@ derive_contract_bridges pointFormal := pointFormal
 
 derive_contract_bridges pointNonIdFormal := pointNonIdFormal
 
-/-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
-theorem pointNonIdFormal_output (cfg : Config)
-    (input : Var (Unconstrained Point) Fp) (i : RegionIndex) :
-    pointNonIdFormal.output cfg input i
-      = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
-
 end WitnessPoint
 
 end Halo2.Ironwood.Ecc

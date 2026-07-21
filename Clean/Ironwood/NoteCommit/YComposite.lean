@@ -154,7 +154,9 @@ def gateChild (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp)) :
 derive_contract_bridges gateChild (wlsb : WitgenIR Fp 1)
   (input : Inputs (AssignedCell Fp)) := gateChild wlsb input
 
-private theorem gateChild_output (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp))
+/-- The gate child's output, at its concrete cell (one hop deeper than the generated
+`gateChild_output`, which stops at the lifted region bundle's folded output). -/
+private theorem gateChild_output_cells (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp))
     (cfg : YCanonicity.Config) (row : Var YCanonicity.Row Fp) (i : RegionIndex) :
     (gateChild wlsb input).output cfg row i
       = AssignedCell.of i 0 (cfg.advices 6) := by
@@ -269,7 +271,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     -- the gate child
     rw [decomposed_output, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
-      gateChild_output, circuit_norm] at hGate
+      gateChild_output_cells, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨by rw [hjz0]; exact hjlt, hK0S, hK2S,
        by rw [hjz0]; exact hz1v, by rw [hjz0]; exact hz13v,
