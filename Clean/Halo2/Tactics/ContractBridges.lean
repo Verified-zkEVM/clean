@@ -121,64 +121,56 @@ where
         acc := acc.push (.fvar decl.fvarId)
     return acc
 
-/-- The call-chunk region-count bridges for a layouter-level bundle (see the module
+/-- The call-chunk region-count bridge for a layouter-level bundle (see the module
 docstring): `<base>_call_regionCount : Operations.regionCount ((bundle.call config
 input).operations j) = <whnf of bundle.regionCount config input>`, proved by the generic
 `FormalCircuit.call_regionCount` (the kernel closes the metadata gap definitionally).
-Emitted in BOTH the abstract-`Var` spelling and the concrete-element-type spelling
-(primed, mirroring the framework's `call_regionCount` / `call_regionCount'` pair) —
-hypotheses occur in both syntactic forms, and each spelling's simp discrimination-tree
-key only matches its own. Returns `#[]` for non-`FormalCircuit` bundles. -/
+For manual `rw`s only — simp-side folding is the `foldCallRegionCount` simproc
+(`Clean/Halo2/Subcircuit.lean`), which handles every bundle and α-spelling without
+per-bundle simp lemmas. Returns `none` for non-`FormalCircuit` bundles. -/
 def buildRegionCountBridge (baseName : Name) (bundle : Expr) :
-    MetaM (Array (Name × Expr × Expr)) := do
+    MetaM (Option (Name × Expr × Expr)) := do
   let bundleTy ← whnf (← inferType bundle)
-  let .const structName _ := bundleTy.getAppFn | return #[]
-  unless structName == ``Halo2.FormalCircuit do return #[]
+  let .const structName _ := bundleTy.getAppFn | return none
+  unless structName == ``Halo2.FormalCircuit do return none
   -- FormalCircuit F [FiniteField F] CI Cfg Input Output [CircuitType Input] [CircuitType Output]
   let args := bundleTy.getAppArgs
-  let some cfgTy := args[3]? | return #[]
-  let some inputM := args[4]? | return #[]
-  let some outM := args[5]? | return #[]
-  let some instIn := args[6]? | return #[]
+  let some cfgTy := args[3]? | return none
+  let some inputM := args[4]? | return none
+  let some instIn := args[6]? | return none
   let F := args[0]!
   let varInputTy := mkApp (← mkAppOptM ``Halo2.Var #[some inputM, some instIn]) F
   withLocalDeclD `config cfgTy fun config =>
   withLocalDeclD `input varInputTy fun input =>
   withLocalDeclD `j (mkConst ``Halo2.RegionIndex) fun j => do
     let call ← mkAppM ``Halo2.FormalCircuit.call #[bundle, config, input]
-    let concreteOut := mkApp outM (mkApp (mkConst ``Halo2.AssignedCell) F)
-    let opsAbstract ← mkAppM ``Halo2.Circuit.operations #[call, j]
-    let opsConcrete ← mkAppOptM ``Halo2.Circuit.operations
-      #[some F, none, some concreteOut, some call, some j]
+    let ops ← mkAppM ``Halo2.Circuit.operations #[call, j]
+    let lhs ← mkAppM ``Halo2.Operations.regionCount #[ops]
     let rhs ← withTransparency .default
       (whnf (← mkAppM ``Halo2.FormalCircuit.regionCount #[bundle, config, input]))
-    let mut out := #[]
-    for (ops, primed) in [(opsAbstract, false), (opsConcrete, true)] do
-      let lhs ← mkAppM ``Halo2.Operations.regionCount #[ops]
-      let eqTy ← mkEq lhs rhs
-      let fvars ← buildBridges.getFVars eqTy
-      let genTy ← mkForallFVars fvars eqTy
-      -- the proof's stated RHS is the reduced metadata; `call_regionCount`'s is the
-      -- folded projection — defeq, validated here and re-checked by the kernel
-      let proof? ← try
-        let pf ← mkLambdaFVars fvars
-          (← mkAppM ``Halo2.FormalCircuit.call_regionCount #[bundle, config, input, j])
-        if ← withTransparency .default (isDefEq (← inferType pf) genTy) then
-          let genTy ← instantiateMVars genTy
-          let pf ← instantiateMVars pf
-          if genTy.hasMVar || pf.hasMVar then pure none else pure (some (genTy, pf))
-        else pure none
-      catch _ => pure none
-      match proof? with
-      | some (genTy, pf) =>
-        let suffix := if primed then "_call_regionCount'" else "_call_regionCount"
-        let thmName := match baseName with
-          | .str p s => p ++ Name.mkSimple (s ++ suffix)
-          | _ => baseName ++ Name.mkSimple (suffix.drop 1).toString
-        out := out.push (thmName, genTy, pf)
-      | none =>
-        logWarning m!"derive_contract_bridges: call_regionCount bridge did not validate; skipped"
-    return out
+    let eqTy ← mkEq lhs rhs
+    let fvars ← buildBridges.getFVars eqTy
+    let genTy ← mkForallFVars fvars eqTy
+    -- the proof's stated RHS is the reduced metadata; `call_regionCount`'s is the
+    -- folded projection — defeq, validated here and re-checked by the kernel
+    let proof? ← try
+      let pf ← mkLambdaFVars fvars
+        (← mkAppM ``Halo2.FormalCircuit.call_regionCount #[bundle, config, input, j])
+      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then
+        let genTy ← instantiateMVars genTy
+        let pf ← instantiateMVars pf
+        if genTy.hasMVar || pf.hasMVar then pure none else pure (some (genTy, pf))
+      else pure none
+    catch _ => pure none
+    match proof? with
+    | some (genTy, pf) =>
+      let thmName := match baseName with
+        | .str p s => p ++ Name.mkSimple (s ++ "_call_regionCount")
+        | _ => baseName ++ Name.mkSimple "call_regionCount"
+      return some (thmName, genTy, pf)
+    | none =>
+      logWarning m!"derive_contract_bridges: call_regionCount bridge did not validate; skipped"
+      return none
 
 /-- `derive_contract_bridges name (binder)* := bundle`.
 
@@ -204,21 +196,14 @@ def elabDeriveContractBridges : CommandElab := fun stx => do
       Term.elabBinders binders fun _ => do
         let bundle ← Term.elabTermAndSynthesize t none
         let mut bridges ← buildBridges baseName bundle
-        bridges := bridges ++ (← buildRegionCountBridge baseName bundle)
+        if let some rc ← buildRegionCountBridge baseName bundle then
+          bridges := bridges.push rc
+        -- NOTHING is tagged into a simp set: simp-side region-count folding is the
+        -- generic `foldCallRegionCount` simproc, and auto-rewriting the CONTRACT
+        -- projections would break the folded-child discipline.
         for (thmName, ty, pf) in bridges do
           addDecl (.thmDecl {
             name := thmName, levelParams := [], type := ty, value := pf })
-          -- the region-count bridge joins `circuit_norm`: `circuit_proof_start`'s
-          -- normalization then folds call-chunk region counts to their literals, so
-          -- consumers never write per-child `rw [<child>_call_regionCount]` walls.
-          -- The CONTRACT bridges stay untagged — auto-rewriting `Spec`/`Assumptions`
-          -- projections would break the folded-child discipline.
-          if thmName.getString!.endsWith "call_regionCount"
-              || thmName.getString!.endsWith "call_regionCount'" then
-            let some ext ← getSimpExtension? `circuit_norm
-              | throwError "derive_contract_bridges: circuit_norm simp set not found"
-            addSimpTheorem ext thmName (post := true) (inv := false) .global
-              (prio := eval_prio default)
   | _ => throwUnsupportedSyntax
 
 end Halo2.ContractBridges

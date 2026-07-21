@@ -87,10 +87,6 @@ def parent :
     -- both goal chunks strengthen in place (op order): the goal becomes the AND of the two
     -- `EnvA ∧ A ∧ PA` bundles, with premised `h_spec_0`/`h_spec_1` in context.
     subcircuit_rw
-    have hrc : ((witnessPointL.call config input_var).operations i₀).regionCount = 1 := by
-      rw [FormalCircuit.call_regionCount]
-      rfl
-    simp only [hrc]
     have key : (eval env input_var).Valid := by
       convert hpa using 2
       with_unfolding_all exact h_input

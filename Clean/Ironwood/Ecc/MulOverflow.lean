@@ -279,14 +279,6 @@ theorem synthesize_regionCount (K : ℕ) (cfg : Config K) (input : Inputs (Assig
     Operations.regionCount ((synthesize K cfg input).operations i) = 3 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
-  -- the copyCheck child call contributes exactly 1 region (its `toFormal` wrapping region)
-  rw [show ∀ (j : RegionIndex),
-      Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
-        cfg.lookupConfig { element := AssignedCell.of i 0 cfg.adv0 }).operations j) = 1
-      from fun j => by
-        rw [FormalCircuit.call_operations]
-        simp only [LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal, Circuit.operations,
-          assignRegion, Operations.regionCount, Nat.add_zero]]
 
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
@@ -321,12 +313,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     -- peel the three-region layouter structure: region 1 (witness s) at i₀, the copyCheck child
     -- at i₀+1, region 3 (gate) at i₀+2.
     simp only [synthesize, circuit_norm] at hc
-    -- reduce the gate-region's index `i₀ + 1 + regionCount(copyCheck call)` to `i₀ + 2`
-    rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
-        cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
-      from by rw [FormalCircuit.call_operations]; simp only [LookupRangeCheck.copyCheck,
-        FormalRegionCircuit.toFormal, Circuit.operations, assignRegion, Operations.regionCount,
-        Nat.add_zero]] at hc
     -- hc : copyCheck chunk (region i₀+1) ∧ gate-region constraints (region i₀+2). The witness-s
     -- region (i₀) has no constraints (bare assignAdvice → True), dropped by simp.
     obtain ⟨hChild, hGate⟩ := hc
@@ -405,13 +391,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     obtain ⟨hTable, hDistinct⟩ := _hE
     -- peel the witness list: region 1 (witness s) ++ copyCheck child ++ gate region.
     simp only [synthesize, circuit_norm] at hwit ⊢
-    -- reduce the copyCheck call's regionCount to 1, so the gate region is at i₀+2
-    rw [show Operations.regionCount (((LookupRangeCheck.copyCheck K (numWords K) false).call
-        cfg.lookupConfig { element := AssignedCell.of i₀ 0 cfg.adv0 }).operations (i₀ + 1)) = 1
-      from by rw [FormalCircuit.call_operations]; simp only [LookupRangeCheck.copyCheck,
-        FormalRegionCircuit.toFormal, Circuit.operations, assignRegion, Operations.regionCount,
-        Nat.add_zero]]
-      at hwit ⊢
     obtain ⟨hWs, hWchild, hWgate⟩ := hwit
     -- the honest witnessed `s` value (region i₀ row 0 = alpha + k254·2^130)
     simp only [sWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,

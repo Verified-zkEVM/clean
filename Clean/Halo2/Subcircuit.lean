@@ -181,6 +181,55 @@ theorem FormalCircuit.call_regionCount' {Output : TypeMap} [ProvableType Output]
       = self.regionCount config input :=
   FormalCircuit.call_regionCount self config input i
 
+/-! ### Region-count folding (`circuit_norm` simproc)
+
+One simproc folds `Operations.regionCount ((child.call cfg inp).operations j)` to the
+child's literal region count, for EVERY layouter bundle (named, parameter-applied, or
+`toFormal`-lifted) and in every α-spelling — it does its own matching, so no
+per-bundle simp lemma and no discrimination-tree-key duplication. Fires only when the
+elaborated metadata `child.regionCount cfg inp` whnf-reduces to a closed `Nat` literal
+(a symbolic count stays untouched); the proof is the generic `call_regionCount`, with
+the kernel closing the metadata-to-literal gap definitionally — the same obligation
+the historical hand-written `rw [FormalCircuit.call_regionCount]; rfl` wrappers
+discharged. -/
+
+open Lean Meta Simp in
+/-- See the section docstring. -/
+def foldCallRegionCountProc : Simproc := fun e => do
+  -- e = Operations.regionCount ops
+  unless e.isAppOfArity ``Halo2.Operations.regionCount 2 do return .continue
+  let ops := e.appArg!
+  -- ops = Circuit.operations circuit j (5 args: F, inst, α, circuit, j)
+  unless ops.isAppOfArity ``Halo2.Circuit.operations 5 do return .continue
+  let circuit := ops.getArg! 3
+  let j := ops.getArg! 4
+  -- circuit = FormalCircuit.call self config input (last three explicit args)
+  unless circuit.getAppFn.isConstOf ``Halo2.FormalCircuit.call do return .continue
+  let cargs := circuit.getAppArgs
+  unless cargs.size ≥ 3 do return .continue
+  try
+    -- `call` and `regionCount` share the `FormalCircuit` section telescope
+    -- (F instFF Input Output instIn instOut CI Cfg self config input), so the call's own
+    -- argument list instantiates `regionCount` directly — no `mkAppM` re-elaboration
+    let lvls := circuit.getAppFn.constLevels!
+    let count ← withTransparency .default
+      (whnf (mkAppN (mkConst ``Halo2.FormalCircuit.regionCount lvls) cargs))
+    -- fold only to CLOSED counts (`evalNat`: raw/`OfNat`/`One.one` shapes all count);
+    -- a symbolic/stuck metadata term stays put
+    let some _ ← (Meta.evalNat count).run | return .continue
+    -- proof built only on a successful fold (cold path), so `mkAppM` is fine here —
+    -- `call_regionCount`'s implicit telescope is ordered differently from `call`'s
+    let proof ← mkAppM ``Halo2.FormalCircuit.call_regionCount
+      #[cargs[cargs.size - 3]!, cargs[cargs.size - 2]!, cargs[cargs.size - 1]!, j]
+    -- the generic lemma's type is the abstract-α spelling with the unreduced metadata
+    -- RHS; re-type it at (e = count) — defeq on both sides, kernel-checked
+    let proof ← mkExpectedTypeHint proof (← mkEq e count)
+    return .visit { expr := count, proof? := some proof }
+  catch _ => return .continue
+
+simproc foldCallRegionCount (Halo2.Operations.regionCount _) := foldCallRegionCountProc
+attribute [circuit_norm] foldCallRegionCount
+
 /-- The closed-form fold state: the accumulator input var and the base region index
 *entering* round `m`. -/
 def FormalCircuit.foldState (c : ℕ → FormalCircuit F CI Cfg Input Output)

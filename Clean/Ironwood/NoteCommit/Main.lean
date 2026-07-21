@@ -341,20 +341,14 @@ def synth (G : Generators) (R : FixedBase)
 the single userland home (the per-file copies were Category-2 duplicates); their final
 home should be framework-side (`Clean/Halo2/Subcircuit.lean`). -/
 
-/-- A `toFormal`-lifted region bundle's call chunk is exactly one region. In
-`circuit_norm` (like the generated `_call_regionCount` bridges), so composite
-normalization folds lifted-child chunks without per-consumer `rw` walls. Stated at the
-concrete element type (the `call_regionCount'` spelling) so the simp discrimination tree
-matches the post-`circuit_norm` hypothesis form. -/
-@[circuit_norm]
+/-- A `toFormal`-lifted region bundle's call chunk is exactly one region. For manual
+`rw`s only — simp-side folding is the generic `foldCallRegionCount` simproc. -/
 theorem toFormal_call_regionCount {CI Cfg : Type} {Input Output : TypeMap}
     [ProvableType Input] [ProvableType Output]
     (b : FormalRegionCircuit Fp CI Cfg Input Output) (name : String) (cfg : Cfg)
     (inp : Var Input Fp) (j : RegionIndex) :
-    Operations.regionCount
-        (@Circuit.operations Fp _ (Output (AssignedCell Fp))
-          ((b.toFormal name).call cfg inp) j) = 1 := by
-  rw [FormalCircuit.call_regionCount']
+    Operations.regionCount (((b.toFormal name).call cfg inp).operations j) = 1 := by
+  rw [FormalCircuit.call_regionCount]
   rfl
 
 theorem toFormal_spec_eq {CI Cfg : Type} {In Out : TypeMap}
