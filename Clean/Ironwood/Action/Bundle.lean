@@ -260,34 +260,34 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
   (wit.magnitude.val < 2 ^ 64 ∧
     ((wit.sign = 1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = ((wit.magnitude.val : Fq) • B.valueCommitV : Point Fp)
-          + (wit.rcv.2 • B.valueCommitR : Point Fp)) ∨
+        = (wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR) ∨
      (wit.sign = -1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = (((-(wit.magnitude.val : Fq)) : Fq) • B.valueCommitV : Point Fp)
-          + (wit.rcv.2 • B.valueCommitR : Point Fp)))) ∧
+        = -(wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR))) ∧
   -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
-  wit.nfOld = ((wit.cmOld +
+  wit.nfOld = (wit.cmOld +
     ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
-      • B.nullifierK : Point Fp)).x ∧
+      • B.nullifierK).x ∧
   -- spend authority: `rk = [α] SpendAuthG + ak_P`
   (⟨wit.rkX, wit.rkY⟩ : Point Fp)
-    = (wit.alpha.2 • B.spendAuthG : Point Fp) + wit.akP ∧
+    = wit.alpha.2 • B.spendAuthG + wit.akP ∧
   -- diversified-address integrity: `ivk ∈ {Commit^ivk, ⊥}` (break exhibited) and
   -- `pk_d_old = [ivk] g_d_old`
   (∃ ivk : Fp,
     SpecOrBreak G.S B.ivkQ
-      (fun bp => ivk = (bp + (wit.rivk.2 • B.commitIvkR : Point Fp)).x)
+      (fun bp => ivk = (bp + wit.rivk.2 • B.commitIvkR).x)
       (hashToPointB G.S B.ivkQ (commitIvkChunks wit.akP.x.val wit.nk.val)) ∧
-    wit.pkdOld = (ivk.val • wit.gdOld : Point Fp)) ∧
+    wit.pkdOld = ivk.val • wit.gdOld) ∧
   -- old note-commitment integrity: `NoteCommit(…) ∈ {cm_old, ⊥}` (break exhibited)
   SpecOrBreak G.S B.noteQ
-    (fun bp => wit.cmOld = bp + (wit.rcmOld.2 • B.noteCommitR : Point Fp))
+    (fun bp => wit.cmOld = bp + wit.rcmOld.2 • B.noteCommitR)
     (hashToPointB G.S B.noteQ
       (noteScalars wit.gdOld wit.pkdOld wit.vOld wit.rhoOld wit.psiOld).chunks) ∧
   -- new note-commitment integrity, `ρ_new = nf_old`:
   -- `Extract(NoteCommit(…)) ∈ {cmx, ⊥}` (break exhibited)
   SpecOrBreak G.S B.noteQ
-    (fun bp => wit.cmx = (bp + (wit.rcmNew.2 • B.noteCommitR : Point Fp)).x)
+    (fun bp => wit.cmx = (bp + wit.rcmNew.2 • B.noteCommitR).x)
     (hashToPointB G.S B.noteQ
       (noteScalars wit.gdNew wit.pkdNew wit.vNew wit.nfOld wit.psiNew).chunks) ∧
   -- Merkle path validity, tied through the `q_orchard` anchor check. The strict-or-break
@@ -1017,30 +1017,29 @@ def ProverAssumptions (G : Generators) (B : Bases)
   -- the three Sinsemilla legs are defined, with the honest commitment equations
   (∃ Bi, hashToPoint G.S B.ivkQ
       (commitIvkChunks wit.akP.x.val wit.nk.val) = some Bi ∧
-    wit.pkdOld = (((Bi + (wit.rivk.2 • B.commitIvkR : Point Fp)).x).val
-      • wit.gdOld : Point Fp)) ∧
+    wit.pkdOld = ((Bi + wit.rivk.2 • B.commitIvkR).x).val • wit.gdOld) ∧
   (∃ Bo, hashToPoint G.S B.noteQ
       (Halo2.Ironwood.NoteCommit.noteScalars wit.gdOld wit.pkdOld wit.vOld
         wit.rhoOld wit.psiOld).chunks = some Bo ∧
-    wit.cmOld = Bo + (wit.rcmOld.2 • B.noteCommitR : Point Fp)) ∧
+    wit.cmOld = Bo + wit.rcmOld.2 • B.noteCommitR) ∧
   (∃ Bn, hashToPoint G.S B.noteQ
       (Halo2.Ironwood.NoteCommit.noteScalars wit.gdNew wit.pkdNew wit.vNew
         wit.nfOld wit.psiNew).chunks = some Bn ∧
-    wit.cmx = (Bn + (wit.rcmNew.2 • B.noteCommitR : Point Fp)).x) ∧
+    wit.cmx = (Bn + wit.rcmNew.2 • B.noteCommitR).x) ∧
   -- the public-input rows are the honestly computed values
   ((wit.sign = 1 →
       (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = ((wit.magnitude.val : Fq) • B.valueCommitV : Point Fp)
-          + (wit.rcv.2 • B.valueCommitR : Point Fp)) ∧
+        = (wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR) ∧
    (wit.sign = -1 →
       (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = (((-(wit.magnitude.val : Fq)) : Fq) • B.valueCommitV : Point Fp)
-          + (wit.rcv.2 • B.valueCommitR : Point Fp))) ∧
-  wit.nfOld = ((wit.cmOld +
+        = -(wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR)) ∧
+  wit.nfOld = (wit.cmOld +
     ((Halo2.Ironwood.Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld]
-      + wit.psiOld).val : Fq) • B.nullifierK : Point Fp)).x ∧
+      + wit.psiOld).val : Fq) • B.nullifierK).x ∧
   (⟨wit.rkX, wit.rkY⟩ : Point Fp)
-    = (wit.alpha.2 • B.spendAuthG : Point Fp) + wit.akP ∧
+    = wit.alpha.2 • B.spendAuthG + wit.akP ∧
   -- the remaining `q_orchard` value checks at the honest values
   wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
   wit.vOld * (1 - wit.enableSpend) = 0 ∧
@@ -1314,9 +1313,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
             rivk := input_var_rivk }
           (i₀ + 283)) : Fp)
-        = (Bi + ((extract cfg input_var i₀
+        = (Bi + (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rivk.2
-              • B.commitIvkR : Point Fp)).x := by
+              • B.commitIvkR).x := by
       rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIder
       rw [civkInputs_eval_eq] at hCIder
       simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
@@ -1442,9 +1441,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
           (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ : Point Fp))
-        = ((extract cfg input_var i₀
+        = (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).alpha.2
-              • B.spendAuthG : Point Fp)
+              • B.spendAuthG
           + (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).akP from hRk]
       with_unfolding_all rfl
@@ -1496,9 +1495,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             psi := AssignedCell.of (i₀ + 349) 0 (cfg.advices 0),
             rcm := input_var_rcmNew }
           (i₀ + 350)) : Point Fp)
-        = Bn + ((extract cfg input_var i₀
+        = Bn + (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rcmNew.2
-              • B.noteCommitR : Point Fp) := by
+              • B.noteCommitR := by
       rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnDer
       rw [ncInputs_eval_eq] at hNCnDer
       rw [show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)

@@ -222,7 +222,7 @@ theorem add_coords_eq {P Q R : Point Fp} (h : P + Q = R) :
 
 /-- Negating the scalar negates the `y`-coordinate of the result. -/
 theorem smul_neg (s : Fq) :
-    (((-s) : Fq) • B : Point Fp) = { x := (s • B).x, y := -((s • B).y) } := by
+    ((-s) • B : Point Fp) = { x := (s • B).x, y := -((s • B).y) } := by
   suffices h : (-s).val • B.point = -(s.val • B.point) by
     show ({ x := ((-s).val • B.point).x, y := ((-s).val • B.point).y } : Point Fp) = _
     rw [h]
@@ -343,7 +343,7 @@ def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
 def ProverSpec (B : FixedBase) (input : MagnitudeSign Fp) (output : Point Fp)
     (_ : ProverHint Fp) : Prop :=
   (input.sign = 1 → output = (input.magnitude.val : Fq) • B) ∧
-    (input.sign = -1 → output = ((-(input.magnitude.val : Fq)) : Fq) • B)
+    (input.sign = -1 → output = -(input.magnitude.val : Fq) • B)
 
 private theorem exists_lt_of_inRange {x : Fp}
     (h : Utilities.RunningSum.InRange (2 ^ 3) x) :
@@ -780,7 +780,7 @@ theorem signed_output_spec (B : FixedBase) {m : ℕ}
     (hySigned_pos : sign = 1 → ySigned = y)
     (hySigned_neg : sign = -1 → ySigned = -y) :
     (sign = 1 → ({ x := x, y := ySigned } : Point Fp) = (m : Fq) • B) ∧
-      (sign = -1 → ({ x := x, y := ySigned } : Point Fp) = ((-(m : Fq)) : Fq) • B) := by
+      (sign = -1 → ({ x := x, y := ySigned } : Point Fp) = -(m : Fq) • B) := by
   constructor
   · intro hs
     rw [hySigned_pos hs]
