@@ -10,6 +10,9 @@ package Clean where
 @[default_target]
 lean_lib Clean where
 
+lean_lib Ironwood where
+  roots := #[`Clean.Ironwood]
+
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
