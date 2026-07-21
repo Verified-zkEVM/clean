@@ -993,7 +993,11 @@ private def dRowP (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironme
 
 /-! ## The bundle -/
 
-instance circuitElaborated (G : Generators) (ns : List ℕ)
+/-- Canonical elaborated instance: the `output` field is established in REDUCED
+cell-record form ONCE here (the structural ladder in `output_eq` is the one-time cost),
+so every consumer — and cps's canonical-`elaborated` unfold — sees the neat record
+instead of re-reducing the composed builder per proof site. -/
+instance elaborated (G : Generators) (ns : List ℕ)
     (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ) :
     ElaboratedRegionCircuit Fp (Inputs ns.length) Output
       (fun input : Var (Inputs ns.length) Fp => do
@@ -1011,7 +1015,16 @@ instance circuitElaborated (G : Generators) (ns : List ℕ)
         let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
         let first ← readState cfg offset
         return ({ point := { x := xExit, y := yFin }, first := first.row }
-          : Output (AssignedCell Fp))) := {}
+          : Output (AssignedCell Fp))) where
+  output _ self :=
+    { point := { x := .of self (offset + prefixRows ns ns.length) cfg.xA,
+                 y := .of self (offset + prefixRows ns ns.length) cfg.lambda1 },
+      first := (HashPiece.reads cfg offset self).row }
+  output_eq := by
+    intro input self
+    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
+      HashPiece.output_readState, output_assignAdvice]
+    rfl
 
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
@@ -1037,7 +1050,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     let first ← readState cfg offset
     return { point := { x := xExit, y := yFin }, first := first.row }
 
-  elaborated cfg offset := circuitElaborated G ns yaIn cfg offset
+  elaborated cfg offset := Chain.elaborated G ns yaIn cfg offset
 
   Witness := ChainWit ns
   extract cfg offset _ self env :=
@@ -1052,16 +1065,17 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
   ProverSpec input output wit _ := ProverSpec G ns input output wit
 
   soundness := by
-    -- ENGINE WALL (recorded in sinsemilla-loop-design.md): the heterogeneous piece call
-    -- (child output type `HashPiece.Output (ns.getD i 0 + 1)` depends on the loop index)
-    -- times out `circuit_proof_start`/the peel at whnf. Plan: wrap each slot as a
-    -- Unit-output FormalRegionCircuit family (`slot i` — positional contract over its
-    -- Witness readings, the `round i` pattern at piece scale) so the loop is homogeneous.
-    -- TACTIC GAP (recorded in sinsemilla-loop-design.md): `circuit_proof_start`'s
-    -- step (b) `simp only [circuit_norm] at h_output` dies at whnf on this bundle's
-    -- composed output (a single six-figure `Eq.rec`/`List.rec` reduction, surviving the
-    -- simproc heartbeat caps added in StructEvalSimprocs.speculative). Manual house
-    -- prefix + targeted peel (the Mul.lean idiom) until that burn is excised.
+    -- ENGINE WALL, re-diagnosed 2026-07-21 (was: "h_output composed-output whnf burn" —
+    -- that half is FIXED: the explicit `elaborated` instance + cps's canonical unfold
+    -- land h_output on the cell record instantly). The REMAINING burn is the peel over
+    -- the goal/constraints where the contract mentions the ABSTRACT-length
+    -- `HVec (zLengths ns)` witness (`zsCellsVal`): the eval simprocs' instance
+    -- synthesis on list-indexed provable types runs six-figure `Eq.rec`/`List.rec`
+    -- reductions OUTSIDE the speculative caps. Empirically unaffected by sealing
+    -- `zsCellsVal` (the TYPE drives synthesis, not the value) and by dropping
+    -- `+instances` from the peel. Until the loop is homogenized (the Unit-output
+    -- `slot i` family plan in sinsemilla-loop-design.md) or list-indexed provables get
+    -- a capped fail-fast in the eval simprocs, keep the manual house prefix below.
     intro cfg offset
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output _hE hA hc

@@ -723,13 +723,20 @@ better). H (this stream) does the CONSUMPTION side:
    replaces it. CommitIvk/Main's identical-shaped instance survived unfolding (smaller
    circuit), kept canonical for now. When your generator lands, emit reduced fields
    under `elaborated` and delete `elaboratedFolded`.
-2. **First end-to-end user: Sinsemilla/Chain.** I'm giving its bundle an explicit
-   `output` field (3-cell record) + one-time `output_eq` (the 4-line structural
-   ladder, moved from the parent proofs into the instance), renaming its
-   `circuitElaborated` → `elaborated`, then porting its soundness/completeness to cps
-   and sweeping its 11 `with_unfolding_all`. This is the hand-written version of what
-   your substrate will automate — treat it as the shape spec for the generated
-   instances.
+2. **First end-to-end user: Sinsemilla/Chain — instance LANDED, port still blocked.**
+   The bundle now has the explicit `output` field (3-cell record) + one-time
+   `output_eq` under the canonical `elaborated` name — treat it as the shape spec for
+   the generated instances. Porting the proofs to cps then hit a SHARPER wall than the
+   old h_output one (which the canonical unfold fixes — verified: h_output arrives on
+   the cell record instantly): the peel over goal/constraints burns in the eval
+   simprocs' instance synthesis on the ABSTRACT-length `HVec (zLengths ns)` contract
+   (`zsCellsVal` in the extract) — six-figure `Eq.rec`/`List.rec` OUTSIDE the
+   speculative caps; unaffected by sealing the value def or dropping `+instances`.
+   Chain keeps its manual prefix (comment in-file re-diagnosed). Two candidate fixes,
+   both substrate-adjacent and possibly yours: (a) a capped fail-fast for
+   list-indexed provable types in the struct-eval simprocs; (b) the file's original
+   homogenization plan (Unit-output `slot i` family, removing the HVec from the
+   parent-visible contract).
 3. **Not mine:** the `derive_contract_bridges` output-bridge emission + the untagged-
    lemma-plus-detection-simproc design (maintainer: bridges stay untagged, ONE simproc
    detects/applies them — your `foldCallRegionCount` registry hybrid is the stated
