@@ -110,11 +110,14 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
   soundness := by
     circuit_proof_start2 [pointNonIdGate, curveEqn]
+    -- land the output atoms on the gate's advice spelling (defining equations, reversed)
+    simp only [← xVar_eq, ← yVar_eq, circuit_norm] at output_eq
     grind [Halo2.Ironwood.Point.OnCurve]
 
   completeness := by
     circuit_proof_start2 [pointNonIdGate, curveEqn]
-    refine ⟨?_, region_0, region_1⟩
+    simp only [← xVar_eq, ← yVar_eq, circuit_norm] at output_eq
+    refine ⟨?_, output_eq.1.symm.trans region_0, output_eq.2.symm.trans region_1⟩
     simp only [region_0, region_1]
     have hc : input_y ^ 2 = input_x ^ 3 + Halo2.Ironwood.pallasB := prover_assumptions
     linear_combination hc

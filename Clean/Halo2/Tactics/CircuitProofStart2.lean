@@ -174,13 +174,11 @@ def binderTypeMints (f : Expr) : TacticM Bool := do
   let .lam _ d _ _ := f | return false
   let d ← withTransparency .instances <| whnf (← instantiateMVars d)
   let head := d.getAppFn.constName?
-  -- a bare `AssignedCell` is ALREADY the minimal atom (`.of self row col` — the
-  -- spelling leaf gates and witness facts match on); minting it would put an alias
-  -- between the gate facts and the cell. Only COMPOUND cell-valued outputs (records,
-  -- vectors) metastasize and mint.
+  -- the ONE principled exclusion: index-valued binders must stay literal for the
+  -- region-count folding. Everything else that is used mints — the defining equation
+  -- reconstructs the concrete spelling wherever a proof needs it.
   return !(head == some ``Nat || head == some ``Halo2.RegionIndex
-    || head == some ``Unit || head == some ``PUnit || head == some ``Int
-    || head == some ``Halo2.AssignedCell)
+    || head == some ``Unit || head == some ``PUnit || head == some ``Int)
 
 /-- One per-bind block. `sound := true` for the soundness direction; `region := true`
 for region-level bundles (region append lemmas, no offset folding). Returns `none`
@@ -256,11 +254,7 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   -- equation to its concrete boundary fact (for loops: the closed-form output via the
   -- tagged loop lemmas) — the continuation keeps the atom. Index-valued binders
   -- (`currentRegion`) never mint: their arithmetic must stay literal for the folds.
-  -- LAYOUTER level only: region-level raw binds are readState-class naming helpers
-  -- whose outputs feed row-local gates spelled at concrete cells — minting them
-  -- aliases the gate facts (broke the MulIncompleteRound port); the metastasis this
-  -- exists to prevent is a layouter-composition phenomenon
-  if !region && !isCall && binderUsed f then
+  if !isCall && binderUsed f then
     if ← binderTypeMints f then
       let mut outs : Array Expr := #[]
       if let some tyC ← hypType? chunkHyp then
