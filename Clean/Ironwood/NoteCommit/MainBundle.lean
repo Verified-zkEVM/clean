@@ -17,8 +17,6 @@ open Halo2.Ironwood.Specs (bitrange)
 open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint)
 open CompElliptic.Fields.Pasta (Fq)
 
-/-! ## Child contract bridges (`rfl`, children stay folded) -/
-
 section ChildBridges
 
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
@@ -1989,8 +1987,6 @@ def circuit (G : Generators) (R : FixedBase)
   ProverSpec := fun _ _ _ _ => True
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
-
-/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
 
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ

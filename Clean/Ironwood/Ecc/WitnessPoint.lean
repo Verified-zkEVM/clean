@@ -122,10 +122,6 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     · linear_combination hc
     · exact ⟨h_output.1.symm, h_output.2.symm⟩
 
-/-! ## Layouter-level bridges for `pointNonId.toFormal`, shared by the consumers
-(generated; the bundle stays folded). Call-chunk region counts come from the generic
-`FormalCircuit.call_regionCount` at the use sites. -/
-
 derive_contract_bridges pointNonId_toFormal (name : String) := pointNonId.toFormal name
 
 /-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/

@@ -866,8 +866,6 @@ derive_contract_bridges shortC (K : ℕ) (numBits : ℕ) :=
 
 derive_contract_bridges gateC (lv : Fp) := Gate.circuit lv
 
--- contract bridges for the hash child come from the generated
--- `HashToPoint.hashCircuit_*` home stack
 /-- The suffix sum of bounded digits is the `pieceZ` of the recombined value (digit
 canonicity: the value's `val` is the digit sum, and dividing by `2^K` drops the head). -/
 private theorem sum_z1_eq_pieceZ {n : ℕ} (hn : K * (n + 1) ≤ 250) {ms : ℕ → ℕ}
@@ -1603,7 +1601,6 @@ deriving ProvableStruct
 
 end Layer
 
--- contract bridges for the layer's hash child (generated)
 derive_contract_bridges HashLayer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10) := HashLayer.circuit G Q hQ l hl
 
@@ -2275,8 +2272,6 @@ def circuit :
       Nat.mod_eq_of_lt (show l₀ + (↑i : ℕ) < 2 ^ 10 from by
         have := i.isLt; omega)]
     exact ⟨B, hB⟩
-
-/-! ## Bundle contract bridges (generated; the bundle stays folded) -/
 
 derive_contract_bridges circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   (l₀ d : ℕ) (hld : l₀ + d ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)

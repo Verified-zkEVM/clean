@@ -1142,10 +1142,6 @@ def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
     let _elt ← assignAdvice cfg.runningSum 0 w
     (rangeCheckAt K numWords strict).call cfg 0 ())
 
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundles stay
-folded). Single home for the `rangeCheckAt_*` / `shortRangeCheck_*` /
-`rangeCheckAtDecomposed_*` stacks formerly copy-pasted per consumer file. -/
-
 derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool) :=
   rangeCheckAt K numWords strict
 

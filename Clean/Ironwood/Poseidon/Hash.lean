@@ -127,7 +127,6 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
--- contract bridges for the hash children (generated at the bundle defs)
 derive_contract_bridges initRegion (capacity : Fp) := initRegion capacity
 
 derive_contract_bridges addInputRegion := addInputRegion
@@ -226,9 +225,6 @@ def hash (capacity : Fp) :
     rw [h2]
     rw [h_input.1, h_input.2]
     rfl
-
-/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
-bundle stays folded) -/
 
 derive_contract_bridges hash (capacity : Fp) := hash capacity
 

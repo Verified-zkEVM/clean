@@ -189,9 +189,6 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
     · exact nextInv_cancel ⟨1, by norm_num⟩ _ _ _
     · exact nextInv_cancel ⟨2, by norm_num⟩ _ _ _
 
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundles stay
-folded) -/
-
 derive_contract_bridges fullRound (r : ℕ) := fullRound r
 
 derive_contract_bridges partialRound (r : ℕ) := partialRound r

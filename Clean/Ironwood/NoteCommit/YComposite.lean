@@ -25,11 +25,6 @@ open Halo2.Ironwood.Specs (bitrange bitrange_lt cast_bitrange_val)
 open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   IsLowBit isLowBit_iff_mod_two nat_mod_two_isBool tPNat)
 
-/-! ## `witnessCheck`/short-check child bridges — the contract projections come from
-the generated `LookupRangeCheck.rangeCheckAt_*` / `rangeCheckAtDecomposed_*` /
-`shortRangeCheck_*` home stacks; only the region-level output-cell / applied-extract
-bridges (deeper than a whnf projection) stay hand-written. -/
-
 section ChildBridges
 
 variable (n b : ℕ)
@@ -460,9 +455,6 @@ def circuit (wlsb : WitgenIR Fp 1) :
         rw [shifted_high_zero (by norm_num) (by norm_num)
           (by rw [cast_bitrange_val (by norm_num)]; exact hatp)]
         simp
-
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
-folded). Single home for the `yc_*` stacks formerly copy-pasted per consumer file. -/
 
 derive_contract_bridges circuit (wlsb : WitgenIR Fp 1) := circuit wlsb
 

@@ -88,9 +88,6 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     circuit_proof_start [addGate, readCell]
     exact ⟨by ring, h_output.symm⟩
 
-/-! ## Layouter-level contract bridges (`add.toFormal`), shared by the consumers
-(generated; the bundle stays folded) -/
-
 derive_contract_bridges add_toFormal (name : String) := add.toFormal name
 
 end Halo2.Ironwood.AddChip

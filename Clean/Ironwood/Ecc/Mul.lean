@@ -1813,9 +1813,6 @@ def mul :
       rw [hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest' input_alpha rfl rfl rfl
 
-/-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the
-bundle stays folded) -/
-
 derive_contract_bridges mul := mul
 
 end Halo2.Ironwood.Ecc.Mul

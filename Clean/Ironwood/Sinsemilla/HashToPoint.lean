@@ -149,8 +149,6 @@ def ProverSpec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y
 
--- contract bridges for the chain child (generated; the `fun _ => Q.y` accumulator seed
--- is a closed term under the binders)
 derive_contract_bridges chainC (G : Generators) (ns : List ℕ) (Q : Point Fp) :=
   Sinsemilla.Chain.circuit G ns (fun _ => Q.y)
 
@@ -500,9 +498,6 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
   ext j hj
   simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
-folded). Single home for the `hashC_*` stacks formerly copy-pasted per consumer file. -/
 
 derive_contract_bridges hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp)
   (hQ : Q.OnCurve) (hns : ns ≠ []) := hashCircuit G ns Q hQ hns

@@ -340,8 +340,6 @@ def EnvAssumptions (G : Generators) (cfg : Config)
   LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env ∧
   cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
 
-/-! ## Child contract bridges (`rfl`, children stay folded) -/
-
 /-- Witness-consistency bridge: the honest prover's evaluated point hint equals the point
 read from the witnessed output cells. From the region's `ExtendsWitnesses` alone (no gate
 constraints), so it is available to discharge the value-level `ProverAssumptions` of the
@@ -362,12 +360,12 @@ private theorem wpoint_eval_eq_cells (name : String)
   apply Halo2.Ironwood.Point.ext_coords
   have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
       (AssignedCell.of i 0 c.x : Var field Fp) : Fp) = env.advice c.x ↑(place i) := by
-    with_unfolding_all rfl
+    simp only [circuit_norm, explicit_provable_type]
   have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
       (AssignedCell.of i 0 c.y : Var field Fp) : Fp) = env.advice c.y ↑(place i) := by
-    with_unfolding_all rfl
+    simp only [circuit_norm, explicit_provable_type]
   simp only [Halo2.Ironwood.Point.coords, hx, hy, hw.1, hw.2]
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem wpointNonId_eval_eq_cells (name : String)
     (c : Ecc.WitnessPoint.Config) (p : Var (Unconstrained Point) Fp)
@@ -385,12 +383,12 @@ private theorem wpointNonId_eval_eq_cells (name : String)
   apply Halo2.Ironwood.Point.ext_coords
   have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
       (AssignedCell.of i 0 c.x : Var field Fp) : Fp) = env.advice c.x ↑(place i) := by
-    with_unfolding_all rfl
+    simp only [circuit_norm, explicit_provable_type]
   have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
       (AssignedCell.of i 0 c.y : Var field Fp) : Fp) = env.advice c.y ↑(place i) := by
-    with_unfolding_all rfl
+    simp only [circuit_norm, explicit_provable_type]
   simp only [Halo2.Ironwood.Point.coords, hx, hy, hw.1, hw.2]
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem wpoint_output (name : String) (c : Ecc.WitnessPoint.Config)
     (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
@@ -435,7 +433,7 @@ private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
         rho := eval (⟨place, env⟩ : Placed Environment Fp) (c6 : Var field Fp),
         psi := eval (⟨place, env⟩ : Placed Environment Fp) (c7 : Var field Fp),
         rcm := () } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
@@ -443,7 +441,7 @@ private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := (), magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
         sign := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 c3 : AssignedCell Fp) (p : Point (AssignedCell Fp)) :
@@ -454,14 +452,14 @@ private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
         psi := eval (⟨place, env⟩ : Placed Environment Fp) (c3 : Var field Fp),
         cm := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
   rw [ProvableStruct.eval_cells_eq_eval]
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (p : Point (AssignedCell Fp)) (a : Var UnconstrainedNat Fp) :
     (eval (Var := Var SpendAuthority.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
       { alpha := a, akP := p })
     = { alpha := (), akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
@@ -470,7 +468,7 @@ private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environm
     = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
         nk := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp),
         rivk := () } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem aiInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp))
@@ -480,7 +478,7 @@ private theorem aiInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
     = { ivk := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
         gDOld := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp),
         pkDOld := () } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c : AssignedCell Fp) :
@@ -488,7 +486,7 @@ private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environm
       ({ node := c } : Var Sinsemilla.Merkle.Layer.Input Fp))
     = { node := eval (⟨place, env⟩ : Placed Environment Fp) (c : Var field Fp) } := by
   rw [ProvableStruct.eval_cells_eq_eval]
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
@@ -501,7 +499,7 @@ private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (c1 : Var field Fp),
         sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c2 : Var field Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
@@ -513,7 +511,7 @@ private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (c2 : Var field Fp),
         rivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (r : Var UnconstrainedNat Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp))
@@ -525,7 +523,7 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (p : Var Point Fp),
         pkDOld := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (pk : Var (Unconstrained Point) Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
@@ -543,7 +541,7 @@ private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
           (c7 : Var field Fp),
         rcm := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (r : Var UnconstrainedNat Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 /-! ## Stage outputs and offsets -/
 
@@ -838,9 +836,9 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
         · show Halo2.Ironwood.Point.OnCurve _
-          with_unfolding_all exact hGdS
+          simp only [circuit_norm, explicit_provable_type]; exact hGdS
         · show Halo2.Ironwood.Point.OnCurve _
-          with_unfolding_all exact hAIS.1)
+          simp only [circuit_norm, explicit_provable_type]; exact hAIS.1)
   rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoS
   rw [ncInputs_eval_eq] at hNCoS
   have hGdNS := hGdN (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
@@ -871,12 +869,12 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     Nat.add_zero, Nat.add_assoc]
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ?_, ?_, ?_, ?_⟩
-  · with_unfolding_all exact hCmS
-  · with_unfolding_all exact hGdS
-  · with_unfolding_all exact hAkS
-  · with_unfolding_all exact hAIS.1
-  · with_unfolding_all exact hGdNS
-  · with_unfolding_all exact hPkNS
+  · exact hCmS
+  · exact hGdS
+  · exact hAkS
+  · exact hAIS.1
+  · exact hGdNS
+  · exact hPkNS
   · -- `v_old < 2^64` (old NoteCommit's value decomposition)
     with_unfolding_all exact hNCoS.1
   · -- `v_new < 2^64` (new NoteCommit's value decomposition)
@@ -900,10 +898,10 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
       with_unfolding_all rfl
     refine ⟨m, hm, by with_unfolding_all exact hmag, ?_⟩
     rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
-    · exact Or.inl ⟨by with_unfolding_all exact hs, by rw [hP]; exact he⟩
-    · exact Or.inr ⟨by with_unfolding_all exact hs, by rw [hP]; exact he⟩
+    · with_unfolding_all exact Or.inl ⟨by exact hs, by rw [hP]; exact he⟩
+    · with_unfolding_all exact Or.inr ⟨by exact hs, by rw [hP]; exact he⟩
   · -- nullifier integrity
-    exact hInf.symm.trans (by with_unfolding_all exact hDNS)
+    with_unfolding_all exact hInf.symm.trans (by exact hDNS)
   · -- spend authority
     have hP : ({ x := env.inst cfg.primary ((RK_X : ℕ) : ℤ),
                  y := env.inst cfg.primary ((RK_Y : ℕ) : ℤ) } : Point Fp)
@@ -922,7 +920,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     rw [hP, hSAS]
     with_unfolding_all rfl
   · -- diversified-address integrity
-    exact ⟨_, by with_unfolding_all exact hCIS, by with_unfolding_all exact hAIS.2⟩
+    with_unfolding_all exact ⟨_, by exact hCIS, by exact hAIS.2⟩
   · -- old note-commitment integrity
     refine Halo2.Ironwood.Specs.Sinsemilla.SpecOrBreak.mono ?_
       (by with_unfolding_all exact hNCoS.2)
@@ -948,7 +946,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
       apply Point.ext_coords
       simp only [Point.coords]
       rw [← hEqR.1, ← hEqR.2]
-      with_unfolding_all rfl
+      simp only [circuit_norm, explicit_provable_type]
     rw [hcmP]
     exact hbp
   · -- new note-commitment integrity
@@ -968,8 +966,8 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     rcases hM1S.2 with hM1Strict | hM1Break
     · rcases hM2S.2 with hM2Strict | hM2Break
       · with_unfolding_all exact Or.inl (Sinsemilla.Merkle.MerkleRootStrict.trans G B.merkleQ hM1Strict hM2Strict)
-      · with_unfolding_all exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.shift G B.merkleQ (l := 0) (k := 16) (k' := 16) hM2Break)
-    · with_unfolding_all exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
+      · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.shift G B.merkleQ (l := 0) (k := 16) (k' := 16) hM2Break)
+    · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
   · -- `v_old − v_new = magnitude · sign`
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
@@ -1121,7 +1119,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
        (by rw [Ecc.WitnessPoint.point_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.Valid _
            rw [wpoint_eval_eq_cells _ _ _ _ _ _ hWcm]
-           with_unfolding_all exact hVcm)⟩
+           exact hVcm)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
       cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd
@@ -1130,7 +1128,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
        (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
            rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgd]
-           with_unfolding_all exact hVgd)⟩
+           exact hVgd)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
       cfg.eccConfig.witnessPoint (i₀ + 4) place env _ hWak
@@ -1139,7 +1137,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
        (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
            rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWak]
-           with_unfolding_all exact hVak)⟩
+           exact hVak)⟩
   · -- ── stages B and C ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
       synthWitness_regionCount, Nat.add_assoc] at hWc hWn
@@ -1199,7 +1197,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         (h := by
           intro j hj
           simp only [extract, cellRead, if_pos hj]
-          try with_unfolding_all rfl)]
+          try simp only [circuit_norm, explicit_provable_type])]
       rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
           (fun j => (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
@@ -1288,7 +1286,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
           show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
-          with_unfolding_all exact hVcm)
+          exact hVcm)
       (by trivial)).1
     have hSAder := (Halo2.SubcircuitRw.layouter_completeness_derived
       (SpendAuthority.circuit B.spendAuthG)
@@ -1297,7 +1295,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
           show Halo2.Ironwood.Point.Valid _
           simp only [Point.eval_eq]
-          with_unfolding_all exact Or.inl hVak)
+          exact Or.inl hVak)
       (by trivial)).1
     have hCIder := (Halo2.SubcircuitRw.layouter_completeness_derived
       (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve)
@@ -1307,7 +1305,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
       (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
           rw [civkInputs_eval_eq_prover]
-          exact ⟨Bi, by with_unfolding_all exact hBi⟩)).1
+          with_unfolding_all exact ⟨Bi, by exact hBi⟩)).1
     -- the ivk output cell carries the honest commitment value
     have hIvkVal : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
         ((CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
@@ -1330,7 +1328,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.ivkQ _ = some Bi from by
           with_unfolding_all exact hBi)] at hCIder
-      with_unfolding_all exact hCIder
+      simp only [circuit_norm, explicit_provable_type]; exact hCIder
     -- ── stage C witnesses and contracts ──
     simp only [synthChecks_output, synthChecks_nextRegionIndex,
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
@@ -1347,9 +1345,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
           · show Halo2.Ironwood.Point.OnCurve _
-            with_unfolding_all exact hVgd
+            exact hVgd
           · show Halo2.Ironwood.Point.OnCurve _
-            with_unfolding_all exact hVpk)
+            exact hVpk)
       (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
           rw [ncInputs_eval_eq_prover]
           refine ⟨?_, ?_, ?_, ?_⟩
@@ -1384,9 +1382,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
           refine ⟨?_, ?_⟩
           · show Halo2.Ironwood.Point.OnCurve _
-            with_unfolding_all exact hVgdn
+            exact hVgdn
           · show Halo2.Ironwood.Point.OnCurve _
-            with_unfolding_all exact hVpkn)
+            exact hVpkn)
       (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
           rw [ncInputs_eval_eq_prover]
           refine ⟨?_, ?_, ?_, ?_⟩
@@ -1429,18 +1427,18 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude.val = m := by
         rw [show (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude
-          = ((m : ℕ) : Fp) from by with_unfolding_all exact hmag]
+          = ((m : ℕ) : Fp) from by exact hmag]
         exact ZMod.val_natCast_of_lt (lt_trans hm
           (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
       rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
       · rw [he]
-        have h2 := hCv1 (by with_unfolding_all exact hs)
+        have h2 := hCv1 (by exact hs)
         rw [hmval] at h2
-        with_unfolding_all exact h2.symm
+        exact h2.symm
       · rw [he]
-        have h2 := hCv2 (by with_unfolding_all exact hs)
+        have h2 := hCv2 (by exact hs)
         rw [hmval] at h2
-        with_unfolding_all exact h2.symm
+        exact h2.symm
     have hSAval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ((SpendAuthority.circuit B.spendAuthG).output
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
@@ -1485,9 +1483,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       rw [ncInputs_eval_eq] at hNCoDer
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bo from by
-          with_unfolding_all exact hBo)] at hNCoDer
+          exact hBo)] at hNCoDer
       rw [hCmo]
-      with_unfolding_all exact hNCoDer.2
+      exact hNCoDer.2
     have hNCnval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ((NoteCommit.Main.circuit G B.noteCommitR B.noteQ
           B.noteQ_onCurve).output
@@ -1533,8 +1531,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           from by with_unfolding_all exact hDNval] at hNCnDer
       rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl_of_some
         (show hashToPoint G.S B.noteQ _ = some Bn from by
-          with_unfolding_all exact hBn)] at hNCnDer
-      with_unfolding_all exact hNCnDer.2
+          exact hBn)] at hNCnDer
+      exact hNCnDer.2
     -- ── assemble the stage-B and stage-C constraints ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
       synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,
@@ -1607,7 +1605,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
                show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
-               with_unfolding_all exact hVcm),
+               exact hVcm),
            (by trivial)⟩
       · with_unfolding_all exact hDNval
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -1617,7 +1615,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
                show Halo2.Ironwood.Point.Valid _
                simp only [Point.eval_eq]
-               with_unfolding_all exact Or.inl hVak),
+               exact Or.inl hVak),
            (by trivial)⟩
       · with_unfolding_all exact congrArg Point.x hSAval
       · with_unfolding_all exact congrArg Point.y hSAval
@@ -1631,7 +1629,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩), (by trivial),
            (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
                rw [civkInputs_eval_eq_prover]
-               exact ⟨Bi, by with_unfolding_all exact hBi⟩)⟩
+               with_unfolding_all exact ⟨Bi, by exact hBi⟩)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (AddressIntegrity.circuit)
           (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) (i₀ + 297) place env _
@@ -1640,7 +1638,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [AddressIntegrity.circuit_assumptions_eq, aiInputs_eval_eq]
                show Halo2.Ironwood.Point.OnCurve _
                simp only [Point.eval_eq]
-               with_unfolding_all exact hVgd),
+               exact hVgd),
            (by rw [AddressIntegrity.circuit_proverAssumptions_eq, aiInputs_eval_eq_prover]
                -- the honest `pk_d_old` hint equals the cells the AddressIntegrity witness
                -- point assigns (region `i₀+301`), bridging it to the extract-level facts
@@ -1659,7 +1657,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                  exact h.2.1
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hAiPkW]
                refine ⟨?_, ?_⟩
-               · with_unfolding_all exact hVpk
+               · exact hVpk
                · have h := hPkd
                  rw [← hIvkVal] at h
                  with_unfolding_all exact h)⟩
@@ -1676,9 +1674,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
                · show Halo2.Ironwood.Point.OnCurve _
-                 with_unfolding_all exact hVgd
+                 exact hVgd
                · show Halo2.Ironwood.Point.OnCurve _
-                 with_unfolding_all exact hVpk),
+                 exact hVpk),
            (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
                rw [ncInputs_eval_eq_prover]
                refine ⟨?_, ?_, ?_, ?_⟩
@@ -1698,7 +1696,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgdn]
-               with_unfolding_all exact hVgdn)⟩
+               exact hVgdn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
           cfg.eccConfig.witnessPoint (i₀ + 348) place env _ hWpkn
@@ -1707,7 +1705,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
                rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWpkn]
-               with_unfolding_all exact hVpkn)⟩
+               exact hVpkn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
             B.noteQ_onCurve)
@@ -1719,9 +1717,9 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
                refine ⟨?_, ?_⟩
                · show Halo2.Ironwood.Point.OnCurve _
-                 with_unfolding_all exact hVgdn
+                 exact hVgdn
                · show Halo2.Ironwood.Point.OnCurve _
-                 with_unfolding_all exact hVpkn),
+                 exact hVpkn),
            (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
                rw [ncInputs_eval_eq_prover]
                refine ⟨?_, ?_, ?_, ?_⟩
@@ -1743,7 +1741,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                        (i₀ + 271)) : Fp))
                    = (extract cfg input_var i₀
                        (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
-                   from by with_unfolding_all exact hDNval]
+                   from by exact hDNval]
                  with_unfolding_all exact hBn)⟩
       · with_unfolding_all exact (congrArg Point.x hNCnval).trans hCmx.symm
       · -- the final `"Orchard circuit checks"` region
@@ -1752,14 +1750,14 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         have hOr' : env.advice (cfg.advices 4) ((place (i₀ + 393) : ℕ) : ℤ)
             = root := hOr.trans (by with_unfolding_all exact hM2root)
         refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-        · with_unfolding_all exact hOv
-        · with_unfolding_all exact hOn
-        · with_unfolding_all exact hOm
-        · with_unfolding_all exact hOs
-        · with_unfolding_all exact hOr
-        · with_unfolding_all exact hOa
-        · with_unfolding_all exact hOes
-        · with_unfolding_all exact hOeo
+        · exact hOv
+        · exact hOn
+        · exact hOm
+        · exact hOs
+        · exact hOr
+        · exact hOa
+        · exact hOes
+        · exact hOeo
         · simp only [orchardGate, Constraints.withSelector, circuit_norm,
             List.Forall]
           refine ⟨?_, ?_, ?_, ?_⟩
@@ -1930,28 +1928,28 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   have hgx : (extract cfg input_var i₀
         (⟨place, env⟩ : Placed Environment Fp)).gdOld.x
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.x :=
-    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e0)).resolve_left hdca)
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e0)).resolve_left hdca)
   have hgy : (extract cfg input_var i₀
         (⟨place, env⟩ : Placed Environment Fp)).gdOld.y
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.y :=
-    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e1)).resolve_left hdca)
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e1)).resolve_left hdca)
   have hpx : (extract cfg input_var i₀
         (⟨place, env⟩ : Placed Environment Fp)).pkdOld.x
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.x :=
-    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e2)).resolve_left hdca)
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e2)).resolve_left hdca)
   have hpy : (extract cfg input_var i₀
         (⟨place, env⟩ : Placed Environment Fp)).pkdOld.y
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.y :=
-    sub_eq_zero.mp ((mul_eq_zero.mp (by with_unfolding_all exact e3)).resolve_left hdca)
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e3)).resolve_left hdca)
   constructor
   · apply Halo2.Ironwood.Point.ext_coords
     show (_, _) = _
     rw [hgx, hgy]
-    with_unfolding_all rfl
+    rfl
   · apply Halo2.Ironwood.Point.ext_coords
     show (_, _) = _
     rw [hpx, hpy]
-    with_unfolding_all rfl
+    rfl
 
 theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
@@ -1990,7 +1988,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         = 0 := by
       rcases hDca with hz | ⟨hg, -⟩
       · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
-            from by with_unfolding_all exact hz]
+            from by exact hz]
         ring
       · rw [show (env.advice cfg.eccConfig.witnessPoint.x
               ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
@@ -2003,7 +2001,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         = 0 := by
       rcases hDca with hz | ⟨hg, -⟩
       · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
-            from by with_unfolding_all exact hz]
+            from by exact hz]
         ring
       · rw [show (env.advice cfg.eccConfig.witnessPoint.y
               ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
@@ -2016,7 +2014,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         = 0 := by
       rcases hDca with hz | ⟨-, hp⟩
       · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
-            from by with_unfolding_all exact hz]
+            from by exact hz]
         ring
       · rw [show (env.advice cfg.eccConfig.witnessPoint.x
               ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
@@ -2029,7 +2027,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         = 0 := by
       rcases hDca with hz | ⟨-, hp⟩
       · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
-            from by with_unfolding_all exact hz]
+            from by exact hz]
         ring
       · rw [show (env.advice cfg.eccConfig.witnessPoint.y
               ((place (i₀ + 301) : ℕ) : ℤ) : Fp)

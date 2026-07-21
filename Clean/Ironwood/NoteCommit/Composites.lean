@@ -26,12 +26,6 @@ open Halo2.Ironwood.Specs (bitrange)
 open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
-/-! ## Shared `witnessCheck` child bridges — the contract projections come from the
-generated `LookupRangeCheck.rangeCheckAt_*` home stack; only the region-level
-output-cell bridge (deeper than a whnf projection) stays hand-written.
-
-The canonicity flows all use `witness_check(elt', 13, false)` with `K = 10`. -/
-
 section WitnessCheckBridges
 
 variable (n : ℕ)

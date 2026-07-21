@@ -24,10 +24,6 @@ open Halo2.Ironwood.Specs (bitrange)
 open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
-/-! ## `witnessCheck` child bridges — the contract projections come from the generated
-`LookupRangeCheck.rangeCheckAt_*` home stack; only the region-level output-cell bridge
-(deeper than a whnf projection) stays hand-written. -/
-
 private theorem rangeCheckAt_output (n : ℕ) (cfg : LookupRangeCheck.Config 10)
     (i : RegionIndex) :
     (LookupRangeCheck.rangeCheckAt 10 n false).output cfg 0 () i
@@ -282,9 +278,6 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
       · -- the donor gate `Spec` at the witnessed `(b_1, d_1)` readings
         simp only [Halo2.Ironwood.CommitIvk.toDonor, Halo2.Ironwood.CommitIvk.Gate.Spec]
         exact ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩
-
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
-folded) -/
 
 derive_contract_bridges circuit (wb1 wd1 : WitgenIR Fp 1) := circuit wb1 wd1
 

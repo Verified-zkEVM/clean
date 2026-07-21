@@ -92,8 +92,6 @@ def blindingFactor (R : FixedBase) :
 
 open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint)
 
--- contract bridges for the hash child come from the generated
--- `HashToPoint.hashCircuit_*` home stack
 /-- The region count of `commit`: the blinding child's two regions, the hash region, the
 final complete addition. -/
 private theorem commit_regionCount
@@ -327,9 +325,6 @@ def commit (G : Generators) (ns : List ℕ)
     constructor
     · rw [hPB0]; exact hB0valid
     · rw [hBl]; exact R.smul_valid _
-
-/-! ## Bundle contract bridges, shared by the consumers (generated; the bundle stays
-folded). Single home for the `commit_*` stacks formerly copy-pasted per consumer file. -/
 
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns

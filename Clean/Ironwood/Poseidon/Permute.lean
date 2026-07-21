@@ -20,9 +20,6 @@ open Halo2.Ironwood.Poseidon
 open Halo2.Ironwood.Poseidon.Permute (State)
 open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
 
-/- Contract bridges for the round chunks come from the generated `fullRound_*` /
-`partialRound_*` home stacks (Rounds.lean); only the applied output-cell bridges stay. -/
-
 private theorem fullRound_output_eq (r : ℕ) (cfg : Config) (o : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
     (fullRound r).output cfg o input self = stateRow cfg (o + 1) self := rfl

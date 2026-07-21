@@ -398,10 +398,6 @@ def add : FormalRegionCircuit Fp
     rw [ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
-/-! ## Layouter-level contract bridges (`add.toFormal`), shared by the gadget.rs-level
-composites (generated; the bundle stays folded). Call-chunk region counts come from the
-generic `FormalCircuit.call_regionCount` at the use sites. -/
-
 derive_contract_bridges toFormal (name : String) := add.toFormal name
 
 end Add
