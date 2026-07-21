@@ -192,7 +192,7 @@ def commit (G : Generators) (ns : List ℕ)
       Sinsemilla.Chain.PieceChunks ns (input.pieces) chunks ∧
       Sinsemilla.Chain.ZsFacts ns chunks wit.1.zs ∧
       ∀ B, hashToPoint G.S Q chunks = some B →
-        output.Valid ∧ output = B + (wit.2.2 • R : Point Fp)
+        output.Valid ∧ output = B + wit.2.2 • R
 
   ProverAssumptions input _ _ :=
     Sinsemilla.Chain.PieceBounds ns (input.pieces) ∧

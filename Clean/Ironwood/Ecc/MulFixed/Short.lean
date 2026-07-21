@@ -1033,7 +1033,7 @@ short exponent. -/
 def Spec (B : FixedBase) (input : Inputs Fp) (output : Point Fp) : Prop :=
   input.magnitude.val < 2 ^ 64 ∧
     ((input.sign = 1 ∧ output = (input.magnitude.val : Fq) • B) ∨
-      (input.sign = -1 ∧ output = ((-(input.magnitude.val : Fq)) : Fq) • B))
+      (input.sign = -1 ∧ output = -(input.magnitude.val : Fq) • B))
 
 /-- The region count of `synthesize`: inner mul + most significant word. -/
 private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
@@ -1170,7 +1170,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         ((env.place (i₀ + 1) + 1 : ℕ) : ℤ) := ⟨_, rfl⟩
     rw [← hyMag_def] at hOutEq
     have hmulEq : ({ x := output_x, y := yMag } : Point Fp)
-        = ((V : Fq) • B : Point Fp) := by
+        = (V : Fq) • B := by
       rw [← hOx]
       rw [show (((V : Fq)) • B : Point Fp)
           = { x := (((V : Fq)).val • B.point).x, y := (((V : Fq)).val • B.point).y }
@@ -1186,8 +1186,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     -- refactor to prove this more naturally
     let output : Point Fp := { x := output_x, y := output_y }
     suffices ∃ m : ℕ, m < 2 ^ 64 ∧ input_magnitude = (m : Fp) ∧
-    ((input_sign = 1 ∧ output = ((m : Fq) • B : Point Fp)) ∨
-      (input_sign = -1 ∧ output = (((-(m : Fq)) : Fq) • B : Point Fp))) by
+    ((input_sign = 1 ∧ output = (m : Fq) • B) ∨
+      (input_sign = -1 ∧ output = (-(m : Fq) • B : Point Fp))) by
       simp only [output] at this
       obtain ⟨V, hV64, hV_def, hsign⟩ := this
       have hmag : input_magnitude.val = V := by

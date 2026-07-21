@@ -941,7 +941,7 @@ def circuit (B : FixedBase) :
   Witness := fun F => Vector F 85 × Halo2.Ironwood.Fq
   extract cfg _ i₀ env := fwExtract cfg i₀ env
 
-  Spec _ output s := output = (s.2 • B : Point Fp)
+  Spec _ output s := output = s.2 • B
 
   ProverAssumptions _ _ _ := True
 
@@ -1013,7 +1013,7 @@ def circuit (B : FixedBase) :
         Nat.mod_eq_of_lt (lt_of_lt_of_le (hks_lt' w hwlt)
           (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))]
     show ({ x := output_x, y := output_y } : Point Fp)
-      = ((fwExtract cfg i₀ ⟨env.place, env.env⟩).2 • B : Point Fp)
+      = (fwExtract cfg i₀ ⟨env.place, env.env⟩).2 • B
     simp only [fwExtract]
     rw [hsum, hOutEq, hchain]
     exact (MulFixed.point_eta _).symm
