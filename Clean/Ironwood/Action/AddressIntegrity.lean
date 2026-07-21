@@ -119,127 +119,30 @@ def circuit : FormalCircuit Fp
         = ((show Fp from input.ivk).val • (show Point Fp from input.gDOld) : Point Fp)
 
   soundness := by
-    -- ═══ v2-manual FRAMEWORK prefix (atomic binds; to become one `circuit_proof_start2`) ═══
-    rintro ⟨mcfg, wcfg⟩
-    rw [FormalCircuit.soundness_iff]
-    intro i₀ env input_var input output h_input h_output hE hA hC
-    obtain ⟨place, env⟩ := env
-    dsimp only [] at *
-    simp only [ElaboratedCircuit.output_eq] at h_output
-    -- bind 1 [derived ← mul.call mcfg { alpha := ivk, base := gDOld }]
-    rw [Circuit.operations_bind, constraints_append] at hC
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨h_call_mul, hC⟩ := hC
-    simp only [FormalCircuit.output_call'] at hC h_output
-    revert hC h_output
-    generalize h_derived : Ecc.Mul.mul.output mcfg
-      { alpha := input_var.ivk, base := input_var.gDOld } i₀ = derived
-    intro hC h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
-    -- bind 2 [pkDOld ← (pointNonId.toFormal …).call wcfg input.pkDOld]
-    rw [Circuit.operations_bind, constraints_append] at hC
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨h_call_pkd, hC⟩ := hC
-    simp only [FormalCircuit.output_call'] at hC h_output
-    revert hC h_output
-    generalize h_pkd : (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").output wcfg input_var.pkDOld (i₀ + 4) = pkDOld
-    intro hC h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
-    -- bind 3 [_ ← assignRegion "constrain equal" …] — unit-valued, no atom; open the raw
-    -- region to its two copy equations (cell reads OF THE ATOMS' cells)
-    rw [Circuit.operations_bind, constraints_append] at hC
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨h_copies, hC⟩ := hC
-    simp only [circuit_norm] at h_copies
-    -- terminal `pure pkDOld`
-    rw [Circuit.operations_pure, constraints_nil] at hC
-    rw [Circuit.output_pure] at h_output
-    clear hC
-    -- consume the child chunks: contracts over the atoms
-    subcircuit_rw at h_call_mul
-    subcircuit_rw at h_call_pkd
-    -- decompose types, preparing normalization pass on h_input, h_ouput and assumptions
-    provable_type_simp
-    simp only [circuit_norm] at hE hA h_input h_output
-    -- simp using user-supplied lemma list AND h_input/h_output simultaneously
-    simp only [
-      circuit_norm,
-      h_input, h_output,
+    circuit_proof_start2 [
       Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_spec_eq, Ecc.Mul.mul_envAssumptions_eq,
       Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq, Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq
-    ] at h_call_mul h_call_pkd h_copies ⊢
+      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]
     -- ═══ USER half ═══
-    -- because our framework did the right thing throughout, a trivially composing parent is trivially sound
+    -- because our framework did the right thing throughout, a trivially composing
+    -- parent is trivially sound
     simp_all
 
   completeness := by
-    -- circuit_proof_start2
-    -- ═══ v2-manual FRAMEWORK prefix ═══
-    rintro ⟨mcfg, wcfg⟩
-    rw [FormalCircuit.completeness_iff]
-    intro i₀ env input_var input output h_input h_output hW hE hA hPA
-    obtain ⟨place, env⟩ := env
-    dsimp only [] at *
-    simp only [ElaboratedCircuit.output_eq] at h_output
-    -- bind 1
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_mul, hW⟩ := hW
-    simp only [FormalCircuit.output_call'] at hW h_output ⊢
-    revert hW h_output
-    generalize h_derived : Ecc.Mul.mul.output mcfg
-      { alpha := input_var.ivk, base := input_var.gDOld } i₀ = derived
-    intro hW h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
-    -- bind 2
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_pkd, hW⟩ := hW
-    simp only [FormalCircuit.output_call'] at hW h_output ⊢
-    revert hW h_output
-    generalize h_pkd : (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").output wcfg input_var.pkDOld (i₀ + 4) = pkDOld
-    intro hW h_output
-    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
-    -- bind 3 (raw copy-constraint region)
-    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
-    rw [Circuit.operations_bind, constraints_append]
-    rw [Circuit.output_bind] at h_output
-    obtain ⟨hW_copies, hW⟩ := hW
-    -- terminal `pure pkDOld`
-    rw [Circuit.operations_pure, constraints_nil]
-    rw [Circuit.output_pure] at h_output
-    clear hW
-    -- strengthen the goal chunks + emit the children's completeness implications
-    subcircuit_rw
-    -- TODO CPSv2: this should REPLACE the relevant subcircuit's extendswitnesses hypotheses
-    clear hW_mul hW_pkd
-    -- decompose types, preparing normalization pass on h_input, h_ouput and assumptions
-    provable_type_simp
-    simp only [
-      circuit_norm, Placed.toEnvironment, -- TODO missing normal form?
-    ] at hE hA hPA h_input h_output
-    -- simp using user-supplied lemma list AND h_input/h_output simultaneously
-    simp only [
-      h_input, h_output,
-      circuit_norm,
-      Placed.toEnvironment, -- TODO missing normal form?
-      Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_proverAssumptions_eq, Ecc.Mul.mul_envAssumptions_eq,
-      Ecc.Mul.mul_proverSpec_eq,
-      Ecc.Mul.mul_spec_eq,
+    circuit_proof_start2 [
+      Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_proverAssumptions_eq,
+      Ecc.Mul.mul_envAssumptions_eq, Ecc.Mul.mul_proverSpec_eq, Ecc.Mul.mul_spec_eq,
       Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq, Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq
-    ] at hA h_spec_0 h_spec_1 hW_copies ⊢
-    -- simp only [circuit_norm] at *
+      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq]
     -- ═══ USER half ═══
-    -- because our framework did the right thing throughout, a trivially composing parent is trivially complete
+    -- because our framework did the right thing throughout, a trivially composing
+    -- parent is trivially complete
     grind
 
 derive_contract_bridges circuit := circuit

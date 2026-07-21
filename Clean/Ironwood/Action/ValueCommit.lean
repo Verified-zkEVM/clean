@@ -118,47 +118,42 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       ((show Fp from input.sign) = 1 ∨ (show Fp from input.sign) = -1)
 
   soundness := by
-    circuit_proof_start2
+    circuit_proof_start2 [
+      Ecc.MulFixed.Short.circuit_envAssumptions_eq, Ecc.MulFixed.Short.circuit_assumptions_eq,
+      Ecc.MulFixed.Short.circuit_spec_eq, Ecc.MulFixed.Short.Spec,
+      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
+      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
-    -- the short child: the commitment is `[±m] V` at some `m < 2⁶⁴`
-    have hSh := h_call_commitment hSEnv trivial
-    rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
-    simp only [Ecc.MulFixed.Short.Spec] at hSh
-    obtain ⟨m, hm_lt, hmag, hcases⟩ := hSh
-    -- the full-width child: the blind is the extracted scalar times `R`
-    have hBl := h_call_blind hFEnv trivial
-    rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
-      Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
-    -- the complete addition: `cv = commitment + blind` (both summands valid)
-    have hAddS := h_call_cv trivial (by
-      rw [Ecc.Add.toFormal_assumptions_eq]
-      refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
-      rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _)
-    rw [Ecc.Add.toFormal_spec_eq] at hAddS
+    obtain ⟨m, hm_lt, hmag, hcases⟩ := h_call_commitment hSEnv
+    have hBl := h_call_blind hFEnv
+    have hAddS := h_call_cv trivial ⟨by
+        rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
+      by rw [hBl]; exact R.smul_valid _⟩
     refine ⟨m, hm_lt, hmag, ?_⟩
-    rw [← h_output]
     rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
-    · exact Or.inl ⟨hsign, by rw [hAddS.2, hCm, hBl]⟩
-    · exact Or.inr ⟨hsign, by rw [hAddS.2, hCm, hBl]⟩
+    · exact Or.inl ⟨hsign, by simp_all⟩
+    · exact Or.inr ⟨hsign, by simp_all⟩
 
   completeness := by
-    circuit_proof_start2
+    circuit_proof_start2 [
+      Ecc.MulFixed.Short.circuit_envAssumptions_eq, Ecc.MulFixed.Short.circuit_assumptions_eq,
+      Ecc.MulFixed.Short.circuit_proverAssumptions_eq,
+      Ecc.MulFixed.Short.circuit_spec_eq, Ecc.MulFixed.Short.Spec,
+      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
+      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨hmag, hsign⟩ := hPA
-    -- the short child's contract: the commitment is `[±m] V`
-    have hSh := (h_spec_0 hSEnv trivial ⟨hmag, hsign⟩).1
-    rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
-    simp only [Ecc.MulFixed.Short.Spec] at hSh
-    obtain ⟨m, -, -, hcases⟩ := hSh
-    -- the full-width child's contract: the blind is the extracted scalar times `R`
-    have hBl := (h_spec_1 hFEnv trivial trivial).1
-    rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
-      Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
-    refine ⟨⟨hSEnv, trivial, ⟨hmag, hsign⟩⟩, ⟨hFEnv, trivial, trivial⟩, trivial, ?_, trivial⟩
-    rw [Ecc.Add.toFormal_assumptions_eq]
-    refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
+    obtain ⟨⟨m, hm_lt, hmag', hcases⟩, -⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
+    have hBl := (h_spec_1 hFEnv).1
+    refine ⟨⟨hSEnv, hmag, hsign⟩, hFEnv, trivial, ⟨?_, by rw [hBl]; exact R.smul_valid _⟩,
+      trivial⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
 
 derive_contract_bridges circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)

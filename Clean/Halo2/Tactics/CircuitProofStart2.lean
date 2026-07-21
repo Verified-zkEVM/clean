@@ -29,16 +29,19 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
 - **(d)** terminal `pure`: close the op list, land `h_output` on the final atom;
 - **(e)** `subcircuit_rw` — per chunk hypothesis (soundness) / goal-mode once
   (completeness, emitting `h_spec_<k>` over the atoms);
-- **(f)** value landing: destructure `input_var`/`input` into per-field components
-  (names from the `Input` structure: `input_var_<f>` / `input_<f>`), one
-  `circuit_norm` pass over the state (evals of ATOMS stay whole — no
-  `explicit_provable_type`), split `h_input` into `h_input_<f>` component equations,
-  and value-replace them forward into every other hypothesis and the goal.
+- **(f)** landing (maintainer model, AddressIntegrity 90912413): `provable_type_simp`
+  decomposes the givens' types into the components that actually occur; one
+  `circuit_norm` normalization pass over the givens (`hE hA (hPA) h_input h_output`);
+  then ONE pass over every derived hypothesis (incl. `hA`) and the goal that uses
+  `h_input` and `h_output` themselves AS REWRITE RULES — `h_output` firing
+  left-to-right (circuit spelling → declared output) — together with the CALLER'S
+  LEMMA LIST (`circuit_proof_start2 [<child bridges, Spec/Assumptions unfolds>]`).
+  With a complete list, trivially-composing parents close by `simp_all`/`grind`.
 
-Known gaps (carried by the exemplars as marked manual blocks, to be absorbed here):
-copy-equation landing at value level (`constrainEqual` facts) and the prover/verifier
-whole-eval coincidence law for hint-free vars. Raw binds whose value IS used mint no
-atom yet (none in the sample).
+Known gaps: raw binds whose value IS used mint no atom yet (none in the sample);
+`Placed.toEnvironment` is spelled into the landing passes pending its `circuit_norm`
+normal form; the engine should replace (not leave) the consumed completeness witness
+chunks — the tactic clears them meanwhile.
 -/
 
 open Lean Elab Tactic Meta
@@ -189,54 +192,6 @@ def peelOneBind (sound : Bool) (chunkHyp : Name) (regionIdx : Nat) :
     run? (← `(tactic| simp only [circuit_norm] at $(mkIdent chunkName):ident))
   return some (chunkName, isCall)
 
-/-- The `Input` structure's field names, read off `input_var`'s type (default-
-transparency whnf: the reducible `Var` alias and the `CircuitTypeOver.Var` projection
-must both unfold to reach the structure head). -/
-def inputFieldNames : TacticM (Array Name) := withMainContext do
-  let some decl := (← getLCtx).findFromUserName? `input_var | return #[]
-  let ty ← withTransparency .default <| whnf (← instantiateMVars decl.type)
-  let .const structName _ := ty.getAppFn | return #[]
-  unless isStructure (← getEnv) structName do return #[]
-  return (getStructureFields (← getEnv) structName)
-
-/-- Destructure the single-constructor value `nm` into components named
-`<prefix>_<field>` (cases API — no rcases quotation). -/
-def destructureInto (nm : Name) (pre : String) (fields : Array Name) : TacticM Unit := do
-  if fields.isEmpty then return
-  let names := fields.toList.map fun f => Name.mkSimple s!"{pre}_{f.getString!}"
-  let s ← saveState
-  try
-    withMainContext do
-      let some decl := (← getLCtx).findFromUserName? nm | failure
-      -- expose the structure head definitionally so `cases` finds the inductive
-      let ty ← withTransparency .default <| whnf (← instantiateMVars decl.type)
-      liftMetaTactic fun g => do
-        let g ← g.changeLocalDecl decl.fvarId ty
-        pure [g]
-      withMainContext do
-        let some decl := (← getLCtx).findFromUserName? nm | failure
-        liftMetaTactic fun g => do
-          let subgoals ← g.cases decl.fvarId #[⟨true, names⟩]
-          pure (subgoals.map (·.mvarId)).toList
-  catch e =>
-    trace[Halo2.circuit_proof_start2] "destructure {nm} failed: {e.toMessageData}"
-    s.restore
-
-/-- Split the (right-nested) conjunction `nm` into `n` components with the given names
-(pairwise And-cases; the final residue takes the last name). -/
-def splitConjInto (nm : Name) (names : Array Name) : TacticM Unit := do
-  if names.isEmpty then return
-  for i in [0:names.size - 1] do
-    bestEffort <| withMainContext do
-      let some decl := (← getLCtx).findFromUserName? nm | failure
-      liftMetaTactic fun g => do
-        let subgoals ← g.cases decl.fvarId #[⟨true, [names[i]!, nm]⟩]
-        pure (subgoals.map (·.mvarId)).toList
-  bestEffort <| withMainContext do
-    let some decl := (← getLCtx).findFromUserName? nm | failure
-    liftMetaTactic fun g => do
-      pure [← g.rename decl.fvarId names.back!]
-
 /-- The names of engine-emitted `h_spec_<k>` hypotheses currently in context. -/
 def specHyps : TacticM (Array Name) := withMainContext do
   let mut out := #[]
@@ -245,8 +200,10 @@ def specHyps : TacticM (Array Name) := withMainContext do
       out := out.push decl.userName
   return out
 
-/-- The v2 runner. -/
-def run (sound : Bool) : TacticM Unit := do
+/-- The v2 runner. `userLemmas` is the caller's bridge/unfold list (the child
+contract bridges + `Spec`/`Assumptions` unfolds the landing pass fires with). -/
+def run (sound : Bool)
+    (userLemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) : TacticM Unit := do
   -- ── (a) intro the config through products; binder names come out of the pattern
   -- matches via the dsimp in (b), so positional names suffice here ──
   let mut guard := 0
@@ -312,34 +269,51 @@ def run (sound : Bool) : TacticM Unit := do
       run? (← `(tactic| subcircuit_rw at $(mkIdent c):ident))
   else
     run? (← `(tactic| subcircuit_rw))
-  -- ── (f) value landing ──
-  let fields ← inputFieldNames
-  destructureInto `input_var "input_var" fields
-  destructureInto `input "input" fields
-  run? (← `(tactic| simp only [circuit_norm] at *))
-  splitConjInto `h_input (fields.map fun f => Name.mkSimple s!"h_input_{f.getString!}")
-  -- value replacement: land every input-var eval on its value name, at every
-  -- hypothesis EXCEPT the component equations themselves (self-rewriting would
-  -- collapse them to True) and the goal
-  let compNames := fields.map fun f => Name.mkSimple s!"h_input_{f.getString!}"
-  let comps ← compNames.mapM fun n =>
-    `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
+  -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
+  -- with provable_type_simp, normalize the GIVENS, then one pass that uses `h_input`
+  -- and `h_output` AS REWRITE RULES (component equations; `h_output` fires
+  -- left-to-right: circuit spelling → declared output) together with the caller's
+  -- bridge list, over every derived hypothesis and the goal ──
+  if !sound then
+    -- the engine consumed the call chunks' witness sides; drop the raw leftovers
+    -- (TODO: subcircuit_rw should replace them itself)
+    for c in callChunks do
+      run? (← `(tactic| clear $(mkIdent c):ident))
+  run? (← `(tactic| provable_type_simp))
+  let givens : Array Name :=
+    if sound then #[`hE, `hA, `h_input, `h_output]
+    else #[`hE, `hA, `hPA, `h_input, `h_output]
+  for g in givens do
+    run? (← `(tactic| simp only [circuit_norm, Placed.toEnvironment]
+      at $(mkIdent g):ident))
+  -- pass 2: derived hypotheses + goal, with h_input/h_output as rules
+  let rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
+    #[← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_input):term),
+      ← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_output):term),
+      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm),
+      ← `(Lean.Parser.Tactic.simpLemma| Placed.toEnvironment)] ++ userLemmas
+  -- pass-2 targets: everything derived PLUS `hA` (its values must land too); only the
+  -- rule-sources and env givens stay out
+  let pass2Excluded : Array Name := #[`h_input, `h_output, `hE, `hPA]
   let targets ← withMainContext do
-    let mut ts : Array Ident := #[]
+    let mut ts : Array Name := #[]
     for decl in ← getLCtx do
-      if decl.isImplementationDetail then continue
-      unless (decl.userName.isInternal || compNames.contains decl.userName) do
-        if (← inferType (← instantiateMVars decl.type)).isProp then
-          ts := ts.push (mkIdent decl.userName)
+      if decl.isImplementationDetail || decl.userName.isInternal then continue
+      if pass2Excluded.contains decl.userName then continue
+      unless (← inferType (← instantiateMVars decl.type)).isProp do continue
+      ts := ts.push decl.userName
     pure ts
-  run? (← `(tactic| simp only [$comps,*] at $[$targets:ident]* ⊢))
+  for t in targets do
+    run? (← `(tactic| simp only [$rules,*] at $(mkIdent t):ident))
+  run? (← `(tactic| simp only [$rules,*]))
 
 end CircuitProofStart2
 
 /-- `circuit_proof_start2` — the atomic-binds (CPS v2) proof prefix. See the module
 docstring and `Clean/Halo2/atomic-binds-design.md`. Direction auto-detected from the
 goal head. Adopted per proof; the v1 `circuit_proof_start` is untouched. -/
-syntax (name := circuitProofStart2) "circuit_proof_start2" : tactic
+syntax (name := circuitProofStart2)
+  "circuit_proof_start2" (" [" withoutPosition(term,*,?) "]")? : tactic
 
 /-- Strip leading ∀ binders. -/
 private partial def stripForalls (e : Expr) : Expr :=
@@ -348,10 +322,15 @@ private partial def stripForalls (e : Expr) : Expr :=
   | e => e
 
 @[tactic circuitProofStart2]
-def evalCircuitProofStart2 : Tactic := fun _ => do
+def evalCircuitProofStart2 : Tactic := fun stx => do
+  let userLemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
+    match stx with
+    | `(tactic| circuit_proof_start2 [$ts,*]) =>
+      ts.getElems.mapM fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+    | _ => pure #[]
   -- detect the direction from the (possibly ∀-wrapped) goal head
   let ty ← withMainContext do instantiateMVars (← getMainTarget)
   let sound := !(stripForalls ty).isAppOf ``FormalCircuit.Completeness
-  CircuitProofStart2.run sound
+  CircuitProofStart2.run sound userLemmas
 
 end Halo2

@@ -103,29 +103,25 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   ProverAssumptions _ _ _ := True
 
   soundness := by
-    circuit_proof_start2
+    circuit_proof_start2 [
+      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
+      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     -- ═══ USER half ═══
-    -- the full-width child: the commitment is the extracted scalar times `G`
-    have hAl := h_call_alphaCommitment hE trivial
-    rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
-      Ecc.MulFixed.FullWidth.circuit_extract_eq] at hAl
-    -- the complete addition: `rk = alphaCommitment + ak_P` (both summands valid)
-    have hAddS := h_call_rk trivial (by
-      rw [Ecc.Add.toFormal_assumptions_eq]
-      exact ⟨by rw [hAl]; exact G.smul_valid _, hA⟩)
-    rw [Ecc.Add.toFormal_spec_eq] at hAddS
-    rw [← h_output, hAddS.2, hAl]
-
+    have hAl := h_call_alphaCommitment hE
+    have hAddS := h_call_rk trivial ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
+    simp_all
   completeness := by
-    circuit_proof_start2
+    circuit_proof_start2 [
+      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
+      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
+      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     -- ═══ USER half ═══
-    -- the full-width child's contract: the commitment is the extracted scalar times `G`
-    have hAl := (h_spec_0 hE trivial trivial).1
-    rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
-      Ecc.MulFixed.FullWidth.circuit_extract_eq] at hAl
-    refine ⟨⟨hE, trivial, trivial⟩, trivial, ?_, trivial⟩
-    rw [Ecc.Add.toFormal_assumptions_eq]
-    exact ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
+    have hAl := (h_spec_0 hE).1
+    exact ⟨hE, trivial, ⟨by rw [hAl]; exact G.smul_valid _, hA⟩, trivial⟩
 
 derive_contract_bridges circuit (G : FixedBase) := circuit G
 
