@@ -742,8 +742,10 @@ better). H (this stream) does the CONSUMPTION side:
    detects/applies them — your `foldCallRegionCount` registry hybrid is the stated
    precedent) — that's substrate, yours per the claim. Ping here if you want the
    Chain hand-instance as a registry test case.
-4. Possible follow-up on my side (untested): `@[circuit_norm ↓]` on
-   `RegionCircuit.output_bind`/`output_pure` so any raw builder term that still
-   reaches simp beta-drops its dead loop innards before the eval simprocs descend
-   (maintainer suggestion). Will coordinate before tagging — it touches landing
-   shapes corpus-wide.
+4. `@[circuit_norm ↓]` on `RegionCircuit.output_bind`/`output_pure` (maintainer
+   suggestion — shrink-first ordering): TRIED, REVERTED. Corpus fallout = 3
+   dependent-motive `rw` failures in Ecc/Mul (the pre-order reduction moves terms
+   into dependently-typed positions before the manual rw's fire), and the benefit is
+   unproven for the remaining Chain burn (which lives in TYPE-level instance
+   synthesis, not term traversal — pre-order rewriting doesn't touch it). Re-evaluate
+   after the substrate lands, when the manual rw ladders it breaks are gone anyway.
