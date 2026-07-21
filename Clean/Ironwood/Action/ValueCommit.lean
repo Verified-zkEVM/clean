@@ -53,7 +53,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   name := "value commit"
   configure := pure
 
-  synthesize := fun (scfg, fcfg, ecfg) input => do
+  synthesize | (scfg, fcfg, ecfg), input => do
     let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
       ⟨input.magnitude, input.sign⟩
     let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
@@ -61,15 +61,13 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       { p := commitment, q := blind }
     pure cv
 
-  elaborated := fun _ => { regionCount := fun _ => 5 }
+  elaborated _ := { regionCount _ := 5 }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env
 
-  Assumptions _ := True
-
-  Witness := fun F => Vector F 85 × Fq
+  Witness F := Vector F 85 × Fq
   extract := fun (_, fcfg, _) _ i₀ env =>
     Ecc.MulFixed.FullWidth.fwExtract fcfg (i₀ + 2) env
 
@@ -92,7 +90,6 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
       Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
-    -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨m, hm_lt, hmag, hcases⟩ := h_call_commitment hSEnv
     have hBl := h_call_blind hFEnv
@@ -114,7 +111,6 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
       Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
-    -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨hmag, hsign⟩ := hPA
     obtain ⟨⟨m, hm_lt, hmag', hcases⟩, -⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
