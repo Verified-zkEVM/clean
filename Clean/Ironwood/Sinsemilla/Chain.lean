@@ -1022,9 +1022,7 @@ instance elaborated (G : Generators) (ns : List ℕ)
       first := (HashPiece.reads cfg offset self).row }
   output_eq := by
     intro input self
-    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-      HashPiece.output_readState, output_assignAdvice]
-    rfl
+    simp only [circuit_norm]
 
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
