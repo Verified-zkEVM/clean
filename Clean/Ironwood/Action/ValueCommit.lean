@@ -118,62 +118,146 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       ((show Fp from input.sign) = 1 ∨ (show Fp from input.sign) = -1)
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨hSEnv, hFEnv⟩ := _hE
-    obtain ⟨hShort, hFw, hAdd⟩ := hc
+    -- ═══ v2-manual FRAMEWORK prefix (atomic binds; to become one `circuit_proof_start2`) ═══
+    rintro ⟨scfg, fcfg, ecfg⟩
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_input h_output hE hA hC
+    obtain ⟨place, env⟩ := env
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- bind 1 [commitment ← (Short.circuit V).call scfg ⟨magnitude, sign⟩]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_short, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_commitment : (Ecc.MulFixed.Short.circuit V).output scfg
+      ⟨input_var.magnitude, input_var.sign⟩ i₀ = commitment
+    intro hC h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
+    -- bind 2 [blind ← (FullWidth.circuit R).call fcfg input.rcv]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_fw, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_blind : (Ecc.MulFixed.FullWidth.circuit R).output fcfg input_var.rcv
+      (i₀ + 2) = blind
+    intro hC h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
+    -- bind 3 [cv ← (add.toFormal …).call ecfg { p := commitment, q := blind }]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_add, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_cv : (Ecc.Add.add.toFormal "complete point addition").output ecfg
+      { p := commitment, q := blind } (i₀ + 4) = cv
+    intro hC h_output
+    -- terminal `pure cv`
+    rw [Circuit.operations_pure, constraints_nil] at hC
+    rw [Circuit.output_pure] at h_output
+    clear hC
+    -- contracts over the atoms
+    subcircuit_rw at h_call_short
+    subcircuit_rw at h_call_fw
+    subcircuit_rw at h_call_add
+    -- value landing on component atoms + value replacement
+    obtain ⟨input_var_rcv, input_var_mag, input_var_sign⟩ := input_var
+    obtain ⟨input_rcv, input_mag, input_sign⟩ := input
+    simp only [circuit_norm]
+      at h_input hE h_commitment h_blind h_cv h_call_short h_call_fw h_call_add ⊢
+    obtain ⟨h_rcv, h_mag, h_sign⟩ := h_input
+    simp only [h_mag, h_sign] at h_call_short h_call_fw h_call_add
+    obtain ⟨hSEnv, hFEnv⟩ := hE
+    -- ═══ USER half ═══
     -- the short child: the commitment is `[±m] V` at some `m < 2⁶⁴`
-    have hSh := hShort (by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv)
-      (by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial)
+    have hSh := h_call_short hSEnv trivial
     rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
     simp only [Ecc.MulFixed.Short.Spec] at hSh
     obtain ⟨m, hm_lt, hmag, hcases⟩ := hSh
     -- the full-width child: the blind is the extracted scalar times `R`
-    have hBl := hFw
-      (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
+    have hBl := h_call_fw hFEnv trivial
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
     -- the complete addition: `cv = commitment + blind` (both summands valid)
-    have hAddS := hAdd trivial (by
+    have hAddS := h_call_add trivial (by
       rw [Ecc.Add.toFormal_assumptions_eq]
       refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
       rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _)
     rw [Ecc.Add.toFormal_spec_eq] at hAddS
     refine ⟨m, hm_lt, hmag, ?_⟩
-    rcases hcases with ⟨hsign, hC⟩ | ⟨hsign, hC⟩
-    · exact Or.inl ⟨hsign, by rw [hAddS.2, hC, hBl]⟩
-    · exact Or.inr ⟨hsign, by rw [hAddS.2, hC, hBl]⟩
+    rw [← h_output]
+    rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
+    · exact Or.inl ⟨hsign, by rw [hAddS.2, hCm, hBl]⟩
+    · exact Or.inr ⟨hsign, by rw [hAddS.2, hCm, hBl]⟩
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨hSEnv, hFEnv⟩ := _hE
+    -- ═══ v2-manual FRAMEWORK prefix ═══
+    rintro ⟨scfg, fcfg, ecfg⟩
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_input h_output hW hE hA hPA
+    obtain ⟨place, env⟩ := env
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- bind 1
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_short, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_commitment : (Ecc.MulFixed.Short.circuit V).output scfg
+      ⟨input_var.magnitude, input_var.sign⟩ i₀ = commitment
+    intro hW h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
+    -- bind 2
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_fw, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_blind : (Ecc.MulFixed.FullWidth.circuit R).output fcfg input_var.rcv
+      (i₀ + 2) = blind
+    intro hW h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
+    -- bind 3
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_add, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_cv : (Ecc.Add.add.toFormal "complete point addition").output ecfg
+      { p := commitment, q := blind } (i₀ + 4) = cv
+    intro hW h_output
+    -- terminal `pure cv`
+    rw [Circuit.operations_pure, constraints_nil]
+    rw [Circuit.output_pure] at h_output
+    clear hW
+    -- strengthen the goal chunks + emit the children's completeness implications
+    subcircuit_rw
+    -- value landing on component atoms + value replacement
+    obtain ⟨input_var_rcv, input_var_mag, input_var_sign⟩ := input_var
+    obtain ⟨input_rcv, input_mag, input_sign⟩ := input
+    simp only [circuit_norm]
+      at h_input hE hA hPA h_commitment h_blind h_cv h_spec_0 h_spec_1 h_spec_2 ⊢
+    obtain ⟨h_rcv, h_mag, h_sign⟩ := h_input
+    simp only [h_mag, h_sign] at h_spec_0 h_spec_1 h_spec_2 ⊢
+    obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨hmag, hsign⟩ := hPA
-    obtain ⟨-, hIn1, hIn2⟩ := h_input
-    have hmagE := hmag
-    rw [← hIn1] at hmagE
-    have hsignE := hsign
-    rw [← hIn2] at hsignE
+    -- ═══ USER half ═══
     -- the short child's contract: the commitment is `[±m] V`
-    have hSh := (h_spec_0 (by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv)
-      (by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial)
-      (by rw [Ecc.MulFixed.Short.circuit_proverAssumptions_eq]; exact ⟨hmagE, hsignE⟩)).1
+    have hSh := (h_spec_0 hSEnv trivial ⟨hmag, hsign⟩).1
     rw [Ecc.MulFixed.Short.circuit_spec_eq] at hSh
     simp only [Ecc.MulFixed.Short.Spec] at hSh
     obtain ⟨m, -, -, hcases⟩ := hSh
     -- the full-width child's contract: the blind is the extracted scalar times `R`
-    have hBl := (h_spec_1
-      (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial)).1
+    have hBl := (h_spec_1 hFEnv trivial trivial).1
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hBl
-    refine ⟨⟨by rw [Ecc.MulFixed.Short.circuit_envAssumptions_eq]; exact hSEnv,
-      by rw [Ecc.MulFixed.Short.circuit_assumptions_eq]; trivial,
-      by rw [Ecc.MulFixed.Short.circuit_proverAssumptions_eq]; exact ⟨hmag, hsign⟩⟩,
-      ⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hFEnv,
-       by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
-       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
-      trivial, ?_, trivial⟩
+    refine ⟨⟨hSEnv, trivial, ⟨hmag, hsign⟩⟩, ⟨hFEnv, trivial, trivial⟩, trivial, ?_, trivial⟩
     rw [Ecc.Add.toFormal_assumptions_eq]
     refine ⟨?_, by rw [hBl]; exact R.smul_valid _⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
