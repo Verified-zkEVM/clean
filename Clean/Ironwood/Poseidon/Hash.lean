@@ -201,7 +201,7 @@ def hash (capacity : Fp) :
         ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
       = (ProvableStruct.eval place env x_gen_out_2 : State Fp).x0 from by
-        with_unfolding_all rfl]
+        provable_type_simp]
     rw [h2]
     rfl
 
@@ -222,7 +222,7 @@ def hash (capacity : Fp) :
         ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
       = (ProvableStruct.eval place env.toEnvironment x_gen_out_2
-          : State Fp).x0 from by with_unfolding_all rfl]
+          : State Fp).x0 from by provable_type_simp]
     rw [h2]
     rw [h_input.1, h_input.2]
     rfl

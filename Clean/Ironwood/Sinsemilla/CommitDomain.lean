@@ -220,7 +220,7 @@ def commit (G : Generators) (ns : List ℕ)
     -- whole-struct `h_input` by unfolding defeq
     have hPC' : PieceChunks ns input.pieces chunks := by
       rw [← h_input]
-      with_unfolding_all exact hPC
+      simp only [circuit_norm]; exact hPC
     refine ⟨chunks, hPC', hZs, ?_⟩
     intro B hB
     have hcoords := hContract B hB
@@ -230,7 +230,7 @@ def commit (G : Generators) (ns : List ℕ)
     have hpoint : (ProvableStruct.eval place env x_gen_out_0).point
         = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp) := by
-      with_unfolding_all rfl
+      rw [ProvableType.eval_cells]; rfl
     -- the hash point equals B
     have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0.point
         : Value Point Fp) = B := by
@@ -275,7 +275,7 @@ def commit (G : Generators) (ns : List ℕ)
     -- and prover-view evals of a pure-provable var agree up to defeq)
     have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces
         : Value (fields ns.length) Fp) = input_pieces := by
-      rw [← h_input.1]; with_unfolding_all rfl
+      rw [← h_input.1, ProvableType.eval_var, ProvableType.eval_var_prover]
     -- the hash child's honest-prover precondition, stated over the hint-erased eval
     have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions
         ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces }
@@ -291,7 +291,7 @@ def commit (G : Generators) (ns : List ℕ)
       exact ⟨hns, hPBounds, ⟨bx, byv⟩, hB0⟩
     -- the hash child's honest contract (prover side: the output point IS the honest hash)
     have hPSHash := (h_spec_1 (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE)
-      trivial (by with_unfolding_all exact hPAhash)).2
+      trivial hPAhash).2
     rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by
       simp only [hpe]; exact hB0)
@@ -301,7 +301,7 @@ def commit (G : Generators) (ns : List ℕ)
     have hpointP : (ProvableStruct.eval place env.toEnvironment x_gen_out_0).point
         = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point
           : Value Point Fp) := by
-      with_unfolding_all rfl
+      rw [ProvableType.eval_cells]; rfl
     -- the hash point equals the honest B0
     have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point : Value Point Fp)
         = (⟨bx, byv⟩ : Point Fp) := by
@@ -318,7 +318,7 @@ def commit (G : Generators) (ns : List ℕ)
       by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
       ⟨by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE, trivial,
-        by with_unfolding_all exact hPAhash⟩,
+        hPAhash⟩,
       trivial, ?_, trivial⟩
     show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0.point
         : Value Point Fp).Valid ∧

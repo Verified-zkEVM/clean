@@ -176,7 +176,7 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
 theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
     (synthPieces cfg ak nk).nextRegionIndex i = i + 7 := by
-  with_unfolding_all rfl
+  rfl
 
 theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
@@ -188,7 +188,7 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
           b0 := .of (i + 1) 0 cfg.lookupConfig.runningSum,
           b2 := .of (i + 2) 0 cfg.lookupConfig.runningSum,
           d0 := .of (i + 5) 0 cfg.lookupConfig.runningSum } := by
-  with_unfolding_all rfl
+  rfl
 
 /-! ## The bundle contract -/
 

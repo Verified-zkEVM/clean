@@ -550,6 +550,22 @@ stay untouched until #34 lands.
 
 Mark progress here per file as it lands; remove this section when the sweep is done.
 
+**Agent H progress (July 21, second wave — commits d9ae53a5..30688024):**
+- `with_unfolding_all` at ZERO in: MulComplete (was 14), Mul (10), AddressIntegrity (8),
+  MulFixed/FullWidth (12), MulIncomplete (already 0 after the atom work). Recipe per
+  15edb497: receiving-lemma hypotheses restated at the circuit_norm atom spelling
+  (`env.get col ((place ri + ro : ℕ) : ℤ)`; `ProverEnvironment.toEnvironment_get` makes
+  the prover side coincide); value-lemma internals cite their one missing reduction
+  (`explicit_provable_type`, `ProvableType.eval_fields_cells`, Witgen eval equations).
+- FullWidth outer proofs = plain cps (both directions); its manual prefixes, change
+  pre-betas, h_output ladder, and region_completeness_leaf_placed ladder all deleted.
+- cps upgrades landed: CoreM-layer bestEffort (88443ab8), per-target peel (33450199),
+  conditional rescueFoldedOutput hook (currently fails closed; kernel-cost audit next).
+- IN FLIGHT (agent): the small files — CommitDomain 6, NoteCommit/Main 5, HashToPoint 3,
+  Ecc/Basic 3, Poseidon 4, CommitIvk/Main 2, DeriveNullifier 1, HashPiece 1.
+- REMAINING after that: Bundle 155 (F-held), NoteCommit/MainBundle 27, Merkle 26,
+  CommitIvk/MainBundle 19, Chain 11 (waits on the kernel-safe h_output ladder).
+
 **Agent F progress (July 21):**
 - **The Category 1/2 sweep is COMPLETE** (commits 6498ca16, ed692bda, 17a73285,
   f9fd0972): every hand-written contract-projection bridge stack in the reserved file

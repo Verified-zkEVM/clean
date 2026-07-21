@@ -294,7 +294,7 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         (show ↑i + 2 ≤ n + 1 by omega)
       have hinp : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var : Fp) = input := by
         rw [← h_input]
-        with_unfolding_all rfl
+        simp only [circuit_norm]
       rw [← hinp] at hC
       refine hleaf ⟨_hE, trivial, A, C, hAon, ?_, hC⟩
       -- the entering neighborhood of round i is honest at word i

@@ -114,7 +114,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
         = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
             x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
             x2 := env.advice (cfg.state 2) ((place self + offset : ℕ) : ℤ) }
-        from by with_unfolding_all rfl]
+        from by simp only [stateRow, circuit_norm]]
       rw [hcp0, hcp1, hcp2]
     have h36 : st 36 = { x0 := output_x0, x1 := output_x1, x2 := output_x2 } := h_output
     -- assemble the three folds
@@ -182,7 +182,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
         = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
             x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
             x2 := env.advice (cfg.state 2) ((place self + offset : ℕ) : ℤ) }
-        from by with_unfolding_all rfl]
+        from by simp only [stateRow, circuit_norm]]
       rw [hw0, hw1, hw2]
     have h36 : st 36 = { x0 := output_x0, x1 := output_x1, x2 := output_x2 } := h_output
     have hA := foldl_of_steps
