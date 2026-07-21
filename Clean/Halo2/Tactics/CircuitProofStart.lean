@@ -275,6 +275,23 @@ def rwIffAndIntro (d : Direction) : TacticM Unit := do
     if nm == `env then
       evalTactic (← `(tactic| obtain ⟨$(mkIdent `place):ident, $(mkIdent `env):ident⟩ := $(mkIdent `env):ident))
 
+/-- Best-effort step: run `tac`, restoring the tactic state on ANY failure — including
+runtime exceptions (deep recursion / stack overflow), which the tactic-level `try`
+combinator RETHROWS (its `orElse` treats them as non-recoverable, so a plain
+`try … catch _ => pure ()` guard is porous exactly for them). A pathological gadget —
+e.g. FullWidth's sealed 85-window inner region, whose spelled output blows `maxRecDepth`
+when step (f) matches `h_output` against `hc` — must degrade to fewer cps services, not
+kill the whole tactic. Interrupts are rethrown (cancellation must propagate), and so is
+heartbeat exhaustion: the declaration's budget is global, so continuing would only move
+the error somewhere misleading. -/
+def bestEffort (tac : TacticM Unit) : TacticM Unit := do
+  let s ← saveState
+  try
+    tac
+  catch ex =>
+    if ex.isInterrupt || ex.isMaxHeartbeat then throw ex
+    s.restore
+
 /-- The set of names that are already `circuit_norm` members — the union of the extension's
 simp-theorem origins (tagged theorems) and its `toUnfold` set (tagged `def`s, e.g.
 `Constraints.withSelector`, `Witgen.evalSteps`). Empty if the extension is somehow absent (never,
@@ -355,6 +372,10 @@ def autoUnfoldsOfMain : TacticM (Array Name) := withMainContext do
     let some (.defnInfo di) := env.find? c | continue
     if (← getProjectionFnInfo? c).isSome then continue
     if ← isBundleConst c then continue
+    -- `seal`ed defs stay folded: irreducibility is the author's "this is a proof
+    -- boundary" declaration (e.g. FullWidth's 85-window `innerRegion`), and while the
+    -- seal already suppresses whnf, the def's *equation* in a simp set would not be.
+    if getReducibilityStatusCore (← getEnv) c matches .irreducible then continue
     let isCircuitTy ← forallTelescope di.type fun _ body =>
       pure (body.getAppFn.constName? == some ``Halo2.Circuit ||
             body.getAppFn.constName? == some ``Halo2.RegionCircuit)
@@ -408,31 +429,92 @@ def mkUnfoldLemmas (terms : Option (Array Term)) :
     return (unfold, bridges)
   | none => pure (#[], #[])
 
+/-- The instance-argument head constants of any FOLDED elaborated-output application
+(`ElaboratedRegionCircuit.output` / `ElaboratedCircuit.output`) in the hypothesis named
+`h_output` — found as the argument whose type's head is the class itself. Empty when the
+output is already reduced (no such application remains). -/
+def foldedOutputInstances : TacticM (Array Name) := withMainContext do
+  let some decl := (← getLCtx).findFromUserName? `h_output | return #[]
+  let ty ← instantiateMVars decl.type
+  let mut insts : Array Name := #[]
+  for (projName, className) in
+      [(``ElaboratedRegionCircuit.output, ``ElaboratedRegionCircuit),
+       (``ElaboratedCircuit.output, ``ElaboratedCircuit)] do
+    let some app := ty.find? (fun sub =>
+      sub.isApp && sub.getAppFn.constName? == some projName) | continue
+    for a in app.getAppArgs do
+      let aTy ← instantiateMVars (← inferType a)
+      if aTy.getAppFn.constName? == some className then
+        if let some n := a.getAppFn.constName? then
+          if !insts.contains n then
+            insts := insts.push n
+        break
+  return insts
+
+/-- Rescue pass at `h_output`, for bundles whose composed output the main `circuit_norm`
+peel leaves FOLDED — the elaborated-instance argument is an opaque constant, so neither
+the explicit `output` field nor the structural default is visible to any rule. The fix is
+to unfold that instance constant itself: projection-of-literal reduction then yields the
+instance's explicit reduced output where one exists (e.g. FullWidth's `innerOutCells`),
+and a default `{}` instance exposes `(main input).output self`, which the structural
+`output_bind`/`output_pure` stepping shrinks by beta-dropping discarded loop innards
+wholesale (e.g. Sinsemilla Chain's loop-composed bundle). The follow-up `circuit_norm`
+pass lands the residue on cell atoms. Ordering matters twice over: running this only
+AFTER the main peel (and only when the output is still folded) keeps every already-green
+landing shape byte-identical; and running the full `circuit_norm` set directly over the
+UN-shrunk structural term instead is a six-figure whnf burn — the sum of the
+(individually capped) eval-simproc attempts over every subterm position is unbounded
+(Chain's bundle was the reproducer). -/
+def rescueFoldedOutput (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
+    TacticM Unit := do
+  let insts ← foldedOutputInstances
+  if insts.isEmpty then return
+  let instLemmas ← insts.mapM fun n =>
+    `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)
+  bestEffort do
+    -- NO `output_eq` here: it would fire before the instance unfold and send an
+    -- explicit-output instance down the structural route (the wrong direction — that
+    -- regressed FullWidth's inner proofs when tried). Projection-of-literal reduction
+    -- on the unfolded instance covers both cases.
+    --
+    -- STATUS: currently fails closed corpus-wide — `simp only [<instance const>]` does
+    -- not rewrite an instance-def occurrence (`unfold … at h_output` does; switching to
+    -- it is pending a kernel-cost audit: on a loop-composed bundle the structural
+    -- output reduction elaborates fast but the produced rfl-steps hand the KERNEL an
+    -- uncapped defeq over the composed term, which is why Chain's manual ladder uses
+    -- its careful narrow `rw` spelling). Until then, gadgets in the folded-output class
+    -- keep their manual ladders and this step is a silent no-op.
+    evalTactic (← `(tactic|
+      simp only [$instLemmas,*, RegionCircuit.output_bind,
+        RegionCircuit.output_pure] at $(mkIdent `h_output):ident))
+    evalTactic (← `(tactic|
+      simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `h_output):ident))
+
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
 target set. Soundness peels `hc`, `h_output` and the goal (the constraints hyp, the output-value
 equation, and the goal `Spec`). Completeness peels `hwit`, `hA`, `hPA`, `h_input`, `h_output` and
 the goal — the witness hyp, the (prover) assumptions, the input/output equations, and the goal
-constraints (matching the reference completeness prefix). The whole call is `try`-guarded: a
-multi-target `simp only … at …` fails only
-when NO target makes progress, so this is a no-op on a gadget already in normal form. -/
+constraints (matching the reference completeness prefix). Guarded: a multi-target
+`simp only … at …` fails only when NO target makes progress, so this is a no-op on a gadget
+already in normal form. -/
 def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do
   if d.isSoundness then
     -- Peel the constraints hyp and the output-value equation, AND the goal (the `Spec`): the
     -- unfold list carries the gadget's `Spec` def (e.g. `RoundInvariant`), which must fire at the
     -- goal too — otherwise a composite gadget's user half has to re-run `simp [circuit_norm, Spec]`
-    -- by hand. `try`-guarded, so it stays a no-op on a leaf whose `Spec` is already atomic.
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
+    -- by hand. Guarded, so it stays a no-op on a leaf whose `Spec` is already atomic.
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident ⊢))
   else
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `hPA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `hPA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢))
 
 /-- Step (c): `provable_type_simp` (never fails; runs to a fixpoint). -/
 def normalizeProvable : TacticM Unit := do
-  try evalTactic (← `(tactic| provable_type_simp)) catch _ => pure ()
+  bestEffort <| evalTactic (← `(tactic| provable_type_simp))
 
 /-- Step (d): `abstract_outputs` (silent no-op on leaf gadgets — no child outputs). -/
 def abstractOutputs : TacticM Unit := do
-  try evalTactic (← `(tactic| abstract_outputs)) catch _ => pure ()
+  bestEffort <| evalTactic (← `(tactic| abstract_outputs))
 
 /-- Step (e): consume the child chunks — `subcircuit_rw at hc` (soundness) / `subcircuit_rw`
 (completeness). Silent no-op when there are no chunks (leaf gadgets), so this is total.
@@ -442,9 +524,9 @@ No env re-bundling is needed on either path: `SubcircuitRw.placedEnv?` reconstru
 fallback), and soundness's leaves read `place`/`env` positionally. -/
 def consumeChunks (d : Direction) : TacticM Unit := do
   if d.isSoundness then
-    try evalTactic (← `(tactic| subcircuit_rw at $(mkIdent `hc):ident)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| subcircuit_rw at $(mkIdent `hc):ident))
   else
-    try evalTactic (← `(tactic| subcircuit_rw)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| subcircuit_rw))
 
 /-- The engine-emitted `h_spec_*` hypotheses (the completeness-side child contracts). -/
 def specHypIdents : TacticM (Array Ident) := withMainContext do
@@ -463,12 +545,12 @@ leaves (nothing new appeared). -/
 def normalizeEmitted (d : Direction)
     (unfold bridges : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) : TacticM Unit := do
   if d.isSoundness then
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $(mkIdent `hc):ident)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $(mkIdent `hc):ident))
   else
     let specHyps ← specHypIdents
     for h in specHyps do
-      try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $h:ident)) catch _ => pure ()
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*])) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*] at $h:ident))
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(unfold ++ bridges),*]))
 
 /-- Whether an expression still carries **unpeeled circuit structure** — an application of one of
 the constraint predicates `RegionOperations.Constraints` / `Constraints` (layouter) /
@@ -531,12 +613,12 @@ def rowFactChaining (d : Direction) : TacticM Unit := do
     -- in the constraints hyp and the goal. (No `circuit_norm` here: the gate simprocs already
     -- fired in step (b); re-running them is wasted work and risks re-folding the split conjuncts.)
     if hOut then
-      try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident, $(mkIdent `h_output):ident] at $(mkIdent `hc):ident ⊢))
     else
-      try evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident] at $(mkIdent `hc):ident ⊢)) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| simp +instances only [$(mkIdent `h_input):ident] at $(mkIdent `hc):ident ⊢))
   else
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident)) catch _ => pure ()
-    try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident $(mkIdent `hPA):ident)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `hwit):ident))
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at ⊢ $(mkIdent `hA):ident $(mkIdent `hPA):ident))
     -- Land `h_output` on the input/witness values. A leaf whose `ProverSpec` is a value equation
     -- (`output = input`, e.g. WitnessPoint) leaves that obligation as a goal conjunct over the free
     -- `output` coords; after this rewrite `h_output` reads as the per-coordinate value equation
@@ -544,7 +626,7 @@ def rowFactChaining (d : Direction) : TacticM Unit := do
     -- `try clear` below). No-op / cleared for a gadget whose completeness goal is pure constraints
     -- (e.g. Add).
     if hOut then
-      try evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at $(mkIdent `h_output):ident)) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $(mkIdent `hwit):ident] at $(mkIdent `h_output):ident))
 
 /-- Whether an expression still carries a **folded child contract** — an application of a
 bundle's `Spec`/`ProverSpec` projection (the shape `subcircuit_rw` leaves for consumers of
@@ -614,9 +696,9 @@ def clearConsumed (d : Direction) : TacticM Unit := do
     return
   if d.isSoundness then
     if ← hypExists `h_output then
-      try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident)) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `h_output):ident))
     else
-      try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident)) catch _ => pure ()
+      bestEffort <| evalTactic (← `(tactic| clear $(mkIdent `h_input):ident))
   else
     -- `h_input`/`hwit` are always spent by the finish. `h_output` is deliberately KEPT: after the
     -- value-landing in the finish it reads as the per-coordinate value equation
@@ -624,7 +706,7 @@ def clearConsumed (d : Direction) : TacticM Unit := do
     -- needs in its user half. A pure-constraint gadget (Add) does not reference it — but the finish
     -- leaves it in its original `eval … = output` form, which the linter treats as used by the
     -- gadget's return, so this does not introduce an unused-hyp lint.
-    try evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `hwit):ident)) catch _ => pure ()
+    bestEffort <| evalTactic (← `(tactic| clear $(mkIdent `h_input):ident $(mkIdent `hwit):ident))
 
 /-- The composite runner: steps (a)–(f) plus the consumed-equation cleanup, each no-op-tolerant.
 
@@ -650,6 +732,7 @@ def run (terms : Option (Array Term)) : TacticM Unit := do
     if unfold.any (fun t => t.raw.isIdent && t.raw.getId == n) then return none
     return some (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)))
   peelConstraints d unfold
+  rescueFoldedOutput unfold
   normalizeProvable
   abstractOutputs
   consumeChunks d

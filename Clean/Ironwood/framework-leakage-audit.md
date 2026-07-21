@@ -393,12 +393,23 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
    unfolds — the capped struct-eval simprocs + `Circuit.bind_def` unification retries
    traverse the un-shrunk loop innards at every subterm, and the caps only bound each
    attempt, not the sum). The narrow ladder (`output_eq` + `output_bind`/`output_pure`
-   + leaf `output_*`) is instant — beta drops the loop body wholesale. FIX STAGED: cps
-   step (b) gets a structural PRE-pass at `h_output`
-   (`simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
-   RegionCircuit.output_pure] at h_output`) before the main `circuit_norm` pass;
-   lands after the concrete-program sweep commits (to avoid invalidating in-flight
-   builds). Expected fallout: the manual `output_eq` ladders in Chain (1151, 1465) and
+   + leaf `output_*`) is instant — beta drops the loop body wholesale. PARTIAL FIX APPLIED (post-d9ae53a5): cps gained a
+   CONDITIONAL rescue hook at `h_output` (`rescueFoldedOutput`, fires only when the main
+   peel leaves `Elaborated*.output` FOLDED) — but it currently FAILS CLOSED corpus-wide:
+   `simp only [<instance const>]` does not rewrite an instance-def occurrence (`unfold`
+   does). Switching it to `unfold` is pending a KERNEL-cost audit: the structural output
+   reduction elaborates instantly (verified in scratch: unfold + output_bind/pure lands
+   Chain's h_output on the small cell record in ms), but the produced rfl-steps hand the
+   kernel an uncapped defeq over the loop-composed term — a scratch decl with that route
+   + a follow-up full `circuit_norm at h_output` hangs past 8 min WALL with simp capped
+   at 100k heartbeats, i.e. the cost is in kernel checking, not elaboration. Chain's
+   manual ladder (narrow rw + targeted simps, Chain:1151) is the kernel-friendly
+   spelling; subsuming it into the rescue = the Chain port task. Designs REJECTED en
+   route (both regressed green files before the conditional fail-closed form): an
+   unconditional structural pre-pass (changed 4 files' destructure shapes) and an
+   `output_eq`-first rescue (sends explicit-output instances down the structural route,
+   broke the MulFixed trio's `change` ladders).
+    Expected fallout: the manual `output_eq` ladders in Chain (1151, 1465) and
    HashToPoint (265, 346) go dead → delete; `hPS`/`hIS`-named ladders are untouched.
    **FullWidth outer-peel ALSO root-caused (H, same session, scratch repro):** the
    "cps deep-recurses on the 85-window synthesize" comment is imprecise — steps (a)–(e′)
@@ -408,7 +419,7 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
    `(innerRegion …).output i₀` inside the add-call record) forces isDefEq through the
    sealed 85-window body — >512 recursion depth (Prod.rec nest). The step IS
    `try`-guarded, but Lean's tactic `try` RETHROWS runtime exceptions (maxRecDepth), so
-   the guard is porous and cps dies instead of degrading. FIX STAGED (same batch): a
+   the guard is porous and cps dies instead of degrading. FIX APPLIED (same batch): a
    `bestEffort` wrapper for cps's guarded steps — `Core.withCatchingRuntimeEx` +
    saved-state restore, catching depth/stack (rethrow heartbeats: those mean the whole
    decl's budget is gone and continuing would only move the error). With it, plain cps
