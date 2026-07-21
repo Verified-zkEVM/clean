@@ -423,7 +423,7 @@ private theorem incompleteOutput_eval_literal {n : ℕ} (place : RegionIndex →
           : MulIncomplete.Output (n + 1) (AssignedCell Fp))
       = { acc := { x := AssignedCell.eval place env xA, y := AssignedCell.eval place env yA },
           zs := ProvableType.eval (M := fields (n + 1)) place env zs } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
 
 /-- Literal-eval bridge for `MulComplete.Output 3` (verifier view; the `acc` field may be a
 symbolic term). -/
@@ -434,7 +434,7 @@ private theorem completeOutput_eval_literal (place : RegionIndex → ℕ)
         ({ acc := acc, zs := zs } : MulComplete.Output 3 (AssignedCell Fp))
       = { acc := ProvableType.eval place env acc,
           zs := ProvableType.eval (M := fields 3) place env zs } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
 
 /-- Elementwise read of an evaluated cell vector. -/
 private theorem fieldsEval_getElem {w : ℕ} (place : RegionIndex → ℕ) (env : Environment Fp)
@@ -601,7 +601,7 @@ private theorem compInputs_eval_eq (env : Placed Environment Fp)
       = { alpha := (), base := eval env (v.base : Point (AssignedCell Fp)),
           xA := eval env (v.xA : AssignedCell Fp), yA := eval env (v.yA : AssignedCell Fp),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Componentwise eval of a `MulOverflow.Inputs` record literal. -/
 private theorem ovInputs_eval_eq (env : Placed Environment Fp)
@@ -636,14 +636,14 @@ private theorem hiInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
           base := eval env (v.base : Point (AssignedCell Fp)),
           acc := eval env (v.acc : Point (AssignedCell Fp)),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- The cell-reading scalar program's prover value is the cell's value. -/
 private theorem fexpr_expr_eval_prover (env : Placed ProverEnvironment Fp)
     (c : AssignedCell Fp) :
     Witgen.MOver.eval (F := Fp) (V := AssignedCell Fp) (value := field) env
       (pure (.expr c) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) = eval env c := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, Witgen.MOver.eval, Witgen.eval_field, Witgen.FExprOver.eval]
 
 /-- The LSB bit program's prover value: `kBitsWindow` of the scalar cell's value. -/
 private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
@@ -653,7 +653,7 @@ private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
   have h := congrFun (MulComplete.bexprsVal_kBitWindowExpr (.expr c) w { env := env }) i
   simp only [MulComplete.bexprsVal] at h
   rw [h]
-  with_unfolding_all rfl
+  simp only [circuit_norm, readCell, AssignedCell.eval]
 
 /-- Prover-side componentwise eval of `MulComplete.Inputs` (the scalar slot holds the
 reading program; its prover value is the program's evaluation). Whole-var, like
@@ -665,7 +665,7 @@ private theorem compInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
           base := eval env (v.base : Point (AssignedCell Fp)),
           xA := eval env (v.xA : AssignedCell Fp), yA := eval env (v.yA : AssignedCell Fp),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the
 scalar program's evaluation, the landing for the children's derived-bit facts
@@ -775,7 +775,7 @@ theorem hiInputs_eval_eq (env : Placed Environment Fp) (v : Var MulIncomplete.In
       = { alpha := (), base := eval env (v.base : Point (AssignedCell Fp)),
           acc := eval env (v.acc : Point (AssignedCell Fp)),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Verifier: an abstract point-output var's coordinate-evals reassemble to its whole-point eval
 (`Point.ofCoords (eval env o.x, eval env o.y) ≡ eval env o`), so an entering accumulator threaded
@@ -783,12 +783,12 @@ through the opaque local `o` lands on the whole-point value equation. `rfl` by `
 unfolding (`Point` is a two-field `Var`). -/
 theorem point_var_eval_eq (env : Placed Environment Fp) (o : Var Point Fp) :
     eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 /-- Prover view of `point_var_eval_eq`. -/
 theorem point_var_eval_eq_prover (env : Placed ProverEnvironment Fp) (o : Var Point Fp) :
     eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 /-! ## The gadget bundle
 
