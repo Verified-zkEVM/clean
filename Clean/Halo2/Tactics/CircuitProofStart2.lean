@@ -199,10 +199,11 @@ def specHyps : TacticM (Array Name) := withMainContext do
       out := out.push decl.userName
   return out
 
-/-- The v2 runner. `userLemmas` is the caller's bridge/unfold list (the child
-contract bridges + `Spec`/`Assumptions` unfolds the landing pass fires with). -/
-def run (sound : Bool)
-    (userLemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) : TacticM Unit := do
+/-- The v2 runner. The caller's list is CPS1-style: bundle constants yield on-the-fly
+contract bridges (`mkBundleBridges`), everything else is an unfold lemma (linted for
+`circuit_norm` redundancy). Factored circuit defs in `main` (synth wrappers) unfold
+automatically (`autoUnfoldsOfMain`), so the bind loop sees the do-block. -/
+def run (sound : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   -- ── (a) intro the config through products; binder names come out of the pattern
   -- matches via the dsimp in (b), so positional names suffice here ──
   let mut guard := 0
@@ -228,6 +229,11 @@ def run (sound : Bool)
       if done then break
       inner := inner + 1
     guard := guard + 1
+  -- resolve the caller's list + the auto-unfolds (goal is now `<head> main …`)
+  let (userUnfolds, bridges) ← CircuitProofStart.mkUnfoldLemmas terms
+  let autoUnfolds ← CircuitProofStart.autoUnfoldsOfMain
+  let unfolds := userUnfolds ++ (← autoUnfolds.mapM fun n =>
+    `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term))
   if sound then
     run? (← `(tactic| rw [FormalCircuit.soundness_iff]))
     run? (← `(tactic| intro $(mkIdent `i₀):ident $(mkIdent `env):ident
@@ -245,6 +251,13 @@ def run (sound : Bool)
   -- ── (b) definitional cleanup + output landing ──
   run? (← `(tactic| dsimp only [] at *))
   run? (← `(tactic| simp only [ElaboratedCircuit.output_eq] at $(mkIdent `h_output):ident))
+  -- open factored circuit defs (synth wrappers etc.) so the bind chain is visible
+  unless unfolds.isEmpty do
+    let chunk := if sound then `hC else `hW
+    run? (← `(tactic| simp only [$unfolds,*]
+      at $(mkIdent chunk):ident $(mkIdent `h_output):ident))
+    unless sound do
+      run? (← `(tactic| simp only [$unfolds,*]))
   -- ── (c) the bind loop ──
   let chunkHyp := if sound then `hC else `hW
   let mut callChunks : Array Name := #[]
@@ -287,7 +300,7 @@ def run (sound : Bool)
   let rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
     #[← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_input):term),
       ← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_output):term),
-      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ userLemmas
+      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ bridges ++ unfolds
   -- pass-2 targets: everything except the rule-sources
   let pass2Excluded : Array Name := #[`h_input, `h_output]
   let targets ← withMainContext do
@@ -318,14 +331,16 @@ private partial def stripForalls (e : Expr) : Expr :=
 
 @[tactic circuitProofStart2]
 def evalCircuitProofStart2 : Tactic := fun stx => do
-  let userLemmas : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
+  let terms : Option (Array Term) :=
     match stx with
-    | `(tactic| circuit_proof_start2 [$ts,*]) =>
-      ts.getElems.mapM fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
-    | _ => pure #[]
-  -- detect the direction from the (possibly ∀-wrapped) goal head
-  let ty ← withMainContext do instantiateMVars (← getMainTarget)
-  let sound := !(stripForalls ty).isAppOf ``FormalCircuit.Completeness
-  CircuitProofStart2.run sound userLemmas
+    | `(tactic| circuit_proof_start2 [$ts,*]) => some ts.getElems
+    | _ => none
+  -- direction via CPS1's detector (all four heads); region-level is not ported yet
+  let some d ← CircuitProofStart.detectDirection?
+    | throwError "circuit_proof_start2: goal is not a bundle Soundness/Completeness proof"
+  if d.isRegion then
+    throwError "circuit_proof_start2: region-level bundles are not supported yet — use \
+circuit_proof_start (v1) for region gadgets"
+  CircuitProofStart2.run d.isSoundness terms
 
 end Halo2
