@@ -131,8 +131,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
   soundness := by
     circuit_proof_start2 [zChain, reads, round, mul_one]
     choose k hk using region_0
-    simp only [← exit_eq, ← zs_eq, circuit_norm] at output_eq
-    obtain ⟨⟨hez, hexA, hel1, hel2, hebx, heby⟩, hzs⟩ := output_eq
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -157,7 +156,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         exact hz
     · -- the accumulator fold
       intro m hOn hacc0 h2m hbudget
-      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebx, ← heby]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hfold := loop_fold
         (fun r => { z := env.advice cfg.z ((place self + (offset + r) : ℕ) : ℤ),
                     xA := env.advice cfg.xA ((place self + (offset + r + 1) : ℕ) : ℤ),
@@ -188,8 +187,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
   completeness := by
     circuit_proof_start2 [reads]
     obtain ⟨m, hH0, hbudget⟩ := prover_assumptions
-    simp only [← exit_eq, ← zs_eq, circuit_norm] at output_eq
-    obtain ⟨⟨hez, hexA, hel1, hel2, hebx, heby⟩, hzs⟩ := output_eq
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -232,7 +230,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       simp only [circuit_norm, input_eq]
       exact hH
     · -- the exit state is the iterated step
-      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebx, ← heby]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hn := hIter n le_rfl
       simp only [rowFam] at hn
       simpa using hn
@@ -331,7 +329,6 @@ def double_and_add (n : ℕ) (w : ℕ) :
   soundness := by
     circuit_proof_start2 [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
-    simp only [← zs_eq, ← xf_eq, ← yf_eq, circuit_norm] at output_eq
     obtain ⟨⟨hax, hay⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
@@ -414,7 +411,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
         (by rw [hbx, hby]; exact hbOn)
         (by rw [hbx, hby]; exact hexit_acc)
         h2n hMb
-      rw [hbx, hby, hax, hay] at hlast
+      rw [hbx, hby] at hlast
       rw [hlast]
       congr 1
       have hext : accScalar m (fun j => if j < n then bits j else kl) n
@@ -431,10 +428,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       loop]
     obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := prover_assumptions
     obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := input_eq
-    -- orient the minted cell atoms onto the concrete cells the helper lemmas speak
-    simp only [← ex_eq, ← zs_eq, ← xf_eq, ← yf_eq, circuit_norm]
-      at region_7 region_8 region_9 h_spec_0 output_eq ⊢
-    obtain ⟨⟨hax, hay⟩, hzs⟩ := output_eq
+    obtain ⟨-, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -639,7 +633,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
             exact hbOn)
         hexAcc hM2 hMb
       rw [hkl, hbx, hby] at hlast
-      rw [← hax, ← hay, region_8, region_9, hbx, hby]
+      rw [hbx, hby]
       exact hlast
 
 end Halo2.Ironwood.Ecc.MulIncomplete

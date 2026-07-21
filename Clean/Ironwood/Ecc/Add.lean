@@ -385,9 +385,7 @@ def add : FormalRegionCircuit Fp
     -- `env.advice cfg.λ …` terms — but they are only ever passed *positionally* to
     -- the coordinate-generic `spec_of_polysZero`, never reasoned about.
     have hspec := spec_of_polysZero h1 h2 h3a h3b h3c h3d h4a h4b h5a h5b h6a h6b
-    -- land the minted output atoms on the advice spelling the spec lemma speaks
-    simp only [← xR_eq, ← yR_eq, circuit_norm] at output_eq
-    rw [← output_eq.1, ← output_eq.2, add_eq_add_of_spec hpValid hqValid hspec]
+    rw [add_eq_add_of_spec hpValid hqValid hspec]
     use Point.valid_add hpValid hqValid
   completeness := by
     circuit_proof_start2 [gate, lambdaProgram, rXProgram, rYProgram]

@@ -76,21 +76,35 @@ a loop combinator before the peel sees it.
 - **primitive** — everything else (`assignRegion`, `currentRegion`, table ops): chunk
   `h_region_<k>`, opened with `circuit_norm`.
 
-**The mint gate: every used binder mints, except index-valued ones.** The single
-principled exclusion is index-valued binders (`currentRegion`'s `RegionIndex`, ℕ):
-they feed offset arithmetic that has to stay literal for the region-count folding —
-atomizing them would re-hide what `foldCallRegionCount` exists to expose (the same
-judgment this doc already makes for region counts). Unit/discarded binders mint
-nothing. Everything else mints uniformly — the defining equation reconstructs the
-concrete spelling wherever a proof wants it, so no information is lost, and the state
-mirrors the do-block everywhere. (Two narrower gates — compound-only and
-layouter-only — were tried when fresh leaf ports broke on the mint, and REJECTED on
-maintainer review: the breakages were pre-mint spelling assumptions, not design
-signals. Adapting all five affected files cost one recurring idiom —
-`simp only [← <atom>_eq, circuit_norm] at output_eq` to land atoms on the concrete
-spelling a proof's helper lemmas speak — roughly two lines per proof.) Loop chunks
-share the raw `region_<k>` naming; the registry's spine-atomicity and auto-unfold
-exclusion are the substantive loop protections, not the name.
+**The mint gate: mint iff no consumer rebinds the output by concrete address**
+(agreed with maintainer, July 22, replacing the short-lived universal gate). The test:
+does any consumer independently re-derive the concrete spelling and match against it,
+or does every consumer treat the value opaquely through an interface? Minting where a
+re-deriver exists splits one thing into two spellings that no longer meet
+syntactically — the exact disease atomization exists to cure.
+
+- **Layouter level: every used cell-valued binder mints.** There are no gates at this
+  level; a raw-produced cell is only ever *passed* — into child calls that
+  copy-constrain it internally, into contracts stated over its eval. Every consumer is
+  opacity-respecting by construction, while the concrete spelling
+  (`AssignedCell.of <nextRegionIndex tower> …`) is exactly the offset-arithmetic term
+  that metastasizes through every later call's input. Same reason call outputs mint.
+- **Region level: raw binds do NOT mint.** Gates address cells by (column, rotation),
+  bypassing the binder entirely — the concrete address is *content*, the connection
+  medium between gate polys, witness equations, and the cell-spelled extract/Spec
+  contract. Cell atoms here forced five of seven region proofs to open with an
+  orientation idiom (`simp only [← <atom>_eq, circuit_norm]`) whose only job was to
+  reverse the mint — the empirical verdict on the universal gate. Raw region facts
+  stay as concrete-spelled `region_<k>` equations; the future for named region reads
+  is VALUE-level atoms (CPS3, issue #428), not address-level ones.
+- Index-valued binders (`currentRegion`'s `RegionIndex`, ℕ) never mint: they feed
+  offset arithmetic that must stay literal for the region-count folding. Unit/discarded
+  binders mint nothing.
+
+The layouter/region split is not a carve-out: it is the consumer-rebinding principle
+evaluated against a structural fact (where gates live). Loop chunks share the raw
+`region_<k>` naming; the registry's spine-atomicity and auto-unfold exclusion are the
+substantive loop protections, not the name.
 
 **Loop outputs mint as ONE atom**: a used map-style loop generalizes its whole
 `(loop …).output i` to a single binder-named atom; the defining equation is reduced

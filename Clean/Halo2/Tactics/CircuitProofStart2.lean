@@ -270,13 +270,17 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
     let some ty' ← hypType? chunkHyp | return some (chunkName, isCall)
     let outs ← newCanonicalOutputs ty'
     discard <| mintAtoms outs nm #[chunkHyp, `output_eq]
-  -- a raw or loop bind whose value passes the TYPE gate mints too (design doc,
-  -- "Raw binds, loops, and the mint gate"): collect the still-shared `(x).output i`
-  -- spelling, generalize it to the do-binder name, and reduce ONLY the defining
-  -- equation to its concrete boundary fact (for loops: the closed-form output via the
-  -- tagged loop lemmas) — the continuation keeps the atom. Index-valued binders
-  -- (`currentRegion`) never mint: their arithmetic must stay literal for the folds.
-  if !isCall && binderUsed f then
+  -- a LAYOUTER-level raw or loop bind whose value passes the TYPE gate mints too
+  -- (design doc, "Raw binds, loops, and the mint gate": mint iff no consumer rebinds
+  -- the output by concrete address — at the layouter level every consumer is
+  -- opacity-respecting, while region gates address cells by (column, rotation), so
+  -- region raw binds keep their concrete spellings; value-level region atoms are
+  -- CPS3, issue #428): collect the still-shared `(x).output i` spelling, generalize
+  -- it to the do-binder name, and reduce ONLY the defining equation to its concrete
+  -- boundary fact (for loops: the closed-form output via the tagged loop lemmas) —
+  -- the continuation keeps the atom. Index-valued binders (`currentRegion`) never
+  -- mint: their arithmetic must stay literal for the folds.
+  if !region && !isCall && binderUsed f then
     if ← binderTypeMints f then
       let mut outs : Array Expr := #[]
       if let some tyC ← hypType? chunkHyp then
