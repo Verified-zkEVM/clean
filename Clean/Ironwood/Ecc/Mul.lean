@@ -480,18 +480,28 @@ private theorem incomplete_output_eq (n : ℕ) (w : ℕ)
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := rfl
 
 /-- The `MulComplete` bundle's output record, full form: the `acc` field is the (symbolic,
-never-reduced) loop output, the `zs` are the fixed-row cells. -/
+never-reduced) fold output, the `zs` are the fixed-row cells. -/
 private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     (MulComplete.assign_region 3 w).output cfg off inp self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowProg inp.alpha w) off 3).output self,
+      = { acc := (RegionCircuit.foldRange off 2 3
+            ({ x := inp.xA, y := inp.yA } : Point (AssignedCell Fp))
+            (fun i r acc => do
+              let out ← (MulComplete.round w i).call cfg r
+                { alpha := inp.alpha, base := inp.base, z := inp.z, acc := acc }
+              pure out.acc)).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
 
 /-- `.call` spelling of `complete_output_eq`. -/
 private theorem complete_call_output_eq (w : ℕ) (cfg : MulComplete.Config)
     (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
     ((MulComplete.assign_region 3 w).call cfg off inp).output self
-      = { acc := (MulComplete.loop cfg inp (MulComplete.kBitWindowProg inp.alpha w) off 3).output self,
+      = { acc := (RegionCircuit.foldRange off 2 3
+            ({ x := inp.xA, y := inp.yA } : Point (AssignedCell Fp))
+            (fun i r acc => do
+              let out ← (MulComplete.round w i).call cfg r
+                { alpha := inp.alpha, base := inp.base, z := inp.z, acc := acc }
+              pure out.acc)).output self,
           zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := by
   rw [FormalRegionCircuit.output_call]; rfl
 
