@@ -30,18 +30,17 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
 - **(e)** `subcircuit_rw` — per chunk hypothesis (soundness) / goal-mode once
   (completeness, emitting `h_spec_<k>` over the atoms);
 - **(f)** landing (maintainer model, AddressIntegrity 90912413): `provable_type_simp`
-  decomposes the givens' types into the components that actually occur; one
-  `circuit_norm` normalization pass over the givens (`hE hA (hPA) h_input h_output`);
-  then ONE pass over every derived hypothesis (incl. `hA`) and the goal that uses
+  decomposes types into the components that actually occur; normalize ONLY the
+  rule-sources `h_input`/`h_output` (so their equations fire on normalized spellings);
+  then ONE pass over every other hypothesis and the goal that uses
   `h_input` and `h_output` themselves AS REWRITE RULES — `h_output` firing
   left-to-right (circuit spelling → declared output) — together with the CALLER'S
   LEMMA LIST (`circuit_proof_start2 [<child bridges, Spec/Assumptions unfolds>]`).
   With a complete list, trivially-composing parents close by `simp_all`/`grind`.
 
-Known gaps: raw binds whose value IS used mint no atom yet (none in the sample);
-`Placed.toEnvironment` is spelled into the landing passes pending its `circuit_norm`
-normal form; the engine should replace (not leave) the consumed completeness witness
-chunks — the tactic clears them meanwhile.
+Known gaps: raw binds whose value IS used mint no atom yet (none in the sample); the
+engine should replace (not leave) the consumed completeness witness chunks — the
+tactic clears them meanwhile.
 -/
 
 open Lean Elab Tactic Meta
@@ -280,21 +279,17 @@ def run (sound : Bool)
     for c in callChunks do
       run? (← `(tactic| clear $(mkIdent c):ident))
   run? (← `(tactic| provable_type_simp))
-  let givens : Array Name :=
-    if sound then #[`hE, `hA, `h_input, `h_output]
-    else #[`hE, `hA, `hPA, `h_input, `h_output]
-  for g in givens do
-    run? (← `(tactic| simp only [circuit_norm, Placed.toEnvironment]
-      at $(mkIdent g):ident))
+  -- pass 1: normalize ONLY the rule-sources, so their equations fire on the
+  -- normalized spellings everywhere else
+  for g in [`h_input, `h_output] do
+    run? (← `(tactic| simp only [circuit_norm] at $(mkIdent g):ident))
   -- pass 2: derived hypotheses + goal, with h_input/h_output as rules
   let rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
     #[← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_input):term),
       ← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `h_output):term),
-      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm),
-      ← `(Lean.Parser.Tactic.simpLemma| Placed.toEnvironment)] ++ userLemmas
-  -- pass-2 targets: everything derived PLUS `hA` (its values must land too); only the
-  -- rule-sources and env givens stay out
-  let pass2Excluded : Array Name := #[`h_input, `h_output, `hE, `hPA]
+      ← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ userLemmas
+  -- pass-2 targets: everything except the rule-sources
+  let pass2Excluded : Array Name := #[`h_input, `h_output]
   let targets ← withMainContext do
     let mut ts : Array Name := #[]
     for decl in ← getLCtx do
