@@ -431,83 +431,37 @@ def mkUnfoldLemmas (terms : Option (Array Term)) :
     return (unfold, bridges)
   | none => pure (#[], #[])
 
-/-- The instance-argument head constants of any FOLDED elaborated-output application
-(`ElaboratedRegionCircuit.output` / `ElaboratedCircuit.output`) in the hypothesis named
-`h_output` — found as the argument whose type's head is the class itself. Empty when the
-output is already reduced (no such application remains). -/
-def foldedOutputInstances : TacticM (Array Name) := withMainContext do
-  let some decl := (← getLCtx).findFromUserName? `h_output | return #[]
-  let ty ← instantiateMVars decl.type
+/-- Canonical-instance unfold (main-Clean parity: `Clean/Utils/Tactics/CircuitProofStart.lean`
+does exactly this with the same name). A factored bundle names its standalone
+`Elaborated(Region)Circuit` instance `elaborated`; dsimp-unfolding that name exposes the
+instance literal, so the `Elaborated*.output`/`.regionCount` projections reduce to the
+EXPLICIT fields the author established once — `h_output` then arrives in the neat
+cell-record form, like `h_input` does. `dsimp` is definitional (no rewrite proof terms),
+so this adds zero kernel obligations. Silent no-op when no `elaborated` is in scope.
+
+This replaces the deleted `rescueFoldedOutput` experiment (see the leakage-audit doc):
+reduce output representations ONCE at the instance, never per parent proof site. -/
+def unfoldCanonicalElaborated : TacticM Unit := do
+  -- Resolve the bare name and keep ONLY genuine instance definitions: the unqualified
+  -- `elaborated` also resolves to the bundle FIELD projections
+  -- (`FormalCircuit.elaborated` / `FormalRegionCircuit.elaborated`), and dsimp-unfolding
+  -- those rewrites every bundle-metadata spelling in every proof (53-error corpus
+  -- fallout when tried). An instance def's type telescopes to `Elaborated*Circuit …`;
+  -- a projection's type telescopes to a function out of the bundle structure.
+  let cands ← try resolveGlobalConst (mkIdent `elaborated) catch _ => pure []
+  let env ← getEnv
   let mut insts : Array Name := #[]
-  for (projName, className) in
-      [(``ElaboratedRegionCircuit.output, ``ElaboratedRegionCircuit),
-       (``ElaboratedCircuit.output, ``ElaboratedCircuit)] do
-    let some app := ty.find? (fun sub =>
-      sub.isApp && sub.getAppFn.constName? == some projName) | continue
-    for a in app.getAppArgs do
-      let aTy ← instantiateMVars (← inferType a)
-      if aTy.getAppFn.constName? == some className then
-        if let some n := a.getAppFn.constName? then
-          if !insts.contains n then
-            insts := insts.push n
-        break
-  return insts
-
-/-- Rescue pass at `h_output`, for bundles whose composed output the main `circuit_norm`
-peel leaves FOLDED — the elaborated-instance argument is an opaque constant, so neither
-the explicit `output` field nor the structural default is visible to any rule. The fix is
-to unfold that instance constant itself: projection-of-literal reduction then yields the
-instance's explicit reduced output where one exists (e.g. FullWidth's `innerOutCells`),
-and a default `{}` instance exposes `(main input).output self`, which the structural
-`output_bind`/`output_pure` stepping shrinks by beta-dropping discarded loop innards
-wholesale (e.g. Sinsemilla Chain's loop-composed bundle). The follow-up `circuit_norm`
-pass lands the residue on cell atoms. Ordering matters twice over: running this only
-AFTER the main peel (and only when the output is still folded) keeps every already-green
-landing shape byte-identical; and running the full `circuit_norm` set directly over the
-UN-shrunk structural term instead is a six-figure whnf burn — the sum of the
-(individually capped) eval-simproc attempts over every subterm position is unbounded
-(Chain's bundle was the reproducer).
-
-PARKED (not wired into `run`): enabling this on the corpus showed the two regimes
-conflict — proofs in the abstracted-outputs regime (`x_gen_out_*`/`h_gen_out_*` from
-`abstract_outputs`/`subcircuit_rw`, e.g. the BaseFieldElem inner families) consume
-outputs through the gen-out equations and BREAK when `h_output` reduces under them,
-and on 85-window loop families the structural pass itself is an 85-unroll that can
-blow a proof's heartbeat budget. The Chain-class beneficiaries are 4 manual-ladder
-sites; wiring this in needs a per-proof opt-in (cps argument) or a cost-bounded
-reduction. Kept for that follow-up, with the working `unfold`-of-instance mechanics. -/
-def rescueFoldedOutput (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
-    TacticM Unit := do
-  let insts ← foldedOutputInstances
+  for c in cands do
+    if (← getProjectionFnInfo? c).isSome then continue
+    let some ci := env.find? c | continue
+    let isInst ← Meta.forallTelescopeReducing ci.type fun _ body =>
+      pure (body.getAppFn.constName? == some ``ElaboratedRegionCircuit ||
+            body.getAppFn.constName? == some ``ElaboratedCircuit)
+    if isInst then insts := insts.push c
   if insts.isEmpty then return
-  -- Abstracted-outputs regime: when `abstract_outputs` has already opaqued child-call
-  -- outputs (`x_gen_out_*` vars in scope), the proof consumes outputs through the
-  -- `h_gen_out_*` equations — reducing `h_output` structurally here would fight that
-  -- abstraction (the BaseFieldElem inner bundles' hand ladders sit in this regime).
-  -- The rescue is for the OTHER regime: loop-composed bundles with no abstractable
-  -- child outputs (Sinsemilla Chain's slot children are Unit-output).
-  let hasGenOuts ← withMainContext do
-    pure <| (← getLCtx).any fun d =>
-      !d.isImplementationDetail && d.userName.getString!.startsWith "x_gen_out"
-  if hasGenOuts then return
-  let instIds := insts.map mkIdent
-  bestEffort do
-    -- `unfold` (not a simp citation — instance-def occurrences don't rewrite via simp
-    -- equations), then the NARROW structural + leaf output set. NO `output_eq` (it
-    -- would fire before the instance unfold and send an explicit-output instance down
-    -- the structural route — the wrong direction; that regressed FullWidth's inner
-    -- proofs when tried), and NO full `circuit_norm` re-land (running the eval
-    -- simprocs over the composed-output residue hands the kernel an uncapped defeq —
-    -- the >8-min wall hang in the Chain scratch audit). The narrow set beta-drops
-    -- discarded loop innards and lands h_output on the cell record; the gadget's own
-    -- literal-eval steps continue from there.
-    evalTactic (← `(tactic| unfold $[$instIds:ident]* at $(mkIdent `h_output):ident))
-    evalTactic (← `(tactic|
-      simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-        Circuit.output_bind, Circuit.output_pure, output_assignRegion,
-        output_assignAdvice, output_assignFixed, output_copyAdvice,
-        FormalRegionCircuit.output_call, FormalCircuit.output_call',
-        $unfold,*] at $(mkIdent `h_output):ident))
+  let ids := insts.map mkIdent
+  bestEffort <| evalTactic (← `(tactic|
+    dsimp +instances only [$[$ids:ident],*] at *))
 
 /-- Step (b): `simp only [circuit_norm, <unfold list>]` at the direction's established constraints
 target set. Soundness peels `hc`, `h_output` and the goal (the constraints hyp, the output-value
@@ -754,6 +708,7 @@ def run (terms : Option (Array Term)) : TacticM Unit := do
   -- helpers) unfold automatically; capture them while the goal still shows `main`.
   let autos ← autoUnfoldsOfMain
   rwIffAndIntro d
+  unfoldCanonicalElaborated
   let (unfold, bridges) ← mkUnfoldLemmas terms
   let unfold := unfold ++ (← autos.filterMapM fun n => do
     if unfold.any (fun t => t.raw.isIdent && t.raw.getId == n) then return none

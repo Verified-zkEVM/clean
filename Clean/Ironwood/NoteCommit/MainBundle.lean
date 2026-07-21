@@ -1977,7 +1977,7 @@ def circuit (G : Generators) (R : FixedBase)
   name := "NoteCommit"
   configure := pure
   synthesize := synth G R Q hQ
-  elaborated := elaborated G R Q hQ
+  elaborated := elaboratedFolded G R Q hQ
   Witness := fun _ => Vector Fp 85 × Fq
   extract := rcmExtract
   EnvAssumptions := EnvAssumptions G

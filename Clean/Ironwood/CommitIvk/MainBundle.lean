@@ -322,7 +322,7 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
           (i₀ + 7)) : Point Fp).x := by
     -- the output walk crosses the commit call (opaque): land the walk on the folded call's
     -- output projection (defeq), open it with `output_call`, then the rest is metadata defeq
-    rw [← h_output, ElaboratedCircuit.output_eq,
+    rw [← h_output,
       show (synth G R Q hQ cfg
           { ak := input_var_ak, nk := input_var_nk, rivk := input_var_rivk }).output i₀
         = ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output

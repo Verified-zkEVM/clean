@@ -984,15 +984,12 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     · have h := hGate.2.2.2
       rw [hOn, hOeo] at h
       linear_combination h
-  · -- output ties: the four witnessed address points
-    exact (congrArg AddressPoints.gdOld h_output).symm.trans
-      (by with_unfolding_all rfl)
-  · exact (congrArg AddressPoints.pkdOld h_output).symm.trans
-      (by with_unfolding_all rfl)
-  · exact (congrArg AddressPoints.gdNew h_output).symm.trans
-      (by with_unfolding_all rfl)
-  · exact (congrArg AddressPoints.pkdNew h_output).symm.trans
-      (by with_unfolding_all rfl)
+  -- output ties: the four witnessed address points — the canonical `elaborated` unfold
+  -- lands h_output destructured to exactly these advice-atom pairs
+  · exact ⟨h_output.1.1.symm, h_output.1.2.symm⟩
+  · exact ⟨h_output.2.1.1.symm, h_output.2.1.2.symm⟩
+  · exact ⟨h_output.2.2.1.1.symm, h_output.2.2.1.2.symm⟩
+  · exact ⟨h_output.2.2.2.1.symm, h_output.2.2.2.2.symm⟩
 
 open Sinsemilla.Merkle.CalculateRoot (pathNode) in
 /-- Honest-prover preconditions: well-formed witness points, 3-bit windows for the five

@@ -512,8 +512,12 @@ open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
-instance). -/
-instance elaborated (G : Generators) (R : FixedBase)
+instance). NOT named `elaborated`: the canonical name is reserved for instances whose fields
+are in REDUCED form (cps dsimp-unfolds it — see `unfoldCanonicalElaborated`); this one's
+`output` is the folded `(synth …).output`, and unfolding that in consumers bloats their
+kernel certificates (NoteCommit/MainBundle hit kernel timeouts when tried). Rename back
+once the metadata substrate derives the reduced fields. -/
+instance elaboratedFolded (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     ElaboratedCircuit Fp Inputs Point (synth G R Q hQ cfg) where
   output input i := (synth G R Q hQ cfg input).output i

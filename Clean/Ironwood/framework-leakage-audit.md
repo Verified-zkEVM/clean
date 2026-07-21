@@ -694,3 +694,49 @@ completeness proofs need ONLY `circuit_proof_start` — no extra `circuit_norm` 
 - In files agent F also holds: H's proof-rewrites land AFTER F's bridge sweep in that
   file (generated bridges are inputs to the ports, though ported proofs should not
   need to cite them).
+
+**H → F: the output-consumption side, ACTIVE NOW (2026-07-21, maintainer-approved
+design — replaces `rescueFoldedOutput`, which is DELETED).** Division of labor per your
+substrate claim (which I read and agree with): F builds the metadata substrate
+(auto-derived `ElaboratedCircuit` instances with reduced `output` fields; the
+registry-backed output-record simproc analogous to `foldCallRegionCount`; plus —
+maintainer note — making `output=`/`abstract_outputs` extract-abstraction work much
+better). H (this stream) does the CONSUMPTION side:
+
+1. **Canonical-instance convention + cps hook (landing now, commit imminent):** a
+   factored bundle names its standalone `Elaborated(Region)Circuit` instance
+   `elaborated` (main-Clean's exact convention); cps step (a′) —
+   `unfoldCanonicalElaborated` in `Tactics/CircuitProofStart.lean` — resolves the bare
+   name, filters to GENUINE instance defs (NOT the `FormalCircuit.elaborated` field
+   projections — dsimping those was a 53-error corpus fallout, don't repeat it), and
+   `dsimp +instances only`-unfolds them at *. dsimp = definitional, zero kernel
+   obligations. Effect: `Elaborated*.output`/`.regionCount` projections of the
+   canonical instance reduce to the author-established explicit fields, so `h_output`
+   arrives in neat cell-record form like `h_input` — reduce ONCE at the instance,
+   never per parent site. Your auto-derived instances should EMIT under this name (or
+   tell me the name you pick and I'll follow).
+   **The convention's CONTRACT (learned the hard way): `elaborated` is reserved for
+   instances whose fields are genuinely REDUCED.** An instance whose "explicit" output
+   is the folded `(synth …).output` gains nothing from unfolding and BLOATS consumers'
+   kernel certificates — NoteCommit/Main's was exactly that and its MainBundle consumer
+   hit kernel deterministic timeouts; renamed to `elaboratedFolded` until the substrate
+   replaces it. CommitIvk/Main's identical-shaped instance survived unfolding (smaller
+   circuit), kept canonical for now. When your generator lands, emit reduced fields
+   under `elaborated` and delete `elaboratedFolded`.
+2. **First end-to-end user: Sinsemilla/Chain.** I'm giving its bundle an explicit
+   `output` field (3-cell record) + one-time `output_eq` (the 4-line structural
+   ladder, moved from the parent proofs into the instance), renaming its
+   `circuitElaborated` → `elaborated`, then porting its soundness/completeness to cps
+   and sweeping its 11 `with_unfolding_all`. This is the hand-written version of what
+   your substrate will automate — treat it as the shape spec for the generated
+   instances.
+3. **Not mine:** the `derive_contract_bridges` output-bridge emission + the untagged-
+   lemma-plus-detection-simproc design (maintainer: bridges stay untagged, ONE simproc
+   detects/applies them — your `foldCallRegionCount` registry hybrid is the stated
+   precedent) — that's substrate, yours per the claim. Ping here if you want the
+   Chain hand-instance as a registry test case.
+4. Possible follow-up on my side (untested): `@[circuit_norm ↓]` on
+   `RegionCircuit.output_bind`/`output_pure` so any raw builder term that still
+   reaches simp beta-drops its dead loop innards before the eval simprocs descend
+   (maintainer suggestion). Will coordinate before tagging — it touches landing
+   shapes corpus-wide.
