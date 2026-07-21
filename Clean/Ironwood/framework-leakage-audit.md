@@ -572,8 +572,20 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   conditional rescueFoldedOutput hook (currently fails closed; kernel-cost audit next).
 - IN FLIGHT (agent): the small files — CommitDomain 6, NoteCommit/Main 5, HashToPoint 3,
   Ecc/Basic 3, Poseidon 4, CommitIvk/Main 2, DeriveNullifier 1, HashPiece 1.
-- REMAINING after that: Bundle 155 (F-held), NoteCommit/MainBundle 27, Merkle 26,
-  CommitIvk/MainBundle 19, Chain 11 (waits on the kernel-safe h_output ladder).
+- Third wave (Merkle/CommitIvk-Bundle): Merkle 26 -> 7, CommitIvk/Bundle 1 -> 0.
+- **FINAL RESIDUE + root causes** (with_unfolding_all in Ironwood):
+  * Action/Bundle 155 — F-held (eval-cell class; the eval_toIRScalar machinery is in).
+  * NoteCommit/MainBundle 27 + CommitIvk/MainBundle 19 + Merkle 7 — ONE root cause,
+    the audit's item 1c precisely: `Eval.eval` is `@[irreducible]`
+    (Clean/Circuit/CircuitType.lean:29) and the concrete piece-width list `ns :=
+    [24,0,24,5,0,24,24,0]` is a non-reducible def, so fields-vector eval bridges
+    (`eval env #v[.of …][Fin i] …`, pieces-projection commutes) hold only at `.all`
+    transparency — `eval_fields_cells`/`getElem_eval_fields_cells`/`eval_cells_eq_eval`
+    cannot unify the instance at simp transparency. Framework-stream fix: concrete-α
+    pre-instantiated eval lemmas, or reducibility for the width lists + a
+    `getElem`-keyed fields-eval rule.
+  * Chain 11 — the parked rescueFoldedOutput ladder (see step 4 notes).
+  * Sinsemilla/Chain manual output ladders (4 sites) — same parked item.
 
 **Agent F progress (July 21):**
 - **The Category 1/2 sweep is COMPLETE** (commits 6498ca16, ed692bda, 17a73285,
