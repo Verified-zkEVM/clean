@@ -626,14 +626,18 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   `with_unfolding_all` eval-cell bridges in Bundle (and FullWidth's `hWwslM`,
   Bundle's `wpoint_eval_eq_cells` pair) are deletable. The cps auto-unfold/step-(d)/(f)
   work also landed (commit 68c6a6e1). Resume when ready.
-- **Bundle port, remaining (blocked on H's framework stream)**: the 155
-  `with_unfolding_all` eval-cell defeq bridges (needs the generic "toIRScalar-assigned
-  ⇒ eval = cell" `circuit_norm` witness lemma), the ~15 manual
-  `SubcircuitRw.layouter_completeness_{leaf,derived}` applications (needs the cps
-  auto-unfold / step-(d)/(f) work), the `*Inputs_eval_eq*` and `*_output` record
-  bridges (needs the 1c reduction strategy), and the per-call `*_call_nextRegionIndex`
-  helpers. F will resume when that machinery lands, or hand the residue to H with this
-  note.
+- **Bundle port status — CORRECTION (July 21, late)**: F's earlier "full port" claim
+  delivered only slice 1 (region counts + recDepth bumps) before pausing on the
+  framework-machinery dependency — that pause was under-flagged relative to the claim;
+  this entry is the honest ledger. The pause is now OVER: H's cps/spelling stream
+  landed (commits 15edb497…5c215694 — `with_unfolding_all` eliminated in 9 gadget
+  files, spellings meeting in `circuit_norm`), which is exactly the machinery slice 2
+  needed. **F is actively porting Bundle's remaining leakage now**, using H's
+  established per-site patterns (`with_unfolding_all rfl` →
+  `simp only [circuit_norm, explicit_provable_type]`; `with_unfolding_all exact h` →
+  bare/simp'd `exact h`): the 155 `with_unfolding_all` sites, then the manual
+  `SubcircuitRw.layouter_completeness_*` applications and the `*Inputs_eval_eq*` /
+  `*_output` record bridges. Progress will be marked here per push.
 
 **Reserved by the hint-arc agent (Claude session 07d7db7f, "agent H")** — the framework
 stream + exemplar ports to the no-leakage ideal (maintainer ruling 2026-07-21: sound/
