@@ -152,7 +152,6 @@ def circuit : FormalCircuit Fp
     rw [Circuit.output_bind] at h_output
     obtain ⟨h_copies, hC⟩ := hC
     simp only [circuit_norm] at h_copies
-    obtain ⟨hCEx, hCEy⟩ := h_copies
     -- terminal `pure pkDOld`
     rw [Circuit.operations_pure, constraints_nil] at hC
     rw [Circuit.output_pure] at h_output
@@ -160,35 +159,20 @@ def circuit : FormalCircuit Fp
     -- consume the child chunks: contracts over the atoms
     subcircuit_rw at h_call_mul
     subcircuit_rw at h_call_pkd
-    -- copy-equation landing (to be SUPPLIED by v2: constrainEqual facts at value level)
-    have hvx : (eval (⟨place, env⟩ : Placed Environment Fp) derived : Value Point Fp).x
-        = (eval (⟨place, env⟩ : Placed Environment Fp) pkDOld : Value Point Fp).x := by
-      simp only [circuit_norm, explicit_provable_type]
-      exact hCEx
-    have hvy : (eval (⟨place, env⟩ : Placed Environment Fp) derived : Value Point Fp).y
-        = (eval (⟨place, env⟩ : Placed Environment Fp) pkDOld : Value Point Fp).y := by
-      simp only [circuit_norm, explicit_provable_type]
-      exact hCEy
     -- value landing on component atoms
-    obtain ⟨input_var_ivk, input_var_gd, input_var_pkd⟩ := input_var
-    obtain ⟨input_ivk, input_gd, input_pkd⟩ := input
-    simp only [circuit_norm] at h_input hA h_derived h_pkd h_call_mul h_call_pkd ⊢
-    obtain ⟨h_ivk, h_gd, h_pkd_in⟩ := h_input
-    -- (h) value replacement: land every input-var eval on its value name
-    simp only [h_ivk, h_gd, h_pkd_in] at h_call_mul h_call_pkd
+    provable_type_simp
+    simp only [h_input, h_output] at h_call_mul h_call_pkd h_copies ⊢
+    -- simp using user-supplied lemma list
+    simp only [
+      circuit_norm,
+      Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_spec_eq, Ecc.Mul.mul_envAssumptions_eq,
+      Ecc.Mul.Assumptions, Ecc.Mul.Spec,
+      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq, Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
+      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq
+    ] at h_call_mul h_call_pkd h_copies
     -- ═══ USER half ═══
-    -- the mul child: the derived point is `[ivk] g_d_old`
-    have hM := h_call_mul hE (by rw [Ecc.Mul.mul_assumptions_eq]; exact hA)
-    rw [Ecc.Mul.mul_spec_eq] at hM
-    simp only [Ecc.Mul.Spec] at hM
-    -- the witness child: the explicit `pk_d_old` is on-curve
-    have hP := h_call_pkd trivial trivial
-    rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq] at hP
-    rw [← h_output]
-    refine ⟨hP, ?_⟩
-    -- the copy constraints pin the output to the derived point, componentwise
-    rw [← hM]
-    exact (Halo2.Ironwood.Point.ext_coords (Prod.ext hvx hvy)).symm
+    -- because our framework did the right thing throughout, a trivially composing parent is trivial to sound
+    simp_all
 
   completeness := by
     -- ═══ v2-manual FRAMEWORK prefix ═══
