@@ -467,7 +467,16 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     if isCall then callChunks := callChunks.push chunkName
     else
       run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
-      regionIdx := regionIdx + 1
+      -- content-free terminal chunks vanish, like the peel's (an output-only step —
+      -- HashPieceRound's terminal `readState` — opens to `True`)
+      let cleared ← withMainContext do
+        let some decl := (← getLCtx).findFromUserName? chunkName | return true
+        if (← instantiateMVars decl.type).isConstOf ``True then return true
+        return false
+      if cleared then
+        run? (← `(tactic| clear $(mkIdent chunkName):ident))
+      else
+        regionIdx := regionIdx + 1
   | none =>
     if region then
       if sound then
