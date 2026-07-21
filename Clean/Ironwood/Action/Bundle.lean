@@ -258,11 +258,12 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   -- value decompositions; the commitment clauses alone can't bound the field elements)
   wit.vOld.val < 2 ^ 64 ∧ wit.vNew.val < 2 ^ 64 ∧
   -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
-  (∃ m : ℕ, m < 2 ^ 64 ∧ wit.magnitude = (m : Fp) ∧
+  (wit.magnitude.val < 2 ^ 64 ∧
     ((wit.sign = 1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = ((m : Fq) • B.valueCommitV : Point Fp) + (wit.rcv.2 • B.valueCommitR : Point Fp)) ∨
+        = ((wit.magnitude.val : Fq) • B.valueCommitV : Point Fp)
+          + (wit.rcv.2 • B.valueCommitR : Point Fp)) ∨
      (wit.sign = -1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
-        = (((-(m : Fq)) : Fq) • B.valueCommitV : Point Fp)
+        = (((-(wit.magnitude.val : Fq)) : Fq) • B.valueCommitV : Point Fp)
           + (wit.rcv.2 • B.valueCommitR : Point Fp)))) ∧
   -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
   wit.nfOld = ((wit.cmOld +
@@ -879,7 +880,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · -- `v_new < 2^64` (new NoteCommit's value decomposition)
     with_unfolding_all exact hNCnS.1
   · -- value-commitment integrity
-    obtain ⟨m, hm, hmag, hdisj⟩ := hVCS
+    obtain ⟨hm, hdisj⟩ := hVCS
     have hP : ({ x := env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
                  y := env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ) } : Point Fp)
         = eval (⟨place, env⟩ : Placed Environment Fp)
@@ -895,7 +896,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
             env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ)) = _
       rw [← hIcvx, ← hIcvy]
       with_unfolding_all rfl
-    refine ⟨m, hm, by with_unfolding_all exact hmag, ?_⟩
+    refine ⟨by with_unfolding_all exact hm, ?_⟩
     rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
     · with_unfolding_all exact Or.inl ⟨by exact hs, by rw [hP]; exact he⟩
     · with_unfolding_all exact Or.inr ⟨by exact hs, by rw [hP]; exact he⟩
@@ -1418,23 +1419,12 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
            (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvY⟩ := by
       rw [ValueCommit.circuit_spec_eq, ValueCommit.circuit_extract_eq, vcInputs_eval_eq] at hVCder
-      obtain ⟨m, hm, hmag, hdisj⟩ := hVCder
-      have hmval : (extract cfg input_var i₀
-          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude.val = m := by
-        rw [show (extract cfg input_var i₀
-            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).magnitude
-          = ((m : ℕ) : Fp) from by exact hmag]
-        exact ZMod.val_natCast_of_lt (lt_trans hm
-          (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
+      obtain ⟨hm, hdisj⟩ := hVCder
       rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
       · rw [he]
-        have h2 := hCv1 (by exact hs)
-        rw [hmval] at h2
-        exact h2.symm
+        with_unfolding_all exact (hCv1 (by exact hs)).symm
       · rw [he]
-        have h2 := hCv2 (by exact hs)
-        rw [hmval] at h2
-        exact h2.symm
+        with_unfolding_all exact (hCv2 (by exact hs)).symm
     have hSAval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         ((SpendAuthority.circuit B.spendAuthG).output
           (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)

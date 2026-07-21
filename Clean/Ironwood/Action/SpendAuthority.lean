@@ -71,7 +71,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     Ecc.MulFixed.FullWidth.fwExtract fcfg i₀ env
 
   Spec input output wit :=
-    output = (wit.2 • G : Point Fp) + input.akP
+    output = wit.2 • G + input.akP
 
   soundness := by
     circuit_proof_start2 [
