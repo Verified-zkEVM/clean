@@ -31,7 +31,7 @@ product on a two-region circuit:
 namespace Halo2.Ironwood.Fixtures.Test.LayoutAdd
 
 open Ironwood (Fp)
-open Ironwood.Ecc.Add (Config add)
+open Ironwood.Ecc.Add (Config add addFormal)
 open Halo2.Ironwood.Fixtures.Layout
 
 /-- The harness config plus the columns `synthesize` needs for witnessing — the same
