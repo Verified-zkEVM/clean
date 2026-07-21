@@ -103,34 +103,111 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   ProverAssumptions _ _ _ := True
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨hFw, hAdd⟩ := hc
+    -- ═══ v2-manual FRAMEWORK prefix (atomic binds; to become one `circuit_proof_start2`) ═══
+    -- (a) intro config + enter the value-landed iff form
+    rintro ⟨fcfg, ecfg⟩
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_input h_output hE hA hC
+    -- (b) definitional cleanup: iota-reduce the destructured-config matches everywhere,
+    -- then land `h_output` on the raw do-block output via the instance's own `output_eq`
+    -- law (reduce-once: the instance is the single place output spellings live)
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- (c) bind 1 [alphaCommitment ← (FullWidth.circuit G).call fcfg input_var.alpha]:
+    --     split off the chunk, canonicalize the output spelling, then mint the atom
+    --     BEFORE the continuation opens
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_fw, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_ac : (Ecc.MulFixed.FullWidth.circuit G).output fcfg input_var.alpha i₀
+      = alphaCommitment
+    intro hC h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
+    -- (d) bind 2 [rk ← (add.toFormal …).call ecfg {p := alphaCommitment, q := input_var.akP}]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_add, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_rk : (Ecc.Add.add.toFormal "complete point addition").output ecfg
+        { p := alphaCommitment, q := input_var.akP } (i₀ + 2) = rk
+    intro hC h_output
+    -- (e) terminal `pure rk`: the op list ends; `h_output` lands on the atom
+    rw [Circuit.operations_pure, constraints_nil] at hC
+    rw [Circuit.output_pure] at h_output
+    clear hC
+    -- (f) consume the child chunks: contracts over the atoms
+    subcircuit_rw at h_call_fw
+    subcircuit_rw at h_call_add
+    -- (g) land values: destructure the input var AND value into component atoms; the
+    -- literal-record simprocs then split `h_input` into per-component `eval env <var>`
+    -- equations, and every eval stays WHOLE (cell spellings never materialize)
+    obtain ⟨input_var_alpha, input_var_akP⟩ := input_var
+    obtain ⟨input_alpha, input_akP⟩ := input
+    simp only [circuit_norm] at h_input hA h_ac h_rk h_call_fw h_call_add ⊢
+    obtain ⟨h_alpha, h_akP⟩ := h_input
+    -- ═══ USER half ═══
     -- the full-width child: the commitment is the extracted scalar times `G`
-    have hAl := hFw
-      (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact _hE)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
+    have hAl := h_call_fw hE trivial
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hAl
-    -- the complete addition: `rk = alpha_commitment + ak_P` (both summands valid)
-    have hAddS := hAdd trivial (by
+    -- the complete addition: `rk = alphaCommitment + ak_P` (both summands valid)
+    have hAddS := h_call_add trivial (by
       rw [Ecc.Add.toFormal_assumptions_eq]
-      exact ⟨by rw [hAl]; exact G.smul_valid _, hA⟩)
+      exact ⟨by rw [hAl]; exact G.smul_valid _, by rw [h_akP]; exact hA⟩)
     rw [Ecc.Add.toFormal_spec_eq] at hAddS
-    rw [hAddS.2, hAl]
+    rw [← h_output, hAddS.2, hAl, h_akP]
 
   completeness := by
-    circuit_proof_start
+    -- ═══ v2-manual FRAMEWORK prefix (atomic binds; to become one `circuit_proof_start2`) ═══
+    -- (a) intro config + enter the value-landed iff form
+    rintro ⟨fcfg, ecfg⟩
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_input h_output hW hE hA hPA
+    obtain ⟨place, env⟩ := env
+    -- (b) definitional cleanup + land `h_output` on the raw do-block output
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- (c) bind 1: split hW and the goal's constraints side, canonicalize, mint the atom
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_fw, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_ac : (Ecc.MulFixed.FullWidth.circuit G).output fcfg input_var.alpha i₀
+      = alphaCommitment
+    intro hW h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
+    -- (d) bind 2: same
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_add, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_rk : (Ecc.Add.add.toFormal "complete point addition").output ecfg
+        { p := alphaCommitment, q := input_var.akP } (i₀ + 2) = rk
+    intro hW h_output
+    -- (e) terminal `pure rk`
+    rw [Circuit.operations_pure, constraints_nil]
+    rw [Circuit.output_pure] at h_output
+    clear hW
+    -- (f) strengthen the goal chunks + emit the children's completeness implications
+    -- (`h_spec_k`, premised on the witness chunks in context)
+    subcircuit_rw
+    -- (g) land values on component atoms
+    obtain ⟨input_var_alpha, input_var_akP⟩ := input_var
+    obtain ⟨input_alpha, input_akP⟩ := input
+    simp only [circuit_norm] at h_input hA h_ac h_rk hW_fw hW_add h_spec_0 h_spec_1 ⊢
+    -- ═══ USER half ═══
     -- the full-width child's contract: the commitment is the extracted scalar times `G`
-    have hAl := (h_spec_0
-      (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact _hE)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
-      (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial)).1
+    have hAl := (h_spec_0 hE trivial trivial).1
     rw [Ecc.MulFixed.FullWidth.circuit_spec_eq,
       Ecc.MulFixed.FullWidth.circuit_extract_eq] at hAl
-    refine ⟨⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact _hE,
-      by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
-      by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
-      trivial, ?_, trivial⟩
+    refine ⟨⟨hE, trivial, trivial⟩, trivial, ?_, trivial⟩
     rw [Ecc.Add.toFormal_assumptions_eq]
     exact ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
 
