@@ -68,10 +68,10 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
       ((do
         let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
           { x0 := input.nk, x1 := input.rho }
-        let scalar ← (AddChip.add.toFormal "c = a + b").call acfg
+        let scalar ← AddChip.addFormal.call acfg
           { a := hash, b := input.psi }
         let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-        let nf ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
+        let nf ← Ecc.Add.addFormal.call ecfg
           { p := input.cm, q := product }
         pure nf.x : Circuit Fp (Var field Fp)).operations i)
       = 9 := by
@@ -99,10 +99,10 @@ def circuit (K : FixedBase) : FormalCircuit Fp
   synthesize := fun (pcfg, acfg, bcfg, ecfg) input => do
     let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
       { x0 := input.nk, x1 := input.rho }
-    let scalar ← (AddChip.add.toFormal "c = a + b").call acfg
+    let scalar ← AddChip.addFormal.call acfg
       { a := hash, b := input.psi }
     let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-    let nf ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
+    let nf ← Ecc.Add.addFormal.call ecfg
       { p := input.cm, q := product }
     pure nf.x
 
@@ -111,10 +111,10 @@ def circuit (K : FixedBase) : FormalCircuit Fp
         ((do
           let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
             { x0 := input.nk, x1 := input.rho }
-          let scalar ← (AddChip.add.toFormal "c = a + b").call acfg
+          let scalar ← AddChip.addFormal.call acfg
             { a := hash, b := input.psi }
           let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-          let nf ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
+          let nf ← Ecc.Add.addFormal.call ecfg
             { p := input.cm, q := product }
           pure nf.x : Circuit Fp (Var field Fp)).output i)
       regionCount := fun _ => 9
@@ -141,7 +141,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     rw [Poseidon.hash_spec_eq] at hH
     -- the add-chip child: the scalar cell is `hash + psi`
     have hS := hScalar trivial trivial
-    rw [AddChip.add_toFormal_spec_eq] at hS
+    rw [AddChip.addFormal_spec_eq] at hS
     -- the fixed-base mul child: the product is `[scalar] K`
     have hB := hBfe (by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE)
       (by rw [Ecc.MulFixed.BaseFieldElem.circuit_assumptions_eq]; trivial)
@@ -149,9 +149,9 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     simp only [Ecc.MulFixed.BaseFieldElem.Spec] at hB
     -- the complete addition: `nf = cm + product` (both summands valid)
     have hAddS := hAdd trivial (by
-      rw [Ecc.Add.toFormal_assumptions_eq]
+      rw [Ecc.Add.addFormal_assumptions_eq]
       exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩)
-    rw [Ecc.Add.toFormal_spec_eq] at hAddS
+    rw [Ecc.Add.addFormal_spec_eq] at hAddS
     have hSum : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
         : Value Point Fp)
         = ({ x := input_cm_x, y := input_cm_y } : Point Fp)
@@ -174,7 +174,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     refine ⟨⟨trivial, trivial, trivial⟩, ⟨trivial, trivial, trivial⟩,
       ⟨by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE, trivial, trivial⟩,
       trivial, ?_, trivial⟩
-    rw [Ecc.Add.toFormal_assumptions_eq]
+    rw [Ecc.Add.addFormal_assumptions_eq]
     exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩
 
 derive_contract_bridges circuit (K : FixedBase) := circuit K

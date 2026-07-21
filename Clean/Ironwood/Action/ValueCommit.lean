@@ -57,7 +57,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     let commitment ← (Ecc.MulFixed.Short.circuit V).call scfg
       ⟨input.magnitude, input.sign⟩
     let blind ← (Ecc.MulFixed.FullWidth.circuit R).call fcfg input.rcv
-    let cv ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
+    let cv ← Ecc.Add.addFormal.call ecfg
       { p := commitment, q := blind }
     pure cv
 
@@ -91,7 +91,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
+      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
     -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨m, hm_lt, hmag, hcases⟩ := h_call_commitment hSEnv
@@ -113,7 +113,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
+      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
     -- ═══ USER half ═══
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨hmag, hsign⟩ := hPA

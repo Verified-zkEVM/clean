@@ -344,18 +344,18 @@ def EnvAssumptions (G : Generators) (cfg : Config)
 read from the witnessed output cells. From the region's `ExtendsWitnesses` alone (no gate
 constraints), so it is available to discharge the value-level `ProverAssumptions` of the
 `WitnessPoint` children against the Action bundle's extract-level facts. -/
-private theorem wpoint_eval_eq_cells (name : String)
+private theorem wpoint_eval_eq_cells
     (c : Ecc.WitnessPoint.Config) (p : Var (Unconstrained Point) Fp)
     (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (hw : Halo2.ExtendsWitnesses place env
-      (((Ecc.WitnessPoint.point.toFormal name).call c p).operations i) i) :
+      ((Ecc.WitnessPoint.pointFormal.call c p).operations i) i) :
     eval (⟨place, env⟩ : Placed ProverEnvironment Fp) p
       = (⟨eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of i 0 c.x : Var field Fp),
           eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of i 0 c.y : Var field Fp)⟩ : Point Fp) := by
   rw [FormalCircuit.call_operations] at hw
-  simp only [Ecc.WitnessPoint.point, FormalRegionCircuit.toFormal, circuit_norm,
+  simp only [Ecc.WitnessPoint.pointFormal, Ecc.WitnessPoint.point, FormalRegionCircuit.toFormal, circuit_norm,
     RegionOperation.extendsWitness_assignAdvice] at hw
   apply Halo2.Ironwood.Point.ext_coords
   have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
@@ -367,18 +367,18 @@ private theorem wpoint_eval_eq_cells (name : String)
   simp only [Halo2.Ironwood.Point.coords, hx, hy, hw.1, hw.2]
   simp only [circuit_norm, explicit_provable_type]
 
-private theorem wpointNonId_eval_eq_cells (name : String)
+private theorem wpointNonId_eval_eq_cells
     (c : Ecc.WitnessPoint.Config) (p : Var (Unconstrained Point) Fp)
     (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (hw : Halo2.ExtendsWitnesses place env
-      (((Ecc.WitnessPoint.pointNonId.toFormal name).call c p).operations i) i) :
+      ((Ecc.WitnessPoint.pointNonIdFormal.call c p).operations i) i) :
     eval (⟨place, env⟩ : Placed ProverEnvironment Fp) p
       = (⟨eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of i 0 c.x : Var field Fp),
           eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of i 0 c.y : Var field Fp)⟩ : Point Fp) := by
   rw [FormalCircuit.call_operations] at hw
-  simp only [Ecc.WitnessPoint.pointNonId, FormalRegionCircuit.toFormal, circuit_norm,
+  simp only [Ecc.WitnessPoint.pointNonIdFormal, Ecc.WitnessPoint.pointNonId, FormalRegionCircuit.toFormal, circuit_norm,
     RegionOperation.extendsWitness_assignAdvice] at hw
   apply Halo2.Ironwood.Point.ext_coords
   have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
@@ -390,15 +390,15 @@ private theorem wpointNonId_eval_eq_cells (name : String)
   simp only [Halo2.Ironwood.Point.coords, hx, hy, hw.1, hw.2]
   simp only [circuit_norm, explicit_provable_type]
 
-private theorem wpoint_output (name : String) (c : Ecc.WitnessPoint.Config)
+private theorem wpoint_output (c : Ecc.WitnessPoint.Config)
     (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
-    (Ecc.WitnessPoint.point.toFormal name).output c inp i
+    Ecc.WitnessPoint.pointFormal.output c inp i
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
 
-private theorem wpointNonId_output (name : String) (c : Ecc.WitnessPoint.Config)
+private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
     (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
-    (Ecc.WitnessPoint.pointNonId.toFormal name).output c inp i
+    Ecc.WitnessPoint.pointNonIdFormal.output c inp i
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
 
@@ -410,8 +410,7 @@ private theorem ai_output
         : Var Point Fp) := by
   change ((do
     let derived ← Ecc.Mul.mul.call c.1 { alpha := inp.ivk, base := inp.gDOld }
-    let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").call c.2 inp.pkDOld
+    let pkDOld ← Ecc.WitnessPoint.pointNonIdFormal.call c.2 inp.pkDOld
     assignRegion "constrain equal" (do
       constrainEqual derived.x pkDOld.x
       constrainEqual derived.y pkDOld.y)
@@ -576,9 +575,9 @@ theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
     nextRegionIndex_loadTable, output_assignRegion, nextRegionIndex_assignRegion,
     output_assignAdvice, FormalCircuit.output_call',
     FormalCircuit.nextRegionIndex_call']
-  rw [wpointNonId_output, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-    wpointNonId_output, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
-    wpoint_output, Ecc.WitnessPoint.point_toFormal_call_regionCount]
+  rw [wpointNonId_output, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
+    wpointNonId_output, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
+    wpoint_output, Ecc.WitnessPoint.pointFormal_call_regionCount]
 
 theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
@@ -673,7 +672,7 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     output_assignRegion, nextRegionIndex_assignRegion,
     nextRegionIndex_constrainInstance, output_assignAdvice, FormalCircuit.output_call',
     FormalCircuit.nextRegionIndex_call']
-  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonId_toFormal_call_regionCount,
+  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
     wpointNonId_output, wpointNonId_output]
 
 instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
@@ -721,15 +720,15 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   subcircuit_rw at hCm
   subcircuit_rw at hGd
   subcircuit_rw at hAk
-  have hCmS := hCm (by rw [Ecc.WitnessPoint.point_toFormal_envAssumptions_eq]; trivial)
-    (by rw [Ecc.WitnessPoint.point_toFormal_assumptions_eq]; trivial)
-  rw [Ecc.WitnessPoint.point_toFormal_spec_eq, wpoint_output] at hCmS
-  have hGdS := hGd (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
-    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hGdS
-  have hAkS := hAk (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
-    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hAkS
+  have hCmS := hCm (by rw [Ecc.WitnessPoint.pointFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointFormal_spec_eq, wpoint_output] at hCmS
+  have hGdS := hGd (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hGdS
+  have hAkS := hAk (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hAkS
   clear hCm hGd hAk
   simp only [Point.eval_eq, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
@@ -841,12 +840,12 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
           simp only [circuit_norm, explicit_provable_type]; exact hAIS.1)
   rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoS
   rw [ncInputs_eval_eq] at hNCoS
-  have hGdNS := hGdN (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
-    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hGdNS
-  have hPkNS := hPkN (by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial)
-    (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial)
-  rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq, wpointNonId_output] at hPkNS
+  have hGdNS := hGdN (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hGdNS
+  have hPkNS := hPkN (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hPkNS
   have hNCnS := hNCn (by exact ⟨hT2, hFw, hTL, hDist⟩)
     (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
         refine ⟨?_, ?_⟩
@@ -1053,13 +1052,13 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
     (hT : Halo2.Constraints place env
       ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀)
     (h1 : Constraints place env
-      (((Ecc.WitnessPoint.point.toFormal "witness point").call
+      ((Ecc.WitnessPoint.pointFormal.call
         cfg.eccConfig.witnessPoint W.cmOld).operations (i₀ + 2)) (i₀ + 2))
     (h2 : Constraints place env
-      (((Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+      ((Ecc.WitnessPoint.pointNonIdFormal.call
         cfg.eccConfig.witnessPoint W.gdOld).operations (i₀ + 3)) (i₀ + 3))
     (h3 : Constraints place env
-      (((Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+      ((Ecc.WitnessPoint.pointNonIdFormal.call
         cfg.eccConfig.witnessPoint W.akP).operations (i₀ + 4)) (i₀ + 4)) :
     Constraints place env ((synthWitness G W cfg).operations i₀) i₀ := by
   simp only [Sinsemilla.load, circuit_norm] at hT
@@ -1109,31 +1108,31 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       input_var_merkleSib, input_var_merkleSwap⟩ cfg i₀ place _
     (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (Ecc.WitnessPoint.point.toFormal "witness point")
+      Ecc.WitnessPoint.pointFormal
       cfg.eccConfig.witnessPoint (i₀ + 2) place env _ hWcm
-      ⟨(by rw [Ecc.WitnessPoint.point_toFormal_envAssumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.point_toFormal_assumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.point_toFormal_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.pointFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.Valid _
-           rw [wpoint_eval_eq_cells _ _ _ _ _ _ hWcm]
+           rw [wpoint_eval_eq_cells _ _ _ _ _ hWcm]
            exact hVcm)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+      Ecc.WitnessPoint.pointNonIdFormal
       cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd
-      ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
-           rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgd]
+           rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWgd]
            exact hVgd)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+      Ecc.WitnessPoint.pointNonIdFormal
       cfg.eccConfig.witnessPoint (i₀ + 4) place env _ hWak
-      ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
-       (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
+      ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
            show Halo2.Ironwood.Point.OnCurve _
-           rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWak]
+           rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWak]
            exact hVak)⟩
   · -- ── stages B and C ──
     simp only [synthWitness_output, synthWitness_nextRegionIndex,
@@ -1640,7 +1639,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                -- the honest `pk_d_old` hint equals the cells the AddressIntegrity witness
                -- point assigns (region `i₀+301`), bridging it to the extract-level facts
                have hAiPkW : Halo2.ExtendsWitnesses place env
-                   (((Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+                   ((Ecc.WitnessPoint.pointNonIdFormal.call
                      cfg.eccConfig.witnessPoint input_var.pkDOld).operations (i₀ + 301))
                      (i₀ + 301) := by
                  have h := hWai
@@ -1652,7 +1651,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                    Ecc.Mul.mul_call_regionCount, Nat.add_assoc, Nat.reduceAdd,
                    and_true] at h
                  exact h.2.1
-               rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hAiPkW]
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hAiPkW]
                refine ⟨?_, ?_⟩
                · exact hVpk
                · have h := hPkd
@@ -1686,22 +1685,22 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         · with_unfolding_all exact congrArg Point.x hNCoval
         · with_unfolding_all exact congrArg Point.y hNCoval
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+          Ecc.WitnessPoint.pointNonIdFormal
           cfg.eccConfig.witnessPoint (i₀ + 347) place env _ hWgdn
-          ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
-           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
-           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
+          ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
-               rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWgdn]
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWgdn]
                exact hVgdn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-          (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point")
+          Ecc.WitnessPoint.pointNonIdFormal
           cfg.eccConfig.witnessPoint (i₀ + 348) place env _ hWpkn
-          ⟨(by rw [Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]; trivial),
-           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq]; trivial),
-           (by rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
+          ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
                show Halo2.Ironwood.Point.OnCurve _
-               rw [wpointNonId_eval_eq_cells _ _ _ _ _ _ hWpkn]
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWpkn]
                exact hVpkn)⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR B.noteQ

@@ -107,7 +107,7 @@ private theorem commit_regionCount
         let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
         let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
           { pieces := input.pieces }
-        let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
+        let result ← Ecc.Add.addFormal.call acfg
           { p := hashOut.point, q := blindOut }
         pure result).operations i)
       = 4 := by
@@ -127,11 +127,11 @@ private theorem commit_regionCount
       simp only [Operations.regionCount]]
   rw [show ∀ (j : RegionIndex) (inp : Var Ecc.Add.Inputs Fp),
       Operations.regionCount
-        (((Ecc.Add.add.toFormal "complete point addition").call acfg inp).operations j) = 1
+        ((Ecc.Add.addFormal.call acfg inp).operations j) = 1
     from fun j inp => by
       rw [FormalCircuit.call_operations]
       simp only [Circuit.operations]
-      rw [show ((Ecc.Add.add.toFormal "complete point addition").synthesize acfg inp j).2.1
+      rw [show (Ecc.Add.addFormal.synthesize acfg inp j).2.1
           = ((assignRegion "complete point addition"
               (Ecc.Add.add.synthesize acfg 0 inp)).operations j) from rfl,
         operations_assignRegion]
@@ -157,7 +157,7 @@ def commit (G : Generators) (ns : List ℕ)
     let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
     let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
       { pieces := input.pieces }
-    let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
+    let result ← Ecc.Add.addFormal.call acfg
       { p := hashOut.point, q := blindOut }
     pure result
 
@@ -167,7 +167,7 @@ def commit (G : Generators) (ns : List ℕ)
           let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
           let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
             { pieces := input.pieces }
-          let result ← (Ecc.Add.add.toFormal "complete point addition").call acfg
+          let result ← Ecc.Add.addFormal.call acfg
             { p := hashOut.point, q := blindOut }
           pure result : Circuit Fp (Var Point Fp)).output i)
       regionCount := fun _ => 4

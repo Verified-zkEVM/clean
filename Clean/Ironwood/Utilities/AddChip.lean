@@ -88,6 +88,11 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     circuit_proof_start [addGate, readCell]
     exact ⟨by ring, h_output.symm⟩
 
-derive_contract_bridges add_toFormal (name : String) := add.toFormal name
+/-- The layouter-level add: `add` in its own region, named once here as in the Rust
+chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
+def addFormal :=
+  add.toFormal "c = a + b"
+
+derive_contract_bridges addFormal := addFormal
 
 end Halo2.Ironwood.AddChip

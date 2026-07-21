@@ -59,8 +59,7 @@ def circuit : FormalCircuit Fp
 
   synthesize := fun (mcfg, wcfg) input => do
     let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
-    let pkDOld ← (Ecc.WitnessPoint.pointNonId.toFormal
-      "witness non-identity point").call wcfg input.pkDOld
+    let pkDOld ← Ecc.WitnessPoint.pointNonIdFormal.call wcfg input.pkDOld
     assignRegion "constrain equal" (do
       constrainEqual derived.x pkDOld.x
       constrainEqual derived.y pkDOld.y)
@@ -89,9 +88,9 @@ def circuit : FormalCircuit Fp
     circuit_proof_start2 [
       Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_spec_eq, Ecc.Mul.mul_envAssumptions_eq,
       Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq]
+      Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]
     -- ═══ USER half ═══
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially sound
@@ -102,11 +101,11 @@ def circuit : FormalCircuit Fp
       Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_proverAssumptions_eq,
       Ecc.Mul.mul_envAssumptions_eq, Ecc.Mul.mul_proverSpec_eq, Ecc.Mul.mul_spec_eq,
       Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonId_toFormal_assumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_spec_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_envAssumptions_eq,
-      Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq]
+      Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq,
+      Ecc.WitnessPoint.pointNonIdFormal_proverSpec_eq]
     -- ═══ USER half ═══
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially complete

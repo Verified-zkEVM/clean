@@ -398,7 +398,12 @@ def add : FormalRegionCircuit Fp
     rw [ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
-derive_contract_bridges toFormal (name : String) := add.toFormal name
+/-- The layouter-level complete addition: `add` in its own region, named once here as
+in the Rust chip (`ecc/chip.rs`: `assign_region(|| "complete point addition", …)`). -/
+def addFormal :=
+  add.toFormal "complete point addition"
+
+derive_contract_bridges addFormal := addFormal
 
 end Add
 
