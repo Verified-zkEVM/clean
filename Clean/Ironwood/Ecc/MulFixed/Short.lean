@@ -1081,10 +1081,6 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     obtain ⟨hAddC, hCpSign, hCpZ21, hBool, hSignSq, _hYchk, hNeg⟩ := hMsw
     obtain ⟨hIMag, hISign⟩ := h_input
     -- ── region 1: the inner windowed mul ──
-    change RegionOperations.Constraints env.place i₀ env.env
-      (((fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
-        innerRegion B.toData cfg 0 input.alpha)
-        ⟨input_var_magnitude⟩).operations i₀) at hInner
     have hIS := short_inner_soundness B cfg 0 i₀ env ⟨input_var_magnitude⟩ _hE trivial
       hInner
     rw [ElaboratedRegionCircuit.output_eq] at hIS
@@ -1201,10 +1197,6 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     obtain ⟨hWInner, hWMsw⟩ := hwit
     obtain ⟨hIMag, hISign⟩ := h_input
     obtain ⟨hMag64, hSignPM⟩ := hPA
-    change RegionOperations.ExtendsWitnesses env.place i₀ env.env
-      (((fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
-        innerRegion B.toData cfg 0 input.alpha)
-        ⟨input_var_magnitude⟩).operations i₀) at hWInner
     have hIC := short_inner_completeness B cfg 0 i₀ env ⟨input_var_magnitude⟩ hWInner
       _hE trivial (by
         show ZMod.val (eval env (⟨input_var_magnitude⟩ :

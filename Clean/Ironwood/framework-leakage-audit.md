@@ -422,11 +422,24 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
    the guard is porous and cps dies instead of degrading. FIX APPLIED (same batch): a
    `bestEffort` wrapper for cps's guarded steps — `Core.withCatchingRuntimeEx` +
    saved-state restore, catching depth/stack (rethrow heartbeats: those mean the whole
-   decl's budget is gone and continuing would only move the error). With it, plain cps
-   completes on FullWidth's outer proofs (step (f) no-ops away) — the manual intro
-   prefixes there can then collapse. The DEEP fix (later, port work): bundle
+   decl's budget is gone and continuing would only move the error). With it (commit 88443ab8;
+   the catch must sit at the CoreM layer — TacticM-level monadic catch ALSO rethrows
+   runtime exceptions), plain cps completes on FullWidth's outer SOUNDNESS: manual
+   prefix + peel + the whole h_output ladder deleted, dead subcircuit_rw dropped.
+   FullWidth COMPLETENESS still holds its manual prefix — its continuation consumes
+   hWAdd via a hand `region_completeness_leaf_placed` ladder that predates the
+   engine-emitted `h_spec_*` facts; porting that ladder is the remaining FullWidth
+   item. The DEEP fix (later, port work): bundle
    `innerRegion` as a `FormalRegionCircuit` per CLAUDE.md's proof-boundary rule; then
    abstract_outputs opaques its output spelling and step (f) fires for real.
+   **cps peel granularity gap (H, from the Short/BaseFieldElem replay):** cps's step-(b)
+   peel is one MULTI-target simp (`at hc h_output ⊢`) under one bestEffort — when a
+   single target's unfold deep-recurses (Short's `mswRegion`-style regions that inline
+   gate assertions around a child call), the guard rolls back ALL targets, leaving the
+   whole state folded; the files' manual per-target peels then stay load-bearing. FIX
+   (queued): split peelConstraints into per-target bestEffort calls so one pathological
+   target degrades alone. FullWidth-port replay on Short/BaseFieldElem netted only the
+   dead `change` pre-betas (8 lines) until that lands.
 
 5. **Drop the now-unneeded `set_option maxRecDepth` bumps** in the four bundle files
    (Category 6) and confirm they build at default depth. This is the *verification* that
