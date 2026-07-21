@@ -404,7 +404,16 @@ def autoUnfoldsOfMain (excludeLoops : Bool := false) : TacticM (Array Name) := w
     -- own induction lemmas stated over the folded spelling; unfolding it in the peel
     -- would sever that interface. Detect recursion by the compiled value's constants.
     let isRecursive := di.value.foldConsts false fun n acc => acc ||
-      n == c || n.isInternal && (n.getPrefix == c) ||
+      n == c ||
+      -- c-prefixed internal auxiliaries signal recursion (`X.rec`, `X.brecOn`,
+      -- eq-compiler internals) — EXCEPT, for the v2 peel (`excludeLoops`), extracted
+      -- proof terms (`X._proof_N`, e.g. a getElem bound in the do-block), which any
+      -- def may carry (found on Short/BFE, whose `synthesize` never unfolded). v1
+      -- keeps the conservative gate: its corpus landed against the old unfold set,
+      -- and v1 files are being retired rather than re-stabilized.
+      (n.isInternal && n.getPrefix == c &&
+        !(excludeLoops &&
+          (match n with | .str _ s => s.startsWith "_proof" | _ => false))) ||
       n == ``WellFounded.fix || (`brecOn).isSuffixOf n || (`rec).isSuffixOf n
     if isRecursive then continue
     out := out.push c

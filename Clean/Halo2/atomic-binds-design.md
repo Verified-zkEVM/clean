@@ -136,6 +136,31 @@ would pay the reduction once at the instance instead of per consumer — the sam
 reduce-once argument as the output field. Would make the hand
 `*_extract_eq`/`*_extract_cells` bridge family deletable.
 
+**Engine-time goal normalization (completeness):** the goal is simped ONCE
+(`circuit_norm` + count folds + the caller's unfolds) after all peels and before the
+goal-mode engine. Every peel is done, so nothing remains for the peel `rw`s to match
+and the full pass is safe; it surfaces every call chunk in the canonical spelling the
+walker matches — calls embedded in mid-chain or terminal raw regions
+(`assignRegion "…" (X.call …)`), and calls under region-level bind spines (BFE's
+`witnessCheck13`). This replaced three earlier per-site goal-opens (terminal,
+mid-chain, spine) that each fixed one spelling gap.
+
+**Two-pass witness/output matching (`subcircuit_rw !`, cps2 only):** with the bang
+flag — which cps2 always passes — the engine's witness locator and the
+output-abstraction lookup run a full `.reducible` pass first (identical spellings —
+the common case, including 85-round loop families), and a relaxed
+default-transparency pass only when nothing matched reducibly. Child/config compares
+stay fail-fast at `.reducible` in both passes (a mismatched candidate must not
+δ-unfold bundle literals), and the relaxed output pass only compares equations for
+the same child bundle (syntactic prefilter). Rationale: the pre-engine goal simp
+respels call inputs/indexes on the goal side only, so genuine matches can diverge by
+normalization — but an unconditional default-transparency compare storms on loop
+families (85 same-child candidates × deep failing defeq — rediscovered the hard way
+on Short's inner soundness). Plain `subcircuit_rw` (v1 callers) keeps the strict
+single-pass semantics: v1 proofs rely on previously-unmatched chunks staying raw,
+and v1 is being retired rather than re-stabilized (the same scoping applies to the
+`_proof_N` exemption in the v2 auto-unfold gate).
+
 **Terminal real steps:** a do-chain may end in a real step instead of `pure`
 (`do let inn ← …; assignRegion "…" (X.call …)` — FullWidth's shape). The terminal
 chunk is that step's chunk and must be kept and registered (`out_spec` for a bare
