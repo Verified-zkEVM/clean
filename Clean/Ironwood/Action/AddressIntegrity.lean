@@ -119,85 +119,156 @@ def circuit : FormalCircuit Fp
         = ((show Fp from input.ivk).val • (show Point Fp from input.gDOld) : Point Fp)
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨hMul, hPkd, hCEx, hCEy⟩ := hc
+    -- ═══ v2-manual FRAMEWORK prefix (atomic binds; to become one `circuit_proof_start2`) ═══
+    rintro ⟨mcfg, wcfg⟩
+    rw [FormalCircuit.soundness_iff]
+    intro i₀ env input_var input output h_input h_output hE hA hC
+    obtain ⟨place, env⟩ := env
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- bind 1 [derived ← mul.call mcfg { alpha := ivk, base := gDOld }]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_mul, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_derived : Ecc.Mul.mul.output mcfg
+      { alpha := input_var.ivk, base := input_var.gDOld } i₀ = derived
+    intro hC h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
+    -- bind 2 [pkDOld ← (pointNonId.toFormal …).call wcfg input.pkDOld]
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_call_pkd, hC⟩ := hC
+    simp only [FormalCircuit.output_call'] at hC h_output
+    revert hC h_output
+    generalize h_pkd : (Ecc.WitnessPoint.pointNonId.toFormal
+      "witness non-identity point").output wcfg input_var.pkDOld (i₀ + 4) = pkDOld
+    intro hC h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hC h_output
+    -- bind 3 [_ ← assignRegion "constrain equal" …] — unit-valued, no atom; open the raw
+    -- region to its two copy equations (cell reads OF THE ATOMS' cells)
+    rw [Circuit.operations_bind, constraints_append] at hC
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨h_copies, hC⟩ := hC
+    simp only [circuit_norm] at h_copies
+    obtain ⟨hCEx, hCEy⟩ := h_copies
+    -- terminal `pure pkDOld`
+    rw [Circuit.operations_pure, constraints_nil] at hC
+    rw [Circuit.output_pure] at h_output
+    clear hC
+    -- consume the child chunks: contracts over the atoms
+    subcircuit_rw at h_call_mul
+    subcircuit_rw at h_call_pkd
+    -- copy-equation landing (to be SUPPLIED by v2: constrainEqual facts at value level)
+    have hvx : (eval (⟨place, env⟩ : Placed Environment Fp) derived : Value Point Fp).x
+        = (eval (⟨place, env⟩ : Placed Environment Fp) pkDOld : Value Point Fp).x := by
+      simp only [circuit_norm, explicit_provable_type]
+      exact hCEx
+    have hvy : (eval (⟨place, env⟩ : Placed Environment Fp) derived : Value Point Fp).y
+        = (eval (⟨place, env⟩ : Placed Environment Fp) pkDOld : Value Point Fp).y := by
+      simp only [circuit_norm, explicit_provable_type]
+      exact hCEy
+    -- value landing on component atoms
+    obtain ⟨input_var_ivk, input_var_gd, input_var_pkd⟩ := input_var
+    obtain ⟨input_ivk, input_gd, input_pkd⟩ := input
+    simp only [circuit_norm] at h_input hA h_derived h_pkd h_call_mul h_call_pkd ⊢
+    obtain ⟨h_ivk, h_gd, h_pkd_in⟩ := h_input
+    -- (h) value replacement: land every input-var eval on its value name
+    simp only [h_ivk, h_gd, h_pkd_in] at h_call_mul h_call_pkd
+    -- ═══ USER half ═══
     -- the mul child: the derived point is `[ivk] g_d_old`
-    have hM := hMul (by rw [Ecc.Mul.mul_envAssumptions_eq]; exact _hE)
-      (by rw [Ecc.Mul.mul_assumptions_eq]; exact hA)
+    have hM := h_call_mul hE (by rw [Ecc.Mul.mul_assumptions_eq]; exact hA)
     rw [Ecc.Mul.mul_spec_eq] at hM
     simp only [Ecc.Mul.Spec] at hM
     -- the witness child: the explicit `pk_d_old` is on-curve
-    have hP := hPkd trivial trivial
+    have hP := h_call_pkd trivial trivial
     rw [Ecc.WitnessPoint.pointNonId_toFormal_spec_eq] at hP
+    rw [← h_output]
     refine ⟨hP, ?_⟩
     -- the copy constraints pin the output to the derived point, componentwise
-    have hox : output_x
-        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
-            : Value Point Fp).x :=
-      (congrArg Halo2.Ironwood.Point.x h_output).symm.trans
-        ((by simp only [circuit_norm, explicit_provable_type] : (eval (⟨place, env⟩ : Placed Environment Fp)
-            x_gen_out_0 : Value Point Fp).x = _).trans
-          (hCEx.symm.trans (by simp only [circuit_norm, explicit_provable_type])))
-    have hoy : output_y
-        = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
-            : Value Point Fp).y :=
-      (congrArg Halo2.Ironwood.Point.y h_output).symm.trans
-        ((by simp only [circuit_norm, explicit_provable_type] : (eval (⟨place, env⟩ : Placed Environment Fp)
-            x_gen_out_0 : Value Point Fp).y = _).trans
-          (hCEy.symm.trans (by simp only [circuit_norm, explicit_provable_type])))
-    rw [← hM, hox, hoy]
+    rw [← hM]
+    exact (Halo2.Ironwood.Point.ext_coords (Prod.ext hvx hvy)).symm
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨hIvkE, ⟨hGxE, hGyE⟩, hPkdE⟩ := h_input
-    -- `g_d_old`'s on-curve assumption, respelled at the input cells
-    have hAE := hA
-    rw [← hGxE, ← hGyE] at hAE
+    -- ═══ v2-manual FRAMEWORK prefix ═══
+    rintro ⟨mcfg, wcfg⟩
+    rw [FormalCircuit.completeness_iff]
+    intro i₀ env input_var input output h_input h_output hW hE hA hPA
+    obtain ⟨place, env⟩ := env
+    dsimp only [] at *
+    simp only [ElaboratedCircuit.output_eq] at h_output
+    -- bind 1
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_mul, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_derived : Ecc.Mul.mul.output mcfg
+      { alpha := input_var.ivk, base := input_var.gDOld } i₀ = derived
+    intro hW h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
+    -- bind 2
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_pkd, hW⟩ := hW
+    simp only [FormalCircuit.output_call'] at hW h_output ⊢
+    revert hW h_output
+    generalize h_pkd : (Ecc.WitnessPoint.pointNonId.toFormal
+      "witness non-identity point").output wcfg input_var.pkDOld (i₀ + 4) = pkDOld
+    intro hW h_output
+    simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount] at hW h_output ⊢
+    -- bind 3 (raw copy-constraint region)
+    rw [Circuit.operations_bind, extendsWitnesses_append] at hW
+    rw [Circuit.operations_bind, constraints_append]
+    rw [Circuit.output_bind] at h_output
+    obtain ⟨hW_copies, hW⟩ := hW
+    -- terminal `pure pkDOld`
+    rw [Circuit.operations_pure, constraints_nil]
+    rw [Circuit.output_pure] at h_output
+    clear hW
+    -- strengthen the goal chunks + emit the children's completeness implications
+    subcircuit_rw
+    -- value landing on component atoms
+    obtain ⟨input_var_ivk, input_var_gd, input_var_pkd⟩ := input_var
+    obtain ⟨input_ivk, input_gd, input_pkd⟩ := input
+    simp only [circuit_norm] at h_input hA hPA h_derived h_pkd h_spec_0 h_spec_1 ⊢
+    obtain ⟨h_ivk, h_gd, h_pkd_in⟩ := h_input
+    -- (h′) prover/verifier eval coincidence for the hint-free point var (v2 TODO: this
+    -- should be a circuit_norm law; cell reads already coincide via toEnvironment_get)
+    have h_gdV : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_gd
+        : Value Point Fp) = input_gd := by
+      rw [← h_gd]
+      simp only [circuit_norm, explicit_provable_type]
+    -- (h) value replacement: land every input-var eval on its value name
+    simp only [h_ivk, h_gdV, h_pkd_in] at h_spec_0 h_spec_1 hA ⊢
+    -- ═══ USER half ═══
+    -- `g_d_old`'s on-curve assumption, respelled at the input value
     -- the mul child's honest contract: the derived point is `[ivk] g_d_old`
-    have hM := (h_spec_0 (by rw [Ecc.Mul.mul_envAssumptions_eq]; exact _hE)
-      (by rw [Ecc.Mul.mul_assumptions_eq]; exact hAE)
-      (by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hAE)).1
+    have hM := (h_spec_0 hE (by rw [Ecc.Mul.mul_assumptions_eq]; exact hA)
+      (by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hA)).1
     rw [Ecc.Mul.mul_spec_eq] at hM
     simp only [Ecc.Mul.Spec] at hM
-    -- the mul contract at the input cell values
-    rw [hIvkE, hGxE, hGyE] at hM
     -- the witness child's honest contract: the assigned cells carry the hint's value
     have hPS := (h_spec_1 trivial trivial (by
-      rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq, hPkdE]
+      rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
       exact hPA.1)).2
-    rw [Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq, hPkdE] at hPS
-    -- land the child's output on its concrete cells
-    rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output] at hPS
-    refine ⟨⟨by rw [Ecc.Mul.mul_envAssumptions_eq]; exact _hE,
-      by rw [Ecc.Mul.mul_assumptions_eq]; exact hA,
-      by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hA⟩,
-      ⟨trivial, trivial, ?_⟩, ?_, ?_⟩
+    rw [Ecc.WitnessPoint.pointNonId_toFormal_proverSpec_eq] at hPS
+    have hDP := hM.trans (hPA.2.symm.trans hPS.symm)
+    refine ⟨⟨hE, by rw [Ecc.Mul.mul_assumptions_eq]; exact hA,
+      by rw [Ecc.Mul.mul_proverAssumptions_eq]; exact hA⟩, ⟨trivial, trivial, ?_⟩, ?_, ?_⟩
     · rw [Ecc.WitnessPoint.pointNonId_toFormal_proverAssumptions_eq]
       exact hPA.1
     · -- the x-coordinate copy constraint in the honest environment
-      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
-      exact ((by simp only [circuit_norm, explicit_provable_type] :
-          env.get x_gen_out_0.x.cell.column
-            ((place x_gen_out_0.x.cell.regionIndex
-              + x_gen_out_0.x.cell.rowOffset : ℕ) : ℤ)
-            = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0
-                : Value Point Fp).x).trans
-        ((congrArg Halo2.Ironwood.Point.x hM).trans
-          ((congrArg Halo2.Ironwood.Point.x hPA.2).symm.trans
-            ((congrArg Halo2.Ironwood.Point.x hPS.symm).trans
-              (by simp only [circuit_norm])))))
+      have h := congrArg Halo2.Ironwood.Point.x hDP
+      simp only [circuit_norm, explicit_provable_type] at h
+      exact h
     · -- the y-coordinate copy constraint in the honest environment
-      rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
-      exact ((by simp only [circuit_norm, explicit_provable_type] :
-          env.get x_gen_out_0.y.cell.column
-            ((place x_gen_out_0.y.cell.regionIndex
-              + x_gen_out_0.y.cell.rowOffset : ℕ) : ℤ)
-            = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) x_gen_out_0
-                : Value Point Fp).y).trans
-        ((congrArg Halo2.Ironwood.Point.y hM).trans
-          ((congrArg Halo2.Ironwood.Point.y hPA.2).symm.trans
-            ((congrArg Halo2.Ironwood.Point.y hPS.symm).trans
-              (by simp only [circuit_norm])))))
+      have h := congrArg Halo2.Ironwood.Point.y hDP
+      simp only [circuit_norm, explicit_provable_type] at h
+      exact h
 
 derive_contract_bridges circuit := circuit
 
