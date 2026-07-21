@@ -52,13 +52,13 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   name := "spend authority"
   configure := pure
 
-  synthesize := fun (fcfg, ecfg) input => do
+  synthesize | (fcfg, ecfg), input => do
     let alphaCommitment ← (Ecc.MulFixed.FullWidth.circuit G).call fcfg input.alpha
     let rk ← Ecc.Add.addFormal.call ecfg
       { p := alphaCommitment, q := input.akP }
     pure rk
 
-  elaborated := fun _ => { regionCount := fun _ => 3 }
+  elaborated _ := { regionCount _ := 3 }
 
   EnvAssumptions := fun (fcfg, _) env =>
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env
@@ -66,14 +66,12 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   -- `ak_P` is already assigned as a valid Pallas point before the spend-authority block
   Assumptions input := input.akP.Valid
 
-  Witness := fun F => Vector F 85 × Fq
+  Witness F := Vector F 85 × Fq
   extract := fun (fcfg, _) _ i₀ env =>
     Ecc.MulFixed.FullWidth.fwExtract fcfg i₀ env
 
   Spec input output wit :=
     output = (wit.2 • G : Point Fp) + input.akP
-
-  ProverAssumptions _ _ _ := True
 
   soundness := by
     circuit_proof_start2 [
@@ -81,7 +79,6 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
       Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
-    -- ═══ USER half ═══
     have hAl := h_call_alphaCommitment hE
     have hAddS := h_call_rk trivial ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
     simp_all
@@ -92,7 +89,6 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
       Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
-    -- ═══ USER half ═══
     have hAl := (h_spec_0 hE).1
     exact ⟨hE, trivial, ⟨by rw [hAl]; exact G.smul_valid _, hA⟩, trivial⟩
 

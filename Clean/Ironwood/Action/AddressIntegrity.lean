@@ -57,7 +57,7 @@ def circuit : FormalCircuit Fp
   name := "address integrity"
   configure := pure
 
-  synthesize := fun (mcfg, wcfg) input => do
+  synthesize | (mcfg, wcfg), input => do
     let derived ← Ecc.Mul.mul.call mcfg { alpha := input.ivk, base := input.gDOld }
     let pkDOld ← Ecc.WitnessPoint.pointNonIdFormal.call wcfg input.pkDOld
     assignRegion "constrain equal" (do
@@ -65,24 +65,24 @@ def circuit : FormalCircuit Fp
       constrainEqual derived.y pkDOld.y)
     pure pkDOld
 
-  elaborated := fun _ => { regionCount := fun _ => 6 }
+  elaborated _ := { regionCount _ := 6 }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 
   -- `g_d_old` is witnessed by `NonIdentityPoint::new` before this block
   Assumptions input := input.gDOld.OnCurve
 
-  Spec input output _ :=
-    output.OnCurve ∧ output = (show Fp from input.ivk).val • (show Point Fp from input.gDOld)
+  Spec
+  | ⟨(ivk : Fp), (gDOld : Point Fp), _⟩, output, _ =>
+    output.OnCurve ∧ output = ivk.val • gDOld
 
   -- honest proving requires the explicit `pk_d_old` hint value to be the derived
   -- address — otherwise the equality constraint is unsatisfiable — and a genuine curve
   -- point (protocol-side, `ivk ≠ 0`: the derived address is never the identity; the
   -- non-identity witness gate is unsatisfiable otherwise)
-  ProverAssumptions input _ _ :=
-    (show Point Fp from input.pkDOld).OnCurve ∧
-      (show Point Fp from input.pkDOld)
-        = ((show Fp from input.ivk).val • (show Point Fp from input.gDOld) : Point Fp)
+  ProverAssumptions
+  | ⟨(ivk : Fp), (gDOld : Point Fp), (pkDOld : Point Fp)⟩, _, _ =>
+    pkDOld.OnCurve ∧ pkDOld = ivk.val • gDOld
 
   soundness := by
     circuit_proof_start2 [
@@ -91,7 +91,6 @@ def circuit : FormalCircuit Fp
       Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq,
       Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
       Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]
-    -- ═══ USER half ═══
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially sound
     simp_all
@@ -106,7 +105,6 @@ def circuit : FormalCircuit Fp
       Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
       Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq,
       Ecc.WitnessPoint.pointNonIdFormal_proverSpec_eq]
-    -- ═══ USER half ═══
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially complete
     grind
