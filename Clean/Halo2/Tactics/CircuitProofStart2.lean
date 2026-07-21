@@ -87,11 +87,33 @@ def bindParts? (body : Expr) : Option (Expr × Expr) :=
     if args.size ≥ 2 then some (args[args.size - 2]!, args[args.size - 1]!) else none
   else none
 
-/-- The do-binder name of the bind's continuation lambda (`x` fallback). -/
-def binderNameOf (f : Expr) : Name :=
-  match f with
-  | .lam n .. => if n.isInternal then `x else n
-  | _ => `x
+/-- The do-binder name for a bind: the continuation lambda's binder, with leading
+underscores stripped (`_lp` → `lp`); for a hygienic/anonymous binder on a call bind,
+the called bundle's base name (`loop` for `(loop n w).call …`); `x` as the last
+resort. -/
+def binderNameOf (x f : Expr) : Name :=
+  let stem : Option Name :=
+    match f with
+    | .lam n .. =>
+      if n.hasMacroScopes then none
+      else
+        let s := n.toString
+        if s.startsWith "_" then
+          let t := s.dropWhile (· == '_') |>.toString
+          if t.isEmpty then none else some (Name.mkSimple t)
+        else some n
+    | _ => none
+  stem.getD (calleeName x)
+where
+  /-- The called bundle's base name: `.call`'s bundle is its third-from-last argument. -/
+  calleeName (x : Expr) : Name :=
+    let args := x.getAppArgs
+    if (x.isAppOf ``Halo2.FormalCircuit.call || x.isAppOf ``Halo2.FormalRegionCircuit.call)
+        && args.size ≥ 3 then
+      match args[args.size - 3]!.getAppFn.constName? with
+      | some c => Name.mkSimple c.getString!
+      | none => `x
+    else `x
 
 /-- Whether the continuation actually uses its binder. -/
 def binderUsed (f : Expr) : Bool :=
@@ -201,7 +223,7 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   let some (x, f) := bindParts? body | do
     trace[Halo2.circuit_proof_start2] "peel stop: not a bind {body.getAppFn}"
     return none
-  let nm := binderNameOf f
+  let nm := binderNameOf x f
   let isCall := x.isAppOf ``Halo2.FormalCircuit.call
     || x.isAppOf ``Halo2.FormalRegionCircuit.call
   -- loop-combinator steps (registry heads) are atomic raw steps: never spine-split —

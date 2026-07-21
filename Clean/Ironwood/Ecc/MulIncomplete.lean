@@ -336,7 +336,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       intro j hj
       rw [← hzs]
       simp [circuit_norm]
-    obtain ⟨bits, hchain, hfold⟩ := x_spec
+    obtain ⟨bits, hchain, hfold⟩ := lp_spec
     obtain ⟨hb3, hg13, hs3, hg23⟩ := region_6
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
     refine ⟨fun j => if j < n then bits j else kl, ?_, ?_⟩
