@@ -270,6 +270,12 @@ lemma getElem_eval_fields_cells_prover {n : ℕ} (env : Placed ProverEnvironment
     from eval_fields_cells_prover env v]
   rw [Vector.getElem_map]
 
+-- Index-form normalization for the lazy vector normal form: `Fin`-spelled getElems land
+-- on ℕ-literal getElems, and `Vector.ofFn` projections resolve pointwise — so per-index
+-- facts formed by `provable_type_simp` (and any consumer projecting a vector atom) arrive
+-- at a single uniform spelling without hand `show`-rewrites of `Fin` coercions.
+attribute [circuit_norm] Fin.getElem_fin Vector.getElem_ofFn
+
 end ProvableType
 
 /-!

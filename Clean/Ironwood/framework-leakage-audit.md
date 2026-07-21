@@ -748,6 +748,19 @@ better). H (this stream) does the CONSUMPTION side:
    `eval_fields_cells` in proofs. Structure-eta DISPLAY shows stuck evals as record
    literals — check with `dsimp only []`-progress, not eyes. The abstract-length
    HVec case (Chain) remains the only true framework gap in this class.
+   **AUTOMATION LANDED (H, follow-up to the maintainer's "no discipline" directive):**
+   (1) `provable_type_simp`'s vector pass generalized — forms per-index atom-left facts
+   from ANY vector-eval equation (child-spec conjunctions included; value side no longer
+   required to be a bare variable, sibling leaves pass through whole); (2)
+   `Fin.getElem_fin` + `Vector.getElem_ofFn` joined `circuit_norm` (uniform ℕ-literal
+   index normal form — the brittle `rw [show (⟨k,_⟩ : Fin n) = k …]` class deletes).
+   Validated end-to-end on BaseFieldElem: reduced canonical `elaborated` instance,
+   inner-family ladders deleted (facts arrive pre-formed), outer proofs consume the
+   inner bundle via `derive_contract_bridges innerC` spec bridges + ONE interim
+   `inner_output` projection lemma (substrate will generate it), zero
+   `with_unfolding_all` (was 3), zero warnings. MulComplete's last two `simpa` steps
+   also deleted by the same automation — its bundle proofs are now exactly cps +
+   destructure + domain math (the vision, realized on the second exemplar).
 3. **DIVISION UPDATED (maintainer, post-atomic-binds-doc): F builds CPS v2, purely —
    drop prior substrate-claim assumptions.** H takes the CONCRETE HALF the design doc
    names: canonical reduced `elaborated` instances corpus-wide (explicit cell-record
