@@ -708,7 +708,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
       (Spec G B) := by
   circuit_proof_start
   obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
-  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
   have hN := hc.2.2
@@ -1096,7 +1096,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       alpha := input_var_alpha, rivk := input_var_rivk, rcmOld := input_var_rcmOld,
       rcmNew := input_var_rcmNew, merkleSib := input_var_merkleSib,
       merkleSwap := input_var_merkleSwap } with hInputVarDef
-  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase,
     circuit_norm] at hwit ⊢
   have hWw := hwit.1
   have hWc := hwit.2.1
@@ -1884,11 +1884,14 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
       alpha := input_var_alpha, rivk := input_var_rivk, rcmOld := input_var_rcmOld,
       rcmNew := input_var_rcmNew, merkleSib := input_var_merkleSib,
       merkleSwap := input_var_merkleSwap } with hInputVarDef
-  simp only [mainPost, circuit_norm] at hc
+  -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
+  -- `base_output` bridge rewrites below fire.
+  subst x_gen_out_0
+  try simp only [mainPost, circuit_norm] at hc
   have hPre := hc.1
   have hX := hc.2
   clear hc
-  subcircuit_rw at hPre
+  -- the base chunk was consumed by circuit_proof_start; `hPre` is its EnvA → A → Spec implication
   have hS := hPre (by rw [base_envAssumptions_eq]; exact _hE)
     (by rw [base_assumptions_eq]; trivial)
   rw [base_spec_eq, base_extract_eq, base_output] at hS
@@ -1956,14 +1959,17 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   obtain ⟨hPA, hDca⟩ := hPA
-  simp only [mainPost, circuit_norm] at hwit ⊢
-  obtain ⟨hWpre, hWx⟩ := hwit
-  refine ⟨?_, ?_⟩
-  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (baseCircuit G B) cfg i₀ place env _ hWpre
-      ⟨(by rw [base_envAssumptions_eq]; exact _hE),
-       (by rw [base_assumptions_eq]; trivial),
-       (by rw [base_proverAssumptions_eq, base_extract_eq]; exact hPA)⟩
+  -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
+  -- `base_output` bridge rewrites below fire.
+  subst x_gen_out_0
+  try simp only [mainPost, circuit_norm] at hwit ⊢
+  obtain ⟨-, hWx⟩ := hwit
+  -- the base chunk was consumed by circuit_proof_start (completeness mode), so the goal opens
+  -- with the base child's preconditions rather than its witness constraints.
+  refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+  · rw [base_envAssumptions_eq]; exact _hE
+  · rw [base_assumptions_eq]; trivial
+  · rw [base_proverAssumptions_eq, base_extract_eq]; exact hPA
   · -- the cross-address region at the honest values
     rw [base_output]
     rw [base_output] at hWx

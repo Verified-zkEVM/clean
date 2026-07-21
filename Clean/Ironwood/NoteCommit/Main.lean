@@ -195,17 +195,17 @@ def currentRegion : Circuit Fp RegionIndex := fun i => (i, [], i)
 @[circuit_norm]
 theorem currentRegion_operations (i : RegionIndex) :
     currentRegion.operations i = [] := by
-  with_unfolding_all rfl
+  rfl
 
 @[circuit_norm]
 theorem currentRegion_nextRegionIndex (i : RegionIndex) :
     currentRegion.nextRegionIndex i = i := by
-  with_unfolding_all rfl
+  rfl
 
 @[circuit_norm]
 theorem currentRegion_output (i : RegionIndex) :
     currentRegion.output i = i := by
-  with_unfolding_all rfl
+  rfl
 
 /-- The piece/sub-piece cells stage 1 hands to the later stages. -/
 structure PieceCells where
@@ -431,7 +431,7 @@ theorem synth_regionCount (G : Generators) (R : FixedBase)
 theorem synthPieces_nextRegionIndex (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     (synthPieces cfg input).nextRegionIndex i = i + 15 := by
-  with_unfolding_all rfl
+  rfl
 
 theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -473,7 +473,7 @@ theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
           e1 := .of (i + 8) 0 cfg.lookupConfig.runningSum,
           g1 := .of (i + 11) 0 cfg.lookupConfig.runningSum,
           h0 := .of (i + 13) 0 cfg.lookupConfig.runningSum } := by
-  with_unfolding_all rfl
+  rfl
 
 theorem synthChecks_output (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)

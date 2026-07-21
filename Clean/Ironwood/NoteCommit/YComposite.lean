@@ -244,14 +244,13 @@ def circuit (wlsb : WitgenIR Fp 1) :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
-      LookupRangeCheck.witnessCheckDecomposed, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
+      LookupRangeCheck.witnessCheckDecomposed, Operations.regionCount, circuit_norm] at hc
     obtain ⟨hK0, hK2, hDec, hJp, hGate⟩ := hc
     subcircuit_rw at hK0
     subcircuit_rw at hK2
     subcircuit_rw at hDec
     subcircuit_rw at hJp
-    subcircuit_rw at hGate
     -- the four lookup children
     have hK0S := hK0 (by rw [LookupRangeCheck.shortRangeCheck_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.shortRangeCheck_assumptions_eq]
@@ -290,15 +289,15 @@ def circuit (wlsb : WitgenIR Fp 1) :
     have hD := hGSpec hb'
     simp only [YCanonicity.toDonor, Halo2.Ironwood.NoteCommit.YCanonicity.Gate.Spec]
       at hD
-    rw [h_input] at hD
     rw [← h_output]
     exact hD.1
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
-      LookupRangeCheck.witnessCheckDecomposed, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
+      LookupRangeCheck.witnessCheckDecomposed, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWk0, hWk0rc⟩, ⟨hWk2, hWk2rc⟩, ⟨hWj, hWjrc⟩, ⟨hWjp, hWjprc⟩, hWgate⟩ := hwit
     subcircuit_rw
     -- the gate region's own witnesses (the `lsb`/`k_3` cells): project the call's single

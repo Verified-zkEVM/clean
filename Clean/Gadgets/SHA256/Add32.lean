@@ -308,7 +308,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
+  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow, Witgen.letN_def, Witgen.evalSteps,
+    Witgen.NExprOver.eval, circuit_norm] at h_env_z h_env_cout
   set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num

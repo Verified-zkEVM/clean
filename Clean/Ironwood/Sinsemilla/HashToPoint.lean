@@ -166,7 +166,7 @@ private theorem out_eval_lit {k : ℕ} (env : Placed Environment Fp)
       ({ point := p, z1s := v } : Output k (AssignedCell Fp))
     = ({ point := ProvableType.eval env.place env.env p,
          z1s := ProvableType.eval (M := fields k) env.place env.env v }
-        : Value (Output k) Fp) from by with_unfolding_all rfl]
+        : Value (Output k) Fp) from by rfl]
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
 
@@ -182,7 +182,7 @@ private theorem out_eval_lit_prover {k : ℕ} (env : Placed ProverEnvironment Fp
       ({ point := p, z1s := v } : Output k (AssignedCell Fp))
     = ({ point := ProvableType.eval env.place env.env.toEnvironment p,
          z1s := ProvableType.eval (M := fields k) env.place env.env.toEnvironment v }
-        : Value (Output k) Fp) from by with_unfolding_all rfl]
+        : Value (Output k) Fp) from by rfl]
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
 
@@ -313,7 +313,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     have hxa_eval : (eval env.toEnvironment
         (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
         = env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ) := by
-      with_unfolding_all rfl
+      simp only [circuit_norm]
     have hPAchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).ProverAssumptions
         (eval env input_var)
         ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).extract cfg offset input_var self

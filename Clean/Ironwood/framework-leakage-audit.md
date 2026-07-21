@@ -385,6 +385,70 @@ the ~6 large *bundle-composition* files where the engine hits its current limits
 4. **Fix the `circuit_proof_start` / `subcircuit_rw` whnf-timeout on function-family
    bundles** (Chain:1083 gap). Removes the manual `output_eq` fallbacks in Chain / Merkle /
    HashToPoint.
+   **ROOT-CAUSED (H, 2026-07-21, scratch repro on Chain's bundle):** the Chain:1055
+   "engine wall" comment is STALE — plain cps now completes the whole prefix in ~2.5k
+   heartbeats (per-slot ∀-facts split, gate facts landed). The one remaining burn is
+   `h_output`: mixing `ElaboratedRegionCircuit.output_eq` into a full `circuit_norm`
+   simp at `h_output` times out (>9 min; diagnostics: 207k `Eq.rec`/111k `List.rec`
+   unfolds — the capped struct-eval simprocs + `Circuit.bind_def` unification retries
+   traverse the un-shrunk loop innards at every subterm, and the caps only bound each
+   attempt, not the sum). The narrow ladder (`output_eq` + `output_bind`/`output_pure`
+   + leaf `output_*`) is instant — beta drops the loop body wholesale. PARTIAL FIX APPLIED (post-d9ae53a5): cps gained a
+   CONDITIONAL rescue hook at `h_output` (`rescueFoldedOutput`, fires only when the main
+   peel leaves `Elaborated*.output` FOLDED) — but it currently FAILS CLOSED corpus-wide:
+   `simp only [<instance const>]` does not rewrite an instance-def occurrence (`unfold`
+   does). Switching it to `unfold` is pending a KERNEL-cost audit: the structural output
+   reduction elaborates instantly (verified in scratch: unfold + output_bind/pure lands
+   Chain's h_output on the small cell record in ms), but the produced rfl-steps hand the
+   kernel an uncapped defeq over the loop-composed term — a scratch decl with that route
+   + a follow-up full `circuit_norm at h_output` hangs past 8 min WALL with simp capped
+   at 100k heartbeats, i.e. the cost is in kernel checking, not elaboration. Chain's
+   manual ladder (narrow rw + targeted simps, Chain:1151) is the kernel-friendly
+   spelling; subsuming it into the rescue = the Chain port task.
+   **RESCUE PARKED (H, end of second wave):** wiring the working unfold-of-instance
+   rescue into `run` (tried at two pipeline positions) conflicts with the
+   abstracted-outputs regime — proofs consuming outputs via `x_gen_out_*`/`h_gen_out_*`
+   (BaseFieldElem inner families) break when h_output reduces under them, and on
+   85-window loop families the structural pass is itself an 85-unroll that blows
+   heartbeat budgets (BFE:848). The mechanics stay in `rescueFoldedOutput` (unwired)
+   with the full analysis; next design: per-proof opt-in via a cps argument, or a
+   cost-bounded reduction. The 4 Chain/HashToPoint manual ladders stay for now.
+   Designs REJECTED en
+   route (both regressed green files before the conditional fail-closed form): an
+   unconditional structural pre-pass (changed 4 files' destructure shapes) and an
+   `output_eq`-first rescue (sends explicit-output instances down the structural route,
+   broke the MulFixed trio's `change` ladders).
+    Expected fallout: the manual `output_eq` ladders in Chain (1151, 1465) and
+   HashToPoint (265, 346) go dead → delete; `hPS`/`hIS`-named ladders are untouched.
+   **FullWidth outer-peel ALSO root-caused (H, same session, scratch repro):** the
+   "cps deep-recurses on the 85-window synthesize" comment is imprecise — steps (a)–(e′)
+   all complete in ~1.5k heartbeats (innerRegion's `seal` holds through the peel; the
+   auto-unfold's equation for it never fires). The killer is step (f) rowFactChaining's
+   `simp only [h_input, h_output] at hc ⊢`: matching h_output's LHS (which spells
+   `(innerRegion …).output i₀` inside the add-call record) forces isDefEq through the
+   sealed 85-window body — >512 recursion depth (Prod.rec nest). The step IS
+   `try`-guarded, but Lean's tactic `try` RETHROWS runtime exceptions (maxRecDepth), so
+   the guard is porous and cps dies instead of degrading. FIX APPLIED (same batch): a
+   `bestEffort` wrapper for cps's guarded steps — `Core.withCatchingRuntimeEx` +
+   saved-state restore, catching depth/stack (rethrow heartbeats: those mean the whole
+   decl's budget is gone and continuing would only move the error). With it (commit 88443ab8;
+   the catch must sit at the CoreM layer — TacticM-level monadic catch ALSO rethrows
+   runtime exceptions), plain cps completes on FullWidth's outer SOUNDNESS: manual
+   prefix + peel + the whole h_output ladder deleted, dead subcircuit_rw dropped.
+   FullWidth COMPLETENESS still holds its manual prefix — its continuation consumes
+   hWAdd via a hand `region_completeness_leaf_placed` ladder that predates the
+   engine-emitted `h_spec_*` facts; porting that ladder is the remaining FullWidth
+   item. The DEEP fix (later, port work): bundle
+   `innerRegion` as a `FormalRegionCircuit` per CLAUDE.md's proof-boundary rule; then
+   abstract_outputs opaques its output spelling and step (f) fires for real.
+   **cps peel granularity gap (H, from the Short/BaseFieldElem replay):** cps's step-(b)
+   peel is one MULTI-target simp (`at hc h_output ⊢`) under one bestEffort — when a
+   single target's unfold deep-recurses (Short's `mswRegion`-style regions that inline
+   gate assertions around a child call), the guard rolls back ALL targets, leaving the
+   whole state folded; the files' manual per-target peels then stay load-bearing. FIX
+   (queued): split peelConstraints into per-target bestEffort calls so one pathological
+   target degrades alone. FullWidth-port replay on Short/BaseFieldElem netted only the
+   dead `change` pre-betas (8 lines) until that lands.
 
 5. **Drop the now-unneeded `set_option maxRecDepth` bumps** in the four bundle files
    (Category 6) and confirm they build at default depth. This is the *verification* that
@@ -495,6 +559,22 @@ stay untouched until #34 lands.
 
 Mark progress here per file as it lands; remove this section when the sweep is done.
 
+**Agent H progress (July 21, second wave — commits d9ae53a5..30688024):**
+- `with_unfolding_all` at ZERO in: MulComplete (was 14), Mul (10), AddressIntegrity (8),
+  MulFixed/FullWidth (12), MulIncomplete (already 0 after the atom work). Recipe per
+  15edb497: receiving-lemma hypotheses restated at the circuit_norm atom spelling
+  (`env.get col ((place ri + ro : ℕ) : ℤ)`; `ProverEnvironment.toEnvironment_get` makes
+  the prover side coincide); value-lemma internals cite their one missing reduction
+  (`explicit_provable_type`, `ProvableType.eval_fields_cells`, Witgen eval equations).
+- FullWidth outer proofs = plain cps (both directions); its manual prefixes, change
+  pre-betas, h_output ladder, and region_completeness_leaf_placed ladder all deleted.
+- cps upgrades landed: CoreM-layer bestEffort (88443ab8), per-target peel (33450199),
+  conditional rescueFoldedOutput hook (currently fails closed; kernel-cost audit next).
+- IN FLIGHT (agent): the small files — CommitDomain 6, NoteCommit/Main 5, HashToPoint 3,
+  Ecc/Basic 3, Poseidon 4, CommitIvk/Main 2, DeriveNullifier 1, HashPiece 1.
+- REMAINING after that: Bundle 155 (F-held), NoteCommit/MainBundle 27, Merkle 26,
+  CommitIvk/MainBundle 19, Chain 11 (waits on the kernel-safe h_output ladder).
+
 **Agent F progress (July 21):**
 - **The Category 1/2 sweep is COMPLETE** (commits 6498ca16, ed692bda, 17a73285,
   f9fd0972): every hand-written contract-projection bridge stack in the reserved file
@@ -539,6 +619,13 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   pre-folded rw's are deleted. All SEVEN gadget-file `maxRecDepth` bumps (Bundle ×4,
   CommitIvk/Composite, CommitIvk/MainBundle ×2→0, YComposite) are GONE — the folded
   towers fit the default depth (Category 6 for gadget files: done).
+- **H → F (2026-07-21)**: the generic witness lemma LANDED — `Witgen.MOver.eval_toIRScalar`
+  (`@[circuit_norm]`, Clean/Circuit/WitnessIRSugar.lean): `((toIRScalar p).eval env)[0]
+  = MOver.eval env p`. Witness facts for `toIRScalar`-assigned cells now land on the
+  high-level `MOver.eval` atom in every `circuit_norm` pass — the 155
+  `with_unfolding_all` eval-cell bridges in Bundle (and FullWidth's `hWwslM`,
+  Bundle's `wpoint_eval_eq_cells` pair) are deletable. The cps auto-unfold/step-(d)/(f)
+  work also landed (commit 68c6a6e1). Resume when ready.
 - **Bundle port, remaining (blocked on H's framework stream)**: the 155
   `with_unfolding_all` eval-cell defeq bridges (needs the generic "toIRScalar-assigned
   ⇒ eval = cell" `circuit_norm` witness lemma), the ~15 manual

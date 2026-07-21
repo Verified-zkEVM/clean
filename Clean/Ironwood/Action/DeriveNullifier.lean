@@ -162,7 +162,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
         ((place x_gen_out_3.x.cell.regionIndex
           + x_gen_out_3.x.cell.rowOffset : ℕ) : ℤ)
       = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
-          : Value Point Fp).x from by with_unfolding_all rfl]
+          : Value Point Fp).x from by simp only [Point.eval_eq, circuit_norm]]
     rw [hSum, hB, hS, hH, constantLength_value_two]
 
   completeness := by

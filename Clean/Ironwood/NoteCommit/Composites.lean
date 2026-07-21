@@ -135,10 +135,9 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
     subcircuit_rw at hWC
-    subcircuit_rw at hGate
     -- the witnessCheck child: `z_0 = a'`-cell and the 130-bit telescoped decomposition
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
@@ -151,19 +150,15 @@ def circuit :
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
-      ⟨by rw [h_input.2.2.1]; exact hA.1,
-       by rw [h_input.2.2.2.1]; exact hA.2.1,
-       by rw [h_input.2.1]; exact hA.2.2.1,
-       by rw [h_input.2.2.2.1, h_input.2.2.2.2]; exact hA.2.2.2,
-       lo, hlo, by rw [hz0eq]; exact htel⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     simp only [GdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec] at hGSpec
-    rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     -- replay the witnessCheck child's contract for the gate child's preconditions
@@ -288,10 +283,9 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
     subcircuit_rw at hWC
-    subcircuit_rw at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
@@ -302,19 +296,15 @@ def circuit :
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
-      ⟨by rw [h_input.2.2.2.1]; exact hA.1,
-       by rw [h_input.2.2.1]; exact hA.2.1,
-       by rw [h_input.2.1]; exact hA.2.2.1,
-       by rw [h_input.2.2.2.2, h_input.2.2.1]; exact hA.2.2.2,
-       lo, hlo, by rw [hz0eq]; exact htel⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec] at hGSpec
-    rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
@@ -434,10 +424,9 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
     subcircuit_rw at hWC
-    subcircuit_rw at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
@@ -448,19 +437,15 @@ def circuit :
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
-      ⟨by rw [h_input.2.2.2.1]; exact hA.1,
-       by rw [h_input.2.2.1]; exact hA.2.1,
-       by rw [h_input.2.1]; exact hA.2.2.1,
-       by rw [h_input.2.2.2.2, h_input.2.2.1]; exact hA.2.2.2,
-       lo, hlo, by rw [hz0eq]; exact htel⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec] at hGSpec
-    rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0
@@ -584,10 +569,9 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm] at hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
     subcircuit_rw at hWC
-    subcircuit_rw at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
@@ -598,20 +582,15 @@ def circuit :
     rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
-      ⟨by rw [h_input.2.2.2.1]; exact hA.1,
-       by rw [h_input.2.2.1]; exact hA.2.1,
-       by rw [h_input.2.2.2.2.1]; exact hA.2.2.1,
-       by rw [h_input.2.1]; exact hA.2.2.2.1,
-       by rw [h_input.2.2.2.2.2, h_input.2.2.1, h_input.2.2.2.2.1]; exact hA.2.2.2.2,
-       lo, hlo, by rw [hz0eq]; exact htel⟩
+      ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     simp only [PsiCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec] at hGSpec
-    rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2.1] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1, hGSpec.2.2.2.1⟩
 
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, readCell] at hwit ⊢
+    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+      readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
     obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0

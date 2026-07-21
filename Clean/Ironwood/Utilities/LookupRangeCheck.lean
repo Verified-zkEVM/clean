@@ -621,13 +621,13 @@ theorem rangeCheck_loop_word_bounds (K : ℕ) (cfg : Config K) (element : Assign
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (offset : ℕ)
     (hTableLt : ∀ r : ℕ, r < env.usableRows → (env.fixed cfg.tableIdx.inner (r : ℤ)).val < 2 ^ K)
     (numWords : ℕ)
-    (hLoop : RegionOperations.Constraints place self env
-      ((rangeCheckLoop K cfg element offset numWords).operations self)) :
+    (hLoop : ∀ i : Fin numWords, RegionOperations.Constraints place self env
+      ((rangeCheckRound K cfg element i (offset + i * 1)).operations self)) :
     ∀ i, i < numWords → ∃ w : ℕ, w < 2 ^ K ∧
       zChain K cfg place self env offset i
         = 2 ^ K * zChain K cfg place self env offset (i + 1) + (w : Fp) := by
-  -- the framework split: `Constraints (loop) ↔ ∀ i : Fin numWords, <round i's constraints>`
-  simp only [rangeCheckLoop, rangeCheckRound, circuit_norm, rangeCheckLookup, mul_one,
+  -- per-round normalization under the pipeline's canonical ∀-chunk
+  simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, mul_one,
     List.map_cons, List.map_nil, List.cons.injEq, and_true, one_mul, zero_mul, add_zero,
     sub_self] at hLoop
   intro i hi
@@ -648,12 +648,12 @@ The framework `forRange'_extendsWitnesses` split turns the loop's `ExtendsWitnes
 theorem rangeCheck_loop_zvalues (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : ProverEnvironment Fp) (offset : ℕ)
     (numWords : ℕ)
-    (hLoop : RegionOperations.ExtendsWitnesses place self env
-      ((rangeCheckLoop K cfg element offset numWords).operations self)) :
+    (hLoop : ∀ i : Fin numWords, RegionOperations.ExtendsWitnesses place self env
+      ((rangeCheckRound K cfg element i (offset + i * 1)).operations self)) :
     ∀ j, 1 ≤ j → j ≤ numWords →
       zChain K cfg place self env.toEnvironment offset j
         = ((element.eval place env.toEnvironment).val / 2 ^ (K * j) : ℕ) := by
-  simp only [rangeCheckLoop, rangeCheckRound, circuit_norm, zWitness, mul_one] at hLoop
+  simp only [rangeCheckRound, circuit_norm, zWitness, mul_one] at hLoop
   intro j hj1 hj2
   -- round `j-1`'s `assignAdvice` pins `z_j` at row `offset + (j-1) + 1`
   have hRound := hLoop ⟨j - 1, by omega⟩
@@ -676,9 +676,9 @@ theorem rangeCheck_loop_constraints_complete (K : ℕ) (cfg : Config K) (element
     (hTableEq : ∀ r : ℕ, r < 2 ^ K → env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp))
     (numWords : ℕ)
     (hz : ∀ j, j ≤ numWords → zChain K cfg place self env offset j = ((a / 2 ^ (K * j) : ℕ) : Fp)) :
-    RegionOperations.Constraints place self env
-      ((rangeCheckLoop K cfg element offset numWords).operations self) := by
-  simp only [rangeCheckLoop, rangeCheckRound, circuit_norm, rangeCheckLookup, mul_one,
+    ∀ i : Fin numWords, RegionOperations.Constraints place self env
+      ((rangeCheckRound K cfg element i (offset + i * 1)).operations self) := by
+  simp only [rangeCheckRound, circuit_norm, rangeCheckLookup, mul_one,
     List.map_cons, List.map_nil, List.cons.injEq, and_true, one_mul, zero_mul, add_zero, sub_self]
   intro i
   obtain ⟨n, hi⟩ := i

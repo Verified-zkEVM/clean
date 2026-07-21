@@ -699,7 +699,6 @@ theorem soundness (G : Generators) (R : FixedBase)
   circuit_proof_start
   change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
-  simp only [synth, circuit_norm] at hc
   have hP := hc.1
   have hCk := hc.2.1
   have hGt := hc.2.2
@@ -1137,7 +1136,6 @@ theorem completeness (G : Generators) (R : FixedBase)
   change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
   obtain ⟨hOnGd, hOnPkd, hVal64, B0, hB0⟩ := hPA
-  simp only [synth, circuit_norm] at hwit ⊢
   have hWP := hwit.1
   have hWCk := hwit.2.1
   have hWGt := hwit.2.2

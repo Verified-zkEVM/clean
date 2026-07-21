@@ -135,16 +135,16 @@ def circuit : FormalCircuit Fp
         = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
             : Value Point Fp).x :=
       (congrArg Halo2.Ironwood.Point.x h_output).symm.trans
-        ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
+        ((by simp only [circuit_norm, explicit_provable_type] : (eval (⟨place, env⟩ : Placed Environment Fp)
             x_gen_out_0 : Value Point Fp).x = _).trans
-          (hCEx.symm.trans (by with_unfolding_all rfl)))
+          (hCEx.symm.trans (by simp only [circuit_norm, explicit_provable_type])))
     have hoy : output_y
         = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_1
             : Value Point Fp).y :=
       (congrArg Halo2.Ironwood.Point.y h_output).symm.trans
-        ((by with_unfolding_all rfl : (eval (⟨place, env⟩ : Placed Environment Fp)
+        ((by simp only [circuit_norm, explicit_provable_type] : (eval (⟨place, env⟩ : Placed Environment Fp)
             x_gen_out_0 : Value Point Fp).y = _).trans
-          (hCEy.symm.trans (by with_unfolding_all rfl)))
+          (hCEy.symm.trans (by simp only [circuit_norm, explicit_provable_type])))
     rw [← hM, hox, hoy]
 
   completeness := by
@@ -176,7 +176,7 @@ def circuit : FormalCircuit Fp
       exact hPA.1
     · -- the x-coordinate copy constraint in the honest environment
       rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
-      exact ((by with_unfolding_all rfl :
+      exact ((by simp only [circuit_norm, explicit_provable_type] :
           env.get x_gen_out_0.x.cell.column
             ((place x_gen_out_0.x.cell.regionIndex
               + x_gen_out_0.x.cell.rowOffset : ℕ) : ℤ)
@@ -185,10 +185,10 @@ def circuit : FormalCircuit Fp
         ((congrArg Halo2.Ironwood.Point.x hM).trans
           ((congrArg Halo2.Ironwood.Point.x hPA.2).symm.trans
             ((congrArg Halo2.Ironwood.Point.x hPS.symm).trans
-              (by with_unfolding_all rfl)))))
+              (by simp only [circuit_norm])))))
     · -- the y-coordinate copy constraint in the honest environment
       rw [← h_gen_out_1, Ecc.WitnessPoint.pointNonId_toFormal_output]
-      exact ((by with_unfolding_all rfl :
+      exact ((by simp only [circuit_norm, explicit_provable_type] :
           env.get x_gen_out_0.y.cell.column
             ((place x_gen_out_0.y.cell.regionIndex
               + x_gen_out_0.y.cell.rowOffset : ℕ) : ℤ)
@@ -197,7 +197,7 @@ def circuit : FormalCircuit Fp
         ((congrArg Halo2.Ironwood.Point.y hM).trans
           ((congrArg Halo2.Ironwood.Point.y hPA.2).symm.trans
             ((congrArg Halo2.Ironwood.Point.y hPS.symm).trans
-              (by with_unfolding_all rfl)))))
+              (by simp only [circuit_norm])))))
 
 /-! ## Bundle contract bridges (generated; the bundle stays folded) -/
 

@@ -423,7 +423,7 @@ private theorem incompleteOutput_eval_literal {n : ℕ} (place : RegionIndex →
           : MulIncomplete.Output (n + 1) (AssignedCell Fp))
       = { acc := { x := AssignedCell.eval place env xA, y := AssignedCell.eval place env yA },
           zs := ProvableType.eval (M := fields (n + 1)) place env zs } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
 
 /-- Literal-eval bridge for `MulComplete.Output 3` (verifier view; the `acc` field may be a
 symbolic term). -/
@@ -434,7 +434,7 @@ private theorem completeOutput_eval_literal (place : RegionIndex → ℕ)
         ({ acc := acc, zs := zs } : MulComplete.Output 3 (AssignedCell Fp))
       = { acc := ProvableType.eval place env acc,
           zs := ProvableType.eval (M := fields 3) place env zs } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
 
 /-- Elementwise read of an evaluated cell vector. -/
 private theorem fieldsEval_getElem {w : ℕ} (place : RegionIndex → ℕ) (env : Environment Fp)
@@ -601,7 +601,7 @@ private theorem compInputs_eval_eq (env : Placed Environment Fp)
       = { alpha := (), base := eval env (v.base : Point (AssignedCell Fp)),
           xA := eval env (v.xA : AssignedCell Fp), yA := eval env (v.yA : AssignedCell Fp),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Componentwise eval of a `MulOverflow.Inputs` record literal. -/
 private theorem ovInputs_eval_eq (env : Placed Environment Fp)
@@ -636,14 +636,14 @@ private theorem hiInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
           base := eval env (v.base : Point (AssignedCell Fp)),
           acc := eval env (v.acc : Point (AssignedCell Fp)),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- The cell-reading scalar program's prover value is the cell's value. -/
 private theorem fexpr_expr_eval_prover (env : Placed ProverEnvironment Fp)
     (c : AssignedCell Fp) :
     Witgen.MOver.eval (F := Fp) (V := AssignedCell Fp) (value := field) env
       (pure (.expr c) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) = eval env c := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, Witgen.MOver.eval, Witgen.eval_field, Witgen.FExprOver.eval]
 
 /-- The LSB bit program's prover value: `kBitsWindow` of the scalar cell's value. -/
 private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
@@ -653,7 +653,7 @@ private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
   have h := congrFun (MulComplete.bexprsVal_kBitWindowExpr (.expr c) w { env := env }) i
   simp only [MulComplete.bexprsVal] at h
   rw [h]
-  with_unfolding_all rfl
+  simp only [circuit_norm, readCell, AssignedCell.eval]
 
 /-- Prover-side componentwise eval of `MulComplete.Inputs` (the scalar slot holds the
 reading program; its prover value is the program's evaluation). Whole-var, like
@@ -665,7 +665,7 @@ private theorem compInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
           base := eval env (v.base : Point (AssignedCell Fp)),
           xA := eval env (v.xA : AssignedCell Fp), yA := eval env (v.yA : AssignedCell Fp),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Prover-side `alpha`-projection of an evaluated `MulIncomplete.Inputs` record — the
 scalar program's evaluation, the landing for the children's derived-bit facts
@@ -775,7 +775,7 @@ theorem hiInputs_eval_eq (env : Placed Environment Fp) (v : Var MulIncomplete.In
       = { alpha := (), base := eval env (v.base : Point (AssignedCell Fp)),
           acc := eval env (v.acc : Point (AssignedCell Fp)),
           z := eval env (v.z : AssignedCell Fp) } := by
-  with_unfolding_all rfl
+  simp only [circuit_norm]
 
 /-- Verifier: an abstract point-output var's coordinate-evals reassemble to its whole-point eval
 (`Point.ofCoords (eval env o.x, eval env o.y) ≡ eval env o`), so an entering accumulator threaded
@@ -783,12 +783,12 @@ through the opaque local `o` lands on the whole-point value equation. `rfl` by `
 unfolding (`Point` is a two-field `Var`). -/
 theorem point_var_eval_eq (env : Placed Environment Fp) (o : Var Point Fp) :
     eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 /-- Prover view of `point_var_eval_eq`. -/
 theorem point_var_eval_eq_prover (env : Placed ProverEnvironment Fp) (o : Var Point Fp) :
     eval env o = ({ x := eval env o.x, y := eval env o.y } : Point Fp) := by
-  with_unfolding_all rfl
+  simp only [circuit_norm, explicit_provable_type]
 
 /-! ## The gadget bundle
 
@@ -867,7 +867,7 @@ def mul :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env := ⟨⟨place, env⟩, rfl, rfl⟩
     -- ── peel the faithful layouter structure: the MAIN REGION (index i₀) and the layouter-level
     -- MulOverflow chunk (its three sibling regions at i₀+1..i₀+3) ──
-    simp only [synthesize, circuit_norm] at hc
+    try simp only [synthesize, circuit_norm] at hc
     obtain ⟨hMain, hOv⟩ := hc
     -- ── peel the main region (bind/append/per-op only — never whole-goal circuit_norm) ──
     simp only [mainRegion,
@@ -1077,7 +1077,6 @@ def mul :
     subcircuit_rw at hFin
     simp only [add_spec_eq, add_assumptions_eq, add_envAssumptions_eq] at hFin
     -- ▸▸ engine site 6: the overflow check (the layouter child) ◂◂
-    subcircuit_rw at hOv
     simp only [EnvAssumptions] at _hE
     have hOvSpec := hOv (by rw [ov_envAssumptions_eq]; exact _hE)
       (by rw [ov_assumptions_eq]
@@ -1088,13 +1087,13 @@ def mul :
         ∃ (sHi : Fp) (sLo : ℕ), sLo < 2 ^ 130 ∧
           input.alpha + input.k254 * (2 ^ 130 : Fp) = (sLo : Fp) + (2 ^ 130 : Fp) * sHi ∧
           (input.k254 = 0 ∨ sHi = 0) ∧
-          (input.k254 = 1 ∨ input.z130 ≠ 0 ∨ sHi = 0)) from rfl,
-      ovInputs_eval_eq] at hOvSpec
+          (input.k254 = 1 ∨ input.z130 ≠ 0 ∨ sHi = 0)) from rfl] at hOvSpec
+    try rw [ovInputs_eval_eq] at hOvSpec
     -- the z-cell projections reduce under `rw` (full unification) — the concrete-α spelling
     -- misses the simp discr key
     rw [mainRegion_output_z0, mainRegion_output_z130, mainRegion_output_k254] at hOvSpec
-    simp only [eval_of] at hOvSpec
-    rw [halpha] at hOvSpec
+    simp only [circuit_norm] at hOvSpec
+    try rw [halpha] at hOvSpec
     obtain ⟨hOvZ0, hOvDisj2, hOvEx⟩ := hOvSpec
     -- ── the canonicity ladder ──
     have hZhiLt : chainNat 0 bitsHi 125 < 2 ^ 125 :=
@@ -1228,7 +1227,7 @@ def mul :
         rw [hm3]; omega
       rw [hM3v, hfin _ rfl] at hResEq
       convert hResEq using 1;
-        simp only [synthesize, mainRegion, circuit_norm, FormalRegionCircuit.output_call',
+        simp only [mainRegion, circuit_norm, FormalRegionCircuit.output_call',
           incomplete_output_eq, complete_output_eq, add_output_eq, Vector.getElem_ofFn]
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       have hcx : env.env.advice cfg.addConfig.xP
@@ -1272,7 +1271,7 @@ def mul :
         rw [hm3]; omega
       rw [hM3v, hfin _ rfl] at hResEq
       convert hResEq using 1;
-        simp only [synthesize, mainRegion, circuit_norm, FormalRegionCircuit.output_call',
+        simp only [mainRegion, circuit_norm, FormalRegionCircuit.output_call',
           incomplete_output_eq, complete_output_eq, add_output_eq, Vector.getElem_ofFn]
 
   -- ══ Completeness ══
@@ -1291,7 +1290,7 @@ def mul :
     have hOnC0 := hPA
     -- ── peel the faithful layouter structure (witnesses AND goal): the MAIN REGION at i₀ and
     -- the layouter-level MulOverflow chunk at i₀+1 ──
-    simp only [synthesize, circuit_norm] at hwit ⊢
+    try simp only [synthesize, circuit_norm] at hwit ⊢
     obtain ⟨hWMain, hWOv⟩ := hwit
     -- ── peel the main-region witness list (bind/append/per-op only) ──
     simp only [mainRegion,
@@ -1805,12 +1804,13 @@ def mul :
       -- recover the concrete bind-chain output (`← h_gen_out_4`), then reduce the projections
       -- lazily via `circuit_norm` and land the cells on env reads.
       simp only [ov_proverAssumptions_eq]
-      rw [ovInputs_eval_eq_prover, ← h_gen_out_4]
-      simp only [circuit_norm, eval_of_prover]
+      try rw [ovInputs_eval_eq_prover]
+      rw [← h_gen_out_4]
+      simp only [circuit_norm]
       rw [incomplete_call_output]
       simp only [Vector.getElem_ofFn, AssignedCell.of_cell, Cell.of_regionIndex,
         Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-      rw [hIalpha, hz0v, hHiZ124, hHiZtop]
+      rw [hz0v, hHiZ124, hHiZtop]
       exact overflow_spec_honest' input_alpha rfl rfl rfl
 
 /-! ## Bundle contract bridges, shared by the layouter-level consumers (generated; the

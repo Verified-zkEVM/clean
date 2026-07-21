@@ -783,10 +783,7 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [innerRegion, RegionCircuit.operations_bind,
-      RegionOperations.constraints_append, RegionOperations.extendsWitnesses_append]
-      at hwit ⊢
-    obtain ⟨hWdec, hWfix, hWchain, -⟩ := hwit
+    obtain ⟨hWdec, hWfix, hWchain⟩ := hwit
     obtain ⟨hZW, hXPeq, hYPeq⟩ := _hE
     have hDC := inner_completeness_dec cfg offset self env input_var_alpha input_alpha
       h_input hPA hWdec
@@ -795,19 +792,21 @@ private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ)
       = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp) := by
       rw [← hZW]
       exact hDC.2
-    refine And.intro (And.intro ?_ (And.intro ?_ (And.intro ?_ ?_))) ?_
-    · with_reducible exact hDC.1
+    -- circuit_proof_start consumed the copyDecompose chunk (completeness mode), so the goal opens
+    -- with the child's preconditions (EnvA/A vacuous, PA = the magnitude bound) rather than its
+    -- constraints, and the trailing `pure` region auto-discharged.
+    refine And.intro (And.intro ⟨trivial, trivial, hPA⟩ (And.intro ?_ ?_)) ?_
     · with_reducible
         exact inner_completeness_fixed B cfg offset self env input_var_alpha
           input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs
     · with_reducible
         exact (inner_completeness_chain B cfg offset self env input_var_alpha
           input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).1
-    · rw [RegionCircuit.operations_pure]
-      exact trivial
     · -- the honest-prover contract (`InnerProverSpec`)
       simp only [InnerProverSpec]
-      rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+      change ProvableStruct.eval env.place env.env.toEnvironment
+        ((innerRegion B.toData cfg offset input_var_alpha).output self) = _ at h_output
+      rw [innerRegion_output] at h_output
       provable_type_simp
       obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
       refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -853,16 +852,19 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [innerRegion, RegionCircuit.operations_bind,
-      RegionOperations.constraints_append] at hc
-    obtain ⟨hDec, hFixed, hChain, -⟩ := hc
-    subcircuit_rw at hDec
+    obtain ⟨hDec, hFixed, hChain⟩ := hc
+    -- circuit_proof_start consumed the copyDecompose chunk into its contract (assumptions `True`);
+    -- discharge and unfold to the running-sum decomposition.
     simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq] at hDec
-    -- output projections (lazy)
-    rw [ElaboratedRegionCircuit.output_eq, innerRegion_output] at h_output
+    -- circuit_proof_start unfolded `innerRegion` in `h_output`; refold to the region output (defeq
+    -- via the default elaborated instance), then project to the reduced cells.
+    change ProvableStruct.eval env.place env.env
+      ((innerRegion B.toData cfg offset input_var_alpha).output self)
+      = { acc := output_acc, mulB := output_mulB, zs := output_zs } at h_output
+    rw [innerRegion_output] at h_output
     provable_type_simp
     -- the decompose spec, landed on cells
-    simp only [Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output, circuit_norm] at hDec
+    simp only [circuit_norm] at hDec
     obtain ⟨V, hVlt, hAlphaV, hZs⟩ := hDec
     obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
     -- ── the digit sequence and its reconstruction ──
@@ -940,7 +942,7 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
     refine ⟨fun w => V / 2 ^ (3 * w) % 8,
       fun w _ => Nat.mod_lt _ (by norm_num), ?_, ?_, ?_, ?_⟩
     · -- α = ↑V (the digit sum)
-      rw [hSum, ← h_input, hAlphaV]
+      rw [hSum]; exact hAlphaV
     · -- acc = [partialSum ks 83]·B  (the window-chain ladder)
       simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm,
         RegionCircuit.operations_bind, RegionOperations.constraints_append] at hChain
