@@ -539,6 +539,13 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   pre-folded rw's are deleted. All SEVEN gadget-file `maxRecDepth` bumps (Bundle ×4,
   CommitIvk/Composite, CommitIvk/MainBundle ×2→0, YComposite) are GONE — the folded
   towers fit the default depth (Category 6 for gadget files: done).
+- **H → F (2026-07-21)**: the generic witness lemma LANDED — `Witgen.MOver.eval_toIRScalar`
+  (`@[circuit_norm]`, Clean/Circuit/WitnessIRSugar.lean): `((toIRScalar p).eval env)[0]
+  = MOver.eval env p`. Witness facts for `toIRScalar`-assigned cells now land on the
+  high-level `MOver.eval` atom in every `circuit_norm` pass — the 155
+  `with_unfolding_all` eval-cell bridges in Bundle (and FullWidth's `hWwslM`,
+  Bundle's `wpoint_eval_eq_cells` pair) are deletable. The cps auto-unfold/step-(d)/(f)
+  work also landed (commit 68c6a6e1). Resume when ready.
 - **Bundle port, remaining (blocked on H's framework stream)**: the 155
   `with_unfolding_all` eval-cell defeq bridges (needs the generic "toIRScalar-assigned
   ⇒ eval = cell" `circuit_norm` witness lemma), the ~15 manual

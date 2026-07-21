@@ -298,6 +298,18 @@ theorem eval_toIRLiteral (program : MOver F V (value (FExprOver F V))) (env : En
     (program.toIRLiteral (Env := Env)).eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIROver.eval, Witgen.eval, ProvableType.toElements_fromElements, VExprOver.eval]
 
+/-- A `toIRScalar` witness's assigned value is the program's scalar evaluation. Tagged
+`@[circuit_norm]` so witness facts land on the high-level `MOver.eval` atom during the
+pipeline's normalization — gadget proofs compare witness values against hint-program
+values without ever seeing the program run (`(p #[]).1/.2`) spelling. -/
+@[circuit_norm]
+theorem eval_toIRScalar (program : MOver F V (FExprOver F V)) (env : Env) :
+    ((toIRScalar program (Env := Env)).eval env)[0]
+      = MOver.eval (value := field) env program := by
+  rcases h : program #[] with ⟨out, steps⟩
+  simp [toIRScalar, toIR, eval, WitgenIROver.eval, h, VExprOver.eval]
+  with_unfolding_all rfl
+
 instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where
   default := pure default
 end MOver
