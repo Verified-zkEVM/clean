@@ -948,18 +948,10 @@ def circuit (B : FixedBase) :
   ProverSpec _ _ _ _ := True
 
   soundness := by
-    -- circuit_proof_start's universal peel (`simp only [circuit_norm, synthesize …]`) deep-recurses
-    -- on this 85-window `synthesize`; run only its intro prefix by hand (the manual peel below is
-    -- what the composite continuation needs anyway).
-    intro cfg
-    rw [FormalCircuit.soundness_iff]
-    intro i₀ env input_var input output h_input h_output _hE hA hc
-    obtain ⟨place, env⟩ := env
-    obtain ⟨output_x, output_y⟩ := output
+    circuit_proof_start
     obtain ⟨env, rfl, rfl⟩ :
         ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
       ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [synthesize, circuit_norm] at hc
     obtain ⟨hInner, hAdd⟩ := hc
     -- region 1: the inner windowed mul (whole-region bundle). The `change` pre-betas
     -- the chunk spelling: the raw application's expected-type check unfolds
@@ -974,7 +966,6 @@ def circuit (B : FixedBase) :
     simp only [InnerSpec, innerOutCells, windowCells, circuit_norm] at hIS
     obtain ⟨ks, hks_lt', hws, hAcc, hMulB⟩ := hIS
     -- ── region 2: the complete addition `mul_b + acc` ──
-    subcircuit_rw at hAdd
     simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
       innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add, circuit_norm]
       at hAdd
@@ -998,13 +989,7 @@ def circuit (B : FixedBase) :
     have hOnQ : (S83 • B.point).OnCurve := B.nsmul_onCurve hS83_pos hS83_card
     obtain ⟨-, hOutEq⟩ := hAdd ⟨by rw [hMulB, hwp84]; exact Or.inl hOnP,
       by rw [hAcc, ← hS83_def]; exact Or.inl hOnQ⟩
-    rw [hMulB, hAcc, hwp84, ← hS83_def,
-      show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
-    simp only [synthesize, circuit_norm] at h_output
-    rw [FormalRegionCircuit.output_call] at h_output
-    simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add,
-      circuit_norm] at h_output
-    rw [h_output] at hOutEq
+    rw [hMulB, hAcc, hwp84, ← hS83_def] at hOutEq
     rw [Halo2.Ironwood.Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- ── the extracted scalar is the digit sum ──
     have hchain : (t84 + S83) • B.point
@@ -1034,9 +1019,11 @@ def circuit (B : FixedBase) :
     exact (MulFixed.point_eta _).symm
 
   completeness := by
-    -- circuit_proof_start's universal peel (`simp only [circuit_norm, synthesize …]`) deep-recurses
-    -- on this 85-window `synthesize`; run only its intro prefix by hand (the manual peel below is
-    -- what the composite continuation needs anyway).
+    -- cps's step-(a)-(e') now complete here too (the runtime-guard fix), but the
+    -- continuation below consumes `hWAdd` through a manual
+    -- `region_completeness_leaf_placed` ladder that predates the engine-emitted
+    -- `h_spec_*` contract facts; porting it is the remaining step (tracked in the
+    -- leakage audit). Until then, keep the manual intro prefix.
     intro cfg
     rw [FormalCircuit.completeness_iff]
     intro i₀ env input_var input output h_input h_output hwit _hE hA hPA

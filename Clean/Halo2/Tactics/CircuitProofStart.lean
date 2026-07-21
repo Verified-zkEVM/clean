@@ -286,11 +286,13 @@ heartbeat exhaustion: the declaration's budget is global, so continuing would on
 the error somewhere misleading. -/
 def bestEffort (tac : TacticM Unit) : TacticM Unit := do
   let s ← saveState
-  try
-    tac
-  catch ex =>
-    if ex.isInterrupt || ex.isMaxHeartbeat then throw ex
-    s.restore
+  -- The catch must live at the CoreM layer: the Elab-layer `tryCatch` instances
+  -- rethrow runtime exceptions before a TacticM-level handler ever sees them.
+  controlAt Lean.CoreM fun runInCore =>
+    Lean.Core.tryCatchRuntimeEx (runInCore tac) fun ex =>
+      runInCore do
+        if ex.isInterrupt || ex.isMaxHeartbeat then throw ex
+        s.restore
 
 /-- The set of names that are already `circuit_norm` members — the union of the extension's
 simp-theorem origins (tagged theorems) and its `toUnfold` set (tagged `def`s, e.g.
