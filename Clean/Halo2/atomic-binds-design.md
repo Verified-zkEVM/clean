@@ -76,14 +76,18 @@ a loop combinator before the peel sees it.
 - **primitive** — everything else (`assignRegion`, `currentRegion`, table ops): chunk
   `h_region_<k>`, opened with `circuit_norm`.
 
-**The mint gate is TYPE-directed, not class-directed.** A used binder mints iff its
+**The mint gate is TYPE-directed, not class-directed, and COMPOUND-only.** A used binder mints iff its
 output is CELL-VALUED (an `AssignedCell`, a `Var` record, a vector of cells — the
 things whose concrete spellings metastasize through continuations). Index-valued
 outputs (`currentRegion`'s `RegionIndex`, ℕ) must NOT mint: they feed offset
 arithmetic that has to stay literal for the region-count folding — atomizing them
 would re-hide what `foldCallRegionCount` exists to expose (the same judgment this doc
 already makes for region counts, generalized into the detector). Unit/discarded
-binders mint nothing.
+binders mint nothing. A bare `AssignedCell` binder does not mint either: `.of self row
+col` is already the minimal atom — the spelling leaf gates and witness facts match on —
+and minting it aliases the gate facts away from the cell (found by breaking the
+WitnessPoint leaf port). Only compound cell-valued outputs (records, vectors)
+metastasize and mint.
 
 **Loop outputs mint as ONE atom**: a used map-style loop generalizes its whole
 `(loop …).output i` to a single binder-named atom; the defining equation is reduced

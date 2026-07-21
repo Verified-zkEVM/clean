@@ -12,6 +12,7 @@ import Clean.Utils.Test.SimpMatchRegression
 import Clean.Halo2.Tests.TestProvableTypeSimp
 import Clean.Halo2.Tests.TestCircuitTypeDeriving
 import Clean.Halo2.Tests.TestSubcircuit
+import Clean.Halo2.Tests.TestRawBind
 import Clean.Halo2.Tests.TestLayouterSubcircuit
 import Clean.Halo2.Tests.TestSubcircuitRw
 import Clean.Halo2.Tests.TestAbstractOutputs

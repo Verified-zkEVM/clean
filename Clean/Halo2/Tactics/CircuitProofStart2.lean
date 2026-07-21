@@ -115,29 +115,72 @@ def newCanonicalOutputs (e : Expr) : TacticM (Array Expr) := withMainContext do
 /-- Mint atoms for `outs` (innermost-first) with base name `n` (numbered `n`, `n_2`, …
 on collisions/multiples): revert `hyps`, generalize, re-intro `hyps` in the SAME order.
 The defining equations are named `h_<atom>`. -/
-def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) : TacticM Unit := do
-  if outs.isEmpty then return
+def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) :
+    TacticM (Array (Name × Name)) := do
+  if outs.isEmpty then return #[]
   -- revert the carrier hypotheses (they hold the occurrences); reverse order so the
   -- FIRST listed hyp ends up outermost, matching the re-intro order below
   for h in hyps.reverse do
     run? (← `(tactic| revert $(mkIdent h):ident))
-  withMainContext do
+  let minted ← withMainContext do
     let mut args : Array GeneralizeArg := #[]
+    let mut minted : Array (Name × Name) := #[]
     let lctx ← getLCtx
     let mut k := 0
     for o in outs do
       let base := if k == 0 then n else Name.mkSimple s!"{n}_{k+1}"
       let xn := if lctx.findFromUserName? base |>.isSome then
         Name.mkSimple s!"{base}'" else base
-      args := args.push { expr := o, xName? := xn,
-                          hName? := Name.mkSimple s!"{xn}_eq" }
+      let hn := Name.mkSimple s!"{xn}_eq"
+      args := args.push { expr := o, xName? := xn, hName? := hn }
+      minted := minted.push (xn, hn)
       k := k + 1
     let g ← getMainGoal
     let (_, g') ← g.generalize args
     replaceMainGoal [g']
+    pure minted
   -- re-intro in list order (first listed = outermost binder)
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))
+  return minted
+
+/-- Subterms `Circuit.output x' i` / `RegionCircuit.output x' i` of `e` whose circuit
+`x'` is (syntactically) the raw step `x` just peeled — the raw-bind analogue of the
+canonical call outputs. Collected BEFORE any reduction so every occurrence still shares
+the one spelling. -/
+partial def rawOutputsOf (x : Expr) (e : Expr) : Array Expr :=
+  go e #[]
+where
+  go (e : Expr) (acc : Array Expr) : Array Expr :=
+    let isRawOut :=
+      (e.isAppOfArity ``Halo2.Circuit.output 5 || e.isAppOfArity ``Halo2.RegionCircuit.output 5)
+        && e.getArg! 3 == x
+    let acc := if isRawOut then (if acc.contains e then acc else acc.push e) else acc
+    match e with
+    | .app f a => go a (go f acc)
+    | .lam _ d b _ => go b (go d acc)
+    | .forallE _ d b _ => go b (go d acc)
+    | .letE _ t v b _ => go b (go v (go t acc))
+    | .mdata _ b => go b acc
+    | .proj _ _ b => go b acc
+    | _ => acc
+
+/-- The TYPE-directed mint gate (see the design doc's "Raw binds, loops, and the mint
+gate"): a used binder mints iff its value is CELL-VALUED — the spellings that
+metastasize through continuations. Index-valued binders (`currentRegion`'s
+`RegionIndex`, ℕ) must stay literal for the region-count folding; Unit-valued ones
+carry nothing. Everything else (cells, `Var` records, vectors of cells) mints. -/
+def binderTypeMints (f : Expr) : TacticM Bool := do
+  let .lam _ d _ _ := f | return false
+  let d ← withTransparency .instances <| whnf (← instantiateMVars d)
+  let head := d.getAppFn.constName?
+  -- a bare `AssignedCell` is ALREADY the minimal atom (`.of self row col` — the
+  -- spelling leaf gates and witness facts match on); minting it would put an alias
+  -- between the gate facts and the cell. Only COMPOUND cell-valued outputs (records,
+  -- vectors) metastasize and mint.
+  return !(head == some ``Nat || head == some ``Halo2.RegionIndex
+    || head == some ``Unit || head == some ``PUnit || head == some ``Int
+    || head == some ``Halo2.AssignedCell)
 
 /-- One per-bind block. `sound := true` for the soundness direction; `region := true`
 for region-level bundles (region append lemmas, no offset folding). Returns `none`
@@ -161,7 +204,13 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   let nm := binderNameOf f
   let isCall := x.isAppOf ``Halo2.FormalCircuit.call
     || x.isAppOf ``Halo2.FormalRegionCircuit.call
+  -- loop-combinator steps (registry heads) are atomic raw steps: never spine-split
+  -- (they are single application nodes — the registry also keeps them out of the
+  -- auto-unfolds), chunk named for readability, rounds split by the canonical tagged
+  -- lemmas when the raw open runs
+  let isLoop := CircuitProofStart.circuitLoopHeads.any x.isAppOf
   let chunkName := if isCall then Name.mkSimple s!"{nm}_spec"
+    else if isLoop then Name.mkSimple s!"loop_{regionIdx}"
     else Name.mkSimple s!"region_{regionIdx}"
   -- peel the constraint/witness/goal sides + the output side
   if region then
@@ -202,7 +251,24 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   if isCall && binderUsed f then
     let some ty' ← hypType? chunkHyp | return some (chunkName, isCall)
     let outs ← newCanonicalOutputs ty'
-    mintAtoms outs nm #[chunkHyp, `output_eq]
+    discard <| mintAtoms outs nm #[chunkHyp, `output_eq]
+  -- a raw or loop bind whose value passes the TYPE gate mints too (design doc,
+  -- "Raw binds, loops, and the mint gate"): collect the still-shared `(x).output i`
+  -- spelling, generalize it to the do-binder name, and reduce ONLY the defining
+  -- equation to its concrete boundary fact (for loops: the closed-form output via the
+  -- tagged loop lemmas) — the continuation keeps the atom. Index-valued binders
+  -- (`currentRegion`) never mint: their arithmetic must stay literal for the folds.
+  if !isCall && binderUsed f then
+    if ← binderTypeMints f then
+      let mut outs : Array Expr := #[]
+      if let some tyC ← hypType? chunkHyp then
+        outs := outs ++ rawOutputsOf x tyC
+      if let some tyO ← hypType? `output_eq then
+        for o in rawOutputsOf x tyO do
+          if !outs.contains o then outs := outs.push o
+      let minted ← mintAtoms outs nm #[chunkHyp, `output_eq]
+      for (_, hn) in minted do
+        run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent hn):ident))
   -- fold the offsets (layouter only; region binds share one region index)
   unless region do
     if sound then
@@ -269,7 +335,7 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     guard := guard + 1
   -- resolve the caller's list + the auto-unfolds (goal is now `<head> main …`)
   let (userUnfolds, bridges) ← CircuitProofStart.mkUnfoldLemmas terms
-  let autoUnfolds ← CircuitProofStart.autoUnfoldsOfMain
+  let autoUnfolds ← CircuitProofStart.autoUnfoldsOfMain (excludeLoops := true)
   let unfolds := userUnfolds ++ (← autoUnfolds.mapM fun n =>
     `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term))
   let iffName : Name :=
@@ -372,7 +438,12 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     run? (← `(tactic| simp only [circuit_norm, $(bridges ++ unfolds),*] at $(mkIdent g):ident))
   -- pass 2: derived hypotheses + goal, with input_eq/output_eq as rules
   let mut rules : Array (TSyntax `Lean.Parser.Tactic.simpLemma) :=
-    #[← `(Lean.Parser.Tactic.simpLemma| circuit_norm)] ++ bridges ++ unfolds
+    #[← `(Lean.Parser.Tactic.simpLemma| circuit_norm),
+      -- raw steps' region counts materialize only HERE (circuit_norm unfolds the
+      -- folded nextRegionIndex in this pass) — fold them in the same fixpoint so
+      -- chunk-contract indexes converge with the minted atoms' spellings
+      ← `(Lean.Parser.Tactic.simpLemma| Operations.regionCount),
+      ← `(Lean.Parser.Tactic.simpLemma| foldCallRegionCount)] ++ bridges ++ unfolds
   for g in ruleSources do
     rules := rules.push (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent g):term))
   -- pass-2 targets: everything except the rule-sources

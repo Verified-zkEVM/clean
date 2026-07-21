@@ -1,5 +1,6 @@
 import Lean.Elab.Tactic
 import Clean.Halo2.Formal
+import Clean.Halo2.Loops
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.AbstractOutputs
 import Clean.Halo2.Tactics.SubcircuitRw
@@ -340,6 +341,19 @@ def isBundleConst (n : Name) : MetaM Bool := do
     | some ``FormalCircuit => return true
     | _ => return false
 
+/-- The loop-combinator registry (see `atomic-binds-design.md`, "Raw binds, loops, and
+the mint gate"): heads that elaborate to a SINGLE application node whose body is a bind
+chain. They must never unfold before a peel walks the do-spine — the self-recursion
+detector below keeps their recursive CORES folded, but these non-recursive WRAPPERS
+would pass it, and unfolding one lets a bind peel eat loop iterations as top-level
+steps, destroying the folded induction interface. Kept as an explicit name list for
+now; graduate to an attribute when combinators start living outside `Clean/Halo2`. -/
+def circuitLoopHeads : Array Name :=
+  #[``Halo2.RegionCircuit.forRange, ``Halo2.RegionCircuit.forRange',
+    ``Halo2.RegionCircuit.forRangeVar', ``Halo2.RegionCircuit.foldRange,
+    ``Halo2.RegionCircuit.foldRangeVar, ``Halo2.RegionCircuit.foldRangeVarAux,
+    ``Halo2.FormalCircuit.foldCall, ``Halo2.FormalCircuit.foldOps]
+
 /-- Auto-unfold candidates from the goal's `main` argument (main-Clean parity: "any `main`
 in scope unfolds automatically"). After the bundle binders are introduced, the goal is one
 of the four proof heads applied to `main` (the bundle's `synthesize` body, substituted).
@@ -348,7 +362,7 @@ type is a circuit; collect those, excluding bundles (their contracts stay folded
 chunk engine), projections, and `circuit_norm` members (already in the peel set). An
 inline-do `main` contributes no constants — the structural `circuit_norm` lemmas walk it
 without unfolding, as before. -/
-def autoUnfoldsOfMain : TacticM (Array Name) := withMainContext do
+def autoUnfoldsOfMain (excludeLoops : Bool := false) : TacticM (Array Name) := withMainContext do
   let goal ← instantiateMVars (← getMainTarget)
   -- `main` is the first explicit argument of the proof head: the unique arg of
   -- one-binder function type into `Circuit`/`RegionCircuit`.
@@ -378,6 +392,10 @@ def autoUnfoldsOfMain : TacticM (Array Name) := withMainContext do
     -- boundary" declaration (e.g. FullWidth's 85-window `innerRegion`), and while the
     -- seal already suppresses whnf, the def's *equation* in a simp set would not be.
     if getReducibilityStatusCore (← getEnv) c matches .irreducible then continue
+    -- loop-combinator wrappers stay folded for the v2 SPINE peel (see
+    -- `circuitLoopHeads`); v1's peel WANTS them unfolded — its canonical ∀-round
+    -- split lemmas fire on the opened spelling
+    if excludeLoops && circuitLoopHeads.contains c then continue
     let isCircuitTy ← forallTelescope di.type fun _ body =>
       pure (body.getAppFn.constName? == some ``Halo2.Circuit ||
             body.getAppFn.constName? == some ``Halo2.RegionCircuit)
