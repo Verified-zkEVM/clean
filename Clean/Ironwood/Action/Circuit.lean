@@ -249,11 +249,11 @@ def synthWitness (G : Generators) (W : Witnesses Fp) (cfg : Config) :
   Sinsemilla.load G cfg.sinsemilla1.generatorTable
   let psiOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.psiOld)
   let rhoOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.rhoOld)
-  let cmOld ← (Ecc.WitnessPoint.point.toFormal "witness point").call
+  let cmOld ← Ecc.WitnessPoint.pointFormal.call
     cfg.eccConfig.witnessPoint W.cmOld
-  let gdOld ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+  let gdOld ← Ecc.WitnessPoint.pointNonIdFormal.call
     cfg.eccConfig.witnessPoint W.gdOld
-  let akP ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+  let akP ← Ecc.WitnessPoint.pointNonIdFormal.call
     cfg.eccConfig.witnessPoint W.akP
   let nk ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.nk)
   let vOld ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.vOld)
@@ -335,9 +335,9 @@ def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     constrainEqual derivedCmOld.x wc.cmOld.x
     constrainEqual derivedCmOld.y wc.cmOld.y)
   -- circuit.rs:731-779 — new note commitment integrity (`rho_new = nf_old`)
-  let gdNew ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+  let gdNew ← Ecc.WitnessPoint.pointNonIdFormal.call
     cfg.eccConfig.witnessPoint W.gdNew
-  let pkdNew ← (Ecc.WitnessPoint.pointNonId.toFormal "witness non-identity point").call
+  let pkdNew ← Ecc.WitnessPoint.pointNonIdFormal.call
     cfg.eccConfig.witnessPoint W.pkdNew
   let psiNew ← loadPrivate (cfg.advices 0) (Witgen.MOver.toIRScalar W.psiNew)
   let cmNew ← (NoteCommit.Main.circuit G B.noteCommitR

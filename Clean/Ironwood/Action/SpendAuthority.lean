@@ -54,7 +54,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
 
   synthesize := fun (fcfg, ecfg) input => do
     let alphaCommitment ← (Ecc.MulFixed.FullWidth.circuit G).call fcfg input.alpha
-    let rk ← (Ecc.Add.add.toFormal "complete point addition").call ecfg
+    let rk ← Ecc.Add.addFormal.call ecfg
       { p := alphaCommitment, q := input.akP }
     pure rk
 
@@ -80,7 +80,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
+      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
     -- ═══ USER half ═══
     have hAl := h_call_alphaCommitment hE
     have hAddS := h_call_rk trivial ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
@@ -91,7 +91,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
+      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
     -- ═══ USER half ═══
     have hAl := (h_spec_0 hE).1
     exact ⟨hE, trivial, ⟨by rw [hAl]; exact G.smul_valid _, hA⟩, trivial⟩

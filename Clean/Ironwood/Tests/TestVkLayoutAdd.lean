@@ -12,7 +12,7 @@ sibling-checkout `AddDumpCircuit` (`ecc::chip::layout_dump::dump_layout_add`): t
 9-advice configure as the CS test, synthesizing a `"witness pq"` region (the four input
 coordinates as `Value::unknown()` cells on `a0..a3`, row 0) followed by one
 `add::Config::assign_region` — here the ported `Add.add` bundle behind
-`.toFormal "complete point addition"`.
+`addFormal`.
 
 This is the smallest possible end-to-end layout match, exercising every keygen-view
 product on a two-region circuit:
@@ -31,7 +31,7 @@ product on a two-region circuit:
 namespace Halo2.Ironwood.Fixtures.Test.LayoutAdd
 
 open Ironwood (Fp)
-open Ironwood.Ecc.Add (Config add)
+open Ironwood.Ecc.Add (Config add addFormal)
 open Halo2.Ironwood.Fixtures.Layout
 
 /-- The harness config plus the columns `synthesize` needs for witnessing — the same
@@ -62,7 +62,7 @@ def layoutProgram : Circuit Fp Unit := do
     let qy ← assignAdvice (addAdvices 3) 0 unknown
     pure (px, py, qx, qy))
   -- the real deal (chip.rs `add` region name)
-  let _ ← (add.toFormal "complete point addition").call addCfg
+  let _ ← addFormal.call addCfg
     { p := { x := pq.1, y := pq.2.1 }, q := { x := pq.2.2.1, y := pq.2.2.2 } }
   pure ()
 

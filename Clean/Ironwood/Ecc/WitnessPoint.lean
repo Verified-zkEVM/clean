@@ -126,15 +126,23 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     · linear_combination hc
     · exact ⟨h_output.1.symm, h_output.2.symm⟩
 
-derive_contract_bridges pointNonId_toFormal (name : String) := pointNonId.toFormal name
+/-- The layouter-level point witnesses: the region bundles in their own regions, named
+once here as in the Rust chip (`ecc/chip/witness_point.rs`). -/
+def pointFormal :=
+  point.toFormal "witness point"
+
+def pointNonIdFormal :=
+  pointNonId.toFormal "witness non-identity point"
+
+derive_contract_bridges pointFormal := pointFormal
+
+derive_contract_bridges pointNonIdFormal := pointNonIdFormal
 
 /-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
-theorem pointNonId_toFormal_output (name : String) (cfg : Config)
+theorem pointNonIdFormal_output (cfg : Config)
     (input : Var (Unconstrained Point) Fp) (i : RegionIndex) :
-    (pointNonId.toFormal name).output cfg input i
+    pointNonIdFormal.output cfg input i
       = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
-
-derive_contract_bridges point_toFormal (name : String) := point.toFormal name
 
 end WitnessPoint
 
