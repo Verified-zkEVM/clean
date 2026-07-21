@@ -71,16 +71,14 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   extract := fun (_, fcfg, _) _ i₀ env =>
     Ecc.MulFixed.FullWidth.fwExtract fcfg (i₀ + 2) env
 
-  Spec input output wit :=
-    ∃ m : ℕ, m < 2 ^ 64 ∧ (show Fp from input.magnitude) = (m : Fp) ∧
-      (((show Fp from input.sign) = 1 ∧
-          output = ((m : Fq) • V : Point Fp) + (wit.2 • R : Point Fp)) ∨
-        ((show Fp from input.sign) = -1 ∧
-          output = (((-(m : Fq)) : Fq) • V : Point Fp) + (wit.2 • R : Point Fp)))
+  Spec
+  | ⟨ _, (magnitude : Fp), (sign : Fp )⟩, output, (_, s) =>
+    magnitude.val < 2 ^ 64 ∧
+      ((sign = 1 ∧ output = (magnitude.val : Fq) • V + s • R) ∨
+        (sign = -1 ∧ output = -(magnitude.val : Fq) • V + s • R))
 
-  ProverAssumptions input _ _ :=
-    (show Fp from input.magnitude).val < 2 ^ 64 ∧
-      ((show Fp from input.sign) = 1 ∨ (show Fp from input.sign) = -1)
+  ProverAssumptions := fun ⟨_, (magnitude : Fp), (sign : Fp)⟩ _ _ =>
+    magnitude.val < 2 ^ 64 ∧ (sign = 1 ∨ sign = -1)
 
   soundness := by
     circuit_proof_start2 [
@@ -91,12 +89,12 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
       Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     obtain ⟨hSEnv, hFEnv⟩ := hE
-    obtain ⟨m, hm_lt, hmag, hcases⟩ := h_call_commitment hSEnv
+    obtain ⟨hm_lt, hcases⟩ := h_call_commitment hSEnv
     have hBl := h_call_blind hFEnv
     have hAddS := h_call_cv trivial ⟨by
         rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
       by rw [hBl]; exact R.smul_valid _⟩
-    refine ⟨m, hm_lt, hmag, ?_⟩
+    refine ⟨hm_lt, ?_⟩
     rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
     · exact Or.inl ⟨hsign, by simp_all⟩
     · exact Or.inr ⟨hsign, by simp_all⟩
@@ -113,7 +111,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.Add.toFormal_assumptions_eq, Ecc.Add.toFormal_spec_eq]
     obtain ⟨hSEnv, hFEnv⟩ := hE
     obtain ⟨hmag, hsign⟩ := hPA
-    obtain ⟨⟨m, hm_lt, hmag', hcases⟩, -⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
+    obtain ⟨⟨hm_lt, hcases⟩, -⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
     have hBl := (h_spec_1 hFEnv).1
     refine ⟨⟨hSEnv, hmag, hsign⟩, hFEnv, trivial, ⟨?_, by rw [hBl]; exact R.smul_valid _⟩,
       trivial⟩

@@ -1031,9 +1031,9 @@ def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
 /-- The gadget's semantic contract: the output is the fixed base scaled by the signed
 short exponent. -/
 def Spec (B : FixedBase) (input : Inputs Fp) (output : Point Fp) : Prop :=
-  ∃ m : ℕ, m < 2 ^ 64 ∧ input.magnitude = (m : Fp) ∧
-    ((input.sign = 1 ∧ output = ((m : Fq) • B : Point Fp)) ∨
-      (input.sign = -1 ∧ output = (((-(m : Fq)) : Fq) • B : Point Fp)))
+  input.magnitude.val < 2 ^ 64 ∧
+    ((input.sign = 1 ∧ output = (input.magnitude.val : Fq) • B) ∨
+      (input.sign = -1 ∧ output = ((-(input.magnitude.val : Fq)) : Fq) • B))
 
 /-- The region count of `synthesize`: inner mul + most significant word. -/
 private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
@@ -1182,6 +1182,20 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       (sign := input_sign) (ySigned := output_y) hmulEq
       (fun hs => by rw [← hyeq, hs, one_mul])
       (fun hs => by rw [← hyeq, hs]; ring)
+    -- TODO this is a bridge from the spec the proof originally used, to a more direct one
+    -- refactor to prove this more naturally
+    let output : Point Fp := { x := output_x, y := output_y }
+    suffices ∃ m : ℕ, m < 2 ^ 64 ∧ input_magnitude = (m : Fp) ∧
+    ((input_sign = 1 ∧ output = ((m : Fq) • B : Point Fp)) ∨
+      (input_sign = -1 ∧ output = (((-(m : Fq)) : Fq) • B : Point Fp))) by
+      simp only [output] at this
+      obtain ⟨V, hV64, hV_def, hsign⟩ := this
+      have hmag : input_magnitude.val = V := by
+        rw [hV_def, ZMod.val_natCast_of_lt]
+        linarith
+      subst hmag
+      simp only [Spec, hV64, hsign]
+      simp
     refine ⟨V, hV64, ?_, ?_⟩
     · rw [← hIMag, hMag, hV_def]
     · rcases hsign with hs | hs
