@@ -131,7 +131,8 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
   soundness := by
     circuit_proof_start2 [zChain, reads, round, mul_one]
     choose k hk using region_0
-    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    simp only [← exit_eq, ← zs_eq, circuit_norm] at output_eq
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebx, heby⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -156,7 +157,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         exact hz
     · -- the accumulator fold
       intro m hOn hacc0 h2m hbudget
-      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebx, ← heby]
       have hfold := loop_fold
         (fun r => { z := env.advice cfg.z ((place self + (offset + r) : ℕ) : ℤ),
                     xA := env.advice cfg.xA ((place self + (offset + r + 1) : ℕ) : ℤ),
@@ -187,7 +188,8 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
   completeness := by
     circuit_proof_start2 [reads]
     obtain ⟨m, hH0, hbudget⟩ := prover_assumptions
-    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    simp only [← exit_eq, ← zs_eq, circuit_norm] at output_eq
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebx, heby⟩, hzs⟩ := output_eq
     -- the z column per-index, off the vector output equation
     have h_output_zs : ∀ (j : ℕ) (hj : j < n),
         env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
@@ -230,7 +232,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       simp only [circuit_norm, input_eq]
       exact hH
     · -- the exit state is the iterated step
-      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebx, ← heby]
       have hn := hIter n le_rfl
       simp only [rowFam] at hn
       simpa using hn

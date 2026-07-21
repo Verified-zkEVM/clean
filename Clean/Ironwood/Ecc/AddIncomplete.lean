@@ -111,6 +111,7 @@ def add : FormalRegionCircuit Fp
 
   soundness := by
     circuit_proof_start2 [gate]
+    simp only [← xR_eq, ← yR_eq, circuit_norm] at output_eq
     obtain ⟨hpoly1, hpoly2⟩ := region_0
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := assumptions
     -- formulate gate polys in terms of `nondegenerateAdd`

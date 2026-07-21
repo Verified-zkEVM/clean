@@ -663,6 +663,8 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     obtain ⟨m, hH⟩ := prover_assumptions
     obtain ⟨-, -, -, -, hbase⟩ := output_eq
     -- substitute the witnessed cells: every out-row cell is a field of `w.step`
+    simp only [← w_eq, readCell, circuit_norm]
+      at region_0 region_1 region_2 region_3 region_4 region_5
     simp only [region_0, region_1, region_2, region_3, region_4, region_5, ← hbase]
     exact ⟨step_gates hH, trivial⟩
 

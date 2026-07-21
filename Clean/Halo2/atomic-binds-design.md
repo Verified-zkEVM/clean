@@ -76,23 +76,21 @@ a loop combinator before the peel sees it.
 - **primitive** — everything else (`assignRegion`, `currentRegion`, table ops): chunk
   `h_region_<k>`, opened with `circuit_norm`.
 
-**The mint gate is TYPE-directed, not class-directed, and COMPOUND-only.** A used binder mints iff its
-output is CELL-VALUED (an `AssignedCell`, a `Var` record, a vector of cells — the
-things whose concrete spellings metastasize through continuations). Index-valued
-outputs (`currentRegion`'s `RegionIndex`, ℕ) must NOT mint: they feed offset
-arithmetic that has to stay literal for the region-count folding — atomizing them
-would re-hide what `foldCallRegionCount` exists to expose (the same judgment this doc
-already makes for region counts, generalized into the detector). Unit/discarded
-binders mint nothing. A bare `AssignedCell` binder does not mint either: `.of self row
-col` is already the minimal atom — the spelling leaf gates and witness facts match on —
-and minting it aliases the gate facts away from the cell (found by breaking the
-WitnessPoint leaf port). Only compound cell-valued outputs (records, vectors)
-metastasize and mint. And LAYOUTER level only: region-level raw binds are
-readState-class naming helpers whose outputs feed row-local gates spelled at concrete
-cells — minting them aliases the gate facts (found by breaking the MulIncompleteRound
-port); the metastasis the mint prevents is a layouter-composition phenomenon. Loop
-chunks share the raw `region_<k>` naming (the registry's spine-atomicity and
-auto-unfold exclusion are the substantive protections, not the name).
+**The mint gate: every used binder mints, except index-valued ones.** The single
+principled exclusion is index-valued binders (`currentRegion`'s `RegionIndex`, ℕ):
+they feed offset arithmetic that has to stay literal for the region-count folding —
+atomizing them would re-hide what `foldCallRegionCount` exists to expose (the same
+judgment this doc already makes for region counts). Unit/discarded binders mint
+nothing. Everything else mints uniformly — the defining equation reconstructs the
+concrete spelling wherever a proof wants it, so no information is lost, and the state
+mirrors the do-block everywhere. (Two narrower gates — compound-only and
+layouter-only — were tried when fresh leaf ports broke on the mint, and REJECTED on
+maintainer review: the breakages were pre-mint spelling assumptions, not design
+signals. Adapting all five affected files cost one recurring idiom —
+`simp only [← <atom>_eq, circuit_norm] at output_eq` to land atoms on the concrete
+spelling a proof's helper lemmas speak — roughly two lines per proof.) Loop chunks
+share the raw `region_<k>` naming; the registry's spine-atomicity and auto-unfold
+exclusion are the substantive loop protections, not the name.
 
 **Loop outputs mint as ONE atom**: a used map-style loop generalizes its whole
 `(loop …).output i` to a single binder-named atom; the defining equation is reduced
