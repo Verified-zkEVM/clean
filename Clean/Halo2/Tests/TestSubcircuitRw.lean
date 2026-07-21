@@ -58,9 +58,7 @@ def regionParent :
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
     -- `hc : EnvA → A → Spec`; feed the (trivial) preconditions to expose `output.Valid`
-    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
-      RegionCircuit.output_pure, output_assignAdvice,
-      FormalRegionCircuit.output_call] at h_output
+    simp only [FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by
@@ -104,9 +102,7 @@ def regionParentWithOp :
     -- rewrites the folded call chunk. The child is never unfolded.
     simp only [circuit_norm] at hc
     subcircuit_rw at hc
-    simp only [ElaboratedRegionCircuit.output_eq, RegionCircuit.output_bind,
-      RegionCircuit.output_pure, output_assignAdvice,
-      FormalRegionCircuit.output_call] at h_output
+    simp only [RegionCircuit.output_bind, FormalRegionCircuit.output_call] at h_output
     exact h_output ▸ hc trivial trivial
 
   completeness := by

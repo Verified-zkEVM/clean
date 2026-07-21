@@ -501,14 +501,22 @@ constraints (matching the reference completeness prefix). Guarded: a multi-targe
 already in normal form. -/
 def peelConstraints (d : Direction) (unfold : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
     TacticM Unit := do
+  -- One bestEffort PER target: a single pathological target (e.g. a region that inlines
+  -- gate assertions around a child call, whose unfold deep-recurses) must degrade alone,
+  -- not roll back the peel of every other target — the Short/BaseFieldElem bundles lost
+  -- the whole peel to exactly that with the earlier single multi-target call.
   if d.isSoundness then
     -- Peel the constraints hyp and the output-value equation, AND the goal (the `Spec`): the
     -- unfold list carries the gadget's `Spec` def (e.g. `RoundInvariant`), which must fire at the
     -- goal too — otherwise a composite gadget's user half has to re-run `simp [circuit_norm, Spec]`
-    -- by hand. Guarded, so it stays a no-op on a leaf whose `Spec` is already atomic.
-    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident $(mkIdent `h_output):ident ⊢))
+    -- by hand. Guarded, so each stays a no-op on a leaf whose part is already atomic.
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hc):ident))
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `h_output):ident))
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*]))
   else
-    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent `hwit):ident $(mkIdent `hA):ident $(mkIdent `hPA):ident $(mkIdent `h_input):ident $(mkIdent `h_output):ident ⊢))
+    for h in [`hwit, `hA, `hPA, `h_input, `h_output] do
+      bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*] at $(mkIdent h):ident))
+    bestEffort <| evalTactic (← `(tactic| simp +instances only [circuit_norm, $unfold,*]))
 
 /-- Step (c): `provable_type_simp` (never fails; runs to a fixpoint). -/
 def normalizeProvable : TacticM Unit := do
