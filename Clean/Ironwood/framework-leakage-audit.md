@@ -638,6 +638,14 @@ Mark progress here per file as it lands; remove this section when the sweep is d
   bare/simp'd `exact h`): the 155 `with_unfolding_all` sites, then the manual
   `SubcircuitRw.layouter_completeness_*` applications and the `*Inputs_eval_eq*` /
   `*_output` record bridges. Progress will be marked here per push.
+- **Slice 2 wave 1 (17e39035): Bundle 155 → 79 `with_unfolding_all`.** 76 sites now
+  close via `circuit_norm` (+ `explicit_provable_type`, and Bundle's own
+  `extract`/`cellRead` unfolds — a gadget unfolding its own defs is not leakage). The
+  79 survivors all bridge `FormalCircuit.output` METADATA to concrete cell records —
+  blocked on exactly the output-reduction H parked as `rescueFoldedOutput` (5c215694,
+  "regime conflict documented"). That reduction (or a `foldCallRegionCount`-style
+  output simproc, see `Clean/Halo2/Subcircuit.lean`) is the single remaining gate for
+  Bundle's `with_unfolding_all` count to reach zero.
 
 **Reserved by the hint-arc agent (Claude session 07d7db7f, "agent H")** — the framework
 stream + exemplar ports to the no-leakage ideal (maintainer ruling 2026-07-21: sound/
