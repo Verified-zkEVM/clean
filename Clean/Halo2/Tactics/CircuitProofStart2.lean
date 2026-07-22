@@ -510,15 +510,22 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     for k in [0:regionIdx] do
       run? (← `(tactic| subcircuit_rw ! at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
   else
-    -- normalize the goal ONCE before the engine: every peel is done, so nothing
-    -- remains for the peel `rw`s to match and the full pass is safe. This surfaces
-    -- every call chunk in the canonical spelling the goal walker matches — calls
-    -- embedded in mid-chain or terminal raw regions (`assignRegion "…" (X.call …)`,
-    -- FullWidth's add), and calls under region-level bind spines (BFE's
-    -- `witnessCheck13`) — with region counts folded to the literal indexes the
-    -- witness locator compares at `.reducible`.
+    -- normalize the goal AND the witness-side chunks ONCE, IDENTICALLY, before the
+    -- engine: every peel is done, so nothing remains for the peel `rw`s to match and
+    -- the full pass is safe. This surfaces every call chunk in the canonical spelling
+    -- the goal walker matches — calls embedded in mid-chain or terminal raw regions
+    -- (`assignRegion "…" (X.call …)`, FullWidth's add), and calls under region-level
+    -- bind spines (BFE's `witnessCheck13`) — with region counts folded to literal
+    -- indexes. Witness chunks must ride in the SAME pass: the locator's child compare
+    -- is fail-fast syntactic-first, and a goal-side-only pass leaves the two sides
+    -- with invisibly different spellings (Chain's slot: an `if`-valued child argument
+    -- diverged only under the goal normalization).
+    let mut engineTargets : Array Name := callChunks
+    for k in [0:regionIdx] do
+      engineTargets := engineTargets.push (Name.mkSimple s!"region_{k}")
+    let locs := engineTargets.map mkIdent
     run? (← `(tactic| simp only [circuit_norm, Operations.regionCount,
-      foldCallRegionCount, $unfolds,*]))
+      foldCallRegionCount, $unfolds,*] at $[$locs:ident]* ⊢))
     run? (← `(tactic| subcircuit_rw !))
     -- h_spec_<k> arrives in call order — name the witness atom from the k-th call's
     -- do-binder (`wit_<binder>`), falling back to the index for excess spec hyps
