@@ -286,36 +286,30 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
       EnvAssumptions]
     -- the child decomposition: s = lo + 2^{K·numWords}·zLast, lo < 2^{K·numWords}
-    have hSpec := dec_spec env_assumptions assumptions
-    simp only [circuit_norm] at hSpec
-    obtain ⟨-, lo, hlo, hDecomp⟩ := hSpec
+    specialize dec_spec env_assumptions assumptions
+    obtain ⟨-, lo, hlo, hDecomp⟩ := dec_spec
     obtain ⟨hCz0, hCz130, hCk254, hCalpha, hCsml, hCs,
       hSCheck, hRecovery, hLoZero, hSMLcheck, hCanon⟩ := region_0
     rw [hKW] at hDecomp hlo
     rw [show (((2 ^ 130 : ℕ) : Fp)) = (2 ^ 130 : Fp) from by norm_num] at hDecomp
+    simp_all only
     refine ⟨?_, ?_, ?_⟩
     · -- recovery: z_0 = alpha + t_q
-      rw [← hCz0, ← hCalpha, ← sub_eq_zero]
       linear_combination hRecovery
     · -- k_254 = 0 ∨ z_130 = 2^124
-      rw [← hCk254, ← hCz130]
       rcases mul_eq_zero.mp hLoZero with h | h
       · exact Or.inl h
       · exact Or.inr (by
           rw [show (2 ^ 124 : Fp) = (2 : Fp) ^ 124 from by norm_num]
           linear_combination sub_eq_zero.mp h)
     · -- the canonicity existential: sHi = the child's zLast value, sLo = lo
-      refine ⟨AssignedCell.eval place env dec_zLast, lo, hlo, ?_, ?_, ?_⟩
+      use AssignedCell.eval place env dec_zLast, lo, hlo
+      refine ⟨?_, ?_, ?_⟩
       · -- alpha + k_254·2^130 = lo + 2^130·zLast, via s_check + the s copy + the decomposition
-        rw [← hCalpha, ← hCk254]
-        linear_combination -hSCheck + hCs + hDecomp
+        linear_combination -hSCheck
       · -- k_254 = 0 ∨ zLast = 0
-        rw [← hCk254]
-        rcases mul_eq_zero.mp hSMLcheck with h | h
-        · exact Or.inl h
-        · exact Or.inr (by rw [← hCsml]; exact h)
+        exact mul_eq_zero.mp hSMLcheck
       · -- k_254 = 1 ∨ z_130 ≠ 0 ∨ zLast = 0
-        rw [← hCk254, ← hCz130]
         rcases mul_eq_zero.mp hCanon with hK | hRest
         · rcases mul_eq_zero.mp hK with hK1 | hEta
           · exact Or.inl (by linear_combination -hK1)
@@ -323,22 +317,16 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
             intro hz
             rw [hz, zero_mul] at hEta
             exact zero_ne_one (by linear_combination -hEta)
-        · exact Or.inr (Or.inr (by rw [← hCsml]; exact hRest))
+        · exact Or.inr (Or.inr hRest)
 
   -- ══ Completeness ══
   completeness := by
     circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
       EnvAssumptions, sWit, etaWit]
+    use ⟨env_assumptions, assumptions⟩
     -- the child's constraints and honest facts arrive through the engine's
     -- strengthened goal position (the `EnvA ∧ A ∧ PA` bundle) and `dec_spec`
-    have hE' : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
-        cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
-      rw [copyCheck_envAssumptions_eq]; exact env_assumptions
-    have hA' : (LookupRangeCheck.copyCheck K (numWords K) false).Assumptions
-        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-          ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
-      rw [copyCheck_assumptions_eq]; exact assumptions
-    obtain ⟨hChildSpec, hChildPS⟩ := dec_spec hE' hA'
+    obtain ⟨hChildSpec, hChildPS⟩ := dec_spec env_assumptions assumptions
     obtain ⟨-, lo, hlo, hDecompV⟩ := hChildSpec
     obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := region_1
     obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := prover_assumptions
@@ -363,8 +351,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         exact hsLo_lt
       rw [Nat.div_eq_of_lt hsVal, Nat.cast_zero]
     have h2124 : (2 ^ 124 : Fp) = (2 : Fp) ^ 124 := by norm_num
-    refine ⟨⟨hE', assumptions⟩,
-      hWz0, hWz130, hWk254, hWalpha, hWsml, hWs2, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨hWz0, hWz130, hWk254, hWalpha, hWsml, hWs2, ?_, ?_, ?_, ?_, ?_⟩
     · -- s_check: the s cell = alpha_gate + k254_gate·2^130
       rw [hWs2, hsval, hWalpha, hWk254]; ring
     · -- recovery: z_0 − alpha − t_q = 0
