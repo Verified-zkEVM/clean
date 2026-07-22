@@ -216,6 +216,50 @@ new caller over the same semantics, not a fork — and the standalone `subcircui
 driver for manual and v1-era proofs until that corpus empties (the CPS1/CPS2
 coexistence pattern).
 
+**Review notes (G-agent, from the porting corpus — gaps to settle before/while
+building):**
+
+1. **Raw-embedded calls are not covered by "the peel visits every call bind."** A
+   large corpus class is calls the peel cannot see as binds: (i) the standard
+   region-bundle invocation `assignRegion "…" (X.call …)` — the whole region body is
+   one call (FullWidth's terminal add, BFE's inner/Add wraps); (ii) calls mid-body of
+   a composite raw region (Short's mswRegion add, BFE's witnessCheck13 rangeCheck).
+   For (i) the peel should recognize the shape syntactically and treat it as a call
+   bind (unwrap one `assignRegion` layer — no matching, still ground-truth Exprs).
+   For (ii) something must remain: either chunk-LOCAL discovery right after the raw
+   chunk opens (single-chunk scope, fresh spellings — far safer than the global
+   walker), or scoped retention of the post-pass walker for raw chunks only. "What
+   dies" currently overclaims: the matching layer can only die for binds the peel
+   actually visits.
+
+2. **Loops: atoms cannot be minted under the binder.** Under-binder conversion at the
+   ∀-split works for CONTRACTS (leaf applied at open round terms via telescope), but
+   `generalize` cannot mint atoms over loose bvars — per-round outputs stay concrete;
+   only the loop's closed-form boundary output mints, as today. State this so the
+   symmetric-loops promise isn't read as per-round atoms.
+
+3. **Failure semantics, and the clear-guard doesn't fully die.** Precedent: fail-soft
+   minting (b996ffc3). If a leaf instantiation fails at peel time (unusual shape,
+   defeq miss), the block must degrade loudly — keep the raw chunk AND the witness
+   chunk (i.e. the clear-guard logic returns in fail-soft form; "an engine miss
+   becomes impossible" holds only for the happy path).
+
+4. **The extract witness belongs in the per-bind artifact block.** `wit_<binder>` +
+   defining equation are constructible at peel time directly from bundle/config/
+   input/index (no need to wait for the opened contract, which is why it currently
+   lives in the post-pass). Order within the block: output atom + wit atom + their
+   equations FIRST, then the leaf instantiation, so the contract is emitted over the
+   atoms (`abstractOutputsIn` finds the equations in context). Keep the Unit-witness
+   skip.
+
+5. **Naming details that otherwise get re-invented ad hoc:** anonymous binders
+   (`let _ ← X.call …`) currently produce fresh-name chunks (`x_spec` in Chain's
+   slot) — pin a rule (e.g. `out_spec` for a terminal call, child-derived otherwise).
+   `<binder>_spec` collisions use the existing prime-suffix convention. The
+   `h_spec_k` → `<binder>_spec` corpus rename (MulComplete, MulOverflow,
+   CommitDomain, HashToPoint, Chain slot, HashPiece loop parents) must land in the
+   SAME commit as the tactic change — the corpus doesn't build mid-way.
+
 **Build assignment:** F (author of the minting loop). The standalone engine's design
 doc (`subcircuit-engine-design.md`) carries a superseded-for-CPS2 status note.
 
