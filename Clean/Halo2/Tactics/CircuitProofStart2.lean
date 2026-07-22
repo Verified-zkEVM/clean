@@ -314,28 +314,27 @@ partial def walkGoalScoped (p : Expr) (sources : Array (Expr × Expr)) :
     -- witness side spells `(step …).nextRegionIndex i₀` (operations_bind); those are
     -- defeq, not reducibly so. No storm risk: the candidates are this bind's own
     -- witness conjuncts, child/config compare stays fail-fast.
+    -- single REDUCIBLE pass, `useOpsIdx`: the ops-index compare is uniform across the
+    -- goal and witness sides, so witness matching needs no relaxed-transparency retry.
     let mut found : Option (Expr × Expr) := none
-    for relaxed in [false, true] do
-      if found.isNone then
-        for s in sources do
-          if ← SubcircuitRw.witnessMatches? c s.2 relaxed then
-            found := some s
-            break
+    for s in sources do
+      if ← SubcircuitRw.witnessMatches? c s.2 (relaxed := false) (useOpsIdx := true) then
+        found := some s
+        break
     let some (witProof, witTy) := found
       -- no counterpart among THIS bind's sources: a later bind's chunk, pre-split by
       -- the goal-side structural pass at region level — its own peel turn converts
       -- it. A genuine miss is caught by the post-landing no-call-left-behind scan.
       | do trace[Halo2.circuit_proof_start2] "scoped walk: no source for chunk, skipping"
            return (none, #[])
+    -- emit the contract at the OPS-index (defeq to the `Constraints` region-arg, but
+    -- the spelling the minted output atom carries), so the child's `.output …` in the
+    -- derived statement lands on the atom REDUCIBLY — no relaxed-transparency pass.
+    let c := { c with regionIdx := c.opsIdx }
     let some (bundle, strengthenProof) ← SubcircuitRw.completenessLeaf? c p witProof witTy
       | throwError "circuit_proof_start2: the completeness strengthening leaf failed \
           to instantiate at chunk:{indentExpr p}"
-    -- allowRelaxed: the derived statement must land on the minted output atoms, and
-    -- the goal-side chunk can spell the child's region index `i₀ + regionCount …`
-    -- where the atom equation spells the folded literal — the same-child relaxed
-    -- pass of `findOutputLocal?` bridges exactly that
     let some (dTy, dProof) ← SubcircuitRw.derivedStatement c witProof witTy
-        (allowRelaxed := true)
       | throwError "circuit_proof_start2: the derived contract statement failed to \
           instantiate at chunk:{indentExpr p}"
     -- suggested name: the child bundle's base name (`round_spec` for a loop over
@@ -487,7 +486,11 @@ def convertCallChunkSound (chunkName binder : Name) : TacticM (Array Name) := do
     let some c ← SubcircuitRw.matchChunk? ty
       | throwError "circuit_proof_start2: call bind '{binder}': chunk is not a \
           call-keyed constraint chunk:{indentExpr ty}"
-    let some (concl, proof) ← SubcircuitRw.soundnessLeaf? c ty (allowRelaxed := true)
+    -- emit the contract at the OPS-index (defeq to the `Constraints` region-arg, but
+    -- the spelling the minted output atom carries), so the child's `.output …` in the
+    -- weakened chunk lands on the atom REDUCIBLY — no relaxed-transparency output pass.
+    let c := { c with regionIdx := c.opsIdx }
+    let some (concl, proof) ← SubcircuitRw.soundnessLeaf? c ty
       | throwError "circuit_proof_start2: call bind '{binder}': the soundness leaf \
           failed to instantiate (child {indentExpr c.child}\n) at chunk:{indentExpr ty}"
     let goal ← getMainGoal
@@ -588,7 +591,17 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
       let minted ← mintAtoms outs nm #[chunkHyp, `output_eq]
       for (_, hn) in minted do
         run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent hn):ident))
-  -- fold the offsets (layouter only; region binds share one region index)
+  -- fold the offsets (layouter only; region binds share one region index). The fold
+  -- set covers EVERY preceding-step kind, not just `.call`: a raw `assignRegion`/
+  -- `loadTable` step's `operations`/`nextRegionIndex` must reduce here too, on BOTH
+  -- the witness chunk and the goal, so the region INDEX of the split-off chunk lands
+  -- in one spelling on both sides. Otherwise the goal side (whose prior raw bind's
+  -- `chunk_split` already unfolded `(assignRegion …).operations`) and the witness side
+  -- (untouched) diverge — `i₀ + regionCount [Operation.region …]` vs
+  -- `i₀ + regionCount ((assignRegion …).operations i₀)` — defeq but not reducibly, the
+  -- residue that used to force a relaxed-transparency compare. Region counts of raw
+  -- steps stay symbolic (they collapse to literals in landing); we only converge the
+  -- `operations`/`nextRegionIndex` spelling.
   unless region do
     if sound then
       run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
@@ -638,7 +651,7 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
   if sound then
     withMainContext do
       if let some decl := (← getLCtx).findFromUserName? chunkName then
-        SubcircuitRw.runSoundness decl.fvarId (allowRelaxed := true) (strict := true)
+        SubcircuitRw.runSoundness decl.fvarId (strict := true) (useOpsIdx := true)
   return some (chunkName, isCall, rawWitEqs)
 
 /-- Find a call-keyed constraint chunk subterm of `e` — the no-call-left-behind scan.
@@ -802,7 +815,7 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
         if sound then
           withMainContext do
             if let some decl := (← getLCtx).findFromUserName? chunkName then
-              SubcircuitRw.runSoundness decl.fvarId (allowRelaxed := true) (strict := true)
+              SubcircuitRw.runSoundness decl.fvarId (strict := true) (useOpsIdx := true)
   | none =>
     if region then
       if sound then

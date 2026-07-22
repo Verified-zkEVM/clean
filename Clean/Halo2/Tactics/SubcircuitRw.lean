@@ -420,8 +420,15 @@ structure ChunkMatch where
   place : Expr
   /-- Verifier `Environment`, as it appears in the matched `Constraints` chunk. -/
   env : Expr
-  /-- `self` (region) or `i₀` (layouter). -/
+  /-- `self` (region) or `i₀` (layouter): the `Constraints`/`RegionOperations.Constraints`
+  head's own region-index argument. Spelled via `regionCount` when a prior raw bind's
+  `chunk_split` unfolded the preceding `operations`. -/
   regionIdx : Expr
+  /-- The index the child's `.operations` is applied at (`(child.call …).operations HERE`).
+  For a genuine chunk this is defeq to `regionIdx`, but it is spelled uniformly across
+  the goal and witness sides (both from `operations_bind` → `(preceding).nextRegionIndex`),
+  whereas `regionIdx` diverges — so witness matching compares THIS, not `regionIdx`. -/
+  opsIdx : Expr
 
 /-- Recognize a call-keyed constraint chunk. On the `Constraints`/`RegionOperations.Constraints`
 head, dig into the `ops` argument for the `call` application and read the child contract's
@@ -476,7 +483,7 @@ def matchChunk? (e : Expr) : MetaM (Option ChunkMatch) := do
       F := callArgs[0]!, finiteField := callArgs[1]!, Input := callArgs[2]!, Output := callArgs[3]!
       ctInput := callArgs[4]!, ctOutput := callArgs[5]!, CI := callArgs[6]!, Cfg := callArgs[7]!
       child := callArgs[8]!, config := callArgs[9]!, offset? := some callArgs[10]!, input := callArgs[11]!
-      place := place, env := env, regionIdx := regionIdx }
+      place := place, env := env, regionIdx := regionIdx, opsIdx := opsArgs[4]! }
   else if !isRegion && callName == ``FormalCircuit.call then
     unless callArgs.size == 11 do
       trace[Halo2.subcircuit_rw] "skip: layouter call arity {callArgs.size}"; return none
@@ -485,7 +492,7 @@ def matchChunk? (e : Expr) : MetaM (Option ChunkMatch) := do
       F := callArgs[0]!, finiteField := callArgs[1]!, Input := callArgs[2]!, Output := callArgs[3]!
       ctInput := callArgs[4]!, ctOutput := callArgs[5]!, CI := callArgs[6]!, Cfg := callArgs[7]!
       child := callArgs[8]!, config := callArgs[9]!, offset? := none, input := callArgs[10]!
-      place := place, env := env, regionIdx := regionIdx }
+      place := place, env := env, regionIdx := regionIdx, opsIdx := opsArgs[4]! }
   else
     trace[Halo2.subcircuit_rw] "skip: call head mismatch ({callName})"
     return none
@@ -697,12 +704,16 @@ Returns `some (p', proof : p → p')` or `none` (no change). `depth` guards runa
 With `strict` (the cps2 in-peel caller), a MATCHED chunk whose leaf fails is a hard error —
 failure classes must surface, not degrade into a silently-raw chunk (maintainer ruling,
 `atomic-binds-design.md` review note 3). -/
-partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := false) :
+partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := false)
+    (useOpsIdx : Bool := false) :
     MetaM (Option (Expr × Expr)) := do
   -- Strip `mdata` wrappers (see `walkGoal`): the recognizers key on the bare head.
   let p := (← instantiateMVars p).consumeMData
   -- Leaf: is `p` itself a call-keyed chunk?
   if let some c ← matchChunk? p then
+    -- `useOpsIdx` (cps2): emit the consequence at the OPS-index so the child `.output`
+    -- lands on the minted atom reducibly (see `witnessMatches?`); v1 keeps `regionIdx`.
+    let c := if useOpsIdx then { c with regionIdx := c.opsIdx } else c
     if let some (concl, proof) ← soundnessLeaf? c p allowRelaxed then
       trace[Halo2.subcircuit_rw] "rewrote positive chunk (region={c.isRegion})"
       return some (concl, proof)
@@ -712,8 +723,8 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := 
   -- Structural cases.
   match p.and? with
   | some (a, b) =>
-    let ra ← walkPos a allowRelaxed strict
-    let rb ← walkPos b allowRelaxed strict
+    let ra ← walkPos a allowRelaxed strict useOpsIdx
+    let rb ← walkPos b allowRelaxed strict useOpsIdx
     match ra, rb with
     | none, none => return none
     | _, _ =>
@@ -724,8 +735,8 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := 
   | none =>
   match or? p with
   | some (a, b) =>
-    let ra ← walkPos a allowRelaxed strict
-    let rb ← walkPos b allowRelaxed strict
+    let ra ← walkPos a allowRelaxed strict useOpsIdx
+    let rb ← walkPos b allowRelaxed strict useOpsIdx
     match ra, rb with
     | none, none => return none
     | _, _ =>
@@ -739,7 +750,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := 
     -- `a → b`: `a` is negative (skip), `b` positive.
     let a := p.bindingDomain!
     let b := p.bindingBody!
-    match ← walkPos b allowRelaxed strict with
+    match ← walkPos b allowRelaxed strict useOpsIdx with
     | none => return none
     | some (b', pb) =>
       -- left unchanged: `imp_mono (id : a → a) pb`
@@ -748,7 +759,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := 
       return some (← mkArrow a b', proof)
   else if p.isForall then
     forallTelescope1? p fun x body => do
-      match ← walkPos body allowRelaxed strict with
+      match ← walkPos body allowRelaxed strict useOpsIdx with
       | none => return none
       | some (body', pbody) =>
         -- `forall_mono (fun x => pbody) : (∀ x, body) → (∀ x, body')`
@@ -766,7 +777,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := 
     let α := args[0]!
     let pbody := args[1]!  -- a lambda `fun x => body`
     lambdaTelescope1? pbody fun x body => do
-      match ← walkPos body allowRelaxed strict with
+      match ← walkPos body allowRelaxed strict useOpsIdx with
       | none => return none
       | some (body', pbodyProof) =>
         let motiveOld ← mkLambdaFVars #[x] body
@@ -809,7 +820,8 @@ candidates (e.g. `Add.add` vs `double_and_add 124 0` bundle literals, recursive 
 bodies included) and was the engine's residual `maxRecDepth` consumer. A genuinely-missed witness
 surfaces as a loud "no ExtendsWitnesses fact located" skip. The env differs (prover vs verifier),
 so we do not compare it. Returns the located fact (`cand`) on success. -/
-def witnessMatches? (c : ChunkMatch) (cand : Expr) (relaxed : Bool := false) : MetaM Bool := do
+def witnessMatches? (c : ChunkMatch) (cand : Expr) (relaxed : Bool := false)
+    (useOpsIdx : Bool := false) : MetaM Bool := do
   let cand ← instantiateMVars cand
   let fn := cand.getAppFn
   let .const headName _ := fn | return false
@@ -841,6 +853,15 @@ def witnessMatches? (c : ChunkMatch) (cand : Expr) (relaxed : Bool := false) : M
   -- inputs/indexes can diverge by normalization only (MulComplete's respelled call
   -- inputs). Keeping the relaxed pass conditional prevents the loop-family storm:
   -- 85 same-child candidates would otherwise each pay a deep failing default-defeq.
+  -- `useOpsIdx` (cps2 in-peel only): compare the candidate's OPS-index against the
+  -- chunk's OPS-index (`c.opsIdx`), NOT the chunk's `Constraints` region-arg. Both
+  -- ops-indices come from the same `operations_bind` split
+  -- (`(preceding).nextRegionIndex i₀`) and so are spelled identically on the goal and
+  -- witness sides, matching REDUCIBLY — whereas the `Constraints` region-arg is
+  -- `regionCount`-based on the goal (a prior raw bind's `chunk_split` unfolded the
+  -- preceding `operations`) and diverges, the residue that used to need a relaxed
+  -- transparency pass. The v1 driver keeps the `regionIdx` compare (default) verbatim.
+  let idxTarget := if useOpsIdx then c.opsIdx else c.regionIdx
   let tailT := if relaxed then TransparencyMode.default else TransparencyMode.reducible
   if isRegion && callName == ``FormalRegionCircuit.call && callArgs.size == 12 then
     let ok ← withTransparency .reducible do
@@ -848,13 +869,13 @@ def witnessMatches? (c : ChunkMatch) (cand : Expr) (relaxed : Bool := false) : M
     if !ok then return false
     withTransparency tailT do
       return (← isDefEq callArgs[10]! c.offset?.get!) && (← isDefEq callArgs[11]! c.input)
-        && (← isDefEq regionIdxCand c.regionIdx)
+        && (← isDefEq regionIdxCand idxTarget)
   else if !isRegion && callName == ``FormalCircuit.call && callArgs.size == 11 then
     let ok ← withTransparency .reducible do
       return (← isDefEq callArgs[8]! c.child) && (← isDefEq callArgs[9]! c.config)
     if !ok then return false
     withTransparency tailT do
-      return (← isDefEq callArgs[10]! c.input) && (← isDefEq regionIdxCand c.regionIdx)
+      return (← isDefEq callArgs[10]! c.input) && (← isDefEq regionIdxCand idxTarget)
   else
     return false
 
@@ -1109,10 +1130,11 @@ has already replaced every child output by an opaque local, so a chunk input tha
 composed `.output` is shallow by construction. When the weakened hypothesis mentions the child's own
 output, `walkPos`'s soundness leaf emits it over the existing abstract local (Stage-1 cooperation),
 so nothing derived from the hypothesis re-materializes a deep composed output. -/
-def runSoundness (fvarId : FVarId) (allowRelaxed : Bool := false) (strict : Bool := false) :
+def runSoundness (fvarId : FVarId) (allowRelaxed : Bool := false) (strict : Bool := false)
+    (useOpsIdx : Bool := false) :
     TacticM Unit := withMainContext do
   let hyp ← instantiateMVars (← fvarId.getType)
-  match ← walkPos hyp allowRelaxed strict with
+  match ← walkPos hyp allowRelaxed strict useOpsIdx with
   | none =>
     trace[Halo2.subcircuit_rw] "no positive chunk found in hypothesis"
   | some (newProp, proof) =>

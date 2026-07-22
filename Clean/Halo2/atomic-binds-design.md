@@ -217,6 +217,30 @@ form it has to re-match. Extending to a new combinator is one `@[chunk_split]` t
 uncovered shape fails the no-call-left-behind scan loudly (`infer_explicit_circuits`
 model — a handful of well-oiled constructor lemmas, not a normalize-and-hope match).
 
+**Region-index matching is by the OPS-index, not the `Constraints` region-arg — the
+relaxed-transparency pass is GONE from cps2 (hardening pass, edge (a)).** A chunk
+`Constraints place env ((child.call …).operations OPS) REGION` carries the index twice:
+`OPS` (where `.operations` is applied) and `REGION` (the `Constraints` head's own arg).
+They are defeq, but when a prior raw bind's `chunk_split` unfolded the preceding
+`(assignRegion …).operations` on the goal side while the witness side stayed folded,
+`REGION` diverges — `i₀ + regionCount [Operation.region …]` vs
+`i₀ + regionCount ((assignRegion …).operations i₀)` — defeq only at default
+transparency. That divergence is the whole reason the engine used to run a
+relaxed-transparency second pass (`witnessMatches?` at `.default`, the loop-family storm
+risk), plus a same-child relaxed `findOutputLocal?` for the output atom. `OPS`, by
+contrast, comes from `operations_bind` (`(preceding).nextRegionIndex i₀`) identically on
+both sides. So `ChunkMatch` now carries `opsIdx`, and the cps2 driver (`useOpsIdx`):
+(i) matches witnesses on `opsIdx` REDUCIBLY (`witnessMatches?`), and (ii) emits every
+contract at `opsIdx` (`{c with regionIdx := c.opsIdx}` into the leaves), so the child
+`.output …` in the weakened chunk / derived statement lands on the minted atom
+reducibly. With that, NO cps2 path passes `allowRelaxed`/`relaxed := true` — the relaxed
+machinery is dead for cps2 (still wired for the v1 `subcircuit_rw !` entry, which no
+current proof uses; its deletion is a follow-up cleanup once the v1 corpus empties). The
+peel-time region-count fold that a first attempt reached for is NOT used: it had to
+touch the goal (breaking user-proof spellings), the remaining chunk (breaking terminal
+detection), or the soundness `region_<k>` numbering — the ops-index compare needs none
+of that, converging the two sides without rewriting either.
+
 **Loops become symmetric by construction.** At a registry-head bind the peel applies
 the canonical ∀-split (`chunk_split`) and converts under the binder in the same step:
 the completeness walker instantiates the bind's own witness chunk at the goal's ∀-binder
