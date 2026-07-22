@@ -240,151 +240,132 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
   ProverSpec input output _ _ := ProverSpec G ns Q input output
 
   soundness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.soundness_iff]
-    intro self env input_var input output h_input h_output _hE hA hc
-    simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
-      operations_enable, operations_assignFixed, operations_assignAdvice,
-      operations_constrainConstant] at hc
-    subcircuit_rw at hc
-    simp only [chainC_spec_eq, chainC_assumptions_eq, chainC_envAssumptions_eq,
-      Sinsemilla.HashPiece.initialYQGate, Sinsemilla.HashPiece.yAExpr,
-      Sinsemilla.HashPiece.xRExpr, Constraints.withSelector, circuit_norm] at hc
-    obtain ⟨hGate, hYQ, hXa, hChain, -⟩ := hc
-    have hSpec := hChain _hE
-    rw [← ProvableStruct.eval_cells_eq_eval env
-        ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).output cfg offset input_var self),
-      Sinsemilla.Chain.circuit_output_eval] at hSpec
+    circuit_proof_start2 [Sinsemilla.HashPiece.initialYQGate,
+      Sinsemilla.HashPiece.yAExpr, Sinsemilla.HashPiece.xRExpr]
+    -- the raw z1s-naming step: no ops, output = the named cell vector
+    simp only [RegionCircuit.operations, RegionCircuit.output, circuit_norm]
+      at region_3 output_eq
+    clear region_3
+    obtain ⟨⟨ho_x, ho_y⟩, ho_z1s⟩ := output_eq
+    -- the chain's contract
+    have hSpec := out_spec env_assumptions trivial
+    -- fold the destructured `Q` atoms back into the point literal, so the Q-generic
+    -- bridge pattern (`fun _ => ?Q.y`) matches
+    rw [show (fun _ : Placed Environment Fp => Q_y)
+        = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
+      from rfl] at hSpec
+    rw [chainC_spec_eq] at hSpec
     obtain ⟨chunks, hPC, hZs, hContract⟩ := hSpec
-    have hin : ProvableStruct.eval env.place env.env input_var = input := by
-      rw [← h_input, ProvableStruct.eval_cells_eq_eval]
-    rw [hin] at hPC
-    -- land our output on its literal
-    rw [ElaboratedRegionCircuit.output_eq] at h_output
-    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure] at h_output
-    rw [out_eval_lit,
-      FormalRegionCircuit.output_call (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset
-        input_var self,
-      Sinsemilla.Chain.output_point_x, Sinsemilla.Chain.output_point_y] at h_output
-    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
+    simp only [Spec]
     refine ⟨chunks, hPC, hZs, ?_, ?_⟩
     · -- the z_1 view of the running sums
       intro hpos
-      rw [← h_output]
-      show (Vector.ofFn fun i : Fin ns.length =>
-          AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits).map
-            (AssignedCell.eval env.place env.env)
-        = z1View ns ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).extract cfg offset
-            input_var self env).zs
-      rw [show ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).extract cfg offset
-            input_var self env).zs
-          = eval env (Sinsemilla.Chain.zsCellsVal cfg self ns offset) from rfl,
+      rw [← ho_z1s, ← wit_out_eq]
+      rw [show ((Sinsemilla.Chain.circuit G ns fun _ => Q_y).extract cfg offset
+            input_var self (⟨place, env⟩ : Placed Environment Fp)).zs
+          = eval (⟨place, env⟩ : Placed Environment Fp)
+              (Sinsemilla.Chain.zsCellsVal cfg self ns offset) from rfl,
         Sinsemilla.Chain.eval_zsCellsVal, z1View_zsFam _ _ _ hpos]
       ext j hj
-      simp only [Vector.getElem_map, Vector.getElem_ofFn, AssignedCell.eval,
+      simp only [circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
         AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
         Environment.get_advice]
       congr 2
     · -- the hash from `Q`
       intro B hB
-      have hres := hContract Q hQ hXa.symm (by
+      -- the chain's entering row, concretized (position-determined cells)
+      have hfirst : (ProvableStruct.eval place env out_first)
+          = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
+               xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
+               lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
+               lambda2 := env.advice cfg.lambda2 ((place self + offset : ℕ) : ℤ) }
+             : Ecc.DoubleAndAddRow Fp) := by
+        rw [show out_first = ((Sinsemilla.Chain.circuit G ns fun x => Q_y).output cfg
+            offset input_var self).first from by rw [out_eq]]
+        with_unfolding_all rfl
+      have hres := hContract ({ x := Q_x, y := Q_y } : Point Fp) hQ
+        (by show Q_x = _; rw [hfirst]; exact region_2.symm) (by
         rw [show ns.isEmpty = false from by
           cases ns with
           | nil => exact absurd rfl hns
           | cons a l => rfl]
-        show 2 * Q.y = Halo2.Ironwood.Ecc.DoubleAndAdd.yA _
-        simp only [Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR]
-        linear_combination hGate - 2 * hYQ) B hB
-      rw [← h_output]
+        show 2 * ({ x := Q_x, y := Q_y } : Point Fp).y
+          = Halo2.Ironwood.Ecc.DoubleAndAdd.yA _
+        rw [hfirst]
+        simp only [Halo2.Ironwood.Ecc.DoubleAndAdd.yA,
+          Halo2.Ironwood.Ecc.DoubleAndAdd.xR]
+        linear_combination region_0 - 2 * region_1) B hB
       exact hres
 
   completeness := by
-    intro cfg offset
-    rw [FormalRegionCircuit.completeness_iff]
-    intro self env input_var input output h_input h_output hwit _hE hA hPA
-    simp only [RegionCircuit.operations_bind, RegionOperations.extendsWitnesses_append,
-      operations_enable, operations_assignFixed, operations_assignAdvice,
-      operations_constrainConstant, circuit_norm] at hwit
-    obtain ⟨hWyq, hWxa, hWchain, -⟩ := hwit
-    obtain ⟨-, hbounds, B0, hchain0⟩ := hPA
-    have hxa_eval : (eval env.toEnvironment
+    circuit_proof_start2 [Sinsemilla.HashPiece.initialYQGate,
+      Sinsemilla.HashPiece.yAExpr, Sinsemilla.HashPiece.xRExpr]
+    obtain ⟨-, hbounds, B0, hchain0⟩ := prover_assumptions
+    -- the raw z1s-naming step: no ops, output = the named cell vector
+    simp only [RegionCircuit.operations, RegionCircuit.output, circuit_norm]
+      at region_2 output_eq
+    clear region_2
+    obtain ⟨⟨ho_x, ho_y⟩, ho_z1s⟩ := output_eq
+    -- fold the destructured `Q` atoms back into the point literal ONCE, so the
+    -- Q-generic bridge patterns (`fun _ => ?Q.y`) match everywhere
+    rw [show (fun _ : Placed Environment Fp => Q_y)
+        = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
+      from rfl] at h_spec_0 wit_out_eq ⊢
+    -- the chain's honest-prover precondition, transported to the minted witness
+    have hPAchain : (Sinsemilla.Chain.circuit G ns
+          fun _ => ({ x := Q_x, y := Q_y } : Point Fp).y).ProverAssumptions
+        input wit_out env.hint := by
+      rw [← wit_out_eq, chainC_proverAssumptions_eq]
+      show Sinsemilla.Chain.ProverAssumptions G ns input _
+      refine ⟨hns, hbounds, { x := Q_x, y := Q_y }, B0, hQ, ?_, rfl, hchain0⟩
+      show Q_x = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
-        = env.env.advice cfg.xA ((env.place self + offset : ℕ) : ℤ) := by
-      simp only [circuit_norm]
-    have hPAchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).ProverAssumptions
-        (eval env input_var)
-        ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).extract cfg offset input_var self
-          env.toEnvironment) env.env.hint := by
-      rw [chainC_proverAssumptions_eq]
-      show Sinsemilla.Chain.ProverAssumptions G ns (eval env input_var) _
-      rw [h_input]
-      refine ⟨hns, hbounds, Q, B0, hQ, ?_, rfl, hchain0⟩
-      show Q.x = (eval env.toEnvironment
-        (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
-      rw [hxa_eval, hWxa]
-    have hder := Halo2.SubcircuitRw.region_completeness_derived_placed
-      (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset self env input_var hWchain
-      (by rw [chainC_envAssumptions_eq]; exact _hE) trivial hPAchain
-    rw [chainC_proverSpec_eq] at hder
-    have hPSchain : Sinsemilla.Chain.ProverSpec G ns input
-        (eval env ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).output cfg offset
-          input_var self))
-        ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).extract cfg offset input_var self
-          env.toEnvironment) := by
-      rw [← h_input]
-      exact hder.2
-    have hfacts := hPSchain Q B0 (by
-        show Q.x = (eval env.toEnvironment
+      simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell,
+        Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+      exact region_1.symm
+    -- the chain's honest contract
+    have hsp := h_spec_0 (by rw [chainC_envAssumptions_eq]; exact env_assumptions)
+      trivial hPAchain
+    have hPSchain := hsp.2
+    rw [← wit_out_eq, chainC_proverSpec_eq] at hPSchain
+    have hfacts := hPSchain ({ x := Q_x, y := Q_y } : Point Fp) B0 (by
+        show Q_x = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
-        rw [hxa_eval, hWxa]) rfl hchain0
-    rw [Sinsemilla.Chain.circuit_output_eval_prover] at hfacts
+        simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell,
+          Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
+          Environment.get_advice]
+        exact region_1.symm) rfl hchain0
     obtain ⟨hpx, hpy, henter⟩ := hfacts
-    -- land our own output
-    rw [ElaboratedRegionCircuit.output_eq] at h_output
-    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure] at h_output
-    rw [out_eval_lit_prover,
-      FormalRegionCircuit.output_call (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset
-        input_var self,
-      Sinsemilla.Chain.output_point_x, Sinsemilla.Chain.output_point_y] at h_output
-    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
-    refine ⟨?_, ?_⟩
-    · -- the constraints
-      simp only [RegionCircuit.operations_bind, RegionOperations.constraints_append,
-        operations_enable, operations_assignFixed, operations_assignAdvice,
-        operations_constrainConstant]
-      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-      · -- the Initial y_Q gate at the entering row
-        simp only [Sinsemilla.HashPiece.initialYQGate, Sinsemilla.HashPiece.yAExpr,
-          Sinsemilla.HashPiece.xRExpr, Constraints.withSelector, circuit_norm]
-        rw [show ns.isEmpty = false from by
-            cases ns with
-            | nil => exact absurd rfl hns
-            | cons a l => rfl] at henter
-        simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, if_false,
-          Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR] at henter
-        linear_combination 2 * hWyq - henter
-      · -- the fixed y_Q load
-        simp only [circuit_norm]
-        exact hWyq
-      · -- assignAdvice emits no constraint
-        simp only [circuit_norm]
-      · -- the x_a constant
-        simp only [circuit_norm]
-        exact hWxa
-      · -- the chain child, via the engine leaf
-        exact Halo2.SubcircuitRw.region_completeness_leaf_placed
-          (Sinsemilla.Chain.circuit G ns fun _ => Q.y) cfg offset self env input_var
-          hWchain ⟨by rw [chainC_envAssumptions_eq]; exact _hE, trivial, hPAchain⟩
-      · -- no ops
-        trivial
-      · -- pure emits no constraints
-        trivial
+    refine ⟨⟨?_, region_0, region_1,
+      ⟨by rw [chainC_envAssumptions_eq]; exact env_assumptions, trivial, hPAchain⟩,
+      ?_⟩, ?_⟩
+    · -- the Initial y_Q gate at the entering row
+      rw [show ns.isEmpty = false from by
+          cases ns with
+          | nil => exact absurd rfl hns
+          | cons a l => rfl] at henter
+      simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, if_false,
+        Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR] at henter
+      -- the chain's entering row, concretized (position-determined cells)
+      have hfirst : (ProvableStruct.eval place env.toEnvironment out_first)
+          = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
+               xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
+               lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
+               lambda2 := env.advice cfg.lambda2 ((place self + offset : ℕ) : ℤ) }
+             : Ecc.DoubleAndAddRow Fp) := by
+        rw [show out_first = ((Sinsemilla.Chain.circuit G ns fun x => Q_y).output cfg
+            offset input_var self).first from by rw [out_eq]]
+        with_unfolding_all rfl
+      rw [hfirst] at henter
+      linear_combination 2 * region_0 - henter
+    · -- the raw z1s-naming step emits no constraints
+      show True
+      trivial
     · -- the honest-prover contract
+      simp only [ProverSpec]
       intro B hB
       have hBB : B0 = B := Option.some.inj (hchain0.symm.trans hB)
-      rw [← h_output, ← hBB]
+      rw [← hBB]
       exact ⟨hpx, hpy⟩
 
 /-- The layouter-level `hash_message` bundle: the `"hash_to_point"` region (Rust
