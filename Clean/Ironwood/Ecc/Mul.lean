@@ -813,8 +813,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       have h := input_eq.1
       simp only [circuit_norm] at h ⊢
       exact h
-    simp only [MulIncomplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hBF0] at hHiPS
+    simp only [MulIncomplete.RoundInvariant, hBF0] at hHiPS
     obtain ⟨hHiChain, hHiAccCl⟩ := hHiPS
     obtain ⟨hHiZ0, hHiZstep⟩ := zChain_split hHiChain
     have hentry : env.advice cfg.hiConfig.z ((place self + offHi : ℕ) : ℤ)
@@ -839,8 +838,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       simp only [incomplete_output_eq, circuit_norm]
       exact hHiOut
     obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
-    simp only [MulIncomplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hBF125] at hLoPS
+    simp only [MulIncomplete.RoundInvariant, hBF125] at hLoPS
     obtain ⟨hLoChain, hLoAccCl⟩ := hLoPS
     obtain ⟨hLoZ0, hLoZstep⟩ := zChain_split hLoChain
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
@@ -862,8 +860,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     obtain ⟨-, hCompAccClv⟩ := hCompRIv
     obtain ⟨hCompAccVv, -⟩ := hCompAccClv
       (by rw [hLoOut]; exact Point.valid_nsmul hbaseV _) hbaseV
-    simp only [MulComplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hW251] at hCompPS
+    simp only [MulComplete.RoundInvariant, hW251] at hCompPS
     obtain ⟨hCompChain, -⟩ := hCompPS
     have hCompZ0 := hCompChain ⟨0, by omega⟩
     simp only [if_pos] at hCompZ0

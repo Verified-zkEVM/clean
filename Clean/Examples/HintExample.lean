@@ -34,14 +34,7 @@ def witnessBool : GeneralFormalCircuit.WithHint (F p) UnconstrainedBool field wh
   ProverSpec (hint : Bool) (b : F p) _ := b = if hint then 1 else 0
 
   soundness := by circuit_proof_all
-  completeness := by
-    circuit_proof_start
-    have h : Witgen.MOver.eval (value := field) env (do let b ← input_var; pure (Witgen.BExprOver.toField b))
-        = if Witgen.MOver.evalBool env input_var then 1 else 0 := by
-      unfold Witgen.MOver.eval Witgen.MOver.evalBool
-      simp only [Witgen.eval_field, Witgen.BExprOver.toField, Witgen.FExprOver.eval]
-    rw [h_env, h, h_input]
-    cases input <;> simp [IsBool]
+  completeness := by circuit_proof_all
 
 structure Input (F : Type) where
   x : F
@@ -76,8 +69,7 @@ def booleanAnd : FormalCircuit (F p) Input field where
   completeness := by
     circuit_proof_start [witnessBool, IsBool]
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
-    <;> simp_all [Witgen.MOver.evalBool, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
-      WitgenEnv.readVar_eq]
+    <;> simp_all
 
 structure MixedInput (F : Type) where
   someElement : U32 F
