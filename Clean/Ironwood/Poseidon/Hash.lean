@@ -196,9 +196,7 @@ def hash (capacity : Fp) :
     rw [h0] at h1
     rw [h1] at h2
     rw [← h_output]
-    rw [show env.get x_gen_out_2.x0.cell.column
-        ((place x_gen_out_2.x0.cell.regionIndex
-          + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
+    rw [show AssignedCell.eval place env x_gen_out_2.x0
       = (ProvableStruct.Halo2.eval place env x_gen_out_2 : State Fp).x0 from by
         provable_type_simp]
     rw [h2]
@@ -217,9 +215,7 @@ def hash (capacity : Fp) :
     refine ⟨⟨⟨trivial, trivial, trivial⟩, ⟨trivial, trivial, trivial⟩,
       trivial, trivial, trivial⟩, ?_⟩
     rw [← h_output]
-    rw [show env.get x_gen_out_2.x0.cell.column
-        ((place x_gen_out_2.x0.cell.regionIndex
-          + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
+    rw [show AssignedCell.eval place env.toEnvironment x_gen_out_2.x0
       = (ProvableStruct.Halo2.eval place env.toEnvironment x_gen_out_2
           : State Fp).x0 from by provable_type_simp]
     rw [h2]

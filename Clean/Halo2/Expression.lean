@@ -345,13 +345,39 @@ lemma AssignedCell.of_cell (self : RegionIndex) (row : ℕ) {kind : ColumnKind} 
 /-- Evaluate an assigned cell: read its column at the region's placement plus the
 cell's offset. `place` is the region-placement parameter of the semantics (the analogue
 of main Clean's `offset`) — proofs are generic over it; the top level instantiates the
-floor planner's output. -/
-@[circuit_norm]
+floor planner's output.
+
+NOT `@[circuit_norm]` (normal-form unification, maintainer ruling): an ABSTRACT cell's
+read stays folded as the `AssignedCell.eval place env c` atom — unfolding it produced
+raw `env.get c.cell.column …` spellings that competed with the typed `env.advice` form
+and got pinned into signatures. Known-kind cells reduce directly to the typed accessors
+via the `eval_of_*` rules below; `env.get` never appears in the user-facing normal
+form. -/
 def AssignedCell.eval [Field F] (place : RegionIndex → ℕ) (env : Environment F)
     (c : AssignedCell F) : F :=
   -- cast the ℕ row sum as a whole (not `↑a + ↑b`), so cell reads share the row form
   -- `↑(place self + rowOffset)` with the query/witness paths (avoids cast-shape mismatch).
   env.get c.cell.column ((place c.cell.regionIndex + c.cell.rowOffset : ℕ) : ℤ)
+
+/-- A concrete advice cell's read is the typed advice accessor — the single
+user-facing spelling for known-kind cell reads. -/
+@[circuit_norm]
+lemma AssignedCell.eval_of_advice [Field F] (place : RegionIndex → ℕ)
+    (env : Environment F) (self : RegionIndex) (row : ℕ) (col : Column .advice) :
+    AssignedCell.eval place env (.of self row col)
+      = env.advice col ((place self + row : ℕ) : ℤ) := rfl
+
+@[circuit_norm]
+lemma AssignedCell.eval_of_fixed [Field F] (place : RegionIndex → ℕ)
+    (env : Environment F) (self : RegionIndex) (row : ℕ) (col : Column .fixed) :
+    AssignedCell.eval place env (.of self row col)
+      = env.fixed col ((place self + row : ℕ) : ℤ) := rfl
+
+@[circuit_norm]
+lemma AssignedCell.eval_of_inst [Field F] (place : RegionIndex → ℕ)
+    (env : Environment F) (self : RegionIndex) (row : ℕ) (col : Column .instance) :
+    AssignedCell.eval place env (.of self row col)
+      = env.inst col ((place self + row : ℕ) : ℤ) := rfl
 
 /-! ## Lemmas about Expression evaluation -/
 

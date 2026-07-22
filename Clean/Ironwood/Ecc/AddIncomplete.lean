@@ -112,13 +112,9 @@ def add : FormalRegionCircuit Fp
   -- typically for hint-consuming gadgets (cf. WitnessPoint's `output = input`).
 
   soundness := by
-    circuit_proof_start [gate]
-    -- ══ user-facing half: pure field values + curve math ══
-    obtain ⟨⟨hpoly1, hpoly2⟩, hcpx, hcpy, hcqx, hcqy⟩ := hc
-    -- eval → value: gate cell = copy source (`hc…`) = input coord (`h_input`), R row = output
-    -- coord (`h_output`)
-    simp only [hcpx, hcpy, hcqx, hcqy] at hpoly1 hpoly2
-    obtain ⟨hpx_curve, hqx_curve, hxne⟩ := hA
+    circuit_proof_start2 [gate]
+    obtain ⟨hpoly1, hpoly2⟩ := region_0
+    obtain ⟨hpx_curve, hqx_curve, hxne⟩ := assumptions
     -- formulate gate polys in terms of `nondegenerateAdd`
     have hsum : ⟨output_x, output_y⟩ = Point.nondegenerateAdd
         ⟨input_p_x, input_p_y⟩ ⟨input_q_x, input_q_y⟩ := by
@@ -130,10 +126,9 @@ def add : FormalRegionCircuit Fp
     exact Point.ne_zero_of_onCurve hqx_curve
 
   completeness := by
-    circuit_proof_start [gate, Point.nondegenerateAdd]
-    -- ══ user-facing half ══
-    -- land the `Assumptions` facts on the input coordinates
-    obtain ⟨-, -, hxne⟩ := hA
+    circuit_proof_start2 [gate, Point.nondegenerateAdd]
+    obtain ⟨-, -, hxne⟩ := assumptions
+    simp_all only
     grind
 
 end AddIncomplete

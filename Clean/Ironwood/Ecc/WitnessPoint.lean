@@ -5,6 +5,7 @@ import Clean.Ironwood.Ecc.Basic
 namespace Zcash.Circuits.Ecc
 
 open Halo2
+
 /-!
 Reference:
 `halo2_gadgets/src/ecc/chip/witness_point.rs`
@@ -71,24 +72,18 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
   ProverSpec input output _ _ := output = input
 
   soundness := by
-    circuit_proof_start [pointGate, curveEqn]
-    -- ══ user-facing half: pure field values + curve math ══
+    circuit_proof_start2 [pointGate, curveEqn]
     grind [Point.Valid, Point.OnCurve, Point.zero_def]
 
   completeness := by
-    circuit_proof_start [pointGate, curveEqn]
-    constructor
-    · rcases hPA with hc | h0
-      · have hc' : _ ^ 2 = _ ^ 3 + pallasB := hc
-        constructor
-        · linear_combination input_x * hc'
-        · linear_combination input_y * hc'
-      · have hx := congrArg Point.x h0
-        have hy := congrArg Point.y h0
-        simp only [Point.zero_def] at hx hy
-        rw [hx, hy]
-        constructor <;> ring
-    · exact ⟨h_output.1.symm, h_output.2.symm⟩
+    circuit_proof_start2 [pointGate, curveEqn]
+    -- `region_0`/`region_1`: the witnessed cells carry the hint point's coordinates
+    refine ⟨?_, region_0, region_1⟩
+    simp only [region_0, region_1]
+    rcases prover_assumptions with hc | h0
+    · have hc' : _ ^ 2 = _ ^ 3 + pallasB := hc
+      exact ⟨by linear_combination input_x * hc', by linear_combination input_y * hc'⟩
+    · grind [Point.zero_def]
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -117,16 +112,15 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
   ProverSpec input output _ _ := output = input
 
   soundness := by
-    circuit_proof_start [pointNonIdGate, curveEqn]
-    -- ══ user-facing half: pure field values + curve math ══
+    circuit_proof_start2 [pointNonIdGate, curveEqn]
     grind [Point.OnCurve]
 
   completeness := by
-    circuit_proof_start [pointNonIdGate, curveEqn]
-    have hc : _ ^ 2 = _ ^ 3 + pallasB := hPA
-    constructor
-    · linear_combination hc
-    · exact ⟨h_output.1.symm, h_output.2.symm⟩
+    circuit_proof_start2 [pointNonIdGate, curveEqn]
+    refine ⟨?_, region_0, region_1⟩
+    simp only [region_0, region_1]
+    have hc : input_y ^ 2 = input_x ^ 3 + pallasB := prover_assumptions
+    linear_combination hc
 
 /-- The layouter-level point witnesses: the region bundles in their own regions, named
 once here as in the Rust chip (`ecc/chip/witness_point.rs`). -/
@@ -139,12 +133,6 @@ def pointNonIdFormal :=
 derive_contract_bridges pointFormal := pointFormal
 
 derive_contract_bridges pointNonIdFormal := pointNonIdFormal
-
-/-- The output cells of the lifted `pointNonId` (row 0 of its own region). -/
-theorem pointNonIdFormal_output (cfg : Config)
-    (input : Var (Unconstrained Point) Fp) (i : RegionIndex) :
-    pointNonIdFormal.output cfg input i
-      = { x := AssignedCell.of i 0 cfg.x, y := AssignedCell.of i 0 cfg.y } := rfl
 
 end WitnessPoint
 

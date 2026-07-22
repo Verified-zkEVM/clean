@@ -1,5 +1,6 @@
 import Lean.Elab.Tactic
 import Clean.Halo2.StructEvalSimprocs
+import Clean.Halo2.Operations
 import Clean.Halo2.WitnessIR
 import Clean.Utils.Tactics.ProvableTacticUtils
 import Clean.Utils.Tactics.ProvableStructNaming
@@ -56,7 +57,12 @@ def structEvalSimpLemmas : Array Name := #[
   -- `Environment.advice`-family accessors, witness reads unfold to assigned-cell evals
   ``ProvableType.Halo2.eval_field, ``ProvableType.Halo2.eval_field_prover,
   ``ProvableType.Halo2.eval_field', ``ProvableType.Halo2.eval_field_prover',
-  ``Halo2.AssignedCell.eval,
+  -- normal-form unification: abstract cell reads stay FOLDED (`AssignedCell.eval` atom;
+  -- the def-unfold is deliberately absent), known-kind cells reduce to the typed
+  -- accessors, and copy-constraint `Cell.eval`s canonicalize onto the assigned-cell atom
+  ``Halo2.AssignedCell.eval_of_advice, ``Halo2.AssignedCell.eval_of_fixed,
+  ``Halo2.AssignedCell.eval_of_inst, ``Halo2.Cell.eval_cell,
+  ``Halo2.Cell.eval_of_advice, ``Halo2.Cell.eval_of_fixed, ``Halo2.Cell.eval_of_inst,
   ``Halo2.AssignedCell.of_cell, ``Halo2.Cell.of_regionIndex, ``Halo2.Cell.of_rowOffset,
   ``Halo2.Cell.of_column,
   ``Halo2.Environment.get_advice, ``Halo2.Environment.get_fixed, ``Halo2.Environment.get_inst,

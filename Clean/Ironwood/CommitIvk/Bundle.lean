@@ -170,98 +170,38 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
       hwnk, hwc, hwd, hwd0, hwd1, hwz13c, hwb2cp, hwz14⟩ := hwit
     rw [show (ProvableStruct.Halo2.eval env.place env.env.toEnvironment input_var
         : Inputs Fp)
-      = { ak := env.env.get input_var.ak.cell.column
-            ((env.place input_var.ak.cell.regionIndex
-              + input_var.ak.cell.rowOffset : ℕ) : ℤ),
-          a := env.env.get input_var.a.cell.column
-            ((env.place input_var.a.cell.regionIndex
-              + input_var.a.cell.rowOffset : ℕ) : ℤ),
-          bWhole := env.env.get input_var.bWhole.cell.column
-            ((env.place input_var.bWhole.cell.regionIndex
-              + input_var.bWhole.cell.rowOffset : ℕ) : ℤ),
-          b0 := env.env.get input_var.b0.cell.column
-            ((env.place input_var.b0.cell.regionIndex
-              + input_var.b0.cell.rowOffset : ℕ) : ℤ),
-          b2 := env.env.get input_var.b2.cell.column
-            ((env.place input_var.b2.cell.regionIndex
-              + input_var.b2.cell.rowOffset : ℕ) : ℤ),
-          z13A := env.env.get input_var.z13A.cell.column
-            ((env.place input_var.z13A.cell.regionIndex
-              + input_var.z13A.cell.rowOffset : ℕ) : ℤ),
-          aPrime := env.env.get input_var.aPrime.cell.column
-            ((env.place input_var.aPrime.cell.regionIndex
-              + input_var.aPrime.cell.rowOffset : ℕ) : ℤ),
-          z13APrime := env.env.get input_var.z13APrime.cell.column
-            ((env.place input_var.z13APrime.cell.regionIndex
-              + input_var.z13APrime.cell.rowOffset : ℕ) : ℤ),
-          nk := env.env.get input_var.nk.cell.column
-            ((env.place input_var.nk.cell.regionIndex
-              + input_var.nk.cell.rowOffset : ℕ) : ℤ),
-          c := env.env.get input_var.c.cell.column
-            ((env.place input_var.c.cell.regionIndex
-              + input_var.c.cell.rowOffset : ℕ) : ℤ),
-          dWhole := env.env.get input_var.dWhole.cell.column
-            ((env.place input_var.dWhole.cell.regionIndex
-              + input_var.dWhole.cell.rowOffset : ℕ) : ℤ),
-          d0 := env.env.get input_var.d0.cell.column
-            ((env.place input_var.d0.cell.regionIndex
-              + input_var.d0.cell.rowOffset : ℕ) : ℤ),
-          z13C := env.env.get input_var.z13C.cell.column
-            ((env.place input_var.z13C.cell.regionIndex
-              + input_var.z13C.cell.rowOffset : ℕ) : ℤ),
-          b2CPrime := env.env.get input_var.b2CPrime.cell.column
-            ((env.place input_var.b2CPrime.cell.regionIndex
-              + input_var.b2CPrime.cell.rowOffset : ℕ) : ℤ),
-          z14B2CPrime := env.env.get input_var.z14B2CPrime.cell.column
-            ((env.place input_var.z14B2CPrime.cell.regionIndex
-              + input_var.z14B2CPrime.cell.rowOffset : ℕ) : ℤ) } from by
+      = { ak := AssignedCell.eval env.place env.env.toEnvironment input_var.ak,
+          a := AssignedCell.eval env.place env.env.toEnvironment input_var.a,
+          bWhole := AssignedCell.eval env.place env.env.toEnvironment input_var.bWhole,
+          b0 := AssignedCell.eval env.place env.env.toEnvironment input_var.b0,
+          b2 := AssignedCell.eval env.place env.env.toEnvironment input_var.b2,
+          z13A := AssignedCell.eval env.place env.env.toEnvironment input_var.z13A,
+          aPrime := AssignedCell.eval env.place env.env.toEnvironment input_var.aPrime,
+          z13APrime := AssignedCell.eval env.place env.env.toEnvironment input_var.z13APrime,
+          nk := AssignedCell.eval env.place env.env.toEnvironment input_var.nk,
+          c := AssignedCell.eval env.place env.env.toEnvironment input_var.c,
+          dWhole := AssignedCell.eval env.place env.env.toEnvironment input_var.dWhole,
+          d0 := AssignedCell.eval env.place env.env.toEnvironment input_var.d0,
+          z13C := AssignedCell.eval env.place env.env.toEnvironment input_var.z13C,
+          b2CPrime := AssignedCell.eval env.place env.env.toEnvironment input_var.b2CPrime,
+          z14B2CPrime := AssignedCell.eval env.place env.env.toEnvironment input_var.z14B2CPrime } from by
         provable_type_simp] at h_input hA
     rw [h_input] at hA
-    have hiak : env.env.get input_var.ak.cell.column
-        ((env.place input_var.ak.cell.regionIndex
-          + input_var.ak.cell.rowOffset : ℕ) : ℤ) = input.ak := congrArg Inputs.ak h_input
-    have hia : env.env.get input_var.a.cell.column
-        ((env.place input_var.a.cell.regionIndex
-          + input_var.a.cell.rowOffset : ℕ) : ℤ) = input.a := congrArg Inputs.a h_input
-    have hibWhole : env.env.get input_var.bWhole.cell.column
-        ((env.place input_var.bWhole.cell.regionIndex
-          + input_var.bWhole.cell.rowOffset : ℕ) : ℤ) = input.bWhole := congrArg Inputs.bWhole h_input
-    have hib0 : env.env.get input_var.b0.cell.column
-        ((env.place input_var.b0.cell.regionIndex
-          + input_var.b0.cell.rowOffset : ℕ) : ℤ) = input.b0 := congrArg Inputs.b0 h_input
-    have hib2 : env.env.get input_var.b2.cell.column
-        ((env.place input_var.b2.cell.regionIndex
-          + input_var.b2.cell.rowOffset : ℕ) : ℤ) = input.b2 := congrArg Inputs.b2 h_input
-    have hiz13A : env.env.get input_var.z13A.cell.column
-        ((env.place input_var.z13A.cell.regionIndex
-          + input_var.z13A.cell.rowOffset : ℕ) : ℤ) = input.z13A := congrArg Inputs.z13A h_input
-    have hiaPrime : env.env.get input_var.aPrime.cell.column
-        ((env.place input_var.aPrime.cell.regionIndex
-          + input_var.aPrime.cell.rowOffset : ℕ) : ℤ) = input.aPrime := congrArg Inputs.aPrime h_input
-    have hiz13APrime : env.env.get input_var.z13APrime.cell.column
-        ((env.place input_var.z13APrime.cell.regionIndex
-          + input_var.z13APrime.cell.rowOffset : ℕ) : ℤ) = input.z13APrime := congrArg Inputs.z13APrime h_input
-    have hink : env.env.get input_var.nk.cell.column
-        ((env.place input_var.nk.cell.regionIndex
-          + input_var.nk.cell.rowOffset : ℕ) : ℤ) = input.nk := congrArg Inputs.nk h_input
-    have hic : env.env.get input_var.c.cell.column
-        ((env.place input_var.c.cell.regionIndex
-          + input_var.c.cell.rowOffset : ℕ) : ℤ) = input.c := congrArg Inputs.c h_input
-    have hidWhole : env.env.get input_var.dWhole.cell.column
-        ((env.place input_var.dWhole.cell.regionIndex
-          + input_var.dWhole.cell.rowOffset : ℕ) : ℤ) = input.dWhole := congrArg Inputs.dWhole h_input
-    have hid0 : env.env.get input_var.d0.cell.column
-        ((env.place input_var.d0.cell.regionIndex
-          + input_var.d0.cell.rowOffset : ℕ) : ℤ) = input.d0 := congrArg Inputs.d0 h_input
-    have hiz13C : env.env.get input_var.z13C.cell.column
-        ((env.place input_var.z13C.cell.regionIndex
-          + input_var.z13C.cell.rowOffset : ℕ) : ℤ) = input.z13C := congrArg Inputs.z13C h_input
-    have hib2CPrime : env.env.get input_var.b2CPrime.cell.column
-        ((env.place input_var.b2CPrime.cell.regionIndex
-          + input_var.b2CPrime.cell.rowOffset : ℕ) : ℤ) = input.b2CPrime := congrArg Inputs.b2CPrime h_input
-    have hiz14B2CPrime : env.env.get input_var.z14B2CPrime.cell.column
-        ((env.place input_var.z14B2CPrime.cell.regionIndex
-          + input_var.z14B2CPrime.cell.rowOffset : ℕ) : ℤ) = input.z14B2CPrime := congrArg Inputs.z14B2CPrime h_input
+    have hiak : AssignedCell.eval env.place env.env.toEnvironment input_var.ak = input.ak := congrArg Inputs.ak h_input
+    have hia : AssignedCell.eval env.place env.env.toEnvironment input_var.a = input.a := congrArg Inputs.a h_input
+    have hibWhole : AssignedCell.eval env.place env.env.toEnvironment input_var.bWhole = input.bWhole := congrArg Inputs.bWhole h_input
+    have hib0 : AssignedCell.eval env.place env.env.toEnvironment input_var.b0 = input.b0 := congrArg Inputs.b0 h_input
+    have hib2 : AssignedCell.eval env.place env.env.toEnvironment input_var.b2 = input.b2 := congrArg Inputs.b2 h_input
+    have hiz13A : AssignedCell.eval env.place env.env.toEnvironment input_var.z13A = input.z13A := congrArg Inputs.z13A h_input
+    have hiaPrime : AssignedCell.eval env.place env.env.toEnvironment input_var.aPrime = input.aPrime := congrArg Inputs.aPrime h_input
+    have hiz13APrime : AssignedCell.eval env.place env.env.toEnvironment input_var.z13APrime = input.z13APrime := congrArg Inputs.z13APrime h_input
+    have hink : AssignedCell.eval env.place env.env.toEnvironment input_var.nk = input.nk := congrArg Inputs.nk h_input
+    have hic : AssignedCell.eval env.place env.env.toEnvironment input_var.c = input.c := congrArg Inputs.c h_input
+    have hidWhole : AssignedCell.eval env.place env.env.toEnvironment input_var.dWhole = input.dWhole := congrArg Inputs.dWhole h_input
+    have hid0 : AssignedCell.eval env.place env.env.toEnvironment input_var.d0 = input.d0 := congrArg Inputs.d0 h_input
+    have hiz13C : AssignedCell.eval env.place env.env.toEnvironment input_var.z13C = input.z13C := congrArg Inputs.z13C h_input
+    have hib2CPrime : AssignedCell.eval env.place env.env.toEnvironment input_var.b2CPrime = input.b2CPrime := congrArg Inputs.b2CPrime h_input
+    have hiz14B2CPrime : AssignedCell.eval env.place env.env.toEnvironment input_var.z14B2CPrime = input.z14B2CPrime := congrArg Inputs.z14B2CPrime h_input
     have heqs := Gate.eqs_of_spec
       (toDonor input
         (env.env.advice (cfg.advices 4) ((env.place self + offset : ℕ) : ℤ))

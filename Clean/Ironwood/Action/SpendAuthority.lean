@@ -73,23 +73,14 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     output = wit.2 • G + input.akP
 
   soundness := by
-    circuit_proof_start2 [
-      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
-      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
-      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
-    have hAl := h_call_alphaCommitment hE
-    have hAddS := h_call_rk trivial ⟨by rw [hAl]; exact G.smul_valid _, hA⟩
+    circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
+    have hAl := alphaCommitment_spec env_assumptions
+    have hAddS := rk_spec ⟨by rw [hAl]; exact G.smul_valid _, assumptions⟩
     simp_all
   completeness := by
-    circuit_proof_start2 [
-      Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq,
-      Ecc.MulFixed.FullWidth.circuit_assumptions_eq,
-      Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq,
-      Ecc.MulFixed.FullWidth.circuit_spec_eq, Ecc.MulFixed.FullWidth.circuit_extract_eq,
-      Ecc.Add.addFormal_assumptions_eq, Ecc.Add.addFormal_spec_eq]
-    have hAl := (h_spec_0 hE).1
-    exact ⟨hE, trivial, ⟨by rw [hAl]; exact G.smul_valid _, hA⟩, trivial⟩
+    circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
+    have hAl := alphaCommitment_spec env_assumptions
+    exact ⟨env_assumptions, by rw [hAl]; exact G.smul_valid _, assumptions⟩
 
 derive_contract_bridges circuit (G : FixedBase) := circuit G
 

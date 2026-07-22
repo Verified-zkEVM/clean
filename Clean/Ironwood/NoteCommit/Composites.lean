@@ -141,7 +141,7 @@ def circuit :
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
     -- the gate child: discharge its rely-conditions, harvest the donor gate `Spec`
-    rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
+    rw [rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
@@ -175,11 +175,11 @@ def circuit :
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
     · -- the gate child's rely-conditions (verifier view)
-      rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+      rw [rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
     · -- the gate child's honest-prover precondition: the donor gate `Spec` + the shift
-      rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+      rw [rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
@@ -287,7 +287,7 @@ def circuit :
     rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
-    rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
+    rw [rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
@@ -319,10 +319,10 @@ def circuit :
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
@@ -428,7 +428,7 @@ def circuit :
     rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
-    rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
+    rw [rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
@@ -460,10 +460,10 @@ def circuit :
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
@@ -573,7 +573,7 @@ def circuit :
     rw [LookupRangeCheck.rangeCheckAt_spec_eq, rangeCheckAt_output] at hWSpec
     simp only [circuit_norm, show (10 * 13 : ℕ) = 130 from by norm_num] at hWSpec
     obtain ⟨hz0eq, lo, hlo, htel⟩ := hWSpec
-    rw [FormalRegionCircuit.output_call, rangeCheckAt_output] at hGate
+    rw [rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
@@ -605,10 +605,10 @@ def circuit :
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]
     · rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]
       simp
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_assumptions_eq, circuit_norm, h_input]
       exact ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    · rw [FormalRegionCircuit.output_call, rangeCheckAt_output]
+    · rw [rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.2.1, h_input.2.2.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2.1,

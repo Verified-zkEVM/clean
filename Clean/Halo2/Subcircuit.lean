@@ -75,10 +75,9 @@ element type is rewritten to the concrete `Output (AssignedCell F)` by `var_of_p
 the generic lemma's discr-tree key then misses under `simp`), the region-level analogue of
 `FormalCircuit.output_call'`.
 
-Deliberately NOT `@[circuit_norm]` (unlike the layouter `output_call'`): region gadget proofs
-`rw [FormalRegionCircuit.output_call]` the concrete-`α` occurrence *by hand* after a
-`simp only [circuit_norm]`, so canonicalizing it inside `circuit_norm` would steal their rewrite
-target. It exists for `abstract_outputs`, which lists it explicitly in its canonicalization set. -/
+`@[circuit_norm]` like the layouter `output_call'` (an earlier exclusion protected v1-era
+by-hand `rw [FormalRegionCircuit.output_call]` targets; the corpus no longer depends on it). -/
+@[circuit_norm]
 theorem FormalRegionCircuit.output_call' {Output : TypeMap} [ProvableType Output] {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
@@ -436,5 +435,14 @@ instance : CoeFun (FormalRegionCircuit F CI Cfg Input Output)
   coe self := self.call
 
 end
+
+/-! ## The `chunk_split` membership (see `Clean/Halo2/Attributes.lean`)
+
+The layouter call-fold's split pair, plus the `operations` bridge that exposes
+`foldOps` for them to fire on. -/
+
+attribute [chunk_split] FormalCircuit.foldCall_operations
+attribute [chunk_split ↓] FormalCircuit.foldOps_constraints
+  FormalCircuit.foldOps_extendsWitnesses
 
 end Halo2

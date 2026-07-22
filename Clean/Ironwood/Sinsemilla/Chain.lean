@@ -349,46 +349,47 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
   ProverSpec piece _ w _ := SlotPS G (ns.getD i 0) piece w
 
   soundness := by
-    circuit_proof_start [slotReads, SlotSpec]
-    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at hc
-    simp only [HashPiece.Spec, circuit_norm] at hc
-    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := hc _hE
+    circuit_proof_start2 [slotReads, readState, SlotSpec]
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at out_spec
+    simp only [HashPiece.Spec, circuit_norm] at out_spec
+    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := out_spec env_assumptions
     refine ⟨ms, hms, ?_, hzs, hlxP, hlyP, hchainP⟩
     exact hrecomb
 
   completeness := by
-    circuit_proof_start [slotReads, SlotPA, SlotPS]
-    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := hPA
-    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_proverAssumptions_eq,
-      pieceC_extract_eq] at h_spec_0
+    circuit_proof_start2 [slotReads, readState, SlotPA, SlotPS]
+    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := prover_assumptions
+    -- reduce the piece extract's defining equation once, then transport through it
+    rw [pieceC_extract_eq] at wit_out_eq
     have hCPA : HashPiece.ProverAssumptions G (ns.getD i 0)
-        (env.get input_var.cell.column
-          ((place input_var.cell.regionIndex + input_var.cell.rowOffset : ℕ) : ℤ))
+        (AssignedCell.eval place env.toEnvironment input_var)
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of self offset cfg.xA : Var field Fp),
           (if i = 0 then yaIn
             else boundaryYA (reads cfg (offset - 1) self).row
-              (AssignedCell.of self offset cfg.xA)) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) := by
-      rw [h_input]
+              (AssignedCell.of self offset cfg.xA))
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) := by
+      rw [input_eq]
       refine ⟨hbound, A, B, hAon, ?_, ?_, hchain⟩
       · rw [hAx]
         with_unfolding_all rfl
       · rw [hAy]
         by_cases hi : i = 0 <;> simp [hi, reads]
-    have hsp := h_spec_0 _hE trivial hCPA
-    rw [pieceC_proverSpec_eq] at hsp
-    simp only [HashPiece.ProverSpec, circuit_norm] at hsp
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq,
+      pieceC_proverAssumptions_eq] at out_spec
+    have hsp := out_spec env_assumptions trivial (input_eq ▸ wit_out_eq ▸ hCPA)
+    simp only [← wit_out_eq, pieceC_proverSpec_eq, HashPiece.ProverSpec,
+      circuit_norm] at hsp
     obtain ⟨-, hPS⟩ := hsp
-    refine ⟨⟨_hE, trivial, ?_⟩, ?_⟩
-    · rw [pieceC_proverAssumptions_eq, pieceC_extract_eq]
-      rw [h_input] at hCPA
-      exact hCPA
+    refine ⟨⟨env_assumptions, trivial, ?_⟩, ?_⟩
+    · rw [pieceC_proverAssumptions_eq]
+      exact input_eq ▸ wit_out_eq ▸ hCPA
     · -- the slot's ProverSpec, off the child's
       intro A' B' hA'x hA'y hchain'
       have hres := hPS A' B'
         (by rw [hA'x]; try with_unfolding_all rfl)
         (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads])
-        (by rw [h_input]; exact hchain')
+        hchain'
       exact hres
 
 /-! Contract bridges for the slot child (generated — including over the function-typed
@@ -1079,6 +1080,10 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     -- `+instances` from the peel. Until the loop is homogenized (the Unit-output
     -- `slot i` family plan in sinsemilla-loop-design.md) or list-indexed provables get
     -- a capped fail-fast in the eval simprocs, keep the manual house prefix below.
+    -- (Re-measured on circuit_proof_start2, 2026-07-22: same wall — the storm is
+    -- instance synthesis on the goal's own HVec spelling during the peel, BEFORE the
+    -- atom minting could make anything opaque; a reduced `extract` slot in the
+    -- metadata would not help here either, it addresses consumer-side reduction.)
     intro cfg offset
     rw [FormalRegionCircuit.soundness_iff]
     intro self env input_var input output h_input h_output _hE hA hc

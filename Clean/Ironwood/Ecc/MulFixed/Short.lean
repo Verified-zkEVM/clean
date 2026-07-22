@@ -424,9 +424,7 @@ each window row. -/
 private theorem short_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
         (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
@@ -499,9 +497,7 @@ constraints from its completeness leaf, on the honest partialSum ladder. -/
 private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 22).operations self))
@@ -744,9 +740,7 @@ gate holds by the fixed-base invariants at the honest digits. -/
 private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 22).operations self))
@@ -873,9 +867,7 @@ the honest running-sum values. -/
 private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hPA : input_alpha.val < 2 ^ 66)
     (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
       (((DecomposeRunningSum.copyDecompose 3 22).call
@@ -898,9 +890,7 @@ private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
     dec_proverAssumptions_eq, dec_proverSpec_eq,
     DecomposeRunningSum.copyDecompose_output, circuit_norm]
     at hDecC hDecS
-  have hPA' : (env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ (3 * 22) := by
+  have hPA' : (AssignedCell.eval env.place env.env.toEnvironment input_var_alpha).val < 2 ^ (3 * 22) := by
     rw [h_input]
     exact lt_of_lt_of_le hPA (by norm_num)
   refine And.intro (hDecC hPA') ?_
@@ -998,30 +988,12 @@ private theorem yVarWit_eval (env : Placed ProverEnvironment Fp)
   simp only [yVarWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
-/-- The complete-addition child's output cells through the `call` wrapper (`rfl`). -/
-private theorem addc_call_out (cfgA : Add.Config) (row : ℕ)
-    (input : Var Add.Inputs Fp) (self : RegionIndex) :
-    (Add.add.call cfgA row input).output self
-      = { x := AssignedCell.of self (row + 1) cfgA.xQR,
-          y := AssignedCell.of self (row + 1) cfgA.yQR } :=
-  (FormalRegionCircuit.output_call Add.add cfgA row input self).trans rfl
-
 /-- The complete-addition child's output cells (`rfl`). -/
 private theorem addc_output_cells (cfgA : Add.Config) (row : ℕ)
     (input : Var Add.Inputs Fp) (self : RegionIndex) :
     Add.add.output cfgA row input self
       = { x := AssignedCell.of self (row + 1) cfgA.xQR,
           y := AssignedCell.of self (row + 1) cfgA.yQR } := rfl
-
-/-- The msw region's output cells: the add result's `x` and the conditionally-negated
-`y` (`rfl`-walk). -/
-private theorem mswRegion_output (cfg : Config) (acc mulB : Point (AssignedCell Fp))
-    (sign z21 : AssignedCell Fp) (self : RegionIndex) :
-    (mswRegion cfg acc mulB sign z21).output self
-      = { x := AssignedCell.of self 1 cfg.superConfig.addConfig.xQR,
-          y := AssignedCell.of self 1 cfg.superConfig.addConfig.yP } := by
-  simp only [mswRegion, circuit_norm, RegionCircuit.output_bind, RegionCircuit.output_pure,
-    FormalRegionCircuit.output_call', addc_output_cells]
 
 /-- Env-level preconditions: the `EccChip` wiring asserts the inner region consumes. -/
 def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
@@ -1068,29 +1040,26 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
   ProverSpec _ _ _ _ := True
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [synthesize, circuit_norm] at hc
-    obtain ⟨hInner, hMsw⟩ := hc
-    simp only [mswRegion, shortGate,
-      DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
-      Vector.getElem_ofFn, circuit_norm, mul_one, one_mul] at hMsw
-    obtain ⟨hAddC, hCpSign, hCpZ21, hBool, hSignSq, _hYchk, hNeg⟩ := hMsw
-    obtain ⟨hIMag, hISign⟩ := h_input
+    circuit_proof_start2 [mswRegion, shortGate,
+      DecomposeRunningSum.eval_rangeCheckExpr, mul_one]
+    obtain ⟨hAddC, hCpSign, hCpZ21, hBool, hSignSq, _hYchk, hNeg⟩ := region_1
+    obtain ⟨hIMag, hISign⟩ := input_eq
     -- ── region 1: the inner windowed mul ──
-    have hIS := short_inner_soundness B cfg 0 i₀ env ⟨input_var_magnitude⟩ _hE trivial
-      hInner
-    rw [ElaboratedRegionCircuit.output_eq] at hIS
-    dsimp only at hIS
-    simp only [innerRegion_output, innerOutCells, InnerSpec, circuit_norm] at hIS
+    have hIS : InnerSpec B
+        (eval (⟨place, env⟩ : Placed Environment Fp)
+          (⟨input_var_magnitude⟩ : Var DecomposeRunningSum.Inputs Fp))
+        (eval (⟨place, env⟩ : Placed Environment Fp) (innerOutCells cfg 0 i₀))
+        default :=
+      short_inner_soundness B cfg 0 i₀ ⟨place, env⟩ ⟨input_var_magnitude⟩
+        env_assumptions trivial region_0
+    simp only [InnerSpec, innerOutCells, circuit_norm] at hIS
     obtain ⟨ks, hks_lt', hMag, hAcc, hMulB, hZs⟩ := hIS
-    -- ── the complete addition `mul_b + acc` ──
-    subcircuit_rw at hAddC
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
+    -- ── the complete addition `mul_b + acc` (the engine-delivered contract) ──
     simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
-      innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add, circuit_norm]
-      at hAddC
+      Nat.zero_add, circuit_norm] at hAddC
     obtain ⟨t21, ht21_def⟩ : ∃ t : ℕ,
         t = (Ecc.MulFixed.Short.windowScalar 21 (ks 21)).val := ⟨_, rfl⟩
     have hwp21 : Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21)
@@ -1112,8 +1081,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       Point.nsmul_onCurve B.onCurve hS20_pos hS20_card
     obtain ⟨-, hOutEq⟩ := hAddC ⟨by rw [hMulB, hwp21]; exact Or.inl hOnP,
       by rw [hAcc, ← hS20_def]; exact Or.inl hOnQ⟩
-    rw [hMulB, hAcc, hwp21, ← hS20_def,
-      show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
+    rw [hMulB, hAcc, hwp21, ← hS20_def] at hOutEq
     rw [Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- the add output cells, as reads
     rw [show Add.add.output cfg.superConfig.addConfig 0
@@ -1127,11 +1095,12 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hOutEq
     -- the circuit's output cells
-    simp only [synthesize, circuit_norm, mswRegion_output] at h_output
-    obtain ⟨hOx, hOy⟩ := h_output
+    simp only [addc_output_cells, circuit_norm] at output_eq
+    obtain ⟨hOx, hOy⟩ := output_eq
     -- ── V is a 64-bit magnitude (the last-window bool check) ──
     have hz21 := hZs ⟨21, by norm_num⟩
     rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl] at hz21
+    simp only [Vector.getElem_ofFn, Nat.zero_add, circuit_norm] at hCpZ21
     rw [hz21] at hCpZ21
     obtain ⟨b, hb_lt, hb_eq⟩ :=
       (DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num) _).mp
@@ -1151,8 +1120,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     have hV64 : V < 2 ^ 64 := by
       have : V / 2 ^ 63 ≤ 1 := by omega
       omega
-    -- ── the sign facts ──
-    rw [hISign] at hCpSign
+    -- ── the sign facts ── (`hCpSign` landed input-spelled: `input_eq` fired)
     rw [hCpSign] at hSignSq hNeg
     have hsign : input_sign = 1 ∨ input_sign = -1 := by
       rcases mul_eq_zero.mp (show (input_sign - 1) * (input_sign + 1) = 0 from by
@@ -1165,8 +1133,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         ← Ecc.MulFixed.Short.FixedBase.add_natCast_val_nsmul, hV_def,
         Ecc.MulFixed.Short.windowScalar_partialSum]
     rw [hchain] at hOutEq
-    obtain ⟨yMag, hyMag_def⟩ : ∃ ym : Fp, ym = env.env.advice cfg.superConfig.addConfig.yQR
-        ((env.place (i₀ + 1) + 1 : ℕ) : ℤ) := ⟨_, rfl⟩
+    obtain ⟨yMag, hyMag_def⟩ : ∃ ym : Fp, ym = env.advice cfg.superConfig.addConfig.yQR
+        ((place (i₀ + 1) + 1 : ℕ) : ℤ) := ⟨_, rfl⟩
     rw [← hyMag_def] at hOutEq
     have hmulEq : ({ x := output_x, y := yMag } : Point Fp)
         = (V : Fq) • B := by
@@ -1175,7 +1143,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
           = { x := (((V : Fq)).val • B.point).x, y := (((V : Fq)).val • B.point).y }
         from rfl, ← hOutEq]
     have hyeq : input_sign * output_y = yMag := by
-      rw [hyMag_def, ← hOy]
+      rw [hyMag_def]
       linear_combination hNeg
     have hsigned := Ecc.MulFixed.Short.signed_output_spec B
       (sign := input_sign) (ySigned := output_y) hmulEq
@@ -1202,20 +1170,20 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       · exact Or.inr ⟨hs, hsigned.2 hs⟩
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [synthesize, circuit_norm] at hwit ⊢
-    obtain ⟨hWInner, hWMsw⟩ := hwit
-    obtain ⟨hIMag, hISign⟩ := h_input
-    obtain ⟨hMag64, hSignPM⟩ := hPA
-    have hIC := short_inner_completeness B cfg 0 i₀ env ⟨input_var_magnitude⟩ hWInner
-      _hE trivial (by
-        show ZMod.val (eval env (⟨input_var_magnitude⟩ :
-          Var DecomposeRunningSum.Inputs Fp)).alpha < 2 ^ 66
-        have h : (eval env (⟨input_var_magnitude⟩ :
-            Var DecomposeRunningSum.Inputs Fp)).alpha
+    circuit_proof_start2 [mswRegion, shortGate,
+      DecomposeRunningSum.eval_rangeCheckExpr, mul_one]
+    obtain ⟨-, hWSign, hWZ21, hWyVar⟩ := region_1
+    obtain ⟨hIMag, hISign⟩ := input_eq
+    obtain ⟨hMag64, hSignPM⟩ := prover_assumptions
+    -- region 1 honest: the inner windowed mul, via the family completeness
+    have hIC := short_inner_completeness B cfg 0 i₀ ⟨place, env⟩ ⟨input_var_magnitude⟩
+      region_0 env_assumptions trivial (by
+        show ZMod.val (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (⟨input_var_magnitude⟩ :
+            Var DecomposeRunningSum.Inputs Fp)).alpha < 2 ^ 66
+        have h : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+            (⟨input_var_magnitude⟩ :
+              Var DecomposeRunningSum.Inputs Fp)).alpha
             = input_magnitude := by
           simp only [circuit_norm, AssignedCell.eval]
           exact hIMag
@@ -1230,89 +1198,76 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       fun t => Nat.mod_lt _ (by norm_num)
     -- the honest facts are over the magnitude READ; land them on `input_magnitude`
     rw [hIMag] at hax hay hmx hmy
-    refine And.intro ?_ ?_
-    · exact hIC.1
-    · -- the msw region: the addition leaf + the sign row on honest values
-      simp only [mswRegion, shortGate,
-        DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
-        Vector.getElem_ofFn, circuit_norm, mul_one, one_mul] at hWMsw ⊢
-      obtain ⟨hWAdd, hWSign, hWZ21, hWyVar⟩ := hWMsw
-      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
-        cfg.superConfig.addConfig 0 (i₀ + 1) env
-        ⟨((innerRegion B.toData cfg 0 input_var_magnitude).output i₀).mulB,
-         ((innerRegion B.toData cfg 0 input_var_magnitude).output i₀).acc⟩ hWAdd
-      simp only [addc_assumptions_eq, addc_envAssumptions_eq,
-        addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
-        Nat.zero_add, circuit_norm] at hC
-      -- honest values at the sign row
-      rw [yVarWit_eval, addc_call_out] at hWyVar
-      simp only [readCell, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
-        Nat.zero_add] at hWyVar
-      rw [hISign] at hWyVar
-      have h2ne : (2 : Fp) ≠ 0 := by
-        have h : ((2 : ℕ) : Fp) ≠ 0 := by
-          rw [Ne, ZMod.natCast_eq_zero_iff]
-          intro hdvd
-          have := Nat.le_of_dvd (by norm_num) hdvd
-          norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at this
-        simpa using h
-      have hone_ne : ¬(1 : Fp) = -1 := fun h => h2ne (by linear_combination h)
-      refine ⟨?_, hWSign, hWZ21, ?_, ?_, ?_, ?_⟩
-      · -- the complete addition on the honest exit points
-        simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add]
-        refine hC ⟨?_, ?_⟩
-        · have hOn : (Ecc.MulFixed.Short.windowPoint B.point 21
-              (input_magnitude.val / 2 ^ (3 * 21) % 8)).OnCurve :=
-            B.windowPoint_onCurve (hks_lt 21)
-          rcases hWp : Ecc.MulFixed.Short.windowPoint B.point 21
-              (input_magnitude.val / 2 ^ (3 * 21) % 8) with ⟨wx, wy⟩
-          rw [hWp] at hOn hmx hmy
-          rw [hmx, hmy]
-          exact Or.inl hOn
-        · have hOn : ((Ecc.MulFixed.partialSum
-              (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20) • B.point).OnCurve :=
-            Point.nsmul_onCurve B.onCurve
-              (Ecc.MulFixed.partialSum_pos _ _)
-              (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
-                (Ecc.MulFixed.partialSum_lt _ 20 (fun j _ => hks_lt j))
-                (by norm_num))
-          rcases hSp : Ecc.MulFixed.partialSum
-              (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20 • B.point
-            with ⟨sx, sy⟩
-          rw [hSp] at hOn hax hay
-          rw [hax, hay]
-          exact Or.inl hOn
-      · -- last-window bool check on the honest running sum
-        have hz21 := hzs ⟨21, by norm_num⟩
-        rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl, hIMag] at hz21
-        rw [hWZ21, hz21]
-        have hb : input_magnitude.val / 2 ^ (3 * 21) < 2 := by
-          have : (2:ℕ) ^ (3 * 21) = 2 ^ 63 := by norm_num
-          omega
-        exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mpr
-          ((DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)
-            _).mpr ⟨input_magnitude.val / 2 ^ (3 * 21), hb, rfl⟩)
-      · -- sign check
-        rw [hWSign, hISign]
-        rcases hSignPM with hs | hs <;> rw [hs] <;> ring
-      · -- y check
-        rcases hSignPM with hs | hs
-        · rw [hs, if_neg hone_ne] at hWyVar
-          rw [hWyVar]
-          ring
-        · rw [hs, if_pos rfl] at hWyVar
-          rw [hWyVar]
-          ring
-      · -- negation check
-        rw [hWSign, hISign]
-        rcases hSignPM with hs | hs
-        · rw [hs, if_neg hone_ne] at hWyVar
-          rw [hWyVar, hs]
-          ring
-        · rw [hs, if_pos rfl] at hWyVar
-          rw [hWyVar, hs]
-          ring
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
+    simp only [Vector.getElem_ofFn, Nat.zero_add, circuit_norm] at hWZ21
+    -- honest values at the sign row
+    rw [yVarWit_eval, addc_output_cells] at hWyVar
+    simp only [readCell, circuit_norm, Nat.zero_add] at hWyVar
+    rw [hISign] at hWyVar
+    have h2ne : (2 : Fp) ≠ 0 := by
+      have h : ((2 : ℕ) : Fp) ≠ 0 := by
+        rw [Ne, ZMod.natCast_eq_zero_iff]
+        intro hdvd
+        have := Nat.le_of_dvd (by norm_num) hdvd
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at this
+      simpa using h
+    have hone_ne : ¬(1 : Fp) = -1 := fun h => h2ne (by linear_combination h)
+    simp only [addc_assumptions_eq, addc_envAssumptions_eq,
+      addc_proverAssumptions_eq, Nat.zero_add, circuit_norm]
+    refine ⟨hIC.1, ⟨?_, ?_⟩, hWSign, hWZ21, ?_, ?_, ?_, ?_⟩
+    · have hOn : (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_magnitude.val / 2 ^ (3 * 21) % 8)).OnCurve :=
+        B.windowPoint_onCurve (hks_lt 21)
+      rcases hWp : Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_magnitude.val / 2 ^ (3 * 21) % 8) with ⟨wx, wy⟩
+      rw [hWp] at hOn hmx hmy
+      rw [hmx, hmy]
+      exact Or.inl hOn
+    · have hOn : ((Ecc.MulFixed.partialSum
+          (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20) • B.point).OnCurve :=
+        Point.nsmul_onCurve B.onCurve
+          (Ecc.MulFixed.partialSum_pos _ _)
+          (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+            (Ecc.MulFixed.partialSum_lt _ 20 (fun j _ => hks_lt j))
+            (by norm_num))
+      rcases hSp : Ecc.MulFixed.partialSum
+          (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20 • B.point
+        with ⟨sx, sy⟩
+      rw [hSp] at hOn hax hay
+      rw [hax, hay]
+      exact Or.inl hOn
+    · -- last-window bool check on the honest running sum
+      have hz21 := hzs ⟨21, by norm_num⟩
+      rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl, hIMag] at hz21
+      rw [hWZ21, hz21]
+      have hb : input_magnitude.val / 2 ^ (3 * 21) < 2 := by
+        have : (2:ℕ) ^ (3 * 21) = 2 ^ 63 := by norm_num
+        omega
+      exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mpr
+        ((DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)
+          _).mpr ⟨input_magnitude.val / 2 ^ (3 * 21), hb, rfl⟩)
+    · -- sign check
+      rw [hWSign]
+      rcases hSignPM with hs | hs <;> rw [hs] <;> ring
+    · -- y check
+      rcases hSignPM with hs | hs
+      · rw [hs, if_neg hone_ne] at hWyVar
+        rw [hWyVar]
+        ring
+      · rw [hs, if_pos rfl] at hWyVar
+        rw [hWyVar]
+        ring
+    · -- negation check
+      rw [hWSign]
+      rcases hSignPM with hs | hs
+      · rw [hs, if_neg hone_ne] at hWyVar
+        rw [hWyVar, hs]
+        ring
+      · rw [hs, if_pos rfl] at hWyVar
+        rw [hWyVar, hs]
+        ring
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 

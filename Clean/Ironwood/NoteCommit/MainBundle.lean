@@ -331,16 +331,16 @@ private theorem rangeCheckAt_extract_cells (n : ℕ) (cfg : LookupRangeCheck.Con
     (LookupRangeCheck.rangeCheckAt 10 n false).extract cfg 0 () i env
       = (env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) : Fp) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
-  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero]
+  simp only [circuit_norm,
+    Nat.add_zero]
 
 private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
     (i : RegionIndex) (env : Placed Environment Fp) :
     (LookupRangeCheck.shortRangeCheck 10 b).extract cfg 0 () i env
       = (env.env.advice cfg.runningSum ((env.place i : ℕ) : ℤ) : Fp) := by
   show eval env (AssignedCell.of i 0 cfg.runningSum : Var field Fp) = _
-  simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero]
+  simp only [circuit_norm,
+    Nat.add_zero]
 
 /-- Build direction for stage 1: the seven short-check chunks give the stage. -/
 private theorem buildPieces (cfg : Config) (input : Var Inputs Fp)
@@ -864,8 +864,7 @@ theorem soundness (G : Generators) (R : FixedBase)
   simp only [DecomposeH.bundle, circuit_norm] at hGhS
   clear hGb hGd hGe hGg hGh
   simp only [synthPieces_output, synthChecks_output, circuit_norm, zCell,
-    AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-    Environment.get_advice] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
+    ] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
   -- ── the six hash running-sum value facts ──
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [hashExtract_zs] at hZs
@@ -962,57 +961,53 @@ theorem soundness (G : Generators) (R : FixedBase)
   have hGgdS := hGgd (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, GdCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-                    circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+                    circuit_norm,
+          Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGbS.1, haval, hb0, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩)
   rw [toFormal_spec_eq, GdCanonicity.bundle_spec_eq] at hGgdS
   simp only [GdCanonicity.toDonor, NoteCommit.GdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-    circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    circuit_norm,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGgdS
   have hGpkdS := hGpkd (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, PkdCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_2,
-          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          circuit_norm,
+          Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGdS.1, hcval, hb3, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩)
   rw [toFormal_spec_eq, PkdCanonicity.bundle_spec_eq] at hGpkdS
   simp only [PkdCanonicity.toDonor, NoteCommit.PkdCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell, prefixRows_ns_2,
-    circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    circuit_norm,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpkdS
   have hGvalS := hGval (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, ValueCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, zCell,
           prefixRows_ns_3,
-          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+          circuit_norm,
+          Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hd2, by rw [hzd]; exact hzdval, he0⟩)
   rw [toFormal_spec_eq, ValueCanonicity.bundle_spec_eq] at hGvalS
   simp only [ValueCanonicity.toDonor, NoteCommit.ValueCanonicity.Gate.Spec,
     synthPieces_output, zCell,
-    prefixRows_ns_3, circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    prefixRows_ns_3, circuit_norm,
     Nat.reduceAdd, Nat.add_zero] at hGvalS
   have hGrhoS := hGrho (by rw [toFormal_envAssumptions_eq]; trivial)
     (by rw [toFormal_assumptions_eq, RhoCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_5,
-          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          circuit_norm,
+          Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGgS.1, hfval, he1, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩)
   rw [toFormal_spec_eq, RhoCanonicity.bundle_spec_eq] at hGrhoS
   simp only [RhoCanonicity.toDonor, NoteCommit.RhoCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_5, circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    prefixRows_ns_5, circuit_norm,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGrhoS
   simp only [prefixRows_ns_3,
     prefixRows_ns_6, Nat.reduceAdd] at hGbS hGdS hGeS hGgS hGhS
@@ -1023,16 +1018,15 @@ theorem soundness (G : Generators) (R : FixedBase)
     (by rw [toFormal_assumptions_eq, PsiCanonicity.bundle_assumptions_eq]
         simp only [synthPieces_output, synthChecks_output, zCell,
           prefixRows_ns_6,
-          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-          Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+          circuit_norm,
+          Nat.add_assoc, Nat.reduceAdd,
           Nat.add_zero]
         exact ⟨hGhS.1, hg1, by rw [hzg1]; exact hzg1val, hh0, hz13G_tail,
           loG, hloG, by rw [← hgz0] at htelG; exact htelG⟩)
   rw [toFormal_spec_eq, PsiCanonicity.bundle_spec_eq] at hGpsiS
   simp only [PsiCanonicity.toDonor, NoteCommit.PsiCanonicity.Gate.Spec,
     synthPieces_output, synthChecks_output, zCell,
-    prefixRows_ns_6, circuit_norm, AssignedCell.of_cell,
-    Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    prefixRows_ns_6, circuit_norm,
     Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hGpsiS
   -- ── the chunk-equality assembly ──
   have hLow1 := hY1S hGbS.2.1
@@ -1040,20 +1034,13 @@ theorem soundness (G : Generators) (R : FixedBase)
   have hz1dEq := NoteCommit.cell_eq_of_val hGvalS.2.2.1
   have hz1gEq := NoteCommit.cell_eq_of_val hGpsiS.2.1
   have hchunksEq := NoteCommit.note_chunks_eq_of_cellFacts
-    (gd := ⟨env.get input_var_gdX.cell.column
-        ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ),
-      env.get input_var_gdY.cell.column
-        ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩)
-    (pkd := ⟨env.get input_var_pkdX.cell.column
-        ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ),
-      env.get input_var_pkdY.cell.column
-        ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩)
-    (value := env.get input_var_value.cell.column
-      ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))
-    (rho := env.get input_var_rho.cell.column
-      ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))
-    (psi := env.get input_var_psi.cell.column
-      ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))
+    (gd := ⟨AssignedCell.eval place env input_var_gdX,
+      AssignedCell.eval place env input_var_gdY⟩)
+    (pkd := ⟨AssignedCell.eval place env input_var_pkdX,
+      AssignedCell.eval place env input_var_pkdY⟩)
+    (value := AssignedCell.eval place env input_var_value)
+    (rho := AssignedCell.eval place env input_var_rho)
+    (psi := AssignedCell.eval place env input_var_psi)
     (cells :=
       { a := env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ),
         b := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ),
@@ -1148,7 +1135,7 @@ theorem completeness (G : Generators) (R : FixedBase)
   obtain ⟨hWy1, hWy2, hWcm, ⟨hWaP, hWra⟩, ⟨hWbP, hWrb⟩, ⟨hWeP, hWre⟩, ⟨hWgP, hWrg⟩⟩ := hWCk
   -- ── prover-side MessageCellFacts at the read cells ──
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input
-  have hVal64' : (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ 64 := by
+  have hVal64' : (AssignedCell.eval place env.toEnvironment input_var_value).val < 2 ^ 64 := by
     rw [hival]; exact hVal64
   -- gate-internal witnesses (the b1/d0/g0/h1 bit cells)
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
@@ -1162,19 +1149,19 @@ theorem completeness (G : Generators) (R : FixedBase)
   have hWgh := hGW.2.2.2.2.1
   rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hWgb hWgd hWgg hWgh
   simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output,
-        circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb
+        circuit_norm, readCell, AssignedCell.of_cell,
+    Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb
   simp only [DecomposeD.bundle, synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_3,
-    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgd
+    circuit_norm, readCell, AssignedCell.of_cell,
+    Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgd
   simp only [DecomposeG.bundle, synthPieces_output, zCell,
     prefixRows_ns_6,
-    circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgg
+    circuit_norm, readCell, AssignedCell.of_cell,
+    Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgg
   simp only [DecomposeH.bundle, synthPieces_output,
-        circuit_norm, readCell, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
+        circuit_norm, readCell, AssignedCell.of_cell,
+    Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
   have hwb2 := yc_lsb_witness (brWit input_var_gdY 0 1) _ _ _ place env hWy1
   have hwd1 := yc_lsb_witness (brWit input_var_pkdY 0 1) _ _ _ place env hWy2
   simp only [circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hwb2 hwd1
@@ -1183,9 +1170,9 @@ theorem completeness (G : Generators) (R : FixedBase)
   have hwg0 := hWgg.2.1
   have hwh1 := hWgh.2.2
   have hMCF : NoteCommit.MessageCellFacts
-      ⟨env.get input_var_gdX.cell.column ((place input_var_gdX.cell.regionIndex + input_var_gdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)⟩
-      ⟨env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ), env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)⟩
-      (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ)) (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))
+      ⟨AssignedCell.eval place env.toEnvironment input_var_gdX, AssignedCell.eval place env.toEnvironment input_var_gdY⟩
+      ⟨AssignedCell.eval place env.toEnvironment input_var_pkdX, AssignedCell.eval place env.toEnvironment input_var_pkdY⟩
+      (AssignedCell.eval place env.toEnvironment input_var_value) (AssignedCell.eval place env.toEnvironment input_var_rho) (AssignedCell.eval place env.toEnvironment input_var_psi)
       { a := env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ), b := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ), c := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ), d := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ),
         e := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 9) : ℕ) : ℤ), f := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 10) : ℕ) : ℤ), g := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ), h := env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 14) : ℕ) : ℤ),
         b0 := env.advice cfg.lookupConfig.runningSum ((place (i₀ + 1) : ℕ) : ℤ),
@@ -1204,15 +1191,15 @@ theorem completeness (G : Generators) (R : FixedBase)
     · rw [hwb0]; exact Specs.cast_bitrange_val (by norm_num) _
     · rw [hwb1]; exact Specs.cast_bitrange_val (by norm_num) _
     · refine NoteCommit.isLowBit_iff_mod_two.mpr ?_
-      rw [hwb2, show Specs.bitrange (ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-          = ZMod.val (env.get input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+      rw [hwb2, show Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_gdY)) 0 1
+          = ZMod.val (AssignedCell.eval place env.toEnvironment input_var_gdY) % 2 from by
         simp [Specs.bitrange]]
     · rw [hwb3]; exact Specs.cast_bitrange_val (by norm_num) _
     · rw [hwc]; exact Specs.cast_bitrange_val (by norm_num) _
     · rw [hwd0]; exact Specs.cast_bitrange_val (by norm_num) _
     · refine NoteCommit.isLowBit_iff_mod_two.mpr ?_
-      rw [hwd1, show Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-          = ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+      rw [hwd1, show Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1
+          = ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY) % 2 from by
         simp [Specs.bitrange]]
     · rw [hwd2]; exact Specs.cast_bitrange_val (by norm_num) _
     · rw [hwe0]; exact Specs.cast_bitrange_val (by norm_num) _
@@ -1275,8 +1262,8 @@ theorem completeness (G : Generators) (R : FixedBase)
             AssignedCell.of (i₀ + 14) 0 cfg.hashConfig.witnessPieces],
           r := input_var_rcm }).pieces := by
     rw [pieces_eval_eq]
-    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    simp only [readCell, circuit_norm,
+      Nat.add_zero]
     exact hPB
   have hHon2 : ∃ B, hashToPoint G.S Q
       (Sinsemilla.Chain.honestChunks ns
@@ -1295,8 +1282,8 @@ theorem completeness (G : Generators) (R : FixedBase)
       = some B := by
     refine ⟨B0, ?_⟩
     rw [pieces_eval_eq]
-    simp only [readCell, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero]
+    simp only [readCell, circuit_norm,
+      Nat.add_zero]
     rw [hHonest]
     exact hB0
   have hCmS := commit_derived_spec G R Q hQ
@@ -1430,50 +1417,50 @@ theorem completeness (G : Generators) (R : FixedBase)
         / 2 ^ 130 : ℕ) : Fp) := by with_unfolding_all exact hz13g
   -- honest z1 cells are the canonical middle slices
   have hdnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)).val
-      = Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
-        + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
-        + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 := by
-    rw [hwd, show ((Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
-        + ((Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 : ℕ) : Fp) * 2
-        + ((Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 : ℕ) : Fp) * (2 ^ 2 : Fp)
-        + ((Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) * (2 ^ 10 : Fp)
-      = ((Specs.bitrange (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Specs.bitrange (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1 * 2
-        + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8 * 4
-        + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 1024 : ℕ) : Fp) from by
+      = Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdX)) 254 1
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1 * 2
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 0 8 * 4
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50 * 1024 := by
+    rw [hwd, show ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdX)) 254 1 : ℕ) : Fp)
+        + ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1 : ℕ) : Fp) * 2
+        + ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 0 8 : ℕ) : Fp) * (2 ^ 2 : Fp)
+        + ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdX)) 254 1
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1 * 2
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 0 8 * 4
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50 * 1024 : ℕ) : Fp) from by
       push_cast; ring]
     rw [ZMod.val_natCast_of_lt (by
-      have h1 := Specs.bitrange_lt (ZMod.val (env.get input_var_pkdX.cell.column ((place input_var_pkdX.cell.regionIndex + input_var_pkdX.cell.rowOffset : ℕ) : ℤ))) 254 1
-      have h2 := Specs.bitrange_lt (ZMod.val (env.get input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-      have h3 := Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
-      have h4 := Specs.bitrange_lt (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50
+      have h1 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdX)) 254 1
+      have h2 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1
+      have h3 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 0 8
+      have h4 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 h4 ⊢
       omega)]
   have hzdEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 52 : ℕ) : ℤ)
-      = ((Specs.bitrange (ZMod.val (env.get input_var_value.cell.column ((place input_var_value.cell.regionIndex + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 : ℕ) : Fp) := by
+      = ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50 : ℕ) : Fp) := by
     rw [hzd, hdnat, z1d_div _ _ _ _ (Specs.bitrange_lt _ _ _)
       (Specs.bitrange_lt _ _ _) (Specs.bitrange_lt _ _ _)
       (Specs.bitrange_lt _ _ _)]
   have hgnat : (env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 12) : ℕ) : ℤ)).val
-      = Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
-        + Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 := by
-    rw [hwg, show ((Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1 : ℕ) : Fp)
-        + ((Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 : ℕ) : Fp) * 2
-        + ((Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) * (2 ^ 10 : Fp)
-      = ((Specs.bitrange (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-        + Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9 * 2
-        + Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 * 1024 : ℕ) : Fp) from by
+      = Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_rho)) 254 1
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 0 9 * 2
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240 * 1024 := by
+    rw [hwg, show ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_rho)) 254 1 : ℕ) : Fp)
+        + ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 0 9 : ℕ) : Fp) * 2
+        + ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240 : ℕ) : Fp) * (2 ^ 10 : Fp)
+      = ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_rho)) 254 1
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 0 9 * 2
+        + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240 * 1024 : ℕ) : Fp) from by
       push_cast; ring]
     rw [ZMod.val_natCast_of_lt (by
-      have h1 := Specs.bitrange_lt (ZMod.val (env.get input_var_rho.cell.column ((place input_var_rho.cell.regionIndex + input_var_rho.cell.rowOffset : ℕ) : ℤ))) 254 1
-      have h2 := Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 0 9
-      have h3 := Specs.bitrange_lt (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240
+      have h1 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_rho)) 254 1
+      have h2 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 0 9
+      have h3 := Specs.bitrange_lt (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240
       norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at h1 h2 h3 ⊢
       omega)]
   have hzgEq : env.advice cfg.hashConfig.bits ((place (i₀ + 27) + 84 : ℕ) : ℤ)
-      = ((Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column ((place input_var_psi.cell.regionIndex + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 : ℕ) : Fp) := by
+      = ((Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240 : ℕ) : Fp) := by
     rw [hzg1, hgnat, z1g_div _ _ _ (Specs.bitrange_lt _ _ _)
       (Specs.bitrange_lt _ _ _) (Specs.bitrange_lt _ _ _)]
   have hMa := hMCF.1
@@ -1540,8 +1527,8 @@ theorem completeness (G : Generators) (R : FixedBase)
     (by have h := hMgEq; simp only [] at h; rw [h, hzgEq])
     hzg13
   simp only [zCell,
-    prefixRows_ns_6, circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_assoc,
+    prefixRows_ns_6, circuit_norm,
+    Nat.add_assoc,
     Nat.reduceAdd, Nat.add_zero] at hWaP hWbP hWeP hWgP
   simp only [synthPieces_nextRegionIndex, synthChecks_nextRegionIndex,
     synthPieces_regionCount, synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
@@ -1662,15 +1649,10 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
        (by rw [YCanonicityCheck.circuit_proverAssumptions_eq, yc_extract]
            refine NoteCommit.isLowBit_iff_mod_two.mpr ?_
-           simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-             Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+           simp only [circuit_norm,
              Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
-           rw [hwb2, show Specs.bitrange (ZMod.val (env.get
-               input_var_gdY.cell.column ((place input_var_gdY.cell.regionIndex
-               + input_var_gdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-             = ZMod.val (env.get input_var_gdY.cell.column
-               ((place input_var_gdY.cell.regionIndex
-               + input_var_gdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+           rw [hwb2, show Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_gdY)) 0 1
+             = ZMod.val (AssignedCell.eval place env.toEnvironment input_var_gdY) % 2 from by
              simp [Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (YCanonicityCheck.circuit (brWit input_var_pkdY 0 1))
@@ -1679,15 +1661,10 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
        (by rw [YCanonicityCheck.circuit_proverAssumptions_eq, yc_extract]
            refine NoteCommit.isLowBit_iff_mod_two.mpr ?_
-           simp only [circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex,
-             Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+           simp only [circuit_norm,
              Nat.add_assoc, Nat.reduceAdd, Nat.add_zero]
-           rw [hwd1, show Specs.bitrange (ZMod.val (env.get
-               input_var_pkdY.cell.column ((place input_var_pkdY.cell.regionIndex
-               + input_var_pkdY.cell.rowOffset : ℕ) : ℤ))) 0 1
-             = ZMod.val (env.get input_var_pkdY.cell.column
-               ((place input_var_pkdY.cell.regionIndex
-               + input_var_pkdY.cell.rowOffset : ℕ) : ℤ)) % 2 from by
+           rw [hwd1, show Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY)) 0 1
+             = ZMod.val (AssignedCell.eval place env.toEnvironment input_var_pkdY) % 2 from by
              simp [Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
@@ -1740,8 +1717,8 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, DecomposeB.bundle_proverAssumptions_eq, decomposeB_extract_eq]
            simp only [synthPieces_output, synthChecks_output,
-                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+                          circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_⟩
            · rw [hwb1]
@@ -1758,8 +1735,8 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_proverAssumptions_eq, DecomposeD.bundle_proverAssumptions_eq, decomposeD_extract_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_3,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_⟩
            · rw [hwd0]
@@ -1775,8 +1752,7 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, DecomposeE.bundle_proverAssumptions_eq]
            simp only [synthPieces_output,
-                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice,
+                          circuit_norm,
              Nat.add_zero]
            rw [hwe, ← hwe0, ← hwe1]
            try ring)⟩
@@ -1788,8 +1764,8 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_proverAssumptions_eq, DecomposeG.bundle_proverAssumptions_eq, decomposeG_extract_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+             circuit_norm,
+             Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwg0]
@@ -1803,8 +1779,7 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq]; trivial),
        (by rw [toFormal_proverAssumptions_eq, DecomposeH.bundle_proverAssumptions_eq, decomposeH_extract_eq]
            simp only [synthPieces_output,
-                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice,
+                          circuit_norm,
              Nat.add_zero]
            refine ⟨?_, ?_⟩
            · rw [hwh1]
@@ -1817,15 +1792,15 @@ theorem completeness (G : Generators) (R : FixedBase)
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq, GdCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+                          circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwb1]; exact bit_cast_isBool _ (Specs.bitrange_lt _ _ _),
              haval, hb0lt, hza, loA, hloA, by rw [← haz0] at htelA; exact htelA⟩),
        (by rw [toFormal_proverAssumptions_eq, GdCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell, prefixRows_ns_0,
-                          circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+                          circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [GdCanonicity.toDonor,
              NoteCommit.GdCanonicity.Gate.Spec]
@@ -1846,16 +1821,16 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq, PkdCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_2,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwd0]; exact bit_cast_isBool _ (Specs.bitrange_lt _ _ _),
              hcval, hb3lt, hzc, loB, hloB, by rw [← hbz0] at htelB; exact htelB⟩),
        (by rw [toFormal_proverAssumptions_eq, PkdCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_2,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [PkdCanonicity.toDonor,
              NoteCommit.PkdCanonicity.Gate.Spec]
@@ -1874,35 +1849,25 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq, ValueCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_3,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+             circuit_norm,
+             Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨hd2lt, hz1dlt, he0lt⟩),
        (by rw [toFormal_proverAssumptions_eq, ValueCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, zCell,
              prefixRows_ns_3,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.reduceAdd,
+             circuit_norm,
+             Nat.reduceAdd,
              Nat.add_zero]
            rw [hwd2, hwe0, hzdEq]
-           have hvnat : (env.get input_var_value.cell.column
-               ((place input_var_value.cell.regionIndex
-                 + input_var_value.cell.rowOffset : ℕ) : ℤ)).val
-               = Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
-                   ((place input_var_value.cell.regionIndex
-                     + input_var_value.cell.rowOffset : ℕ) : ℤ))) 0 8
-                 + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
-                   ((place input_var_value.cell.regionIndex
-                     + input_var_value.cell.rowOffset : ℕ) : ℤ))) 8 50 * 2 ^ 8
-                 + Specs.bitrange (ZMod.val (env.get input_var_value.cell.column
-                   ((place input_var_value.cell.regionIndex
-                     + input_var_value.cell.rowOffset : ℕ) : ℤ))) 58 6 * 2 ^ 58 := by
+           have hvnat : (AssignedCell.eval place env.toEnvironment input_var_value).val
+               = Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 0 8
+                 + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 8 50 * 2 ^ 8
+                 + Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_value)) 58 6 * 2 ^ 58 := by
              have h64 := hVal64'
              simp only [Specs.bitrange]
              omega
-           conv_lhs => rw [← ZMod.natCast_zmod_val (env.get input_var_value.cell.column
-             ((place input_var_value.cell.regionIndex
-               + input_var_value.cell.rowOffset : ℕ) : ℤ)), hvnat]
+           conv_lhs => rw [← ZMod.natCast_zmod_val (AssignedCell.eval place env.toEnvironment input_var_value), hvnat]
            push_cast
            ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
@@ -1912,16 +1877,16 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq, RhoCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_5,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwg0]; exact bit_cast_isBool _ (Specs.bitrange_lt _ _ _),
              hfval, he1lt, hzf, loE, hloE, by rw [← hez0] at htelE; exact htelE⟩),
        (by rw [toFormal_proverAssumptions_eq, RhoCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_5,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [RhoCanonicity.toDonor,
              NoteCommit.RhoCanonicity.Gate.Spec]
@@ -1940,8 +1905,8 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_assumptions_eq, PsiCanonicity.bundle_assumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            exact ⟨by rw [hwh1]; exact bit_cast_isBool _ (Specs.bitrange_lt _ _ _),
              hg1lt, hz1glt, hh0lt, hz13Gt, loG, hloG,
@@ -1949,16 +1914,14 @@ theorem completeness (G : Generators) (R : FixedBase)
        (by rw [toFormal_proverAssumptions_eq, PsiCanonicity.bundle_proverAssumptions_eq]
            simp only [synthPieces_output, synthChecks_output, zCell,
              prefixRows_ns_6,
-             circuit_norm, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-             Cell.of_column, Environment.get_advice, Nat.add_assoc, Nat.reduceAdd,
+             circuit_norm,
+             Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            simp only [PsiCanonicity.toDonor,
              NoteCommit.PsiCanonicity.Gate.Spec]
            have hg2val : (env.advice cfg.hashConfig.bits
                ((place (i₀ + 27) + 84 : ℕ) : ℤ)).val
-               = Specs.bitrange (ZMod.val (env.get input_var_psi.cell.column
-                   ((place input_var_psi.cell.regionIndex
-                     + input_var_psi.cell.rowOffset : ℕ) : ℤ))) 9 240 := by
+               = Specs.bitrange (ZMod.val (AssignedCell.eval place env.toEnvironment input_var_psi)) 9 240 := by
              rw [hzgEq, Specs.cast_bitrange_val (by norm_num)]
            refine ⟨⟨hMg1, hg2val, hMh0, hMh1, fun h1 => ?_⟩, by rw [hWgP]; try ring⟩
            have hbase := NoteCommit.base_val_lt_tP_val hMg1 hg2val

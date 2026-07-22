@@ -236,16 +236,8 @@ def chainedParent :
     subcircuit_rw at hc2
     intro hv
     rw [← h_output]
-    have hout : (passthrough.call config offset input_var).output self
-        = passthrough.output config offset input_var self := by
-      rw [FormalRegionCircuit.output_call]
-    have hout2 : (passthrough.call config offset
-          ((passthrough.call config offset input_var).output self)).output self
-        = passthrough.output config offset
-          ((passthrough.call config offset input_var).output self) self := by
-      rw [FormalRegionCircuit.output_call]
-    exact hout2.symm ▸ hc2 trivial trivial
-      (hout.symm ▸ hc1 trivial trivial (h_input ▸ hv))
+    -- both chunks' output spellings arrive canonicalized (`output_call'` in `circuit_norm`)
+    exact hc2 trivial trivial (hc1 trivial trivial (h_input ▸ hv))
 
   completeness := by
     intro config offset

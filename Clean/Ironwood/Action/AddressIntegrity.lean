@@ -84,26 +84,15 @@ def circuit : FormalCircuit Fp
     pkDOld.OnCurve ∧ pkDOld = ivk.val • gDOld
 
   soundness := by
-    circuit_proof_start2 [
-      Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_spec_eq, Ecc.Mul.mul_envAssumptions_eq,
-      Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]
+    circuit_proof_start2 [Ecc.Mul.mul, Ecc.WitnessPoint.pointNonIdFormal,
+      Ecc.Mul.Assumptions, Ecc.Mul.Spec]
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially sound
     simp_all
 
   completeness := by
-    circuit_proof_start2 [
-      Ecc.Mul.mul_assumptions_eq, Ecc.Mul.mul_proverAssumptions_eq,
-      Ecc.Mul.mul_envAssumptions_eq, Ecc.Mul.mul_proverSpec_eq, Ecc.Mul.mul_spec_eq,
-      Ecc.Mul.Assumptions, Ecc.Mul.Spec,
-      Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_spec_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq,
-      Ecc.WitnessPoint.pointNonIdFormal_proverSpec_eq]
+    circuit_proof_start2 [Ecc.Mul.mul, Ecc.WitnessPoint.pointNonIdFormal,
+      Ecc.Mul.Assumptions, Ecc.Mul.Spec]
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially complete
     grind

@@ -404,7 +404,8 @@ theorem readCell_of (env : Placed ProverEnvironment Fp) (self : RegionIndex) (ro
 /-- The gate identities of one row force the double-and-add step, in point form:
 `step_nsmul` + `coordinates_of_constraints` applied to a single constrained row.
 Stated over the raw cell values so the bundle's peeled soundness goal unifies with it. -/
-private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
+private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp} {obase : Point Fp}
+    (hbase : ({ x := obx, y := oby } : Point Fp) = obase)
     (hxpc : bx - obx = 0) (hypc : yb - oby = 0)
     (hbool : (oz - z * 2) * (1 - (oz - z * 2)) = 0)
     (hg1 : l1 * (xA - bx) - (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹
@@ -413,14 +414,15 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
     (hg2 : l2 * (xA - oxA) - (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹
       - (ol1 + ol2) * (oxA - (ol1 * ol1 - oxA - obx)) * (2 : Fp)⁻¹ = 0) :
     ∃ k : Bool, oz = 2 * z + (if k then 1 else 0) ∧
-      (obx = bx ∧ oby = yb) ∧
+      obase = { x := bx, y := yb } ∧
       ∀ m : ℕ, ({ x := bx, y := yb } : Point Fp).OnCurve →
         ({ x := xA, y := (l1 + l2) * (xA - (l1 * l1 - xA - bx)) * (2 : Fp)⁻¹ } : Point Fp)
           = m • { x := bx, y := yb } →
         2 ≤ m → 2 * m + 1 < PALLAS_SCALAR_CARD →
-        ({ x := oxA, y := (ol1 + ol2) * (oxA - (ol1 * ol1 - oxA - obx)) * (2 : Fp)⁻¹ }
+        ({ x := oxA, y := (ol1 + ol2) * (oxA - (ol1 * ol1 - oxA - obase.x)) * (2 : Fp)⁻¹ }
             : Point Fp)
           = (2 * m + (if k then 1 else 0) * 2 - 1) • { x := bx, y := yb } := by
+  subst hbase
   have h2 : (2 : Fp) ≠ 0 := by decide
   have hobx : bx = obx := by linear_combination hxpc
   have hoby : yb = oby := by linear_combination hypc
@@ -478,9 +480,9 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp}
     rw [hyB, hxB]
   rcases mul_eq_zero.mp hbool with hk | hk
   · exact ⟨false, by simp only [Bool.false_eq_true, if_false]; linear_combination hk,
-      ⟨rfl, rfl⟩, core false (by simp only [Bool.false_eq_true, if_false]; linear_combination hk)⟩
+      rfl, core false (by simp only [Bool.false_eq_true, if_false]; linear_combination hk)⟩
   · exact ⟨true, by simp only [if_true]; linear_combination -hk,
-      ⟨rfl, rfl⟩, core true (by simp only [if_true]; linear_combination -hk)⟩
+      rfl, core true (by simp only [if_true]; linear_combination -hk)⟩
 
 /-- The step keeps the base point. -/
 private theorem step_base (w : State Fp) (k k' : Bool) : (w.step k k').base = w.base := rfl
@@ -650,16 +652,19 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     out = w.step (kBitsWindow alpha 0 i) (kBitsWindow alpha 0 (i + 1))
 
   soundness := by
-    circuit_proof_start [qMul2Gate, forLoopPolys, yA, xRExpr, reads,
+    circuit_proof_start2 [qMul2Gate, forLoopPolys, yA, xRExpr, reads,
       State.acc, State.yA2, State.xR]
-    obtain ⟨hxpc, hypc, hbool, hg1, hsec, hg2⟩ := hc
-    exact sound_step hxpc hypc hbool hg1 hsec hg2
+    obtain ⟨hxpc, hypc, hbool, hg1, hsec, hg2⟩ := region_0
+    obtain ⟨-, -, -, -, hbase⟩ := output_eq
+    exact sound_step hbase hxpc hypc hbool hg1 hsec hg2
 
   completeness := by
-    circuit_proof_start [qMul2Gate, forLoopPolys, yA, xRExpr, reads]
-    obtain ⟨m, hH⟩ := hPA
-    refine ⟨step_gates hH, ?_⟩
-    simp [← h_output]
+    circuit_proof_start2 [qMul2Gate, forLoopPolys, yA, xRExpr, reads]
+    obtain ⟨m, hH⟩ := prover_assumptions
+    obtain ⟨-, -, -, -, hbase⟩ := output_eq
+    -- substitute the witnessed cells: every out-row cell is a field of `w.step`
+    simp only [region_0, region_1, region_2, region_3, region_4, region_5, ← hbase]
+    exact ⟨step_gates hH, trivial⟩
 
 /-- Witness equations chain into the iterated step. -/
 theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)

@@ -204,11 +204,19 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
     ∀ j : Fin n, out.zs[j] = (ws.iter G piece (j.val + 1)).z
 
   soundness := by
-    circuit_proof_start [wordChain, reads]
+    circuit_proof_start2 [wordChain, reads, readState]
     simp only [roundC_spec_eq, roundC_assumptions_eq, roundC_envAssumptions_eq,
-      roundC_extract_eq, mul_one, reads, circuit_norm] at hc
-    provable_type_simp
-    have hc' := fun i : Fin n => hc i _hE
+      roundC_extract_eq, mul_one, reads, circuit_norm] at region_0
+    -- the whole-vector zs naming, per index
+    have h_output_zs : ∀ j, (hj : j < n) →
+        env.advice cfg.bits ((place self + (offset + 1 + j) : ℕ) : ℤ)
+          = output_zs[j]'hj := by
+      intro j hj
+      rw [← output_eq.2]
+      simp [circuit_norm]
+    obtain ⟨⟨h_output_exit_z, h_output_exit_row_xA, h_output_exit_row_xP,
+      h_output_exit_row_lambda1, h_output_exit_row_lambda2⟩, -⟩ := output_eq
+    have hc' := fun i : Fin n => region_0 i env_assumptions
     choose m hm hspec using hc'
     refine ⟨fun j => if h : j < n then m ⟨j, h⟩ else 0, ?_, ?_, ?_⟩
     · intro r
@@ -261,8 +269,15 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       simpa using hfold
 
   completeness := by
-    circuit_proof_start [reads]
-    obtain ⟨A, B, hAon, hH0, hchain⟩ := hPA
+    circuit_proof_start2 [reads, readState]
+    obtain ⟨A, B, hAon, hH0, hchain⟩ := prover_assumptions
+    -- the whole-vector zs naming, per index
+    have h_output_zs : ∀ j, (hj : j < n) →
+        env.advice cfg.bits ((place self + (offset + 1 + j) : ℕ) : ℤ)
+          = output_zs[j]'hj := by
+      intro j hj
+      rw [← output_eq.2]
+      simp [circuit_norm]
     -- the per-round witness equations, as steps of the row family
     have hsteps : ∀ i : Fin n,
         rowFam cfg place env self offset (i.val + 1)
@@ -270,9 +285,9 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
             ((G.S (pieceWord input (i.val + 1))).x, (G.S (pieceWord input (i.val + 1))).y)
             (pieceZ input (i.val + 1)) := by
       intro i
-      have hw := hwit i
+      have hw := region_0 i
       rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call] at hw
-      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, h_input] at hw
+      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, input_eq] at hw
       obtain ⟨hq, hz, hxp, hl1, hl2, hxa⟩ := hw
       simp only [rowFam]
       rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
@@ -284,30 +299,23 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         simp only [rowFam]
         exact hH0) hchain
     refine ⟨?_, ?_, ?_⟩
-    · -- each round's constraints, via the engine leaf and the chained honesty
+    · -- each round's precondition bundle (the engine strengthened the goal per round),
+      -- via the chained honesty
       intro i
-      have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round G ↑i) cfg
-        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var (hwit i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
-        roundC_extract_eq] at hleaf
+        roundC_extract_eq]
       obtain ⟨C, hC⟩ := range_prefix_some G.S A (pieceWord input) hchain
         (show ↑i + 2 ≤ n + 1 by omega)
-      have hinp : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var : Fp) = input := by
-        rw [← h_input]
-        simp only [circuit_norm]
-      rw [← hinp] at hC
-      refine hleaf ⟨_hE, trivial, A, C, hAon, ?_, hC⟩
+      refine ⟨env_assumptions, trivial, A, C, hAon, ?_, hC⟩
       -- the entering neighborhood of round i is honest at word i
       have hH := hHall ↑i (by omega)
       rw [← hIter ↑i (by omega)] at hH
       simp only [rowFam] at hH
       simp only [reads, mul_one]
       provable_type_simp
-      simp only [circuit_norm, h_input]
       exact hH
     · -- the exit row is the iterated step
-      rw [← h_output_exit_z, ← h_output_exit_row_xA, ← h_output_exit_row_xP,
-        ← h_output_exit_row_lambda1, ← h_output_exit_row_lambda2]
+      rw [← output_eq.1.1, ← output_eq.1.2]
       have hn := hIter n le_rfl
       simp only [rowFam] at hn
       simpa using hn
@@ -348,8 +356,8 @@ def initXPWit (G : Generators) (piece : AssignedCell Fp) : WitgenIR Fp 1 :=
 theorem initXPWit_eval (G : Generators) (piece : AssignedCell Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initXPWit G piece).eval env)[j]
-      = (G.S (pieceWord (env.env.get piece.cell.column
-          ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x := by
+      = (G.S (pieceWord
+          (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).x := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [initXPWit, Witgen.WitgenIROver.eval_native_apply]
@@ -370,13 +378,12 @@ theorem initLWit_eval (G : Generators) (piece xAcell : AssignedCell Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initLWit G piece xAcell yaIn f).eval env)[j]
       = f (rowValue
-          (env.env.get xAcell.cell.column
-            ((env.place xAcell.cell.regionIndex + xAcell.cell.rowOffset : ℕ) : ℤ),
+          (AssignedCell.eval env.place env.env.toEnvironment xAcell,
            yaIn env.toEnvironment)
-          ((G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).x,
-           (G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) 0)).y)) := by
+          ((G.S (pieceWord
+              (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).x,
+           (G.S (pieceWord
+              (AssignedCell.eval env.place env.env.toEnvironment piece) 0)).y)) := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [initLWit, Witgen.WitgenIROver.eval_native_apply]
@@ -506,19 +513,30 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
   ProverSpec piece output wit _ := ProverSpec G w piece output wit
 
   soundness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads, HashPiece.Spec]
-    obtain ⟨hZ0, hLoop, hQ, hMem⟩ := hc
-    rw [loopC_envAssumptions_eq, loopC_assumptions_eq, loopC_spec_eq,
-      loopC_extract_eq] at hLoop
-    simp only [reads, circuit_norm, forall_const, wordChain] at hLoop
-    obtain ⟨ms0, hms0, hwc, hfold⟩ := hLoop _hE
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState, HashPiece.Spec]
+    obtain ⟨⟨h_output_first_xA, h_output_first_xP, h_output_first_lambda1,
+      h_output_first_lambda2⟩,
+      ⟨h_output_last_xA, h_output_last_xP, h_output_last_lambda1,
+        h_output_last_lambda2⟩,
+      h_output_xANext, h_output_zsv⟩ := output_eq
+    have h_output_zs : ∀ r, (hr : r < w + 1) →
+        env.advice cfg.bits ((place self + (offset + r) : ℕ) : ℤ)
+          = output_zs[r]'hr := by
+      intro r hr
+      rw [← h_output_zsv]
+      simp [circuit_norm]
+    -- the loop's contract, on its extracted entering row
+    simp only [← wit_lp_eq, loopC_envAssumptions_eq, loopC_assumptions_eq,
+      loopC_spec_eq, loopC_extract_eq, reads, circuit_norm, forall_const,
+      wordChain] at lp_spec
+    obtain ⟨ms0, hms0, hwc, hfold⟩ := lp_spec env_assumptions
     -- the last-word edge: `q_run` vanishes at the boundary value, the word is `z_w`
-    simp only [List.cons.injEq, and_true] at hMem
-    obtain ⟨t, ht, h0, h1, h2y⟩ := hMem
-    obtain ⟨-, hSpec, -⟩ := _hE
+    simp only [List.cons.injEq, and_true] at region_2
+    obtain ⟨t, ht, h0, h1, h2y⟩ := region_2
+    obtain ⟨-, hSpec, -⟩ := env_assumptions
     obtain ⟨mw, hmw, hIdx, hX, hY⟩ := hSpec t ht
-    rw [hQ] at h0
+    rw [region_1] at h0
     rw [hIdx] at h0
     rw [hX] at h1
     rw [hY] at h2y
@@ -527,7 +545,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       linear_combination h0
         + env.advice cfg.bits ((place self + (offset + w + 1) : ℕ) : ℤ)
           * (2 : Fp) ^ K * qS2Boundary_run final
-    -- the word family and the running-sum family
     refine ⟨fun r => if r < w then ms0 r else mw, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro r
       beta_reduce
@@ -566,7 +583,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
           rw [if_neg (by omega)])
       beta_reduce at hkey ⊢
       rw [if_pos (by omega : 0 ≤ w), Nat.add_zero] at hkey
-      rw [← hZ0]
+      rw [← region_0]
       exact hkey
     · -- the running sums are the suffix recombinations
       apply Vector.ext
@@ -599,12 +616,11 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       exact hsfx
     · -- the last row's x_p lands on the generator
       beta_reduce
-      rw [← h_output_last_xP, if_neg (show ¬ w < w by omega)]
+      rw [if_neg (show ¬ w < w by omega)]
       linear_combination h1
     · -- the last row's y_p derivation lands on the generator
       beta_reduce
-      rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
-        ← h_output_last_lambda2, if_neg (show ¬ w < w by omega)]
+      rw [if_neg (show ¬ w < w by omega)]
       simp only [yA, xR]
       linear_combination h2y
     · -- the chain contract, from the loop's fold
@@ -614,16 +630,17 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,
         ← h_output_first_lambda2] at hAyA
       rw [map_range_congr w _ ms0 (fun j hj => if_pos hj)] at hB
-      have hres := hfold A hAon hAx hAyA B hB
-      rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
-        ← h_output_last_lambda2]
-      exact hres
+      exact hfold A hAon hAx hAyA B hB
 
   completeness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads, HashPiece.ProverSpec, HashPiece.ProverAssumptions]
-    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := hPA
-    obtain ⟨hWz0, hWxp, hWl1, hWl2, hWloop, hWq, hWxf⟩ := hwit
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState, HashPiece.ProverSpec, HashPiece.ProverAssumptions]
+    obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := prover_assumptions
+    obtain ⟨⟨h_output_first_xA, h_output_first_xP, h_output_first_lambda1,
+      h_output_first_lambda2⟩,
+      ⟨h_output_last_xA, h_output_last_xP, h_output_last_lambda1,
+        h_output_last_lambda2⟩,
+      h_output_xANext, h_output_zsv⟩ := output_eq
     have h2 : (2 : Fp) ≠ 0 := by decide
     -- the entering row is the honest row 0
     have hH0 : (State.mk
@@ -636,28 +653,28 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       refine ⟨?_, ?_, ?_, ?_, ?_⟩
       · show env.advice cfg.bits _ = pieceZ input 0
         rw [pieceZ_zero]
-        exact hWz0
-      · exact hAx.symm
-      · exact hWxp
+        exact region_0
+      · exact h_output_first_xA.trans hAx.symm
+      · exact h_output_first_xP.trans region_1
       · show env.advice cfg.lambda1 _
           = (rowValue (accAfter G (A.x, A.y) input 0) _).1
         rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
-        exact hWl1
+        exact h_output_first_lambda1.trans region_2
       · show env.advice cfg.lambda2 _
           = (rowValue (accAfter G (A.x, A.y) input 0) _).2.1
         rw [show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl, hAx, hAy]
-        exact hWl2
-    rw [h_input] at h_spec_0
-    -- the loop's honest-prover precondition
+        exact h_output_first_lambda2.trans region_3
+    -- the loop's honest-prover precondition, at the extract spelling
     have hLPA : (loop G w).ProverAssumptions input
-        ((loop G w).extract cfg offset input_var self (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
+        ((loop G w).extract cfg offset input_var self
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
       rw [loopC_proverAssumptions_eq, loopC_extract_eq]
       simp only [reads, circuit_norm]
       exact ⟨A, B, hAon, hH0, hchain⟩
     -- the loop's Spec + ProverSpec on the honest run
-    have hsp := h_spec_0 _hE trivial hLPA
-    rw [loopC_spec_eq, loopC_proverSpec_eq, loopC_extract_eq] at hsp
-    simp only [reads, circuit_norm] at hsp
+    have hsp := lp_spec env_assumptions trivial (wit_lp_eq ▸ hLPA)
+    simp only [← wit_lp_eq, loopC_spec_eq, loopC_proverSpec_eq, loopC_extract_eq,
+      reads, circuit_norm] at hsp
     obtain ⟨-, hExit, hZs⟩ := hsp
     -- the exit row is honest at word w
     have hHexit := iter_honest G
@@ -672,16 +689,15 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     have hEx := step_exit G hHexit hchain
     obtain ⟨-, hExB, hEyB, hEyp⟩ := hEx
     obtain ⟨hzE, hxAE, hxPE, hl1E, hl2E⟩ := hHexit
-    have hUsable := _hE.1
-    have hBlock := _hE.2.2
-    rw [Placed.toEnvironment_env] at hUsable hBlock
+    have hUsable := env_assumptions.1
+    have hBlock := env_assumptions.2.2
     obtain ⟨hb_idx, hb_x, hb_y⟩ := hBlock (pieceWord input w) (pieceWord_lt input w)
-    refine ⟨⟨⟨_hE, trivial, hLPA⟩,
+    refine ⟨⟨region_0, ⟨env_assumptions, trivial, wit_lp_eq ▸ hLPA⟩, region_4,
       ⟨pieceWord input w, lt_of_lt_of_le (pieceWord_lt input w) hUsable, ?_⟩⟩, ?_⟩
     · -- the word-`w` membership: `q_run` vanishes at the boundary, the word is `z_w`
       simp only [List.cons.injEq, and_true]
       refine ⟨?_, ?_, ?_⟩
-      · rw [hb_idx]
+      · rw [region_4, hb_idx]
         have hzwv : env.advice cfg.bits ((place self + (offset + w) : ℕ) : ℤ)
             = pieceZ input w := hzE
         rw [hzwv, pieceZ_last hbound]
@@ -718,18 +734,16 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       · rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,
           ← h_output_first_lambda2]
         exact hyA0
-      · rw [← h_output_xANext, hWxf,
+      · rw [region_5,
           stepXA_eq _ ((G.S (pieceWord input (w + 1))).x, (G.S (pieceWord input (w + 1))).y)
             (pieceZ input (w + 1))]
         exact hExB
       · -- secant: the exit x_a is the stepped x over the last row's cells
-        rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
-          ← h_output_last_lambda2, ← h_output_xANext, hWxf]
+        rw [region_5]
         simp only [State.stepXA, xR]
         ring
       · -- the `nextYA` derivation lands on `2·B.y`
-        rw [← h_output_last_xA, ← h_output_last_xP, ← h_output_last_lambda1,
-          ← h_output_last_lambda2, ← h_output_xANext, hWxf,
+        rw [region_5,
           stepXA_eq _ ((G.S (pieceWord input (w + 1))).x, (G.S (pieceWord input (w + 1))).y)
             (pieceZ input (w + 1))]
         simp only [yA, xR, State.accY, Ecc.DoubleAndAdd.yA,

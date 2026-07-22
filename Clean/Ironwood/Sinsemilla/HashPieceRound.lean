@@ -297,13 +297,13 @@ def zWit (piece : AssignedCell Fp) (r : ℕ) : WitgenIR Fp 1 :=
   .ofFExpr (.ofNat (.div (.val (.expr piece)) (.const (2 ^ (K * r)))))
 
 /-- The running-sum witness evaluates to the honest `pieceZ` of the piece cell's value —
-spelled over the raw cell read, the form `h_input` lands on (the `bitWit_eval` pattern). -/
+spelled over the folded `AssignedCell.eval` cell read, the form `h_input` lands on (the
+`bitWit_eval` pattern). -/
 @[circuit_norm]
 theorem zWit_eval (piece : AssignedCell Fp) (r : ℕ) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
     ((zWit piece r).eval env)[j]
-      = pieceZ (env.env.get piece.cell.column
-          ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) r := by
+      = pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) r := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr]
@@ -327,12 +327,9 @@ theorem stepWit_eval (G : Generators) (piece : AssignedCell Fp) (w : State (Assi
     (i : ℕ) (f : State Fp → Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((stepWit G piece w i f).eval env)[j]
       = f ((readsValue w env).step
-          ((G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))).x,
-           (G.S (pieceWord (env.env.get piece.cell.column
-              ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))).y)
-          (pieceZ (env.env.get piece.cell.column
-            ((env.place piece.cell.regionIndex + piece.cell.rowOffset : ℕ) : ℤ)) (i + 1))) := by
+          ((G.S (pieceWord (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))).x,
+           (G.S (pieceWord (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))).y)
+          (pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) (i + 1))) := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [stepWit, Witgen.WitgenIROver.eval_native_apply]
@@ -785,14 +782,15 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (pieceZ piece (i + 1))
 
   soundness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads]
-    obtain ⟨hQ, ⟨t, ht, hmem⟩, hsec, hyck⟩ := hc
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState]
+    obtain ⟨t, ht, hmem⟩ := region_1
     simp only [List.cons.injEq, and_true] at hmem
     obtain ⟨h0, h1, h2y⟩ := hmem
-    obtain ⟨-, hSpec, -⟩ := _hE
+    obtain ⟨-, hSpec, -⟩ := env_assumptions
     obtain ⟨m, hm, hIdx, hX, hY⟩ := hSpec t ht
-    rw [hQ] at h0 hyck
+    obtain ⟨hsec, hyck⟩ := region_2
+    rw [region_0] at h0 hyck
     rw [hIdx] at h0
     rw [hX] at h1
     rw [hY] at h2y
@@ -801,19 +799,20 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (by linear_combination h2y) (by linear_combination hsec) (by linear_combination hyck)
 
   completeness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads]
-    obtain ⟨A, B, hAon, hH, hchain⟩ := hPA
-    obtain ⟨hUsable, -, hBlock⟩ := _hE
-    rw [Placed.toEnvironment_env] at hUsable hBlock
-    obtain ⟨ho1, ho2, ho3, ho4, ho5⟩ := h_output
-    refine ⟨complete_gates G _
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState]
+    obtain ⟨A, B, hAon, hH, hchain⟩ := prover_assumptions
+    obtain ⟨hUsable, -, hBlock⟩ := env_assumptions
+    -- land the honest witness values in the goal (the fixed selector, the outgoing
+    -- row's assigns, and the running-sum cell), then the gates are the honest lemma
+    rw [region_0, ← output_eq.2, region_1, region_2, region_3, region_4, region_5]
+    refine ⟨?_, rfl⟩
+    simp only [one_mul, true_and]
+    exact complete_gates G _
       (fun t => env.fixed cfg.generatorTable.tableIdx.inner (t : ℤ))
       (fun t => env.fixed cfg.generatorTable.tableX.inner (t : ℤ))
       (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
-      hH hchain hUsable hBlock, ?_⟩
-    rw [State.mk.injEq, DoubleAndAddRow.mk.injEq]
-    exact ⟨ho1.symm, ho2.symm, ho3.symm, ho4.symm, ho5.symm⟩
+      hH hchain hUsable hBlock
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]

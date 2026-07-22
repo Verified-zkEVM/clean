@@ -129,9 +129,15 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
     ∀ j : Fin n, out.zs[j] = (ws.iter (bitsFrom alpha w) (j.val + 1)).z
 
   soundness := by
-    circuit_proof_start [zChain, reads, round, mul_one]
-    provable_type_simp
-    choose k hk using hc
+    circuit_proof_start2 [zChain, reads, round, mul_one]
+    choose k hk using region_0
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
     refine ⟨fun j => if h : j < n then k ⟨j, h⟩ else false, ?_, ?_⟩
     · -- the running-sum chain, from the per-round z-steps
       intro j
@@ -150,8 +156,7 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         exact hz
     · -- the accumulator fold
       intro m hOn hacc0 h2m hbudget
-      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
-        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hfold := loop_fold
         (fun r => { z := env.advice cfg.z ((place self + (offset + r) : ℕ) : ℤ),
                     xA := env.advice cfg.xA ((place self + (offset + r + 1) : ℕ) : ℤ),
@@ -179,19 +184,25 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
           exact ha)
         m (by simpa using hOn) (by simpa using hacc0) h2m hbudget
       simpa using hfold
-
   completeness := by
-    circuit_proof_start [reads]
-    obtain ⟨m, hH0, hbudget⟩ := hPA
+    circuit_proof_start2 [reads]
+    obtain ⟨m, hH0, hbudget⟩ := prover_assumptions
+    obtain ⟨⟨hez, hexA, hel1, hel2, hebase⟩, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
     -- the per-round witness equations, as steps of the row family
     have hsteps : ∀ i : Fin n,
         (rowFam cfg place env self offset) (i.val + 1)
           = ((rowFam cfg place env self offset) i.val).step
             (bitsFrom input w i.val) (bitsFrom input w (i.val + 1)) := by
       intro i
-      have hw := hwit i
+      have hw := region_0 i
       rw [Halo2.SubcircuitRw.FormalRegionCircuit.extendsWitnesses_call] at hw
-      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, h_input] at hw
+      simp only [roundC_synthesize_eq, circuit_norm, mul_one, reads, input_eq] at hw
       obtain ⟨hz, hxa, hl1, hl2, hxp, hyp⟩ := hw
       simp only [rowFam, bitsFrom]
       rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega,
@@ -204,22 +215,19 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       (bitsFrom input w) hsteps m
       (by simp only [rowFam, bitsFrom, Nat.add_zero]; exact hH0) hbudget
     refine ⟨?_, ?_, ?_⟩
-    · -- each round's constraints, via the engine leaf and the chained honesty
+    · -- each round's precondition bundle (the engine strengthened the goal per round),
+      -- via the chained honesty
       intro i
-      have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round (w + ↑i)) cfg
-        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var (hwit i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
-        roundC_extract_eq] at hleaf
-      refine hleaf ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
+        roundC_extract_eq]
+      refine ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
       have hH := hHall ↑i i.isLt.le
       simp only [rowFam, bitsFrom] at hH
       simp only [reads, mul_one]
       provable_type_simp
-      simp only [circuit_norm, h_input]
       exact hH
     · -- the exit state is the iterated step
-      rw [← h_output_exit_z, ← h_output_exit_xA, ← h_output_exit_lambda1,
-        ← h_output_exit_lambda2, ← h_output_exit_base_x, ← h_output_exit_base_y]
+      rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
       have hn := hIter n le_rfl
       simp only [rowFam] at hn
       simpa using hn
@@ -316,11 +324,19 @@ def double_and_add (n : ℕ) (w : ℕ) :
     RoundInvariant (n + 1) input.z input.base input.acc output (bitsFrom input.alpha w)
 
   soundness := by
-    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
+    circuit_proof_start2 [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
-    obtain ⟨hcz, hcx, hcy, hcbx, hcby, hq1, hloop, hb3, hg13, hs3, hg23⟩ := hc
-    provable_type_simp
-    obtain ⟨bits, hchain, hfold⟩ := hloop
+    obtain ⟨⟨hax, hay⟩, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
+    -- re-concretize the loop witness: this proof's fold helpers speak the advice rows
+    simp only [← wit_lp_eq] at lp_spec
+    obtain ⟨bits, hchain, hfold⟩ := lp_spec
+    obtain ⟨hb3, hg13, hs3, hg23⟩ := region_6
     obtain ⟨kl, hzl, hstepl⟩ := sound_last_step hb3 hg13 hs3 hg23
     refine ⟨fun j => if j < n then bits j else kl, ?_, ?_⟩
     · -- the running-sum chain
@@ -334,7 +350,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
           simp [hjn]]
         rcases Nat.eq_zero_or_pos j.val with h0 | hpos
         · rw [dif_pos h0]
-          rw [dif_pos h0, hcz] at hcj
+          rw [dif_pos h0, region_0] at hcj
           exact hcj
         · rw [dif_neg (by omega)]
           rw [dif_neg (by omega), h_output_zs (j.val - 1) (by omega)] at hcj
@@ -350,7 +366,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
         · subst hn0
           rw [dif_pos rfl]
           simp only [Nat.add_zero] at hz'
-          rw [hcz] at hz'
+          rw [region_0] at hz'
           exact hz'
         · rw [dif_neg (by omega)]
           rw [show offset + n = offset + 1 + (n - 1) from by omega,
@@ -358,9 +374,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
           exact hz'
     · -- the accumulator
       intro m hacc h2m hbudget
-      have hbOn : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hA
+      have hbOn : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := assumptions
       have hentry := hfold m
-        (by rw [hcbx, hcby]; exact hbOn)
+        (by rw [region_3, region_4]; exact hbOn)
         (by
           simp only [State.acc, State.yA2, State.xR]
           have hy : (env.advice cfg.lambda1 ((place self + (offset + 1) : ℕ) : ℤ)
@@ -371,13 +387,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
                   - env.advice cfg.xA ((place self + (offset + 1) : ℕ) : ℤ)
                   - env.advice cfg.xP ((place self + (offset + 1) : ℕ) : ℤ)))
               * (2 : Fp)⁻¹ = input_acc_y := by
-            linear_combination hcy - hq1
-          rw [hy, hcx, hcbx, hcby]
+            linear_combination region_2 - region_5
+          rw [hy, region_1, region_3, region_4]
           exact hacc)
         h2m hbudget
       obtain ⟨hexit_acc, hexit_base⟩ := hentry
       simp only [State.acc, State.yA2, State.xR] at hexit_acc
-      rw [hcbx, hcby] at hexit_acc
+      rw [region_3, region_4] at hexit_acc
       have h2n : 2 ≤ accScalar m bits n := accScalar_two_le h2m bits n
       have hMle : accScalar m bits n ≤ 2 ^ n * (m + 1) - 1 := accScalar_le bits n
       have hp : 2 ^ n * (m + 1) ≤ 2 ^ (n + 1) * (m + 1) :=
@@ -386,18 +402,16 @@ def double_and_add (n : ℕ) (w : ℕ) :
         have h254 := pow254_lt_card
         have hsplit : 2 ^ (n + 2) * (m + 1) = 2 * (2 ^ (n + 1) * (m + 1)) := by ring
         omega
+      simp only [Point.mk.injEq] at hexit_base
       obtain ⟨hbx, hby⟩ := hexit_base
-      rw [hcbx] at hbx
-      rw [hcby] at hby
+      rw [region_3] at hbx
+      rw [region_4] at hby
       rw [hbx] at hexit_acc
       have hlast := hstepl (accScalar m bits n)
         (by rw [hbx, hby]; exact hbOn)
         (by rw [hbx, hby]; exact hexit_acc)
         h2n hMb
       rw [hbx, hby] at hlast
-      rw [← h_output_acc_x, ← h_output_acc_y]
-      rw [show ((place self + (offset + n + 2) : ℕ) : ℤ)
-          = ((place self + (offset + n + 1 + 1) : ℕ) : ℤ) from by push_cast; ring] at hlast ⊢
       rw [hlast]
       congr 1
       have hext : accScalar m (fun j => if j < n then bits j else kl) n
@@ -410,19 +424,25 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hext, if_neg (show ¬ n < n by omega)]
 
   completeness := by
-    circuit_proof_start [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
+    circuit_proof_start2 [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
       loop]
-    obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := hPA
-    obtain ⟨hz0, hxa0, hy0, hxp0, hyp0, hl1w, hl2w, -, hzl, hxal, hyl⟩ := hwit
-    obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := h_input
+    obtain ⟨hbOn, m, haccm, h2m, hbudget⟩ := prover_assumptions
+    obtain ⟨hia, ⟨hibx, hiby⟩, ⟨hiax, hiay⟩, hiz⟩ := input_eq
+    obtain ⟨-, hzs⟩ := output_eq
+    -- the z column per-index, off the vector output equation
+    have h_output_zs : ∀ (j : ℕ) (hj : j < n + 1),
+        env.advice cfg.z ((place self + (offset + 1 + j) : ℕ) : ℤ) = output_zs[j] := by
+      intro j hj
+      rw [← hzs]
+      simp [circuit_norm]
     -- the init λ witnesses, over the honest multiple's coordinates
     have hacx : input_acc_x = (m • Point.mk input_base_x input_base_y).x :=
       congrArg Point.x haccm
     have hacy : input_acc_y = (m • Point.mk input_base_x input_base_y).y :=
       congrArg Point.y haccm
-    simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay] at hxa0 hy0 hxp0 hyp0 hl1w hl2w
-    have hl1m := hl1w
-    have hl2m := hl2w
+    simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay] at region_5 region_6
+    have hl1m := region_5
+    have hl2m := region_6
     rw [hacx, hacy] at hl1m hl2m
     -- the entering neighborhood is the honest row for `[m]·base`
     have hH0 : (State.mk (env.advice cfg.z ((place self + offset : ℕ) : ℤ))
@@ -437,20 +457,20 @@ def double_and_add (n : ℕ) (w : ℕ) :
       have h254 := pow254_lt_card
       refine ⟨?_, h2m, by omega, ?_, ?_, ?_⟩
       · show (Point.mk _ _).OnCurve
-        rw [hxp0, hyp0]
+        rw [region_3, region_4]
         exact hbOn
       · show env.advice cfg.xA _ = _
-        rw [hxa0, hxp0, hyp0]
+        rw [region_1, region_3, region_4]
         exact hacx
       · show env.advice cfg.lambda1 _ = _
-        rw [hxp0, hyp0]
+        rw [region_3, region_4]
         exact hl1m
       · show env.advice cfg.lambda2 _ = _
-        rw [hxp0, hyp0]
+        rw [region_3, region_4]
         exact hl2m
-    -- the loop's contract arrived open; land the scalar cell's value in it
-    simp only [hia] at h_spec_0
-    obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
+    -- re-concretize the loop-witness contract: this proof's helpers speak advice rows
+    simp only [← wit_lp_eq] at lp_spec
+    obtain ⟨hSpec, hPS1, hPS2⟩ := lp_spec ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
     have hstepz : ∀ (s : State Fp) (k k' : Bool),
         (s.step k k').z = 2 * s.z + (if k then 1 else 0) := fun _ _ _ => rfl
@@ -499,13 +519,13 @@ def double_and_add (n : ℕ) (w : ℕ) :
         rw [h_output_zs j.val (by omega)] at hc
         rcases Nat.eq_zero_or_pos j.val with h0 | hpos
         · rw [dif_pos h0]
-          rw [dif_pos h0, hz0] at hc
+          rw [dif_pos h0, region_0] at hc
           exact hc
         · rw [dif_neg (show ¬ j.val = 0 by omega)]
           rw [dif_neg (show ¬ j.val = 0 by omega), h_output_zs (j.val - 1) (by omega)] at hc
           exact hc
       · have hjeq : j.val = n := by omega
-        have hz' := hzl
+        have hz' := region_7
         rw [hstepz, show offset + n + 1 = offset + 1 + n from by omega,
           h_output_zs n (by omega)] at hz'
         simp only [hjeq]
@@ -513,7 +533,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
         · subst hn0
           rw [dif_pos rfl]
           simp only [Nat.add_zero] at hz'
-          rw [hz0] at hz'
+          rw [region_0] at hz'
           exact hz'
         · rw [dif_neg (show ¬ n = 0 by omega)]
           rw [show offset + n = offset + 1 + (n - 1) from by omega,
@@ -542,13 +562,15 @@ def double_and_add (n : ℕ) (w : ℕ) :
     beta_reduce at hyv2
     rw [show (2 : Fp) * input_acc_y * (2 : Fp)⁻¹ = input_acc_y from by
       rw [mul_comm (2 : Fp) input_acc_y, mul_assoc, mul_inv_cancel₀ h2, mul_one]] at hyv2
-    refine ⟨⟨?_, ⟨m, ?_, hbudget⟩, hlg.1, hlg.2.1, hlg.2.2.1, hlg.2.2.2⟩, hzc, ?_⟩
+    -- the final row's cells are `w.step`/`stepY` values (`last_gates`' spelling)
+    simp only [region_7, region_8, region_9]
+    refine ⟨⟨region_0, region_1, region_2, region_3, region_4, ?_, ⟨m, ?_, hbudget⟩,
+      hlg.1, hlg.2.1, hlg.2.2.1, hlg.2.2.2⟩, hzc, ?_⟩
     · -- the `q_mul_1` boundary: the witnessed init y_a is the accumulator's y
-      simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay]
+      simp only [region_1, region_2, region_3, region_5, region_6]
       linear_combination -hyv2
-    · -- the loop's honest entry, in the witnessed-value spelling
-      simp only [readCell, circuit_norm, hibx, hiby, hiax, hiay]
-      exact hHV
+    · -- the loop's honest entry (the obligation speaks the minted witness atom)
+      exact wit_lp_eq ▸ hH0
     · -- the accumulator fold, for any in-range multiple entering the region:
       -- replay the constraints (loop spec + final-row identities), which hold
       -- for the honest witness and quantify over every multiple
@@ -556,15 +578,16 @@ def double_and_add (n : ℕ) (w : ℕ) :
       obtain ⟨bits', hchain', hfold'⟩ := hSpec
       have hexit := hfold' m'
         (by show (Point.mk _ _).OnCurve
-            rw [hxp0, hyp0]
+            rw [region_3, region_4]
             exact hbOn)
         (by simp only [State.acc, State.yA2, State.xR]
-            rw [hxa0, hxp0, hyp0, hl1w, hl2w, hyv2]
+            rw [region_1, region_3, region_4, region_5, region_6, hyv2]
             exact hacc')
         h2' hbud'
+      simp only [Point.mk.injEq] at hexit
       obtain ⟨hexAcc, hbpx, hbpy⟩ := hexit
-      have hbx := hbpx.trans hxp0
-      have hby := hbpy.trans hyp0
+      have hbx := hbpx.trans region_3
+      have hby := hbpy.trans region_4
       -- the loop's bit sequence is the honest one below `n`
       have hbits : ∀ j : Fin n, bits' j.val = bitsFrom input_alpha w j.val := by
         intro j
@@ -612,7 +635,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
             rw [hbx, hby]
             exact hbOn)
         hexAcc hM2 hMb
-      rw [hkl, ← hxal, ← hyl, h_output_acc_x, h_output_acc_y, hbx, hby] at hlast
+      rw [hkl, hbx, hby] at hlast
+      rw [hbx, hby]
       exact hlast
 
 end Zcash.Circuits.Ecc.MulIncomplete

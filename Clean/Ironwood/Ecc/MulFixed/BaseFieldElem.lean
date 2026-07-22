@@ -294,9 +294,7 @@ each window row. -/
 private theorem inner_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
         (MulFixed.processWindow B.toData (Ecc.MulFixed.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
@@ -369,9 +367,7 @@ constraints from its completeness leaf, on the honest partialSum ladder. -/
 private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 85).operations self))
@@ -614,9 +610,7 @@ gate holds by the fixed-base invariants at the honest digits. -/
 private theorem inner_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
         cfg.superConfig offset 85).operations self))
@@ -743,9 +737,7 @@ the honest running-sum values. -/
 private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed ProverEnvironment Fp)
     (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
-    (h_input : env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
     (hPA : input_alpha.val < 2 ^ 255)
     (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
       (((DecomposeRunningSum.copyDecompose 3 85).call
@@ -768,9 +760,7 @@ private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
     dec_proverAssumptions_eq, dec_proverSpec_eq,
     DecomposeRunningSum.copyDecompose_output, circuit_norm]
     at hDecC hDecS
-  have hPA' : (env.env.get input_var_alpha.cell.column
-      ((env.place input_var_alpha.cell.regionIndex
-        + input_var_alpha.cell.rowOffset : ℕ) : ℤ)).val < 2 ^ (3 * 85) := by
+  have hPA' : (AssignedCell.eval env.place env.env.toEnvironment input_var_alpha).val < 2 ^ (3 * 85) := by
     rw [h_input]
     exact lt_of_lt_of_le hPA (by norm_num)
   refine And.intro (hDecC hPA') ?_
@@ -1028,12 +1018,12 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
   completeness := fun cfg offset => inner_completeness B cfg offset
 
 /-- The four layouter pieces in source order. Returns the result point `[α]B`. -/
-def synthesize (B : FixedBaseData) (cfg : Config) (alpha : AssignedCell Fp) :
+def synthesize (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) :
     Circuit Fp (Var Point Fp) := do
-  -- 1. the incomplete-addition region
+  -- 1. the incomplete-addition region, through the bundled `inner` subcircuit
   let inn ←
     assignRegion "Base-field elem fixed-base mul (incomplete addition)"
-      (innerRegion B cfg 0 alpha)
+      ((inner B).call cfg 0 ⟨alpha⟩)
   let zs := inn.zs
   -- 2. the complete addition `mul_b + acc`
   let result ←
@@ -1074,7 +1064,7 @@ def Spec (B : FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
 
 /-- The region count of `synthesize`: inner mul, complete addition, witness check,
 canonicity checks. -/
-private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+private theorem synthesize_regionCount (B : FixedBase) (cfg : Config)
     (alpha : AssignedCell Fp) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg alpha).operations i) = 4 := by
   simp only [synthesize, witnessCheck13, circuit_norm, operations_assignRegion,
@@ -1086,15 +1076,6 @@ private theorem rca_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
     (LookupRangeCheck.rangeCheckAt 10 13 false).output cfgL offset () self
       = { z0 := AssignedCell.of self offset cfgL.runningSum,
           zLast := AssignedCell.of self (offset + 13) cfgL.runningSum } := rfl
-
-/-- The `zLast` output cell of the range-check chunk, through the `call` wrapper (the
-`output_call` rewrite does not fire inside cell projections; this is its `rfl` fusion
-with `rca_output`). -/
-private theorem rca_call_zLast (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
-    (self : RegionIndex) :
-    (((LookupRangeCheck.rangeCheckAt 10 13 false).call cfgL offset ()).output self).zLast
-      = AssignedCell.of self (offset + 13) cfgL.runningSum := by
-  rw [FormalRegionCircuit.output_call, rca_output]
 
 /-- The range-check chunk's extraction data: the positional element cell's value. -/
 private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
@@ -1177,20 +1158,6 @@ private theorem canon_gate_polys {row : Ecc.MulFixed.BaseFieldElem.Gate.Input Fp
 
 derive_contract_bridges innerC (B : FixedBase) := inner B
 
-/-- The inner bundle's output projection at the call spelling, reduced (`rfl` through
-the canonical `elaborated` instance). INTERIM hand bridge: the metadata substrate's
-`derive_contract_bridges` output emission will generate this. -/
-private theorem inner_output (B : FixedBase) (cfg : Config) (offset : ℕ)
-    (input : Var DecomposeRunningSum.Inputs Fp) (self : RegionIndex) :
-    @ElaboratedRegionCircuit.output Fp _ DecomposeRunningSum.Inputs InnerOut
-        _ _ _ ((inner B).elaborated cfg offset) input self
-      = ({ acc := { x := .of self (offset + 84) cfg.superConfig.addIncompleteConfig.xQR,
-                    y := .of self (offset + 84) cfg.superConfig.addIncompleteConfig.yQR },
-           mulB := { x := .of self (offset + 84) cfg.superConfig.addConfig.xP,
-                     y := .of self (offset + 84) cfg.superConfig.addConfig.yP },
-           zs := Vector.ofFn (fun j => .of self (offset + j.val)
-                   cfg.superConfig.runningSumConfig.z) } : InnerOut (AssignedCell Fp)) := rfl
-
 /-- Rust `FixedPointBaseField::mul`: `[α]B` for a base-field element α, canonically. -/
 def circuit (B : FixedBase) : FormalCircuit Fp
     ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config)
@@ -1200,13 +1167,13 @@ def circuit (B : FixedBase) : FormalCircuit Fp
   configure := fun (canonAdvices, lookupConfig, superConfig) =>
     configure canonAdvices lookupConfig superConfig
 
-  synthesize cfg alpha := synthesize B.toData cfg alpha
+  synthesize cfg alpha := synthesize B cfg alpha
 
   elaborated cfg :=
-    { output := fun alpha i => (synthesize B.toData cfg alpha).output i
+    { output := fun alpha i => (synthesize B cfg alpha).output i
       regionCount := fun _ => 4
       output_eq := by intro _ _; rfl
-      regionCount_eq := fun alpha i => (synthesize_regionCount B.toData cfg alpha i).symm }
+      regionCount_eq := fun alpha i => (synthesize_regionCount B cfg alpha i).symm }
 
   EnvAssumptions := EnvAssumptions
 
@@ -1219,37 +1186,27 @@ def circuit (B : FixedBase) : FormalCircuit Fp
   ProverSpec _ _ _ _ := True
 
   soundness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [synthesize, witnessCheck13, circuit_norm] at hc
-    obtain ⟨hInner, hAdd, hRC, hCanon⟩ := hc
-    obtain ⟨hEI, hTable, hDistinct⟩ := _hE
-    -- ── region 1: the inner windowed mul, consumed through the bundle's soundness ──
-    have hIS := (inner B).soundness cfg 0 i₀ env ⟨input_var⟩ hEI trivial hInner
-    simp only [innerC_spec_eq, inner_output, circuit_norm] at hIS
-    obtain ⟨ks, hks_lt, hαV, hAcc, hMulB, hZs⟩ := hIS
+    circuit_proof_start2 [witnessCheck13, canonicityRegion, canonGate,
+      DecomposeRunningSum.eval_rangeCheckExpr]
+    obtain ⟨hEI, hTable, hDistinct⟩ := env_assumptions
+    -- ── region 1: the inner bundle's contract (engine-delivered) ──
+    simp only [innerC_spec_eq, innerC_envAssumptions_eq, circuit_norm] at region_0
+    obtain ⟨ks, hks_lt, hαV, hAcc, hMulB, hZs⟩ := region_0 hEI trivial
     -- ── region 2: the complete addition `mul_b + acc` ──
-    subcircuit_rw at hAdd
     simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
-      innerRegion_output, circuit_norm] at hAdd
-    simp only [synthesize, witnessCheck13, circuit_norm] at h_output
+      circuit_norm] at region_1
+    have hAdd := region_1
     -- ── region 3: the 13-word lookup range check of α₀' ──
-    subcircuit_rw at hRC
     simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
-      circuit_norm] at hRC
-    -- ── region 4: the canonicity checks (lazy zs-projection first) ──
-    simp only [innerRegion_output_zs] at hCanon
-    simp only [Vector.getElem_ofFn] at hCanon
-    simp only [canonicityRegion, canonGate,
-      DecomposeRunningSum.eval_rangeCheckExpr,
-      circuit_norm] at hCanon
+      circuit_norm] at region_2
+    have hRC := region_2
+    -- ── region 4: the canonicity checks (landed by cps2) ──
     obtain ⟨⟨hG1, hG2, hG3, hG4, hG5, hG6, hG7, hG8⟩,
-      hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := hCanon
-    rw [rca_call_zLast] at hCpZ13
-    simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice, Nat.zero_add] at hCpZ13
+      hCpA, hCpZ84, hCpAP, hCpZ13, hCpZ44, hCpZ43⟩ := region_3
+    -- concretize the witnessCheck13 tuple atom
+    cases x_eq
+    rw [rca_output] at hCpZ13
+    simp only [circuit_norm, Nat.zero_add] at hCpZ13 hCpAP
     -- ── the range-check contract, landed on advice reads ──
     have hRCS := hRC ⟨hTable, hDistinct⟩
       ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
@@ -1264,14 +1221,10 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     have hz84V := hZs ⟨84, by norm_num⟩
     have hz44V := hZs ⟨44, by norm_num⟩
     have hz43V := hZs ⟨43, by norm_num⟩
-    rw [show ((⟨0, by norm_num⟩ : Fin 86) : ℕ) = 0 from rfl] at hz0V
-    rw [show ((⟨84, by norm_num⟩ : Fin 86) : ℕ) = 84 from rfl,
-      show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84V
-    rw [show ((⟨44, by norm_num⟩ : Fin 86) : ℕ) = 44 from rfl,
-      show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44V
-    rw [show ((⟨43, by norm_num⟩ : Fin 86) : ℕ) = 43 from rfl,
-      show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43V
-    simp only [Nat.add_zero, pow_zero, Nat.mul_zero, Nat.div_one] at hz0V
+    simp only [show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84V
+    simp only [show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44V
+    simp only [show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43V
+    simp only [pow_zero, Nat.mul_zero, Nat.div_one] at hz0V
     rw [hz0V] at hCpA
     rw [hz84V] at hCpZ84
     rw [hz44V] at hCpZ44
@@ -1361,10 +1314,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
           Ecc.MulFixed.BaseFieldElem.alpha0_lt_tp hlo hα0lt132 hfield
         rw [hV254]
         omega
-    have hinput : input = ((V : ℕ) : Fp) := by
-      rw [← h_input]
-      simp only [circuit_norm]
-      exact hαV
+    have hinput : input = ((V : ℕ) : Fp) := hαV
     -- ── the output value: `mul_b + acc = [V]B` ──
     obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
         t = (Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
@@ -1385,12 +1335,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     have hOnQ : (S83 • B.point).OnCurve := B.nsmul_onCurve hS83_pos hS83_card
     obtain ⟨-, hOutEq⟩ := hAdd ⟨by rw [hMulB, hwp84]; exact Or.inl hOnP,
       by rw [hAcc, ← hS83_def]; exact Or.inl hOnQ⟩
-    rw [hMulB, hAcc, hwp84, ← hS83_def,
-      show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
-    simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add,
-      circuit_norm] at h_output
-    rw [FormalRegionCircuit.output_call] at h_output
-    rw [h_output] at hOutEq
+    rw [hMulB, hAcc, hwp84, ← hS83_def] at hOutEq
     rw [Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- (t84 + S83) • B = [(V : Fq).val] • B = the Spec's scalar mul
     have hchain : (t84 + S83) • B.point = ((V : Fq)).val • B.point := by
@@ -1401,187 +1346,152 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     exact (point_eta _).symm
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨env, rfl, rfl⟩ :
-        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
-      ⟨⟨place, env⟩, rfl, rfl⟩
-    simp only [synthesize, witnessCheck13, circuit_norm] at hwit ⊢
-    obtain ⟨hWInner, hWAdd, ⟨hWap, hWrc⟩, hWCanon⟩ := hwit
-    obtain ⟨hEI, hTable, hDistinct⟩ := _hE
-    -- every base-field element fits 255 bits (the inner honest-prover precondition)
+    circuit_proof_start2 [witnessCheck13, canonicityRegion, canonGate,
+      DecomposeRunningSum.eval_rangeCheckExpr]
+    obtain ⟨hEI, hTable, hDistinct⟩ := env_assumptions
+    obtain ⟨hWap, -⟩ := region_2
+    obtain ⟨hWcA, hWcZ84, hWcAP, hWa1, hWa2, hWcZ13, hWcZ44, hWcZ43⟩ := region_3
+    simp only [innerC_envAssumptions_eq, innerC_assumptions_eq,
+      innerC_proverAssumptions_eq, innerC_proverSpec_eq, innerC_spec_eq,
+      addc_envAssumptions_eq, addc_assumptions_eq, addc_proverAssumptions_eq,
+      rca_envAssumptions_eq, rca_assumptions_eq, rca_proverAssumptions_eq,
+      circuit_norm] at inner_spec add_spec rangeCheckAt_spec ⊢
+    -- ── honest inner facts (the bundle contract's prover side) ──
     have hval255 : ∀ x : Fp, x.val < 2 ^ 255 := fun x =>
       lt_of_lt_of_le (ZMod.val_lt x)
         (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    -- the inner bundle's honest-prover facts (exit accumulator/MSB, running sums)
-    have hIPS := ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
-      trivial (hval255 _)).2
-    simp only [innerC_proverSpec_eq, inner_output, circuit_norm] at hIPS
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · exact ((inner B).completeness cfg 0 i₀ env ⟨input_var⟩ hWInner hEI
-        trivial (hval255 _)).1
-    · -- the complete addition `mul_b + acc` on the honest exit points
-      have hks_lt : ∀ t : ℕ, ZMod.val (env.env.get input_var.cell.column
-            ((env.place input_var.cell.regionIndex
-              + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8 < 8 :=
-        fun t => Nat.mod_lt _ (by norm_num)
-      obtain ⟨hax, hay, hmx, hmy, -⟩ := hIPS
-      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
-        cfg.superConfig.addConfig 0 (i₀ + 1) env
-        ⟨((innerRegion B.toData cfg 0 input_var).output i₀).mulB,
-         ((innerRegion B.toData cfg 0 input_var).output i₀).acc⟩ hWAdd
-      simp only [addc_assumptions_eq, addc_envAssumptions_eq,
-        addc_proverAssumptions_eq, innerRegion_output_mulB, innerRegion_output_acc,
-        Nat.zero_add, circuit_norm] at hC
-      refine hC ⟨?_, ?_⟩
-      · have hOn : (Ecc.MulFixed.windowPoint B.point 84
-            (ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8)).OnCurve :=
-          B.windowPoint_onCurve (hks_lt 84)
-        rcases hWp : Ecc.MulFixed.windowPoint B.point 84
-            (ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * 84) % 8) with ⟨wx, wy⟩
-        rw [hWp] at hOn hmx hmy
-        rw [hmx, hmy]
-        exact Or.inl hOn
-      · have hOn : ((Ecc.MulFixed.partialSum
-            (fun t => ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
-            • B.point)).OnCurve :=
-          B.nsmul_onCurve (Ecc.MulFixed.partialSum_pos _ _)
-            (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
-              (Ecc.MulFixed.partialSum_lt _ 83 (fun j _ => hks_lt j))
-              (by norm_num))
-        rcases hSp : Ecc.MulFixed.partialSum
-            (fun t => ZMod.val (env.env.get input_var.cell.column
-              ((env.place input_var.cell.regionIndex
-                + input_var.cell.rowOffset : ℕ) : ℤ)) / 2 ^ (3 * t) % 8) 83
-            • B.point with ⟨sx, sy⟩
-        rw [hSp] at hOn hax hay
-        rw [hax, hay]
-        exact Or.inl hOn
-    · -- the 13-word range check chunk
-      have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed
-        (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 2) env () hWrc
-      simp only [rca_assumptions_eq, rca_envAssumptions_eq,
-        rca_proverAssumptions_eq, circuit_norm] at hC
-      exact hC ⟨⟨hTable, hDistinct⟩,
-        by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
-        by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
-    · -- the canonicity region: copies by their witness clauses, the gate on the
-      -- honest values (`honest_canon_spec` + `canon_gate_polys`)
-      simp only [innerRegion_output_zs] at hWCanon ⊢
-      simp only [Vector.getElem_ofFn] at hWCanon ⊢
-      simp only [canonicityRegion, canonGate, alpha1Wit, alpha2Wit,
-        DecomposeRunningSum.eval_rangeCheckExpr, circuit_norm]
-        at hWCanon ⊢
-      obtain ⟨hWcA, hWcZ84, hWcAP, hWa1, hWa2, hWcZ13, hWcZ44, hWcZ43⟩ := hWCanon
-      rw [rca_call_zLast] at hWcZ13
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, Nat.zero_add] at hWcZ13
-      obtain ⟨-, -, -, -, hZs⟩ := hIPS
-      -- the α₀' witness value, on the honest running sums
-      simp only [innerRegion_output_zs, Vector.getElem_ofFn] at hWap
-      rw [alphaZeroPrimeWit_eval] at hWap
-      simp only [readCell_of, Nat.zero_add, Nat.add_zero] at hWap
-      -- z13's honest value (the range-check chunk's honest contract)
-      have hZL := Halo2.SubcircuitRw.region_completeness_derived_placed
-        (LookupRangeCheck.rangeCheckAt 10 13 false) cfg.lookupConfig 0 (i₀ + 2) env () hWrc
-      simp only [rca_spec_eq, rca_assumptions_eq, rca_envAssumptions_eq,
-        rca_proverAssumptions_eq, rca_proverSpec_eq, rca_output, rca_extract,
-        circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-        Cell.of_rowOffset, Cell.of_column, Environment.get_advice, Nat.add_zero] at hZL
-      obtain ⟨-, hzLast⟩ := hZL ⟨hTable, hDistinct⟩
-        ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
-         by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
-      rw [show (10 * 13 : ℕ) = 130 from by norm_num] at hzLast
-      -- the honest running sums at 0/84/44/43, in `8^w` form
-      have hz0 := hZs ⟨0, by norm_num⟩
-      have hz84 := hZs ⟨84, by norm_num⟩
-      have hz44 := hZs ⟨44, by norm_num⟩
-      have hz43 := hZs ⟨43, by norm_num⟩
-      rw [show ((⟨0, by norm_num⟩ : Fin 86) : ℕ) = 0 from rfl] at hz0
-      rw [show ((⟨84, by norm_num⟩ : Fin 86) : ℕ) = 84 from rfl,
-        show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84
-      rw [show ((⟨44, by norm_num⟩ : Fin 86) : ℕ) = 44 from rfl,
-        show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44
-      rw [show ((⟨43, by norm_num⟩ : Fin 86) : ℕ) = 43 from rfl,
-        show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43
-      simp only [Nat.add_zero, Nat.mul_zero, pow_zero, Nat.div_one] at hz0
-      -- the α value: `z_0 = α` (the copied base-field element)
-      obtain ⟨A, hA_def⟩ : ∃ a : Fp, a = env.env.get input_var.cell.column
-          ((env.place input_var.cell.regionIndex
-            + input_var.cell.rowOffset : ℕ) : ℤ) := ⟨_, rfl⟩
-      rw [← hA_def] at hz0 hz84 hz44 hz43
-      have hz0A : env.env.advice cfg.superConfig.runningSumConfig.z
-          ((env.place i₀ : ℕ) : ℤ) = A := hz0.trans (ZMod.natCast_zmod_val A)
-      -- the gate-row facts (`honest_canon_spec` hypotheses)
-      rw [hz0A] at hWa1 hWa2 hWap
-      rw [hz84] at hWap
-      rw [show (2:ℕ) ^ 252 = 8 ^ 84 from by norm_num] at hWa1
-      have hdiv2 : A.val / 2 ^ 254 % 2 = A.val / 8 ^ 84 / 4 := by
+    obtain ⟨hax, hay, hmx, hmy, hZs⟩ := (inner_spec hEI (hval255 _)).2
+    -- ── the honest running sums at 0/84/44/43, in `8^w` form ──
+    have hz0 := hZs ⟨0, by norm_num⟩
+    have hz84 := hZs ⟨84, by norm_num⟩
+    have hz44 := hZs ⟨44, by norm_num⟩
+    have hz43 := hZs ⟨43, by norm_num⟩
+    simp only [show (2:ℕ) ^ (3 * 84) = 8 ^ 84 from by rw [pow_mul]; norm_num] at hz84
+    simp only [show (2:ℕ) ^ (3 * 44) = 8 ^ 44 from by rw [pow_mul]; norm_num] at hz44
+    simp only [show (2:ℕ) ^ (3 * 43) = 8 ^ 43 from by rw [pow_mul]; norm_num] at hz43
+    simp only [Nat.mul_zero, pow_zero, Nat.div_one] at hz0
+    -- the α value, at the honest field type (`input` is a `ProverValue` spelling)
+    obtain ⟨A, hA_def⟩ : ∃ a : Fp, a = input := ⟨input, rfl⟩
+    rw [← hA_def] at hz0 hz84 hz44 hz43 hax hay hmx hmy
+    have hz0A : AssignedCell.eval place env.toEnvironment inn_zs[0] = A :=
+      hz0.trans (ZMod.natCast_zmod_val A)
+    -- ── the concretized witnessCheck13 cells ──
+    cases x_eq
+    simp only [rca_output, circuit_norm, Nat.zero_add, Nat.add_zero] at hWcAP hWcZ13
+    -- ── the α₀' witness value, on the honest running sums ──
+    rw [alphaZeroPrimeWit_eval] at hWap
+    simp only [readCell, circuit_norm] at hWap
+    rw [hz0A, hz84] at hWap
+    -- ── z13's honest value (the range-check contract's honest side) ──
+    simp only [rca_spec_eq, rca_proverSpec_eq, rca_output, circuit_norm,
+      AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
+      Cell.of_column, Environment.get_advice, Nat.add_zero] at rangeCheckAt_spec
+    obtain ⟨-, hw2assign, hzLast⟩ := rangeCheckAt_spec ⟨hTable, hDistinct⟩
+      ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
+       by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
+    rw [← hw2assign] at hzLast
+    rw [show (10 * 13 : ℕ) = 130 from by norm_num] at hzLast
+    -- ── the gate-row facts (`honest_canon_spec` hypotheses) ──
+    simp only [alpha1Wit, alpha2Wit, circuit_norm, readCell] at hWa1 hWa2
+    rw [hz0A] at hWa1 hWa2
+    rw [show (2:ℕ) ^ 252 = 8 ^ 84 from by norm_num] at hWa1
+    have hdiv2 : A.val / 2 ^ 254 % 2 = A.val / 8 ^ 84 / 4 := by
+      rw [Nat.div_div_eq_div_mul, show (8:ℕ) ^ 84 * 4 = 2 ^ 254 from by norm_num]
+      exact Nat.mod_eq_of_lt
+        (Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num)))
+    rw [hdiv2] at hWa2
+    have hap : env.advice (cfg.canonAdvices 0)
+          ((place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)
+        = A - ((A.val / 8 ^ 84 : ℕ) : Fp) * (2:Fp) ^ 252 + (2:Fp) ^ 130
+          - ((Ecc.MulFixed.BaseFieldElem.tPNat : ℕ) : Fp) := by
+      rw [hWcAP, hWap]
+      push_cast [tP, Ecc.MulFixed.BaseFieldElem.tPNat]
+      ring
+    have hz13row : env.advice (cfg.canonAdvices 0)
+          ((place (i₀ + 1 + 2) + 2 : ℕ) : ℤ)
+        = ((((env.advice (cfg.canonAdvices 0)
+            ((place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)).val / 2 ^ 130 : ℕ)) : Fp) := by
+      rw [hWcZ13, hzLast, hWcAP]
+    obtain ⟨hDecR, hCanonR⟩ := Ecc.MulFixed.BaseFieldElem.honest_canon_spec
+      (row := { alpha := env.advice (cfg.canonAdvices 0)
+                  ((place (i₀ + 1 + 2) : ℕ) : ℤ),
+                z84Alpha := env.advice (cfg.canonAdvices 2)
+                  ((place (i₀ + 1 + 2) : ℕ) : ℤ),
+                alpha1 := env.advice (cfg.canonAdvices 1)
+                  ((place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                alpha2 := env.advice (cfg.canonAdvices 2)
+                  ((place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                alpha0Prime := env.advice (cfg.canonAdvices 0)
+                  ((place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
+                z13Alpha0Prime := env.advice (cfg.canonAdvices 0)
+                  ((place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
+                z44Alpha := env.advice (cfg.canonAdvices 1)
+                  ((place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
+                z43Alpha := env.advice (cfg.canonAdvices 2)
+                  ((place (i₀ + 1 + 2) + 2 : ℕ) : ℤ) })
+      (α := A) (ZMod.val_lt A)
+      (hWcA.trans hz0A) (hWcZ84.trans hz84) hWa1 hWa2 hap
+      (hWcZ44.trans hz44) (hWcZ43.trans hz43) hz13row
+    -- ── α₁ ∈ {0..3}, α₂ boolean (the honest witnessed top bits) ──
+    have hA1 : Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1
+        (((A.val / 8 ^ 84 % 4 : ℕ) : Fp)) := by
+      have hlt : A.val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
+      obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 % 4 := ⟨_, rfl⟩
+      rw [← hm_def]
+      rw [← hm_def] at hlt
+      interval_cases m <;>
+        simp [Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1]
+    have hA2 : IsBool (((A.val / 8 ^ 84 / 4 : ℕ) : Fp)) := by
+      have hlt : A.val / 8 ^ 84 / 4 < 2 := by
         rw [Nat.div_div_eq_div_mul, show (8:ℕ) ^ 84 * 4 = 2 ^ 254 from by norm_num]
-        exact Nat.mod_eq_of_lt
-          (Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num)))
-      rw [hdiv2] at hWa2
-      have hap : env.env.advice (cfg.canonAdvices 0)
-            ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)
-          = A - ((A.val / 8 ^ 84 : ℕ) : Fp) * (2:Fp) ^ 252 + (2:Fp) ^ 130
-            - ((Ecc.MulFixed.BaseFieldElem.tPNat : ℕ) : Fp) := by
-        rw [hWcAP, hWap]
-        push_cast [tP, Ecc.MulFixed.BaseFieldElem.tPNat]
-        ring
-      have hz13row : env.env.advice (cfg.canonAdvices 0)
-            ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ)
-          = ((((env.env.advice (cfg.canonAdvices 0)
-              ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ)).val / 2 ^ 130 : ℕ)) : Fp) := by
-        rw [hWcZ13, hzLast, hWcAP]
-      obtain ⟨hDecR, hCanonR⟩ := Ecc.MulFixed.BaseFieldElem.honest_canon_spec
-        (row := { alpha := env.env.advice (cfg.canonAdvices 0)
-                    ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
-                  z84Alpha := env.env.advice (cfg.canonAdvices 2)
-                    ((env.place (i₀ + 1 + 2) : ℕ) : ℤ),
-                  alpha1 := env.env.advice (cfg.canonAdvices 1)
-                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
-                  alpha2 := env.env.advice (cfg.canonAdvices 2)
-                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
-                  alpha0Prime := env.env.advice (cfg.canonAdvices 0)
-                    ((env.place (i₀ + 1 + 2) + 1 : ℕ) : ℤ),
-                  z13Alpha0Prime := env.env.advice (cfg.canonAdvices 0)
-                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
-                  z44Alpha := env.env.advice (cfg.canonAdvices 1)
-                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ),
-                  z43Alpha := env.env.advice (cfg.canonAdvices 2)
-                    ((env.place (i₀ + 1 + 2) + 2 : ℕ) : ℤ) })
-        (α := A) (ZMod.val_lt A)
-        (hWcA.trans hz0A) (hWcZ84.trans hz84) hWa1 hWa2 hap
-        (hWcZ44.trans hz44) (hWcZ43.trans hz43) hz13row
-      -- α₁ ∈ {0..3}, α₂ boolean (the honest witnessed top bits)
-      have hA1 : Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1
-          (((A.val / 8 ^ 84 % 4 : ℕ) : Fp)) := by
-        have hlt : A.val / 8 ^ 84 % 4 < 4 := Nat.mod_lt _ (by norm_num)
-        obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 % 4 := ⟨_, rfl⟩
-        rw [← hm_def]
-        rw [← hm_def] at hlt
-        interval_cases m <;>
-          simp [Ecc.MulFixed.BaseFieldElem.Gate.IsAlpha1]
-      have hA2 : IsBool (((A.val / 8 ^ 84 / 4 : ℕ) : Fp)) := by
-        have hlt : A.val / 8 ^ 84 / 4 < 2 := by
-          rw [Nat.div_div_eq_div_mul, show (8:ℕ) ^ 84 * 4 = 2 ^ 254 from by norm_num]
-          exact Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num))
-        obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 / 4 := ⟨_, rfl⟩
-        rw [← hm_def]
-        rw [← hm_def] at hlt
-        interval_cases m <;> simp [IsBool]
-      rw [← hWa1] at hA1
-      rw [← hWa2] at hA2
-      have hPolys := canon_gate_polys hA1 hA2 hDecR hCanonR
-      rw [rca_call_zLast]
-      simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice, Nat.zero_add]
-      exact ⟨hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
+        exact Nat.div_lt_of_lt_mul (lt_of_lt_of_le (hval255 A) (by norm_num))
+      obtain ⟨m, hm_def⟩ : ∃ m, m = A.val / 8 ^ 84 / 4 := ⟨_, rfl⟩
+      rw [← hm_def]
+      rw [← hm_def] at hlt
+      interval_cases m <;> simp [IsBool]
+    rw [← hWa1] at hA1
+    rw [← hWa2] at hA2
+    have hPolys := canon_gate_polys hA1 hA2 hDecR hCanonR
+    -- ── assemble: inner bundle, add bundle, rca bundle, canon polys + copies ──
+    rw [rca_output]
+    simp only [circuit_norm, Nat.zero_add]
+    refine ⟨⟨hEI, hval255 _⟩, ⟨?_, ?_⟩, ⟨⟨hTable, hDistinct⟩,
+      by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
+      by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩,
+      hPolys, hWcA, hWcZ84, hWcAP, hWcZ13, hWcZ44, hWcZ43⟩
+    · -- mulB honest: window-84 point on curve
+      have hks_lt : ∀ t : ℕ, A.val / 2 ^ (3 * t) % 8 < 8 :=
+        fun t => Nat.mod_lt _ (by norm_num)
+      have hOn : (Ecc.MulFixed.windowPoint B.point 84
+          (A.val / 2 ^ (3 * 84) % 8)).OnCurve :=
+        B.windowPoint_onCurve (hks_lt 84)
+      rcases hWp : Ecc.MulFixed.windowPoint B.point 84
+          (A.val / 2 ^ (3 * 84) % 8) with ⟨wx, wy⟩
+      rw [hWp] at hOn hmx hmy
+      dsimp only at hmx hmy
+      have hpt : eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inn_mulB
+          = ({ x := wx, y := wy } : Point Fp) := by
+        rw [← hmx, ← hmy]
+      rw [hpt]
+      exact Or.inl hOn
+    · -- acc honest: partialSum point on curve
+      have hks_lt : ∀ t : ℕ, A.val / 2 ^ (3 * t) % 8 < 8 :=
+        fun t => Nat.mod_lt _ (by norm_num)
+      have hOn : ((Ecc.MulFixed.partialSum
+          (fun t => A.val / 2 ^ (3 * t) % 8) 83 • B.point)).OnCurve :=
+        B.nsmul_onCurve (Ecc.MulFixed.partialSum_pos _ _)
+          (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+            (Ecc.MulFixed.partialSum_lt _ 83 (fun j _ => hks_lt j))
+            (by norm_num))
+      rcases hSp : Ecc.MulFixed.partialSum
+          (fun t => A.val / 2 ^ (3 * t) % 8) 83 • B.point with ⟨sx, sy⟩
+      rw [hSp] at hOn hax hay
+      dsimp only at hax hay
+      have hpt : eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inn_acc
+          = ({ x := sx, y := sy } : Point Fp) := by
+        rw [← hax, ← hay]
+      rw [hpt]
+      exact Or.inl hOn
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 

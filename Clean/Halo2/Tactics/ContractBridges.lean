@@ -78,12 +78,19 @@ def buildBridges (baseName : Name) (bundle : Expr) :
     let projName := structName ++ fieldName
     unless (← getEnv).contains projName do continue
     let lhs ← try mkProjection bundle fieldName catch _ => continue
-    -- Reduce the projection to the assigned field value. For a **parameter-applied** bundle the
-    -- structure literal is behind the bundle def (`double_and_add 124 bits`), so a single WHNF
-    -- leaves the projection stuck; reduce at `.default` transparency to unfold the bundle def and
-    -- expose the literal, then let the projection fire (finding #4). Closed bundles already
-    -- reduce with a plain WHNF, so this only widens coverage.
-    let rhs ← withTransparency .default (whnf lhs)
+    -- `extract` is read off VERBATIM (the author's written spelling — a full whnf keeps
+    -- unfolding the field value's own head, so an eta-reduced `extract := fwExtract`
+    -- would dissolve). The other contract fields reduce at `.default` transparency as
+    -- before: for a parameter-applied bundle the structure literal is behind the bundle
+    -- def, so a single WHNF leaves the projection stuck (finding #4), and for `toFormal`
+    -- lifts the deep reduction lands on the child's contract, which is the spelling
+    -- consumers use.
+    let rhs ← if fieldName == `extract then
+        match ← readField? bundle fieldName with
+        | some r => pure r
+        | none => continue
+      else
+        withTransparency .default (whnf lhs)
     let eqTy ← mkEq lhs rhs
     -- generalize over the free variables the equation mentions (section vars + explicit args)
     let fvars ← getFVars eqTy
@@ -112,6 +119,23 @@ def buildBridges (baseName : Name) (bundle : Expr) :
       logWarning m!"derive_contract_bridges: {projName} did not reduce by rfl; skipped"
   return out
 where
+  /-- Read a structure field's value off a bundle term verbatim: delta the head once, then
+  `whnfCore` (beta/iota/proj, no delta) so the projection fires on the exposed literal. -/
+  readField? (bundle : Expr) (fieldName : Name) : MetaM (Option Expr) := do
+    -- chase the definition chain down to the structure literal (a `toFormal`-lifted
+    -- bundle is two hops: the bundle def, then the lift), but never reduce INTO field
+    -- values — the whole point is the author's spelling, verbatim
+    let mut e := bundle
+    for _ in [0:8] do
+      if e.getAppFn.isConst && (← isConstructorApp e) then
+        break
+      let some u ← withTransparency .default (unfoldDefinition? e) | return none
+      e := u.headBeta
+    unless ← isConstructorApp e do return none
+    let proj ← try mkProjection e fieldName catch _ => return none
+    -- reducible-transparency whnf: unfolds the projection FUNCTION and fires the
+    -- proj-of-mk iota; a lambda/regular-def field value stays untouched
+    return some (← withTransparency .reducible (whnf proj))
   /-- The free variables appearing in `e`, in context order. -/
   getFVars (e : Expr) : MetaM (Array Expr) := do
     let fvarIds := (collectFVars {} e).fvarSet
@@ -120,6 +144,60 @@ where
       if fvarIds.contains decl.fvarId && !decl.isImplementationDetail then
         acc := acc.push (.fvar decl.fvarId)
     return acc
+
+/-- The output bridge, from the author's OPT-IN reduced representation: reads the
+`elaborated` field's `output` component verbatim and states
+
+    <base>_output : (bundle).output config (offset) input region = <that representation>
+
+proved by `rfl` (`FormalCircuit.output`/`FormalRegionCircuit.output` project the
+elaborated instance, so the equation is a projection chain — the synthesize side is
+never reduced). Skipped when the representation is the class default (detected by the
+inlined synthesize do-block: the default spells `(main input).output region`, so it
+mentions `Bind.bind`; author representations are reduced cell spellings and do not).
+NOT tagged `@[circuit_norm]`: outputs stay opaque by default (the atomic-binds
+asymmetry) — consumers pass the bridge explicitly where they chain through outputs. -/
+def buildOutputBridge (baseName : Name) (bundle : Expr) :
+    MetaM (Option (Name × Expr × Expr)) := do
+  let bundleTy ← whnf (← inferType bundle)
+  let .const structName _ := bundleTy.getAppFn | return none
+  let projName := structName ++ `output
+  unless (← getEnv).contains projName do return none
+  let some elabField ← buildBridges.readField? bundle `elaborated | return none
+  let lhs0 ← mkAppM projName #[bundle]
+  forallTelescope (← inferType lhs0) fun args _ => do
+    unless args.size ≥ 2 do return none
+    -- (config, [offset,] input, region): the elaborated instance takes all but the last two
+    let nInst := args.size - 2
+    let inst ← withTransparency .reducible (whnf (mkAppN elabField (args.extract 0 nInst)))
+    let outField ← try mkProjection inst `output catch _ => return none
+    -- the class-method projection only unfolds at default transparency; the field value
+    -- itself is a lambda (the `output := fun input self => …` shape), so the whnf stops
+    -- there and the author's body is not reduced further
+    let rhs := (mkAppN (← withTransparency .default (whnf outField))
+      (args.extract nInst args.size)).headBeta
+    if (rhs.find? (·.isConstOf ``Bind.bind)).isSome then return none
+    let lhs := mkAppN lhs0 args
+    let eqTy ← mkEq lhs rhs
+    let fvars ← buildBridges.getFVars eqTy
+    let genTy ← mkForallFVars fvars eqTy
+    let proof? ← try
+      let pf ← mkLambdaFVars fvars (← mkEqRefl lhs)
+      if ← withTransparency .default (isDefEq (← inferType pf) genTy) then
+        let genTy ← instantiateMVars genTy
+        let pf ← instantiateMVars pf
+        if genTy.hasMVar || pf.hasMVar then pure none else pure (some (genTy, pf))
+      else pure none
+    catch _ => pure none
+    match proof? with
+    | some (genTy, pf) =>
+      let thmName := match baseName with
+        | .str p s => p ++ Name.mkSimple (s ++ "_output")
+        | _ => baseName ++ Name.mkSimple "output"
+      return some (thmName, genTy, pf)
+    | none =>
+      logWarning m!"derive_contract_bridges: output bridge did not validate; skipped"
+      return none
 
 /-- The call-chunk region-count bridge for a layouter-level bundle (see the module
 docstring): `<base>_call_regionCount : Operations.regionCount ((bundle.call config
@@ -199,6 +277,8 @@ def elabDeriveContractBridges : CommandElab := fun stx => do
         let rc? ← buildRegionCountBridge baseName bundle
         if let some rc := rc? then
           bridges := bridges.push rc
+        if let some ob := ← buildOutputBridge baseName bundle then
+          bridges := bridges.push ob
         -- NOTHING is tagged into a simp set: simp-side region-count folding is the
         -- generic `foldCallRegionCount` simproc, and auto-rewriting the CONTRACT
         -- projections would break the folded-child discipline.
