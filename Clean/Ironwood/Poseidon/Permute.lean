@@ -13,12 +13,14 @@ Reference (ported from actual Rust, not memory):
 `Clean/Orchard/Poseidon/Pow5.lean`), at the ported P128Pow5T3 round constants.
 -/
 
-namespace Halo2.Ironwood.Poseidon
+open ProvableStruct.Halo2 (eval_cells_eq_eval)
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Poseidon
-open Halo2.Ironwood.Poseidon.Permute (State)
-open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
+namespace Zcash.Circuits.Poseidon
+
+open Halo2
+open Poseidon
+open Poseidon.Permute (State)
+open Poseidon.Permute.P128Pow5T3 (mds mdsInv roundConstants)
 
 private theorem fullRound_output_eq (r : ℕ) (cfg : Config) (o : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
@@ -73,11 +75,11 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     simp only [fullRound_envAssumptions_eq, fullRound_assumptions_eq, fullRound_spec_eq,
       fullRound_extract_eq, fullRound_output_eq, partialRound_envAssumptions_eq,
       partialRound_assumptions_eq, partialRound_spec_eq, partialRound_extract_eq,
-      partialRound_output_eq, ProvableStruct.eval_cells_eq_eval, forall_const,
+      partialRound_output_eq, eval_cells_eq_eval, forall_const,
       mul_one] at hfullA hpart hfullB
     -- the row-value family
     set st : ℕ → State Fp := fun k =>
-      ProvableStruct.eval place env (stateRow cfg (offset + k) self) with hst
+      ProvableStruct.Halo2.eval place env (stateRow cfg (offset + k) self) with hst
     -- per-phase step facts on the family
     have hstepA : ∀ i : ℕ, i < 4 →
         st (0 + i + 1) = FullRound.value (FullRound.params roundConstants mds i)
@@ -106,7 +108,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     -- endpoints
     have h0 : st 0 = { x0 := input_x0, x1 := input_x1, x2 := input_x2 } := by
       simp only [hst, Nat.add_zero]
-      rw [show (ProvableStruct.eval place env (stateRow cfg offset self)
+      rw [show (ProvableStruct.Halo2.eval place env (stateRow cfg offset self)
           : State Fp)
         = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
             x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
@@ -143,10 +145,10 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
       (hwC i) trivial trivial trivial).1
     simp only [fullRound_spec_eq, fullRound_extract_eq, fullRound_output_eq,
       partialRound_spec_eq, partialRound_extract_eq, partialRound_output_eq,
-      ProvableStruct.eval_cells_eq_eval, mul_one] at hdA hdB hdC
+      eval_cells_eq_eval, mul_one] at hdA hdB hdC
     -- the row-value family (verifier view of the honest environment)
     set st : ℕ → State Fp := fun k =>
-      ProvableStruct.eval place env.toEnvironment (stateRow cfg (offset + k) self)
+      ProvableStruct.Halo2.eval place env.toEnvironment (stateRow cfg (offset + k) self)
       with hst
     have hstepA : ∀ i : ℕ, i < 4 →
         st (0 + i + 1) = FullRound.value (FullRound.params roundConstants mds i)
@@ -174,7 +176,7 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
       exact h
     have h0 : st 0 = { x0 := input_x0, x1 := input_x1, x2 := input_x2 } := by
       simp only [hst, Nat.add_zero]
-      rw [show (ProvableStruct.eval place env.toEnvironment
+      rw [show (ProvableStruct.Halo2.eval place env.toEnvironment
           (stateRow cfg offset self) : State Fp)
         = { x0 := env.advice (cfg.state 0) ((place self + offset : ℕ) : ℤ),
             x1 := env.advice (cfg.state 1) ((place self + offset : ℕ) : ℤ),
@@ -216,4 +218,4 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
 
 derive_contract_bridges permuteRegion := permuteRegion
 
-end Halo2.Ironwood.Poseidon
+end Zcash.Circuits.Poseidon

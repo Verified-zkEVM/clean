@@ -19,13 +19,13 @@ the codec, the pinned-content-hash scheme, and why the data is not a Lean term);
 mismatch or failed load is a build failure, exactly like the former `#guard`s.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test.MatchAction
+namespace Zcash.Circuits.Fixtures.Test.MatchAction
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Fixtures.Json
+open Halo2
+open Fixtures.Json
 
 def actionCS : ConstraintSystem Fp :=
-  (Halo2.Ironwood.Action.Circuit.configure Halo2.Ironwood.Specs.Sinsemilla.orchardGenerators {}).2
+  (Action.Circuit.configure Specs.Sinsemilla.orchardGenerators {}).2
 
 /-- Registration-order query seed from a dumped fixture's query layouts. -/
 def seedOf (f : CsFixture) : List Query :=
@@ -44,4 +44,4 @@ def seedOf (f : CsFixture) : List Query :=
     ("actionPost: projected CS = dump",
       projectCSPostMap (seedOf actionPost) actionSelMap actionCS == actionPost)]
 
-end Halo2.Ironwood.Fixtures.Test.MatchAction
+end Zcash.Circuits.Fixtures.Test.MatchAction

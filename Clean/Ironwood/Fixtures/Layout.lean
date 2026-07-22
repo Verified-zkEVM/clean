@@ -47,7 +47,7 @@ list — do NOT count `assign_table`. `place` bridges the two by a lockstep walk
 op consumes one fixture region slot, matching Rust's `assign_table` `enter_region`).
 -/
 
-namespace Halo2.Ironwood.Fixtures.Layout
+namespace Zcash.Circuits.Fixtures.Layout
 
 open Halo2
 
@@ -390,4 +390,4 @@ def allFixed [Inhabited F] (toNat : F → ℕ) (usable : ℕ) (selMap : SelCompr
     ++ constantsFixed consts
     ++ selectorFixed selMap (activations starts regions))
 
-end Halo2.Ironwood.Fixtures.Layout
+end Zcash.Circuits.Fixtures.Layout

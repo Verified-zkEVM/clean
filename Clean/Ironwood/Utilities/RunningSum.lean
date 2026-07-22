@@ -8,11 +8,15 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 The value-level layer of `halo2_gadgets`' `decompose_running_sum` range check: the
 `range_check(word, range)` product polynomial, the `InRange` predicate it enforces, and
 the step relation `word = z_cur - 2^W * z_next`. Consumed by the running-sum
-decomposition circuit (`Clean.Ironwood.Utilities.DecomposeRunningSum`) and the
+decomposition circuit (`Zcash.Circuits.DecomposeRunningSum`) and the
 fixed-base scalar-multiplication canonicity proofs.
 -/
 
-namespace Halo2.Ironwood
+namespace Zcash.Circuits
+
+open Clean
+
+
 namespace Utilities
 
 variable {F : Type} [FiniteField F]
@@ -91,4 +95,4 @@ theorem rangeCheckPoly_eq_zero_iff (range : ℕ) (word : F) :
 end RunningSum
 
 end Utilities
-end Halo2.Ironwood
+end Zcash.Circuits

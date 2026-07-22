@@ -2,6 +2,8 @@ import Clean.Utils.Primes
 import Clean.Types.U64
 import Clean.Gadgets.And.And8
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 

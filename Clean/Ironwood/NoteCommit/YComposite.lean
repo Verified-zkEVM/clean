@@ -8,7 +8,7 @@ Reference (ported from actual Rust, not memory):
 `witness_check(j, 25, true)` handing out `zs[1]`/`zs[13]`, `canon_bitshift_130(j)`
 (`witness_check(j', 13, false)`), then the `"y canonicity"` gate region
 (`YCanonicity::assign`, lines 1345-1409). Phase-1 donor:
-`Halo2.Ironwood.NoteCommit.YCanonicity` (`Clean/Orchard/Action/NoteCommit.lean:525-646`).
+`NoteCommit.YCanonicity` (`Clean/Orchard/Action/NoteCommit.lean:525-646`).
 
 Only the `lsb` witness program is a parameter (the caller computes it from its Sinsemilla
 sign bit); `k_0`/`k_2`/`k_3` and `j` are witnessed by the canonical bit-slice programs, so
@@ -17,12 +17,12 @@ composite payoff (`lsb` is the low bit of `y`), conditioned on the lsb cell's bo
 (constrained outside this flow, exactly as in the gate bundle).
 -/
 
-namespace Halo2.Ironwood.NoteCommit.YCanonicityCheck
+namespace Zcash.Circuits.NoteCommit.YCanonicityCheck
 
-open Halo2.Ironwood (Fp)
+open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
+open Specs (bitrange bitrange_lt cast_bitrange_val)
+open NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   IsLowBit isLowBit_iff_mod_two nat_mod_two_isBool tPNat)
 
 section ChildBridges
@@ -135,13 +135,13 @@ theorem jWit_eval (wlsb : WitgenIR Fp 1) (y : AssignedCell Fp)
 
 /-- `j' = j + 2¹³⁰ − t_P` (Rust `canon_bitshift_130`, computed from the `j` cell). -/
 def jPrimeWit (jCell : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env jCell + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP]
+  .native fun env => #v[readCell env jCell + ((2 ^ 130 : ℕ) : Fp) - tP]
 
 @[circuit_norm]
 theorem jPrimeWit_eval (jCell : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
     ((jPrimeWit jCell).eval env)[j]
-      = readCell env jCell + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+      = readCell env jCell + ((2 ^ 130 : ℕ) : Fp) - tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [jPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -282,7 +282,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     have hb' : IsBool (env.advice (cfg.1.advices 6) ((place (i₀ + 4) : ℕ) : ℤ)) := by
       rw [← h_output] at hb; exact hb
     have hD := hGSpec hb'
-    simp only [YCanonicity.toDonor, Halo2.Ironwood.NoteCommit.YCanonicity.Gate.Spec]
+    simp only [YCanonicity.toDonor, NoteCommit.YCanonicity.Gate.Spec]
       at hD
     rw [← h_output]
     exact hD.1
@@ -333,8 +333,8 @@ def circuit (wlsb : WitgenIR Fp 1) :
     have htile : bitrange input_y.val 0 250
         = bitrange input_y.val 0 1 + 2 * bitrange input_y.val 1 9
           + 2 ^ 10 * bitrange input_y.val 10 240 := by
-      rw [show (250 : ℕ) = 1 + 249 from rfl, Halo2.Ironwood.Specs.bitrange_add,
-        show (249 : ℕ) = 9 + 240 from rfl, Halo2.Ironwood.Specs.bitrange_add]
+      rw [show (250 : ℕ) = 1 + 249 from rfl, Specs.bitrange_add,
+        show (249 : ℕ) = 9 + 240 from rfl, Specs.bitrange_add]
       ring
     -- the honest `j` is the low 250 bits of `y`
     have hjeq : env.advice cfg.2.runningSum ((place (i₀ + 2) : ℕ) : ℤ)
@@ -451,11 +451,11 @@ def circuit (wlsb : WitgenIR Fp 1) :
         rw [show (i₀ + 2 + 2 : ℕ) = i₀ + 4 from rfl, hgk3] at h1
         rw [hzLastP, ← hpz0P, hWjp, hjeq]
         obtain ⟨-, hatp, -⟩ := high_bit_canonical (ZMod.val_lt input_y)
-          (Halo2.Ironwood.NoteCommit.bit_one_of_eq rfl h1)
+          (NoteCommit.bit_one_of_eq rfl h1)
         rw [shifted_high_zero (by norm_num) (by norm_num)
           (by rw [cast_bitrange_val (by norm_num)]; exact hatp)]
         simp
 
 derive_contract_bridges circuit (wlsb : WitgenIR Fp 1) := circuit wlsb
 
-end Halo2.Ironwood.NoteCommit.YCanonicityCheck
+end Zcash.Circuits.NoteCommit.YCanonicityCheck

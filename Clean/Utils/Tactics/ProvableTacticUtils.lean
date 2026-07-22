@@ -2,6 +2,8 @@ import Lean
 import Clean.Circuit.CircuitType
 import Clean.Circuit.Provable
 
+open Clean
+
 open Lean Meta Elab Tactic
 
 /-- Check if an expression is a constructor application (ends with .mk).
@@ -81,9 +83,10 @@ def hasProvableStructInstance (type : Expr) : MetaM Bool := do
     catch _ => return false
   | _ => return false
 
-/-- Check if expression contains eval pattern (ProvableType.eval, Expression.eval, or ProvableStruct.eval) -/
+/-- Check if expression contains eval pattern (ProvableType.Clean.eval, Expression.eval, or ProvableStruct.Clean.eval) -/
 def hasEvalPattern (e : Expr) : Bool :=
-  e.isAppOf ``eval || e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval
+  e.isAppOf ``eval || e.isAppOf ``ProvableType.Clean.eval || e.isAppOf ``Expression.eval ||
+    e.isAppOf ``ProvableStruct.Clean.eval
 
 /-- Extract type map candidates from a type for ProvableType/ProvableStruct checking -/
 def extractTypeMapCandidates (type : Expr) : MetaM (List Expr) := do

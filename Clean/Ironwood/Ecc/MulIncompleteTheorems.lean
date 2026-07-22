@@ -6,7 +6,9 @@ import Clean.Ironwood.Ecc.DoubleAndAdd
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul.Incomplete
+namespace Zcash.Circuits.Ecc.Mul.Incomplete
+
+open Clean
 
 namespace Init
 
@@ -564,4 +566,4 @@ theorem accVal_eq_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
 
 end DoubleAndAdd
 
-end Halo2.Ironwood.Ecc.Mul.Incomplete
+end Zcash.Circuits.Ecc.Mul.Incomplete

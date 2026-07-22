@@ -5,6 +5,8 @@ import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 # Orchard incoming viewing key commitment
 
@@ -585,7 +587,7 @@ deriving ProvableStruct
 /-- The output, parametrized over the running-sum list `ns` so its `eval` projection
 lemmas (`eval_cells`/`eval_zs`) are proved *generically* — stuck on the symbolic `ns` —
 and merely instantiated at the concrete `[24, 0, 23, 0]`. Proving them at the concrete list
-forces `ProvableStruct.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
+forces `ProvableStruct.Clean.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
 structure OutputGen (ns : List ℕ) (F : Type) where
   cells : Cells F
   zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) F
@@ -607,14 +609,14 @@ theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
 
 theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).cells = eval env out.cells := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).zs = eval env out.zs := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 /-- Single-leaf projections of an evaluated `Cells`. Proved generically (stuck on the
@@ -630,21 +632,21 @@ theorem eval_cells_leaves (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).b2 = Expression.eval env c.b2 ∧
     (eval env c).d0 = Expression.eval env c.d0 ∧
     (eval env c).d1 = Expression.eval env c.d1 := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).point = eval env c.point := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
     (out : Var (CommitDomain.Output ns) Fp) :
     (eval env out).point = eval env out.point := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 @[reducible] def Output : TypeMap := OutputGen [24, 0, 23, 0]
@@ -1162,7 +1164,7 @@ private theorem canonicity_assumptions_of_commit
   -- Project the `Canonicity.Input` eval field-by-field (cheap: 13 single-field projections),
   -- without ever forcing `eval env O.zs` (the 51-leaf flatten that `circuit_norm` triggers).
   -- Project the evaluated `Canonicity.Input` field-by-field. Crucially this is done with
-  -- `ProvableStruct.eval_eq_eval` + the single-field projection only, so the running-sum
+  -- `ProvableStruct.Clean.eval_eq_eval` + the single-field projection only, so the running-sum
   -- fields stay as `Expression.eval env (… O.zs …)[13]` (one var lookup) and the 51-leaf
   -- `O.zs` heterogeneous vector is never flattened (unlike a full `circuit_norm`).
   rw [show Canonicity.circuit.Assumptions = Canonicity.Assumptions from rfl]

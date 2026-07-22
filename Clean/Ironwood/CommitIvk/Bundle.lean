@@ -13,13 +13,13 @@ value arguments are the donor row-level lemmas (`soundness_ak`/`soundness_nk` an
 extracted `eqs_of_spec`).
 -/
 
-namespace Halo2.Ironwood.CommitIvk
+namespace Zcash.Circuits.CommitIvk
 
-open Halo2.Ironwood (Fp)
+open Halo2
 
-private abbrev DRow := Halo2.Ironwood.CommitIvk.Gate.Input
-private abbrev DSpec := Halo2.Ironwood.CommitIvk.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.CommitIvk.Gate.Assumptions
+private abbrev DRow := Gate.Input
+private abbrev DSpec := Gate.Spec
+private abbrev DAssumptions := Gate.Assumptions
 
 /-- `v·(1−v) = 0` pins a boolean. -/
 private theorem isBool_of_boolCheck {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
@@ -103,9 +103,9 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
 
   ProverAssumptions := fun input (wit : Fp × Fp) _ =>
     (wit.1 = 1 → input.z13APrime = 0) ∧ (wit.2 = 1 → input.z14B2CPrime = 0) ∧
-    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
+    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - tP ∧
     input.b2CPrime = input.b2 + input.c * ((2 ^ 5 : ℕ) : Fp)
-      + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP ∧
+      + ((2 ^ 140 : ℕ) : Fp) - tP ∧
     DSpec (toDonor input wit.1 wit.2)
 
   soundness := by
@@ -128,10 +128,10 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
         = ((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ) + 1 := by ring
     rw [hca, hcap] at hapC
     rw [hcb2, hcc, hcb2cp] at hb2cpC
-    have hapS : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    have hapS : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - tP := by
       push_cast at hapC ⊢; linear_combination -hapC
     have hb2cS : input_b2CPrime = input_b2 + input_c * ((2 ^ 5 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+        + ((2 ^ 140 : ℕ) : Fp) - tP := by
       push_cast at hb2cpC ⊢; linear_combination -hb2cpC
     have hakEq : input_a + input_b0 * ((2 ^ 250 : ℕ) : Fp)
         + env.advice (cfg.advices 4)
@@ -147,11 +147,11 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
       rw [hidx1] at hnk
       linear_combination hnk
     obtain ⟨hakE1, hakE2, hakE3⟩ :=
-      Halo2.Ironwood.CommitIvk.Gate.soundness_ak hA.1 hA.2.1
+      Gate.soundness_ak hA.1 hA.2.1
         (isBool_of_boolCheck hb1c) hapS hA.2.2.2.2.2.1
         hA.2.2.2.2.2.2.1 hakEq hb1b0 hb1z13A hb1z13ap
     obtain ⟨hnkE1, hnkE2, hnkE3, hnkE4⟩ :=
-      Halo2.Ironwood.CommitIvk.Gate.soundness_nk hA.2.2.1 hA.2.2.2.1 hA.2.2.2.2.1
+      Gate.soundness_nk hA.2.2.1 hA.2.2.2.1 hA.2.2.2.2.1
         (isBool_of_boolCheck hd1c) hb2cS
         hA.2.2.2.2.2.2.2.2 hnkEq hd1d0 hd1z14
     exact ⟨hakE1, hakE2, hakE3, hnkE1, hnkE2, hnkE3, hnkE4,
@@ -168,7 +168,7 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     simp only [circuit_norm, gate, boolCheck] at hwit h_input h_output hA hPA ⊢
     obtain ⟨hwak, hwa, hwb, hwb0, hwb1, hwb2, hwz13a, hwap, hwz13ap,
       hwnk, hwc, hwd, hwd0, hwd1, hwz13c, hwb2cp, hwz14⟩ := hwit
-    rw [show (ProvableStruct.eval env.place env.env.toEnvironment input_var
+    rw [show (ProvableStruct.Halo2.eval env.place env.env.toEnvironment input_var
         : Inputs Fp)
       = { ak := env.env.get input_var.ak.cell.column
             ((env.place input_var.ak.cell.regionIndex
@@ -262,7 +262,7 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     have hiz14B2CPrime : env.env.get input_var.z14B2CPrime.cell.column
         ((env.place input_var.z14B2CPrime.cell.regionIndex
           + input_var.z14B2CPrime.cell.rowOffset : ℕ) : ℤ) = input.z14B2CPrime := congrArg Inputs.z14B2CPrime h_input
-    have heqs := Halo2.Ironwood.CommitIvk.Gate.eqs_of_spec
+    have heqs := Gate.eqs_of_spec
       (toDonor input
         (env.env.advice (cfg.advices 4) ((env.place self + offset : ℕ) : ℤ))
         (env.env.advice (cfg.advices 4) ((env.place self + (offset + 1) : ℕ) : ℤ)))
@@ -303,4 +303,4 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     · push_cast at he13 ⊢; linear_combination he13
     · push_cast at he14 ⊢; linear_combination he14
 
-end Halo2.Ironwood.CommitIvk
+end Zcash.Circuits.CommitIvk

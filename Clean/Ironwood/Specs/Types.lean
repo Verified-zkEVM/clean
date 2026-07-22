@@ -8,7 +8,7 @@ wrappers: field-like protocol objects remain `Fp`, group-like objects remain `Po
 and partial protocol operations use `Option`.
 -/
 
-namespace Halo2.Ironwood.Specs
+namespace Zcash.Circuits.Specs
 
 /-- Orchard Merkle tree depth. -/
 def merkleDepth : ℕ := 32
@@ -98,4 +98,4 @@ structure ActionAux.Circuit (F : Type) where
   rcm_new : F
   rcv : F
 
-end Halo2.Ironwood.Specs
+end Zcash.Circuits.Specs

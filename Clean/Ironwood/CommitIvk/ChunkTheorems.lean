@@ -13,16 +13,16 @@ import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
 /-!
 # `commit_ivk` message-piece chunk bridge
 
-Port of the `note_commit` message-piece chunk bridge (`Clean.Halo2.Ironwood.NoteCommit`)
+Port of the `note_commit` message-piece chunk bridge (`Zcash.Circuits.NoteCommit`)
 to the simpler `commit_ivk` message `ak + 2^255 * nk` (2 scalar fields, 4 Sinsemilla
 pieces with word counts `25, 1, 24, 1`).
 -/
 
-namespace Halo2.Ironwood.CommitIvk
+namespace Zcash.Circuits.CommitIvk
 
-open Halo2.Ironwood.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
-open Halo2.Ironwood.Specs (K)
-open Halo2.Ironwood.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq commitIvkMessage commitIvkChunks
+open Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
+open Specs (K)
+open Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq commitIvkMessage commitIvkChunks
   commitIvkChunks_tiling sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum chunksOf_one_eq_singleton)
 
@@ -141,12 +141,12 @@ theorem commitIvkChunks_eq_of_piece_digit_sums {msA msB msC msD : ℕ → ℕ} {
 
 theorem pieceChunks_commitIvkRounds_chunks
     {pieces : Vector Fp 4} {chunks : List ℕ}
-    (h : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks) :
+    (h : Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks) :
     ∃ msA msB msC msD : ℕ → ℕ,
       (∀ r, msA r < 2 ^ K) ∧ (∀ r, msB r < 2 ^ K) ∧ (∀ r, msC r < 2 ^ K) ∧ (∀ r, msD r < 2 ^ K) ∧
       chunks = (List.range 25).map msA ++ (List.range 1).map msB
         ++ (List.range 24).map msC ++ (List.range 1).map msD := by
-  simp only [Halo2.Ironwood.Sinsemilla.Chain.PieceChunks] at h
+  simp only [Sinsemilla.Chain.PieceChunks] at h
   obtain ⟨msA, hA, _hpA, tailA, rfl, h⟩ := h
   obtain ⟨msB, hB, _hpB, tailB, rfl, h⟩ := h
   obtain ⟨msC, hC, _hpC, tailC, rfl, h⟩ := h
@@ -157,14 +157,14 @@ theorem pieceChunks_commitIvkRounds_chunks
 
 theorem pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
     {pieces : Vector Fp 4} {chunks : List ℕ} {ak nk : ℕ}
-    (hPC : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
+    (hPC : Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
     (hA : pieces[0] = ((ak % 2 ^ (K * 25) : ℕ) : Fp))
     (hB : pieces[1] = ((bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 : ℕ) : Fp))
     (hC : pieces[2] = (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp))
     (hD : pieces[3] = ((bitrange nk 245 9 + bitrange nk 254 1 * 512 : ℕ) : Fp))
     (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
     chunks = commitIvkChunks ak nk := by
-  simp only [Halo2.Ironwood.Sinsemilla.Chain.PieceChunks] at hPC
+  simp only [Sinsemilla.Chain.PieceChunks] at hPC
   obtain ⟨msA, hmsA, hpA, tailA, rfl, hPC⟩ := hPC
   obtain ⟨msB, hmsB, hpB, tailB, rfl, hPC⟩ := hPC
   obtain ⟨msC, hmsC, hpC, tailC, rfl, hPC⟩ := hPC
@@ -192,15 +192,15 @@ theorem pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
 are in range). -/
 theorem honestChunks_eq_commitIvkChunks
     {pieces : Vector Fp 4} {ak nk : ℕ}
-    (hbounds : Halo2.Ironwood.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] pieces)
+    (hbounds : Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] pieces)
     (hA : pieces[0] = ((ak % 2 ^ (K * 25) : ℕ) : Fp))
     (hB : pieces[1] = ((bitrange ak 250 4 + bitrange ak 254 1 * 16 + bitrange nk 0 5 * 32 : ℕ) : Fp))
     (hC : pieces[2] = (((nk / 2 ^ 5) % 2 ^ (K * 24) : ℕ) : Fp))
     (hD : pieces[3] = ((bitrange nk 245 9 + bitrange nk 254 1 * 512 : ℕ) : Fp))
     (hak : ak < 2 ^ 255) (hnk : nk < 2 ^ 255) :
-    Halo2.Ironwood.Sinsemilla.Chain.honestChunks [24, 0, 23, 0] pieces = commitIvkChunks ak nk :=
+    Sinsemilla.Chain.honestChunks [24, 0, 23, 0] pieces = commitIvkChunks ak nk :=
   pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
-    (Halo2.Ironwood.Sinsemilla.Chain.pieceChunks_honestChunks [24, 0, 23, 0] pieces hbounds)
+    (Sinsemilla.Chain.pieceChunks_honestChunks [24, 0, 23, 0] pieces hbounds)
     hA hB hC hD hak hnk
 
-end Halo2.Ironwood.CommitIvk
+end Zcash.Circuits.CommitIvk

@@ -1,5 +1,7 @@
 import Clean.Gadgets.SHA256.LowerSigma0
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

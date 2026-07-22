@@ -25,13 +25,12 @@ in source order:
 Phase-1 donor: `Clean/Orchard/Action/DeriveNullifier.lean`.
 -/
 
-namespace Halo2.Ironwood.Action.DeriveNullifier
+namespace Zcash.Circuits.Action.DeriveNullifier
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point Fq)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
-open Halo2.Ironwood.Poseidon
-open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (roundConstants)
+open Halo2
+open Ecc.MulFixed (FixedBase)
+open Poseidon
+open Poseidon.Permute.P128Pow5T3 (roundConstants)
 
 /-- The inputs of `derive_nullifier`: the already-assigned cells `nk`, `rho`, `psi`, and
 the note commitment point `cm`. -/
@@ -179,4 +178,4 @@ def circuit (K : FixedBase) : FormalCircuit Fp
 
 derive_contract_bridges circuit (K : FixedBase) := circuit K
 
-end Halo2.Ironwood.Action.DeriveNullifier
+end Zcash.Circuits.Action.DeriveNullifier

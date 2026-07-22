@@ -29,9 +29,9 @@
 --   cargo test -p halo2_gadgets --lib ecc::chip::layout_dump -- --nocapture
 import Clean.Ironwood.Fixtures.FixtureTypes
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 -- `maxRecDepth` is raised only to elaborate the long flat data lists (the full lookup-table
 -- column contents can be thousands of rows). This is a data-literal elaboration depth, not a
@@ -2491,4 +2491,4 @@ def mulLayout : LayoutFixture :=
       (7, 137, 3),
       (8, 141, 1)] }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

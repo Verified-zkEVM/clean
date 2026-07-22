@@ -812,7 +812,7 @@ scope):
 > - for no apparent reason, inner soundness does not pass constants like dec_spec_eq,
 >   dec_assumptions_eq, dec_envAssumptions_eq to CPS, causing it to need separate
 >   circuit_norm passes after unfolding these, in several places.
-> - `Halo2.Ironwood.Ecc` qualifiers used pervasively although the entire file is
+> - `Zcash.Circuits.Ecc` qualifiers used pervasively although the entire file is
 >   already in that namespace
 > - in synthesize, instead of using `inner` as a subcircuit call (strong rule in
 >   AGENTS.md), the innerRegion circuit is inlined, causing the proofs to have to

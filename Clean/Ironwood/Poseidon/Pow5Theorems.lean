@@ -18,14 +18,16 @@ Orchard configures `Pow5Chip<pallas::Base, 3, 2>` in
 width 3 and rate 2.
 -/
 
-namespace Halo2.Ironwood.Poseidon
+namespace Zcash.Circuits.Poseidon
+
+open Clean
 
 def pow5 {K : Type} [Mul K] (x : K) : K :=
   let x2 := x * x
   x2 * x2 * x
 
 /-- `pow5` commutes with witness-IR evaluation, since it is built purely from `*`. -/
-theorem pow5_FExpr_eval (ctx : Witgen.Ctx Fp) (x : Witgen.FExpr Fp) :
+theorem pow5_FExpr_eval (ctx : Ctx Fp) (x : FExpr Fp) :
     Witgen.FExprOver.eval ctx (pow5 x) = pow5 (Witgen.FExprOver.eval ctx x) := by
   simp [pow5, circuit_norm]
 
@@ -179,7 +181,7 @@ def Params.toExpr (params : Params Fp) :
   mInv22 := params.mInv22
 
 def Params.toFExpr (params : Params Fp) :
-    Params (Witgen.FExpr Fp) where
+    Params (FExpr Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -409,4 +411,4 @@ def concreteValue : State Fp → State Fp :=
 
 end Permute
 
-end Halo2.Ironwood.Poseidon
+end Zcash.Circuits.Poseidon

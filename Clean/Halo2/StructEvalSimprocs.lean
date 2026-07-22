@@ -6,7 +6,7 @@ import Clean.Halo2.Provable
 Verifier-side counterpart of the witgen simprocs (`Clean.Circuit.WitnessIR`:
 `evalProjection`, `evalStructLiteral`) and the port of main Clean's PR #424
 `Clean.Circuit.StructEvalSimprocs`, adapted to halo2's evaluators
-(`Halo2.ProvableStruct.eval`, `Halo2.ProvableType.eval`, and the `Eval.eval` class head)
+(`ProvableStruct.Halo2.eval`, `ProvableType.Halo2.eval`, and the `Eval.eval` class head)
 over `Placed Environment`/`AssignedCell`.
 
 The `circuit_norm` normal form for evaluation is component-preserving and row-level:
@@ -20,7 +20,7 @@ The `circuit_norm` normal form for evaluation is component-preserving and row-le
   facts (`h_input : eval env input_var = input`);
 * a constructor equality of provable types splits field-wise.
 
-Two evaluation heads matter, in priority order (see `Halo2.ProvableStruct.eval_var_eq_eval`,
+Two evaluation heads matter, in priority order (see `ProvableStruct.Halo2.eval_var_eq_eval`,
 tagged `↓ high`): a **`ProvableStruct`** value decomposes along its semantic component
 boundaries; a plain **`ProvableType`** value (e.g. `Point`) decomposes componentwise via
 the same literal simproc, validated by definitional equality (structure eta survives; only
@@ -88,7 +88,7 @@ def projectionView? (e : Expr) : MetaM (Option (Expr × (Expr → MetaM Expr))) 
 
 /-- Evaluation heads that carry a `(… place env value)` / `(… env value)` shape. -/
 private def evalHeads : Array Name :=
-  #[``Eval.eval, ``Halo2.ProvableStruct.eval, ``Halo2.ProvableType.eval]
+  #[``Eval.eval, ``ProvableStruct.Halo2.eval, ``ProvableType.Halo2.eval]
 
 /-- Unfold a `List` literal expression into its element expressions. -/
 private partial def listLitElems (e : Expr) : MetaM (Array Expr) := do
@@ -125,7 +125,7 @@ private def buildFieldEval (placedEnv field : Expr)
   let (``Halo2.Placed, #[envCtor, fF]) := placedTy.getAppFnArgs |
     throwError "structEvalLiteral: env is not `Placed …`: {← ppExpr placedTy}"
   withTransparency .default do
-    let ctInst ← mkAppOptM ``ProvableType.toCircuitType #[some compTy, some compInst]
+    let ctInst ← mkAppOptM ``ProvableType.Halo2.toCircuitType #[some compTy, some compInst]
     let evalInst ←
       if envCtor.isConstOf ``Halo2.Environment then
         mkAppOptM ``Halo2.CircuitType.verifierEval #[some fF, none, some compTy, some ctInst]
@@ -138,8 +138,8 @@ private def buildFieldEval (placedEnv field : Expr)
 /--
 Decompose evaluation of a struct/point **literal** component-wise:
 ```
-Halo2.ProvableStruct.eval place env ⟨a, b, …⟩  ~~>  ⟨Eval.eval ⟨place,env⟩ a, …⟩
-Halo2.ProvableType.eval   place env ⟨a, b, …⟩  ~~>  ⟨Eval.eval ⟨place,env⟩ a, …⟩
+ProvableStruct.Halo2.eval place env ⟨a, b, …⟩  ~~>  ⟨Eval.eval ⟨place,env⟩ a, …⟩
+ProvableType.Halo2.eval   place env ⟨a, b, …⟩  ~~>  ⟨Eval.eval ⟨place,env⟩ a, …⟩
 ```
 Fires only on constructor literals (opaque values stay folded atoms — the restriction that
 makes the pair {literal-decompose, projection-lift} confluent). Each field is re-evaluated
@@ -150,7 +150,7 @@ equality at `.all` (matches the witgen struct-literal simproc).
 A `Vector (AssignedCell F) n` field (e.g. an `Output.zs`, or any future bundle with a
 vector-valued Output such as Sinsemilla) is handled via the enclosing `ProvableStruct`'s
 `components` list: the plain `Eval.eval` synthesis cannot recover `M = fields n` from the raw
-`Vector` field type, so on the `ProvableStruct.eval` route we thread the component's spelled-out
+`Vector` field type, so on the `ProvableStruct.Halo2.eval` route we thread the component's spelled-out
 `M`/instance into `buildFieldEval` as a fallback. The vector field decomposes to
 `Eval.eval placedEnv v` (a `Value (fields n) F`, i.e. `Vector F n`), which `circuit_norm`
 further reduces to `Vector.map (AssignedCell.eval …)`. -/
@@ -160,7 +160,7 @@ def structEvalLiteralProc : Simproc := fun e => do
   -- Recover the `Placed` env for the per-field `Eval.eval` calls, plus the value:
   --   `Eval.eval env x`                          — env is already `Placed`
   --   `Halo2.Provable{Struct,Type}.eval place env x` — reconstruct `⟨place, env⟩`
-  -- On the `ProvableStruct.eval` route the type map `α` and its `ProvableStruct` instance are
+  -- On the `ProvableStruct.Halo2.eval` route the type map `α` and its `ProvableStruct` instance are
   -- explicit args, giving a per-field fallback `M`/instance list from `components α` (the vector
   -- field's `M = fields n`, unrecoverable from the raw `Vector` field type). The other routes are
   -- plain `ProvableType` literals (scalar-only fields), where the plain `Eval.eval` synthesis
@@ -172,12 +172,12 @@ def structEvalLiteralProc : Simproc := fun e => do
       -- only a *provable-type* literal (avoid firing on `Eval.eval` of a scalar cell etc.)
       unless ← isProvableTypeLike (← inferType args[args.size - 1]!) do return (none, default, none)
       pure (some args[args.size - 2]!, args[args.size - 1]!, none)
-    | ``Halo2.ProvableType.eval =>
+    | ``ProvableType.Halo2.eval =>
       unless args.size ≥ 3 do return (none, default, none)
       let placed ← withTransparency .default <|
         mkAppM ``Halo2.Placed.mk #[args[args.size - 3]!, args[args.size - 2]!]
       pure (some placed, args[args.size - 1]!, none)
-    | ``Halo2.ProvableStruct.eval =>
+    | ``ProvableStruct.Halo2.eval =>
       unless args.size ≥ 7 do return (none, default, none)
       let placed ← withTransparency .default <|
         mkAppM ``Halo2.Placed.mk #[args[args.size - 3]!, args[args.size - 2]!]
@@ -249,7 +249,7 @@ def evalProjectionLiftProc : Simproc := fun e => do
   -- `Eval.eval env x` has 1; `Halo2.Provable{Struct,Type}.eval place env x` have 2.
   let nEnv ← match hname with
     | ``Eval.eval => pure 1
-    | ``Halo2.ProvableStruct.eval | ``Halo2.ProvableType.eval => pure 2
+    | ``ProvableStruct.Halo2.eval | ``ProvableType.Halo2.eval => pure 2
     | _ => return .continue
   let args := e.getAppArgs
   unless args.size ≥ nEnv + 1 do return .continue
@@ -311,7 +311,7 @@ def evalProjectionLiftTypeProc : Simproc := evalProjectionLiftProc
 def evalProjectionLiftEvalProc : Simproc := evalProjectionLiftProc
 
 /-!
-The surface `simproc … (Halo2.ProvableStruct.eval _ _)` syntax insists on synthesizing the
+The surface `simproc … (ProvableStruct.Halo2.eval _ _)` syntax insists on synthesizing the
 `ProvableStruct ?α` instance during pattern elaboration; compute the discrimination keys
 with plain metavariables and register directly.
 -/
@@ -321,8 +321,8 @@ run_cmd Command.liftTermElabM do
     let f ← mkConstWithFreshMVarLevels head
     let (mvars, _, _) ← forallMetaTelescope (← inferType f)
     withSimpGlobalConfig <| DiscrTree.mkPath (mkAppN f mvars)
-  let structKeys ← mkKeys ``Halo2.ProvableStruct.eval
-  let typeKeys ← mkKeys ``Halo2.ProvableType.eval
+  let structKeys ← mkKeys ``ProvableStruct.Halo2.eval
+  let typeKeys ← mkKeys ``ProvableType.Halo2.eval
   let evalKeys ← mkKeys ``Eval.eval
   registerSimproc ``structEvalLiteralStructProc structKeys
   registerSimproc ``structEvalLiteralTypeProc typeKeys

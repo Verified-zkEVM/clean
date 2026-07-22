@@ -1,5 +1,7 @@
 import Clean.Circuit.WitnessIR
 
+open Clean
+
 /-!
 # Authoring sugar for the witness IR
 
@@ -26,7 +28,7 @@ witnessVectorProgram 32 do
 
 variable {F : Type} {α β : Type}
 
-namespace Witgen
+namespace Clean
 
 /-! ## Operators and coercions -/
 
@@ -37,6 +39,11 @@ instance : Coe F (FExpr F) := ⟨.const⟩
 instance : Coe F (field (FExpr F)) := ⟨.const⟩
 instance {M : TypeMap} [ProvableType M] : Coe (M (Expression F)) (M (FExpr F)) where
   coe v := fromElements (toElements v |>.map .expr)
+
+end Clean
+
+namespace Witgen
+
 /- Numeric literals are generic over the variable atom `V` (like the arithmetic
 instances below), so `3`, `2`, … build the same `.const` regardless of whether variables
 are main Clean's `Expression F` or Halo2-Clean's `AssignedCell F`. -/
@@ -48,9 +55,15 @@ regardless of how it reads circuit variables. -/
 instance {V : Type} : Add (FExprOver F V) := ⟨.add⟩
 instance {V : Type} : Mul (FExprOver F V) := ⟨.mul⟩
 instance {V : Type} : Inv (FExprOver F V) := ⟨.inv⟩
-@[reducible] instance : Inv (field (Witgen.FExpr F)) := (inferInstance : Inv (Witgen.FExpr F))
+@[reducible] instance {V : Type} : Inv (field (FExprOver F V)) :=
+  (inferInstance : Inv (FExprOver F V))
 instance {V : Type} [Field F] : Neg (FExprOver F V) := ⟨.neg⟩
 instance {V : Type} [Field F] : Sub (FExprOver F V) := ⟨.sub⟩
+
+end Witgen
+
+namespace Clean
+open Witgen
 
 /- Heterogeneous arithmetic between circuit expressions and witness expressions: the
 `Coe (Expression F) (FExpr F)` route stopped covering `binop%` elaboration after the
@@ -62,6 +75,10 @@ instance : HMul (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => .mul (.expr 
 instance : HMul (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => .mul x (.expr e)⟩
 instance [Field F] : HSub (Expression F) (FExpr F) (FExpr F) := ⟨fun e x => FExprOver.sub (.expr e) x⟩
 instance [Field F] : HSub (FExpr F) (Expression F) (FExpr F) := ⟨fun x e => FExprOver.sub x (.expr e)⟩
+
+end Clean
+
+namespace Witgen
 
 /- The Nat-sorted instances are atom-generic like the field-sorted ones above. -/
 instance {V : Type} : Coe ℕ (NExprOver F V) := ⟨.const⟩
@@ -86,17 +103,25 @@ instance {V : Type} : HShiftLeft (NExprOver F V) ℕ (NExprOver F V) where
 instance {V : Type} : HShiftRight (NExprOver F V) ℕ (NExprOver F V) where
   hShiftRight n m := .shiftR n m
 
+end Witgen
+
+namespace Clean
+
 /-- A single field-sorted expression is a length-1 witness program, so scalar
 sites can pass an `FExpr` to the generic `witness`. -/
 instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
+
+/-- The `ℕ` value of a circuit expression, as a witness-IR expression: `x.val`. -/
+abbrev Expression.val (e : Expression F) : NExpr F := .val (.expr e)
+
+end Clean
+
+namespace Witgen
 
 /-! ## Bridges as dot notation -/
 
 /-- The `ℕ` value of an IR field expression: `e.val`. -/
 abbrev FExprOver.val {V : Type} (e : FExprOver F V) : NExprOver F V := .val e
-
-/-- The `ℕ` value of a circuit expression, as a witness-IR expression: `x.val`. -/
-abbrev _root_.Expression.val (e : Expression F) : NExpr F := .val (.expr e)
 
 /-- Cast a Nat-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
 abbrev NExprOver.toField {V : Type} (n : NExprOver F V) : FExprOver F V := .ofNat n
@@ -120,14 +145,8 @@ class EqCond (α β : Type) (F : outParam Type) (V : outParam Type) where
 @[inherit_doc EqCond.eqCond] infix:50 " =? " => EqCond.eqCond
 
 instance {V : Type} : EqCond (FExprOver F V) (FExprOver F V) F V := ⟨.feq⟩
-instance : EqCond (Expression F) (FExpr F) F (Expression F) where eqCond x y := .feq x y
-instance : EqCond (FExpr F) (Expression F) F (Expression F) where eqCond x y := .feq x y
 instance {V : Type} : EqCond (FExprOver F V) F F V where eqCond x y := .feq x (.const y)
 instance {V : Type} : EqCond F (FExprOver F V) F V where eqCond x y := .feq (.const x) y
-instance : EqCond (Expression F) F F (Expression F) where eqCond x y := .feq x y
-instance : EqCond F (Expression F) F (Expression F) where eqCond x y := .feq x y
-instance [NatCast F] : EqCond (Expression F) ℕ F (Expression F) where eqCond x n := .feq x (n : F)
-instance [NatCast F] : EqCond ℕ (Expression F) F (Expression F) where eqCond n x := .feq (n : F) x
 instance {V : Type} [NatCast F] : EqCond (FExprOver F V) ℕ F V where
   eqCond x n := .feq x (.const (n : F))
 instance {V : Type} [NatCast F] : EqCond ℕ (FExprOver F V) F V where
@@ -136,10 +155,23 @@ instance {V : Type} : EqCond (NExprOver F V) (NExprOver F V) F V := ⟨.neq⟩
 instance {V : Type} : EqCond (NExprOver F V) ℕ F V where eqCond x n := .neq x (.const n)
 instance {V : Type} : EqCond ℕ (NExprOver F V) F V where eqCond n x := .neq (.const n) x
 
-@[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
+@[inherit_doc BExprOver.lt] infix:50 " <? " => BExprOver.lt
 
 instance {V : Type} : Inhabited (BExprOver F V) := ⟨.false⟩
 instance {V : Type} : AndOp (BExprOver F V) := ⟨.and⟩
+
+end Witgen
+
+namespace Clean
+
+open Witgen
+
+instance : EqCond (Expression F) (FExpr F) F (Expression F) where eqCond x y := .feq x y
+instance : EqCond (FExpr F) (Expression F) F (Expression F) where eqCond x y := .feq x y
+instance : EqCond (Expression F) F F (Expression F) where eqCond x y := .feq x y
+instance : EqCond F (Expression F) F (Expression F) where eqCond x y := .feq x y
+instance [NatCast F] : EqCond (Expression F) ℕ F (Expression F) where eqCond x n := .feq x (n : F)
+instance [NatCast F] : EqCond ℕ (Expression F) F (Expression F) where eqCond n x := .feq (n : F) x
 
 /-! ## Index access notation for .listGet -/
 
@@ -167,7 +199,7 @@ lemma evalList_map_vector_expr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ
     FExprOver.evalList ctx i (v.toList.map FExpr.expr) = if hi : i < n then v[i].eval ctx.env else 0 := by
   induction v using Vector.induct generalizing i with
   | nil => simp [FExprOver.evalList]
-  | cons hd tl ih => cases i <;> simp_all [FExprOver.evalList, FExprOver.eval, WitgenEnv.readVar_main]
+  | cons hd tl ih => cases i <;> simp_all [FExprOver.evalList, FExprOver.eval, WitgenEnv.readVar_eq]
 
 @[circuit_norm]
 lemma evalList_map_vector_fexpr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (FExpr F) n) (i : ℕ) :
@@ -187,6 +219,10 @@ def VExpr.range (n : ℕ) (body : NExpr F → FExpr F) : VExpr F n :=
 @[circuit_norm]
 theorem VExpr.range_def (n : ℕ) (body : NExpr F → FExpr F) :
     VExpr.range n body = .mapRange n (body .idx) := rfl
+
+end Clean
+
+namespace Witgen
 
 /-! ## Builder monad for stepped programs -/
 
@@ -234,11 +270,19 @@ instance {V : Type} : CoeOut (FExprOver F V) (MOver F V (FExprOver F V)) := ⟨l
 theorem letF_def {V : Type} (e : FExprOver F V) :
     letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
 
+end Witgen
+
+namespace Clean
+
 instance {F: Type} [Field F] : Inhabited (FExpr F) where
   default := .const 0
 
 instance [Field F] {value : TypeMap} [ProvableType value] : Inhabited (value (FExpr F)) where
   default := fromElements default
+
+end Clean
+
+namespace Witgen
 
 namespace MOver
 variable [FiniteField F] {value : TypeMap} [ProvableType value]
@@ -377,6 +421,8 @@ export MOver (eval evalBool evalNat eval_pure toIR toIRScalar toIRLiteral eval_t
 end M
 end Witgen
 
+namespace Clean
+
 /--
 IR-backed prover-only inputs for `GeneralFormalCircuit.WithHint`.
 
@@ -384,7 +430,7 @@ The verifier view is erased to `Unit`; the prover view is a typed witness progra
 against the prover environment. The closure-backed escape hatch is `UnconstrainedNative`.
 -/
 structure Unconstrained (M : TypeMap) (F : Type) where
-  program : Witgen.M F (M (Witgen.FExpr F))
+  program : Witgen.M F (M (FExpr F))
 
 namespace Unconstrained
 variable {value : TypeMap} [ProvableType value]
@@ -424,16 +470,16 @@ instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
     = M.eval := by
   with_unfolding_all rfl
 
-@[circuit_norm]
-def unconstrained (program : Witgen.M F (value (Witgen.FExpr F))) : Var (Unconstrained value) F :=
-  program
 end Unconstrained
 
-export Unconstrained (unconstrained)
+@[circuit_norm]
+def unconstrained {value : TypeMap} [ProvableType value]
+    (program : Witgen.M F (value (FExpr F))) : Var (Unconstrained value) F :=
+  program
 
 /-- IR-backed prover-only Boolean input for `GeneralFormalCircuit.WithHint`. -/
 structure UnconstrainedBool (F : Type) where
-  program : Witgen.M F (Witgen.BExpr F)
+  program : Witgen.M F (BExpr F)
 
 namespace UnconstrainedBool
 open Witgen
@@ -472,16 +518,15 @@ instance : Inhabited (Var UnconstrainedBool F) :=
     = M.evalBool := by
   with_unfolding_all rfl
 
-@[circuit_norm]
-def unconstrainedBool (program : Witgen.M F (Witgen.BExpr F)) : Var UnconstrainedBool F :=
-  program
 end UnconstrainedBool
 
-export UnconstrainedBool (unconstrainedBool)
+@[circuit_norm]
+def unconstrainedBool (program : Witgen.M F (BExpr F)) : Var UnconstrainedBool F :=
+  program
 
 /-- IR-backed prover-only Nat input for `GeneralFormalCircuit.WithHint`. -/
 structure UnconstrainedNat (F : Type) where
-  program : Witgen.M F (Witgen.NExpr F)
+  program : Witgen.M F (NExpr F)
 
 namespace UnconstrainedNat
 open Witgen
@@ -520,9 +565,10 @@ instance : Inhabited (Var UnconstrainedNat F) :=
     = M.evalNat := by
   with_unfolding_all rfl
 
-@[circuit_norm]
-def unconstrainedNat (program : Witgen.M F (Witgen.NExpr F)) : Var UnconstrainedNat F :=
-  program
 end UnconstrainedNat
 
-export UnconstrainedNat (unconstrainedNat)
+@[circuit_norm]
+def unconstrainedNat (program : Witgen.M F (NExpr F)) : Var UnconstrainedNat F :=
+  program
+
+end Clean

@@ -2,6 +2,8 @@ import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Ecc.DoubleAndAdd
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/

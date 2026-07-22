@@ -2,6 +2,8 @@ import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`.
 
@@ -171,7 +173,7 @@ theorem rowValue_spec (B : FixedBase) (s : ℕ) {w : ℕ} (hw : w < 85) :
 base-8 decomposition (`k = s / 8^w % 8`, matching `windowVal` definitionally), and read
 the three window-table columns at the computed index `k`. -/
 def rowProgram (B : FixedBase) (scalar : Var UnconstrainedNat Fp) (w : ℕ) :
-    Witgen.M Fp (CoordsRow (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (CoordsRow (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val

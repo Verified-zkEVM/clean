@@ -23,12 +23,12 @@ inverse algebra), the `Permute.value` 4+28+4 schedule, and the sponge/hash value
 composition are consumed directly from there.
 -/
 
-namespace Halo2.Ironwood.Poseidon
+namespace Zcash.Circuits.Poseidon
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Poseidon (pow5)
-open Halo2.Ironwood.Poseidon.Permute (State)
-open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (mds mdsInv)
+open Halo2
+open Poseidon (pow5)
+open Poseidon.Permute (State)
+open Poseidon.Permute.P128Pow5T3 (mds mdsInv)
 
 /-- Rust `Pow5Config` (`pow5.rs:21-35`), width-3/rate-2: the three state advices, the
 `partial_sbox` advice, the `rc_a`/`rc_b` fixed triples, and the three round selectors. -/
@@ -122,4 +122,4 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
   createGate (padAndAddGate cfg)
   return cfg
 
-end Halo2.Ironwood.Poseidon
+end Zcash.Circuits.Poseidon

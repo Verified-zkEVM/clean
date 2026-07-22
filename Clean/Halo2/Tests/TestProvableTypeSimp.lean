@@ -7,7 +7,7 @@ pattern the confluence claims depend on. Companion to main Clean's `TestProvable
 -/
 
 namespace Halo2.ProvableTypeSimp.Test
-open Ironwood
+open Zcash.Circuits
 
 /-- Two-level struct: a `ProvableStruct` whose components are themselves higher-level
 (`Point`) — the Add32 `{x:U32,y:U32}` analogue. -/
@@ -50,7 +50,7 @@ example (env : Placed Environment Fp) (v : Point (AssignedCell Fp)) (out : Point
   exact h.1
 
 -- 4. Opaque `eval = eval` between two structs is a row-level fact: left folded, as `eval`
--- (NOT flattened to `ProvableType.eval`). `provable_type_simp` is intentionally a no-op here
+-- (NOT flattened to `ProvableType.Halo2.eval`). `provable_type_simp` is intentionally a no-op here
 -- — that no-op is the assertion that the opaque value keeps the `eval` normal form.
 set_option linter.unusedTactic false in
 example (env : Placed Environment Fp) (u v : Point (AssignedCell Fp))
@@ -71,12 +71,12 @@ example (a b c d : AssignedCell Fp) (env : Placed Environment Fp)
 A `ProvableStruct` literal with a `Vector (AssignedCell F) n` field decomposes through the
 vector field: the plain `Eval` synthesis cannot recover `M = fields n` from the raw `Vector`
 type, so the literal simproc reads the component's `M` off the derived `components` list. Before
-the fix the whole literal stayed folded as `ProvableStruct.eval …` (the `MulIncomplete`
+the fix the whole literal stayed folded as `ProvableStruct.Halo2.eval …` (the `MulIncomplete`
 `output_eval_fields` hand-lemma existed only to work around that). -/
 
 -- 5a. The vector-field literal decomposes to the record of per-field evals; the vector field
 -- becomes a folded per-field `Eval.eval` (`Value (fields n)`, i.e. `Vector F n`), never a bailed
--- whole-struct `ProvableStruct.eval` atom.
+-- whole-struct `ProvableStruct.Halo2.eval` atom.
 example (env : Placed Environment Fp) (a : AssignedCell Fp) (v : Vector (AssignedCell Fp) 3) :
     eval env (⟨a, v⟩ : VecStruct 3 (AssignedCell Fp))
       = ⟨eval env a, Eval.eval (Var := (fields 3) (AssignedCell Fp)) env v⟩ := by

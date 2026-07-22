@@ -12,10 +12,10 @@ Reference (ported from actual Rust, not memory):
   `a'`/`b2_c'` shifts — fourteen constraints in the source's exact order.
 -/
 
-namespace Halo2.Ironwood.CommitIvk
+namespace Zcash.Circuits.CommitIvk
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (tP)
+open Halo2
+
 
 /-- Rust `bool_check` (`utilities.rs:141-143`): `v · (1 − v)`. -/
 def boolCheck (v : Expression Fp Query) : Expression Fp Query :=
@@ -76,4 +76,4 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
-end Halo2.Ironwood.CommitIvk
+end Zcash.Circuits.CommitIvk

@@ -1,5 +1,7 @@
 import Clean.Gadgets.ByteLookup
 
+open Clean
+
 namespace Gadgets
 inductive Byte (F : Type) where
   | private mk : (Variable F) → Byte F
@@ -9,7 +11,7 @@ variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime] [Fact (p > 512)]
 
 def var (b : Byte (F p)) := Expression.var b.1
 
-def witness (e : Witgen.FExpr (F p)) := do
+def witness (e : FExpr (F p)) := do
   let x ← witnessVar (.ofFExpr e)
   lookup ByteTable (.var x)
   return Byte.mk x

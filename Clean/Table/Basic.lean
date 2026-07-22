@@ -9,6 +9,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Field
 import Clean.Table.SimpTable
 
+open Clean
+
 /--
   A row is StructuredElement that contains field elements.
 -/
@@ -398,7 +400,7 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
     let ctx' : TableContext W S F := {
       inputSize := ctx.inputSize,
       circuit := ctx.circuit ++ [.witness (size S) (.ir []
-        (Witgen.VExpr.range (size S) fun i => .envGet (((ctx.offset : ℕ) : Witgen.NExpr F) + i)))],
+        (VExpr.range (size S) fun i => .envGet (((ctx.offset : ℕ) : NExpr F) + i)))],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')

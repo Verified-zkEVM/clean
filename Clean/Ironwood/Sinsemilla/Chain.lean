@@ -23,21 +23,24 @@ piece's cells.
 Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.Chain
+open ProvableType.Halo2 (eval_cells)
+open ProvableStruct.Halo2 (eval_eq_eval eval_cells_eq_eval eval_cells_eq_eval_prover)
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.DoubleAndAdd (xR yA)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
-open Halo2.Ironwood.Specs (K)
-open Halo2.Ironwood.Sinsemilla (HVec)
-open Halo2.Ironwood.Sinsemilla
+namespace Zcash.Circuits.Sinsemilla.Chain
+
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.DoubleAndAdd (xR yA)
+open Specs.Sinsemilla (Generators step hashToPoint)
+open Specs (K)
+open Sinsemilla (HVec)
+open Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
    pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
    chain_eq_suffix_sum step_coordinates_of_constraints step_honest accAfter_eq_chain)
-open Halo2.Ironwood.Sinsemilla.HashPiece
+open Sinsemilla.HashPiece
   (Config sinsemillaGate qS3Expr yAExpr xRExpr qS2Boundary qS2Boundary_run
-   State reads readState cellAt cellVec)
+   State reads readState cellVec)
 
 /-! ## Value-level chain algebra -/
 
@@ -185,7 +188,7 @@ def pieceSlot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp →
     (cfg : Config) (pieces : Vector (AssignedCell Fp) ns.length) (i base : ℕ) :
     RegionCircuit Fp Unit := do
   let prev ← readState cfg (base - 1)
-  let xEnter ← cellAt cfg.xA base
+  let xEnter ← HashPiece.cellAt cfg.xA base
   let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
       (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base (pieces[i]!)
   let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
@@ -261,10 +264,10 @@ private theorem link_step (G : Generators) (n : ℕ) (isFinal : Bool) (ms : ℕ 
       ∀ B, hashToPoint G.S A ((List.range (n + 1)).map ms) = some B →
         next.xA = B.x ∧ 2 * B.y = enterYA isFinal next := by
   intro A hAon hAx hAyA B hB
-  obtain ⟨B0, hB0⟩ := Halo2.Ironwood.Sinsemilla.HashPiece.range_prefix_some G.S A ms hB
+  obtain ⟨B0, hB0⟩ := Sinsemilla.HashPiece.range_prefix_some G.S A ms hB
     (show n ≤ n + 1 by omega)
   have hstep : step G.S (ms n) B0 = some B :=
-    Halo2.Ironwood.Sinsemilla.HashPiece.prefix_step_some G.S A ms hB0 hB
+    Sinsemilla.HashPiece.prefix_step_some G.S A ms hB0 hB
   obtain ⟨hlast_xA, hlast_yA⟩ := hchain_piece A hAon hAx hAyA B0 hB0
   have hlast_yA' := hlast_yA
   simp only [yA, xR] at hlast_yA'
@@ -327,7 +330,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
 
   synthesize cfg base (piece : AssignedCell Fp) := do
     let prev ← readState cfg (base - 1)
-    let xEnter ← cellAt cfg.xA base
+    let xEnter ← HashPiece.cellAt cfg.xA base
     let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
         (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base piece
     pure ()
@@ -420,38 +423,39 @@ def zsFam (zV : ℕ → Fp) : (ns : List ℕ) → (base : ℕ) → HVec (zLength
 
 /-- `zsFam`'s head vector (the first piece's running sums). -/
 theorem zsFam_head (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
-    Halo2.Ironwood.Sinsemilla.HVec.head (zsFam zV (n :: rest) base)
+    Sinsemilla.HVec.head (zsFam zV (n :: rest) base)
       = Vector.ofFn (fun r : Fin (n + 1) => zV (base + r.val)) :=
-  Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _
+  Sinsemilla.HVec.head_cons _ _
 
 /-- `zsFam`'s tail (the remaining pieces' running sums). -/
 theorem zsFam_tail (zV : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
-    Halo2.Ironwood.Sinsemilla.HVec.tail (zsFam zV (n :: rest) base)
+    Sinsemilla.HVec.tail (zsFam zV (n :: rest) base)
       = zsFam zV rest (base + (n + 1)) :=
-  Halo2.Ironwood.Sinsemilla.HVec.tail_cons _ _
+  Sinsemilla.HVec.tail_cons _ _
 
 /-- `zsFam`'s second piece's running sums (the composed tail-head view). -/
 theorem zsFam_tail_head (zV : ℕ → Fp) (n m : ℕ) (rest : List ℕ) (base : ℕ) :
-    Halo2.Ironwood.Sinsemilla.HVec.head
-        (Halo2.Ironwood.Sinsemilla.HVec.tail (zsFam zV (n :: m :: rest) base))
+    Sinsemilla.HVec.head
+        (Sinsemilla.HVec.tail (zsFam zV (n :: m :: rest) base))
       = Vector.ofFn (fun r : Fin (m + 1) => zV (base + (n + 1) + r.val)) :=
-  (congrArg Halo2.Ironwood.Sinsemilla.HVec.head (zsFam_tail zV n (m :: rest) base)).trans
+  (congrArg Sinsemilla.HVec.head (zsFam_tail zV n (m :: rest) base)).trans
     (zsFam_head zV m rest (base + (n + 1)))
 
 /-- Flat eval of a `fields`-vector of cells is the pointwise cell eval. -/
 theorem eval_fields_eq_map (place : RegionIndex → ℕ) (env : Environment Fp) {k : ℕ}
     (v : Vector (AssignedCell Fp) k) :
-    ProvableType.eval (M := fields k) place env v = v.map (AssignedCell.eval place env) := by
-  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements]
+    ProvableType.Halo2.eval (M := fields k) place env v =
+      v.map (AssignedCell.eval place env) := by
+  simp only [ProvableType.Halo2.eval, ProvableType.toElements, ProvableType.fromElements]
 
 /-- Flat eval distributes over `HVec.cons`. -/
 private theorem hvec_eval_cons (place : RegionIndex → ℕ) (env : Environment Fp)
     {n : ℕ} {ls : List ℕ}
     (a : Vector (AssignedCell Fp) n) (b : HVec ls (AssignedCell Fp)) :
-    ProvableType.eval (M := HVec (n :: ls)) place env (HVec.cons a b)
-      = HVec.cons (ProvableType.eval (M := fields n) place env a)
-          (ProvableType.eval (M := HVec ls) place env b) := by
-  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+    ProvableType.Halo2.eval (M := HVec (n :: ls)) place env (HVec.cons a b)
+      = HVec.cons (ProvableType.Halo2.eval (M := fields n) place env a)
+          (ProvableType.Halo2.eval (M := HVec ls) place env b) := by
+  simp only [ProvableType.Halo2.eval, ProvableType.toElements, ProvableType.fromElements,
     HVec.cons]
   exact congrArg HVec.mk (Vector.map_append ..)
 
@@ -460,16 +464,17 @@ unfold `zLengths`). -/
 theorem hvec_eval_cons_zl (place : RegionIndex → ℕ) (env : Environment Fp)
     {n : ℕ} {rest : List ℕ}
     (a : Vector (AssignedCell Fp) (n + 1)) (b : HVec (zLengths rest) (AssignedCell Fp)) :
-    ProvableType.eval (M := HVec (zLengths (n :: rest))) place env (HVec.cons a b)
-      = HVec.cons (ProvableType.eval (M := fields (n + 1)) place env a)
-          (ProvableType.eval (M := HVec (zLengths rest)) place env b) :=
+    ProvableType.Halo2.eval (M := HVec (zLengths (n :: rest))) place env
+        (HVec.cons a b)
+      = HVec.cons (ProvableType.Halo2.eval (M := fields (n + 1)) place env a)
+          (ProvableType.Halo2.eval (M := HVec (zLengths rest)) place env b) :=
   hvec_eval_cons place env a b
 
 /-- The flat eval of the positional running-sum cells is the `zsFam` family. -/
 private theorem eval_zsCellsVal_flat (cfg : Config) (self : RegionIndex)
     (env : Placed Environment Fp) :
     ∀ (ns : List ℕ) (off : ℕ),
-      ProvableType.eval (M := HVec (zLengths ns)) env.place env.env
+      ProvableType.Halo2.eval (M := HVec (zLengths ns)) env.place env.env
           (zsCellsVal cfg self ns off)
         = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
   intro ns
@@ -503,7 +508,7 @@ theorem eval_zsCellsVal (cfg : Config) (self : RegionIndex)
     (env : Placed Environment Fp) (ns : List ℕ) (off : ℕ) :
     (eval env (zsCellsVal cfg self ns off) : HVec (zLengths ns) Fp)
       = zsFam (fun r => env.env.advice cfg.bits ((env.place self + r : ℕ) : ℤ)) ns off := by
-  rw [ProvableType.eval_cells (M := HVec (zLengths ns))]
+  rw [eval_cells (M := HVec (zLengths ns))]
   exact eval_zsCellsVal_flat cfg self env ns off
 
 /-! ## The chain contract -/
@@ -562,8 +567,8 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         pointX = B.x ∧ pointY = B.y := by
   intro A hAon hAx hAyA B hB
   have hAvalid : A.Valid := Or.inl hAon
-  have hA0 : A ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hAon
-  rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hB
+  have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
+  rw [Specs.Sinsemilla.hashToPoint_append] at hB
   cases hpre : hashToPoint G.S A ((List.range (n + 1)).map ms) with
   | none => rw [hpre] at hB; simp at hB
   | some B₁ =>
@@ -571,7 +576,7 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
     replace hB : hashToPoint G.S B₁ tailChunks = some B := hB
     rw [List.range_succ] at hpre
     simp only [List.map_append, List.map_cons, List.map_nil] at hpre
-    rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat] at hpre
+    rw [Specs.Sinsemilla.hashToPoint_concat] at hpre
     cases hpre0 : hashToPoint G.S A ((List.range n).map ms) with
     | none => rw [hpre0] at hpre; simp at hpre
     | some B₀ =>
@@ -599,15 +604,15 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
         (by linear_combination hsec')
         (by linear_combination hyck - 4 * last.lambda2 * hlast_xA - 2 * hlast_yA)
       have hB₀valid : B₀.Valid :=
-        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hAvalid
+        Specs.Sinsemilla.hashToPoint_valid hAvalid
           (fun m hm => by
             rcases List.mem_map.mp hm with ⟨r, hr, rfl⟩
             exact hms r)
           hpre0
       have hB₁valid : B₁.Valid :=
-        Halo2.Ironwood.Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
+        Specs.Sinsemilla.step_valid hB₀valid (hms n) hpre
       have hB₁0 : B₁ ≠ 0 :=
-        Halo2.Ironwood.Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
+        Specs.Sinsemilla.step_ne_zero hB₀valid (hms n) hpre
       have hB₁on : B₁.OnCurve := by
         rcases hB₁valid with h | h
         · exact h
@@ -616,33 +621,33 @@ theorem soundness_aux (G : Generators) (n : ℕ) (isFinal : Bool)
 
 /-- Literal-eval bridges for the output record, at the `ProvableStruct`/`ProvableType`
 eval heads (the old-Chain-proven shape; the `Eval`-head spelling is bridged by a manual
-`ProvableStruct.eval_cells_eq_eval` rw at the reduced literal). -/
+`eval_cells_eq_eval` rw at the reduced literal). -/
 private theorem output_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     (p : Point (AssignedCell Fp)) (f : DoubleAndAddRow (AssignedCell Fp)) :
-    ProvableStruct.eval place env ({ point := p, first := f } : Output (AssignedCell Fp))
-      = { point := ProvableType.eval place env p, first := ProvableType.eval place env f } := by
+    ProvableStruct.Halo2.eval place env ({ point := p, first := f } : Output (AssignedCell Fp))
+      = { point := ProvableType.Halo2.eval place env p, first := ProvableType.Halo2.eval place env f } := by
   with_unfolding_all rfl
 
 theorem point_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     (a b : AssignedCell Fp) :
-    ProvableType.eval place env ({ x := a, y := b } : Point (AssignedCell Fp))
+    ProvableType.Halo2.eval place env ({ x := a, y := b } : Point (AssignedCell Fp))
       = { x := AssignedCell.eval place env a, y := AssignedCell.eval place env b } := by
   with_unfolding_all rfl
 
 private theorem row_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     (a b c d : AssignedCell Fp) :
-    ProvableType.eval place env ({ xA := a, xP := b, lambda1 := c, lambda2 := d }
+    ProvableType.Halo2.eval place env ({ xA := a, xP := b, lambda1 := c, lambda2 := d }
         : DoubleAndAddRow (AssignedCell Fp))
       = { xA := AssignedCell.eval place env a, xP := AssignedCell.eval place env b,
           lambda1 := AssignedCell.eval place env c,
           lambda2 := AssignedCell.eval place env d } := by
-  rw [ProvableStruct.eval_eq_eval]
+  rw [eval_eq_eval]
   with_unfolding_all rfl
 
 theorem inputs_eval_literal (place : RegionIndex → ℕ) (env : Environment Fp)
     {k : ℕ} (p : Vector (AssignedCell Fp) k) :
-    ProvableStruct.eval place env ({ pieces := p } : Inputs k (AssignedCell Fp))
-      = { pieces := ProvableType.eval (M := fields k) place env p } := by
+    ProvableStruct.Halo2.eval place env ({ pieces := p } : Inputs k (AssignedCell Fp))
+      = { pieces := ProvableType.Halo2.eval (M := fields k) place env p } := by
   with_unfolding_all rfl
 
 private theorem slotReads_eval_literal (env : Placed Environment Fp) {m : ℕ}
@@ -650,13 +655,13 @@ private theorem slotReads_eval_literal (env : Placed Environment Fp) {m : ℕ}
     (nx : DoubleAndAddRow (AssignedCell Fp)) (y : AssignedCell Fp) :
     (eval env ({ prev := p, first := f, last := l, zs := zs, next := nx, yIn := y }
         : SlotReads m (AssignedCell Fp)) : SlotReads m Fp)
-      = { prev := ProvableType.eval env.place env.env p,
-          first := ProvableType.eval env.place env.env f,
-          last := ProvableType.eval env.place env.env l,
-          zs := ProvableType.eval (M := fields m) env.place env.env zs,
-          next := ProvableType.eval env.place env.env nx,
+      = { prev := ProvableType.Halo2.eval env.place env.env p,
+          first := ProvableType.Halo2.eval env.place env.env f,
+          last := ProvableType.Halo2.eval env.place env.env l,
+          zs := ProvableType.Halo2.eval (M := fields m) env.place env.env zs,
+          next := ProvableType.Halo2.eval env.place env.env nx,
           yIn := AssignedCell.eval env.place env.env y } := by
-  rw [ProvableStruct.eval_cells_eq_eval]
+  rw [eval_cells_eq_eval]
   with_unfolding_all rfl
 
 /-- The flattened eval of the slot neighborhood (all cells named, rows explicit). -/
@@ -771,7 +776,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
     refine ⟨rfl, trivial, ?_⟩
     intro A hAon hAx hAyA B hB
     rw [show chunksOf msF [] i0 = [] from rfl,
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil] at hB
+      Specs.Sinsemilla.hashToPoint_nil] at hB
     obtain rfl : A = B := Option.some.inj hB
     simp only [List.isEmpty_nil, enterYA, if_true] at hAyA
     refine ⟨?_, ?_⟩
@@ -856,7 +861,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
         simpa only [List.isEmpty_cons, enterYA, Bool.false_eq_true, if_false] using hAyA
       rw [show chunksOf msF (n :: rest) i0
           = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
-        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hB
+        Specs.Sinsemilla.hashToPoint_append] at hB
       cases hpre : hashToPoint G.S A ((List.range (n + 1)).map (msF i0)) with
       | none =>
         rw [hpre] at hB
@@ -865,15 +870,15 @@ private theorem chain_fold (G : Generators) (N : ℕ)
         rw [hpre] at hB
         replace hB : hashToPoint G.S B1 (chunksOf msF rest (i0 + 1)) = some B := hB
         have hAvalid : A.Valid := Or.inl hAon
-        have hA0 : A ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hAon
+        have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
         have hpre_lt : ∀ m ∈ (List.range (n + 1)).map (msF i0), m < 2 ^ K := by
           intro m hm
           rcases List.mem_map.mp hm with ⟨t, ht, rfl⟩
           exact hms i0 t
         have hB1valid : B1.Valid :=
-          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hAvalid hpre_lt hpre
+          Specs.Sinsemilla.hashToPoint_valid hAvalid hpre_lt hpre
         have hB10 : B1 ≠ 0 :=
-          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hpre_lt hpre
+          Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hpre_lt hpre
         have hB1on : B1.OnCurve := by
           rcases hB1valid with h | h
           · exact h
@@ -968,9 +973,9 @@ private theorem sufChunks_drop_succ (pv : ℕ → Fp) (ns : List ℕ) (k : ℕ) 
 private theorem output_eval_literal_prover (env : Placed ProverEnvironment Fp)
     (p : Point (AssignedCell Fp)) (f : DoubleAndAddRow (AssignedCell Fp)) :
     (eval env ({ point := p, first := f } : Output (AssignedCell Fp)) : Output Fp)
-      = { point := ProvableType.eval env.place env.env.toEnvironment p,
-          first := ProvableType.eval env.place env.env.toEnvironment f } := by
-  rw [ProvableStruct.eval_cells_eq_eval_prover]
+      = { point := ProvableType.Halo2.eval env.place env.env.toEnvironment p,
+          first := ProvableType.Halo2.eval env.place env.env.toEnvironment f } := by
+  rw [eval_cells_eq_eval_prover]
   with_unfolding_all rfl
 
 /-- The slot-`k` entering-`y` VALUE (the `yaIn` program for slot 0, the positional
@@ -1008,7 +1013,7 @@ instance elaborated (G : Generators) (ns : List ℕ)
               (qS2Boundary (decide (i = ns.length - 1)))
             (sinsemillaGate cfg).enable (base + ns.getD i 0))
         let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
-        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let xExit ← HashPiece.cellAt cfg.xA (offset + prefixRows ns ns.length)
         let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
           (finalYAWit ex.row xExit)
         let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
@@ -1040,7 +1045,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         (sinsemillaGate cfg).enable (base + ns.getD i 0))
     -- the trailing dummy row: the final `y_a` into `λ₁`, dummy `λ₂`/`x_p`
     let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
-    let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+    let xExit ← HashPiece.cellAt cfg.xA (offset + prefixRows ns ns.length)
     let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
       (finalYAWit ex.row xExit)
     let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
@@ -1112,13 +1117,13 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         beta_reduce
         simp only [Nat.zero_add, dif_pos j.isLt]
         have hzsv := hzsF j
-        rw [ProvableType.eval_cells (M := fields (ns.getD j.val 0 + 1)),
+        rw [eval_cells (M := fields (ns.getD j.val 0 + 1)),
           eval_fields_eq_map] at hzsv
         refine ⟨?_, ?_, hxPF j, hyPF j, hchF j⟩
         · -- the piece value
           have hpieces_eq : input.pieces
               = input_var.pieces.map (fun c => AssignedCell.eval env.place env.env c) := by
-            rw [← h_input, ProvableStruct.eval_cells_eq_eval]
+            rw [← h_input, eval_cells_eq_eval]
             cases input_var with
             | mk pv =>
               rw [inputs_eval_literal]
@@ -1164,7 +1169,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
       HashPiece.output_readState,
       output_assignAdvice] at h_output
-    rw [ProvableStruct.eval_cells_eq_eval, output_eval_literal, point_eval_literal,
+    rw [eval_cells_eq_eval, output_eval_literal, point_eval_literal,
       row_eval_literal] at h_output
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
       Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
@@ -1194,7 +1199,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     have hpieces_eq : input.pieces
         = input_var.pieces.map
             (fun c => AssignedCell.eval env.place env.env.toEnvironment c) := by
-      rw [← h_input, ProvableStruct.eval_cells_eq_eval_prover]
+      rw [← h_input, eval_cells_eq_eval_prover]
       cases input_var with
       | mk pv =>
         rw [inputs_eval_literal]
@@ -1235,7 +1240,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         intro hm1
         obtain ⟨Cm, hCon, hCx, hCy, hCchain⟩ := ih (by omega)
         rw [sufChunks_drop_succ _ ns m (by omega),
-          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hCchain
+          Specs.Sinsemilla.hashToPoint_append] at hCchain
         cases hsplit : hashToPoint G.S Cm ((List.range (ns.getD m 0 + 1)).map
             (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
               (input_var.pieces[m]!)))) with
@@ -1277,7 +1282,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           obtain ⟨hfy, hnx, hlsec, hlnyA⟩ := hfacts
           -- Dm is on-curve
           have hCmValid : Cm.Valid := Or.inl hCon
-          have hCm0 : Cm ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hCon
+          have hCm0 : Cm ≠ 0 := Point.ne_zero_of_onCurve hCon
           have hwords_lt : ∀ w ∈ (List.range (ns.getD m 0 + 1)).map
               (pieceWord (AssignedCell.eval env.place env.env.toEnvironment
                 (input_var.pieces[m]!))), w < 2 ^ K := by
@@ -1285,9 +1290,9 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             rcases List.mem_map.mp hw with ⟨t, ht, rfl⟩
             exact pieceWord_lt _ t
           have hDmValid : Dm.Valid :=
-            Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hCmValid hwords_lt hsplit
+            Specs.Sinsemilla.hashToPoint_valid hCmValid hwords_lt hsplit
           have hDm0 : Dm ≠ 0 :=
-            Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_ne_zero hCmValid hCm0 hwords_lt hsplit
+            Specs.Sinsemilla.hashToPoint_ne_zero hCmValid hCm0 hwords_lt hsplit
           have hDmOn : Dm.OnCurve := by
             rcases hDmValid with h | h
             · exact h
@@ -1342,7 +1347,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       simp only [Fin.val_mk]
       obtain ⟨Ci, hCon, hCx, hCy, hCchain⟩ := hthread m (le_of_lt hm)
       rw [sufChunks_drop_succ _ ns m hm,
-        Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hCchain
+        Specs.Sinsemilla.hashToPoint_append] at hCchain
       cases hsplit : hashToPoint G.S Ci
           ((List.range (ns.getD m 0 + 1)).map (pieceWord
             (AssignedCell.eval env.place env.env.toEnvironment
@@ -1537,7 +1542,7 @@ theorem circuit_output_eval (G : Generators) (ns : List ℕ)
               (qS2Boundary (decide (i = ns.length - 1)))
             (sinsemillaGate cfg).enable (base + ns.getD i 0))
         let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
-        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let xExit ← HashPiece.cellAt cfg.xA (offset + prefixRows ns ns.length)
         let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
           (finalYAWit ex.row xExit)
         let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
@@ -1546,8 +1551,8 @@ theorem circuit_output_eval (G : Generators) (ns : List ℕ)
         return ({ point := { x := xExit, y := yFin }, first := first.row }
           : Output (AssignedCell Fp))).output self) : Value Output Fp) = _
   simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-    HashPiece.output_readState, Halo2.output_cellAt, output_assignAdvice]
-  rw [ProvableStruct.eval_cells_eq_eval, output_eval_literal, point_eval_literal,
+    HashPiece.output_readState, HashPiece.output_cellAt, output_assignAdvice]
+  rw [eval_cells_eq_eval, output_eval_literal, point_eval_literal,
     row_eval_literal]
   simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
@@ -1577,7 +1582,7 @@ theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
               (qS2Boundary (decide (i = ns.length - 1)))
             (sinsemillaGate cfg).enable (base + ns.getD i 0))
         let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
-        let xExit ← cellAt cfg.xA (offset + prefixRows ns ns.length)
+        let xExit ← HashPiece.cellAt cfg.xA (offset + prefixRows ns ns.length)
         let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
           (finalYAWit ex.row xExit)
         let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
@@ -1586,7 +1591,7 @@ theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
         return ({ point := { x := xExit, y := yFin }, first := first.row }
           : Output (AssignedCell Fp))).output self) : Value Output Fp) = _
   simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-    HashPiece.output_readState, Halo2.output_cellAt, output_assignAdvice]
+    HashPiece.output_readState, HashPiece.output_cellAt, output_assignAdvice]
   rw [output_eval_literal_prover, point_eval_literal, row_eval_literal]
   simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
@@ -1603,4 +1608,4 @@ theorem output_point_y (G : Generators) (ns : List ℕ) (yaIn : Placed Environme
     ((circuit G ns yaIn).output cfg offset iv self).point.y
       = AssignedCell.of self (offset + prefixRows ns ns.length) cfg.lambda1 := rfl
 
-end Halo2.Ironwood.Sinsemilla.Chain
+end Zcash.Circuits.Sinsemilla.Chain

@@ -15,7 +15,9 @@ This module mirrors `halo2_poseidon/src/fp.rs` for the Pallas-base constants use
 `halo2_poseidon::P128Pow5T3`.
 -/
 
-namespace Halo2.Ironwood.Poseidon.Permute
+namespace Zcash.Circuits.Poseidon.Permute
+
+open Clean
 
 /-- Width-3 Poseidon state used by Orchard's `P128Pow5T3`. -/
 structure State (F : Type) where
@@ -243,4 +245,4 @@ theorem mds_mul_mdsInv_apply (i : Fin 3) (n0 n1 n2 : Fp) :
 
 end P128Pow5T3
 
-end Halo2.Ironwood.Poseidon.Permute
+end Zcash.Circuits.Poseidon.Permute

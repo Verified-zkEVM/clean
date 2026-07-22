@@ -1,5 +1,7 @@
 import Clean.Circuit
 
+open Clean
+
 /-!
 This regression test covers a mixed `CircuitType` input: one ordinary provable
 field and one prover-only field-dependent hint. The important proof ergonomics
@@ -76,7 +78,7 @@ def parent : GeneralFormalCircuit F field field where
     -- evaluated by citing the folded-away IR equations.
     unfold Witgen.MOver.eval
     simp only [Witgen.evalSteps, Witgen.eval_field, Witgen.FExprOver.eval,
-      Witgen.WitgenEnv.readVar_main, h_input]
+      WitgenEnv.readVar_eq, h_input]
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
 
@@ -126,6 +128,6 @@ def boolNatParent : GeneralFormalCircuit F field field where
     -- `evalBool`/`evalNat` atoms by citing the IR equations.
     unfold Witgen.MOver.evalBool Witgen.MOver.evalNat
     simp only [Witgen.BExprOver.eval, Witgen.NExprOver.eval, Witgen.FExprOver.eval,
-      Witgen.WitgenEnv.readVar_main, h_input, Bool.and_true, decide_eq_true_eq, and_self]
+      WitgenEnv.readVar_eq, h_input, Bool.and_true, decide_eq_true_eq, and_self]
 
 end TestMixedCircuitType

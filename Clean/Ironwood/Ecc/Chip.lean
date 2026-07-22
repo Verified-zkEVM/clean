@@ -17,9 +17,10 @@ full-width / short / base-field-element wrappers.
 Reference: `halo2_gadgets/src/ecc/chip.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
 
-open Halo2.Ironwood (Fp)
+open Halo2
+
 
 structure EccConfig where
   -- Witness point.
@@ -66,4 +67,4 @@ def configure (advices : Fin 10 → Column .advice)
   return { witnessPoint, addIncomplete, add, mul, mulFixedFull, mulFixedShort,
            mulFixedBaseField }
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

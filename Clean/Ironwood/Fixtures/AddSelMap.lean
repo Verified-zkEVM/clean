@@ -3,12 +3,12 @@
 --   cargo test --release -p halo2_gadgets --lib ecc::chip::layout_dump::dump_layout_add -- --nocapture
 import Clean.Ironwood.Fixtures.FixtureTypes
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 def addSelMap : SelCompressMap :=
   { newFixedCols := 1,
     entries := [(0, ⟨0, 1, 1⟩)] }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

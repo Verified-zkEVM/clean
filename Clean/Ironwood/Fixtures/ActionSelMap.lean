@@ -2,9 +2,9 @@
 -- Selector-compression map for the full Orchard Action circuit. Do not edit by hand.
 import Clean.Ironwood.Fixtures.FixtureTypes
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 def actionSelMap : SelCompressMap :=
   { newFixedCols := 15,
@@ -65,4 +65,4 @@ def actionSelMap : SelCompressMap :=
       (54, ⟨28, 7, 6⟩),
       (55, ⟨28, 7, 7⟩)] }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

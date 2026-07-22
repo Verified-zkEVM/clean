@@ -28,11 +28,11 @@ product on a two-region circuit:
 `#guard` equality is fine (D1).
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test.LayoutAdd
+namespace Zcash.Circuits.Fixtures.Test.LayoutAdd
 
-open Ironwood (Fp)
-open Ironwood.Ecc.Add (Config add addFormal)
-open Halo2.Ironwood.Fixtures.Layout
+open Halo2
+open Ecc.Add (Config add addFormal)
+open Fixtures.Layout
 
 /-- The harness config plus the columns `synthesize` needs for witnessing — the same
 `configure` chain as `TestVkMatchAdd.addProgram`, returning the advice columns too. -/
@@ -95,4 +95,4 @@ def myFixed : List (ℕ × ℕ × ℕ) :=
 #guard mySigma = addLayout.sigma
 #guard myFixed = sortFixed addLayout.fixed
 
-end Halo2.Ironwood.Fixtures.Test.LayoutAdd
+end Zcash.Circuits.Fixtures.Test.LayoutAdd

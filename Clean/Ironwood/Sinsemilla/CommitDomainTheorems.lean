@@ -24,7 +24,7 @@ parameters with the properties the proofs need (`Q.OnCurve`, `Generators.S_ne_ze
 `FixedBase`).
 -/
 
-namespace Halo2.Ironwood.Sinsemilla
+namespace Zcash.Circuits.Sinsemilla
 
 open CompElliptic.Curves.Pasta
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -37,4 +37,4 @@ namespace CommitDomain
 
 end CommitDomain
 
-end Halo2.Ironwood.Sinsemilla
+end Zcash.Circuits.Sinsemilla

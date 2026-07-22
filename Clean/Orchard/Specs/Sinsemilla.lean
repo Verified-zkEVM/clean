@@ -2,6 +2,8 @@ import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Specs.CompElliptic.Curves.Pasta
 import Clean.Orchard.Specs.Bitrange
 
+open Clean
+
 /-!
 # Sinsemilla value-level specification
 

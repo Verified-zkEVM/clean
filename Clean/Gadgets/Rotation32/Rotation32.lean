@@ -5,6 +5,8 @@ import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.Rotation32.Rotation32Bits
 import Clean.Circuit.Provable
 
+open Clean
+
 namespace Gadgets.Rotation32
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]

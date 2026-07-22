@@ -2,7 +2,9 @@ import Clean.Halo2
 import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
+
+open Halo2
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/ecc/chip/add_incomplete.rs`
@@ -52,7 +54,7 @@ def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp 
 ## The gadget
 
 Input is the pair of input points (P, Q). We use a small `ProvableStruct` for it, matching
-the repo convention (`Halo2.Ironwood.Ecc.AddIncomplete.Input`). The verifier assumptions and spec
+the repo convention (`Ecc.AddIncomplete.Input`). The verifier assumptions and spec
 express what the Rust gadget guarantees: incomplete addition is only correct when both
 inputs are non-identity on-curve points and `x_p ≠ x_q` (the Rust `assign_region` errors on
 `P = O`, `Q = O`, or `x_p = x_q`).
@@ -118,17 +120,17 @@ def add : FormalRegionCircuit Fp
     simp only [hcpx, hcpy, hcqx, hcqy] at hpoly1 hpoly2
     obtain ⟨hpx_curve, hqx_curve, hxne⟩ := hA
     -- formulate gate polys in terms of `nondegenerateAdd`
-    have hsum : ⟨output_x, output_y⟩ = Halo2.Ironwood.Point.nondegenerateAdd
+    have hsum : ⟨output_x, output_y⟩ = Point.nondegenerateAdd
         ⟨input_p_x, input_p_y⟩ ⟨input_q_x, input_q_y⟩ := by
-      grind [Halo2.Ironwood.Point.nondegenerateAdd]
+      grind [Point.nondegenerateAdd]
     rw [hsum]
-    use Halo2.Ironwood.Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne
-    apply Halo2.Ironwood.Point.nondegenerateAdd_eq_add ?_ ?_ hxne
-    exact Halo2.Ironwood.Point.ne_zero_of_onCurve hpx_curve
-    exact Halo2.Ironwood.Point.ne_zero_of_onCurve hqx_curve
+    use Point.nondegenerateAdd_onCurve hpx_curve hqx_curve hxne
+    apply Point.nondegenerateAdd_eq_add ?_ ?_ hxne
+    exact Point.ne_zero_of_onCurve hpx_curve
+    exact Point.ne_zero_of_onCurve hqx_curve
 
   completeness := by
-    circuit_proof_start [gate, Halo2.Ironwood.Point.nondegenerateAdd]
+    circuit_proof_start [gate, Point.nondegenerateAdd]
     -- ══ user-facing half ══
     -- land the `Assumptions` facts on the input coordinates
     obtain ⟨-, -, hxne⟩ := hA
@@ -136,4 +138,4 @@ def add : FormalRegionCircuit Fp
 
 end AddIncomplete
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

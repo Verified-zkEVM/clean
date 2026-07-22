@@ -29,11 +29,11 @@ skeleton, but the word bound comes from the range-check *gate* instead of a tabl
 and the whole `zs` vector is exposed (the `mul_fixed` coords rows and the
 `base_field_elem` canonicity check consume interior running sums). -/
 
-namespace Halo2.Ironwood.DecomposeRunningSum
+namespace Zcash.Circuits.DecomposeRunningSum
 
-open Halo2.Ironwood (Fp)
+open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Utilities.RunningSum (rangeCheckPoly rangeCheckValues InRange
+open Utilities.RunningSum (rangeCheckPoly rangeCheckValues InRange
   rangeCheckPoly_eq_zero_iff)
 
 /-- Rust `RunningSumConfig<F, WINDOW_NUM_BITS>` (lines 48-53): the shared `q_range_check`
@@ -67,7 +67,7 @@ private theorem rangeCheckValues_eq (range : ℕ) :
   simp [rangeCheckValues, List.map_eq_flatMap]
 
 /-- `rangeCheckExpr` evaluates to the donor's `rangeCheckPoly` of the evaluated word —
-the bridge to the `InRange` machinery (`Halo2.Ironwood.Utilities.RunningSum`). -/
+the bridge to the `InRange` machinery (`Utilities.RunningSum`). -/
 theorem eval_rangeCheckExpr (range : ℕ) (word : Expression Fp Query) (f : Query → Fp) :
     (rangeCheckExpr range word).eval f = rangeCheckPoly range (word.eval f) := by
   unfold rangeCheckExpr rangeCheckPoly
@@ -401,4 +401,4 @@ theorem copyDecompose_output (W numWindows : ℕ) (cfg : Config) (o : ℕ)
     (copyDecompose W numWindows).output cfg o input self
       = { zs := Vector.ofFn (fun j => AssignedCell.of self (o + j) cfg.z) } := rfl
 
-end Halo2.Ironwood.DecomposeRunningSum
+end Zcash.Circuits.DecomposeRunningSum

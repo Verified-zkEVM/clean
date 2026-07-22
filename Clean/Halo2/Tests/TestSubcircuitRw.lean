@@ -33,7 +33,9 @@ prove the bundle once (`have pre₀ := ⟨…⟩`) and feed its components to bo
 `chainedParent` below.
 -/
 
-namespace Halo2.Ironwood.Ecc.TestSubcircuitRw
+namespace Zcash.Circuits.Ecc.TestSubcircuitRw
+
+open Halo2
 
 /-! ## Region parent, bare call -/
 
@@ -315,4 +317,4 @@ output is an opaque local, the inputs that used to be deep are shallow by constr
 evidence is `Clean/Ironwood/Ecc/Mul.lean` (`mul`, both directions) and `MulComplete.lean`, which run
 `abstract_outputs` before `subcircuit_rw` and build with ZERO `set_option maxRecDepth`. -/
 
-end Halo2.Ironwood.Ecc.TestSubcircuitRw
+end Zcash.Circuits.Ecc.TestSubcircuitRw

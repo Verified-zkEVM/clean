@@ -4,6 +4,8 @@ import Clean.Orchard.Ecc.Mul.Complete
 import Clean.Orchard.Ecc.Mul.Overflow
 import Clean.Orchard.Ecc.Add
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs::Config::assign`
 (`CircuitVersion::AnchoredBase`).

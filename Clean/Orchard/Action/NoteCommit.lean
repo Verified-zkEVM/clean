@@ -5,6 +5,8 @@ import Clean.Orchard.Specs.Bitrange
 import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 # `gadgets::note_commit` synthesis-level entry
 
@@ -542,7 +544,7 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
     (unconstrained do return input.y)
   let k3 ← witness (input.y.val.bitrange 254 1).toField
   let j ← witness (((input.lsb + k0 * (2 : Fp) : Expression Fp)
-    + (input.y.val.bitrange 10 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp) : Witgen.FExpr Fp))
+    + (input.y.val.bitrange 10 240).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
@@ -919,11 +921,11 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let b ← witness (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp) : Expression Fp)
   let c ← witness (pkdX.val.bitrange 4 250).toField
   let d ← witness (((d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) : Expression Fp)
-    + (v.val.bitrange 8 50).toField * Witgen.FExpr.const (2 ^ 10 : Fp) : Witgen.FExpr Fp))
+    + (v.val.bitrange 8 50).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let e ← witness (e0 + e1 * (2 ^ 6 : Fp) : Expression Fp)
   let f ← witness (rho.val.bitrange 4 250).toField
   let g ← witness (((g0 + g1 * (2 : Fp) : Expression Fp)
-    + (psi.val.bitrange 9 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp) : Witgen.FExpr Fp))
+    + (psi.val.bitrange 9 240).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let h ← witness (h0 + h1 * (2 ^ 5 : Fp) : Expression Fp)
   return {
     a, b, c, d, e, f, g, h,

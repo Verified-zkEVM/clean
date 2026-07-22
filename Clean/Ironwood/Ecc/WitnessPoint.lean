@@ -2,7 +2,9 @@ import Clean.Halo2
 import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
+
+open Halo2
 /-!
 Reference:
 `halo2_gadgets/src/ecc/chip/witness_point.rs`
@@ -71,19 +73,19 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
   soundness := by
     circuit_proof_start [pointGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Halo2.Ironwood.Point.Valid, Halo2.Ironwood.Point.OnCurve, Halo2.Ironwood.Point.zero_def]
+    grind [Point.Valid, Point.OnCurve, Point.zero_def]
 
   completeness := by
     circuit_proof_start [pointGate, curveEqn]
     constructor
     · rcases hPA with hc | h0
-      · have hc' : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hc
+      · have hc' : _ ^ 2 = _ ^ 3 + pallasB := hc
         constructor
         · linear_combination input_x * hc'
         · linear_combination input_y * hc'
-      · have hx := congrArg Halo2.Ironwood.Point.x h0
-        have hy := congrArg Halo2.Ironwood.Point.y h0
-        simp only [Halo2.Ironwood.Point.zero_def] at hx hy
+      · have hx := congrArg Point.x h0
+        have hy := congrArg Point.y h0
+        simp only [Point.zero_def] at hx hy
         rw [hx, hy]
         constructor <;> ring
     · exact ⟨h_output.1.symm, h_output.2.symm⟩
@@ -117,11 +119,11 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
   soundness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
     -- ══ user-facing half: pure field values + curve math ══
-    grind [Halo2.Ironwood.Point.OnCurve]
+    grind [Point.OnCurve]
 
   completeness := by
     circuit_proof_start [pointNonIdGate, curveEqn]
-    have hc : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hPA
+    have hc : _ ^ 2 = _ ^ 3 + pallasB := hPA
     constructor
     · linear_combination hc
     · exact ⟨h_output.1.symm, h_output.2.symm⟩
@@ -146,4 +148,4 @@ theorem pointNonIdFormal_output (cfg : Config)
 
 end WitnessPoint
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

@@ -31,14 +31,16 @@ boundary — an abstract child). `CalculateRoot` is the 32-layer fold of `Layer`
 Reference: `halo2_gadgets/src/sinsemilla/merkle/chip.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.Merkle
+open ProvableStruct.Halo2 (eval_cells_eq_eval eval_cells_eq_eval_prover)
 
-open Halo2.Ironwood (Point)
+namespace Zcash.Circuits.Sinsemilla.Merkle
+
+open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators merkleChunks hashToPoint hashToPointB
+open Specs.Sinsemilla (Generators merkleChunks hashToPoint hashToPointB
   BreakData ValidBreak SpecOrBreak breaksOfGuarded)
-open Halo2.Ironwood.Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
-open Halo2.Ironwood.Sinsemilla (pieceWord pieceZ)
+open Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
+open Sinsemilla (pieceWord pieceZ)
 
 /-! ### MerkleCRH decomposition gate constants -/
 
@@ -800,14 +802,14 @@ def merkleNs : List ℕ := [24, 1, 24]
 short-range-check `b_1`/`b_2` (5 bits), witness `b`/`c`, `hash_to_point` (the `hashMessage`
 region), the `"Check piece decomposition"` gate region. Output: the hash point's `x` cell. -/
 def synthesize (G : Generators) (cfg : Config)
-    (lookupCfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp)
+    (lookupCfg : LookupRangeCheck.Config 10) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   -- witness a; range-check b1/b2; witness b, c
   let pa ← HashToPoint.witnessMessagePiece cfg.sinsemilla (waWit l input.left)
-  let b1 ← Halo2.Ironwood.LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
+  let b1 ← LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
     (wb1Wit input.left)
-  let b2 ← Halo2.Ironwood.LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
+  let b2 ← LookupRangeCheck.witnessShortCheck 10 5 lookupCfg
     (wb2Wit input.right)
   let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
   let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
@@ -839,7 +841,7 @@ private theorem gateInputs_eval_literal (env : Placed Environment Fp)
           z1B := AssignedCell.eval env.place env.env zB,
           b1 := AssignedCell.eval env.place env.env s1,
           b2 := AssignedCell.eval env.place env.env s2 } := by
-  rw [ProvableStruct.eval_cells_eq_eval]
+  rw [eval_cells_eq_eval]
   provable_type_simp
 
 /-- Literal-eval bridge for the gate-input record, prover view. -/
@@ -857,12 +859,12 @@ private theorem gateInputs_eval_literal_prover (env : Placed ProverEnvironment F
           z1B := AssignedCell.eval env.place env.env.toEnvironment zB,
           b1 := AssignedCell.eval env.place env.env.toEnvironment s1,
           b2 := AssignedCell.eval env.place env.env.toEnvironment s2 } := by
-  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  rw [eval_cells_eq_eval_prover]
   provable_type_simp
 
 -- contract bridges for the children
 derive_contract_bridges shortC (K : ℕ) (numBits : ℕ) :=
-  Halo2.Ironwood.LookupRangeCheck.shortRangeCheck K numBits
+  LookupRangeCheck.shortRangeCheck K numBits
 
 derive_contract_bridges gateC (lv : Fp) := Gate.circuit lv
 
@@ -891,12 +893,12 @@ private theorem sum_z1_eq_pieceZ {n : ℕ} (hn : K * (n + 1) ≤ 250) {ms : ℕ 
 /-- The region count of `HashLayer.synthesize`: three witness-piece regions, two short
 range checks, the hash region, the decomposition region = 7. -/
 private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
-    (lcfg : Halo2.Ironwood.LookupRangeCheck.Config 10) (Q : Point Fp) (hQ : Q.OnCurve)
+    (lcfg : LookupRangeCheck.Config 10) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (input : Var HashLayer.Input Fp) (i : RegionIndex) :
     Operations.regionCount
       ((HashLayer.synthesize G cfg lcfg Q hQ l input).operations i) = 7 := by
   simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
-    Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+    LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
     Circuit.operations_bind, operations_assignRegion,
     Operations.regionCount_append, Operations.regionCount]
   rw [show ∀ (j : RegionIndex) (pieces : Var (Sinsemilla.Chain.Inputs
@@ -913,8 +915,8 @@ on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the
 `Gate`). -/
 def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (hl : l < 2 ^ 10) :
-    FormalCircuit Fp (Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
-      (Config × Halo2.Ironwood.LookupRangeCheck.Config 10) HashLayer.Input field where
+    FormalCircuit Fp (Config × LookupRangeCheck.Config 10)
+      (Config × LookupRangeCheck.Config 10) HashLayer.Input field where
   name := "hash layer"
   configure := pure
 
@@ -930,7 +932,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   EnvAssumptions := fun (cfg, lcfg) env =>
     Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
-    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
     lcfg.qLookup.index ≠ lcfg.qRunning.index
 
   Assumptions _ := True
@@ -948,7 +950,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
   soundness := by
     circuit_proof_start
     simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
-      Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+      LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
       circuit_norm] at hc
     subcircuit_rw at hc
     simp only [shortC_spec_eq, shortC_assumptions_eq, shortC_envAssumptions_eq,
@@ -969,13 +971,13 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     -- the b_1/b_2 range bounds (the shortcheck outputs ARE the gate's b_1/b_2 cells)
     have hb1 := hB1 ⟨hEtab, hEdist⟩ hAshort
     have hb2 := hB2 ⟨hEtab, hEdist⟩ hAshort
-    rw [show (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 1)
+    rw [show (LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 1)
         = AssignedCell.of (i₀ + 1) 0 cfg.2.runningSum from rfl, hcellEval] at hb1
-    rw [show (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 2)
+    rw [show (LookupRangeCheck.shortRangeCheck 10 5).output cfg.2 0 () (i₀ + 2)
         = AssignedCell.of (i₀ + 2) 0 cfg.2.runningSum from rfl, hcellEval] at hb2
     -- the hash spec: chunking + running sums + the z1 view + the hash-from-Q contract
     have hHashS := hHash hEgen trivial
-    rw [ProvableStruct.eval_cells_eq_eval, Sinsemilla.Chain.inputs_eval_literal] at hHashS
+    rw [eval_cells_eq_eval, Sinsemilla.Chain.inputs_eval_literal] at hHashS
     rw [HashToPoint.hashCircuit_output_eval] at hHashS
     obtain ⟨chunks, hPC, hZs, hz1v, hContract⟩ := hHashS
     -- the gate spec on the landed cell values
@@ -1008,7 +1010,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     obtain ⟨msA, hmsA, hpAval, tailB, hchunksEq, hPCB⟩ := hPC
     obtain ⟨msB, hmsB, hpBval, tailC, htailC, hPCC⟩ := hPCB
     obtain ⟨msC, hmsC, hpCval, tailN, htailN, hnil⟩ := hPCC
-    rw [show ProvableType.eval (M := fields HashLayer.merkleNs.length) place env
+    rw [show ProvableType.Halo2.eval (M := fields HashLayer.merkleNs.length) place env
         #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
            AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
            AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces]
@@ -1099,7 +1101,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
   completeness := by
     circuit_proof_start
     simp only [HashLayer.synthesize, HashToPoint.witnessMessagePiece,
-      Halo2.Ironwood.LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
+      LookupRangeCheck.witnessShortCheck, HashToPoint.hashMessage,
       circuit_norm] at hwit ⊢
     obtain ⟨hWa, ⟨hWb1x, hWb1⟩, ⟨hWb2x, hWb2⟩, hWb, hWc, hWhash, hWgate⟩ := hwit
     -- the canonical node values, the node reads, and the honest piece values
@@ -1152,8 +1154,8 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
           (i₀ + 3 + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) env.hint := by
       rw [HashToPoint.hashCircuit_proverAssumptions_eq]
-      rw [ProvableStruct.eval_cells_eq_eval_prover, Sinsemilla.Chain.inputs_eval_literal,
-        show ProvableType.eval (M := fields HashLayer.merkleNs.length) place
+      rw [eval_cells_eq_eval_prover, Sinsemilla.Chain.inputs_eval_literal,
+        show ProvableType.Halo2.eval (M := fields HashLayer.merkleNs.length) place
           env.toEnvironment
           #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
              AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
@@ -1174,7 +1176,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       · show ZMod.val (env.advice cfg.1.sinsemilla.witnessPieces
           ((place (i₀ + 2 + 2) : ℕ) : ℤ)) < 2 ^ (K * 25)
         exact hbC
-      · show Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
+      · show Specs.Sinsemilla.hashToPoint G.S Q
           ((List.range 25).map (pieceWord (env.advice cfg.1.sinsemilla.witnessPieces
               ((place i₀ : ℕ) : ℤ)))
             ++ ((List.range 2).map (pieceWord (env.advice
@@ -1281,17 +1283,17 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
     · -- b1 short check
       refine Halo2.SubcircuitRw.region_completeness_leaf_placed
-        (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 1) (⟨place, env⟩ : Placed ProverEnvironment Fp) ()
+        (LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 1) (⟨place, env⟩ : Placed ProverEnvironment Fp) ()
         hWb1 ⟨⟨?_, ?_⟩, ?_, ?_⟩
       · exact _hE.2.1
       · exact _hE.2.2
       · exact ⟨by norm_num, by norm_num [PALLAS_BASE_CARD]⟩
       · rw [shortC_proverAssumptions_eq]
         simp only [Placed.toEnvironment_mk]
-        rw [show ((Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).extract
+        rw [show ((LookupRangeCheck.shortRangeCheck 10 5).extract
             cfg.2 0 () (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp) : Fp)
           = env.advice cfg.2.runningSum ((place (i₀ + 1) : ℕ) : ℤ) from by
-            simp only [Halo2.Ironwood.LookupRangeCheck.shortRangeCheck, circuit_norm], hWb1x]
+            simp only [LookupRangeCheck.shortRangeCheck, circuit_norm], hWb1x]
         rw [show (Witgen.WitgenIROver.eval (HashLayer.wb1Wit input_var_left)
             { place := place, env := env })[0]
           = ((bitrange (Sinsemilla.HashPiece.readCell ⟨place, env⟩
@@ -1305,17 +1307,17 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         exact bitrange_lt _ _ _
     · -- b2 short check
       refine Halo2.SubcircuitRw.region_completeness_leaf_placed
-        (Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 2) (⟨place, env⟩ : Placed ProverEnvironment Fp) ()
+        (LookupRangeCheck.shortRangeCheck 10 5) cfg.2 0 (i₀ + 2) (⟨place, env⟩ : Placed ProverEnvironment Fp) ()
         hWb2 ⟨⟨?_, ?_⟩, ?_, ?_⟩
       · exact _hE.2.1
       · exact _hE.2.2
       · exact ⟨by norm_num, by norm_num [PALLAS_BASE_CARD]⟩
       · rw [shortC_proverAssumptions_eq]
         simp only [Placed.toEnvironment_mk]
-        rw [show ((Halo2.Ironwood.LookupRangeCheck.shortRangeCheck 10 5).extract
+        rw [show ((LookupRangeCheck.shortRangeCheck 10 5).extract
             cfg.2 0 () (i₀ + 2) (⟨place, env.toEnvironment⟩ : Placed Environment Fp) : Fp)
           = env.advice cfg.2.runningSum ((place (i₀ + 2) : ℕ) : ℤ) from by
-            simp only [Halo2.Ironwood.LookupRangeCheck.shortRangeCheck, circuit_norm], hWb2x]
+            simp only [LookupRangeCheck.shortRangeCheck, circuit_norm], hWb2x]
         rw [show (Witgen.WitgenIROver.eval (HashLayer.wb2Wit input_var_right)
             { place := place, env := env })[0]
           = ((bitrange (Sinsemilla.HashPiece.readCell ⟨place, env⟩
@@ -1471,10 +1473,10 @@ theorem MerkleStep.strictOrBreak (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve
   | inl B =>
     simp only [SpecOrBreak, hB] at hsob
     exact Or.inl ⟨lv, rv, hlv, hrv, hnode, B,
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inl hB, hsob⟩
+      Specs.Sinsemilla.hashToPointB_inl hB, hsob⟩
   | inr br =>
     simp only [SpecOrBreak, hB] at hsob
-    have hsplit := (Halo2.Ironwood.Specs.Sinsemilla.hashToPointB_inr hB).1
+    have hsplit := (Specs.Sinsemilla.hashToPointB_inr hB).1
     exact Or.inr ⟨0, by omega, br, hsob, lv, rv, hlv, hrv, by
       rw [Nat.add_zero]
       exact hsplit.symm⟩
@@ -1609,12 +1611,12 @@ private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurv
     (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
-    (lcfg : Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (lcfg : LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
     Operations.regionCount
       ((do
         let pair ← assignRegion "swap"
-          ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+          ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
         (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
           { left := pair.aSwapped, right := pair.bSwapped }).operations i) = 8 := by
   simp only [Circuit.operations_bind, operations_assignRegion,
@@ -1633,15 +1635,15 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool) :
     FormalCircuit Fp
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       Layer.Input field where
   name := "MerkleCRH layer"
   configure := pure
 
   synthesize := fun (ccfg, cfg, lcfg) input => do
     let pair ← assignRegion "swap"
-      ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+      ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
     (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
       { left := pair.aSwapped, right := pair.bSwapped }
 
@@ -1649,7 +1651,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     { output := fun input i =>
         ((do
           let pair ← assignRegion "swap"
-            ((Halo2.Ironwood.CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+            ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
           (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
             { left := pair.aSwapped, right := pair.bSwapped }
           : Circuit Fp (Var field Fp)).output i)
@@ -1660,7 +1662,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   EnvAssumptions := fun (ccfg, cfg, lcfg) env =>
     Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
-    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
     lcfg.qLookup.index ≠ lcfg.qRunning.index
 
   Assumptions _ := True
@@ -1683,21 +1685,21 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
   soundness := by
     circuit_proof_start
     obtain ⟨hSwap, hHash⟩ := hc
-    have hSw : Halo2.Ironwood.CondSwap.SwapSpec input_node
-        (ProvableStruct.eval place env x_gen_out_0)
-        ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0 { a := input_var_node }
+    have hSw : CondSwap.SwapSpec input_node
+        (ProvableStruct.Halo2.eval place env x_gen_out_0)
+        ((CondSwap.swap wsib wswap).extract cfg.1 0 { a := input_var_node }
           i₀ ⟨place, env⟩) := hSwap trivial trivial
     obtain ⟨hbool, hASw, hBSw⟩ := hSw
     -- the swapped cells' reads are the eval'd swap-output components
     have hAread : (env.get x_gen_out_0.aSwapped.cell.column
           ((place x_gen_out_0.aSwapped.cell.regionIndex
             + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
-        = (ProvableStruct.eval place env x_gen_out_0).aSwapped := by
+        = (ProvableStruct.Halo2.eval place env x_gen_out_0).aSwapped := by
       provable_type_simp
     have hBread : (env.get x_gen_out_0.bSwapped.cell.column
           ((place x_gen_out_0.bSwapped.cell.regionIndex
             + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
-        = (ProvableStruct.eval place env x_gen_out_0).bSwapped := by
+        = (ProvableStruct.Halo2.eval place env x_gen_out_0).bSwapped := by
       provable_type_simp
     have hHashS := hHash ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial
     rw [HashLayer.circuit_spec_eq] at hHashS
@@ -1736,26 +1738,26 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     obtain ⟨B0, hB0⟩ := hPA
     -- the swap child's honest values (its ProverSpec, over the witness-cell reads)
     have hSwPS := h_spec_0 trivial trivial trivial
-    have hwit1 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+    have hwit1 : ((CondSwap.swap wsib wswap).extract cfg.1 0
           { a := input_var_node } i₀ (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).1
         = env.advice cfg.1.b ((place i₀ : ℕ) : ℤ) := by
-      simp only [Halo2.Ironwood.CondSwap.swap, circuit_norm]
-    have hwit2 : ((Halo2.Ironwood.CondSwap.swap wsib wswap).extract cfg.1 0
+      simp only [CondSwap.swap, circuit_norm]
+    have hwit2 : ((CondSwap.swap wsib wswap).extract cfg.1 0
           { a := input_var_node } i₀ (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).2
         = env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) := by
-      simp only [Halo2.Ironwood.CondSwap.swap, circuit_norm]
+      simp only [CondSwap.swap, circuit_norm]
     obtain ⟨-, hASw, hBSw⟩ := hSwPS
     rw [hwit1, hwit2, h_input] at hASw hBSw
     -- the swapped cells' reads are the eval'd swap-output components
     have hAread : (env.get x_gen_out_0.aSwapped.cell.column
           ((place x_gen_out_0.aSwapped.cell.regionIndex
             + x_gen_out_0.aSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
-        = (ProvableStruct.eval place env.toEnvironment x_gen_out_0).aSwapped := by
+        = (ProvableStruct.Halo2.eval place env.toEnvironment x_gen_out_0).aSwapped := by
       provable_type_simp
     have hBread : (env.get x_gen_out_0.bSwapped.cell.column
           ((place x_gen_out_0.bSwapped.cell.regionIndex
             + x_gen_out_0.bSwapped.cell.rowOffset : ℕ) : ℤ) : Fp)
-        = (ProvableStruct.eval place env.toEnvironment x_gen_out_0).bSwapped := by
+        = (ProvableStruct.Halo2.eval place env.toEnvironment x_gen_out_0).bSwapped := by
       provable_type_simp
     -- the hash child's honest-prover precondition
     have hPAhash : (HashLayer.circuit G Q hQ l hl).ProverAssumptions
@@ -1860,8 +1862,8 @@ identity on the 32 layers used). -/
 def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
     (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool) (i : ℕ) :
     FormalCircuit Fp
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       Layer.Input field :=
   Layer.circuit G Q hQ ((l₀ + i) % 2 ^ 10) (Nat.mod_lt _ (by norm_num)) (wsib i) (wswap i)
 
@@ -1917,7 +1919,7 @@ variable (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ d : ℕ)
 
 /-- The fold's region index entering layer `m`: 8 regions per layer. -/
 private theorem foldState_snd
-    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i₀ : RegionIndex) : ∀ m : ℕ,
     (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg input i₀ m).2
       = i₀ + 8 * m
@@ -1929,7 +1931,7 @@ private theorem foldState_snd
 
 /-- The fold's region count: `8 * d`. -/
 private theorem fold_regionCount
-    (cfg : CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
     Operations.regionCount
       (((FormalCircuit.foldCall (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d >>=
@@ -1946,13 +1948,13 @@ private theorem fold_regionCount
 /-- Projection landing: `.node` of an eval'd `Layer.Input` var is the eval of its cell. -/
 private theorem input_eval_node (env : Placed Environment Fp) (v : Var Layer.Input Fp) :
     (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
-  rw [ProvableStruct.eval_cells_eq_eval]
+  rw [eval_cells_eq_eval]
   provable_type_simp
 
 private theorem input_eval_node_prover (env : Placed ProverEnvironment Fp)
     (v : Var Layer.Input Fp) :
     (eval env v : Value Layer.Input Fp).node = (eval env v.node : Fp) := by
-  rw [ProvableStruct.eval_cells_eq_eval_prover]
+  rw [eval_cells_eq_eval_prover]
   provable_type_simp
 
 /-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
@@ -1962,8 +1964,8 @@ records either an escape-free strict chain or an exhibited layer escape, as requ
 by the breaks-as-data convention of zcash/ironwood#45. -/
 def circuit :
     FormalCircuit Fp
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
-      (CondSwap.Config × Config × Halo2.Ironwood.LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       Layer.Input field where
   name := "MerkleCRH calculate_root"
   configure := pure
@@ -1988,7 +1990,7 @@ def circuit :
 
   EnvAssumptions := fun (_, cfg, lcfg) env =>
     Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla.generatorTable env.env ∧
-    Halo2.Ironwood.LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
+    LookupRangeCheck.TableLoaded 10 lcfg env.env ∧
     lcfg.qLookup.index ≠ lcfg.qRunning.index
 
   Assumptions _ := True
@@ -2280,4 +2282,4 @@ derive_contract_bridges circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 
 end CalculateRoot
 
-end Halo2.Ironwood.Sinsemilla.Merkle
+end Zcash.Circuits.Sinsemilla.Merkle

@@ -7,7 +7,9 @@ import CompElliptic.CurveForms.ShortWeierstrass
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul.Complete
+namespace Zcash.Circuits.Ecc.Mul.Complete
+
+open Clean
 
 structure Input (F : Type) where
   zPrev : F
@@ -170,4 +172,4 @@ private theorem bit_facts_complete (zP bY : Fp) (b : Bool) :
 
 end AssignRegion
 
-end Halo2.Ironwood.Ecc.Mul.Complete
+end Zcash.Circuits.Ecc.Mul.Complete

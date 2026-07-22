@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
 
@@ -393,7 +395,7 @@ private theorem rowTailValue_u (B : FixedBase) (m : Fp) (w : ℕ) :
 of the committed magnitude (`k = m.val / 8^w % 8`, matching `windowVal` definitionally),
 witness the next running-sum value, and read the three window-table columns at `k`. -/
 def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val

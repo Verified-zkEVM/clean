@@ -25,16 +25,21 @@ Soundness rests on `2^254 + t_q ≡ 0 (mod q)`: the double-and-add accumulates
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul
+open ProvableType.Halo2
+  (eval_field eval_field_prover eval_field' eval_field_prover' eval_cells eval_cells_prover
+    eval_fields_cells)
+open ProvableStruct.Halo2 (eval_var_eq_eval eval_var_eq_eval_prover)
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (tQ)
-open Halo2.Ironwood.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
+namespace Zcash.Circuits.Ecc.Mul
+
+open Halo2
+open Ecc (tQ)
+open Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
   chain_cast accScalar_closed k_canonical cells_kNat z0_cell_value)
-open Halo2.Ironwood.Ecc.Mul.Decompose (m_bounds)
-open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
+open Ecc.Mul.Decompose (m_bounds)
+open Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
+open Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
   kBitsWindow_as_kBits kBitsWindow_zero)
 
 /-! ## Config -/
@@ -275,17 +280,17 @@ private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
     (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
     MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } :=
-  Halo2.Ironwood.Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
+  Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
 
 /-! ## Point-level scalar-multiple algebra
 
 The `SWPoint`-level step/negation/identity algebra, transported to `Point Fp` `nsmul` through the
-`toSW` bridge (`Halo2.Ironwood.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
+`toSW` bridge (`Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
 
 section PointAlgebra
 open CompElliptic.CurveForms.ShortWeierstrass (SWPoint)
 open CompElliptic.Curves.Pasta
-open Halo2.Ironwood.Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
+open Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
   valid_add valid_neg valid_zero valid_nsmul nsmul_add_nsmul nsmul_eq_zero_iff)
 
 /-- `P + P = 2 • P` at the `Point` level. -/
@@ -309,7 +314,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)),
       toSW_add (valid_neg hPv) (valid_nsmul hPv a), toSW_neg hPv,
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
+    simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
     simp only [if_true]
     apply (ext_toSW_iff
@@ -318,7 +323,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)),
       toSW_add hPv (valid_nsmul hPv a),
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
+    simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
 
 /-- `-P + m•P = (m−1)•P` at the `Point` level. -/
 private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (hm : 1 ≤ m) :
@@ -328,7 +333,7 @@ private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h
     (valid_nsmul hPv _)).mpr
   rw [toSW_add (valid_neg hPv) (valid_nsmul hPv m), toSW_neg hPv, toSW_nsmul hPv m,
     toSW_nsmul hPv]
-  exact Halo2.Ironwood.Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
+  exact Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
 
 /-- `0 + Q = Q` at the `Point` level, for valid `Q`. -/
 private theorem point_zero_add {Q : Point Fp} (hQ : Q.Valid) : (0 : Point Fp) + Q = Q := by
@@ -418,30 +423,30 @@ private theorem add_call_output (cfg : Add.Config) (off : ℕ) (inp : Var Add.In
 private theorem incompleteOutput_eval_literal {n : ℕ} (place : RegionIndex → ℕ)
     (env : Environment Fp) (xA yA : AssignedCell Fp)
     (zs : Vector (AssignedCell Fp) (n + 1)) :
-    ProvableStruct.eval place env
+    ProvableStruct.Halo2.eval place env
         ({ acc := { x := xA, y := yA }, zs := zs }
           : MulIncomplete.Output (n + 1) (AssignedCell Fp))
       = { acc := { x := AssignedCell.eval place env xA, y := AssignedCell.eval place env yA },
-          zs := ProvableType.eval (M := fields (n + 1)) place env zs } := by
-  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
+          zs := ProvableType.Halo2.eval (M := fields (n + 1)) place env zs } := by
+  simp only [circuit_norm, explicit_provable_type, eval_fields_cells]
 
 /-- Literal-eval bridge for `MulComplete.Output 3` (verifier view; the `acc` field may be a
 symbolic term). -/
 private theorem completeOutput_eval_literal (place : RegionIndex → ℕ)
     (env : Environment Fp) (acc : Point (AssignedCell Fp))
     (zs : Vector (AssignedCell Fp) 3) :
-    ProvableStruct.eval place env
+    ProvableStruct.Halo2.eval place env
         ({ acc := acc, zs := zs } : MulComplete.Output 3 (AssignedCell Fp))
-      = { acc := ProvableType.eval place env acc,
-          zs := ProvableType.eval (M := fields 3) place env zs } := by
-  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
+      = { acc := ProvableType.Halo2.eval place env acc,
+          zs := ProvableType.Halo2.eval (M := fields 3) place env zs } := by
+  simp only [circuit_norm, explicit_provable_type, eval_fields_cells]
 
 /-- Elementwise read of an evaluated cell vector. -/
 private theorem fieldsEval_getElem {w : ℕ} (place : RegionIndex → ℕ) (env : Environment Fp)
     (zs : Vector (AssignedCell Fp) w) (i : ℕ) (hi : i < w) :
-    (ProvableType.eval (M := fields w) place env zs)[i]
+    (ProvableType.Halo2.eval (M := fields w) place env zs)[i]
       = AssignedCell.eval place env (zs[i]) := by
-  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+  simp only [ProvableType.Halo2.eval, ProvableType.toElements, ProvableType.fromElements,
     Vector.getElem_map]
 
 /-- `Cell.eval` of an `AssignedCell.of` cell's `.cell` (the `constrainConstant` constraint
@@ -547,7 +552,7 @@ private theorem eval_of (env : Placed Environment Fp) (self : RegionIndex) (row 
     (col : Column .advice) :
     eval env (AssignedCell.of self row col : AssignedCell Fp)
       = env.env.advice col ((env.place self + row : ℕ) : ℤ) := by
-  rw [ProvableType.eval_field, assignedCell_eval_of]
+  rw [eval_field, assignedCell_eval_of]
 
 /-- `zs`-component read of an evaluated `MulIncomplete.Output` literal. -/
 private theorem incompleteOutput_zs_getElem {n : ℕ} (env : Placed Environment Fp)
@@ -556,10 +561,10 @@ private theorem incompleteOutput_zs_getElem {n : ℕ} (env : Placed Environment 
     (eval env ({ acc := { x := xA, y := yA }, zs := zs }
         : Var (MulIncomplete.Output (n + 1)) Fp)).zs[i]
       = eval env (zs[i]) := by
-  rw [ProvableStruct.eval_var_eq_eval]
+  rw [eval_var_eq_eval]
   rw [incompleteOutput_eval_literal]
-  show (ProvableType.eval (M := fields (n + 1)) env.place env.env zs)[i] = _
-  rw [fieldsEval_getElem env.place env.env zs i hi, ProvableType.eval_field]
+  show (ProvableType.Halo2.eval (M := fields (n + 1)) env.place env.env zs)[i] = _
+  rw [fieldsEval_getElem env.place env.env zs i hi, eval_field]
 
 /-- `acc`-components of an evaluated `MulIncomplete.Output` literal. -/
 private theorem incompleteOutput_acc {n : ℕ} (env : Placed Environment Fp)
@@ -567,18 +572,18 @@ private theorem incompleteOutput_acc {n : ℕ} (env : Placed Environment Fp)
     (eval env ({ acc := { x := xA, y := yA }, zs := zs }
         : Var (MulIncomplete.Output (n + 1)) Fp)).acc
       = { x := eval env xA, y := eval env yA } := by
-  rw [ProvableStruct.eval_var_eq_eval]
+  rw [eval_var_eq_eval]
   rw [incompleteOutput_eval_literal]
   show Point.mk _ _ = _
-  rw [ProvableType.eval_field, ProvableType.eval_field]
+  rw [eval_field, eval_field]
 
 /-- `acc`-component of an evaluated `MulComplete.Output 3` literal. -/
 private theorem completeOutput_acc (env : Placed Environment Fp)
     (acc : Point (AssignedCell Fp)) (zs : Vector (AssignedCell Fp) 3) :
     (eval env ({ acc := acc, zs := zs } : Var (MulComplete.Output 3) Fp)).acc
       = eval env acc := by
-  rw [ProvableStruct.eval_var_eq_eval]
-  rw [completeOutput_eval_literal, ProvableType.eval_cells]
+  rw [eval_var_eq_eval]
+  rw [completeOutput_eval_literal, eval_cells]
 
 /-- `zs`-component read of an evaluated `MulComplete.Output 3` literal. -/
 private theorem completeOutput_zs_getElem (env : Placed Environment Fp)
@@ -586,10 +591,10 @@ private theorem completeOutput_zs_getElem (env : Placed Environment Fp)
     (hi : i < 3) :
     (eval env ({ acc := acc, zs := zs } : Var (MulComplete.Output 3) Fp)).zs[i]
       = eval env (zs[i]) := by
-  rw [ProvableStruct.eval_var_eq_eval]
+  rw [eval_var_eq_eval]
   rw [completeOutput_eval_literal]
-  show (ProvableType.eval (M := fields 3) env.place env.env zs)[i] = _
-  rw [fieldsEval_getElem env.place env.env zs i hi, ProvableType.eval_field]
+  show (ProvableType.Halo2.eval (M := fields 3) env.place env.env zs)[i] = _
+  rw [fieldsEval_getElem env.place env.env zs i hi, eval_field]
 
 /-- Componentwise eval of a `MulComplete.Inputs` record (the scalar slot is a prover hint,
 its verifier value is trivial). Stated over a whole var — a mixed-record literal admits no
@@ -623,7 +628,7 @@ private theorem eval_of_prover (env : Placed ProverEnvironment Fp) (self : Regio
     (row : ℕ) (col : Column .advice) :
     eval env (AssignedCell.of self row col : AssignedCell Fp)
       = env.env.toEnvironment.advice col ((env.place self + row : ℕ) : ℤ) := by
-  rw [ProvableType.eval_field_prover, assignedCell_eval_of]
+  rw [eval_field_prover, assignedCell_eval_of]
 
 /-- Prover-side componentwise eval of `MulIncomplete.Inputs` (the scalar slot holds the
 reading program; its prover value is the program's evaluation). Stated over a whole var —
@@ -695,7 +700,7 @@ private theorem ovInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
 private theorem addInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
     (p q : Point (AssignedCell Fp)) :
     eval env (⟨p, q⟩ : Add.Inputs (AssignedCell Fp)) = { p := eval env p, q := eval env q } := by
-  simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+  simp only [circuit_norm, eval_cells_prover, eval_cells]
 
 /-- Prover-side `zs`-component read of an evaluated `MulIncomplete.Output` literal. -/
 private theorem incompleteOutput_zs_getElem_prover {n : ℕ} (env : Placed ProverEnvironment Fp)
@@ -704,11 +709,12 @@ private theorem incompleteOutput_zs_getElem_prover {n : ℕ} (env : Placed Prove
     (eval env ({ acc := { x := xA, y := yA }, zs := zs }
         : Var (MulIncomplete.Output (n + 1)) Fp)).zs[i]
       = eval env (zs[i]) := by
-  rw [ProvableStruct.eval_var_eq_eval_prover]
+  rw [eval_var_eq_eval_prover]
   rw [incompleteOutput_eval_literal]
-  show (ProvableType.eval (M := fields (n + 1)) env.place env.env.toEnvironment zs)[i] = _
+  show (ProvableType.Halo2.eval (M := fields (n + 1))
+    env.place env.env.toEnvironment zs)[i] = _
   rw [fieldsEval_getElem env.place env.env.toEnvironment zs i hi,
-    ProvableType.eval_field_prover]
+    eval_field_prover]
 
 /-- Split a `zChain` into the start equation and the step family (the shape
 `chain_cast` consumes). -/
@@ -732,17 +738,17 @@ private theorem incompleteOutput_acc_prover {n : ℕ} (env : Placed ProverEnviro
     (eval env ({ acc := { x := xA, y := yA }, zs := zs }
         : Var (MulIncomplete.Output (n + 1)) Fp)).acc
       = { x := eval env xA, y := eval env yA } := by
-  rw [ProvableStruct.eval_var_eq_eval_prover, incompleteOutput_eval_literal]
+  rw [eval_var_eq_eval_prover, incompleteOutput_eval_literal]
   show Point.mk _ _ = _
-  rw [ProvableType.eval_field_prover, ProvableType.eval_field_prover]
+  rw [eval_field_prover, eval_field_prover]
 
 /-- Prover-side `acc`-component of an evaluated `MulComplete.Output 3` literal. -/
 private theorem completeOutput_acc_prover (env : Placed ProverEnvironment Fp)
     (acc : Point (AssignedCell Fp)) (zs : Vector (AssignedCell Fp) 3) :
     (eval env ({ acc := acc, zs := zs } : Var (MulComplete.Output 3) Fp)).acc
       = eval env acc := by
-  rw [ProvableStruct.eval_var_eq_eval_prover, completeOutput_eval_literal,
-    ProvableType.eval_cells_prover]
+  rw [eval_var_eq_eval_prover, completeOutput_eval_literal,
+    eval_cells_prover]
 
 /-- Prover-side `zs`-component read of an evaluated `MulComplete.Output 3` literal. -/
 private theorem completeOutput_zs_getElem_prover (env : Placed ProverEnvironment Fp)
@@ -750,10 +756,11 @@ private theorem completeOutput_zs_getElem_prover (env : Placed ProverEnvironment
     (hi : i < 3) :
     (eval env ({ acc := acc, zs := zs } : Var (MulComplete.Output 3) Fp)).zs[i]
       = eval env (zs[i]) := by
-  rw [ProvableStruct.eval_var_eq_eval_prover, completeOutput_eval_literal]
-  show (ProvableType.eval (M := fields 3) env.place env.env.toEnvironment zs)[i] = _
+  rw [eval_var_eq_eval_prover, completeOutput_eval_literal]
+  show (ProvableType.Halo2.eval (M := fields 3)
+    env.place env.env.toEnvironment zs)[i] = _
   rw [fieldsEval_getElem env.place env.env.toEnvironment zs i hi,
-    ProvableType.eval_field_prover]
+    eval_field_prover]
 
 /-! ## Composition ergonomics
 
@@ -764,7 +771,7 @@ locally-elaborated one, so every decomposition site below is a `rw`. -/
 /-- Eval of an `Add.Inputs` pair built from two points (componentwise). -/
 theorem addInputs_eval_eq (env : Placed Environment Fp) (p q : Point (AssignedCell Fp)) :
     eval env (⟨p, q⟩ : Add.Inputs (AssignedCell Fp)) = { p := eval env p, q := eval env q } := by
-  simp only [circuit_norm, ProvableType.eval_cells]
+  simp only [circuit_norm, eval_cells]
 
 /-- Eval of a `MulIncomplete.Inputs` record (componentwise; the scalar slot is a prover
 hint, its verifier value is trivial). Stated over a whole var — a mixed-record literal
@@ -883,11 +890,11 @@ def mul :
     obtain ⟨hIalpha, hBxIn, hByIn⟩ := h_input
     -- ── the base point: cells and value ──
     have hbX : eval env input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hBxIn
+      rw [eval_field]; simpa only [AssignedCell.eval] using hBxIn
     have hbY : eval env input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hByIn
+      rw [eval_field]; simpa only [AssignedCell.eval] using hByIn
     have halpha : eval env input_var_alpha = input_alpha := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hIalpha
+      rw [eval_field]; simpa only [AssignedCell.eval] using hIalpha
     have hbaseEval : eval env ({ x := input_var_base_x, y := input_var_base_y }
         : Point (AssignedCell Fp)) = { x := input_base_x, y := input_base_y } := by
       rw [Point.eval_eq, hbX, hbY]
@@ -973,7 +980,7 @@ def mul :
       (by
         rw [hiInputs_eval_eq]
         rw [← h_gen_out_1, incomplete_output_eq]
-        simp only [Vector.getElem_ofFn, Halo2.ProvableType.eval_field', assignedCell_eval_of]
+        simp only [Vector.getElem_ofFn, eval_field', assignedCell_eval_of]
         exact hHiZ124)
       hLoZ0 hLoZstep
     -- the lo accumulator, entering at m = accScalar 2 bitsHi 125 (hi output, via `← h_gen_out_1`)
@@ -1005,14 +1012,14 @@ def mul :
           ((env.place i₀ + (offLo + 125 + 2) : ℕ) : ℤ))) := by
       show (Point.mk _ _).Valid
       rw [hLoOut]
-      exact Halo2.Ironwood.Point.valid_nsmul hbaseV _
+      exact Point.valid_nsmul hbaseV _
     -- The complete chunk's chained hi→lo input projections use the shallow lo-output local
     -- `x_gen_out_2`, and its output uses `x_gen_out_3`.
     -- Comp entering: recover the concrete lo output (`← h_gen_out_2`) to reduce its coords to cells;
     -- comp output: recover the concrete complete output (`← h_gen_out_3`) for `complete_output_eq`.
     obtain ⟨bitsC, hCompRI⟩ := hComp trivial (by
       rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-      simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of]
+      simp only [eval_field', assignedCell_eval_of]
       rw [hbaseEval]
       exact ⟨hLoOutV, hbaseV⟩)
     simp only [MulComplete.RoundInvariant] at hCompRI
@@ -1021,7 +1028,7 @@ def mul :
     obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
       (by
         rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of]
+        simp only [eval_field', assignedCell_eval_of]
         exact hLoOutV)
       (by
         rw [compInputs_eval_eq]
@@ -1042,7 +1049,7 @@ def mul :
     -- its entering acc is the lo output `x_gen_out_2` (→ `hLoOutRec` via `← h_gen_out_2`).
     rw [← h_gen_out_3, complete_output_eq, completeOutput_acc] at hCompAccEq hCompAccV
     rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq] at hCompAccEq
-    simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of] at hCompAccEq
+    simp only [eval_field', assignedCell_eval_of] at hCompAccEq
     rw [hbaseEval, hLoOutRec, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
     -- align with the final add's normal form (component-decomposed, z-field reduced)
     simp only [Point.eval_eq] at hCompAccEq
@@ -1057,7 +1064,7 @@ def mul :
       (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
       (by
         rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Vector.getElem_ofFn, Halo2.ProvableType.eval_field', assignedCell_eval_of]
+        simp only [Vector.getElem_ofFn, eval_field', assignedCell_eval_of]
         exact hLoZ125)
       hCompZ0
       (fun b => by
@@ -1207,7 +1214,7 @@ def mul :
           rw [Point.eval_eq]
           simp only [output_assignAdvice, eval_of]
           rw [hcorr]
-          exact Halo2.Ironwood.Point.valid_neg hbaseV
+          exact Point.valid_neg hbaseV
         · show Point.Valid (eval env _)
           rw [← h_gen_out_3]
           simp only [complete_output_eq]
@@ -1251,7 +1258,7 @@ def mul :
           rw [Point.eval_eq]
           simp only [output_assignAdvice, eval_of]
           rw [hcorr]
-          exact Halo2.Ironwood.Point.valid_zero
+          exact Point.valid_zero
         · show Point.Valid (eval env _)
           rw [← h_gen_out_3]
           simp only [complete_output_eq]
@@ -1260,7 +1267,7 @@ def mul :
       simp only [Point.eval_eq, output_assignAdvice, eval_of,
         complete_output_eq, ← h_gen_out_2, incomplete_output_eq] at hResEq
       rw [hcorr, hCompAccEq,
-        point_zero_add (Halo2.Ironwood.Point.valid_nsmul hbaseV _)] at hResEq
+        point_zero_add (Point.valid_nsmul hbaseV _)] at hResEq
       -- the working scalar: k = α + t_q with k₀ = 1
       have hK := hKpart 1 (by omega) (by
         push_cast
@@ -1335,15 +1342,15 @@ def mul :
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := hOnC0
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
     have hbXv : eval env.toEnvironment input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hBxIn
+      rw [eval_field]; simpa only [AssignedCell.eval] using hBxIn
     have hbYv : eval env.toEnvironment input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field]; simpa only [AssignedCell.eval] using hByIn
+      rw [eval_field]; simpa only [AssignedCell.eval] using hByIn
     have hbXp : eval env input_var_base_x = input_base_x := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hBxIn
+      rw [eval_field_prover]; simpa only [AssignedCell.eval] using hBxIn
     have hbYp : eval env input_var_base_y = input_base_y := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hByIn
+      rw [eval_field_prover]; simpa only [AssignedCell.eval] using hByIn
     have halphap : eval env input_var_alpha = input_alpha := by
-      rw [ProvableType.eval_field_prover]; simpa only [AssignedCell.eval] using hIalpha
+      rw [eval_field_prover]; simpa only [AssignedCell.eval] using hIalpha
     -- the honest working-scalar bits, as a local opaque constant (`obtain`, not `set`: a
     -- delta-accessible `kBits` body would let the elaborator's defeq unfold into the `tQNat`
     -- numeral landmine)
@@ -1428,7 +1435,7 @@ def mul :
     have hHiCells := chain_cast (n := 124) _ _ 0 bits
       (by
         rw [hiInputs_eval_eq_prover]
-        simp only [output_assignAdvice, Halo2.ProvableType.eval_field_prover', assignedCell_eval_of, Nat.cast_zero]
+        simp only [output_assignAdvice, eval_field_prover', assignedCell_eval_of, Nat.cast_zero]
         exact hWZi)
       hHiZ0 hHiZstep
     -- the honest hi accumulator: [accScalar 2 bits 125] • base. Entering acc = init output
@@ -1491,7 +1498,7 @@ def mul :
       (by
         rw [hiInputs_eval_eq_prover]
         rw [← h_gen_out_1, incomplete_output_eq]
-        simp only [Vector.getElem_ofFn, Halo2.ProvableType.eval_field_prover', assignedCell_eval_of]
+        simp only [Vector.getElem_ofFn, eval_field_prover', assignedCell_eval_of]
         exact hHiZ124)
       hLoZ0 hLoZstep
     -- the honest lo accumulator (lo output is `x_gen_out_2`)
@@ -1524,20 +1531,20 @@ def mul :
           ((env.place i₀ + (offLo + 125 + 2) : ℕ) : ℤ))) := by
       show (Point.mk _ _).Valid
       rw [hLoOut]
-      exact Halo2.Ironwood.Point.valid_nsmul hbaseV _
+      exact Point.valid_nsmul hbaseV _
     -- comp's entering accumulator = lo output `x_gen_out_2`; recover concrete (`← h_gen_out_2`) to
     -- reduce its `.xA`/`.yA` to the lo output cells (matching `hLoOutV`).
     have hCompBoth := h_spec_3 trivial
       (by
         simp only [comp_assumptions_eq]
         rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
+        simp only [eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
         rw [hbaseEvalV]
         exact ⟨hLoOutV, hbaseV⟩)
       (by
         simp only [comp_proverAssumptions_eq]
         rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Halo2.ProvableType.eval_field_prover', assignedCell_eval_of]
+        simp only [eval_field_prover', assignedCell_eval_of]
         rw [hbaseEvalP]
         exact ⟨hLoOutV, hbaseV⟩)
     have hCompPS := hCompBoth.2
@@ -1549,7 +1556,7 @@ def mul :
     obtain ⟨hCompAccV, -⟩ := hCompAccCl
       (by
         rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Halo2.ProvableType.eval_field_prover', assignedCell_eval_of]
+        simp only [eval_field_prover', assignedCell_eval_of]
         exact hLoOutV)
       (by
         rw [compInputs_eval_eq_prover]
@@ -1563,7 +1570,7 @@ def mul :
       (chainNat (chainNat 0 bits 125) (fun i => bits (125 + i)) 126) (fun i => bits (251 + i))
       (by
         rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Vector.getElem_ofFn, Halo2.ProvableType.eval_field_prover', assignedCell_eval_of]
+        simp only [Vector.getElem_ofFn, eval_field_prover', assignedCell_eval_of]
         exact hLoZ125)
       hCompZ0
       (fun b => by
@@ -1645,7 +1652,7 @@ def mul :
     obtain ⟨hCompAccVv, -⟩ := hCompAccClv
       (by
         rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-        simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
+        simp only [eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
         exact hLoOutV)
       (by
         rw [compInputs_eval_eq]
@@ -1718,13 +1725,13 @@ def mul :
     · -- comp Assumptions (lo output entering, via `← h_gen_out_2`)
       simp only [comp_assumptions_eq]
       rw [compInputs_eval_eq, ← h_gen_out_2, incomplete_output_eq]
-      simp only [Halo2.ProvableType.eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
+      simp only [eval_field', assignedCell_eval_of, Placed.toEnvironment_env, Placed.toEnvironment_place]
       rw [hbaseEvalV]
       exact ⟨hLoOutV, hbaseV⟩
     · -- comp ProverAssumptions (lo output entering, via `← h_gen_out_2`)
       simp only [comp_proverAssumptions_eq]
       rw [compInputs_eval_eq_prover, ← h_gen_out_2, incomplete_output_eq]
-      simp only [Halo2.ProvableType.eval_field_prover', assignedCell_eval_of]
+      simp only [eval_field_prover', assignedCell_eval_of]
       rw [hbaseEvalP]
       exact ⟨hLoOutV, hbaseV⟩
     · -- base_x copy equality
@@ -1784,9 +1791,9 @@ def mul :
           -- equations (~1.5s failing path) before it recovers
           rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
                 = -{ x := input_base_x, y := input_base_y } from rfl]
-          exact Halo2.Ironwood.Point.valid_neg hbaseV
+          exact Point.valid_neg hbaseV
         · simp only [if_true]
-          exact Halo2.Ironwood.Point.valid_zero
+          exact Point.valid_zero
       · -- comp acc validity: recover the concrete comp output (`← h_gen_out_3`), land on `hCompAccVv`
         show Point.Valid (eval env.toEnvironment _)
         rw [← h_gen_out_3]
@@ -1815,4 +1822,4 @@ def mul :
 
 derive_contract_bridges mul := mul
 
-end Halo2.Ironwood.Ecc.Mul
+end Zcash.Circuits.Ecc.Mul

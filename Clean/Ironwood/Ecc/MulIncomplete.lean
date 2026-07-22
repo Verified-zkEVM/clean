@@ -3,12 +3,12 @@ import Clean.Ironwood.Ecc.MulIncompleteRound
 
 /-! The double-and-add loop and bundle over the round gadget (`MulIncompleteRound.lean`). -/
 
-namespace Halo2.Ironwood.Ecc.MulIncomplete
+namespace Zcash.Circuits.Ecc.MulIncomplete
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.Mul (kBits kNat tQNat)
-open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.Mul (kBits kNat tQNat)
+open Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
    accScalar_two_le accScalar_le pow254_lt_card)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -249,13 +249,13 @@ def RoundInvariant (numBits : ℕ) (z : Fp) (base acc : Point Fp)
 
 /-- Honest witnesses for the init row's slopes (round 0's λ's), from the input cells. -/
 def initLambdaWit (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (base acc : Point (AssignedCell Fp)) (w : ℕ)
-    (f : Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp) : WitgenIR Fp 1 :=
+    (f : Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[f (lambdaCellsValue (readCell env base.x) (readCell env base.y)
     (readCell env acc.x) (readCell env acc.y) (bitWit alpha w env))]
 
 @[circuit_norm]
 theorem initLambdaWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (base acc : Point (AssignedCell Fp))
-    (w : ℕ) (f : Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp)
+    (w : ℕ) (f : Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((initLambdaWit alpha base acc w f).eval env)[j]
       = f (lambdaCellsValue (readCell env base.x) (readCell env base.y)
@@ -615,4 +615,4 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hkl, ← hxal, ← hyl, h_output_acc_x, h_output_acc_y, hbx, hby] at hlast
       exact hlast
 
-end Halo2.Ironwood.Ecc.MulIncomplete
+end Zcash.Circuits.Ecc.MulIncomplete

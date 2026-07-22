@@ -2,6 +2,8 @@ import Clean.Types.U64
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Utils.Primes
 
+open Clean
+
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 

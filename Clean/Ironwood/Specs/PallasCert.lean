@@ -10,7 +10,7 @@ checked field equations (plus literal disequalities) into the `Point`-level fact
 computed — the slope witness replaces it.
 -/
 
-namespace Halo2.Ironwood.Point
+namespace Zcash.Circuits.Point
 
 open CompElliptic.CurveForms
 
@@ -46,7 +46,7 @@ theorem double_of_witness {p r : Point Fp} (l : Fp)
     (h3 : r.y = l * (p.x - r.x) - p.y) :
     p + p = r := by
   have h2y : (2 : Fp) * p.y ≠ 0 :=
-    mul_ne_zero Halo2.Ironwood.two_ne_zero hy
+    mul_ne_zero two_ne_zero hy
   have hl : (3 * p.x ^ 2 + pallasA) / (2 * p.y) = l := by
     rw [div_eq_iff h2y, ← h1]
   have hyy : ¬(p.y + p.y = 0) := by
@@ -80,4 +80,4 @@ theorem onCurve_of_add_eq {p q r : Point Fp}
   · exact hv
   · exact absurd hv hr
 
-end Halo2.Ironwood.Point
+end Zcash.Circuits.Point

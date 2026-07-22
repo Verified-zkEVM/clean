@@ -29,10 +29,10 @@ integrity, and the final `"Orchard circuit checks"` region (copies, the three
 `assign_advice_from_instance` public inputs, `q_orchard`).
 -/
 
-namespace Halo2.Ironwood.Action.Circuit
+namespace Zcash.Circuits.Action.Circuit
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
+open Halo2
+open Specs.Sinsemilla (Generators)
 
 /-- Rust `Config` (`circuit.rs:120-137`): everything `synthesize` consumes. The shared
 lookup config (`range_check`) is carried explicitly (Rust reaches it through the chips). -/
@@ -130,8 +130,7 @@ def configure (G : Generators) : Configure Fp Config := do
 
 /-! ## Synthesize -/
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Ecc.MulFixed (FixedBase)
 
 /-- The public-input rows of the `primary` instance column (`circuit.rs:78-86`). -/
 def ANCHOR : ℕ := 0
@@ -149,7 +148,7 @@ def DISABLE_CROSS_ADDRESS : ℕ := 9
 (Rust reaches them through `OrchardFixedBases` / the domain constants). -/
 structure Bases where
   nullifierK : FixedBase
-  valueCommitV : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase
+  valueCommitV : Ecc.MulFixed.Short.FixedBase
   valueCommitR : FixedBase
   spendAuthG : FixedBase
   commitIvkR : FixedBase
@@ -172,7 +171,7 @@ structure UnconstrainedSibs (F : Type) where
   evalVerifier _ _ := ()
   evalProver pe f := fun i => ((f i).eval pe)[0]
 
-instance : ProvableType (Halo2.Value UnconstrainedSibs) :=
+instance : ProvableType (Value UnconstrainedSibs) :=
   (inferInstance : ProvableType unit)
 
 /-- Prover-only ℕ-indexed family of Merkle swap flags (native closures — the cond-swap
@@ -187,7 +186,7 @@ structure UnconstrainedSwaps (F : Type) where
   evalVerifier _ _ := ()
   evalProver pe f := fun i => f i pe
 
-instance : ProvableType (Halo2.Value UnconstrainedSwaps) :=
+instance : ProvableType (Value UnconstrainedSwaps) :=
   (inferInstance : ProvableType unit)
 
 /-- The Action circuit's private inputs as a prover-only hint block, derived per-field
@@ -417,4 +416,4 @@ def synthesize (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
   let pts ← synthesizeBase G B W cfg
   synthCrossAddressChecks cfg pts
 
-end Halo2.Ironwood.Action.Circuit
+end Zcash.Circuits.Action.Circuit

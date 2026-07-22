@@ -29,10 +29,9 @@ the statement is direct).
 Phase-1 donor: `Clean/Orchard/Action/AddressIntegrity.lean` (post-`CommitIvk` part).
 -/
 
-namespace Halo2.Ironwood.Action.AddressIntegrity
+namespace Zcash.Circuits.Action.AddressIntegrity
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point)
+open Halo2
 
 /-- The inputs of the address-integrity block: the committed incoming viewing key cell
 `ivk` (the `commit_ivk` output, coerced by the region-free `ScalarVar::from_base`) and
@@ -111,4 +110,4 @@ def circuit : FormalCircuit Fp
 
 derive_contract_bridges circuit := circuit
 
-end Halo2.Ironwood.Action.AddressIntegrity
+end Zcash.Circuits.Action.AddressIntegrity

@@ -15,9 +15,10 @@ Reference (ported from actual Rust, not memory):
 The phase-one donor is `Clean/Orchard/Utilities.lean` (`Utilities.AddChip`).
 -/
 
-namespace Halo2.Ironwood.AddChip
+namespace Zcash.Circuits.AddChip
 
-open Halo2.Ironwood (Fp)
+open Halo2
+
 
 /-- Rust `AddConfig` (`add_chip.rs:13-19`). -/
 structure Config where
@@ -95,4 +96,4 @@ def addFormal :=
 
 derive_contract_bridges addFormal := addFormal
 
-end Halo2.Ironwood.AddChip
+end Zcash.Circuits.AddChip

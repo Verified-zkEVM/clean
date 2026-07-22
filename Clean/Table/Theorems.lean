@@ -1,5 +1,7 @@
 import Clean.Table.Basic
 
+open Clean
+
 namespace Trace
 variable {F : Type} {S : Type → Type} [ProvableType S]
 

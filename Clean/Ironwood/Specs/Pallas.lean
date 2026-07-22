@@ -52,7 +52,7 @@ theorem no_onCurve_y_zero (x : Fields.Pasta.PallasBaseField) : ¬ OnCurve a b (x
 
 end CompElliptic.Curves.Pasta.Pallas
 
-namespace Halo2.Ironwood
+namespace Zcash.Circuits
 
 open CompElliptic.CurveForms
 open ShortWeierstrass (SWPoint)
@@ -528,4 +528,4 @@ theorem nsmul_x_ne {P : Point Fp} (hP : P.OnCurve)
 
 end Point
 
-end Halo2.Ironwood
+end Zcash.Circuits

@@ -23,11 +23,10 @@ Reference (ported from actual Rust, not memory):
 Phase-1 donor: `Clean/Orchard/Action/ValueCommit.lean`.
 -/
 
-namespace Halo2.Ironwood.Action.ValueCommit
+namespace Zcash.Circuits.Action.ValueCommit
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point Fq)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2
+open Ecc.MulFixed (FixedBase)
 
 /-- The inputs: the short child's magnitude/sign cells and the blinding scalar's
 nat-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
@@ -45,7 +44,7 @@ ValueCommitR` (full-width; the scalar is the child's extraction data), and the f
 complete addition. `Spec` is the donor contract: the commitment is
 `[±m] V + [rcv] R` at the sign-resolved magnitude `m < 2⁶⁴` and the extracted
 full-width scalar. -/
-def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
+def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     FormalCircuit Fp
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
@@ -117,7 +116,7 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       trivial⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
 
-derive_contract_bridges circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase)
+derive_contract_bridges circuit (V : Ecc.MulFixed.Short.FixedBase)
   (R : FixedBase) := circuit V R
 
-end Halo2.Ironwood.Action.ValueCommit
+end Zcash.Circuits.Action.ValueCommit

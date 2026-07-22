@@ -25,9 +25,8 @@ whose hash escapes yields a nontrivial discrete-log relation among `Q` and the
 nonzero mod the odd group order).
 -/
 
-namespace Halo2.Ironwood.Specs.Sinsemilla
+namespace Zcash.Circuits.Specs.Sinsemilla
 
-open Halo2.Ironwood (Point)
 
 /-- Which incomplete-addition escape fired at the exceptional step. The step is
 `(acc ⸭ S m) ⸭ acc` (§5.4.1.9); conditions are listed in evaluation order, so each
@@ -371,7 +370,7 @@ theorem SpecOrBreak.mono {S : ℕ → Point Fp} {Q : Point Fp}
 theorem chunksOf_mem_lt {val n m : ℕ} (h : m ∈ chunksOf val n) : m < 2 ^ K := by
   simp only [chunksOf, List.mem_map, List.mem_range] at h
   obtain ⟨i, -, rfl⟩ := h
-  exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
+  exact bitrange_lt _ _ _
 
 /-- The generator table is on-curve at every chunk of a `chunksOf` message. -/
 theorem Generators.chunksOf_onCurve (G : Generators) (val n : ℕ) :
@@ -390,4 +389,4 @@ theorem breaksOfGuarded {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ
   | inl B => exact h B (hashToPointB_inl hB)
   | inr br => exact validBreak_of_inr hQ hS hB
 
-end Halo2.Ironwood.Specs.Sinsemilla
+end Zcash.Circuits.Specs.Sinsemilla

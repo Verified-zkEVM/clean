@@ -37,7 +37,7 @@ Here, we introduce the `VmTables` structure (capturing basic assumptions we put 
 `addVm_soundVmChannel_of_soundChannels`, which shows soundness for a VM added on top of a `SoundChannels` ensemble.
 -/
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 
 structure VmStep (Message : TypeMap) [ProvableType Message] (F : Type) where
   enabled : Expression F
@@ -119,8 +119,8 @@ def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F
     simp only [← input_eq, circuit_norm] at *
     have soundVm := ens.soundVmChannel witness ?assumptions constraints balance
     convert (ens.verifier.original_full_soundness _ _ _ ?_ ?_ soundVm).1
-    · rw [ProvableType.eval_fromInput_varFromOffset_zero]
-    · rw [ProvableType.eval_fromInput_varFromOffset_zero]
+    · rw [ProvableType.Clean.eval_fromInput_varFromOffset_zero]
+    · rw [ProvableType.Clean.eval_fromInput_varFromOffset_zero]
       exact verifier_assumptions
     · exact EnsembleWitness.verifierConstraints_of_constraints constraints
     simp only [EnsembleWitness.Assumptions]
@@ -145,7 +145,7 @@ variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → P
     ∀ data, ens.ensemble.verifier.Assumptions publicInput data ∧ ExtraAssumptions publicInput data := by
   simp only [toFormal, circuit_norm]
 end SoundVmEnsemble
-end Air.Flat
+end Clean.Air.Flat
 
 def List.flattenPairs {α : Type} (pairs : List (α × α)) : List α :=
   pairs.map (fun (a, b) => [a, b]) |>.flatten
@@ -215,7 +215,7 @@ lemma List.zip_map_fst_snd {α β : Type} (pairs : List (α × β)) :
   | cons pair pairs ih =>
     simp [ih]
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 omit [DecidableEq F] in
 /-- Ensemble interactions preserving the per-row structure until the final flatten. -/
 lemma EnsembleWitness.flatMap_interactionsWith_eq_flatten {ens : Ensemble F PublicIO}
@@ -361,7 +361,7 @@ lemma interactionValuesWith_eq (witness : VmWitness vm)
     vm.channel.pulledIfValue (witness.rowEnabled ‹_› row) (witness.rowPull ‹_› row),
     vm.channel.pushedIfValue (witness.rowEnabled ‹_› row) (witness.rowPush ‹_› row) ] := by
   simp only [circuit_norm, vm.interactionsWith_eq (witness.mem_allTables_component_of_mem_allTables ‹_›),
-    rowEnabled, rowPull, rowPush, AbstractInteraction.eval, ProvableType.toElements_eval]
+    rowEnabled, rowPull, rowPush, AbstractInteraction.eval, ProvableType.Clean.toElements_eval]
 
 lemma interactionValuesWith_length (witness : VmWitness vm)
     {table} (_ : table ∈ witness.allTables) (row : Array F) :
@@ -888,4 +888,4 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
   (soundEns.addVm vm nmv gsf rdf).ensemble = soundEns.ensemble.addVm vm := rfl
 
 end SoundEnsemble
-end Air.Flat
+end Clean.Air.Flat

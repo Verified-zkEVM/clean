@@ -16,18 +16,17 @@ Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
 -- file-wide (as in the sibling wrappers).
 set_option linter.constructorNameAsVariable false
 
-namespace Halo2.Ironwood.Ecc.MulFixed.Short
+namespace Zcash.Circuits.Ecc.MulFixed.Short
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Ecc.MulFixed
+open Halo2
+open Ecc.MulFixed
   (coordsGate fixedConstantsLoop processWindow windowChain FixedBaseData)
-open Halo2.Ironwood.DecomposeRunningSum (copyDecompose rangeCheckExpr)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed.Short (FixedBase)
+open DecomposeRunningSum (copyDecompose rangeCheckExpr)
+open Ecc.MulFixed.Short (FixedBase)
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 
 /-- The data of a proven short fixed base (window tables for the 22 short windows). -/
-def _root_.Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase.toData (B : FixedBase) :
+def FixedBase.toData (B : FixedBase) :
     FixedBaseData :=
   { params := B.params, point := B.point, u := B.u }
 
@@ -104,7 +103,7 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
   fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 22
   -- the window chain over the magnitude cell
   let r ← windowChain cfg.superConfig
-    (processWindow B (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+    (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
       magnitude) offset 22
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
@@ -150,7 +149,7 @@ private theorem innerRegion_output_zs (B : FixedBaseData) (cfg : Config) (offset
   show (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig offset
       { alpha := magnitude }).output self).zs = _
   rw [FormalRegionCircuit.output_call,
-    Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output]
+    DecomposeRunningSum.copyDecompose_output]
 
 private theorem innerRegion_output_acc (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (magnitude : AssignedCell Fp) (self : RegionIndex) :
@@ -175,16 +174,16 @@ private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : 
   rw [innerOutCells, ← innerRegion_output_acc, ← innerRegion_output_mulB,
     ← innerRegion_output_zs]
 
-derive_contract_bridges dec := Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22
-derive_contract_bridges addinc := Halo2.Ironwood.Ecc.AddIncomplete.add
-derive_contract_bridges addc := Halo2.Ironwood.Ecc.Add.add
+derive_contract_bridges dec := DecomposeRunningSum.copyDecompose 3 22
+derive_contract_bridges addinc := Ecc.AddIncomplete.add
+derive_contract_bridges addc := Ecc.Add.add
 
 /-- Lower windows' short table point as a plain scalar multiple. -/
 theorem shortWindowPoint_lower (point : Point Fp) {w k : ℕ} (hw : w < 21) (hk : k < 8) :
-    Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint point w k
+    Ecc.MulFixed.Short.windowPoint point w k
       = (((k + 2) * 8 ^ w : ℕ) • point) := by
-  unfold Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint
-  rw [Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_val hw hk]
+  unfold Ecc.MulFixed.Short.windowPoint
+  rw [Ecc.MulFixed.Short.windowScalar_val hw hk]
 
 /-- The shared-config assumptions the inner proofs consume. -/
 def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
@@ -194,41 +193,41 @@ def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
 
 /-- The inner bundle's soundness contract, split at the region boundary. -/
 def InnerSpec (B : FixedBase)
-    (input : Value Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
+    (input : Value DecomposeRunningSum.Inputs Fp)
     (out : Value InnerOut Fp) (_ : unit Fp) : Prop :=
   ∃ ks : ℕ → ℕ, (∀ w, w < 22 → ks w < 8) ∧
     (let V := ∑ j ∈ Finset.range 22, ks j * 8 ^ j
     input.alpha = (V : Fp) ∧
-    out.acc = { x := ((Halo2.Ironwood.Ecc.MulFixed.partialSum ks 20) • B.point).x,
-                y := ((Halo2.Ironwood.Ecc.MulFixed.partialSum ks 20) • B.point).y } ∧
-    out.mulB = Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21) ∧
+    out.acc = { x := ((Ecc.MulFixed.partialSum ks 20) • B.point).x,
+                y := ((Ecc.MulFixed.partialSum ks 20) • B.point).y } ∧
+    out.mulB = Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21) ∧
     ∀ w : Fin 23, out.zs[w.val] = ((V / 2 ^ (3 * w.val) : ℕ) : Fp))
 
 /-- Honest-prover precondition: the magnitude fits the strict 66-bit decomposition. -/
 def InnerProverAssumptions
-    (input : ProverValue Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
+    (input : ProverValue DecomposeRunningSum.Inputs Fp)
     (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
   input.alpha.val < 2 ^ 66
 
 /-- Honest-prover postcondition: the exit cells at the magnitude's own digits, plus the
 running sums. -/
 def InnerProverSpec (B : FixedBase)
-    (input : ProverValue Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)
+    (input : ProverValue DecomposeRunningSum.Inputs Fp)
     (out : ProverValue InnerOut Fp) (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
-  out.acc.x = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+  out.acc.x = (Ecc.MulFixed.partialSum
       (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
-  out.acc.y = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+  out.acc.y = (Ecc.MulFixed.partialSum
       (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
-  out.mulB.x = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+  out.mulB.x = (Ecc.MulFixed.Short.windowPoint B.point 21
       (input.alpha.val / 2 ^ (3 * 21) % 8)).x ∧
-  out.mulB.y = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+  out.mulB.y = (Ecc.MulFixed.Short.windowPoint B.point 21
       (input.alpha.val / 2 ^ (3 * 21) % 8)).y ∧
   ∀ w : Fin 23, out.zs[w.val] = ((input.alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)
 
 /-- The elaborated-metadata instance, with the output cells in explicit reduced form. -/
 instance innerElab (B : FixedBaseData) (config : Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut
-      (fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
+    ElaboratedRegionCircuit Fp DecomposeRunningSum.Inputs InnerOut
+      (fun input : Var DecomposeRunningSum.Inputs Fp =>
         innerRegion B config offset input.alpha) where
   output := fun _ self => innerOutCells config offset self
   output_eq := by
@@ -239,8 +238,8 @@ set_option linter.all false in
 /-- The inner region's soundness, standalone (own declaration budget). -/
 private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Soundness
-      (Input := Halo2.Ironwood.DecomposeRunningSum.Inputs) (Output := InnerOut)
-      (fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
+      (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
+      (fun input : Var DecomposeRunningSum.Inputs Fp =>
         innerRegion B.toData cfg offset input.alpha)
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) (InnerSpec B) := by
@@ -253,11 +252,11 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
   -- discharge and unfold to the running-sum decomposition.
   simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq] at hDec
   -- circuit_proof_start unfolded `innerRegion` in `h_output`; it is defeq to the reduced cells.
-  change ProvableStruct.eval env.place env.env (innerOutCells cfg offset self)
+  change ProvableStruct.Halo2.eval env.place env.env (innerOutCells cfg offset self)
     = { acc := output_acc, mulB := output_mulB, zs := output_zs } at h_output
   simp only [innerOutCells] at h_output
   provable_type_simp
-  simp only [Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output, circuit_norm] at hDec
+  simp only [DecomposeRunningSum.copyDecompose_output, circuit_norm] at hDec
   obtain ⟨V, hVlt, hAlphaV, hZs⟩ := hDec
   obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
   -- ── the digit sequence and its reconstruction ──
@@ -272,7 +271,7 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
     calc (∑ j ∈ Finset.range 22, V / 2 ^ (3 * j) % 8 * 8 ^ j)
         = ∑ j ∈ Finset.range 22, V / 8 ^ j % 8 * 8 ^ j :=
           Finset.sum_congr rfl (fun j _ => hstep j)
-      _ = V % 8 ^ 22 := Halo2.Ironwood.Ecc.MulFixed.sum_base8 V 22
+      _ = V % 8 ^ 22 := Ecc.MulFixed.sum_base8 V 22
       _ = V := Nat.mod_eq_of_lt hVlt'
   -- ── the per-row window points (the coords rows) ──
   simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
@@ -283,11 +282,11 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
   have hWP : ∀ w : Fin 22,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (V / 2 ^ (3 * w.val) % 8)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (V / 2 ^ (3 * w.val) % 8)).y := by
     intro w
     have hRow := hFixed w
@@ -305,13 +304,13 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
             * ((MulFixed.H : ℕ) : Fp)
         = ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp) := by
       rw [show offset + w.val + 1 = offset + (w.val + 1) from by omega, hz0, hz1]
-      have hsw := Halo2.Ironwood.DecomposeRunningSum.shift_word_eq 3 V w.val
+      have hsw := DecomposeRunningSum.shift_word_eq 3 V w.val
       norm_num [MulFixed.H] at hsw ⊢
       exact hsw
     rw [hword] at hIx
     have hxP : env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = Halo2.Ironwood.Ecc.MulFixed.interpolate (B.params w.val)
+        = Ecc.MulFixed.interpolate (B.params w.val)
             ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp) := by
       rw [← sub_eq_zero.mp hIx]
       apply MulFixed.interpolate_congr_params <;>
@@ -319,7 +318,7 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
         first
         | exact hL0 | exact hL1 | exact hL2 | exact hL3
         | exact hL4 | exact hL5 | exact hL6 | exact hL7
-    have hspec : Halo2.Ironwood.Ecc.MulFixed.Coords.Spec (B.params w.val)
+    have hspec : Ecc.MulFixed.Coords.Spec (B.params w.val)
         { window := ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp),
           xP := env.env.advice cfg.superConfig.addConfig.xP
             ((env.place self + (offset + w.val) : ℕ) : ℤ),
@@ -401,14 +400,14 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
     rw [if_neg (by norm_num : ¬(20 : ℕ) = 0), if_neg (by norm_num : ¬(20 : ℕ) = 0),
       show offset + 20 + 1 = offset + 21 from by omega] at hI20
     rw [← hOax, ← hOay]
-    rcases hP : Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 20
+    rcases hP : Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 20
         • B.point with ⟨px, py⟩
     rw [hP] at hI20
     rw [hI20.1, hI20.2]
   · -- mulB = the short MSB window point
     obtain ⟨hwx, hwy⟩ := hWP ⟨21, by norm_num⟩
     rw [← hOmx, ← hOmy]
-    rcases hW : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21 (V / 2 ^ (3 * 21) % 8)
+    rcases hW : Ecc.MulFixed.Short.windowPoint B.point 21 (V / 2 ^ (3 * 21) % 8)
       with ⟨wx, wy⟩
     rw [show ((⟨21, by norm_num⟩ : Fin 22) : ℕ) = 21 from rfl, hW] at hwx hwy
     rw [hwx, hwy]
@@ -430,16 +429,16 @@ private theorem short_windows_honest (B : FixedBase) (cfg : Config) (offset : �
         + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         22).operations self)) :
     ∀ w : Fin 22,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
       env.env.advice cfg.superConfig.u
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
@@ -451,11 +450,11 @@ private theorem short_windows_honest (B : FixedBase) (cfg : Config) (offset : �
   have hPW : ∀ w : Fin 22,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
       env.env.advice cfg.superConfig.u
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
@@ -508,7 +507,7 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
         cfg.superConfig offset 22).operations self))
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         22).operations self))
     (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
     (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
@@ -518,23 +517,23 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)) :
     RegionOperations.Constraints env.place self env.env.toEnvironment
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         22).operations self) ∧
     (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+      = (Ecc.MulFixed.partialSum
           (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+      = (Ecc.MulFixed.partialSum
           (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
      env.env.advice cfg.superConfig.addConfig.xP
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
           (input_alpha.val / 2 ^ (3 * 21) % 8)).x ∧
      env.env.advice cfg.superConfig.addConfig.yP
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
           (input_alpha.val / 2 ^ (3 * 21) % 8)).y) := by
   have hPW := short_windows_honest B cfg offset self env input_var_alpha input_alpha
     h_input hWchain
@@ -613,11 +612,11 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
   have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 20 →
       env.env.advice cfg.superConfig.addIncompleteConfig.xQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+        = (Ecc.MulFixed.partialSum
             (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).x ∧
       env.env.advice cfg.superConfig.addIncompleteConfig.yQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+        = (Ecc.MulFixed.partialSum
             (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
@@ -626,19 +625,19 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+      = (Ecc.MulFixed.partialSum
           (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
       env.env.advice cfg.superConfig.addIncompleteConfig.yQR
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum
+      = (Ecc.MulFixed.partialSum
           (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
       env.env.advice cfg.superConfig.addConfig.xP
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
           (input_alpha.val / 2 ^ (3 * 21) % 8)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
         ((env.place self + (offset + 21) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
           (input_alpha.val / 2 ^ (3 * 21) % 8)).y := by
     have h83 := hInv 20 (by norm_num) le_rfl
     rw [show offset + 20 + 1 = offset + 21 from by omega] at h83
@@ -662,19 +661,19 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
     rw [show ((⟨1, by norm_num⟩ : Fin 22) : ℕ) = 1 from rfl] at hp1x hp1y
     rw [show ((⟨0, by norm_num⟩ : Fin 22) : ℕ) = 0 from rfl,
       show offset + 0 = offset from by omega] at hp0x hp0y
-    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar 1
+    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.Short.windowScalar 1
       (input_alpha.val / 2 ^ (3 * 1) % 8)).val := ⟨_, rfl⟩
-    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar 0
+    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.Short.windowScalar 0
       (input_alpha.val / 2 ^ (3 * 0) % 8)).val := ⟨_, rfl⟩
     have ht1 : t1 = (input_alpha.val / 2 ^ (3 * 1) % 8 + 2) * 8 ^ 1 := by
       rw [ht1_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 1)
+      exact Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 1)
     have hs0 : s0 = (input_alpha.val / 2 ^ (3 * 0) % 8 + 2) * 8 ^ 0 := by
       rw [hs0_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 0)
-    have hwp1 : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 1
+      exact Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 0)
+    have hwp1 : Ecc.MulFixed.Short.windowPoint B.point 1
         (input_alpha.val / 2 ^ (3 * 1) % 8) = t1 • B.point := by rw [ht1_def]; rfl
-    have hwp0 : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 0
+    have hwp0 : Ecc.MulFixed.Short.windowPoint B.point 0
         (input_alpha.val / 2 ^ (3 * 0) % 8) = s0 • B.point := by rw [hs0_def]; rfl
     rw [hwp1] at hp1x hp1y
     rw [hwp0] at hp0x hp0y
@@ -707,24 +706,24 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
     have hih := hInv (i.val + 1) (by omega) (by omega)
     rw [show offset + (i.val + 1) + 1 = offset + 2 + i.val from by omega] at hih
     obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
-        t = (Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar (i.val + 2)
+        t = (Ecc.MulFixed.Short.windowScalar (i.val + 2)
           (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8)).val := ⟨_, rfl⟩
     obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
-        S = Halo2.Ironwood.Ecc.MulFixed.partialSum
+        S = Ecc.MulFixed.partialSum
           (fun t => input_alpha.val / 2 ^ (3 * t) % 8) (i.val + 1) := ⟨_, rfl⟩
     have hval : t = (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8 + 2) * 8 ^ (i.val + 2) := by
       rw [ht_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_val (by omega) (hks_lt _)
-    have hwp : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point (i.val + 2)
+      exact Ecc.MulFixed.Short.windowScalar_val (by omega) (hks_lt _)
+    have hwp : Ecc.MulFixed.Short.windowPoint B.point (i.val + 2)
         (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8) = t • B.point := by
       rw [ht_def]; rfl
     rw [hwp] at hpx hpy
     rw [← hS_def] at hih
     have hS_lt : S < 2 * 8 ^ (i.val + 2) := by
       rw [hS_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
+      exact Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
     have hS_pos : 0 < S := by
-      rw [hS_def]; exact Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _
+      rw [hS_def]; exact Ecc.MulFixed.partialSum_pos _ _
     obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
       step_bounds (hks_lt (i.val + 2)) hS_lt hS_pos (by omega)
     rw [← hval] at hb1 hb2 hb3 hb5
@@ -753,7 +752,7 @@ private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset 
         cfg.superConfig offset 22).operations self))
     (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
       ((MulFixed.windowChain cfg.superConfig
-        (MulFixed.processWindow B.toData (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
         22).operations self))
     (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
     (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
@@ -781,11 +780,11 @@ private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset 
   have hPW : ∀ w : Fin 22,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point w.val
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
             (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
       env.env.advice cfg.superConfig.u
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
@@ -836,20 +835,20 @@ private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset 
         * ((MulFixed.H : ℕ) : Fp)
       = ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp) := by
     rw [show offset + i.val + 1 = offset + (i.val + 1) from by omega, hz0, hz1]
-    have hsw := Halo2.Ironwood.DecomposeRunningSum.shift_word_eq 3 input_alpha.val i.val
+    have hsw := DecomposeRunningSum.shift_word_eq 3 input_alpha.val i.val
     norm_num [MulFixed.H] at hsw ⊢
     exact hsw
   refine ⟨?_, ?_, ?_⟩
   · -- check x
     rw [hword, hpx]
-    have hcongr : Halo2.Ironwood.Ecc.MulFixed.interpolate
+    have hcongr : Ecc.MulFixed.interpolate
         (MulFixed.readParams cfg.superConfig
           (Query.eval env.env.toEnvironment
             (fun j => if j = cfg.superConfig.runningSumConfig.qRangeCheck.index then 1
               else 0)
             ((env.place self + (offset + i.val) : ℕ) : ℤ)))
         ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp)
-        = Halo2.Ironwood.Ecc.MulFixed.interpolate (B.params i.val)
+        = Ecc.MulFixed.interpolate (B.params i.val)
             ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp) := by
       apply MulFixed.interpolate_congr_params <;>
         simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
@@ -865,7 +864,7 @@ private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset 
   · -- on-curve
     rw [hpx, hpy]
     have hoc := B.windowPoint_onCurve (w := i.val) hdig
-    unfold Halo2.Ironwood.Point.OnCurve at hoc
+    unfold Point.OnCurve at hoc
     linear_combination hoc
 
 set_option linter.all false in
@@ -879,25 +878,25 @@ private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
         + input_var_alpha.cell.rowOffset : ℕ) : ℤ) = input_alpha)
     (hPA : input_alpha.val < 2 ^ 66)
     (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
-      (((Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22).call
+      (((DecomposeRunningSum.copyDecompose 3 22).call
         cfg.superConfig.runningSumConfig offset
         { alpha := input_var_alpha }).operations self)) :
     RegionOperations.Constraints env.place self env.env.toEnvironment
-      (((Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22).call
+      (((DecomposeRunningSum.copyDecompose 3 22).call
         cfg.superConfig.runningSumConfig offset
         { alpha := input_var_alpha }).operations self) ∧
     ∀ w : Fin 23, env.env.advice cfg.superConfig.runningSumConfig.z
         ((env.place self + (offset + w.val) : ℕ) : ℤ)
       = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp) := by
   have hDecC := Halo2.SubcircuitRw.region_completeness_leaf_placed
-    (Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22)
+    (DecomposeRunningSum.copyDecompose 3 22)
     cfg.superConfig.runningSumConfig offset self env { alpha := input_var_alpha } hWdec
   have hDecS := Halo2.SubcircuitRw.region_completeness_derived_placed
-    (Halo2.Ironwood.DecomposeRunningSum.copyDecompose 3 22)
+    (DecomposeRunningSum.copyDecompose 3 22)
     cfg.superConfig.runningSumConfig offset self env { alpha := input_var_alpha } hWdec
   simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq,
     dec_proverAssumptions_eq, dec_proverSpec_eq,
-    Halo2.Ironwood.DecomposeRunningSum.copyDecompose_output, circuit_norm]
+    DecomposeRunningSum.copyDecompose_output, circuit_norm]
     at hDecC hDecS
   have hPA' : (env.env.get input_var_alpha.cell.column
       ((env.place input_var_alpha.cell.regionIndex
@@ -913,8 +912,8 @@ set_option linter.all false in
 /-- The inner region's completeness, standalone (own declaration budget). -/
 private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
-      (Input := Halo2.Ironwood.DecomposeRunningSum.Inputs) (Output := InnerOut)
-      (fun input : Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp =>
+      (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
+      (fun input : Var DecomposeRunningSum.Inputs Fp =>
         innerRegion B.toData cfg offset input.alpha)
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
@@ -944,7 +943,7 @@ private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset 
           input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).1
     · -- the honest-prover contract (`InnerProverSpec`)
       simp only [InnerProverSpec]
-      change ProvableStruct.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
+      change ProvableStruct.Halo2.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
         = _ at h_output
       simp only [innerOutCells] at h_output
       provable_type_simp
@@ -969,7 +968,7 @@ private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset 
 
 /-- The inner-region bundle. -/
 def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
-    Halo2.Ironwood.DecomposeRunningSum.Inputs InnerOut where
+    DecomposeRunningSum.Inputs InnerOut where
   configure := pure
   synthesize cfg offset input := innerRegion B.toData cfg offset input.alpha
   Assumptions _ := True
@@ -1076,7 +1075,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     simp only [synthesize, circuit_norm] at hc
     obtain ⟨hInner, hMsw⟩ := hc
     simp only [mswRegion, shortGate,
-      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
+      DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
       Vector.getElem_ofFn, circuit_norm, mul_one, one_mul] at hMsw
     obtain ⟨hAddC, hCpSign, hCpZ21, hBool, hSignSq, _hYchk, hNeg⟩ := hMsw
     obtain ⟨hIMag, hISign⟩ := h_input
@@ -1093,29 +1092,29 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add, circuit_norm]
       at hAddC
     obtain ⟨t21, ht21_def⟩ : ∃ t : ℕ,
-        t = (Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar 21 (ks 21)).val := ⟨_, rfl⟩
-    have hwp21 : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21)
+        t = (Ecc.MulFixed.Short.windowScalar 21 (ks 21)).val := ⟨_, rfl⟩
+    have hwp21 : Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21)
         = t21 • B.point := by rw [ht21_def]; rfl
-    obtain ⟨S20, hS20_def⟩ : ∃ S : ℕ, S = Halo2.Ironwood.Ecc.MulFixed.partialSum ks 20 :=
+    obtain ⟨S20, hS20_def⟩ : ∃ S : ℕ, S = Ecc.MulFixed.partialSum ks 20 :=
       ⟨_, rfl⟩
     have hS20_lt : S20 < 2 * 8 ^ 21 := by
       rw [hS20_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ 20 (fun j hj => hks_lt' j (by omega))
+      exact Ecc.MulFixed.partialSum_lt _ 20 (fun j hj => hks_lt' j (by omega))
     have hS20_pos : 0 < S20 := by
       rw [hS20_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _
+      exact Ecc.MulFixed.partialSum_pos _ _
     have hS20_card : S20 < PALLAS_SCALAR_CARD :=
-      Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS20_lt (by norm_num)
+      Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS20_lt (by norm_num)
     have hOnP : (t21 • B.point).OnCurve := by
       rw [← hwp21]
       exact B.windowPoint_onCurve (hks_lt' 21 (by norm_num))
     have hOnQ : (S20 • B.point).OnCurve :=
-      Halo2.Ironwood.Point.nsmul_onCurve B.onCurve hS20_pos hS20_card
+      Point.nsmul_onCurve B.onCurve hS20_pos hS20_card
     obtain ⟨-, hOutEq⟩ := hAddC ⟨by rw [hMulB, hwp21]; exact Or.inl hOnP,
       by rw [hAcc, ← hS20_def]; exact Or.inl hOnQ⟩
     rw [hMulB, hAcc, hwp21, ← hS20_def,
       show (⟨env.place, env.env⟩ : Placed Environment Fp) = env from rfl] at hOutEq
-    rw [Halo2.Ironwood.Point.nsmul_add_nsmul B.onCurve] at hOutEq
+    rw [Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- the add output cells, as reads
     rw [show Add.add.output cfg.superConfig.addConfig 0
         ⟨{ x := AssignedCell.of i₀ 21 cfg.superConfig.addConfig.xP,
@@ -1135,15 +1134,15 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl] at hz21
     rw [hz21] at hCpZ21
     obtain ⟨b, hb_lt, hb_eq⟩ :=
-      (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num) _).mp
-        ((Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mp hBool)
+      (DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num) _).mp
+        ((Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mp hBool)
     rw [hCpZ21] at hb_eq
     obtain ⟨V, hV_def⟩ : ∃ v : ℕ, v = ∑ j ∈ Finset.range 22, ks j * 8 ^ j := ⟨_, rfl⟩
     have hVlt : V < 8 ^ 22 := by
       rw [hV_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.sum_lt_of_windows hks_lt'
+      exact Ecc.MulFixed.BaseFieldElem.RunningSumMul.sum_lt_of_windows hks_lt'
     have hdig21 : V / 2 ^ 63 = b := by
-      apply Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
+      apply Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
         (by rw [show (2:ℕ) ^ 63 = 8 ^ 21 from by norm_num]
             rw [show (8:ℕ) ^ 22 = 8 ^ 21 * 8 from by ring] at hVlt
             exact Nat.div_lt_of_lt_mul (by omega))
@@ -1163,8 +1162,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     -- ── assemble the signed spec ──
     have hchain : (t21 + S20) • B.point = ((V : Fq)).val • B.point := by
       rw [ht21_def, hS20_def,
-        ← Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase.add_natCast_val_nsmul, hV_def,
-        Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar_partialSum]
+        ← Ecc.MulFixed.Short.FixedBase.add_natCast_val_nsmul, hV_def,
+        Ecc.MulFixed.Short.windowScalar_partialSum]
     rw [hchain] at hOutEq
     obtain ⟨yMag, hyMag_def⟩ : ∃ ym : Fp, ym = env.env.advice cfg.superConfig.addConfig.yQR
         ((env.place (i₀ + 1) + 1 : ℕ) : ℤ) := ⟨_, rfl⟩
@@ -1178,7 +1177,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     have hyeq : input_sign * output_y = yMag := by
       rw [hyMag_def, ← hOy]
       linear_combination hNeg
-    have hsigned := Halo2.Ironwood.Ecc.MulFixed.Short.signed_output_spec B
+    have hsigned := Ecc.MulFixed.Short.signed_output_spec B
       (sign := input_sign) (ySigned := output_y) hmulEq
       (fun hs => by rw [← hyeq, hs, one_mul])
       (fun hs => by rw [← hyeq, hs]; ring)
@@ -1214,9 +1213,9 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     have hIC := short_inner_completeness B cfg 0 i₀ env ⟨input_var_magnitude⟩ hWInner
       _hE trivial (by
         show ZMod.val (eval env (⟨input_var_magnitude⟩ :
-          Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)).alpha < 2 ^ 66
+          Var DecomposeRunningSum.Inputs Fp)).alpha < 2 ^ 66
         have h : (eval env (⟨input_var_magnitude⟩ :
-            Var Halo2.Ironwood.DecomposeRunningSum.Inputs Fp)).alpha
+            Var DecomposeRunningSum.Inputs Fp)).alpha
             = input_magnitude := by
           simp only [circuit_norm, AssignedCell.eval]
           exact hIMag
@@ -1235,7 +1234,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
     · exact hIC.1
     · -- the msw region: the addition leaf + the sign row on honest values
       simp only [mswRegion, shortGate,
-        Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
+        DecomposeRunningSum.eval_rangeCheckExpr, innerRegion_output_zs,
         Vector.getElem_ofFn, circuit_norm, mul_one, one_mul] at hWMsw ⊢
       obtain ⟨hWAdd, hWSign, hWZ21, hWyVar⟩ := hWMsw
       have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed Add.add
@@ -1263,22 +1262,22 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       · -- the complete addition on the honest exit points
         simp only [innerRegion_output_mulB, innerRegion_output_acc, Nat.zero_add]
         refine hC ⟨?_, ?_⟩
-        · have hOn : (Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+        · have hOn : (Ecc.MulFixed.Short.windowPoint B.point 21
               (input_magnitude.val / 2 ^ (3 * 21) % 8)).OnCurve :=
             B.windowPoint_onCurve (hks_lt 21)
-          rcases hWp : Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint B.point 21
+          rcases hWp : Ecc.MulFixed.Short.windowPoint B.point 21
               (input_magnitude.val / 2 ^ (3 * 21) % 8) with ⟨wx, wy⟩
           rw [hWp] at hOn hmx hmy
           rw [hmx, hmy]
           exact Or.inl hOn
-        · have hOn : ((Halo2.Ironwood.Ecc.MulFixed.partialSum
+        · have hOn : ((Ecc.MulFixed.partialSum
               (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20) • B.point).OnCurve :=
-            Halo2.Ironwood.Point.nsmul_onCurve B.onCurve
-              (Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _)
-              (Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
-                (Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ 20 (fun j _ => hks_lt j))
+            Point.nsmul_onCurve B.onCurve
+              (Ecc.MulFixed.partialSum_pos _ _)
+              (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+                (Ecc.MulFixed.partialSum_lt _ 20 (fun j _ => hks_lt j))
                 (by norm_num))
-          rcases hSp : Halo2.Ironwood.Ecc.MulFixed.partialSum
+          rcases hSp : Ecc.MulFixed.partialSum
               (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20 • B.point
             with ⟨sx, sy⟩
           rw [hSp] at hOn hax hay
@@ -1291,8 +1290,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         have hb : input_magnitude.val / 2 ^ (3 * 21) < 2 := by
           have : (2:ℕ) ^ (3 * 21) = 2 ^ 63 := by norm_num
           omega
-        exact (Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mpr
-          ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)
+        exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mpr
+          ((DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)
             _).mpr ⟨input_magnitude.val / 2 ^ (3 * 21), hb, rfl⟩)
       · -- sign check
         rw [hWSign, hISign]
@@ -1317,4 +1316,4 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 
-end Halo2.Ironwood.Ecc.MulFixed.Short
+end Zcash.Circuits.Ecc.MulFixed.Short

@@ -20,12 +20,12 @@ The value-level contract is the donor `Hash.HashPaddedBlock.value`
 (`Clean/Orchard/Poseidon/Hash.lean`) at capacity `ConstantLength.capacity 2 = 2·2⁶⁴`.
 -/
 
-namespace Halo2.Ironwood.Poseidon
+namespace Zcash.Circuits.Poseidon
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Poseidon
-open Halo2.Ironwood.Poseidon.Permute (State)
-open Halo2.Ironwood.Poseidon.Permute.P128Pow5T3 (roundConstants)
+open Halo2
+open Poseidon
+open Poseidon.Permute (State)
+open Poseidon.Permute.P128Pow5T3 (roundConstants)
 
 /-- A constant witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]
@@ -199,7 +199,7 @@ def hash (capacity : Fp) :
     rw [show env.get x_gen_out_2.x0.cell.column
         ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
-      = (ProvableStruct.eval place env x_gen_out_2 : State Fp).x0 from by
+      = (ProvableStruct.Halo2.eval place env x_gen_out_2 : State Fp).x0 from by
         provable_type_simp]
     rw [h2]
     rfl
@@ -220,7 +220,7 @@ def hash (capacity : Fp) :
     rw [show env.get x_gen_out_2.x0.cell.column
         ((place x_gen_out_2.x0.cell.regionIndex
           + x_gen_out_2.x0.cell.rowOffset : ℕ) : ℤ)
-      = (ProvableStruct.eval place env.toEnvironment x_gen_out_2
+      = (ProvableStruct.Halo2.eval place env.toEnvironment x_gen_out_2
           : State Fp).x0 from by provable_type_simp]
     rw [h2]
     rw [h_input.1, h_input.2]
@@ -228,4 +228,4 @@ def hash (capacity : Fp) :
 
 derive_contract_bridges hash (capacity : Fp) := hash capacity
 
-end Halo2.Ironwood.Poseidon
+end Zcash.Circuits.Poseidon

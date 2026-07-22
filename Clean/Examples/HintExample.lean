@@ -11,6 +11,8 @@ import Clean.Circuit
 import Clean.Gadgets.Boolean
 import Clean.Types.U32
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 namespace Examples.HintExample
@@ -75,7 +77,7 @@ def booleanAnd : FormalCircuit (F p) Input field where
     circuit_proof_start [witnessBool, IsBool]
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
     <;> simp_all [Witgen.MOver.evalBool, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
-      Witgen.WitgenEnv.readVar_main]
+      WitgenEnv.readVar_eq]
 
 structure MixedInput (F : Type) where
   someElement : U32 F

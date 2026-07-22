@@ -29,14 +29,15 @@ checks, or assignment machinery around the gate.
 Like the `NoteCommit` canonicity gates, the gate `Spec` is the *canonical-decomposition
 payoff*: under the surrounding lookup rely-conditions (`Assumptions`), the witnessed
 sub-pieces are exactly the canonical little-endian bit slices of `ak`/`nk`. The proofs reuse
-the shared canonicity facts in `Halo2.Ironwood.NoteCommit` (`CanonicityTheorems`).
+the shared canonicity facts in `NoteCommit` (`CanonicityTheorems`).
 -/
 
-namespace Halo2.Ironwood.CommitIvk.Gate
+namespace Zcash.Circuits.CommitIvk.Gate
 
-open Halo2.Ironwood.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
+open Clean
+open Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.NoteCommit (pallasBaseCard_eq tPNat tP_eq val_limb2 val_shift
+open NoteCommit (pallasBaseCard_eq tPNat tP_eq val_limb2 val_shift
   canonical_top_decomp natCast_eq_zero high_bit_canonical high_bit_z13_zero
   high_bit_high_zero bitrange_low_div bitrange_div_pow bit_decomp_255 bitrange_one_isBool)
 
@@ -339,4 +340,4 @@ theorem eqs_of_spec (row : Input Fp) (hAss : Assumptions row) (hSpec : Spec row)
     · rw [hd1_eq, h]; simp
     · rw [hd1z14Impl (by rw [hd1_eq, h]; norm_num)]; simp
 
-end Halo2.Ironwood.CommitIvk.Gate
+end Zcash.Circuits.CommitIvk.Gate

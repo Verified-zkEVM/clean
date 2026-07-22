@@ -20,7 +20,9 @@ subcircuit (a purely virtual boundary; no extra constraints or wiring), which ex
 the running-sum cells `z₄₃`, `z₄₄`, `z₈₄` that the canonicity check copies in.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem
+namespace Zcash.Circuits.Ecc.MulFixed.BaseFieldElem
+
+open Clean
 
 namespace Gate
 
@@ -129,7 +131,7 @@ of the committed base-field element (`k = α.val / 8^w % 8`, matching `windowVal
 definitionally), witness the next running-sum value, and read the three window-table
 columns at `k`. -/
 def rowProgram (B : MulFixed.FixedBase) (alpha : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -613,4 +615,4 @@ theorem honest_canon_spec {row : Input Fp} {α : Fp}
     · -- z13 = 0
       rw [hz13, Nat.div_eq_of_lt hap_val]; norm_num
 
-end Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem
+end Zcash.Circuits.Ecc.MulFixed.BaseFieldElem

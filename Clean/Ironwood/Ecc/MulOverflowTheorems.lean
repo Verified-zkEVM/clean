@@ -5,7 +5,9 @@ import Clean.Ironwood.Utilities.RunningSum
 Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul.Overflow
+namespace Zcash.Circuits.Ecc.Mul.Overflow
+
+open Clean
 
 structure Input (F : Type) where
   z0 : F
@@ -79,4 +81,4 @@ private theorem eval_get13 (env : Environment Fp) (v : Vector (Expression Fp) 14
 
 end OverflowCheck
 
-end Halo2.Ironwood.Ecc.Mul.Overflow
+end Zcash.Circuits.Ecc.Mul.Overflow

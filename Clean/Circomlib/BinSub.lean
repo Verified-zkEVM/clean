@@ -3,6 +3,8 @@ import Clean.Utils.Bits
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
 
+open Clean
+
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime]
@@ -40,7 +42,7 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [NeZero n] (env : Environment (F p))
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
-  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [ProvableType.Clean.getElem_eval_fields, getElem_eval_vector, h_eval]
   have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][k]) (fun i => 2^i) (n:=n)
   simp_all only [Fin.getElem_fin, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.mod_succ]
   simp [fieldFromBits_as_sum]

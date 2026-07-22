@@ -13,7 +13,9 @@ the Sinsemilla hash.
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
+
+open Clean
 
 -- A helper struct for single-row double-and-add using incomplete addition.
 structure DoubleAndAddRow (F : Type) where
@@ -146,4 +148,4 @@ theorem coordinates_of_constraints {A S B : Point Fp}
 
 end DoubleAndAdd
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
+open Clean
+
 namespace Orchard.Ecc
 
 open CompElliptic.CurveForms
@@ -310,18 +312,18 @@ def main (input : Var Input Fp) :
     Circuit Fp (Var Point Fp) := do
   let p <== input.p
   let q <== input.q
-  let px : Witgen.FExpr Fp := p.x
-  let qx : Witgen.FExpr Fp := q.x
-  let py : Witgen.FExpr Fp := p.y
-  let qy : Witgen.FExpr Fp := q.y
-  let rX : Witgen.FExpr Fp :=
+  let px : FExpr Fp := p.x
+  let qx : FExpr Fp := q.x
+  let py : FExpr Fp := p.y
+  let qy : FExpr Fp := q.y
+  let rX : FExpr Fp :=
     .ite ((px =? 0) &&& (py =? 0)) qx <|
     .ite ((qx =? 0) &&& (qy =? 0)) px <|
     .ite (px =? qx)
       (.ite (py + qy =? 0) 0
         ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx))
       ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)
-  let rY : Witgen.FExpr Fp :=
+  let rY : FExpr Fp :=
     .ite ((px =? 0) &&& (py =? 0)) qy <|
     .ite ((qx =? 0) &&& (qy =? 0)) py <|
     .ite (px =? qx)
@@ -330,7 +332,7 @@ def main (input : Var Input Fp) :
           (px - ((3 * px * px) * (2 * py)⁻¹ * ((3 * px * px) * (2 * py)⁻¹) - px - qx)) - py))
       ((qy - py) * (qx - px)⁻¹ *
         (px - ((qy - py) * (qx - px)⁻¹ * ((qy - py) * (qx - px)⁻¹) - px - qx)) - py)
-  let r ← witness <| (Point.mk rX rY : Point (Witgen.FExpr Fp))
+  let r ← witness <| (Point.mk rX rY : Point (FExpr Fp))
   let lambda ← witness <| .ite (qx =? px)
     (.ite (py =? 0) 0 ((3 * px * px) * (2 * py)⁻¹))
     ((qy - py) * (qx - px)⁻¹)

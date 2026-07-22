@@ -20,7 +20,7 @@ This file only supplies what is element-specific:
   `M (Expression F)`): structured circuit values are structs of cell references, halo2's
   composition currency (Rust gadgets do the same: `EccPoint` is a struct of
   `AssignedCell`s).
-- `ProvableType.eval place env` evaluates them to values `M F`, given the region
+- `ProvableType.Halo2.eval place env` evaluates them to values `M F`, given the region
   placement.
 
 Deliberately absent, with no halo2 analogue:
@@ -32,9 +32,9 @@ Deliberately absent, with no halo2 analogue:
   created by an assignment operation at a specific (region, column, row offset).
 -/
 
-namespace Halo2
-
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
+
+namespace Halo2
 
 instance : Inhabited Cell where
   default := ⟨0, 0, ⟨.advice, 0⟩⟩
@@ -101,15 +101,18 @@ namespace CircuitType
 
 /-- Verifier-view evaluation of a halo2 circuit variable, given a placement + env. -/
 instance verifierEval M [CircuitType M] : Eval (Placed Environment F) (Var M F) (Value M F) where
-  eval := CircuitType.evalVerifier
+  eval := CircuitTypeOver.evalVerifier
 
 /-- Prover-view evaluation (hints visible). -/
 instance proverEval M [CircuitType M] : Eval (Placed ProverEnvironment F) (Var M F) (ProverValue M F) where
-  eval := CircuitType.evalProver
+  eval := CircuitTypeOver.evalProver
 
 end CircuitType
 
-namespace ProvableType
+end Halo2
+
+namespace ProvableType.Halo2
+open _root_.Halo2
 
 /--
 Evaluate a structured variable in the given environment: every cell reference is read
@@ -119,8 +122,8 @@ from its column at its region's placement plus its row offset.
 `offset`); proofs are generic over it, the top level instantiates the floor planner's
 output.
 
-Note: like main Clean's `ProvableType.eval`, this is not tagged with `circuit_norm`, to
-enable higher-level `ProvableStruct` decompositions.
+Note: like main Clean's `ProvableType.Clean.eval`, this is not tagged with `circuit_norm`,
+to enable higher-level `ProvableStruct` decompositions.
 -/
 @[explicit_provable_type]
 def eval (place : RegionIndex → ℕ) (env : Environment F) (x : M (AssignedCell F)) : M F :=
@@ -131,14 +134,14 @@ def eval (place : RegionIndex → ℕ) (env : Environment F) (x : M (AssignedCel
 /--
 `ProvableType`s are halo2 `CircuitType`s: verifier- and prover-value coincide with the
 input type, and `Var` is `M (AssignedCell ·)`. Halo2 counterpart of main Clean's
-`ProvableType.toCircuitType`.
+`ProvableType.Clean.toCircuitType`.
 -/
 @[reducible] instance toCircuitType {M : TypeMap} [ProvableType M] : CircuitType M where
   Var F := M (AssignedCell F)
   Value := M
   ProverValue := M
-  evalVerifier pe v := ProvableType.eval pe.place pe.env v
-  evalProver pe v := ProvableType.eval pe.place pe.env.toEnvironment v
+  evalVerifier pe v := ProvableType.Halo2.eval pe.place pe.env v
+  evalProver pe v := ProvableType.Halo2.eval pe.place pe.env.toEnvironment v
 
 /- Normalize `Var`/`Value`/`ProverValue` of a provable type to their concrete forms, so
 the *concrete* form is the single simp normal form (matching main Clean, and symmetric
@@ -191,7 +194,7 @@ lemma eval_field_prover' (env : Placed ProverEnvironment F) (x : Var field F) :
 
 /-!
 General struct-eval bridges (main Clean's `eval_var`/`eval_expression`): rewrite the
-`Eval.eval` of a provable variable to `ProvableType.eval`, which `explicit_provable_type`
+`Eval.eval` of a provable variable to `ProvableType.Halo2.eval`, which `explicit_provable_type`
 then unfolds componentwise for *any* provable type. Provided at BOTH the abstract
 `Var M F` form and the concrete `M (AssignedCell F)` form, so they fire regardless of
 which spelling a goal carries — this replaces per-gadget eval-split lemmas.
@@ -199,22 +202,23 @@ which spelling a goal carries — this replaces per-gadget eval-split lemmas.
 
 -- Deliberately `explicit_provable_type` only, NOT `circuit_norm`: `Eval.eval` is the normal
 -- form (nicer to state facts against), so `circuit_norm` must not flatten plain
--- `ProvableType`s to `ProvableType.eval`. `provable_type_simp` decomposes plain-type
+-- `ProvableType`s to `ProvableType.Halo2.eval`. `provable_type_simp` decomposes plain-type
 -- *literals* directly on the `Eval.eval` head instead (see `StructEvalSimprocs`).
 @[explicit_provable_type] lemma eval_var (env : Placed Environment F) (v : Var M F) :
-    Eval.eval env v = ProvableType.eval env.place env.env (v : M (AssignedCell F)) := by
+    Eval.eval env v = ProvableType.Halo2.eval env.place env.env (v : M (AssignedCell F)) := by
   with_unfolding_all rfl
 
 @[explicit_provable_type] lemma eval_var_prover (env : Placed ProverEnvironment F) (v : Var M F) :
-    Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment (v : M (AssignedCell F)) := by
+    Eval.eval env v = ProvableType.Halo2.eval env.place env.env.toEnvironment
+      (v : M (AssignedCell F)) := by
   with_unfolding_all rfl
 
 @[explicit_provable_type] lemma eval_cells (env : Placed Environment F) (v : M (AssignedCell F)) :
-    Eval.eval env v = ProvableType.eval env.place env.env v := by
+    Eval.eval env v = ProvableType.Halo2.eval env.place env.env v := by
   with_unfolding_all rfl
 
 @[explicit_provable_type] lemma eval_cells_prover (env : Placed ProverEnvironment F) (v : M (AssignedCell F)) :
-    Eval.eval env v = ProvableType.eval env.place env.env.toEnvironment v := by
+    Eval.eval env v = ProvableType.Halo2.eval env.place env.env.toEnvironment v := by
   with_unfolding_all rfl
 
 /-!
@@ -276,12 +280,12 @@ lemma getElem_eval_fields_cells_prover {n : ℕ} (env : Placed ProverEnvironment
 -- at a single uniform spelling without hand `show`-rewrites of `Fin` coercions.
 attribute [circuit_norm] Fin.getElem_fin Vector.getElem_ofFn
 
-end ProvableType
+end ProvableType.Halo2
 
 /-!
 ## Struct-preserving evaluation
 
-Halo2 counterpart of main Clean's `ProvableStruct.eval` (`Clean/Circuit/Provable.lean`):
+Halo2 counterpart of main Clean's `ProvableStruct.Clean.eval` (`Clean/Circuit/Provable.lean`):
 evaluate a struct of cell references component-by-component, keeping the high-level
 `ProvableStruct` shape instead of flattening to a field vector. The `@[circuit_norm ↓ high]`
 bridges rewrite `Eval.eval env x` (verifier and prover views) to this form for *any*
@@ -290,7 +294,9 @@ a per-gadget `eval_eq` lemma — matching main Clean, and symmetric with the wit
 `Witgen.StructEval.eval` (`Clean/Circuit/WitnessIR.lean`).
 -/
 
-namespace ProvableStruct
+namespace ProvableStruct.Halo2
+open _root_.Halo2
+open ProvableType.Halo2
 open _root_.ProvableStruct (WithProvableType ProvableTypeList componentsToElements componentsFromElements combinedSize')
 variable {α : TypeMap} [ProvableStruct α]
 
@@ -306,13 +312,13 @@ def eval (place : RegionIndex → ℕ) (env : Environment F) (var : α (Assigned
 where
   go : (cs : List WithProvableType) → ProvableTypeList (AssignedCell F) cs → ProvableTypeList F cs
     | [], .nil => .nil
-    | _ :: cs, .cons a as => .cons (ProvableType.eval place env a) (go cs as)
+    | _ :: cs, .cons a as => .cons (ProvableType.Halo2.eval place env a) (go cs as)
 
-/-- `ProvableStruct.eval` agrees with the flat `ProvableType.eval`. -/
+/-- `ProvableStruct.Halo2.eval` agrees with the flat `ProvableType.Halo2.eval`. -/
 theorem eval_eq_eval (place : RegionIndex → ℕ) (env : Environment F) (x : α (AssignedCell F)) :
-    ProvableType.eval place env x = ProvableStruct.eval place env x := by
+    ProvableType.Halo2.eval place env x = ProvableStruct.Halo2.eval place env x := by
   symm
-  simp only [eval, ProvableType.eval, fromElements, toElements, size]
+  simp only [eval, ProvableType.Halo2.eval, fromElements, toElements, size]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -334,27 +340,30 @@ where
 flat unfold (`↓ high`), so goals keep the struct shape. -/
 @[circuit_norm ↓ high]
 theorem eval_var_eq_eval (env : Placed Environment F) (x : Var α F) :
-    Eval.eval env x = ProvableStruct.eval env.place env.env (x : α (AssignedCell F)) := by
-  rw [ProvableType.eval_var]; exact eval_eq_eval env.place env.env (x : α (AssignedCell F))
+    Eval.eval env x = ProvableStruct.Halo2.eval env.place env.env (x : α (AssignedCell F)) := by
+  rw [eval_var]
+  exact eval_eq_eval env.place env.env (x : α (AssignedCell F))
 
 /-- Prover-view componentwise `Eval.eval` of a derived struct variable. -/
 @[circuit_norm ↓ high]
 theorem eval_var_eq_eval_prover (env : Placed ProverEnvironment F) (x : Var α F) :
-    Eval.eval env x = ProvableStruct.eval env.place env.env.toEnvironment (x : α (AssignedCell F)) := by
-  rw [ProvableType.eval_var_prover]; exact eval_eq_eval env.place _ (x : α (AssignedCell F))
+    Eval.eval env x = ProvableStruct.Halo2.eval env.place env.env.toEnvironment
+      (x : α (AssignedCell F)) := by
+  rw [eval_var_prover]
+  exact eval_eq_eval env.place _ (x : α (AssignedCell F))
 
 /-- Verifier componentwise `Eval.eval`, concrete `α (AssignedCell F)` spelling. -/
 @[circuit_norm ↓ high]
 theorem eval_cells_eq_eval (env : Placed Environment F) (x : α (AssignedCell F)) :
-    Eval.eval env x = ProvableStruct.eval env.place env.env x := by
-  rw [ProvableType.eval_cells]; exact eval_eq_eval env.place env.env x
+    Eval.eval env x = ProvableStruct.Halo2.eval env.place env.env x := by
+  rw [eval_cells]
+  exact eval_eq_eval env.place env.env x
 
 /-- Prover componentwise `Eval.eval`, concrete `α (AssignedCell F)` spelling. -/
 @[circuit_norm ↓ high]
 theorem eval_cells_eq_eval_prover (env : Placed ProverEnvironment F) (x : α (AssignedCell F)) :
-    Eval.eval env x = ProvableStruct.eval env.place env.env.toEnvironment x := by
-  rw [ProvableType.eval_cells_prover]; exact eval_eq_eval env.place _ x
+    Eval.eval env x = ProvableStruct.Halo2.eval env.place env.env.toEnvironment x := by
+  rw [eval_cells_prover]
+  exact eval_eq_eval env.place _ x
 
-end ProvableStruct
-
-end Halo2
+end ProvableStruct.Halo2

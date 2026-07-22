@@ -1,5 +1,7 @@
 import Clean.Orchard.Ecc.Defs
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/

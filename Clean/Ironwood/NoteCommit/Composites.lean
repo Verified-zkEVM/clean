@@ -18,12 +18,12 @@ the gate's own constraint (derived inside the gate bundle's soundness). `Spec` i
 donor composite's bit-slice payoff.
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
 
-open Halo2.Ironwood (Fp)
+open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Specs (bitrange)
-open Halo2.Ironwood.NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
+open Specs (bitrange)
+open NoteCommit (high_bit_canonical shifted_high_zero bit_one_of_val_eq
   base_val_lt_tP_val tPNat)
 
 section WitnessCheckBridges
@@ -57,12 +57,12 @@ deriving ProvableStruct
 /-- The `a' = a + 2¹³⁰ − t_P` witness program (Rust `canon_bitshift_130`, computed from
 `a`'s value). -/
 def aPrimeWit (a : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP]
+  .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - tP]
 
 @[circuit_norm]
 theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
-    ((aPrimeWit a).eval env)[j] = readCell env a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    ((aPrimeWit a).eval env)[j] = readCell env a + ((2 ^ 130 : ℕ) : Fp) - tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [aPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -145,7 +145,7 @@ def circuit :
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    simp only [GdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec] at hGSpec
+    simp only [GdCanonicity.toDonor, NoteCommit.GdCanonicity.Gate.Spec] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
@@ -183,7 +183,7 @@ def circuit :
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
-      simp only [GdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec]
+      simp only [GdCanonicity.toDonor, NoteCommit.GdCanonicity.Gate.Spec]
       refine ⟨⟨hPA.1, hPA.2.1, hPA.2.2, ?_⟩, hWaP⟩
       -- honest tail of `a' = a + 2^130 - t_P`: with the top bit set, `a < t_P`, so the
       -- 130-bit shift stays below `2^130` and the running-sum tail vanishes
@@ -211,12 +211,12 @@ deriving ProvableStruct
 
 /-- The shifted-value witness program (Rust computes it from the pieces' values). -/
 def b3CPrimeWit (b3 c : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env b3 + ((2 ^ 4 : ℕ) : Fp) * readCell env c + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP]
+  .native fun env => #v[readCell env b3 + ((2 ^ 4 : ℕ) : Fp) * readCell env c + ((2 ^ 140 : ℕ) : Fp) - tP]
 
 @[circuit_norm]
 theorem b3CPrimeWit_eval (b3 c : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
-    ((b3CPrimeWit b3 c).eval env)[j] = readCell env b3 + ((2 ^ 4 : ℕ) : Fp) * readCell env c + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    ((b3CPrimeWit b3 c).eval env)[j] = readCell env b3 + ((2 ^ 4 : ℕ) : Fp) * readCell env c + ((2 ^ 140 : ℕ) : Fp) - tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [b3CPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -291,7 +291,7 @@ def circuit :
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec] at hGSpec
+    simp only [PkdCanonicity.toDonor, NoteCommit.PkdCanonicity.Gate.Spec] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
@@ -326,7 +326,7 @@ def circuit :
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
-      simp only [PkdCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec]
+      simp only [PkdCanonicity.toDonor, NoteCommit.PkdCanonicity.Gate.Spec]
       refine ⟨⟨hPA.1, hPA.2.1, hPA.2.2, ?_⟩, by rw [hWaP]; ring⟩
       intro h1
       rw [hzLast, ← hz0eqP, hWaP]
@@ -352,12 +352,12 @@ deriving ProvableStruct
 
 /-- The shifted-value witness program (Rust computes it from the pieces' values). -/
 def e1FPrimeWit (e1 f : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env e1 + ((2 ^ 4 : ℕ) : Fp) * readCell env f + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP]
+  .native fun env => #v[readCell env e1 + ((2 ^ 4 : ℕ) : Fp) * readCell env f + ((2 ^ 140 : ℕ) : Fp) - tP]
 
 @[circuit_norm]
 theorem e1FPrimeWit_eval (e1 f : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
-    ((e1FPrimeWit e1 f).eval env)[j] = readCell env e1 + ((2 ^ 4 : ℕ) : Fp) * readCell env f + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    ((e1FPrimeWit e1 f).eval env)[j] = readCell env e1 + ((2 ^ 4 : ℕ) : Fp) * readCell env f + ((2 ^ 140 : ℕ) : Fp) - tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [e1FPrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -432,7 +432,7 @@ def circuit :
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec] at hGSpec
+    simp only [RhoCanonicity.toDonor, NoteCommit.RhoCanonicity.Gate.Spec] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1⟩
 
   completeness := by
@@ -467,7 +467,7 @@ def circuit :
       simp only [gateChild_proverAssumptions_eq, circuit_norm]
       rw [h_input.2.1, h_input.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2]
-      simp only [RhoCanonicity.toDonor, Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec]
+      simp only [RhoCanonicity.toDonor, NoteCommit.RhoCanonicity.Gate.Spec]
       refine ⟨⟨hPA.1, hPA.2.1, hPA.2.2, ?_⟩, by rw [hWaP]; ring⟩
       intro h1
       rw [hzLast, ← hz0eqP, hWaP]
@@ -494,12 +494,12 @@ deriving ProvableStruct
 
 /-- The shifted-value witness program (Rust computes it from the pieces' values). -/
 def g1G2PrimeWit (g1 g2 : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .native fun env => #v[readCell env g1 + ((2 ^ 9 : ℕ) : Fp) * readCell env g2 + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP]
+  .native fun env => #v[readCell env g1 + ((2 ^ 9 : ℕ) : Fp) * readCell env g2 + ((2 ^ 130 : ℕ) : Fp) - tP]
 
 @[circuit_norm]
 theorem g1G2PrimeWit_eval (g1 g2 : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
-    ((g1G2PrimeWit g1 g2).eval env)[j] = readCell env g1 + ((2 ^ 9 : ℕ) : Fp) * readCell env g2 + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    ((g1G2PrimeWit g1 g2).eval env)[j] = readCell env g1 + ((2 ^ 9 : ℕ) : Fp) * readCell env g2 + ((2 ^ 130 : ℕ) : Fp) - tP := by
   have hj0 : j = 0 := by omega
   subst hj0
   simp only [g1G2PrimeWit, Witgen.WitgenIROver.eval_native_apply]
@@ -577,7 +577,7 @@ def circuit :
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, circuit_norm] at hGate
     have hGSpec := hGate trivial
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hA.2.2.2.2, lo, hlo, by rw [hz0eq]; exact htel⟩
-    simp only [PsiCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec] at hGSpec
+    simp only [PsiCanonicity.toDonor, NoteCommit.PsiCanonicity.Gate.Spec] at hGSpec
     exact ⟨hGSpec.1, hGSpec.2.1, hGSpec.2.2.1, hGSpec.2.2.2.1⟩
 
   completeness := by
@@ -613,7 +613,7 @@ def circuit :
       rw [h_input.2.2.1, h_input.2.2.2.2.1] at hWaP
       rw [h_input.1, h_input.2.1, h_input.2.2.1, h_input.2.2.2.1, h_input.2.2.2.2.1,
         h_input.2.2.2.2.2]
-      simp only [PsiCanonicity.toDonor, Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec]
+      simp only [PsiCanonicity.toDonor, NoteCommit.PsiCanonicity.Gate.Spec]
       refine ⟨⟨hPA.1, hPA.2.1, hPA.2.2.1, hPA.2.2.2, ?_⟩, by rw [hWaP]; ring⟩
       intro h1
       rw [hzLast, ← hz0eqP, hWaP]
@@ -624,4 +624,4 @@ def circuit :
 
 end PsiCanonicityCheck
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

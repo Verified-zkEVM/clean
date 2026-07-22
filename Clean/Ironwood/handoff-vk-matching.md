@@ -922,8 +922,8 @@ tree itself is left for whoever performs the deletion).
 
 Where things landed:
 - `Clean/Ironwood/Specs/` = the old `Clean/Orchard/Specs` (verbatim copy), namespaces
-  `Orchard.*` → `Halo2.Ironwood.*` (so `Fp`/`Fq`/`Point`/`pallasB` are now defined in
-  `Specs/Pallas.lean` under `Halo2.Ironwood` — `Ecc/Basic.lean`'s abbrevs are gone).
+  `Orchard.*` → `Zcash.Circuits.*` (so `Fp`/`Fq`/`Point`/`pallasB` are now defined in
+  `Specs/Pallas.lean` under `Zcash.Circuits` — `Ecc/Basic.lean`'s abbrevs are gone).
   The vendored `CompElliptic`/`CompPoly` namespaces are unchanged.
 - Phase-1 donor files' pure layers live as theorems files next to their consuming
   circuits (`XTheorems.lean` / folder `Theorems.lean` pattern): Ecc `Defs`,
@@ -941,10 +941,10 @@ Where things landed:
   `honestChunks_donor_eq` bridges in the two MainBundles are now `rfl`.
 - VK fixtures + tests moved: `Clean/Ironwood/Fixtures/*` (incl. FixtureTypes/Layout/
   Project — they are Fp-specialized) and `Clean/Ironwood/Tests/TestVk*` +
-  `BenchFixedBase`; namespace `Halo2.Fixtures` → `Halo2.Ironwood.Fixtures`.
+  `BenchFixedBase`; namespace `Halo2.Fixtures` → `Zcash.Circuits.Fixtures`.
   `Clean/Halo2` is now Ironwood-free except its framework tests' toy usages.
   The LOCAL-ONLY Rust dumper commits (this machine, /root/code/halo2) emit the new
-  `Clean.Ironwood.Fixtures`/`Halo2.Ironwood.Fixtures` header (commit a6964d4).
+  `Clean.Ironwood.Fixtures` import / `Zcash.Circuits.Fixtures` namespace header (commit a6964d4).
 
 ## VK test suite pruned to top-level + doc tests (July 20, 2026, Gregor's directive)
 

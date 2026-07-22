@@ -5,7 +5,7 @@ import Clean.Ironwood.Ecc.WitnessPoint
 /-!
 # Test: parent circuits composing a subcircuit via the `subcircuit_rw` engine
 
-Two PARENT `FormalRegionCircuit`s call the real child `Halo2.Ironwood.Ecc.WitnessPoint.point`
+Two PARENT `FormalRegionCircuit`s call the real child `Ecc.WitnessPoint.point`
 and are proven sound + complete by consuming the child's constraint chunk with the
 `subcircuit_rw` engine (the mechanism that replaced the historical absorption iffs):
 
@@ -25,7 +25,9 @@ introduces the premised derived statement `h_spec_0 : EnvA → A → PA → Spec
 marker/OR leftovers to discard.
 -/
 
-namespace Halo2.Ironwood.Ecc.TestSubcircuit
+namespace Zcash.Circuits.Ecc.TestSubcircuit
+
+open Halo2
 
 /-! ## Bare-call parent -/
 
@@ -112,4 +114,4 @@ def parentWithOp :
     convert hpa using 2
     with_unfolding_all exact h_input
 
-end Halo2.Ironwood.Ecc.TestSubcircuit
+end Zcash.Circuits.Ecc.TestSubcircuit

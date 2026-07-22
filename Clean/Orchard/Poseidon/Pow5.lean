@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Orchard.Poseidon.Pow5.Constants
 
+open Clean
+
 /-!
 # Orchard Poseidon Pow5 gates and chip entry points
 
@@ -25,7 +27,7 @@ def pow5 {K : Type} [Mul K] (x : K) : K :=
   x2 * x2 * x
 
 /-- `pow5` commutes with witness-IR evaluation, since it is built purely from `*`. -/
-theorem pow5_FExpr_eval (ctx : Witgen.Ctx Fp) (x : Witgen.FExpr Fp) :
+theorem pow5_FExpr_eval (ctx : Ctx Fp) (x : FExpr Fp) :
     Witgen.FExprOver.eval ctx (pow5 x) = pow5 (Witgen.FExprOver.eval ctx x) := by
   simp [pow5, circuit_norm]
 
@@ -143,9 +145,9 @@ def value (params : FullRound.Gate.Params Fp) (state : Permute.State Fp) : Permu
 def main (params : Gate.Params Fp) (state : Var Permute.State Fp) :
     Circuit Fp (Var Permute.State Fp) := do
   let next : Var Permute.State Fp ← witnessProgram do
-    let s0 ← pow5 (K := Witgen.FExpr Fp) (state.x0 + params.rcA0)
-    let s1 ← pow5 (K := Witgen.FExpr Fp) (state.x1 + params.rcA1)
-    let s2 ← pow5 (K := Witgen.FExpr Fp) (state.x2 + params.rcA2)
+    let s0 ← pow5 (K := FExpr Fp) (state.x0 + params.rcA0)
+    let s1 ← pow5 (K := FExpr Fp) (state.x1 + params.rcA1)
+    let s2 ← pow5 (K := FExpr Fp) (state.x2 + params.rcA2)
     return Permute.State.mk
       (s0 * params.m00 + s1 * params.m01 + s2 * params.m02)
       (s0 * params.m10 + s1 * params.m11 + s2 * params.m12)
@@ -240,7 +242,7 @@ def Params.toExpr (params : Params Fp) :
   mInv22 := params.mInv22
 
 def Params.toFExpr (params : Params Fp) :
-    Params (Witgen.FExpr Fp) where
+    Params (FExpr Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -441,9 +443,9 @@ internally and assert the `partial rounds` gate. -/
 def main (params : Gate.Params Fp) (state : Var Permute.State Fp) :
     Circuit Fp (Var Permute.State Fp) := do
   let mid0Sbox ← witness <|
-    mid0SboxValue (K := Witgen.FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
+    mid0SboxValue (K := FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
   let next ← witness <|
-    value (K := Witgen.FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
+    value (K := FExpr Fp) params.toFExpr (Permute.State.mk state.x0 state.x1 state.x2)
   Gate.circuit params
     { cur0 := state.x0, cur1 := state.x1, cur2 := state.x2,
       mid0Sbox,

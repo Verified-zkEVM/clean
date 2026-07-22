@@ -4,6 +4,8 @@ import Clean.Utils.FiniteField
 import Clean.Utils.Vector
 import Clean.Circuit.Provable
 
+open Clean
+
 /-!
 # Witness-generation IR
 
@@ -41,7 +43,7 @@ running index via `NExpr.idx`) — kept as a *loop* rather than unrolled — or 
    needed for serialization anyway).
 -/
 
-variable {F : Type}
+variable {F V Env : Type}
 
 namespace Witgen
 
@@ -116,15 +118,6 @@ inductive BExprOver (F : Type) (V : Type) where
 
 end
 
-/-- Main Clean's field-sorted witness expressions: variables are circuit `Expression`s. -/
-abbrev FExpr (F : Type) := FExprOver F (Expression F)
-/-- Main Clean's Nat-sorted witness expressions. -/
-abbrev NExpr (F : Type) := NExprOver F (Expression F)
-/-- Main Clean's witness conditions. -/
-abbrev BExpr (F : Type) := BExprOver F (Expression F)
-
-variable {V Env : Type}
-
 /-- `x - y` as a derived field expression. -/
 @[reducible] def FExprOver.sub [Field F] (x y : FExprOver F V) : FExprOver F V :=
   .add x (.mul (.const (-1)) y)
@@ -140,6 +133,18 @@ variable {V Env : Type}
 @[reducible] def NExprOver.testBit (x i : NExprOver F V) : NExprOver F V :=
   .mod (.shiftR x i) (.const 2)
 
+end Witgen
+
+namespace Clean
+open Witgen
+
+/-- Main Clean's field-sorted witness expressions: variables are circuit `Expression`s. -/
+abbrev FExpr (F : Type) := FExprOver F (Expression F)
+/-- Main Clean's Nat-sorted witness expressions. -/
+abbrev NExpr (F : Type) := NExprOver F (Expression F)
+/-- Main Clean's witness conditions. -/
+abbrev BExpr (F : Type) := BExprOver F (Expression F)
+
 namespace FExpr
 export FExprOver (expr envGet const localVar add mul inv ofNat ite listGet dataGet hintGet)
 end FExpr
@@ -152,15 +157,16 @@ namespace BExpr
 export BExprOver (true false feq neq lt not and)
 end BExpr
 
+end Clean
+
+namespace Witgen
+
 /-- Evaluation context: the prover environment, the values of the `let`-steps computed
 so far, and the innermost `mapRange` index. Generic over the environment type. -/
 structure CtxOver (F : Type) (Env : Type) where
   env : Env
   locals : Array (F ⊕ ℕ) := #[]
   idx : ℕ := 0
-
-/-- Main Clean's evaluation context. -/
-abbrev Ctx (F : Type) := CtxOver F (ProverEnvironment F)
 
 /--
 How witness programs read from an environment: the variable-atom valuation plus the
@@ -174,7 +180,16 @@ class WitgenEnv (F : Type) (Env : Type) (V : Type) where
   data : Env → ProverData F
   hint : Env → ProverHint F
 
-@[reducible] instance [Field F] : WitgenEnv F (ProverEnvironment F) (Expression F) where
+end Witgen
+
+namespace Clean
+open Witgen
+
+/-- Main Clean's evaluation context. -/
+abbrev Ctx (F : Type) := CtxOver F (ProverEnvironment F)
+
+@[reducible] instance instWitgenEnv [Field F] :
+    WitgenEnv F (ProverEnvironment F) (Expression F) where
   readVar env e := e.eval env.toEnvironment
   get env := env.get
   data env := env.data
@@ -182,14 +197,21 @@ class WitgenEnv (F : Type) (Env : Type) (V : Type) where
 
 /- Main-instance reads normalize back to their pre-generalization spellings, so the
 existing `circuit_norm` lemma ecosystem keeps matching. -/
-@[circuit_norm] lemma WitgenEnv.readVar_main [Field F] (env : ProverEnvironment F)
+namespace WitgenEnv
+
+@[circuit_norm] lemma readVar_eq [Field F] (env : ProverEnvironment F)
     (e : Expression F) : WitgenEnv.readVar env e = e.eval env.toEnvironment := rfl
-@[circuit_norm] lemma WitgenEnv.get_main [Field F] (env : ProverEnvironment F) (i : ℕ) :
+@[circuit_norm] lemma get_eq [Field F] (env : ProverEnvironment F) (i : ℕ) :
     WitgenEnv.get (V := Expression F) env i = env.get i := rfl
-@[circuit_norm] lemma WitgenEnv.data_main [Field F] (env : ProverEnvironment F) :
+@[circuit_norm] lemma data_eq [Field F] (env : ProverEnvironment F) :
     WitgenEnv.data (V := Expression F) env = env.data := rfl
-@[circuit_norm] lemma WitgenEnv.hint_main [Field F] (env : ProverEnvironment F) :
+@[circuit_norm] lemma hint_eq [Field F] (env : ProverEnvironment F) :
     WitgenEnv.hint (V := Expression F) env = env.hint := rfl
+
+end WitgenEnv
+end Clean
+
+namespace Witgen
 
 section Eval
 variable [FiniteField F] [WitgenEnv F Env V]
@@ -290,9 +312,6 @@ inductive VExprOver (F : Type) (V : Type) : ℕ → Type where
   | mapRange (n : ℕ) (body : FExprOver F V) : VExprOver F V n
   | append {m n : ℕ} (a : VExprOver F V m) (b : VExprOver F V n) : VExprOver F V (m + n)
 
-/-- Main Clean's vector-shaped witness outputs. -/
-abbrev VExpr (F : Type) := VExprOver F (Expression F)
-
 instance {n} : Coe (Vector (FExprOver F V) n) (VExprOver F V n) where
   coe es := .lit es
 
@@ -302,9 +321,19 @@ def VExprOver.eval [FiniteField F] [WitgenEnv F Env V] (ctx : CtxOver F Env) :
   | _, .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
   | _, .append a b => a.eval ctx ++ b.eval ctx
 
+end Witgen
+
+namespace Clean
+open Witgen
+
+/-- Main Clean's vector-shaped witness outputs. -/
+abbrev VExpr (F : Type) := VExprOver F (Expression F)
+
 namespace VExpr
 export VExprOver (lit mapRange append)
-end VExpr
+end Clean.VExpr
+
+namespace Witgen
 
 /-- A scalar `let`-step: computes one field or Nat value from the environment and
 earlier steps. Referenced by position via `localVar`. -/
@@ -312,12 +341,19 @@ inductive StepOver (F : Type) (V : Type) where
   | letF (e : FExprOver F V)
   | letN (e : NExprOver F V)
 
+end Witgen
+
+namespace Clean
+open Witgen
+
 /-- Main Clean's `let`-steps. -/
 abbrev Step (F : Type) := StepOver F (Expression F)
 
 namespace Step
 export StepOver (letF letN)
-end Step
+end Clean.Step
+
+namespace Witgen
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
@@ -336,27 +372,37 @@ inductive WitgenIROver (F : Type) (Env : Type) (V : Type) : ℕ → Type where
   /-- Structured straight-line program: `let`-steps, then a vector output. -/
   | ir {m : ℕ} (steps : List (StepOver F V)) (out : VExprOver F V m) : WitgenIROver F Env V m
 
-/-- Main Clean's witness-generation programs. -/
-abbrev WitgenIR (F : Type) := WitgenIROver F (ProverEnvironment F) (Expression F)
-
 def WitgenIROver.eval {m : ℕ} [FiniteField F] [WitgenEnv F Env V] :
     WitgenIROver F Env V m → Env → Vector F m
   | .native f => f
   | .ir steps out => fun env =>
     out.eval { env, locals := evalSteps env steps }
 
+end Witgen
+
+namespace Clean
+open Witgen
+
+/-- Main Clean's witness-generation programs. -/
+abbrev WitgenIR (F : Type) :=
+  WitgenIROver F (ProverEnvironment F) (Expression F)
+
 namespace WitgenIR
 export WitgenIROver (native ir)
-end WitgenIR
 
 @[circuit_norm]
-theorem WitgenIR.eval_native {m : ℕ} [FiniteField F]
+theorem eval_native {m : ℕ} [FiniteField F]
     (f : ProverEnvironment F → Vector F m) : (WitgenIR.native f : WitgenIR F m).eval = f := rfl
 
 @[circuit_norm]
-theorem WitgenIR.eval_native_apply {m : ℕ} [FiniteField F]
+theorem eval_native_apply {m : ℕ} [FiniteField F]
     (f : ProverEnvironment F → Vector F m) (env : ProverEnvironment F) :
     (WitgenIR.native f : WitgenIR F m).eval env = f env := rfl
+
+end WitgenIR
+end Clean
+
+namespace Witgen
 
 /-!
 ## Smart constructors
@@ -374,9 +420,13 @@ def WitgenIROver.ofFExpr (e : FExprOver F V) : WitgenIROver F Env V 1 := .ir [] 
 def WitgenIROver.ofFExprs {n : ℕ} (es : Vector (FExprOver F V) n) : WitgenIROver F Env V n :=
   .ir [] (.lit es)
 
+end Witgen
+
+namespace Clean
+open Witgen
+
 namespace WitgenIR
 export WitgenIROver (ofFExpr ofFExprs)
-end WitgenIR
 
 /-- Witness program computing a whole provable value from a native Lean closure — the
 payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
@@ -384,16 +434,18 @@ so that the completeness obligation of `witnessNative` stays recognizable and ca
 rewritten at the level of provable values (`ProverEnvironment.extendsVector_nativeValue`
 in `Clean.Circuit.Basic`) instead of unfolding element-wise into `toElements` internals.
 For the same reason, this is deliberately not tagged `@[circuit_norm]`. -/
-def WitgenIR.nativeValue {value : TypeMap} [ProvableType value]
+def nativeValue {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
   .native fun env => compute env |> toElements
 
-theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
+theorem eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
-    (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
+    (nativeValue compute).eval env = toElements (compute env) := rfl
+
+end WitgenIR
 
 /-- `Witgen.eval` on `fields n` is elementwise evaluation (the witgen analogue of
-`ProvableType.eval_fields`). -/
+`ProvableType.Clean.eval_fields`). -/
 theorem eval_fields' [FiniteField F] {n : ℕ} (ctx : Ctx F) (xs : Vector (FExpr F) n) :
     Witgen.eval (M := fields n) ctx xs = xs.map (FExprOver.eval ctx) := rfl
 
@@ -424,7 +476,7 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
     (env : ProverEnvironment F) :
     (ofExprs es).eval env = es.map (Expression.eval env.toEnvironment) := by
   ext i hi
-  simp [ofExprs, WitgenIROver.eval, VExprOver.eval, FExprOver.eval, evalSteps, WitgenEnv.readVar_main]
+  simp [ofExprs, WitgenIROver.eval, VExprOver.eval, FExprOver.eval, evalSteps, WitgenEnv.readVar_eq]
 
 attribute [circuit_norm] Array.getElem?_singleton
 
@@ -498,7 +550,7 @@ theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
     (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := by
   ext i hi
   rcases Nat.lt_one_iff.mp hi
-  simp [ofFExpr, WitgenIROver.eval, VExprOver.eval, FExprOver.eval, evalSteps, WitgenEnv.readVar_main]
+  simp [ofFExpr, WitgenIROver.eval, VExprOver.eval, FExprOver.eval, evalSteps, WitgenEnv.readVar_eq]
 
 /-- Elementwise evaluation of expression-copying witnesses, keyed on `getElem` so it
 fires regardless of how the expression vector was built (matches the codebase's
@@ -517,7 +569,11 @@ theorem WitgenIR.eval_ofExprs_toElements [FiniteField F] {M : TypeMap} [Provable
     (x : M (Expression F)) (env : ProverEnvironment F) :
     (WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
-  rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
+  rw [WitgenIR.eval_ofExprs, ProvableType.Clean.toElements_eval]
+
+end Clean
+
+namespace Witgen
 
 /-!
 ## Eval-simplification tooling
@@ -664,7 +720,7 @@ Evaluate witness-IR *struct literals* component-wise.
 
 `Witgen.eval ctx s`, where `s` is a literal constructor application of a `ProvableStruct`
 type, decomposes into per-component evaluations (via `StructEval.eval`) — mirroring the
-component-preserving normal form of the regular `ProvableStruct.eval`. This is the shape
+component-preserving normal form of the regular `ProvableStruct.Clean.eval`. This is the shape
 produced by struct-valued `witnessProgram`s whose `do`-block assembles an output record
 (e.g. Poseidon's `Permute.State`), where the proof needs the per-component values.
 
@@ -715,5 +771,3 @@ simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
 attribute [circuit_norm] evalStructLiteral
 end Eval
 end Witgen
-
-export Witgen (WitgenIR)

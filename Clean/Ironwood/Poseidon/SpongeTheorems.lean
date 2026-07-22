@@ -8,7 +8,7 @@ This module mirrors `halo2_gadgets/src/poseidon.rs` around `Sponge`,
 `P128Pow5T3` instance.
 -/
 
-namespace Halo2.Ironwood.Poseidon.Sponge
+namespace Zcash.Circuits.Poseidon.Sponge
 
 /-- The rate-2 part of a P128 Poseidon state. -/
 structure Rate2 (F : Type) where
@@ -54,4 +54,4 @@ def Spec (state : Permute.State Fp) (output : Rate2 Fp) : Prop :=
 
 end GetOutput
 
-end Halo2.Ironwood.Poseidon.Sponge
+end Zcash.Circuits.Poseidon.Sponge

@@ -4,6 +4,8 @@ import Clean.Utils.Tactics
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 
+open Clean
+
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
@@ -125,7 +127,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       (rename_i h_s0 h_s1 h_s2
        simp only [h_s0, h_s1, h_s2, h_s10, circuit_norm]
        norm_num
-       rw [ProvableType.getElem_eval_fields, getElem_eval_vector])
+       rw [ProvableType.Clean.getElem_eval_fields, getElem_eval_vector])
 
     all_goals ring_nf
 

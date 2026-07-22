@@ -28,15 +28,14 @@ The output is the extracted `x`-coordinate (`ivk`). `Spec` is the breaks-as-data
 `Commit^ivk` relation at the extracted `rivk` window scalar (zcash/ironwood#45).
 -/
 
-namespace Halo2.Ironwood.CommitIvk.Main
+namespace Zcash.Circuits.CommitIvk.Main
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Sinsemilla.HashToPoint (witnessMessagePiece)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
-open Halo2.Ironwood.Specs (bitrange)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
-open Halo2.Ironwood.NoteCommit.Main (brWit currentRegion)
+open Halo2
+open Sinsemilla.HashToPoint (witnessMessagePiece)
+open Ecc.MulFixed (FixedBase)
+open Specs (bitrange)
+open Specs.Sinsemilla (Generators)
+open NoteCommit.Main (brWit currentRegion)
 
 /-- Piece word counts minus one, per the chain convention: `a` = 25 words, `b` = 1,
 `c` = 24, `d` = 1 (`I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` split at `250/10/240/10` bits). -/
@@ -142,7 +141,7 @@ def synth (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
   let cm ← (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
     (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
     { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d], r := input.rivk }
-  let _ ← (Halo2.Ironwood.CommitIvk.Canonicity.circuit (brWit input.ak 254 1) (brWit input.nk 254 1)).call
+  let _ ← (CommitIvk.Canonicity.circuit (brWit input.ak 254 1) (brWit input.nk 254 1)).call
     (cfg.gate, cfg.lookupConfig)
     { ak := input.ak, a := pcs.a, bWhole := pcs.b, b0 := pcs.b0, b2 := pcs.b2,
       z13A := zCell cfg.hashConfig iHash 0 13,
@@ -192,7 +191,7 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
 
 /-! ## The bundle contract -/
 
-open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
+open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
 instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
@@ -224,7 +223,7 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value field Fp)
     (rivk : Vector Fp 85 × Fq) : Prop :=
   SpecOrBreak G.S Q
-    (fun B => (output : Fp) = (B + (rivk.2 • R : Halo2.Ironwood.Point Fp)).x)
+    (fun B => (output : Fp) = (B + (rivk.2 • R : Point Fp)).x)
     (hashToPointB G.S Q
       (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val))
 
@@ -236,4 +235,4 @@ def ProverAssumptions (G : Generators) (Q : Point Fp)
   ∃ B, hashToPoint G.S Q
     (commitIvkChunks (show Fp from input.ak).val (show Fp from input.nk).val) = some B
 
-end Halo2.Ironwood.CommitIvk.Main
+end Zcash.Circuits.CommitIvk.Main

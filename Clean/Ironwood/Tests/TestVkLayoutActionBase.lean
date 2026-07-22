@@ -10,11 +10,10 @@ the 0.14.0 circuit — verified on the ironwood branch), loaded from
 shared between the two versions.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test.LayoutActionBase
+namespace Zcash.Circuits.Fixtures.Test.LayoutActionBase
 
-open Halo2 Halo2.Ironwood.Fixtures Halo2.Ironwood.Fixtures.Layout
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Fixtures.Test.LayoutAction (aProgramBase)
+open Halo2 Fixtures Fixtures.Layout
+open Fixtures.Test.LayoutAction (aProgramBase)
 
 /-! All checks live in ONE `#eval` so the shared reconstruction (ops → regions → copy
 list → σ → fixed) evaluates exactly once; the fixture is loaded from
@@ -49,4 +48,4 @@ list → σ → fixed) evaluates exactly once; the fixture is loaded from
     ("σ", decide (sigma = fx.sigma)),
     ("fixed contents", decide (fixed = sortFixed fx.fixed))]
 
-end Halo2.Ironwood.Fixtures.Test.LayoutActionBase
+end Zcash.Circuits.Fixtures.Test.LayoutActionBase

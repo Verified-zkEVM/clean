@@ -3,6 +3,8 @@ import Clean.Gadgets.SHA256.SHA256Schedule
 import Clean.Gadgets.SHA256.Add32
 import Clean.Specs.SHA256
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
 
