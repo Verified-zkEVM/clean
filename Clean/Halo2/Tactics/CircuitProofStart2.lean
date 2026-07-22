@@ -18,17 +18,30 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
   with the house binder names, split the placed env into `place`/`env`;
 - **(b)** `dsimp only [] at *` (iota-reduces the destructured-config matches), then land
   `output_eq` on the raw do-block output via `ElaboratedCircuit.output_eq`;
-- **(c)** per bind, one block: single `operations_bind` peel (`constraints_append` at
-  `constraints`, plus `extendsWitnesses_append` at `witnesses` and the goal's constraints side in the
-  completeness direction), `output_bind` at `output_eq`, split off the chunk as
-  `<name>_spec` (call binds) / `region_<k>` (raw binds, immediately
-  `circuit_norm`-opened), canonicalize the output spelling (`output_call'`), then mint
-  the atom by `generalize <name>_eq : <canonical output> = <name>` under a
-  `revert constraints output_eq` — BEFORE the continuation's occurrences diverge — and fold the
-  offsets (`nextRegionIndex_call` + the `foldCallRegionCount` simproc);
-- **(d)** terminal `pure`: close the op list, land `output_eq` on the final atom;
-- **(e)** `subcircuit_rw` — per chunk hypothesis (soundness) / goal-mode once
-  (completeness, emitting `h_spec_<k>` over the atoms);
+- **(c)** per bind, one block — THE IN-PEEL ENGINE (design doc, "The in-peel engine
+  (subcircuit rewriting v2)"): single `operations_bind` peel (`constraints_append` at
+  `constraints`, plus `extendsWitnesses_append` at `witnesses` and the goal's
+  constraints side in the completeness direction), `output_bind` at `output_eq`, split
+  off the chunk as `<name>_spec` (call binds) / `region_<k>` (raw binds), canonicalize
+  the output spelling (`output_call'`), mint the atom by
+  `generalize <name>_eq : <canonical output> = <name>` under a
+  `revert constraints output_eq` — BEFORE the continuation's occurrences diverge — and
+  fold the offsets (`nextRegionIndex_call` + the `foldCallRegionCount` simproc). Then
+  the bind's chunk CONVERTS in the same block, by direct term application of the
+  `SubcircuitRw` leaf lemmas at arguments in hand — no post-pass, no re-matching:
+  * a CALL chunk weakens in place to the child's `EnvA → A → Spec` (soundness), or
+    strengthens the goal's just-split conjunct to `EnvA ∧ A ∧ PA` and asserts the
+    derived `<name>_spec : EnvA → A → PA → Spec ∧ ProverSpec`, consuming the witness
+    chunk (completeness); the `wit_<name>` extract atoms mint from the contract;
+  * a RAW chunk splits STRUCTURALLY first (the `chunk_split` constructor set,
+    `Clean/Halo2/Attributes.lean` — leaves stay pristine), embedded and ∀-bound
+    `.call` chunks convert at ground truth (loop families under the binder, the
+    round-`i` witness CONSTRUCTED from the bind's own witness chunk, never located),
+    and the remainder opens with `circuit_norm`;
+  * failure semantics are HARD (maintainer ruling): a call the peel uncovered that
+    cannot convert is an error naming the bind — never a silently-raw chunk;
+- **(d)** terminal `pure`: close the op list, land `output_eq` on the final atom; a
+  terminal REAL step gets the same per-bind conversion block (`out_spec`);
 - **(f)** landing (maintainer model, AddressIntegrity 90912413): `provable_type_simp`
   decomposes types into the components that actually occur; normalize ONLY the
   rule-sources `input_eq`/`output_eq` (so their equations fire on normalized spellings);
@@ -36,11 +49,13 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
   `input_eq` and `output_eq` themselves AS REWRITE RULES — `output_eq` firing
   left-to-right (circuit spelling → declared output) — together with the CALLER'S
   LEMMA LIST (`circuit_proof_start2 [<child bridges, Spec/Assumptions unfolds>]`).
-  With a complete list, trivially-composing parents close by `simp_all`/`grind`.
+  With a complete list, trivially-composing parents close by `simp_all`/`grind`;
+- **(g)** the no-call-left-behind scan: post-landing, any surviving call-keyed
+  constraint chunk (a shape the structural set does not cover) is a hard error.
 
 Known gaps: raw binds whose value IS used mint no atom yet (none in the sample); the
-engine should replace (not leave) the consumed completeness witness chunks — the
-tactic clears them meanwhile.
+atom mint hard-errors on the dependent-occurrence `generalize` failure (Merkle
+HashLayer, not yet on cps2) — its occurrence-filtered root fix is the one deferred item.
 -/
 
 open Lean Elab Tactic Meta
@@ -88,9 +103,10 @@ def bindParts? (body : Expr) : Option (Expr × Expr) :=
   else none
 
 /-- The do-binder name for a bind: the continuation lambda's binder, with leading
-underscores stripped (`_lp` → `lp`); for a hygienic/anonymous binder on a call bind,
-the called bundle's base name (`loop` for `(loop n w).call …`); `x` as the last
-resort. -/
+underscores stripped (`_lp` → `lp`). For a hygienic/anonymous binder on a call bind
+(H's review note #5, "Chain's slot") the name is pinned: `out` when the continuation
+is a terminal `pure` (the call discards its output — `let _ ← X.call …; pure ()`),
+otherwise the called bundle's base name (`loop` for `(loop n w).call …`). -/
 def binderNameOf (x f : Expr) : Name :=
   let stem : Option Name :=
     match f with
@@ -103,17 +119,32 @@ def binderNameOf (x f : Expr) : Name :=
           if t.isEmpty then none else some (Name.mkSimple t)
         else some n
     | _ => none
-  stem.getD (calleeName x)
+  stem.getD (if isCall x && contIsPure f then `out else calleeName x)
 where
-  /-- The called bundle's base name: `.call`'s bundle is its third-from-last argument. -/
+  /-- Whether `x` is a `.call` application. -/
+  isCall (x : Expr) : Bool :=
+    x.isAppOf ``Halo2.FormalCircuit.call || x.isAppOf ``Halo2.FormalRegionCircuit.call
+  /-- Whether the continuation body is a terminal `pure` (nothing after this bind). -/
+  contIsPure (f : Expr) : Bool :=
+    match f with
+    | .lam _ _ b _ => b.consumeMData.isAppOf ``Pure.pure
+    | _ => false
+  /-- The called bundle's base name: the `child` argument of `.call` — 4th-from-last
+  for a region call (`child config offset input`), 3rd-from-last for a layouter call
+  (`child config input`); `x` as the last resort for a non-call bind. -/
   calleeName (x : Expr) : Name :=
     let args := x.getAppArgs
-    if (x.isAppOf ``Halo2.FormalCircuit.call || x.isAppOf ``Halo2.FormalRegionCircuit.call)
-        && args.size ≥ 3 then
-      match args[args.size - 3]!.getAppFn.constName? with
-      | some c => Name.mkSimple c.getString!
+    let child? : Option Expr :=
+      if x.isAppOf ``Halo2.FormalRegionCircuit.call && args.size ≥ 4 then
+        some args[args.size - 4]!
+      else if x.isAppOf ``Halo2.FormalCircuit.call && args.size ≥ 3 then
+        some args[args.size - 3]!
+      else none
+    match child? with
+    | some c => match c.getAppFn.constName? with
+      | some n => Name.mkSimple n.getString!
       | none => `x
-    else `x
+    | none => `x
 
 /-- Whether the continuation actually uses its binder. -/
 def binderUsed (f : Expr) : Bool :=
@@ -158,16 +189,19 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) :
       minted := minted.push (xn, hn)
       k := k + 1
     let g ← getMainGoal
-    -- fail-soft: a dependent occurrence can make the abstracted motive
-    -- type-incorrect (Merkle's HashLayer hash output) — keep the concrete
-    -- spelling for that binder rather than killing the peel
+    -- HARD by default (maintainer ruling — no silent skips): a dependent occurrence
+    -- can make `generalize`'s all-occurrences motive type-incorrect (Merkle's
+    -- HashLayer hash-output binder). No landed cps2 proof hits this today; when one
+    -- does, this surfaces loudly and gets the occurrence-filtered mint fix at the
+    -- root rather than a silent concrete-spelling fallback.
     try
       let (_, g') ← g.generalize args
       replaceMainGoal [g']
       pure minted
-    catch _ =>
-      trace[Halo2.circuit_proof_start2] "mint skipped (generalize failed) for {n}"
-      pure #[]
+    catch e =>
+      throwError "circuit_proof_start2: minting the atom '{n}' failed — a dependent \
+        occurrence makes the abstracted motive type-incorrect. The atom mint needs the \
+        occurrence-filtered fix for this circuit shape.\n{e.toMessageData}"
   -- re-intro in list order (first listed = outermost binder)
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))
@@ -209,12 +243,271 @@ def binderTypeMints (f : Expr) : TacticM Bool := do
   return !(head == some ``Nat || head == some ``Halo2.RegionIndex
     || head == some ``Unit || head == some ``PUnit || head == some ``Int)
 
+/-- Fully-applied `FormalCircuit.extract`/`FormalRegionCircuit.extract` subterms of `e`
+(closed, no loose bvars — ∀-bound loop contracts are skipped: `generalize` cannot
+abstract open terms). The extract-side analogue of the canonical call outputs (design
+doc: "the extract value gets the same treatment — `wit_<binder>` atom"). -/
+partial def extractTermsOf (e : Expr) : Array Expr :=
+  go e #[]
+where
+  go (e : Expr) (acc : Array Expr) : Array Expr :=
+    let isExtract :=
+      (e.isAppOfArity ``Halo2.FormalCircuit.extract 13
+        || e.isAppOfArity ``Halo2.FormalRegionCircuit.extract 14)
+      && !e.hasLooseBVars
+    let acc := if isExtract then (if acc.contains e then acc else acc.push e) else acc
+    match e with
+    | .app f a => go a (go f acc)
+    | .lam _ d b _ => go b (go d acc)
+    | .forallE _ d b _ => go b (go d acc)
+    | .letE _ t v b _ => go b (go v (go t acc))
+    | .mdata _ b => go b acc
+    | .proj _ _ b => go b acc
+    | _ => acc
+
+/-- Mint `wit_<binder>` atoms for the child-extract terms appearing in hypothesis
+`src` (the just-converted contract speaks the child's extract). Skips Unit-like
+witnesses. The defining equations reduce in the landing pass via the child's
+`_extract_eq` bridge, landing them on the concrete extract spelling. -/
+def mintExtracts (src : Name) (binder : Name) : TacticM (Array Name) := do
+  let some ty ← hypType? src | return #[]
+  let mut outs : Array Expr := #[]
+  for e in extractTermsOf ty do
+    let wty ← withTransparency .instances <| whnf (← instantiateMVars (← inferType e))
+    let whead := wty.getAppFn.constName?
+    unless whead == some ``Unit || whead == some ``PUnit do
+      outs := outs.push e
+  return (← mintAtoms outs (Name.mkSimple s!"wit_{binder}") #[src]).map (·.2)
+
+/-- Split the witness-side chunk hypothesis into its conjunct leaves — the scoped
+witness sources the completeness conversion draws from. Each source is a
+`(proof, type)` pair built by `And.left/right` projection; no context scan ever
+happens (the in-peel engine's ground-truth discipline). -/
+partial def shatterSources (proof ty : Expr) (acc : Array (Expr × Expr)) :
+    MetaM (Array (Expr × Expr)) := do
+  let ty := ty.consumeMData
+  match ty.and? with
+  | some (a, b) =>
+    let acc ← shatterSources (← mkAppM ``And.left #[proof]) a acc
+    shatterSources (← mkAppM ``And.right #[proof]) b acc
+  | none => return acc.push (proof, ty)
+
+/-- The scoped completeness walker (the in-peel engine's goal side). Walks goal
+proposition `p` in positive polarity; every call-keyed constraint chunk is
+strengthened in place to its `EnvA ∧ A ∧ PA` precondition bundle, with the witness
+fact taken from `sources` — the shattered conjuncts of THIS bind's witness chunk,
+augmented under each ∀ binder by instantiating ∀-typed sources at the goal's own
+binder (which is how loop families convert under the binder: the round-`i` witness
+is `source i`, constructed, never located). Returns `(some (p', proof : p' → p))`
+with the derived contract statements — already abstracted over any binders between
+them and the top (loop families come out as `∀ i, EnvA i → A i → PA i → Spec i ∧
+ProverSpec i`) — or `(none, #[])` if `p` contains no call-keyed chunk.
+
+Failure semantics are HARD (maintainer ruling): a matched chunk with no source
+counterpart, or a failing leaf instantiation, is an error naming the chunk — there
+is no silently-unconverted outcome for a chunk the walk can see. -/
+partial def walkGoalScoped (p : Expr) (sources : Array (Expr × Expr)) :
+    TacticM (Option (Expr × Expr) × Array (Name × Expr × Expr)) := do
+  let p := (← instantiateMVars p).consumeMData
+  -- Leaf: a call-keyed constraint chunk. Its witness MUST be among the sources.
+  if let some c ← SubcircuitRw.matchChunk? p then
+    -- source lookup: reducible pass first (identical spellings — the common case),
+    -- then a default-transparency pass on the SAME tiny scoped set — the goal side
+    -- can spell a region index `i₀ + regionCount …` (constraints_append) where the
+    -- witness side spells `(step …).nextRegionIndex i₀` (operations_bind); those are
+    -- defeq, not reducibly so. No storm risk: the candidates are this bind's own
+    -- witness conjuncts, child/config compare stays fail-fast.
+    let mut found : Option (Expr × Expr) := none
+    for relaxed in [false, true] do
+      if found.isNone then
+        for s in sources do
+          if ← SubcircuitRw.witnessMatches? c s.2 relaxed then
+            found := some s
+            break
+    let some (witProof, witTy) := found
+      -- no counterpart among THIS bind's sources: a later bind's chunk, pre-split by
+      -- the goal-side structural pass at region level — its own peel turn converts
+      -- it. A genuine miss is caught by the post-landing no-call-left-behind scan.
+      | do trace[Halo2.circuit_proof_start2] "scoped walk: no source for chunk, skipping"
+           return (none, #[])
+    let some (bundle, strengthenProof) ← SubcircuitRw.completenessLeaf? c p witProof witTy
+      | throwError "circuit_proof_start2: the completeness strengthening leaf failed \
+          to instantiate at chunk:{indentExpr p}"
+    -- allowRelaxed: the derived statement must land on the minted output atoms, and
+    -- the goal-side chunk can spell the child's region index `i₀ + regionCount …`
+    -- where the atom equation spells the folded literal — the same-child relaxed
+    -- pass of `findOutputLocal?` bridges exactly that
+    let some (dTy, dProof) ← SubcircuitRw.derivedStatement c witProof witTy
+        (allowRelaxed := true)
+      | throwError "circuit_proof_start2: the derived contract statement failed to \
+          instantiate at chunk:{indentExpr p}"
+    -- suggested name: the child bundle's base name (`round_spec` for a loop over
+    -- `round` — H's naming rule: child-derived for embedded/loop conversions)
+    let base := match c.child.getAppFn.constName? with
+      | some n => Name.mkSimple n.getString!
+      | none => `out
+    return (some (bundle, strengthenProof), #[(base, dTy, dProof)])
+  match p.and? with
+  | some (a, b) =>
+    let (ra, da) ← walkGoalScoped a sources
+    let (rb, db) ← walkGoalScoped b sources
+    match ra, rb with
+    | none, none => return (none, #[])
+    | _, _ =>
+      let (a', pa) := ra.getD (a, ← identProof a)
+      let (b', pb) := rb.getD (b, ← identProof b)
+      return (some (← mkAppM ``And #[a', b'],
+        ← mkAppM ``SubcircuitRw.and_mono #[pa, pb]), da ++ db)
+  | none =>
+  match SubcircuitRw.or? p with
+  | some (a, b) =>
+    let (ra, da) ← walkGoalScoped a sources
+    let (rb, db) ← walkGoalScoped b sources
+    match ra, rb with
+    | none, none => return (none, #[])
+    | _, _ =>
+      let (a', pa) := ra.getD (a, ← identProof a)
+      let (b', pb) := rb.getD (b, ← identProof b)
+      return (some (← mkAppM ``Or #[a', b'],
+        ← mkAppM ``SubcircuitRw.or_mono #[pa, pb]), da ++ db)
+  | none =>
+  if p.isArrow then
+    let a := p.bindingDomain!
+    let b := p.bindingBody!
+    let (rb, db) ← walkGoalScoped b sources
+    match rb with
+    | none => return (none, #[])
+    | some (b', pb) =>
+      return (some (← mkArrow a b',
+        ← mkAppM ``SubcircuitRw.imp_mono #[← identProof a, pb]), db)
+  else if p.isForall then
+    forallBoundedTelescope p (some 1) fun xs body => do
+      let #[x] := xs | return (none, #[])
+      -- augment: every ∀-typed source whose domain matches the goal binder yields
+      -- its instantiation at that binder (shattered further through ∧)
+      let mut srcs := sources
+      for s in sources do
+        if s.2.isForall then
+          if ← withTransparency .reducible <| isDefEq s.2.bindingDomain! (← inferType x) then
+            srcs ← shatterSources (mkApp s.1 x) (s.2.bindingBody!.instantiate1 x) srcs
+      let (rb, db) ← walkGoalScoped body srcs
+      -- abstract the derived statements over the binder where they mention it
+      let db' ← db.mapM fun (base, ty, proof) => do
+        if ty.containsFVar x.fvarId! || proof.containsFVar x.fvarId! then
+          return (base, ← mkForallFVars #[x] ty, ← mkLambdaFVars #[x] proof)
+        return (base, ty, proof)
+      match rb with
+      | none => return (none, db')
+      | some (body', pbody) =>
+        let motiveOld ← mkLambdaFVars #[x] body
+        let motiveNew ← mkLambdaFVars #[x] body'
+        let hfun ← mkLambdaFVars #[x] pbody
+        let proof ← mkAppOptM ``SubcircuitRw.forall_mono
+          #[← inferType x, motiveNew, motiveOld, hfun]
+        return (some (← mkForallFVars #[x] body', proof), db')
+  else
+    return (none, #[])
+where
+  identProof (p : Expr) : MetaM Expr := do
+    withLocalDeclD `h p fun h => mkLambdaFVars #[h] h
+
+/-- In-peel completeness conversion at one bind (the in-peel engine's goal side):
+walk the goal with `walkGoalScoped`, sources = the shattered witness chunk
+`witChunk`; strengthen the goal in place; assert each derived contract as
+`<binder>_spec` (primes on collision); mint the `wit_<binder>` extract atoms from
+the closed derived contracts. `required` (call binds): zero conversions is a hard
+error — the peel uncovered a `.call`, so the goal MUST convert. The witness chunk
+is cleared when consumed (always for call binds; for raw chunks, when it held
+nothing but call witnesses). Returns the minted wit-equation names. -/
+def convertGoalScoped (binder : Name) (witChunk : Name) (required : Bool) :
+    TacticM (Array Name) := withMainContext do
+  let some decl := (← getLCtx).findFromUserName? witChunk
+    | if required then
+        throwError "circuit_proof_start2: call bind '{binder}': witness chunk \
+          {witChunk} vanished before conversion"
+      else return #[]
+  let witTy ← instantiateMVars decl.type
+  let sources ← shatterSources (.fvar decl.fvarId) witTy #[]
+  let goalMVar ← getMainGoal
+  let target ← instantiateMVars (← goalMVar.getType)
+  let (res, derived) ← walkGoalScoped target sources
+  match res with
+  | none =>
+    if required then
+      throwError "circuit_proof_start2: call bind '{binder}': the goal contains no \
+        constraint chunk matching the call — nothing to convert"
+    return #[]
+  | some (newGoal, proof) =>
+    let newMVar ← mkFreshExprSyntheticOpaqueMVar newGoal (tag := `strengthened)
+    goalMVar.assign (mkApp proof newMVar)
+    let mut g := newMVar.mvarId!
+    let mut names : Array Name := #[]
+    -- name the derived contracts `<binder>_spec` (call binds: the do-binder; raw
+    -- binds: the walker's child-derived base — `round_spec` for a loop over
+    -- `round`), priming on collision; the witness chunk's own name does not count
+    -- (call binds: the contract REPLACES it)
+    let taken ← g.withContext do
+      let mut t : Array Name := #[]
+      for d in ← getLCtx do
+        unless d.isImplementationDetail || d.fvarId == decl.fvarId do
+          t := t.push d.userName
+      pure t
+    for (childBase, dTy, dProof) in derived do
+      let base := if required then s!"{binder}_spec" else s!"{childBase.getString!}_spec"
+      let mut nm := Name.mkSimple base
+      while taken.contains nm || names.contains nm do
+        nm := Name.mkSimple (nm.getString! ++ "'")
+      let g' ← g.assert nm (← instantiateMVars dTy) (← instantiateMVars dProof)
+      let (_, g'') ← g'.intro1P
+      g := g''
+      names := names.push nm
+    -- clear the consumed witness chunk — CALL binds only: the derived contract
+    -- replaces it. Raw chunks always keep theirs, even ∀-call-families: loop
+    -- parents legitimately open the call boundary per round to recover the raw
+    -- witness equations that build their honest-value chains (MulIncomplete's
+    -- `hsteps`), and the derived family's PA premises need exactly those.
+    if required then
+      g ← g.tryClearMany #[decl.fvarId]
+    replaceMainGoal [g]
+    let mut witEqs : Array Name := #[]
+    for nm in names do
+      witEqs := witEqs ++ (← mintExtracts nm binder)
+    return witEqs
+
+/-- In-peel soundness conversion of a call bind's chunk (the in-peel engine,
+`atomic-binds-design.md`): the chunk hypothesis IS the call-keyed constraint chunk —
+read the contract arguments off it, weaken it in place to the child's
+`EnvAssumptions → Assumptions → Spec` via the soundness leaf, then mint the
+`wit_<binder>` extract atoms from the converted contract. No search, no miss modes:
+a failure here is a HARD error naming the bind (maintainer ruling — soft degradation
+breeds silently-raw chunks). Returns the minted wit-equation names. -/
+def convertCallChunkSound (chunkName binder : Name) : TacticM (Array Name) := do
+  withMainContext do
+    let some decl := (← getLCtx).findFromUserName? chunkName
+      | throwError "circuit_proof_start2: call bind '{binder}': \
+          chunk hypothesis {chunkName} vanished before conversion"
+    let ty ← instantiateMVars decl.type
+    let some c ← SubcircuitRw.matchChunk? ty
+      | throwError "circuit_proof_start2: call bind '{binder}': chunk is not a \
+          call-keyed constraint chunk:{indentExpr ty}"
+    let some (concl, proof) ← SubcircuitRw.soundnessLeaf? c ty (allowRelaxed := true)
+      | throwError "circuit_proof_start2: call bind '{binder}': the soundness leaf \
+          failed to instantiate (child {indentExpr c.child}\n) at chunk:{indentExpr ty}"
+    let goal ← getMainGoal
+    let hExpr := mkApp proof (.fvar decl.fvarId)
+    let (_, goal') ← (← goal.assert chunkName concl hExpr).intro1P
+    let goal' ← goal'.tryClearMany #[decl.fvarId]
+    replaceMainGoal [goal']
+  mintExtracts chunkName binder
+
 /-- One per-bind block. `sound := true` for the soundness direction; `region := true`
 for region-level bundles (region append lemmas, no offset folding). Returns `none`
-when the chunk hypothesis no longer holds a bind (terminal reached). -/
+when the chunk hypothesis no longer holds a bind (terminal reached); otherwise the
+chunk name, whether it was a call bind, and the wit-atom equations minted by the
+in-peel conversion. -/
 def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
     (unfolds : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
-    TacticM (Option (Name × Bool)) := do
+    TacticM (Option (Name × Bool × Array Name)) := do
   let ty? ← hypType? chunkHyp
   let some ty := ty? | do
     trace[Halo2.circuit_proof_start2] "peel stop: no hyp {chunkHyp}"
@@ -274,9 +567,9 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
     run? (← `(tactic| simp only [$canon,*]
       at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident ⊢))
   if isCall && binderUsed f then
-    let some ty' ← hypType? chunkHyp | return some (chunkName, isCall)
-    let outs ← newCanonicalOutputs ty'
-    discard <| mintAtoms outs nm #[chunkHyp, `output_eq]
+    if let some ty' ← hypType? chunkHyp then
+      let outs ← newCanonicalOutputs ty'
+      discard <| mintAtoms outs nm #[chunkHyp, `output_eq]
   -- a LAYOUTER-level raw or loop bind whose value passes the TYPE gate mints too
   -- (design doc, "Raw binds, loops, and the mint gate": mint iff no consumer rebinds
   -- the output by concrete address — at the layouter level every consumer is
@@ -306,62 +599,75 @@ def peelOneBind (sound region : Bool) (chunkHyp : Name) (regionIdx : Nat)
     else
       run? (← `(tactic| simp only [FormalCircuit.nextRegionIndex_call, foldCallRegionCount]
         at $(mkIdent chunkHyp):ident $(mkIdent `output_eq):ident ⊢))
-  -- raw (non-call) chunks open immediately; content-free ones (assignments) vanish
-  unless isCall do
-    run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
-    let cleared ← withMainContext do
-      let some decl := (← getLCtx).findFromUserName? chunkName | return true
-      if (← instantiateMVars decl.type).isConstOf ``True then
-        return true
-      return false
-    if cleared then
-      run? (← `(tactic| clear $(mkIdent chunkName):ident))
-      return some (Name.anonymous, false)  -- consumed, nothing to track
-  return some (chunkName, isCall)
+  -- ── in-peel engine: a call chunk converts to its contract HERE, with every
+  -- argument in hand — no post-pass re-matching (design doc, "The in-peel engine").
+  -- Soundness weakens the chunk hypothesis in place; completeness strengthens the
+  -- goal's just-split conjunct to `EnvA ∧ A ∧ PA` and asserts the derived
+  -- `<binder>_spec`, consuming the witness chunk. The `wit_<binder>` extract atoms
+  -- mint from the converted contract in the same block. Failures are hard errors
+  -- (maintainer ruling). ──
+  if isCall then
+    let witEqs ←
+      if sound then convertCallChunkSound chunkName nm
+      else convertGoalScoped nm chunkName (required := true)
+    return some (chunkName, isCall, witEqs)
+  -- ── raw (non-call) chunks: STRUCTURAL split first (`chunk_split` — constructor
+  -- lemmas only, so leaves and especially embedded `.call` boundaries keep their
+  -- pristine spellings), then in-peel conversion of any embedded or ∀-bound call
+  -- chunks (inlined region calls, loop combinators over child bundles) at ground
+  -- truth, then the remainder opens with `circuit_norm` (gates land as before;
+  -- content-free chunks vanish) ──
+  run? (← `(tactic| simp only [chunk_split] at $(mkIdent chunkName):ident))
+  let mut rawWitEqs : Array Name := #[]
+  unless sound do
+    -- goal side (completeness): the same structural set, then the scoped conversion
+    -- against the just-split witness chunk — BEFORE the circuit_norm open, so both
+    -- sides still share the pristine spellings
+    run? (← `(tactic| simp only [chunk_split]))
+    rawWitEqs ← convertGoalScoped nm chunkName (required := false)
+  run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+  let cleared ← withMainContext do
+    let some decl := (← getLCtx).findFromUserName? chunkName | return true
+    if (← instantiateMVars decl.type).isConstOf ``True then
+      return true
+    return false
+  if cleared then
+    run? (← `(tactic| clear $(mkIdent chunkName):ident))
+    return some (Name.anonymous, false, rawWitEqs)  -- consumed, nothing to track
+  -- soundness conversion runs AFTER the open: the call boundary is opaque to
+  -- circuit_norm (chunks stay pristine), and converting last keeps the emitted
+  -- contract out of the open-simp's reach — reducing a contract's `.Spec` bundle
+  -- projection without its bridges is a whnf bomb (FullWidth's sealed inner region)
+  if sound then
+    withMainContext do
+      if let some decl := (← getLCtx).findFromUserName? chunkName then
+        SubcircuitRw.runSoundness decl.fvarId (allowRelaxed := true) (strict := true)
+  return some (chunkName, isCall, rawWitEqs)
 
-/-- Fully-applied `FormalCircuit.extract`/`FormalRegionCircuit.extract` subterms of `e`
-(closed, no loose bvars — ∀-bound loop contracts are skipped: `generalize` cannot
-abstract open terms). The extract-side analogue of the canonical call outputs (design
-doc: "the extract value gets the same treatment — `wit_<binder>` atom"). -/
-partial def extractTermsOf (e : Expr) : Array Expr :=
-  go e #[]
-where
-  go (e : Expr) (acc : Array Expr) : Array Expr :=
-    let isExtract :=
-      (e.isAppOfArity ``Halo2.FormalCircuit.extract 13
-        || e.isAppOfArity ``Halo2.FormalRegionCircuit.extract 14)
-      && !e.hasLooseBVars
-    let acc := if isExtract then (if acc.contains e then acc else acc.push e) else acc
-    match e with
-    | .app f a => go a (go f acc)
-    | .lam _ d b _ => go b (go d acc)
-    | .forallE _ d b _ => go b (go d acc)
-    | .letE _ t v b _ => go b (go v (go t acc))
-    | .mdata _ b => go b acc
-    | .proj _ _ b => go b acc
-    | _ => acc
-
-/-- Mint `wit_<binder>` atoms for the child-extract terms appearing in hypothesis
-`src` (post-engine: the opened contract speaks the child's extract). Skips Unit-like
-witnesses. The defining equations reduce in the landing pass via the child's
-`_extract_eq` bridge, landing them on the concrete extract spelling. -/
-def mintExtracts (src : Name) (binder : Name) : TacticM (Array Name) := do
-  let some ty ← hypType? src | return #[]
-  let mut outs : Array Expr := #[]
-  for e in extractTermsOf ty do
-    let wty ← withTransparency .instances <| whnf (← instantiateMVars (← inferType e))
-    let whead := wty.getAppFn.constName?
-    unless whead == some ``Unit || whead == some ``PUnit do
-      outs := outs.push e
-  return (← mintAtoms outs (Name.mkSimple s!"wit_{binder}") #[src]).map (·.2)
-
-/-- The names of engine-emitted `h_spec_<k>` hypotheses currently in context. -/
-def specHyps : TacticM (Array Name) := withMainContext do
-  let mut out := #[]
-  for decl in ← getLCtx do
-    if !decl.isImplementationDetail && decl.userName.getString!.startsWith "h_spec_" then
-      out := out.push decl.userName
-  return out
+/-- Find a call-keyed constraint chunk subterm of `e` — the no-call-left-behind scan.
+A `.call` whose constraints survive to the end of the prefix means a circuit shape
+the in-peel engine does not cover; that must be a LOUD failure (the growth model:
+add the constructor's `@[chunk_split]` lemma), never a silently-raw chunk. Binders
+are entered by telescope so ∀-bound loop chunks are seen. -/
+partial def findCallChunk (e : Expr) : MetaM (Option Expr) := do
+  if e.isAppOf ``RegionOperations.Constraints || e.isAppOf ``Halo2.Constraints then
+    if (← SubcircuitRw.matchChunk? e).isSome then
+      return some e
+  match e with
+  | .app f a =>
+    if let some r ← findCallChunk f then return some r
+    findCallChunk a
+  | .forallE .. =>
+    forallBoundedTelescope e (some 1) fun _ body => findCallChunk body
+  | .lam .. =>
+    lambdaBoundedTelescope e 1 fun _ body => findCallChunk body
+  | .letE _ t v b _ =>
+    if let some r ← findCallChunk t then return some r
+    if let some r ← findCallChunk v then return some r
+    findCallChunk b
+  | .mdata _ b => findCallChunk b
+  | .proj _ _ b => findCallChunk b
+  | _ => return none
 
 /-- The v2 runner. The caller's list is CPS1-style: bundle constants yield on-the-fly
 contract bridges (`mkBundleBridges`), everything else is an unfold lemma (linted for
@@ -440,13 +746,13 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
       run? (← `(tactic| simp only [$unfolds,*]))
   -- ── (c) the bind loop ──
   let chunkHyp := if sound then `constraints else `witnesses
-  let mut callChunks : Array Name := #[]
+  let mut witEqs : Array Name := #[]
   let mut regionIdx := 0
   for _ in [0:32] do
     match ← peelOneBind sound region chunkHyp regionIdx unfolds with
-    | some (nm, isCall) =>
-      if nm == Name.anonymous then pure ()
-      else if isCall then callChunks := callChunks.push nm
+    | some (nm, isCall, weqs) =>
+      witEqs := witEqs ++ weqs
+      if nm == Name.anonymous || isCall then pure ()
       else regionIdx := regionIdx + 1
     | none => break
   -- ── (d) terminal step ──
@@ -471,8 +777,20 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     run? (← `(tactic| simp only [FormalCircuit.output_call',
       FormalRegionCircuit.output_call, FormalRegionCircuit.output_call',
       output_assignRegion] at $(mkIdent `output_eq):ident))
-    if isCall then callChunks := callChunks.push chunkName
+    if isCall then
+      -- in-peel engine: the terminal call converts like every peeled bind
+      if sound then
+        witEqs := witEqs ++ (← convertCallChunkSound chunkName `out)
+      else
+        witEqs := witEqs ++ (← convertGoalScoped `out chunkName (required := true))
     else
+      -- the terminal raw chunk gets the peel's raw treatment: structural split,
+      -- in-peel conversion of embedded calls (completeness before / soundness after
+      -- the circuit_norm open — see the peel's raw block), then the open
+      run? (← `(tactic| simp only [chunk_split] at $(mkIdent chunkName):ident))
+      unless sound do
+        run? (← `(tactic| simp only [chunk_split]))
+        witEqs := witEqs ++ (← convertGoalScoped `out chunkName (required := false))
       run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
       -- content-free terminal chunks vanish, like the peel's (an output-only step —
       -- HashPieceRound's terminal `readState` — opens to `True`)
@@ -484,6 +802,10 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
         run? (← `(tactic| clear $(mkIdent chunkName):ident))
       else
         regionIdx := regionIdx + 1
+        if sound then
+          withMainContext do
+            if let some decl := (← getLCtx).findFromUserName? chunkName then
+              SubcircuitRw.runSoundness decl.fvarId (allowRelaxed := true) (strict := true)
   | none =>
     if region then
       if sound then
@@ -501,67 +823,11 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
         run? (← `(tactic| rw [Circuit.operations_pure, constraints_nil]))
       run? (← `(tactic| rw [Circuit.output_pure] at $(mkIdent `output_eq):ident))
     run? (← `(tactic| clear $(mkIdent chunkHyp):ident))
-  -- ── (e) engine ──
-  let mut witEqs : Array Name := #[]
-  if sound then
-    for c in callChunks do
-      run? (← `(tactic| subcircuit_rw ! at $(mkIdent c):ident))
-      -- the opened contract is the first time the child's EXTRACT is spelled — mint
-      -- it to the `wit_<binder>` atom (design doc: extract mirrors the output
-      -- treatment at every call bind); its defining equation reduces in the landing
-      -- pass via the child's `_extract_eq` bridge
-      witEqs := witEqs ++ (← mintExtracts c
-        (c.getString!.dropSuffix "_spec" |> Name.mkSimple ∘ ToString.toString))
-    -- raw chunks can carry ∀-bound `.call` constraints (loop combinators over child
-    -- calls); the engine supports those, and is a silent no-op on call-free chunks
-    for k in [0:regionIdx] do
-      run? (← `(tactic| subcircuit_rw ! at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
-  else
-    -- normalize the goal AND the witness-side chunks ONCE, IDENTICALLY, before the
-    -- engine: every peel is done, so nothing remains for the peel `rw`s to match and
-    -- the full pass is safe. This surfaces every call chunk in the canonical spelling
-    -- the goal walker matches — calls embedded in mid-chain or terminal raw regions
-    -- (`assignRegion "…" (X.call …)`, FullWidth's add), and calls under region-level
-    -- bind spines (BFE's `witnessCheck13`) — with region counts folded to literal
-    -- indexes. Witness chunks must ride in the SAME pass: the locator's child compare
-    -- is fail-fast syntactic-first, and a goal-side-only pass leaves the two sides
-    -- with invisibly different spellings (Chain's slot: an `if`-valued child argument
-    -- diverged only under the goal normalization).
-    let mut engineTargets : Array Name := callChunks
-    for k in [0:regionIdx] do
-      engineTargets := engineTargets.push (Name.mkSimple s!"region_{k}")
-    let locs := engineTargets.map mkIdent
-    run? (← `(tactic| simp only [circuit_norm, Operations.regionCount,
-      foldCallRegionCount, $unfolds,*] at $[$locs:ident]* ⊢))
-    run? (← `(tactic| subcircuit_rw !))
-    -- h_spec_<k> arrives in call order — name the witness atom from the k-th call's
-    -- do-binder (`wit_<binder>`), falling back to the index for excess spec hyps
-    let hs ← specHyps
-    -- specs beyond the call binds belong to calls embedded in raw steps (e.g.
-    -- `assignRegion "…" (X.call …)`): a single one is the terminal output call
-    -- (`wit_out`); several are disambiguated by spec index (`wit_out_<k>`)
-    let unmatched := hs.size - min hs.size callChunks.size
-    for i in [0:hs.size] do
-      let h := hs[i]!
-      let binder :=
-        if hcc : i < callChunks.size then
-          (callChunks[i].getString!.dropSuffix "_spec" |> ToString.toString)
-        else if unmatched == 1 then "out"
-        else s!"out_{i - callChunks.size}"
-      witEqs := witEqs ++ (← mintExtracts h (Name.mkSimple binder))
   -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
   -- with provable_type_simp, normalize the GIVENS, then one pass that uses `input_eq`
   -- and `output_eq` AS REWRITE RULES (component equations; `output_eq` fires
   -- left-to-right: circuit spelling → declared output) together with the caller's
   -- bridge list, over every derived hypothesis and the goal ──
-  if !sound then
-    -- the engine consumed the call chunks' witness sides; drop the raw leftovers —
-    -- but only when it actually emitted the derived `h_spec_*` statements (an engine
-    -- miss must keep the witness material for the user half's manual leaf application)
-    -- (TODO: subcircuit_rw should replace them itself)
-    unless (← specHyps).isEmpty do
-      for c in callChunks do
-        run? (← `(tactic| clear $(mkIdent c):ident))
   run? (← `(tactic| provable_type_simp))
   -- rule-sources: ONLY the naming equations `input_eq`/`output_eq` (cell spelling ↦
   -- declared value; that rewrite direction is forced). Row/witness equations
@@ -607,6 +873,26 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     let witLemmas ← witEqs.mapM fun n =>
       `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
     run? (← `(tactic| simp only [$witLemmas,*]))
+  -- ── no-call-left-behind (post-landing): any call-keyed constraint chunk still
+  -- present is a circuit shape the in-peel engine does not cover — hard error, per
+  -- the failure-semantics ruling. The landing has fully normalized by now, so even
+  -- chunks that hid under shapes the structural set missed (an `ite`-guarded region,
+  -- an untagged combinator) are visible to the scan. ──
+  withMainContext do
+    if sound then
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        if let some chunk ← findCallChunk (← instantiateMVars decl.type) then
+          throwError "circuit_proof_start2: an unconverted call chunk survived in \
+            hypothesis {decl.userName}:{indentExpr chunk}\nThis circuit shape is not \
+            covered by the in-peel engine — tag its structural split lemma with \
+            @[chunk_split] (see Clean/Halo2/Attributes.lean)."
+    else
+      if let some chunk ← findCallChunk (← instantiateMVars (← getMainTarget)) then
+        throwError "circuit_proof_start2: an unconverted call chunk survived in the \
+          goal:{indentExpr chunk}\nThis circuit shape is not covered by the in-peel \
+          engine — tag its structural split lemma with @[chunk_split] (see \
+          Clean/Halo2/Attributes.lean)."
 
 end CircuitProofStart2
 

@@ -1,3 +1,4 @@
+import Clean.Halo2.Attributes
 import Clean.Halo2.Basic
 
 /-!
@@ -503,5 +504,23 @@ theorem extendsWitnesses_loadTable (place : RegionIndex → ℕ) (env : ProverEn
   simp only [Halo2.ExtendsWitnesses]
 
 end Constraints
+
+/-! ## The `chunk_split` membership (see `Clean/Halo2/Attributes.lean`)
+
+The structural constructor subset of this file's lemmas: region-level bind spines,
+`assignRegion` wrappers, and the empty spine — enough to decompose a raw step's chunk
+down to its leaves without touching any leaf. Layouter spine lemmas
+(`constraints_append`/`extendsWitnesses_append`, `Circuit.operations_bind`) are
+deliberately absent: the cps2 peel owns the layouter spine. (At region level the
+peel's own spine shares these lemmas, so a goal-side firing may pre-split later
+binds — that is fine: each bind's conversion still happens at its own peel turn,
+keyed by its own witness chunk.) -/
+
+attribute [chunk_split] RegionCircuit.operations_bind RegionCircuit.operations_pure
+  operations_assignRegion constraints_region constraints_nil
+  extendsWitnesses_region extendsWitnesses_nil
+  RegionOperations.constraints_append RegionOperations.constraints_nil
+  RegionOperations.extendsWitnesses_append RegionOperations.extendsWitnesses_nil
+  and_true true_and
 
 end Halo2

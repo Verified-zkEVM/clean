@@ -99,8 +99,8 @@ def circuit (V : Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       Ecc.Add.addFormal, Ecc.MulFixed.Short.Spec]
     obtain ⟨hSEnv, hFEnv⟩ := env_assumptions
     obtain ⟨hmag, hsign⟩ := prover_assumptions
-    obtain ⟨hm_lt, hcases⟩ := h_spec_0 hSEnv ⟨hmag, hsign⟩
-    have hBl := h_spec_1 hFEnv
+    obtain ⟨hm_lt, hcases⟩ := commitment_spec hSEnv ⟨hmag, hsign⟩
+    have hBl := blind_spec hFEnv
     refine ⟨⟨hSEnv, hmag, hsign⟩, hFEnv, ?_, by rw [hBl]; exact R.smul_valid _⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
 

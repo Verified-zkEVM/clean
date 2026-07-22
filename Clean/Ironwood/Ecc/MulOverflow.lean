@@ -329,7 +329,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
       EnvAssumptions, sWit, etaWit]
     -- the child's constraints and honest facts arrive through the engine's
-    -- strengthened goal position (the `EnvA ∧ A ∧ PA` bundle) and `h_spec_0`
+    -- strengthened goal position (the `EnvA ∧ A ∧ PA` bundle) and `dec_spec`
     have hE' : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
         cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
       rw [copyCheck_envAssumptions_eq]; exact env_assumptions
@@ -337,7 +337,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
       rw [copyCheck_assumptions_eq]; exact assumptions
-    obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hE' hA'
+    obtain ⟨hChildSpec, hChildPS⟩ := dec_spec hE' hA'
     obtain ⟨-, lo, hlo, hDecompV⟩ := hChildSpec
     obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := region_1
     obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := prover_assumptions

@@ -796,13 +796,13 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [hlsb] at region_1 region_4 region_5
     obtain ⟨⟨hOResX, hOResY⟩, hOZ0, hOZ130, hOK254⟩ := output_eq
     -- init add: acc = [2]base (honest view)
-    obtain ⟨hAccV, hAccEq⟩ := h_spec_0 hbaseV
+    obtain ⟨hAccV, hAccEq⟩ := acc_spec hbaseV
     have hAcc2 : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) acc
         = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
       rw [← point_eval_toEnv, ← point_two_nsmul hOnC]
       exact hAccEq
     -- hi half: honest RoundInvariant over `bits`
-    obtain ⟨-, hHiPS⟩ := h_spec_1 hOnC ⟨hOnC, 2, hAcc2, le_refl 2, by norm_num⟩
+    obtain ⟨-, hHiPS⟩ := hi_spec hOnC ⟨hOnC, 2, hAcc2, le_refl 2, by norm_num⟩
     have halphap : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var_alpha
         = input_alpha := by
       have h := input_eq.1
@@ -833,7 +833,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       rw [← hi_eq]
       simp only [incomplete_output_eq, circuit_norm]
       exact hHiOut
-    obtain ⟨-, hLoPS⟩ := h_spec_2 hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
+    obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
     simp only [MulIncomplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
       hBF125] at hLoPS
     obtain ⟨hLoChain, hLoAccCl⟩ := hLoPS
@@ -847,9 +847,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [← lo_eq, incomplete_output_eq] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     -- complete rounds: honest RoundInvariant
-    rw [← lo_eq] at h_spec_3
-    simp only [incomplete_output_eq, circuit_norm] at h_spec_3
-    obtain ⟨hCompSpecV, hCompPS⟩ := h_spec_3
+    rw [← lo_eq] at comp_spec
+    simp only [incomplete_output_eq, circuit_norm] at comp_spec
+    obtain ⟨hCompSpecV, hCompPS⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩
       ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩
     obtain ⟨bitsC', hCompRIv⟩ := hCompSpecV
@@ -1077,10 +1077,10 @@ def mul :
     circuit_proof_start2 [mainCircuit, MulOverflow.circuit, Spec, Assumptions,
       EnvAssumptions]
     simp only [main_envAssumptions_eq, main_assumptions_eq, main_proverAssumptions_eq,
-      main_proverSpec_eq] at h_spec_0 ⊢
+      main_proverSpec_eq] at m_spec ⊢
     -- the honest running-sum cells, from the main bundle's `ProverSpec`
     obtain ⟨hz0v, hz130v, hk254v⟩ :=
-      (h_spec_0 trivial assumptions prover_assumptions).2
+      (m_spec trivial assumptions prover_assumptions).2
     refine ⟨⟨trivial, assumptions, prover_assumptions⟩, env_assumptions,
       ⟨by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD],
        by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]⟩, ?_⟩

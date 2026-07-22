@@ -310,7 +310,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     -- Q-generic bridge patterns (`fun _ => ?Q.y`) match everywhere
     rw [show (fun _ : Placed Environment Fp => Q_y)
         = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
-      from rfl] at h_spec_0 wit_out_eq ⊢
+      from rfl] at out_spec wit_out_eq ⊢
     -- the chain's honest-prover precondition, transported to the minted witness
     have hPAchain : (Sinsemilla.Chain.circuit G ns
           fun _ => ({ x := Q_x, y := Q_y } : Point Fp).y).ProverAssumptions
@@ -324,7 +324,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
       exact region_1.symm
     -- the chain's honest contract
-    have hsp := h_spec_0 (by rw [chainC_envAssumptions_eq]; exact env_assumptions)
+    have hsp := out_spec (by rw [chainC_envAssumptions_eq]; exact env_assumptions)
       trivial hPAchain
     have hPSchain := hsp.2
     rw [← wit_out_eq, chainC_proverSpec_eq] at hPSchain

@@ -175,7 +175,14 @@ its region index spells `i₀ + k` literally (the witness locator compares index
 reducible transparency). The same embedded-call gap exists for mid-chain raw
 regions — unfixed until a circuit needs it.
 
-## The in-peel engine (subcircuit rewriting v2) — agreed with maintainer, July 22
+## The in-peel engine (subcircuit rewriting v2) — BUILT, July 22
+
+**Status: landed and green across the corpus** (`Clean` + `Ironwood` + `CleanTests`).
+The whole post-pass completeness engine invocation, the CPS2 witness clear-guard, the
+soundness raw-chunk pass, and the emission-ordered `h_spec_k` names are gone from the
+CPS2 pipeline; the standalone `subcircuit_rw` driver survives only for the v1 corpus
+(Merkle's top bundles, HashLayer) and manual proofs. What follows is the design as
+built; the "review notes" below record how each pre-build gap was resolved.
 
 **Principle: contract conversion happens inside `peelOneBind`, not in a post-pass.**
 The peel visits every call bind and every loop bind explicitly, in both directions,
@@ -198,12 +205,29 @@ to the `EnvA ∧ A ∧ PA` premise bundle and introduces the derived
 `EnvA → A → PA → Spec ∧ ProverSpec` statement — named `<binder>_spec` in BOTH
 directions (retiring `h_spec_k`).
 
+**Raw steps decompose STRUCTURALLY, not by `circuit_norm`-then-match.** A raw chunk
+(a composite region, a loop combinator, an `assignRegion` wrapping a `.call`) is split
+by the `chunk_split` simp set (`Clean/Halo2/Attributes.lean`) — a small tagged set of
+**constructor** lemmas only (region bind spine, `assignRegion`, the loop `_constraints`/
+`_extendsWitnesses` split pairs, the layouter call-fold split). It descends the circuit
+constructors to expose the embedded call chunks while leaving every leaf — gates,
+witness ops, and especially the folded `.call` boundaries — in their pristine spellings,
+so the in-peel leaf application sees ground-truth Exprs, never a `circuit_norm` normal
+form it has to re-match. Extending to a new combinator is one `@[chunk_split]` tag; an
+uncovered shape fails the no-call-left-behind scan loudly (`infer_explicit_circuits`
+model — a handful of well-oiled constructor lemmas, not a normalize-and-hope match).
+
 **Loops become symmetric by construction.** At a registry-head bind the peel applies
-the canonical ∀-split and converts under the binder in the same step. The completeness
-asymmetry — soundness consumes ∀-bound call chunks while fold parents hand-apply
-`region_completeness_leaf_placed` per round — disappears; `fold_complete`-style
-helpers produce the premise family directly and the per-round leaf boilerplate in
-MulComplete's parent and MulIncomplete's loop dies.
+the canonical ∀-split (`chunk_split`) and converts under the binder in the same step:
+the completeness walker instantiates the bind's own witness chunk at the goal's ∀-binder
+(the round-`i` witness is *constructed* by projection, never located), and abstracts the
+derived contract back over the binder — so a fold parent receives one
+`round_spec : ∀ i, EnvA → A → PA → Spec ∧ ProverSpec`. The completeness asymmetry —
+soundness consumes ∀-bound call chunks while fold parents hand-apply
+`region_completeness_leaf_placed`/`_derived_placed` per round — is gone: MulComplete's
+`fold_complete` now takes `round_spec i` directly (8 lines of hand-instantiated leaf +
+simp collapse to one `obtain`), and MulIncomplete/HashPiece drop the same per-round
+boilerplate.
 
 **What dies with it** (for CPS2 paths): the engine's matching layer
 (canonical-output discovery, the relaxed transparency pass of a5fd815e, the
@@ -216,59 +240,54 @@ new caller over the same semantics, not a fork — and the standalone `subcircui
 driver for manual and v1-era proofs until that corpus empties (the CPS1/CPS2
 coexistence pattern).
 
-**Review notes (G-agent, from the porting corpus — gaps to settle before/while
-building):**
+**Review notes (G-agent, from the porting corpus) — RESOLVED as built:**
 
-1. **Raw-embedded calls are not covered by "the peel visits every call bind."** A
-   large corpus class is calls the peel cannot see as binds: (i) the standard
-   region-bundle invocation `assignRegion "…" (X.call …)` — the whole region body is
-   one call (FullWidth's terminal add, BFE's inner/Add wraps); (ii) calls mid-body of
-   a composite raw region (Short's mswRegion add, BFE's witnessCheck13 rangeCheck).
-   For (i) the peel should recognize the shape syntactically and treat it as a call
-   bind (unwrap one `assignRegion` layer — no matching, still ground-truth Exprs).
-   For (ii) something must remain: either chunk-LOCAL discovery right after the raw
-   chunk opens (single-chunk scope, fresh spellings — far safer than the global
-   walker), or scoped retention of the post-pass walker for raw chunks only. "What
-   dies" currently overclaims: the matching layer can only die for binds the peel
-   actually visits.
+1. **Raw-embedded calls** (`assignRegion "…" (X.call …)`, calls mid-composite-region).
+   RESOLVED by the structural `chunk_split` descent, not by unwrapping-one-layer or a
+   scoped walker. The maintainer's ruling on this (recorded live) was decisive: do NOT
+   `circuit_norm`-then-match; special-case the constructors with tagged lemmas, the
+   `infer_explicit_circuits` model. So a raw chunk descends its constructors
+   (`chunk_split`) to expose every embedded/∀-bound call chunk in its ground-truth
+   spelling, and each converts by direct leaf application — no post-pass walker for raw
+   chunks at all. "What dies" no longer overclaims: everything the descent reaches
+   converts in-peel; anything it misses is a loud no-call-left-behind error, not a
+   silent raw chunk. (The house rule the maintainer restated: a region call is either
+   fully inlined — and then fully supported here — or bundled; never a middle
+   definition with bespoke bundle-like lemmas.)
 
-2. **Loops: atoms cannot be minted under the binder.** Under-binder conversion at the
-   ∀-split works for CONTRACTS (leaf applied at open round terms via telescope), but
-   `generalize` cannot mint atoms over loose bvars — per-round outputs stay concrete;
-   only the loop's closed-form boundary output mints, as today. State this so the
-   symmetric-loops promise isn't read as per-round atoms.
+2. **Loops: atoms cannot be minted under the binder.** Confirmed and honored — the
+   ∀-split converts CONTRACTS under the binder (round-`i` witness constructed by
+   projecting the bind's own witness chunk at the goal binder), while per-round outputs
+   stay concrete; only the loop's closed-form boundary output mints. The
+   symmetric-loops claim above is about contracts, not per-round atoms.
 
-3. **Failure semantics: hard by default (maintainer ruling).** A leaf instantiation
-   that fails at peel time is a HARD ERROR with a diagnostic naming the bind, the
-   child bundle, and the failing defeq — soft failures get papered over and breed
-   workarounds; failure classes must surface and be fixed in the tactic. Soft
-   degradation (keep the raw chunk + witness chunk, proceed) exists only behind an
-   explicit per-proof opt-in flag, visible in the proof text, for a genuinely bad
-   case while its class is being fixed. Note `trace[…]` output is invisible in
-   normal builds — a "loud trace" is still a silent green build, which is exactly
-   the problem. CONSEQUENCE: the fail-soft mint (b996ffc3) violates this policy and
-   must be revisited — either fix the dependent-occurrence generalize failure at
-   the root (Merkle HashLayer's hash-output binder is the repro), or convert the
-   silent skip into the hard-error + opt-in shape.
+3. **Failure semantics: hard by default.** DONE, three ways: (a) a matched call chunk
+   whose leaf fails to instantiate is a hard error naming the bind and child
+   (`convertCallChunkSound`, `walkGoalScoped`, `subcircuit_rw`'s new `strict` flag);
+   (b) a call bind whose goal conversion finds no matching witness/produces nothing is a
+   hard error (`convertGoalScoped required := true`); (c) the post-landing
+   no-call-left-behind scan hard-errors on any surviving call-keyed chunk. The
+   fail-soft mint (b996ffc3) is retired: `mintAtoms` now hard-errors on the
+   dependent-occurrence `generalize` failure with a diagnostic. No landed cps2 proof
+   hits it (Merkle HashLayer is still on v1); when one does it surfaces loudly and gets
+   the occurrence-filtered mint fix at the root — the one genuinely deferred item.
 
-4. **The extract witness belongs in the per-bind artifact block.** `wit_<binder>` +
-   defining equation are constructible at peel time directly from bundle/config/
-   input/index (no need to wait for the opened contract, which is why it currently
-   lives in the post-pass). Order within the block: output atom + wit atom + their
-   equations FIRST, then the leaf instantiation, so the contract is emitted over the
-   atoms (`abstractOutputsIn` finds the equations in context). Keep the Unit-witness
-   skip.
+4. **The extract witness in the per-bind block.** DONE — `mintExtracts` runs inside
+   the per-bind conversion (`convertCallChunkSound` / `convertGoalScoped`), reading the
+   child extract off the just-converted contract, so `wit_<binder>` mints in the same
+   block. Unit-witness skip kept.
 
-5. **Naming details that otherwise get re-invented ad hoc:** anonymous binders
-   (`let _ ← X.call …`) currently produce fresh-name chunks (`x_spec` in Chain's
-   slot) — pin a rule (e.g. `out_spec` for a terminal call, child-derived otherwise).
-   `<binder>_spec` collisions use the existing prime-suffix convention. The
-   `h_spec_k` → `<binder>_spec` corpus rename (MulComplete, MulOverflow,
-   CommitDomain, HashToPoint, Chain slot, HashPiece loop parents) must land in the
-   SAME commit as the tactic change — the corpus doesn't build mid-way.
+5. **Naming.** DONE and pinned in `binderNameOf`: explicit do-binder wins; an anonymous
+   call binder is `out` when the continuation is a terminal `pure` (Chain's slot →
+   `out_spec`), else the child bundle's base name; non-call fallback stays `x`. Prime
+   suffix on collision. The whole `h_spec_k` → `<binder>_spec` corpus rename
+   (MulComplete `tmp_spec`/`acc'_spec`, MulIncomplete `lp_spec`, MulComplete/HashPiece
+   `round_spec`, MulOverflow `dec_spec`, CommitDomain `blindOut_spec`/`hashOut_spec`,
+   HashToPoint/Chain `out_spec`, SpendAuthority/ValueCommit/BFE child names) lands in
+   this same change — the corpus builds as a unit.
 
-**Build assignment:** F (author of the minting loop). The standalone engine's design
-doc (`subcircuit-engine-design.md`) carries a superseded-for-CPS2 status note.
+**Built by:** F (author of the minting loop). The standalone engine's design doc
+(`subcircuit-engine-design.md`) carries a superseded-for-CPS2 status note.
 
 ## Rollout
 

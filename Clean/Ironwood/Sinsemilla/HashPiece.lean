@@ -299,28 +299,20 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         simp only [rowFam]
         exact hH0) hchain
     refine ⟨?_, ?_, ?_⟩
-    · -- each round's constraints, via the engine leaf and the chained honesty
+    · -- each round's precondition bundle (the engine strengthened the goal per round),
+      -- via the chained honesty
       intro i
-      have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round G ↑i) cfg
-        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var
-        (region_0 i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
-        roundC_extract_eq] at hleaf
+        roundC_extract_eq]
       obtain ⟨C, hC⟩ := range_prefix_some G.S A (pieceWord input) hchain
         (show ↑i + 2 ≤ n + 1 by omega)
-      have hinp : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var : Fp)
-          = input := by
-        rw [← input_eq]
-        simp only [circuit_norm]
-      rw [← hinp] at hC
-      refine hleaf ⟨env_assumptions, trivial, A, C, hAon, ?_, hC⟩
+      refine ⟨env_assumptions, trivial, A, C, hAon, ?_, hC⟩
       -- the entering neighborhood of round i is honest at word i
       have hH := hHall ↑i (by omega)
       rw [← hIter ↑i (by omega)] at hH
       simp only [rowFam] at hH
       simp only [reads, mul_one]
       provable_type_simp
-      simp only [circuit_norm, input_eq]
       exact hH
     · -- the exit row is the iterated step
       rw [← output_eq.1.1, ← output_eq.1.2]
@@ -680,7 +672,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       simp only [reads, circuit_norm]
       exact ⟨A, B, hAon, hH0, hchain⟩
     -- the loop's Spec + ProverSpec on the honest run
-    have hsp := h_spec_0 env_assumptions trivial (wit_lp_eq ▸ hLPA)
+    have hsp := lp_spec env_assumptions trivial (wit_lp_eq ▸ hLPA)
     simp only [← wit_lp_eq, loopC_spec_eq, loopC_proverSpec_eq, loopC_extract_eq,
       reads, circuit_norm] at hsp
     obtain ⟨-, hExit, hZs⟩ := hsp

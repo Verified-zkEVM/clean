@@ -215,19 +215,16 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       (bitsFrom input w) hsteps m
       (by simp only [rowFam, bitsFrom, Nat.add_zero]; exact hH0) hbudget
     refine ⟨?_, ?_, ?_⟩
-    · -- each round's constraints, via the engine leaf and the chained honesty
+    · -- each round's precondition bundle (the engine strengthened the goal per round),
+      -- via the chained honesty
       intro i
-      have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round (w + ↑i)) cfg
-        (offset + ↑i * 1) self (⟨place, env⟩ : Placed ProverEnvironment Fp) input_var
-        (region_0 i)
       rw [roundC_envAssumptions_eq, roundC_assumptions_eq, roundC_proverAssumptions_eq,
-        roundC_extract_eq] at hleaf
-      refine hleaf ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
+        roundC_extract_eq]
+      refine ⟨trivial, trivial, accScalar m (bitsFrom input w) ↑i, ?_⟩
       have hH := hHall ↑i i.isLt.le
       simp only [rowFam, bitsFrom] at hH
       simp only [reads, mul_one]
       provable_type_simp
-      simp only [circuit_norm, input_eq]
       exact hH
     · -- the exit state is the iterated step
       rw [← hez, ← hexA, ← hel1, ← hel2, ← hebase]
@@ -472,8 +469,8 @@ def double_and_add (n : ℕ) (w : ℕ) :
         rw [region_3, region_4]
         exact hl2m
     -- re-concretize the loop-witness contract: this proof's helpers speak advice rows
-    simp only [← wit_lp_eq] at h_spec_0
-    obtain ⟨hSpec, hPS1, hPS2⟩ := h_spec_0 ⟨m, hH0, hbudget⟩
+    simp only [← wit_lp_eq] at lp_spec
+    obtain ⟨hSpec, hPS1, hPS2⟩ := lp_spec ⟨m, hH0, hbudget⟩
     -- step/iter value shapes (definitional)
     have hstepz : ∀ (s : State Fp) (k k' : Bool),
         (s.step k k').z = 2 * s.z + (if k then 1 else 0) := fun _ _ _ => rfl

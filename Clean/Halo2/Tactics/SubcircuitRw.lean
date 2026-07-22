@@ -693,8 +693,11 @@ polarity into the left of `→`; on that flipped (negative) side the chunk is le
 identity, handled by returning `none`. The proof is assembled from the congruence lemmas. -/
 
 /-- Walk `p` in positive polarity, rewriting call-keyed chunks to their soundness consequence.
-Returns `some (p', proof : p → p')` or `none` (no change). `depth` guards runaway recursion. -/
-partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
+Returns `some (p', proof : p → p')` or `none` (no change). `depth` guards runaway recursion.
+With `strict` (the cps2 in-peel caller), a MATCHED chunk whose leaf fails is a hard error —
+failure classes must surface, not degrade into a silently-raw chunk (maintainer ruling,
+`atomic-binds-design.md` review note 3). -/
+partial def walkPos (p : Expr) (allowRelaxed : Bool := false) (strict : Bool := false) :
     MetaM (Option (Expr × Expr)) := do
   -- Strip `mdata` wrappers (see `walkGoal`): the recognizers key on the bare head.
   let p := (← instantiateMVars p).consumeMData
@@ -703,11 +706,14 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
     if let some (concl, proof) ← soundnessLeaf? c p allowRelaxed then
       trace[Halo2.subcircuit_rw] "rewrote positive chunk (region={c.isRegion})"
       return some (concl, proof)
+    else if strict then
+      throwError "subcircuit_rw: matched a call-keyed chunk (child {indentExpr c.child}\n) \
+        but the soundness leaf failed to instantiate at{indentExpr p}"
   -- Structural cases.
   match p.and? with
   | some (a, b) =>
-    let ra ← walkPos a allowRelaxed
-    let rb ← walkPos b allowRelaxed
+    let ra ← walkPos a allowRelaxed strict
+    let rb ← walkPos b allowRelaxed strict
     match ra, rb with
     | none, none => return none
     | _, _ =>
@@ -718,8 +724,8 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
   | none =>
   match or? p with
   | some (a, b) =>
-    let ra ← walkPos a allowRelaxed
-    let rb ← walkPos b allowRelaxed
+    let ra ← walkPos a allowRelaxed strict
+    let rb ← walkPos b allowRelaxed strict
     match ra, rb with
     | none, none => return none
     | _, _ =>
@@ -733,7 +739,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
     -- `a → b`: `a` is negative (skip), `b` positive.
     let a := p.bindingDomain!
     let b := p.bindingBody!
-    match ← walkPos b allowRelaxed with
+    match ← walkPos b allowRelaxed strict with
     | none => return none
     | some (b', pb) =>
       -- left unchanged: `imp_mono (id : a → a) pb`
@@ -742,7 +748,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
       return some (← mkArrow a b', proof)
   else if p.isForall then
     forallTelescope1? p fun x body => do
-      match ← walkPos body allowRelaxed with
+      match ← walkPos body allowRelaxed strict with
       | none => return none
       | some (body', pbody) =>
         -- `forall_mono (fun x => pbody) : (∀ x, body) → (∀ x, body')`
@@ -760,7 +766,7 @@ partial def walkPos (p : Expr) (allowRelaxed : Bool := false) :
     let α := args[0]!
     let pbody := args[1]!  -- a lambda `fun x => body`
     lambdaTelescope1? pbody fun x body => do
-      match ← walkPos body allowRelaxed with
+      match ← walkPos body allowRelaxed strict with
       | none => return none
       | some (body', pbodyProof) =>
         let motiveOld ← mkLambdaFVars #[x] body
@@ -1103,10 +1109,10 @@ has already replaced every child output by an opaque local, so a chunk input tha
 composed `.output` is shallow by construction. When the weakened hypothesis mentions the child's own
 output, `walkPos`'s soundness leaf emits it over the existing abstract local (Stage-1 cooperation),
 so nothing derived from the hypothesis re-materializes a deep composed output. -/
-def runSoundness (fvarId : FVarId) (allowRelaxed : Bool := false) :
+def runSoundness (fvarId : FVarId) (allowRelaxed : Bool := false) (strict : Bool := false) :
     TacticM Unit := withMainContext do
   let hyp ← instantiateMVars (← fvarId.getType)
-  match ← walkPos hyp allowRelaxed with
+  match ← walkPos hyp allowRelaxed strict with
   | none =>
     trace[Halo2.subcircuit_rw] "no positive chunk found in hypothesis"
   | some (newProp, proof) =>

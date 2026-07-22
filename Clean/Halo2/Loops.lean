@@ -431,5 +431,18 @@ theorem foldRange_extendsWitnesses (offset stride m : ℕ) (init : β)
               (foldAcc (fun j => offset + j * stride) init body i.val self)).operations self) :=
   foldRangeVarAux_extendsWitnesses _ _ _ _ _ _ _
 
+/-! ## The `chunk_split` membership (see `Clean/Halo2/Attributes.lean`)
+
+Every combinator's canonical ∀-round split pair, in the pre-order (`↓`) discipline the
+`circuit_norm` tags already use: the fold head splits before simp descends into it. -/
+
+attribute [chunk_split ↓] loopAux_constraints loopAux_extendsWitnesses
+  forRange'_constraints forRange'_extendsWitnesses
+  forRangeVar'_constraints forRangeVar'_extendsWitnesses
+  forRange_constraints forRange_extendsWitnesses
+  foldRangeVarAux_constraints foldRangeVarAux_extendsWitnesses
+  foldRangeVar_constraints foldRangeVar_extendsWitnesses
+  foldRange_constraints foldRange_extendsWitnesses
+
 end RegionCircuit
 end Halo2

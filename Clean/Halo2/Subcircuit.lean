@@ -436,4 +436,13 @@ instance : CoeFun (FormalRegionCircuit F CI Cfg Input Output)
 
 end
 
+/-! ## The `chunk_split` membership (see `Clean/Halo2/Attributes.lean`)
+
+The layouter call-fold's split pair, plus the `operations` bridge that exposes
+`foldOps` for them to fire on. -/
+
+attribute [chunk_split] FormalCircuit.foldCall_operations
+attribute [chunk_split ↓] FormalCircuit.foldOps_constraints
+  FormalCircuit.foldOps_extendsWitnesses
+
 end Halo2

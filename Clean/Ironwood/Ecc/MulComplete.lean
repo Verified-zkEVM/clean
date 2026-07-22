@@ -419,20 +419,20 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     rcases Bool.dichotomy (kBitsWindow input_alpha w iter) with hb | hb <;>
       rw [hb] at region_2 ⊢ <;>
       simp only [if_false, Bool.false_eq_true, if_true] at region_2 <;>
-      rw [region_2] at h_spec_0 ⊢
+      rw [region_2] at tmp_spec ⊢
     · -- bit 0: U = (base.x, −base.y)
       have hUv : ({ x := input_base_x, y := -input_base_y } : Point Fp).Valid := by
         simpa [stepBasePoint] using stepBasePoint_valid hBaseV false
-      obtain ⟨hTmpV, hTmpE⟩ := h_spec_0 ⟨hUv, hAccV⟩
-      obtain ⟨hAccV', hAccE⟩ := h_spec_1 ⟨hAccV, hTmpV⟩
+      obtain ⟨hTmpV, hTmpE⟩ := tmp_spec ⟨hUv, hAccV⟩
+      obtain ⟨hAccV', hAccE⟩ := acc'_spec ⟨hAccV, hTmpV⟩
       refine ⟨⟨rfl, ⟨by simp, by simp⟩, ⟨hUv, hAccV⟩, hAccV, hTmpV⟩, ?_, rfl⟩
       rw [← hAccOut, hAccE, hTmpE]
       simp [stepPoint, stepBasePoint]
     · -- bit 1: U = (base.x, base.y)
       have hUv : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := by
         simpa [stepBasePoint] using stepBasePoint_valid hBaseV true
-      obtain ⟨hTmpV, hTmpE⟩ := h_spec_0 ⟨hUv, hAccV⟩
-      obtain ⟨hAccV', hAccE⟩ := h_spec_1 ⟨hAccV, hTmpV⟩
+      obtain ⟨hTmpV, hTmpE⟩ := tmp_spec ⟨hUv, hAccV⟩
+      obtain ⟨hAccV', hAccE⟩ := acc'_spec ⟨hAccV, hTmpV⟩
       refine ⟨⟨rfl, ⟨by simp, by simp⟩, ⟨hUv, hAccV⟩, hAccV, hTmpV⟩, ?_, rfl⟩
       rw [← hAccOut, hAccE, hTmpE]
       simp [stepPoint, stepBasePoint]
@@ -690,25 +690,26 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       intro j hj
       rw [← hzs]
       simp [circuit_norm]
-    -- the per-round honest contracts, in `fold_complete`'s shape
+    -- the per-round honest bundles (the engine strengthened the goal per round and
+    -- delivered `round_spec`), chained by `fold_complete`
     obtain ⟨hCall, haccN, hzN⟩ :=
       fold_complete (base := { x := input_base_x, y := input_base_y })
         (A0 := { x := input_xA, y := input_yA }) hAcc0V hBaseV
         (kBitsWindow input_alpha w) input_z
-        (fun i => RegionOperations.Constraints place self env.toEnvironment
-          (((round w i).call cfg (offset + i * 2)
-            { alpha := input_var_alpha,
-              base := { x := input_var_base_x, y := input_var_base_y },
-              z := input_var_z,
-              acc := RegionCircuit.foldAcc (fun j => offset + j * 2)
-                ({ x := input_var_xA, y := input_var_yA } : Point (AssignedCell Fp))
-                (fun i r acc => do
-                  let out ← (round w i).call cfg r
-                    { alpha := input_var_alpha,
-                      base := { x := input_var_base_x, y := input_var_base_y },
-                      z := input_var_z, acc := acc }
-                  pure out.acc) i self }).operations self))
-        (fun n => eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        (fun i => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (RegionCircuit.foldAcc (fun j => offset + j * 2)
+              ({ x := input_var_xA, y := input_var_yA } : Point (AssignedCell Fp))
+              (fun i r acc => do
+                let out ← (round w i).call cfg r
+                  { alpha := input_var_alpha,
+                    base := { x := input_var_base_x, y := input_var_base_y },
+                    z := input_var_z, acc := acc }
+                pure out.acc) i self)).Valid ∧
+            ({ x := input_base_x, y := input_base_y } : Point Fp).Valid) ∧
+          env.advice cfg.zComplete ((place self + (offset + i * 2) : ℕ) : ℤ)
+            = if i = 0 then input_z
+              else zRunValue input_z (kBitsWindow input_alpha w) (i - 1))
+        (fun n => eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           (RegionCircuit.foldAcc (fun j => offset + j * 2)
             ({ x := input_var_xA, y := input_var_yA } : Point (AssignedCell Fp))
             (fun i r acc => do
@@ -722,17 +723,8 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (fun i hpre => by
           obtain ⟨hAV, hBV, hzP⟩ := hpre
           beta_reduce at hAV hzP
-          have hleaf := Halo2.SubcircuitRw.region_completeness_leaf_placed (round w ↑i) cfg
-            (offset + ↑i * 2) self ⟨place, env⟩ _ (region_1 i)
-          have hder := Halo2.SubcircuitRw.region_completeness_derived_placed (round w ↑i) cfg
-            (offset + ↑i * 2) self ⟨place, env⟩ _ (region_1 i)
-          simp only [round_envAssumptions_eq, round_assumptions_eq,
-            round_proverAssumptions_eq, round_proverSpec_eq, round_extract_eq,
-            round_output, circuit_norm, input_eq] at hleaf hder
-          have hAV' := hAV
-          rw [← point_eval_toEnvironment] at hAV'
-          obtain ⟨hSpec, hPSacc, hPSz⟩ := hder ⟨hAV', hBV⟩ hzP
-          refine ⟨hleaf ⟨⟨hAV', hBV⟩, hzP⟩, ?_, ?_⟩ <;> beta_reduce
+          obtain ⟨hSpec, hPSacc, hPSz⟩ := round_spec i ⟨hAV, hBV⟩ hzP
+          refine ⟨⟨⟨hAV, hBV⟩, hzP⟩, ?_, ?_⟩ <;> beta_reduce
           · rw [RegionCircuit.foldAcc_succ]
             simp only [round_output, circuit_norm, ← point_eval_toEnvironment] at hPSacc ⊢
             exact hPSacc
@@ -758,9 +750,9 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       rw [show ({ x := output_acc_x, y := output_acc_y } : Point Fp)
         = accPoint { x := input_base_x, y := input_base_y } { x := input_xA, y := input_yA }
             (kBitsWindow input_alpha w) numBits from
-        (hOutAcc.symm.trans (point_eval_toEnvironment place env _)).trans haccN]
+        hOutAcc.symm.trans haccN]
       exact accPoint_valid hBaseV hAcc0V (kBitsWindow input_alpha w) numBits
     · -- accumulator value
-      exact (hOutAcc.symm.trans (point_eval_toEnvironment place env _)).trans haccN
+      exact hOutAcc.symm.trans haccN
 
 end Halo2.Ironwood.Ecc.MulComplete

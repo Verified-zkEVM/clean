@@ -1356,12 +1356,12 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       innerC_proverAssumptions_eq, innerC_proverSpec_eq, innerC_spec_eq,
       addc_envAssumptions_eq, addc_assumptions_eq, addc_proverAssumptions_eq,
       rca_envAssumptions_eq, rca_assumptions_eq, rca_proverAssumptions_eq,
-      circuit_norm] at h_spec_0 h_spec_1 h_spec_2 ⊢
+      circuit_norm] at inner_spec add_spec rangeCheckAt_spec ⊢
     -- ── honest inner facts (the bundle contract's prover side) ──
     have hval255 : ∀ x : Fp, x.val < 2 ^ 255 := fun x =>
       lt_of_lt_of_le (ZMod.val_lt x)
         (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
-    obtain ⟨hax, hay, hmx, hmy, hZs⟩ := (h_spec_0 hEI (hval255 _)).2
+    obtain ⟨hax, hay, hmx, hmy, hZs⟩ := (inner_spec hEI (hval255 _)).2
     -- ── the honest running sums at 0/84/44/43, in `8^w` form ──
     have hz0 := hZs ⟨0, by norm_num⟩
     have hz84 := hZs ⟨84, by norm_num⟩
@@ -1386,8 +1386,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp
     -- ── z13's honest value (the range-check contract's honest side) ──
     simp only [rca_spec_eq, rca_proverSpec_eq, rca_output, circuit_norm,
       AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-      Cell.of_column, Environment.get_advice, Nat.add_zero] at h_spec_2
-    obtain ⟨-, hw2assign, hzLast⟩ := h_spec_2 ⟨hTable, hDistinct⟩
+      Cell.of_column, Environment.get_advice, Nat.add_zero] at rangeCheckAt_spec
+    obtain ⟨-, hw2assign, hzLast⟩ := rangeCheckAt_spec ⟨hTable, hDistinct⟩
       ⟨by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD],
        by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]⟩
     rw [← hw2assign] at hzLast

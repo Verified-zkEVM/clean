@@ -80,7 +80,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     simp_all
   completeness := by
     circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
-    have hAl := h_spec_0 env_assumptions
+    have hAl := alphaCommitment_spec env_assumptions
     exact ⟨env_assumptions, by rw [hAl]; exact G.smul_valid _, assumptions⟩
 
 derive_contract_bridges circuit (G : FixedBase) := circuit G

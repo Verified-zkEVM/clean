@@ -263,7 +263,7 @@ def commit (G : Generators) (ns : List ℕ)
     obtain ⟨hPBounds, B0, hB0⟩ := prover_assumptions
     obtain ⟨bx, byv⟩ := B0
     -- the blind child's contract
-    have hBl := (h_spec_0 (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE)
+    have hBl := (blindOut_spec (by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE)
       (by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial)
       (by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial)).1
     rw [Ecc.MulFixed.FullWidth.circuit_extract_eq] at wit_blindOut_eq
@@ -283,7 +283,7 @@ def commit (G : Generators) (ns : List ℕ)
       simp only [hpe]
       exact ⟨hns, hPBounds, ⟨bx, byv⟩, hB0⟩
     -- the hash child's honest contract (prover side: the output point IS the honest hash)
-    have hPSHash := (h_spec_1 (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE)
+    have hPSHash := (hashOut_spec (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE)
       trivial hPAhash).2
     rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by

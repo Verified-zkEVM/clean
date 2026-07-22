@@ -347,9 +347,9 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
 
   soundness := by
     circuit_proof_start2 [slotReads, readState, SlotSpec]
-    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at x_spec
-    simp only [HashPiece.Spec, circuit_norm] at x_spec
-    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := x_spec env_assumptions
+    rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq, pieceC_spec_eq] at out_spec
+    simp only [HashPiece.Spec, circuit_norm] at out_spec
+    obtain ⟨ms, hms, hrecomb, hzs, hlxP, hlyP, hchainP⟩ := out_spec env_assumptions
     refine ⟨ms, hms, ?_, hzs, hlxP, hlyP, hchainP⟩
     exact hrecomb
 
@@ -357,7 +357,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     circuit_proof_start2 [slotReads, readState, SlotPA, SlotPS]
     obtain ⟨hbound, A, B, hAon, hAx, hAy, hchain⟩ := prover_assumptions
     -- reduce the piece extract's defining equation once, then transport through it
-    rw [pieceC_extract_eq] at wit_x_eq
+    rw [pieceC_extract_eq] at wit_out_eq
     have hCPA : HashPiece.ProverAssumptions G (ns.getD i 0)
         (AssignedCell.eval place env.toEnvironment input_var)
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
@@ -373,14 +373,14 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
       · rw [hAy]
         by_cases hi : i = 0 <;> simp [hi, reads]
     rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq,
-      pieceC_proverAssumptions_eq] at h_spec_0
-    have hsp := h_spec_0 env_assumptions trivial (input_eq ▸ wit_x_eq ▸ hCPA)
-    simp only [← wit_x_eq, pieceC_proverSpec_eq, HashPiece.ProverSpec,
+      pieceC_proverAssumptions_eq] at out_spec
+    have hsp := out_spec env_assumptions trivial (input_eq ▸ wit_out_eq ▸ hCPA)
+    simp only [← wit_out_eq, pieceC_proverSpec_eq, HashPiece.ProverSpec,
       circuit_norm] at hsp
     obtain ⟨-, hPS⟩ := hsp
     refine ⟨⟨env_assumptions, trivial, ?_⟩, ?_⟩
     · rw [pieceC_proverAssumptions_eq]
-      exact input_eq ▸ wit_x_eq ▸ hCPA
+      exact input_eq ▸ wit_out_eq ▸ hCPA
     · -- the slot's ProverSpec, off the child's
       intro A' B' hA'x hA'y hchain'
       have hres := hPS A' B'
