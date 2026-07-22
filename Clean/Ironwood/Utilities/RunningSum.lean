@@ -16,7 +16,6 @@ namespace Zcash.Circuits
 
 open Clean
 
-
 namespace Utilities
 
 variable {F : Type} [FiniteField F]

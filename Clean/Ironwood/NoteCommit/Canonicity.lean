@@ -17,7 +17,6 @@ namespace Zcash.Circuits.NoteCommit
 
 open Halo2
 
-
 /-- `v·(1−v) = 0` pins a boolean. -/
 private theorem isBool_of_boolCheck' {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
   rcases mul_eq_zero.mp h with h0 | h1

@@ -19,7 +19,6 @@ namespace Zcash.Circuits.AddChip
 
 open Halo2
 
-
 /-- Rust `AddConfig` (`add_chip.rs:13-19`). -/
 structure Config where
   a : Column .advice

@@ -689,7 +689,6 @@ theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : Prover
   exact (CircuitType.eval_expression_prover env (varFromOffset α offset)).trans (by
     simpa only [CircuitType.eval_expression] using eval_varFromOffset (α:=α) env.toEnvironment offset)
 
-
 theorem eval_fromElements (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
     Eval.eval env (fromElements (F:=Expression F) xs : α (Expression F)) = fromElements (xs.map env) := by

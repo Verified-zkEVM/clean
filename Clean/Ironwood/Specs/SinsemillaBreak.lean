@@ -27,7 +27,6 @@ nonzero mod the odd group order).
 
 namespace Zcash.Circuits.Specs.Sinsemilla
 
-
 /-- Which incomplete-addition escape fired at the exceptional step. The step is
 `(acc ⸭ S m) ⸭ acc` (§5.4.1.9); conditions are listed in evaluation order, so each
 kind additionally certifies the *negations* of the earlier conditions. -/
