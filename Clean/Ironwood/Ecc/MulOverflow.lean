@@ -286,7 +286,6 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       EnvAssumptions]
     -- the child decomposition: s = lo + 2^{K·numWords}·zLast, lo < 2^{K·numWords}
     have hSpec := dec_spec env_assumptions assumptions
-    rw [dec_eq] at hSpec
     simp only [circuit_norm] at hSpec
     obtain ⟨-, lo, hlo, hDecomp⟩ := hSpec
     obtain ⟨hCz0, hCz130, hCk254, hCalpha, hCsml, hCs,
@@ -329,13 +328,8 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
   completeness := by
     circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
       EnvAssumptions, sWit, etaWit]
-    -- the child's constraints and honest facts, via the engine leaves on the witness chunk
-    have hleaf := Halo2.SubcircuitRw.layouter_completeness_leaf
-      (LookupRangeCheck.copyCheck K (numWords K) false) cfg.lookupConfig (i₀ + 1)
-      place env { element := sCell } dec_spec
-    have hder := Halo2.SubcircuitRw.layouter_completeness_derived
-      (LookupRangeCheck.copyCheck K (numWords K) false) cfg.lookupConfig (i₀ + 1)
-      place env { element := sCell } dec_spec
+    -- the child's constraints and honest facts arrive through the engine's
+    -- strengthened goal position (the `EnvA ∧ A ∧ PA` bundle) and `h_spec_0`
     have hE' : (LookupRangeCheck.copyCheck K (numWords K) false).EnvAssumptions
         cfg.lookupConfig (⟨place, env.toEnvironment⟩ : Placed Environment Fp) := by
       rw [copyCheck_envAssumptions_eq]; exact env_assumptions
@@ -343,17 +337,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp))) := by
       rw [copyCheck_assumptions_eq]; exact assumptions
-    have hPA' : (LookupRangeCheck.copyCheck K (numWords K) false).ProverAssumptions
-        (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          ({ element := sCell } : LookupRangeCheck.Inputs (AssignedCell Fp)))
-        ((LookupRangeCheck.copyCheck K (numWords K) false).extract cfg.lookupConfig
-          { element := sCell } (i₀ + 1) (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
-        env.hint := by
-      rw [copyCheck_proverAssumptions_eq]; simp
-    obtain ⟨hChildSpec, hChildPS⟩ := hder hE' hA' hPA'
-    rw [copyCheck_spec_eq, dec_eq] at hChildSpec
-    rw [copyCheck_proverSpec_eq, dec_eq] at hChildPS
-    simp only [circuit_norm] at hChildSpec hChildPS
+    obtain ⟨hChildSpec, hChildPS⟩ := h_spec_0 hE' hA'
     obtain ⟨-, lo, hlo, hDecompV⟩ := hChildSpec
     obtain ⟨hWz0, hWz130, hWeta, hWk254, hWalpha, hWsml, hWs2⟩ := region_1
     obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := prover_assumptions
@@ -378,7 +362,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         exact hsLo_lt
       rw [Nat.div_eq_of_lt hsVal, Nat.cast_zero]
     have h2124 : (2 ^ 124 : Fp) = (2 : Fp) ^ 124 := by norm_num
-    refine ⟨hleaf ⟨hE', hA', hPA'⟩,
+    refine ⟨⟨hE', assumptions⟩,
       hWz0, hWz130, hWk254, hWalpha, hWsml, hWs2, ?_, ?_, ?_, ?_, ?_⟩
     · -- s_check: the s cell = alpha_gate + k254_gate·2^130
       rw [hWs2, hsval, hWalpha, hWk254]; ring

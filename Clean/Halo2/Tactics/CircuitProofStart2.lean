@@ -466,21 +466,17 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
       output_assignRegion] at $(mkIdent `output_eq):ident))
     if isCall then callChunks := callChunks.push chunkName
     else
-      -- completeness also opens the GOAL's terminal conjunct: a raw region whose body
-      -- is a region-level call (`assignRegion "…" (X.call …)`) must expose
-      -- `RegionOperations.Constraints` of the call BEFORE the goal-mode engine runs,
-      -- or the engine cannot strengthen the chunk (found porting FullWidth; the same
-      -- gap exists for mid-chain raw regions with embedded calls — unfixed until a
-      -- circuit needs it)
-      if sound then
-        run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+      run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+      -- content-free terminal chunks vanish, like the peel's (an output-only step —
+      -- HashPieceRound's terminal `readState` — opens to `True`)
+      let cleared ← withMainContext do
+        let some decl := (← getLCtx).findFromUserName? chunkName | return true
+        if (← instantiateMVars decl.type).isConstOf ``True then return true
+        return false
+      if cleared then
+        run? (← `(tactic| clear $(mkIdent chunkName):ident))
       else
-        -- fold the raw-step region counts here too (they normally materialize only in
-        -- landing pass 2): the engine's witness locator compares region indexes at
-        -- `.reducible`, so the goal must spell `i₀ + 1`, not `i₀ + regionCount [...]`
-        run? (← `(tactic| simp only [circuit_norm, Operations.regionCount,
-          foldCallRegionCount, $unfolds,*] at $(mkIdent chunkName):ident ⊢))
-      regionIdx := regionIdx + 1
+        regionIdx := regionIdx + 1
   | none =>
     if region then
       if sound then
@@ -502,7 +498,7 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
   let mut witEqs : Array Name := #[]
   if sound then
     for c in callChunks do
-      run? (← `(tactic| subcircuit_rw at $(mkIdent c):ident))
+      run? (← `(tactic| subcircuit_rw ! at $(mkIdent c):ident))
       -- the opened contract is the first time the child's EXTRACT is spelled — mint
       -- it to the `wit_<binder>` atom (design doc: extract mirrors the output
       -- treatment at every call bind); its defining equation reduces in the landing
@@ -512,21 +508,32 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     -- raw chunks can carry ∀-bound `.call` constraints (loop combinators over child
     -- calls); the engine supports those, and is a silent no-op on call-free chunks
     for k in [0:regionIdx] do
-      run? (← `(tactic| subcircuit_rw at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
+      run? (← `(tactic| subcircuit_rw ! at $(mkIdent (Name.mkSimple s!"region_{k}")):ident))
   else
-    run? (← `(tactic| subcircuit_rw))
+    -- normalize the goal ONCE before the engine: every peel is done, so nothing
+    -- remains for the peel `rw`s to match and the full pass is safe. This surfaces
+    -- every call chunk in the canonical spelling the goal walker matches — calls
+    -- embedded in mid-chain or terminal raw regions (`assignRegion "…" (X.call …)`,
+    -- FullWidth's add), and calls under region-level bind spines (BFE's
+    -- `witnessCheck13`) — with region counts folded to the literal indexes the
+    -- witness locator compares at `.reducible`.
+    run? (← `(tactic| simp only [circuit_norm, Operations.regionCount,
+      foldCallRegionCount, $unfolds,*]))
+    run? (← `(tactic| subcircuit_rw !))
     -- h_spec_<k> arrives in call order — name the witness atom from the k-th call's
     -- do-binder (`wit_<binder>`), falling back to the index for excess spec hyps
     let hs ← specHyps
+    -- specs beyond the call binds belong to calls embedded in raw steps (e.g.
+    -- `assignRegion "…" (X.call …)`): a single one is the terminal output call
+    -- (`wit_out`); several are disambiguated by spec index (`wit_out_<k>`)
+    let unmatched := hs.size - min hs.size callChunks.size
     for i in [0:hs.size] do
       let h := hs[i]!
       let binder :=
         if hcc : i < callChunks.size then
           (callChunks[i].getString!.dropSuffix "_spec" |> ToString.toString)
-        -- no matching call bind: the spec belongs to a call embedded in a raw
-        -- step (e.g. a terminal `assignRegion "…" (X.call …)`) — its output is the
-        -- bundle output, so name the witness after it
-        else "out"
+        else if unmatched == 1 then "out"
+        else s!"out_{i - callChunks.size}"
       witEqs := witEqs ++ (← mintExtracts h (Name.mkSimple binder))
   -- ── (f) landing (maintainer model, AddressIntegrity 90912413): decompose types
   -- with provable_type_simp, normalize the GIVENS, then one pass that uses `input_eq`

@@ -782,14 +782,15 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (pieceZ piece (i + 1))
 
   soundness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads]
-    obtain ⟨hQ, ⟨t, ht, hmem⟩, hsec, hyck⟩ := hc
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState]
+    obtain ⟨t, ht, hmem⟩ := region_1
     simp only [List.cons.injEq, and_true] at hmem
     obtain ⟨h0, h1, h2y⟩ := hmem
-    obtain ⟨-, hSpec, -⟩ := _hE
+    obtain ⟨-, hSpec, -⟩ := env_assumptions
     obtain ⟨m, hm, hIdx, hX, hY⟩ := hSpec t ht
-    rw [hQ] at h0 hyck
+    obtain ⟨hsec, hyck⟩ := region_2
+    rw [region_0] at h0 hyck
     rw [hIdx] at h0
     rw [hX] at h1
     rw [hY] at h2y
@@ -798,19 +799,20 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (by linear_combination h2y) (by linear_combination hsec) (by linear_combination hyck)
 
   completeness := by
-    circuit_proof_start [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
-      reads]
-    obtain ⟨A, B, hAon, hH, hchain⟩ := hPA
-    obtain ⟨hUsable, -, hBlock⟩ := _hE
-    rw [Placed.toEnvironment_env] at hUsable hBlock
-    obtain ⟨ho1, ho2, ho3, ho4, ho5⟩ := h_output
-    refine ⟨complete_gates G _
+    circuit_proof_start2 [generatorLookup, sinsemillaGate, yPExpr, yAExpr, xRExpr, qS3Expr,
+      reads, readState]
+    obtain ⟨A, B, hAon, hH, hchain⟩ := prover_assumptions
+    obtain ⟨hUsable, -, hBlock⟩ := env_assumptions
+    -- land the honest witness values in the goal (the fixed selector, the outgoing
+    -- row's assigns, and the running-sum cell), then the gates are the honest lemma
+    rw [region_0, ← output_eq.2, region_1, region_2, region_3, region_4, region_5]
+    refine ⟨?_, rfl⟩
+    simp only [one_mul, true_and]
+    exact complete_gates G _
       (fun t => env.fixed cfg.generatorTable.tableIdx.inner (t : ℤ))
       (fun t => env.fixed cfg.generatorTable.tableX.inner (t : ℤ))
       (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
-      hH hchain hUsable hBlock, ?_⟩
-    rw [State.mk.injEq, DoubleAndAddRow.mk.injEq]
-    exact ⟨ho1.symm, ho2.symm, ho3.symm, ho4.symm, ho5.symm⟩
+      hH hchain hUsable hBlock
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
