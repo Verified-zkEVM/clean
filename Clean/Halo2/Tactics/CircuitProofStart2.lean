@@ -158,9 +158,16 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) :
       minted := minted.push (xn, hn)
       k := k + 1
     let g ← getMainGoal
-    let (_, g') ← g.generalize args
-    replaceMainGoal [g']
-    pure minted
+    -- fail-soft: a dependent occurrence can make the abstracted motive
+    -- type-incorrect (Merkle's HashLayer hash output) — keep the concrete
+    -- spelling for that binder rather than killing the peel
+    try
+      let (_, g') ← g.generalize args
+      replaceMainGoal [g']
+      pure minted
+    catch _ =>
+      trace[Halo2.circuit_proof_start2] "mint skipped (generalize failed) for {n}"
+      pure #[]
   -- re-intro in list order (first listed = outermost binder)
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))
