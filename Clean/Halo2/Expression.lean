@@ -342,6 +342,8 @@ lemma Cell.of_column (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col :
 lemma AssignedCell.of_cell (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
     (AssignedCell.of self row col : AssignedCell F).cell = Cell.of self row col := rfl
 
+-- TODO HALO2 this seems extremely questionable. eval-normal form of an arbitrary cell doesn't match
+-- the one of a concrete cell. see Mul.lean, `incomplete_call_output` necessity
 /-- Evaluate an assigned cell: read its column at the region's placement plus the
 cell's offset. `place` is the region-placement parameter of the semantics (the analogue
 of main Clean's `offset`) — proofs are generic over it; the top level instantiates the

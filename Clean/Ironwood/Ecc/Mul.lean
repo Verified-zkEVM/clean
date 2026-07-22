@@ -33,9 +33,6 @@ open ProvableStruct.Halo2 (eval_var_eq_eval eval_var_eq_eval_prover)
 namespace Zcash.Circuits.Ecc.Mul
 
 open Halo2
-open Ecc (tQ)
-open Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
-  chain_cast accScalar_closed k_canonical cells_kNat z0_cell_value)
 open Ecc.Mul.Decompose (m_bounds)
 open Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -213,15 +210,6 @@ def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
 The running-sum/canonicity machinery (`chainNat_*`, `chain_cast`, `accScalar_closed`,
 `k_canonical`, `m_bounds`, `cells_kNat`, `z0_cell_value`, `nsmul_step`, `neg_add_nsmul`). -/
 
-/-- The honest running-sum cells satisfy the overflow-check contract (`overflow_spec_honest` at
-the `MulOverflow.Spec` record — same formula, defeq). -/
-private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
-    (hz0v : z0v = ((kNat alpha : ℕ) : Fp))
-    (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
-    (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
-    MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } :=
-  Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
-
 /-! ## Point-level scalar-multiple algebra
 
 The `SWPoint`-level step/negation/identity algebra, transported to `Point Fp` `nsmul` through the
@@ -342,7 +330,8 @@ private theorem incomplete_call_output (n : ℕ) (w : ℕ)
       = { acc := { x := .of self (off + n + 2) cfg.xA,
                    y := .of self (off + n + 2) cfg.lambda1 },
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := by
-  rw [FormalRegionCircuit.output_call]; rfl
+  -- TODO HALO2 circuit_norm is incomplete to resolve elaborated circuit outputs => rfl disease
+  simp only [circuit_norm, MulIncomplete.double_and_add, FormalRegionCircuit.output, ElaboratedRegionCircuit.output]
 
 /-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
 never reduced, per the whnf discipline). -/
@@ -602,16 +591,12 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
   soundness := by
     circuit_proof_start2 [Add.add, MulIncomplete.double_and_add, MulComplete.assign_region,
       lsbGate]
-    have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := assumptions
-    have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
+    have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl assumptions
     -- init add: acc = base + base = [2]base
-    obtain ⟨hAccV, hAccEq⟩ := acc_spec hbaseV
-    have hAcc2 : eval (⟨place, env⟩ : Placed Environment Fp) acc
-        = 2 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← point_two_nsmul hOnC]
-      exact hAccEq
+    obtain ⟨hAccV, hAcc2⟩ := acc_spec hbaseV
+    rw [point_two_nsmul assumptions] at hAcc2
     -- hi half: ∃ bitsHi, RoundInvariant 125
-    obtain ⟨bitsHi, hHiRI⟩ := hi_spec hOnC
+    obtain ⟨bitsHi, hHiRI⟩ := hi_spec assumptions
     simp only [MulIncomplete.RoundInvariant] at hHiRI
     obtain ⟨hHiChain, hHiAccCl⟩ := hHiRI
     obtain ⟨hHiZ0, hHiZstep⟩ := zChain_split hHiChain
@@ -633,7 +618,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [← hi_eq, incomplete_output_eq] at hHiOut
     simp only [circuit_norm] at hHiOut
     -- lo half: ∃ bitsLo, RoundInvariant 126 with entering z = z₁₃₀, entering acc = hi.acc
-    obtain ⟨bitsLo, hLoRI⟩ := lo_spec hOnC
+    obtain ⟨bitsLo, hLoRI⟩ := lo_spec assumptions
     simp only [MulIncomplete.RoundInvariant] at hLoRI
     obtain ⟨hLoChain, hLoAccCl⟩ := hLoRI
     obtain ⟨hLoZ0, hLoZstep⟩ := zChain_split hLoChain
@@ -660,7 +645,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     -- the complete-phase accumulator: [accScalar M₂ bitsC 3] • base, valid
     obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
       (by rw [hLoOut]; exact Point.valid_nsmul hbaseV _) hbaseV
-    rw [hLoOut, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
+    rw [hLoOut, accPoint_nsmul assumptions _ hM2pos bitsC 3] at hCompAccEq
     -- the complete-phase z-chain, continued from the lo chain
     have hLoZ125 := hLoCells 125 (by omega)
     rw [← lo_eq, incomplete_output_eq] at hLoZ125
@@ -733,7 +718,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
           ⟨by rw [hcx, hcy]; exact Point.valid_neg hbaseV, hCompAccV⟩
         rw [hcx, hcy, show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -({ x := input_base_x, y := input_base_y } : Point Fp) from rfl,
-          hCompAccEq, point_neg_add_nsmul hOnC hM3pos] at hResEq
+          hCompAccEq, point_neg_add_nsmul assumptions hM3pos] at hResEq
         rw [← hOResX, ← hOResY] at hResEq ⊢
         rw [hResEq]
         congr 1
@@ -1090,7 +1075,7 @@ def mul :
       ⟨by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD],
        by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]⟩, ?_⟩
     rw [hz0v, hz130v, hk254v]
-    exact overflow_spec_honest' input_alpha rfl rfl rfl
+    exact Ecc.Mul.overflow_spec_honest input_alpha rfl rfl rfl
 
 derive_contract_bridges mul := mul
 
