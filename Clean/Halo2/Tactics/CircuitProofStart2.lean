@@ -190,18 +190,15 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) :
       k := k + 1
     let g ← getMainGoal
     -- HARD by default (maintainer ruling — no silent skips): a dependent occurrence
-    -- can make `generalize`'s all-occurrences motive type-incorrect (Merkle's
-    -- HashLayer hash-output binder). No landed cps2 proof hits this today; when one
-    -- does, this surfaces loudly and gets the occurrence-filtered mint fix at the
-    -- root rather than a silent concrete-spelling fallback.
-    try
-      let (_, g') ← g.generalize args
-      replaceMainGoal [g']
-      pure minted
-    catch e =>
-      throwError "circuit_proof_start2: minting the atom '{n}' failed — a dependent \
-        occurrence makes the abstracted motive type-incorrect. The atom mint needs the \
-        occurrence-filtered fix for this circuit shape.\n{e.toMessageData}"
+    -- can make `generalize`'s all-occurrences motive type-incorrect (known repro:
+    -- Merkle HashLayer's hash-output binder). No landed cps2 proof hits this today;
+    -- when one does, this surfaces loudly and gets the occurrence-filtered mint fix
+    -- at the root rather than a silent concrete-spelling fallback.
+    let (_, g') ← try g.generalize args catch e =>
+      throwError "circuit_proof_start2: minting `{n}` failed — the abstracted motive \
+        is not type correct (a dependent occurrence of the output term){indentD e.toMessageData}"
+    replaceMainGoal [g']
+    pure minted
   -- re-intro in list order (first listed = outermost binder)
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))

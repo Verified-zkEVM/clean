@@ -261,8 +261,9 @@ coexistence pattern).
    stay concrete; only the loop's closed-form boundary output mints. The
    symmetric-loops claim above is about contracts, not per-round atoms.
 
-3. **Failure semantics: hard by default.** DONE, three ways: (a) a matched call chunk
-   whose leaf fails to instantiate is a hard error naming the bind and child
+3. **Failure semantics: hard by default (maintainer ruling; H removed the fail-soft
+   mint in parallel, a3230157).** DONE, three ways: (a) a matched call chunk whose leaf
+   fails to instantiate is a hard error naming the bind and child
    (`convertCallChunkSound`, `walkGoalScoped`, `subcircuit_rw`'s new `strict` flag);
    (b) a call bind whose goal conversion finds no matching witness/produces nothing is a
    hard error (`convertGoalScoped required := true`); (c) the post-landing
