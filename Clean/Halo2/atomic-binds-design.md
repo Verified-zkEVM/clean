@@ -175,6 +175,50 @@ its region index spells `i₀ + k` literally (the witness locator compares index
 reducible transparency). The same embedded-call gap exists for mid-chain raw
 regions — unfixed until a circuit needs it.
 
+## The in-peel engine (subcircuit rewriting v2) — agreed with maintainer, July 22
+
+**Principle: contract conversion happens inside `peelOneBind`, not in a post-pass.**
+The peel visits every call bind and every loop bind explicitly, in both directions,
+holding the ground truth as Exprs: the bundle term, config, offset, input, the
+just-split chunk hypothesis, the witness-side chunk (completeness), and — a moment
+later — the minted atom with its defining equation. The post-pass engine re-discovers
+all of this by syntactic matching, and every engine fragility to date lives in that
+re-matching layer: the MulOverflow minted-atom miss, the relaxed transparency pass and
+its bundle-compare fail-fast, the `h_spec_k` emission-order names, the missing ∀-bound
+goal conversion for loops, the CPS2 witness clear-guard. In-peel, the conversion is
+direct term application of the existing leaf lemmas
+(`layouter_/region_completeness_leaf/derived[_placed]`,
+`Clean/Halo2/Tactics/SubcircuitRw.lean`) at arguments already in hand — no search, no
+transparency tiers, no miss modes.
+
+**Per-bind artifact set.** A call bind produces, in one block: its chunk, its atom +
+defining equation, its boundary fact, and its contract. Soundness weakens the chunk
+hypothesis to the contract in place; completeness strengthens the goal's head conjunct
+to the `EnvA ∧ A ∧ PA` premise bundle and introduces the derived
+`EnvA → A → PA → Spec ∧ ProverSpec` statement — named `<binder>_spec` in BOTH
+directions (retiring `h_spec_k`).
+
+**Loops become symmetric by construction.** At a registry-head bind the peel applies
+the canonical ∀-split and converts under the binder in the same step. The completeness
+asymmetry — soundness consumes ∀-bound call chunks while fold parents hand-apply
+`region_completeness_leaf_placed` per round — disappears; `fold_complete`-style
+helpers produce the premise family directly and the per-round leaf boilerplate in
+MulComplete's parent and MulIncomplete's loop dies.
+
+**What dies with it** (for CPS2 paths): the engine's matching layer
+(canonical-output discovery, the relaxed transparency pass of a5fd815e, the
+bundle-compare fail-fast), the CPS2 witness clear-guard (an engine miss becomes
+impossible for peeled binds), and the "engine should replace, not leave, consumed
+witness chunks" known-gap.
+
+**What stays:** the leaf lemmas as the shared logical core — the in-peel driver is a
+new caller over the same semantics, not a fork — and the standalone `subcircuit_rw`
+driver for manual and v1-era proofs until that corpus empties (the CPS1/CPS2
+coexistence pattern).
+
+**Build assignment:** F (author of the minting loop). The standalone engine's design
+doc (`subcircuit-engine-design.md`) carries a superseded-for-CPS2 status note.
+
 ## Rollout
 
 1. **CPS v2, wholesale.** A new version of the `circuit_proof_start` pipeline adopting

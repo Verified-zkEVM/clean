@@ -9,6 +9,17 @@ proofs consume child contracts. The iffs were the deliberate fast unblock; this 
 > `call_constraints_and_specs` copies have all been retired from `Subcircuit.lean` (only a
 > historical docstring there records them); `subcircuit_rw` is the sole consumption mechanism.
 > Read the "Migration and retirement" and D1 sections below as done, not planned.
+>
+> **STATUS 2 (July 22): superseded for CPS2 proofs by the in-peel engine.** This doc
+> describes the STANDALONE post-pass driver: it scans a finished proof state and
+> re-discovers each call's bundle/config/input by syntactic matching — the layer where
+> the known fragilities live (minted-atom spelling misses, the relaxed transparency
+> pass, `h_spec_k` naming, no ∀-bound goal conversion). For `circuit_proof_start2`
+> proofs, contract conversion moves into the minting loop itself, where those arguments
+> are in hand as Exprs — see `atomic-binds-design.md`, "The in-peel engine (subcircuit
+> rewriting v2)". The leaf lemmas defined here remain the shared logical core; the
+> polarity-rewriter driver below remains the mechanism for manual and v1-era proofs
+> until that corpus empties.
 
 ## Why the iffs are not the endgame
 
