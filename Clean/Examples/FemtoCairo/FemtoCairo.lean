@@ -494,12 +494,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input1
     simp only [h_input2] at ⊢ h_env
     -- `State` is a custom `ProvableType` (not `ProvableStruct`), so the struct-level
-    -- `h_env` equation needs the explicit unfolding path to decompose into components.
-    -- The witnessed value is a `pure` hint program, so evaluate its folded `MOver.eval`
-    -- atom (`eval_pure`) before decomposing.
-    simp only [circuit_norm, explicit_provable_type, State.mk.injEq, Witgen.M.pure_def,
-      Witgen.MOver.eval_pure, Witgen.FExprOver.eval, h_input2, h_input_v1, h_input_v2,
-      h_input_v3] at h_env
+    -- `h_env` equation needs the explicit unfolding path to decompose into components
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_env
     obtain ⟨h_env0, h_env1, h_env2⟩ := h_env
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite] at h_exec ⊢

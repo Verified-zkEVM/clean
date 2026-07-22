@@ -805,21 +805,29 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
   obtain ⟨hXPeq, hYPeq⟩ := _hE
   -- the window cells hold the hint digits (the witness loop's assign clauses).
   -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
+  -- Land the assigned advice on the hint program's `MOver.eval` atom, and STOP there:
+  -- run circuit_norm with `eval_toIRScalar` erased (leaves the `toIRScalar _ .eval`
+  -- form, since `MOver.eval` never appears to be unfolded), then apply `eval_toIRScalar`
+  -- alone. The honest-value facts below (`hbound`/`hintWindowVal`) are atom-spelled and
+  -- meet it directly. (The general high-level path is the follow-up discriminating simproc.)
   simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
-  -- `eval_toIRScalar` (circuit_norm) already lands the assigned advice on the hint
-  -- program's `MOver.eval` — `hWwsl` IS the high-level fact
   have hWwslM := hWwsl
-  -- the honest `< 8` bound on the advice reads, from the program bound
+  -- TEMPORARY (pending the follow-up discriminating simproc): with `eval` reducing
+  -- again, `hWwslM` lands at the reduced program-run spelling, so bridge the honest
+  -- facts (atom-spelled `hbound`/`hintWindowVal`) to that same run form via
+  -- `circuit_norm`. The high-level path keeps `MOver.eval env <hint>` an atom.
   have hPA' : ∀ w : Fin 85, (env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)).val < 8 := by
     intro w
     rw [hWwslM w]
-    exact hbound env w
+    have hb := hbound env w
+    simp only [circuit_norm] at hb
+    exact hb
   have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)
     = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
     intro w
-    simp only [hintWindowVal]
+    simp only [hintWindowVal, circuit_norm]
     rw [hWwslM w, Nat.mod_eq_of_lt (by rw [← hWwslM w]; exact hPA' w)]
     exact (ZMod.natCast_zmod_val _).symm
   -- the trailing `pure` region auto-discharged, so the constraint block is the three loops only.

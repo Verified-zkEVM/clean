@@ -21,7 +21,6 @@ namespace Zcash.Circuits.Ecc
 
 open Halo2
 
-
 structure EccConfig where
   -- Witness point.
   witnessPoint : WitnessPoint.Config
