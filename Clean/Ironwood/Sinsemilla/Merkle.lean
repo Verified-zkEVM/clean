@@ -232,15 +232,20 @@ def circuit (l : Fp) :
   Spec input _ _ := GateSpec l input
   ProverAssumptions input _ _ := GateSpec l input
   soundness := by
-    circuit_proof_start [body, decomposeGate]
-    obtain ⟨⟨hL, hLeft, hRight, hB⟩, hlc, ha, hb, hcw, hleft, hright, hz1a, hz1b,
-      hb1, hb2⟩ := hc
-    simp only [hlc, ha, hb, hcw, hleft, hright, hz1a, hz1b, hb1, hb2] at hL hLeft hRight hB
+    circuit_proof_start2 [body, decomposeGate]
+    obtain ⟨hL, hLeft, hRight, hB⟩ := region_0
+    simp only [region_1, region_2, region_3, region_4, region_5, region_6, region_7,
+      region_8, region_9, region_10] at hL hLeft hRight hB
     exact spec_of_polysZero (by linear_combination hL) (by linear_combination hLeft)
       (by linear_combination hRight) (by linear_combination hB)
   completeness := by
-    circuit_proof_start [body, decomposeGate]
-    exact polysZero_of_spec hPA
+    circuit_proof_start2 [body, decomposeGate]
+    simp only [region_0, region_1, region_2, region_3, region_4, region_5, region_6,
+      region_7, region_8, region_9]
+    have h := polysZero_of_spec prover_assumptions
+    dsimp only at h
+    exact ⟨h, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
+      trivial, trivial⟩
 
 end Gate
 
