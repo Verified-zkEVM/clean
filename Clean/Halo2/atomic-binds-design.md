@@ -238,11 +238,18 @@ building):**
    only the loop's closed-form boundary output mints, as today. State this so the
    symmetric-loops promise isn't read as per-round atoms.
 
-3. **Failure semantics, and the clear-guard doesn't fully die.** Precedent: fail-soft
-   minting (b996ffc3). If a leaf instantiation fails at peel time (unusual shape,
-   defeq miss), the block must degrade loudly — keep the raw chunk AND the witness
-   chunk (i.e. the clear-guard logic returns in fail-soft form; "an engine miss
-   becomes impossible" holds only for the happy path).
+3. **Failure semantics: hard by default (maintainer ruling).** A leaf instantiation
+   that fails at peel time is a HARD ERROR with a diagnostic naming the bind, the
+   child bundle, and the failing defeq — soft failures get papered over and breed
+   workarounds; failure classes must surface and be fixed in the tactic. Soft
+   degradation (keep the raw chunk + witness chunk, proceed) exists only behind an
+   explicit per-proof opt-in flag, visible in the proof text, for a genuinely bad
+   case while its class is being fixed. Note `trace[…]` output is invisible in
+   normal builds — a "loud trace" is still a silent green build, which is exactly
+   the problem. CONSEQUENCE: the fail-soft mint (b996ffc3) violates this policy and
+   must be revisited — either fix the dependent-occurrence generalize failure at
+   the root (Merkle HashLayer's hash-output binder is the repro), or convert the
+   silent skip into the hard-error + opt-in shape.
 
 4. **The extract witness belongs in the per-bind artifact block.** `wit_<binder>` +
    defining equation are constructible at peel time directly from bundle/config/
