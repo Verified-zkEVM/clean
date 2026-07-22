@@ -86,5 +86,5 @@ import Clean.Ironwood.Action.RealBases
 # Ironwood circuits
 
 Aggregator for the Ironwood (halo2-native) circuit modules. Ironwood is kept separate
-from the main `Clean` library export and can be built with `lake build Ironwood`.
+from the main `Clean` library export and can be built with `lake build Zcash`.
 -/
