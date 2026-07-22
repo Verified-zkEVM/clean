@@ -328,8 +328,7 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
   -- ══ Completeness ══
   completeness := by
     circuit_proof_start2 [LookupRangeCheck.copyCheck, gateRegion, overflowGate, Spec,
-      EnvAssumptions, sWit, etaWit, eval_ofFExpr_zero, Witgen.FExprOver.eval,
-      WitgenEnv.readVar_halo2]
+      EnvAssumptions, sWit, etaWit]
     -- the child's constraints and honest facts, via the engine leaves on the witness chunk
     have hleaf := Halo2.SubcircuitRw.layouter_completeness_leaf
       (LookupRangeCheck.copyCheck K (numWords K) false) cfg.lookupConfig (i₀ + 1)
