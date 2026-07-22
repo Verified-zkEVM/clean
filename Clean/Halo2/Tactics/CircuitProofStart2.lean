@@ -158,16 +158,14 @@ def mintAtoms (outs : Array Expr) (n : Name) (hyps : Array Name) :
       minted := minted.push (xn, hn)
       k := k + 1
     let g ← getMainGoal
-    -- fail-soft: a dependent occurrence can make the abstracted motive
-    -- type-incorrect (Merkle's HashLayer hash output) — keep the concrete
-    -- spelling for that binder rather than killing the peel
-    try
-      let (_, g') ← g.generalize args
-      replaceMainGoal [g']
-      pure minted
-    catch _ =>
-      trace[Halo2.circuit_proof_start2] "mint skipped (generalize failed) for {n}"
-      pure #[]
+    -- a dependent occurrence can make the abstracted motive type-incorrect
+    -- (known repro: Merkle HashLayer's hash-output binder) — that is a hard
+    -- error by policy (atomic-binds-design.md, failure semantics): the failure
+    -- class must surface and be fixed, not be papered over
+    let (_, g') ← try g.generalize args catch e =>
+      throwError "circuit_proof_start2: minting `{n}` failed — the abstracted         motive is not type correct (a dependent occurrence of the output         term){Lean.indentD e.toMessageData}"
+    replaceMainGoal [g']
+    pure minted
   -- re-intro in list order (first listed = outermost binder)
   for h in hyps do
     run? (← `(tactic| intro $(mkIdent h):ident))

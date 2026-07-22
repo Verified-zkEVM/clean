@@ -246,10 +246,11 @@ building):**
    explicit per-proof opt-in flag, visible in the proof text, for a genuinely bad
    case while its class is being fixed. Note `trace[…]` output is invisible in
    normal builds — a "loud trace" is still a silent green build, which is exactly
-   the problem. CONSEQUENCE: the fail-soft mint (b996ffc3) violates this policy and
-   must be revisited — either fix the dependent-occurrence generalize failure at
-   the root (Merkle HashLayer's hash-output binder is the repro), or convert the
-   silent skip into the hard-error + opt-in shape.
+   the problem. The fail-soft mint (b996ffc3) was removed under this ruling while
+   still unexercised: minting failures are hard errors with a diagnostic naming the
+   binder. The underlying failure class — a dependent occurrence making the
+   abstracted motive type-incorrect (repro: Merkle HashLayer's hash-output binder)
+   — remains to be fixed at the root as part of the in-peel build.
 
 4. **The extract witness belongs in the per-bind artifact block.** `wit_<binder>` +
    defining equation are constructible at peel time directly from bundle/config/
