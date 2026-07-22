@@ -15,9 +15,9 @@ range facts stay OUT of these bundles (they are the callers' rely-conditions, th
 the composite level exactly as in phase 1).
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
 
-open Halo2.Ironwood (Fp)
+open Halo2
 
 /-- `v·(1−v) = 0` pins a boolean. -/
 private theorem isBool_of_boolCheck {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
@@ -274,4 +274,4 @@ derive_contract_bridges bundle (wh1 : WitgenIR Fp 1) := bundle wh1
 
 end DecomposeH
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

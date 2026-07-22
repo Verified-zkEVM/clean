@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
 
+open Clean
+
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]

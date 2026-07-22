@@ -2,6 +2,8 @@ import Mathlib.Tactic
 import Clean.Circuit.WitnessIRSugar
 import Clean.Orchard.Specs.CompElliptic.Fields.Pasta
 
+open Clean
+
 open CompElliptic.Fields.Pasta (Fp)
 
 /-!
@@ -100,7 +102,7 @@ theorem val_Fp (x : Fp) :
 
 /-- The raw `n / 2^s % 2^l` shape (definitionally `bitrange`) folded into the named form,
 for the rare proof that still needs to bridge a manually-written division/mod chain into
-`bitrange`, rather than going through `Witgen.NExpr.bitrange`. -/
+`bitrange`, rather than going through `Clean.NExpr.bitrange`. -/
 theorem bitrange_eq (n s l : ℕ) : n / 2 ^ s % 2 ^ l = bitrange n s l := rfl
 
 end Orchard.Specs

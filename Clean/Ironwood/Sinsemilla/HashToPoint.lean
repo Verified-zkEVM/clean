@@ -20,10 +20,12 @@ The hash (`Chain.circuit`) starts at the same offset: the init row is the first 
 Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.HashToPoint
+open ProvableStruct.Halo2 (eval_cells_eq_eval eval_cells_eq_eval_prover)
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
+namespace Zcash.Circuits.Sinsemilla.HashToPoint
+
+open Halo2
+open Specs.Sinsemilla (Generators)
 
 /-- Constant single-cell witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]
@@ -54,14 +56,14 @@ the entering accumulator to the public `Q` (the constant copy fixes `x_a(0) = Q.
 collapses to the hash from `Q`. `toFormal "hash_to_point"` lifts it to the layouter level
 (one region — the Rust `hash_to_point` `assign_region`). -/
 
-open Halo2.Ironwood.Sinsemilla.Chain in
+open Sinsemilla.Chain in
 /-- The per-piece `z_1` values off the chain's running-sum extraction data (`HVec` is
 stored flat; piece `i`'s `z_1` sits at flat index `prefixRows ns i + 1`). -/
-def z1View (ns : List ℕ) (zs : Halo2.Ironwood.Sinsemilla.HVec (zLengths ns) Fp) :
+def z1View (ns : List ℕ) (zs : Sinsemilla.HVec (zLengths ns) Fp) :
     Vector Fp ns.length :=
   Vector.ofFn fun i : Fin ns.length => zs.elems[prefixRows ns ↑i + 1]!
 
-open Halo2.Ironwood.Sinsemilla.Chain in
+open Sinsemilla.Chain in
 /-- The flat contents of the abstract running-sum family. -/
 private theorem zsFam_elems (f : ℕ → Fp) : ∀ (ns : List ℕ) (off : ℕ),
     (zsFam f ns off).elems
@@ -85,7 +87,7 @@ private theorem zsFam_elems (f : ℕ → Fp) : ∀ (ns : List ℕ) (off : ℕ),
       exact (Vector.getElem_ofFn
         (f := fun k : Fin (n + 1 + (zLengths rest).sum) => f (off + (k : ℕ))) hj).symm
 
-open Halo2.Ironwood.Sinsemilla.Chain in
+open Sinsemilla.Chain in
 /-- `z1View` over the abstract running-sum family: the per-piece `base + 1` reads
 (each piece must have ≥ 2 words — `z_1` exists). -/
 private theorem z1View_zsFam (f : ℕ → Fp) (ns : List ℕ) (off : ℕ)
@@ -131,21 +133,21 @@ def Spec (G : Generators) (ns : List ℕ) (Q : Point Fp)
   ∃ chunks : List ℕ, Sinsemilla.Chain.PieceChunks ns input.pieces chunks ∧
     Sinsemilla.Chain.ZsFacts ns chunks wit.zs ∧
     ((∀ x ∈ ns, 0 < x) → output.z1s = z1View ns wit.zs) ∧
-    ∀ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
+    ∀ B, Specs.Sinsemilla.hashToPoint G.S Q chunks = some B →
       output.point.x = B.x ∧ output.point.y = B.y
 
 /-- The honest-prover precondition: nonempty message, pieces in range, honest hash defined. -/
 def ProverAssumptions (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp) : Prop :=
   ns ≠ [] ∧ Sinsemilla.Chain.PieceBounds ns input.pieces ∧
-  ∃ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
+  ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B
 
 /-- The honest-prover contract: the output point is the honest hash. -/
 def ProverSpec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     (input : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
     (output : Value (Output ns.length) Fp) : Prop :=
-  ∀ B, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint G.S Q
+  ∀ B, Specs.Sinsemilla.hashToPoint G.S Q
     (Sinsemilla.Chain.honestChunks ns input.pieces) = some B →
     output.point.x = B.x ∧ output.point.y = B.y
 
@@ -159,11 +161,11 @@ private theorem out_eval_lit {k : ℕ} (env : Placed Environment Fp)
       = { point := { x := AssignedCell.eval env.place env.env p.x,
                      y := AssignedCell.eval env.place env.env p.y },
           z1s := v.map (AssignedCell.eval env.place env.env) } := by
-  rw [ProvableStruct.eval_cells_eq_eval]
-  rw [show ProvableStruct.eval env.place env.env
+  rw [ProvableStruct.Halo2.eval_cells_eq_eval]
+  rw [show ProvableStruct.Halo2.eval env.place env.env
       ({ point := p, z1s := v } : Output k (AssignedCell Fp))
-    = ({ point := ProvableType.eval env.place env.env p,
-         z1s := ProvableType.eval (M := fields k) env.place env.env v }
+    = ({ point := ProvableType.Halo2.eval env.place env.env p,
+         z1s := ProvableType.Halo2.eval (M := fields k) env.place env.env v }
         : Value (Output k) Fp) from by rfl]
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
@@ -175,11 +177,11 @@ private theorem out_eval_lit_prover {k : ℕ} (env : Placed ProverEnvironment Fp
       = { point := { x := AssignedCell.eval env.place env.env.toEnvironment p.x,
                      y := AssignedCell.eval env.place env.env.toEnvironment p.y },
           z1s := v.map (AssignedCell.eval env.place env.env.toEnvironment) } := by
-  rw [ProvableStruct.eval_cells_eq_eval_prover]
-  rw [show ProvableStruct.eval env.place env.env.toEnvironment
+  rw [ProvableStruct.Halo2.eval_cells_eq_eval_prover]
+  rw [show ProvableStruct.Halo2.eval env.place env.env.toEnvironment
       ({ point := p, z1s := v } : Output k (AssignedCell Fp))
-    = ({ point := ProvableType.eval env.place env.env.toEnvironment p,
-         z1s := ProvableType.eval (M := fields k) env.place env.env.toEnvironment v }
+    = ({ point := ProvableType.Halo2.eval env.place env.env.toEnvironment p,
+         z1s := ProvableType.Halo2.eval (M := fields k) env.place env.env.toEnvironment v }
         : Value (Output k) Fp) from by rfl]
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
@@ -233,7 +235,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).extract cfg offset input self env
 
   EnvAssumptions cfg env :=
-    Halo2.Ironwood.Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env
+    Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env
 
   Spec input output wit := Spec G ns Q input output wit
   ProverAssumptions input _ _ := ProverAssumptions G ns Q input
@@ -274,7 +276,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     · -- the hash from `Q`
       intro B hB
       -- the chain's entering row, concretized (position-determined cells)
-      have hfirst : (ProvableStruct.eval place env out_first)
+      have hfirst : (ProvableStruct.Halo2.eval place env out_first)
           = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
                xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
                lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
@@ -290,10 +292,10 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           | nil => exact absurd rfl hns
           | cons a l => rfl]
         show 2 * ({ x := Q_x, y := Q_y } : Point Fp).y
-          = Halo2.Ironwood.Ecc.DoubleAndAdd.yA _
+          = Ecc.DoubleAndAdd.yA _
         rw [hfirst]
-        simp only [Halo2.Ironwood.Ecc.DoubleAndAdd.yA,
-          Halo2.Ironwood.Ecc.DoubleAndAdd.xR]
+        simp only [Ecc.DoubleAndAdd.yA,
+          Ecc.DoubleAndAdd.xR]
         linear_combination region_0 - 2 * region_1) B hB
       exact hres
 
@@ -345,9 +347,9 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           | nil => exact absurd rfl hns
           | cons a l => rfl] at henter
       simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, if_false,
-        Halo2.Ironwood.Ecc.DoubleAndAdd.yA, Halo2.Ironwood.Ecc.DoubleAndAdd.xR] at henter
+        Ecc.DoubleAndAdd.yA, Ecc.DoubleAndAdd.xR] at henter
       -- the chain's entering row, concretized (position-determined cells)
-      have hfirst : (ProvableStruct.eval place env.toEnvironment out_first)
+      have hfirst : (ProvableStruct.Halo2.eval place env.toEnvironment out_first)
           = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
                xP := env.advice cfg.xP ((place self + offset : ℕ) : ℤ),
                lambda1 := env.advice cfg.lambda1 ((place self + offset : ℕ) : ℤ),
@@ -483,4 +485,4 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
 derive_contract_bridges hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp)
   (hQ : Q.OnCurve) (hns : ns ≠ []) := hashCircuit G ns Q hQ hns
 
-end Halo2.Ironwood.Sinsemilla.HashToPoint
+end Zcash.Circuits.Sinsemilla.HashToPoint

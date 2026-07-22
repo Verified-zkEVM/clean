@@ -9,16 +9,15 @@ bundled `circuit`. Mirrors `Clean/Ironwood/NoteCommit/MainBundle.lean` at a thir
 of the scale (10 children, one canonicity composite called as a unit).
 -/
 
-namespace Halo2.Ironwood.CommitIvk.Main
+namespace Zcash.Circuits.CommitIvk.Main
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
-open Halo2.Ironwood.Specs (bitrange)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
+open Halo2
+open Ecc.MulFixed (FixedBase)
+open Specs (bitrange)
+open Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
   commitIvkChunks breaksOfGuarded chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (Fq)
-open Halo2.Ironwood.NoteCommit.Main (brWit currentRegion)
+open NoteCommit.Main (brWit currentRegion)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-! ## Child contract bridges — the contract projections come from the generated home
@@ -36,12 +35,12 @@ private theorem short_output (b : ℕ) (cfg : LookupRangeCheck.Config 10)
 private theorem pieceChunks_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length) (chunks : List ℕ),
       Sinsemilla.Chain.PieceChunks ms pieces chunks ↔
-      Halo2.Ironwood.Sinsemilla.Chain.PieceChunks ms pieces chunks := by
+      Sinsemilla.Chain.PieceChunks ms pieces chunks := by
   intro ms
   induction ms with
   | nil =>
     intro pieces chunks
-    simp only [Sinsemilla.Chain.PieceChunks, Halo2.Ironwood.Sinsemilla.Chain.PieceChunks]
+    simp only [Sinsemilla.Chain.PieceChunks, Sinsemilla.Chain.PieceChunks]
   | cons n rest ih =>
     intro pieces chunks
     constructor
@@ -53,14 +52,14 @@ private theorem pieceChunks_donor_iff :
 /-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
 private theorem zsFacts_donor_iff :
     ∀ (ms : List ℕ) (chunks : List ℕ)
-      (zs : Halo2.Ironwood.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
+      (zs : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
       Sinsemilla.Chain.ZsFacts ms chunks zs ↔
-      Halo2.Ironwood.Sinsemilla.Chain.ZsFacts ms chunks zs := by
+      Sinsemilla.Chain.ZsFacts ms chunks zs := by
   intro ms
   induction ms with
   | nil =>
     intro chunks zs
-    simp only [Sinsemilla.Chain.ZsFacts, Halo2.Ironwood.Sinsemilla.Chain.ZsFacts]
+    simp only [Sinsemilla.Chain.ZsFacts, Sinsemilla.Chain.ZsFacts]
   | cons n rest ih =>
     intro chunks zs
     constructor
@@ -80,31 +79,31 @@ private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
           (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
   show (eval (⟨place, env⟩ : Placed Environment Fp)
     (Sinsemilla.Chain.zsCellsVal cfg iH ns 0)
-    : Halo2.Ironwood.Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
+    : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
   exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
 
 /-- The two hash running-sum reads the composite copies, at the concrete `ns` layout
 (piece row starts `[0, 25, 26, 50]`). -/
 private theorem zs_get_z13a (f : ℕ → Fp) :
-    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
+    (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
+  simp only [ns, Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
+    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
         Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
-    (Halo2.Ironwood.Sinsemilla.HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)
+    (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
-  simp only [ns, Halo2.Ironwood.Sinsemilla.Chain.zLengths,
+  simp only [ns, Sinsemilla.Chain.zLengths,
     List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Halo2.Ironwood.Sinsemilla.HVec.get,
-    Halo2.Ironwood.Sinsemilla.HVec.tail_cons,
+    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
+    Sinsemilla.HVec.tail_cons,
     Nat.reduceAdd, Nat.zero_add]
   exact (congrArg (fun v => v[13]'(by norm_num))
-    (Halo2.Ironwood.Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
 
 private theorem prefixRows_ns_2 : Sinsemilla.Chain.prefixRows ns 2 = 26 := rfl
 
@@ -164,17 +163,17 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   -- the two hash running-sum value facts
-  have hz13a := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13a := NoteCommit.zsFacts_cell ns _ chunks _
     ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13a] at hz13a
-  have hz13c := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13c := NoteCommit.zsFacts_cell ns _ chunks _
     ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13c] at hz13c
   simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c
   -- the piece value bounds
-  have hpieceA := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceA := NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨0, by decide⟩ hPC' (by decide)
-  have hpieceC := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceC := NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
   -- ── the canonicity composite ──
   subcircuit_rw at hCan
@@ -238,9 +237,9 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
       (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
   have hAv : env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)
       = (((AssignedCell.eval place env input_var_ak).val
-          % 2 ^ (Halo2.Ironwood.Specs.K * 25) : ℕ) : Fp) := by
+          % 2 ^ (Specs.K * 25) : ℕ) : Fp) := by
     rw [haF]
-    norm_num [Halo2.Ironwood.Specs.bitrange, Halo2.Ironwood.Specs.K]
+    norm_num [Specs.bitrange, Specs.K]
   have hBv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 3) : ℕ) : ℤ)
       = ((bitrange (AssignedCell.eval place env input_var_ak).val 250 4
           + bitrange (AssignedCell.eval place env input_var_ak).val 254 1 * 16
@@ -250,16 +249,16 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     ring
   have hCv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 4) : ℕ) : ℤ)
       = ((((AssignedCell.eval place env input_var_nk).val / 2 ^ 5)
-          % 2 ^ (Halo2.Ironwood.Specs.K * 24) : ℕ) : Fp) := by
+          % 2 ^ (Specs.K * 24) : ℕ) : Fp) := by
     rw [hcF]
-    norm_num [Halo2.Ironwood.Specs.bitrange, Halo2.Ironwood.Specs.K]
+    norm_num [Specs.bitrange, Specs.K]
   have hDv : env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)
       = ((bitrange (AssignedCell.eval place env input_var_nk).val 245 9
           + bitrange (AssignedCell.eval place env input_var_nk).val 254 1 * 512 : ℕ) : Fp) := by
     rw [hSdW, hd0F, hd1F]
     push_cast
     ring
-  have hchunks := Halo2.Ironwood.CommitIvk.pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
+  have hchunks := CommitIvk.pieceChunks_eq_commitIvkChunks_of_indexed_piece_values
     hPC'
     (by with_unfolding_all exact hAv)
     (by with_unfolding_all exact hBv)
@@ -270,7 +269,7 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [Spec]
   rw [hiak, hink] at hchunks
   refine breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve (chunksOf_mem_lt (by
-    simpa [Halo2.Ironwood.Specs.Sinsemilla.commitIvkChunks] using hm))) ?_
+    simpa [Specs.Sinsemilla.commitIvkChunks] using hm))) ?_
   intro B hB
   rw [← hchunks] at hB
   obtain ⟨-, hOut⟩ := hContract B hB
@@ -320,12 +319,12 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
 private theorem pieceBounds_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.PieceBounds ms pieces ↔
-      Halo2.Ironwood.Sinsemilla.Chain.PieceBounds ms pieces := by
+      Sinsemilla.Chain.PieceBounds ms pieces := by
   intro ms
   induction ms with
   | nil =>
     intro pieces
-    simp only [Sinsemilla.Chain.PieceBounds, Halo2.Ironwood.Sinsemilla.Chain.PieceBounds]
+    simp only [Sinsemilla.Chain.PieceBounds, Sinsemilla.Chain.PieceBounds]
   | cons n rest ih =>
     intro pieces
     constructor
@@ -337,7 +336,7 @@ private theorem pieceBounds_donor_iff :
 private theorem honestChunks_donor_eq :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.honestChunks ms pieces
-        = Halo2.Ironwood.Sinsemilla.Chain.honestChunks ms pieces := by
+        = Sinsemilla.Chain.honestChunks ms pieces := by
   intro ms pieces
   rfl
 
@@ -457,7 +456,7 @@ private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
     circuit_norm] at h
   have hg := h.2.2
   rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hg
-  simp only [Halo2.Ironwood.CommitIvk.bundle, circuit_norm] at hg
+  simp only [CommitIvk.bundle, circuit_norm] at hg
   try simp only [Nat.add_assoc, Nat.reduceAdd] at hg
   try simp only [Nat.add_assoc, Nat.reduceAdd]
   exact ⟨hg.2.2.2.2.1, hg.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
@@ -507,7 +506,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [Nat.reduceAdd] at hWCan
   obtain ⟨hiak, hink, -⟩ := h_input
   -- ── honest piece facts ──
-  have hHF := Halo2.Ironwood.CommitIvk.Commit.honest_pieces_facts
+  have hHF := CommitIvk.Commit.honest_pieces_facts
     (AssignedCell.eval place env input_var_ak)
     (AssignedCell.eval place env input_var_nk)
     (env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ))
@@ -568,16 +567,16 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   try simp only [circuit_norm, Nat.add_zero] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
-  have hz13a := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13a := NoteCommit.zsFacts_cell ns _ chunks _
     ⟨0, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13a] at hz13a
-  have hz13c := Halo2.Ironwood.NoteCommit.zsFacts_cell ns _ chunks _
+  have hz13c := NoteCommit.zsFacts_cell ns _ chunks _
     ⟨2, by decide⟩ hPC' hZs' (by decide) (r := 13) (by decide)
   rw [zs_get_z13c] at hz13c
   simp only [Nat.add_assoc, Nat.reduceAdd] at hz13a hz13c
-  have hpieceA := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceA := NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨0, by decide⟩ hPC' (by decide)
-  have hpieceC := Halo2.Ironwood.NoteCommit.pieceChunks_val_lt ns _ chunks
+  have hpieceC := NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
   -- the b1/d1 gate-internal witnesses
   have hbits := canon_bit_witness (brWit input_var_ak 254 1) (brWit input_var_nk 254 1)
@@ -603,8 +602,8 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 1) : ℕ) : ℤ)).val < 2 ^ 4
-           rw [hwb0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
+           rw [hwb0, Specs.cast_bitrange_val (by norm_num)]
+           exact Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 5) cfg.lookupConfig 0 (i₀ + 2) place env ()
       hWrb2
@@ -618,8 +617,8 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 2) : ℕ) : ℤ)).val < 2 ^ 5
-           rw [hwb2, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
+           rw [hwb2, Specs.cast_bitrange_val (by norm_num)]
+           exact Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.region_completeness_leaf
       (LookupRangeCheck.shortRangeCheck 10 9) cfg.lookupConfig 0 (i₀ + 5) place env ()
       hWrd0
@@ -633,8 +632,8 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
            rw [short_extract_eq']
            show (env.advice cfg.lookupConfig.runningSum
              ((place (i₀ + 5) : ℕ) : ℤ)).val < 2 ^ 9
-           rw [hwd0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-           exact Halo2.Ironwood.Specs.bitrange_lt _ _ _)⟩
+           rw [hwd0, Specs.cast_bitrange_val (by norm_num)]
+           exact Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) (i₀ + 7) place env _ hWcm
@@ -659,26 +658,26 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
              Nat.add_zero]
            refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
            · with_unfolding_all exact hpieceA
-           · rw [hwb0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-             exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
-           · rw [hwb2, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-             exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
+           · rw [hwb0, Specs.cast_bitrange_val (by norm_num)]
+             exact Specs.bitrange_lt _ _ _
+           · rw [hwb2, Specs.cast_bitrange_val (by norm_num)]
+             exact Specs.bitrange_lt _ _ _
            · with_unfolding_all exact hpieceC
-           · rw [hwd0, Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num)]
-             exact Halo2.Ironwood.Specs.bitrange_lt _ _ _
+           · rw [hwd0, Specs.cast_bitrange_val (by norm_num)]
+             exact Specs.bitrange_lt _ _ _
            · with_unfolding_all exact hz13a
            · with_unfolding_all exact hz13c),
        (by rw [Canonicity.circuit_proverAssumptions_eq, Canonicity.circuit_extract_eq]
            simp only [circuit_norm, zCell, prefixRows_ns_2, Nat.add_assoc, Nat.reduceAdd,
              Nat.add_zero]
            refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-           · rw [hwa]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwb0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwb1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwb2]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwc]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwd0]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
-           · rw [hwd1]; exact Halo2.Ironwood.Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwa]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwb0]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwb1]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwb2]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwc]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwd0]; exact Specs.cast_bitrange_val (by norm_num) _
+           · rw [hwd1]; exact Specs.cast_bitrange_val (by norm_num) _
            · rw [hwb, ← hwb0, ← hwb1, ← hwb2]
              try ring
            · rw [hwd, ← hwd0, ← hwd1]
@@ -704,4 +703,4 @@ def circuit (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ
 
-end Halo2.Ironwood.CommitIvk.Main
+end Zcash.Circuits.CommitIvk.Main

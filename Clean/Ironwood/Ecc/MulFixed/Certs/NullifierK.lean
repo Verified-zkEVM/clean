@@ -4,7 +4,7 @@
 -- Do not edit by hand.
 import Clean.Ironwood.Ecc.MulFixed.CertCheck
 
-namespace Halo2.Ironwood.Ecc.MulFixed.Certs
+namespace Zcash.Circuits.Ecc.MulFixed.Certs
 
 set_option maxRecDepth 100000 in
 private def rowsData : List (List ((ℕ × ℕ) × ℕ)) := [
@@ -968,7 +968,7 @@ theorem nullifierKCert_check : Cert.checkFull 84 nullifierKCert = true := by
   native_decide
 
 /-- The REAL orchard `nullifierK` fixed base, proofs and all. -/
-def nullifierK : Halo2.Ironwood.Ecc.MulFixed.FixedBase :=
+def nullifierK : Ecc.MulFixed.FixedBase :=
   Cert.ofCert nullifierKCert nullifierKCert_check
 
-end Halo2.Ironwood.Ecc.MulFixed.Certs
+end Zcash.Circuits.Ecc.MulFixed.Certs

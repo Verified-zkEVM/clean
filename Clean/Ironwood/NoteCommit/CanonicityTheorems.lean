@@ -16,11 +16,13 @@ import Clean.Utils.Tactics.ProvableStructDeriving
 # NoteCommit canonicity theorems
 
 Foundational bit-decomposition / Pallas-base-modulus canonicity facts shared by the
-note-commitment gates.  Stated over `Halo2.Ironwood.Specs.bitrange` and the modulus, with no
+note-commitment gates.  Stated over `Specs.bitrange` and the modulus, with no
 reference to any particular circuit cell.
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
+
+open Clean
 
 variable {F : Type} [FiniteField F]
 
@@ -29,12 +31,12 @@ theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by
 
 /-! ### Foundational bit-decomposition / canonicity facts
 
-These are stated over `Halo2.Ironwood.Specs.bitrange` and the Pallas base modulus, with no
+These are stated over `Specs.bitrange` and the Pallas base modulus, with no
 reference to any particular circuit cell (`y`, `j`, …). The canonicity gates build on
 them. -/
 
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
+open Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 
 /-- `t_P`, the Pallas base modulus minus `2^254`, as a natural number. -/
 def tPNat : ℕ := 45560315531419706090280762371685220353
@@ -288,13 +290,13 @@ theorem natCast_eq_zero {n : ℕ} (hlt : n < PALLAS_BASE_CARD) (h : ((n : ℕ) :
   have hv := congrArg ZMod.val h
   rwa [ZMod.val_natCast_of_lt hlt, ZMod.val_zero] at hv
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit
 
 /-! ### Canonicity custom-gate specs (`note_commit.rs` `*Canonicity` gates) -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
 
-open Halo2.Ironwood.Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
+open Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 namespace GdCanonicity.Gate
@@ -1128,4 +1130,4 @@ theorem eqs_of_spec (row : Row Fp) (hAss : Assumptions row) (hSpec : Spec row) :
 
 end YCanonicity.Gate
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

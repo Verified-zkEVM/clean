@@ -20,7 +20,9 @@ registration order, used by `MerkleChip::configure`); the `swap` gadget bundle f
 namespace `CondSwap`.
 -/
 
-namespace Halo2.Ironwood.CondSwap
+namespace Zcash.Circuits.CondSwap
+
+open Halo2
 
 /-- Rust `CondSwapConfig` (`cond_swap.rs:41-49`): the simple `q_swap` selector and the five
 advice columns `a, b, a_swapped, b_swapped, swap` (Merkle instantiates them with the five
@@ -160,4 +162,4 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOB
 
-end Halo2.Ironwood.CondSwap
+end Zcash.Circuits.CondSwap

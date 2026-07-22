@@ -26,7 +26,7 @@ Theorem 5.4.4). Circuit completeness statements therefore assume the hashed mess
 non-exceptional, i.e. the spec-level hash is defined.
 -/
 
-namespace Halo2.Ironwood.Specs.Sinsemilla
+namespace Zcash.Circuits.Specs.Sinsemilla
 
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 
@@ -478,4 +478,4 @@ theorem commitIvkChunks_tiling (ak nk : ℕ) :
   simp only [Nat.div_div_eq_div_mul, ← pow_add, K, Nat.reduceMul, Nat.reduceAdd,
     List.append_assoc]
 
-end Halo2.Ironwood.Specs.Sinsemilla
+end Zcash.Circuits.Specs.Sinsemilla

@@ -28,14 +28,13 @@ The hash running-sum cells the gates copy (`z13_a`, `z13_c`, `z1_d`, `z13_f`, `z
 `bits` column at `prefixRows ns i + j`).
 -/
 
-namespace Halo2.Ironwood.NoteCommit.Main
+namespace Zcash.Circuits.NoteCommit.Main
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Sinsemilla.HashToPoint (witnessMessagePiece)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
-open Halo2.Ironwood.Specs (bitrange)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
+open Halo2
+open Sinsemilla.HashToPoint (witnessMessagePiece)
+open Ecc.MulFixed (FixedBase)
+open Specs (bitrange)
+open Specs.Sinsemilla (Generators)
 
 /-- The NoteCommit message piece lengths in `K = 10`-bit words:
 `a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)` — the chain
@@ -508,7 +507,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
-open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
+open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
@@ -533,8 +532,8 @@ def EnvAssumptions (G : Generators) (cfg : Config)
   cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
 
 def Assumptions (input : Value Inputs Fp) : Prop :=
-  Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-  Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩
+  Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Point.OnCurve ⟨input.pkdX, input.pkdY⟩
 
 /-- The extracted `rcm` window data: the fixed-base mul's window readings and the scalar
 they encode, inside the commit child (regions `i₀+25`/`i₀+26`). -/
@@ -545,7 +544,7 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
 /-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
 chain over the note's canonical chunks is defined and the output is the commitment
 `B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
-(`Halo2.Ironwood.Specs.Sinsemilla.ValidBreak`).
+(`Specs.Sinsemilla.ValidBreak`).
 
 The 64-bit value bound is exported (from the `ValueCanonicity` gate): without it the
 statement can't type `v` as §4.17.4 does — `noteScalars` bitranges truncate `v` at 64
@@ -554,19 +553,19 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
   (show Fp from input.value).val < 2 ^ 64 ∧
-  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Halo2.Ironwood.Point Fp))
+  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Point Fp))
     (hashToPointB G.S Q
-      (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+      (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
         ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Inputs Fp) (_ : Vector Fp 85 × Fq)
     (_ : ProverHint Fp) : Prop :=
-  Halo2.Ironwood.Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
-  Halo2.Ironwood.Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
+  Point.OnCurve ⟨input.gdX, input.gdY⟩ ∧
+  Point.OnCurve ⟨input.pkdX, input.pkdY⟩ ∧
   (show Fp from input.value).val < 2 ^ 64 ∧
   (∃ B, hashToPoint G.S Q
-    (Halo2.Ironwood.NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+    (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
       ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks = some B)
 
-end Halo2.Ironwood.NoteCommit.Main
+end Zcash.Circuits.NoteCommit.Main

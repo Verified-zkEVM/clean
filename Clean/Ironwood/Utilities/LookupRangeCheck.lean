@@ -29,8 +29,9 @@ phase-one donor `Clean/Orchard/Utilities.lean`, namespace `LookupRangeCheck` —
 `K`-generically here.
 -/
 
-namespace Halo2.Ironwood.LookupRangeCheck
+namespace Zcash.Circuits.LookupRangeCheck
 
+open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-- Rust `LookupRangeCheckConfig<F, K>` (`lookup_range_check.rs:63-70`).
@@ -861,10 +862,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       -- reduce `h_output` to its component equations (the `if` on `strict` blocks `.output`, but the
       -- output literal `{ z0, zLast }` is identical in both branches) and read off `output_zLast`
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
-            AssignedCell.eval, AssignedCell.of_cell,
-            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-            at h_output
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
           exact h_output.2.symm
 
 /-- Rust `witness_check`'s check body (`lookup_range_check.rs:142-162`), POSITIONAL: the
@@ -969,10 +967,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
         rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
     · -- ProverSpec, first conjunct: `output_z0` is the positional cell
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
-            AssignedCell.eval, AssignedCell.of_cell,
-            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-            at h_output
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
           rw [heCell]
           exact h_output.1.symm
     · -- ProverSpec, C6: `output_zLast = ↑(elt.val / 2^{K·numWords})`
@@ -980,10 +975,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
       simp only [zChain] at hzn
       rw [← hzn]
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true,
-            AssignedCell.eval, AssignedCell.of_cell,
-            Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
-            at h_output
+        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
           exact h_output.2.symm
 
 /-- The decomposition output cells of the strict 25-word check: `z_0`, `z_1` (the `k_1`
@@ -1150,4 +1142,4 @@ derive_contract_bridges rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ nu
 
 derive_contract_bridges shortRangeCheck (K numBits : ℕ) := shortRangeCheck K numBits
 
-end Halo2.Ironwood.LookupRangeCheck
+end Zcash.Circuits.LookupRangeCheck

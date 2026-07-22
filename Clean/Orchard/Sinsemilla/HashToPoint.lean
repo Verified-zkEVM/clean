@@ -5,6 +5,8 @@ import Clean.Orchard.Specs.Sinsemilla
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Sinsemilla.HVec
 
+open Clean
+
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/chip/generator_table.rs`
@@ -1302,16 +1304,16 @@ theorem eval_z1sOfZs {F : Type} [FiniteField F] (env : Environment F) : (ns : Li
     rw [HVec.eval_tail] at htail
     apply Vector.ext
     intro i hi
-    rw [ProvableType.eval_fields, Vector.getElem_map]
+    rw [ProvableType.Clean.eval_fields, Vector.getElem_map]
     rcases i with _ | k
     · rw [z1sOfZs_getElem_zero, z1sOfZs_getElem_zero]
       by_cases hn : 1 < n + 1
       · simp only [dif_pos hn]
-        rw [ProvableType.getElem_eval_fields, HVec.eval_head]
+        rw [ProvableType.Clean.getElem_eval_fields, HVec.eval_head]
         rfl
       · simp only [dif_neg hn]
         rfl
-    · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ProvableType.getElem_eval_fields,
+    · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ProvableType.Clean.getElem_eval_fields,
         eval_z1sOfZs env rest (HVec.tail zs), HVec.eval_tail]
       rfl
 
@@ -2019,7 +2021,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   circuit_proof_start [output, HashToPoint.circuit, HashToPoint.Spec]
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_, ?_⟩
-  · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
+  · rw [← ProvableType.Clean.eval_fields, Chain.eval_z1sOfZs]
     exact Chain.z1Facts_of_zsFacts _ chunks _ hZs
   · intro B hB
     exact hfun B hB
@@ -2032,7 +2034,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     HashToPoint.ProverAssumptions, HashToPoint.ProverSpec]
   obtain ⟨-, hZsH, hAfun⟩ := h_env h_assumptions
   refine ⟨h_assumptions, ?_, ?_⟩
-  · rw [← ProvableType.eval_fields, Chain.eval_z1sOfZs]
+  · rw [← ProvableType.Clean.eval_fields, Chain.eval_z1sOfZs]
     exact Chain.z1sHonest_of_zsHonest _ _ _ h_assumptions.1 hZsH
   · intro B' hB'
     exact hAfun B' hB'

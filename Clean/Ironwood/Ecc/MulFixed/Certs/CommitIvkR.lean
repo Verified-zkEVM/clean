@@ -4,7 +4,7 @@
 -- Do not edit by hand.
 import Clean.Ironwood.Ecc.MulFixed.CertCheck
 
-namespace Halo2.Ironwood.Ecc.MulFixed.Certs
+namespace Zcash.Circuits.Ecc.MulFixed.Certs
 
 set_option maxRecDepth 100000 in
 private def rowsData : List (List ((ℕ × ℕ) × ℕ)) := [
@@ -968,7 +968,7 @@ theorem commitIvkRCert_check : Cert.checkFull 84 commitIvkRCert = true := by
   native_decide
 
 /-- The REAL orchard `commitIvkR` fixed base, proofs and all. -/
-def commitIvkR : Halo2.Ironwood.Ecc.MulFixed.FixedBase :=
+def commitIvkR : Ecc.MulFixed.FixedBase :=
   Cert.ofCert commitIvkRCert commitIvkRCert_check
 
-end Halo2.Ironwood.Ecc.MulFixed.Certs
+end Zcash.Circuits.Ecc.MulFixed.Certs

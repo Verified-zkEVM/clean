@@ -46,11 +46,11 @@ Kept (with `TestVkLayoutMul`) as the lookup/selector-compression half of the doc
 suite — see the header of `TestVkMatchAdd` for the suite layout.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test
+namespace Zcash.Circuits.Fixtures.Test
 
-open Ironwood (Fp)
-open Ironwood.Ecc.Add (add)
-open Ironwood.Ecc.Mul (Config configure)
+open Halo2
+open Ecc.Add (add)
+open Ecc.Mul (Config configure)
 
 /-- The mul configure chain on fresh columns, mirroring the Rust `configure_mul` harness:
 allocate 10 advice columns, the lookup table column and the constants column
@@ -69,7 +69,7 @@ def mulProgram : Configure Fp Config := do
   let advices : Fin 10 → Column .advice :=
     ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
   -- range_check first (ecc.rs:836), on advices[9]
-  let lookupConfig ← Ironwood.LookupRangeCheck.configure 10 a9 tableIdx
+  let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
   -- add before mul (EccChip::configure order), on advices[0..8]
   let addConfig ← add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
   -- the mul chain
@@ -101,4 +101,4 @@ def mulSeedPost : List Query :=
 -- yields exactly the dumped post-compression CS.
 #guard projectCSPostMap mulSeedPost mulSelMap mulCS == mulPost
 
-end Halo2.Ironwood.Fixtures.Test
+end Zcash.Circuits.Fixtures.Test

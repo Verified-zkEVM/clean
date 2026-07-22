@@ -17,8 +17,9 @@ the derived generator `y`-coordinate
 `y_p = Y_A/2 - λ₁·(x_A - x_P)` in this table.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla
+namespace Zcash.Circuits.Sinsemilla
 
+open Clean
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open Specs.Sinsemilla (Generators)
 open Specs (K)
@@ -978,4 +979,4 @@ namespace HashToPoint
 
 end HashToPoint
 
-end Halo2.Ironwood.Sinsemilla
+end Zcash.Circuits.Sinsemilla

@@ -28,10 +28,10 @@ top-level suite: `TestVkMatchAction` (configure, both versions) + `TestVkLayoutA
 per-gadget tests were subsumed by those and retired (see git history).
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test
+namespace Zcash.Circuits.Fixtures.Test
 
-open Ironwood (Fp)
-open Ironwood.Ecc.Add (Config add)
+open Halo2
+open Ecc.Add (Config add)
 
 /-- Allocate the 9 advice columns (mirroring the Rust harness's `EccConfig`-minimal column
 allocation: `advices[0..9]` via `meta.advice_column()`), then run `Add.add.configure` on them.
@@ -60,4 +60,4 @@ def addSeed : List Query :=
 -- Post-compression: projected CS equals the dumped fixture.
 #guard projectCSPost addSeed addCS == addPost
 
-end Halo2.Ironwood.Fixtures.Test
+end Zcash.Circuits.Fixtures.Test

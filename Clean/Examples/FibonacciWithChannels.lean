@@ -10,6 +10,8 @@ Prove e2e soundness and completeness of the table ensemble.
 -/
 import Clean.Air.Vm
 import Clean.Gadgets.Addition8.Theorems
+
+open Clean
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)

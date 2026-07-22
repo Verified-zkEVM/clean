@@ -13,9 +13,9 @@ same field equations, so applying its `soundness` at offset 0, a trivial environ
 const-lifted inputs turns the Ironwood-landed equations into the donor `Spec`.
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
 
-open Halo2.Ironwood (Fp)
+open Halo2
 
 /-- `v·(1−v) = 0` pins a boolean. -/
 private theorem isBool_of_boolCheck' {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by
@@ -25,9 +25,9 @@ private theorem isBool_of_boolCheck' {v : Fp} (h : v * (1 - v) = 0) : IsBool v :
 
 namespace ValueCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.ValueCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.ValueCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.ValueCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   value : F
@@ -65,7 +65,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     circuit_proof_start [gate]
     obtain ⟨heq, hcv, hcd2, hcd3, hce0⟩ := hc
     rw [hcv, hcd2, hcd3, hce0] at heq
-    exact Halo2.Ironwood.NoteCommit.ValueCanonicity.Gate.spec_of_eq
+    exact NoteCommit.ValueCanonicity.Gate.spec_of_eq
       ⟨input_value, input_d2, input_d3, input_e0⟩ hA
       (by push_cast; linear_combination heq)
 
@@ -79,9 +79,9 @@ end ValueCanonicity
 
 namespace GdCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.GdCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.GdCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.GdCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   gdX : F
@@ -124,7 +124,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
   Spec input _ _ := DSpec (toDonor input)
 
   ProverAssumptions input _ _ := DSpec (toDonor input) ∧
-    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP
+    input.aPrime = input.a + ((2 ^ 130 : ℕ) : Fp) - tP
 
   soundness := by
     circuit_proof_start [gate]
@@ -134,9 +134,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     rw [hc3, hc2] at hg3
     rw [hc3, hc6] at hg4
     rw [hc3, hc7] at hg5
-    have haPrime : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    have haPrime : input_aPrime = input_a + ((2 ^ 130 : ℕ) : Fp) - tP := by
       push_cast at hg2 ⊢; linear_combination -hg2
-    exact Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.spec_of_eqs
+    exact NoteCommit.GdCanonicity.Gate.spec_of_eqs
       ⟨input_gdX, input_b0, input_b1, input_a, input_aPrime, input_z13A,
         input_z13APrime⟩
       ⟨hA.1, hA.2.1, hA.2.2.1, haPrime, hA.2.2.2.1, hA.2.2.2.2⟩
@@ -144,7 +144,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
   completeness := by
     circuit_proof_start [gate]
-    have heqs := Halo2.Ironwood.NoteCommit.GdCanonicity.Gate.eqs_of_spec
+    have heqs := NoteCommit.GdCanonicity.Gate.eqs_of_spec
       (toDonor { gdX := input_gdX, b0 := input_b0, b1 := input_b1, a := input_a,
                  aPrime := input_aPrime, z13A := input_z13A, z13APrime := input_z13APrime })
       ⟨hA.1, hA.2.1, hA.2.2.1, hPA.2, hA.2.2.2.1, hA.2.2.2.2⟩ hPA.1
@@ -165,9 +165,9 @@ end GdCanonicity
 
 namespace PkdCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.PkdCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.PkdCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.PkdCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   pkdX : F
@@ -210,7 +210,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
   Spec input _ _ := DSpec (toDonor input)
 
   ProverAssumptions input _ _ := DSpec (toDonor input) ∧
-    input.b3CPrime = input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP
+    input.b3CPrime = input.b3 + input.c * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP
 
   soundness := by
     circuit_proof_start [gate]
@@ -220,9 +220,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     rw [hc3, hc6] at hg3
     rw [hc3, hc7] at hg4
     have hshift : input_b3CPrime = input_b3 + input_c * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+        + ((2 ^ 140 : ℕ) : Fp) - tP := by
       push_cast at hg2 ⊢; linear_combination -hg2
-    exact Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.spec_of_eqs
+    exact NoteCommit.PkdCanonicity.Gate.spec_of_eqs
       ⟨input_pkdX, input_b3, input_d0, input_c, input_b3CPrime, input_z13C,
         input_z14B3CPrime⟩
       ⟨hA.1, hA.2.1, hA.2.2.1, hshift, hA.2.2.2.1, hA.2.2.2.2⟩
@@ -230,7 +230,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
   completeness := by
     circuit_proof_start [gate]
-    have heqs := Halo2.Ironwood.NoteCommit.PkdCanonicity.Gate.eqs_of_spec
+    have heqs := NoteCommit.PkdCanonicity.Gate.eqs_of_spec
       (toDonor { pkdX := input_pkdX, b3 := input_b3, d0 := input_d0, c := input_c,
                  b3CPrime := input_b3CPrime, z13C := input_z13C,
                  z14B3CPrime := input_z14B3CPrime })
@@ -251,9 +251,9 @@ end PkdCanonicity
 
 namespace RhoCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.RhoCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.RhoCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.RhoCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   rho : F
@@ -296,7 +296,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
   Spec input _ _ := DSpec (toDonor input)
 
   ProverAssumptions input _ _ := DSpec (toDonor input) ∧
-    input.e1FPrime = input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP
+    input.e1FPrime = input.e1 + input.f * ((2 ^ 4 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP
 
   soundness := by
     circuit_proof_start [gate]
@@ -306,9 +306,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     rw [hc3, hc6] at hg3
     rw [hc3, hc7] at hg4
     have hshift : input_e1FPrime = input_e1 + input_f * ((2 ^ 4 : ℕ) : Fp)
-        + ((2 ^ 140 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+        + ((2 ^ 140 : ℕ) : Fp) - tP := by
       push_cast at hg2 ⊢; linear_combination -hg2
-    exact Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.spec_of_eqs
+    exact NoteCommit.RhoCanonicity.Gate.spec_of_eqs
       ⟨input_rho, input_e1, input_g0, input_f, input_e1FPrime, input_z13F,
         input_z14E1FPrime⟩
       ⟨hA.1, hA.2.1, hA.2.2.1, hshift, hA.2.2.2.1, hA.2.2.2.2⟩
@@ -316,7 +316,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
   completeness := by
     circuit_proof_start [gate]
-    have heqs := Halo2.Ironwood.NoteCommit.RhoCanonicity.Gate.eqs_of_spec
+    have heqs := NoteCommit.RhoCanonicity.Gate.eqs_of_spec
       (toDonor { rho := input_rho, e1 := input_e1, g0 := input_g0, f := input_f,
                  e1FPrime := input_e1FPrime, z13F := input_z13F,
                  z14E1FPrime := input_z14E1FPrime })
@@ -337,9 +337,9 @@ end RhoCanonicity
 
 namespace PsiCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.PsiCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.PsiCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.PsiCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   psi : F
@@ -385,7 +385,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
   ProverAssumptions input _ _ := DSpec (toDonor input) ∧
     input.g1G2Prime = input.g1 + input.g2 * ((2 ^ 9 : ℕ) : Fp)
-      + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP
+      + ((2 ^ 130 : ℕ) : Fp) - tP
 
   soundness := by
     circuit_proof_start [gate]
@@ -396,9 +396,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     rw [hc4, hc7] at hg4
     rw [hc4, hc8] at hg5
     have hshift : input_g1G2Prime = input_g1 + input_g2 * ((2 ^ 9 : ℕ) : Fp)
-        + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+        + ((2 ^ 130 : ℕ) : Fp) - tP := by
       push_cast at hg2 ⊢; linear_combination -hg2
-    exact Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.spec_of_eqs
+    exact NoteCommit.PsiCanonicity.Gate.spec_of_eqs
       ⟨input_psi, input_h0, input_g1, input_h1, input_g2, input_g1G2Prime, input_z13G,
         input_z13G1G2Prime⟩
       ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2.1, hshift, hA.2.2.2.2.1, hA.2.2.2.2.2⟩
@@ -406,7 +406,7 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
 
   completeness := by
     circuit_proof_start [gate]
-    have heqs := Halo2.Ironwood.NoteCommit.PsiCanonicity.Gate.eqs_of_spec
+    have heqs := NoteCommit.PsiCanonicity.Gate.eqs_of_spec
       (toDonor { psi := input_psi, h0 := input_h0, g1 := input_g1, h1 := input_h1,
                  g2 := input_g2, g1G2Prime := input_g1G2Prime, z13G := input_z13G,
                  z13G1G2Prime := input_z13G1G2Prime })
@@ -428,9 +428,9 @@ end PsiCanonicity
 
 namespace YCanonicity
 
-private abbrev DRow := Halo2.Ironwood.NoteCommit.YCanonicity.Gate.Row
-private abbrev DSpec := Halo2.Ironwood.NoteCommit.YCanonicity.Gate.Spec
-private abbrev DAssumptions := Halo2.Ironwood.NoteCommit.YCanonicity.Gate.Assumptions
+private abbrev DRow := NoteCommit.YCanonicity.Gate.Row
+private abbrev DSpec := NoteCommit.YCanonicity.Gate.Spec
+private abbrev DAssumptions := NoteCommit.YCanonicity.Gate.Assumptions
 
 /-- The copied-in cells (the `lsb`/`k_3` sign bits are witnessed in-region). -/
 structure Row (F : Type) where
@@ -493,7 +493,7 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
 
   ProverAssumptions := fun input (wit : Fp × Fp) _ =>
     IsBool wit.1 ∧ DSpec (toDonor input wit.1 wit.2) ∧
-    input.jPrime = input.j + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP
+    input.jPrime = input.j + ((2 ^ 130 : ℕ) : Fp) - tP
 
   ProverSpec := fun _ (out : Fp) (wit : Fp × Fp) _ => out = wit.1
 
@@ -506,13 +506,13 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     rw [hck2] at hg1
     rw [hcj, hcjp] at hjpc
     rw [hcz13p] at hg3
-    have hjP : input_jPrime = input_j + ((2 ^ 130 : ℕ) : Fp) - Halo2.Ironwood.tP := by
+    have hjP : input_jPrime = input_j + ((2 ^ 130 : ℕ) : Fp) - tP := by
       push_cast at hjpc ⊢; linear_combination -hjpc
     have hidx : ((place self + offset : ℕ) : ℤ)
         = ((place self : ℕ) : ℤ) + ((offset : ℕ) : ℤ) := by push_cast; ring
     rw [hidx] at hk3c hyc hg1 hg3
     exact ⟨trivial, fun hbool =>
-      Halo2.Ironwood.NoteCommit.YCanonicity.Gate.spec_of_eqs
+      NoteCommit.YCanonicity.Gate.spec_of_eqs
         (toDonor ⟨input_y, input_k0, input_k2, input_j, input_z1J, input_z13J,
           input_jPrime, input_z13JPrime⟩ _ _)
         ⟨hbool, hA.1, hA.2.1, hA.2.2.1, hjP, hA.2.2.2.1,
@@ -525,7 +525,7 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
 
   completeness := by
     circuit_proof_start [gate, boolCheck]
-    have heqs := Halo2.Ironwood.NoteCommit.YCanonicity.Gate.eqs_of_spec
+    have heqs := NoteCommit.YCanonicity.Gate.eqs_of_spec
       (toDonor { y := input_y, k0 := input_k0, k2 := input_k2, j := input_j,
                  z1J := input_z1J, z13J := input_z13J, jPrime := input_jPrime,
                  z13JPrime := input_z13JPrime }
@@ -550,4 +550,4 @@ derive_contract_bridges bundle (wlsb wk3 : WitgenIR Fp 1) := bundle wlsb wk3
 
 end YCanonicity
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

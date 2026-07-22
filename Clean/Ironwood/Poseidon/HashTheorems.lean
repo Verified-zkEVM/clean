@@ -7,7 +7,9 @@ This module mirrors `halo2_gadgets/src/poseidon.rs::Hash` for the source-shaped 
 that can be expressed once a full padded rate-2 block is available.
 -/
 
-namespace Halo2.Ironwood.Poseidon.Hash
+namespace Zcash.Circuits.Poseidon.Hash
+
+open Clean
 
 namespace HashPaddedBlock
 
@@ -117,4 +119,4 @@ lemma evalBlock_blockVar {L : Nat} {env : Environment Fp}
 
 end ConstantLength
 
-end Halo2.Ironwood.Poseidon.Hash
+end Zcash.Circuits.Poseidon.Hash

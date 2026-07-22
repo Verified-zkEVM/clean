@@ -24,7 +24,9 @@ The engine-cooperation reuse path (re-running after `subcircuit_rw`) is exercise
 `MulComplete.lean`'s migrated completeness proof, the real-load acceptance.
 -/
 
-namespace Halo2.Ironwood.Ecc.TestAbstractOutputs
+namespace Zcash.Circuits.Ecc.TestAbstractOutputs
+
+open Halo2
 
 /-! ## Guise 1 + 5: call-form output under `eval`, region level
 
@@ -141,4 +143,4 @@ example (config : Unit) (self : RegionIndex) (place : RegionIndex → ℕ) (env 
       = eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_0
   rfl
 
-end Halo2.Ironwood.Ecc.TestAbstractOutputs
+end Zcash.Circuits.Ecc.TestAbstractOutputs

@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
 
@@ -223,7 +225,7 @@ of the committed base-field element (`k = α.val / 8^w % 8`, matching `windowVal
 definitionally), witness the next running-sum value, and read the three window-table
 columns at `k`. -/
 def rowProgram (B : MulFixed.FixedBase) (alpha : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -1347,8 +1349,8 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
   let alpha0Prime ← witness <|
-    ((Witgen.FExpr.expr alpha : Witgen.FExpr Fp) - Witgen.FExpr.expr m.z84 * Witgen.FExpr.const (2 ^ 252 : Fp))
-      + Witgen.FExpr.const (2 ^ 130 : Fp) - Witgen.FExpr.const (tPNat : Fp)
+    ((FExpr.expr alpha : FExpr Fp) - FExpr.expr m.z84 * FExpr.const (2 ^ 252 : Fp))
+      + FExpr.const (2 ^ 130 : Fp) - FExpr.const (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]
   -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate

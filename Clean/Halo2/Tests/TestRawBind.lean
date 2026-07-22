@@ -21,14 +21,14 @@ The proofs end in `sorry` deliberately: the circuit has no gate on the witnessed
 so its `Spec` is not provable — the DELIVERED STATE is what this test pins (the
 `guard_hyp`s), the established sorry-pin style. -/
 
-namespace Halo2.Ironwood.Ecc.TestRawBind
+namespace Zcash.Circuits.Ecc.TestRawBind
 
-open Halo2.Ironwood (Fp Point)
+open Halo2
 
 /-- Doubling a witnessed point: raw witness region + one `addFormal` call on `⟨p, p⟩`. -/
 def double : FormalCircuit Fp
-    ((Column .advice × Column .advice) × Halo2.Ironwood.Ecc.Add.Config)
-    ((Column .advice × Column .advice) × Halo2.Ironwood.Ecc.Add.Config)
+    ((Column .advice × Column .advice) × Add.Config)
+    ((Column .advice × Column .advice) × Add.Config)
     (Unconstrained Point) Point where
   name := "raw-bind double"
   configure := fun ((x, y), acfg) => do
@@ -41,7 +41,7 @@ def double : FormalCircuit Fp
       let xVar ← assignAdvice x 0 (Witgen.MOver.toIRScalar (Point.x <$> input))
       let yVar ← assignAdvice y 0 (Witgen.MOver.toIRScalar (Point.y <$> input))
       pure ({ x := xVar, y := yVar } : Var Point Fp))
-    let s ← Halo2.Ironwood.Ecc.Add.addFormal.call acfg { p := p, q := p }
+    let s ← Add.addFormal.call acfg { p := p, q := p }
     pure s
 
   elaborated _ := { regionCount _ := 2 }
@@ -51,10 +51,10 @@ def double : FormalCircuit Fp
   ProverAssumptions input _ _ := input.Valid
 
   soundness := by
-    circuit_proof_start2 [Halo2.Ironwood.Ecc.Add.addFormal]
+    circuit_proof_start2 [Add.addFormal]
     -- the minted boundary facts and the atom-spelled contract, pinned
     guard_hyp p_eq : AssignedCell.of i₀ 0 cfg_1.1 = p_x ∧ AssignedCell.of i₀ 0 cfg_1.2 = p_y
-    guard_hyp s_eq : Halo2.Ironwood.Ecc.Add.addFormal.output cfg
+    guard_hyp s_eq : Add.addFormal.output cfg
         { p := { x := p_x, y := p_y }, q := { x := p_x, y := p_y } } (i₀ + 1)
       = { x := s_x, y := s_y }
     guard_hyp output_eq : AssignedCell.eval place env s_x = output_x
@@ -62,7 +62,7 @@ def double : FormalCircuit Fp
     sorry
 
   completeness := by
-    circuit_proof_start2 [Halo2.Ironwood.Ecc.Add.addFormal]
+    circuit_proof_start2 [Add.addFormal]
     sorry
 
-end Halo2.Ironwood.Ecc.TestRawBind
+end Zcash.Circuits.Ecc.TestRawBind

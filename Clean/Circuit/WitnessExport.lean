@@ -1,6 +1,8 @@
 import Clean.Circuit.Json
 import Clean.Circuit.Formal
 
+open Clean
+
 /-!
 # Witness-generation export (witgen IR plan, phase 6)
 
@@ -132,6 +134,8 @@ def WitgenIROver.toJson? {m : ℕ} : WitgenIR F m → Except String Json
 
 end Witgen
 
+namespace Clean
+
 /-! ## Operation-level export -/
 
 variable {F : Type} [FiniteField F] [ToJson F] {α : Type}
@@ -220,3 +224,5 @@ macro "#assert_exportable " c:term : command =>
 /-- Pretty-print the witgen export JSON of the given circuit (or formal circuit). -/
 macro "#witgen_json " c:term : command =>
   `(#eval do IO.println (← WitgenExport.jsonString $c))
+
+end Clean

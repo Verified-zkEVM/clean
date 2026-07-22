@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Gadgets.Equality
 import Clean.Utils.Primes
 
+open Clean
+
 /-!
 # Regression tests for `elaborate_circuit`'s output quality
 

@@ -23,9 +23,10 @@ lookups).
 Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulOverflow
+namespace Zcash.Circuits.Ecc.MulOverflow
 
-open Halo2.Ironwood.Ecc (tQ)
+open Halo2
+open Ecc (tQ)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-- The number of `K`-bit words decomposing the low 130 bits of `s`. With `K = 10`,
@@ -389,4 +390,4 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
 end MulOverflow
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

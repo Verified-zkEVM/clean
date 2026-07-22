@@ -28,18 +28,20 @@ The `Chain.circuit` enters at an accumulator seeded from the domain point `Q`: t
 Reference: `halo2_gadgets/src/sinsemilla.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.CommitDomain
+open ProvableType.Halo2 (eval_cells eval_var eval_var_prover)
 
-open Halo2.Ironwood (Point Fq)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators hashToPoint)
-open Halo2.Ironwood.Specs (K)
-open Halo2.Ironwood.Sinsemilla (HVec)
+namespace Zcash.Circuits.Sinsemilla.CommitDomain
+
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.MulFixed (FixedBase)
+open Specs.Sinsemilla (Generators hashToPoint)
+open Specs (K)
+open Sinsemilla (HVec)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.Sinsemilla
+open Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded)
-open Halo2.Ironwood.Sinsemilla.Chain
+open Sinsemilla.Chain
   (zLengths PieceChunks ZsFacts honestChunks PieceBounds ZsHonest pieceChunks_bound
    pieceChunks_honestChunks)
 
@@ -90,7 +92,7 @@ def blindingFactor (R : FixedBase) :
 
 /-! ## The `commit` bundle -/
 
-open Halo2.Ironwood.Specs.Sinsemilla (hashToPoint)
+open Specs.Sinsemilla (hashToPoint)
 
 /-- The region count of `commit`: the blinding child's two regions, the hash region, the
 final complete addition. -/
@@ -223,12 +225,12 @@ def commit (G : Generators) (ns : List ℕ)
     intro B hB
     have hcoords := hContract B hB
     -- the hash output point value IS the eval'd point (projection commute; go through
-    -- the componentwise `ProvableStruct.eval` — the flat eval of the whole symbolic-size
+    -- the componentwise `ProvableStruct.Halo2.eval` — the flat eval of the whole symbolic-size
     -- Output struct is a whnf wall)
-    have hpoint : (ProvableStruct.eval place env hashOut).point
+    have hpoint : (ProvableStruct.Halo2.eval place env hashOut).point
         = (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
           : Value Point Fp) := by
-      rw [ProvableType.eval_cells]; rfl
+      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals B
     have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
         : Value Point Fp) = B := by
@@ -242,7 +244,7 @@ def commit (G : Generators) (ns : List ℕ)
       rw [← hx, ← hy]
     -- B is a valid point (the chunks are generator indices)
     have hBvalid : B.Valid :=
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
+      Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound hPC) hB
     -- the complete addition's contract (input literal already eval'd componentwise)
     have hAddS := result_spec trivial (by
@@ -273,7 +275,7 @@ def commit (G : Generators) (ns : List ℕ)
     -- and prover-view evals of a pure-provable var agree up to defeq)
     have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces
         : Value (fields ns.length) Fp) = input.pieces := by
-      rw [← input_eq, ProvableType.eval_var, ProvableType.eval_var_prover]
+      rw [← input_eq, ProvableType.Halo2.eval_var, ProvableType.Halo2.eval_var_prover]
     -- the hash child's honest-prover precondition, transported to the minted witness
     have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions
         ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces }
@@ -288,12 +290,12 @@ def commit (G : Generators) (ns : List ℕ)
     rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by
       simp only [hpe]; exact hB0)
-    -- projection commute through the componentwise `ProvableStruct.eval` (the flat
+    -- projection commute through the componentwise `ProvableStruct.Halo2.eval` (the flat
     -- eval of the whole symbolic-size Output struct is a whnf wall)
-    have hpointP : (ProvableStruct.eval place env.toEnvironment hashOut).point
+    have hpointP : (ProvableStruct.Halo2.eval place env.toEnvironment hashOut).point
         = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point
           : Value Point Fp) := by
-      rw [ProvableType.eval_cells]; rfl
+      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals the honest B0
     have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp)
         = (⟨bx, byv⟩ : Point Fp) := by
@@ -303,7 +305,7 @@ def commit (G : Generators) (ns : List ℕ)
         rw [← hpointP]; exact hres.2
       rw [← hx, ← hy]
     have hB0valid : (⟨bx, byv⟩ : Point Fp).Valid :=
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
+      Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound
           (Sinsemilla.Chain.pieceChunks_honestChunks ns input.pieces hPBounds)) hB0
     refine ⟨⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE,
@@ -323,4 +325,4 @@ def commit (G : Generators) (ns : List ℕ)
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns
 
-end Halo2.Ironwood.Sinsemilla.CommitDomain
+end Zcash.Circuits.Sinsemilla.CommitDomain

@@ -11,25 +11,26 @@ child bridges consumed by `mul`'s soundness/completeness).
 -/
 
 namespace Halo2.ContractBridges.Test
+open Zcash.Circuits
 
 -- generate the bridges for the `Add.add` child (unparameterized bundle)
-derive_contract_bridges addTest := Ironwood.Ecc.Add.add
+derive_contract_bridges addTest := Ecc.Add.add
 
 -- 1. the five expected bridge names exist with the right statements.
-example : Ironwood.Ecc.Add.add.Spec
+example : Ecc.Add.add.Spec
     = fun input output _ => output.Valid ∧ output = input.p + input.q := addTest_spec_eq
-example : Ironwood.Ecc.Add.add.Assumptions
+example : Ecc.Add.add.Assumptions
     = fun input => input.p.Valid ∧ input.q.Valid := addTest_assumptions_eq
-example : Ironwood.Ecc.Add.add.EnvAssumptions = fun _ _ => True := addTest_envAssumptions_eq
-example : Ironwood.Ecc.Add.add.ProverAssumptions = fun _ _ _ => True :=
+example : Ecc.Add.add.EnvAssumptions = fun _ _ => True := addTest_envAssumptions_eq
+example : Ecc.Add.add.ProverAssumptions = fun _ _ _ => True :=
   addTest_proverAssumptions_eq
-example : Ironwood.Ecc.Add.add.ProverSpec = fun _ _ _ _ => True := addTest_proverSpec_eq
+example : Ecc.Add.add.ProverSpec = fun _ _ _ _ => True := addTest_proverSpec_eq
 
 -- 2. the generated bridge fires under `simp only`, rewriting the folded projection (the consumer
 -- pattern), exactly like a hand-written `rfl`-bridge.
-example (input : Value Ironwood.Ecc.Add.Inputs Ironwood.Fp)
-    (output : Value Halo2.Ironwood.Point Ironwood.Fp) (w : Unit)
-    (h : Ironwood.Ecc.Add.add.Spec input output w) :
+example (input : Value Ecc.Add.Inputs Fp)
+    (output : Value Point Fp) (w : Unit)
+    (h : Ecc.Add.add.Spec input output w) :
     output.Valid ∧ output = input.p + input.q := by
   simp only [addTest_spec_eq] at h
   exact h

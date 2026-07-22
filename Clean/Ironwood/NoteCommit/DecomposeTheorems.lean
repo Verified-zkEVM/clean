@@ -11,7 +11,9 @@ Custom-gate `FormalAssertion`s that constrain each Sinsemilla message piece to e
 weighted sum of its sub-pieces (`orchard note_commit.rs` `Decompose*`).
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
+
+open Clean
 
 namespace DecomposeB.Gate
 
@@ -89,4 +91,4 @@ def Spec (row : Row Fp) : Prop :=
 
 end DecomposeH.Gate
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

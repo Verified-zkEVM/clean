@@ -3,6 +3,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
 import Lean.PrettyPrinter.Delaborator.Basic
 
+open Clean
+
 open Lean Meta Elab Tactic
 
 /-- Helper function to check if an expression is a struct constructor or struct variable -/
@@ -26,7 +28,7 @@ private def hasProvableStructType (e : Expr) : MetaM Bool := do
 
 /-- Extract the value being evaluated from supported `eval` forms. -/
 private def evalArg? (e : Expr) : Option Expr :=
-  if e.isAppOf ``eval || e.isAppOf ``ProvableType.eval then
+  if e.isAppOf ``eval || e.isAppOf ``ProvableType.Clean.eval then
     e.getAppArgs.back?
   else
     none
@@ -156,27 +158,27 @@ elab "simplify_provable_struct_eval" : tactic => do
       let structSyntax ← Lean.PrettyPrinter.delab structExpr
       let typeSyntax ← Lean.PrettyPrinter.delab structType
       let castStructSyntax ← `(($structSyntax : $typeSyntax))
-      let evalLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_eq_eval (x := $castStructSyntax))
+      let evalLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_eq_eval (x := $castStructSyntax))
       simpArgs := simpArgs.push evalLemma
-      let evalProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_eq_eval_prover (x := $castStructSyntax))
+      let evalProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_eq_eval_prover (x := $castStructSyntax))
       simpArgs := simpArgs.push evalProverLemma
-      let evalVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_var_eq_eval (x := $castStructSyntax))
+      let evalVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_var_eq_eval (x := $castStructSyntax))
       simpArgs := simpArgs.push evalVarLemma
-      let evalVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_var_eq_eval_prover (x := $castStructSyntax))
+      let evalVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_var_eq_eval_prover (x := $castStructSyntax))
       simpArgs := simpArgs.push evalVarProverLemma
-      let evalFieldVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_field_var_eq_eval (x := $castStructSyntax))
+      let evalFieldVarLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_field_var_eq_eval (x := $castStructSyntax))
       simpArgs := simpArgs.push evalFieldVarLemma
-      let evalFieldVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_field_var_eq_eval_prover (x := $castStructSyntax))
+      let evalFieldVarProverLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval_field_var_eq_eval_prover (x := $castStructSyntax))
       simpArgs := simpArgs.push evalFieldVarProverLemma
       if let some fromComponentsConsName ← fromComponentsConsNameFromType? structType then
         simpArgs ← addIdentLemmaIfMissing simpArgs fromComponentsConsName
 
     -- Add the other simp lemmas
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.components))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.toComponents))
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval.go))
-    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableType.eval_field))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.Clean.eval.go))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableType.Clean.eval_field))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_var_prover_to_verifier))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_var_field))
     simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| CircuitType.eval_var_field_prover))

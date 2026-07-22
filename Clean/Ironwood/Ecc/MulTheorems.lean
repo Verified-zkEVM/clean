@@ -5,7 +5,7 @@ import CompElliptic.CurveForms.ShortWeierstrass
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul
+namespace Zcash.Circuits.Ecc.Mul
 
 namespace Gate
 
@@ -41,4 +41,4 @@ def Spec (row : Input Fp) : Prop :=
 
 end Gate
 
-end Halo2.Ironwood.Ecc.Mul
+end Zcash.Circuits.Ecc.Mul

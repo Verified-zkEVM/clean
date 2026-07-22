@@ -3,6 +3,8 @@ import Lean.Elab.Exception
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableStructNaming
 
+open Clean
+
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean

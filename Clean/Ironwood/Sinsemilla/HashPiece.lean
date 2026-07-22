@@ -11,14 +11,14 @@ program, never a cell).
 Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.HashPiece
+namespace Zcash.Circuits.Sinsemilla.HashPiece
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.DoubleAndAdd (xR yA)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
-open Halo2.Ironwood.Specs (K)
-open Halo2.Ironwood.Sinsemilla
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.DoubleAndAdd (xR yA)
+open Specs.Sinsemilla (Generators step hashToPoint)
+open Specs (K)
+open Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
    pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
    chain_eq_suffix_sum step_coordinates_of_constraints step_honest accAfter_eq_chain)
@@ -104,7 +104,7 @@ private theorem loop_fold (G : Generators) {n : ℕ} (st : ℕ → State Fp) (ms
         (st n).row.xA = B.x ∧ 2 * B.y = yA (st n).row := by
   intro A hAon hAx hAyA B hB
   have hAvalid : A.Valid := Or.inl hAon
-  have hA0 : A ≠ 0 := Halo2.Ironwood.Point.ne_zero_of_onCurve hAon
+  have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
   suffices h : ∀ r, r ≤ n → ∀ C : Point Fp,
       hashToPoint G.S A ((List.range r).map ms) = some C →
       C.OnCurve ∧ (st r).row.xA = C.x ∧ 2 * C.y = yA (st r).row from
@@ -114,7 +114,7 @@ private theorem loop_fold (G : Generators) {n : ℕ} (st : ℕ → State Fp) (ms
   | zero =>
     intro _ C hC
     rw [show ((List.range 0).map ms) = ([] : List ℕ) from rfl,
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil] at hC
+      Specs.Sinsemilla.hashToPoint_nil] at hC
     obtain rfl : A = C := Option.some.inj hC
     exact ⟨hAon, hAx.symm, hAyA⟩
   | succ v ih =>
@@ -128,9 +128,9 @@ private theorem loop_fold (G : Generators) {n : ℕ} (st : ℕ → State Fp) (ms
       simp only [List.mem_range] at hj
       exact hms ⟨j, by omega⟩
     have hCvalid : C.Valid :=
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_valid hAvalid hprefix_lt hC
+      Specs.Sinsemilla.hashToPoint_valid hAvalid hprefix_lt hC
     have hC0 : C ≠ 0 :=
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hprefix_lt hC
+      Specs.Sinsemilla.hashToPoint_ne_zero hAvalid hA0 hprefix_lt hC
     have hCOn : C.OnCurve := by
       rcases hCvalid with h | h
       · exact h
@@ -727,7 +727,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       have hstep0 : step G.S (pieceWord input 0) A = some B1 := by
         refine prefix_step_some G.S A (pieceWord input) ?_ hB1
         rw [show ((List.range 0).map (pieceWord input)) = ([] : List ℕ) from rfl,
-          Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil]
+          Specs.Sinsemilla.hashToPoint_nil]
       have hyA0 := honest_yA G hH0 (show accAfter G (A.x, A.y) input 0 = (A.x, A.y) from rfl)
         hstep0
       refine ⟨?_, ?_, ?_, ?_⟩
@@ -746,8 +746,8 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         rw [region_5,
           stepXA_eq _ ((G.S (pieceWord input (w + 1))).x, (G.S (pieceWord input (w + 1))).y)
             (pieceZ input (w + 1))]
-        simp only [yA, xR, State.accY, Halo2.Ironwood.Ecc.DoubleAndAdd.yA,
-          Halo2.Ironwood.Ecc.DoubleAndAdd.xR] at hEyB ⊢
+        simp only [yA, xR, State.accY, Ecc.DoubleAndAdd.yA,
+          Ecc.DoubleAndAdd.xR] at hEyB ⊢
         linear_combination (norm := (field_simp; ring)) 2 * hEyB
 
 /-- The piece bundle's output variable (position-determined, rfl). -/
@@ -764,5 +764,4 @@ theorem piece_output (G : Generators) (w : ℕ) (final : Bool)
           xANext := .of self (o + w + 1) cfg.xA,
           zs := Vector.ofFn (fun r => .of self (o + r.val) cfg.bits) } := rfl
 
-end Halo2.Ironwood.Sinsemilla.HashPiece
-
+end Zcash.Circuits.Sinsemilla.HashPiece

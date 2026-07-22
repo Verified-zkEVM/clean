@@ -20,15 +20,15 @@ moves, which is VK-neutral.
 Reference: `halo2_gadgets/src/sinsemilla/chip/hash_to_point.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.HashPiece
+namespace Zcash.Circuits.Sinsemilla.HashPiece
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.DoubleAndAdd (xR yA)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
-open Halo2.Ironwood.Specs (K)
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.DoubleAndAdd (xR yA)
+open Specs.Sinsemilla (Generators step hashToPoint)
+open Specs (K)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Halo2.Ironwood.Sinsemilla
+open Sinsemilla
   (GeneratorTableConfig GeneratorTableLoaded pieceWord pieceZ rowValue accAfter nextYA
    pieceWord_lt pieceZ_zero pieceZ_succ pieceZ_last chain_eq_sum piece_recombine
    chain_eq_suffix_sum step_coordinates_of_constraints step_honest accAfter_eq_chain)
@@ -447,7 +447,7 @@ theorem range_prefix_some (S : ℕ → Point Fp) (Q : Point Fp) (f : ℕ → ℕ
     {r : ℕ} (hr : r ≤ n) :
     ∃ C, hashToPoint S Q ((List.range r).map f) = some C := by
   obtain ⟨k, rfl⟩ : ∃ k, n = r + k := ⟨n - r, by omega⟩
-  rw [List.range_add, List.map_append, Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_append] at hn
+  rw [List.range_add, List.map_append, Specs.Sinsemilla.hashToPoint_append] at hn
   cases hc : hashToPoint S Q ((List.range r).map f) with
   | none => rw [hc] at hn; simp at hn
   | some C => exact ⟨C, rfl⟩
@@ -460,7 +460,7 @@ theorem prefix_step_some (S : ℕ → Point Fp) (Q : Point Fp) (f : ℕ → ℕ)
     step S (f r) Ar = some Ar1 := by
   rw [List.range_succ] at hAr1
   simp only [List.map_append, List.map_cons, List.map_nil] at hAr1
-  rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
+  rw [Specs.Sinsemilla.hashToPoint_concat, hAr] at hAr1
   exact hAr1
 
 /-- The step of an honest row lands on the honest next row (the round's chaining lemma),
@@ -820,4 +820,4 @@ theorem round_output (G : Generators) (i : ℕ) (cfg : Config) (o : ℕ) (iv : A
     (self : RegionIndex) :
     (round G i).output cfg o iv self = reads cfg (o + 1) self := rfl
 
-end Halo2.Ironwood.Sinsemilla.HashPiece
+end Zcash.Circuits.Sinsemilla.HashPiece

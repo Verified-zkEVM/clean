@@ -108,7 +108,7 @@ per-projection `rfl` equations) are built and fed to step (e′), so the child's
 open without the consumer declaring or naming any bridge lemmas.
 
 A shared **spec** unfold that the gadget's user half genuinely needs (e.g.
-`Halo2.Ironwood.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
+`Zcash.Circuits.Point.nondegenerateAdd`, unfolded so `grind` can close AddIncomplete's completeness) is the
 one legitimate non-own-file entry — it is neither `circuit_norm` noise nor another gadget's circuit
 internals, but the same category as the gadget's own `Spec`. It is not linted (it is not a
 `circuit_norm` member).
@@ -373,8 +373,8 @@ def autoUnfoldsOfMain (excludeLoops : Bool := false) : TacticM (Array Name) := w
     let ty ← instantiateMVars (← inferType a)
     let ok := match ty with
       | .forallE _ _ body _ =>
-        body.getAppFn.constName? == some ``Halo2.Circuit ||
-        body.getAppFn.constName? == some ``Halo2.RegionCircuit
+        body.getAppFn.constName? == some ``Circuit ||
+        body.getAppFn.constName? == some ``RegionCircuit
       | _ => false
     if ok then
       mainArg? := some a
@@ -397,8 +397,8 @@ def autoUnfoldsOfMain (excludeLoops : Bool := false) : TacticM (Array Name) := w
     -- split lemmas fire on the opened spelling
     if excludeLoops && circuitLoopHeads.contains c then continue
     let isCircuitTy ← forallTelescope di.type fun _ body =>
-      pure (body.getAppFn.constName? == some ``Halo2.Circuit ||
-            body.getAppFn.constName? == some ``Halo2.RegionCircuit)
+      pure (body.getAppFn.constName? == some ``Circuit ||
+            body.getAppFn.constName? == some ``RegionCircuit)
     unless isCircuitTy do continue
     -- LOOPS stay folded (like bundles): a structurally/WF-recursive circuit def has its
     -- own induction lemmas stated over the folded spelling; unfolding it in the peel

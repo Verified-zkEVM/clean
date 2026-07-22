@@ -25,8 +25,9 @@ Soundness rests on the identity `2^254 + t_q ≡ 0 (mod q)`: the double-and-add
 accumulates `[2^254 + k] base = [alpha] base`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul
+namespace Zcash.Circuits.Ecc.Mul
 
+open Clean
 open CompElliptic.CurveForms
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -614,4 +615,4 @@ theorem overflow_spec_honest (alpha : Fp) {z0v z130v k254v : Fp}
         rw [hav]
         ring
 
-end Halo2.Ironwood.Ecc.Mul
+end Zcash.Circuits.Ecc.Mul

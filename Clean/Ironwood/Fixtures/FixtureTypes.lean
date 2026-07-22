@@ -16,13 +16,11 @@ The dumper (`halo2_proofs::plonk::dump_lean`) emits `CsFixture` literals into
 `AddPre.lean` / `AddPost.lean` in this namespace.
 -/
 
-namespace Halo2.Ironwood.Fixtures
-
-open _root_.Halo2.Ironwood (Fp)
+namespace Zcash.Circuits.Fixtures
 
 /-- Ironwood's gate-polynomial AST (`Zcash.Snark.Expr`), index-based: `fixed`/`advice`/
 `instance` carry a **query index**, not a `(column, rotation)`. This is the erasure target
-of `Halo2.Expression Fp Query`. -/
+of `Expression Fp Query`. -/
 inductive Expr (F : Type) where
   | constant : F → Expr F
   | fixed : ℕ → Expr F
@@ -153,4 +151,4 @@ structure LayoutFixture where
   fixed : List (ℕ × ℕ × ℕ)
 deriving DecidableEq, Repr
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

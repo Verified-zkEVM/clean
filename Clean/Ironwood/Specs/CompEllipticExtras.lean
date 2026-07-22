@@ -8,7 +8,7 @@ Small generic lemmas (and the `Fp`/`Fq` field abbreviations) that the formerly v
 CompElliptic copy carried on top of upstream `daira/CompElliptic`, kept in CompElliptic's
 own namespaces so call sites read as the natural continuations — all candidates for
 upstreaming. The Pallas-side curve twins (`neg_five_not_isCube`/`no_onCurve_y_zero`)
-live in `Clean.Ironwood.Specs.Pallas`.
+live in `Zcash.Circuits.Specs.Pallas`.
 -/
 
 namespace CompElliptic.Fields.Pasta

@@ -13,7 +13,7 @@ contiguous bit-slice that shows up in the canonicity proofs (and `Sinsemilla.chu
 is just a list of `K`-aligned, `K`-wide `bitrange`s).
 -/
 
-namespace Halo2.Ironwood.Specs
+namespace Zcash.Circuits.Specs
 
 /-- The Sinsemilla / lookup-range-check word width: bits per chunk (`= 10`).
 Shared by `Sinsemilla.chunksOf` and `LookupRangeCheck`. -/
@@ -100,32 +100,38 @@ theorem val_Fp (x : Fp) :
 
 /-- The raw `n / 2^s % 2^l` shape (definitionally `bitrange`) folded into the named form,
 for the rare proof that still needs to bridge a manually-written division/mod chain into
-`bitrange`, rather than going through `Witgen.NExpr.bitrange`. -/
+`bitrange`, rather than going through `Clean.NExpr.bitrange`. -/
 theorem bitrange_eq (n s l : ℕ) : n / 2 ^ s % 2 ^ l = bitrange n s l := rfl
 
-end Halo2.Ironwood.Specs
+end Zcash.Circuits.Specs
+
+open Zcash.Circuits.Specs (bitrange)
 
 /-! ## The witness-IR counterpart of `bitrange`
 
 `Witgen.NExprOver.bitrange n start len` is the witness-generation-IR expression for the
-same bit slice `Halo2.Ironwood.Specs.bitrange` computes on concrete naturals — write
+same bit slice `Zcash.Circuits.Specs.bitrange` computes on concrete naturals — write
 `n.bitrange start len` inside a witness generator (via dot notation) instead of spelling
 out `n / 2 ^ start % 2 ^ len`. Generic over the variable atom `V`, matching the
 atom-generic authoring sugar (`Clean/Circuit/WitnessIRSugar.lean`). It's kept as an
 opaque named definition (not unfolded by `circuit_norm`) specifically so that
-`circuit_proof_start`'s normalization produces `Halo2.Ironwood.Specs.bitrange (n.eval ctx) start
+`circuit_proof_start`'s normalization produces `Zcash.Circuits.Specs.bitrange (n.eval ctx) start
 len` directly, in the exact shape the rest of the canonicity proofs already expect — no
 manual re-folding needed. -/
 
 namespace Witgen
 
-/-- The `NExpr` (witness-IR) counterpart of `Halo2.Ironwood.Specs.bitrange`. -/
+/-- The `NExpr` (witness-IR) counterpart of `Zcash.Circuits.Specs.bitrange`. -/
 def NExprOver.bitrange {F V : Type} (n : NExprOver F V) (start len : ℕ) : NExprOver F V :=
   n / (2 ^ start : ℕ) % (2 ^ len : ℕ)
+
+end Witgen
+
+namespace Clean
 
 variable {F : Type} [FiniteField F]
 
 @[simp, circuit_norm] theorem NExpr.eval_bitrange (ctx : Ctx F) (n : NExpr F) (start len : ℕ) :
-    (n.bitrange start len).eval ctx = Halo2.Ironwood.Specs.bitrange (n.eval ctx) start len := rfl
+    (n.bitrange start len).eval ctx = bitrange (n.eval ctx) start len := rfl
 
-end Witgen
+end Clean

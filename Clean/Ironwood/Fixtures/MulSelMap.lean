@@ -3,9 +3,9 @@
 -- fixed column, its combination length, and this selector's assigned root.
 import Clean.Ironwood.Fixtures.FixtureTypes
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 def mulSelMap : SelCompressMap :=
   { newFixedCols := 7,
@@ -23,4 +23,4 @@ def mulSelMap : SelCompressMap :=
       (11, ⟨8, 1, 1⟩),
       (12, ⟨7, 3, 3⟩)] }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

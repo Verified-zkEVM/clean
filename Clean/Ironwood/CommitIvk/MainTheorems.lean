@@ -22,25 +22,24 @@ c = bits   5..=244 of nk                                            (240 bits, 2
 d = d_0 || d_1 = (bits 245..=253 of nk) || (bit 254 of nk)          (10 bits,  1 word)
 ```
 
-The custom canonicity gate lives in `Clean.Ironwood.CommitIvk.GateTheorems` under
-`Halo2.Ironwood.CommitIvk.Gate`; this entry circuit depends on `Sinsemilla.Domain` (the
+The custom canonicity gate lives in `Zcash.Circuits.CommitIvk.Gate` under
+`CommitIvk.Gate`; this entry circuit depends on `Sinsemilla.Domain` (the
 `CommitDomain` hash exposing the running sums needed for the `ak`/`nk` canonicity
 checks).
 -/
 
-namespace Halo2.Ironwood.CommitIvk
+namespace Zcash.Circuits.CommitIvk
 
-open Halo2.Ironwood.Specs (K)
+open Specs (K)
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms.ShortWeierstrass
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
-open Halo2.Ironwood.Ecc
-open Halo2.Ironwood.Sinsemilla
-
-open Halo2.Ironwood.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Halo2.Ironwood.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
+open Specs.Sinsemilla (Generators)
+open Ecc
+open Sinsemilla
+open Specs (bitrange bitrange_lt cast_bitrange_val)
+open Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
   hashToPointB SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
+open NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
 
 /-- Semantic statement that the four Sinsemilla pieces `a, b, c, d` are exactly the
@@ -201,7 +200,7 @@ private theorem completeness_bit_facts {ak nk a b2 c b1 d1 : Fp}
   have hb2c_val : (b2 + ((2 ^ 5 : ℕ) : Fp) * c).val = bitrange nk.val 0 245 := by
     have hcast : b2 + ((2 ^ 5 : ℕ) : Fp) * c
         = ((bitrange nk.val 0 245 : ℕ) : Fp) := by
-      rw [hb2_eq, hc_eq, Halo2.Ironwood.Specs.bitrange_add nk.val 0 5 240]; push_cast; ring
+      rw [hb2_eq, hc_eq, Specs.bitrange_add nk.val 0 5 240]; push_cast; ring
     rw [hcast, ZMod.val_natCast_of_lt
       (lt_trans (bitrange_lt _ 0 245) (by norm_num [PALLAS_BASE_CARD]))]
   refine ⟨?_, ?_, ?_, ?_⟩
@@ -225,8 +224,8 @@ private theorem completeness_bit_facts {ak nk a b2 c b1 d1 : Fp}
     obtain ⟨_, hlo, _⟩ := high_bit_canonical hak hbr
     refine ⟨?_, ?_⟩
     · rw [ha_val]
-      rw [Halo2.Ironwood.NoteCommit.bitrange_low_div ak.val 130 120,
-        Halo2.Ironwood.NoteCommit.high_bit_high_zero hak hbr (by norm_num) (by norm_num)]
+      rw [NoteCommit.bitrange_low_div ak.val 130 120,
+        NoteCommit.high_bit_high_zero hak hbr (by norm_num) (by norm_num)]
       simp
     · rw [shifted_high_zero (by norm_num) (by norm_num) (ha_val ▸ hlo)]; simp
   · -- `d_1 = 1 → b2c'.val / 2^140 = 0`
@@ -254,13 +253,13 @@ end Canonicity
 hence its `.val` is `< 2^(K·(n+1))` and equals that digit sum. -/
 private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
-    (h : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    (h : Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
     ∃ ms : ℕ → ℕ, (∀ r, ms r < 2 ^ K) ∧
       pieces[0] = ((∑ r ∈ Finset.range (n + 1),
         ms r * 2 ^ (K * r) : ℕ) : Fp) ∧
       (∀ i, i < n + 1 → chunks.getD i 0 = ms i) ∧
-      Halo2.Ironwood.Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
-  simp only [Halo2.Ironwood.Sinsemilla.Chain.PieceChunks] at h
+      Sinsemilla.Chain.PieceChunks rest pieces.tail (chunks.drop (n + 1)) := by
+  simp only [Sinsemilla.Chain.PieceChunks] at h
   obtain ⟨ms, hms, hpc, tailChunks, hchunks, hPC⟩ := h
   subst hchunks
   refine ⟨ms, hms, hpc, ?_, ?_⟩
@@ -269,7 +268,7 @@ private theorem pieceChunks_head_digits {n : ℕ} {rest : List ℕ}
     simp only [List.getElem?_map, List.getElem?_range, hi, Option.map_some, Option.getD_some]
   · rwa [List.drop_left' (by simp)]
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- `2^(K·m) < PALLAS_BASE_CARD` for the message piece widths used here (`m ≤ 25`). -/
 private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
     2 ^ (K * m) < PALLAS_BASE_CARD := by
@@ -278,7 +277,7 @@ private theorem two_pow_K_lt_card {m : ℕ} (hm : m ≤ 25) :
   exact lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) hle)
     (by norm_num [PALLAS_BASE_CARD])
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- From the head-piece digit data of a `PieceChunks` decomposition (`ms`, the cast-sum
 fact, and `chunks.getD i 0 = ms i` on the head segment), the piece value's `.val` is the
 digit sum, hence `< 2^(K·(n+1))`, and the `ZsFacts` running-sum cell at index `r ≤ n`
@@ -306,13 +305,13 @@ private theorem zsFacts_cell_eq_div {n : ℕ} {piece : Fp} {chunks : List ℕ} {
     rw [hgetD (r + j) (by omega)]
   rw [hsum, hpval, sum_suffix_div hms (n + 1) r (by omega)]
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- The head piece of a `(n :: rest)` `PieceChunks` decomposition has `.val < 2^(K·(n+1))`
 (it is a digit sum of `n+1` `K`-bit words). -/
 private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
     {pieces : Vector Fp (n :: rest).length} {chunks : List ℕ}
     (hm : n + 1 ≤ 25)
-    (h : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
+    (h : Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks) :
     ZMod.val (pieces[0] : Fp) < 2 ^ (K * (n + 1)) := by
   obtain ⟨ms, hms, hpc, -, -⟩ := pieceChunks_head_digits h
   rw [hpc, ZMod.val_natCast_of_lt
@@ -322,7 +321,7 @@ private theorem pieceChunks_head_val_lt {n : ℕ} {rest : List ℕ}
 /-- The `a` (`pieces[0]`) and `c` (`pieces[2]`) message pieces of the `commit_ivk`
 decomposition are `< 2^250` and `< 2^240` respectively. -/
 private theorem commit_pieceChunks_ac_bounds {pieces : Vector Fp 4} {chunks : List ℕ}
-    (hPC : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks) :
+    (hPC : Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks) :
     ZMod.val (pieces[0] : Fp) < 2 ^ 250 ∧ ZMod.val (pieces[2] : Fp) < 2 ^ 240 := by
   obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
   obtain ⟨-, -, -, -, hPCtail2⟩ := pieceChunks_head_digits hPCtail
@@ -337,15 +336,15 @@ private theorem commit_pieceChunks_ac_bounds {pieces : Vector Fp 4} {chunks : Li
       (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
   exact ⟨hA, ht2 ▸ hC⟩
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- The `z₁₃` running-sum cell of a head piece (`HVec.head zs`, index 13) is the
 `130`-bit-shifted piece value `piece.val / 2^130`. Combines the `ZsFacts` head identity
 with the `PieceChunks` digit data via `zsFacts_cell_eq_div` (at `r = 13`). -/
 private theorem zsFacts_head_cell_eq_div {n : ℕ} {rest : List ℕ} {chunks : List ℕ}
     {pieces : Vector Fp (n :: rest).length}
-    {zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
+    {zs : HVec (Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (hm : n + 1 ≤ 25) (h13 : 13 ≤ n)
-    (hPC : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
+    (hPC : Sinsemilla.Chain.PieceChunks (n :: rest) pieces chunks)
     (hZsHead : HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
       ((∑ j ∈ Finset.range (n + 1 - r.val),
         chunks.getD (r.val + j) 0 * 2 ^ (K * j) : ℕ) : Fp))) :
@@ -356,19 +355,19 @@ private theorem zsFacts_head_cell_eq_div {n : ℕ} {rest : List ℕ} {chunks : L
   rw [zsFacts_cell_eq_div hm hms hpc hgetD h13,
     show K * 13 = 130 from by norm_num [K]]
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- The `z₁₃` running-sum cell of the `c` piece (`commit_ivk`'s `[24,0,23,0]` index 2) is
 `c.val / 2^130`. Recurses into the `ZsFacts`/`PieceChunks` tails twice, then applies the head
 cell lemma to the `[23,0]` sub-decomposition. -/
 private theorem zsFacts_get2_cell_eq_div {pieces : Vector Fp 4} {chunks : List ℕ}
-    {zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
-    (hPC : Halo2.Ironwood.Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
-    (hZs : Halo2.Ironwood.Sinsemilla.Chain.ZsFacts [24, 0, 23, 0] chunks zs) :
-    (HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
+    {zs : HVec (Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
+    (hPC : Sinsemilla.Chain.PieceChunks [24, 0, 23, 0] pieces chunks)
+    (hZs : Sinsemilla.Chain.ZsFacts [24, 0, 23, 0] chunks zs) :
+    (HVec.get (Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
       = (((pieces[2] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
   obtain ⟨-, -, -, -, hPCtail⟩ := pieceChunks_head_digits hPC
   obtain ⟨-, -, -, -, hPCtail2⟩ := pieceChunks_head_digits hPCtail
-  simp only [Halo2.Ironwood.Sinsemilla.Chain.ZsFacts] at hZs
+  simp only [Sinsemilla.Chain.ZsFacts] at hZs
   obtain ⟨-, -, hZsHeadC, -⟩ := hZs
   have hcell := zsFacts_head_cell_eq_div (n := 23) (by norm_num) (by norm_num) hPCtail2 hZsHeadC
   have ht2 : (pieces.tail.tail[0]'(by decide) : Fp) = pieces[2] :=
@@ -376,29 +375,29 @@ private theorem zsFacts_get2_cell_eq_div {pieces : Vector Fp 4} {chunks : List �
       (Vector.getElem_tail (v := pieces) (i := 1) (hi := by decide))
   exact ht2 ▸ hcell
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- The `z₁₃` cell of an honest head running-sum vector is `piece.val / 2^130`
 (`pieceZ piece 13`, with `K·13 = 130`). -/
 private theorem zsHonest_head_cell_eq_div {n : ℕ} {rest : List ℕ} (h13 : 13 ≤ n)
     {pieces : Vector Fp (n :: rest).length}
-    {zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths (n :: rest)) Fp}
+    {zs : HVec (Sinsemilla.Chain.zLengths (n :: rest)) Fp}
     (hZsHead : HVec.head zs = Vector.ofFn (fun r : Fin (n + 1) =>
-      Halo2.Ironwood.Sinsemilla.pieceZ pieces[0] r.val)) :
+      Sinsemilla.pieceZ pieces[0] r.val)) :
     (HVec.head zs)[13]'(Nat.lt_succ_of_le h13)
       = (((pieces[0] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
   rw [hZsHead, Vector.getElem_ofFn]
-  simp only [Halo2.Ironwood.Sinsemilla.pieceZ,
+  simp only [Sinsemilla.pieceZ,
     show K * 13 = 130 from by norm_num [K]]
 
-open Halo2.Ironwood.Specs.Sinsemilla in
+open Specs.Sinsemilla in
 /-- The `z₁₃` cell of the honest `c` running-sum vector (index 2 of `[24,0,23,0]`) is
 `c.val / 2^130`. -/
 private theorem zsHonest_get2_cell_eq_div {pieces : Vector Fp 4}
-    {zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
-    (hZs : Halo2.Ironwood.Sinsemilla.Chain.ZsHonest [24, 0, 23, 0] pieces zs) :
-    (HVec.get (Halo2.Ironwood.Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
+    {zs : HVec (Sinsemilla.Chain.zLengths [24, 0, 23, 0]) Fp}
+    (hZs : Sinsemilla.Chain.ZsHonest [24, 0, 23, 0] pieces zs) :
+    (HVec.get (Sinsemilla.Chain.zLengths [24, 0, 23, 0]) zs ⟨2, by decide⟩)[13]'(by decide)
       = (((pieces[2] : Fp).val / 2 ^ 130 : ℕ) : Fp) := by
-  simp only [Halo2.Ironwood.Sinsemilla.Chain.ZsHonest] at hZs
+  simp only [Sinsemilla.Chain.ZsHonest] at hZs
   obtain ⟨-, -, hZsHeadC, -⟩ := hZs
   have hcell := zsHonest_head_cell_eq_div (n := 23) (rest := [0]) (by norm_num)
     (pieces := pieces.tail.tail) hZsHeadC
@@ -436,13 +435,13 @@ deriving ProvableStruct
 /-- The output, parametrized over the running-sum list `ns` so its `eval` projection
 lemmas (`eval_cells`/`eval_zs`) are proved *generically* — stuck on the symbolic `ns` —
 and merely instantiated at the concrete `[24, 0, 23, 0]`. Proving them at the concrete list
-forces `ProvableStruct.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
+forces `ProvableStruct.Halo2.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
 structure OutputGen (ns : List ℕ) (F : Type) where
   cells : Cells F
-  zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns) F
+  zs : HVec (Sinsemilla.Chain.zLengths ns) F
 
 instance (ns : List ℕ) : ProvableStruct (OutputGen ns) where
-  components := [Cells, HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns)]
+  components := [Cells, HVec (Sinsemilla.Chain.zLengths ns)]
   toComponents := fun { cells, zs } => .cons cells (.cons zs .nil)
   fromComponents := fun (.cons cells (.cons zs .nil)) => { cells, zs }
 
@@ -452,7 +451,7 @@ generated): lets `simp` reduce `fromComponents` applications without going throu
 private match auxiliary, which no longer reduces at reducible transparency (4.30 bump). -/
 @[circuit_norm]
 theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
-    (cells : Cells F) (zs : HVec (Halo2.Ironwood.Sinsemilla.Chain.zLengths ns) F) :
+    (cells : Cells F) (zs : HVec (Sinsemilla.Chain.zLengths ns) F) :
     fromComponents (α := OutputGen ns) (F := F)
       (.cons cells (.cons zs .nil)) = { cells, zs } := rfl
 
@@ -468,9 +467,9 @@ theorem honest_pieces_facts (ak nk a b c d : Fp)
             + ((bitrange nk.val 0 5 : ℕ) : Fp) * 2 ^ 5)
     (hc : c = ((bitrange nk.val 5 240 : ℕ) : Fp))
     (hd : d = ((bitrange nk.val 245 9 : ℕ) : Fp) + ((bitrange nk.val 254 1 : ℕ) : Fp) * 2 ^ 9) :
-    Halo2.Ironwood.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] ∧
-    Halo2.Ironwood.Sinsemilla.Chain.honestChunks [24, 0, 23, 0] #v[a, b, c, d]
-      = Halo2.Ironwood.Specs.Sinsemilla.commitIvkChunks ak.val nk.val := by
+    Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] ∧
+    Sinsemilla.Chain.honestChunks [24, 0, 23, 0] #v[a, b, c, d]
+      = Specs.Sinsemilla.commitIvkChunks ak.val nk.val := by
   -- the four piece values, recast into the indexed `(divisor/modulus)` form the bridge wants
   have hbN : b = ((ak.val / 2 ^ 250 % 16 + (ak.val / 2 ^ 254 % 2) * 16 + (nk.val % 2 ^ 5) * 32
       : ℕ) : Fp) := by rw [hb]; simp only [bitrange, pow_zero, Nat.div_one]; push_cast; ring
@@ -506,8 +505,8 @@ theorem honest_pieces_facts (ak nk a b c d : Fp)
   have hdval : d.val < 2 ^ (K * 1) := by
     rw [hdN, ZMod.val_natCast_of_lt (lt_trans hdbound (by norm_num [PALLAS_BASE_CARD]))]
     simpa [K] using hdbound
-  have hbounds : Halo2.Ironwood.Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] := by
-    simp only [Halo2.Ironwood.Sinsemilla.Chain.PieceBounds]
+  have hbounds : Sinsemilla.Chain.PieceBounds [24, 0, 23, 0] #v[a, b, c, d] := by
+    simp only [Sinsemilla.Chain.PieceBounds]
     refine ⟨?_, ?_, ?_, ?_, trivial⟩
     · show a.val < _; exact haval
     · show b.val < _; exact hbval
@@ -584,4 +583,4 @@ private theorem commitIvkPieceValues_of_canonicity_spec (row : Canonicity.Input 
     simp only [bitrange]
     push_cast; ring
 
-end Halo2.Ironwood.CommitIvk
+end Zcash.Circuits.CommitIvk

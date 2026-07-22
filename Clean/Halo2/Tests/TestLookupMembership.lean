@@ -6,7 +6,9 @@ helper turns a lookup-membership existential + the `TableLoaded` usable-rows bou
 bound in one step. Acceptance-consumed in `LookupRangeCheck.short_range_check` soundness.
 -/
 
-namespace Halo2.Ironwood.LookupRangeCheck.Test
+namespace Zcash.Circuits.LookupRangeCheck.Test
+
+open Halo2
 
 -- the "two obtains + apply" pattern collapses to one `exact` on the helper.
 example {K : ℕ} {cfg : Config K} {env : Environment Fp} {v : Fp}
@@ -16,4 +18,4 @@ example {K : ℕ} {cfg : Config K} {env : Environment Fp} {v : Fp}
     v.val < 2 ^ K :=
   mem_usableRows_val_lt hTableLt hMem
 
-end Halo2.Ironwood.LookupRangeCheck.Test
+end Zcash.Circuits.LookupRangeCheck.Test

@@ -1,5 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [h_large : Fact (p > 2^33)]
 
@@ -26,7 +28,7 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 
 /-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
-private def bitsVal (a : Var (fields 32) (F p)) : Witgen.NExpr (F p) :=
+private def bitsVal (a : Var (fields 32) (F p)) : NExpr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 
@@ -308,8 +310,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow, Witgen.letN_def, Witgen.evalSteps,
-    Witgen.NExprOver.eval, circuit_norm] at h_env_z h_env_cout
+  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
   set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num

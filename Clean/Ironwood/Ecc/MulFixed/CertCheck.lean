@@ -13,9 +13,8 @@ consumes. Subtraction is encoded as `(a + P − b) % P`; no inversion or exponen
 appears — slopes are witnesses.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulFixed.Cert
+namespace Zcash.Circuits.Ecc.MulFixed.Cert
 
-open Halo2.Ironwood (Point Fp pallasA)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-- The Pallas base-field modulus (the checker's `ℕ` world). -/
@@ -95,7 +94,7 @@ theorem checkAdd_sound {px py qx qy l rx ry : ℕ}
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hpx, hpy⟩, hqx⟩, hqy⟩, hl⟩, hrx⟩, hry⟩, hpz⟩, hqz⟩, hne⟩,
     h1⟩, h2⟩, h3⟩ := h
   have hPle : ∀ {a : ℕ}, a < P → a ≤ P := fun h => Nat.le_of_lt h
-  apply Halo2.Ironwood.Point.add_of_witness (l := (l : Fp))
+  apply Point.add_of_witness (l := (l : Fp))
   · exact pointOf_ne_zero hpx hpy (by
       intro ⟨h1', h2'⟩
       simp [h1', h2'] at hpz)
@@ -131,7 +130,7 @@ theorem checkDouble_sound {px py l rx ry : ℕ}
     Bool.not_eq_true', Bool.and_eq_false_iff, beq_eq_false_iff_ne, ne_eq] at h
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hpx, hpy⟩, hl⟩, hrx⟩, hry⟩, hpz⟩, hyz⟩, h1⟩, h2⟩, h3⟩ := h
   have hPle : ∀ {a : ℕ}, a < P → a ≤ P := fun h => Nat.le_of_lt h
-  apply Halo2.Ironwood.Point.double_of_witness (l := (l : Fp))
+  apply Point.double_of_witness (l := (l : Fp))
   · exact pointOf_ne_zero hpx hpy (by
       intro ⟨h1', h2'⟩
       simp [h1', h2'] at hpz)
@@ -144,7 +143,7 @@ theorem checkDouble_sound {px py l rx ry : ℕ}
     rw [show ((3 * px * px % P : ℕ) : Fp) = ((3 * px * px : ℕ) : Fp) from cast_mod _]
       at this
     push_cast at this
-    rw [this, Halo2.Ironwood.pallasA]
+    rw [this, pallasA]
     ring
   · show ((rx : ℕ) : Fp) = (l : Fp) * (l : Fp) - ((px : ℕ) : Fp) - ((px : ℕ) : Fp)
     have := congrArg (Nat.cast (R := Fp)) h2
@@ -164,7 +163,7 @@ theorem checkDouble_sound {px py l rx ry : ℕ}
 
 namespace Chain
 
-open Halo2.Ironwood.Point
+open Point
 
 /-- Check a row tail: successive entries step by the fixed point `S`
 (`entry + S = next`, secant with witnessed slope). -/
@@ -189,8 +188,8 @@ def checkWindows (S : ℕ × ℕ) : List (List ((ℕ × ℕ) × ℕ)) → Bool
       | none => false
 
 theorem one_nsmul_point (p : Point Fp) : (1 : ℕ) • p = p := by
-  rw [Halo2.Ironwood.Point.nsmul_def]
-  show Halo2.Ironwood.Point.ofCoords
+  rw [Point.nsmul_def]
+  show Point.ofCoords
     (CompElliptic.CurveForms.ShortWeierstrass.add _ ((0 : ℕ) • p).coords p.coords) = p
   rw [show ((0 : ℕ) • p).coords = ((0 : Fp), (0 : Fp)) from rfl,
     CompElliptic.CurveForms.ShortWeierstrass.zero_add]
@@ -208,7 +207,7 @@ theorem checkRow_sound {B : Point Fp} (hB : B.OnCurve) {S : ℕ × ℕ} {s : ℕ
       intro prev a hprev h i hi
       simp only [checkRow, Bool.and_eq_true] at h
       have hr : pointOf r = (a + s) • B := by
-        rw [← Halo2.Ironwood.Point.nsmul_add_nsmul hB, ← hprev, ← hS]
+        rw [← Point.nsmul_add_nsmul hB, ← hprev, ← hS]
         exact (checkAdd_sound h.1).symm
       match i with
       | 0 => simpa using hr
@@ -227,7 +226,7 @@ theorem checkWindow_sound {B : Point Fp} (hB : B.OnCurve) {S : ℕ × ℕ} {s : 
       obtain ⟨p0, l0⟩ := e
       simp only [checkWindow, Bool.and_eq_true] at h
       have h0 : pointOf p0 = (2 * s) • B := by
-        rw [show 2 * s = s + s from by ring, ← Halo2.Ironwood.Point.nsmul_add_nsmul hB, ← hS]
+        rw [show 2 * s = s + s from by ring, ← Point.nsmul_add_nsmul hB, ← hS]
         exact (checkDouble_sound h.1).symm
       intro i hi
       match i with
@@ -279,7 +278,7 @@ theorem checkNeg_sound {tx ty rx ry : ℕ} (h : checkNeg tx ty rx ry = true) :
     -(pointOf (tx, ty)) = pointOf (rx, ry) := by
   simp only [checkNeg, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
   obtain ⟨⟨⟨⟨⟨htx, hty⟩, hrx⟩, hry⟩, hx⟩, hy⟩ := h
-  apply Halo2.Ironwood.Point.neg_of_witness
+  apply Point.neg_of_witness
   · show ((rx : ℕ) : Fp) = ((tx : ℕ) : Fp)
     rw [hx]
   · show ((ry : ℕ) : Fp) = -((ty : ℕ) : Fp)
@@ -287,25 +286,25 @@ theorem checkNeg_sound {tx ty rx ry : ℕ} (h : checkNeg tx ty rx ry = true) :
     rwa [cast_subm _ (Nat.le_of_lt hty), Nat.cast_zero, zero_sub] at this
 
 /-- Cancellation transport: if `p + q = 0` for valid points, `q = −p`. -/
-theorem eq_neg_of_add_eq_zero {p q : Halo2.Ironwood.Point Fp}
+theorem eq_neg_of_add_eq_zero {p q : Point Fp}
     (hp : p.Valid) (hq : q.Valid) (h : p + q = 0) : q = -p := by
-  have hsw := (Halo2.Ironwood.Point.ext_toSW_iff (Halo2.Ironwood.Point.valid_add hp hq)
-    Halo2.Ironwood.Point.valid_zero).mp h
-  rw [Halo2.Ironwood.Point.toSW_add hp hq, Halo2.Ironwood.Point.toSW_zero] at hsw
-  rw [Halo2.Ironwood.Point.ext_toSW_iff hq (Halo2.Ironwood.Point.valid_neg hp),
-    Halo2.Ironwood.Point.toSW_neg hp]
+  have hsw := (Point.ext_toSW_iff (Point.valid_add hp hq)
+    Point.valid_zero).mp h
+  rw [Point.toSW_add hp hq, Point.toSW_zero] at hsw
+  rw [Point.ext_toSW_iff hq (Point.valid_neg hp),
+    Point.toSW_neg hp]
   exact eq_neg_of_add_eq_zero_right hsw
 
 /-- `m • B = −(n • B)` whenever `n + m ≡ 0` mod the group order. -/
-theorem nsmul_eq_neg_nsmul {B : Halo2.Ironwood.Point Fp} (hB : B.OnCurve) {n m : ℕ}
+theorem nsmul_eq_neg_nsmul {B : Point Fp} (hB : B.OnCurve) {n m : ℕ}
     (h : (n + m) % CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD = 0) :
     m • B = -(n • B) := by
   have hz : (n + m) • B = 0 := by
-    rw [Halo2.Ironwood.Point.nsmul_eq_zero_iff hB]
+    rw [Point.nsmul_eq_zero_iff hB]
     exact Nat.dvd_of_mod_eq_zero h
-  rw [← Halo2.Ironwood.Point.nsmul_add_nsmul hB] at hz
-  exact eq_neg_of_add_eq_zero (Halo2.Ironwood.Point.valid_nsmul (.inl hB) n)
-    (Halo2.Ironwood.Point.valid_nsmul (.inl hB) m) hz
+  rw [← Point.nsmul_add_nsmul hB] at hz
+  exact eq_neg_of_add_eq_zero (Point.valid_nsmul (.inl hB) n)
+    (Point.valid_nsmul (.inl hB) m) hz
 
 /-- A row whose step point varies per entry: `prev + q_j = r_j` (the offset `T`-chain). -/
 def checkVarRow (prev : ℕ × ℕ) : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ) → Bool
@@ -313,7 +312,7 @@ def checkVarRow (prev : ℕ × ℕ) : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ)
   | (q, r, l) :: rest =>
       checkAdd prev.1 prev.2 q.1 q.2 l r.1 r.2 && checkVarRow r rest
 
-theorem checkVarRow_sound {B : Halo2.Ironwood.Point Fp} (hB : B.OnCurve)
+theorem checkVarRow_sound {B : Point Fp} (hB : B.OnCurve)
     (entries : List ((ℕ × ℕ) × (ℕ × ℕ) × ℕ)) :
     ∀ (prev : ℕ × ℕ) (c : ℕ) (f : ℕ → ℕ),
       pointOf prev = c • B →
@@ -328,7 +327,7 @@ theorem checkVarRow_sound {B : Halo2.Ironwood.Point Fp} (hB : B.OnCurve)
       intro prev c f hprev hf h j hj
       simp only [checkVarRow, Bool.and_eq_true] at h
       have hr : pointOf r = (c + f 0) • B := by
-        rw [← Halo2.Ironwood.Point.nsmul_add_nsmul hB, ← hprev,
+        rw [← Point.nsmul_add_nsmul hB, ← hprev,
           ← hf 0 (by simp)]
         exact (checkAdd_sound h.1).symm
       match j with
@@ -506,8 +505,8 @@ def certEntry (numLower : ℕ) (c : BaseCert) (w k : ℕ) : ℕ × ℕ :=
 open CompElliptic.Fields.Pasta (Fq PALLAS_SCALAR_CARD)
 
 theorem windowScalar_val_lower {w k : ℕ} (hw : w < 84) (hk : k < 8) :
-    (Halo2.Ironwood.Ecc.MulFixed.windowScalar w k).val = (k + 2) * 8 ^ w := by
-  rw [Halo2.Ironwood.Ecc.MulFixed.windowScalar, if_neg (by omega)]
+    (Ecc.MulFixed.windowScalar w k).val = (k + 2) * 8 ^ w := by
+  rw [Ecc.MulFixed.windowScalar, if_neg (by omega)]
   have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
     push_cast
     ring
@@ -519,24 +518,24 @@ theorem windowScalar_val_lower {w k : ℕ} (hw : w < 84) (hk : k < 8) :
         norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 theorem offsetAcc_eq_sum :
-    Halo2.Ironwood.Ecc.MulFixed.offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
-  rw [Halo2.Ironwood.Ecc.MulFixed.offsetAcc]
+    Ecc.MulFixed.offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
+  rw [Ecc.MulFixed.offsetAcc]
   apply Finset.sum_congr rfl
   intro j _
   rw [pow_succ' 2 (3 * j), pow_mul]
   norm_num
 
-open Halo2.Ironwood.Point in
+open Point in
 /-- The full 85-window bridge: a passed `checkBase 84` certificate's entries ARE the
 `windowPoint`s of its base. -/
 theorem cert_windowPoint_eq {c : BaseCert}
     (hB : (pointOf c.base).OnCurve) (h : checkBase 84 c = true) :
     ∀ w, (hw : w < 85) → ∀ k, (hk : k < 8) →
       pointOf (certEntry 84 c w k)
-        = Halo2.Ironwood.Ecc.MulFixed.windowPoint (pointOf c.base) w k := by
+        = Ecc.MulFixed.windowPoint (pointOf c.base) w k := by
   obtain ⟨hlow, hmsb⟩ := checkBase_sound (by omega) hB h
   intro w hw k hk
-  rw [Halo2.Ironwood.Ecc.MulFixed.windowPoint]
+  rw [Ecc.MulFixed.windowPoint]
   by_cases hw84 : w < 84
   · obtain ⟨hw', hk', hval⟩ := hlow w hw84 k hk
     rw [certEntry, if_pos (show w < 84 from hw84), getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
@@ -545,7 +544,7 @@ theorem cert_windowPoint_eq {c : BaseCert}
     subst hw'
     obtain ⟨hk', hval⟩ := hmsb k hk
     rw [certEntry, if_neg (by omega : ¬ 84 < 84), getElem!_pos c.msb k hk', hval]
-    apply Halo2.Ironwood.Point.nsmul_congr hB
+    apply Point.nsmul_congr hB
     rw [← ZMod.natCast_eq_natCast_iff]
     set S : ℕ := ∑ j ∈ Finset.range 84, 2 * 8 ^ j with hSdef
     have hSle : S % PALLAS_SCALAR_CARD ≤ PALLAS_SCALAR_CARD :=
@@ -557,9 +556,9 @@ theorem cert_windowPoint_eq {c : BaseCert}
       push_cast
       ring
     rw [hcast]
-    have hws : Halo2.Ironwood.Ecc.MulFixed.windowScalar 84 k
+    have hws : Ecc.MulFixed.windowScalar 84 k
         = (k : Fq) * 8 ^ 84 - (S : Fq) := by
-      rw [Halo2.Ironwood.Ecc.MulFixed.windowScalar, if_pos rfl, offsetAcc_eq_sum, hSdef]
+      rw [Ecc.MulFixed.windowScalar, if_pos rfl, offsetAcc_eq_sum, hSdef]
     rw [← hws]
     exact (ZMod.natCast_rightInverse _).symm
 
@@ -570,7 +569,7 @@ def evalInterp (cs : List ℕ) (k : ℕ) : ℕ :=
   cs.foldr (fun ci acc => (ci + k * acc) % P) 0
 
 /-- `CoordsParams` from dumped `ℕ` literals (`z`, then the 8 coefficients). -/
-def mkParams (z : ℕ) (cs : List ℕ) : Halo2.Ironwood.Ecc.MulFixed.CoordsParams Fp :=
+def mkParams (z : ℕ) (cs : List ℕ) : Ecc.MulFixed.CoordsParams Fp :=
   { z := (z : Fp), lagrange0 := (cs[0]! : Fp), lagrange1 := (cs[1]! : Fp),
     lagrange2 := (cs[2]! : Fp), lagrange3 := (cs[3]! : Fp),
     lagrange4 := (cs[4]! : Fp), lagrange5 := (cs[5]! : Fp),
@@ -578,9 +577,9 @@ def mkParams (z : ℕ) (cs : List ℕ) : Halo2.Ironwood.Ecc.MulFixed.CoordsParam
 
 theorem evalInterp_cast (z c0 c1 c2 c3 c4 c5 c6 c7 k : ℕ) :
     ((evalInterp [c0, c1, c2, c3, c4, c5, c6, c7] k : ℕ) : Fp)
-      = Halo2.Ironwood.Ecc.MulFixed.interpolate
+      = Ecc.MulFixed.interpolate
           (mkParams z [c0, c1, c2, c3, c4, c5, c6, c7]) (k : Fp) := by
-  simp only [evalInterp, List.foldr, cast_mod, Halo2.Ironwood.Ecc.MulFixed.interpolate,
+  simp only [evalInterp, List.foldr, cast_mod, Ecc.MulFixed.interpolate,
     mkParams, List.getElem!_cons_zero, List.getElem!_cons_succ]
   push_cast [cast_mod]
   ring
@@ -680,7 +679,7 @@ theorem checkNonSquare_sound {x : ℕ} (h : checkNonSquare x = true) :
   rw [hP2.symm] at hcast
   rw [this] at hcast
   have : (2 : Fp) = 0 := by linear_combination -hcast
-  exact Halo2.Ironwood.two_ne_zero this
+  exact two_ne_zero this
 
 /-- On-curve check for a `ℕ` point (`y² = x³ + 5`). -/
 def checkOnCurve (x y : ℕ) : Bool :=
@@ -693,8 +692,8 @@ theorem checkOnCurve_sound {x y : ℕ} (h : checkOnCurve x y = true) :
   have := congrArg (Nat.cast (R := Fp)) hc
   rw [cast_mulm, cast_mod] at this
   push_cast [cast_mulm] at this
-  show ((y : ℕ) : Fp) ^ 2 = ((x : ℕ) : Fp) ^ 3 + Halo2.Ironwood.pallasB
-  rw [Halo2.Ironwood.pallasB]
+  show ((y : ℕ) : Fp) ^ 2 = ((x : ℕ) : Fp) ^ 3 + pallasB
+  rw [pallasB]
   rw [show ((y : ℕ) : Fp) ^ 2 = ((y : ℕ) : Fp) * ((y : ℕ) : Fp) from sq _]
   rw [this]
   ring
@@ -733,7 +732,7 @@ def checkFull (numLower : ℕ) (c : FullCert) : Bool :=
 theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     (h : checkFull numLower c = true) :
     ∀ (w : ℕ), (hw : w < numLower + 1) → ∀ (k : ℕ), (hk : k < 8) →
-      (Halo2.Ironwood.Ecc.MulFixed.interpolate (mkParams c.zs[w]! c.coeffs[w]!) (k : Fp)
+      (Ecc.MulFixed.interpolate (mkParams c.zs[w]! c.coeffs[w]!) (k : Fp)
           = ((entryX numLower c.toBaseCert w k : ℕ) : Fp)) ∧
       (((c.us[w]!)[k]! : Fp) * ((c.us[w]!)[k]! : Fp)
           = ((entryY numLower c.toBaseCert w k : ℕ) : Fp) + ((c.zs[w]! : ℕ) : Fp)) ∧
@@ -781,10 +780,10 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     have := checkNonSquare_sound hnsk
     rwa [cast_subm _ (Nat.le_of_lt (of_decide_eq_true hylt))] at this
 
-open Halo2.Ironwood.Point in
+open Point in
 /-- Construct a proof-carrying `FixedBase` (85 windows) from a passed certificate. -/
 def ofCert (c : FullCert) (h : checkFull 84 c = true) :
-    Halo2.Ironwood.Ecc.MulFixed.FixedBase where
+    Ecc.MulFixed.FixedBase where
   point := pointOf c.base
   onCurve := by
     have h' := h
@@ -841,8 +840,8 @@ def ofCert (c : FullCert) (h : checkFull 84 c = true) :
 /-! ### The Short (22-window) variant -/
 
 theorem short_windowScalar_val_lower {w k : ℕ} (hw : w < 21) (hk : k < 8) :
-    (Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar w k).val = (k + 2) * 8 ^ w := by
-  rw [Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar, if_neg (by omega)]
+    (Ecc.MulFixed.Short.windowScalar w k).val = (k + 2) * 8 ^ w := by
+  rw [Ecc.MulFixed.Short.windowScalar, if_neg (by omega)]
   have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
     push_cast
     ring
@@ -853,17 +852,17 @@ theorem short_windowScalar_val_lower {w k : ℕ} (hw : w < 21) (hk : k < 8) :
     _ < PALLAS_SCALAR_CARD := by
         norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
-open Halo2.Ironwood.Point in
+open Point in
 /-- The 22-window bridge: a passed `checkBase 21` certificate's entries ARE the Short
 `windowPoint`s of its base. -/
 theorem cert_windowPoint_eq_short {c : BaseCert}
     (hB : (pointOf c.base).OnCurve) (h : checkBase 21 c = true) :
     ∀ (w : ℕ), (hw : w < 22) → ∀ (k : ℕ), (hk : k < 8) →
       pointOf (certEntry 21 c w k)
-        = Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint (pointOf c.base) w k := by
+        = Ecc.MulFixed.Short.windowPoint (pointOf c.base) w k := by
   obtain ⟨hlow, hmsb⟩ := checkBase_sound (by omega) hB h
   intro w hw k hk
-  rw [Halo2.Ironwood.Ecc.MulFixed.Short.windowPoint]
+  rw [Ecc.MulFixed.Short.windowPoint]
   by_cases hw21 : w < 21
   · obtain ⟨hw', hk', hval⟩ := hlow w hw21 k hk
     rw [certEntry, if_pos (show w < 21 from hw21), getElem!_pos c.rows w hw',
@@ -872,7 +871,7 @@ theorem cert_windowPoint_eq_short {c : BaseCert}
     subst hw'
     obtain ⟨hk', hval⟩ := hmsb k hk
     rw [certEntry, if_neg (by omega : ¬ 21 < 21), getElem!_pos c.msb k hk', hval]
-    apply Halo2.Ironwood.Point.nsmul_congr hB
+    apply Point.nsmul_congr hB
     rw [← ZMod.natCast_eq_natCast_iff]
     set S : ℕ := ∑ j ∈ Finset.range 21, 2 * 8 ^ j with hSdef
     have hSle : S % PALLAS_SCALAR_CARD ≤ PALLAS_SCALAR_CARD :=
@@ -885,17 +884,17 @@ theorem cert_windowPoint_eq_short {c : BaseCert}
       push_cast
       ring
     rw [hcast]
-    have hws : Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar 21 k
+    have hws : Ecc.MulFixed.Short.windowScalar 21 k
         = (k : Fq) * 8 ^ 21 - (S : Fq) := by
-      rw [Halo2.Ironwood.Ecc.MulFixed.Short.windowScalar, if_pos rfl,
-        Halo2.Ironwood.Ecc.MulFixed.Short.offsetAcc_eq, hSdef]
+      rw [Ecc.MulFixed.Short.windowScalar, if_pos rfl,
+        Ecc.MulFixed.Short.offsetAcc_eq, hSdef]
     rw [← hws]
     exact (ZMod.natCast_rightInverse _).symm
 
-open Halo2.Ironwood.Point in
+open Point in
 /-- Construct a proof-carrying `Short.FixedBase` (22 windows) from a passed certificate. -/
 def ofCertShort (c : FullCert) (h : checkFull 21 c = true) :
-    Halo2.Ironwood.Ecc.MulFixed.Short.FixedBase where
+    Ecc.MulFixed.Short.FixedBase where
   point := pointOf c.base
   onCurve := by
     have h' := h
@@ -935,4 +934,4 @@ end Chain
 
 export Chain (BaseCert FullCert checkBase checkFull ofCert ofCertShort)
 
-end Halo2.Ironwood.Ecc.MulFixed.Cert
+end Zcash.Circuits.Ecc.MulFixed.Cert

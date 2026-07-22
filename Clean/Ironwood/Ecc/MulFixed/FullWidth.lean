@@ -16,14 +16,13 @@ Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`.
 -- helpers below and times out; disabled file-wide (as in `BaseFieldElem.lean`).
 set_option linter.constructorNameAsVariable false
 
-namespace Halo2.Ironwood.Ecc.MulFixed.FullWidth
+namespace Zcash.Circuits.Ecc.MulFixed.FullWidth
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Ecc.MulFixed
+open Halo2
+open Ecc.MulFixed
   (coordsCheck fixedConstantsLoop processWindow FixedBaseData)
-open Halo2.Ironwood.DecomposeRunningSum (rangeCheckExpr)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open DecomposeRunningSum (rangeCheckExpr)
+open Ecc.MulFixed (FixedBase)
 
 structure Config where
   -- Selector for the "Full-width fixed-base scalar mul" gate.
@@ -69,12 +68,12 @@ def hintWindowVal (env : Placed ProverEnvironment Fp) (windows : Vector (Witgen.
 
 def xPWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
-    #v[((Vector.ofFn fun k : Fin 8 => (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w k.val).x)[
+    #v[((Vector.ofFn fun k : Fin 8 => (Ecc.MulFixed.windowPoint B.point w k.val).x)[
       hintWindowVal env windows w]!)]
 
 def yPWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
   .native fun env =>
-    #v[((Vector.ofFn fun k : Fin 8 => (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w k.val).y)[
+    #v[((Vector.ofFn fun k : Fin 8 => (Ecc.MulFixed.windowPoint B.point w k.val).y)[
       hintWindowVal env windows w]!)]
 
 def uWitH (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) : WitgenIR Fp 1 :=
@@ -156,8 +155,8 @@ private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : 
                       cfg.superConfig.addConfig.yP } } := by
   rw [← innerRegion_output_acc, ← innerRegion_output_mulB]
 
-derive_contract_bridges addinc := Halo2.Ironwood.Ecc.AddIncomplete.add
-derive_contract_bridges addc := Halo2.Ironwood.Ecc.Add.add
+derive_contract_bridges addinc := Ecc.AddIncomplete.add
+derive_contract_bridges addc := Ecc.Add.add
 
 /-- Required shared-config equalities: `add_incomplete.x_p/y_p` are `add.x_p/y_p`. -/
 def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
@@ -184,9 +183,9 @@ def InnerSpec (B : FixedBase) (_ : Value unit Fp) (out : Value InnerOut Fp)
     (ws : Vector Fp 85) : Prop :=
   ∃ ks : ℕ → ℕ, (∀ w, w < 85 → ks w < 8) ∧
     (∀ w : Fin 85, ws[w.val] = ((ks w.val : ℕ) : Fp)) ∧
-    out.acc = { x := ((Halo2.Ironwood.Ecc.MulFixed.partialSum ks 83) • B.point).x,
-                y := ((Halo2.Ironwood.Ecc.MulFixed.partialSum ks 83) • B.point).y } ∧
-    out.mulB = Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (ks 84)
+    out.acc = { x := ((Ecc.MulFixed.partialSum ks 83) • B.point).x,
+                y := ((Ecc.MulFixed.partialSum ks 83) • B.point).y } ∧
+    out.mulB = Ecc.MulFixed.windowPoint B.point 84 (ks 84)
 
 /-- Honest-prover precondition: trivial — the window programs the bundle instantiates are
 3-bit by construction (`scalarWindows`), so the digit bound is proved, not assumed
@@ -200,10 +199,10 @@ exit cells hold the ladder values at those digits. -/
 def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
     (out : ProverValue InnerOut Fp) (ws : Vector Fp 85) (_ : ProverHint Fp) : Prop :=
   (∀ t : ℕ, t < 85 → (ws[t]!).val < 8) ∧
-  out.acc.x = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).x ∧
-  out.acc.y = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).y ∧
-  out.mulB.x = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).x ∧
-  out.mulB.y = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).y
+  out.acc.x = (Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).x ∧
+  out.acc.y = (Ecc.MulFixed.partialSum (fun t => (ws[t]!).val) 83 • B.point).y ∧
+  out.mulB.x = (Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).x ∧
+  out.mulB.y = (Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).y
 
 /-- The elaborated-metadata instance for the inner region's synthesize lambda, with the
 output cells in explicit reduced form (`innerOutCells`) — computing the default output
@@ -238,11 +237,11 @@ private theorem fw_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
     ∀ w : Fin 85,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w.val
+        = (Ecc.MulFixed.windowPoint B.point w.val
             (hintWindowVal env windows w.val)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w.val
+        = (Ecc.MulFixed.windowPoint B.point w.val
             (hintWindowVal env windows w.val)).y ∧
       env.env.advice cfg.superConfig.u
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
@@ -291,18 +290,18 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
         85).operations self) ∧
     (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+      = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
           • B.point).x ∧
      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+      = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
           • B.point).y ∧
      env.env.advice cfg.superConfig.addConfig.xP
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
+      = (Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
      env.env.advice cfg.superConfig.addConfig.yP
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y) := by
+      = (Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y) := by
   have hPW := fw_windows_honest B cfg offset self env windows hWchain
   have hks_lt : ∀ t, hintWindowVal env windows t < 8 :=
     fun t => Nat.mod_lt _ (by norm_num)
@@ -376,11 +375,11 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
   have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 83 →
       env.env.advice cfg.superConfig.addIncompleteConfig.xQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
+        = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
             • B.point).x ∧
       env.env.advice cfg.superConfig.addIncompleteConfig.yQR
           ((env.place self + (offset + j + 1) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
+        = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) j
             • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
@@ -389,18 +388,18 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+      = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
           • B.point).x ∧
       env.env.advice cfg.superConfig.addIncompleteConfig.yQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
+      = (Ecc.MulFixed.partialSum (fun t => hintWindowVal env windows t) 83
           • B.point).y ∧
       env.env.advice cfg.superConfig.addConfig.xP
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
+      = (Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
         ((env.place self + (offset + 84) : ℕ) : ℤ)
-      = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y := by
+      = (Ecc.MulFixed.windowPoint B.point 84 (hintWindowVal env windows 84)).y := by
     have h83 := hInv 83 (by norm_num) le_rfl
     rw [show offset + 83 + 1 = offset + 84 from by omega] at h83
     obtain ⟨hx84', hy84', -⟩ := hPW ⟨84, by norm_num⟩
@@ -423,19 +422,19 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
     rw [show ((⟨1, by norm_num⟩ : Fin 85) : ℕ) = 1 from rfl] at hp1x hp1y
     rw [show ((⟨0, by norm_num⟩ : Fin 85) : ℕ) = 0 from rfl,
       show offset + 0 = offset from by omega] at hp0x hp0y
-    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar 1
+    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.windowScalar 1
       (hintWindowVal env windows 1)).val := ⟨_, rfl⟩
-    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar 0
+    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.windowScalar 0
       (hintWindowVal env windows 0)).val := ⟨_, rfl⟩
     have ht1 : t1 = (hintWindowVal env windows 1 + 2) * 8 ^ 1 := by
       rw [ht1_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 1)
+      exact Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 1)
     have hs0 : s0 = (hintWindowVal env windows 0 + 2) * 8 ^ 0 := by
       rw [hs0_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)
-    have hwp1 : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 1
+      exact Ecc.MulFixed.windowScalar_val (by norm_num) (hks_lt 0)
+    have hwp1 : Ecc.MulFixed.windowPoint B.point 1
         (hintWindowVal env windows 1) = t1 • B.point := by rw [ht1_def]; rfl
-    have hwp0 : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 0
+    have hwp0 : Ecc.MulFixed.windowPoint B.point 0
         (hintWindowVal env windows 0) = s0 • B.point := by rw [hs0_def]; rfl
     rw [hwp1] at hp1x hp1y
     rw [hwp0] at hp0x hp0y
@@ -470,24 +469,24 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
     have hih := hInv (i.val + 1) (by omega) (by omega)
     rw [show offset + (i.val + 1) + 1 = offset + 2 + i.val from by omega] at hih
     obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
-        t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar (i.val + 2)
+        t = (Ecc.MulFixed.windowScalar (i.val + 2)
           (hintWindowVal env windows (i.val + 2))).val := ⟨_, rfl⟩
     obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
-        S = Halo2.Ironwood.Ecc.MulFixed.partialSum
+        S = Ecc.MulFixed.partialSum
           (fun t => hintWindowVal env windows t) (i.val + 1) := ⟨_, rfl⟩
     have hval : t = (hintWindowVal env windows (i.val + 2) + 2) * 8 ^ (i.val + 2) := by
       rw [ht_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
-    have hwp : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point (i.val + 2)
+      exact Ecc.MulFixed.windowScalar_val (by omega) (hks_lt _)
+    have hwp : Ecc.MulFixed.windowPoint B.point (i.val + 2)
         (hintWindowVal env windows (i.val + 2)) = t • B.point := by
       rw [ht_def]; rfl
     rw [hwp] at hpx hpy
     rw [← hS_def] at hih
     have hS_lt : S < 2 * 8 ^ (i.val + 2) := by
       rw [hS_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
+      exact Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
     have hS_pos : 0 < S := by
-      rw [hS_def]; exact Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _
+      rw [hS_def]; exact Ecc.MulFixed.partialSum_pos _ _
     obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
       MulFixed.step_bounds (hks_lt (i.val + 2)) hS_lt hS_pos (by omega)
     rw [← hval] at hb1 hb2 hb3 hb5
@@ -532,7 +531,7 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
   · -- the witness loop's 85 gate enables
     simp only [witnessScalarLoop, fullWidthGate, MulFixed.coordsCheck,
       MulFixed.eval_interpolatedX,
-      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+      DecomposeRunningSum.eval_rangeCheckExpr,
       circuit_norm, mul_one, one_mul]
     intro i
     obtain ⟨hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hWfix i
@@ -540,9 +539,9 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
     simp only [show B.toData.params = B.params from rfl] at hL6 hL7 hZf
     obtain ⟨hpx, hpy, hpu⟩ := hPW i
     have hdig : hintWindowVal env windows i.val < 8 := Nat.mod_lt _ (by norm_num)
-    have hxi : (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point i.val
+    have hxi : (Ecc.MulFixed.windowPoint B.point i.val
           (hintWindowVal env windows i.val)).x
-        = Halo2.Ironwood.Ecc.MulFixed.interpolate (B.params i.val)
+        = Ecc.MulFixed.interpolate (B.params i.val)
             ((hintWindowVal env windows i.val : ℕ) : Fp) :=
       (B.interpolate_eq i.val i.isLt _ hdig).symm
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -561,17 +560,17 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
     · -- on-curve
       rw [hpx, hpy]
       have hoc := B.windowPoint_onCurve (w := i.val) hdig
-      unfold Halo2.Ironwood.Point.OnCurve at hoc
+      unfold Point.OnCurve at hoc
       linear_combination hoc
     · -- window range check
       rw [hWin i]
-      exact (Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
-        ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
+      exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
+        ((DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
           ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
   · -- the fixed-constants loop: the same gate equations + the fixed-cell clauses
     simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
       fullWidthGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
-      Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+      DecomposeRunningSum.eval_rangeCheckExpr,
       circuit_norm, mul_one, one_mul]
     intro i
     obtain ⟨hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hWfix i
@@ -579,9 +578,9 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
     simp only [show B.toData.params = B.params from rfl] at hL6 hL7 hZf
     obtain ⟨hpx, hpy, hpu⟩ := hPW i
     have hdig : hintWindowVal env windows i.val < 8 := Nat.mod_lt _ (by norm_num)
-    have hxi : (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point i.val
+    have hxi : (Ecc.MulFixed.windowPoint B.point i.val
           (hintWindowVal env windows i.val)).x
-        = Halo2.Ironwood.Ecc.MulFixed.interpolate (B.params i.val)
+        = Ecc.MulFixed.interpolate (B.params i.val)
             ((hintWindowVal env windows i.val : ℕ) : Fp) :=
       (B.interpolate_eq i.val i.isLt _ hdig).symm
     refine ⟨⟨?_, ?_, ?_, ?_⟩, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩
@@ -600,12 +599,12 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
     · -- on-curve
       rw [hpx, hpy]
       have hoc := B.windowPoint_onCurve (w := i.val) hdig
-      unfold Halo2.Ironwood.Point.OnCurve at hoc
+      unfold Point.OnCurve at hoc
       linear_combination hoc
     · -- window range check
       rw [hWin i]
-      exact (Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
-        ((Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
+      exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mpr
+        ((DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mpr
           ⟨hintWindowVal env windows i.val, hdig, rfl⟩)
 
 /-- The elaborated output projection, reduced (`rfl` via `innerElab`). -/
@@ -629,7 +628,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
     ⟨⟨place, env⟩, rfl, rfl⟩
   obtain ⟨-, hFixed, hChain⟩ := hc
   -- circuit_proof_start unfolded `innerRegion` in `h_output`; it is defeq to the reduced cells.
-  change ProvableStruct.eval env.place env.env (innerOutCells cfg offset self)
+  change ProvableStruct.Halo2.eval env.place env.env (innerOutCells cfg offset self)
     = { acc := output_acc, mulB := output_mulB } at h_output
   simp only [innerOutCells] at h_output
   provable_type_simp
@@ -638,7 +637,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
   -- ── the per-row gate + Lagrange-fixed rows ──
   simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
     fullWidthGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
-    Halo2.Ironwood.DecomposeRunningSum.eval_rangeCheckExpr,
+    DecomposeRunningSum.eval_rangeCheckExpr,
     circuit_norm, mul_one, one_mul] at hFixed
   -- ── the 3-bit digits, from the per-row window range checks ──
   have hdig : ∀ w : Fin 85, ∃ k : ℕ, k < 8 ∧
@@ -646,8 +645,8 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         ((env.place self + (offset + w.val) : ℕ) : ℤ) = ((k : ℕ) : Fp) := by
     intro w
     obtain ⟨⟨-, -, -, hRange⟩, -⟩ := hFixed w
-    exact (Halo2.Ironwood.DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mp
-      ((Halo2.Ironwood.Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mp hRange)
+    exact (DecomposeRunningSum.inRange_iff_exists_lt 8 (by norm_num) _).mp
+      ((Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 8 _).mp hRange)
   choose kf hkf_lt hkf_eq using hdig
   obtain ⟨ks, hks_def⟩ : ∃ ks : ℕ → ℕ,
       ks = fun t => if h : t < 85 then kf ⟨t, h⟩ else 0 := ⟨_, rfl⟩
@@ -669,10 +668,10 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
   have hWP : ∀ w : Fin 85,
       env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).x ∧
+        = (Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).x ∧
       env.env.advice cfg.superConfig.addConfig.yP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).y := by
+        = (Ecc.MulFixed.windowPoint B.point w.val (ks w.val)).y := by
     intro w
     have hRow := hFixed w
     obtain ⟨⟨hIx, hUy, hCrv, -⟩, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hRow
@@ -681,7 +680,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
     rw [hkeq w] at hIx
     have hxP : env.env.advice cfg.superConfig.addConfig.xP
           ((env.place self + (offset + w.val) : ℕ) : ℤ)
-        = Halo2.Ironwood.Ecc.MulFixed.interpolate (B.params w.val)
+        = Ecc.MulFixed.interpolate (B.params w.val)
             ((ks w.val : ℕ) : Fp) := by
       rw [← sub_eq_zero.mp hIx]
       apply MulFixed.interpolate_congr_params <;>
@@ -689,7 +688,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         first
         | exact hL0 | exact hL1 | exact hL2 | exact hL3
         | exact hL4 | exact hL5 | exact hL6 | exact hL7
-    have hspec : Halo2.Ironwood.Ecc.MulFixed.Coords.Spec (B.params w.val)
+    have hspec : Ecc.MulFixed.Coords.Spec (B.params w.val)
         { window := ((ks w.val : ℕ) : Fp),
           xP := env.env.advice cfg.superConfig.addConfig.xP
             ((env.place self + (offset + w.val) : ℕ) : ℤ),
@@ -776,13 +775,13 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
     rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
       show offset + 83 + 1 = offset + 84 from by omega] at hI83
     rw [← hOax, ← hOay]
-    rcases hP : Halo2.Ironwood.Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩
+    rcases hP : Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩
     rw [hP] at hI83
     rw [hI83.1, hI83.2]
   · -- mulB = windowPoint 84 k₈₄  (the MSB coords row)
     obtain ⟨hwx, hwy⟩ := hWP ⟨84, by norm_num⟩
     rw [← hOmx, ← hOmy]
-    rcases hW : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (ks 84) with ⟨wx, wy⟩
+    rcases hW : Ecc.MulFixed.windowPoint B.point 84 (ks 84) with ⟨wx, wy⟩
     rw [show ((⟨84, by norm_num⟩ : Fin 85) : ℕ) = 84 from rfl, hW] at hwx hwy
     rw [hwx, hwy]
 
@@ -806,21 +805,29 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
   obtain ⟨hXPeq, hYPeq⟩ := _hE
   -- the window cells hold the hint digits (the witness loop's assign clauses).
   -- NB `have hW := hWwsl` (a chunk-typed copy) whnf-storms; peel in place.
+  -- Land the assigned advice on the hint program's `MOver.eval` atom, and STOP there:
+  -- run circuit_norm with `eval_toIRScalar` erased (leaves the `toIRScalar _ .eval`
+  -- form, since `MOver.eval` never appears to be unfolded), then apply `eval_toIRScalar`
+  -- alone. The honest-value facts below (`hbound`/`hintWindowVal`) are atom-spelled and
+  -- meet it directly. (The general high-level path is the follow-up discriminating simproc.)
   simp only [witnessScalarLoop, circuit_norm, mul_one] at hWwsl
-  -- `eval_toIRScalar` (circuit_norm) already lands the assigned advice on the hint
-  -- program's `MOver.eval` — `hWwsl` IS the high-level fact
   have hWwslM := hWwsl
-  -- the honest `< 8` bound on the advice reads, from the program bound
+  -- TEMPORARY (pending the follow-up discriminating simproc): with `eval` reducing
+  -- again, `hWwslM` lands at the reduced program-run spelling, so bridge the honest
+  -- facts (atom-spelled `hbound`/`hintWindowVal`) to that same run form via
+  -- `circuit_norm`. The high-level path keeps `MOver.eval env <hint>` an atom.
   have hPA' : ∀ w : Fin 85, (env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)).val < 8 := by
     intro w
     rw [hWwslM w]
-    exact hbound env w
+    have hb := hbound env w
+    simp only [circuit_norm] at hb
+    exact hb
   have hWin : ∀ w : Fin 85, env.env.advice cfg.superConfig.window
       ((env.place self + (offset + w.val) : ℕ) : ℤ)
     = ((hintWindowVal env windows w.val : ℕ) : Fp) := by
     intro w
-    simp only [hintWindowVal]
+    simp only [hintWindowVal, circuit_norm]
     rw [hWwslM w, Nat.mod_eq_of_lt (by rw [← hWwslM w]; exact hPA' w)]
     exact (ZMod.natCast_zmod_val _).symm
   -- the trailing `pure` region auto-discharged, so the constraint block is the three loops only.
@@ -833,7 +840,7 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
       exact (fw_completeness_chain B cfg offset self env windows hWchain
         hXPeq hYPeq).1
   · -- the honest-prover contract (`InnerProverSpec`)
-    change ProvableStruct.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
+    change ProvableStruct.Halo2.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
       = _ at h_output
     simp only [innerOutCells] at h_output
     provable_type_simp
@@ -894,13 +901,13 @@ theorem scalarWindows_eval_lt (scalar : Var UnconstrainedNat Fp)
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
 /-- The scalar read off the 85 window cells (the constructive extractor). -/
-def windowsScalar (ws : Vector Fp 85) : Halo2.Ironwood.Fq :=
-  ((∑ w ∈ Finset.range 85, (ws[w]!).val * 8 ^ w : ℕ) : Halo2.Ironwood.Fq)
+def windowsScalar (ws : Vector Fp 85) : Fq :=
+  ((∑ w ∈ Finset.range 85, (ws[w]!).val * 8 ^ w : ℕ) : Fq)
 
 /-- The top-level extraction data: the window cells and the scalar they encode
 (a named def keeps the pair opaque during proof setup). -/
 def fwExtract (cfg : Config) (i₀ : RegionIndex) (env : Placed Environment Fp) :
-    Vector Fp 85 × Halo2.Ironwood.Fq :=
+    Vector Fp 85 × Fq :=
   let ws := eval env (windowCells cfg 0 i₀)
   (ws, windowsScalar ws)
 
@@ -938,7 +945,7 @@ def circuit (B : FixedBase) :
 
   Assumptions _ := True
 
-  Witness := fun F => Vector F 85 × Halo2.Ironwood.Fq
+  Witness := fun F => Vector F 85 × Fq
   extract cfg _ i₀ env := fwExtract cfg i₀ env
 
   Spec _ output s := output = s.2 • B
@@ -967,18 +974,18 @@ def circuit (B : FixedBase) :
     have hAdd := region_1
     -- ── the honest scalars, opaque ──
     obtain ⟨t84, ht84_def⟩ : ∃ t : ℕ,
-        t = (Halo2.Ironwood.Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
-    have hwp84 : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84 (ks 84) = t84 • B.point := by
+        t = (Ecc.MulFixed.windowScalar 84 (ks 84)).val := ⟨_, rfl⟩
+    have hwp84 : Ecc.MulFixed.windowPoint B.point 84 (ks 84) = t84 • B.point := by
       rw [ht84_def]; rfl
-    obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = Halo2.Ironwood.Ecc.MulFixed.partialSum ks 83 := ⟨_, rfl⟩
+    obtain ⟨S83, hS83_def⟩ : ∃ S : ℕ, S = Ecc.MulFixed.partialSum ks 83 := ⟨_, rfl⟩
     have hS83_lt : S83 < 2 * 8 ^ 84 := by
       rw [hS83_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hks_lt' j (by omega))
+      exact Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hks_lt' j (by omega))
     have hS83_pos : 0 < S83 := by
       rw [hS83_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _
+      exact Ecc.MulFixed.partialSum_pos _ _
     have hS83_card : S83 < CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD :=
-      Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS83_lt (by norm_num)
+      Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS83_lt (by norm_num)
     have hOnP : (t84 • B.point).OnCurve := by
       rw [← hwp84]
       exact B.windowPoint_onCurve (hks_lt' 84 (by norm_num))
@@ -986,17 +993,17 @@ def circuit (B : FixedBase) :
     obtain ⟨-, hOutEq⟩ := hAdd ⟨by rw [hMulB, hwp84]; exact Or.inl hOnP,
       by rw [hAcc, ← hS83_def]; exact Or.inl hOnQ⟩
     rw [hMulB, hAcc, hwp84, ← hS83_def] at hOutEq
-    rw [Halo2.Ironwood.Point.nsmul_add_nsmul B.onCurve] at hOutEq
+    rw [Point.nsmul_add_nsmul B.onCurve] at hOutEq
     -- ── the extracted scalar is the digit sum ──
     have hchain : (t84 + S83) • B.point
         = (((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
-            Halo2.Ironwood.Fq)).val • B.point := by
-      rw [ht84_def, hS83_def, ← Halo2.Ironwood.Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
-        Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
+            Fq)).val • B.point := by
+      rw [ht84_def, hS83_def, ← Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
+        Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
     have hsum : windowsScalar
         (eval (⟨place, env⟩ : Placed Environment Fp) (windowCells cfg 0 i₀))
         = ((∑ w ∈ Finset.range 85, ks w * 8 ^ w : ℕ) :
-            Halo2.Ironwood.Fq) := by
+            Fq) := by
       unfold windowsScalar
       refine congrArg Nat.cast (Finset.sum_congr rfl ?_)
       intro w hw
@@ -1033,26 +1040,26 @@ def circuit (B : FixedBase) :
       addc_proverAssumptions_eq, Nat.zero_add, circuit_norm]
     refine ⟨hIC.1, ?_, ?_⟩
     · -- mulB honest: window-84 point on curve
-      have hOn : (Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
+      have hOn : (Ecc.MulFixed.windowPoint B.point 84
           (@getElem! (Vector Fp 85) ℕ Fp _ _ _
             (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) 84).val).OnCurve :=
         B.windowPoint_onCurve (hkv 84 (by norm_num))
-      rcases hWp : Halo2.Ironwood.Ecc.MulFixed.windowPoint B.point 84
+      rcases hWp : Ecc.MulFixed.windowPoint B.point 84
           (@getElem! (Vector Fp 85) ℕ Fp _ _ _
             (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) 84).val with ⟨wx, wy⟩
       rw [hWp] at hOn hmx hmy
       rw [hmx, hmy]
       exact Or.inl hOn
     · -- acc honest: partialSum point on curve
-      have hOn : ((Halo2.Ironwood.Ecc.MulFixed.partialSum
+      have hOn : ((Ecc.MulFixed.partialSum
           (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
             (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) t).val) 83)
             • B.point).OnCurve :=
-        B.nsmul_onCurve (Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ _)
-          (Halo2.Ironwood.Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
-            (Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hkv j (by omega)))
+        B.nsmul_onCurve (Ecc.MulFixed.partialSum_pos _ _)
+          (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+            (Ecc.MulFixed.partialSum_lt _ 83 (fun j hj => hkv j (by omega)))
             (by norm_num))
-      rcases hSp : Halo2.Ironwood.Ecc.MulFixed.partialSum
+      rcases hSp : Ecc.MulFixed.partialSum
           (fun t => (@getElem! (Vector Fp 85) ℕ Fp _ _ _
             (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) (windowCells cfg 0 i₀)) t).val) 83
           • B.point with ⟨sx, sy⟩
@@ -1062,4 +1069,4 @@ def circuit (B : FixedBase) :
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 
-end Halo2.Ironwood.Ecc.MulFixed.FullWidth
+end Zcash.Circuits.Ecc.MulFixed.FullWidth

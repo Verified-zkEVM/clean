@@ -7,9 +7,9 @@
 -- Value::unknown().
 import Clean.Ironwood.Fixtures.FixtureTypes
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 def addLayout : LayoutFixture :=
   { k := 11,
@@ -31,4 +31,4 @@ def addLayout : LayoutFixture :=
     constants := [],
     fixed := [(0, 1, 1)] }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

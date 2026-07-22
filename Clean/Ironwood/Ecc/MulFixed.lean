@@ -22,14 +22,11 @@ enabling a running-sum row fires both the range check and the coordinates check.
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulFixed
+namespace Zcash.Circuits.Ecc.MulFixed
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.MulFixed (CoordsParams interpolate FixedBase windowPoint windowScalar)
-
-open Halo2.Ironwood (pallasB)
-open Halo2.Ironwood.DecomposeRunningSum (copyDecompose)
+open Halo2
+open Ecc.MulFixed (CoordsParams interpolate FixedBase windowPoint windowScalar)
+open DecomposeRunningSum (copyDecompose)
 
 /-- The window size, `H = 2^3`. -/
 def H : ℕ := 8
@@ -50,7 +47,7 @@ structure FixedBaseData where
   u : ℕ → ℕ → Fp
 
 /-- The data of a proven fixed base. -/
-def _root_.Halo2.Ironwood.Ecc.MulFixed.FixedBase.toData (B : FixedBase) : FixedBaseData :=
+def FixedBase.toData (B : FixedBase) : FixedBaseData :=
   { params := B.params, point := B.point, u := B.u }
 
 /-! ## Config -/
@@ -139,10 +136,10 @@ def readParams (cfg : Config) (f : Query → Fp) : CoordsParams Fp where
 gate AST to the coordinate algebra. -/
 theorem eval_interpolatedX (cfg : Config) (word : Expression Fp Query) (f : Query → Fp) :
     (interpolatedX cfg word).eval f
-      = Halo2.Ironwood.Ecc.MulFixed.interpolate (readParams cfg f) (word.eval f) := by
+      = Ecc.MulFixed.interpolate (readParams cfg f) (word.eval f) := by
   simp only [interpolatedX, windowPow, queryFixed, List.range_succ, List.range_zero,
     List.nil_append, List.cons_append, List.foldl_cons, List.foldl_nil,
-    circuit_norm, Halo2.Ironwood.Ecc.MulFixed.interpolate, readParams]
+    circuit_norm, Ecc.MulFixed.interpolate, readParams]
 
 /-- `interpolate` only depends on the params componentwise — the bridge from the
 `readParams` cell reads to a known `CoordsParams` value. -/
@@ -151,8 +148,8 @@ theorem interpolate_congr_params {p q : CoordsParams Fp}
     (h2 : p.lagrange2 = q.lagrange2) (h3 : p.lagrange3 = q.lagrange3)
     (h4 : p.lagrange4 = q.lagrange4) (h5 : p.lagrange5 = q.lagrange5)
     (h6 : p.lagrange6 = q.lagrange6) (h7 : p.lagrange7 = q.lagrange7) (w : Fp) :
-    Halo2.Ironwood.Ecc.MulFixed.interpolate p w = Halo2.Ironwood.Ecc.MulFixed.interpolate q w := by
-  unfold Halo2.Ironwood.Ecc.MulFixed.interpolate
+    Ecc.MulFixed.interpolate p w = Ecc.MulFixed.interpolate q w := by
+  unfold Ecc.MulFixed.interpolate
   rw [h0, h1, h2, h3, h4, h5, h6, h7]
 
 /-- Equality on `window` and `u`, a fresh selector for the running-sum config (whose `configure`
@@ -273,13 +270,13 @@ theorem point_eta_onCurve {P : Point Fp} (h : P.OnCurve) :
 
 /-- `partialSum` at 1, unfolded (context-free arithmetic). -/
 theorem partialSum_one (ks : ℕ → ℕ) :
-    Halo2.Ironwood.Ecc.MulFixed.partialSum ks 1 = ks 0 + 2 + (ks 1 + 2) * 8 ^ 1 := by
-  simp [Halo2.Ironwood.Ecc.MulFixed.partialSum]
+    Ecc.MulFixed.partialSum ks 1 = ks 0 + 2 + (ks 1 + 2) * 8 ^ 1 := by
+  simp [Ecc.MulFixed.partialSum]
 
 /-- `partialSum` at a successor (context-free unfold). -/
 theorem partialSum_succ (ks : ℕ → ℕ) (n : ℕ) :
-    Halo2.Ironwood.Ecc.MulFixed.partialSum ks (n + 1)
-      = Halo2.Ironwood.Ecc.MulFixed.partialSum ks n + (ks (n + 1) + 2) * 8 ^ (n + 1) := rfl
+    Ecc.MulFixed.partialSum ks (n + 1)
+      = Ecc.MulFixed.partialSum ks n + (ks (n + 1) + 2) * 8 ^ (n + 1) := rfl
 
 /-- Pure-ℕ bounds for the ladder's first addition (windows 0 + 1). -/
 theorem base_bounds {a b : ℕ} (ha : a < 8) (hb : b < 8) :
@@ -308,19 +305,19 @@ theorem step_bounds {k S j : ℕ} (hk : k < 8) (hS_lt : S < 2 * 8 ^ (j + 1))
 
 /-- `partialSum` only reads windows `0..w`. -/
 theorem partialSum_congr {ks ks' : ℕ → ℕ} (w : ℕ) (h : ∀ t ≤ w, ks t = ks' t) :
-    Halo2.Ironwood.Ecc.MulFixed.partialSum ks w = Halo2.Ironwood.Ecc.MulFixed.partialSum ks' w := by
+    Ecc.MulFixed.partialSum ks w = Ecc.MulFixed.partialSum ks' w := by
   induction w with
-  | zero => simp [Halo2.Ironwood.Ecc.MulFixed.partialSum, h 0 (by omega)]
+  | zero => simp [Ecc.MulFixed.partialSum, h 0 (by omega)]
   | succ n ih =>
-    simp only [Halo2.Ironwood.Ecc.MulFixed.partialSum]
+    simp only [Ecc.MulFixed.partialSum]
     rw [ih (fun t ht => h t (by omega)), h (n + 1) le_rfl]
 
 /-- Lower windows' table point as a plain scalar multiple (the `+2`-padded window
 scalar; both the 85- and 22-window families share this form below the MSB). -/
 theorem windowPoint_lower (point : Point Fp) {w k : ℕ} (hw : w < 84) (hk : k < 8) :
-    Halo2.Ironwood.Ecc.MulFixed.windowPoint point w k = (((k + 2) * 8 ^ w : ℕ) • point) := by
-  unfold Halo2.Ironwood.Ecc.MulFixed.windowPoint
-  rw [Halo2.Ironwood.Ecc.MulFixed.windowScalar_val hw hk]
+    Ecc.MulFixed.windowPoint point w k = (((k + 2) * 8 ^ w : ℕ) • point) := by
+  unfold Ecc.MulFixed.windowPoint
+  rw [Ecc.MulFixed.windowScalar_val hw hk]
 
 /-- The shared incomplete-addition ladder, abstract over the base point, window count
 and cell reads: window `w < N−1` holds `[(ks w + 2)·8^w]·P` (`hWP`), the entering
@@ -344,15 +341,15 @@ theorem chain_ladder (point : Point Fp) (hP : point.OnCurve)
       ({ x := ax j, y := ay j } : Point Fp)
         = { x := wx j, y := wy j } + { x := ax (j - 1), y := ay (j - 1) }) :
     ∀ j, j ≤ N - 2 →
-      ax j = (Halo2.Ironwood.Ecc.MulFixed.partialSum ks j • point).x ∧
-      ay j = (Halo2.Ironwood.Ecc.MulFixed.partialSum ks j • point).y := by
+      ax j = (Ecc.MulFixed.partialSum ks j • point).x ∧
+      ay j = (Ecc.MulFixed.partialSum ks j • point).y := by
   intro j
   induction j with
   | zero =>
     intro _
     obtain ⟨h0x, h0y⟩ := hWP 0 (by omega)
-    rw [show ((ks 0 + 2) * 8 ^ 0 : ℕ) = Halo2.Ironwood.Ecc.MulFixed.partialSum ks 0 from by
-      simp [Halo2.Ironwood.Ecc.MulFixed.partialSum]] at h0x h0y
+    rw [show ((ks 0 + 2) * 8 ^ 0 : ℕ) = Ecc.MulFixed.partialSum ks 0 from by
+      simp [Ecc.MulFixed.partialSum]] at h0x h0y
     exact ⟨hAcc0.1.trans h0x, hAcc0.2.trans h0y⟩
   | succ n ih =>
     intro hle
@@ -360,34 +357,34 @@ theorem chain_ladder (point : Point Fp) (hP : point.OnCurve)
     obtain ⟨hpx, hpy⟩ := hWP (n + 1) (by omega)
     -- opaque scalars (performance: keep the products off the goal)
     obtain ⟨t, ht_def⟩ : ∃ t : ℕ, t = (ks (n + 1) + 2) * 8 ^ (n + 1) := ⟨_, rfl⟩
-    obtain ⟨S, hS_def⟩ : ∃ S : ℕ, S = Halo2.Ironwood.Ecc.MulFixed.partialSum ks n := ⟨_, rfl⟩
+    obtain ⟨S, hS_def⟩ : ∃ S : ℕ, S = Ecc.MulFixed.partialSum ks n := ⟨_, rfl⟩
     rw [← ht_def] at hpx hpy
     rw [← hS_def] at hih
     have hS_lt : S < 2 * 8 ^ (n + 1) := by
       rw [hS_def]
-      exact Halo2.Ironwood.Ecc.MulFixed.partialSum_lt _ n (fun _ _ => hks_lt _)
+      exact Ecc.MulFixed.partialSum_lt _ n (fun _ _ => hks_lt _)
     have hS_pos : 0 < S := by
-      rw [hS_def]; exact Halo2.Ironwood.Ecc.MulFixed.partialSum_pos _ n
+      rw [hS_def]; exact Ecc.MulFixed.partialSum_pos _ n
     obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
       step_bounds (hks_lt (n + 1)) hS_lt hS_pos (by omega)
     rw [← ht_def] at hb1 hb2 hb3 hb5
     have hOut := hStep (n + 1) (by omega) (by omega) ⟨by
         rw [hpx, hpy]
-        exact point_eta_onCurve (Halo2.Ironwood.Point.nsmul_onCurve hP hb1 hb3),
+        exact point_eta_onCurve (Point.nsmul_onCurve hP hb1 hb3),
       by
         rw [show n + 1 - 1 = n from by omega, hih.1, hih.2]
-        exact point_eta_onCurve (Halo2.Ironwood.Point.nsmul_onCurve hP hS_pos hb4),
+        exact point_eta_onCurve (Point.nsmul_onCurve hP hS_pos hb4),
       by
         rw [show n + 1 - 1 = n from by omega, hpx, hih.1]
-        exact Halo2.Ironwood.Point.nsmul_x_ne hP hS_pos hb2 (by omega)⟩
+        exact Point.nsmul_x_ne hP hS_pos hb2 (by omega)⟩
     rw [show n + 1 - 1 = n from by omega, hpx, hpy, hih.1, hih.2] at hOut
     rw [point_eta ((t : ℕ) • point), point_eta ((S : ℕ) • point),
-      Halo2.Ironwood.Point.nsmul_add_nsmul hP] at hOut
-    have hps : t + S = Halo2.Ironwood.Ecc.MulFixed.partialSum ks (n + 1) := by
+      Point.nsmul_add_nsmul hP] at hOut
+    have hps : t + S = Ecc.MulFixed.partialSum ks (n + 1) := by
       rw [ht_def, hS_def, partialSum_succ]
       ring
     rw [hps] at hOut
-    exact ⟨congrArg Halo2.Ironwood.Point.x hOut, congrArg Halo2.Ironwood.Point.y hOut⟩
+    exact ⟨congrArg Point.x hOut, congrArg Point.y hOut⟩
 
 /-- Reduce the witness tables' `getElem!` at the honest window value: index
 `windowVal = α.val / 8^w % 8 < 8`, and `8^w = 2^{3w}`. -/
@@ -414,4 +411,4 @@ theorem addinc_output_cells (cfgI : AddIncomplete.Config) (row : ℕ)
       = { x := AssignedCell.of self (row + 1) cfgI.xQR,
           y := AssignedCell.of self (row + 1) cfgI.yQR } := rfl
 
-end Halo2.Ironwood.Ecc.MulFixed
+end Zcash.Circuits.Ecc.MulFixed

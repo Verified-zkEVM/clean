@@ -2,6 +2,8 @@ import Clean.Gadgets.Equality
 import Clean.Orchard.Action.CommitIvk
 import Clean.Orchard.Ecc.Mul.Assign
 
+open Clean
+
 /-!
 # Orchard diversified address integrity
 

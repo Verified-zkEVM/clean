@@ -21,11 +21,10 @@ Small fixtures (the Add/Mul doc-test pairs, the SelMaps) stay as readable Lean
 literals; only the whole-circuit Action dumps use this path.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Json
+namespace Zcash.Circuits.Fixtures.Json
 
 open Lean (Json JsonNumber)
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Fixtures
+open Fixtures
 
 /-! ## Content hash (FNV-1a 64) -/
 
@@ -228,4 +227,4 @@ def runChecks (checks : List (String × Bool)) : IO Unit := do
     unless ok do
       throw <| IO.userError s!"VK fixture check FAILED: {name}"
 
-end Halo2.Ironwood.Fixtures.Json
+end Zcash.Circuits.Fixtures.Json

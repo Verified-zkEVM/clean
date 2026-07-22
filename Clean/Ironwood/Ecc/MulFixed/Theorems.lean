@@ -4,7 +4,9 @@ import Clean.Ironwood.Ecc.Defs
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulFixed
+namespace Zcash.Circuits.Ecc.MulFixed
+
+open Clean
 
 structure CoordsParams (F : Type) where
   z : F
@@ -308,4 +310,4 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 85) (hk : k < 8)
 
 end FixedBase
 
-end Halo2.Ironwood.Ecc.MulFixed
+end Zcash.Circuits.Ecc.MulFixed

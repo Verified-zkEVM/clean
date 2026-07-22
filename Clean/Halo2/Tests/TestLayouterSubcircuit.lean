@@ -25,7 +25,9 @@ scenario the historical `Placed`-projection-keyed iffs missed inside loop lemmas
 headline finding), now handled by the engine's own `isDefEq` matching.
 -/
 
-namespace Halo2.Ironwood.Ecc.TestLayouterSubcircuit
+namespace Zcash.Circuits.Ecc.TestLayouterSubcircuit
+
+open Halo2
 
 /-! ## The native layouter child
 
@@ -118,4 +120,4 @@ example (config : WitnessPoint.Config) (i₀ : RegionIndex) (place : RegionIndex
   subcircuit_rw at h
   exact h trivial trivial
 
-end Halo2.Ironwood.Ecc.TestLayouterSubcircuit
+end Zcash.Circuits.Ecc.TestLayouterSubcircuit

@@ -18,8 +18,9 @@ additions, offset-corrected most significant window, complete addition), and fin
 conditionally negates the result according to the sign.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulFixed.Short
+namespace Zcash.Circuits.Ecc.MulFixed.Short
 
+open Clean
 open CompElliptic.Curves.Pasta CompElliptic.CurveForms
 open ShortWeierstrass (SWPoint)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -332,7 +333,7 @@ private theorem rowTailValue_u (B : FixedBase) (m : Fp) (w : ℕ) :
 of the committed magnitude (`k = m.val / 8^w % 8`, matching `windowVal` definitionally),
 witness the next running-sum value, and read the three window-table columns at `k`. -/
 def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -819,4 +820,4 @@ theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
 
 -- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
 -- indices (lean4#12179).
-end Halo2.Ironwood.Ecc.MulFixed.Short
+end Zcash.Circuits.Ecc.MulFixed.Short

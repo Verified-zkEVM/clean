@@ -26,9 +26,10 @@ row-layout machinery. The synthesis-level circuits that enable them live in
 `Sinsemilla/HashToPoint.lean`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla.Chip
+namespace Zcash.Circuits.Sinsemilla.Chip
 
-open Halo2.Ironwood.Ecc
+open Clean
+open Ecc
 
 /-! ### Initial `y_Q` gate -/
 namespace InitialYQ
@@ -83,4 +84,4 @@ def Spec (params : Params Fp) (row : Row Fp) : Prop :=
 
 end Gate
 
-end Halo2.Ironwood.Sinsemilla.Chip
+end Zcash.Circuits.Sinsemilla.Chip

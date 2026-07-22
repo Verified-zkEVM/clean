@@ -7,7 +7,10 @@ import Mathlib.Tactic
 /-
 Some definitions useful for circuits involving points
 -/
-namespace Halo2.Ironwood
+namespace Zcash.Circuits
+
+open Clean
+
 variable {F : Type} [FiniteField F]
 
 structure CurrentNext (F : Type) where
@@ -23,9 +26,9 @@ instance : ProvableType Point where
     y := elems[1]
   }
 
-end Halo2.Ironwood
+end Zcash.Circuits
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
 
 /-- Shared helpers for the scalar-multiplication gates. -/
 
@@ -39,4 +42,4 @@ def tQ {K : Type} [OfNat K 45560315531506369815346746415080538113] : K :=
 lemma sw_add_coords (P Q : CompElliptic.CurveForms.ShortWeierstrass.SWPoint CompElliptic.Curves.Pasta.Pallas.curve) :
   CompElliptic.CurveForms.ShortWeierstrass.add pallasA (P.x, P.y) (Q.x, Q.y) = ((P + Q).x, (P + Q).y) := rfl
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

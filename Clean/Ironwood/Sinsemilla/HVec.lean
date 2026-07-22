@@ -14,7 +14,9 @@ making generic `ProvableType`/`ProvableStruct` evaluation unfold a large
 recursive nested-pair type when `ns` is concrete.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla
+namespace Zcash.Circuits.Sinsemilla
+
+open Clean
 
 variable {F : Type}
 
@@ -102,7 +104,7 @@ theorem eval_tail [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ
     eval env (tail v) = tail (eval env v) := by
   rw [CircuitType.eval_expression (M := HVec ns)]
   rw [CircuitType.eval_expression (M := HVec (n :: ns))]
-  simp +instances only [tail, ProvableType.eval, instProvableType]
+  simp +instances only [tail, ProvableType.Clean.eval, instProvableType]
   congr
   ext i hi
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
@@ -121,8 +123,8 @@ theorem eval_get [FiniteField F] (env : Environment F) :
 theorem eval_getElem [FiniteField F] (env : Environment F) (ns : List ℕ)
     (v : Var (HVec ns) F) (i : Fin ns.length) (j : ℕ) (hj : j < ns[i]) :
     eval env ((get ns v i)[j]'hj) = (get ns (eval env v) i)[j]'hj := by
-  rw [ProvableType.eval_field]
-  rw [ProvableType.getElem_eval_fields]
+  rw [ProvableType.Clean.eval_field]
+  rw [ProvableType.Clean.getElem_eval_fields]
   rw [eval_get]
 
 /-- `eval` distributes over `cons`. -/
@@ -132,9 +134,9 @@ theorem eval_cons [FiniteField F] (env : Environment F) {n : ℕ} {ns : List ℕ
       = HVec.cons (eval env a) (eval env b) := by
   rw [CircuitType.eval_expression (M := HVec (n :: ns))]
   rw [CircuitType.eval_expression (M := HVec ns)]
-  simp +instances only [ProvableType.eval, instProvableType, cons, CircuitType.eval_var_fields]
+  simp +instances only [ProvableType.Clean.eval, instProvableType, cons, CircuitType.eval_var_fields]
   exact congrArg HVec.mk (Vector.map_append ..)
 
 end HVec
 
-end Halo2.Ironwood.Sinsemilla
+end Zcash.Circuits.Sinsemilla

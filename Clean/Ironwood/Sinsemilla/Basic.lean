@@ -17,12 +17,12 @@ three columns at a shared row.
 Reference: `halo2_gadgets/src/sinsemilla/chip/generator_table.rs`.
 -/
 
-namespace Halo2.Ironwood.Sinsemilla
+namespace Zcash.Circuits.Sinsemilla
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators step hashToPoint)
-open Halo2.Ironwood.Specs (K)
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Specs.Sinsemilla (Generators step hashToPoint)
+open Specs (K)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-! ## The generator table
@@ -198,7 +198,7 @@ theorem load_generatorTableLoaded (G : Generators) (cfg : GeneratorTableConfig)
 
 /-! ## Pure piece value-algebra
 
-Framework-agnostic `Fp` / `Point` / `Halo2.Ironwood.Specs.Sinsemilla` facts. -/
+Framework-agnostic `Fp` / `Point` / `Specs.Sinsemilla` facts. -/
 
 /-! ### Pure running-sum / recombination lemmas -/
 
@@ -297,7 +297,7 @@ theorem step_coordinates_of_constraints (S : ℕ → Point Fp) {A B : Point Fp} 
     (hSecant : lambda2 * lambda2 = xa' + (lambda1 * lambda1 - A.x - xp) + A.x)
     (hYCheck : 4 * lambda2 * (A.x - xa') = 4 * A.y + 2 * YA') :
     xa' = B.x ∧ YA' = 2 * B.y := by
-  exact Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints (S := S m)
+  exact Ecc.DoubleAndAdd.coordinates_of_constraints (S := S m)
     (by simpa [step] using hstep) hYP hXP hYA hSecant hYCheck
 
 /-- The honest-prover counterpart of `step_coordinates_of_constraints`: the honest cell
@@ -409,13 +409,13 @@ theorem accAfter_eq_chain (G : Generators) {A : Point Fp} (p : Fp)
   induction r generalizing Ar with
   | zero =>
     rw [show ((List.range 0).map (pieceWord p)) = ([] : List ℕ) from rfl,
-      Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_nil] at hchain
+      Specs.Sinsemilla.hashToPoint_nil] at hchain
     obtain rfl : A = Ar := Option.some.inj hchain
     rfl
   | succ r ih =>
     rw [List.range_succ] at hchain
     simp only [List.map_append, List.map_cons, List.map_nil] at hchain
-    rw [Halo2.Ironwood.Specs.Sinsemilla.hashToPoint_concat] at hchain
+    rw [Specs.Sinsemilla.hashToPoint_concat] at hchain
     cases hpre : hashToPoint G.S A ((List.range r).map (pieceWord p)) with
     | none =>
       rw [hpre] at hchain
@@ -439,4 +439,4 @@ theorem accAfter_eq_chain (G : Generators) {A : Point Fp} (p : Fp)
         rfl rfl rfl rfl
       exact Prod.ext hh.2.2.1 hh.2.2.2
 
-end Halo2.Ironwood.Sinsemilla
+end Zcash.Circuits.Sinsemilla

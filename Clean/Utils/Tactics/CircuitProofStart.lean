@@ -2,6 +2,8 @@ import Lean
 import Clean.Circuit.Formal
 import Clean.Utils.Tactics.ProvableStructSimp
 
+open Clean
+
 open Lean Elab Tactic Meta
 open Circuit
 

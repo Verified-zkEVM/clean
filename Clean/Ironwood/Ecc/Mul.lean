@@ -25,16 +25,21 @@ Soundness rests on `2^254 + t_q ≡ 0 (mod q)`: the double-and-add accumulates
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.Mul
+open ProvableType.Halo2
+  (eval_field eval_field_prover eval_field' eval_field_prover' eval_cells eval_cells_prover
+    eval_fields_cells)
+open ProvableStruct.Halo2 (eval_var_eq_eval eval_var_eq_eval_prover)
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (tQ)
-open Halo2.Ironwood.Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
+namespace Zcash.Circuits.Ecc.Mul
+
+open Halo2
+open Ecc (tQ)
+open Ecc.Mul (tQNat kNat kBits chainNat chainNat_lt chainNat_offset chainNat_msb
   chain_cast accScalar_closed k_canonical cells_kNat z0_cell_value)
-open Halo2.Ironwood.Ecc.Mul.Decompose (m_bounds)
-open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
+open Ecc.Mul.Decompose (m_bounds)
+open Ecc.Mul.Incomplete.DoubleAndAdd (accScalar zRunValue)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
+open Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits
   kBitsWindow_as_kBits kBitsWindow_zero)
 
 /-! ## Config -/
@@ -215,17 +220,17 @@ private theorem overflow_spec_honest' (alpha : Fp) {z0v z130v k254v : Fp}
     (h130 : z130v = ((kNat alpha / 2 ^ 130 : ℕ) : Fp))
     (h254 : k254v = ((kNat alpha / 2 ^ 254 : ℕ) : Fp)) :
     MulOverflow.Spec { alpha := alpha, z0 := z0v, z130 := z130v, k254 := k254v } :=
-  Halo2.Ironwood.Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
+  Ecc.Mul.overflow_spec_honest alpha hz0v h130 h254
 
 /-! ## Point-level scalar-multiple algebra
 
 The `SWPoint`-level step/negation/identity algebra, transported to `Point Fp` `nsmul` through the
-`toSW` bridge (`Halo2.Ironwood.Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
+`toSW` bridge (`Point.ext_toSW_iff`/`toSW_add`/`toSW_nsmul`/`toSW_neg`/`toSW_zero`). -/
 
 section PointAlgebra
 open CompElliptic.CurveForms.ShortWeierstrass (SWPoint)
 open CompElliptic.Curves.Pasta
-open Halo2.Ironwood.Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
+open Point (ext_toSW_iff toSW_add toSW_neg toSW_zero toSW_nsmul
   valid_add valid_neg valid_zero valid_nsmul nsmul_add_nsmul nsmul_eq_zero_iff)
 
 /-- `P + P = 2 • P` at the `Point` level. -/
@@ -249,7 +254,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)),
       toSW_add (valid_neg hPv) (valid_nsmul hPv a), toSW_neg hPv,
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
+    simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
     simp only [if_true]
     apply (ext_toSW_iff
@@ -258,7 +263,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
     rw [toSW_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)),
       toSW_add hPv (valid_nsmul hPv a),
       toSW_nsmul hPv a, toSW_nsmul hPv]
-    simpa using Halo2.Ironwood.Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
+    simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha true
 
 /-- `-P + m•P = (m−1)•P` at the `Point` level. -/
 private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (hm : 1 ≤ m) :
@@ -268,7 +273,7 @@ private theorem point_neg_add_nsmul {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h
     (valid_nsmul hPv _)).mpr
   rw [toSW_add (valid_neg hPv) (valid_nsmul hPv m), toSW_neg hPv, toSW_nsmul hPv m,
     toSW_nsmul hPv]
-  exact Halo2.Ironwood.Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
+  exact Ecc.Mul.neg_add_nsmul (P.toSW hPv) hm
 
 /-- `0 + Q = Q` at the `Point` level, for valid `Q`. -/
 private theorem point_zero_add {Q : Point Fp} (hQ : Q.Valid) : (0 : Point Fp) + Q = Q := by
@@ -359,18 +364,18 @@ symbolic term). -/
 private theorem completeOutput_eval_literal (place : RegionIndex → ℕ)
     (env : Environment Fp) (acc : Point (AssignedCell Fp))
     (zs : Vector (AssignedCell Fp) 3) :
-    ProvableStruct.eval place env
+    ProvableStruct.Halo2.eval place env
         ({ acc := acc, zs := zs } : MulComplete.Output 3 (AssignedCell Fp))
-      = { acc := ProvableType.eval place env acc,
-          zs := ProvableType.eval (M := fields 3) place env zs } := by
-  simp only [circuit_norm, explicit_provable_type, ProvableType.eval_fields_cells]
+      = { acc := ProvableType.Halo2.eval place env acc,
+          zs := ProvableType.Halo2.eval (M := fields 3) place env zs } := by
+  simp only [circuit_norm, explicit_provable_type, ProvableType.Halo2.eval_fields_cells]
 
 /-- Elementwise read of an evaluated cell vector. -/
 private theorem fieldsEval_getElem {w : ℕ} (place : RegionIndex → ℕ) (env : Environment Fp)
     (zs : Vector (AssignedCell Fp) w) (i : ℕ) (hi : i < w) :
-    (ProvableType.eval (M := fields w) place env zs)[i]
+    (ProvableType.Halo2.eval (M := fields w) place env zs)[i]
       = AssignedCell.eval place env (zs[i]) := by
-  simp only [ProvableType.eval, ProvableType.toElements, ProvableType.fromElements,
+  simp only [ProvableType.Halo2.eval, ProvableType.toElements, ProvableType.fromElements,
     Vector.getElem_map]
 
 /-- Plain-`.output` spelling of `incomplete_call_output` (the composition iff's form). -/
@@ -443,7 +448,7 @@ private theorem kBitWindowExpr_expr_eval (env : Placed ProverEnvironment Fp)
 private theorem addInputs_eval_eq_prover (env : Placed ProverEnvironment Fp)
     (p q : Point (AssignedCell Fp)) :
     eval env (⟨p, q⟩ : Add.Inputs (AssignedCell Fp)) = { p := eval env p, q := eval env q } := by
-  simp only [circuit_norm, ProvableType.eval_cells_prover, ProvableType.eval_cells]
+  simp only [circuit_norm, ProvableType.Halo2.eval_cells_prover, ProvableType.Halo2.eval_cells]
 
 /-- Split a `zChain` into the start equation and the step family (the shape
 `chain_cast` consumes). -/
@@ -466,8 +471,8 @@ private theorem completeOutput_acc_prover (env : Placed ProverEnvironment Fp)
     (acc : Point (AssignedCell Fp)) (zs : Vector (AssignedCell Fp) 3) :
     (eval env ({ acc := acc, zs := zs } : Var (MulComplete.Output 3) Fp)).acc
       = eval env acc := by
-  rw [ProvableStruct.eval_var_eq_eval_prover, completeOutput_eval_literal,
-    ProvableType.eval_cells_prover]
+  rw [ProvableStruct.Halo2.eval_var_eq_eval_prover, completeOutput_eval_literal,
+    ProvableType.Halo2.eval_cells_prover]
 
 /-! ## Composition ergonomics
 
@@ -649,12 +654,12 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [← lo_eq] at comp_spec
     simp only [incomplete_output_eq, circuit_norm] at comp_spec
     obtain ⟨bitsC, hCompRI⟩ := comp_spec
-      ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩
+      ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
     simp only [MulComplete.RoundInvariant] at hCompRI
     obtain ⟨hCompChain, hCompAccCl⟩ := hCompRI
     -- the complete-phase accumulator: [accScalar M₂ bitsC 3] • base, valid
     obtain ⟨hCompAccV, hCompAccEq⟩ := hCompAccCl
-      (by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _) hbaseV
+      (by rw [hLoOut]; exact Point.valid_nsmul hbaseV _) hbaseV
     rw [hLoOut, accPoint_nsmul hOnC _ hM2pos bitsC 3] at hCompAccEq
     -- the complete-phase z-chain, continued from the lo chain
     have hLoZ125 := hLoCells 125 (by omega)
@@ -725,7 +730,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
             = -input_base_y := by
           linear_combination hLsbY + input_base_y * hk0
         obtain ⟨hResV, hResEq⟩ := result_spec
-          ⟨by rw [hcx, hcy]; exact Halo2.Ironwood.Point.valid_neg hbaseV, hCompAccV⟩
+          ⟨by rw [hcx, hcy]; exact Point.valid_neg hbaseV, hCompAccV⟩
         rw [hcx, hcy, show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -({ x := input_base_x, y := input_base_y } : Point Fp) from rfl,
           hCompAccEq, point_neg_add_nsmul hOnC hM3pos] at hResEq
@@ -740,7 +745,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
                   = input_base_x from by linear_combination hLsbX - input_base_x * hk0,
                 show env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ)
                   = -input_base_y from by linear_combination hLsbY + input_base_y * hk0]
-              exact Halo2.Ironwood.Point.valid_neg hbaseV, hCompAccV⟩
+              exact Point.valid_neg hbaseV, hCompAccV⟩
         exact hResV
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       refine ⟨bitsHi, bitsLo, bitsC, true, hK254bit, hOZ130.symm.trans hHiZ124, ?_, ?_, ?_⟩
@@ -754,9 +759,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have hcy : env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ) = 0 := by
           linear_combination hLsbY - input_base_y * hk1
         obtain ⟨hResV, hResEq⟩ := result_spec
-          ⟨by rw [hcx, hcy]; exact Halo2.Ironwood.Point.valid_zero, hCompAccV⟩
+          ⟨by rw [hcx, hcy]; exact Point.valid_zero, hCompAccV⟩
         rw [hcx, hcy, show ({ x := 0, y := 0 } : Point Fp) = (0 : Point Fp) from rfl,
-          hCompAccEq, point_zero_add (Halo2.Ironwood.Point.valid_nsmul hbaseV _)] at hResEq
+          hCompAccEq, point_zero_add (Point.valid_nsmul hbaseV _)] at hResEq
         rw [← hOResX, ← hOResY] at hResEq ⊢
         rw [hResEq]
         congr 1
@@ -765,7 +770,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
                   linear_combination hLsbX + input_base_x * hk1,
                 show env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ) = 0 from by
                   linear_combination hLsbY - input_base_y * hk1]
-              exact Halo2.Ironwood.Point.valid_zero, hCompAccV⟩
+              exact Point.valid_zero, hCompAccV⟩
         exact hResV
   completeness := by
     circuit_proof_start2 [Add.add, MulIncomplete.double_and_add, MulComplete.assign_region,
@@ -808,8 +813,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       have h := input_eq.1
       simp only [circuit_norm] at h ⊢
       exact h
-    simp only [MulIncomplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hBF0] at hHiPS
+    simp only [MulIncomplete.RoundInvariant, hBF0] at hHiPS
     obtain ⟨hHiChain, hHiAccCl⟩ := hHiPS
     obtain ⟨hHiZ0, hHiZstep⟩ := zChain_split hHiChain
     have hentry : env.advice cfg.hiConfig.z ((place self + offHi : ℕ) : ℤ)
@@ -834,8 +838,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       simp only [incomplete_output_eq, circuit_norm]
       exact hHiOut
     obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
-    simp only [MulIncomplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hBF125] at hLoPS
+    simp only [MulIncomplete.RoundInvariant, hBF125] at hLoPS
     obtain ⟨hLoChain, hLoAccCl⟩ := hLoPS
     obtain ⟨hLoZ0, hLoZstep⟩ := zChain_split hLoChain
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
@@ -850,15 +853,14 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [← lo_eq] at comp_spec
     simp only [incomplete_output_eq, circuit_norm] at comp_spec
     obtain ⟨hCompSpecV, hCompPS⟩ := comp_spec
-      ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩
-      ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩
+      ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
+      ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
     obtain ⟨bitsC', hCompRIv⟩ := hCompSpecV
     simp only [MulComplete.RoundInvariant] at hCompRIv
     obtain ⟨-, hCompAccClv⟩ := hCompRIv
     obtain ⟨hCompAccVv, -⟩ := hCompAccClv
-      (by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _) hbaseV
-    simp only [MulComplete.RoundInvariant, fexpr_expr_eval_prover, halphap,
-      hW251] at hCompPS
+      (by rw [hLoOut]; exact Point.valid_nsmul hbaseV _) hbaseV
+    simp only [MulComplete.RoundInvariant, hW251] at hCompPS
     obtain ⟨hCompChain, -⟩ := hCompPS
     have hCompZ0 := hCompChain ⟨0, by omega⟩
     simp only [if_pos] at hCompZ0
@@ -907,7 +909,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     refine ⟨⟨hbaseV, region_0,
       ⟨hOnC, hOnC, 2, hAcc2, le_refl 2, by norm_num⟩,
       ⟨hOnC, hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩,
-      ⟨by rw [hLoOut]; exact Halo2.Ironwood.Point.valid_nsmul hbaseV _, hbaseV⟩,
+      ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩,
       region_2, region_3, ⟨?_, ?_, ?_⟩, ?_, hCompAccVv⟩,
       hz0v, by rw [← hOZ130]; exact hHiZ124, by rw [← hOK254]; exact hHiZtop⟩
     · -- bool_check on the honest bit
@@ -928,9 +930,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       · simp only [Bool.false_eq_true, if_false]
         rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -{ x := input_base_x, y := input_base_y } from rfl]
-        exact Halo2.Ironwood.Point.valid_neg hbaseV
+        exact Point.valid_neg hbaseV
       · simp only [if_true]
-        exact Halo2.Ironwood.Point.valid_zero
+        exact Point.valid_zero
 
 derive_contract_bridges main := mainCircuit.toFormal "variable-base scalar mul"
 
@@ -1089,4 +1091,4 @@ def mul :
 
 derive_contract_bridges mul := mul
 
-end Halo2.Ironwood.Ecc.Mul
+end Zcash.Circuits.Ecc.Mul

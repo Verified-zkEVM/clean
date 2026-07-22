@@ -3,7 +3,7 @@ import Clean.Ironwood.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
 
 open CompElliptic.CurveForms
 
@@ -456,4 +456,4 @@ private theorem ite_rY (px py qx qy : Fp)
       · simp only [eq_false h1, eq_false h2, eq_false h3, reduceIte]
         ring
 
-end Halo2.Ironwood.Ecc.Add
+end Zcash.Circuits.Ecc.Add

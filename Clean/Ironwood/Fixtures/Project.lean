@@ -32,10 +32,9 @@ substitutes each simple selector by its packed fixed column (for a single-select
 one new fixed column, replacement = the bare fixed query — see `compress_selectors.rs`).
 -/
 
-namespace Halo2.Ironwood.Fixtures
+namespace Zcash.Circuits.Fixtures
 
 open _root_.Halo2
-open _root_.Halo2.Ironwood (Fp)
 
 /-- The mutable state of the query walk: the three query layouts accumulated so far, in
 first-encounter order. -/
@@ -317,4 +316,4 @@ def projectCSPostMap (seed : List Query) (map : SelCompressMap)
     gates := gates
     lookups := lookups }
 
-end Halo2.Ironwood.Fixtures
+end Zcash.Circuits.Fixtures

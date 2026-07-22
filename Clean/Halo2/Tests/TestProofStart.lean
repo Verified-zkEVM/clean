@@ -44,7 +44,7 @@ Coverage of the mul-stack review fixes, by where each is pinned:
 namespace Halo2.TestProofStart
 
 open Lean Elab Meta
-open CircuitProofStart Ironwood Ironwood.Ecc
+open CircuitProofStart Zcash.Circuits Zcash.Circuits.Ecc
 
 /-! ## Direction detection ×4 (the head-constant discriminator) -/
 

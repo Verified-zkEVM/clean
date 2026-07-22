@@ -22,10 +22,9 @@ v·(1−v)`, source constraint names). The semantic per-gate contracts live in t
 bundle files; this file is the VK-facing surface only.
 -/
 
-namespace Halo2.Ironwood.NoteCommit
+namespace Zcash.Circuits.NoteCommit
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (tP)
+open Halo2
 
 /-- Rust `bool_check` (`utilities.rs:141-143`): `v · (1 − v)`. -/
 def boolCheck (v : Expression Fp Query) : Expression Fp Query :=
@@ -458,4 +457,4 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let y ← YCanonicity.configure advices
   return { b, d, e, g, h, gd, pkd, value, rho, psi, y }
 
-end Halo2.Ironwood.NoteCommit
+end Zcash.Circuits.NoteCommit

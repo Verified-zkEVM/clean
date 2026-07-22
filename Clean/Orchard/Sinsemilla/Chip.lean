@@ -4,6 +4,8 @@ import Clean.Orchard.Ecc.DoubleAndAdd
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 /-!
 # Sinsemilla chip custom gates
 

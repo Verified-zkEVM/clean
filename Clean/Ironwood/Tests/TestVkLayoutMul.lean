@@ -49,12 +49,12 @@ suite — the fixed contents here include the range-check TABLE column, the cons
 column, and 7 packed selector columns. See the header of `TestVkMatchAdd`.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test.Layout
+namespace Zcash.Circuits.Fixtures.Test.Layout
 
-open Ironwood (Fp)
-open Ironwood.Ecc.Add (add)
-open Ironwood.Ecc.Mul (Config configure)
-open Halo2.Ironwood.Fixtures.Layout
+open Halo2
+open Ecc.Add (add)
+open Ecc.Mul (Config configure)
+open Fixtures.Layout
 
 /-- The harness config plus the columns `synthesize` needs for witnessing — built by the same
 `configure` chain as `TestVkMatchMul.mulProgram` (`configure_mul` in `dump.rs`), returning the
@@ -69,7 +69,7 @@ def setup : Config × (Fin 10 → Column .advice) × TableColumn :=
     let constants ← fixedColumn
     enableConstant constants
     let advices : Fin 10 → Column .advice := ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
-    let lookupConfig ← Ironwood.LookupRangeCheck.configure 10 a9 tableIdx
+    let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
     let addConfig ← add.configure (a0, a1, a2, a3, a4, a5, a6, a7, a8)
     let cfg ← configure addConfig lookupConfig advices
     return (cfg, advices, tableIdx)
@@ -95,7 +95,7 @@ def layoutProgram : Circuit Fp Unit := do
   -- witness alpha: advices[0] row 0
   let alpha ← assignRegion "witness alpha" (assignAdvice (mulAdvices 0) 0 unknown)
   -- the real deal
-  let _ ← Ironwood.Ecc.Mul.synthesize mulCfg
+  let _ ← Ecc.Mul.synthesize mulCfg
     { alpha := alpha, base := { x := base.1, y := base.2 } }
   pure ()
 
@@ -149,4 +149,4 @@ against `myCopyList`/`mulLayout.copyList` when a guard above breaks. -/
 def firstDiff {α : Type} [DecidableEq α] (a b : List α) : Option (ℕ × α × α) :=
   (a.zip b).zipIdx.findSome? fun ((x, y), i) => if x = y then none else some (i, x, y)
 
-end Halo2.Ironwood.Fixtures.Test.Layout
+end Zcash.Circuits.Fixtures.Test.Layout

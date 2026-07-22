@@ -7,7 +7,7 @@ import Clean.Utils.Field
 import Clean.Examples.FemtoCairo.SpecLemmas
 import Clean.Examples.FemtoCairo.TypesLemmas
 
-namespace Examples.FemtoCairo
+open Clean
 open Gadgets
 open Utils.Bits
 open Examples.FemtoCairo
@@ -25,7 +25,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
   To represent, e.g., a read-write memory we will need a more complex construction.
 -/
-def Table.staticOfFn {n : ℕ} (h : n < p) (name : String) (f : Fin n → F p) :
+def Clean.Table.staticOfFn {n : ℕ} (h : n < p) (name : String) (f : Fin n → F p) :
     Table (F p) fieldPair := .fromStatic {
   name
   length := n
@@ -34,6 +34,8 @@ def Table.staticOfFn {n : ℕ} (h : n < p) (name : String) (f : Fin n → F p) :
   Spec | (i, v) => ∃ hi: i.val < n, v = f ⟨ i.val, hi ⟩
   contains_iff := by grind
 }
+
+namespace Examples.FemtoCairo
 
 def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
   let bits : Var (fields 8) (F p) ← Gadgets.toBits 8 (by linarith [p_large_enough.elim]) instruction
@@ -297,7 +299,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp only [CircuitType.eval_expression, fromElements, ProvableType.eval,
+    simp only [CircuitType.eval_expression, fromElements, ProvableType.Clean.eval,
       size, toElements, Vector.map_mk, List.map_toArray,
       List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
       ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
@@ -492,12 +494,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input1
     simp only [h_input2] at ⊢ h_env
     -- `State` is a custom `ProvableType` (not `ProvableStruct`), so the struct-level
-    -- `h_env` equation needs the explicit unfolding path to decompose into components.
-    -- The witnessed value is a `pure` hint program, so evaluate its folded `MOver.eval`
-    -- atom (`eval_pure`) before decomposing.
-    simp only [circuit_norm, explicit_provable_type, State.mk.injEq, Witgen.M.pure_def,
-      Witgen.MOver.eval_pure, Witgen.FExprOver.eval, h_input2, h_input_v1, h_input_v2,
-      h_input_v3] at h_env
+    -- `h_env` equation needs the explicit unfolding path to decompose into components
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_env
     obtain ⟨h_env0, h_env1, h_env2⟩ := h_env
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite] at h_exec ⊢

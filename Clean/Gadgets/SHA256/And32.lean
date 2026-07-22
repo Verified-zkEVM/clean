@@ -1,5 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
+open Clean
+
 namespace Gadgets.SHA256.And32
 variable {p : ℕ} [Fact p.Prime]
 

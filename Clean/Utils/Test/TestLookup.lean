@@ -2,6 +2,8 @@ import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Utilities.LookupRangeCheck
 
+open Clean
+
 /-!
 Shape / composition regression tests for the lookup axis (`lookup-design.md` §2.2/§2.4).
 
@@ -24,7 +26,7 @@ Each `example` pins a claim the design's normal-form conventions depend on:
 -/
 
 namespace Halo2.Lookup.Test
-open Halo2 Halo2.Ironwood
+open Halo2 Zcash.Circuits
 
 /-- `q_lookup`, `q_running`: the range-check gating selectors (complex,
 `lookup_range_check.rs:320-321`). Concrete indices so the per-row activation valuation
@@ -139,7 +141,7 @@ migrated loop proofs depend on: the per-round **split** of the loop's `Constrain
 hand-written `++` operations-succ pin), and the running-word membership a single round reduces to. -/
 
 namespace RangeCheckLoop
-open Halo2.Ironwood.LookupRangeCheck Halo2.RegionCircuit
+open Zcash.Circuits.LookupRangeCheck RegionCircuit
 
 -- (d-1) The framework `forRange'` split: the loop's `Constraints` become `∀ i : Fin numWords,
 -- <round i's constraints at base row offset + i>`. This `circuit_norm ↓` split (from

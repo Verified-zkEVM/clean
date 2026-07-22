@@ -21,12 +21,11 @@ sites expanded data-level (`*.synthesize <base>Data`) since the layout test only
 the dumped window tables, and every other child called through its bundle.
 -/
 
-namespace Halo2.Ironwood.Fixtures.Test.LayoutAction
+namespace Zcash.Circuits.Fixtures.Test.LayoutAction
 
-open Halo2 Halo2.Ironwood.Fixtures Halo2.Ironwood.Fixtures.Layout
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood.Specs.Sinsemilla (Generators)
-open Halo2.Ironwood.Action.Circuit (Config configure orchardGate loadPrivate
+open Halo2 Fixtures Fixtures.Layout
+open Specs.Sinsemilla (Generators)
+open Action.Circuit (Config configure orchardGate loadPrivate
   ANCHOR ENABLE_SPEND ENABLE_OUTPUT CV_NET_X CV_NET_Y NF_OLD RK_X RK_Y CMX)
 
 /-! ## Generators and config -/
@@ -34,14 +33,14 @@ open Halo2.Ironwood.Action.Circuit (Config configure orchardGate loadPrivate
 /-- The real proof-carrying generator family; the layout guards below cross-validate
 its table (extracted into `SinsemillaGenerators.lean`) against the dump's fixed
 columns. -/
-def aG : Generators := Halo2.Ironwood.Specs.Sinsemilla.orchardGenerators
+def aG : Generators := Specs.Sinsemilla.orchardGenerators
 
 /-- The REAL ported configure (CS-matched by `TestVkMatchAction`). -/
 def aCfg : Config := (configure aG {}).1
 
 /-- Keygen never evaluates witness programs (`Value::unknown()`). -/
 def unk : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp) := pure (.const 0)
-def unkPoint : Witgen.MOver Fp (AssignedCell Fp) (Halo2.Ironwood.Point (FExpr Fp)) :=
+def unkPoint : Witgen.MOver Fp (AssignedCell Fp) (Point (FExpr Fp)) :=
   pure { x := .const 0, y := .const 0 }
 def unkNat : Witgen.MOver Fp (AssignedCell Fp) (NExpr Fp) := pure (.const 0)
 
@@ -49,7 +48,7 @@ def unkNat : Witgen.MOver Fp (AssignedCell Fp) (NExpr Fp) := pure (.const 0)
 fixed-base-mul sites data-level) -/
 
 /-- The keygen witness set (all programs `Value::unknown()`-shaped). -/
-def aW : Ironwood.Action.Circuit.Witnesses Fp :=
+def aW : Action.Circuit.Witnesses Fp :=
   { psiOld := unk, rhoOld := unk, nk := unk, vOld := unk, vNew := unk, psiNew := unk,
     magnitude := unk, sign := unk,
     cmOld := unkPoint, gdOld := unkPoint, akP := unkPoint, pkDOld := unkPoint,
@@ -61,12 +60,12 @@ def aW : Ironwood.Action.Circuit.Witnesses Fp :=
 
 /-- THE REAL ironwood (post-NU 6.3) circuit, at the REAL certified bases. -/
 def aProgram : Circuit Fp Unit :=
-  Ironwood.Action.Circuit.synthesize aG Ironwood.Action.orchardBases aW aCfg
+  Action.Circuit.synthesize aG Action.orchardBases aW aCfg
 
 /-- The real pre-ironwood (fixed post-NU 6.2) circuit, at the same bases. -/
 def aProgramBase : Circuit Fp Unit := do
-  let _ ← Ironwood.Action.CircuitPreIronwood.synthesize aG
-    Ironwood.Action.orchardBases aW aCfg
+  let _ ← Action.CircuitPreIronwood.synthesize aG
+    Action.orchardBases aW aCfg
   pure ()
 
 /-! ## The reconstructed layout products vs the ported Action stack (ironwood)
@@ -111,4 +110,4 @@ temporarily when debugging a mismatch. -/
     -- the full fixed contents
     ("fixed contents", decide (fixed = sortFixed fx.fixed))]
 
-end Halo2.Ironwood.Fixtures.Test.LayoutAction
+end Zcash.Circuits.Fixtures.Test.LayoutAction

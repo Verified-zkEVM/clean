@@ -3,7 +3,7 @@ import Clean.Ironwood.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
 
 open CompElliptic.CurveForms
 
@@ -132,4 +132,4 @@ def Assumptions (input : Input Fp) : Prop :=
 def Spec (input : Input Fp) (output : Point Fp) : Prop :=
   output.OnCurve ∧ output = input.p + input.q
 
-end Halo2.Ironwood.Ecc.AddIncomplete
+end Zcash.Circuits.Ecc.AddIncomplete

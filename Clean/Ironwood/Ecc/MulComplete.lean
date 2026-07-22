@@ -20,11 +20,13 @@ gate), and perform two chained complete additions `tmp = U + acc`, `acc' = acc +
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulComplete
+open ProvableType.Halo2 (eval_cells)
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
-open Halo2.Ironwood.Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits)
+namespace Zcash.Circuits.Ecc.MulComplete
+
+open Halo2
+open Ecc.Mul.Incomplete.DoubleAndAdd (zRunValue)
+open Ecc.MulIncomplete (BitsHint kBitsWindow kBitsWindow_eq_kBits)
 
 /-! ## Config -/
 
@@ -116,14 +118,14 @@ theorem stepBasePoint_valid {base : Point Fp} (hbase : base.Valid) (bit : Bool) 
     (stepBasePoint base bit).Valid := by
   simp only [stepBasePoint]
   rcases Bool.dichotomy bit with hb | hb <;> rw [hb]
-  · simpa using Halo2.Ironwood.Point.valid_neg hbase
+  · simpa using Point.valid_neg hbase
   · simpa using hbase
 
 /-- Validity is preserved by a complete round (the complete group law is total on valid points). -/
 theorem stepPoint_valid {base acc : Point Fp} (hbase : base.Valid) (hacc : acc.Valid)
     (bit : Bool) : (stepPoint base acc bit).Valid :=
-  Halo2.Ironwood.Point.valid_add hacc
-    (Halo2.Ironwood.Point.valid_add (stepBasePoint_valid hbase bit) hacc)
+  Point.valid_add hacc
+    (Point.valid_add (stepBasePoint_valid hbase bit) hacc)
 
 theorem accPoint_valid {base acc0 : Point Fp} (hbase : base.Valid) (hacc0 : acc0.Valid)
     (bits : BitsHint) (b : ℕ) : (accPoint base acc0 bits b).Valid := by
@@ -390,7 +392,7 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
         simpa [stepBasePoint] using stepBasePoint_valid hBaseV false
       obtain ⟨hV1, hE1⟩ := tmp_spec ⟨hUv, hAccV⟩
       rw [hE1] at acc'_spec
-      obtain ⟨hV2, hE2⟩ := acc'_spec ⟨hAccV, Halo2.Ironwood.Point.valid_add hUv hAccV⟩
+      obtain ⟨hV2, hE2⟩ := acc'_spec ⟨hAccV, Point.valid_add hUv hAccV⟩
       rw [hAccOut] at hV2 hE2
       refine ⟨false, by simpa using hzeq, ?_, hV2⟩
       rw [hE2]
@@ -401,7 +403,7 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
         simpa [stepBasePoint] using stepBasePoint_valid hBaseV true
       obtain ⟨hV1, hE1⟩ := tmp_spec ⟨hUv, hAccV⟩
       rw [hE1] at acc'_spec
-      obtain ⟨hV2, hE2⟩ := acc'_spec ⟨hAccV, Halo2.Ironwood.Point.valid_add hUv hAccV⟩
+      obtain ⟨hV2, hE2⟩ := acc'_spec ⟨hAccV, Point.valid_add hUv hAccV⟩
       rw [hAccOut] at hV2 hE2
       refine ⟨true, by simpa using hzeq, ?_, hV2⟩
       rw [hE2]
@@ -755,4 +757,4 @@ def assign_region (numBits : ℕ) (w : ℕ) :
     · -- accumulator value
       exact hOutAcc.symm.trans haccN
 
-end Halo2.Ironwood.Ecc.MulComplete
+end Zcash.Circuits.Ecc.MulComplete

@@ -3,6 +3,8 @@ import Clean.Utils.Bitwise
 import Clean.Utils.Field
 import Clean.Gadgets.Boolean
 
+open Clean
+
 /-!
 # Binary Operations Utilities
 

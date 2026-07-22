@@ -2,7 +2,10 @@ import Clean.Halo2
 import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Basic
 
-namespace Halo2.Ironwood.Ecc
+namespace Zcash.Circuits.Ecc
+
+open Halo2
+
 /-!
 Reference:
 `halo2_gadgets/src/ecc/chip/witness_point.rs`
@@ -70,7 +73,7 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 
   soundness := by
     circuit_proof_start2 [pointGate, curveEqn]
-    grind [Halo2.Ironwood.Point.Valid, Halo2.Ironwood.Point.OnCurve, Halo2.Ironwood.Point.zero_def]
+    grind [Point.Valid, Point.OnCurve, Point.zero_def]
 
   completeness := by
     circuit_proof_start2 [pointGate, curveEqn]
@@ -78,9 +81,9 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     refine ⟨?_, region_0, region_1⟩
     simp only [region_0, region_1]
     rcases prover_assumptions with hc | h0
-    · have hc' : _ ^ 2 = _ ^ 3 + Halo2.Ironwood.pallasB := hc
+    · have hc' : _ ^ 2 = _ ^ 3 + pallasB := hc
       exact ⟨by linear_combination input_x * hc', by linear_combination input_y * hc'⟩
-    · grind [Halo2.Ironwood.Point.zero_def]
+    · grind [Point.zero_def]
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -110,13 +113,13 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
   soundness := by
     circuit_proof_start2 [pointNonIdGate, curveEqn]
-    grind [Halo2.Ironwood.Point.OnCurve]
+    grind [Point.OnCurve]
 
   completeness := by
     circuit_proof_start2 [pointNonIdGate, curveEqn]
     refine ⟨?_, region_0, region_1⟩
     simp only [region_0, region_1]
-    have hc : input_y ^ 2 = input_x ^ 3 + Halo2.Ironwood.pallasB := prover_assumptions
+    have hc : input_y ^ 2 = input_x ^ 3 + pallasB := prover_assumptions
     linear_combination hc
 
 /-- The layouter-level point witnesses: the region bundles in their own regions, named
@@ -133,4 +136,4 @@ derive_contract_bridges pointNonIdFormal := pointNonIdFormal
 
 end WitnessPoint
 
-end Halo2.Ironwood.Ecc
+end Zcash.Circuits.Ecc

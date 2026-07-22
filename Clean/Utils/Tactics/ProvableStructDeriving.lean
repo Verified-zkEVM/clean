@@ -2,6 +2,8 @@ import Lean
 import Lean.Elab.Deriving.Util
 import Clean.Circuit.Provable
 
+open Clean
+
 /-!
   # Deriving handlers for ProvableStruct and CircuitType
 

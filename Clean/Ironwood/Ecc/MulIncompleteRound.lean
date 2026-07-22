@@ -15,19 +15,19 @@ rotations, a running `z` column (`z_i = 2·z_{i+1} + k_i`), and the round relati
 Generic over the bit count `n + 1`: the `hi`/`lo` halves of `mul.rs` are two instantiations of this
 one `Config`, differing only in the advice columns and `NUM_BITS` (125 / 126).
 
-The value-level `Fp`/`Point` algebra lives in `Halo2.Ironwood.Ecc.Mul.Incomplete`; the framework
+The value-level `Fp`/`Point` algebra lives in `Ecc.Mul.Incomplete`; the framework
 wiring (`Config`/gates/`configure`, the `synthesize` loop, the `FormalRegionCircuit` bundle) is
 here.
 
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
 
-namespace Halo2.Ironwood.Ecc.MulIncomplete
+namespace Zcash.Circuits.Ecc.MulIncomplete
 
-open Halo2.Ironwood (Point)
-open Halo2.Ironwood.Ecc (DoubleAndAddRow)
-open Halo2.Ironwood.Ecc.Mul (kBits kNat tQNat)
-open Halo2.Ironwood.Ecc.Mul.Incomplete.DoubleAndAdd
+open Halo2
+open Ecc (DoubleAndAddRow)
+open Ecc.Mul (kBits kNat tQNat)
+open Ecc.Mul.Incomplete.DoubleAndAdd
   (accScalar zRunValue stepPoint accVal lambdaCellsValue rowLambdaValue
    accScalar_two_le accScalar_le pow254_lt_card step_nsmul honest_step)
 open CompElliptic.Fields.Pasta (PALLAS_SCALAR_CARD)
@@ -470,7 +470,7 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp} {obase
       linear_combination (norm := (field_simp; ring)) 4 * hg2 + 4 * hay
     have hstep' : Point.doubleAndAdd (m • P) (stepPoint P k)
         = some ((2 * m + (if k then 1 else 0) * 2 - 1) • P) := hstep
-    obtain ⟨hxB, hYB⟩ := Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints
+    obtain ⟨hxB, hYB⟩ := Ecc.DoubleAndAdd.coordinates_of_constraints
       hstep' hYP hXP hYA hSec hYC
     -- assemble the output point
     have hyB : (ol1 + ol2) * (oxA - (ol1 * ol1 - oxA - P.x)) * (2 : Fp)⁻¹
@@ -760,7 +760,7 @@ theorem sound_last_step {z xA l1 l2 bx yb oz oxA oy : Fp}
       linear_combination (norm := (field_simp; ring)) 4 * hg2 + 4 * hay - 4 * l2 * hax
     have hstep' : Point.doubleAndAdd (m • P) (stepPoint P k)
         = some ((2 * m + (if k then 1 else 0) * 2 - 1) • P) := hstep
-    obtain ⟨hxB, hYB⟩ := Halo2.Ironwood.Ecc.DoubleAndAdd.coordinates_of_constraints
+    obtain ⟨hxB, hYB⟩ := Ecc.DoubleAndAdd.coordinates_of_constraints
       hstep' hYP hXP hYA hSec hYC
     have hyB : oy = ((2 * m + (if k then 1 else 0) * 2 - 1) • P).y := by
       field_simp at hYB
@@ -793,7 +793,7 @@ theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
 @[circuit_norm]
 theorem round_output (i : ℕ) (cfg : Config) (o : ℕ)
     (iv : Var (Unconstrained field) Fp) (self : RegionIndex) :
-    (Halo2.Ironwood.Ecc.MulIncomplete.round i).output cfg o iv self
+    (Ecc.MulIncomplete.round i).output cfg o iv self
       = reads cfg (o + 1) self := rfl
 
-end Halo2.Ironwood.Ecc.MulIncomplete
+end Zcash.Circuits.Ecc.MulIncomplete

@@ -4,10 +4,10 @@
 import Clean.Ironwood.Specs.Sinsemilla
 import Clean.Ironwood.Ecc.MulFixed.CertCheck
 
-namespace Halo2.Ironwood.Specs.Sinsemilla
+namespace Zcash.Circuits.Specs.Sinsemilla
 
-open Halo2.Ironwood.Ecc.MulFixed.Cert (pointOf)
-open Halo2.Ironwood.Ecc.MulFixed.Cert.Chain (checkOnCurve checkOnCurve_sound)
+open Ecc.MulFixed.Cert (pointOf)
+open Ecc.MulFixed.Cert.Chain (checkOnCurve checkOnCurve_sound)
 
 set_option maxRecDepth 100000 in
 private def sData : List (ℕ × ℕ) := [
@@ -2093,4 +2093,4 @@ def orchardGenerators : Generators where
     checkSList_sound sTable_check k
       (by rw [sData_length]; exact lt_of_lt_of_le hk (by norm_num [K]))
 
-end Halo2.Ironwood.Specs.Sinsemilla
+end Zcash.Circuits.Specs.Sinsemilla

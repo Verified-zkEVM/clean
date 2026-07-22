@@ -26,11 +26,10 @@ extractor reads `alpha` off any satisfying assignment and `rk = [alpha] SpendAut
 holds at that `alpha`, with no existential.
 -/
 
-namespace Halo2.Ironwood.Action.SpendAuthority
+namespace Zcash.Circuits.Action.SpendAuthority
 
-open Halo2.Ironwood (Fp)
-open Halo2.Ironwood (Point Fq)
-open Halo2.Ironwood.Ecc.MulFixed (FixedBase)
+open Halo2
+open Ecc.MulFixed (FixedBase)
 
 /-- The input of the spend-authority block: the randomizer's nat-valued reading program
 `alpha` (a prover hint — Rust `Value<pallas::Scalar>`; the `FullWidth` child derives its
@@ -85,4 +84,4 @@ def circuit (G : FixedBase) : FormalCircuit Fp
 
 derive_contract_bridges circuit (G : FixedBase) := circuit G
 
-end Halo2.Ironwood.Action.SpendAuthority
+end Zcash.Circuits.Action.SpendAuthority
