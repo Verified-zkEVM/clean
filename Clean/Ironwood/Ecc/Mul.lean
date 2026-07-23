@@ -69,16 +69,17 @@ structure Config where
 /-- The `q_mul_lsb` gate, a pure function of the config columns. Reads `z_complete` at
 `cur`/`next` (`z_1`, `z_0`), `add.xP`/`add.yP` at `cur` (`x_p`, `y_p`) and `next`
 (`base_x`, `base_y`). -/
-def lsbGate (cfg : Config) : Gate Fp where
-  name := "LSB check"
-  selector := cfg.qMulLsb
-  constraints :=
-    let z1 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 0   -- z_1
-    let z0 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 1   -- z_0
-    let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0               -- x_p
-    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0               -- y_p
-    let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x
-    let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y
+def lsbGate (cfg : Config) : Gate Fp :=
+  let z1 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 0   -- z_1
+  let z0 : Expression Fp Query := queryAdvice cfg.completeConfig.zComplete 1   -- z_0
+  let xP : Expression Fp Query := queryAdvice cfg.addConfig.xP 0               -- x_p
+  let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0               -- y_p
+  let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x
+  let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y
+  { name := "LSB check"
+    selector := cfg.qMulLsb
+    queriedCells := [z1, z0, xP, yP, baseX, baseY]
+    constraints :=
     let lsb := z0 - z1 * (2 : Fp)
     -- `lsb · (1 − lsb)`, with the `1` on the left of the subtraction to match the compiled gate
     -- AST.
@@ -86,7 +87,7 @@ def lsbGate (cfg : Config) : Gate Fp where
     let lsbX := lsb * xP + ((1 : Fp) - lsb) * (xP - baseX)
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
     Constraints.withSelector cfg.qMulLsb
-      [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
+      [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ] }
 
 /-! ## Configure -/
 

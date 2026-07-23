@@ -35,6 +35,16 @@ structure Config where
 def fullWidthGate (cfg : Config) : Gate Fp where
   name := "Full-width fixed-base scalar mul"
   selector := cfg.qMulFixedFull
+  -- the raw `window` query first, then `coords_check`'s atoms (y_p, x_p, the fixed `z`, u)
+  -- and the eight Lagrange-coeff fixed queries from `interpolated_x`.
+  queriedCells :=
+    [ queryAdvice cfg.superConfig.window 0,
+      queryAdvice cfg.superConfig.addConfig.yP 0, queryAdvice cfg.superConfig.addConfig.xP 0,
+      queryFixed cfg.superConfig.fixedZ, queryAdvice cfg.superConfig.u 0,
+      queryFixed (cfg.superConfig.lagrangeCoeffs 0), queryFixed (cfg.superConfig.lagrangeCoeffs 1),
+      queryFixed (cfg.superConfig.lagrangeCoeffs 2), queryFixed (cfg.superConfig.lagrangeCoeffs 3),
+      queryFixed (cfg.superConfig.lagrangeCoeffs 4), queryFixed (cfg.superConfig.lagrangeCoeffs 5),
+      queryFixed (cfg.superConfig.lagrangeCoeffs 6), queryFixed (cfg.superConfig.lagrangeCoeffs 7) ]
   constraints :=
     let window : Expression Fp Query := queryAdvice cfg.superConfig.window 0
     Constraints.withSelector cfg.qMulFixedFull

@@ -45,19 +45,15 @@ def addProgram : Configure Fp Config := do
 
 def addCS : ConstraintSystem Fp := (addProgram {}).2
 
-/-- The Add gate's queried cells in halo2 declaration order (the closure's `let` sequence,
-`add.rs`): `x_p, y_p, x_q, y_q, x_r, y_r, λ, α, β, γ, δ` on advice columns `0..8`, with
-`x_r, y_r` at `Rotation::next()` on columns `2, 3`. This is halo2's `Gate::queried_cells`;
-it seeds the query-index walk so the projected layout and gate indices match Rust. -/
-def addSeed : List Query :=
-  [ .advice ⟨0⟩ 0, .advice ⟨1⟩ 0, .advice ⟨2⟩ 0, .advice ⟨3⟩ 0,
-    .advice ⟨2⟩ 1, .advice ⟨3⟩ 1,
-    .advice ⟨4⟩ 0, .advice ⟨5⟩ 0, .advice ⟨6⟩ 0, .advice ⟨7⟩ 0, .advice ⟨8⟩ 0 ]
+-- The gate's `queriedCells` registered faithfully (no ill-formed entries); the layout
+-- equalities below then certify the recorded order against the Rust dump.
+#guard addCS.invalidQueriedCells.isEmpty
 
--- Pre-compression: projected CS equals the dumped fixture.
-#guard projectCS addSeed addCS == addPre
+-- Pre-compression: projected CS (query layouts from the configure-recorded queries)
+-- equals the dumped fixture.
+#guard projectCS addCS == addPre
 
 -- Post-compression: projected CS equals the dumped fixture.
-#guard projectCSPost addSeed addCS == addPost
+#guard projectCSPost addCS == addPost
 
 end Zcash.Circuits.Fixtures.Test

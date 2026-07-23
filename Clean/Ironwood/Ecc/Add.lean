@@ -41,21 +41,22 @@ structure Config where
 /-- The twelve complete-addition gate polynomials, a pure function of the columns.
 `x_p, y_p, x_q, y_q, λ, α, β, γ, δ` are read at the current row; `x_r, y_r` at the next row. -/
 def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column .advice) :
-    Gate Fp where
-  name := "complete addition"
-  selector := qAdd
-  constraints :=
-    let x_p : Expression Fp Query := queryAdvice xP 0
-    let y_p : Expression Fp Query := queryAdvice yP 0
-    let x_q : Expression Fp Query := queryAdvice xQR 0
-    let y_q : Expression Fp Query := queryAdvice yQR 0
-    let x_r : Expression Fp Query := queryAdvice xQR 1
-    let y_r : Expression Fp Query := queryAdvice yQR 1
-    let lambda : Expression Fp Query := queryAdvice lambda 0
-    let alpha : Expression Fp Query := queryAdvice alpha 0
-    let beta : Expression Fp Query := queryAdvice beta 0
-    let gamma : Expression Fp Query := queryAdvice gamma 0
-    let delta : Expression Fp Query := queryAdvice delta 0
+    Gate Fp :=
+  let x_p : Expression Fp Query := queryAdvice xP 0
+  let y_p : Expression Fp Query := queryAdvice yP 0
+  let x_q : Expression Fp Query := queryAdvice xQR 0
+  let y_q : Expression Fp Query := queryAdvice yQR 0
+  let x_r : Expression Fp Query := queryAdvice xQR 1
+  let y_r : Expression Fp Query := queryAdvice yQR 1
+  let lambda : Expression Fp Query := queryAdvice lambda 0
+  let alpha : Expression Fp Query := queryAdvice alpha 0
+  let beta : Expression Fp Query := queryAdvice beta 0
+  let gamma : Expression Fp Query := queryAdvice gamma 0
+  let delta : Expression Fp Query := queryAdvice delta 0
+  { name := "complete addition"
+    selector := qAdd
+    queriedCells := [x_p, y_p, x_q, y_q, x_r, y_r, lambda, alpha, beta, gamma, delta]
+    constraints :=
     let x_q_minus_x_p := x_q - x_p
     let x_p_minus_x_r := x_p - x_r
     let y_q_plus_y_p := y_q + y_p
@@ -85,7 +86,7 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
         ("3a", poly3a), ("3b", poly3b), ("3c", poly3c), ("3d", poly3d),
         ("4a", poly4a), ("4b", poly4b),
         ("5a", poly5a), ("5b", poly5b),
-        ("6a", poly6a), ("6b", poly6b) ]
+        ("6a", poly6a), ("6b", poly6b) ] }
 
 /-!
 ## Algebraic core lemmas

@@ -51,20 +51,21 @@ structure Config where
 incomplete-addition gate `q_mul` already checks it for the other bits): `k = z_i − 2·z_{i+1}` is a
 bit, and `y_p` is `base_y` conditionally negated by it (`k = 1 ⇒ y_p = base_y`, `k = 0 ⇒
 y_p = −base_y`). -/
-def decomposeGate (cfg : Config) : Gate Fp where
-  name := "Decompose scalar for complete bits of variable-base mul"
-  selector := cfg.qDecompose
-  constraints :=
-    let zPrev : Expression Fp Query := queryAdvice cfg.zComplete (-1)   -- z_{i+1}
-    let zNext : Expression Fp Query := queryAdvice cfg.zComplete 1      -- z_i
-    let baseY : Expression Fp Query := queryAdvice cfg.zComplete 0      -- base_y
-    let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP (-1)   -- y_p
+def decomposeGate (cfg : Config) : Gate Fp :=
+  let zPrev : Expression Fp Query := queryAdvice cfg.zComplete (-1)   -- z_{i+1}
+  let zNext : Expression Fp Query := queryAdvice cfg.zComplete 1      -- z_i
+  let baseY : Expression Fp Query := queryAdvice cfg.zComplete 0      -- base_y
+  let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP (-1)   -- y_p
+  { name := "Decompose scalar for complete bits of variable-base mul"
+    selector := cfg.qDecompose
+    queriedCells := [zPrev, zNext, baseY, yP]
+    constraints :=
     let k := zNext - (2 : Fp) * zPrev
     -- `k · (1 − k)`, with the `1` on the left of the subtraction to match the compiled gate AST.
     let boolCheck := k * ((1 : Fp) - k)
     let ySwitch := k * (baseY - yP) + ((1 : Fp) - k) * (baseY + yP)
     Constraints.withSelector cfg.qDecompose
-      [ ("bool_check", boolCheck), ("y_switch", ySwitch) ]
+      [ ("bool_check", boolCheck), ("y_switch", ySwitch) ] }
 
 /-- Enable equality on `z_complete`, allocate the selector, register the gate. The `add::Config`'s
 columns are already equality-enabled by `add`'s own `configure`. -/

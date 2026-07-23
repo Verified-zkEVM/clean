@@ -27,21 +27,19 @@ open Fixtures.Json
 def actionCS : ConstraintSystem Fp :=
   (Action.Circuit.configure Specs.Sinsemilla.orchardGenerators {}).2
 
-/-- Registration-order query seed from a dumped fixture's query layouts. -/
-def seedOf (f : CsFixture) : List Query :=
-  f.adviceQueryLayout.map (fun (c, r) => Query.advice ⟨c⟩ r)
-    ++ f.fixedQueryLayout.map (fun (c, r) => Query.fixed ⟨c⟩ r)
-    ++ f.instanceQueryLayout.map (fun (c, r) => Query.instance ⟨c⟩ r)
-
 #eval show IO Unit from do
   let actionPre ← loadCsFixture "Clean/Ironwood/Fixtures/actionPre.json" 0x31656840fdb3156d
   let actionPost ← loadCsFixture "Clean/Ironwood/Fixtures/actionPost.json" 0xdb884f3c3174a41b
   runChecks [
-    -- Pre-compression: projected CS equals the dumped fixture.
-    ("actionPre: projected CS = dump", projectCS (seedOf actionPre) actionCS == actionPre),
+    -- Every gate's/lookup's `queriedCells` registered faithfully; the layout equalities
+    -- below then certify the recorded order against the Rust dump.
+    ("action: no ill-formed queriedCells", actionCS.invalidQueriedCells.isEmpty),
+    -- Pre-compression: projected CS (query layouts from the configure-recorded queries)
+    -- equals the dumped fixture.
+    ("actionPre: projected CS = dump", projectCS actionCS == actionPre),
     -- Post-compression: the Rust-dumped selector map, applied mechanically, yields
     -- exactly the dumped post-compression CS.
     ("actionPost: projected CS = dump",
-      projectCSPostMap (seedOf actionPost) actionSelMap actionCS == actionPost)]
+      projectCSPostMap actionSelMap actionCS == actionPost)]
 
 end Zcash.Circuits.Fixtures.Test.MatchAction

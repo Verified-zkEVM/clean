@@ -81,20 +81,23 @@ structure Config where
 - `left_check`: `z1_a + (b_0 + b_1·2^10)·2^240 − left`, with `b_0 = b_whole − z1_b·2^10`
 - `right_check`: `b_2 + c_whole·2^5 − right`
 - `b1_b2_check`: `z1_b − (b_1 + b_2·2^5)` -/
-def decomposeGate (cfg : Config) : Gate Fp where
-  name := "Decomposition check"
-  selector := cfg.qDecompose
-  constraints :=
-    let aWhole : Expression Fp Query := queryAdvice cfg.aWhole 0
-    let bWhole : Expression Fp Query := queryAdvice cfg.bWhole 0
-    let cWhole : Expression Fp Query := queryAdvice cfg.cWhole 0
-    let leftNode : Expression Fp Query := queryAdvice cfg.leftNode 0
-    let rightNode : Expression Fp Query := queryAdvice cfg.rightNode 0
-    let z1A : Expression Fp Query := queryAdvice cfg.z1A 1
-    let z1B : Expression Fp Query := queryAdvice cfg.z1B 1
-    let b1 : Expression Fp Query := queryAdvice cfg.b1 1
-    let b2 : Expression Fp Query := queryAdvice cfg.b2 1
-    let l : Expression Fp Query := queryAdvice cfg.lWhole 1
+def decomposeGate (cfg : Config) : Gate Fp :=
+  let aWhole : Expression Fp Query := queryAdvice cfg.aWhole 0
+  let bWhole : Expression Fp Query := queryAdvice cfg.bWhole 0
+  let cWhole : Expression Fp Query := queryAdvice cfg.cWhole 0
+  let leftNode : Expression Fp Query := queryAdvice cfg.leftNode 0
+  let rightNode : Expression Fp Query := queryAdvice cfg.rightNode 0
+  let z1A : Expression Fp Query := queryAdvice cfg.z1A 1
+  let z1B : Expression Fp Query := queryAdvice cfg.z1B 1
+  let b1 : Expression Fp Query := queryAdvice cfg.b1 1
+  let b2 : Expression Fp Query := queryAdvice cfg.b2 1
+  let l : Expression Fp Query := queryAdvice cfg.lWhole 1
+  { name := "Decomposition check"
+    selector := cfg.qDecompose
+    -- `l_whole` (advices[4] @ next) is queried first in the Rust closure, ahead of the
+    -- cur-row cells and the remaining next-row cells.
+    queriedCells := [l, aWhole, bWhole, cWhole, leftNode, rightNode, z1A, z1B, b1, b2]
+    constraints :=
     let twoPow5 : Expression Fp Query := (2 ^ 5 : Fp)
     let twoPow10 : Expression Fp Query := (2 ^ 10 : Fp)
     let twoPow240 : Expression Fp Query := (2 ^ 240 : Fp)
@@ -106,7 +109,7 @@ def decomposeGate (cfg : Config) : Gate Fp where
     let b1b2Check := z1B - (b1 + b2 * twoPow5)
     Constraints.withSelector cfg.qDecompose
       [ ("l_check", lCheck), ("left_check", leftCheck),
-        ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ]
+        ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ] }
 
 /-- The value-level decomposition spec, over the ten cell values.
 Uses the plain `(2^k : Fp)` literals (definitionally the `twoPow*` constants). -/

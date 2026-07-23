@@ -28,14 +28,14 @@ structure Config where
 
 /-- Rust `"Field element addition: c = a + b"` gate (`add_chip.rs:50-58`): the single
 constraint `a + b - c`, all cells at `Rotation::cur`. -/
-def addGate (cfg : Config) : Gate Fp where
-  name := "Field element addition: c = a + b"
-  selector := cfg.qAdd
-  constraints :=
-    let a : Expression Fp Query := queryAdvice cfg.a 0
-    let b : Expression Fp Query := queryAdvice cfg.b 0
-    let c : Expression Fp Query := queryAdvice cfg.c 0
-    Constraints.withSelector cfg.qAdd [("", a + b - c)]
+def addGate (cfg : Config) : Gate Fp :=
+  let a : Expression Fp Query := queryAdvice cfg.a 0
+  let b : Expression Fp Query := queryAdvice cfg.b 0
+  let c : Expression Fp Query := queryAdvice cfg.c 0
+  { name := "Field element addition: c = a + b"
+    selector := cfg.qAdd
+    queriedCells := [a, b, c]
+    constraints := Constraints.withSelector cfg.qAdd [("", a + b - c)] }
 
 /-- Rust `AddChip::configure` (`add_chip.rs:43-61`), VK-exact: the fresh `q_add`
 selector, then the gate. -/

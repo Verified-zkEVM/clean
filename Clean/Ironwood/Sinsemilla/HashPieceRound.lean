@@ -96,6 +96,10 @@ rotation 0 (the non-`allow_init_from_private_point` branch, which the action cir
 def initialYQGate (cfg : Config) : Gate Fp where
   name := "Initial y_Q"
   selector := cfg.qS4
+  -- `y_q` (fixed) first, then `Y_A(cur)`'s atoms (xA/λ₁/λ₂ @ cur) via the helper.
+  queriedCells :=
+    [ queryFixed cfg.fixedYQ,
+      queryAdvice cfg.xA 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
   constraints :=
     let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
     Constraints.withSelector cfg.qS4
@@ -115,6 +119,14 @@ def qS3Expr (cfg : Config) : Expression Fp Query :=
 def sinsemillaGate (cfg : Config) : Gate Fp where
   name := "Sinsemilla gate"
   selector := cfg.qS1
+  -- `q_s3` registers `q_s2` (fixed) first; then the closure's four lets; then `x_r(cur)`
+  -- adds x_p/λ₁ @ cur and `Y_A(next)` adds λ₂ @ next (cur-row `Y_A` atoms all deduped).
+  queriedCells :=
+    [ queryFixed cfg.qS2,
+      queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 0,
+      queryAdvice cfg.xA 0, queryAdvice cfg.xA 1,
+      queryAdvice cfg.xP 0, queryAdvice cfg.lambda1 0,
+      queryAdvice cfg.lambda2 1 ]
   constraints :=
     let l2Cur : Expression Fp Query := queryAdvice cfg.lambda2 0
     let xACur : Expression Fp Query := queryAdvice cfg.xA 0
@@ -180,8 +192,13 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   let cfg : Config :=
     { qS1, qS2, qS4, fixedYQ, xA, xP, lambda1, lambda2, bits, witnessPieces,
       generatorTable := genTable }
-  -- the 3-tuple generator lookup, registered before the gates
-  lookup [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
+  -- the 3-tuple generator lookup, registered before the gates. The closure queries
+  -- `q_s2` (fixed, via `q_s3`), then `bits` cur/next, `x_p`, and the `y_p` block's
+  -- λ₁/x_a @ cur plus λ₂ @ cur (from `Y_A`).
+  lookup [queryFixed cfg.qS2, queryAdvice cfg.bits 0, queryAdvice cfg.bits 1,
+          queryAdvice cfg.xP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.xA 0,
+          queryAdvice cfg.lambda2 0]
+    [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
   createGate (initialYQGate cfg)

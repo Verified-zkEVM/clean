@@ -27,28 +27,30 @@ structure Config where
 
 /-- `"CommitIvk canonicity check"` (`commit_ivk.rs:78-232`), fourteen constraints in the
 source's exact order. -/
-def gate (cfg : Config) : Gate Fp where
-  name := "CommitIvk canonicity check"
-  selector := cfg.qCommitIvk
-  constraints :=
-    let ak : Expression Fp Query := queryAdvice (cfg.advices 0) 0
-    let nk : Expression Fp Query := queryAdvice (cfg.advices 0) 1
-    let a : Expression Fp Query := queryAdvice (cfg.advices 1) 0
-    let bWhole : Expression Fp Query := queryAdvice (cfg.advices 2) 0
-    let c : Expression Fp Query := queryAdvice (cfg.advices 1) 1
-    let dWhole : Expression Fp Query := queryAdvice (cfg.advices 2) 1
-    let b0 : Expression Fp Query := queryAdvice (cfg.advices 3) 0
-    let b1 : Expression Fp Query := queryAdvice (cfg.advices 4) 0
-    let b2 : Expression Fp Query := queryAdvice (cfg.advices 5) 0
-    let d0 : Expression Fp Query := queryAdvice (cfg.advices 3) 1
-    let d1 : Expression Fp Query := queryAdvice (cfg.advices 4) 1
-    let z13A : Expression Fp Query := queryAdvice (cfg.advices 6) 0
-    let aPrime : Expression Fp Query := queryAdvice (cfg.advices 7) 0
-    let z13APrime : Expression Fp Query := queryAdvice (cfg.advices 8) 0
-    let z13C : Expression Fp Query := queryAdvice (cfg.advices 6) 1
-    let b2CPrime : Expression Fp Query := queryAdvice (cfg.advices 7) 1
-    let z14B2CPrime : Expression Fp Query := queryAdvice (cfg.advices 8) 1
-    Constraints.withSelector cfg.qCommitIvk
+def gate (cfg : Config) : Gate Fp :=
+  let ak : Expression Fp Query := queryAdvice (cfg.advices 0) 0
+  let nk : Expression Fp Query := queryAdvice (cfg.advices 0) 1
+  let a : Expression Fp Query := queryAdvice (cfg.advices 1) 0
+  let bWhole : Expression Fp Query := queryAdvice (cfg.advices 2) 0
+  let c : Expression Fp Query := queryAdvice (cfg.advices 1) 1
+  let dWhole : Expression Fp Query := queryAdvice (cfg.advices 2) 1
+  let b0 : Expression Fp Query := queryAdvice (cfg.advices 3) 0
+  let b1 : Expression Fp Query := queryAdvice (cfg.advices 4) 0
+  let b2 : Expression Fp Query := queryAdvice (cfg.advices 5) 0
+  let d0 : Expression Fp Query := queryAdvice (cfg.advices 3) 1
+  let d1 : Expression Fp Query := queryAdvice (cfg.advices 4) 1
+  let z13A : Expression Fp Query := queryAdvice (cfg.advices 6) 0
+  let aPrime : Expression Fp Query := queryAdvice (cfg.advices 7) 0
+  let z13APrime : Expression Fp Query := queryAdvice (cfg.advices 8) 0
+  let z13C : Expression Fp Query := queryAdvice (cfg.advices 6) 1
+  let b2CPrime : Expression Fp Query := queryAdvice (cfg.advices 7) 1
+  let z14B2CPrime : Expression Fp Query := queryAdvice (cfg.advices 8) 1
+  { name := "CommitIvk canonicity check"
+    selector := cfg.qCommitIvk
+    queriedCells :=
+      [ak, nk, a, bWhole, c, dWhole, b0, b1, b2, d0, d1,
+       z13A, aPrime, z13APrime, z13C, b2CPrime, z14B2CPrime]
+    constraints := Constraints.withSelector cfg.qCommitIvk
       [("b1_bool_check", boolCheck b1),
        ("d1_bool_check", boolCheck d1),
        ("b_decomposition_check",
@@ -66,7 +68,7 @@ def gate (cfg : Config) : Gate Fp where
        ("z13_c_check", d1 * z13C),
        ("b2_c_prime_check",
         b2 + c * (2 ^ 5 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b2CPrime),
-       ("z14_b2_c_prime", d1 * z14B2CPrime)]
+       ("z14_b2_c_prime", d1 * z14B2CPrime)] }
 
 /-- Rust `CommitIvkChip::configure` (`commit_ivk.rs:60-235`), VK-exact. -/
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do

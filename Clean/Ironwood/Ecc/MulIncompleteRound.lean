@@ -125,6 +125,11 @@ derived next-row `y_a`. -/
 def qMul1Gate (cfg : Config) : Gate Fp where
   name := "q_mul_1 == 1 checks"
   selector := cfg.qMul1
+  -- `y_a(next)` is built before `y_a_witnessed` in the Rust closure, so the `Y_A` helper's
+  -- atoms (xA/λ₁/λ₂ @ next) register ahead of `λ₁ @ cur`.
+  queriedCells :=
+    [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
+      queryAdvice cfg.lambda1 0 ]
   constraints :=
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     Constraints.withSelector cfg.qMul1
@@ -135,6 +140,13 @@ next-row `y_a` derived. -/
 def qMul2Gate (cfg : Config) : Gate Fp where
   name := "q_mul_2 == 1 checks"
   selector := cfg.qMul2
+  -- `y_a(next)` registers xA/λ₁/λ₂ @ next first; then the closure's own `x_p`/`y_p` lets;
+  -- then `for_loop`'s queries (its cur-row atoms already deduped by the `Y_A`/`x_r` calls).
+  queriedCells :=
+    [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
+      queryAdvice cfg.xP 0, queryAdvice cfg.xP 1, queryAdvice cfg.yP 0, queryAdvice cfg.yP 1,
+      queryAdvice cfg.z 0, queryAdvice cfg.z (-1), queryAdvice cfg.xA 0,
+      queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
   constraints :=
     let xPCur : Expression Fp Query := queryAdvice cfg.xP 0
     let xPNext : Expression Fp Query := queryAdvice cfg.xP 1
@@ -150,6 +162,12 @@ def qMul2Gate (cfg : Config) : Gate Fp where
 def qMul3Gate (cfg : Config) : Gate Fp where
   name := "q_mul_3 == 1 checks"
   selector := cfg.qMul3
+  -- `y_a_final` (λ₁ @ next) registers first; then `for_loop`'s queries in its let-order
+  -- (cur-row `Y_A`/`x_r` atoms deduped).
+  queriedCells :=
+    [ queryAdvice cfg.lambda1 1, queryAdvice cfg.z 0, queryAdvice cfg.z (-1),
+      queryAdvice cfg.xA 0, queryAdvice cfg.xA 1, queryAdvice cfg.xP 0,
+      queryAdvice cfg.yP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
   constraints :=
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
     Constraints.withSelector cfg.qMul3 (forLoopPolys cfg yAFinal)

@@ -53,6 +53,13 @@ left-fold. -/
 def fullRoundGate (cfg : Config) : Gate Fp where
   name := "full round"
   selector := cfg.sFull
+  -- Execution order: `state_next` for next_idx=0 registers first, then the inner idx-loop's
+  -- cur/rc_a atoms (which dedup for the later next_idx), so `state[1]/[2] @ next` land last.
+  queriedCells :=
+    [ queryAdvice (cfg.state 0) 1, queryAdvice (cfg.state 0) 0, queryFixed (cfg.rcA 0),
+      queryAdvice (cfg.state 1) 0, queryFixed (cfg.rcA 1),
+      queryAdvice (cfg.state 2) 0, queryFixed (cfg.rcA 2),
+      queryAdvice (cfg.state 1) 1, queryAdvice (cfg.state 2) 1 ]
   constraints :=
     let term (nextIdx idx : Fin 3) : Expression Fp Query :=
       pow5Expr (queryAdvice (cfg.state idx) 0 + queryFixed (cfg.rcA idx))
@@ -70,6 +77,15 @@ two linear rounds — in the source's exact order and orientation. -/
 def partialRoundsGate (cfg : Config) : Gate Fp where
   name := "partial rounds"
   selector := cfg.sPartial
+  -- Order: the four top lets (cur_0, mid_0, rc_a0, rc_b0), then `mid(0)`'s cur/rc_a atoms,
+  -- then `next(0)`'s three next-row states, then rc_b[1], rc_b[2] from the linear rounds.
+  queriedCells :=
+    [ queryAdvice (cfg.state 0) 0, queryAdvice cfg.partialSbox 0,
+      queryFixed (cfg.rcA 0), queryFixed (cfg.rcB 0),
+      queryAdvice (cfg.state 1) 0, queryFixed (cfg.rcA 1),
+      queryAdvice (cfg.state 2) 0, queryFixed (cfg.rcA 2),
+      queryAdvice (cfg.state 0) 1, queryAdvice (cfg.state 1) 1, queryAdvice (cfg.state 2) 1,
+      queryFixed (cfg.rcB 1), queryFixed (cfg.rcB 2) ]
   constraints :=
     let cur (i : Fin 3) : Expression Fp Query := queryAdvice (cfg.state i) 0
     let rcA (i : Fin 3) : Expression Fp Query := queryFixed (cfg.rcA i)
@@ -94,6 +110,12 @@ through unchanged. -/
 def padAndAddGate (cfg : Config) : Gate Fp where
   name := "pad-and-add"
   selector := cfg.sPadAndAdd
+  -- Order: the rate (state[2]) prev/next lets first, then the pad_and_add loop over
+  -- idx 0,1 (prev/cur/next each).
+  queriedCells :=
+    [ queryAdvice (cfg.state 2) (-1), queryAdvice (cfg.state 2) 1,
+      queryAdvice (cfg.state 0) (-1), queryAdvice (cfg.state 0) 0, queryAdvice (cfg.state 0) 1,
+      queryAdvice (cfg.state 1) (-1), queryAdvice (cfg.state 1) 0, queryAdvice (cfg.state 1) 1 ]
   constraints :=
     let padAndAdd (i : Fin 3) : Expression Fp Query :=
       queryAdvice (cfg.state i) (-1) + queryAdvice (cfg.state i) 0

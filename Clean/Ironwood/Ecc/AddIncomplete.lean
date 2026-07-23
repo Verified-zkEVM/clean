@@ -34,21 +34,21 @@ structure Config where
   xQR : Column .advice
   yQR : Column .advice
 
-def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp where
-  name := "incomplete addition"
-  selector := qAddIncomplete
-  constraints :=
-    let x_p : Expression Fp Query := queryAdvice xP 0
-    let y_p : Expression Fp Query := queryAdvice yP 0
-    let x_q : Expression Fp Query := queryAdvice xQR 0
-    let y_q : Expression Fp Query := queryAdvice yQR 0
-    let x_r : Expression Fp Query := queryAdvice xQR 1
-    let y_r : Expression Fp Query := queryAdvice yQR 1
-    let poly1 :=
-      (x_r + x_q + x_p) * (x_p - x_q) * (x_p - x_q) - (y_p - y_q) * (y_p - y_q)
-    let poly2 :=
-      (y_r + y_q) * (x_p - x_q) - (y_p - y_q) * (x_q - x_r)
-    Constraints.withSelector qAddIncomplete [("x_r", poly1), ("y_r", poly2)]
+def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp :=
+  let x_p : Expression Fp Query := queryAdvice xP 0
+  let y_p : Expression Fp Query := queryAdvice yP 0
+  let x_q : Expression Fp Query := queryAdvice xQR 0
+  let y_q : Expression Fp Query := queryAdvice yQR 0
+  let x_r : Expression Fp Query := queryAdvice xQR 1
+  let y_r : Expression Fp Query := queryAdvice yQR 1
+  let poly1 :=
+    (x_r + x_q + x_p) * (x_p - x_q) * (x_p - x_q) - (y_p - y_q) * (y_p - y_q)
+  let poly2 :=
+    (y_r + y_q) * (x_p - x_q) - (y_p - y_q) * (x_q - x_r)
+  { name := "incomplete addition"
+    selector := qAddIncomplete
+    queriedCells := [x_p, y_p, x_q, y_q, x_r, y_r]
+    constraints := Constraints.withSelector qAddIncomplete [("x_r", poly1), ("y_r", poly2)] }
 
 /-!
 ## The gadget
