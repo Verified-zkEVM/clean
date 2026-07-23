@@ -318,7 +318,7 @@ partial def walkGoalScoped (p : Expr) (sources : Array (Expr × Expr)) :
     -- goal and witness sides, so witness matching needs no relaxed-transparency retry.
     let mut found : Option (Expr × Expr) := none
     for s in sources do
-      if ← SubcircuitRw.witnessMatches? c s.2 (relaxed := false) (useOpsIdx := true) then
+      if ← SubcircuitRw.witnessMatches? c s.2 (useOpsIdx := true) then
         found := some s
         break
     let some (witProof, witTy) := found

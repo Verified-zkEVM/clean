@@ -233,9 +233,11 @@ both sides. So `ChunkMatch` now carries `opsIdx`, and the cps2 driver (`useOpsId
 (i) matches witnesses on `opsIdx` REDUCIBLY (`witnessMatches?`), and (ii) emits every
 contract at `opsIdx` (`{c with regionIdx := c.opsIdx}` into the leaves), so the child
 `.output …` in the weakened chunk / derived statement lands on the minted atom
-reducibly. With that, NO cps2 path passes `allowRelaxed`/`relaxed := true` — the relaxed
-machinery is dead for cps2 (still wired for the v1 `subcircuit_rw !` entry, which no
-current proof uses; its deletion is a follow-up cleanup once the v1 corpus empties). The
+reducibly. With that, NO path passes `allowRelaxed`/`relaxed := true`, and the entire
+relaxed-transparency machinery — the `subcircuit_rw !` entry, the two-pass witness
+lookup, the `findOutputLocal?` default-transparency retry, and the `allowRelaxed`/
+`relaxed` params threaded through the walkers — has been DELETED (both v1 and v2 always
+ran the reducible single pass; only the unused `!` entry ever set the flag). The
 peel-time region-count fold that a first attempt reached for is NOT used: it had to
 touch the goal (breaking user-proof spellings), the remaining chunk (breaking terminal
 detection), or the soundness `region_<k>` numbering — the ops-index compare needs none
