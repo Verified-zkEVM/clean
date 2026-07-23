@@ -100,17 +100,9 @@ def resolveCell (permCols : List ColRef) (starts : List ℕ) (c : Cell) : ℕ ×
 
 /-! ## Indexed region walk
 
-Pairs each `assignRegion` body with its Halo2-Clean region index (only `region`
-increments; subcircuit calls appear pre-appended in the op list). Everything downstream
-(copies, activations) is a fold over this list. -/
-
-def indexedRegions : Operations F → ℕ → List (ℕ × RegionOperations F) × ℕ
-  | [], i => ([], i)
-  | .region _ body :: rest, i =>
-      let (rs, i') := indexedRegions rest (i + 1)
-      ((i, body) :: rs, i')
-  | .constrainInstance _ _ _ :: rest, i => indexedRegions rest i
-  | .loadTable _ _ :: rest, i => indexedRegions rest i
+`indexedRegions` (pairing each `assignRegion` body with its Halo2-Clean region index) now
+lives in Clean core (`Clean.Halo2.Keygen.FloorPlanner`) and is in scope via `open Halo2`.
+Everything downstream (copies, activations) is a fold over that list. -/
 
 /-! ## Ordered copy extraction — the two halo2 floor planners
 
@@ -291,18 +283,11 @@ def sigmaEntries (mapping : Array (Array (ℕ × ℕ))) : List (ℕ × ℕ × �
     colArr.toList.zipIdx.filterMap fun (v, j) =>
       if v = (i, j) then none else some (i, j, v.1, v.2))
 
-/-! ## Fixed assignments -/
+/-! ## Fixed assignments
 
-/-- Selector-activation rows: `(selectorIndex, absRow)` for every `enableGate` (its own
-selector) and `enableLookup` (each enabled selector) across all regions. -/
-def activations (starts : List ℕ) (regions : List (ℕ × RegionOperations F)) : List (ℕ × ℕ) :=
-  regions.flatMap fun (idx, body) =>
-    body.flatMap fun op =>
-      match op with
-      | .enableGate gate row => [(gate.selector.index, place starts idx + row)]
-      | .enableLookup _ enabled row =>
-          enabled.map fun s => (s.index, place starts idx + row)
-      | _ => []
+`activations` (the `(selectorIndex, absRow)` rows for every `enableGate`/`enableLookup`)
+now lives in Clean core (`Clean.Halo2.Keygen.FloorPlanner`) and is in scope via `open
+Halo2`. -/
 
 /-- Blinding-factor count (`ConstraintSystem::blinding_factors`, `circuit.rs`):
 `max(3, maxAdviceQueriesPerColumn) + 2`. -/
