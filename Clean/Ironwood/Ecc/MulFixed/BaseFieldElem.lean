@@ -49,20 +49,22 @@ Cell layout, relative to the gate row (selector enabled at region offset 1):
 /-- The "Canonicity checks" gate, the exact Rust AST (constraint order: the four
 `canon_checks`, the three `decomposition_checks`, then the `alpha_0_prime check`).
 `range_check`/`bool_check` are the shared halo2 fold (`rangeCheckExpr`). -/
-def canonGate (cfg : Config) : Gate Fp where
-  name := "Canonicity checks"
-  selector := cfg.qMulFixedBaseField
-  constraints :=
-    let alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) (-1)
-    let z84Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) (-1)
-    -- α_0 is derived, not witnessed: α − z_84·2^252 (scale on the right)
-    let alpha0 := alpha - z84Alpha * (((2 ^ 252 : ℕ) : Fp) : Expression Fp Query)
-    let alpha1 : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 0
-    let alpha2 : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 0
-    let alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 0
-    let z13Alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 1
-    let z44Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 1
-    let z43Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 1
+def canonGate (cfg : Config) : Gate Fp :=
+  let alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) (-1)
+  let z84Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) (-1)
+  -- α_0 is derived, not witnessed: α − z_84·2^252 (scale on the right)
+  let alpha0 := alpha - z84Alpha * (((2 ^ 252 : ℕ) : Fp) : Expression Fp Query)
+  let alpha1 : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 0
+  let alpha2 : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 0
+  let alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 0
+  let z13Alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 1
+  let z44Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 1
+  let z43Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 1
+  { name := "Canonicity checks"
+    selector := cfg.qMulFixedBaseField
+    queriedCells :=
+      [alpha, z84Alpha, alpha1, alpha2, alpha0Prime, z13Alpha0Prime, z44Alpha, z43Alpha]
+    constraints :=
     -- decomposition checks
     let alpha1RangeCheck := rangeCheckExpr 4 alpha1
     let alpha2RangeCheck := rangeCheckExpr 2 alpha2
@@ -87,7 +89,7 @@ def canonGate (cfg : Config) : Gate Fp where
         ("alpha_1_range_check", alpha1RangeCheck),
         ("alpha_2_range_check", alpha2RangeCheck),
         ("z_84_alpha_check", z84AlphaCheck),
-        ("alpha_0_prime check", alpha0PrimeCheck) ]
+        ("alpha_0_prime check", alpha0PrimeCheck) ] }
 
 /-- Enable equality on the three canon advices, allocate a fresh selector, register the
 canonicity gate. (The canon-advice/incomplete-addition column deconfliction assert holds

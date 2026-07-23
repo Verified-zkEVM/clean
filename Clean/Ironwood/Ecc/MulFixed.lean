@@ -113,6 +113,16 @@ right). -/
 def coordsGate (cfg : Config) : Gate Fp where
   name := "Running sum coordinates check"
   selector := cfg.runningSumConfig.qRangeCheck
+  -- window cur/next first (word derivation), then `coords_check`'s atoms (y_p, x_p, the
+  -- fixed `z`, u) and finally the eight Lagrange-coeff fixed queries from `interpolated_x`.
+  queriedCells :=
+    [ queryAdvice cfg.window 0, queryAdvice cfg.window 1,
+      queryAdvice cfg.addConfig.yP 0, queryAdvice cfg.addConfig.xP 0,
+      queryFixed cfg.fixedZ, queryAdvice cfg.u 0,
+      queryFixed (cfg.lagrangeCoeffs 0), queryFixed (cfg.lagrangeCoeffs 1),
+      queryFixed (cfg.lagrangeCoeffs 2), queryFixed (cfg.lagrangeCoeffs 3),
+      queryFixed (cfg.lagrangeCoeffs 4), queryFixed (cfg.lagrangeCoeffs 5),
+      queryFixed (cfg.lagrangeCoeffs 6), queryFixed (cfg.lagrangeCoeffs 7) ]
   constraints :=
     let zCur : Expression Fp Query := queryAdvice cfg.window 0
     let zNext : Expression Fp Query := queryAdvice cfg.window 1

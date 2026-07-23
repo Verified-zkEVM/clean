@@ -33,6 +33,7 @@ synthesize soundness proof reference this same def). -/
 def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
   name := "witness point"
   selector := qPoint
+  queriedCells := [queryAdvice x 0, queryAdvice y 0]
   constraints :=
     let qPoint := querySelector qPoint
     [ ⟨ "x == 0 v on_curve", qPoint * queryAdvice x 0 * curveEqn x y ⟩,
@@ -42,6 +43,7 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
 def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp where
   name := "witness non-identity point"
   selector := qPointNonId
+  queriedCells := [queryAdvice x 0, queryAdvice y 0]
   constraints := [⟨ "on_curve", querySelector qPointNonId * curveEqn x y ⟩]
 
 def configure (x y : Column .advice) : Configure Fp Config := do

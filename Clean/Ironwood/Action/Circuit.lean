@@ -54,23 +54,23 @@ structure Config where
 
 /-- The `"Orchard circuit checks"` gate (`circuit.rs:290-329`): the four top-level value
 checks over `advices[0..8]` at the current row, in the source's constraint order. -/
-def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Gate Fp where
-  name := "Orchard circuit checks"
-  selector := qOrchard
-  constraints :=
-    let vOld : Expression Fp Query := queryAdvice (advices 0) 0
-    let vNew : Expression Fp Query := queryAdvice (advices 1) 0
-    let magnitude : Expression Fp Query := queryAdvice (advices 2) 0
-    let sign : Expression Fp Query := queryAdvice (advices 3) 0
-    let root : Expression Fp Query := queryAdvice (advices 4) 0
-    let anchor : Expression Fp Query := queryAdvice (advices 5) 0
-    let enableSpends : Expression Fp Query := queryAdvice (advices 6) 0
-    let enableOutputs : Expression Fp Query := queryAdvice (advices 7) 0
-    Constraints.withSelector qOrchard
+def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Gate Fp :=
+  let vOld : Expression Fp Query := queryAdvice (advices 0) 0
+  let vNew : Expression Fp Query := queryAdvice (advices 1) 0
+  let magnitude : Expression Fp Query := queryAdvice (advices 2) 0
+  let sign : Expression Fp Query := queryAdvice (advices 3) 0
+  let root : Expression Fp Query := queryAdvice (advices 4) 0
+  let anchor : Expression Fp Query := queryAdvice (advices 5) 0
+  let enableSpends : Expression Fp Query := queryAdvice (advices 6) 0
+  let enableOutputs : Expression Fp Query := queryAdvice (advices 7) 0
+  { name := "Orchard circuit checks"
+    selector := qOrchard
+    queriedCells := [vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs]
+    constraints := Constraints.withSelector qOrchard
       [ ("v_old - v_new = magnitude * sign", vOld - vNew - magnitude * sign),
         ("Either v_old = 0, or root = anchor", vOld * (root - anchor)),
         ("v_old = 0 or enable_spends = 1", vOld * ((1 : Fp) - enableSpends)),
-        ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ]
+        ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ] }
 
 /-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
 def configure (G : Generators) : Configure Fp Config := do

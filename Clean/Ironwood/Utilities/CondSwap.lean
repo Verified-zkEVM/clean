@@ -42,20 +42,20 @@ a·b + (1−a)·c` and `bool_check(v) = v·(1−v)` ASTs verbatim:
 - `a_check`: `a_swapped − (swap·b + (1−swap)·a)`
 - `b_check`: `b_swapped − (swap·a + (1−swap)·b)`
 - `swap is bool`: `swap·(1−swap)` -/
-def swapGate (cfg : Config) : Gate Fp where
-  name := "a' = b ⋅ swap + a ⋅ (1-swap)"
-  selector := cfg.qSwap
-  constraints :=
-    let a : Expression Fp Query := queryAdvice cfg.a 0
-    let b : Expression Fp Query := queryAdvice cfg.b 0
-    let aSwapped : Expression Fp Query := queryAdvice cfg.aSwapped 0
-    let bSwapped : Expression Fp Query := queryAdvice cfg.bSwapped 0
-    let swap : Expression Fp Query := queryAdvice cfg.swap 0
-    let aCheck := aSwapped - (swap * b + ((1 : Fp) - swap) * a)
-    let bCheck := bSwapped - (swap * a + ((1 : Fp) - swap) * b)
-    let boolCheck := swap * ((1 : Fp) - swap)
-    Constraints.withSelector cfg.qSwap
-      [("a check", aCheck), ("b check", bCheck), ("swap is bool", boolCheck)]
+def swapGate (cfg : Config) : Gate Fp :=
+  let a : Expression Fp Query := queryAdvice cfg.a 0
+  let b : Expression Fp Query := queryAdvice cfg.b 0
+  let aSwapped : Expression Fp Query := queryAdvice cfg.aSwapped 0
+  let bSwapped : Expression Fp Query := queryAdvice cfg.bSwapped 0
+  let swap : Expression Fp Query := queryAdvice cfg.swap 0
+  let aCheck := aSwapped - (swap * b + ((1 : Fp) - swap) * a)
+  let bCheck := bSwapped - (swap * a + ((1 : Fp) - swap) * b)
+  let boolCheck := swap * ((1 : Fp) - swap)
+  { name := "a' = b ⋅ swap + a ⋅ (1-swap)"
+    selector := cfg.qSwap
+    queriedCells := [a, b, aSwapped, bSwapped, swap]
+    constraints := Constraints.withSelector cfg.qSwap
+      [("a check", aCheck), ("b check", bCheck), ("swap is bool", boolCheck)] }
 
 /-- Rust `CondSwapChip::configure` (`cond_swap.rs:235-287`), VK-exact: equality on column
 `a` only (`cond_swap.rs:241` — the other columns are the caller's business), the simple

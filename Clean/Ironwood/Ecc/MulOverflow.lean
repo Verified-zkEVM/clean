@@ -66,17 +66,18 @@ The five constraints, verbatim:
 
 /-- The overflow gate, a pure function of the config. Enabled at the middle row `g`;
 reads `advices[0]/advices[1]` at `prev/cur/next` and `advices[2]` at `cur`. -/
-def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp where
-  name := "overflow checks"
-  selector := cfg.qOverflow
-  constraints :=
-    let z0 : Expression Fp Query := queryAdvice cfg.adv0 (-1)   -- z_0   (prev)
-    let z130 : Expression Fp Query := queryAdvice cfg.adv0 0     -- z_130 (cur)
-    let eta : Expression Fp Query := queryAdvice cfg.adv0 1      -- eta   (next)
-    let k254 : Expression Fp Query := queryAdvice cfg.adv1 (-1)  -- k_254 (prev)
-    let alpha : Expression Fp Query := queryAdvice cfg.adv1 0    -- alpha (cur)
-    let sMinusLo130 : Expression Fp Query := queryAdvice cfg.adv1 1  -- s_minus_lo_130 (next)
-    let s : Expression Fp Query := queryAdvice cfg.adv2 0        -- s (cur)
+def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp :=
+  let z0 : Expression Fp Query := queryAdvice cfg.adv0 (-1)   -- z_0   (prev)
+  let z130 : Expression Fp Query := queryAdvice cfg.adv0 0     -- z_130 (cur)
+  let eta : Expression Fp Query := queryAdvice cfg.adv0 1      -- eta   (next)
+  let k254 : Expression Fp Query := queryAdvice cfg.adv1 (-1)  -- k_254 (prev)
+  let alpha : Expression Fp Query := queryAdvice cfg.adv1 0    -- alpha (cur)
+  let sMinusLo130 : Expression Fp Query := queryAdvice cfg.adv1 1  -- s_minus_lo_130 (next)
+  let s : Expression Fp Query := queryAdvice cfg.adv2 0        -- s (cur)
+  { name := "overflow checks"
+    selector := cfg.qOverflow
+    queriedCells := [z0, z130, eta, k254, alpha, sMinusLo130, s]
+    constraints :=
     let twoPow124 : Expression Fp Query := (2 ^ 124 : Fp)
     -- Rust builds `two_pow_130 = two_pow_124 * Constant(1 << 6)`: a PRODUCT of two `Constant`
     -- expressions, NOT a single `2^130` constant. We reproduce that AST exactly (`k_254 *
@@ -92,7 +93,7 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp where
     let canonicity := ((1 : Fp) - k254) * ((1 : Fp) - z130 * eta) * sMinusLo130
     Constraints.withSelector cfg.qOverflow
       [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
-        ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ]
+        ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ] }
 
 /-- Enable equality on the three advice columns, allocate the `q_mul_overflow` selector, register
 the overflow gate. The `lookup_config` is handed down by the chip assembly, already configured by

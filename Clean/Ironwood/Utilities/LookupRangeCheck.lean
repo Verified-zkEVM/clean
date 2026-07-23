@@ -75,15 +75,15 @@ def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp where
 (`lookup_range_check.rs:370-384`). Reads `word` at `Rotation::prev()` (−1), `shifted_word`
 at `Rotation::cur()` (0), `inv_two_pow_s` at `Rotation::next()` (+1); the single constraint
 is `word · 2^K · inv_two_pow_s − shifted_word`. -/
-def bitshiftGate (K : ℕ) (cfg : Config K) : Gate Fp where
-  name := "Short lookup bitshift"
-  selector := cfg.qBitshift
-  constraints :=
-    let word : Expression Fp Query := queryAdvice cfg.runningSum (-1)
-    let shiftedWord : Expression Fp Query := queryAdvice cfg.runningSum 0
-    let invTwoPowS : Expression Fp Query := queryAdvice cfg.runningSum 1
-    Constraints.withSelector cfg.qBitshift
-      [("bitshift", word * (2 ^ K : Fp) * invTwoPowS - shiftedWord)]
+def bitshiftGate (K : ℕ) (cfg : Config K) : Gate Fp :=
+  let word : Expression Fp Query := queryAdvice cfg.runningSum (-1)
+  let shiftedWord : Expression Fp Query := queryAdvice cfg.runningSum 0
+  let invTwoPowS : Expression Fp Query := queryAdvice cfg.runningSum 1
+  { name := "Short lookup bitshift"
+    selector := cfg.qBitshift
+    queriedCells := [word, shiftedWord, invTwoPowS]
+    constraints := Constraints.withSelector cfg.qBitshift
+      [("bitshift", word * (2 ^ K : Fp) * invTwoPowS - shiftedWord)] }
 
 /-- Rust `configure` (`lookup_range_check.rs:313-387`): enable equality on `running_sum`,
 allocate the two complex selectors and the simple `q_bitshift`, take the handed-down
@@ -96,7 +96,8 @@ def configure (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   let qBitshift ← selector
   let cfg : Config K := { qLookup, qRunning, qBitshift, runningSum, tableIdx }
   -- register the lookup: one (input, table) pair, verbatim §1.4
-  lookup [((rangeCheckLookup K cfg).inputs.headI, tableIdx)]
+  lookup [queryAdvice runningSum 0, queryAdvice runningSum 1]
+    [((rangeCheckLookup K cfg).inputs.headI, tableIdx)]
   -- register the bitshift gate
   createGate (bitshiftGate K cfg)
   return cfg

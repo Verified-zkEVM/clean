@@ -108,15 +108,15 @@ theorem inRange_iff_exists_lt (range : ℕ) (hrange : 0 < range) (word : Fp) :
 /-- The "range check" gate (`decompose_running_sum.rs:86-96`): on `q_range_check`, the
 running word `z_cur − z_next·2^W` is `range_check`ed to `[0, 2^W)`. The word AST matches
 Rust: `z_cur - z_next * F::from(1 << W)` (constant scale on the right). -/
-def rangeCheckGate (W : ℕ) (cfg : Config) : Gate Fp where
-  name := "range check"
-  selector := cfg.qRangeCheck
-  constraints :=
-    let zCur : Expression Fp Query := queryAdvice cfg.z 0
-    let zNext : Expression Fp Query := queryAdvice cfg.z 1
-    let word := zCur - zNext * (((2 ^ W : ℕ) : Fp) : Expression Fp Query)
-    Constraints.withSelector cfg.qRangeCheck
-      [("range check", rangeCheckExpr (2 ^ W) word)]
+def rangeCheckGate (W : ℕ) (cfg : Config) : Gate Fp :=
+  let zCur : Expression Fp Query := queryAdvice cfg.z 0
+  let zNext : Expression Fp Query := queryAdvice cfg.z 1
+  let word := zCur - zNext * (((2 ^ W : ℕ) : Fp) : Expression Fp Query)
+  { name := "range check"
+    selector := cfg.qRangeCheck
+    queriedCells := [zCur, zNext]
+    constraints := Constraints.withSelector cfg.qRangeCheck
+      [("range check", rangeCheckExpr (2 ^ W) word)] }
 
 /-- Rust `RunningSumConfig::configure` (lines 70-99): equality on `z`, register the
 range-check gate on the given selector. -/

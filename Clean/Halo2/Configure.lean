@@ -13,10 +13,18 @@ Executing verbatim-ported configure code in a small state monad reproduces them 
 construction; hand-maintaining them (10 advice + 29 fixed columns, 56 selectors,
 gate order across all chips) would be unmaintainable and un-checkable.
 
-**Why gate bodies are pure**: `Query` atoms carry no query index (indices are assigned
-by a deterministic first-encounter walk at VK-compilation time), so `meta.query_advice`
-ports as the pure function `queryAdvice` and `create_gate` closures become pure
-`Expression` terms. No `VirtualCells` state.
+**Why gate bodies are pure, and where query indices come from**: `Query` atoms carry no
+query index, so `meta.query_advice` ports as the pure function `queryAdvice` and
+`create_gate` closures become pure `Expression` terms — no `VirtualCells` state. But
+query indices in Rust are execution-order artifacts of `configure()`: `query_*` register
+`(column, rotation)` first-encounter *at closure call time*, i.e. in the closure's
+`let`-order — which no walk over the finished polynomial AST can recover (let-order ≠
+use-order, and unused atoms still register). So each `Gate` carries its atoms in
+closure-call order (`queriedCells`, mirroring Rust's `Gate::queried_cells`,
+`circuit.rs:894-901`), and the `Configure` actions perform the registration into
+`cs.{advice,fixed,instance}Queries` — `createGate`/`enableEquality`/`enableConstant`/
+`lookup` interleaved in execution order exactly as in Rust
+(`query_*_index`, `circuit.rs:1081-1136`). See `query-registration-design.md`.
 
 **Proofs never look inside `Configure`**: it is a data-construction device, run once to
 produce config structs and the `ConstraintSystem`. The proof surface is the synthesize
@@ -65,6 +73,13 @@ actual 0/1 activation table" is a once-per-circuit lemma at the VK boundary.
 structure Gate (F : Type) where
   name : String
   selector : Selector
+  /-- The gate closure's query atoms in Rust *call order* (`let`-order), mirroring
+  `Gate::queried_cells` (`circuit.rs:894-901`) — the registration order for
+  `cs.{advice,fixed,instance}Queries`, which the finished `constraints` AST does not
+  determine. Entries are the same pure atoms the constraints use. Selector atoms do NOT
+  belong here (selectors get no query index). Deliberately no default value: every gate
+  author must transcribe the order from the Rust chip's `create_gate` closure. -/
+  queriedCells : List (Expression F Query)
   constraints : List (Constraint F)
 
 /-- Rust: `Constraints::with_selector(q, [(name, poly), …])` — multiplies every
@@ -108,6 +123,77 @@ structure ConstraintSystem (F : Type) where
   permutationColumns : List AnyColumn := []
   /-- Columns that constants are assigned into (`enable_constant`). -/
   constants : List (Column .fixed) := []
+  /-- Registered advice queries in first-encounter order, mirroring
+  `cs.advice_queries` (`query_advice_index`, `circuit.rs:1096-1114`). Per-column counts
+  give `num_advice_queries` (the input to `blinding_factors`). -/
+  adviceQueries : List (Column .advice × Rotation) := []
+  /-- Registered fixed queries, mirroring `cs.fixed_queries` (`circuit.rs:1081-1094`).
+  Registration always inserts rotation 0 (`query_fixed` takes no rotation in this halo2
+  version, `circuit.rs:1495-1503`); the `Rotation` field maps directly onto the pinned
+  `fixedQueryLayout`. -/
+  fixedQueries : List (Column .fixed × Rotation) := []
+  /-- Registered instance queries, mirroring `cs.instance_queries`
+  (`circuit.rs:1116-1126`). -/
+  instanceQueries : List (Column .instance × Rotation) := []
+  /-- Ill-formed `Gate.queriedCells`/`lookup` entries encountered during registration
+  (owner name + description of the offending atom). Must stay `[]`; VK fixture tests
+  `#guard` this. A poison list rather than `panic!` because `panic!` reduces silently to
+  `default` under kernel evaluation (`#guard`/`decide`), which would hide the error in
+  exactly the places that check the query layouts. -/
+  invalidQueriedCells : List String := []
+
+/-!
+## Query registration
+
+Internal first-encounter registration, mirroring Rust's `query_*_index`
+(`circuit.rs:1081-1136`): return the existing index if `(column, rotation)` is already
+present, else append. Gate authors never call these; they run inside `createGate`,
+`enableEquality`, `enableConstant` and `lookup`.
+-/
+
+/-- Rust: `query_advice_index` (`circuit.rs:1096-1114`). -/
+def ConstraintSystem.queryAdviceIndex (cs : ConstraintSystem F) (c : Column .advice)
+    (rot : Rotation) : ConstraintSystem F :=
+  if (c, rot) ∈ cs.adviceQueries then cs
+  else { cs with adviceQueries := cs.adviceQueries ++ [(c, rot)] }
+
+/-- Rust: `query_fixed_index` (`circuit.rs:1081-1094`); registration is always at
+rotation 0 (§1 of `query-registration-design.md`). -/
+def ConstraintSystem.queryFixedIndex (cs : ConstraintSystem F) (c : Column .fixed) :
+    ConstraintSystem F :=
+  if (c, (0 : Rotation)) ∈ cs.fixedQueries then cs
+  else { cs with fixedQueries := cs.fixedQueries ++ [(c, 0)] }
+
+/-- Rust: `query_instance_index` (`circuit.rs:1116-1126`). -/
+def ConstraintSystem.queryInstanceIndex (cs : ConstraintSystem F) (c : Column .instance)
+    (rot : Rotation) : ConstraintSystem F :=
+  if (c, rot) ∈ cs.instanceQueries then cs
+  else { cs with instanceQueries := cs.instanceQueries ++ [(c, rot)] }
+
+/-- Rust: `query_any_index` at `Rotation::cur()` (`circuit.rs:1127-1136`), as used by
+`enable_equality`. -/
+def ConstraintSystem.queryAnyIndex (cs : ConstraintSystem F) (c : AnyColumn) :
+    ConstraintSystem F :=
+  match c with
+  | ⟨.advice, i⟩ => cs.queryAdviceIndex ⟨i⟩ 0
+  | ⟨.fixed, i⟩ => cs.queryFixedIndex ⟨i⟩
+  | ⟨.instance, i⟩ => cs.queryInstanceIndex ⟨i⟩ 0
+
+/-- Register one `queriedCells` entry. Only bare query atoms are well-formed; a selector
+atom or a compound expression poisons `invalidQueriedCells` instead of being skipped. -/
+def ConstraintSystem.registerQueriedCell (cs : ConstraintSystem F) (owner : String) :
+    Expression F Query → ConstraintSystem F
+  | var (.advice c rot) => cs.queryAdviceIndex c rot
+  | var (.fixed c _) => cs.queryFixedIndex c
+  | var (.instance c rot) => cs.queryInstanceIndex c rot
+  | var (.selector _) => { cs with invalidQueriedCells := cs.invalidQueriedCells ++
+      [s!"{owner}: selector atom in queriedCells (selectors get no query index)"] }
+  | _ => { cs with invalidQueriedCells := cs.invalidQueriedCells ++
+      [s!"{owner}: non-atom expression in queriedCells"] }
+
+def ConstraintSystem.registerQueriedCells (cs : ConstraintSystem F) (owner : String)
+    (cells : List (Expression F Query)) : ConstraintSystem F :=
+  cells.foldl (fun cs e => cs.registerQueriedCell owner e) cs
 
 /--
 The configure monad: threads the `ConstraintSystem` being built. Mirrors passing
@@ -139,34 +225,42 @@ def complexSelector : Configure F Selector :=
 `permutation::Argument::add_column` (`permutation.rs:61-65`: `if !columns.contains`),
 which matters for VK-faithful permutation-column order when a column is
 equality-enabled twice (e.g. `mul_fixed`'s `window`: once by `mul_fixed::configure`,
-once by `RunningSumConfig::configure`). -/
-def enableEquality (c : AnyColumn) : Configure F Unit :=
-  fun cs => ((), { cs with permutationColumns :=
-    if c ∈ cs.permutationColumns then cs.permutationColumns
-    else cs.permutationColumns ++ [c] })
+once by `RunningSumConfig::configure`).
 
-/-- Rust: `meta.enable_constant(column)`: registers the constants column and enables
-equality on it (constants are enforced via copies into this column; the equality enable
-dedups like `enableEquality`). -/
+Also registers a cur-rotation query on the column *before* the permutation append
+(`circuit.rs:1046-1050`) — unconditionally, not gated on the column being new to the
+permutation (idempotence comes from the `query_*_index` dedup). -/
+def enableEquality (c : AnyColumn) : Configure F Unit :=
+  fun cs =>
+    let cs := cs.queryAnyIndex c
+    ((), { cs with permutationColumns :=
+      if c ∈ cs.permutationColumns then cs.permutationColumns
+      else cs.permutationColumns ++ [c] })
+
+/-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
+constants column and enables equality on it (constants are enforced via copies into this
+column) — including `enable_equality`'s cur fixed-query registration. -/
 def enableConstant (col : Column .fixed) : Configure F Unit :=
-  fun cs => ((),
-    { cs with
-      constants := cs.constants ++ [col]
-      permutationColumns :=
-        if col.toAny ∈ cs.permutationColumns then cs.permutationColumns
-        else cs.permutationColumns ++ [col.toAny] })
+  fun cs =>
+    let cs := cs.queryFixedIndex col
+    ((),
+      { cs with
+        constants := cs.constants ++ [col]
+        permutationColumns :=
+          if col.toAny ∈ cs.permutationColumns then cs.permutationColumns
+          else cs.permutationColumns ++ [col.toAny] })
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
   return { inner := ← fixedColumn }
 
 /-- Rust: `meta.create_gate(name, |meta| Constraints::with_selector(guard, [...]))`.
-The gate is registered in creation order; its body is pure data (see module docs).
-
-TODO surface syntax: decide when porting the first chip whether to mirror
-`Constraints::with_selector` more literally. -/
+Registers the gate's `queriedCells` in list order (the closure's queries all execute
+before the gate is pushed, `circuit.rs:1195-1229`), then appends the gate. -/
 def createGate (gate : Gate F) : Configure F Unit :=
-  fun cs => ((), { cs with gates := cs.gates ++ [gate] })
+  fun cs =>
+    let cs := cs.registerQueriedCells gate.name gate.queriedCells
+    ((), { cs with gates := cs.gates ++ [gate] })
 
 /-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
 of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
@@ -175,10 +269,19 @@ of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fi
 
 Rust also `panic!`s if any input contains a *simple* selector (`circuit.rs:1064`); that is
 a well-formedness condition checked at the VK boundary, not enforced here (proofs never
-depend on it). SKETCH: semantics (satisfaction) TBD with the lookup port. -/
-def lookup (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
+depend on it). SKETCH: semantics (satisfaction) TBD with the lookup port.
+
+`queriedCells` (mandatory, like `Gate.queriedCells`) is the table-map closure's query
+atoms in call order; they register first (the closure runs before the pairs are
+processed), then each pair's table column registers a cur fixed query
+(`cells.query_fixed(table.inner())`, `circuit.rs:1068`). -/
+def lookup (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
   let inputs := tableMap.map Prod.fst
   let tables := tableMap.map fun (_, tbl) => queryFixed tbl.inner
-  fun cs => ((), { cs with lookups := cs.lookups ++ [{ inputs, tables }] })
+  fun cs =>
+    let cs := cs.registerQueriedCells "lookup" queriedCells
+    let cs := tableMap.foldl (fun cs (_, tbl) => cs.queryFixedIndex tbl.inner) cs
+    ((), { cs with lookups := cs.lookups ++ [{ inputs, tables }] })
 
 end Halo2

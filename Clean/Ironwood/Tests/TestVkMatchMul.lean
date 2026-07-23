@@ -77,28 +77,17 @@ def mulProgram : Configure Fp Config := do
 
 def mulCS : ConstraintSystem Fp := (mulProgram {}).2
 
-/-- The whole-chain registration-order query seed (halo2 `queried_cells` across every gate
-and lookup closure — and `enable_equality`/`enable_constant`, which also register rot-0
-queries via `query_any_index` — in configure-call order). Built from the dumped layouts:
-the Rust dump's `{advice,fixed}QueryLayout` ARE the deduplicated first-encounter order per
-query kind, so seeding with them reproduces the exact layouts and isolates any gate/lookup
-AST mismatch. (Advice and fixed live in independent index spaces, so seeding each kind in
-its own order is faithful.) -/
-def mulSeed : List Query :=
-  mulPre.adviceQueryLayout.map (fun (c, r) => Query.advice ⟨c⟩ r)
-    ++ mulPre.fixedQueryLayout.map (fun (c, r) => Query.fixed ⟨c⟩ r)
+-- Every gate's/lookup's `queriedCells` registered faithfully (no ill-formed entries);
+-- the layout equalities below then certify the recorded order against the Rust dump.
+#guard mulCS.invalidQueriedCells.isEmpty
 
-/-- The post-compression seed: the dumped post layouts (= pre layouts ++ the packed columns'
-rot-0 fixed queries, registered at column-allocation time inside `compress_selectors`). -/
-def mulSeedPost : List Query :=
-  mulPost.adviceQueryLayout.map (fun (c, r) => Query.advice ⟨c⟩ r)
-    ++ mulPost.fixedQueryLayout.map (fun (c, r) => Query.fixed ⟨c⟩ r)
-
--- Pre-compression: projected CS equals the dumped fixture.
-#guard projectCS mulSeed mulCS == mulPre
+-- Pre-compression: projected CS (query layouts from the configure-recorded queries)
+-- equals the dumped fixture.
+#guard projectCS mulCS == mulPre
 
 -- Post-compression: the Rust-dumped selector-compression map, applied mechanically,
--- yields exactly the dumped post-compression CS.
-#guard projectCSPostMap mulSeedPost mulSelMap mulCS == mulPost
+-- yields exactly the dumped post-compression CS (packed columns' fixed queries appended
+-- to the recorded layout in packing order).
+#guard projectCSPostMap mulSelMap mulCS == mulPost
 
 end Zcash.Circuits.Fixtures.Test
