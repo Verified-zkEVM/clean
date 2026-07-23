@@ -241,6 +241,36 @@ touch the goal (breaking user-proof spellings), the remaining chunk (breaking te
 detection), or the soundness `region_<k>` numbering — the ops-index compare needs none
 of that, converging the two sides without rewriting either.
 
+**Soundness conversion vs. the `circuit_norm` open — a PRINCIPLED ordering, not a
+landmine (hardening pass, edge (b)).** For a raw chunk the peel must both open its
+residual gates (`circuit_norm`) and convert its embedded `.call` chunks (leaf
+application). These two steps do NOT commute, for a concrete reason: `circuit_norm` must
+never meet an emitted contract. A converted call chunk becomes `EnvA → A → child.Spec …
+(child.output … idx) (child.extract … idx)`, and running `circuit_norm` over that whnf's
+the child bundle's `Spec`/`output`/`extract` — a full δ-unfold of the child bundle
+literal, and, worse, if `idx` still spells a preceding raw step's
+`(assignRegion "…" <sealed body>).nextRegionIndex i₀`, the reduction unfolds the seal and
+runs away (the FullWidth/Short "whnf bomb"). So:
+- **Mixed raw chunks (gates + embedded call):** OPEN then CONVERT. The open normalizes
+  the gates while the `.call` boundary stays opaque (calls are opaque to `circuit_norm`);
+  conversion happens after, and `circuit_norm` never sees the contract. This is the
+  robust default and is why the direction is asymmetric with completeness (which converts
+  the goal against a witness and needs pristine pre-open spellings for the match).
+- **Pure `assignRegion "…" (X.call …)` (H review note 1(i) — the standard region-bundle
+  invocation, FullWidth/Short terminals):** the chunk is a single call with NO gates, so
+  it converts SYMMETRICALLY before any open. Two safety steps make the leaf emission
+  whnf-safe: (i) fold the chunk's region index to a literal first
+  (`nextRegionIndex_assignRegion` + `Operations.regionCount`, neither of which unfolds a
+  region body), so the leaf's `isDefEq hyp chunk` never whnf's a sealed region; (ii) SKIP
+  the `circuit_norm` open entirely — the chunk is now a bare contract, and opening it
+  would δ-unfold the child bundle for nothing. This removes the one asymmetry that
+  mattered and is also faster.
+
+Full ordering-independence for mixed chunks is intentionally NOT pursued: it would need
+to shield the contract conjunct from the open (split the `∧`, `circuit_norm` only the
+gate side, splice back), which is machinery for a case that is already safe via
+open-then-convert.
+
 **Loops become symmetric by construction.** At a registry-head bind the peel applies
 the canonical ∀-split (`chunk_split`) and converts under the binder in the same step:
 the completeness walker instantiates the bind's own witness chunk at the goal's ∀-binder

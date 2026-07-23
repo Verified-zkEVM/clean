@@ -794,14 +794,38 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
       else
         witEqs := witEqs ++ (← convertGoalScoped `out chunkName (required := true))
     else
-      -- the terminal raw chunk gets the peel's raw treatment: structural split,
-      -- in-peel conversion of embedded calls (completeness before / soundness after
-      -- the circuit_norm open — see the peel's raw block), then the open
+      -- the terminal raw chunk: structural split, then convert. A PURE region-bundle
+      -- invocation `assignRegion "…" (X.call …)` (H review note 1(i)) becomes a single
+      -- call chunk; on the soundness side it converts WHNF-SAFELY before any open (edge
+      -- (b)): fold its region index to a literal first — otherwise the soundness leaf's
+      -- `isDefEq hyp chunk` whnf's the `Constraints` region-arg's
+      -- `regionCount [.region … <sealed body>]` and unfolds the seal (the whnf bomb) —
+      -- then convert and SKIP the `circuit_norm` open entirely (the chunk is now a bare
+      -- contract; opening it would whnf the child `Spec`/`output`/`extract`, a bundle
+      -- δ-unfold, for nothing). A MIXED raw chunk (gates + embedded call) keeps the
+      -- open-then-convert order: the open normalizes gates while the `.call` boundary
+      -- stays opaque, so `circuit_norm` never meets the contract.
       run? (← `(tactic| simp only [chunk_split] at $(mkIdent chunkName):ident))
-      unless sound do
+      let pureCall ← withMainContext do
+        let some ty ← hypType? chunkName | pure false
+        pure (← SubcircuitRw.matchChunk? ty).isSome
+      if sound then
+        if pureCall then
+          run? (← `(tactic| simp only [nextRegionIndex_assignRegion, nextRegionIndex_loadTable,
+            FormalCircuit.nextRegionIndex_call, foldCallRegionCount, Operations.regionCount,
+            Nat.add_zero, Nat.zero_add] at $(mkIdent chunkName):ident))
+          withMainContext do
+            if let some decl := (← getLCtx).findFromUserName? chunkName then
+              SubcircuitRw.runSoundness decl.fvarId (strict := true) (useOpsIdx := true)
+        else
+          run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+          withMainContext do
+            if let some decl := (← getLCtx).findFromUserName? chunkName then
+              SubcircuitRw.runSoundness decl.fvarId (strict := true) (useOpsIdx := true)
+      else
         run? (← `(tactic| simp only [chunk_split]))
         witEqs := witEqs ++ (← convertGoalScoped `out chunkName (required := false))
-      run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
+        run? (← `(tactic| simp only [circuit_norm, $unfolds,*] at $(mkIdent chunkName):ident))
       -- content-free terminal chunks vanish, like the peel's (an output-only step —
       -- HashPieceRound's terminal `readState` — opens to `True`)
       let cleared ← withMainContext do
