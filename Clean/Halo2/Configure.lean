@@ -57,6 +57,20 @@ def queryAdvice (c : Column .advice) (rot : Rotation) : Expression F Query := va
 @[circuit_norm, selector_free]
 def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.instance c rot)
 
+/--
+An expression contains no simple selector. Halo 2 permits complex selectors in
+lookup inputs but rejects simple selectors during lookup registration.
+-/
+@[circuit_norm]
+def Expression.NoSimpleSelectors : Expression F Query → Prop
+  | .var (.selector selector) => selector.simple = false
+  | .var _ => True
+  | .const _ => True
+  | .add left right =>
+      left.NoSimpleSelectors ∧ right.NoSimpleSelectors
+  | .mul left right =>
+      left.NoSimpleSelectors ∧ right.NoSimpleSelectors
+
 /-- One named constraint of a custom gate. Rust: `Constraint<F>`. -/
 structure Constraint (F : Type) where
   name : String := ""
@@ -115,6 +129,9 @@ loading) is TBD with the lookup port — see `lookup-design.md`. -/
 structure LookupArgument (F : Type) where
   inputs : List (Expression F Query)
   tables : List (Expression F Query)
+  /-- Halo 2 rejects simple selectors in lookup input expressions. -/
+  inputsNoSimpleSelectors :
+    ∀ input ∈ inputs, input.NoSimpleSelectors
   /-- Halo 2 constructs the table side solely from lookup-table columns. -/
   tablesFree : ∀ table ∈ tables, table.SelectorFree
   /-- `lookup` receives pairs and unzips them, so both tuple sides have equal arity. -/
@@ -293,7 +310,12 @@ atoms in call order; they register first (the closure runs before the pairs are
 processed), then each pair's table column registers a cur fixed query
 (`cells.query_fixed(table.inner())`, `circuit.rs:1068`). -/
 def lookup (queriedCells : List (Expression F Query))
-    (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
+    (tableMap : List (Expression F Query × TableColumn))
+    (_inputsNoSimpleSelectors :
+      ∀ input ∈ tableMap.map Prod.fst,
+        input.NoSimpleSelectors := by
+      simp [Expression.NoSimpleSelectors]) :
+    Configure F Unit :=
   let inputs := tableMap.map Prod.fst
   let tables : List (Expression F Query) :=
     tableMap.map fun (_, tbl) => queryFixed tbl.inner
@@ -308,6 +330,12 @@ def lookup (queriedCells : List (Expression F Query))
     let cs := cs.registerQueriedCells "lookup" queriedCells
     let cs := tableMap.foldl (fun cs (_, tbl) => cs.queryFixedIndex tbl.inner) cs
     ((), { cs with lookups :=
-      cs.lookups ++ [{ inputs, tables, tablesFree, arity }] })
+      cs.lookups ++ [{
+        inputs
+        tables
+        inputsNoSimpleSelectors := by
+          simpa only [inputs] using _inputsNoSimpleSelectors
+        tablesFree
+        arity }] })
 
 end Halo2

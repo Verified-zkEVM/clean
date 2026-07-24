@@ -146,6 +146,77 @@ structure SynthesisWellFormed
       .loadTable table values ∈ operations →
       values.length ≤ env.usableRows
 
+/-- Selector indices occurring in an expression, with syntax-order multiplicity. -/
+def Expression.selectorIndices : Expression F Query → List ℕ
+  | .var (.selector selector) => [selector.index]
+  | .var _ => []
+  | .const _ => []
+  | .add left right =>
+      left.selectorIndices ++ right.selectorIndices
+  | .mul left right =>
+      left.selectorIndices ++ right.selectorIndices
+
+/-- Membership in an enabled-selector list, by the index used by semantics. -/
+def SelectorEnabledAtIndex
+    (enabled : List Selector) (selector : ℕ) : Prop :=
+  ∃ candidate ∈ enabled, candidate.index = selector
+
+/-- Some operation in this region activates a selector at the given local row. -/
+def RegionOperations.SelectorActivatedAt
+    (body : RegionOperations F) (selector row : ℕ) : Prop :=
+  ∃ operation ∈ body,
+    FloorPlanner.activatesSelectorAt selector row operation
+
+/--
+Each lookup operation's local zero/one valuation agrees with every activation of
+the relevant selector indices elsewhere in the same region body.
+-/
+def RegionOperations.LookupRelevantSelectorActivationsExact
+    (body : RegionOperations F) : Prop :=
+  body.Forall fun operation =>
+    match operation with
+    | .enableLookup argument enabled row =>
+        argument.inputs.Forall fun expression =>
+          expression.selectorIndices.Forall fun selector =>
+            SelectorEnabledAtIndex enabled selector ↔
+              body.SelectorActivatedAt selector row
+    | _ => True
+
+/-- Region-local lookup selector coherence across a complete operation stream. -/
+def Operations.LookupRelevantSelectorActivationsExact
+    (operations : Operations F) : Prop :=
+  (indexedRegions operations 0).1.Forall fun (_, body) =>
+    body.LookupRelevantSelectorActivationsExact
+
+/-- Select the region-local law for one indexed region body. -/
+theorem Operations.LookupRelevantSelectorActivationsExact.of_region
+    {operations : Operations F}
+    (hlaw : operations.LookupRelevantSelectorActivationsExact)
+    {region : RegionIndex} {body : RegionOperations F}
+    (hregion : (region, body) ∈ (indexedRegions operations 0).1) :
+    body.LookupRelevantSelectorActivationsExact := by
+  exact List.forall_iff_forall_mem.mp hlaw (region, body) hregion
+
+/-- Select the exact activation equivalence for one lookup selector leaf. -/
+theorem RegionOperations.LookupRelevantSelectorActivationsExact.of_lookup
+    {body : RegionOperations F}
+    (hlaw : body.LookupRelevantSelectorActivationsExact)
+    {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
+    (hlookup :
+      RegionOperation.enableLookup argument enabled row ∈ body)
+    {expression : Expression F Query}
+    (hexpression : expression ∈ argument.inputs)
+    {selector : ℕ}
+    (hselector : selector ∈ expression.selectorIndices) :
+    SelectorEnabledAtIndex enabled selector ↔
+      body.SelectorActivatedAt selector row := by
+  have hoperation :=
+    List.forall_iff_forall_mem.mp hlaw
+      (.enableLookup argument enabled row) hlookup
+  have hinput :=
+    List.forall_iff_forall_mem.mp hoperation expression hexpression
+  exact List.forall_iff_forall_mem.mp hinput selector hselector
+
 /--
 A configured, unit-input formal circuit whose verifier assumptions are exactly
 `True`, and whose own successful synthesis discharges its compositional environment
@@ -162,6 +233,10 @@ structure TopLevelCircuit
   formalCircuit : FormalCircuit F ConfigInput Config unit Output
   configInput : ConfigInput
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
+  lookupRelevantSelectorActivationsExact :
+    let config := (formalCircuit.configure configInput {}).1
+    Operations.LookupRelevantSelectorActivationsExact
+      ((formalCircuit.synthesize config ()).operations 0)
   closesEnvironmentSoundness :
     let config := (formalCircuit.configure configInput {}).1
     ∀ (i : RegionIndex) (env : Placed Environment F),

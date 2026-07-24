@@ -119,6 +119,66 @@ def substSelectorMap (m : ℕ → Option SelCompress) :
   | .add a b => .add (substSelectorMap m a) (substSelectorMap m b)
   | .mul a b => .mul (substSelectorMap m a) (substSelectorMap m b)
 
+omit [Field F] in
+private theorem noSimpleSelectors_foldl_mul
+    (factors : List (Expression F Query))
+    (accumulator : Expression F Query)
+    (haccumulator : accumulator.NoSimpleSelectors)
+    (hfactors : ∀ factor ∈ factors, factor.NoSimpleSelectors) :
+    (factors.foldl (· * ·) accumulator).NoSimpleSelectors := by
+  induction factors generalizing accumulator with
+  | nil =>
+      exact haccumulator
+  | cons factor rest ih =>
+      rw [List.foldl_cons]
+      apply ih
+      · exact ⟨haccumulator, hfactors factor (by simp)⟩
+      · intro next hnext
+        exact hfactors next (by simp [hnext])
+
+/-- The root-finding replacement contains no selector leaves. -/
+theorem selReplacement_noSimpleSelectors (description : SelCompress) :
+    (selReplacement (F := F) description).NoSimpleSelectors := by
+  unfold selReplacement
+  apply noSimpleSelectors_foldl_mul
+  · trivial
+  · intro factor hfactor
+    rw [List.mem_filterMap] at hfactor
+    obtain ⟨index, _, hresult⟩ := hfactor
+    by_cases hroot : index + 1 = description.assignedRoot
+    · simp [hroot] at hresult
+    · rw [if_neg hroot, Option.some_inj] at hresult
+      subst factor
+      trivial
+
+/-- Selector substitution preserves the prohibition on simple selector leaves. -/
+theorem substSelectorMap_noSimpleSelectors
+    (m : ℕ → Option SelCompress)
+    (expression : Expression F Query)
+    (hfree : expression.NoSimpleSelectors) :
+    (substSelectorMap m expression).NoSimpleSelectors := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp only [Expression.NoSimpleSelectors] at hfree
+          simp only [substSelectorMap]
+          split
+          · exact selReplacement_noSimpleSelectors _
+          · simpa [Expression.NoSimpleSelectors] using hfree
+      | fixed column rotation =>
+          trivial
+      | advice column rotation =>
+          trivial
+      | «instance» column rotation =>
+          trivial
+  | const value =>
+      trivial
+  | add left right ihLeft ihRight =>
+      exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
+  | mul left right ihLeft ihRight =>
+      exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
+
 end Field
 
 /-! ## Deriving the map from the circuit -/

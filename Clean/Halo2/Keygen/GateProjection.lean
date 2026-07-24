@@ -528,9 +528,12 @@ theorem fromEmpty
 @[circuit_norm]
 theorem lookup
     (queriedCells : List (Expression F Query))
-    (tableMap : List (Expression F Query × TableColumn)) :
+    (tableMap : List (Expression F Query × TableColumn))
+    (inputsNoSimpleSelectors :
+      ∀ input ∈ tableMap.map Prod.fst,
+        input.NoSimpleSelectors) :
     PreservesGateWellFormedness
-      (Halo2.lookup queriedCells tableMap) := by
+      (Halo2.lookup queriedCells tableMap inputsNoSimpleSelectors) := by
   constructor
   intro cs hcs
   simp only [Halo2.lookup, ConstraintSystem.GatesWellFormed]
