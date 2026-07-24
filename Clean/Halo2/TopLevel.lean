@@ -194,6 +194,84 @@ def Operations.LookupInputsNoSimpleSelectors
   operations.enabledLookups.Forall fun argument =>
     argument.inputs.Forall Expression.NoSimpleSelectors
 
+private theorem indexedRegions_append
+    (left right : Operations F) (i : ℕ) :
+    indexedRegions (left ++ right) i =
+      let leftResult := indexedRegions left i
+      let rightResult := indexedRegions right leftResult.2
+      (leftResult.1 ++ rightResult.1, rightResult.2) := by
+  induction left generalizing i with
+  | nil =>
+      simp [indexedRegions]
+  | cons operation rest ih =>
+      cases operation <;> simp [indexedRegions, ih]
+
+private theorem indexedRegions_forall_body_independent
+    (operations : Operations F)
+    (property : RegionOperations F → Prop) (i j : ℕ) :
+    (indexedRegions operations i).1.Forall (fun (_, body) => property body) ↔
+      (indexedRegions operations j).1.Forall (fun (_, body) => property body) := by
+  induction operations generalizing i j with
+  | nil =>
+      simp [indexedRegions]
+  | cons operation rest ih =>
+      cases operation with
+      | region name body =>
+          simp only [indexedRegions, List.forall_cons, and_congr_right_iff]
+          intro _
+          exact ih (i + 1) (j + 1)
+      | constrainInstance cell column row =>
+          simp only [indexedRegions]
+          exact ih i j
+      | loadTable table values =>
+          simp only [indexedRegions]
+          exact ih i j
+
+/-- Region-local selector exactness composes across complete operation streams.
+
+The corresponding statement intentionally does not split a region body: a lookup
+operation observes selector activations from its entire enclosing region. -/
+@[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.append
+    (left right : Operations F) :
+    (left ++ right).LookupRelevantSelectorActivationsExact ↔
+      left.LookupRelevantSelectorActivationsExact ∧
+        right.LookupRelevantSelectorActivationsExact := by
+  simp only [Operations.LookupRelevantSelectorActivationsExact]
+  rw [indexedRegions_append]
+  simp only [List.forall_append]
+  constructor
+  · intro h
+    refine ⟨h.1, ?_⟩
+    exact (indexedRegions_forall_body_independent right
+      RegionOperations.LookupRelevantSelectorActivationsExact
+      (indexedRegions left 0).2 0).mp h.2
+  · rintro ⟨hleft, hright⟩
+    refine ⟨hleft, ?_⟩
+    exact (indexedRegions_forall_body_independent right
+      RegionOperations.LookupRelevantSelectorActivationsExact
+      (indexedRegions left 0).2 0).mpr hright
+
+@[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.nil :
+    Operations.LookupRelevantSelectorActivationsExact
+      ([] : Operations F) := by
+  simp [Operations.LookupRelevantSelectorActivationsExact, indexedRegions]
+
+/-- The no-simple-selector lookup condition composes across operation streams. -/
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.append
+    (left right : Operations F) :
+    (left ++ right).LookupInputsNoSimpleSelectors ↔
+      left.LookupInputsNoSimpleSelectors ∧
+        right.LookupInputsNoSimpleSelectors := by
+  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.nil :
+    Operations.LookupInputsNoSimpleSelectors ([] : Operations F) := by
+  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
+
 /-- Select the region-local law for one indexed region body. -/
 theorem Operations.LookupRelevantSelectorActivationsExact.of_region
     {operations : Operations F}
