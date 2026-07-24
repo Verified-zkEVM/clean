@@ -40,6 +40,39 @@ namespace Halo2
 
 variable {F : Type} [Field F]
 
+/-! ## Syntactic selector bounds imply coverage -/
+
+omit [Field F] in
+/--
+If an expression's one-past-largest selector index is at most `bound`, every selector
+atom in the expression satisfies the corresponding strict index bound.
+-/
+theorem Expression.selectorsCovered_lt_of_selectorBound_le
+    (expression : Expression F Query) (bound : ℕ)
+    (hbound : expression.selectorBound ≤ bound) :
+    expression.selectorsCovered
+        (fun selector => decide (selector < bound)) = true := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp only [Expression.selectorBound] at hbound
+          simp only [Expression.selectorsCovered, decide_eq_true_eq]
+          omega
+      | fixed _ _ | advice _ _ | «instance» _ _ =>
+          rfl
+  | const _ =>
+      rfl
+  | add left right ihLeft ihRight
+  | mul left right ihLeft ihRight =>
+      simp only [Expression.selectorBound] at hbound
+      have hleft : left.selectorBound ≤ bound :=
+        le_trans (le_max_left _ _) hbound
+      have hright : right.selectorBound ≤ bound :=
+        le_trans (le_max_right _ _) hbound
+      simp only [Expression.selectorsCovered, Bool.and_eq_true]
+      exact ⟨ihLeft hleft, ihRight hright⟩
+
 /-! ## Selector compression is evaluation under a rewritten valuation -/
 
 /-- The valuation `substSelectorMap` simulates: selectors in the map read their
