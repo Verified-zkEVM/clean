@@ -4,6 +4,8 @@ import Clean.Halo2.Keygen.FloorPlanner
 import Clean.Halo2.Keygen.Projection
 import Clean.Halo2.Keygen.PinnedCs
 import Clean.Halo2.Keygen.Semantics
+import Clean.Halo2.Keygen.Layout
+import Clean.Halo2.Keygen.GateProjection
 
 /-!
 # Halo2 keygen — the circuit-side half of `keygen_vk`
@@ -18,4 +20,9 @@ plan → activations → minimal fitting domain → `compress_selectors` → pin
 * `Projection` — the query-index walk erasing `Expression F Query` into `RichExpression F`.
 * `PinnedCs` — `PinnedConstraintSystem`, `.ofOperations`, `FormalCircuit.toPinnedCS`.
 * `Semantics` — the projection preserves evaluation (`derive_gates_eval`).
+* `Layout` — the keygen layout semantics: floor-planner copy lists, the keygen
+  `Assembly` (σ) replay, and fixed-column contents (tables, region assignments,
+  packed selectors).
+* `GateProjection` — selector-compressed gate algebra: the verifier-side gate
+  polynomial as a packed-selector scale of Clean's enabled-gate evaluation.
 -/

@@ -10,6 +10,8 @@ import Clean.Halo2.Lemmas
 import Clean.Halo2.Loops
 import Clean.Halo2.Formal
 import Clean.Halo2.Keygen
+import Clean.Halo2.TopLevel
+import Clean.Halo2.TopLevelKeygen
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.SelectorFree
 import Clean.Halo2.Tactics.ContractBridges
