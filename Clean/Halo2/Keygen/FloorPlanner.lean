@@ -96,7 +96,7 @@ before first-fit (`strategy.rs:177-178`, `region_columns.sort_unstable()`):
 inductive RegionColumn where
   | column : ColumnKind → ℕ → RegionColumn
   | selector : ℕ → RegionColumn
-deriving DecidableEq, Repr, BEq
+deriving DecidableEq, Repr, BEq, ReflBEq, LawfulBEq
 
 namespace RegionColumn
 
@@ -928,6 +928,292 @@ def globallyDisjointAllocations
       let columnAllocations := current.getD column #[]
       current.insert column
         (columnAllocations.insert start shape.rowCount)
+
+/-- An operation activates selector `selector` at region-local `row`. -/
+def activatesSelectorAt (selector row : ℕ) : RegionOperation F → Prop
+  | .enableGate gate operationRow =>
+      gate.selector.index = selector ∧ operationRow = row
+  | .enableLookup _ enabled operationRow =>
+      (∃ enabledSelector ∈ enabled, enabledSelector.index = selector) ∧
+        operationRow = row
+  | _ => False
+
+private theorem mem_addCol_self
+    (columns : List RegionColumn) (column : RegionColumn) :
+    column ∈ addCol columns column := by
+  unfold addCol
+  by_cases hcontains : columns.contains column = true
+  · simp only [hcontains, ↓reduceIte]
+    exact List.contains_iff_mem.mp hcontains
+  · have hnotmem : column ∉ columns := by
+      simpa only [List.contains_iff_mem] using hcontains
+    simp [hnotmem]
+
+private theorem mem_addCol_of_mem
+    (columns : List RegionColumn) (added column : RegionColumn)
+    (hcolumn : column ∈ columns) :
+    column ∈ addCol columns added := by
+  unfold addCol
+  split <;> simp_all
+
+private theorem mem_foldl_addCol_of_initial_mem
+    (selectors : List Selector) (columns : List RegionColumn)
+    {column : RegionColumn} (hcolumn : column ∈ columns) :
+    column ∈
+      selectors.foldl
+        (fun current next => addCol current (.selector next.index))
+        columns := by
+  induction selectors generalizing columns with
+  | nil =>
+      exact hcolumn
+  | cons head tail ih =>
+      simp only [List.foldl_cons]
+      exact ih _ (mem_addCol_of_mem columns (.selector head.index) column hcolumn)
+
+private theorem mem_foldl_addCol_of_mem
+    (selectors : List Selector) (columns : List RegionColumn)
+    {selector : Selector} (hselector : selector ∈ selectors) :
+    RegionColumn.selector selector.index ∈
+      selectors.foldl
+        (fun current next => addCol current (.selector next.index))
+        columns := by
+  induction selectors generalizing columns with
+  | nil =>
+      simp at hselector
+  | cons head tail ih =>
+      simp only [List.mem_cons] at hselector
+      simp only [List.foldl_cons]
+      rcases hselector with rfl | htail
+      · exact mem_foldl_addCol_of_initial_mem tail _
+          (mem_addCol_self columns (.selector selector.index))
+      · exact ih (addCol columns (.selector head.index)) htail
+
+private theorem mem_addOperationColumns_of_mem
+    (columns : List RegionColumn) (operation : RegionOperation F)
+    {column : RegionColumn} (hcolumn : column ∈ columns) :
+    column ∈ addOperationColumns columns operation := by
+  cases operation <;>
+    simp [addOperationColumns, mem_addCol_of_mem,
+      mem_foldl_addCol_of_initial_mem, hcolumn]
+
+private theorem mem_foldl_addOperationColumns_of_initial_mem
+    (body : RegionOperations F) (columns : List RegionColumn)
+    {column : RegionColumn} (hcolumn : column ∈ columns) :
+    column ∈ body.foldl addOperationColumns columns := by
+  induction body generalizing columns with
+  | nil =>
+      exact hcolumn
+  | cons head tail ih =>
+      simp only [List.foldl_cons]
+      exact ih _ (mem_addOperationColumns_of_mem columns head hcolumn)
+
+private theorem selector_mem_foldl_addOperationColumns_of_activation
+    (body : RegionOperations F) (columns : List RegionColumn)
+    {operation : RegionOperation F} (hoperation : operation ∈ body)
+    {selector row : ℕ}
+    (hactivation : activatesSelectorAt selector row operation) :
+    RegionColumn.selector selector ∈
+      body.foldl addOperationColumns columns := by
+  induction body generalizing columns operation with
+  | nil =>
+      simp at hoperation
+  | cons head tail ih =>
+      simp only [List.mem_cons] at hoperation
+      simp only [List.foldl_cons]
+      rcases hoperation with rfl | htail
+      · apply mem_foldl_addOperationColumns_of_initial_mem
+        cases operation with
+        | enableGate gate operationRow =>
+            rcases hactivation with ⟨rfl, rfl⟩
+            exact mem_addCol_self columns (.selector gate.selector.index)
+        | enableLookup argument enabled operationRow =>
+            rcases hactivation with ⟨⟨selected, hselected, rfl⟩, rfl⟩
+            exact mem_foldl_addCol_of_mem enabled columns hselected
+        | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+            constrainInstance =>
+            contradiction
+      · exact ih (addOperationColumns columns head) htail hactivation
+
+/-- Every activated selector is a virtual column measured for its region. -/
+theorem selector_mem_measureRegion_of_activatesSelectorAt
+    (idx : ℕ) (body : RegionOperations F)
+    {operation : RegionOperation F} (hoperation : operation ∈ body)
+    {selector row : ℕ}
+    (hactivation : activatesSelectorAt selector row operation) :
+    RegionColumn.selector selector ∈ (measureRegion idx body).columns := by
+  exact selector_mem_foldl_addOperationColumns_of_activation
+    body [] hoperation hactivation
+
+/-- Every selector activation row lies in its measured region interval. -/
+theorem row_lt_measureRegion_of_activatesSelectorAt
+    (idx : ℕ) (body : RegionOperations F)
+    {operation : RegionOperation F} (hoperation : operation ∈ body)
+    {selector row : ℕ}
+    (hactivation : activatesSelectorAt selector row operation) :
+    row < (measureRegion idx body).rowCount := by
+  cases operation with
+  | enableGate gate operationRow =>
+      rcases hactivation with ⟨_, rfl⟩
+      rw [Nat.lt_iff_add_one_le]
+      exact value_le_foldl_max_of_mem body regionOperationRowExtent 0
+        (.enableGate gate operationRow) hoperation
+  | enableLookup argument enabled operationRow =>
+      rcases hactivation with ⟨_, rfl⟩
+      exact row_lt_measureRegion_of_enableLookup_mem
+        idx body argument enabled operationRow hoperation
+  | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+      constrainInstance =>
+      contradiction
+
+/--
+Distinct regions whose selector intervals are disjoint cannot activate the same
+selector at the same absolute row.
+-/
+theorem activation_rows_ne_of_sharedSelectorIntervalsDisjoint
+    {shapes : List RegionShape} {starts : List ℕ}
+    (hplanner : SharedSelectorIntervalsDisjoint shapes starts)
+    {leftIndex rightIndex : ℕ}
+    {leftBody rightBody : RegionOperations F}
+    (hleftShape : measureRegion leftIndex leftBody ∈ shapes)
+    (hrightShape : measureRegion rightIndex rightBody ∈ shapes)
+    (hindices : leftIndex ≠ rightIndex)
+    {leftOperation rightOperation : RegionOperation F}
+    (hleftOperation : leftOperation ∈ leftBody)
+    (hrightOperation : rightOperation ∈ rightBody)
+    {selector leftRow rightRow : ℕ}
+    (hleftActivation :
+      activatesSelectorAt selector leftRow leftOperation)
+    (hrightActivation :
+      activatesSelectorAt selector rightRow rightOperation) :
+    starts.getD leftIndex 0 + leftRow ≠
+      starts.getD rightIndex 0 + rightRow := by
+  have hleftColumn :=
+    selector_mem_measureRegion_of_activatesSelectorAt
+      leftIndex leftBody hleftOperation hleftActivation
+  have hrightColumn :=
+    selector_mem_measureRegion_of_activatesSelectorAt
+      rightIndex rightBody hrightOperation hrightActivation
+  have hleftRow :=
+    row_lt_measureRegion_of_activatesSelectorAt
+      leftIndex leftBody hleftOperation hleftActivation
+  have hrightRow :=
+    row_lt_measureRegion_of_activatesSelectorAt
+      rightIndex rightBody hrightOperation hrightActivation
+  have hdisjoint :=
+    hplanner hleftShape hrightShape hindices
+      hleftColumn hrightColumn
+  change
+    RowIntervalsDisjoint
+      (starts.getD leftIndex 0)
+      (measureRegion leftIndex leftBody).rowCount
+      (starts.getD rightIndex 0)
+      (measureRegion rightIndex rightBody).rowCount at hdisjoint
+  intro hequal
+  rcases hdisjoint with hleftBefore | hrightBefore
+  · have habsLt :
+        starts.getD leftIndex 0 + leftRow <
+          starts.getD leftIndex 0 +
+            (measureRegion leftIndex leftBody).rowCount :=
+      Nat.add_lt_add_left hleftRow _
+    rw [hequal] at habsLt
+    exact (Nat.not_lt_of_ge
+      (hleftBefore.trans
+        (Nat.le_add_right (starts.getD rightIndex 0) rightRow))) habsLt
+  · have habsLt :
+        starts.getD rightIndex 0 + rightRow <
+          starts.getD rightIndex 0 +
+            (measureRegion rightIndex rightBody).rowCount :=
+      Nat.add_lt_add_left hrightRow _
+    rw [← hequal] at habsLt
+    exact (Nat.not_lt_of_ge
+      (hrightBefore.trans
+        (Nat.le_add_right (starts.getD leftIndex 0) leftRow))) habsLt
+
+/--
+Membership in the flattened activation list retains a concrete source region,
+operation, and local row.
+-/
+theorem exists_activation_origin_of_mem_activations
+    {starts : List ℕ} {regions : List (ℕ × RegionOperations F)}
+    {selector absoluteRow : ℕ}
+    (hactivation :
+      (selector, absoluteRow) ∈ activations starts regions) :
+    ∃ regionIndex body operation localRow,
+      (regionIndex, body) ∈ regions ∧
+      operation ∈ body ∧
+      activatesSelectorAt selector localRow operation ∧
+      absoluteRow = starts.getD regionIndex 0 + localRow := by
+  simp only [activations, List.mem_flatMap] at hactivation
+  obtain ⟨region, hregion, hbody⟩ := hactivation
+  rcases region with ⟨regionIndex, body⟩
+  obtain ⟨operation, hoperation, hop⟩ := hbody
+  cases operation with
+  | enableGate gate operationRow =>
+      simp only [List.mem_singleton] at hop
+      have hselector : gate.selector.index = selector :=
+        (congrArg Prod.fst hop).symm
+      have habsolute :
+          starts.getD regionIndex 0 + operationRow = absoluteRow :=
+        (congrArg Prod.snd hop).symm
+      exact ⟨regionIndex, body, .enableGate gate operationRow,
+        operationRow, hregion, hoperation, ⟨hselector, rfl⟩,
+        habsolute.symm⟩
+  | enableLookup argument enabled operationRow =>
+      simp only [List.mem_map] at hop
+      obtain ⟨enabledSelector, henabledSelector, hpair⟩ := hop
+      have hselector : enabledSelector.index = selector :=
+        congrArg Prod.fst hpair
+      have habsolute :
+          starts.getD regionIndex 0 + operationRow = absoluteRow :=
+        congrArg Prod.snd hpair
+      exact ⟨regionIndex, body,
+        .enableLookup argument enabled operationRow, operationRow,
+        hregion, hoperation,
+        ⟨⟨enabledSelector, henabledSelector, hselector⟩, rfl⟩,
+        habsolute.symm⟩
+  | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+      constrainInstance =>
+      simp at hop
+
+/--
+Under selector-interval disjointness, an absolute selector activation has a unique
+source region index. Multiple source operations within that region remain harmless.
+-/
+theorem activation_origin_regionIndex_unique
+    {regions : List (ℕ × RegionOperations F)} {starts : List ℕ}
+    (hplanner :
+      SharedSelectorIntervalsDisjoint
+        (regions.map fun region =>
+          measureRegion region.1 region.2)
+        starts)
+    {selector absoluteRow : ℕ}
+    {leftIndex rightIndex : ℕ}
+    {leftBody rightBody : RegionOperations F}
+    {leftOperation rightOperation : RegionOperation F}
+    {leftRow rightRow : ℕ}
+    (hleftRegion : (leftIndex, leftBody) ∈ regions)
+    (hrightRegion : (rightIndex, rightBody) ∈ regions)
+    (hleftOperation : leftOperation ∈ leftBody)
+    (hrightOperation : rightOperation ∈ rightBody)
+    (hleftActivation :
+      activatesSelectorAt selector leftRow leftOperation)
+    (hrightActivation :
+      activatesSelectorAt selector rightRow rightOperation)
+    (hleftAbsolute :
+      absoluteRow = starts.getD leftIndex 0 + leftRow)
+    (hrightAbsolute :
+      absoluteRow = starts.getD rightIndex 0 + rightRow) :
+    leftIndex = rightIndex := by
+  by_contra hindices
+  apply activation_rows_ne_of_sharedSelectorIntervalsDisjoint
+    hplanner
+    (List.mem_map.mpr
+      ⟨(leftIndex, leftBody), hleftRegion, rfl⟩)
+    (List.mem_map.mpr
+      ⟨(rightIndex, rightBody), hrightRegion, rfl⟩)
+    hindices hleftOperation hrightOperation
+    hleftActivation hrightActivation
+  rw [← hleftAbsolute, ← hrightAbsolute]
 
 /-! ## The two planners -/
 
