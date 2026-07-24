@@ -137,8 +137,10 @@ config and constraint system), then derive the pinned record from the `synthesiz
 operation stream. -/
 def FormalCircuit.toPinnedCS (c : FormalCircuit F ConfigInput Config Input Output)
     (ci : ConfigInput) (input : Var Input F) : PinnedConstraintSystem F :=
-  let (config, cs) := c.configure ci {}
-  .ofOperations cs ((c.synthesize config input).operations)
+  -- projections rather than pair-destructuring, so downstream definitional equalities
+  -- never force a kernel evaluation of the configure run
+  .ofOperations (c.configure ci {}).2
+    ((c.synthesize (c.configure ci {}).1 input).operations)
 
 end FormalCircuit
 
