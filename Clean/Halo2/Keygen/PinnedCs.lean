@@ -103,7 +103,9 @@ the faithful derived value. -/
 loaded table lengths (both must fit in the usable rows). -/
 def usedRows (ops : Operations F) : ℕ :=
   let shapes := FloorPlanner.measureRegions ops
-  let starts := FloorPlanner.V1.starts ops
+  -- `(planFull shapes).1 = V1.starts ops`, reusing the measured shapes rather than
+  -- re-measuring inside `V1.starts`
+  let starts := (FloorPlanner.V1.planFull shapes).1
   let regionEnd := ((starts.zip shapes).map fun (s, sh) => s + sh.rowCount).foldl max 0
   let tableLen := (ops.filterMap fun op => match op with
     | .loadTable _ vals => some vals.length
@@ -112,7 +114,9 @@ def usedRows (ops : Operations F) : ℕ :=
 
 /-- The minimal domain exponent for which the circuit fits keygen's asserts. -/
 def minimalK (cs : ConstraintSystem F) (ops : Operations F) : ℕ :=
-  let need := max (usedRows ops + cs.blindingFactors + 1) cs.minimumRows
+  let blinding := cs.blindingFactors
+  -- `blinding + 3 = cs.minimumRows`, without recomputing the blinding count
+  let need := max (usedRows ops + blinding + 1) (blinding + 3)
   ((List.range 33).find? (fun k => need ≤ 2 ^ k)).getD 33
 
 /-- The pinned constraint system of a circuit given its keygen-view operation stream:
