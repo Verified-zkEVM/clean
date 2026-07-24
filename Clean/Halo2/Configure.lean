@@ -1,4 +1,5 @@
 import Clean.Halo2.Expression
+import Clean.Halo2.Tactics.SelectorFree
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -49,9 +50,12 @@ Verbatim-port counterparts of Rust `meta.query_*` inside `create_gate` closures.
 @[circuit_norm] def querySelector (s : Selector) : Expression F Query := var (.selector s)
 /-- Rust `query_fixed` takes no rotation in this halo2 version (always the current row);
 the `Query.fixed` constructor keeps a rotation for generality of the compiled CS. -/
-@[circuit_norm] def queryFixed (c : Column .fixed) : Expression F Query := var (.fixed c 0)
-@[circuit_norm] def queryAdvice (c : Column .advice) (rot : Rotation) : Expression F Query := var (.advice c rot)
-@[circuit_norm] def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.instance c rot)
+@[circuit_norm, selector_free]
+def queryFixed (c : Column .fixed) : Expression F Query := var (.fixed c 0)
+@[circuit_norm, selector_free]
+def queryAdvice (c : Column .advice) (rot : Rotation) : Expression F Query := var (.advice c rot)
+@[circuit_norm, selector_free]
+def queryInstance (c : Column .instance) (rot : Rotation) : Expression F Query := var (.instance c rot)
 
 /-- One named constraint of a custom gate. Rust: `Constraint<F>`. -/
 structure Constraint (F : Type) where
@@ -83,11 +87,16 @@ structure Gate (F : Type) where
   constraints : List (Constraint F)
 
 /-- Rust: `Constraints::with_selector(q, [(name, poly), …])` — multiplies every
-constraint by the selector, building exactly the Rust AST `q * poly`.
+constraint by the selector, building exactly the Rust AST `q * poly`. The defaulted
+third argument requires every ungated polynomial to be selector-free; `selector_free`
+discharges ordinary gate syntax, so call sites retain Rust's two-argument spelling.
 `@[circuit_norm]`: part of the gate-reduction normal form, so proofs need not list this
 combinator to reduce an enabled gate's constraint list. -/
 @[circuit_norm]
-def Constraints.withSelector (s : Selector) (constraints : List (String × Expression F Query)) :
+def Constraints.withSelector (s : Selector)
+    (constraints : List (String × Expression F Query))
+    (_h : ∀ constraint ∈ constraints, constraint.2.selectorFree := by
+      selector_free) :
     List (Constraint F) :=
   constraints.map fun (name, poly) => { name, poly := querySelector s * poly }
 

@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Field.Basic
 import Clean.Circuit.SimpGadget
 import Clean.Circuit.Expression
+import Clean.Halo2.SelectorFreeAttr
 
 /-!
 # Halo2 variables, expressions and environments
@@ -115,6 +116,18 @@ inductive Expression (F : Type) (L : Type) where
 deriving DecidableEq
 
 export Expression (var)
+
+/-- Whether an expression contains no selector queries.
+
+This lives with the expression language, rather than the key-generation semantics,
+because gate construction uses it as a local well-formedness condition. -/
+@[circuit_norm, selector_free]
+def Expression.selectorFree {F : Type} : Expression F Query → Prop
+  | .var (.selector _) => False
+  | .var _ => True
+  | .const _ => True
+  | .add a b => a.selectorFree ∧ b.selectorFree
+  | .mul a b => a.selectorFree ∧ b.selectorFree
 
 /--
 `Environment` represents the data that is provided at runtime to concretely specify the
@@ -263,6 +276,7 @@ instance : Mul (Expression F L) where mul := mul
 shape `e * (const c * const 1)` erases to `.product e (.constant c)` in the VK-matching
 projection (`Fixtures/Project.lean`); semantically it is just `e * c` (`mul_one` folds
 the marker in proofs). First needed by `base_field_elem`'s `alpha_0_hi_120`. -/
+@[selector_free]
 def mulConstant (e : Expression F L) (c : F) : Expression F L :=
   mul e (mul (const c) (const 1))
 

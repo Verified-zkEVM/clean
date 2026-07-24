@@ -42,6 +42,7 @@ structure Config where
   sPadAndAdd : Selector
 
 /-- Rust `pow_5` (`pow5.rs:89-92`): `v² · v² · v`, in the source's exact association. -/
+@[selector_free]
 def pow5Expr (v : Expression Fp Query) : Expression Fp Query :=
   let v2 := v * v
   v2 * v2 * v

@@ -14,7 +14,7 @@ soundness bridge needs:
   decided by the packed column: `0` where no member is active (`_of_zero`) or where
   another member's root is written (`_of_other`), nonzero at the selector's own root
   (`_of_root`).
-* `Expression.selectorFree` and `substSelectorMap_selectorFree` — compression leaves
+* `substSelectorMap_selectorFree` — compression leaves
   exactly the uncovered selector atoms (`selectorsCovered`), so for a covering map the
   erasure's residual selector arm is unreachable.
 * `eraseExpr_eval` — the query-walk erasure of a selector-free expression evaluates to
@@ -24,14 +24,6 @@ soundness bridge needs:
 -/
 
 namespace Halo2.Expression
-
-/-- No `Query.selector` atom occurs in the expression. -/
-def selectorFree {F : Type} : Expression F Query → Bool
-  | .var (.selector _) => false
-  | .var _ => true
-  | .const _ => true
-  | .add a b => a.selectorFree && b.selectorFree
-  | .mul a b => a.selectorFree && b.selectorFree
 
 /-- Every selector atom's index satisfies `dom` — with `dom := (m · |>.isSome)`, the
 compression map covers the expression. -/
@@ -160,22 +152,22 @@ theorem selReplacement_eval_of_root (d : SelCompress) (v : Query → F)
 
 set_option linter.unusedSectionVars false in
 private theorem selectorFree_foldl_mul (fs : List (Expression F Query))
-    (acc : Expression F Query) (hacc : acc.selectorFree = true)
-    (hfs : ∀ f ∈ fs, f.selectorFree = true) :
-    (fs.foldl (· * ·) acc).selectorFree = true := by
+    (acc : Expression F Query) (hacc : acc.selectorFree)
+    (hfs : ∀ f ∈ fs, f.selectorFree) :
+    (fs.foldl (· * ·) acc).selectorFree := by
   induction fs generalizing acc with
   | nil => exact hacc
   | cons f fs ih =>
       rw [List.foldl_cons]
       refine ih (acc * f) ?_ (fun g hg => hfs g (List.mem_cons_of_mem f hg))
-      show (Expression.mul acc f).selectorFree = true
+      show (Expression.mul acc f).selectorFree
       simp [Expression.selectorFree, hacc, hfs f (List.mem_cons_self ..)]
 
 /-- The root-finding replacement's atoms are a fixed query and constants. -/
 theorem selReplacement_selectorFree (d : SelCompress) :
-    (selReplacement (F := F) d).selectorFree = true := by
+    (selReplacement (F := F) d).selectorFree := by
   unfold selReplacement
-  refine selectorFree_foldl_mul _ _ rfl ?_
+  refine selectorFree_foldl_mul _ _ trivial ?_
   intro f hf
   rw [List.mem_filterMap] at hf
   obtain ⟨j, _, hj⟩ := hf
@@ -183,35 +175,42 @@ theorem selReplacement_selectorFree (d : SelCompress) :
   · simp [hcase] at hj
   · rw [if_neg hcase, Option.some_inj] at hj
     subst hj
-    rfl
+    simp [Expression.selectorFree]
 
 /-- Compression leaves exactly the uncovered selector atoms: the substituted expression
 is selector-free iff the map covers every selector occurrence. -/
 theorem substSelectorMap_selectorFree (m : ℕ → Option SelCompress)
     (e : Expression F Query) :
-    (substSelectorMap m e).selectorFree
-      = e.selectorsCovered (fun i => (m i).isSome) := by
+    (substSelectorMap m e).selectorFree ↔
+      e.selectorsCovered (fun i => (m i).isSome) = true := by
   induction e with
   | var q =>
       cases q with
       | selector sel =>
           cases hs : m sel.index with
           | some d =>
-              simp only [substSelectorMap, hs, Expression.selectorsCovered,
-                Option.isSome_some]
-              exact selReplacement_selectorFree d
+              simp [substSelectorMap, hs, Expression.selectorsCovered,
+                selReplacement_selectorFree d]
           | none => simp [substSelectorMap, hs, Expression.selectorsCovered,
               Expression.selectorFree]
-      | fixed c r => rfl
-      | advice c r => rfl
-      | «instance» c r => rfl
-  | const c => rfl
+      | fixed c r =>
+          simp [substSelectorMap, Expression.selectorFree,
+            Expression.selectorsCovered]
+      | advice c r =>
+          simp [substSelectorMap, Expression.selectorFree,
+            Expression.selectorsCovered]
+      | «instance» c r =>
+          simp [substSelectorMap, Expression.selectorFree,
+            Expression.selectorsCovered]
+  | const c =>
+      simp [substSelectorMap, Expression.selectorFree,
+        Expression.selectorsCovered]
   | add a b iha ihb =>
-      show (Expression.add _ _).selectorFree = _
-      simp [Expression.selectorFree, Expression.selectorsCovered, iha, ihb]
+      simp [substSelectorMap, Expression.selectorFree,
+        Expression.selectorsCovered, iha, ihb, Bool.and_eq_true]
   | mul a b iha ihb =>
-      show (Expression.mul _ _).selectorFree = _
-      simp [Expression.selectorFree, Expression.selectorsCovered, iha, ihb]
+      simp [substSelectorMap, Expression.selectorFree,
+        Expression.selectorsCovered, iha, ihb, Bool.and_eq_true]
 
 /-! ## The query walk interprets its own layout
 
@@ -456,7 +455,7 @@ any state extending the walk's output — in practice the whole-circuit walk's f
 — then the erased selector-free expression evaluates to the original at `v`. -/
 theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
     (e : Expression F Query) (s sfin : QueryState)
-    (hfree : e.selectorFree = true)
+    (hfree : e.selectorFree)
     (hext : sfin.Extends (eraseExpr e s).2)
     (hint : Interprets sfin fE aE iE v) :
     RichExpression.eval fE aE iE (eraseExpr e s).1 = e.eval v := by
@@ -486,18 +485,18 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
       simpa using this
   | case6 e s e' s₁ heq ih =>
       simp only [eraseExpr, if_true] at hext ⊢
-      simp only [Expression.selectorFree, Bool.true_and] at hfree
+      simp only [Expression.selectorFree, true_and] at hfree
       rw [RichExpression.eval, ih hfree hext,
         show (Expression.mul (.const (-1)) e).eval v = -1 * e.eval v from rfl]
       ring
   | case7 c e s hc e' s₁ heq ih =>
       simp only [eraseExpr, if_neg hc] at hext ⊢
-      simp only [Expression.selectorFree, Bool.true_and] at hfree
+      simp only [Expression.selectorFree, true_and] at hfree
       rw [RichExpression.eval, RichExpression.eval, ih hfree hext]
       rfl
   | case8 e c s he e' s₁ heq ih =>
       rw [eraseExpr_mulConstant e c s he] at hext ⊢
-      simp only [Expression.selectorFree, Bool.and_true] at hfree
+      simp only [Expression.selectorFree, and_true] at hfree
       rw [RichExpression.eval, RichExpression.eval, ih hfree hext,
         show (Expression.mul e (.mul (.const c) (.const 1))).eval v
           = e.eval v * (c * 1) from rfl]
@@ -505,20 +504,20 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
   | case9 e c one s he hone e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       rw [eraseExpr_mul_const_mul_const_of_ne_one e c one s he hone] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree, Bool.and_true] at hfree
+      simp only [Expression.selectorFree, and_true] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
-        ih₂ rfl hext]
+        ih₂ (by simp [Expression.selectorFree]) hext]
       rfl
   | case10 e c s he e' s₁ heq ih =>
       rw [eraseExpr_mul_const e c s he] at hext ⊢
-      simp only [Expression.selectorFree, Bool.and_true] at hfree
+      simp only [Expression.selectorFree, and_true] at hfree
       rw [RichExpression.eval, ih hfree hext]
       rfl
   | case11 a b s e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       simp only [eraseExpr] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree, Bool.and_eq_true] at hfree
+      simp only [Expression.selectorFree] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
         ih₂ hfree.2 hext]
@@ -526,7 +525,7 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
   | case12 a b s ha hb1 hb2 e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       rw [eraseExpr_mul a b s ha hb1 hb2] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree, Bool.and_eq_true] at hfree
+      simp only [Expression.selectorFree] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
         ih₂ hfree.2 hext]
@@ -546,7 +545,7 @@ theorem eraseExpr_substSelectorMap_eval (m : ℕ → Option SelCompress)
     RichExpression.eval fE aE iE (eraseExpr (substSelectorMap m p) s).1
       = p.eval (substValuation m v) := by
   rw [eraseExpr_eval fE aE iE v _ s sfin
-      ((substSelectorMap_selectorFree m p).trans hcov) hext hint,
+      ((substSelectorMap_selectorFree m p).2 hcov) hext hint,
     substSelectorMap_eval]
 
 /-! ## Threading the erasure lemmas through the gate list -/
@@ -572,7 +571,7 @@ source expression, position by position, when the families interpret a state ext
 the walk's output. -/
 theorem eraseGates_eval (fE aE iE : ℕ → F) (v : Query → F)
     (ps : List (Expression F Query)) (s sfin : QueryState)
-    (hfree : ∀ p ∈ ps, p.selectorFree = true)
+    (hfree : ∀ p ∈ ps, p.selectorFree)
     (hext : sfin.Extends (eraseGates ps s).2)
     (hint : Interprets sfin fE aE iE v) :
     ∀ (j : ℕ) (_h1 : j < (eraseGates ps s).1.length) (_h2 : j < ps.length),
@@ -626,10 +625,10 @@ theorem PinnedConstraintSystem.derive_gates_eval (cs : ConstraintSystem F)
     RichExpression.eval fE aE iE (PinnedConstraintSystem.derive cs map).gates[j]
       = Expression.eval (substValuation map.lookup v) (flatGates cs)[j] := by
   have hfree : ∀ p ∈ (flatGates cs).map (substSelectorMap map.lookup),
-      p.selectorFree = true := by
+      p.selectorFree := by
     intro p hp'
     obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp'
-    exact (substSelectorMap_selectorFree _ q).trans (hcov q hq)
+    exact (substSelectorMap_selectorFree _ q).2 (hcov q hq)
   rw [List.getElem_of_eq (PinnedConstraintSystem.derive_gates cs map) hg]
   have h := eraseGates_eval fE aE iE v
     ((flatGates cs).map (substSelectorMap map.lookup)) (queryWalkInit map cs) _ hfree

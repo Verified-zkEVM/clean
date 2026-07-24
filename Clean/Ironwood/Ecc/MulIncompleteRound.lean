@@ -69,6 +69,7 @@ column, and the boundary gates `q_mul_1`/`q_mul_3` tie the derived form to real 
 start/end. -/
 
 /-- `x_R = λ₁² − x_A − x_P` at `rot`. -/
+@[selector_free]
 def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let xP : Expression Fp Query := queryAdvice cfg.xP rot
@@ -77,6 +78,7 @@ def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
 
 /-- `y_a = (λ₁ + λ₂)(x_A − x_R) · TWO_INV` at `rot`. The trailing `TWO_INV = (2 : Fp)⁻¹` factor
 matches the compiled Rust gate (VK-faithful). -/
+@[selector_free]
 def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
@@ -85,6 +87,7 @@ def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
 
 /-- Constraints used for `q_mul_{2,3} == 1`. `yANext` is the next-row `y_a`: derived
 (`yA cfg 1`) for `q_mul_2`, the witnessed final `y` for `q_mul_3`. -/
+@[selector_free]
 def forLoopPolys (cfg : Config) (yANext : Expression Fp Query) :
     List (String × Expression Fp Query) :=
   -- z_i

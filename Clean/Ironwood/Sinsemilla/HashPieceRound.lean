@@ -66,6 +66,7 @@ structure Config where
 `Expression` builders over the config columns. -/
 
 /-- `x_r = λ₁² − x_a − x_p` at `rot` (Rust `DoubleAndAdd::x_r`). -/
+@[selector_free]
 def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let xP : Expression Fp Query := queryAdvice cfg.xP rot
@@ -73,6 +74,7 @@ def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   l1 * l1 - xA - xP
 
 /-- `Y_A = (λ₁ + λ₂)(x_a − x_r)` at `rot` (Rust `DoubleAndAdd::Y_A`). -/
+@[selector_free]
 def yAExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
@@ -107,6 +109,7 @@ def initialYQGate (cfg : Config) : Gate Fp where
 
 /-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)`: `0` when `q_s2 ∈ {0,1}`, `2` when
 `q_s2 = 2` (final piece). -/
+@[selector_free]
 def qS3Expr (cfg : Config) : Expression Fp Query :=
   let qS2 : Expression Fp Query := queryFixed cfg.qS2
   qS2 * (qS2 - (1 : Fp))

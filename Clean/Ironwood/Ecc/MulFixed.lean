@@ -73,11 +73,13 @@ structure Config where
 
 /-- `window_pow[k] = (0..k).fold(Const 1, |acc,_| acc * window)` — the exact Rust AST: `1`,
 `1·w`, `(1·w)·w`, …. -/
+@[selector_free]
 def windowPow (word : Expression Fp Query) (k : ℕ) : Expression Fp Query :=
   (List.range k).foldl (fun acc _ => acc * word) (Expression.const 1)
 
 /-- The interpolated `x_p`: fold from `Const 0`, `acc + window_pow[k] · lagrange_coeffs[k]` — the
 8-iteration fold written out (identical AST; keeps the eval bridge fold-free). -/
+@[selector_free]
 def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Query :=
   Expression.const 0
     + windowPow word 0 * queryFixed (cfg.lagrangeCoeffs 0)
@@ -93,6 +95,7 @@ def interpolatedX (cfg : Config) (word : Expression Fp Query) : Expression Fp Qu
 `x_p`/`y_p` on the add config's columns at `cur`, `u` at `cur`, `fixed_z` and the 8 Lagrange
 columns as rotation-0 fixed queries. Used by BOTH the running-sum coords gate (word = `z_cur −
 z_next·8`) and the full-width gate (word = the raw `window` query). -/
+@[selector_free]
 def coordsCheck (cfg : Config) (word : Expression Fp Query) :
     List (String × Expression Fp Query) :=
   let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0
