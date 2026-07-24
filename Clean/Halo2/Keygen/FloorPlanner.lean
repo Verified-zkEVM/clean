@@ -19,8 +19,10 @@ Two planners, matching the Rust module split (`halo2_proofs/src/circuit/floor_pl
 * **`SimpleFloorPlanner`** (`single_pass.rs`) — sequential per-region placement at the
   earliest row where none of the region's columns are in use. Drives the Add/Mul fixtures.
 
-Everything is `#eval`-computable (`Decide`-free), so tests can `#guard`/`#eval` the derived
-starts against fixture placements.
+Everything is `#eval`-computable. V1 retains the exact candidate placement when a
+small finite selector-interval guard accepts it, and otherwise uses a conservative
+globally row-disjoint plan. Tests can `#guard`/`#eval` the derived starts against
+fixture placements.
 
 ## Region shape — what participates (`layouter.rs`, `impl RegionLayouter for RegionShape`)
 
@@ -700,6 +702,233 @@ def slotIn (shapes : List RegionShape) : List (ℕ × ℕ) × CircuitAllocations
     let (row?, colAllocs') := firstFit cols.length colAllocs cols shape.rowCount 0 none
     (pairs ++ [(shape.index, row?.getD 0)], colAllocs')
 
+/-! ## Guarded selector placement
+
+The legacy planner's two sorting implementations are consensus-critical computations,
+but their implementations do not expose permutation proofs. Rather than make selector
+cell-disjointness depend on those implementation details, V1 validates the candidate's
+small list of virtual-selector intervals. A rejected candidate falls back to a
+globally row-disjoint placement with matching allocation state.
+-/
+
+/-- Disjointness of two half-open row intervals. -/
+def RowIntervalsDisjoint
+    (leftStart leftLength rightStart rightLength : ℕ) : Prop :=
+  leftStart + leftLength ≤ rightStart ∨
+    rightStart + rightLength ≤ leftStart
+
+/-- One occurrence of a virtual selector column in a placed region. -/
+structure SelectorPlacement where
+  selector : ℕ
+  regionIndex : ℕ
+  start : ℕ
+  length : ℕ
+deriving DecidableEq
+
+/-- Flatten the virtual-selector part of a placed region layout. -/
+def selectorPlacements
+    (shapes : List RegionShape) (starts : List ℕ) :
+    List SelectorPlacement :=
+  shapes.flatMap fun shape =>
+    shape.columns.filterMap fun
+      | .selector selector =>
+          some
+            { selector
+              regionIndex := shape.index
+              start := starts.getD shape.index 0
+              length := shape.rowCount }
+      | .column _ _ => none
+
+/-- Finite selector-only safety check for a candidate placement. -/
+def CheckedSharedSelectorIntervalsDisjoint
+    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
+  (selectorPlacements shapes starts).Pairwise fun left right =>
+    left.selector ≠ right.selector ∨
+      left.regionIndex = right.regionIndex ∨
+      RowIntervalsDisjoint
+        left.start left.length right.start right.length
+
+private def checkedSharedSelectorIntervalsDisjointDecidable
+    (shapes : List RegionShape) (starts : List ℕ) :
+    Decidable (CheckedSharedSelectorIntervalsDisjoint shapes starts) := by
+  unfold CheckedSharedSelectorIntervalsDisjoint RowIntervalsDisjoint
+  infer_instance
+
+/--
+The semantic selector-placement invariant: distinct regions that share a virtual
+selector column occupy disjoint row intervals.
+-/
+def SharedSelectorIntervalsDisjoint
+    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
+  ∀ ⦃left right : RegionShape⦄,
+    left ∈ shapes →
+    right ∈ shapes →
+    left.index ≠ right.index →
+    ∀ ⦃selector : ℕ⦄,
+      RegionColumn.selector selector ∈ left.columns →
+      RegionColumn.selector selector ∈ right.columns →
+      RowIntervalsDisjoint
+        (starts.getD left.index 0) left.rowCount
+        (starts.getD right.index 0) right.rowCount
+
+private theorem rel_or_reverse_of_pairwise_of_mem
+    {α : Type} {relation : α → α → Prop}
+    {items : List α} (hpairs : items.Pairwise relation)
+    {left right : α} (hleft : left ∈ items)
+    (hright : right ∈ items) (hne : left ≠ right) :
+    relation left right ∨ relation right left := by
+  induction items with
+  | nil =>
+      simp at hleft
+  | cons head tail ih =>
+      rw [List.pairwise_cons] at hpairs
+      simp only [List.mem_cons] at hleft hright
+      rcases hleft with rfl | hleft
+      · rcases hright with rfl | hright
+        · contradiction
+        · exact Or.inl (hpairs.1 right hright)
+      · rcases hright with rfl | hright
+        · exact Or.inr (hpairs.1 left hleft)
+        · exact ih hpairs.2 hleft hright
+
+private theorem selectorPlacement_mem
+    {shapes : List RegionShape} {starts : List ℕ}
+    {shape : RegionShape} (hshape : shape ∈ shapes)
+    {selector : ℕ}
+    (hselector : RegionColumn.selector selector ∈ shape.columns) :
+    { selector
+      regionIndex := shape.index
+      start := starts.getD shape.index 0
+      length := shape.rowCount : SelectorPlacement } ∈
+      selectorPlacements shapes starts := by
+  rw [selectorPlacements, List.mem_flatMap]
+  refine ⟨shape, hshape, ?_⟩
+  rw [List.mem_filterMap]
+  exact ⟨.selector selector, hselector, rfl⟩
+
+/-- Acceptance of the finite guard implies the semantic selector invariant. -/
+theorem sharedSelectorIntervalsDisjoint_of_checked
+    {shapes : List RegionShape} {starts : List ℕ}
+    (hchecked :
+      CheckedSharedSelectorIntervalsDisjoint shapes starts) :
+    SharedSelectorIntervalsDisjoint shapes starts := by
+  intro left right hleft hright hindices selector
+    hleftSelector hrightSelector
+  let leftPlacement : SelectorPlacement :=
+    { selector
+      regionIndex := left.index
+      start := starts.getD left.index 0
+      length := left.rowCount }
+  let rightPlacement : SelectorPlacement :=
+    { selector
+      regionIndex := right.index
+      start := starts.getD right.index 0
+      length := right.rowCount }
+  have hleftPlacement : leftPlacement ∈ selectorPlacements shapes starts :=
+    selectorPlacement_mem hleft hleftSelector
+  have hrightPlacement : rightPlacement ∈ selectorPlacements shapes starts :=
+    selectorPlacement_mem hright hrightSelector
+  have hne : leftPlacement ≠ rightPlacement := by
+    intro heq
+    apply hindices
+    exact congrArg SelectorPlacement.regionIndex heq
+  rcases rel_or_reverse_of_pairwise_of_mem hchecked
+      hleftPlacement hrightPlacement hne with hforward | hreverse
+  · rcases hforward with hselector | hregion | hintervals
+    · exact False.elim (hselector rfl)
+    · exact False.elim (hindices hregion)
+    · exact hintervals
+  · rcases hreverse with hselector | hregion | hintervals
+    · exact False.elim (hselector rfl)
+    · exact False.elim (hindices hregion.symm)
+    · exact hintervals.elim Or.inr Or.inl
+
+/-- One plus the largest region index, enough entries to address every shape. -/
+def fallbackStartsLength (shapes : List RegionShape) : ℕ :=
+  shapes.foldl (fun length shape => max length (shape.index + 1)) 0
+
+/-- The largest measured region height. -/
+def fallbackStride (shapes : List RegionShape) : ℕ :=
+  shapes.foldl (fun stride shape => max stride shape.rowCount) 0
+
+/--
+A universally safe fallback: region `i` starts at `i * maxRowCount`, so distinct
+region indices occupy globally disjoint row intervals.
+-/
+def globallyDisjointStarts (shapes : List RegionShape) : List ℕ :=
+  (List.range (fallbackStartsLength shapes)).map
+    fun index => index * fallbackStride shapes
+
+private theorem index_lt_fallbackStartsLength_of_mem
+    {shapes : List RegionShape} {shape : RegionShape}
+    (hshape : shape ∈ shapes) :
+    shape.index < fallbackStartsLength shapes := by
+  rw [Nat.lt_iff_add_one_le]
+  exact value_le_foldl_max_of_mem shapes
+    (fun current => current.index + 1) 0 shape hshape
+
+private theorem rowCount_le_fallbackStride_of_mem
+    {shapes : List RegionShape} {shape : RegionShape}
+    (hshape : shape ∈ shapes) :
+    shape.rowCount ≤ fallbackStride shapes := by
+  exact value_le_foldl_max_of_mem shapes
+    RegionShape.rowCount 0 shape hshape
+
+private theorem globallyDisjointStarts_getD
+    {shapes : List RegionShape} {shape : RegionShape}
+    (hshape : shape ∈ shapes) :
+    (globallyDisjointStarts shapes).getD shape.index 0 =
+      shape.index * fallbackStride shapes := by
+  have hindex :=
+    index_lt_fallbackStartsLength_of_mem hshape
+  simp [globallyDisjointStarts, hindex]
+
+/-- The conservative fallback satisfies the semantic selector invariant. -/
+theorem globallyDisjointStarts_sharedSelectorIntervalsDisjoint
+    (shapes : List RegionShape) :
+    SharedSelectorIntervalsDisjoint
+      shapes (globallyDisjointStarts shapes) := by
+  intro left right hleft hright hindices selector
+    hleftSelector hrightSelector
+  rw [globallyDisjointStarts_getD hleft,
+    globallyDisjointStarts_getD hright]
+  have hleftHeight :=
+    rowCount_le_fallbackStride_of_mem hleft
+  have hrightHeight :=
+    rowCount_le_fallbackStride_of_mem hright
+  rcases Nat.lt_or_gt_of_ne hindices with hlt | hgt
+  · left
+    calc
+      left.index * fallbackStride shapes + left.rowCount ≤
+          left.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hleftHeight _
+      _ = (left.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ right.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hlt)
+  · right
+    calc
+      right.index * fallbackStride shapes + right.rowCount ≤
+          right.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hrightHeight _
+      _ = (right.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ left.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hgt)
+
+/-- Allocation state corresponding to `globallyDisjointStarts`. -/
+def globallyDisjointAllocations
+    (shapes : List RegionShape) : CircuitAllocations :=
+  let stride := fallbackStride shapes
+  shapes.foldl (init := ∅) fun allocations shape =>
+    let start := shape.index * stride
+    shape.columns.foldl (init := allocations) fun current column =>
+      let columnAllocations := current.getD column #[]
+      current.insert column
+        (columnAllocations.insert start shape.rowCount)
+
 /-! ## The two planners -/
 
 namespace V1
@@ -707,14 +936,49 @@ namespace V1
 /-- `slot_in_biggest_advice_first` (`strategy.rs:198-242`) then un-sort: sort the shapes by
 `key` (legacy pdqsort), reverse (biggest advice area first), slot them in, and re-order the
 resulting starts back to region-index order. Returns `(starts, finalAllocations)`. -/
-def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
+def planCandidate (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
   let sortedDesc := (Pdqsort.quicksort shapes.toArray (fun a b => a.key < b.key)).reverse
   let (pairs, colAllocs) := slotIn sortedDesc.toList
   let byIndex := pairs.toArray.qsort (fun p q => p.1 < q.1)
   ((byIndex.toList).map (·.2), colAllocs)
 
+/--
+The exact legacy V1 plan when its selector intervals pass the finite safety guard;
+otherwise a conservative plan whose region intervals and allocation state agree.
+-/
+def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
+  let candidate := planCandidate shapes
+  if @decide
+      (CheckedSharedSelectorIntervalsDisjoint shapes candidate.1)
+      (checkedSharedSelectorIntervalsDisjointDecidable shapes candidate.1) then
+    candidate
+  else
+    (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
+
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
 def starts (ops : Operations F) : List ℕ := (planFull (measureRegions ops)).1
+
+/--
+V1 placement makes regions sharing a virtual selector column row-disjoint by
+construction, independently of the legacy candidate's sorting implementation.
+-/
+theorem starts_sharedSelectorIntervalsDisjoint
+    (ops : Operations F) :
+    SharedSelectorIntervalsDisjoint
+      (measureRegions ops) (starts ops) := by
+  unfold starts planFull
+  dsimp only
+  split
+  · rename_i hchecked
+    exact sharedSelectorIntervalsDisjoint_of_checked
+      (@of_decide_eq_true
+        (CheckedSharedSelectorIntervalsDisjoint
+          (measureRegions ops) (planCandidate (measureRegions ops)).1)
+        (checkedSharedSelectorIntervalsDisjointDecidable
+          (measureRegions ops) (planCandidate (measureRegions ops)).1)
+        hchecked)
+  · exact globallyDisjointStarts_sharedSelectorIntervalsDisjoint
+      (measureRegions ops)
 
 /-! ### Constants allocation (`v1.rs:79-136`)
 
