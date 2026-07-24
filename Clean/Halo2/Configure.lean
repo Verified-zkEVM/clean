@@ -129,9 +129,6 @@ loading) is TBD with the lookup port — see `lookup-design.md`. -/
 structure LookupArgument (F : Type) where
   inputs : List (Expression F Query)
   tables : List (Expression F Query)
-  /-- Halo 2 rejects simple selectors in lookup input expressions. -/
-  inputsNoSimpleSelectors :
-    ∀ input ∈ inputs, input.NoSimpleSelectors
   /-- Halo 2 constructs the table side solely from lookup-table columns. -/
   tablesFree : ∀ table ∈ tables, table.SelectorFree
   /-- `lookup` receives pairs and unzips them, so both tuple sides have equal arity. -/
@@ -310,12 +307,7 @@ atoms in call order; they register first (the closure runs before the pairs are
 processed), then each pair's table column registers a cur fixed query
 (`cells.query_fixed(table.inner())`, `circuit.rs:1068`). -/
 def lookup (queriedCells : List (Expression F Query))
-    (tableMap : List (Expression F Query × TableColumn))
-    (_inputsNoSimpleSelectors :
-      ∀ input ∈ tableMap.map Prod.fst,
-        input.NoSimpleSelectors := by
-      simp [Expression.NoSimpleSelectors]) :
-    Configure F Unit :=
+    (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
   let inputs := tableMap.map Prod.fst
   let tables : List (Expression F Query) :=
     tableMap.map fun (_, tbl) => queryFixed tbl.inner
@@ -330,12 +322,6 @@ def lookup (queriedCells : List (Expression F Query))
     let cs := cs.registerQueriedCells "lookup" queriedCells
     let cs := tableMap.foldl (fun cs (_, tbl) => cs.queryFixedIndex tbl.inner) cs
     ((), { cs with lookups :=
-      cs.lookups ++ [{
-        inputs
-        tables
-        inputsNoSimpleSelectors := by
-          simpa only [inputs] using _inputsNoSimpleSelectors
-        tablesFree
-        arity }] })
+      cs.lookups ++ [{ inputs, tables, tablesFree, arity }] })
 
 end Halo2

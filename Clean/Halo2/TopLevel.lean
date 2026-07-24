@@ -188,6 +188,12 @@ def Operations.LookupRelevantSelectorActivationsExact
   (indexedRegions operations 0).1.Forall fun (_, body) =>
     body.LookupRelevantSelectorActivationsExact
 
+/-- Every synthesis-enabled lookup input obeys Halo 2's no-simple-selector rule. -/
+def Operations.LookupInputsNoSimpleSelectors
+    (operations : Operations F) : Prop :=
+  operations.enabledLookups.Forall fun argument =>
+    argument.inputs.Forall Expression.NoSimpleSelectors
+
 /-- Select the region-local law for one indexed region body. -/
 theorem Operations.LookupRelevantSelectorActivationsExact.of_region
     {operations : Operations F}
@@ -236,6 +242,10 @@ structure TopLevelCircuit
   lookupRelevantSelectorActivationsExact :
     let config := (formalCircuit.configure configInput {}).1
     Operations.LookupRelevantSelectorActivationsExact
+      ((formalCircuit.synthesize config ()).operations 0)
+  lookupInputsNoSimpleSelectors :
+    let config := (formalCircuit.configure configInput {}).1
+    Operations.LookupInputsNoSimpleSelectors
       ((formalCircuit.synthesize config ()).operations 0)
   closesEnvironmentSoundness :
     let config := (formalCircuit.configure configInput {}).1
