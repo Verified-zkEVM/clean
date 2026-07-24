@@ -147,6 +147,7 @@ structure SynthesisWellFormed
       values.length ≤ env.usableRows
 
 /-- Selector indices occurring in an expression, with syntax-order multiplicity. -/
+@[circuit_norm]
 def Expression.selectorIndices : Expression F Query → List ℕ
   | .var (.selector selector) => [selector.index]
   | .var _ => []
@@ -157,11 +158,13 @@ def Expression.selectorIndices : Expression F Query → List ℕ
       left.selectorIndices ++ right.selectorIndices
 
 /-- Membership in an enabled-selector list, by the index used by semantics. -/
+@[circuit_norm]
 def SelectorEnabledAtIndex
     (enabled : List Selector) (selector : ℕ) : Prop :=
   ∃ candidate ∈ enabled, candidate.index = selector
 
 /-- Some operation in this region activates a selector at the given local row. -/
+@[circuit_norm]
 def RegionOperations.SelectorActivatedAt
     (body : RegionOperations F) (selector row : ℕ) : Prop :=
   ∃ operation ∈ body,
@@ -171,6 +174,7 @@ def RegionOperations.SelectorActivatedAt
 Each lookup operation's local zero/one valuation agrees with every activation of
 the relevant selector indices elsewhere in the same region body.
 -/
+@[circuit_norm]
 def RegionOperations.LookupRelevantSelectorActivationsExact
     (body : RegionOperations F) : Prop :=
   body.Forall fun operation =>
@@ -258,6 +262,14 @@ theorem Operations.LookupRelevantSelectorActivationsExact.nil :
       ([] : Operations F) := by
   simp [Operations.LookupRelevantSelectorActivationsExact, indexedRegions]
 
+@[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.region_singleton
+    (name : String) (body : RegionOperations F) :
+    Operations.LookupRelevantSelectorActivationsExact
+        [.region name body] ↔
+      body.LookupRelevantSelectorActivationsExact := by
+  simp [Operations.LookupRelevantSelectorActivationsExact, indexedRegions]
+
 /-- The no-simple-selector lookup condition composes across operation streams. -/
 @[circuit_norm]
 theorem Operations.LookupInputsNoSimpleSelectors.append
@@ -270,6 +282,14 @@ theorem Operations.LookupInputsNoSimpleSelectors.append
 @[circuit_norm]
 theorem Operations.LookupInputsNoSimpleSelectors.nil :
     Operations.LookupInputsNoSimpleSelectors ([] : Operations F) := by
+  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.region_singleton
+    (name : String) (body : RegionOperations F) :
+    Operations.LookupInputsNoSimpleSelectors [.region name body] ↔
+      body.enabledLookups.Forall fun argument =>
+        argument.inputs.Forall Expression.NoSimpleSelectors := by
   simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
 
 /-- Select the region-local law for one indexed region body. -/
