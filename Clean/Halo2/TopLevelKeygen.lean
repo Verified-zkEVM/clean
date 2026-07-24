@@ -80,11 +80,11 @@ def pinnedCS (self : TopLevelCircuit F ConfigInput Config Output) :
   self.formalCircuit.toPinnedCS self.configInput ()
 
 /-- V1 region starts derived from the circuit's own operation stream. -/
-def regionStarts (self : TopLevelCircuit F ConfigInput Config Output) : List ℕ :=
+@[reducible] def regionStarts (self : TopLevelCircuit F ConfigInput Config Output) : List ℕ :=
   FloorPlanner.V1.starts (self.operations 0)
 
 /-- Selector activations produced by the circuit's own synthesis and V1 placement. -/
-def selectorActivations
+@[reducible] def selectorActivations
     (self : TopLevelCircuit F ConfigInput Config Output) :
     List (ℕ × ℕ) :=
   activations self.regionStarts
@@ -105,14 +105,14 @@ def usedRows (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
   Halo2.usedRows (self.operations 0)
 
 /-- The smallest keygen domain exponent derived from this circuit's CS and operations. -/
-def domainExponent (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
+@[reducible] def domainExponent (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
   Halo2.minimalK self.constraintSystem (self.operations 0)
 
 /--
 The selector-compression map derived from the circuit's own constraint system,
 operation stream, placement, and minimal fitting domain.
 -/
-def selectorMap
+@[reducible] def selectorMap
     (self : TopLevelCircuit F ConfigInput Config Output) :
     SelCompressMap :=
   deriveSelCompressMap self.constraintSystem
