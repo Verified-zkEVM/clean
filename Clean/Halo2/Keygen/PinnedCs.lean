@@ -277,15 +277,63 @@ the faithful derived value. -/
 /-- The rows the keygen-view synthesize occupies: floor-planned region extents and
 loaded table lengths (both must fit in the usable rows). -/
 def usedRows (ops : Operations F) : ℕ :=
-  let shapes := FloorPlanner.measureRegions ops
-  -- `(planFull shapes).1 = V1.starts ops`, reusing the measured shapes rather than
-  -- re-measuring inside `V1.starts`
-  let starts := (FloorPlanner.V1.planFull shapes).1
-  let regionEnd := ((starts.zip shapes).map fun (s, sh) => s + sh.rowCount).foldl max 0
+  let regions := (indexedRegions ops 0).1
+  let starts := FloorPlanner.V1.starts ops
+  let regionEnd :=
+    (regions.map fun (index, body) =>
+      starts.getD index 0 +
+        (FloorPlanner.measureRegion index body).rowCount).foldl max 0
   let tableLen := (ops.filterMap fun op => match op with
     | .loadTable _ vals => some vals.length
     | _ => none).foldl max 0
   max regionEnd tableLen
+
+/--
+Every lookup operation inside an indexed region lies below the operation stream's
+keygen row footprint after V1 placement.
+-/
+theorem absoluteRow_lt_usedRows_of_enableLookup_mem
+    (ops : Operations F) (region : RegionIndex)
+    (body : RegionOperations F)
+    (hregion : (region, body) ∈ (indexedRegions ops 0).1)
+    (argument : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (hlookup : RegionOperation.enableLookup argument enabled row ∈ body) :
+    (FloorPlanner.V1.starts ops).getD region 0 + row < usedRows ops := by
+  let regions := (indexedRegions ops 0).1
+  let starts := FloorPlanner.V1.starts ops
+  let regionEnd :=
+    (regions.map fun (index, currentBody) =>
+      starts.getD index 0 +
+        (FloorPlanner.measureRegion index currentBody).rowCount).foldl max 0
+  have hrow :
+      row < (FloorPlanner.measureRegion region body).rowCount :=
+    FloorPlanner.row_lt_measureRegion_of_enableLookup_mem
+      region body argument enabled row hlookup
+  have hentry :
+      starts.getD region 0 +
+          (FloorPlanner.measureRegion region body).rowCount ∈
+        regions.map fun (index, currentBody) =>
+          starts.getD index 0 +
+            (FloorPlanner.measureRegion index currentBody).rowCount :=
+    List.mem_map.mpr ⟨(region, body), hregion, rfl⟩
+  have hend :
+      starts.getD region 0 +
+          (FloorPlanner.measureRegion region body).rowCount ≤
+        regionEnd :=
+    FloorPlanner.value_le_foldl_max_of_mem
+      (regions.map fun (index, currentBody) =>
+        starts.getD index 0 +
+          (FloorPlanner.measureRegion index currentBody).rowCount)
+      id 0
+      (starts.getD region 0 +
+        (FloorPlanner.measureRegion region body).rowCount)
+      hentry
+  have habsolute :
+      starts.getD region 0 + row < regionEnd :=
+    (Nat.add_lt_add_left hrow _).trans_le hend
+  unfold usedRows
+  dsimp only
+  exact habsolute.trans_le (Nat.le_max_left _ _)
 
 /-- The minimal domain exponent for which the circuit fits keygen's asserts. -/
 def minimalK (cs : ConstraintSystem F) (ops : Operations F) : ℕ :=

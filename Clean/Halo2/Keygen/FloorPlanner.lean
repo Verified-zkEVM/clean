@@ -150,24 +150,84 @@ deriving Repr, Inhabited
 def addCol (cols : List RegionColumn) (c : RegionColumn) : List RegionColumn :=
   if cols.contains c then cols else cols ++ [c]
 
+/-- The one-past-last row touched by a region operation. Copy-only operations touch no
+new row; every semantically active gate, lookup, or assignment contributes its offset. -/
+def regionOperationRowExtent : RegionOperation F → ℕ
+  | .assignAdvice _ row _
+  | .assignFixed _ row _
+  | .enableGate _ row
+  | .enableLookup _ _ row => row + 1
+  | .constrainEqual _ _
+  | .constrainConstant _ _
+  | .constrainInstance _ _ _ => 0
+
+/-- Add the columns touched by one operation to a region's measured column set. -/
+def addOperationColumns
+    (columns : List RegionColumn) (operation : RegionOperation F) :
+    List RegionColumn :=
+  match operation with
+  | .assignAdvice column _ _ =>
+      addCol columns (.column .advice column.index)
+  | .assignFixed column _ _ =>
+      addCol columns (.column .fixed column.index)
+  | .enableGate gate _ =>
+      addCol columns (.selector gate.selector.index)
+  | .enableLookup _ enabled _ =>
+      enabled.foldl
+        (fun current selector =>
+          addCol current (.selector selector.index))
+        columns
+  | _ => columns
+
 /-- Measure one region body to its `RegionShape` (`layouter.rs`, `impl RegionLayouter for
 RegionShape`). See the module header for the per-operation contribution. -/
-def measureRegion (idx : ℕ) (body : RegionOperations F) : RegionShape := Id.run do
-  let mut cols : List RegionColumn := []
-  let mut rc : ℕ := 0
-  for op in body do
-    match op with
-    | .assignAdvice col off _ =>
-        cols := addCol cols (.column .advice col.index); rc := max rc (off + 1)
-    | .assignFixed col off _ =>
-        cols := addCol cols (.column .fixed col.index); rc := max rc (off + 1)
-    | .enableGate gate off =>
-        cols := addCol cols (.selector gate.selector.index); rc := max rc (off + 1)
-    | .enableLookup _ enabled off =>
-        for s in enabled do cols := addCol cols (.selector s.index)
-        if !enabled.isEmpty then rc := max rc (off + 1)
-    | _ => pure ()
-  return ⟨idx, cols, rc⟩
+def measureRegion (idx : ℕ) (body : RegionOperations F) : RegionShape :=
+  { index := idx
+    columns := body.foldl addOperationColumns []
+    rowCount :=
+      body.foldl
+        (fun current operation =>
+          max current (regionOperationRowExtent operation))
+        0 }
+
+private theorem foldl_max_accumulator_le
+    {α : Type}
+    (values : List α) (value : α → ℕ) (initial : ℕ) :
+    initial ≤ values.foldl (fun current next => max current (value next)) initial := by
+  induction values generalizing initial with
+  | nil =>
+      exact le_rfl
+  | cons head tail ih =>
+      rw [List.foldl_cons]
+      exact (Nat.le_max_left _ _).trans (ih _)
+
+/-- A member's value is bounded by a left fold of `max`. -/
+theorem value_le_foldl_max_of_mem
+    {α : Type}
+    (values : List α) (value : α → ℕ) (initial : ℕ)
+    (item : α) (hitem : item ∈ values) :
+    value item ≤
+      values.foldl (fun current next => max current (value next)) initial := by
+  induction values generalizing initial with
+  | nil =>
+      simp at hitem
+  | cons head tail ih =>
+      rw [List.mem_cons] at hitem
+      rw [List.foldl_cons]
+      rcases hitem with rfl | htail
+      · exact (Nat.le_max_right _ _).trans
+          (foldl_max_accumulator_le tail value _)
+      · exact ih _ htail
+
+/-- Every lookup activation row is strictly below its measured region extent. -/
+theorem row_lt_measureRegion_of_enableLookup_mem
+    (idx : ℕ) (body : RegionOperations F)
+    (argument : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (hlookup : RegionOperation.enableLookup argument enabled row ∈ body) :
+    row < (measureRegion idx body).rowCount := by
+  rw [Nat.lt_iff_add_one_le]
+  exact value_le_foldl_max_of_mem body regionOperationRowExtent 0
+    (.enableLookup argument enabled row) hlookup
 
 /-- Measure every `assignRegion` region (in region-index order; `loadTable`/layouter-level
 `constrainInstance` are not measured — V1 `assign_table` is a no-op in the measurement pass,
