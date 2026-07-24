@@ -216,6 +216,19 @@ theorem keygenCoherent
     self.KeygenCoherent := by
   apply OperationsKeygenCoherent.closeWithOperations
 
+/--
+Every selector atom in a top-level circuit's lookup inputs is allocated by its
+synthesis-closed constraint system.
+-/
+theorem lookupInputsAllocated
+    (self : TopLevelCircuit F ConfigInput Config Output) :
+    ∀ argument ∈ self.constraintSystem.lookups,
+      ∀ expression ∈ argument.inputs,
+        expression.selectorBound ≤ self.constraintSystem.numSelectors := by
+  exact ConstraintSystem.lookupInputsAllocated_closeWithOperations
+    (self.formalCircuit.configure self.configInput {}).2
+    (self.formalCircuit.toOperations self.configInput ())
+
 /-- The semantic statement extracted from a placed satisfying assignment. -/
 def Statement (self : TopLevelCircuit F ConfigInput Config Output)
     (i : RegionIndex) (env : Placed Environment F) : Prop :=
