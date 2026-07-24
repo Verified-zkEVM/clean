@@ -171,6 +171,8 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
     [ queryFixed cfg.generatorTable.tableIdx.inner,
       queryFixed cfg.generatorTable.tableX.inner,
       queryFixed cfg.generatorTable.tableY.inner ]
+  tablesFree := by simp [Expression.SelectorFree, queryFixed]
+  arity := rfl
 
 /-! ## Configure
 

@@ -28,6 +28,8 @@ def enabledGate : Gate Nat where
 def enabledLookup : LookupArgument Nat where
   inputs := [queryAdvice ⟨2⟩ 0]
   tables := [queryFixed ⟨0⟩]
+  tablesFree := by simp [Expression.SelectorFree, queryFixed]
+  arity := rfl
 
 def rawConstraintSystem : ConstraintSystem Nat :=
   (createGate configuredGate {}).2

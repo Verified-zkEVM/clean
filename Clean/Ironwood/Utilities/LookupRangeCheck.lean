@@ -70,6 +70,8 @@ def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp where
     -- `.scaled z_next 2^K`, NOT `product(const, z_next)`. Spell it `zNext * (2^K : Fp)`.
     [qL * (qR * (zCur - zNext * (2 ^ K : Fp)) + (1 - qR) * zCur)]
   tables := [queryFixed cfg.tableIdx.inner]
+  tablesFree := by simp [Expression.SelectorFree, queryFixed]
+  arity := rfl
 
 /-- The "Short lookup bitshift" gate, ported verbatim from `configure`
 (`lookup_range_check.rs:370-384`). Reads `word` at `Rotation::prev()` (−1), `shifted_word`

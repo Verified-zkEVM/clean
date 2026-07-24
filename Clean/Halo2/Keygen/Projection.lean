@@ -191,6 +191,30 @@ def queryWalkInit (map : SelCompressMap) (cs : ConstraintSystem F) : QueryState 
   (List.range map.newFixedCols).foldl
     (fun s i => (s.fixIdx (cs.numFixedColumns + i) 0).2) (recordedQueries cs)
 
+/-- Selector substitution is inert on selector-free expressions. -/
+theorem substSelectorMap_eq_of_selectorFree
+    [Field F]
+    (map : ℕ → Option SelCompress) (expression : Expression F Query)
+    (hfree : expression.SelectorFree) :
+    substSelectorMap map expression = expression := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp [Expression.SelectorFree] at hfree
+      | fixed | advice | «instance» =>
+          rfl
+  | const =>
+      rfl
+  | add left right ihLeft ihRight =>
+      simp only [Expression.SelectorFree] at hfree
+      simp only [substSelectorMap]
+      rw [ihLeft hfree.1, ihRight hfree.2]
+  | mul left right ihLeft ihRight =>
+      simp only [Expression.SelectorFree] at hfree
+      simp only [substSelectorMap]
+      rw [ihLeft hfree.1, ihRight hfree.2]
+
 /-- Project the CS with a selector-compression map: substitute every selector (in gates and
 lookups) by its root-finding replacement, grow `numFixedColumns` by the new packed columns,
 and run the seeded query walk.
@@ -204,7 +228,14 @@ def projectCS [Field F] [DecidableEq F] (map : SelCompressMap) (cs : ConstraintS
   let polys := (flatGates cs).map (substSelectorMap m)
   let lookups' : List (LookupArgument F) := cs.lookups.map (fun a =>
     { inputs := a.inputs.map (substSelectorMap m)
-      tables := a.tables.map (substSelectorMap m) })
+      tables := a.tables.map (substSelectorMap m)
+      tablesFree := by
+        intro table htable
+        obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp htable
+        rw [substSelectorMap_eq_of_selectorFree m source
+          (a.tablesFree source hsource)]
+        exact a.tablesFree source hsource
+      arity := by simp [a.arity] })
   -- plain projections (not `let (a, b) := …` matches), so record-field access reduces
   -- structurally without evaluating the walk
   let gs := eraseGates polys (queryWalkInit map cs)

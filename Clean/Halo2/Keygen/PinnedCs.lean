@@ -70,6 +70,34 @@ def Expression.queryAtoms : Expression F Query → List (Expression F Query)
   | .add left right
   | .mul left right => left.queryAtoms ++ right.queryAtoms
 
+/-- One past the largest selector index occurring in an expression. -/
+def Expression.selectorBound : Expression F Query → ℕ
+  | .var (.selector selector) => selector.index + 1
+  | .var _ => 0
+  | .const _ => 0
+  | .add left right
+  | .mul left right => max left.selectorBound right.selectorBound
+
+/-- One past every selector index occurring in a lookup's input tuple. -/
+def LookupArgument.inputSelectorBound (argument : LookupArgument F) : ℕ :=
+  (argument.inputs.map Expression.selectorBound).foldr max 0
+
+/-- One past every input-selector index occurring in a lookup list. -/
+def lookupInputSelectorBound (arguments : List (LookupArgument F)) : ℕ :=
+  (arguments.map LookupArgument.inputSelectorBound).foldr max 0
+
+/-- A selected lookup input expression lies below the whole lookup-list bound. -/
+theorem Expression.selectorBound_le_lookupInputSelectorBound
+    {arguments : List (LookupArgument F)} {argument : LookupArgument F}
+    (hargument : argument ∈ arguments)
+    {expression : Expression F Query} (hexpression : expression ∈ argument.inputs) :
+    expression.selectorBound ≤ lookupInputSelectorBound arguments := by
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨argument, hargument, rfl⟩)
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨expression, hexpression, rfl⟩)
+  exact le_rfl
+
 /-- Gates enabled by synthesis but absent from the raw configure result, preserving
 first-enable order and leaving the configured gate list itself untouched. -/
 def ConstraintSystem.missingEnabledGates [DecidableEq F]
@@ -90,12 +118,16 @@ only the first occurrence of each missing synthesis entry is appended. Missing g
 register their declared `queriedCells`. Missing lookups have no configure closure whose
 call order could be recorded, so their expression query atoms are registered
 deterministically from inputs followed by tables. This matters for advice-query counts
-and therefore blinding factors, not just for expression projection.
+and therefore blinding factors, not just for expression projection. The selector count
+is also closed over every lookup input's syntactic selector bound, so selector
+compression covers even a synthesis-only lookup by construction. Faithful circuits
+already allocate those selectors, making this maximum inert.
 -/
 def ConstraintSystem.closeWithOperations [DecidableEq F]
     (cs : ConstraintSystem F) (ops : Operations F) : ConstraintSystem F :=
   let missingGates := cs.missingEnabledGates ops
   let missingLookups := cs.missingEnabledLookups ops
+  let finalLookups := cs.lookups ++ missingLookups
   let registeredGates := missingGates.foldl
     (fun current gate =>
       current.registerQueriedCells gate.name gate.queriedCells) cs
@@ -106,7 +138,24 @@ def ConstraintSystem.closeWithOperations [DecidableEq F]
     registeredGates
   { registered with
     gates := cs.gates ++ missingGates
-    lookups := cs.lookups ++ missingLookups }
+    lookups := finalLookups
+    numSelectors := max cs.numSelectors
+      (lookupInputSelectorBound finalLookups) }
+
+/-- Every selector atom in every synthesis-closed lookup input has a corresponding
+allocated selector index. This is true by construction even for a lookup that
+synthesis enabled without registering it during configure. -/
+theorem ConstraintSystem.lookupInputsAllocated_closeWithOperations
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F) :
+    ∀ argument ∈ (cs.closeWithOperations ops).lookups,
+      ∀ expression ∈ argument.inputs,
+        expression.selectorBound ≤
+          (cs.closeWithOperations ops).numSelectors := by
+  intro argument hargument expression hexpression
+  exact le_trans
+    (Expression.selectorBound_le_lookupInputSelectorBound
+      hargument hexpression)
+    (le_max_right _ _)
 
 /-- Closing under synthesis preserves every configure-registered gate. -/
 theorem ConstraintSystem.mem_gates_closeWithOperations_of_mem

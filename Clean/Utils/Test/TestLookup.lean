@@ -46,6 +46,8 @@ def rcArg (z : Column .advice) (tbl : TableColumn) : LookupArgument Fp where
     let zNext : Expression Fp Query := queryAdvice z 1
     [qL * (qR * (zCur - (2 ^ 4 : Fp) * zNext) + (1 - qR) * zCur)]
   tables := [queryFixed tbl.inner]
+  tablesFree := by simp [Expression.SelectorFree, queryFixed]
+  arity := rfl
 
 -- (a-1) Running-sum row: `enableLookup … [qLookup, qRunning] row` — both selectors on.
 -- The gated input reduces to the running word `z_cur − 2^4·z_next`; the RHS is written

@@ -115,6 +115,10 @@ loading) is TBD with the lookup port — see `lookup-design.md`. -/
 structure LookupArgument (F : Type) where
   inputs : List (Expression F Query)
   tables : List (Expression F Query)
+  /-- Halo 2 constructs the table side solely from lookup-table columns. -/
+  tablesFree : ∀ table ∈ tables, table.SelectorFree
+  /-- `lookup` receives pairs and unzips them, so both tuple sides have equal arity. -/
+  arity : inputs.length = tables.length
 
 deriving instance DecidableEq for Constraint
 deriving instance DecidableEq for Gate
@@ -291,10 +295,19 @@ processed), then each pair's table column registers a cur fixed query
 def lookup (queriedCells : List (Expression F Query))
     (tableMap : List (Expression F Query × TableColumn)) : Configure F Unit :=
   let inputs := tableMap.map Prod.fst
-  let tables := tableMap.map fun (_, tbl) => queryFixed tbl.inner
+  let tables : List (Expression F Query) :=
+    tableMap.map fun (_, tbl) => queryFixed tbl.inner
+  have tablesFree : ∀ table : Expression F Query,
+      table ∈ tables → table.SelectorFree := by
+    intro table htable
+    obtain ⟨⟨_, tableColumn⟩, _, rfl⟩ := List.mem_map.mp htable
+    simp [Expression.SelectorFree, queryFixed]
+  have arity : inputs.length = tables.length := by
+    simp [inputs, tables]
   fun cs =>
     let cs := cs.registerQueriedCells "lookup" queriedCells
     let cs := tableMap.foldl (fun cs (_, tbl) => cs.queryFixedIndex tbl.inner) cs
-    ((), { cs with lookups := cs.lookups ++ [{ inputs, tables }] })
+    ((), { cs with lookups :=
+      cs.lookups ++ [{ inputs, tables, tablesFree, arity }] })
 
 end Halo2
