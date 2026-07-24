@@ -107,6 +107,10 @@ structure LookupArgument (F : Type) where
   inputs : List (Expression F Query)
   tables : List (Expression F Query)
 
+deriving instance DecidableEq for Constraint
+deriving instance DecidableEq for Gate
+deriving instance DecidableEq for LookupArgument
+
 /--
 The constraint system under construction: the state of the `Configure` monad, mirroring
 the builder role of Rust's `ConstraintSystem<F>`. Allocation counters plus accumulated

@@ -18,11 +18,137 @@ packed columns' fixed queries are appended by the projection (`queryWalkInit`).
 `PinnedConstraintSystem.ofOperations` and `FormalCircuit.toPinnedCS` close the loop — the
 circuit-side half of halo2's `keygen_vk`: floor plan → activations → minimal fitting
 domain → compress_selectors → pinned record.
+
+The constraint system used for those steps is closed under synthesis by construction:
+gates and lookups enabled by the operation stream but absent from the raw `configure`
+result are appended in first-enable order. This keeps a faithful circuit unchanged while
+making the compiler boundary total for every `FormalCircuit`; downstream soundness proofs
+do not need a separate configure/synthesize registration obligation.
 -/
 
 namespace Halo2
 
 variable {F : Type}
+
+/-! ## Synthesis-closed constraint systems -/
+
+/-- Every gate enabled by a region body, in operation order. -/
+def RegionOperations.enabledGates (ops : RegionOperations F) : List (Gate F) :=
+  ops.filterMap fun op => match op with
+    | .enableGate gate _ => some gate
+    | _ => none
+
+/-- Every lookup enabled by a region body, in operation order. -/
+def RegionOperations.enabledLookups (ops : RegionOperations F) :
+    List (LookupArgument F) :=
+  ops.filterMap fun op => match op with
+    | .enableLookup argument _ _ => some argument
+    | _ => none
+
+/-- Every gate enabled by a layouter operation stream, in region/operation order. -/
+def Operations.enabledGates (ops : Operations F) : List (Gate F) :=
+  ops.flatMap fun op => match op with
+    | .region _ body => body.enabledGates
+    | _ => []
+
+/-- Every lookup enabled by a layouter operation stream, in region/operation order. -/
+def Operations.enabledLookups (ops : Operations F) : List (LookupArgument F) :=
+  ops.flatMap fun op => match op with
+    | .region _ body => body.enabledLookups
+    | _ => []
+
+/--
+The non-selector query atoms occurring in an expression, in left-to-right syntax-tree
+order. Configure-time gates carry the more faithful closure-call order separately in
+`Gate.queriedCells`; this traversal supplies a deterministic registration order only for
+a lookup that synthesis enabled without configure having registered it.
+-/
+def Expression.queryAtoms : Expression F Query → List (Expression F Query)
+  | .var (.selector _) => []
+  | atom@(.var _) => [atom]
+  | .const _ => []
+  | .add left right
+  | .mul left right => left.queryAtoms ++ right.queryAtoms
+
+/-- Gates enabled by synthesis but absent from the raw configure result, preserving
+first-enable order and leaving the configured gate list itself untouched. -/
+def ConstraintSystem.missingEnabledGates [DecidableEq F]
+    (cs : ConstraintSystem F) (ops : Operations F) : List (Gate F) :=
+  (ops.enabledGates.filter fun gate => decide (gate ∉ cs.gates)).dedup
+
+/-- Lookups enabled by synthesis but absent from the raw configure result, preserving
+first-enable order and leaving the configured lookup list itself untouched. -/
+def ConstraintSystem.missingEnabledLookups [DecidableEq F]
+    (cs : ConstraintSystem F) (ops : Operations F) : List (LookupArgument F) :=
+  (ops.enabledLookups.filter fun argument => decide (argument ∉ cs.lookups)).dedup
+
+/--
+Close a raw configure result under the gate and lookup arguments enabled by synthesis.
+
+Configured entries retain their exact order (including any deliberate duplicates);
+only the first occurrence of each missing synthesis entry is appended. Missing gates
+register their declared `queriedCells`. Missing lookups have no configure closure whose
+call order could be recorded, so their expression query atoms are registered
+deterministically from inputs followed by tables. This matters for advice-query counts
+and therefore blinding factors, not just for expression projection.
+-/
+def ConstraintSystem.closeWithOperations [DecidableEq F]
+    (cs : ConstraintSystem F) (ops : Operations F) : ConstraintSystem F :=
+  let missingGates := cs.missingEnabledGates ops
+  let missingLookups := cs.missingEnabledLookups ops
+  let registeredGates := missingGates.foldl
+    (fun current gate =>
+      current.registerQueriedCells gate.name gate.queriedCells) cs
+  let registered := missingLookups.foldl
+    (fun current argument =>
+      current.registerQueriedCells "synthesis lookup"
+        ((argument.inputs ++ argument.tables).flatMap Expression.queryAtoms))
+    registeredGates
+  { registered with
+    gates := cs.gates ++ missingGates
+    lookups := cs.lookups ++ missingLookups }
+
+/-- Closing under synthesis preserves every configure-registered gate. -/
+theorem ConstraintSystem.mem_gates_closeWithOperations_of_mem
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
+    (gate : Gate F) (hgate : gate ∈ cs.gates) :
+    gate ∈ (cs.closeWithOperations ops).gates := by
+  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
+  exact Or.inl hgate
+
+/-- Every synthesis-enabled gate belongs to the closed constraint system. -/
+theorem ConstraintSystem.mem_gates_closeWithOperations_of_enabled
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
+    (gate : Gate F) (hgate : gate ∈ ops.enabledGates) :
+    gate ∈ (cs.closeWithOperations ops).gates := by
+  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
+  by_cases configured : gate ∈ cs.gates
+  · exact Or.inl configured
+  · apply Or.inr
+    rw [ConstraintSystem.missingEnabledGates, List.mem_dedup,
+      List.mem_filter]
+    exact ⟨hgate, by simp [configured]⟩
+
+/-- Closing under synthesis preserves every configure-registered lookup. -/
+theorem ConstraintSystem.mem_lookups_closeWithOperations_of_mem
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
+    (argument : LookupArgument F) (hargument : argument ∈ cs.lookups) :
+    argument ∈ (cs.closeWithOperations ops).lookups := by
+  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
+  exact Or.inl hargument
+
+/-- Every synthesis-enabled lookup belongs to the closed constraint system. -/
+theorem ConstraintSystem.mem_lookups_closeWithOperations_of_enabled
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
+    (argument : LookupArgument F) (hargument : argument ∈ ops.enabledLookups) :
+    argument ∈ (cs.closeWithOperations ops).lookups := by
+  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
+  by_cases configured : argument ∈ cs.lookups
+  · exact Or.inl configured
+  · apply Or.inr
+    rw [ConstraintSystem.missingEnabledLookups, List.mem_dedup,
+      List.mem_filter]
+    exact ⟨hargument, by simp [configured]⟩
 
 /-! ## Constraint-system derived scalars
 
@@ -122,25 +248,42 @@ def minimalK (cs : ConstraintSystem F) (ops : Operations F) : ℕ :=
 /-- The pinned constraint system of a circuit given its keygen-view operation stream:
 derived floor plan → activations → minimal fitting domain → compress_selectors → pinned
 record. The circuit-side half of halo2 keygen_vk. -/
-def PinnedConstraintSystem.ofOperations [Field F] [DecidableEq F] (cs : ConstraintSystem F)
+private def PinnedConstraintSystem.ofClosedOperations
+    [Field F] [DecidableEq F] (cs : ConstraintSystem F)
     (ops : Operations F) : PinnedConstraintSystem F :=
   let acts := activations (FloorPlanner.V1.starts ops) (indexedRegions ops 0).1
   let map := deriveSelCompressMap cs (2 ^ minimalK cs ops) acts
   .derive cs map
 
+/-- The pinned constraint system of a raw configure result and its keygen-view
+operation stream. The configure result is first closed under synthesis, so every
+enabled gate and lookup participates in selector compression and projection. -/
+def PinnedConstraintSystem.ofOperations [Field F] [DecidableEq F]
+    (cs : ConstraintSystem F) (ops : Operations F) : PinnedConstraintSystem F :=
+  .ofClosedOperations (cs.closeWithOperations ops) ops
+
 section FormalCircuit
 variable [FiniteField F] {ConfigInput Config : Type} {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output]
 
-/-- The pinned constraint system of a `FormalCircuit`: run its `configure` (producing the
-config and constraint system), then derive the pinned record from the `synthesize`
-operation stream. -/
+/-- The operation stream produced by a `FormalCircuit`'s own configure/synthesize run. -/
+def FormalCircuit.toOperations (c : FormalCircuit F ConfigInput Config Input Output)
+    (ci : ConfigInput) (input : Var Input F) : Operations F :=
+  ((c.synthesize (c.configure ci {}).1 input).operations)
+
+/-- The raw configure result closed under the gates and lookups enabled by the circuit's
+own synthesis run. This is the constraint system consumed by key generation. -/
+def FormalCircuit.toConstraintSystem
+    (c : FormalCircuit F ConfigInput Config Input Output)
+    (ci : ConfigInput) (input : Var Input F) : ConstraintSystem F :=
+  (c.configure ci {}).2.closeWithOperations (c.toOperations ci input)
+
+/-- The pinned constraint system of a `FormalCircuit`, derived from its
+synthesis-closed constraint system and the same operation stream. -/
 def FormalCircuit.toPinnedCS (c : FormalCircuit F ConfigInput Config Input Output)
     (ci : ConfigInput) (input : Var Input F) : PinnedConstraintSystem F :=
-  -- projections rather than pair-destructuring, so downstream definitional equalities
-  -- never force a kernel evaluation of the configure run
-  .ofOperations (c.configure ci {}).2
-    ((c.synthesize (c.configure ci {}).1 input).operations)
+  .ofClosedOperations (c.toConstraintSystem ci input)
+    (c.toOperations ci input)
 
 end FormalCircuit
 
