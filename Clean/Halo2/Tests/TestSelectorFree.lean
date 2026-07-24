@@ -11,7 +11,7 @@ example (a b c : Column .advice) :
     ∀ expression ∈
       ([queryAdvice a 0 * queryAdvice b 1 - queryAdvice c 0] :
         List (Expression F Query)),
-      expression.selectorFree := by
+      expression.SelectorFree := by
   selector_free
 
 -- An advice-valued conditional/mux.
@@ -21,7 +21,7 @@ example (bit x y out : Column .advice) :
           (1 - queryAdvice bit 0) * queryAdvice y 0 -
           queryAdvice out 0] :
         List (Expression F Query)),
-      expression.selectorFree := by
+      expression.SelectorFree := by
   selector_free
 
 -- A fixed column used as a boolean pseudo-selector is still selector-free.
@@ -29,7 +29,7 @@ example (q : Column .fixed) :
     ∀ expression ∈
       ([queryFixed q * (queryFixed q - 1)] :
         List (Expression F Query)),
-      expression.selectorFree := by
+      expression.SelectorFree := by
   selector_free
 
 -- A mixture of all non-selector query kinds and rotations.
@@ -38,7 +38,7 @@ example (a : Column .advice) (q : Column .fixed) (i : Column .instance) :
       ([queryFixed q * queryAdvice a (-1) +
           queryInstance i 1 * queryAdvice a 2] :
         List (Expression F Query)),
-      expression.selectorFree := by
+      expression.SelectorFree := by
   selector_free
 
 -- The exact public API: the selector-freedom proof is inserted by default.

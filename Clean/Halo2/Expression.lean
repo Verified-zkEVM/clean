@@ -122,12 +122,12 @@ export Expression (var)
 This lives with the expression language, rather than the key-generation semantics,
 because gate construction uses it as a local well-formedness condition. -/
 @[circuit_norm, selector_free]
-def Expression.selectorFree {F : Type} : Expression F Query → Prop
+def Expression.SelectorFree {F : Type} : Expression F Query → Prop
   | .var (.selector _) => False
   | .var _ => True
   | .const _ => True
-  | .add a b => a.selectorFree ∧ b.selectorFree
-  | .mul a b => a.selectorFree ∧ b.selectorFree
+  | .add a b => a.SelectorFree ∧ b.SelectorFree
+  | .mul a b => a.SelectorFree ∧ b.SelectorFree
 
 /--
 `Environment` represents the data that is provided at runtime to concretely specify the

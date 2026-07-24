@@ -152,20 +152,20 @@ theorem selReplacement_eval_of_root (d : SelCompress) (v : Query → F)
 
 set_option linter.unusedSectionVars false in
 private theorem selectorFree_foldl_mul (fs : List (Expression F Query))
-    (acc : Expression F Query) (hacc : acc.selectorFree)
-    (hfs : ∀ f ∈ fs, f.selectorFree) :
-    (fs.foldl (· * ·) acc).selectorFree := by
+    (acc : Expression F Query) (hacc : acc.SelectorFree)
+    (hfs : ∀ f ∈ fs, f.SelectorFree) :
+    (fs.foldl (· * ·) acc).SelectorFree := by
   induction fs generalizing acc with
   | nil => exact hacc
   | cons f fs ih =>
       rw [List.foldl_cons]
       refine ih (acc * f) ?_ (fun g hg => hfs g (List.mem_cons_of_mem f hg))
-      show (Expression.mul acc f).selectorFree
-      simp [Expression.selectorFree, hacc, hfs f (List.mem_cons_self ..)]
+      show (Expression.mul acc f).SelectorFree
+      simp [Expression.SelectorFree, hacc, hfs f (List.mem_cons_self ..)]
 
 /-- The root-finding replacement's atoms are a fixed query and constants. -/
 theorem selReplacement_selectorFree (d : SelCompress) :
-    (selReplacement (F := F) d).selectorFree := by
+    (selReplacement (F := F) d).SelectorFree := by
   unfold selReplacement
   refine selectorFree_foldl_mul _ _ trivial ?_
   intro f hf
@@ -175,13 +175,13 @@ theorem selReplacement_selectorFree (d : SelCompress) :
   · simp [hcase] at hj
   · rw [if_neg hcase, Option.some_inj] at hj
     subst hj
-    simp [Expression.selectorFree]
+    simp [Expression.SelectorFree]
 
 /-- Compression leaves exactly the uncovered selector atoms: the substituted expression
 is selector-free iff the map covers every selector occurrence. -/
 theorem substSelectorMap_selectorFree (m : ℕ → Option SelCompress)
     (e : Expression F Query) :
-    (substSelectorMap m e).selectorFree ↔
+    (substSelectorMap m e).SelectorFree ↔
       e.selectorsCovered (fun i => (m i).isSome) = true := by
   induction e with
   | var q =>
@@ -192,24 +192,24 @@ theorem substSelectorMap_selectorFree (m : ℕ → Option SelCompress)
               simp [substSelectorMap, hs, Expression.selectorsCovered,
                 selReplacement_selectorFree d]
           | none => simp [substSelectorMap, hs, Expression.selectorsCovered,
-              Expression.selectorFree]
+              Expression.SelectorFree]
       | fixed c r =>
-          simp [substSelectorMap, Expression.selectorFree,
+          simp [substSelectorMap, Expression.SelectorFree,
             Expression.selectorsCovered]
       | advice c r =>
-          simp [substSelectorMap, Expression.selectorFree,
+          simp [substSelectorMap, Expression.SelectorFree,
             Expression.selectorsCovered]
       | «instance» c r =>
-          simp [substSelectorMap, Expression.selectorFree,
+          simp [substSelectorMap, Expression.SelectorFree,
             Expression.selectorsCovered]
   | const c =>
-      simp [substSelectorMap, Expression.selectorFree,
+      simp [substSelectorMap, Expression.SelectorFree,
         Expression.selectorsCovered]
   | add a b iha ihb =>
-      simp [substSelectorMap, Expression.selectorFree,
+      simp [substSelectorMap, Expression.SelectorFree,
         Expression.selectorsCovered, iha, ihb, Bool.and_eq_true]
   | mul a b iha ihb =>
-      simp [substSelectorMap, Expression.selectorFree,
+      simp [substSelectorMap, Expression.SelectorFree,
         Expression.selectorsCovered, iha, ihb, Bool.and_eq_true]
 
 /-! ## The query walk interprets its own layout
@@ -455,13 +455,13 @@ any state extending the walk's output — in practice the whole-circuit walk's f
 — then the erased selector-free expression evaluates to the original at `v`. -/
 theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
     (e : Expression F Query) (s sfin : QueryState)
-    (hfree : e.selectorFree)
+    (hfree : e.SelectorFree)
     (hext : sfin.Extends (eraseExpr e s).2)
     (hint : Interprets sfin fE aE iE v) :
     RichExpression.eval fE aE iE (eraseExpr e s).1 = e.eval v := by
   induction e, s using eraseExpr.induct with
   | case1 c s => rfl
-  | case2 sel s => simp [Expression.selectorFree] at hfree
+  | case2 sel s => simp [Expression.SelectorFree] at hfree
   | case3 col rot s i s₁ heq =>
       show RichExpression.eval fE aE iE (.advice (s.advIdx col.index rot).1)
         = v (.advice col rot)
@@ -485,18 +485,18 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
       simpa using this
   | case6 e s e' s₁ heq ih =>
       simp only [eraseExpr, if_true] at hext ⊢
-      simp only [Expression.selectorFree, true_and] at hfree
+      simp only [Expression.SelectorFree, true_and] at hfree
       rw [RichExpression.eval, ih hfree hext,
         show (Expression.mul (.const (-1)) e).eval v = -1 * e.eval v from rfl]
       ring
   | case7 c e s hc e' s₁ heq ih =>
       simp only [eraseExpr, if_neg hc] at hext ⊢
-      simp only [Expression.selectorFree, true_and] at hfree
+      simp only [Expression.SelectorFree, true_and] at hfree
       rw [RichExpression.eval, RichExpression.eval, ih hfree hext]
       rfl
   | case8 e c s he e' s₁ heq ih =>
       rw [eraseExpr_mulConstant e c s he] at hext ⊢
-      simp only [Expression.selectorFree, and_true] at hfree
+      simp only [Expression.SelectorFree, and_true] at hfree
       rw [RichExpression.eval, RichExpression.eval, ih hfree hext,
         show (Expression.mul e (.mul (.const c) (.const 1))).eval v
           = e.eval v * (c * 1) from rfl]
@@ -504,20 +504,20 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
   | case9 e c one s he hone e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       rw [eraseExpr_mul_const_mul_const_of_ne_one e c one s he hone] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree, and_true] at hfree
+      simp only [Expression.SelectorFree, and_true] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
-        ih₂ (by simp [Expression.selectorFree]) hext]
+        ih₂ (by simp [Expression.SelectorFree]) hext]
       rfl
   | case10 e c s he e' s₁ heq ih =>
       rw [eraseExpr_mul_const e c s he] at hext ⊢
-      simp only [Expression.selectorFree, and_true] at hfree
+      simp only [Expression.SelectorFree, and_true] at hfree
       rw [RichExpression.eval, ih hfree hext]
       rfl
   | case11 a b s e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       simp only [eraseExpr] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree] at hfree
+      simp only [Expression.SelectorFree] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
         ih₂ hfree.2 hext]
@@ -525,7 +525,7 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
   | case12 a b s ha hb1 hb2 e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
       rw [eraseExpr_mul a b s ha hb1 hb2] at hext ⊢
       simp only [heq] at hext ih₁ ⊢
-      simp only [Expression.selectorFree] at hfree
+      simp only [Expression.SelectorFree] at hfree
       simp only [RichExpression.eval]
       rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
         ih₂ hfree.2 hext]
@@ -571,7 +571,7 @@ source expression, position by position, when the families interpret a state ext
 the walk's output. -/
 theorem eraseGates_eval (fE aE iE : ℕ → F) (v : Query → F)
     (ps : List (Expression F Query)) (s sfin : QueryState)
-    (hfree : ∀ p ∈ ps, p.selectorFree)
+    (hfree : ∀ p ∈ ps, p.SelectorFree)
     (hext : sfin.Extends (eraseGates ps s).2)
     (hint : Interprets sfin fE aE iE v) :
     ∀ (j : ℕ) (_h1 : j < (eraseGates ps s).1.length) (_h2 : j < ps.length),
@@ -625,7 +625,7 @@ theorem PinnedConstraintSystem.derive_gates_eval (cs : ConstraintSystem F)
     RichExpression.eval fE aE iE (PinnedConstraintSystem.derive cs map).gates[j]
       = Expression.eval (substValuation map.lookup v) (flatGates cs)[j] := by
   have hfree : ∀ p ∈ (flatGates cs).map (substSelectorMap map.lookup),
-      p.selectorFree := by
+      p.SelectorFree := by
     intro p hp'
     obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp'
     exact (substSelectorMap_selectorFree _ q).2 (hcov q hq)

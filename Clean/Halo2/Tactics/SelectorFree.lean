@@ -20,12 +20,12 @@ without unfolding that list at the call site. -/
 theorem Expression.selectorFree_foldl_mul {F α : Type}
     (xs : List α) (factor : α → Expression F Query)
     (acc : Expression F Query) :
-    (xs.foldl (fun product x => product * factor x) acc).selectorFree ↔
-      acc.selectorFree ∧ ∀ x ∈ xs, (factor x).selectorFree := by
+    (xs.foldl (fun product x => product * factor x) acc).SelectorFree ↔
+      acc.SelectorFree ∧ ∀ x ∈ xs, (factor x).SelectorFree := by
   induction xs generalizing acc with
   | nil => simp
   | cons x xs ih =>
-      simp [List.foldl_cons, ih, Expression.selectorFree, and_assoc]
+      simp [List.foldl_cons, ih, Expression.SelectorFree, and_assoc]
 
 /-- Prove concrete selector-freedom goals built from the standard query helpers. -/
 macro "selector_free" : tactic =>

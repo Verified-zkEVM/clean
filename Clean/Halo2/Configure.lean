@@ -95,7 +95,7 @@ combinator to reduce an enabled gate's constraint list. -/
 @[circuit_norm]
 def Constraints.withSelector (s : Selector)
     (constraints : List (String × Expression F Query))
-    (_h : ∀ constraint ∈ constraints, constraint.2.selectorFree := by
+    (_h : ∀ constraint ∈ constraints, constraint.2.SelectorFree := by
       selector_free) :
     List (Constraint F) :=
   constraints.map fun (name, poly) => { name, poly := querySelector s * poly }
