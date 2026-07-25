@@ -124,13 +124,10 @@ wrapper region contributes nothing else). Completeness proofs open lifted chunks
 this to reach per-cell witness equations. NOT `@[circuit_norm]` — chunks open only
 deliberately. -/
 theorem FormalRegionCircuit.toFormal_call_extendsWitnesses {CI Cfg : Type}
-    (b : FormalRegionCircuit F CI Cfg Input Output)
-    (synthesisLaws : b.SynthesisLaws)
-    (name : String) (cfg : Cfg)
+    (b : FormalRegionCircuit F CI Cfg Input Output) (name : String) (cfg : Cfg)
     (inp : Var Input F) (i : RegionIndex) (place : RegionIndex → ℕ)
     (env : ProverEnvironment F) :
-    ExtendsWitnesses place env
-        (((b.toFormal name synthesisLaws).call cfg inp).operations i) i
+    ExtendsWitnesses place env (((b.toFormal name).call cfg inp).operations i) i
       = RegionOperations.ExtendsWitnesses place i env
           ((b.synthesize cfg 0 inp).operations i) := by
   rw [FormalCircuit.call_operations]

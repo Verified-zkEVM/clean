@@ -509,6 +509,14 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   synthesize : Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)
   elaborated : ∀ config offset,
     ElaboratedRegionCircuit F Input Output (synthesize config offset) := fun _ _ => {}
+  /-- Static lookup coherence of the complete region fragment. This is checked on the
+  packaged circuit itself; promotion to a fresh layouter region consumes it directly. -/
+  synthesisLaws :
+    ∀ (config : Config) (offset : ℕ) (input : Var Input F)
+      (region : RegionIndex),
+      let body := (synthesize config offset input).operations region
+      body.LookupRelevantSelectorActivationsExact ∧
+        body.LookupInputsNoSimpleSelectors
 
   /-- Designated env readings the contract may reference: `Spec` and the prover-side
   predicates all receive `extract`'s value. Two uses: knowledge-soundness extraction
@@ -641,23 +649,10 @@ wrapping region fixes offset `0`), so the layouter `extract` is `child.extract c
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 
-/-- The static lookup laws required when a region circuit is promoted to a complete,
-fresh layouter region. The proof is checked at that full-region boundary. -/
-def SynthesisLaws
-    (child : FormalRegionCircuit F ConfigInput Config Input Output) : Prop :=
-  ∀ (config : Config) (input : Var Input F) (region : RegionIndex),
-    let body := (child.synthesize config 0 input).operations region
-    body.LookupRelevantSelectorActivationsExact ∧
-      body.LookupInputsNoSimpleSelectors
-
 /-- Lift a region-level formal circuit to the layouter level by wrapping its body in a fresh
 region. See the section docstring for the contract-transfer details. -/
 def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
-    (name : String := child.name)
-    (_synthesisLaws : child.SynthesisLaws := by
-      intros
-      dsimp
-      simp only [circuit_norm]) :
+    (name : String := child.name) :
     FormalCircuit F ConfigInput Config Input Output where
   name := name
   configure := child.configure
@@ -672,7 +667,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
   synthesisLaws config input i := by
     exact (Operations.SynthesisLaws.region_singleton name
       ((child.synthesize config 0 input).operations i)).mpr
-        (_synthesisLaws config input i)
+        (child.synthesisLaws config 0 input i)
   Witness := child.Witness
   inhabitedWitness := child.inhabitedWitness
   extract config input i₀ env := child.extract config 0 input i₀ env
