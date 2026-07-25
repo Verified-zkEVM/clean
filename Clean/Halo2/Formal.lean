@@ -191,6 +191,11 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   synthesize : Config → Var Input F → Circuit F (Var Output F)
   elaborated : ∀ config, ElaboratedCircuit F Input Output (synthesize config) := by
     intro config; first | infer_instance | exact {}
+  /-- Static coherence of every complete region emitted by synthesis. This travels
+  through opaque layouter-level subcircuit calls as part of the package. -/
+  synthesisLaws :
+    ∀ (config : Config) (input : Var Input F) (i : RegionIndex),
+      Operations.SynthesisLaws ((synthesize config input).operations i)
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
@@ -331,6 +336,15 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
     (self.call config input).operations i
       = (self.synthesize config input).operations i :=
   self.callOps_eq config input i
+
+/-- An opaque layouter-level call carries the child's packaged synthesis laws. -/
+@[circuit_norm]
+theorem call_synthesisLaws
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    Operations.SynthesisLaws ((self.call config input).operations i) := by
+  rw [self.call_operations]
+  exact self.synthesisLaws config input i
 
 /-!
 The consumption mechanism for `call` chunks lives in `Subcircuit.lean` (framework leaf
@@ -627,10 +641,21 @@ wrapping region fixes offset `0`), so the layouter `extract` is `child.extract c
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 
+/-- The static lookup laws required when a region circuit is promoted to a complete,
+fresh layouter region. The proof is checked at that full-region boundary. -/
+def SynthesisLaws
+    (child : FormalRegionCircuit F ConfigInput Config Input Output) : Prop :=
+  ∀ (config : Config) (input : Var Input F) (region : RegionIndex),
+    let body := (child.synthesize config 0 input).operations region
+    body.LookupRelevantSelectorActivationsExact ∧
+      body.LookupInputsNoSimpleSelectors
+
 /-- Lift a region-level formal circuit to the layouter level by wrapping its body in a fresh
 region. See the section docstring for the contract-transfer details. -/
 def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
-    (name : String := child.name) :
+    (name : String := child.name)
+    (_synthesisLaws : child.SynthesisLaws := by
+      simp only [circuit_norm]) :
     FormalCircuit F ConfigInput Config Input Output where
   name := name
   configure := child.configure
@@ -642,6 +667,10 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
       regionCount_eq := by
         intro _ _
         simp only [assignRegion, Circuit.operations, Operations.regionCount] }
+  synthesisLaws config input i := by
+    exact (Operations.SynthesisLaws.region_singleton name
+      ((child.synthesize config 0 input).operations i)).mpr
+        (_synthesisLaws config input i)
   Witness := child.Witness
   inhabitedWitness := child.inhabitedWitness
   extract config input i₀ env := child.extract config 0 input i₀ env

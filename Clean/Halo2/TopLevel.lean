@@ -146,151 +146,32 @@ structure SynthesisWellFormed
       .loadTable table values ∈ operations →
       values.length ≤ env.usableRows
 
-/-- Selector indices occurring in an expression, with syntax-order multiplicity. -/
-@[circuit_norm]
-def Expression.selectorIndices : Expression F Query → List ℕ
-  | .var (.selector selector) => [selector.index]
-  | .var _ => []
-  | .const _ => []
-  | .add left right =>
-      left.selectorIndices ++ right.selectorIndices
-  | .mul left right =>
-      left.selectorIndices ++ right.selectorIndices
-
-/-- Membership in an enabled-selector list, by the index used by semantics. -/
-@[circuit_norm]
-def SelectorEnabledAtIndex
-    (enabled : List Selector) (selector : ℕ) : Prop :=
-  ∃ candidate ∈ enabled, candidate.index = selector
-
-/-- Some operation in this region activates a selector at the given local row. -/
-@[circuit_norm]
-def RegionOperations.SelectorActivatedAt
-    (body : RegionOperations F) (selector row : ℕ) : Prop :=
-  ∃ operation ∈ body,
-    FloorPlanner.activatesSelectorAt selector row operation
-
-/--
-Each lookup operation's local zero/one valuation agrees with every activation of
-the relevant selector indices elsewhere in the same region body.
--/
-@[circuit_norm]
-def RegionOperations.LookupRelevantSelectorActivationsExact
-    (body : RegionOperations F) : Prop :=
-  body.Forall fun operation =>
-    match operation with
-    | .enableLookup argument enabled row =>
-        argument.inputs.Forall fun expression =>
-          expression.selectorIndices.Forall fun selector =>
-            SelectorEnabledAtIndex enabled selector ↔
-              body.SelectorActivatedAt selector row
-    | _ => True
-
-/-- Region-local lookup selector coherence across a complete operation stream. -/
-def Operations.LookupRelevantSelectorActivationsExact
-    (operations : Operations F) : Prop :=
-  (indexedRegions operations 0).1.Forall fun (_, body) =>
-    body.LookupRelevantSelectorActivationsExact
-
-/-- Every synthesis-enabled lookup input obeys Halo 2's no-simple-selector rule. -/
-def Operations.LookupInputsNoSimpleSelectors
-    (operations : Operations F) : Prop :=
-  operations.enabledLookups.Forall fun argument =>
-    argument.inputs.Forall Expression.NoSimpleSelectors
-
-private theorem indexedRegions_append
-    (left right : Operations F) (i : ℕ) :
-    indexedRegions (left ++ right) i =
-      let leftResult := indexedRegions left i
-      let rightResult := indexedRegions right leftResult.2
-      (leftResult.1 ++ rightResult.1, rightResult.2) := by
-  induction left generalizing i with
+private theorem exists_region_operation_of_mem_indexedRegions
+    {operations : Operations F} {start region : ℕ}
+    {body : RegionOperations F}
+    (hregion : (region, body) ∈ (indexedRegions operations start).1) :
+    ∃ name, Operation.region name body ∈ operations := by
+  induction operations generalizing start with
   | nil =>
-      simp [indexedRegions]
-  | cons operation rest ih =>
-      cases operation <;> simp [indexedRegions, ih]
-
-private theorem indexedRegions_forall_body_independent
-    (operations : Operations F)
-    (property : RegionOperations F → Prop) (i j : ℕ) :
-    (indexedRegions operations i).1.Forall (fun (_, body) => property body) ↔
-      (indexedRegions operations j).1.Forall (fun (_, body) => property body) := by
-  induction operations generalizing i j with
-  | nil =>
-      simp [indexedRegions]
+      simp [indexedRegions] at hregion
   | cons operation rest ih =>
       cases operation with
-      | region name body =>
-          simp only [indexedRegions, List.forall_cons, and_congr_right_iff]
-          intro _
-          exact ih (i + 1) (j + 1)
+      | region name headBody =>
+          simp only [indexedRegions, List.mem_cons] at hregion
+          rcases hregion with hhead | hrest
+          · have : body = headBody := congrArg Prod.snd hhead
+            subst body
+            exact ⟨name, List.mem_cons_self⟩
+          · obtain ⟨foundName, hfound⟩ := ih hrest
+            exact ⟨foundName, List.mem_cons_of_mem _ hfound⟩
       | constrainInstance cell column row =>
-          simp only [indexedRegions]
-          exact ih i j
+          exact
+            let ⟨foundName, hfound⟩ := ih hregion
+            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
       | loadTable table values =>
-          simp only [indexedRegions]
-          exact ih i j
-
-/-- Region-local selector exactness composes across complete operation streams.
-
-The corresponding statement intentionally does not split a region body: a lookup
-operation observes selector activations from its entire enclosing region. -/
-@[circuit_norm]
-theorem Operations.LookupRelevantSelectorActivationsExact.append
-    (left right : Operations F) :
-    (left ++ right).LookupRelevantSelectorActivationsExact ↔
-      left.LookupRelevantSelectorActivationsExact ∧
-        right.LookupRelevantSelectorActivationsExact := by
-  simp only [Operations.LookupRelevantSelectorActivationsExact]
-  rw [indexedRegions_append]
-  simp only [List.forall_append]
-  constructor
-  · intro h
-    refine ⟨h.1, ?_⟩
-    exact (indexedRegions_forall_body_independent right
-      RegionOperations.LookupRelevantSelectorActivationsExact
-      (indexedRegions left 0).2 0).mp h.2
-  · rintro ⟨hleft, hright⟩
-    refine ⟨hleft, ?_⟩
-    exact (indexedRegions_forall_body_independent right
-      RegionOperations.LookupRelevantSelectorActivationsExact
-      (indexedRegions left 0).2 0).mpr hright
-
-@[circuit_norm]
-theorem Operations.LookupRelevantSelectorActivationsExact.nil :
-    Operations.LookupRelevantSelectorActivationsExact
-      ([] : Operations F) := by
-  simp [Operations.LookupRelevantSelectorActivationsExact, indexedRegions]
-
-@[circuit_norm]
-theorem Operations.LookupRelevantSelectorActivationsExact.region_singleton
-    (name : String) (body : RegionOperations F) :
-    Operations.LookupRelevantSelectorActivationsExact
-        [.region name body] ↔
-      body.LookupRelevantSelectorActivationsExact := by
-  simp [Operations.LookupRelevantSelectorActivationsExact, indexedRegions]
-
-/-- The no-simple-selector lookup condition composes across operation streams. -/
-@[circuit_norm]
-theorem Operations.LookupInputsNoSimpleSelectors.append
-    (left right : Operations F) :
-    (left ++ right).LookupInputsNoSimpleSelectors ↔
-      left.LookupInputsNoSimpleSelectors ∧
-        right.LookupInputsNoSimpleSelectors := by
-  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
-
-@[circuit_norm]
-theorem Operations.LookupInputsNoSimpleSelectors.nil :
-    Operations.LookupInputsNoSimpleSelectors ([] : Operations F) := by
-  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
-
-@[circuit_norm]
-theorem Operations.LookupInputsNoSimpleSelectors.region_singleton
-    (name : String) (body : RegionOperations F) :
-    Operations.LookupInputsNoSimpleSelectors [.region name body] ↔
-      body.enabledLookups.Forall fun argument =>
-        argument.inputs.Forall Expression.NoSimpleSelectors := by
-  simp [Operations.LookupInputsNoSimpleSelectors, Operations.enabledLookups]
+          exact
+            let ⟨foundName, hfound⟩ := ih hregion
+            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
 
 /-- Select the region-local law for one indexed region body. -/
 theorem Operations.LookupRelevantSelectorActivationsExact.of_region
@@ -299,7 +180,10 @@ theorem Operations.LookupRelevantSelectorActivationsExact.of_region
     {region : RegionIndex} {body : RegionOperations F}
     (hregion : (region, body) ∈ (indexedRegions operations 0).1) :
     body.LookupRelevantSelectorActivationsExact := by
-  exact List.forall_iff_forall_mem.mp hlaw (region, body) hregion
+  obtain ⟨name, hoperation⟩ :=
+    exists_region_operation_of_mem_indexedRegions hregion
+  exact List.forall_iff_forall_mem.mp hlaw
+    (.region name body) hoperation
 
 /-- Select the exact activation equivalence for one lookup selector leaf. -/
 theorem RegionOperations.LookupRelevantSelectorActivationsExact.of_lookup
@@ -337,14 +221,6 @@ structure TopLevelCircuit
   formalCircuit : FormalCircuit F ConfigInput Config unit Output
   configInput : ConfigInput
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
-  lookupRelevantSelectorActivationsExact :
-    let config := (formalCircuit.configure configInput {}).1
-    Operations.LookupRelevantSelectorActivationsExact
-      ((formalCircuit.synthesize config ()).operations 0)
-  lookupInputsNoSimpleSelectors :
-    let config := (formalCircuit.configure configInput {}).1
-    Operations.LookupInputsNoSimpleSelectors
-      ((formalCircuit.synthesize config ()).operations 0)
   closesEnvironmentSoundness :
     let config := (formalCircuit.configure configInput {}).1
     ∀ (i : RegionIndex) (env : Placed Environment F),
@@ -383,6 +259,18 @@ def constraintSystem (self : TopLevelCircuit F ConfigInput Config Output) :
 def operations (self : TopLevelCircuit F ConfigInput Config Output)
     (i : RegionIndex := 0) : Operations F :=
   (self.formalCircuit.synthesize self.config ()).operations i
+
+/-- Region-local lookup selector coherence, inherited from the formal-circuit package. -/
+theorem lookupRelevantSelectorActivationsExact
+    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self.operations 0).LookupRelevantSelectorActivationsExact :=
+  (self.formalCircuit.synthesisLaws self.config () 0).lookupRelevantSelectorActivationsExact
+
+/-- The top-level lookup inputs obey Halo 2's no-simple-selector rule. -/
+theorem lookupInputsNoSimpleSelectors
+    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self.operations 0).LookupInputsNoSimpleSelectors :=
+  (self.formalCircuit.synthesisLaws self.config () 0).lookupInputsNoSimpleSelectors
 
 /--
 The circuit-side static premise needed to connect synthesized gate and lookup

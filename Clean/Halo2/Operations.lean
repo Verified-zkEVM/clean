@@ -122,6 +122,154 @@ inductive Operation (F : Type) where
 
 abbrev Operations (F : Type) := List (Operation F)
 
+/-! ## Static synthesis laws
+
+These laws describe the operation stream itself. Keeping them below the keygen layer
+lets `FormalCircuit` package them and lets opaque subcircuit calls expose them as one
+proof boundary, just like the circuit's semantic contract.
+-/
+
+/-- Selector indices occurring in an expression, with syntax-order multiplicity. -/
+@[circuit_norm]
+def Expression.selectorIndices : Expression F Query → List ℕ
+  | .var (.selector selector) => [selector.index]
+  | .var _ => []
+  | .const _ => []
+  | .add left right =>
+      left.selectorIndices ++ right.selectorIndices
+  | .mul left right =>
+      left.selectorIndices ++ right.selectorIndices
+
+/-- Membership in an enabled-selector list, by the index used by semantics. -/
+@[circuit_norm]
+def SelectorEnabledAtIndex
+    (enabled : List Selector) (selector : ℕ) : Prop :=
+  ∃ candidate ∈ enabled, candidate.index = selector
+
+/-- An operation activates selector `selector` at region-local `row`. -/
+@[circuit_norm]
+def RegionOperation.ActivatesSelectorAt
+    (selector row : ℕ) : RegionOperation F → Prop
+  | .enableGate gate operationRow =>
+      gate.selector.index = selector ∧ operationRow = row
+  | .enableLookup _ enabled operationRow =>
+      SelectorEnabledAtIndex enabled selector ∧ operationRow = row
+  | _ => False
+
+/-- Some operation in this region activates a selector at the given local row. -/
+@[circuit_norm]
+def RegionOperations.SelectorActivatedAt
+    (body : RegionOperations F) (selector row : ℕ) : Prop :=
+  ∃ operation ∈ body, operation.ActivatesSelectorAt selector row
+
+/--
+Each lookup operation's local zero/one valuation agrees with every activation of
+the relevant selector indices elsewhere in the same complete region body.
+-/
+@[circuit_norm]
+def RegionOperations.LookupRelevantSelectorActivationsExact
+    (body : RegionOperations F) : Prop :=
+  body.Forall fun operation =>
+    match operation with
+    | .enableLookup argument enabled row =>
+        argument.inputs.Forall fun expression =>
+          expression.selectorIndices.Forall fun selector =>
+            SelectorEnabledAtIndex enabled selector ↔
+              body.SelectorActivatedAt selector row
+    | _ => True
+
+/-- Every lookup input emitted in a region obeys Halo 2's no-simple-selector rule. -/
+@[circuit_norm]
+def RegionOperations.LookupInputsNoSimpleSelectors
+    (body : RegionOperations F) : Prop :=
+  body.Forall fun operation =>
+    match operation with
+    | .enableLookup argument _ _ =>
+        argument.inputs.Forall Expression.NoSimpleSelectors
+    | _ => True
+
+/-- The lookup synthesis laws for one complete layouter operation. -/
+@[circuit_norm]
+def Operation.LookupRelevantSelectorActivationsExact : Operation F → Prop
+  | .region _ body => body.LookupRelevantSelectorActivationsExact
+  | _ => True
+
+@[circuit_norm]
+def Operation.LookupInputsNoSimpleSelectors : Operation F → Prop
+  | .region _ body => body.LookupInputsNoSimpleSelectors
+  | _ => True
+
+/-- Region-local lookup selector coherence across a complete operation stream. -/
+def Operations.LookupRelevantSelectorActivationsExact
+    (operations : Operations F) : Prop :=
+  operations.Forall Operation.LookupRelevantSelectorActivationsExact
+
+/-- Every synthesis-enabled lookup input obeys Halo 2's no-simple-selector rule. -/
+def Operations.LookupInputsNoSimpleSelectors
+    (operations : Operations F) : Prop :=
+  operations.Forall Operation.LookupInputsNoSimpleSelectors
+
+/-- Static laws carried by a formal circuit's complete synthesis stream. -/
+structure Operations.SynthesisLaws (operations : Operations F) : Prop where
+  lookupRelevantSelectorActivationsExact :
+    operations.LookupRelevantSelectorActivationsExact
+  lookupInputsNoSimpleSelectors :
+    operations.LookupInputsNoSimpleSelectors
+
+@[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.append
+    (left right : Operations F) :
+    (left ++ right).LookupRelevantSelectorActivationsExact ↔
+      left.LookupRelevantSelectorActivationsExact ∧
+        right.LookupRelevantSelectorActivationsExact := by
+  simp [Operations.LookupRelevantSelectorActivationsExact]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.append
+    (left right : Operations F) :
+    (left ++ right).LookupInputsNoSimpleSelectors ↔
+      left.LookupInputsNoSimpleSelectors ∧
+        right.LookupInputsNoSimpleSelectors := by
+  simp [Operations.LookupInputsNoSimpleSelectors]
+
+@[circuit_norm]
+theorem Operations.SynthesisLaws.append
+    (left right : Operations F) :
+    (left ++ right).SynthesisLaws ↔
+      left.SynthesisLaws ∧ right.SynthesisLaws := by
+  constructor
+  · rintro ⟨hexact, hsimple⟩
+    rw [Operations.LookupRelevantSelectorActivationsExact.append] at hexact
+    rw [Operations.LookupInputsNoSimpleSelectors.append] at hsimple
+    exact ⟨⟨hexact.1, hsimple.1⟩, ⟨hexact.2, hsimple.2⟩⟩
+  · rintro ⟨⟨hleftExact, hleftSimple⟩, ⟨hrightExact, hrightSimple⟩⟩
+    exact
+      ⟨(Operations.LookupRelevantSelectorActivationsExact.append left right).mpr
+          ⟨hleftExact, hrightExact⟩,
+        (Operations.LookupInputsNoSimpleSelectors.append left right).mpr
+          ⟨hleftSimple, hrightSimple⟩⟩
+
+@[circuit_norm]
+theorem Operations.SynthesisLaws.nil :
+    Operations.SynthesisLaws ([] : Operations F) := by
+  exact ⟨by simp [Operations.LookupRelevantSelectorActivationsExact],
+    by simp [Operations.LookupInputsNoSimpleSelectors]⟩
+
+@[circuit_norm]
+theorem Operations.SynthesisLaws.region_singleton
+    (name : String) (body : RegionOperations F) :
+    Operations.SynthesisLaws [.region name body] ↔
+      body.LookupRelevantSelectorActivationsExact ∧
+        body.LookupInputsNoSimpleSelectors := by
+  constructor
+  · rintro ⟨hexact, hsimple⟩
+    exact ⟨List.forall_iff_forall_mem.mp hexact
+      (.region name body) (by simp), List.forall_iff_forall_mem.mp hsimple
+      (.region name body) (by simp)⟩
+  · rintro ⟨hexact, hsimple⟩
+    exact ⟨by simpa [Operations.LookupRelevantSelectorActivationsExact],
+      by simpa [Operations.LookupInputsNoSimpleSelectors]⟩
+
 /-- Number of region indices a list of operations consumes (the `localLength`
 analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal. -/
 def Operations.regionCount : Operations F → ℕ

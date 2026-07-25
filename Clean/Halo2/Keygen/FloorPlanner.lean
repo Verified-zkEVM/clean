@@ -931,12 +931,7 @@ def globallyDisjointAllocations
 
 /-- An operation activates selector `selector` at region-local `row`. -/
 def activatesSelectorAt (selector row : ℕ) : RegionOperation F → Prop
-  | .enableGate gate operationRow =>
-      gate.selector.index = selector ∧ operationRow = row
-  | .enableLookup _ enabled operationRow =>
-      (∃ enabledSelector ∈ enabled, enabledSelector.index = selector) ∧
-        operationRow = row
-  | _ => False
+  | operation => operation.ActivatesSelectorAt selector row
 
 private theorem mem_addCol_self
     (columns : List RegionColumn) (column : RegionColumn) :
