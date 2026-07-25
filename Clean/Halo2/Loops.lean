@@ -116,6 +116,28 @@ theorem loopAux_operations (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → Re
     simp only [Fin.val_last, Fin.val_castSucc, List.flatten_cons, List.flatten_nil,
       List.append_nil]
 
+/--
+An operation-local law holds over a loop exactly when it holds over every
+round.  Unlike the constraint-specific splits below, this generic `List.Forall`
+interface is also useful for static synthesis laws.
+-/
+theorem loopAux_forall (property : RegionOperation F → Prop)
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (k : ℕ) :
+    ((loopAux rows body k).operations self).Forall property ↔
+      ∀ i : Fin k,
+        ((body i.val (rows i.val)).operations self).Forall property := by
+  induction k with
+  | zero =>
+      change List.Forall property [] ↔
+        ∀ i : Fin 0,
+          ((body i.val (rows i.val)).operations self).Forall property
+      simp
+  | succ n ih =>
+      rw [loopAux_operations_succ, List.forall_append, ih,
+        Fin.forall_fin_succ']
+      simp only [Fin.val_last, Fin.val_castSucc]
+
 /-- **The `Constraints` split.** The loop's constraints hold iff each round's constraints hold at
 its base row — `∀ i : Fin k, <round i's predicate>`. This is what lets each round reduce like
 straight-line code after the split (the port of main Clean's `forEach.forAll`). -/
@@ -165,6 +187,16 @@ theorem forRange'_operations (offset stride m : ℕ)
           (body i.val (offset + i.val * stride)).operations self).flatten :=
   loopAux_operations _ _ _ _
 
+/-- Operation-local laws over `forRange'`, split by symbolic round. -/
+theorem forRange'_forall (property : RegionOperation F → Prop)
+    (offset stride m : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    ((forRange' offset stride m body).operations self).Forall property ↔
+      ∀ i : Fin m,
+        ((body i.val (offset + i.val * stride)).operations self).Forall property :=
+  loopAux_forall property _ _ _ _
+
 @[circuit_norm ↓]
 theorem forRange'_constraints (offset stride m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
@@ -199,6 +231,16 @@ theorem forRangeVar'_operations (rows : ℕ → ℕ) (m : ℕ)
     (forRangeVar' rows m body).operations self
       = (List.ofFn fun i : Fin m => (body i.val (rows i.val)).operations self).flatten :=
   loopAux_operations _ _ _ _
+
+/-- Operation-local laws over `forRangeVar'`, split by symbolic round. -/
+theorem forRangeVar'_forall (property : RegionOperation F → Prop)
+    (rows : ℕ → ℕ) (m : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    ((forRangeVar' rows m body).operations self).Forall property ↔
+      ∀ i : Fin m,
+        ((body i.val (rows i.val)).operations self).Forall property :=
+  loopAux_forall property _ _ _ _
 
 @[circuit_norm ↓]
 theorem forRangeVar'_constraints (rows : ℕ → ℕ) (m : ℕ)

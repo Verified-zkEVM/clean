@@ -188,6 +188,62 @@ def RegionOperations.LookupInputsNoSimpleSelectors
         argument.inputs.Forall Expression.NoSimpleSelectors
     | _ => True
 
+/--
+Every selector occurring in a lookup input is explicitly enabled by that lookup
+operation.  This strong, operation-local condition is the common case: it implies
+exact region-wide selector accounting because the lookup operation is itself an
+activation witness.  Gadgets that intentionally leave an input selector disabled
+(notably a short range check) prove the exact region law directly instead.
+-/
+@[circuit_norm]
+def RegionOperation.LookupInputSelectorsEnabled :
+    RegionOperation F → Prop
+  | .enableLookup argument enabled _ =>
+      argument.inputs.Forall fun expression =>
+        expression.selectorIndices.Forall fun selector =>
+          SelectorEnabledAtIndex enabled selector
+  | _ => True
+
+/-- The operation-local sufficient lookup-selector condition over a region body. -/
+def RegionOperations.LookupInputSelectorsEnabled
+    (body : RegionOperations F) : Prop :=
+  body.Forall RegionOperation.LookupInputSelectorsEnabled
+
+/--
+If every lookup explicitly enables every selector in its inputs, its selector
+valuation agrees with all relevant activations in the complete region body.
+-/
+theorem RegionOperations.lookupRelevantSelectorActivationsExact_of_inputSelectorsEnabled
+    {body : RegionOperations F}
+    (h : body.LookupInputSelectorsEnabled) :
+    body.LookupRelevantSelectorActivationsExact := by
+  simp only [RegionOperations.LookupRelevantSelectorActivationsExact,
+    List.forall_iff_forall_mem]
+  intro operation hoperation
+  cases operation with
+  | enableLookup argument enabled row =>
+      simp only
+      intro expression hexpression selector hselector
+      have hoperationLaw :=
+        List.forall_iff_forall_mem.mp h
+          (.enableLookup argument enabled row) hoperation
+      have hexpressionLaw :=
+        List.forall_iff_forall_mem.mp hoperationLaw expression hexpression
+      have henabled :=
+        List.forall_iff_forall_mem.mp hexpressionLaw selector hselector
+      exact
+        ⟨fun _ =>
+          ⟨.enableLookup argument enabled row, hoperation,
+            ⟨henabled, rfl⟩⟩,
+          fun _ => henabled⟩
+  | assignAdvice _ _ _
+  | assignFixed _ _ _
+  | enableGate _ _
+  | constrainEqual _ _
+  | constrainConstant _ _
+  | constrainInstance _ _ _ =>
+      trivial
+
 /-- The lookup synthesis laws for one complete layouter operation. -/
 @[circuit_norm]
 def Operation.LookupRelevantSelectorActivationsExact : Operation F → Prop
