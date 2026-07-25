@@ -233,6 +233,34 @@ theorem Operations.LookupInputsNoSimpleSelectors.append
   simp [Operations.LookupInputsNoSimpleSelectors]
 
 @[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.nil :
+    Operations.LookupRelevantSelectorActivationsExact
+      ([] : Operations F) := by
+  simp [Operations.LookupRelevantSelectorActivationsExact]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.nil :
+    Operations.LookupInputsNoSimpleSelectors
+      ([] : Operations F) := by
+  simp [Operations.LookupInputsNoSimpleSelectors]
+
+@[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.region_singleton
+    (name : String) (body : RegionOperations F) :
+    Operations.LookupRelevantSelectorActivationsExact [.region name body] ↔
+      body.LookupRelevantSelectorActivationsExact := by
+  simp only [Operations.LookupRelevantSelectorActivationsExact,
+    List.Forall, Operation.LookupRelevantSelectorActivationsExact]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.region_singleton
+    (name : String) (body : RegionOperations F) :
+    Operations.LookupInputsNoSimpleSelectors [.region name body] ↔
+      body.LookupInputsNoSimpleSelectors := by
+  simp only [Operations.LookupInputsNoSimpleSelectors,
+    List.Forall, Operation.LookupInputsNoSimpleSelectors]
+
+@[circuit_norm]
 theorem Operations.SynthesisLaws.append
     (left right : Operations F) :
     (left ++ right).SynthesisLaws ↔
