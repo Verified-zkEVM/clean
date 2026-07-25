@@ -221,6 +221,14 @@ structure TopLevelCircuit
   formalCircuit : FormalCircuit F ConfigInput Config unit Output
   configInput : ConfigInput
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
+  lookupRelevantSelectorActivationsExact :
+    let config := (formalCircuit.configure configInput {}).1
+    Operations.LookupRelevantSelectorActivationsExact
+      ((formalCircuit.synthesize config ()).operations 0)
+  lookupInputsNoSimpleSelectors :
+    let config := (formalCircuit.configure configInput {}).1
+    Operations.LookupInputsNoSimpleSelectors
+      ((formalCircuit.synthesize config ()).operations 0)
   closesEnvironmentSoundness :
     let config := (formalCircuit.configure configInput {}).1
     ∀ (i : RegionIndex) (env : Placed Environment F),
@@ -259,18 +267,6 @@ def constraintSystem (self : TopLevelCircuit F ConfigInput Config Output) :
 def operations (self : TopLevelCircuit F ConfigInput Config Output)
     (i : RegionIndex := 0) : Operations F :=
   (self.formalCircuit.synthesize self.config ()).operations i
-
-/-- Region-local lookup selector coherence, inherited from the formal-circuit package. -/
-theorem lookupRelevantSelectorActivationsExact
-    (self : TopLevelCircuit F ConfigInput Config Output) :
-    (self.operations 0).LookupRelevantSelectorActivationsExact :=
-  (self.formalCircuit.synthesisLaws self.config () 0).lookupRelevantSelectorActivationsExact
-
-/-- The top-level lookup inputs obey Halo 2's no-simple-selector rule. -/
-theorem lookupInputsNoSimpleSelectors
-    (self : TopLevelCircuit F ConfigInput Config Output) :
-    (self.operations 0).LookupInputsNoSimpleSelectors :=
-  (self.formalCircuit.synthesisLaws self.config () 0).lookupInputsNoSimpleSelectors
 
 /--
 The circuit-side static premise needed to connect synthesized gate and lookup

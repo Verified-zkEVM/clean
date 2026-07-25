@@ -191,11 +191,6 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   synthesize : Config → Var Input F → Circuit F (Var Output F)
   elaborated : ∀ config, ElaboratedCircuit F Input Output (synthesize config) := by
     intro config; first | infer_instance | exact {}
-  /-- Static coherence of every complete region emitted by synthesis. This travels
-  through opaque layouter-level subcircuit calls as part of the package. -/
-  synthesisLaws :
-    ∀ (config : Config) (input : Var Input F) (i : RegionIndex),
-      Operations.SynthesisLaws ((synthesize config input).operations i)
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
@@ -336,15 +331,6 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
     (self.call config input).operations i
       = (self.synthesize config input).operations i :=
   self.callOps_eq config input i
-
-/-- An opaque layouter-level call carries the child's packaged synthesis laws. -/
-@[circuit_norm]
-theorem call_synthesisLaws
-    (self : FormalCircuit F ConfigInput Config Input Output)
-    (config : Config) (input : Var Input F) (i : RegionIndex) :
-    Operations.SynthesisLaws ((self.call config input).operations i) := by
-  rw [self.call_operations]
-  exact self.synthesisLaws config input i
 
 /-!
 The consumption mechanism for `call` chunks lives in `Subcircuit.lean` (framework leaf
@@ -509,14 +495,6 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   synthesize : Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)
   elaborated : ∀ config offset,
     ElaboratedRegionCircuit F Input Output (synthesize config offset) := fun _ _ => {}
-  /-- Static lookup coherence of the complete region fragment. This is checked on the
-  packaged circuit itself; promotion to a fresh layouter region consumes it directly. -/
-  synthesisLaws :
-    ∀ (config : Config) (offset : ℕ) (input : Var Input F)
-      (region : RegionIndex),
-      let body := (synthesize config offset input).operations region
-      body.LookupRelevantSelectorActivationsExact ∧
-        body.LookupInputsNoSimpleSelectors
 
   /-- Designated env readings the contract may reference: `Spec` and the prover-side
   predicates all receive `extract`'s value. Two uses: knowledge-soundness extraction
@@ -664,10 +642,6 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
       regionCount_eq := by
         intro _ _
         simp only [assignRegion, Circuit.operations, Operations.regionCount] }
-  synthesisLaws config input i := by
-    exact (Operations.SynthesisLaws.region_singleton name
-      ((child.synthesize config 0 input).operations i)).mpr
-        (child.synthesisLaws config 0 input i)
   Witness := child.Witness
   inhabitedWitness := child.inhabitedWitness
   extract config input i₀ env := child.extract config 0 input i₀ env
