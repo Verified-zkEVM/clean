@@ -655,6 +655,8 @@ region. See the section docstring for the contract-transfer details. -/
 def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     (name : String := child.name)
     (_synthesisLaws : child.SynthesisLaws := by
+      intros
+      dsimp
       simp only [circuit_norm]) :
     FormalCircuit F ConfigInput Config Input Output where
   name := name
