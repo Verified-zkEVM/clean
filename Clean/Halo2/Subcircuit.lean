@@ -428,6 +428,37 @@ theorem FormalCircuit.foldCall_lookupInputsNoSimpleSelectors (m : ℕ) :
   rw [FormalCircuit.foldCall_operations,
     FormalCircuit.foldOps_lookupInputsNoSimpleSelectors]
 
+/--
+Sufficient, state-independent interface for proving exact lookup-selector accounting
+over a fold: prove one arbitrary round for arbitrary incoming cells and placement.
+This avoids exposing the fold's potentially large closed-form state to automation.
+-/
+theorem FormalCircuit.foldCall_lookupRelevantSelectorActivationsExact_of_forall
+    (m : ℕ)
+    (hround : ∀ j : Fin m, ∀ input i,
+      Operations.LookupRelevantSelectorActivationsExact
+        (((c j).call config input).operations i)) :
+    Operations.LookupRelevantSelectorActivationsExact
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀) := by
+  rw [FormalCircuit.foldCall_lookupRelevantSelectorActivationsExact]
+  intro j
+  exact hround j _ _
+
+/--
+Sufficient, state-independent interface for proving the lookup no-simple-selector
+law over a fold.
+-/
+theorem FormalCircuit.foldCall_lookupInputsNoSimpleSelectors_of_forall
+    (m : ℕ)
+    (hround : ∀ j : Fin m, ∀ input i,
+      Operations.LookupInputsNoSimpleSelectors
+        (((c j).call config input).operations i)) :
+    Operations.LookupInputsNoSimpleSelectors
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀) := by
+  rw [FormalCircuit.foldCall_lookupInputsNoSimpleSelectors]
+  intro j
+  exact hround j _ _
+
 theorem FormalCircuit.foldCall_output (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).output i₀
       = (FormalCircuit.foldState c toInput config init i₀ m).1 := by
