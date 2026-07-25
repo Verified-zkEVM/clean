@@ -245,6 +245,23 @@ theorem Operations.LookupInputsNoSimpleSelectors.nil :
   simp [Operations.LookupInputsNoSimpleSelectors]
 
 @[circuit_norm]
+theorem Operations.LookupRelevantSelectorActivationsExact.cons
+    (head : Operation F) (tail : Operations F) :
+    Operations.LookupRelevantSelectorActivationsExact (head :: tail) ↔
+      head.LookupRelevantSelectorActivationsExact ∧
+        tail.LookupRelevantSelectorActivationsExact := by
+  simp only [Operations.LookupRelevantSelectorActivationsExact,
+    List.forall_cons]
+
+@[circuit_norm]
+theorem Operations.LookupInputsNoSimpleSelectors.cons
+    (head : Operation F) (tail : Operations F) :
+    Operations.LookupInputsNoSimpleSelectors (head :: tail) ↔
+      head.LookupInputsNoSimpleSelectors ∧
+        tail.LookupInputsNoSimpleSelectors := by
+  simp only [Operations.LookupInputsNoSimpleSelectors, List.forall_cons]
+
+@[circuit_norm]
 theorem Operations.LookupRelevantSelectorActivationsExact.region_singleton
     (name : String) (body : RegionOperations F) :
     Operations.LookupRelevantSelectorActivationsExact [.region name body] ↔
