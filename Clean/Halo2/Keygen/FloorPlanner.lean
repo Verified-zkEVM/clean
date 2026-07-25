@@ -5217,6 +5217,81 @@ def RowIntervalsDisjoint
   leftStart + leftLength ≤ rightStart ∨
     rightStart + rightLength ≤ leftStart
 
+/-- Whether two measured regions share any concrete or virtual column. -/
+def columnsOverlap
+    (left right : List RegionColumn) : Bool :=
+  left.any fun column => right.contains column
+
+/-- Finite safety check for every shared measured column in a candidate placement. -/
+def CheckedSharedColumnIntervalsDisjoint
+    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
+  shapes.Pairwise fun left right =>
+    columnsOverlap left.columns right.columns = false ∨
+      RowIntervalsDisjoint
+        (starts.getD left.index 0) left.rowCount
+        (starts.getD right.index 0) right.rowCount
+
+private def checkedSharedColumnIntervalsDisjointDecidable
+    (shapes : List RegionShape) (starts : List ℕ) :
+    Decidable (CheckedSharedColumnIntervalsDisjoint shapes starts) := by
+  unfold CheckedSharedColumnIntervalsDisjoint RowIntervalsDisjoint
+  infer_instance
+
+/-- Distinct regions sharing any measured column occupy disjoint row intervals. -/
+def SharedColumnIntervalsDisjoint
+    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
+  ∀ ⦃left right : RegionShape⦄,
+    left ∈ shapes →
+    right ∈ shapes →
+    left.index ≠ right.index →
+    ∀ ⦃column : RegionColumn⦄,
+      column ∈ left.columns →
+      column ∈ right.columns →
+      RowIntervalsDisjoint
+        (starts.getD left.index 0) left.rowCount
+        (starts.getD right.index 0) right.rowCount
+
+/-- Hash-set form of the placed selector activation stream, used by the V1 guard. -/
+def activationSet
+    (starts : List ℕ) (regions : List (ℕ × RegionOperations F)) :
+    Std.HashSet (ℕ × ℕ) :=
+  (activations starts regions).foldl
+    (fun set activation => set.insert activation) ∅
+
+/--
+Executable guard for the exact placed selector fact lookup semantics needs. The
+activation set is built once before the nested lookup-input walk.
+-/
+def placedLookupSelectorRowsExactCheck
+    (operations : Operations F) (starts : List ℕ) : Bool :=
+  let regions := (indexedRegions operations 0).1
+  let active := activationSet starts regions
+  regions.all fun region =>
+    region.2.all fun operation =>
+      match operation with
+      | .enableLookup argument enabled row =>
+          argument.inputs.all fun expression =>
+            expression.selectorIndices.all fun selector =>
+              (enabled.any fun candidate =>
+                  candidate.index == selector) ==
+                active.contains
+                  (selector, starts.getD region.1 0 + row)
+      | _ => true
+
+/--
+Every selector leaf occurring in a lookup input has the lookup operation's zero/one
+enabled value at that absolute row.
+-/
+def PlacedLookupSelectorRowsExact
+    (operations : Operations F) (starts : List ℕ) : Prop :=
+  placedLookupSelectorRowsExactCheck operations starts = true
+
+private def placedLookupSelectorRowsExactDecidable
+    (operations : Operations F) (starts : List ℕ) :
+    Decidable (PlacedLookupSelectorRowsExact operations starts) := by
+  unfold PlacedLookupSelectorRowsExact
+  infer_instance
+
 /-- One occurrence of a virtual selector column in a placed region. -/
 structure SelectorPlacement where
   selector : ℕ
@@ -5290,6 +5365,33 @@ private theorem rel_or_reverse_of_pairwise_of_mem
       · rcases hright with rfl | hright
         · exact Or.inr (hpairs.1 left hleft)
         · exact ih hpairs.2 hleft hright
+
+/-- Acceptance of the full finite guard implies the shared-column invariant. -/
+theorem sharedColumnIntervalsDisjoint_of_checked
+    {shapes : List RegionShape} {starts : List ℕ}
+    (hchecked :
+      CheckedSharedColumnIntervalsDisjoint shapes starts) :
+    SharedColumnIntervalsDisjoint shapes starts := by
+  intro left right hleft hright hindices column
+    hleftColumn hrightColumn
+  have hne : left ≠ right := by
+    intro heq
+    apply hindices
+    exact congrArg RegionShape.index heq
+  rcases rel_or_reverse_of_pairwise_of_mem
+      hchecked hleft hright hne with hforward | hreverse
+  · rcases hforward with hcolumns | hintervals
+    · have hnotContains :=
+        List.any_eq_false.mp hcolumns column hleftColumn
+      exact False.elim
+        (hnotContains (List.contains_iff_mem.mpr hrightColumn))
+    · exact hintervals
+  · rcases hreverse with hcolumns | hintervals
+    · have hnotContains :=
+        List.any_eq_false.mp hcolumns column hrightColumn
+      exact False.elim
+        (hnotContains (List.contains_iff_mem.mpr hleftColumn))
+    · exact hintervals.elim Or.inr Or.inl
 
 private theorem selectorPlacement_mem
     {shapes : List RegionShape} {starts : List ℕ}
@@ -5383,13 +5485,13 @@ private theorem globallyDisjointStarts_getD
     index_lt_fallbackStartsLength_of_mem hshape
   simp [globallyDisjointStarts, hindex]
 
-/-- The conservative fallback satisfies the semantic selector invariant. -/
-theorem globallyDisjointStarts_sharedSelectorIntervalsDisjoint
+/-- The conservative fallback satisfies the shared-column invariant. -/
+theorem globallyDisjointStarts_sharedColumnIntervalsDisjoint
     (shapes : List RegionShape) :
-    SharedSelectorIntervalsDisjoint
+    SharedColumnIntervalsDisjoint
       shapes (globallyDisjointStarts shapes) := by
-  intro left right hleft hright hindices selector
-    hleftSelector hrightSelector
+  intro left right hleft hright hindices column
+    hleftColumn hrightColumn
   rw [globallyDisjointStarts_getD hleft,
     globallyDisjointStarts_getD hright]
   have hleftHeight :=
@@ -5417,6 +5519,16 @@ theorem globallyDisjointStarts_sharedSelectorIntervalsDisjoint
         rw [Nat.add_mul, one_mul]
       _ ≤ left.index * fallbackStride shapes :=
         Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hgt)
+
+/-- The conservative fallback also satisfies the selector-only projection. -/
+theorem globallyDisjointStarts_sharedSelectorIntervalsDisjoint
+    (shapes : List RegionShape) :
+    SharedSelectorIntervalsDisjoint
+      shapes (globallyDisjointStarts shapes) := by
+  intro left right hleft hright hindices selector
+    hleftSelector hrightSelector
+  exact globallyDisjointStarts_sharedColumnIntervalsDisjoint shapes
+    hleft hright hindices hleftSelector hrightSelector
 
 /-- Allocation state corresponding to `globallyDisjointStarts`. -/
 def globallyDisjointAllocations
@@ -5710,6 +5822,296 @@ theorem activation_origin_regionIndex_unique
     hleftActivation hrightActivation
   rw [← hleftAbsolute, ← hrightAbsolute]
 
+private theorem mem_foldl_hashSet_insert_iff
+    (item : ℕ × ℕ) (items : List (ℕ × ℕ))
+    (initial : Std.HashSet (ℕ × ℕ)) :
+    item ∈ items.foldl (fun set next => set.insert next) initial ↔
+      item ∈ initial ∨ item ∈ items := by
+  induction items generalizing initial with
+  | nil =>
+      simp
+  | cons head tail ih =>
+      rw [List.foldl_cons, ih]
+      simp only [Std.HashSet.mem_insert, beq_iff_eq, List.mem_cons]
+      aesop
+
+private theorem activationSet_contains_iff
+    (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
+    (activation : ℕ × ℕ) :
+    (activationSet starts regions).contains activation = true ↔
+      activation ∈ activations starts regions := by
+  rw [← Std.HashSet.mem_iff_contains]
+  unfold activationSet
+  rw [mem_foldl_hashSet_insert_iff]
+  simp
+
+private theorem enabled_any_iff
+    (enabled : List Selector) (selector : ℕ) :
+    (enabled.any fun candidate => candidate.index == selector) = true ↔
+      SelectorEnabledAtIndex enabled selector := by
+  rw [List.any_eq_true]
+  simp only [beq_iff_eq, SelectorEnabledAtIndex]
+
+/-- Logical interface to the optimized Boolean/HashSet lookup-selector guard. -/
+theorem placedLookupSelectorRowsExact_iff
+    (operations : Operations F) (starts : List ℕ) :
+    PlacedLookupSelectorRowsExact operations starts ↔
+      ∀ region ∈ (indexedRegions operations 0).1,
+        ∀ operation ∈ region.2,
+          match operation with
+          | .enableLookup argument enabled row =>
+              ∀ expression ∈ argument.inputs,
+                ∀ selector ∈ expression.selectorIndices,
+                  SelectorEnabledAtIndex enabled selector ↔
+                    (selector, starts.getD region.1 0 + row) ∈
+                      activations starts
+                        (indexedRegions operations 0).1
+          | _ => True := by
+  unfold PlacedLookupSelectorRowsExact placedLookupSelectorRowsExactCheck
+  simp only [List.all_eq_true]
+  constructor
+  · intro hguard region hregion operation hoperation
+    have hoperationGuard := hguard region hregion operation hoperation
+    cases operation with
+    | enableLookup argument enabled row =>
+        simp only at hoperationGuard ⊢
+        rw [List.all_eq_true] at hoperationGuard
+        intro expression hexpression
+        have hexpressionGuard :=
+          hoperationGuard expression hexpression
+        rw [List.all_eq_true] at hexpressionGuard
+        intro selector hselector
+        have hselectorGuard :=
+          hexpressionGuard selector hselector
+        rw [beq_iff_eq, Bool.eq_iff_iff,
+          enabled_any_iff, activationSet_contains_iff] at hselectorGuard
+        exact hselectorGuard
+    | assignAdvice | assignFixed | enableGate | constrainEqual |
+        constrainConstant | constrainInstance =>
+        trivial
+  · intro hguard region hregion operation hoperation
+    have hoperationGuard := hguard region hregion operation hoperation
+    cases operation with
+    | enableLookup argument enabled row =>
+        simp only at hoperationGuard ⊢
+        rw [List.all_eq_true]
+        intro expression hexpression
+        have hexpressionGuard :=
+          hoperationGuard expression hexpression
+        rw [List.all_eq_true]
+        intro selector hselector
+        have hselectorGuard :=
+          hexpressionGuard selector hselector
+        rw [beq_iff_eq, Bool.eq_iff_iff,
+          enabled_any_iff, activationSet_contains_iff]
+        exact hselectorGuard
+    | assignAdvice | assignFixed | enableGate | constrainEqual |
+        constrainConstant | constrainInstance =>
+        rfl
+
+private theorem indexedRegions_index_ge
+    (operations : Operations F) (initial : ℕ)
+    {region : ℕ} {body : RegionOperations F}
+    (hregion : (region, body) ∈ (indexedRegions operations initial).1) :
+    initial ≤ region := by
+  induction operations generalizing initial with
+  | nil =>
+      simp [indexedRegions] at hregion
+  | cons operation rest ih =>
+      cases operation with
+      | region name headBody =>
+          simp only [indexedRegions, List.mem_cons] at hregion
+          rcases hregion with hhead | hrest
+          · exact le_of_eq (congrArg Prod.fst hhead).symm
+          · exact Nat.le_add_right initial 1 |>.trans
+              (ih (initial + 1) hrest)
+      | constrainInstance cell column row =>
+          exact ih initial (by simpa only [indexedRegions] using hregion)
+      | loadTable table values =>
+          exact ih initial (by simpa only [indexedRegions] using hregion)
+
+private theorem indexedRegions_body_unique
+    {operations : Operations F} {initial region : ℕ}
+    {left right : RegionOperations F}
+    (hleft : (region, left) ∈ (indexedRegions operations initial).1)
+    (hright : (region, right) ∈ (indexedRegions operations initial).1) :
+    left = right := by
+  induction operations generalizing initial region left right with
+  | nil =>
+      simp [indexedRegions] at hleft
+  | cons operation rest ih =>
+      cases operation with
+      | region name body =>
+          simp only [indexedRegions, List.mem_cons] at hleft hright
+          rcases hleft with hleft | hleft
+          · rcases hright with hright | hright
+            · exact
+                (congrArg Prod.snd hleft).trans
+                  (congrArg Prod.snd hright).symm
+            · have hregion : region = initial := congrArg Prod.fst hleft
+              subst region
+              have hindex :=
+                indexedRegions_index_ge rest (initial + 1) hright
+              omega
+          · rcases hright with hright | hright
+            · have hregion : region = initial := congrArg Prod.fst hright
+              subst region
+              have hindex :=
+                indexedRegions_index_ge rest (initial + 1) hleft
+              omega
+            · exact ih hleft hright
+      | constrainInstance cell column row =>
+          exact ih hleft hright
+      | loadTable table values =>
+          exact ih hleft hright
+
+/-- Globally sequential fallback starts separate every pair of distinct regions. -/
+theorem globallyDisjointStarts_intervalsDisjoint
+    {shapes : List RegionShape} {left right : RegionShape}
+    (hleft : left ∈ shapes) (hright : right ∈ shapes)
+    (hindices : left.index ≠ right.index) :
+    RowIntervalsDisjoint
+      ((globallyDisjointStarts shapes).getD left.index 0) left.rowCount
+      ((globallyDisjointStarts shapes).getD right.index 0) right.rowCount := by
+  rw [globallyDisjointStarts_getD hleft,
+    globallyDisjointStarts_getD hright]
+  have hleftHeight := rowCount_le_fallbackStride_of_mem hleft
+  have hrightHeight := rowCount_le_fallbackStride_of_mem hright
+  rcases Nat.lt_or_gt_of_ne hindices with hlt | hgt
+  · left
+    calc
+      left.index * fallbackStride shapes + left.rowCount ≤
+          left.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hleftHeight _
+      _ = (left.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ right.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hlt)
+  · right
+    calc
+      right.index * fallbackStride shapes + right.rowCount ≤
+          right.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hrightHeight _
+      _ = (right.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ left.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hgt)
+
+private theorem mem_activations_of_lookup_enabled
+    {regions : List (ℕ × RegionOperations F)} {starts : List ℕ}
+    {region : RegionIndex} {body : RegionOperations F}
+    (hregion : (region, body) ∈ regions)
+    {argument : LookupArgument F} {enabled : List Selector} {row selector : ℕ}
+    (hlookup : RegionOperation.enableLookup argument enabled row ∈ body)
+    (henabled : SelectorEnabledAtIndex enabled selector) :
+    (selector, starts.getD region 0 + row) ∈ activations starts regions := by
+  unfold activations
+  rw [List.mem_flatMap]
+  refine ⟨(region, body), hregion, ?_⟩
+  rw [List.mem_flatMap]
+  refine ⟨.enableLookup argument enabled row, hlookup, ?_⟩
+  simp only [List.mem_map]
+  obtain ⟨candidate, hcandidate, hindex⟩ := henabled
+  exact ⟨candidate, hcandidate, by simp [hindex]⟩
+
+/--
+Global row separation turns the region-local synthesis law into the direct placed
+lookup-selector law used by the V1 guard.
+-/
+theorem globallyDisjointStarts_placedLookupSelectorRowsExact
+    (operations : Operations F)
+    (hlaw : ∀ region body,
+      (region, body) ∈ (indexedRegions operations 0).1 →
+        body.LookupRelevantSelectorActivationsExact) :
+    PlacedLookupSelectorRowsExact operations
+      (globallyDisjointStarts (measureRegions operations)) := by
+  rw [placedLookupSelectorRowsExact_iff]
+  intro region hregion operation hoperation
+  cases operation with
+  | enableLookup argument enabled row =>
+      simp only
+      intro expression hexpression selector hselector
+      have hoperationLaw :=
+        List.forall_iff_forall_mem.mp
+          (hlaw region.1 region.2 hregion)
+          (.enableLookup argument enabled row) hoperation
+      have hexpressionLaw :=
+        List.forall_iff_forall_mem.mp hoperationLaw
+          expression hexpression
+      have hlocal :=
+        List.forall_iff_forall_mem.mp hexpressionLaw
+          selector hselector
+      constructor
+      · intro henabled
+        exact mem_activations_of_lookup_enabled hregion hoperation henabled
+      · intro hactivation
+        obtain ⟨sourceRegion, sourceBody, sourceOperation, sourceRow,
+            hsourceRegion, hsourceOperation, hsourceActivation, habsolute⟩ :=
+          exists_activation_origin_of_mem_activations hactivation
+        have hsourceShape :
+            measureRegion sourceRegion sourceBody ∈
+              measureRegions operations := by
+          exact List.mem_map.mpr
+            ⟨(sourceRegion, sourceBody), hsourceRegion, rfl⟩
+        have htargetShape :
+            measureRegion region.1 region.2 ∈
+              measureRegions operations := by
+          exact List.mem_map.mpr ⟨region, hregion, rfl⟩
+        by_cases hregionEq : sourceRegion = region.1
+        · subst sourceRegion
+          have hbody : sourceBody = region.2 :=
+            indexedRegions_body_unique hsourceRegion hregion
+          subst sourceBody
+          have hrow : sourceRow = row := by
+            omega
+          subst sourceRow
+          exact hlocal.mpr
+            ⟨sourceOperation, hsourceOperation, hsourceActivation⟩
+        · have hsourceRow :=
+            row_lt_measureRegion_of_activatesSelectorAt
+              sourceRegion sourceBody hsourceOperation hsourceActivation
+          have htargetRow :=
+            row_lt_measureRegion_of_enableLookup_mem
+              region.1 region.2 argument enabled row hoperation
+          have hdisjoint :=
+            globallyDisjointStarts_intervalsDisjoint
+              hsourceShape htargetShape hregionEq
+          rcases hdisjoint with hsourceBefore | htargetBefore
+          · have hlt :
+                (globallyDisjointStarts (measureRegions operations)).getD
+                    sourceRegion 0 + sourceRow <
+                  (globallyDisjointStarts (measureRegions operations)).getD
+                      sourceRegion 0 +
+                    (measureRegion sourceRegion sourceBody).rowCount :=
+              Nat.add_lt_add_left hsourceRow _
+            rw [← habsolute] at hlt
+            exact False.elim
+              ((Nat.not_lt_of_ge
+                (hsourceBefore.trans
+                  (Nat.le_add_right
+                    ((globallyDisjointStarts
+                      (measureRegions operations)).getD region.1 0) row))) hlt)
+          · have hlt :
+                (globallyDisjointStarts (measureRegions operations)).getD
+                    region.1 0 + row <
+                  (globallyDisjointStarts (measureRegions operations)).getD
+                      region.1 0 +
+                    (measureRegion region.1 region.2).rowCount :=
+              Nat.add_lt_add_left htargetRow _
+            rw [habsolute] at hlt
+            exact False.elim
+              ((Nat.not_lt_of_ge
+                (htargetBefore.trans
+                  (Nat.le_add_right
+                    ((globallyDisjointStarts
+                      (measureRegions operations)).getD sourceRegion 0)
+                    sourceRow))) hlt)
+  | assignAdvice | assignFixed | enableGate | constrainEqual |
+      constrainConstant | constrainInstance =>
+      trivial
+
 /-! ## The two planners -/
 
 namespace V1
@@ -5724,42 +6126,99 @@ def planCandidate (shapes : List RegionShape) : List ℕ × CircuitAllocations :
   ((byIndex.toList).map (·.2), colAllocs)
 
 /--
-The exact legacy V1 plan when its selector intervals pass the finite safety guard;
-otherwise a conservative plan whose region intervals and allocation state agree.
+The exact legacy V1 plan when every pair of regions sharing a measured column passes
+the finite safety guard; otherwise a conservative plan whose region intervals and
+allocation state agree.
 -/
 def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
   let candidate := planCandidate shapes
   if @decide
-      (CheckedSharedSelectorIntervalsDisjoint shapes candidate.1)
-      (checkedSharedSelectorIntervalsDisjointDecidable shapes candidate.1) then
+      (CheckedSharedColumnIntervalsDisjoint shapes candidate.1)
+      (checkedSharedColumnIntervalsDisjointDecidable shapes candidate.1) then
+    candidate
+  else
+    (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
+
+/--
+Apply the semantic lookup-selector guard to the shape-safe V1 plan. A faithful
+candidate is preserved exactly; a rejected candidate uses the same globally
+row-disjoint starts and allocation state as the shape guard's fallback.
+-/
+def planOperations
+    (operations : Operations F) : List ℕ × CircuitAllocations :=
+  let shapes := measureRegions operations
+  let candidate := planFull shapes
+  if @decide
+      (PlacedLookupSelectorRowsExact operations candidate.1)
+      (placedLookupSelectorRowsExactDecidable operations candidate.1) then
     candidate
   else
     (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
 
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
-def starts (ops : Operations F) : List ℕ := (planFull (measureRegions ops)).1
+def starts (ops : Operations F) : List ℕ := (planOperations ops).1
 
 /--
-V1 placement makes regions sharing a virtual selector column row-disjoint by
-construction, independently of the legacy candidate's sorting implementation.
+V1 placement makes regions sharing any measured column row-disjoint by construction,
+independently of the legacy candidate's sorting implementation.
 -/
+theorem starts_sharedColumnIntervalsDisjoint
+    (ops : Operations F) :
+    SharedColumnIntervalsDisjoint
+      (measureRegions ops) (starts ops) := by
+  unfold starts planOperations
+  dsimp only
+  split
+  · exact (by
+      unfold planFull
+      dsimp only
+      split
+      · rename_i hchecked
+        exact sharedColumnIntervalsDisjoint_of_checked
+          (@of_decide_eq_true
+            (CheckedSharedColumnIntervalsDisjoint
+              (measureRegions ops) (planCandidate (measureRegions ops)).1)
+            (checkedSharedColumnIntervalsDisjointDecidable
+              (measureRegions ops) (planCandidate (measureRegions ops)).1)
+            hchecked)
+      · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
+          (measureRegions ops))
+  · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
+      (measureRegions ops)
+
+/-- The full V1 shared-column invariant implies its virtual-selector projection. -/
 theorem starts_sharedSelectorIntervalsDisjoint
     (ops : Operations F) :
     SharedSelectorIntervalsDisjoint
       (measureRegions ops) (starts ops) := by
-  unfold starts planFull
+  intro left right hleft hright hindices selector
+    hleftSelector hrightSelector
+  exact starts_sharedColumnIntervalsDisjoint ops
+    hleft hright hindices hleftSelector hrightSelector
+
+/--
+The operation-aware V1 planner supplies exact global lookup-selector rows whenever
+the synthesis stream supplies the corresponding region-local law.
+-/
+theorem starts_placedLookupSelectorRowsExact_of_regionLaw
+    (operations : Operations F)
+    (hlaw : ∀ region body,
+      (region, body) ∈ (indexedRegions operations 0).1 →
+        body.LookupRelevantSelectorActivationsExact) :
+    PlacedLookupSelectorRowsExact operations (starts operations) := by
+  unfold starts planOperations
   dsimp only
   split
   · rename_i hchecked
-    exact sharedSelectorIntervalsDisjoint_of_checked
-      (@of_decide_eq_true
-        (CheckedSharedSelectorIntervalsDisjoint
-          (measureRegions ops) (planCandidate (measureRegions ops)).1)
-        (checkedSharedSelectorIntervalsDisjointDecidable
-          (measureRegions ops) (planCandidate (measureRegions ops)).1)
-        hchecked)
-  · exact globallyDisjointStarts_sharedSelectorIntervalsDisjoint
-      (measureRegions ops)
+    exact
+      @of_decide_eq_true
+        (PlacedLookupSelectorRowsExact operations
+          (planFull (measureRegions operations)).1)
+        (placedLookupSelectorRowsExactDecidable operations
+          (planFull (measureRegions operations)).1)
+        hchecked
+  · exact globallyDisjointStarts_placedLookupSelectorRowsExact
+      operations hlaw
 
 /-! ### Constants allocation (`v1.rs:79-136`)
 
@@ -5799,7 +6258,7 @@ a single column). Reproduces `v1.rs:102-136`: enumerate free rows per constants 
 with the collected constants. -/
 def constants (toNat : F → ℕ) (ops : Operations F) (constCols : List ℕ) :
     List (ℕ × ℕ × ℕ) :=
-  let (_, colAllocs) := planFull (measureRegions ops)
+  let (_, colAllocs) := planOperations ops
   let endRow := firstUnassignedRow colAllocs
   let positions : List (ℕ × ℕ) := constCols.flatMap fun c =>
     (freeRows colAllocs c endRow).map fun row => (c, row)

@@ -206,6 +206,19 @@ theorem RegionOperations.LookupRelevantSelectorActivationsExact.of_lookup
   exact List.forall_iff_forall_mem.mp hinput selector hselector
 
 /--
+The region-local synthesis law, combined with V1's guarded placement, supplies the
+exact global selector activation rows consumed by lookup projection.
+-/
+theorem Operations.LookupRelevantSelectorActivationsExact.placed
+    {operations : Operations F}
+    (hlaw : operations.LookupRelevantSelectorActivationsExact) :
+    FloorPlanner.PlacedLookupSelectorRowsExact operations
+      (FloorPlanner.V1.starts operations) := by
+  apply FloorPlanner.V1.starts_placedLookupSelectorRowsExact_of_regionLaw
+  intro region body hregion
+  exact hlaw.of_region hregion
+
+/--
 A configured, unit-input formal circuit whose verifier assumptions are exactly
 `True`, and whose own successful synthesis discharges its compositional environment
 requirements.
