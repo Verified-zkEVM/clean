@@ -60,11 +60,8 @@ def canonGate (cfg : Config) : Gate Fp :=
   let z13Alpha0Prime : Expression Fp Query := queryAdvice (cfg.canonAdvices 0) 1
   let z44Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 1) 1
   let z43Alpha : Expression Fp Query := queryAdvice (cfg.canonAdvices 2) 1
-  { name := "Canonicity checks"
-    selector := cfg.qMulFixedBaseField
-    queriedCells :=
-      [alpha, z84Alpha, alpha1, alpha2, alpha0Prime, z13Alpha0Prime, z44Alpha, z43Alpha]
-    constraints :=
+  Gate.withSelector "Canonicity checks" cfg.qMulFixedBaseField
+      [alpha, z84Alpha, alpha1, alpha2, alpha0Prime, z13Alpha0Prime, z44Alpha, z43Alpha] <|
     -- decomposition checks
     let alpha1RangeCheck := rangeCheckExpr 4 alpha1
     let alpha2RangeCheck := rangeCheckExpr 2 alpha2
@@ -81,15 +78,14 @@ def canonGate (cfg : Config) : Gate Fp :=
     let alpha0Hi120 :=
       z44Alpha - Expression.mulConstant z84Alpha ((2 ^ 120 : ℕ) : Fp)
     let a43 := z43Alpha - z44Alpha * (((8 : ℕ) : Fp) : Expression Fp Query)
-    Constraints.withSelector cfg.qMulFixedBaseField
-      [ ("MSB = 1 => alpha_1 = 0", alpha2 * alpha1),
-        ("MSB = 1 => alpha_0_hi_120 = 0", alpha2 * alpha0Hi120),
-        ("MSB = 1 => a_43 = 0 or 1", alpha2 * rangeCheckExpr 2 a43),
-        ("MSB = 1 => z_13_alpha_0_prime = 0", alpha2 * z13Alpha0Prime),
-        ("alpha_1_range_check", alpha1RangeCheck),
-        ("alpha_2_range_check", alpha2RangeCheck),
-        ("z_84_alpha_check", z84AlphaCheck),
-        ("alpha_0_prime check", alpha0PrimeCheck) ] }
+    [ ("MSB = 1 => alpha_1 = 0", alpha2 * alpha1),
+      ("MSB = 1 => alpha_0_hi_120 = 0", alpha2 * alpha0Hi120),
+      ("MSB = 1 => a_43 = 0 or 1", alpha2 * rangeCheckExpr 2 a43),
+      ("MSB = 1 => z_13_alpha_0_prime = 0", alpha2 * z13Alpha0Prime),
+      ("alpha_1_range_check", alpha1RangeCheck),
+      ("alpha_2_range_check", alpha2RangeCheck),
+      ("z_84_alpha_check", z84AlphaCheck),
+      ("alpha_0_prime check", alpha0PrimeCheck) ]
 
 /-- Enable equality on the three canon advices, allocate a fresh selector, register the
 canonicity gate. (The canon-advice/incomplete-addition column deconfliction assert holds

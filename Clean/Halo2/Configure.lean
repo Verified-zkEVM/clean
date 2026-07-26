@@ -76,10 +76,28 @@ structure Constraint (F : Type) where
   name : String := ""
   poly : Expression F Query
 
+/--
+The one-sided semantic law required of every custom gate.
+
+At an enabled row, selector compression replaces the gate's distinguished selector by
+a nonzero field value. If the resulting verifier-side polynomial vanishes, the same
+compiled polynomial must vanish under Clean's selector-one/foreign-selectors-zero
+valuation. No converse or exact scaling equation is required.
+-/
+def Gate.WellFormed
+    [Field F]
+    (selector : Selector) (constraints : List (Constraint F)) : Prop :=
+  ∀ constraint ∈ constraints,
+    ∀ (base : Query → F) (scale : F), scale ≠ 0 →
+      constraint.poly.eval
+          (Expression.replaceSelectorValue selector scale base) = 0 →
+        constraint.poly.eval
+          (Expression.enabledGateValuation selector base) = 0
+
 /-- A custom gate.
 
 `constraints` are the **compiled** polynomials, verbatim as the Rust source builds them
-— usually `Constraints.withSelector` shapes `q * poly`, but e.g. `witness_point` builds
+— usually `Gate.withSelector` shapes `q * poly`, but e.g. `witness_point` builds
 `(q * x) * curve_eqn` manually for pinned-VK AST reasons. `selector` is the gate's
 activation handle: per the selector survey (`halo2-selector-survey.md`), every gate in
 scope is activated by exactly one simple `Selector`, and genuine selectors never occur
@@ -99,20 +117,60 @@ structure Gate (F : Type) where
   author must transcribe the order from the Rust chip's `create_gate` closure. -/
   queriedCells : List (Expression F Query)
   constraints : List (Constraint F)
+  /-- Selector compression preserves vanishing in the direction required for
+  verifier-to-Clean soundness. -/
+  wellFormed : ∀ [Field F], Gate.WellFormed selector constraints
 
-/-- Rust: `Constraints::with_selector(q, [(name, poly), …])` — multiplies every
-constraint by the selector, building exactly the Rust AST `q * poly`. The defaulted
-third argument requires every ungated polynomial to be selector-free; `selector_free`
-discharges ordinary gate syntax, so call sites retain Rust's two-argument spelling.
-`@[circuit_norm]`: part of the gate-reduction normal form, so proofs need not list this
-combinator to reduce an enabled gate's constraint list. -/
+/--
+Construct a gate in the standard Halo 2 form: multiply every selector-free ungated
+polynomial by the gate selector, building exactly the Rust AST `q * poly`.
+
+The defaulted proof is discharged by `selector_free`, so ordinary call sites carry no
+proof boilerplate. The stronger selector-free construction rule implies the gate's
+weaker one-sided `WellFormed` law automatically.
+-/
 @[circuit_norm]
-def Constraints.withSelector (s : Selector)
+def Gate.withSelector
+    [Field F]
+    (name : String) (selector : Selector)
+    (queriedCells : List (Expression F Query))
     (constraints : List (String × Expression F Query))
-    (_h : ∀ constraint ∈ constraints, constraint.2.SelectorFree := by
+    (hfree : ∀ constraint ∈ constraints, constraint.2.SelectorFree := by
       selector_free) :
-    List (Constraint F) :=
-  constraints.map fun (name, poly) => { name, poly := querySelector s * poly }
+    Gate F where
+  name := name
+  selector := selector
+  queriedCells := queriedCells
+  constraints :=
+    constraints.map fun (constraintName, poly) =>
+      { name := constraintName, poly := querySelector selector * poly }
+  wellFormed := by
+    intro
+    rw [Gate.WellFormed]
+    intro constraint hconstraint
+    obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
+      List.mem_map.mp hconstraint
+    intro base scale hscale hzero
+    have hpolyFree : poly.SelectorFree :=
+      hfree (constraintName, poly) hsource
+    have hpolyEval :
+        poly.eval
+            (Expression.replaceSelectorValue selector scale base) =
+          poly.eval
+            (Expression.enabledGateValuation selector base) := by
+      apply Expression.eval_eq_of_selectorFree poly hpolyFree
+      · intro _ _
+        rfl
+      · intro _ _
+        rfl
+      · intro _ _
+        rfl
+    simp only [querySelector, Expression.eval,
+      Expression.replaceSelectorValue, if_pos] at hzero
+    simp only [querySelector, Expression.eval,
+      Expression.enabledGateValuation, if_pos, one_mul]
+    rw [← hpolyEval]
+    exact (mul_eq_zero.mp hzero).resolve_left hscale
 
 /-- A lookup argument. Rust: `lookup::Argument<F>`
 (`halo2_proofs/src/plonk/lookup.rs:7-11`): a tuple of input expressions and a tuple of

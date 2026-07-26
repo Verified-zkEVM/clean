@@ -81,11 +81,9 @@ def bitshiftGate (K : ℕ) (cfg : Config K) : Gate Fp :=
   let word : Expression Fp Query := queryAdvice cfg.runningSum (-1)
   let shiftedWord : Expression Fp Query := queryAdvice cfg.runningSum 0
   let invTwoPowS : Expression Fp Query := queryAdvice cfg.runningSum 1
-  { name := "Short lookup bitshift"
-    selector := cfg.qBitshift
-    queriedCells := [word, shiftedWord, invTwoPowS]
-    constraints := Constraints.withSelector cfg.qBitshift
-      [("bitshift", word * (2 ^ K : Fp) * invTwoPowS - shiftedWord)] }
+  Gate.withSelector "Short lookup bitshift" cfg.qBitshift
+    [word, shiftedWord, invTwoPowS]
+    [("bitshift", word * (2 ^ K : Fp) * invTwoPowS - shiftedWord)]
 
 /-- Rust `configure` (`lookup_range_check.rs:313-387`): enable equality on `running_sum`,
 allocate the two complex selectors and the simple `q_bitshift`, take the handed-down

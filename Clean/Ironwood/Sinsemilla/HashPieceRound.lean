@@ -95,17 +95,13 @@ def yPExpr (cfg : Config) : Expression Fp Query :=
 /-- The `"Initial y_Q"` gate, gated by `q_sinsemilla4`: initializes the
 accumulator `y` to `y_Q` via `2·y_Q − Y_{A,cur} = 0`. Here `y_Q` is the `fixed_y_q` column at
 rotation 0 (the non-`allow_init_from_private_point` branch, which the action circuit uses). -/
-def initialYQGate (cfg : Config) : Gate Fp where
-  name := "Initial y_Q"
-  selector := cfg.qS4
+def initialYQGate (cfg : Config) : Gate Fp :=
   -- `y_q` (fixed) first, then `Y_A(cur)`'s atoms (xA/λ₁/λ₂ @ cur) via the helper.
-  queriedCells :=
+  Gate.withSelector "Initial y_Q" cfg.qS4
     [ queryFixed cfg.fixedYQ,
-      queryAdvice cfg.xA 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
-  constraints :=
+      queryAdvice cfg.xA 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
-    Constraints.withSelector cfg.qS4
-      [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
+    [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
 
 /-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)`: `0` when `q_s2 ∈ {0,1}`, `2` when
 `q_s2 = 2` (final piece). -/
@@ -119,18 +115,15 @@ def qS3Expr (cfg : Config) : Expression Fp Query :=
 - **secant line**: `λ₂² − (x_{a,next} + x_r + x_{a,cur}) = 0`.
 - **y check**:
   `4·λ₂·(x_{a,cur} − x_{a,next}) − [2·Y_{A,cur} + (2 − q_s3)·Y_{A,next} + 2·q_s3·λ₁_next] = 0`. -/
-def sinsemillaGate (cfg : Config) : Gate Fp where
-  name := "Sinsemilla gate"
-  selector := cfg.qS1
+def sinsemillaGate (cfg : Config) : Gate Fp :=
   -- `q_s3` registers `q_s2` (fixed) first; then the closure's four lets; then `x_r(cur)`
   -- adds x_p/λ₁ @ cur and `Y_A(next)` adds λ₂ @ next (cur-row `Y_A` atoms all deduped).
-  queriedCells :=
+  Gate.withSelector "Sinsemilla gate" cfg.qS1
     [ queryFixed cfg.qS2,
       queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 0,
       queryAdvice cfg.xA 0, queryAdvice cfg.xA 1,
       queryAdvice cfg.xP 0, queryAdvice cfg.lambda1 0,
-      queryAdvice cfg.lambda2 1 ]
-  constraints :=
+      queryAdvice cfg.lambda2 1 ] <|
     let l2Cur : Expression Fp Query := queryAdvice cfg.lambda2 0
     let xACur : Expression Fp Query := queryAdvice cfg.xA 0
     let xANext : Expression Fp Query := queryAdvice cfg.xA 1
@@ -141,8 +134,7 @@ def sinsemillaGate (cfg : Config) : Gate Fp where
         - (yAExpr cfg 0 * (2 : Fp)
             + ((2 : Fp) - qS3Expr cfg) * yAExpr cfg 1
             + qS3Expr cfg * (2 : Fp) * l1Next)
-    Constraints.withSelector cfg.qS1
-      [("secant line", secant), ("y check", yCheck)]
+    [("secant line", secant), ("y check", yCheck)]
 
 /-! ## The 3-tuple generator lookup
 

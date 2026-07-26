@@ -44,10 +44,8 @@ def shortGate (cfg : Config) : Gate Fp :=
   -- z_21 = k_21, copied into the `u` column
   let lastWindow : Expression Fp Query := queryAdvice cfg.superConfig.u 0
   let sign : Expression Fp Query := queryAdvice cfg.superConfig.window 0
-  { name := "Short fixed-base mul gate"
-    selector := cfg.qMulFixedShort
-    queriedCells := [yP, yA, lastWindow, sign]
-    constraints :=
+  Gate.withSelector "Short fixed-base mul gate" cfg.qMulFixedShort
+    [yP, yA, lastWindow, sign] <|
     -- bool_check(last_window) = range_check(last_window, 2)
     let lastWindowCheck := rangeCheckExpr 2 lastWindow
     -- sign² − 1
@@ -56,11 +54,10 @@ def shortGate (cfg : Config) : Gate Fp :=
     let yCheck := (yP - yA) * (yP + yA)
     -- sign·y_p − y_a
     let negationCheck := sign * yP - yA
-    Constraints.withSelector cfg.qMulFixedShort
-      [ ("last_window_check", lastWindowCheck),
-        ("sign_check", signCheck),
-        ("y_check", yCheck),
-        ("negation_check", negationCheck) ] }
+    [ ("last_window_check", lastWindowCheck),
+      ("sign_check", signCheck),
+      ("y_check", yCheck),
+      ("negation_check", negationCheck) ]
 
 /-- Allocate the `q_mul_fixed_short` selector and register the gate. -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do

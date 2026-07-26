@@ -1092,7 +1092,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     subcircuit_rw at hc
     simp only [slotC_spec_eq, slotC_assumptions_eq, slotC_envAssumptions_eq,
       slotC_extract_cells, sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
-      HashPiece.xRExpr, Constraints.withSelector, SlotSpec, slotReads,
+      HashPiece.xRExpr, Gate.withSelector, SlotSpec, slotReads,
       circuit_norm] at hc
     -- per-slot facts and the totalized word family
     have hSp := fun i : Fin ns.length => (hc i).1 _hE
@@ -1430,7 +1430,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           exact (hWs ⟨m, hm⟩).2
         · -- the piece-linking gate
           simp only [sinsemillaGate, HashPiece.qS3Expr, HashPiece.yAExpr,
-            HashPiece.xRExpr, Constraints.withSelector, circuit_norm]
+            HashPiece.xRExpr, Gate.withSelector, circuit_norm]
           rw [(hWs ⟨m, hm⟩).2]
           simp only [dRowP, yA, xR] at hsec hlny
           have hq := qS3_yRhs (decide (m = ns.length - 1))

@@ -113,24 +113,21 @@ def coordsCheck (cfg : Config) (word : Expression Fp Query) :
 /-- The "Running sum coordinates check" gate, registered on the running sum's `q_range_check`
 selector. The window value is derived: `word = z_cur − z_next·8` (constant scale on the
 right). -/
-def coordsGate (cfg : Config) : Gate Fp where
-  name := "Running sum coordinates check"
-  selector := cfg.runningSumConfig.qRangeCheck
+def coordsGate (cfg : Config) : Gate Fp :=
   -- window cur/next first (word derivation), then `coords_check`'s atoms (y_p, x_p, the
   -- fixed `z`, u) and finally the eight Lagrange-coeff fixed queries from `interpolated_x`.
-  queriedCells :=
+  Gate.withSelector "Running sum coordinates check" cfg.runningSumConfig.qRangeCheck
     [ queryAdvice cfg.window 0, queryAdvice cfg.window 1,
       queryAdvice cfg.addConfig.yP 0, queryAdvice cfg.addConfig.xP 0,
       queryFixed cfg.fixedZ, queryAdvice cfg.u 0,
       queryFixed (cfg.lagrangeCoeffs 0), queryFixed (cfg.lagrangeCoeffs 1),
       queryFixed (cfg.lagrangeCoeffs 2), queryFixed (cfg.lagrangeCoeffs 3),
       queryFixed (cfg.lagrangeCoeffs 4), queryFixed (cfg.lagrangeCoeffs 5),
-      queryFixed (cfg.lagrangeCoeffs 6), queryFixed (cfg.lagrangeCoeffs 7) ]
-  constraints :=
+      queryFixed (cfg.lagrangeCoeffs 6), queryFixed (cfg.lagrangeCoeffs 7) ] <|
     let zCur : Expression Fp Query := queryAdvice cfg.window 0
     let zNext : Expression Fp Query := queryAdvice cfg.window 1
     let word := zCur - zNext * (((H : ℕ) : Fp) : Expression Fp Query)
-    Constraints.withSelector cfg.runningSumConfig.qRangeCheck (coordsCheck cfg word)
+    coordsCheck cfg word
 
 /-- The `CoordsParams` read off the environment's fixed cells at a given row — what the
 coords gate's queries see. -/

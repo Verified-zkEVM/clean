@@ -76,18 +76,14 @@ def lsbGate (cfg : Config) : Gate Fp :=
   let yP : Expression Fp Query := queryAdvice cfg.addConfig.yP 0               -- y_p
   let baseX : Expression Fp Query := queryAdvice cfg.addConfig.xP 1            -- base_x
   let baseY : Expression Fp Query := queryAdvice cfg.addConfig.yP 1            -- base_y
-  { name := "LSB check"
-    selector := cfg.qMulLsb
-    queriedCells := [z1, z0, xP, yP, baseX, baseY]
-    constraints :=
+  Gate.withSelector "LSB check" cfg.qMulLsb [z1, z0, xP, yP, baseX, baseY] <|
     let lsb := z0 - z1 * (2 : Fp)
     -- `lsb · (1 − lsb)`, with the `1` on the left of the subtraction to match the compiled gate
     -- AST.
     let boolCheck := lsb * ((1 : Fp) - lsb)
     let lsbX := lsb * xP + ((1 : Fp) - lsb) * (xP - baseX)
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
-    Constraints.withSelector cfg.qMulLsb
-      [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ] }
+    [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
 
 /-! ## Configure -/
 

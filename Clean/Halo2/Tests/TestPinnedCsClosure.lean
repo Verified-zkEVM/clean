@@ -1,4 +1,5 @@
 import Clean.Halo2.Keygen.PinnedCs
+import Clean.Utils.Field
 
 /-!
 # Regression tests: synthesis-closed keygen constraint systems
@@ -13,31 +14,30 @@ namespace Halo2.Tests.TestPinnedCsClosure
 
 open Halo2
 
-def configuredGate : Gate Nat where
-  name := "configured"
-  selector := ⟨0, true⟩
-  queriedCells := [queryAdvice ⟨0⟩ 0]
-  constraints := [{ poly := querySelector ⟨0, true⟩ * queryAdvice ⟨0⟩ 0 }]
+local instance : Fact (Nat.Prime 17) := ⟨by decide⟩
+abbrev TestField := F 17
 
-def enabledGate : Gate Nat where
-  name := "enabled"
-  selector := ⟨1, true⟩
-  queriedCells := [queryAdvice ⟨1⟩ 0]
-  constraints := [{ poly := querySelector ⟨1, true⟩ * queryAdvice ⟨1⟩ 0 }]
+def configuredGate : Gate TestField :=
+  Gate.withSelector "configured" ⟨0, true⟩
+    [queryAdvice ⟨0⟩ 0] [("", queryAdvice ⟨0⟩ 0)]
 
-def enabledLookup : LookupArgument Nat where
+def enabledGate : Gate TestField :=
+  Gate.withSelector "enabled" ⟨1, true⟩
+    [queryAdvice ⟨1⟩ 0] [("", queryAdvice ⟨1⟩ 0)]
+
+def enabledLookup : LookupArgument TestField where
   inputs := [queryAdvice ⟨2⟩ 0]
   tables := [queryFixed ⟨0⟩]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
 
-def rawConstraintSystem : ConstraintSystem Nat :=
+def rawConstraintSystem : ConstraintSystem TestField :=
   (createGate configuredGate {}).2
 
-def faithfulOperations : Operations Nat :=
+def faithfulOperations : Operations TestField :=
   [.region "faithful" [.enableGate configuredGate 0]]
 
-def mismatchedOperations : Operations Nat :=
+def mismatchedOperations : Operations TestField :=
   [.region "mismatched"
     [.enableGate configuredGate 0,
      .enableGate enabledGate 1,
@@ -50,7 +50,7 @@ def mismatchedOperations : Operations Nat :=
 #guard (rawConstraintSystem.closeWithOperations faithfulOperations).lookups =
   rawConstraintSystem.lookups
 
-def closedConstraintSystem : ConstraintSystem Nat :=
+def closedConstraintSystem : ConstraintSystem TestField :=
   rawConstraintSystem.closeWithOperations mismatchedOperations
 
 #guard closedConstraintSystem.gates = [configuredGate, enabledGate]

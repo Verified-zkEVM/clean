@@ -89,7 +89,7 @@ user halves consume those facts directly.
 that are **not** already `circuit_norm` members — in practice, **names defined in the gadget's own
 file**: its gate definitions, its witness programs, and its `Spec`. A name that is already a
 `circuit_norm` member (a tagged theorem like `RegionCircuit.operations_bind`, or a tagged `def` like
-`Constraints.withSelector` / `Witgen.evalSteps`) is pure noise — it changes nothing, and left
+`Gate.withSelector` / `Witgen.evalSteps`) is pure noise — it changes nothing, and left
 unchecked such entries accrete across the corpus.
 
 To keep this from happening, `mkUnfoldLemmas` **lints every argument** (`warnRedundantUnfold`,
@@ -297,7 +297,7 @@ def bestEffort (tac : TacticM Unit) : TacticM Unit := do
 
 /-- The set of names that are already `circuit_norm` members — the union of the extension's
 simp-theorem origins (tagged theorems) and its `toUnfold` set (tagged `def`s, e.g.
-`Constraints.withSelector`, `Witgen.evalSteps`). Empty if the extension is somehow absent (never,
+`Gate.withSelector`, `Witgen.evalSteps`). Empty if the extension is somehow absent (never,
 in a build that imported `circuit_norm`). Used to lint the unfold list (see `warnRedundantUnfold`). -/
 def circuitNormMembers : CoreM NameSet := do
   match ← getSimpExtension? `circuit_norm with
