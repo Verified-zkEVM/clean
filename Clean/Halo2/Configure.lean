@@ -788,6 +788,25 @@ def LookupArgument.inputSelectorBound (argument : LookupArgument F) : ℕ :=
 def lookupInputSelectorBound (arguments : List (LookupArgument F)) : ℕ :=
   (arguments.map LookupArgument.inputSelectorBound).foldr max 0
 
+private theorem foldr_max_append (left right : List ℕ) :
+    (left ++ right).foldr max 0 =
+      max (left.foldr max 0) (right.foldr max 0) := by
+  induction left with
+  | nil =>
+      simp
+  | cons value left ih =>
+      simp only [List.cons_append, List.foldr_cons, ih]
+      exact (max_assoc value (left.foldr max 0)
+        (right.foldr max 0)).symm
+
+@[simp] theorem lookupInputSelectorBound_append
+    (left right : List (LookupArgument F)) :
+    lookupInputSelectorBound (left ++ right) =
+      max (lookupInputSelectorBound left)
+        (lookupInputSelectorBound right) := by
+  simp only [lookupInputSelectorBound, List.map_append,
+    foldr_max_append]
+
 /-- A selected lookup input expression lies below the whole lookup-list bound. -/
 theorem Expression.selectorBound_le_lookupInputSelectorBound
     {arguments : List (LookupArgument F)} {argument : LookupArgument F}
@@ -820,6 +839,27 @@ theorem ConfigureDelta.SelectorsAllocated.mono
     delta.SelectorsAllocated target where
   gates := hallocated.gates.imp fun _ hgate => hgate.trans_le hcount
   lookups := hallocated.lookups.trans hcount
+
+/-- The empty configure contribution allocates no selectors. -/
+theorem ConfigureDelta.SelectorsAllocated.empty (numSelectors : ℕ) :
+    ({} : ConfigureDelta F).SelectorsAllocated numSelectors := by
+  constructor
+  · simp
+  · simp [lookupInputSelectorBound]
+
+/-- Allocation laws compose across append-only configure deltas. -/
+theorem ConfigureDelta.SelectorsAllocated.append
+    {left right : ConfigureDelta F} {numSelectors : ℕ}
+    (hleft : left.SelectorsAllocated numSelectors)
+    (hright : right.SelectorsAllocated numSelectors) :
+    (left.append right).SelectorsAllocated numSelectors where
+  gates := by
+    simpa only [ConfigureDelta.gates_append, List.forall_append] using
+      And.intro hleft.gates hright.gates
+  lookups := by
+    simp only [ConfigureDelta.lookups_append,
+      lookupInputSelectorBound_append]
+    exact max_le hleft.lookups hright.lookups
 
 @[simp] theorem ConfigureDelta.gates_queriedCells
     (owner : String) (cells : List (Expression F Query)) :
@@ -1301,6 +1341,18 @@ class ElaboratedConfigure (program : Configure F α) where
     (program.delta counts).instanceQueries =
       instanceQueries counts := by
     configure_norm
+  /--
+  Selector allocation required from the incoming configure state. Primitive gate and
+  lookup registration expose requirements; monadic bind composes them.
+  -/
+  selectorRequirements : ConfigureCounts → Prop := fun counts =>
+    (program.delta counts).SelectorsAllocated
+      (program.finalCounts counts).numSelectors
+  selectorsAllocated : ∀ counts, selectorRequirements counts →
+    (program.delta counts).SelectorsAllocated
+      (program.finalCounts counts).numSelectors := by
+    intro _ hrequirements
+    exact hrequirements
 
 @[simp] theorem ElaboratedConfigure.delta_instanceQueries
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
@@ -1314,6 +1366,10 @@ instance ElaboratedConfigure.pure (value : α) :
   instanceQueries_eq := by
     intro counts
     rfl
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.bind {β : Type}
     (program : Configure F α) [programElaborated : ElaboratedConfigure program]
@@ -1329,26 +1385,63 @@ instance ElaboratedConfigure.bind {β : Type}
     rw [Configure.delta_bind, ConfigureDelta.instanceQueries_append,
       programElaborated.instanceQueries_eq,
       (nextElaborated (program.output counts)).instanceQueries_eq]
+  selectorRequirements counts :=
+    programElaborated.selectorRequirements counts ∧
+      (nextElaborated (program.output counts)).selectorRequirements
+        (program.finalCounts counts)
+  selectorsAllocated := by
+    intro counts hrequirements
+    rw [Configure.delta_bind, Configure.finalCounts_bind]
+    apply ConfigureDelta.SelectorsAllocated.append
+    · exact
+        (programElaborated.selectorsAllocated counts hrequirements.1).mono
+          ((next (program.output counts)).numSelectors_le_finalCounts
+            (program.finalCounts counts))
+    · exact
+        (nextElaborated (program.output counts)).selectorsAllocated
+          (program.finalCounts counts) hrequirements.2
 
 instance ElaboratedConfigure.adviceColumn :
     ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
   instanceQueries_eq := Configure.delta_adviceColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.fixedColumn :
     ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
   instanceQueries_eq := Configure.delta_fixedColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.instanceColumn :
     ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
   instanceQueries_eq := Configure.delta_instanceColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.selector :
     ElaboratedConfigure (selector : Configure F Selector) where
   instanceQueries_eq := Configure.delta_selector_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty
+      (counts.numSelectors + 1)
 
 instance ElaboratedConfigure.complexSelector :
     ElaboratedConfigure (complexSelector : Configure F Selector) where
   instanceQueries_eq := Configure.delta_complexSelector_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty
+      (counts.numSelectors + 1)
 
 instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     ElaboratedConfigure (enableEquality (F := F) column) where
@@ -1358,11 +1451,35 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     | _ => []
   instanceQueries_eq :=
     Configure.delta_enableEquality_instanceQueries column
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    rcases column with ⟨kind, index⟩
+    cases kind
+    all_goals
+      constructor
+      · simp [Configure.delta, Configure.finalCounts,
+          Configure.countDelta, ConfigureCountDelta.apply,
+          Halo2.enableEquality, ConfigureDelta.queryAny]
+      · simp [Configure.delta, Configure.finalCounts,
+          Configure.countDelta, ConfigureCountDelta.apply,
+          Halo2.enableEquality, ConfigureDelta.queryAny,
+          lookupInputSelectorBound]
 
 instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
   instanceQueries_eq :=
     Configure.delta_enableConstant_instanceQueries column
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    constructor
+    · simp [Configure.delta, Configure.finalCounts,
+        Configure.countDelta, ConfigureCountDelta.apply,
+        Halo2.enableConstant]
+    · simp [Configure.delta, Configure.finalCounts,
+        Configure.countDelta, ConfigureCountDelta.apply,
+        Halo2.enableConstant, lookupInputSelectorBound]
 
 instance ElaboratedConfigure.createGate (gate : Gate F) :
     ElaboratedConfigure (createGate gate) where
@@ -1370,6 +1487,13 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
     ConfigureDelta.instanceQueriesOfCells gate.queriedCells
   instanceQueries_eq :=
     Configure.delta_createGate_instanceQueries gate
+  selectorRequirements counts :=
+    gate.selector.index < counts.numSelectors
+  selectorsAllocated := by
+    intro counts hselector
+    constructor
+    · simpa [Configure.delta_createGate] using hselector
+    · simp [Configure.delta_createGate, lookupInputSelectorBound]
 
 instance ElaboratedConfigure.lookup
     (queriedCells : List (Expression F Query))
@@ -1379,6 +1503,17 @@ instance ElaboratedConfigure.lookup
     ConfigureDelta.instanceQueriesOfCells queriedCells
   instanceQueries_eq :=
     Configure.delta_lookup_instanceQueries queriedCells tableMap
+  selectorRequirements counts :=
+    (Configure.delta (Halo2.lookup queriedCells tableMap) counts).gates = [] ∧
+      lookupInputSelectorBound
+        ((Halo2.lookup queriedCells tableMap).delta counts).lookups ≤
+          counts.numSelectors
+  selectorsAllocated := by
+    intro counts hselectors
+    constructor
+    · rw [hselectors.1]
+      trivial
+    · simpa using hselectors.2
 
 instance ElaboratedConfigure.lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by
