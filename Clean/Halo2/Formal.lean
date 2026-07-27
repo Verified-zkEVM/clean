@@ -249,13 +249,15 @@ data.
 
 The law is stated over arbitrary initial allocation counts so child circuits compose
 inside a parent's configure program. Append-only configure metadata records the exact
-gate and lookup contributions; synthesis may enable only those arguments. All emitted
-selectors must fit below the program's final selector count.
+local contributions; synthesis may enable those arguments plus explicit arguments
+required from its caller. All locally emitted selectors must fit below the program's
+final selector count.
 -/
 structure FormalCircuit.KeygenLawful
     {ConfigInput Config : Type}
     [CircuitType Input] [CircuitType Output]
-    (self : FormalCircuit F ConfigInput Config Input Output) : Prop where
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
   selectorCountMonotone :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
     counts.numSelectors ≤
@@ -269,8 +271,8 @@ structure FormalCircuit.KeygenLawful
       (input : Var Input F) (i : RegionIndex),
     let program := self.configure configInput
     ((self.synthesize (program.output counts) input).operations i).KeygenRegistered
-      (program.delta counts).gates
-      (program.delta counts).lookups
+      (requirements.gates configInput ++ (program.delta counts).gates)
+      (requirements.lookups configInput ++ (program.delta counts).lookups)
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -593,7 +595,8 @@ matching every context in which a parent may call the region circuit.
 structure FormalRegionCircuit.KeygenLawful
     {ConfigInput Config : Type}
     [CircuitType Input] [CircuitType Output]
-    (self : FormalRegionCircuit F ConfigInput Config Input Output) : Prop where
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
   selectorCountMonotone :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
     counts.numSelectors ≤
@@ -609,8 +612,8 @@ structure FormalRegionCircuit.KeygenLawful
     ((self.synthesize
       (program.output counts) offset input).operations region).Forall
         (RegionOperation.KeygenRegistered
-          (program.delta counts).gates
-          (program.delta counts).lookups)
+          (requirements.gates configInput ++ (program.delta counts).gates)
+          (requirements.lookups configInput ++ (program.delta counts).lookups))
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -773,8 +776,9 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
 /-- The region-to-layouter bridge preserves configure/synthesis keygen lawfulness. -/
 theorem KeygenLawful.toFormal
     {child : FormalRegionCircuit F ConfigInput Config Input Output}
-    (hlawful : child.KeygenLawful) (name : String := child.name) :
-    (child.toFormal name).KeygenLawful where
+    {requirements : KeygenRequirements F ConfigInput}
+    (hlawful : child.KeygenLawful requirements) (name : String := child.name) :
+    (child.toFormal name).KeygenLawful requirements where
   selectorCountMonotone :=
     FormalRegionCircuit.KeygenLawful.selectorCountMonotone hlawful
   selectorsAllocated :=

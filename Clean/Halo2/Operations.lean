@@ -125,6 +125,18 @@ abbrev Operations (F : Type) := List (Operation F)
 /-! ## Configure/synthesis registration -/
 
 /--
+Gate and lookup arguments supplied by a circuit's caller rather than created by the
+circuit's own configure program.
+
+This is the keygen analogue of an effect requirement: leaf region circuits commonly
+receive an already-configured chip `Config` and use its arguments while contributing
+no configure delta of their own.
+-/
+structure KeygenRequirements (F ConfigInput : Type) where
+  gates : ConfigInput → List (Gate F) := fun _ => []
+  lookups : ConfigInput → List (LookupArgument F) := fun _ => []
+
+/--
 Static registration of one region operation in explicit configure-produced gate and
 lookup lists.
 
