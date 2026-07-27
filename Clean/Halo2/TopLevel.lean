@@ -773,6 +773,25 @@ theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
   (self.publicInputLayout_cells_snd_lt_usedRows i).trans_le
     self.usedRows_le_usableRowsAt_domainExponent
 
+/-- The canonical domain leaves a usable row beyond the blinding suffix. -/
+theorem blindingFactors_succ_lt_domainSize
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.blindingFactors + 1 < 2 ^ self.domainExponent := by
+  have hfit := (Nat.le_max_right _ _).trans
+    (Halo2.minimalKForRows_fits
+      (TopLevelCompilation.constraintSystem self.formalCircuit)
+      (TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout))
+  simp only [ConstraintSystem.minimumRows] at hfit
+  simp only [blindingFactors, domainExponent,
+    TopLevelCompilation.domainExponent, constraintSystem] at *
+  omega
+
+/-- The canonical domain has strictly more rows than the blinding count. -/
+theorem blindingFactors_lt_domainSize
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.blindingFactors < 2 ^ self.domainExponent :=
+  Nat.lt_of_succ_lt self.blindingFactors_succ_lt_domainSize
+
 /-- The pinned constraint system derived solely from the closed circuit: the
 projection of its synthesis-closed constraint system through its circuit-owned
 selector map. -/
