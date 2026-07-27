@@ -503,8 +503,8 @@ def finalCounts (program : Configure F α) (counts : ConfigureCounts) :
 def run (program : Configure F α) (initial : ConstraintSystem F) :
     α × ConstraintSystem F :=
   let counts := ConfigureCounts.ofConstraintSystem initial
-  (program.output counts,
-    (program.delta counts).apply initial (program.finalCounts counts))
+  let (output, delta, finalCounts) := program.plan counts
+  (output, delta.apply initial finalCounts)
 
 theorem mem_instanceQueries_run_iff
     (program : Configure F α) (initial : ConstraintSystem F)
@@ -514,7 +514,7 @@ theorem mem_instanceQueries_run_iff
         query ∈
           (program.delta
             (ConfigureCounts.ofConstraintSystem initial)).instanceQueries := by
-  simp only [run, ConfigureDelta.apply, mem_appendFirstEncounters]
+  simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
 
 instance : CoeFun (Configure F α)
     (fun _ => ConstraintSystem F → α × ConstraintSystem F) where
@@ -523,13 +523,10 @@ instance : CoeFun (Configure F α)
 instance : Monad (Configure F) where
   pure value := ⟨fun counts => (value, {}, counts)⟩
   bind program next := ⟨fun counts =>
-    let output := program.output counts
-    let delta := program.delta counts
-    let nextCounts := program.finalCounts counts
-    let nextProgram := next output
-    (nextProgram.output nextCounts,
-      delta.append (nextProgram.delta nextCounts),
-      nextProgram.finalCounts nextCounts)⟩
+    let (output, delta, nextCounts) := program.plan counts
+    let (nextOutput, nextDelta, finalCounts) :=
+      (next output).plan nextCounts
+    (nextOutput, delta.append nextDelta, finalCounts)⟩
 
 end Configure
 
