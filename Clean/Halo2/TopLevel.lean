@@ -316,16 +316,11 @@ theorem extract_eq
 
 end PublicInputLayout
 
-/--
-The proof-varying part of a Halo2 assignment.
-
-Advice and instance columns vary from proof to proof. Fixed columns, placement, and the
-usable-row bound are compiled from the top-level circuit and therefore are intentionally
-absent from this record. Instance data belongs here even though it is public: it is still
-chosen for each proof rather than during key generation.
--/
+/-- The proof-varying advice and instance portions of a Halo2 assignment. -/
 structure ProofAssignment (F : Type) where
+  /-- Values of the proof's advice columns. -/
   advice : Column .advice → ℤ → F
+  /-- Values of the proof's public instance columns. -/
   inst : Column .instance → ℤ → F
 
 /-- A closed formal circuit together with its public/private witness boundary. -/
