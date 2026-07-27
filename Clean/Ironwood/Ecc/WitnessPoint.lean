@@ -118,6 +118,28 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
       exact ⟨by linear_combination input_x * hc', by linear_combination input_y * hc'⟩
     · grind [Point.zero_def]
 
+/-- Configure/synthesis keygen law for the identity-permitting point witness. -/
+theorem point_keygenLawful : point.KeygenLawful := by
+  constructor
+  · rintro ⟨x, y⟩ counts
+    simp [point, configure]
+    omega
+  · rintro ⟨x, y⟩ counts
+    constructor
+    · simp [point, configure, pointGate, pointNonIdGate]
+    · simp [point, configure, lookupInputSelectorBound]
+  · rintro ⟨x, y⟩ counts offset input region
+    simp only [point, configure, Configure.output_bind,
+      Configure.output_selector,
+      Configure.output_pure, Configure.delta_bind, Configure.delta_selector,
+      Configure.delta_createGate, Configure.delta_pure,
+      ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+      RegionCircuit.operations_bind, operations_enable,
+      operations_assignAdvice,
+      output_assignAdvice, RegionCircuit.operations_pure,
+      List.forall_append]
+    simp [RegionOperation.KeygenRegistered]
+
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
 assign x/y; but the gate has no identity escape hatch, so the `Spec` is *strictly* on-curve
@@ -155,6 +177,28 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     have hc : input_y ^ 2 = input_x ^ 3 + pallasB := prover_assumptions
     linear_combination hc
 
+/-- Configure/synthesis keygen law for the non-identity point witness. -/
+theorem pointNonId_keygenLawful : pointNonId.KeygenLawful where
+  selectorCountMonotone := by
+    intro configInput counts
+    exact FormalRegionCircuit.KeygenLawful.selectorCountMonotone
+      point_keygenLawful configInput counts
+  selectorsAllocated := by
+    intro configInput counts
+    exact FormalRegionCircuit.KeygenLawful.selectorsAllocated
+      point_keygenLawful configInput counts
+  registered := by
+    rintro ⟨x, y⟩ counts offset input region
+    simp only [pointNonId, configure, Configure.output_bind,
+      Configure.output_selector, Configure.output_pure,
+      Configure.delta_bind, Configure.delta_selector,
+      Configure.delta_createGate, Configure.delta_pure,
+      ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+      RegionCircuit.operations_bind, operations_enable,
+      operations_assignAdvice, output_assignAdvice,
+      RegionCircuit.operations_pure, List.forall_append]
+    simp [RegionOperation.KeygenRegistered]
+
 /-- The layouter-level point witnesses: the region bundles in their own regions, named
 once here as in the Rust chip (`ecc/chip/witness_point.rs`). -/
 def pointFormal :=
@@ -162,6 +206,14 @@ def pointFormal :=
 
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
+
+/-- Region-to-layouter preservation of the point witness keygen laws. -/
+theorem pointFormal_keygenLawful : pointFormal.KeygenLawful :=
+  point_keygenLawful.toFormal "witness point"
+
+theorem pointNonIdFormal_keygenLawful :
+    pointNonIdFormal.KeygenLawful :=
+  pointNonId_keygenLawful.toFormal "witness non-identity point"
 
 derive_contract_bridges pointFormal := pointFormal
 

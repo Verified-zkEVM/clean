@@ -173,6 +173,17 @@ def Gate.withSelector
     rw [← hpolyEval]
     exact (mul_eq_zero.mp hzero).resolve_left hscale
 
+@[simp] theorem Gate.withSelector_selector
+    [Field F]
+    (name : String) (selector : Selector)
+    (queriedCells : List (Expression F Query))
+    (constraints : List (String × Expression F Query))
+    (hfree : ∀ constraint ∈ constraints,
+      constraint.2.SelectorFree) :
+    (Gate.withSelector name selector queriedCells constraints hfree).selector =
+      selector :=
+  rfl
+
 /-- A lookup argument. Rust: `lookup::Argument<F>`
 (`halo2_proofs/src/plonk/lookup.rs:7-11`): a tuple of input expressions and a tuple of
 table expressions; the enforced relation is per-row membership of the input tuple in the
@@ -671,6 +682,72 @@ def lookup (queriedCells : List (Expression F Query))
     ((), queryDelta.append tableDelta |>.append
       { lookups := [{ inputs, tables, tablesFree, arity }] }, counts)⟩
 
+@[simp] theorem ConfigureDelta.gates_append
+    (left right : ConfigureDelta F) :
+    (left.append right).gates = left.gates ++ right.gates :=
+  rfl
+
+@[simp] theorem ConfigureDelta.lookups_append
+    (left right : ConfigureDelta F) :
+    (left.append right).lookups = left.lookups ++ right.lookups :=
+  rfl
+
+@[simp] theorem ConfigureDelta.gates_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).gates = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).gates = delta.gates := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
+@[simp] theorem ConfigureDelta.lookups_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).lookups = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).lookups = delta.lookups := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
 namespace Configure
 
 variable {α β : Type}
@@ -685,6 +762,21 @@ variable {α β : Type}
 
 @[simp] theorem finalCounts_pure (value : α) (counts : ConfigureCounts) :
     finalCounts (pure value : Configure F α) counts = counts :=
+  rfl
+
+@[simp] theorem delta_selector (counts : ConfigureCounts) :
+    delta (selector : Configure F Selector) counts = {} :=
+  rfl
+
+@[simp] theorem delta_complexSelector (counts : ConfigureCounts) :
+    delta (complexSelector : Configure F Selector) counts = {} :=
+  rfl
+
+@[simp] theorem delta_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    delta (createGate gate) counts =
+      (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
+        { gates := [gate] } :=
   rfl
 
 @[simp] theorem delta_bind
