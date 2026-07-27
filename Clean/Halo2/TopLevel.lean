@@ -218,10 +218,59 @@ theorem Operations.LookupRelevantSelectorActivationsExact.placed
   intro region body hregion
   exact hlaw.of_region hregion
 
+/-!
+## Top-level public inputs
+
+A top-level circuit declares the instance cells containing its public input once.
+Both extraction from a verifier environment and serialization for a verifier are
+derived from that declaration.
+-/
+
+structure PublicInputLayout
+    (Config : Type) (PublicInput : TypeMap) [ProvableType PublicInput] where
+  cells : Config → Fin (size PublicInput) → Column .instance × ℕ
+  cells_injective : ∀ config, Function.Injective (cells config)
+
+namespace PublicInputLayout
+
+variable {F Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
+
+/-- Read the public input from its declared instance cells. -/
+def extract (self : PublicInputLayout Config PublicInput)
+    (config : Config) (env : Environment F) : PublicInput F :=
+  fromElements (Vector.ofFn fun i =>
+    env.inst (self.cells config i).1 (self.cells config i).2)
+
+/-- Associate each public-input element with its declared instance cell. -/
+def assignments (self : PublicInputLayout Config PublicInput)
+    (config : Config) (input : PublicInput F) :
+    Vector ((Column .instance × ℕ) × F) (size PublicInput) :=
+  Vector.ofFn fun i => (self.cells config i, (toElements input)[i])
+
+theorem extract_eq
+    (self : PublicInputLayout Config PublicInput)
+    (config : Config) (env : Environment F) (input : PublicInput F)
+    (hvalues : ∀ i,
+      env.inst (self.cells config i).1 (self.cells config i).2 =
+        (toElements input)[i]) :
+    self.extract config env = input := by
+  unfold extract
+  rw [← ProvableType.fromElements_toElements input]
+  congr 1
+  rw [Vector.ext_iff]
+  intro i hi
+  simpa using hvalues ⟨i, hi⟩
+
+end PublicInputLayout
+
 /--
-A configured, unit-input formal circuit whose verifier assumptions are exactly
-`True`, and whose own successful synthesis discharges its compositional environment
-requirements.
+A closed formal circuit together with its public/private witness boundary.
+
+Configuration and synthesis inputs and the circuit output are all unit.  The public
+input occupies declared instance cells; the remaining witness is extracted
+separately.  `extract_factorization` connects this boundary to the formal circuit's
+native witness extraction, while `spec_iff` connects the top-level specification to
+the formal circuit's specification.
 
 The two closure fields correspond to the verifier and honest-prover views.  They are
 separate because `Constraints` and `ExtendsWitnesses` expose the fixed/table data
@@ -229,21 +278,38 @@ through different predicates.
 -/
 structure TopLevelCircuit
     (F : Type) [FiniteField F]
-    (ConfigInput Config : Type) (Output : TypeMap)
-    [CircuitType Output] where
-  formalCircuit : FormalCircuit F ConfigInput Config unit Output
-  configInput : ConfigInput
+    (Config : Type) (PublicInput : TypeMap)
+    [ProvableType PublicInput] where
+  formalCircuit : FormalCircuit F Unit Config unit unit
+  publicInputLayout : PublicInputLayout Config PublicInput
+  PrivateWitness : Type
+  extractPrivate :
+    Config → RegionIndex → Placed Environment F → PrivateWitness
+  combine :
+    PublicInput F → PrivateWitness → formalCircuit.Witness F
+  Spec : PublicInput F → PrivateWitness → Prop
+  spec_iff :
+    ∀ publicInput privateWitness,
+      Spec publicInput privateWitness ↔
+        formalCircuit.Spec () () (combine publicInput privateWitness)
+  extract_factorization :
+    let config := (formalCircuit.configure () {}).1
+    ∀ (i : RegionIndex) (env : Placed Environment F),
+      combine
+        (publicInputLayout.extract config env.env)
+        (extractPrivate config i env) =
+      formalCircuit.extract config () i env
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
   lookupRelevantSelectorActivationsExact :
-    let config := (formalCircuit.configure configInput {}).1
+    let config := (formalCircuit.configure () {}).1
     Operations.LookupRelevantSelectorActivationsExact
       ((formalCircuit.synthesize config ()).operations 0)
   lookupInputsNoSimpleSelectors :
-    let config := (formalCircuit.configure configInput {}).1
+    let config := (formalCircuit.configure () {}).1
     Operations.LookupInputsNoSimpleSelectors
       ((formalCircuit.synthesize config ()).operations 0)
   closesEnvironmentSoundness :
-    let config := (formalCircuit.configure configInput {}).1
+    let config := (formalCircuit.configure () {}).1
     ∀ (i : RegionIndex) (env : Placed Environment F),
       SynthesisWellFormed env.env
         ((formalCircuit.synthesize config ()).operations i) →
@@ -251,7 +317,7 @@ structure TopLevelCircuit
         ((formalCircuit.synthesize config ()).operations i) i →
       formalCircuit.EnvAssumptions config env
   closesEnvironmentCompleteness :
-    let config := (formalCircuit.configure configInput {}).1
+    let config := (formalCircuit.configure () {}).1
     ∀ (i : RegionIndex) (env : Placed ProverEnvironment F),
       SynthesisWellFormed env.toEnvironment.env
         ((formalCircuit.synthesize config ()).operations i) →
@@ -263,21 +329,21 @@ namespace TopLevelCircuit
 
 variable
     {F : Type} [FiniteField F]
-    {ConfigInput Config : Type} {Output : TypeMap}
-    [CircuitType Output]
+    {Config : Type} {PublicInput : TypeMap}
+    [ProvableType PublicInput]
 
 /-- The configuration produced by the top-level circuit's own configure run. -/
-def config (self : TopLevelCircuit F ConfigInput Config Output) : Config :=
-  (self.formalCircuit.configure self.configInput {}).1
+def config (self : TopLevelCircuit F Config PublicInput) : Config :=
+  (self.formalCircuit.configure () {}).1
 
 /-- The circuit-derived constraint system used by key generation: the configure result
 closed under every gate and lookup enabled by this circuit's synthesis. -/
-def constraintSystem (self : TopLevelCircuit F ConfigInput Config Output) :
+def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
-  self.formalCircuit.toConstraintSystem self.configInput ()
+  self.formalCircuit.toConstraintSystem () ()
 
 /-- The closed top-level operation stream. -/
-def operations (self : TopLevelCircuit F ConfigInput Config Output)
+def operations (self : TopLevelCircuit F Config PublicInput)
     (i : RegionIndex := 0) : Operations F :=
   (self.formalCircuit.synthesize self.config ()).operations i
 
@@ -286,13 +352,13 @@ The circuit-side static premise needed to connect synthesized gate and lookup
 activations to the pinned constraint system derived from `configure`.
 -/
 def KeygenCoherent
-    (self : TopLevelCircuit F ConfigInput Config Output) : Prop :=
+    (self : TopLevelCircuit F Config PublicInput) : Prop :=
   OperationsKeygenCoherent self.constraintSystem (self.operations 0)
 
 /-- Configure/synthesis registration coherence follows from the circuit-derived
 constraint system; it is not a separate top-level circuit obligation. -/
 theorem keygenCoherent
-    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self : TopLevelCircuit F Config PublicInput) :
     self.KeygenCoherent := by
   apply OperationsKeygenCoherent.closeWithOperations
 
@@ -301,21 +367,28 @@ Every selector atom in a top-level circuit's lookup inputs is allocated by its
 synthesis-closed constraint system.
 -/
 theorem lookupInputsAllocated
-    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self : TopLevelCircuit F Config PublicInput) :
     ∀ argument ∈ self.constraintSystem.lookups,
       ∀ expression ∈ argument.inputs,
         expression.selectorBound ≤ self.constraintSystem.numSelectors := by
   exact ConstraintSystem.lookupInputsAllocated_closeWithOperations
-    (self.formalCircuit.configure self.configInput {}).2
-    (self.formalCircuit.toOperations self.configInput ())
+    (self.formalCircuit.configure () {}).2
+    (self.formalCircuit.toOperations () ())
 
-/-- The semantic statement extracted from a placed satisfying assignment. -/
-def Statement (self : TopLevelCircuit F ConfigInput Config Output)
-    (i : RegionIndex) (env : Placed Environment F) : Prop :=
-  self.formalCircuit.Spec
-    (eval env (show Var unit F from ()))
-    (eval env (self.formalCircuit.output self.config () i))
-    (self.formalCircuit.extract self.config () i env)
+/-- Read this circuit's public input from its declared instance cells. -/
+def extractPublicInput (self : TopLevelCircuit F Config PublicInput)
+    (env : Environment F) : PublicInput F :=
+  self.publicInputLayout.extract self.config env
+
+/-- Read this circuit's private witness from a placed environment. -/
+def extractPrivateWitness (self : TopLevelCircuit F Config PublicInput)
+    (i : RegionIndex) (env : Placed Environment F) : self.PrivateWitness :=
+  self.extractPrivate self.config i env
+
+/-- The externally visible statement: some private witness satisfies the circuit spec. -/
+def Statement (self : TopLevelCircuit F Config PublicInput)
+    (publicInput : PublicInput F) : Prop :=
+  ∃ privateWitness, self.Spec publicInput privateWitness
 
 /--
 Generic verifier-side top-level soundness.  The public theorem consumes successful
@@ -323,23 +396,38 @@ synthesis/layout and the circuit constraints, but no circuit-specific environmen
 input assumption.
 -/
 theorem soundness
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (i : RegionIndex) (env : Placed Environment F)
     (hwellFormed : SynthesisWellFormed env.env (self.operations i))
     (hconstraints : Constraints env.place env.env (self.operations i) i) :
-    self.Statement i env := by
+    self.Spec
+      (self.extractPublicInput env.env)
+      (self.extractPrivateWitness i env) := by
+  apply (self.spec_iff _ _).mpr
+  unfold extractPublicInput extractPrivateWitness config
+  rw [self.extract_factorization]
   apply self.formalCircuit.soundness self.config i env ()
   · exact self.closesEnvironmentSoundness i env hwellFormed hconstraints
   · rw [self.assumptions_eq]
     trivial
   · exact hconstraints
 
+/-- A satisfying assignment establishes the external statement for its public input. -/
+theorem statement_soundness
+    (self : TopLevelCircuit F Config PublicInput)
+    (i : RegionIndex) (env : Placed Environment F)
+    (hwellFormed : SynthesisWellFormed env.env (self.operations i))
+    (hconstraints : Constraints env.place env.env (self.operations i) i) :
+    self.Statement (self.extractPublicInput env.env) :=
+  ⟨self.extractPrivateWitness i env,
+    self.soundness i env hwellFormed hconstraints⟩
+
 /--
 Generic honest-prover top-level completeness.  As on the verifier side, successful
 synthesis/layout closes the environment contract internally.
 -/
 theorem completeness
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (i : RegionIndex) (env : Placed ProverEnvironment F)
     (hwitnesses : ExtendsWitnesses env.place env.env (self.operations i) i)
     (hwellFormed : SynthesisWellFormed env.toEnvironment.env (self.operations i))

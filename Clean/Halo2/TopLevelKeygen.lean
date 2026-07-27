@@ -71,41 +71,41 @@ namespace TopLevelCircuit
 
 variable
     {F : Type} [FiniteField F]
-    {ConfigInput Config : Type} {Output : TypeMap}
-    [CircuitType Output]
+    {Config : Type} {PublicInput : TypeMap}
+    [ProvableType PublicInput]
 
 /-- The pinned constraint system derived solely from the closed circuit. -/
-def pinnedCS (self : TopLevelCircuit F ConfigInput Config Output) :
+def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
     PinnedConstraintSystem F :=
-  self.formalCircuit.toPinnedCS self.configInput ()
+  self.formalCircuit.toPinnedCS () ()
 
 /-- V1 region starts derived from the circuit's own operation stream. -/
-def regionStarts (self : TopLevelCircuit F ConfigInput Config Output) : List ℕ :=
+def regionStarts (self : TopLevelCircuit F Config PublicInput) : List ℕ :=
   FloorPlanner.V1.starts (self.operations 0)
 
 /-- Selector activations produced by the circuit's own synthesis and V1 placement. -/
 def selectorActivations
-    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self : TopLevelCircuit F Config PublicInput) :
     List (ℕ × ℕ) :=
   activations self.regionStarts
     (indexedRegions (self.operations 0) 0).1
 
 /-- The circuit-owned V1 placement function. -/
-def placement (self : TopLevelCircuit F ConfigInput Config Output) :
+def placement (self : TopLevelCircuit F Config PublicInput) :
     RegionIndex → ℕ :=
   fun region => self.regionStarts.getD region 0
 
 @[simp] theorem placement_apply
-    (self : TopLevelCircuit F ConfigInput Config Output) (region : RegionIndex) :
+    (self : TopLevelCircuit F Config PublicInput) (region : RegionIndex) :
     self.placement region = self.regionStarts.getD region 0 :=
   rfl
 
 /-- The operation footprint that key generation requires to fit in usable rows. -/
-def usedRows (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
+def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   Halo2.usedRows (self.operations 0)
 
 /-- The smallest keygen domain exponent derived from this circuit's CS and operations. -/
-def domainExponent (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
+def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   Halo2.minimalK self.constraintSystem (self.operations 0)
 
 /--
@@ -113,7 +113,7 @@ The selector-compression map derived from the circuit's own constraint system,
 operation stream, placement, and minimal fitting domain.
 -/
 def selectorMap
-    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self : TopLevelCircuit F Config PublicInput) :
     SelCompressMap :=
   deriveSelCompressMap self.constraintSystem
     (2 ^ self.domainExponent) self.selectorActivations
@@ -123,21 +123,21 @@ The circuit-owned pinned constraint system is exactly the projection using its
 circuit-owned selector map.
 -/
 theorem pinnedCS_eq_derive
-    (self : TopLevelCircuit F ConfigInput Config Output) :
+    (self : TopLevelCircuit F Config PublicInput) :
     self.pinnedCS =
       PinnedConstraintSystem.derive self.constraintSystem self.selectorMap := by
   rfl
 
 /-- The blinding-row count derived from the circuit's own configure run. -/
-def blindingFactors (self : TopLevelCircuit F ConfigInput Config Output) : ℕ :=
+def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.constraintSystem.blindingFactors
 
 /-- Halo2's usable-row count at a proposed evaluation-domain exponent. -/
-def usableRowsAt (self : TopLevelCircuit F ConfigInput Config Output) (k : ℕ) : ℕ :=
+def usableRowsAt (self : TopLevelCircuit F Config PublicInput) (k : ℕ) : ℕ :=
   2 ^ k - self.blindingFactors - 1
 
 /-- The keygen fit assertion for a proposed domain exponent. -/
-def FitsAt (self : TopLevelCircuit F ConfigInput Config Output) (k : ℕ) : Prop :=
+def FitsAt (self : TopLevelCircuit F Config PublicInput) (k : ℕ) : Prop :=
   self.usedRows + self.blindingFactors + 1 ≤ 2 ^ k
 
 /--
@@ -145,7 +145,7 @@ The bounded `minimalK` search supplies the keygen fit inequality whenever it ret
 a supported Pasta domain exponent rather than its sentinel value `33`.
 -/
 theorem fitsAt_domainExponent
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (hbound : self.domainExponent < 33) :
     self.FitsAt self.domainExponent := by
   let need :=
@@ -170,7 +170,7 @@ theorem fitsAt_domainExponent
 
 /-- A fitting keygen domain has strictly more rows than its blinding count. -/
 theorem blindingFactors_lt_domainSize
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (k : ℕ) (hfit : self.FitsAt k) :
     self.blindingFactors < 2 ^ k := by
   unfold FitsAt at hfit
@@ -181,7 +181,7 @@ A nonempty operation footprint leaves at least one non-blinding usable row
 before the final usable row.
 -/
 theorem blindingFactors_succ_lt_domainSize
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (k : ℕ) (hfit : self.FitsAt k)
     (hused : 0 < self.usedRows) :
     self.blindingFactors + 1 < 2 ^ k := by
@@ -189,7 +189,7 @@ theorem blindingFactors_succ_lt_domainSize
   omega
 
 theorem usedRows_le_usableRowsAt
-    (self : TopLevelCircuit F ConfigInput Config Output) (k : ℕ)
+    (self : TopLevelCircuit F Config PublicInput) (k : ℕ)
     (hfit : self.FitsAt k) :
     self.usedRows ≤ self.usableRowsAt k := by
   unfold FitsAt at hfit
@@ -201,7 +201,7 @@ A fitting circuit-owned keygen domain supplies the exact synthesis well-formedne
 certificate expected by generic top-level soundness.
 -/
 theorem synthesisWellFormed
-    (self : TopLevelCircuit F ConfigInput Config Output)
+    (self : TopLevelCircuit F Config PublicInput)
     (k : ℕ) (env : Environment F)
     (husable : env.usableRows = self.usableRowsAt k)
     (hfit : self.FitsAt k) :
