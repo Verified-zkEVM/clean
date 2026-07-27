@@ -59,7 +59,6 @@ inductive ColRef where
   | instance : ℕ → ColRef
 deriving DecidableEq, Repr
 
-
 /-! ## Column translation (permutation-column order) -/
 
 /-- A `ColRef` as an `AnyColumn` (the `Cell`/`Column` column spelling). -/

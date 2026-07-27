@@ -2157,7 +2157,6 @@ theorem partitionInBlocksFactored_contract
     · simp only [if_neg hpendingR]
       exact ⟨by omega, hperm⟩
 
-
 /-- `partition_in_blocks` (`sort.rs:233-465`), implemented through the
 proved phase decomposition above. -/
 def partitionInBlocks (v : Array T) (pivot : T)
@@ -2387,7 +2386,6 @@ private def recurseStep
     recurseLong rec v isLess pred limit len
       wasBalanced wasPartitioned
 
-
 /-- `recurse` (`sort.rs:694-777`), factored through one proof-facing driver step. -/
 def recurse : ℕ → Array T → (T → T → Bool) → Option T → ℕ → Bool → Bool → Array T
   | 0, v, isLess, _, _, _, _ => heapsort v isLess
@@ -2403,7 +2401,6 @@ recursion depth (see `recurse`). -/
 def quicksort (v : Array T) (isLess : T → T → Bool) : Array T :=
   if v.size == 0 then v
   else recurse (v.size + 1) v isLess none (Nat.log2 v.size + 1) true true
-
 
 /-! ## Permutation correctness of legacy pdqsort -/
 
@@ -3870,8 +3867,6 @@ theorem reverse_perm (a : Array T) :
   rw [Array.toList_reverse]
   exact List.reverse_perm _
 
-
-
 theorem extract_pivot_split_toList (a : Array T) (i : ℕ)
     (hi : i < a.size) :
     (a.extract 0 i).toList ++ [a[i]!] ++
@@ -5063,7 +5058,6 @@ theorem quicksort_perm_of_contracts
   · exact recurse_perm_of_contracts contracts
       (v.size + 1) v isLess none
       (Nat.log2 v.size + 1) true true
-
 
 variable {T : Type} [Inhabited T]
 

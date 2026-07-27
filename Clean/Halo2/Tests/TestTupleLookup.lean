@@ -35,7 +35,9 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
     (s : Selector) (i0 i1 i2 : Expression Fp Query) (c0 c1 c2 : Column .fixed) :
     (RegionOperation.enableLookup
         { inputs := [i0, i1, i2],
-          tables := [queryFixed c0, queryFixed c1, queryFixed c2] }
+          tables := [queryFixed c0, queryFixed c1, queryFixed c2],
+          tablesFree := by selector_free
+          arity := rfl }
         [s] row).Constraints place self env
       ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
           i0.eval (Query.eval env (fun j => if j ∈ [s].map Selector.index then 1 else 0)
