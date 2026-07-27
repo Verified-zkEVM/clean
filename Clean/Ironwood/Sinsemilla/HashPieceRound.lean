@@ -202,6 +202,12 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   createGate (sinsemillaGate cfg)
   return cfg
 
+instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) :
+    ElaboratedConfigure
+      (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) := {}
+
 /-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece
 (`hash_to_point.rs::hash_piece`, `final_piece`). Deliberately NOT `@[simp]`: proofs keep it
 as an atom so `linear_combination` can consume `qS2Boundary_run` without case-splitting on

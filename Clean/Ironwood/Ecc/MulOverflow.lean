@@ -105,6 +105,12 @@ def configure (K : ℕ) (lookupConfig : LookupRangeCheck.Config K)
   createGate (overflowGate K cfg)
   return cfg
 
+instance (K : ℕ) (lookupConfig : LookupRangeCheck.Config K)
+    (adv0 adv1 adv2 : Column .advice) :
+    ElaboratedConfigure (configure K lookupConfig adv0 adv1 adv2) := by
+  unfold configure
+  infer_instance
+
 /-! ## Inputs / Output -/
 
 /-- Verifier-visible inputs: the scalar `alpha` and the running-sum cells `z_0`, `z_130`,

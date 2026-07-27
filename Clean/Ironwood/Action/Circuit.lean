@@ -126,6 +126,13 @@ def configure (G : Generators) : Configure Fp Config := do
            sinsemilla1, merkle1, sinsemilla2, merkle2, commitIvkConfig,
            noteCommitOld, noteCommitNew, lookupConfig }
 
+instance (G : Generators) :
+    ElaboratedConfigure (configure G) where
+  instanceQueries counts :=
+    [(⟨counts.numInstanceColumns⟩, 0)]
+  instanceQueries_eq := by
+    configure_norm
+
 /-! ## Synthesize -/
 
 open Ecc.MulFixed (FixedBase)

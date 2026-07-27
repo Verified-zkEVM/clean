@@ -54,6 +54,11 @@ def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   createGate (fullWidthGate cfg)
   return cfg
 
+instance (superConfig : MulFixed.Config) :
+    ElaboratedConfigure (configure superConfig) := by
+  unfold configure
+  infer_instance
+
 /-- `decompose_scalar_fixed`: enable `q_mul_fixed_full` on all `numWindows` rows, then
 witness the scalar's 3-bit windows `k[w]` into the `window` column — from the window
 hints. Returns nothing; the window cells are read positionally (the coords rows consume

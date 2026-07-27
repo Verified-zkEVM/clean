@@ -102,6 +102,13 @@ def configure (canonAdvices : Fin 3 → Column .advice)
   createGate (canonGate cfg)
   return cfg
 
+instance (canonAdvices : Fin 3 → Column .advice)
+    (lookupConfig : LookupRangeCheck.Config 10)
+    (superConfig : MulFixed.Config) :
+    ElaboratedConfigure (configure canonAdvices lookupConfig superConfig) := by
+  unfold configure
+  infer_instance
+
 /-! ## Synthesize -/
 
 structure InnerOut (F : Type) where

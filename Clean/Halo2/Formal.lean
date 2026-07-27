@@ -187,6 +187,14 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   system, from what the parent hands down (`ConfigInput`) to the configuration consumed
   by `synthesize` (`Config`). Rust: `Config::configure(meta, …)`. -/
   configure : ConfigInput → Configure F Config
+  /-- Reduced configure metadata. Instance-query requests are empty for ordinary child
+  circuits and are declared explicitly by the top-level circuits that expose public
+  inputs. -/
+  elaboratedConfigure : ∀ input, ElaboratedConfigure (configure input) := by
+    intro input
+    first
+    | infer_instance
+    | exact {}
   /-- Synthesis phase: the layouter-level circuit. Rust: the chip method body. -/
   synthesize : Config → Var Input F → Circuit F (Var Output F)
   elaborated : ∀ config, ElaboratedCircuit F Input Output (synthesize config) := by
@@ -237,6 +245,11 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
+
+instance (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) :
+    ElaboratedConfigure (self.configure input) :=
+  self.elaboratedConfigure input
 
 /-- The output variable of the circuit (via the elaborated metadata). -/
 def output (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
@@ -490,6 +503,13 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   the configuration consumed by `synthesize` (`Config`, halo2's meaning: selectors +
   columns, e.g. `witness_point::Config`). Rust: `Config::configure(meta, …)`. -/
   configure : ConfigInput → Configure F Config
+  /-- Reduced configure metadata. Region-level gadgets ordinarily emit no instance
+  queries, so the default elaboration is empty. -/
+  elaboratedConfigure : ∀ input, ElaboratedConfigure (configure input) := by
+    intro input
+    first
+    | infer_instance
+    | exact {}
   /-- Synthesis phase: the region-level circuit, at row `offset` inside the ambient
   region. Rust: the `assign_region`-helper body at `offset`. -/
   synthesize : Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)
@@ -537,6 +557,11 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
+
+instance (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) :
+    ElaboratedConfigure (self.configure input) :=
+  self.elaboratedConfigure input
 
 /-- The output variable of the region circuit, in the ambient region. -/
 def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
@@ -634,6 +659,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     FormalCircuit F ConfigInput Config Input Output where
   name := name
   configure := child.configure
+  elaboratedConfigure := child.elaboratedConfigure
   synthesize config input := assignRegion name (child.synthesize config 0 input)
   elaborated config :=
     { output := fun input i => (child.synthesize config 0 input).output i

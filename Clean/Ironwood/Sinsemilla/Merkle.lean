@@ -157,6 +157,13 @@ def configure (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole : Co
   createGate (decomposeGate cfg)
   return cfg
 
+instance (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole :
+    Column .advice) :
+    ElaboratedConfigure
+      (configure aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole) := by
+  unfold configure
+  infer_instance
+
 /-! ### The gate gadget (pure region-level assertion)
 
 Verifier-visible inputs are the ten already-assigned cells; no output (`unit`), like
@@ -272,6 +279,11 @@ def configure (scfg : HashPiece.Config) : Configure Fp Config := do
   let gate ← Gate.configure scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
     scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
   return { condSwap, gate, sinsemilla := scfg }
+
+instance (scfg : HashPiece.Config) :
+    ElaboratedConfigure (configure scfg) := by
+  unfold configure
+  infer_instance
 
 /-! ### Digit toolkit
 

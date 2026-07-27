@@ -66,6 +66,11 @@ def configure (a b aSwapped bSwapped swap : Column .advice) : Configure Fp Confi
   createGate (swapGate cfg)
   return cfg
 
+instance (a b aSwapped bSwapped swap : Column .advice) :
+    ElaboratedConfigure (configure a b aSwapped bSwapped swap) := by
+  unfold configure
+  infer_instance
+
 /-! ## The `swap` gadget (Rust `CondSwapInstructions::swap`, `cond_swap.rs:88-134`)
 
 One row: copy `a` in, witness `b` and the boolean `swap` flag, witness the conditionally

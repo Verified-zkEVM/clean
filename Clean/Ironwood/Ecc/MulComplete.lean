@@ -73,6 +73,11 @@ def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure 
   createGate (decomposeGate cfg)
   return cfg
 
+instance (zComplete : Column .advice) (addConfig : Add.Config) :
+    ElaboratedConfigure (configure zComplete addConfig) := by
+  unfold configure
+  infer_instance
+
 /-! ## Inputs / Output -/
 
 structure Inputs (F : Type) where

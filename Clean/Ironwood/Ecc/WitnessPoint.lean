@@ -79,6 +79,11 @@ def configure (x y : Column .advice) : Configure Fp Config := do
   createGate (pointNonIdGate qPointNonId x y)
   return { qPoint, qPointNonId, x, y }
 
+instance (x y : Column .advice) :
+    ElaboratedConfigure (configure x y) := by
+  unfold configure
+  infer_instance
+
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
