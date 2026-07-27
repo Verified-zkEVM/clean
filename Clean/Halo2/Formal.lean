@@ -243,6 +243,35 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
     FormalCircuit.Completeness (synthesize config) (extract config) (EnvAssumptions config)
       Assumptions ProverAssumptions ProverSpec
 
+/--
+The configure and synthesis phases of a layouter circuit agree on their keygen-facing
+data.
+
+The law is stated over arbitrary initial allocation counts so child circuits compose
+inside a parent's configure program. Append-only configure metadata records the exact
+gate and lookup contributions; synthesis may enable only those arguments. All emitted
+selectors must fit below the program's final selector count.
+-/
+structure FormalCircuit.KeygenLawful
+    {ConfigInput Config : Type}
+    [CircuitType Input] [CircuitType Output]
+    (self : FormalCircuit F ConfigInput Config Input Output) : Prop where
+  selectorCountMonotone :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
+    counts.numSelectors ≤
+      ((self.configure configInput).finalCounts counts).numSelectors
+  selectorsAllocated :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
+    ((self.configure configInput).delta counts).SelectorsAllocated
+      ((self.configure configInput).finalCounts counts).numSelectors
+  registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (input : Var Input F) (i : RegionIndex),
+    let program := self.configure configInput
+    ((self.synthesize (program.output counts) input).operations i).KeygenRegistered
+      (program.delta counts).gates
+      (program.delta counts).lookups
+
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 
@@ -554,6 +583,34 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   completeness : ∀ (config : Config) (offset : ℕ),
     FormalRegionCircuit.Completeness (synthesize config offset) (extract config offset)
       (EnvAssumptions config) Assumptions ProverAssumptions ProverSpec
+
+/--
+Region-level counterpart of `FormalCircuit.KeygenLawful`.
+
+The operation stream is quantified over both its row offset and ambient region index,
+matching every context in which a parent may call the region circuit.
+-/
+structure FormalRegionCircuit.KeygenLawful
+    {ConfigInput Config : Type}
+    [CircuitType Input] [CircuitType Output]
+    (self : FormalRegionCircuit F ConfigInput Config Input Output) : Prop where
+  selectorCountMonotone :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
+    counts.numSelectors ≤
+      ((self.configure configInput).finalCounts counts).numSelectors
+  selectorsAllocated :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
+    ((self.configure configInput).delta counts).SelectorsAllocated
+      ((self.configure configInput).finalCounts counts).numSelectors
+  registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex),
+    let program := self.configure configInput
+    ((self.synthesize
+      (program.output counts) offset input).operations region).Forall
+        (RegionOperation.KeygenRegistered
+          (program.delta counts).gates
+          (program.delta counts).lookups)
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}

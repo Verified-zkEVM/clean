@@ -18,93 +18,18 @@ namespace Halo2
 variable {F : Type}
 
 /--
-Static configure/synthesis coherence for one region operation.
-
-Assignments and copies need no configure-phase registration. Gate and lookup
-activations do: their semantic expressions must be among the arguments from which
-key generation constructs the pinned constraint system.
--/
-@[circuit_norm]
-def RegionOperation.KeygenCoherent
-    (cs : ConstraintSystem F) : RegionOperation F → Prop
-  | .enableGate gate _ => gate ∈ cs.gates
-  | .enableLookup argument _ _ => argument ∈ cs.lookups
-  | _ => True
-
-/-- Static configure/synthesis coherence for one layouter operation. -/
-@[circuit_norm]
-def Operation.KeygenCoherent
-    (cs : ConstraintSystem F) : Operation F → Prop
-  | .region _ body => body.Forall (RegionOperation.KeygenCoherent cs)
-  | _ => True
-
-/--
-Every gate and lookup emitted by synthesis was registered by the same circuit's
-configure phase.
-
-`FormalCircuit` intentionally keeps `configure` and `synthesize` independent, so
-this property cannot be derived for an arbitrary value of that type. A deployed
-top-level circuit certifies it once; the verifier-to-circuit bridge then uses it
-generically.
--/
-def OperationsKeygenCoherent
-    (cs : ConstraintSystem F) (operations : Operations F) : Prop :=
-  operations.Forall (Operation.KeygenCoherent cs)
-
-@[circuit_norm]
-theorem OperationsKeygenCoherent.nil
-    (cs : ConstraintSystem F) :
-    OperationsKeygenCoherent cs [] := by
-  simp [OperationsKeygenCoherent]
-
-/-- Configure/synthesis coherence composes across operation-stream append. -/
-@[circuit_norm]
-theorem OperationsKeygenCoherent.append
-    (cs : ConstraintSystem F) (left right : Operations F) :
-    OperationsKeygenCoherent cs (left ++ right) ↔
-      OperationsKeygenCoherent cs left ∧
-        OperationsKeygenCoherent cs right := by
-  simp [OperationsKeygenCoherent]
-
-/-- A region is coherent exactly when each operation in its body is coherent. -/
-@[circuit_norm]
-theorem OperationsKeygenCoherent.region_cons
-    (cs : ConstraintSystem F) (name : String)
-    (body : RegionOperations F) (rest : Operations F) :
-    OperationsKeygenCoherent cs (.region name body :: rest) ↔
-      body.Forall (RegionOperation.KeygenCoherent cs) ∧
-        OperationsKeygenCoherent cs rest := by
-  simp [OperationsKeygenCoherent, Operation.KeygenCoherent]
-
-@[circuit_norm]
-theorem OperationsKeygenCoherent.constrainInstance_cons
-    (cs : ConstraintSystem F) (cell : Cell)
-    (column : Column .instance) (row : ℕ) (rest : Operations F) :
-    OperationsKeygenCoherent cs
-        (.constrainInstance cell column row :: rest) ↔
-      OperationsKeygenCoherent cs rest := by
-  simp [OperationsKeygenCoherent, Operation.KeygenCoherent]
-
-@[circuit_norm]
-theorem OperationsKeygenCoherent.loadTable_cons
-    (cs : ConstraintSystem F) (table : TableColumn)
-    (values : List F) (rest : Operations F) :
-    OperationsKeygenCoherent cs (.loadTable table values :: rest) ↔
-      OperationsKeygenCoherent cs rest := by
-  simp [OperationsKeygenCoherent, Operation.KeygenCoherent]
-
-/--
 Closing a constraint system under an operation stream makes configure/synthesis
 registration coherence true by construction.
 -/
 theorem OperationsKeygenCoherent.closeWithOperations
     [DecidableEq F] (cs : ConstraintSystem F) (operations : Operations F) :
     OperationsKeygenCoherent (cs.closeWithOperations operations) operations := by
-  rw [OperationsKeygenCoherent, List.forall_iff_forall_mem]
+  rw [OperationsKeygenCoherent, Operations.KeygenRegistered,
+    List.forall_iff_forall_mem]
   intro operation hoperation
   cases operation with
   | region name body =>
-      rw [Operation.KeygenCoherent, List.forall_iff_forall_mem]
+      rw [Operation.KeygenRegistered, List.forall_iff_forall_mem]
       intro regionOperation hregionOperation
       cases regionOperation with
       | enableGate gate row =>
