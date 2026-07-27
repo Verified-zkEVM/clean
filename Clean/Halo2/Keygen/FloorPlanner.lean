@@ -6245,18 +6245,27 @@ def freeRows (colAllocs : CircuitAllocations) (colIdx endRow : ℕ) : List ℕ :
       | some e => (List.range (e - s)).map (· + s)
       | none => []
 
-/-- The V1 constants allocation `(value, constantsColIdx, row)` — the fixture's `constants`
-field — derived from the operation stream and the planner's allocations. `constCols` is the
-list of constants fixed-column indices (`cs.constants`, from `enable_constant`; orchard uses
-a single column). Reproduces `v1.rs:102-136`: enumerate free rows per constants column, zip
-with the collected constants. -/
-def constants (toNat : F → ℕ) (ops : Operations F) (constCols : List ℕ) :
-    List (ℕ × ℕ × ℕ) :=
+/--
+The V1 constants allocation `(value, constantsColIdx, row)`, retaining field values.
+
+`constCols` is the list of constants fixed-column indices (`cs.constants`, from
+`enable_constant`; Orchard uses a single column). This is the semantic compiler view:
+field values stay in the field instead of making a round trip through a backend-specific
+natural-number encoding.
+-/
+def constantAssignments (ops : Operations F) (constCols : List ℕ) :
+    List (F × ℕ × ℕ) :=
   let (_, colAllocs) := planOperations ops
   let endRow := firstUnassignedRow colAllocs
   let positions : List (ℕ × ℕ) := constCols.flatMap fun c =>
     (freeRows colAllocs c endRow).map fun row => (c, row)
-  (positions.zip (constantValues ops)).map fun ((c, row), v) => (toNat v, c, row)
+  (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
+
+/-- Natural-number projection of `constantAssignments`, retained for fixture comparison. -/
+def constants (toNat : F → ℕ) (ops : Operations F) (constCols : List ℕ) :
+    List (ℕ × ℕ × ℕ) :=
+  (constantAssignments ops constCols).map fun (value, column, row) =>
+    (toNat value, column, row)
 
 end V1
 

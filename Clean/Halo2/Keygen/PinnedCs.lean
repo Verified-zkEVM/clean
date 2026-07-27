@@ -335,12 +335,27 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
   dsimp only
   exact habsolute.trans_le (Nat.le_max_left _ _)
 
-/-- The minimal domain exponent for which the circuit fits keygen's asserts. -/
+/--
+The minimal domain exponent for which the circuit fits keygen's asserts.
+
+This is an unbounded derivation. Concrete backends may impose their own supported-domain
+limit after compilation, but the semantic compiler never returns a sentinel exponent
+that fails its own fit condition.
+-/
 def minimalK (cs : ConstraintSystem F) (ops : Operations F) : ℕ :=
   let blinding := cs.blindingFactors
   -- `blinding + 3 = cs.minimumRows`, without recomputing the blinding count
   let need := max (usedRows ops + blinding + 1) (blinding + 3)
-  ((List.range 33).find? (fun k => need ≤ 2 ^ k)).getD 33
+  Nat.clog 2 need
+
+/-- The total domain derivation always fits the circuit and minimum-row requirements. -/
+theorem minimalK_fits (cs : ConstraintSystem F) (ops : Operations F) :
+    max (usedRows ops + cs.blindingFactors + 1) cs.minimumRows ≤
+      2 ^ minimalK cs ops := by
+  simpa [minimalK, ConstraintSystem.minimumRows] using
+    Nat.le_pow_clog (by omega : 1 < 2)
+      (max (usedRows ops + cs.blindingFactors + 1)
+        (cs.blindingFactors + 3))
 
 /-- The pinned constraint system of a circuit given its keygen-view operation stream:
 derived floor plan → activations → minimal fitting domain → compress_selectors → pinned
