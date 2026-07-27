@@ -1,5 +1,7 @@
 import Clean.Halo2.Keygen.CompressSelectors
 import Clean.Halo2.Keygen.FloorPlanner
+import Batteries.Data.Array.Lemmas
+import Mathlib.Data.List.GetD
 
 /-!
 # Phase-2 layout reconstruction (reusable, NOT mul-specific)
@@ -380,5 +382,199 @@ def allFixed [Inhabited F] (toNat : F → ℕ) (usable : ℕ) (selMap : SelCompr
     ++ regionAssignFixed toNat starts regions
     ++ constantsFixed consts
     ++ selectorFixed selMap (activations starts regions))
+
+/-! ## Field-valued fixed-row compiler
+
+The fixture-facing helpers above deliberately expose natural-number encodings. Semantic
+environments and key generation should instead consume the field-valued compiler below.
+It derives every input from the closed constraint system and operation stream; callers
+cannot substitute arbitrary fixed cells, placements, or constants allocations.
+-/
+
+/-- One compiled fixed-cell assignment `(column, absolute row, field value)`. -/
+abbrev FixedAssignment (F : Type) := ℕ × ℕ × F
+
+/-- Loaded-table assignments, including Halo2's default-fill over all usable rows. -/
+def tableAssignments (usable : ℕ) : Operations F → List (FixedAssignment F)
+  | [] => []
+  | .loadTable table values :: rest =>
+      let column := table.inner.index
+      let block := values.zipIdx.map fun (value, row) => (column, row, value)
+      let fill := match values with
+        | [] => []
+        | first :: _ =>
+            (List.range (usable - values.length)).map fun row =>
+              (column, values.length + row, first)
+      block ++ fill ++ tableAssignments usable rest
+  | _ :: rest => tableAssignments usable rest
+
+/-- Region-level `assignFixed` operations at their V1-placed absolute rows. -/
+def regionAssignments (starts : List ℕ)
+    (regions : List (ℕ × RegionOperations F)) : List (FixedAssignment F) :=
+  regions.flatMap fun (index, body) =>
+    body.filterMap fun operation =>
+      match operation with
+      | .assignFixed column row value =>
+          some (column.index, place starts index + row, value)
+      | _ => none
+
+/-- V1 deferred constants as ordinary fixed-cell assignments. -/
+def constantAssignments
+    (assignments : List (F × ℕ × ℕ)) : List (FixedAssignment F) :=
+  assignments.map fun (value, column, row) => (column, row, value)
+
+/--
+Packed-selector assignments in the circuit field.
+
+`assignedRoot` is a combinatorial natural-number output of selector compression.
+`FiniteField.fromNat` is the canonical interpretation in an arbitrary finite field;
+in particular this does not incorrectly use `Nat.cast` for binary extension fields.
+-/
+def selectorAssignments [FiniteField F]
+    (selectorMap : SelCompressMap) (selectorActivations : List (ℕ × ℕ)) :
+    List (FixedAssignment F) :=
+  let unique : Std.HashSet (ℕ × ℕ) :=
+    selectorActivations.foldl (·.insert ·) ∅
+  unique.toList.filterMap fun (selector, row) =>
+    (selectorMap.entries.find? (·.1 = selector)).map fun (_, compressed) =>
+      (compressed.packedCol, row, FiniteField.fromNat compressed.assignedRoot)
+
+/-- Deduplicate field-valued assignments by cell, retaining the last write. -/
+def dedupAssignments
+    (assignments : List (FixedAssignment F)) : List (FixedAssignment F) :=
+  let values : Std.HashMap (ℕ × ℕ) F :=
+    assignments.foldl
+      (fun values (column, row, value) =>
+        values.insert (column, row) value)
+      ∅
+  values.toList.map fun ((column, row), value) => (column, row, value)
+
+/-- Sort field-valued assignments canonically by `(column, row)`. -/
+def sortAssignments
+    (assignments : List (FixedAssignment F)) : List (FixedAssignment F) :=
+  assignments.toArray.qsort
+    (fun (leftColumn, leftRow, _) (rightColumn, rightRow, _) =>
+      leftColumn < rightColumn ∨
+        (leftColumn = rightColumn ∧ leftRow < rightRow))
+    |>.toList
+
+/--
+Compile every fixed cell of a closed circuit: tables, V1 deferred constants, compressed
+selectors, and placed region assignments.
+-/
+def compileFixed [FiniteField F]
+    (usable : ℕ) (selectorMap : SelCompressMap)
+    (constraintSystem : ConstraintSystem F) (operations : Operations F) :
+    List (FixedAssignment F) :=
+  let starts := FloorPlanner.V1.starts operations
+  let regions := (indexedRegions operations 0).1
+  sortAssignments (dedupAssignments
+    (tableAssignments usable operations
+      ++ constantAssignments
+        (FloorPlanner.V1.constantAssignments operations
+          (constraintSystem.constants.map (·.index)))
+      ++ selectorAssignments selectorMap (activations starts regions)
+      ++ regionAssignments starts regions))
+
+/-- Scatter one fixed assignment into a rectangular dense-column accumulator. -/
+def scatterFixed [Zero F] (numColumns : ℕ) (columns : Array (Array F))
+    (assignment : FixedAssignment F) : Array (Array F) :=
+  let (column, row, value) := assignment
+  if column < numColumns then
+    columns.modify column fun values => values.set! row value
+  else
+    columns
+
+/--
+Compile sparse fixed assignments into `numColumns` dense columns of `numRows` values.
+Unassigned and out-of-range cells are zero, matching Halo2's empty Lagrange polynomial.
+-/
+def denseFixedColumns [Zero F] (numRows numColumns : ℕ)
+    (assignments : List (FixedAssignment F)) : List (List F) :=
+  let initial : Array (Array F) :=
+    Array.replicate numColumns (Array.replicate numRows 0)
+  (assignments.foldl (scatterFixed numColumns) initial).toList.map Array.toList
+
+private theorem scatterFixed_sized [Zero F]
+    {numRows numColumns : ℕ} {columns : Array (Array F)}
+    (hcolumns : columns.size = numColumns)
+    (hrows : ∀ column (hcolumn : column < columns.size),
+      columns[column].size = numRows)
+    (assignment : FixedAssignment F) :
+    let next := scatterFixed numColumns columns assignment
+    next.size = numColumns ∧
+      ∀ column (hcolumn : column < next.size),
+        next[column].size = numRows := by
+  rcases assignment with ⟨column, row, value⟩
+  simp only [scatterFixed]
+  split
+  next hcolumn =>
+    constructor
+    · simpa only [Array.size_modify] using hcolumns
+    · intro other hother
+      rw [Array.getElem_modify hother]
+      split
+      next hequal =>
+        subst other
+        simp only [Array.size_set!]
+        exact hrows column (by simpa only [hcolumns] using hcolumn)
+      next _ =>
+        exact hrows other (by simpa using hother)
+  next _ =>
+    exact ⟨hcolumns, hrows⟩
+
+private theorem scatterFixed_fold_sized [Zero F]
+    {numRows numColumns : ℕ}
+    (assignments : List (FixedAssignment F))
+    {columns : Array (Array F)}
+    (hcolumns : columns.size = numColumns)
+    (hrows : ∀ column (hcolumn : column < columns.size),
+      columns[column].size = numRows) :
+    let result := assignments.foldl (scatterFixed numColumns) columns
+    result.size = numColumns ∧
+      ∀ column (hcolumn : column < result.size),
+        result[column].size = numRows := by
+  induction assignments generalizing columns with
+  | nil =>
+      exact ⟨hcolumns, hrows⟩
+  | cons assignment rest inductionHypothesis =>
+      simp only [List.foldl_cons]
+      have hnext := scatterFixed_sized hcolumns hrows assignment
+      exact inductionHypothesis hnext.1 hnext.2
+
+/-- Dense compilation emits exactly the requested number of fixed columns. -/
+@[simp] theorem denseFixedColumns_length [Zero F]
+    (numRows numColumns : ℕ)
+    (assignments : List (FixedAssignment F)) :
+    (denseFixedColumns numRows numColumns assignments).length = numColumns := by
+  let initial : Array (Array F) :=
+    Array.replicate numColumns (Array.replicate numRows 0)
+  let result := assignments.foldl (scatterFixed numColumns) initial
+  have hshape := scatterFixed_fold_sized assignments
+    (columns := initial) (numRows := numRows) (numColumns := numColumns)
+    (by simp [initial]) (by simp [initial])
+  simpa [denseFixedColumns, initial, result] using hshape.1
+
+/-- Every in-range dense fixed column spans the requested row count. -/
+theorem denseFixedColumns_getD_length [Zero F]
+    (numRows numColumns : ℕ)
+    (assignments : List (FixedAssignment F))
+    (column : ℕ) (hcolumn : column < numColumns) :
+    ((denseFixedColumns numRows numColumns assignments).getD column []).length =
+      numRows := by
+  let initial : Array (Array F) :=
+    Array.replicate numColumns (Array.replicate numRows 0)
+  let result := assignments.foldl (scatterFixed numColumns) initial
+  have hshape := scatterFixed_fold_sized assignments
+    (columns := initial) (numRows := numRows) (numColumns := numColumns)
+    (by simp [initial]) (by simp [initial])
+  have hresultColumn : column < result.size := by
+    rw [hshape.1]
+    exact hcolumn
+  rw [List.getD_eq_getElem _ _ (by
+    simpa only [denseFixedColumns_length] using hcolumn)]
+  simp only [denseFixedColumns, List.getElem_map,
+    Array.getElem_toList, Array.length_toList]
+  exact hshape.2 column hresultColumn
 
 end Halo2.Layout
