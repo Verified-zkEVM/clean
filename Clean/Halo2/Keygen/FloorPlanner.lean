@@ -6261,12 +6261,6 @@ def constantAssignments (ops : Operations F) (constCols : List ℕ) :
     (freeRows colAllocs c endRow).map fun row => (c, row)
   (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
 
-/-- Natural-number projection of `constantAssignments`, retained for fixture comparison. -/
-def constants (toNat : F → ℕ) (ops : Operations F) (constCols : List ℕ) :
-    List (ℕ × ℕ × ℕ) :=
-  (constantAssignments ops constCols).map fun (value, column, row) =>
-    (toNat value, column, row)
-
 end V1
 
 namespace SimpleFloorPlanner
