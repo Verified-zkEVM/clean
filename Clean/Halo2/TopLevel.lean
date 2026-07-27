@@ -336,6 +336,42 @@ def assignments (self : PublicInputLayout PublicInput columns)
     Vector ((Column .instance × ℕ) × F) (size PublicInput) :=
   Vector.ofFn fun i => (self.cells i, (toElements input)[i])
 
+/--
+Serialize one instance column as a dense row prefix.
+
+Cells absent from the public-input layout are zero. For a top-level circuit the
+layout columns are distinct, so every declared cell selects exactly one serialized
+public-input element.
+-/
+def rows [Zero F] (self : PublicInputLayout PublicInput columns)
+    (input : PublicInput F) (column : Column .instance) : List F :=
+  (List.range self.usedRows).map fun row =>
+    (toElements input).toList.getD
+      (self.cellList.idxOf (column, row)) 0
+
+/-- The row serialization reads back every declared public-input element. -/
+theorem rows_getD_cells
+    [Zero F]
+    (self : PublicInputLayout PublicInput columns)
+    (hcolumns : columns.Nodup)
+    (input : PublicInput F) (i : Fin (size PublicInput)) :
+    (self.rows input (self.cells i).1).getD
+        (self.cells i).2 0 =
+      (toElements input)[i] := by
+  have hrow := self.cells_snd_lt_usedRows i
+  rw [List.getD_eq_getElem _ _ (by simpa [rows] using hrow)]
+  simp only [rows, List.getElem_map, List.getElem_range]
+  have hindex :
+      self.cellList.idxOf (self.cells i) = i.val := by
+    unfold cells
+    apply List.Nodup.idxOf_getElem
+    exact self.cellList_nodup hcolumns
+  rw [hindex]
+  rw [List.getD_eq_getElem _ _ (by
+    simpa only [Vector.length_toList] using i.isLt)]
+  rw [Vector.getElem_toList]
+  rfl
+
 theorem extract_eq
     (self : PublicInputLayout PublicInput columns)
     (env : Environment F) (input : PublicInput F)
@@ -638,6 +674,23 @@ theorem publicInputLayout_cells_injective
     Function.Injective self.publicInputLayout.cells := by
   apply self.publicInputLayout.cells_injective
   exact TopLevelCompilation.publicInputColumns_nodup self.formalCircuit
+
+/-- Serialize one circuit-derived public instance column as a dense row prefix. -/
+def publicInputRows
+    (self : TopLevelCircuit F Config PublicInput)
+    (input : PublicInput F) (column : Column .instance) : List F :=
+  self.publicInputLayout.rows input column
+
+/-- Circuit-derived public row serialization reads back every declared cell. -/
+theorem publicInputRows_getD_cell
+    (self : TopLevelCircuit F Config PublicInput)
+    (input : PublicInput F) (i : Fin (size PublicInput)) :
+    (self.publicInputRows input (self.publicInputLayout.cells i).1).getD
+        (self.publicInputLayout.cells i).2 0 =
+      (toElements input)[i] := by
+  exact self.publicInputLayout.rows_getD_cells
+    (TopLevelCompilation.publicInputColumns_nodup self.formalCircuit)
+    input i
 
 /-- Each public-input cell's column has a verifier query at some rotation. -/
 theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
