@@ -249,6 +249,34 @@ theorem Operations.KeygenRegistered.mono
   | loadTable =>
       trivial
 
+/-- Region-operation registration is monotone in both available argument lists. -/
+theorem RegionOperations.keygenRegistered_mono
+    {operations : RegionOperations F}
+    {sourceGates targetGates : List (Gate F)}
+    {sourceLookups targetLookups : List (LookupArgument F)}
+    (hregistered :
+      operations.Forall
+        (RegionOperation.KeygenRegistered sourceGates sourceLookups))
+    (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
+    (hlookups :
+      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups) :
+    operations.Forall
+      (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  rw [List.forall_iff_forall_mem] at hregistered ⊢
+  intro operation hoperation
+  have hoperationRegistered := hregistered operation hoperation
+  cases operation with
+  | enableGate gate row =>
+      exact hgates gate hoperationRegistered
+  | enableLookup argument selectors row =>
+      exact hlookups argument hoperationRegistered
+  | assignAdvice
+  | assignFixed
+  | constrainEqual
+  | constrainConstant
+  | constrainInstance =>
+      trivial
+
 /--
 Registration against a configure delta remains true after interpreting that delta
 over any initial constraint system.

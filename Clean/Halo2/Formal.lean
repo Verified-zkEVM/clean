@@ -376,6 +376,35 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
       = (self.synthesize config input).operations i :=
   self.callOps_eq config input i
 
+/--
+A lawful layouter child remains registered when called inside a parent whose available
+argument lists contain the child's requirements and configure contribution.
+-/
+theorem KeygenLawful.call_registered
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {requirements : KeygenRequirements F ConfigInput}
+    (hlawful : self.KeygenLawful requirements)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (input : Var Input F) (i : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates :
+      ∀ gate,
+        gate ∈ requirements.gates configInput ++
+          ((self.configure configInput).delta counts).gates →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ requirements.lookups configInput ++
+          ((self.configure configInput).delta counts).lookups →
+        argument ∈ targetLookups) :
+    ((self.call
+      ((self.configure configInput).output counts)
+      input).operations i).KeygenRegistered targetGates targetLookups := by
+  rw [self.call_operations]
+  exact (FormalCircuit.KeygenLawful.registered
+    hlawful configInput counts input i).mono hgates hlookups
+
 /-!
 The consumption mechanism for `call` chunks lives in `Subcircuit.lean` (framework leaf
 lemmas over the folded `(call …).operations` term) and `Tactics/SubcircuitRw.lean` (the
@@ -694,6 +723,38 @@ theorem call_operations (self : FormalRegionCircuit F ConfigInput Config Input O
     (self.call config offset input).operations region
       = (self.synthesize config offset input).operations region :=
   self.callOps_eq config offset input region
+
+/--
+A lawful region child remains registered when called inside a parent whose available
+argument lists contain the child's requirements and configure contribution.
+-/
+theorem KeygenLawful.call_registered
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {requirements : KeygenRequirements F ConfigInput}
+    (hlawful : self.KeygenLawful requirements)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates :
+      ∀ gate,
+        gate ∈ requirements.gates configInput ++
+          ((self.configure configInput).delta counts).gates →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ requirements.lookups configInput ++
+          ((self.configure configInput).delta counts).lookups →
+        argument ∈ targetLookups) :
+    ((self.call
+      ((self.configure configInput).output counts)
+      offset input).operations region).Forall
+        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  rw [self.call_operations]
+  exact RegionOperations.keygenRegistered_mono
+    (FormalRegionCircuit.KeygenLawful.registered
+      hlawful configInput counts offset input region)
+    hgates hlookups
 
 end FormalRegionCircuit
 
