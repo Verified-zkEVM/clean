@@ -721,6 +721,17 @@ theorem usedRows_le_usableRowsAt_domainExponent
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
       self.formalCircuit self.publicInputLayout
 
+/-- The compiler-derived domain includes Halo 2's three mandatory terminal rows. -/
+theorem blindingFactors_add_three_le_domainSize
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.blindingFactors + 3 ≤ 2 ^ self.domainExponent := by
+  have hfit := Halo2.minimalKForRows_fits
+    self.constraintSystem self.usedRows
+  have hminimum :
+      self.constraintSystem.minimumRows ≤ 2 ^ self.domainExponent :=
+    (Nat.le_max_right _ _).trans hfit
+  simpa only [ConstraintSystem.minimumRows, blindingFactors] using hminimum
+
 /-- Every public-input cell lies in the compiler-derived usable-row range. -/
 theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput)
