@@ -1,6 +1,7 @@
 import Clean.Halo2.Expression
 import Clean.Halo2.Tactics.SelectorFree
 import Mathlib.Data.List.Dedup
+import Mathlib.Data.List.MinMax
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -768,6 +769,57 @@ def lookup (queriedCells : List (Expression F Query))
     (left right : ConfigureDelta F) :
     (left.append right).lookups = left.lookups ++ right.lookups :=
   rfl
+
+/-! ## Selector allocation -/
+
+/-- One past the largest selector index occurring in an expression. -/
+def Expression.selectorBound : Expression F Query → ℕ
+  | .var (.selector selector) => selector.index + 1
+  | .var _ => 0
+  | .const _ => 0
+  | .add left right
+  | .mul left right => max left.selectorBound right.selectorBound
+
+/-- One past every selector index occurring in a lookup's input tuple. -/
+def LookupArgument.inputSelectorBound (argument : LookupArgument F) : ℕ :=
+  (argument.inputs.map Expression.selectorBound).foldr max 0
+
+/-- One past every input-selector index occurring in a lookup list. -/
+def lookupInputSelectorBound (arguments : List (LookupArgument F)) : ℕ :=
+  (arguments.map LookupArgument.inputSelectorBound).foldr max 0
+
+/-- A selected lookup input expression lies below the whole lookup-list bound. -/
+theorem Expression.selectorBound_le_lookupInputSelectorBound
+    {arguments : List (LookupArgument F)} {argument : LookupArgument F}
+    (hargument : argument ∈ arguments)
+    {expression : Expression F Query} (hexpression : expression ∈ argument.inputs) :
+    expression.selectorBound ≤ lookupInputSelectorBound arguments := by
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨argument, hargument, rfl⟩)
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨expression, hexpression, rfl⟩)
+  exact le_rfl
+
+/--
+Every gate selector and lookup-input selector emitted by a configure delta lies below
+the final allocated selector count. Gate well-formedness then gives the same bound for
+every selector atom in each gate constraint.
+-/
+structure ConfigureDelta.SelectorsAllocated
+    (delta : ConfigureDelta F) (numSelectors : ℕ) : Prop where
+  gates :
+    delta.gates.Forall fun gate => gate.selector.index < numSelectors
+  lookups :
+    lookupInputSelectorBound delta.lookups ≤ numSelectors
+
+/-- Selector allocation remains true when the available count grows. -/
+theorem ConfigureDelta.SelectorsAllocated.mono
+    {delta : ConfigureDelta F} {source target : ℕ}
+    (hallocated : delta.SelectorsAllocated source)
+    (hcount : source ≤ target) :
+    delta.SelectorsAllocated target where
+  gates := hallocated.gates.imp fun _ hgate => hgate.trans_le hcount
+  lookups := hallocated.lookups.trans hcount
 
 @[simp] theorem ConfigureDelta.gates_queriedCells
     (owner : String) (cells : List (Expression F Query)) :
