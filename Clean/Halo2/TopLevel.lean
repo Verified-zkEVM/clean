@@ -254,6 +254,7 @@ derived from that declaration.
 structure PublicInputLayout
     (Config : Type) (PublicInput : TypeMap) [ProvableType PublicInput] where
   cells : Config → Fin (size PublicInput) → Column .instance × ℕ
+  cells_injective : ∀ config, Function.Injective (cells config)
 
 namespace PublicInputLayout
 
@@ -453,6 +454,19 @@ structure TopLevelCircuit
   formalCircuit : FormalCircuit F Unit Config unit unit
   /-- The instance cells containing the public input. -/
   publicInputLayout : PublicInputLayout Config PublicInput
+  /-- Every declared public-input row belongs to the circuit's evaluation domain. -/
+  publicInputRowsInDomain :
+    ∀ i,
+      (publicInputLayout.cells
+        (TopLevelCompilation.config formalCircuit) i).2 <
+        2 ^ TopLevelCompilation.domainExponent formalCircuit
+  /-- Every declared public-input column is queried at its own row. -/
+  publicInputColumnsRegistered :
+    ∀ i,
+      ((publicInputLayout.cells
+          (TopLevelCompilation.config formalCircuit) i).1,
+        (0 : Rotation)) ∈
+        (TopLevelCompilation.constraintSystem formalCircuit).instanceQueries
   /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
   /-- Extract the private witness from a top-level execution, which starts at region zero. -/
