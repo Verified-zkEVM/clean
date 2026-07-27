@@ -15,7 +15,7 @@ mirrors every field of the Rust pinned record (`circuit.rs:966-979`).
 configure-time query registration records it in `cs.{advice,fixed,instance}Queries`, and the
 packed columns' fixed queries are appended by the projection (`queryWalkInit`).
 
-`PinnedConstraintSystem.ofOperations` and `FormalCircuit.toPinnedCS` close the loop — the
+`PinnedConstraintSystem.derive` closes the loop — the
 circuit-side half of halo2's `keygen_vk`: floor plan → activations → minimal fitting
 domain → compress_selectors → pinned record.
 
@@ -357,23 +357,6 @@ theorem minimalK_fits (cs : ConstraintSystem F) (ops : Operations F) :
       (max (usedRows ops + cs.blindingFactors + 1)
         (cs.blindingFactors + 3))
 
-/-- The pinned constraint system of a circuit given its keygen-view operation stream:
-derived floor plan → activations → minimal fitting domain → compress_selectors → pinned
-record. The circuit-side half of halo2 keygen_vk. -/
-private def PinnedConstraintSystem.ofClosedOperations
-    [Field F] [DecidableEq F] (cs : ConstraintSystem F)
-    (ops : Operations F) : PinnedConstraintSystem F :=
-  let acts := activations (FloorPlanner.V1.starts ops) (indexedRegions ops 0).1
-  let map := deriveSelCompressMap cs (2 ^ minimalK cs ops) acts
-  .derive cs map
-
-/-- The pinned constraint system of a raw configure result and its keygen-view
-operation stream. The configure result is first closed under synthesis, so every
-enabled gate and lookup participates in selector compression and projection. -/
-def PinnedConstraintSystem.ofOperations [Field F] [DecidableEq F]
-    (cs : ConstraintSystem F) (ops : Operations F) : PinnedConstraintSystem F :=
-  .ofClosedOperations (cs.closeWithOperations ops) ops
-
 section FormalCircuit
 variable [FiniteField F] {ConfigInput Config : Type} {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output]
@@ -389,13 +372,6 @@ def FormalCircuit.toConstraintSystem
     (c : FormalCircuit F ConfigInput Config Input Output)
     (ci : ConfigInput) (input : Var Input F) : ConstraintSystem F :=
   (c.configure ci {}).2.closeWithOperations (c.toOperations ci input)
-
-/-- The pinned constraint system of a `FormalCircuit`, derived from its
-synthesis-closed constraint system and the same operation stream. -/
-def FormalCircuit.toPinnedCS (c : FormalCircuit F ConfigInput Config Input Output)
-    (ci : ConfigInput) (input : Var Input F) : PinnedConstraintSystem F :=
-  .ofClosedOperations (c.toConstraintSystem ci input)
-    (c.toOperations ci input)
 
 end FormalCircuit
 
