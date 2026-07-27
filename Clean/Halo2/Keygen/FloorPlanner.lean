@@ -5901,6 +5901,247 @@ def constantAssignments (ops : Operations F) (constCols : List ℕ) :
     (freeRows colAllocs c endRow).map fun row => (c, row)
   (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
 
+
+/--
+Membership in the flattened activation list retains a concrete source region,
+operation, and local row.
+-/
+theorem exists_activation_origin_of_mem_activations
+    {starts : List ℕ} {regions : List (ℕ × RegionOperations F)}
+    {selector absoluteRow : ℕ}
+    (hactivation :
+      (selector, absoluteRow) ∈ activations starts regions) :
+    ∃ regionIndex body operation localRow,
+      (regionIndex, body) ∈ regions ∧
+      operation ∈ body ∧
+      activatesSelectorAt selector localRow operation ∧
+      absoluteRow = starts.getD regionIndex 0 + localRow := by
+  simp only [activations, List.mem_flatMap] at hactivation
+  obtain ⟨region, hregion, hbody⟩ := hactivation
+  rcases region with ⟨regionIndex, body⟩
+  obtain ⟨operation, hoperation, hop⟩ := hbody
+  cases operation with
+  | enableGate gate operationRow =>
+      simp only [List.mem_singleton] at hop
+      have hselector : gate.selector.index = selector :=
+        (congrArg Prod.fst hop).symm
+      have habsolute :
+          starts.getD regionIndex 0 + operationRow = absoluteRow :=
+        (congrArg Prod.snd hop).symm
+      exact ⟨regionIndex, body, .enableGate gate operationRow,
+        operationRow, hregion, hoperation, ⟨hselector, rfl⟩,
+        habsolute.symm⟩
+  | enableLookup argument enabled operationRow =>
+      simp only [List.mem_map] at hop
+      obtain ⟨enabledSelector, henabledSelector, hpair⟩ := hop
+      have hselector : enabledSelector.index = selector :=
+        congrArg Prod.fst hpair
+      have habsolute :
+          starts.getD regionIndex 0 + operationRow = absoluteRow :=
+        congrArg Prod.snd hpair
+      exact ⟨regionIndex, body,
+        .enableLookup argument enabled operationRow, operationRow,
+        hregion, hoperation,
+        ⟨⟨enabledSelector, henabledSelector, hselector⟩, rfl⟩,
+        habsolute.symm⟩
+  | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+      constrainInstance =>
+      simp at hop
+
+private theorem mem_foldl_hashSet_insert_iff
+    (item : ℕ × ℕ) (items : List (ℕ × ℕ))
+    (initial : Std.HashSet (ℕ × ℕ)) :
+    item ∈ items.foldl (fun set next => set.insert next) initial ↔
+      item ∈ initial ∨ item ∈ items := by
+  induction items generalizing initial with
+  | nil =>
+      simp
+  | cons head tail ih =>
+      rw [List.foldl_cons, ih]
+      simp only [Std.HashSet.mem_insert, beq_iff_eq, List.mem_cons]
+      aesop
+
+private theorem activationSet_contains_iff
+    (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
+    (activation : ℕ × ℕ) :
+    (activationSet starts regions).contains activation = true ↔
+      activation ∈ activations starts regions := by
+  rw [← Std.HashSet.mem_iff_contains]
+  unfold activationSet
+  rw [mem_foldl_hashSet_insert_iff]
+  simp
+
+private theorem enabled_any_iff
+    (enabled : List Selector) (selector : ℕ) :
+    (enabled.any fun candidate => candidate.index == selector) = true ↔
+      SelectorEnabledAtIndex enabled selector := by
+  rw [List.any_eq_true]
+  simp only [beq_iff_eq, SelectorEnabledAtIndex]
+
+/-- Logical interface to the optimized Boolean/HashSet lookup-selector guard. -/
+theorem placedLookupSelectorRowsExact_iff
+    (operations : Operations F) (starts : List ℕ) :
+    PlacedLookupSelectorRowsExact operations starts ↔
+      ∀ region ∈ (indexedRegions operations 0).1,
+        ∀ operation ∈ region.2,
+          match operation with
+          | .enableLookup argument enabled row =>
+              ∀ expression ∈ argument.inputs,
+                ∀ selector ∈ expression.selectorIndices,
+                  SelectorEnabledAtIndex enabled selector ↔
+                    (selector, starts.getD region.1 0 + row) ∈
+                      activations starts
+                        (indexedRegions operations 0).1
+          | _ => True := by
+  unfold PlacedLookupSelectorRowsExact placedLookupSelectorRowsExactCheck
+  simp only [List.all_eq_true]
+  constructor
+  · intro hguard region hregion operation hoperation
+    have hoperationGuard := hguard region hregion operation hoperation
+    cases operation with
+    | enableLookup argument enabled row =>
+        simp only at hoperationGuard ⊢
+        rw [List.all_eq_true] at hoperationGuard
+        intro expression hexpression
+        have hexpressionGuard :=
+          hoperationGuard expression hexpression
+        rw [List.all_eq_true] at hexpressionGuard
+        intro selector hselector
+        have hselectorGuard :=
+          hexpressionGuard selector hselector
+        rw [beq_iff_eq, Bool.eq_iff_iff,
+          enabled_any_iff, activationSet_contains_iff] at hselectorGuard
+        exact hselectorGuard
+    | assignAdvice | assignFixed | enableGate | constrainEqual |
+        constrainConstant | constrainInstance =>
+        trivial
+  · intro hguard region hregion operation hoperation
+    have hoperationGuard := hguard region hregion operation hoperation
+    cases operation with
+    | enableLookup argument enabled row =>
+        simp only at hoperationGuard ⊢
+        rw [List.all_eq_true]
+        intro expression hexpression
+        have hexpressionGuard :=
+          hoperationGuard expression hexpression
+        rw [List.all_eq_true]
+        intro selector hselector
+        have hselectorGuard :=
+          hexpressionGuard selector hselector
+        rw [beq_iff_eq, Bool.eq_iff_iff,
+          enabled_any_iff, activationSet_contains_iff]
+        exact hselectorGuard
+    | assignAdvice | assignFixed | enableGate | constrainEqual |
+        constrainConstant | constrainInstance =>
+        rfl
+
+private theorem indexedRegions_index_ge
+    (operations : Operations F) (initial : ℕ)
+    {region : ℕ} {body : RegionOperations F}
+    (hregion : (region, body) ∈ (indexedRegions operations initial).1) :
+    initial ≤ region := by
+  induction operations generalizing initial with
+  | nil =>
+      simp [indexedRegions] at hregion
+  | cons operation rest ih =>
+      cases operation with
+      | region name headBody =>
+          simp only [indexedRegions, List.mem_cons] at hregion
+          rcases hregion with hhead | hrest
+          · exact le_of_eq (congrArg Prod.fst hhead).symm
+          · exact Nat.le_add_right initial 1 |>.trans
+              (ih (initial + 1) hrest)
+      | constrainInstance cell column row =>
+          exact ih initial (by simpa only [indexedRegions] using hregion)
+      | loadTable table values =>
+          exact ih initial (by simpa only [indexedRegions] using hregion)
+
+private theorem indexedRegions_body_unique
+    {operations : Operations F} {initial region : ℕ}
+    {left right : RegionOperations F}
+    (hleft : (region, left) ∈ (indexedRegions operations initial).1)
+    (hright : (region, right) ∈ (indexedRegions operations initial).1) :
+    left = right := by
+  induction operations generalizing initial region left right with
+  | nil =>
+      simp [indexedRegions] at hleft
+  | cons operation rest ih =>
+      cases operation with
+      | region name body =>
+          simp only [indexedRegions, List.mem_cons] at hleft hright
+          rcases hleft with hleft | hleft
+          · rcases hright with hright | hright
+            · exact
+                (congrArg Prod.snd hleft).trans
+                  (congrArg Prod.snd hright).symm
+            · have hregion : region = initial := congrArg Prod.fst hleft
+              subst region
+              have hindex :=
+                indexedRegions_index_ge rest (initial + 1) hright
+              omega
+          · rcases hright with hright | hright
+            · have hregion : region = initial := congrArg Prod.fst hright
+              subst region
+              have hindex :=
+                indexedRegions_index_ge rest (initial + 1) hleft
+              omega
+            · exact ih hleft hright
+      | constrainInstance cell column row =>
+          exact ih hleft hright
+      | loadTable table values =>
+          exact ih hleft hright
+
+/-- Globally sequential fallback starts separate every pair of distinct regions. -/
+theorem globallyDisjointStarts_intervalsDisjoint
+    {shapes : List RegionShape} {left right : RegionShape}
+    (hleft : left ∈ shapes) (hright : right ∈ shapes)
+    (hindices : left.index ≠ right.index) :
+    RowIntervalsDisjoint
+      ((globallyDisjointStarts shapes).getD left.index 0) left.rowCount
+      ((globallyDisjointStarts shapes).getD right.index 0) right.rowCount := by
+  rw [globallyDisjointStarts_getD hleft,
+    globallyDisjointStarts_getD hright]
+  have hleftHeight := rowCount_le_fallbackStride_of_mem hleft
+  have hrightHeight := rowCount_le_fallbackStride_of_mem hright
+  rcases Nat.lt_or_gt_of_ne hindices with hlt | hgt
+  · left
+    calc
+      left.index * fallbackStride shapes + left.rowCount ≤
+          left.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hleftHeight _
+      _ = (left.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ right.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hlt)
+  · right
+    calc
+      right.index * fallbackStride shapes + right.rowCount ≤
+          right.index * fallbackStride shapes +
+            fallbackStride shapes :=
+        Nat.add_le_add_left hrightHeight _
+      _ = (right.index + 1) * fallbackStride shapes := by
+        rw [Nat.add_mul, one_mul]
+      _ ≤ left.index * fallbackStride shapes :=
+        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hgt)
+
+private theorem mem_activations_of_lookup_enabled
+    {regions : List (ℕ × RegionOperations F)} {starts : List ℕ}
+    {region : RegionIndex} {body : RegionOperations F}
+    (hregion : (region, body) ∈ regions)
+    {argument : LookupArgument F} {enabled : List Selector} {row selector : ℕ}
+    (hlookup : RegionOperation.enableLookup argument enabled row ∈ body)
+    (henabled : SelectorEnabledAtIndex enabled selector) :
+    (selector, starts.getD region 0 + row) ∈ activations starts regions := by
+  unfold activations
+  rw [List.mem_flatMap]
+  refine ⟨(region, body), hregion, ?_⟩
+  rw [List.mem_flatMap]
+  refine ⟨.enableLookup argument enabled row, hlookup, ?_⟩
+  simp only [List.mem_map]
+  obtain ⟨candidate, hcandidate, hindex⟩ := henabled
+  exact ⟨candidate, hcandidate, by simp [hindex]⟩
+
 end V1
 
 namespace SimpleFloorPlanner
