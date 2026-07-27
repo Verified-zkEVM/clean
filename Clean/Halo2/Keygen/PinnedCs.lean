@@ -575,18 +575,18 @@ theorem FormalCircuit.KeygenLawful.operationsKeygenCoherent
   simpa only [FormalCircuit.toOperations, program, counts,
     Configure.run, ConfigureCounts.ofConstraintSystem] using happlied
 
-/-- A lawful circuit's raw configure result allocates every lookup-input selector. -/
-theorem FormalCircuit.KeygenLawful.lookupSelectorsAllocated
-    {c : FormalCircuit F ConfigInput Config Input Output}
-    (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) :
+/-- A circuit meeting its configure requirements allocates every lookup-input selector. -/
+theorem FormalCircuit.lookupSelectorsAllocated
+    (c : FormalCircuit F ConfigInput Config Input Output)
+    (ci : ConfigInput)
+    (hrequirements : c.selectorRequirements ci
+      (ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F))) :
     (c.configure ci {}).2.LookupSelectorsAllocated := by
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hallocated :=
-    (FormalCircuit.KeygenLawful.selectorsAllocated
-      hlawful ci counts).lookups
+    (c.selectorsAllocated ci counts hrequirements).lookups
   simpa only [ConstraintSystem.LookupSelectorsAllocated, program, counts,
     Configure.run, ConfigureCounts.ofConstraintSystem,
     ConfigureDelta.apply, List.nil_append] using hallocated
@@ -598,20 +598,24 @@ circuits.
 theorem FormalCircuit.KeygenLawful.closeWithOperations_eq_raw
     {c : FormalCircuit F ConfigInput Config Input Output}
     (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) (input : Var Input F) :
+    (ci : ConfigInput) (input : Var Input F)
+    (hrequirements : c.selectorRequirements ci
+      (ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F))) :
     (c.configure ci {}).2.closeWithOperations (c.toOperations ci input) =
       (c.configure ci {}).2 :=
   ConstraintSystem.closeWithOperations_eq_self
     (hlawful.operationsKeygenCoherent ci input)
-    (hlawful.lookupSelectorsAllocated ci)
+    (c.lookupSelectorsAllocated ci hrequirements)
 
 /-- The canonical compiler already equals raw configure on every lawful circuit. -/
 theorem FormalCircuit.KeygenLawful.toConstraintSystem_eq_raw
     {c : FormalCircuit F ConfigInput Config Input Output}
     (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) (input : Var Input F) :
+    (ci : ConfigInput) (input : Var Input F)
+    (hrequirements : c.selectorRequirements ci
+      (ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F))) :
     c.toConstraintSystem ci input = (c.configure ci {}).2 :=
-  hlawful.closeWithOperations_eq_raw ci input
+  hlawful.closeWithOperations_eq_raw ci input hrequirements
 
 end FormalCircuit
 

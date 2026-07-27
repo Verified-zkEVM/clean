@@ -99,15 +99,12 @@ def keygenRequirements : KeygenRequirements Fp Config where
 theorem add_keygenLawful :
     add.KeygenLawful keygenRequirements := by
   constructor
-  · intro _ _
-    change ({} : ConfigureDelta Fp).SelectorsAllocated _
-    exact ⟨by simp, by simp [lookupInputSelectorBound]⟩
-  · intro cfg counts offset input region
-    simp only [add, keygenRequirements, Configure.output_pure,
-      RegionCircuit.operations_bind, operations_enable, operations_copyAdvice,
-      RegionCircuit.output_bind, List.forall_append]
-    rw [operations_assignAdvice]
-    simp [RegionOperation.KeygenRegistered]
+  intro cfg counts offset input region
+  simp only [add, keygenRequirements, Configure.output_pure,
+    RegionCircuit.operations_bind, operations_enable, operations_copyAdvice,
+    RegionCircuit.output_bind, List.forall_append]
+  rw [operations_assignAdvice]
+  simp [RegionOperation.KeygenRegistered]
 
 /-- The layouter-level add: `add` in its own region, named once here as in the Rust
 chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/

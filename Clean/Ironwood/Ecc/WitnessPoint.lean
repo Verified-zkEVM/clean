@@ -123,21 +123,17 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 /-- Configure/synthesis keygen law for the identity-permitting point witness. -/
 theorem point_keygenLawful : point.KeygenLawful := by
   constructor
-  · rintro ⟨x, y⟩ counts
-    constructor
-    · simp [point, configure, pointGate, pointNonIdGate]
-    · simp [point, configure, lookupInputSelectorBound]
-  · rintro ⟨x, y⟩ counts offset input region
-    simp only [point, configure, Configure.output_bind,
-      Configure.output_selector,
-      Configure.output_pure, Configure.delta_bind, Configure.delta_selector,
-      Configure.delta_createGate, Configure.delta_pure,
-      ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
-      RegionCircuit.operations_bind, operations_enable,
-      operations_assignAdvice,
-      output_assignAdvice, RegionCircuit.operations_pure,
-      List.forall_append]
-    simp [RegionOperation.KeygenRegistered]
+  rintro ⟨x, y⟩ counts offset input region
+  simp only [point, configure, Configure.output_bind,
+    Configure.output_selector,
+    Configure.output_pure, Configure.delta_bind, Configure.delta_selector,
+    Configure.delta_createGate, Configure.delta_pure,
+    ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+    RegionCircuit.operations_bind, operations_enable,
+    operations_assignAdvice,
+    output_assignAdvice, RegionCircuit.operations_pure,
+    List.forall_append]
+  simp [RegionOperation.KeygenRegistered]
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -178,10 +174,6 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
 /-- Configure/synthesis keygen law for the non-identity point witness. -/
 theorem pointNonId_keygenLawful : pointNonId.KeygenLawful where
-  selectorsAllocated := by
-    intro configInput counts
-    exact FormalRegionCircuit.KeygenLawful.selectorsAllocated
-      point_keygenLawful configInput counts
   registered := by
     rintro ⟨x, y⟩ counts offset input region
     simp only [pointNonId, configure, Configure.output_bind,

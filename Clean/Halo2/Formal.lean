@@ -250,18 +250,14 @@ data.
 The law is stated over arbitrary initial allocation counts so child circuits compose
 inside a parent's configure program. Append-only configure metadata records the exact
 local contributions; synthesis may enable those arguments plus explicit arguments
-required from its caller. All locally emitted selectors must fit below the program's
-final selector count.
+required from its caller. Selector allocation is carried compositionally by the
+mandatory `ElaboratedConfigure`, independently of this cross-phase registration law.
 -/
 structure FormalCircuit.KeygenLawful
     {ConfigInput Config : Type}
     [CircuitType Input] [CircuitType Output]
     (self : FormalCircuit F ConfigInput Config Input Output)
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
-  selectorsAllocated :
-    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
-    ((self.configure configInput).delta counts).SelectorsAllocated
-      ((self.configure configInput).finalCounts counts).numSelectors
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (input : Var Input F) (i : RegionIndex),
@@ -277,6 +273,25 @@ instance (self : FormalCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
   self.elaboratedConfigure input
+
+/--
+Selector allocation borrowed from the incoming configure state. Complete configure
+programs normally reduce this to `True`; reusable gadgets may require selectors carried
+by `ConfigInput` to have been allocated by their caller.
+-/
+def selectorRequirements
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
+  (self.elaboratedConfigure input).selectorRequirements counts
+
+/-- Local gate and lookup selectors are allocated whenever the caller requirements hold. -/
+theorem selectorsAllocated
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.selectorRequirements input counts) :
+    ((self.configure input).delta counts).SelectorsAllocated
+      ((self.configure input).finalCounts counts).numSelectors :=
+  (self.elaboratedConfigure input).selectorsAllocated counts hrequirements
 
 /-- The output variable of the circuit (via the elaborated metadata). -/
 def output (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
@@ -622,10 +637,6 @@ structure FormalRegionCircuit.KeygenLawful
     [CircuitType Input] [CircuitType Output]
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
-  selectorsAllocated :
-    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
-    ((self.configure configInput).delta counts).SelectorsAllocated
-      ((self.configure configInput).finalCounts counts).numSelectors
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (offset : ℕ) (input : Var Input F) (region : RegionIndex),
@@ -643,6 +654,21 @@ instance (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
   self.elaboratedConfigure input
+
+/-- Region-level counterpart of `FormalCircuit.selectorRequirements`. -/
+def selectorRequirements
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
+  (self.elaboratedConfigure input).selectorRequirements counts
+
+/-- Region-level counterpart of `FormalCircuit.selectorsAllocated`. -/
+theorem selectorsAllocated
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.selectorRequirements input counts) :
+    ((self.configure input).delta counts).SelectorsAllocated
+      ((self.configure input).finalCounts counts).numSelectors :=
+  (self.elaboratedConfigure input).selectorsAllocated counts hrequirements
 
 /-- The output variable of the region circuit, in the ambient region. -/
 def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
@@ -832,8 +858,6 @@ theorem KeygenLawful.toFormal
     {requirements : KeygenRequirements F ConfigInput}
     (hlawful : child.KeygenLawful requirements) (name : String := child.name) :
     (child.toFormal name).KeygenLawful requirements where
-  selectorsAllocated :=
-    FormalRegionCircuit.KeygenLawful.selectorsAllocated hlawful
   registered := by
     intro configInput counts input region
     have hregistered :=
