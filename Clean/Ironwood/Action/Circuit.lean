@@ -63,14 +63,12 @@ def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Ga
   let anchor : Expression Fp Query := queryAdvice (advices 5) 0
   let enableSpends : Expression Fp Query := queryAdvice (advices 6) 0
   let enableOutputs : Expression Fp Query := queryAdvice (advices 7) 0
-  { name := "Orchard circuit checks"
-    selector := qOrchard
-    queriedCells := [vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs]
-    constraints := Constraints.withSelector qOrchard
-      [ ("v_old - v_new = magnitude * sign", vOld - vNew - magnitude * sign),
-        ("Either v_old = 0, or root = anchor", vOld * (root - anchor)),
-        ("v_old = 0 or enable_spends = 1", vOld * ((1 : Fp) - enableSpends)),
-        ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ] }
+  Gate.withSelector "Orchard circuit checks" qOrchard
+    [vOld, vNew, magnitude, sign, root, anchor, enableSpends, enableOutputs]
+    [ ("v_old - v_new = magnitude * sign", vOld - vNew - magnitude * sign),
+      ("Either v_old = 0, or root = anchor", vOld * (root - anchor)),
+      ("v_old = 0 or enable_spends = 1", vOld * ((1 : Fp) - enableSpends)),
+      ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ]
 
 /-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
 def configure (G : Generators) : Configure Fp Config := do

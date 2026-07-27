@@ -74,10 +74,8 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp :=
   let alpha : Expression Fp Query := queryAdvice cfg.adv1 0    -- alpha (cur)
   let sMinusLo130 : Expression Fp Query := queryAdvice cfg.adv1 1  -- s_minus_lo_130 (next)
   let s : Expression Fp Query := queryAdvice cfg.adv2 0        -- s (cur)
-  { name := "overflow checks"
-    selector := cfg.qOverflow
-    queriedCells := [z0, z130, eta, k254, alpha, sMinusLo130, s]
-    constraints :=
+  Gate.withSelector "overflow checks" cfg.qOverflow
+    [z0, z130, eta, k254, alpha, sMinusLo130, s] <|
     let twoPow124 : Expression Fp Query := (2 ^ 124 : Fp)
     -- Rust builds `two_pow_130 = two_pow_124 * Constant(1 << 6)`: a PRODUCT of two `Constant`
     -- expressions, NOT a single `2^130` constant. We reproduce that AST exactly (`k_254 *
@@ -91,9 +89,8 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp :=
     let loZero := k254 * (z130 - twoPow124)
     let sMinusLo130Check := k254 * sMinusLo130
     let canonicity := ((1 : Fp) - k254) * ((1 : Fp) - z130 * eta) * sMinusLo130
-    Constraints.withSelector cfg.qOverflow
-      [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
-        ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ] }
+    [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
+      ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ]
 
 /-- Enable equality on the three advice columns, allocate the `q_mul_overflow` selector, register
 the overflow gate. The `lookup_config` is handed down by the chip assembly, already configured by

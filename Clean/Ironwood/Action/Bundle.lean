@@ -956,7 +956,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · -- Merkle path validity + the anchor check
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S.1 hM2S.1
-    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.2.1
     rw [hOv, hOr, hOa] at h
     refine ⟨_, by with_unfolding_all exact hRoot, ?_, by with_unfolding_all exact h⟩
@@ -967,13 +967,13 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
   · -- `v_old − v_new = magnitude · sign`
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
-    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.1
     rw [hOv, hOn, hOm, hOs] at h
     linear_combination h
   · -- the enable-flag checks
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
-    simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall] at hGate
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
     refine ⟨?_, ?_⟩
     · have h := hGate.2.2.1
       rw [hOv, hOes] at h
@@ -1739,7 +1739,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         · exact hOa
         · exact hOes
         · exact hOeo
-        · simp only [orchardGate, Constraints.withSelector, circuit_norm,
+        · simp only [orchardGate, Gate.withSelector, circuit_norm,
             List.Forall]
           refine ⟨?_, ?_, ?_, ?_⟩
           · rw [hOv, hOn, hOm, hOs]
@@ -1877,7 +1877,7 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   obtain ⟨ha10, -, -, -, ha14, ha15, -, -, -, -, hG1⟩ := h1
   obtain ⟨ha20, -, -, -, ha24, ha25, -, -, -, -, hG2⟩ := h2
   obtain ⟨ha30, -, -, -, ha34, ha35, -, -, -, -, hG3⟩ := h3
-  simp only [orchardGate, Constraints.withSelector, circuit_norm,
+  simp only [orchardGate, Gate.withSelector, circuit_norm,
     List.Forall] at hG0 hG1 hG2 hG3
   have e0 := hG0.2.1
   have e1 := hG1.2.1
@@ -2004,7 +2004,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
       Nat.mul_one, Nat.add_zero]
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
-      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
       refine ⟨?_, ?_, ?_, ?_⟩
       · rw [w2, w3, w1, w0]
         ring
@@ -2016,7 +2016,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         ring
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw1
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
-      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
       refine ⟨?_, ?_, ?_, ?_⟩
       · rw [w2, w3, w1, w0]
         ring
@@ -2028,7 +2028,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         ring
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw2
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
-      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
       refine ⟨?_, ?_, ?_, ?_⟩
       · rw [w2, w3, w1, w0]
         ring
@@ -2040,7 +2040,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
         ring
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw3
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
-      simp only [orchardGate, Constraints.withSelector, circuit_norm, List.Forall]
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
       refine ⟨?_, ?_, ?_, ?_⟩
       · rw [w2, w3, w1, w0]
         ring

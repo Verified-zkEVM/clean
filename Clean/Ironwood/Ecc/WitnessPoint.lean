@@ -22,6 +22,7 @@ structure Config where
   y : Column .advice
 
 /-- `y² = x³ + b`, the short-Weierstrass curve equation over the point's columns. -/
+@[selector_free]
 def curveEqn (x y : Column .advice) : Expression Fp Query :=
   let x : Expression Fp Query := queryAdvice x 0
   let y : Expression Fp Query := queryAdvice y 0
@@ -38,13 +39,38 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
     let qPoint := querySelector qPoint
     [ ⟨ "x == 0 v on_curve", qPoint * queryAdvice x 0 * curveEqn x y ⟩,
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
+  wellFormed := by
+    intro
+    rw [Gate.WellFormed]
+    intro constraint hconstraint
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
+    rcases hconstraint with rfl | rfl
+    all_goals
+      intro base scale hscale hzero
+      have hcurveEval :
+          (curveEqn x y).eval
+              (Expression.replaceSelectorValue qPoint scale base) =
+            (curveEqn x y).eval
+              (Expression.enabledGateValuation qPoint base) := by
+        apply Expression.eval_eq_of_selectorFree (curveEqn x y) (by selector_free)
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+      simp only [querySelector, queryAdvice, Expression.eval,
+        Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
+      rw [← hcurveEval, one_mul]
+      rcases mul_eq_zero.mp hzero with hscaled | hcurve
+      · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
+      · exact mul_eq_zero.mpr (.inr hcurve)
 
 /-- The "witness non-identity point" gate. -/
-def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp where
-  name := "witness non-identity point"
-  selector := qPointNonId
-  queriedCells := [queryAdvice x 0, queryAdvice y 0]
-  constraints := [⟨ "on_curve", querySelector qPointNonId * curveEqn x y ⟩]
+def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp :=
+  Gate.withSelector "witness non-identity point" qPointNonId
+    [queryAdvice x 0, queryAdvice y 0]
+    [("on_curve", curveEqn x y)]
 
 def configure (x y : Column .advice) : Configure Fp Config := do
   let qPoint ← selector

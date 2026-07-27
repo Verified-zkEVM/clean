@@ -92,12 +92,10 @@ def decomposeGate (cfg : Config) : Gate Fp :=
   let b1 : Expression Fp Query := queryAdvice cfg.b1 1
   let b2 : Expression Fp Query := queryAdvice cfg.b2 1
   let l : Expression Fp Query := queryAdvice cfg.lWhole 1
-  { name := "Decomposition check"
-    selector := cfg.qDecompose
+  Gate.withSelector "Decomposition check" cfg.qDecompose
     -- `l_whole` (advices[4] @ next) is queried first in the Rust closure, ahead of the
     -- cur-row cells and the remaining next-row cells.
-    queriedCells := [l, aWhole, bWhole, cWhole, leftNode, rightNode, z1A, z1B, b1, b2]
-    constraints :=
+    [l, aWhole, bWhole, cWhole, leftNode, rightNode, z1A, z1B, b1, b2] <|
     let twoPow5 : Expression Fp Query := (2 ^ 5 : Fp)
     let twoPow10 : Expression Fp Query := (2 ^ 10 : Fp)
     let twoPow240 : Expression Fp Query := (2 ^ 240 : Fp)
@@ -107,9 +105,8 @@ def decomposeGate (cfg : Config) : Gate Fp :=
     let leftCheck := z1A + (b0 + b1 * twoPow10) * twoPow240 - leftNode
     let rightCheck := b2 + cWhole * twoPow5 - rightNode
     let b1b2Check := z1B - (b1 + b2 * twoPow5)
-    Constraints.withSelector cfg.qDecompose
-      [ ("l_check", lCheck), ("left_check", leftCheck),
-        ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ] }
+    [ ("l_check", lCheck), ("left_check", leftCheck),
+      ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ]
 
 /-- The value-level decomposition spec, over the ten cell values.
 Uses the plain `(2^k : Fp)` literals (definitionally the `twoPow*` constants). -/

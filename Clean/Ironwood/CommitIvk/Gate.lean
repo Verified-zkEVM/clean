@@ -46,30 +46,27 @@ def gate (cfg : Config) : Gate Fp :=
   let z13C : Expression Fp Query := queryAdvice (cfg.advices 6) 1
   let b2CPrime : Expression Fp Query := queryAdvice (cfg.advices 7) 1
   let z14B2CPrime : Expression Fp Query := queryAdvice (cfg.advices 8) 1
-  { name := "CommitIvk canonicity check"
-    selector := cfg.qCommitIvk
-    queriedCells :=
-      [ak, nk, a, bWhole, c, dWhole, b0, b1, b2, d0, d1,
-       z13A, aPrime, z13APrime, z13C, b2CPrime, z14B2CPrime]
-    constraints := Constraints.withSelector cfg.qCommitIvk
-      [("b1_bool_check", boolCheck b1),
-       ("d1_bool_check", boolCheck d1),
-       ("b_decomposition_check",
-        bWhole - (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp))),
-       ("d_decomposition_check", dWhole - (d0 + d1 * (2 ^ 9 : Fp))),
-       ("ak_decomposition_check",
-        a + b0 * (2 ^ 250 : Fp) + b1 * (2 ^ 254 : Fp) - ak),
-       ("nk_decomposition_check",
-        b2 + c * (2 ^ 5 : Fp) + d0 * (2 ^ 245 : Fp) + d1 * (2 ^ 254 : Fp) - nk),
-       ("b0_canon_check", b1 * b0),
-       ("z13_a_check", b1 * z13A),
-       ("a_prime_check", a + (2 ^ 130 : Fp) - (tP : Fp) - aPrime),
-       ("z13_a_prime", b1 * z13APrime),
-       ("c0_canon_check", d1 * d0),
-       ("z13_c_check", d1 * z13C),
-       ("b2_c_prime_check",
-        b2 + c * (2 ^ 5 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b2CPrime),
-       ("z14_b2_c_prime", d1 * z14B2CPrime)] }
+  Gate.withSelector "CommitIvk canonicity check" cfg.qCommitIvk
+    [ak, nk, a, bWhole, c, dWhole, b0, b1, b2, d0, d1,
+     z13A, aPrime, z13APrime, z13C, b2CPrime, z14B2CPrime]
+    [("b1_bool_check", boolCheck b1),
+     ("d1_bool_check", boolCheck d1),
+     ("b_decomposition_check",
+      bWhole - (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp))),
+     ("d_decomposition_check", dWhole - (d0 + d1 * (2 ^ 9 : Fp))),
+     ("ak_decomposition_check",
+      a + b0 * (2 ^ 250 : Fp) + b1 * (2 ^ 254 : Fp) - ak),
+     ("nk_decomposition_check",
+      b2 + c * (2 ^ 5 : Fp) + d0 * (2 ^ 245 : Fp) + d1 * (2 ^ 254 : Fp) - nk),
+     ("b0_canon_check", b1 * b0),
+     ("z13_a_check", b1 * z13A),
+     ("a_prime_check", a + (2 ^ 130 : Fp) - (tP : Fp) - aPrime),
+     ("z13_a_prime", b1 * z13APrime),
+     ("c0_canon_check", d1 * d0),
+     ("z13_c_check", d1 * z13C),
+     ("b2_c_prime_check",
+      b2 + c * (2 ^ 5 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b2CPrime),
+     ("z14_b2_c_prime", d1 * z14B2CPrime)]
 
 /-- Rust `CommitIvkChip::configure` (`commit_ivk.rs:60-235`), VK-exact. -/
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do

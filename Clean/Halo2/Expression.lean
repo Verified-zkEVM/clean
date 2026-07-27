@@ -244,6 +244,58 @@ def eval (v : L → F) : Expression F L → F
   | add x y => eval v x + eval v y
   | mul x y => eval v x * eval v y
 
+/-- Replace one selector's value while leaving every other query unchanged. -/
+def replaceSelectorValue
+    (selector : Selector) (value : F) (base : Query → F) : Query → F
+  | .selector other =>
+      if other.index = selector.index then value
+      else base (.selector other)
+  | query => base query
+
+/--
+The valuation used by Clean for one enabled gate: its own selector is one,
+foreign selectors are zero, and ordinary queries retain their supplied values.
+-/
+def enabledGateValuation
+    (selector : Selector) (base : Query → F) : Query → F
+  | .selector other =>
+      if other.index = selector.index then 1 else 0
+  | query => base query
+
+/--
+A selector-free expression has the same evaluation under valuations agreeing on
+fixed, advice, and instance queries.
+-/
+theorem eval_eq_of_selectorFree
+    (expression : Expression F Query)
+    (hfree : expression.SelectorFree)
+    (left right : Query → F)
+    (hfixed : ∀ column rotation,
+      left (.fixed column rotation) = right (.fixed column rotation))
+    (hadvice : ∀ column rotation,
+      left (.advice column rotation) = right (.advice column rotation))
+    (hinstance : ∀ column rotation,
+      left (.instance column rotation) = right (.instance column rotation)) :
+    expression.eval left = expression.eval right := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp [Expression.SelectorFree] at hfree
+      | fixed column rotation =>
+          exact hfixed column rotation
+      | advice column rotation =>
+          exact hadvice column rotation
+      | «instance» column rotation =>
+          exact hinstance column rotation
+  | const value => rfl
+  | add leftExpression rightExpression ihLeft ihRight =>
+      simp only [Expression.SelectorFree] at hfree
+      simp only [eval, ihLeft hfree.1, ihRight hfree.2]
+  | mul leftExpression rightExpression ihLeft ihRight =>
+      simp only [Expression.SelectorFree] at hfree
+      simp only [eval, ihLeft hfree.1, ihRight hfree.2]
+
 /-- Rename/project the variables of an expression. Eval-compatibility is
 `eval_mapVar` below. Used to project circuit-writing gates (`L := Query`) to the
 VK-comparison form over bare query indices. -/

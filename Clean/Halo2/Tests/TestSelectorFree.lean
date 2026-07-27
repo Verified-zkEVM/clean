@@ -42,8 +42,10 @@ example (a : Column .advice) (q : Column .fixed) (i : Column .instance) :
   selector_free
 
 -- The exact public API: the selector-freedom proof is inserted by default.
-example (s : Selector) (a b c d : Column .advice) : List (Constraint F) :=
-  Constraints.withSelector s
+example (s : Selector) (a b c d : Column .advice) : Gate F :=
+  Gate.withSelector "representative" s
+    [queryAdvice a 0, queryAdvice b 0, queryAdvice c 0, queryAdvice d 0,
+      queryAdvice a 1, queryAdvice b (-1)]
     [("product",
       (queryAdvice a 0 * queryAdvice b 0) *
         (queryAdvice c 0 - queryAdvice d 0)),

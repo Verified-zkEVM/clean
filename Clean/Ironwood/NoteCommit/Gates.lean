@@ -50,14 +50,12 @@ def gate (cfg : Config) : Gate Fp :=
   let b1 : Expression Fp Query := queryAdvice cfg.colR 0
   let b2 : Expression Fp Query := queryAdvice cfg.colM 1
   let b3 : Expression Fp Query := queryAdvice cfg.colR 1
-  { name := "NoteCommit MessagePiece b"
-    selector := cfg.qNotecommitB
-    queriedCells := [b, b0, b1, b2, b3]
-    constraints := Constraints.withSelector cfg.qNotecommitB
-      [("bool_check b_1", boolCheck b1),
-       ("bool_check b_2", boolCheck b2),
-       ("decomposition",
-        b - (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp)))] }
+  Gate.withSelector "NoteCommit MessagePiece b" cfg.qNotecommitB
+    [b, b0, b1, b2, b3]
+    [("bool_check b_1", boolCheck b1),
+     ("bool_check b_2", boolCheck b2),
+     ("decomposition",
+      b - (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp)))]
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitB ← selector
@@ -84,14 +82,12 @@ def gate (cfg : Config) : Gate Fp :=
   let d1 : Expression Fp Query := queryAdvice cfg.colR 0
   let d2 : Expression Fp Query := queryAdvice cfg.colM 1
   let d3 : Expression Fp Query := queryAdvice cfg.colR 1
-  { name := "NoteCommit MessagePiece d"
-    selector := cfg.qNotecommitD
-    queriedCells := [d, d0, d1, d2, d3]
-    constraints := Constraints.withSelector cfg.qNotecommitD
-      [("bool_check d_0", boolCheck d0),
-       ("bool_check d_1", boolCheck d1),
-       ("decomposition",
-        d - (d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) + d3 * (2 ^ 10 : Fp)))] }
+  Gate.withSelector "NoteCommit MessagePiece d" cfg.qNotecommitD
+    [d, d0, d1, d2, d3]
+    [("bool_check d_0", boolCheck d0),
+     ("bool_check d_1", boolCheck d1),
+     ("decomposition",
+      d - (d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) + d3 * (2 ^ 10 : Fp)))]
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitD ← selector
@@ -115,11 +111,9 @@ def gate (cfg : Config) : Gate Fp :=
   let e : Expression Fp Query := queryAdvice cfg.colL 0
   let e0 : Expression Fp Query := queryAdvice cfg.colM 0
   let e1 : Expression Fp Query := queryAdvice cfg.colR 0
-  { name := "NoteCommit MessagePiece e"
-    selector := cfg.qNotecommitE
-    queriedCells := [e, e0, e1]
-    constraints := Constraints.withSelector cfg.qNotecommitE
-      [("decomposition", e - (e0 + e1 * (2 ^ 6 : Fp)))] }
+  Gate.withSelector "NoteCommit MessagePiece e" cfg.qNotecommitE
+    [e, e0, e1]
+    [("decomposition", e - (e0 + e1 * (2 ^ 6 : Fp)))]
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitE ← selector
@@ -144,12 +138,10 @@ def gate (cfg : Config) : Gate Fp :=
   let g0 : Expression Fp Query := queryAdvice cfg.colM 0
   let g1 : Expression Fp Query := queryAdvice cfg.colL 1
   let g2 : Expression Fp Query := queryAdvice cfg.colM 1
-  { name := "NoteCommit MessagePiece g"
-    selector := cfg.qNotecommitG
-    queriedCells := [g, g0, g1, g2]
-    constraints := Constraints.withSelector cfg.qNotecommitG
-      [("bool_check g_0", boolCheck g0),
-       ("decomposition", g - (g0 + g1 * (2 : Fp) + g2 * (2 ^ 10 : Fp)))] }
+  Gate.withSelector "NoteCommit MessagePiece g" cfg.qNotecommitG
+    [g, g0, g1, g2]
+    [("bool_check g_0", boolCheck g0),
+     ("decomposition", g - (g0 + g1 * (2 : Fp) + g2 * (2 ^ 10 : Fp)))]
 
 def configure (colL colM : Column .advice) : Configure Fp Config := do
   let qNotecommitG ← selector
@@ -174,12 +166,10 @@ def gate (cfg : Config) : Gate Fp :=
   let h : Expression Fp Query := queryAdvice cfg.colL 0
   let h0 : Expression Fp Query := queryAdvice cfg.colM 0
   let h1 : Expression Fp Query := queryAdvice cfg.colR 0
-  { name := "NoteCommit MessagePiece h"
-    selector := cfg.qNotecommitH
-    queriedCells := [h, h0, h1]
-    constraints := Constraints.withSelector cfg.qNotecommitH
-      [("bool_check h_1", boolCheck h1),
-       ("decomposition", h - (h0 + h1 * (2 ^ 5 : Fp)))] }
+  Gate.withSelector "NoteCommit MessagePiece h" cfg.qNotecommitH
+    [h, h0, h1]
+    [("bool_check h_1", boolCheck h1),
+     ("decomposition", h - (h0 + h1 * (2 ^ 5 : Fp)))]
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitH ← selector
@@ -212,15 +202,13 @@ def gate (cfg : Config) : Gate Fp :=
   let aPrime : Expression Fp Query := queryAdvice cfg.colR 1
   let z13A : Expression Fp Query := queryAdvice cfg.colZ 0
   let z13APrime : Expression Fp Query := queryAdvice cfg.colZ 1
-  { name := "NoteCommit input g_d"
-    selector := cfg.qNotecommitGd
-    queriedCells := [gdX, b0, b1, a, aPrime, z13A, z13APrime]
-    constraints := Constraints.withSelector cfg.qNotecommitGd
-      [("decomposition", a + b0 * (2 ^ 250 : Fp) + b1 * (2 ^ 254 : Fp) - gdX),
-       ("a_prime_check", a + (2 ^ 130 : Fp) - (tP : Fp) - aPrime),
-       ("b_1 = 1 => b_0", b1 * b0),
-       ("b_1 = 1 => z13_a", b1 * z13A),
-       ("b_1 = 1 => z13_a_prime", b1 * z13APrime)] }
+  Gate.withSelector "NoteCommit input g_d" cfg.qNotecommitGd
+    [gdX, b0, b1, a, aPrime, z13A, z13APrime]
+    [("decomposition", a + b0 * (2 ^ 250 : Fp) + b1 * (2 ^ 254 : Fp) - gdX),
+     ("a_prime_check", a + (2 ^ 130 : Fp) - (tP : Fp) - aPrime),
+     ("b_1 = 1 => b_0", b1 * b0),
+     ("b_1 = 1 => z13_a", b1 * z13A),
+     ("b_1 = 1 => z13_a_prime", b1 * z13APrime)]
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitGd ← selector
@@ -251,15 +239,13 @@ def gate (cfg : Config) : Gate Fp :=
   let b3CPrime : Expression Fp Query := queryAdvice cfg.colR 1
   let z13C : Expression Fp Query := queryAdvice cfg.colZ 0
   let z14B3CPrime : Expression Fp Query := queryAdvice cfg.colZ 1
-  { name := "NoteCommit input pk_d"
-    selector := cfg.qNotecommitPkd
-    queriedCells := [pkdX, b3, d0, c, b3CPrime, z13C, z14B3CPrime]
-    constraints := Constraints.withSelector cfg.qNotecommitPkd
-      [("decomposition", b3 + c * (2 ^ 4 : Fp) + d0 * (2 ^ 254 : Fp) - pkdX),
-       ("b3_c_prime_check",
-        b3 + c * (2 ^ 4 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b3CPrime),
-       ("d_0 = 1 => z13_c", d0 * z13C),
-       ("d_0 = 1 => z14_b3_c_prime", d0 * z14B3CPrime)] }
+  Gate.withSelector "NoteCommit input pk_d" cfg.qNotecommitPkd
+    [pkdX, b3, d0, c, b3CPrime, z13C, z14B3CPrime]
+    [("decomposition", b3 + c * (2 ^ 4 : Fp) + d0 * (2 ^ 254 : Fp) - pkdX),
+     ("b3_c_prime_check",
+      b3 + c * (2 ^ 4 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b3CPrime),
+     ("d_0 = 1 => z13_c", d0 * z13C),
+     ("d_0 = 1 => z14_b3_c_prime", d0 * z14B3CPrime)]
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitPkd ← selector
@@ -286,11 +272,9 @@ def gate (cfg : Config) : Gate Fp :=
   let d2 : Expression Fp Query := queryAdvice cfg.colM 0
   let d3 : Expression Fp Query := queryAdvice cfg.colR 0
   let e0 : Expression Fp Query := queryAdvice cfg.colZ 0
-  { name := "NoteCommit input value"
-    selector := cfg.qNotecommitValue
-    queriedCells := [value, d2, d3, e0]
-    constraints := Constraints.withSelector cfg.qNotecommitValue
-      [("value_check", d2 + d3 * (2 ^ 8 : Fp) + e0 * (2 ^ 58 : Fp) - value)] }
+  Gate.withSelector "NoteCommit input value" cfg.qNotecommitValue
+    [value, d2, d3, e0]
+    [("value_check", d2 + d3 * (2 ^ 8 : Fp) + e0 * (2 ^ 58 : Fp) - value)]
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitValue ← selector
@@ -321,15 +305,13 @@ def gate (cfg : Config) : Gate Fp :=
   let e1FPrime : Expression Fp Query := queryAdvice cfg.colR 1
   let z13F : Expression Fp Query := queryAdvice cfg.colZ 0
   let z14E1FPrime : Expression Fp Query := queryAdvice cfg.colZ 1
-  { name := "NoteCommit input rho"
-    selector := cfg.qNotecommitRho
-    queriedCells := [rho, e1, g0, f, e1FPrime, z13F, z14E1FPrime]
-    constraints := Constraints.withSelector cfg.qNotecommitRho
-      [("decomposition", e1 + f * (2 ^ 4 : Fp) + g0 * (2 ^ 254 : Fp) - rho),
-       ("e1_f_prime_check",
-        e1 + f * (2 ^ 4 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - e1FPrime),
-       ("g_0 = 1 => z13_f", g0 * z13F),
-       ("g_0 = 1 => z14_e1_f_prime", g0 * z14E1FPrime)] }
+  Gate.withSelector "NoteCommit input rho" cfg.qNotecommitRho
+    [rho, e1, g0, f, e1FPrime, z13F, z14E1FPrime]
+    [("decomposition", e1 + f * (2 ^ 4 : Fp) + g0 * (2 ^ 254 : Fp) - rho),
+     ("e1_f_prime_check",
+      e1 + f * (2 ^ 4 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - e1FPrime),
+     ("g_0 = 1 => z13_f", g0 * z13F),
+     ("g_0 = 1 => z14_e1_f_prime", g0 * z14E1FPrime)]
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitRho ← selector
@@ -361,17 +343,15 @@ def gate (cfg : Config) : Gate Fp :=
   let g1G2Prime : Expression Fp Query := queryAdvice cfg.colR 1
   let z13G : Expression Fp Query := queryAdvice cfg.colZ 0
   let z13G1G2Prime : Expression Fp Query := queryAdvice cfg.colZ 1
-  { name := "NoteCommit input psi"
-    selector := cfg.qNotecommitPsi
-    queriedCells := [psi, h0, g1, h1, g2, g1G2Prime, z13G, z13G1G2Prime]
-    constraints := Constraints.withSelector cfg.qNotecommitPsi
-      [("decomposition",
-        g1 + g2 * (2 ^ 9 : Fp) + h0 * (2 ^ 249 : Fp) + h1 * (2 ^ 254 : Fp) - psi),
-       ("g1_g2_prime_check",
-        g1 + g2 * (2 ^ 9 : Fp) + (2 ^ 130 : Fp) - (tP : Fp) - g1G2Prime),
-       ("h_1 = 1 => h_0", h1 * h0),
-       ("h_1 = 1 => z13_g", h1 * z13G),
-       ("h_1 = 1 => z13_g1_g2_prime", h1 * z13G1G2Prime)] }
+  Gate.withSelector "NoteCommit input psi" cfg.qNotecommitPsi
+    [psi, h0, g1, h1, g2, g1G2Prime, z13G, z13G1G2Prime]
+    [("decomposition",
+      g1 + g2 * (2 ^ 9 : Fp) + h0 * (2 ^ 249 : Fp) + h1 * (2 ^ 254 : Fp) - psi),
+     ("g1_g2_prime_check",
+      g1 + g2 * (2 ^ 9 : Fp) + (2 ^ 130 : Fp) - (tP : Fp) - g1G2Prime),
+     ("h_1 = 1 => h_0", h1 * h0),
+     ("h_1 = 1 => z13_g", h1 * z13G),
+     ("h_1 = 1 => z13_g1_g2_prime", h1 * z13G1G2Prime)]
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitPsi ← selector
@@ -402,17 +382,15 @@ def gate (cfg : Config) : Gate Fp :=
   let z13J : Expression Fp Query := queryAdvice (cfg.advices 7) 1
   let jPrime : Expression Fp Query := queryAdvice (cfg.advices 8) 1
   let z13JPrime : Expression Fp Query := queryAdvice (cfg.advices 9) 1
-  { name := "y coordinate checks"
-    selector := cfg.qYCanon
-    queriedCells := [y, lsb, k0, k2, k3, j, z1J, z13J, jPrime, z13JPrime]
-    constraints := Constraints.withSelector cfg.qYCanon
-      [("k3_check", boolCheck k3),
-       ("j_check", j - (lsb + k0 * (2 : Fp) + z1J * (2 ^ 10 : Fp))),
-       ("y_check", y - (j + k2 * (2 ^ 250 : Fp) + k3 * (2 ^ 254 : Fp))),
-       ("j_prime_check", j + (2 ^ 130 : Fp) - (tP : Fp) - jPrime),
-       ("k_3 = 1 => k_2 = 0", k3 * k2),
-       ("k_3 = 1 => z13_j = 0", k3 * z13J),
-       ("k_3 = 1 => z13_j_prime = 0", k3 * z13JPrime)] }
+  Gate.withSelector "y coordinate checks" cfg.qYCanon
+    [y, lsb, k0, k2, k3, j, z1J, z13J, jPrime, z13JPrime]
+    [("k3_check", boolCheck k3),
+     ("j_check", j - (lsb + k0 * (2 : Fp) + z1J * (2 ^ 10 : Fp))),
+     ("y_check", y - (j + k2 * (2 ^ 250 : Fp) + k3 * (2 ^ 254 : Fp))),
+     ("j_prime_check", j + (2 ^ 130 : Fp) - (tP : Fp) - jPrime),
+     ("k_3 = 1 => k_2 = 0", k3 * k2),
+     ("k_3 = 1 => z13_j = 0", k3 * z13J),
+     ("k_3 = 1 => z13_j_prime = 0", k3 * z13JPrime)]
 
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let qYCanon ← selector

@@ -45,10 +45,9 @@ def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp 
     (x_r + x_q + x_p) * (x_p - x_q) * (x_p - x_q) - (y_p - y_q) * (y_p - y_q)
   let poly2 :=
     (y_r + y_q) * (x_p - x_q) - (y_p - y_q) * (x_q - x_r)
-  { name := "incomplete addition"
-    selector := qAddIncomplete
-    queriedCells := [x_p, y_p, x_q, y_q, x_r, y_r]
-    constraints := Constraints.withSelector qAddIncomplete [("x_r", poly1), ("y_r", poly2)] }
+  Gate.withSelector "incomplete addition" qAddIncomplete
+    [x_p, y_p, x_q, y_q, x_r, y_r]
+    [("x_r", poly1), ("y_r", poly2)]
 
 /-!
 ## The gadget

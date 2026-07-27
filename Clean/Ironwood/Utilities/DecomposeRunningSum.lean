@@ -113,11 +113,9 @@ def rangeCheckGate (W : ℕ) (cfg : Config) : Gate Fp :=
   let zCur : Expression Fp Query := queryAdvice cfg.z 0
   let zNext : Expression Fp Query := queryAdvice cfg.z 1
   let word := zCur - zNext * (((2 ^ W : ℕ) : Fp) : Expression Fp Query)
-  { name := "range check"
-    selector := cfg.qRangeCheck
-    queriedCells := [zCur, zNext]
-    constraints := Constraints.withSelector cfg.qRangeCheck
-      [("range check", rangeCheckExpr (2 ^ W) word)] }
+  Gate.withSelector "range check" cfg.qRangeCheck
+    [zCur, zNext]
+    [("range check", rangeCheckExpr (2 ^ W) word)]
 
 /-- Rust `RunningSumConfig::configure` (lines 70-99): equality on `z`, register the
 range-check gate on the given selector. -/

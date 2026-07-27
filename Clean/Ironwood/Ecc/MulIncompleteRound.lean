@@ -125,55 +125,44 @@ def forLoopPolys (cfg : Config) (yANext : Expression Fp Query) :
 
 /-- The `q_mul_1` gate: the witnessed `y_a` (in the `λ₁` column at the current row) equals the
 derived next-row `y_a`. -/
-def qMul1Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_1 == 1 checks"
-  selector := cfg.qMul1
+def qMul1Gate (cfg : Config) : Gate Fp :=
   -- `y_a(next)` is built before `y_a_witnessed` in the Rust closure, so the `Y_A` helper's
   -- atoms (xA/λ₁/λ₂ @ next) register ahead of `λ₁ @ cur`.
-  queriedCells :=
+  Gate.withSelector "q_mul_1 == 1 checks" cfg.qMul1
     [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
-      queryAdvice cfg.lambda1 0 ]
-  constraints :=
+      queryAdvice cfg.lambda1 0 ] <|
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
-    Constraints.withSelector cfg.qMul1
-      [("init y_a", yAWitnessed - yA cfg 1)]
+    [("init y_a", yAWitnessed - yA cfg 1)]
 
 /-- The `q_mul_2` gate: `x_p`/`y_p` are constant on the next row, plus the shared loop body with the
 next-row `y_a` derived. -/
-def qMul2Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_2 == 1 checks"
-  selector := cfg.qMul2
+def qMul2Gate (cfg : Config) : Gate Fp :=
   -- `y_a(next)` registers xA/λ₁/λ₂ @ next first; then the closure's own `x_p`/`y_p` lets;
   -- then `for_loop`'s queries (its cur-row atoms already deduped by the `Y_A`/`x_r` calls).
-  queriedCells :=
+  Gate.withSelector "q_mul_2 == 1 checks" cfg.qMul2
     [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
       queryAdvice cfg.xP 0, queryAdvice cfg.xP 1, queryAdvice cfg.yP 0, queryAdvice cfg.yP 1,
       queryAdvice cfg.z 0, queryAdvice cfg.z (-1), queryAdvice cfg.xA 0,
-      queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
-  constraints :=
+      queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let xPCur : Expression Fp Query := queryAdvice cfg.xP 0
     let xPNext : Expression Fp Query := queryAdvice cfg.xP 1
     let yPCur : Expression Fp Query := queryAdvice cfg.yP 0
     let yPNext : Expression Fp Query := queryAdvice cfg.yP 1
-    Constraints.withSelector cfg.qMul2
-      ([ ("x_p_check", xPCur - xPNext),
-         ("y_p_check", yPCur - yPNext) ]
-        ++ forLoopPolys cfg (yA cfg 1))
+    ([ ("x_p_check", xPCur - xPNext),
+       ("y_p_check", yPCur - yPNext) ]
+      ++ forLoopPolys cfg (yA cfg 1))
 
 /-- The `q_mul_3` gate: the loop body on the last row, with the next-row `y_a` the WITNESSED final
 `y` in the `λ₁` column (a bare query, not a derived `Y_A`). -/
-def qMul3Gate (cfg : Config) : Gate Fp where
-  name := "q_mul_3 == 1 checks"
-  selector := cfg.qMul3
+def qMul3Gate (cfg : Config) : Gate Fp :=
   -- `y_a_final` (λ₁ @ next) registers first; then `for_loop`'s queries in its let-order
   -- (cur-row `Y_A`/`x_r` atoms deduped).
-  queriedCells :=
+  Gate.withSelector "q_mul_3 == 1 checks" cfg.qMul3
     [ queryAdvice cfg.lambda1 1, queryAdvice cfg.z 0, queryAdvice cfg.z (-1),
       queryAdvice cfg.xA 0, queryAdvice cfg.xA 1, queryAdvice cfg.xP 0,
-      queryAdvice cfg.yP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ]
-  constraints :=
+      queryAdvice cfg.yP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
-    Constraints.withSelector cfg.qMul3 (forLoopPolys cfg yAFinal)
+    forLoopPolys cfg yAFinal
 
 /-- Rust `Config::configure`: enable equality on `z` and `λ₁`, allocate the three selectors, and
 register the three gates. The columns are handed down by `mul.rs` (different for `hi`/`lo`). -/

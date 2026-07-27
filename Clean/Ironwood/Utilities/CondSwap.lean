@@ -51,11 +51,9 @@ def swapGate (cfg : Config) : Gate Fp :=
   let aCheck := aSwapped - (swap * b + ((1 : Fp) - swap) * a)
   let bCheck := bSwapped - (swap * a + ((1 : Fp) - swap) * b)
   let boolCheck := swap * ((1 : Fp) - swap)
-  { name := "a' = b ⋅ swap + a ⋅ (1-swap)"
-    selector := cfg.qSwap
-    queriedCells := [a, b, aSwapped, bSwapped, swap]
-    constraints := Constraints.withSelector cfg.qSwap
-      [("a check", aCheck), ("b check", bCheck), ("swap is bool", boolCheck)] }
+  Gate.withSelector "a' = b ⋅ swap + a ⋅ (1-swap)" cfg.qSwap
+    [a, b, aSwapped, bSwapped, swap]
+    [("a check", aCheck), ("b check", bCheck), ("swap is bool", boolCheck)]
 
 /-- Rust `CondSwapChip::configure` (`cond_swap.rs:235-287`), VK-exact: equality on column
 `a` only (`cond_swap.rs:241` — the other columns are the caller's business), the simple
