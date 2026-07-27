@@ -309,6 +309,72 @@ def ConstraintSystem.registerQueriedCells (cs : ConstraintSystem F) (owner : Str
     (cells : List (Expression F Query)) : ConstraintSystem F :=
   cells.foldl (fun cs e => cs.registerQueriedCell owner e) cs
 
+theorem ConstraintSystem.mem_instanceQueries_queryInstanceIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .instance)
+    (rotation : Rotation) (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryInstanceIndex column rotation).instanceQueries := by
+  unfold queryInstanceIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_queryAdviceIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .advice)
+    (rotation : Rotation) (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryAdviceIndex column rotation).instanceQueries := by
+  unfold queryAdviceIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_queryFixedIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .fixed)
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryFixedIndex column).instanceQueries := by
+  unfold queryFixedIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_registerQueriedCell_of_mem
+    (cs : ConstraintSystem F) (owner : String)
+    (cell : Expression F Query)
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.registerQueriedCell owner cell).instanceQueries := by
+  cases cell with
+  | var queried =>
+      cases queried with
+      | selector =>
+          exact hquery
+      | fixed column _ =>
+          exact cs.mem_instanceQueries_queryFixedIndex_of_mem
+            column query hquery
+      | advice column rotation =>
+          exact cs.mem_instanceQueries_queryAdviceIndex_of_mem
+            column rotation query hquery
+      | «instance» column rotation =>
+          exact cs.mem_instanceQueries_queryInstanceIndex_of_mem
+            column rotation query hquery
+  | const =>
+      exact hquery
+  | add =>
+      exact hquery
+  | mul =>
+      exact hquery
+
+theorem ConstraintSystem.mem_instanceQueries_registerQueriedCells_of_mem
+    (cs : ConstraintSystem F) (owner : String)
+    (cells : List (Expression F Query))
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.registerQueriedCells owner cells).instanceQueries := by
+  induction cells generalizing cs with
+  | nil =>
+      exact hquery
+  | cons cell cells ih =>
+      rw [registerQueriedCells, List.foldl_cons]
+      apply ih
+      exact cs.mem_instanceQueries_registerQueriedCell_of_mem
+        owner cell query hquery
+
 /-- Allocation counters threaded through configure programs. -/
 structure ConfigureCounts where
   numAdviceColumns : ℕ := 0
@@ -358,6 +424,34 @@ private def appendFirstEncounters {α : Type} [DecidableEq α]
       if request ∈ accumulated then accumulated
       else accumulated ++ [request])
     initial
+
+theorem mem_appendFirstEncounters {α : Type} [DecidableEq α]
+    (value : α) (initial requests : List α) :
+    value ∈ appendFirstEncounters initial requests ↔
+      value ∈ initial ∨ value ∈ requests := by
+  induction requests generalizing initial with
+  | nil =>
+      simp [appendFirstEncounters]
+  | cons request requests ih =>
+      rw [appendFirstEncounters, List.foldl_cons]
+      change
+        value ∈ appendFirstEncounters
+            (if request ∈ initial then initial
+              else initial ++ [request])
+            requests ↔
+          value ∈ initial ∨ value ∈ request :: requests
+      rw [ih]
+      by_cases hrequest : request ∈ initial
+      · simp only [hrequest, if_pos, List.mem_cons]
+        constructor
+        · intro h
+          exact h.elim Or.inl (fun htail => Or.inr (Or.inr htail))
+        · rintro (hinitial | heq | htail)
+          · exact Or.inl hinitial
+          · subst value
+            exact Or.inl hrequest
+          · exact Or.inr htail
+      · simp [hrequest, or_assoc, or_left_comm]
 
 def ConfigureDelta.apply (delta : ConfigureDelta F)
     (initial : ConstraintSystem F) (counts : ConfigureCounts) :
@@ -411,6 +505,16 @@ def run (program : Configure F α) (initial : ConstraintSystem F) :
   let counts := ConfigureCounts.ofConstraintSystem initial
   (program.output counts,
     (program.delta counts).apply initial (program.finalCounts counts))
+
+theorem mem_instanceQueries_run_iff
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (query : Column .instance × Rotation) :
+    query ∈ (program.run initial).2.instanceQueries ↔
+      query ∈ initial.instanceQueries ∨
+        query ∈
+          (program.delta
+            (ConfigureCounts.ofConstraintSystem initial)).instanceQueries := by
+  simp only [run, ConfigureDelta.apply, mem_appendFirstEncounters]
 
 instance : CoeFun (Configure F α)
     (fun _ => ConstraintSystem F → α × ConstraintSystem F) where

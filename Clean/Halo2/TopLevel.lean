@@ -452,11 +452,42 @@ def constraintSystem
     ConstraintSystem F :=
   circuit.toConstraintSystem () ()
 
+/-- Instance-query requests emitted by this circuit's configure program. -/
+def configureInstanceQueries
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    List (Column .instance × Rotation) :=
+  (circuit.elaboratedConfigure ()).instanceQueries {}
+
 /-- Queried instance columns, in their first-query order. -/
 def publicInputColumns
     (circuit : FormalCircuit F Unit Config unit unit) :
     List (Column .instance) :=
-  (constraintSystem circuit).queriedInstanceColumns
+  (configureInstanceQueries circuit).map Prod.fst |>.dedup
+
+@[simp] theorem publicInputColumns_nodup
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    (publicInputColumns circuit).Nodup :=
+  List.nodup_dedup _
+
+/-- Every summarized configure query occurs in the interpreted configure result. -/
+theorem exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (column : Column .instance)
+    (hcolumn : column ∈ publicInputColumns circuit) :
+    ∃ rotation,
+      (column, rotation) ∈ (circuit.configure () {}).2.instanceQueries := by
+  rw [publicInputColumns, List.mem_dedup, List.mem_map] at hcolumn
+  obtain ⟨⟨foundColumn, rotation⟩, hquery, hcolumn⟩ := hcolumn
+  simp only at hcolumn
+  subst foundColumn
+  refine ⟨rotation, ?_⟩
+  rw [configureInstanceQueries] at hquery
+  rw [← (circuit.elaboratedConfigure ()).instanceQueries_eq] at hquery
+  change
+    (column, rotation) ∈
+      ((circuit.configure ()).run {}).2.instanceQueries
+  rw [Configure.mem_instanceQueries_run_iff]
+  exact Or.inr hquery
 
 def operations
     (circuit : FormalCircuit F Unit Config unit unit) : Operations F :=
@@ -688,7 +719,7 @@ theorem publicInputLayout_cells_injective
     (self : TopLevelCircuit F Config PublicInput) :
     Function.Injective self.publicInputLayout.cells := by
   apply self.publicInputLayout.cells_injective
-  exact self.constraintSystem.queriedInstanceColumns_nodup
+  exact TopLevelCompilation.publicInputColumns_nodup self.formalCircuit
 
 /-- Each public-input cell's column has a verifier query at some rotation. -/
 theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
@@ -697,10 +728,18 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
     ∃ rotation,
       ((self.publicInputLayout.cells i).1, rotation) ∈
         self.constraintSystem.instanceQueries := by
-  apply
-    self.constraintSystem
-      |>.exists_rotation_mem_instanceQueries_of_mem_queriedInstanceColumns
-  exact self.publicInputLayout.cells_fst_mem_columns i
+  obtain ⟨rotation, hquery⟩ :=
+    TopLevelCompilation.exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
+      self.formalCircuit
+      (self.publicInputLayout.cells i).1
+      (self.publicInputLayout.cells_fst_mem_columns i)
+  refine ⟨rotation, ?_⟩
+  exact
+    ConstraintSystem.mem_instanceQueries_closeWithOperations_of_mem
+      (self.formalCircuit.configure () {}).2
+      (self.formalCircuit.toOperations () ())
+      ((self.publicInputLayout.cells i).1, rotation)
+      hquery
 
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=

@@ -142,6 +142,37 @@ def ConstraintSystem.closeWithOperations [DecidableEq F]
     numSelectors := max cs.numSelectors
       (lookupInputSelectorBound finalLookups) }
 
+/-- Closing under synthesis preserves every configure-registered instance query. -/
+theorem ConstraintSystem.mem_instanceQueries_closeWithOperations_of_mem
+    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.closeWithOperations ops).instanceQueries := by
+  have fold_preserves {α : Type}
+      (items : List α)
+      (owner : α → String)
+      (cells : α → List (Expression F Query))
+      (initial : ConstraintSystem F)
+      (hinitial : query ∈ initial.instanceQueries) :
+      query ∈
+        (items.foldl
+          (fun current item =>
+            current.registerQueriedCells (owner item) (cells item))
+          initial).instanceQueries := by
+    induction items generalizing initial with
+    | nil =>
+        exact hinitial
+    | cons item items ih =>
+        rw [List.foldl_cons]
+        apply ih
+        exact initial.mem_instanceQueries_registerQueriedCells_of_mem
+          (owner item) (cells item) query hinitial
+  unfold closeWithOperations
+  dsimp only
+  apply fold_preserves
+  apply fold_preserves
+  exact hquery
+
 /-- Every selector atom in every synthesis-closed lookup input has a corresponding
 allocated selector index. This is true by construction even for a lookup that
 synthesis enabled without registering it during configure. -/
