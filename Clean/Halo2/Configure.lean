@@ -393,6 +393,57 @@ structure ConfigureCounts where
   numInstanceColumns : ℕ := 0
   numSelectors : ℕ := 0
 
+/--
+The additive allocation contribution of a configure program.
+
+Unlike a freely returned final `ConfigureCounts`, this representation makes decreasing
+an allocation counter unrepresentable.
+-/
+structure ConfigureCountDelta where
+  numAdviceColumns : ℕ := 0
+  numFixedColumns : ℕ := 0
+  numInstanceColumns : ℕ := 0
+  numSelectors : ℕ := 0
+
+def ConfigureCountDelta.apply
+    (delta : ConfigureCountDelta) (initial : ConfigureCounts) :
+    ConfigureCounts where
+  numAdviceColumns :=
+    initial.numAdviceColumns + delta.numAdviceColumns
+  numFixedColumns :=
+    initial.numFixedColumns + delta.numFixedColumns
+  numInstanceColumns :=
+    initial.numInstanceColumns + delta.numInstanceColumns
+  numSelectors :=
+    initial.numSelectors + delta.numSelectors
+
+def ConfigureCountDelta.append
+    (left right : ConfigureCountDelta) : ConfigureCountDelta where
+  numAdviceColumns :=
+    left.numAdviceColumns + right.numAdviceColumns
+  numFixedColumns :=
+    left.numFixedColumns + right.numFixedColumns
+  numInstanceColumns :=
+    left.numInstanceColumns + right.numInstanceColumns
+  numSelectors :=
+    left.numSelectors + right.numSelectors
+
+@[simp] theorem ConfigureCountDelta.apply_append
+    (left right : ConfigureCountDelta) (initial : ConfigureCounts) :
+    (left.append right).apply initial =
+      right.apply (left.apply initial) := by
+  cases initial
+  cases left
+  cases right
+  simp [ConfigureCountDelta.append, ConfigureCountDelta.apply,
+    Nat.add_assoc]
+
+theorem ConfigureCountDelta.numSelectors_le_apply
+    (delta : ConfigureCountDelta) (initial : ConfigureCounts) :
+    initial.numSelectors ≤ (delta.apply initial).numSelectors := by
+  simp only [ConfigureCountDelta.apply]
+  omega
+
 def ConfigureCounts.ofConstraintSystem (cs : ConstraintSystem F) :
     ConfigureCounts where
   numAdviceColumns := cs.numAdviceColumns
@@ -494,7 +545,8 @@ written to `ConfigureDelta`. The `CoeFun` instance preserves the existing `progr
 interface by interpreting that delta at the boundary.
 -/
 structure Configure (F : Type) (α : Type) where
-  plan : ConfigureCounts → α × ConfigureDelta F × ConfigureCounts
+  plan : ConfigureCounts →
+    α × ConfigureDelta F × ConfigureCountDelta
 
 namespace Configure
 
@@ -507,15 +559,26 @@ def delta (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureDelta F :=
   (program.plan counts).2.1
 
+def countDelta (program : Configure F α) (counts : ConfigureCounts) :
+    ConfigureCountDelta :=
+  (program.plan counts).2.2
+
 def finalCounts (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureCounts :=
-  (program.plan counts).2.2
+  (program.countDelta counts).apply counts
+
+/-- Configure programs can only increase the selector allocation count. -/
+theorem numSelectors_le_finalCounts
+    (program : Configure F α) (counts : ConfigureCounts) :
+    counts.numSelectors ≤ (program.finalCounts counts).numSelectors :=
+  ConfigureCountDelta.numSelectors_le_apply
+    (program.countDelta counts) counts
 
 def run (program : Configure F α) (initial : ConstraintSystem F) :
     α × ConstraintSystem F :=
   let counts := ConfigureCounts.ofConstraintSystem initial
-  let (output, delta, finalCounts) := program.plan counts
-  (output, delta.apply initial finalCounts)
+  let (output, delta, countDelta) := program.plan counts
+  (output, delta.apply initial (countDelta.apply counts))
 
 theorem mem_instanceQueries_run_iff
     (program : Configure F α) (initial : ConstraintSystem F)
@@ -532,12 +595,14 @@ instance : CoeFun (Configure F α)
   coe := run
 
 instance : Monad (Configure F) where
-  pure value := ⟨fun counts => (value, {}, counts)⟩
+  pure value := ⟨fun _ => (value, {}, {})⟩
   bind program next := ⟨fun counts =>
-    let (output, delta, nextCounts) := program.plan counts
-    let (nextOutput, nextDelta, finalCounts) :=
+    let (output, delta, countDelta) := program.plan counts
+    let nextCounts := countDelta.apply counts
+    let (nextOutput, nextDelta, nextCountDelta) :=
       (next output).plan nextCounts
-    (nextOutput, delta.append nextDelta, finalCounts)⟩
+    (nextOutput, delta.append nextDelta,
+      countDelta.append nextCountDelta)⟩
 
 end Configure
 
@@ -583,34 +648,31 @@ def ConfigureDelta.instanceQueriesOfCells
 def adviceColumn : Configure F (Column .advice) :=
   ⟨fun counts =>
     (⟨counts.numAdviceColumns⟩, {},
-      { counts with
-        numAdviceColumns := counts.numAdviceColumns + 1 })⟩
+      { numAdviceColumns := 1 })⟩
 
 /-- Rust: `meta.fixed_column()`. -/
 def fixedColumn : Configure F (Column .fixed) :=
   ⟨fun counts =>
     (⟨counts.numFixedColumns⟩, {},
-      { counts with
-        numFixedColumns := counts.numFixedColumns + 1 })⟩
+      { numFixedColumns := 1 })⟩
 
 /-- Rust: `meta.instance_column()`. -/
 def instanceColumn : Configure F (Column .instance) :=
   ⟨fun counts =>
     (⟨counts.numInstanceColumns⟩, {},
-      { counts with
-        numInstanceColumns := counts.numInstanceColumns + 1 })⟩
+      { numInstanceColumns := 1 })⟩
 
 /-- Rust: `meta.selector()` (a simple selector). -/
 def selector : Configure F Selector :=
   ⟨fun counts =>
     (⟨counts.numSelectors, true⟩, {},
-      { counts with numSelectors := counts.numSelectors + 1 })⟩
+      { numSelectors := 1 })⟩
 
 /-- Rust: `meta.complex_selector()`. -/
 def complexSelector : Configure F Selector :=
   ⟨fun counts =>
     (⟨counts.numSelectors, false⟩, {},
-      { counts with numSelectors := counts.numSelectors + 1 })⟩
+      { numSelectors := 1 })⟩
 
 /-- Rust: `meta.enable_equality(column)`. Idempotent, exactly like Rust's
 `permutation::Argument::add_column` (`permutation.rs:61-65`: `if !columns.contains`),
@@ -622,20 +684,20 @@ Also registers a cur-rotation query on the column *before* the permutation appen
 (`circuit.rs:1046-1050`) — unconditionally, not gated on the column being new to the
 permutation (idempotence comes from the `query_*_index` dedup). -/
 def enableEquality (c : AnyColumn) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), (ConfigureDelta.queryAny c).append
-      { permutationRequests := [c] }, counts)⟩
+      { permutationRequests := [c] }, {})⟩
 
 /-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
 constants column and enables equality on it (constants are enforced via copies into this
 column) — including `enable_equality`'s cur fixed-query registration. -/
 def enableConstant (col : Column .fixed) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), {
       fixedQueries := [(col, 0)]
       constants := [col]
       permutationRequests := [col.toAny]
-    }, counts)⟩
+    }, {})⟩
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
@@ -645,9 +707,9 @@ def lookupTableColumn : Configure F TableColumn := do
 Registers the gate's `queriedCells` in list order (the closure's queries all execute
 before the gate is pushed, `circuit.rs:1195-1229`), then appends the gate. -/
 def createGate (gate : Gate F) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
-      { gates := [gate] }, counts)⟩
+      { gates := [gate] }, {})⟩
 
 /-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
 of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
@@ -674,13 +736,13 @@ def lookup (queriedCells : List (Expression F Query))
     simp [Expression.SelectorFree, queryFixed]
   have arity : inputs.length = tables.length := by
     simp [inputs, tables]
-  ⟨fun counts =>
+  ⟨fun _ =>
     let queryDelta := ConfigureDelta.queriedCells "lookup" queriedCells
     let tableDelta := (tableMap.map Prod.snd).foldl
       (fun delta table =>
         delta.append { fixedQueries := [(table.inner, 0)] }) {}
     ((), queryDelta.append tableDelta |>.append
-      { lookups := [{ inputs, tables, tablesFree, arity }] }, counts)⟩
+      { lookups := [{ inputs, tables, tablesFree, arity }] }, {})⟩
 
 @[simp] theorem ConfigureDelta.gates_append
     (left right : ConfigureDelta F) :
@@ -756,6 +818,11 @@ variable {α β : Type}
     delta (pure value : Configure F α) counts = {} :=
   rfl
 
+@[simp] theorem countDelta_pure
+    (value : α) (counts : ConfigureCounts) :
+    countDelta (pure value : Configure F α) counts = {} :=
+  rfl
+
 @[simp] theorem output_pure (value : α) (counts : ConfigureCounts) :
     output (pure value : Configure F α) counts = value :=
   rfl
@@ -788,6 +855,15 @@ variable {α β : Type}
           (program.finalCounts counts)) :=
   rfl
 
+@[simp] theorem countDelta_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    countDelta (program >>= next) counts =
+      (program.countDelta counts).append
+        ((next (program.output counts)).countDelta
+          (program.finalCounts counts)) :=
+  rfl
+
 @[simp] theorem output_bind
     (program : Configure F α) (next : α → Configure F β)
     (counts : ConfigureCounts) :
@@ -802,7 +878,7 @@ variable {α β : Type}
     finalCounts (program >>= next) counts =
       (next (program.output counts)).finalCounts
         (program.finalCounts counts) :=
-  rfl
+  by simp [finalCounts]
 
 @[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
     output (adviceColumn : Configure F (Column .advice)) counts =

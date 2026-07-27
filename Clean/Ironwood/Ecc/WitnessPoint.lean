@@ -122,9 +122,6 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 theorem point_keygenLawful : point.KeygenLawful := by
   constructor
   · rintro ⟨x, y⟩ counts
-    simp [point, configure]
-    omega
-  · rintro ⟨x, y⟩ counts
     constructor
     · simp [point, configure, pointGate, pointNonIdGate]
     · simp [point, configure, lookupInputSelectorBound]
@@ -179,10 +176,6 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
 /-- Configure/synthesis keygen law for the non-identity point witness. -/
 theorem pointNonId_keygenLawful : pointNonId.KeygenLawful where
-  selectorCountMonotone := by
-    intro configInput counts
-    exact FormalRegionCircuit.KeygenLawful.selectorCountMonotone
-      point_keygenLawful configInput counts
   selectorsAllocated := by
     intro configInput counts
     exact FormalRegionCircuit.KeygenLawful.selectorsAllocated

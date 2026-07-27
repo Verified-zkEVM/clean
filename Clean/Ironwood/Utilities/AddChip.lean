@@ -100,8 +100,6 @@ theorem add_keygenLawful :
     add.KeygenLawful keygenRequirements := by
   constructor
   · intro _ _
-    rfl
-  · intro _ _
     change ({} : ConfigureDelta Fp).SelectorsAllocated _
     exact ⟨by simp, by simp [lookupInputSelectorBound]⟩
   · intro cfg counts offset input region

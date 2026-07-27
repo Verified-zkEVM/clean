@@ -258,10 +258,6 @@ structure FormalCircuit.KeygenLawful
     [CircuitType Input] [CircuitType Output]
     (self : FormalCircuit F ConfigInput Config Input Output)
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
-  selectorCountMonotone :
-    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
-    counts.numSelectors ≤
-      ((self.configure configInput).finalCounts counts).numSelectors
   selectorsAllocated :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
     ((self.configure configInput).delta counts).SelectorsAllocated
@@ -626,10 +622,6 @@ structure FormalRegionCircuit.KeygenLawful
     [CircuitType Input] [CircuitType Output]
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
-  selectorCountMonotone :
-    ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
-    counts.numSelectors ≤
-      ((self.configure configInput).finalCounts counts).numSelectors
   selectorsAllocated :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts),
     ((self.configure configInput).delta counts).SelectorsAllocated
@@ -840,8 +832,6 @@ theorem KeygenLawful.toFormal
     {requirements : KeygenRequirements F ConfigInput}
     (hlawful : child.KeygenLawful requirements) (name : String := child.name) :
     (child.toFormal name).KeygenLawful requirements where
-  selectorCountMonotone :=
-    FormalRegionCircuit.KeygenLawful.selectorCountMonotone hlawful
   selectorsAllocated :=
     FormalRegionCircuit.KeygenLawful.selectorsAllocated hlawful
   registered := by
