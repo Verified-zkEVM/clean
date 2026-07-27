@@ -18,7 +18,7 @@ plan → activations → minimal fitting domain → `compress_selectors` → pin
 * `CompressSelectors` — the `SelCompressMap` derivation and its root-finding algebra.
 * `FloorPlanner` — the V1 floor planner (region placement from the operation stream).
 * `Projection` — the query-index walk erasing `Expression F Query` into `RichExpression F`.
-* `PinnedCs` — `PinnedConstraintSystem`, `.ofOperations`, `FormalCircuit.toPinnedCS`.
+* `PinnedCs` — `PinnedConstraintSystem` and `.derive`.
 * `Semantics` — the projection preserves evaluation (`derive_gates_eval`).
 * `Layout` — the keygen layout semantics: floor-planner copy lists, the keygen
   `Assembly` (σ) replay, and fixed-column contents (tables, region assignments,

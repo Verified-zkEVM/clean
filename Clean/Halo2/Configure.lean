@@ -1,5 +1,6 @@
 import Clean.Halo2.Expression
 import Clean.Halo2.Tactics.SelectorFree
+import Mathlib.Data.List.Dedup
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -258,6 +259,30 @@ def ConstraintSystem.queryInstanceIndex (cs : ConstraintSystem F) (c : Column .i
     (rot : Rotation) : ConstraintSystem F :=
   if (c, rot) ∈ cs.instanceQueries then cs
   else { cs with instanceQueries := cs.instanceQueries ++ [(c, rot)] }
+
+/--
+The instance columns whose polynomials participate in verifier queries, preserving
+their first-query order while forgetting duplicate rotations.
+-/
+def ConstraintSystem.queriedInstanceColumns
+    (cs : ConstraintSystem F) : List (Column .instance) :=
+  (cs.instanceQueries.map Prod.fst).dedup
+
+@[simp] theorem ConstraintSystem.queriedInstanceColumns_nodup
+    (cs : ConstraintSystem F) :
+    cs.queriedInstanceColumns.Nodup :=
+  List.nodup_dedup _
+
+/-- A derived queried instance column has at least one registered rotation. -/
+theorem ConstraintSystem.exists_rotation_mem_instanceQueries_of_mem_queriedInstanceColumns
+    (cs : ConstraintSystem F) (column : Column .instance)
+    (hcolumn : column ∈ cs.queriedInstanceColumns) :
+    ∃ rotation, (column, rotation) ∈ cs.instanceQueries := by
+  rw [queriedInstanceColumns, List.mem_dedup, List.mem_map] at hcolumn
+  obtain ⟨⟨foundColumn, rotation⟩, hquery, hcolumn⟩ := hcolumn
+  simp only at hcolumn
+  subst foundColumn
+  exact ⟨rotation, hquery⟩
 
 /-- Rust: `query_any_index` at `Rotation::cur()` (`circuit.rs:1127-1136`), as used by
 `enable_equality`. -/

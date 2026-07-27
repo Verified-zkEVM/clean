@@ -94,6 +94,10 @@ temporarily when debugging a mismatch. -/
         ++ constantsFixed fx.constants
         ++ selectorFixed actionSelMap (activations starts regions)
         ++ regionAssignFixed (ZMod.val : Fp → ℕ) starts regions))
+  let compiledFixed : List (ℕ × ℕ × ℕ) :=
+    (Halo2.Layout.compileFixed usable actionSelMap
+      ((Action.Circuit.configure aG {}).2.closeWithOperations ops) ops).map
+        fun (column, row, value) => (column, row, ZMod.val value)
   Json.runChecks [
     -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list
     ("σ replay from fixture copyList",
@@ -108,6 +112,9 @@ temporarily when debugging a mismatch. -/
     -- the keygen permutation σ
     ("σ", decide (sigma = fx.sigma)),
     -- the full fixed contents
-    ("fixed contents", decide (fixed = sortFixed fx.fixed))]
+    ("fixed contents", decide (fixed = sortFixed fx.fixed)),
+    -- the field-valued semantic compiler matches the same V1 keygen layout
+    ("field-valued fixed compiler",
+      decide (compiledFixed = sortFixed fx.fixed))]
 
 end Zcash.Circuits.Fixtures.Test.LayoutAction
