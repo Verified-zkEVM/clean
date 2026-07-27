@@ -770,6 +770,24 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     rw [hout] at hcompl
     exact hcompl.2
 
+/-- The region-to-layouter bridge preserves configure/synthesis keygen lawfulness. -/
+theorem KeygenLawful.toFormal
+    {child : FormalRegionCircuit F ConfigInput Config Input Output}
+    (hlawful : child.KeygenLawful) (name : String := child.name) :
+    (child.toFormal name).KeygenLawful where
+  selectorCountMonotone :=
+    FormalRegionCircuit.KeygenLawful.selectorCountMonotone hlawful
+  selectorsAllocated :=
+    FormalRegionCircuit.KeygenLawful.selectorsAllocated hlawful
+  registered := by
+    intro configInput counts input region
+    have hregistered :=
+      FormalRegionCircuit.KeygenLawful.registered
+        hlawful configInput counts 0 input region
+    simpa only [toFormal, assignRegion, Circuit.operations,
+      Operations.KeygenRegistered, Operation.KeygenRegistered,
+      List.Forall, and_true] using hregistered
+
 end FormalRegionCircuit
 
 end Halo2
