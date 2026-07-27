@@ -109,6 +109,12 @@ def configure (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 1
   createGate (lsbGate cfg)
   return cfg
 
+instance (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 10)
+    (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure addConfig lookupConfig advices) := by
+  unfold configure
+  infer_instance
+
 /-! ## Inputs / Output -/
 
 structure Inputs (F : Type) where

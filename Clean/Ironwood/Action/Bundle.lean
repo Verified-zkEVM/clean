@@ -141,15 +141,14 @@ theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     Circuit.operations_bind, Circuit.operations_pure, Operations.regionCount_append]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
-/-- The `FormalCircuit` entry: the private witness programs in (`PrivateInputs`),
-the witnessed old/new-note address point cells out. -/
+/-- The base Action synthesis with its one fixed hint-backed witness program. -/
 def main (G : Generators) (B : Bases) (cfg : Config) :
-    Var PrivateInputs Fp → Circuit Fp (Var AddressPoints Fp) := fun W =>
-  CircuitPreIronwood.synthesize G B W cfg
+    Var unit Fp → Circuit Fp (Var AddressPoints Fp) := fun _ =>
+  CircuitPreIronwood.synthesize G B hintWitnesses cfg
 
 theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
-    (W : Witnesses Fp) (i : RegionIndex) :
-    Operations.regionCount ((main G B cfg W).operations i) = 394 := by
+    (input : Var unit Fp) (i : RegionIndex) :
+    Operations.regionCount ((main G B cfg input).operations i) = 394 := by
   simp only [main]
   rw [synthesize_regionCount]
 
@@ -244,6 +243,11 @@ def extract (cfg : Config) (_ : Var PrivateInputs Fp) (i₀ : RegionIndex)
   rcmOld := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 328) env
   rcmNew := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 375) env
 
+/-- The base circuit's extractor at its fixed top-level witness program. -/
+def extractBase (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
+    (env : Placed Environment Fp) : ActionData :=
+  extract cfg hintWitnesses i₀ env
+
 /-! ## The statement (§4.17.4, knowledge-sound, breaks-as-data) -/
 
 open NoteCommit (noteScalars)
@@ -307,40 +311,77 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
 carrying the four witnessed address points (what the ironwood cross-address stage
 consumes). -/
 def Spec (G : Generators) (B : Bases)
-    (_ : Value PrivateInputs Fp) (out : Value AddressPoints Fp) (wit : ActionData) :
+    (_ : Value unit Fp) (out : Value AddressPoints Fp) (wit : ActionData) :
     Prop :=
   SpecBase G B wit ∧ out.gdOld = wit.gdOld ∧ out.pkdOld = wit.pkdOld ∧
   out.gdNew = wit.gdNew ∧ out.pkdNew = wit.pkdNew
 
-/-- The generator table holds *exactly* the `load` contents (block + default fill) —
-the completeness-side strengthening of `GeneratorTableLoaded` (the honest env is one
-that ran the load). Stated as the load's own constraint set (place-independent). -/
-def GeneratorTableExact (G : Generators) (cfg : Sinsemilla.GeneratorTableConfig)
-    (env : Environment Fp) : Prop :=
-  Halo2.Constraints (fun _ => 0) env
-    ((Sinsemilla.load G cfg).operations 0) 0
-
-private theorem generatorTableExact_constraints (G : Generators)
-    (cfg : Sinsemilla.GeneratorTableConfig) (env : Environment Fp)
-    (h : GeneratorTableExact G cfg env) (place : RegionIndex → ℕ) (i : RegionIndex) :
-    Halo2.Constraints place env ((Sinsemilla.load G cfg).operations i) i := by
-  simp only [GeneratorTableExact, Sinsemilla.load, circuit_norm] at h ⊢
-  exact h
-
-/-- Env preconditions: the loaded tables and selector-distinctness every child asserts. -/
-def EnvAssumptions (G : Generators) (cfg : Config)
+/--
+Layout and configuration facts that neither constraint satisfaction nor honest
+witness extension establishes.
+-/
+def EnvAssumptions (cfg : Config)
     (env : Placed Environment Fp) : Prop :=
-  GeneratorTableExact G cfg.sinsemilla1.generatorTable env.env ∧
-  Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla1.generatorTable env.env ∧
-  Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla2.generatorTable env.env ∧
-  Sinsemilla.GeneratorTableLoaded G cfg.merkle1.sinsemilla.generatorTable env.env ∧
-  Sinsemilla.GeneratorTableLoaded G cfg.merkle2.sinsemilla.generatorTable env.env ∧
+  2 ^ Specs.K ≤ env.env.usableRows ∧
+  cfg.sinsemilla2.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.merkle1.sinsemilla.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.merkle2.sinsemilla.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.lookupConfig.tableIdx = cfg.sinsemilla1.generatorTable.tableIdx ∧
   Ecc.MulFixed.FullWidth.EnvAssumptions cfg.eccConfig.mulFixedFull env ∧
   Ecc.MulFixed.Short.EnvAssumptions cfg.eccConfig.mulFixedShort env ∧
-  Ecc.MulFixed.BaseFieldElem.EnvAssumptions cfg.eccConfig.mulFixedBaseField env ∧
-  Ecc.Mul.EnvAssumptions cfg.eccConfig.mul env ∧
-  LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env ∧
+  Ecc.MulFixed.BaseFieldElem.InnerEnvAssumptions
+    cfg.eccConfig.mulFixedBaseField env ∧
+  cfg.eccConfig.mulFixedBaseField.lookupConfig = cfg.lookupConfig ∧
+  cfg.eccConfig.mul.overflowConfig.lookupConfig = cfg.lookupConfig ∧
   cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
+
+private theorem rangeLoad_constraints_of_generatorLoad
+    (G : Generators) (gcfg : Sinsemilla.GeneratorTableConfig)
+    (lcfg : LookupRangeCheck.Config 10)
+    (htable : lcfg.tableIdx = gcfg.tableIdx)
+    (i : RegionIndex) (env : Placed Environment Fp)
+    (h : Constraints env.place env.env
+      ((Sinsemilla.load G gcfg).operations i) i) :
+    Constraints env.place env.env
+      ((LookupRangeCheck.load 10 lcfg).operations i) i := by
+  simp only [Sinsemilla.load, LookupRangeCheck.load, circuit_norm] at h ⊢
+  rw [htable]
+  exact ⟨h.1, h.2.1⟩
+
+private theorem loadedChildEnvFacts
+    (G : Generators) (cfg : Config)
+    (i : RegionIndex) (env : Placed Environment Fp)
+    (hEnv : EnvAssumptions cfg env)
+    (hload : Constraints env.place env.env
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i) i) :
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla1.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla2.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G
+      cfg.merkle1.sinsemilla.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G
+      cfg.merkle2.sinsemilla.generatorTable env.env ∧
+    Ecc.MulFixed.BaseFieldElem.EnvAssumptions
+      cfg.eccConfig.mulFixedBaseField env ∧
+    Ecc.Mul.EnvAssumptions cfg.eccConfig.mul env ∧
+    LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env := by
+  obtain ⟨hUsable, hs2, hm1, hm2, hlookup, -, -, hBfInner,
+    hBfLookup, hMulLookup, hDist⟩ := hEnv
+  have hT1 := Sinsemilla.load_generatorTableLoaded G
+    cfg.sinsemilla1.generatorTable env.place env.env i hUsable hload
+  have hTL := LookupRangeCheck.load_tableLoaded 10 cfg.lookupConfig
+    env.place env.env i (by norm_num) hUsable
+    (rangeLoad_constraints_of_generatorLoad G
+      cfg.sinsemilla1.generatorTable cfg.lookupConfig hlookup i env hload)
+  refine ⟨hT1, ?_, ?_, ?_, ?_, ?_, hTL⟩
+  · simpa only [hs2] using hT1
+  · simpa only [hm1] using hT1
+  · simpa only [hm2] using hT1
+  · simp only [Ecc.MulFixed.BaseFieldElem.EnvAssumptions]
+    rw [hBfLookup]
+    exact ⟨hBfInner, hTL, hDist⟩
+  · simp only [Ecc.Mul.EnvAssumptions, Ecc.MulOverflow.EnvAssumptions]
+    rw [hMulLookup]
+    exact ⟨hTL, hDist⟩
 
 /-- Witness-consistency bridge: the honest prover's evaluated point hint equals the point
 read from the witnessed output cells. From the region's `ExtendsWitnesses` alone (no gate
@@ -678,7 +719,7 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     wpointNonId_output, wpointNonId_output]
 
 instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedCircuit Fp PrivateInputs AddressPoints (main G B cfg) where
+    ElaboratedCircuit Fp unit AddressPoints (main G B cfg) where
   output _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
@@ -690,12 +731,12 @@ instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
                   y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
   regionCount _ := 394
   output_eq := by
-    intro W i₀
+    intro _ i₀
     simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
       Circuit.output_bind, Circuit.output_pure,
       synthWitness_output, synthWitness_nextRegionIndex, synthChecks_output,
       synthChecks_nextRegionIndex, synthNotes_output]
-  regionCount_eq := fun W i => (main_regionCount G B cfg W i).symm
+  regionCount_eq := fun input i => (main_regionCount G B cfg input i).symm
 
 /-! ## Soundness -/
 
@@ -703,15 +744,27 @@ open Sinsemilla.Merkle (MerkleRoot)
 
 theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (main G B cfg) (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
       (Spec G B) := by
   circuit_proof_start
-  obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
+  let input_var_rcv := hintWitnesses.rcv
+  let input_var_alpha := hintWitnesses.alpha
+  let input_var_rivk := hintWitnesses.rivk
+  let input_var_rcmOld := hintWitnesses.rcmOld
+  let input_var_rcmNew := hintWitnesses.rcmNew
   simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
   have hN := hc.2.2
   clear hc
+  have hLoad := hW
+  simp only [synthWitness, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil] at hLoad
+  rw [constraints_append] at hLoad
+  obtain ⟨hT1, hT2, hTM1, hTM2, hBf, hMulE, hTL⟩ :=
+    loadedChildEnvFacts G cfg i₀
+      (⟨place, env⟩ : Placed Environment Fp) _hE hLoad.1
+  obtain ⟨-, -, -, -, -, hFw, hSh, -, -, -, hDist⟩ := _hE
   -- ── stage A: the witness regions ──
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hW
   have hCm := hW.2.2.2.2.2.2.1
@@ -862,7 +915,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   try simp only [circuit_norm] at hEqR
   try simp only [circuit_norm] at hOrch
   -- ── assemble the statement ──
-  simp only [Spec, SpecBase, extract, cellRead, circuit_norm,
+  simp only [Spec, SpecBase, extractBase, extract, cellRead, circuit_norm,
     Nat.add_zero, Nat.add_assoc]
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ?_, ?_, ?_, ?_⟩
@@ -940,6 +993,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
                 psi := AssignedCell.of i₀ 0 (cfg.advices 0),
                 rcm := input_var_rcmOld }
               (i₀ + 303)) := by
+      simp only [input_var_rcmOld]
       apply Point.ext_coords
       simp only [Point.coords]
       rw [← hEqR.1, ← hEqR.2]
@@ -993,8 +1047,8 @@ open Sinsemilla.Merkle.CalculateRoot (pathNode) in
 fixed-base scalars, a fully-defined Merkle path, defined Sinsemilla hashes for the three
 commitment legs (with the honest commitment equations for the copies/instance rows),
 and the `q_orchard` value checks at the honest values. -/
-def ProverAssumptions (G : Generators) (B : Bases)
-    (_ : WitnessData Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
+def ProverAssumptionsCore (G : Generators) (B : Bases)
+    (wit : ActionData) : Prop :=
   wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
   wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
   (∀ w : Fin 85, (wit.rcv.1[w.val]).val < 8) ∧
@@ -1042,6 +1096,11 @@ def ProverAssumptions (G : Generators) (B : Bases)
   wit.vOld * (1 - wit.enableSpend) = 0 ∧
   wit.vNew * (1 - wit.enableOutput) = 0
 
+/-- Honest-prover assumptions for the closed base circuit. -/
+def ProverAssumptions (G : Generators) (B : Bases)
+    (_ : ProverValue unit Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
+  ProverAssumptionsCore G B wit
+
 /-! ## Completeness -/
 
 private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
@@ -1066,33 +1125,56 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
 
 theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (main G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (main G B cfg) (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
       (ProverAssumptions G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
-  obtain ⟨hTE, hT1, hT2, hTM1, hTM2, hFw, hSh, hBf, hMulE, hTL, hDist⟩ := _hE
+  simp only [extractBase] at hPA
   obtain ⟨hVcm, hVgd, hVak, hVpk, hVgdn, hVpkn, hWrcv, hWal, hWri, hWro, hWrn,
     hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hVanch⟩,
     ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmo⟩, ⟨Bn, hBn, hCmx⟩,
     ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
-  -- `circuit_proof_start` destructures the formal input into its `input_var_*` fields;
-  -- re-bind the whole record as `input_var` (folding the copies the hypotheses carry)
-  -- so the `extract cfg input_var i₀ …` spellings below resolve. `extract` ignores this
-  -- argument, so the reconstruction is definitionally the framework's input var.
-  set input_var : Var PrivateInputs Fp :=
-    { psiOld := input_var_psiOld, rhoOld := input_var_rhoOld, nk := input_var_nk,
-      vOld := input_var_vOld, vNew := input_var_vNew, psiNew := input_var_psiNew,
-      magnitude := input_var_magnitude, sign := input_var_sign, cmOld := input_var_cmOld,
-      gdOld := input_var_gdOld, akP := input_var_akP, pkDOld := input_var_pkDOld,
-      gdNew := input_var_gdNew, pkdNew := input_var_pkdNew, rcv := input_var_rcv,
-      alpha := input_var_alpha, rivk := input_var_rivk, rcmOld := input_var_rcmOld,
-      rcmNew := input_var_rcmNew, merkleSib := input_var_merkleSib,
-      merkleSwap := input_var_merkleSwap } with hInputVarDef
+  -- Keep the historical local names in the detailed completeness proof, but bind
+  -- them to the one fixed top-level witness program.
+  let input_var : Witnesses Fp := hintWitnesses
+  let input_var_psiOld := hintWitnesses.psiOld
+  let input_var_rhoOld := hintWitnesses.rhoOld
+  let input_var_nk := hintWitnesses.nk
+  let input_var_vOld := hintWitnesses.vOld
+  let input_var_vNew := hintWitnesses.vNew
+  let input_var_psiNew := hintWitnesses.psiNew
+  let input_var_magnitude := hintWitnesses.magnitude
+  let input_var_sign := hintWitnesses.sign
+  let input_var_cmOld := hintWitnesses.cmOld
+  let input_var_gdOld := hintWitnesses.gdOld
+  let input_var_akP := hintWitnesses.akP
+  let input_var_pkDOld := hintWitnesses.pkDOld
+  let input_var_gdNew := hintWitnesses.gdNew
+  let input_var_pkdNew := hintWitnesses.pkdNew
+  let input_var_rcv := hintWitnesses.rcv
+  let input_var_alpha := hintWitnesses.alpha
+  let input_var_rivk := hintWitnesses.rivk
+  let input_var_rcmOld := hintWitnesses.rcmOld
+  let input_var_rcmNew := hintWitnesses.rcmNew
+  let input_var_merkleSib := hintWitnesses.merkleSib
+  let input_var_merkleSwap := hintWitnesses.merkleSwap
   simp only [CircuitPreIronwood.synthesize, synthesizeBase,
     circuit_norm] at hwit ⊢
   have hWw := hwit.1
   have hWc := hwit.2.1
   have hWn := hwit.2.2
   clear hwit
+  have hLoadWitnesses := hWw
+  simp only [synthWitness, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil] at hLoadWitnesses
+  rw [extendsWitnesses_append] at hLoadWitnesses
+  have hLoad : Constraints place env.toEnvironment
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀ := by
+    simp only [Sinsemilla.load, circuit_norm] at hLoadWitnesses ⊢
+    exact hLoadWitnesses.1
+  obtain ⟨hT1, hT2, hTM1, hTM2, hBf, hMulE, hTL⟩ :=
+    loadedChildEnvFacts G cfg i₀
+      (⟨place, env.toEnvironment⟩ : Placed Environment Fp) _hE hLoad
+  obtain ⟨-, -, -, -, -, hFw, hSh, -, -, -, hDist⟩ := _hE
   -- ── stage A witnesses: the shared cells are the programs' honest values ──
   simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hWw
   obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
@@ -1103,7 +1185,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
       input_var_gdNew, input_var_pkdNew, input_var_rcv, input_var_alpha,
       input_var_rivk, input_var_rcmOld, input_var_rcmNew,
       input_var_merkleSib, input_var_merkleSwap⟩ cfg i₀ place _
-    (generatorTableExact_constraints G _ _ hTE place i₀) ?_ ?_ ?_, ?_⟩
+    hLoad ?_ ?_ ?_, ?_⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
       Ecc.WitnessPoint.pointFormal
       cfg.eccConfig.witnessPoint (i₀ + 2) place env _ hWcm
@@ -1770,14 +1852,14 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
 (breaks-as-data) over the extracted primary-instance rows and witness data,
 outputting the four witnessed address points. -/
 def baseCircuit (G : Generators) (B : Bases) :
-    FormalCircuit Fp Unit Config PrivateInputs AddressPoints where
+    FormalCircuit Fp Unit Config unit AddressPoints where
   name := "OrchardActionBase"
   configure := fun _ => configure G
   synthesize := main G B
   elaborated := fun cfg => elaborated G B cfg
   Witness := fun _ => ActionData
-  extract := extract
-  EnvAssumptions := EnvAssumptions G
+  extract := extractBase
+  EnvAssumptions := EnvAssumptions
   Assumptions := fun _ => True
   Spec := Spec G B
   ProverAssumptions := ProverAssumptions G B
@@ -1797,32 +1879,37 @@ private theorem aafi_output (instCol : Column .instance) (r : ℕ)
 
 derive_contract_bridges base (G : Generators) (B : Bases) := baseCircuit G B
 
-/-- The ironwood `FormalCircuit` entry: base subcircuit + cross-address region,
-the private witness programs flowing through as the input. -/
+/-- The deployed ironwood synthesis: the fixed hint-backed Action witness program,
+followed by the cross-address region. -/
 def mainPost (G : Generators) (B : Bases) (cfg : Config) :
-    Var PrivateInputs Fp → Circuit Fp (Var unit Fp) := fun W => do
-  let pts ← (baseCircuit G B).call cfg W
+    Var unit Fp → Circuit Fp (Var unit Fp) := fun _ => do
+  let pts ← (baseCircuit G B).call cfg ()
   synthCrossAddressChecks cfg pts
   pure ()
 
 theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
-    (W : Witnesses Fp) (i : RegionIndex) :
-    Operations.regionCount ((mainPost G B cfg W).operations i) = 395 := by
+    (input : Var unit Fp) (i : RegionIndex) :
+    Operations.regionCount ((mainPost G B cfg input).operations i) = 395 := by
   simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
 
 instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedCircuit Fp PrivateInputs unit (mainPost G B cfg) where
+    ElaboratedCircuit Fp unit unit (mainPost G B cfg) where
   output _ _ := ()
   regionCount _ := 395
   output_eq := by intro _ _; rfl
-  regionCount_eq := fun W i => (mainPost_regionCount G B cfg W i).symm
+  regionCount_eq := fun input i => (mainPost_regionCount G B cfg input i).symm
+
+/-- Read the Action statement data for the fixed top-level witness program. -/
+def extractPost (cfg : Config) (_ : Var unit Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) : ActionData :=
+  extractBase cfg () i env
 
 /-- The ironwood Action statement: the base §4.17.4 statement, plus the post-NU 6.3
 cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
 note's diversified address to equal the old note's. -/
 def SpecPost (G : Generators) (B : Bases)
-    (_ : Value PrivateInputs Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
+    (_ : Value unit Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
   SpecBase G B wit ∧
   (wit.disableCrossAddress ≠ 0 → wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew)
 
@@ -1830,26 +1917,16 @@ def SpecPost (G : Generators) (B : Bases)
 the cross-address rows hold at the honest values (the flag is off, or the addresses
 coincide). -/
 def ProverAssumptionsPost (G : Generators) (B : Bases)
-    (input : WitnessData Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
-  ProverAssumptions G B input wit hint ∧
+    (_ : ProverValue unit Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
+  ProverAssumptions G B () wit hint ∧
   (wit.disableCrossAddress = 0 ∨ (wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew))
 
 theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (mainPost G B cfg) (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
       (SpecPost G B) := by
   circuit_proof_start
-  -- re-bind the destructured formal input as `input_var` (see `completeness`); `extract`
-  -- ignores this argument, so the reconstruction is the framework's input var.
-  set input_var : Var PrivateInputs Fp :=
-    { psiOld := input_var_psiOld, rhoOld := input_var_rhoOld, nk := input_var_nk,
-      vOld := input_var_vOld, vNew := input_var_vNew, psiNew := input_var_psiNew,
-      magnitude := input_var_magnitude, sign := input_var_sign, cmOld := input_var_cmOld,
-      gdOld := input_var_gdOld, akP := input_var_akP, pkDOld := input_var_pkDOld,
-      gdNew := input_var_gdNew, pkdNew := input_var_pkdNew, rcv := input_var_rcv,
-      alpha := input_var_alpha, rivk := input_var_rivk, rcmOld := input_var_rcmOld,
-      rcmNew := input_var_rcmNew, merkleSib := input_var_merkleSib,
-      merkleSwap := input_var_merkleSwap } with hInputVarDef
+  set input_var : Witnesses Fp := hintWitnesses
   -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
   -- `base_output` bridge rewrites below fire.
   subst x_gen_out_0
@@ -1907,6 +1984,7 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
         (⟨place, env⟩ : Placed Environment Fp)).pkdOld.y
       = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.y :=
     sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e3)).resolve_left hdca)
+  simp only [extractPost, extractBase]
   constructor
   · apply Point.ext_coords
     show (_, _) = _
@@ -1919,7 +1997,7 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
 
 theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (mainPost G B cfg) (extract cfg) (EnvAssumptions G cfg) (fun _ => True)
+      (mainPost G B cfg) (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
       (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   obtain ⟨hPA, hDca⟩ := hPA
@@ -2055,14 +2133,14 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
 proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
 binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
 def circuit (G : Generators) (B : Bases) :
-    FormalCircuit Fp Unit Config PrivateInputs unit where
+    FormalCircuit Fp Unit Config unit unit where
   name := "OrchardAction"
   configure := fun _ => configure G
   synthesize := mainPost G B
   elaborated := fun cfg => elaboratedPost G B cfg
   Witness := fun _ => ActionData
-  extract := extract
-  EnvAssumptions := EnvAssumptions G
+  extract := extractPost
+  EnvAssumptions := EnvAssumptions
   Assumptions := fun _ => True
   Spec := SpecPost G B
   ProverAssumptions := ProverAssumptionsPost G B

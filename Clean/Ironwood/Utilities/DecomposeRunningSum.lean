@@ -126,6 +126,11 @@ def configure (W : ℕ) (qRangeCheck : Selector) (z : Column .advice) :
   createGate (rangeCheckGate W cfg)
   return cfg
 
+instance (W : ℕ) (qRangeCheck : Selector) (z : Column .advice) :
+    ElaboratedConfigure (configure W qRangeCheck z) := by
+  unfold configure
+  infer_instance
+
 /-! ## The `copy_decompose` gadget (strict) -/
 
 /-- Input: the field element `α` to decompose (already assigned; `copy_decompose`). -/

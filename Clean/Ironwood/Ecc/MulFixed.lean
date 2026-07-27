@@ -180,6 +180,13 @@ def configure (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .adv
   createGate (coordsGate cfg)
   return cfg
 
+instance (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
+    (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config) :
+    ElaboratedConfigure
+      (configure lagrangeCoeffs window u addConfig addIncompleteConfig) := by
+  unfold configure
+  infer_instance
+
 /-! ## Region-relative synthesize pieces
 
 Offset-generic `RegionCircuit`s; the wrapper bundles compose them inside one region. -/

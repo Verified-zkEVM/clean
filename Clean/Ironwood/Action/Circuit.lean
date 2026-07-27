@@ -126,6 +126,13 @@ def configure (G : Generators) : Configure Fp Config := do
            sinsemilla1, merkle1, sinsemilla2, merkle2, commitIvkConfig,
            noteCommitOld, noteCommitNew, lookupConfig }
 
+instance (G : Generators) :
+    ElaboratedConfigure (configure G) where
+  instanceQueries counts :=
+    [(⟨counts.numInstanceColumns⟩, 0)]
+  instanceQueries_eq := by
+    configure_norm
+
 /-! ## Synthesize -/
 
 open Ecc.MulFixed (FixedBase)
@@ -221,6 +228,79 @@ abbrev Witnesses (F : Type) := PrivateInputs.Var F
 
 /-- The evaluated (prover-view) private inputs. -/
 abbrev WitnessData (F : Type) := PrivateInputs.ProverValue F
+
+/-!
+## Top-level prover hints
+
+The top-level Action circuit has no verifier-visible input. Its prover choices enter
+through one fixed witness program built from `ProverEnvironment.hint`: key generation
+sees this program but does not evaluate it, while witness generation evaluates the same
+program against the prover's runtime hint map.
+
+The keys below are local data of this circuit, not a framework-wide convention.
+-/
+
+/-- One field-valued Action hint, stored as the sole column of row zero. -/
+private def fieldHint (key : String) :
+    Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp) :=
+  pure (.hintGet key 1 (.const 0) 0)
+
+/-- One point-valued Action hint, stored as `(x,y)` in row zero. -/
+private def pointHint (key : String) :
+    Witgen.MOver Fp (AssignedCell Fp) (Point (FExpr Fp)) :=
+  pure {
+    x := .hintGet key 2 (.const 0) 0
+    y := .hintGet key 2 (.const 0) 1
+  }
+
+/-- One Nat-valued Action hint, read through the field-to-Nat bridge. -/
+private def natHint (key : String) :
+    Witgen.MOver Fp (AssignedCell Fp) (NExpr Fp) :=
+  pure (.val (.hintGet key 1 (.const 0) 0))
+
+/-- A Merkle sibling hint at layer `i`. -/
+private def merkleSiblingHint (i : ℕ) : WitgenIR Fp 1 :=
+  .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i) 0)
+
+/--
+A Merkle swap hint at layer `i`. This remains the existing native escape hatch for
+now, but reads the same `ProverHint` store as structured `hintGet`; it can later become
+`UnconstrainedBool` without changing the top-level circuit interface.
+-/
+private def merkleSwapHint (i : ℕ) :
+    Placed ProverEnvironment Fp → Bool := fun env =>
+  Witgen.FExprOver.eval
+      ({ env := env } : Witgen.CtxOver Fp (Placed ProverEnvironment Fp))
+      ((.hintGet "orchard.action.merkle_swap" 1 (.const i) 0) : FExpr Fp) == 1
+
+/--
+The one fixed private-witness program of the top-level Action circuit. All actual
+values are chosen at proving time through `ProverHint`; callers do not parameterize
+synthesis with alternative witness programs.
+-/
+def hintWitnesses : Witnesses Fp := {
+  psiOld := fieldHint "orchard.action.psi_old"
+  rhoOld := fieldHint "orchard.action.rho_old"
+  nk := fieldHint "orchard.action.nk"
+  vOld := fieldHint "orchard.action.v_old"
+  vNew := fieldHint "orchard.action.v_new"
+  psiNew := fieldHint "orchard.action.psi_new"
+  magnitude := fieldHint "orchard.action.magnitude"
+  sign := fieldHint "orchard.action.sign"
+  cmOld := pointHint "orchard.action.cm_old"
+  gdOld := pointHint "orchard.action.gd_old"
+  akP := pointHint "orchard.action.ak_p"
+  pkDOld := pointHint "orchard.action.pkd_old"
+  gdNew := pointHint "orchard.action.gd_new"
+  pkdNew := pointHint "orchard.action.pkd_new"
+  rcv := natHint "orchard.action.rcv"
+  alpha := natHint "orchard.action.alpha"
+  rivk := natHint "orchard.action.rivk"
+  rcmOld := natHint "orchard.action.rcm_old"
+  rcmNew := natHint "orchard.action.rcm_new"
+  merkleSib := merkleSiblingHint
+  merkleSwap := merkleSwapHint
+}
 
 /-- Rust `assign_free_advice` (`circuit.rs:101-113`): the `"load private"` region, one
 advice cell at row 0. -/

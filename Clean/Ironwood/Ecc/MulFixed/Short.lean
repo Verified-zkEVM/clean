@@ -66,6 +66,11 @@ def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   createGate (shortGate cfg)
   return cfg
 
+instance (superConfig : MulFixed.Config) :
+    ElaboratedConfigure (configure superConfig) := by
+  unfold configure
+  infer_instance
+
 structure Inputs (F : Type) where
   -- The unsigned magnitude, already assigned.
   magnitude : F

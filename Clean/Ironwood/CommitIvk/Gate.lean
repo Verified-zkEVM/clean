@@ -75,4 +75,9 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) := by
+  unfold configure
+  infer_instance
+
 end Zcash.Circuits.CommitIvk

@@ -66,4 +66,11 @@ def configure (advices : Fin 10 → Column .advice)
   return { witnessPoint, addIncomplete, add, mul, mulFixedFull, mulFixedShort,
            mulFixedBaseField }
 
+instance (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) :
+    ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) := by
+  unfold configure
+  infer_instance
+
 end Zcash.Circuits.Ecc

@@ -102,6 +102,11 @@ def configure (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   createGate (bitshiftGate K cfg)
   return cfg
 
+instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
+    ElaboratedConfigure (configure K runningSum tableIdx) := by
+  unfold configure
+  infer_instance
+
 /-! ## The table loader
 
 Packaging decision: a plain `def load … : Circuit Fp Unit` emitting the single `loadTable`

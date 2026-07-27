@@ -133,4 +133,8 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
   createGate (padAndAddGate cfg)
   return cfg
 
+instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) :
+    ElaboratedConfigure (configure state partialSbox rcA rcB) := {}
+
 end Zcash.Circuits.Poseidon

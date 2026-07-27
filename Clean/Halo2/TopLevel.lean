@@ -176,78 +176,6 @@ theorem Operations.loadTable_length_le_usedRows
   exact hlength.trans (htable.trans
     ((Nat.le_max_right _ _).trans (Nat.le_max_left _ _)))
 
-private theorem exists_region_operation_of_mem_indexedRegions
-    {operations : Operations F} {start region : ℕ}
-    {body : RegionOperations F}
-    (hregion : (region, body) ∈ (indexedRegions operations start).1) :
-    ∃ name, Operation.region name body ∈ operations := by
-  induction operations generalizing start with
-  | nil =>
-      simp [indexedRegions] at hregion
-  | cons operation rest ih =>
-      cases operation with
-      | region name headBody =>
-          simp only [indexedRegions, List.mem_cons] at hregion
-          rcases hregion with hhead | hrest
-          · have : body = headBody := congrArg Prod.snd hhead
-            subst body
-            exact ⟨name, List.mem_cons_self⟩
-          · obtain ⟨foundName, hfound⟩ := ih hrest
-            exact ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-      | constrainInstance cell column row =>
-          exact
-            let ⟨foundName, hfound⟩ := ih hregion
-            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-      | loadTable table values =>
-          exact
-            let ⟨foundName, hfound⟩ := ih hregion
-            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-
-/-- Select the region-local law for one indexed region body. -/
-theorem Operations.LookupRelevantSelectorActivationsExact.of_region
-    {operations : Operations F}
-    (hlaw : operations.LookupRelevantSelectorActivationsExact)
-    {region : RegionIndex} {body : RegionOperations F}
-    (hregion : (region, body) ∈ (indexedRegions operations 0).1) :
-    body.LookupRelevantSelectorActivationsExact := by
-  obtain ⟨name, hoperation⟩ :=
-    exists_region_operation_of_mem_indexedRegions hregion
-  exact List.forall_iff_forall_mem.mp hlaw
-    (.region name body) hoperation
-
-/-- Select the exact activation equivalence for one lookup selector leaf. -/
-theorem RegionOperations.LookupRelevantSelectorActivationsExact.of_lookup
-    {body : RegionOperations F}
-    (hlaw : body.LookupRelevantSelectorActivationsExact)
-    {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
-    (hlookup :
-      RegionOperation.enableLookup argument enabled row ∈ body)
-    {expression : Expression F Query}
-    (hexpression : expression ∈ argument.inputs)
-    {selector : ℕ}
-    (hselector : selector ∈ expression.selectorIndices) :
-    SelectorEnabledAtIndex enabled selector ↔
-      body.SelectorActivatedAt selector row := by
-  have hoperation :=
-    List.forall_iff_forall_mem.mp hlaw
-      (.enableLookup argument enabled row) hlookup
-  have hinput :=
-    List.forall_iff_forall_mem.mp hoperation expression hexpression
-  exact List.forall_iff_forall_mem.mp hinput selector hselector
-
-/--
-The region-local synthesis law, combined with V1's guarded placement, supplies the
-exact global selector activation rows consumed by lookup projection.
--/
-theorem Operations.LookupRelevantSelectorActivationsExact.placed
-    {operations : Operations F}
-    (hlaw : operations.LookupRelevantSelectorActivationsExact) :
-    FloorPlanner.PlacedLookupSelectorRowsExact operations
-      (FloorPlanner.V1.starts operations) := by
-  apply FloorPlanner.V1.starts_placedLookupSelectorRowsExact_of_regionLaw
-  intro region body hregion
-  exact hlaw.of_region hregion
-
 /-!
 ## Top-level public inputs
 
@@ -408,6 +336,42 @@ def assignments (self : PublicInputLayout PublicInput columns)
     Vector ((Column .instance × ℕ) × F) (size PublicInput) :=
   Vector.ofFn fun i => (self.cells i, (toElements input)[i])
 
+/--
+Serialize one instance column as a dense row prefix.
+
+Cells absent from the public-input layout are zero. For a top-level circuit the
+layout columns are distinct, so every declared cell selects exactly one serialized
+public-input element.
+-/
+def rows [Zero F] (self : PublicInputLayout PublicInput columns)
+    (input : PublicInput F) (column : Column .instance) : List F :=
+  (List.range self.usedRows).map fun row =>
+    (toElements input).toList.getD
+      (self.cellList.idxOf (column, row)) 0
+
+/-- The row serialization reads back every declared public-input element. -/
+theorem rows_getD_cells
+    [Zero F]
+    (self : PublicInputLayout PublicInput columns)
+    (hcolumns : columns.Nodup)
+    (input : PublicInput F) (i : Fin (size PublicInput)) :
+    (self.rows input (self.cells i).1).getD
+        (self.cells i).2 0 =
+      (toElements input)[i] := by
+  have hrow := self.cells_snd_lt_usedRows i
+  rw [List.getD_eq_getElem _ _ (by simpa [rows] using hrow)]
+  simp only [rows, List.getElem_map, List.getElem_range]
+  have hindex :
+      self.cellList.idxOf (self.cells i) = i.val := by
+    unfold cells
+    apply List.Nodup.idxOf_getElem
+    exact self.cellList_nodup hcolumns
+  rw [hindex]
+  rw [List.getD_eq_getElem _ _ (by
+    simpa only [Vector.length_toList] using i.isLt)]
+  rw [Vector.getElem_toList]
+  rfl
+
 theorem extract_eq
     (self : PublicInputLayout PublicInput columns)
     (env : Environment F) (input : PublicInput F)
@@ -452,11 +416,42 @@ def constraintSystem
     ConstraintSystem F :=
   circuit.toConstraintSystem () ()
 
+/-- Instance-query requests emitted by this circuit's configure program. -/
+def configureInstanceQueries
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    List (Column .instance × Rotation) :=
+  (circuit.elaboratedConfigure ()).instanceQueries {}
+
 /-- Queried instance columns, in their first-query order. -/
 def publicInputColumns
     (circuit : FormalCircuit F Unit Config unit unit) :
     List (Column .instance) :=
-  (constraintSystem circuit).queriedInstanceColumns
+  (configureInstanceQueries circuit).map Prod.fst |>.dedup
+
+@[simp] theorem publicInputColumns_nodup
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    (publicInputColumns circuit).Nodup :=
+  List.nodup_dedup _
+
+/-- Every summarized configure query occurs in the interpreted configure result. -/
+theorem exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (column : Column .instance)
+    (hcolumn : column ∈ publicInputColumns circuit) :
+    ∃ rotation,
+      (column, rotation) ∈ (circuit.configure () {}).2.instanceQueries := by
+  rw [publicInputColumns, List.mem_dedup, List.mem_map] at hcolumn
+  obtain ⟨⟨foundColumn, rotation⟩, hquery, hcolumn⟩ := hcolumn
+  simp only at hcolumn
+  subst foundColumn
+  refine ⟨rotation, ?_⟩
+  rw [configureInstanceQueries] at hquery
+  rw [← (circuit.elaboratedConfigure ()).instanceQueries_eq] at hquery
+  change
+    (column, rotation) ∈
+      ((circuit.configure ()).run {}).2.instanceQueries
+  rw [Configure.mem_instanceQueries_run_iff]
+  exact Or.inr hquery
 
 def operations
     (circuit : FormalCircuit F Unit Config unit unit) : Operations F :=
@@ -645,16 +640,6 @@ structure TopLevelCircuit
       formalCircuit.extract config () 0 env
   /-- A top-level circuit has no assumptions supplied by an enclosing circuit. -/
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
-  /-- Synthesized lookup selector activations are represented exactly. -/
-  lookupRelevantSelectorActivationsExact :
-    let config := (formalCircuit.configure () {}).1
-    Operations.LookupRelevantSelectorActivationsExact
-      ((formalCircuit.synthesize config ()).operations 0)
-  /-- Lookup inputs do not contain simple selectors. -/
-  lookupInputsNoSimpleSelectors :
-    let config := (formalCircuit.configure () {}).1
-    Operations.LookupInputsNoSimpleSelectors
-      ((formalCircuit.synthesize config ()).operations 0)
   /--
   The canonical compiled environment supplies the residual facts that the circuit
   cannot establish from either constraints or witness extension.
@@ -688,7 +673,24 @@ theorem publicInputLayout_cells_injective
     (self : TopLevelCircuit F Config PublicInput) :
     Function.Injective self.publicInputLayout.cells := by
   apply self.publicInputLayout.cells_injective
-  exact self.constraintSystem.queriedInstanceColumns_nodup
+  exact TopLevelCompilation.publicInputColumns_nodup self.formalCircuit
+
+/-- Serialize one circuit-derived public instance column as a dense row prefix. -/
+def publicInputRows
+    (self : TopLevelCircuit F Config PublicInput)
+    (input : PublicInput F) (column : Column .instance) : List F :=
+  self.publicInputLayout.rows input column
+
+/-- Circuit-derived public row serialization reads back every declared cell. -/
+theorem publicInputRows_getD_cell
+    (self : TopLevelCircuit F Config PublicInput)
+    (input : PublicInput F) (i : Fin (size PublicInput)) :
+    (self.publicInputRows input (self.publicInputLayout.cells i).1).getD
+        (self.publicInputLayout.cells i).2 0 =
+      (toElements input)[i] := by
+  exact self.publicInputLayout.rows_getD_cells
+    (TopLevelCompilation.publicInputColumns_nodup self.formalCircuit)
+    input i
 
 /-- Each public-input cell's column has a verifier query at some rotation. -/
 theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
@@ -697,10 +699,18 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
     ∃ rotation,
       ((self.publicInputLayout.cells i).1, rotation) ∈
         self.constraintSystem.instanceQueries := by
-  apply
-    self.constraintSystem
-      |>.exists_rotation_mem_instanceQueries_of_mem_queriedInstanceColumns
-  exact self.publicInputLayout.cells_fst_mem_columns i
+  obtain ⟨rotation, hquery⟩ :=
+    TopLevelCompilation.exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
+      self.formalCircuit
+      (self.publicInputLayout.cells i).1
+      (self.publicInputLayout.cells_fst_mem_columns i)
+  refine ⟨rotation, ?_⟩
+  exact
+    ConstraintSystem.mem_instanceQueries_closeWithOperations_of_mem
+      (self.formalCircuit.configure () {}).2
+      (self.formalCircuit.toOperations () ())
+      ((self.publicInputLayout.cells i).1, rotation)
+      hquery
 
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
@@ -728,6 +738,12 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 /-- The operation footprint that key generation requires to fit in usable rows. -/
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout
+
+/-- The complete synthesis operation footprint is included in top-level row usage. -/
+theorem operations_usedRows_le_usedRows
+    (self : TopLevelCircuit F Config PublicInput) :
+    Halo2.usedRows self.operations ≤ self.usedRows := by
+  exact Nat.le_max_left _ _
 
 /-- Every public-input cell is below the compiler-derived usable-row requirement. -/
 theorem publicInputLayout_cells_snd_lt_usedRows
@@ -763,6 +779,17 @@ theorem usedRows_le_usableRowsAt_domainExponent
     constraintSystem] using
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
       self.formalCircuit self.publicInputLayout
+
+/-- The compiler-derived domain includes Halo 2's three mandatory terminal rows. -/
+theorem blindingFactors_add_three_le_domainSize
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.blindingFactors + 3 ≤ 2 ^ self.domainExponent := by
+  have hfit := Halo2.minimalKForRows_fits
+    self.constraintSystem self.usedRows
+  have hminimum :
+      self.constraintSystem.minimumRows ≤ 2 ^ self.domainExponent :=
+    (Nat.le_max_right _ _).trans hfit
+  simpa only [ConstraintSystem.minimumRows, blindingFactors] using hminimum
 
 /-- Every public-input cell lies in the compiler-derived usable-row range. -/
 theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent

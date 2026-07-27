@@ -63,6 +63,11 @@ def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM colR : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR) := by
+  unfold configure
+  infer_instance
+
 end DecomposeB
 
 namespace DecomposeD
@@ -95,6 +100,11 @@ def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM colR : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR) := by
+  unfold configure
+  infer_instance
+
 end DecomposeD
 
 namespace DecomposeE
@@ -120,6 +130,11 @@ def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let cfg : Config := { qNotecommitE, colL, colM, colR }
   createGate (gate cfg)
   return cfg
+
+instance (colL colM colR : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR) := by
+  unfold configure
+  infer_instance
 
 end DecomposeE
 
@@ -149,6 +164,11 @@ def configure (colL colM : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM : Column .advice) :
+    ElaboratedConfigure (configure colL colM) := by
+  unfold configure
+  infer_instance
+
 end DecomposeG
 
 namespace DecomposeH
@@ -176,6 +196,11 @@ def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let cfg : Config := { qNotecommitH, colL, colM, colR }
   createGate (gate cfg)
   return cfg
+
+instance (colL colM colR : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR) := by
+  unfold configure
+  infer_instance
 
 end DecomposeH
 
@@ -216,6 +241,11 @@ def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM colR colZ : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR colZ) := by
+  unfold configure
+  infer_instance
+
 end GdCanonicity
 
 namespace PkdCanonicity
@@ -253,6 +283,11 @@ def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM colR colZ : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR colZ) := by
+  unfold configure
+  infer_instance
+
 end PkdCanonicity
 
 namespace ValueCanonicity
@@ -281,6 +316,11 @@ def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let cfg : Config := { qNotecommitValue, colL, colM, colR, colZ }
   createGate (gate cfg)
   return cfg
+
+instance (colL colM colR colZ : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR colZ) := by
+  unfold configure
+  infer_instance
 
 end ValueCanonicity
 
@@ -318,6 +358,11 @@ def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let cfg : Config := { qNotecommitRho, colL, colM, colR, colZ }
   createGate (gate cfg)
   return cfg
+
+instance (colL colM colR colZ : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR colZ) := by
+  unfold configure
+  infer_instance
 
 end RhoCanonicity
 
@@ -359,6 +404,11 @@ def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (colL colM colR colZ : Column .advice) :
+    ElaboratedConfigure (configure colL colM colR colZ) := by
+  unfold configure
+  infer_instance
+
 end PsiCanonicity
 
 namespace YCanonicity
@@ -398,6 +448,11 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) := by
+  unfold configure
+  infer_instance
+
 end YCanonicity
 
 /-! ## The combined configure (`NoteCommitConfig::configure`, `note_commit.rs:1456-1560`) -/
@@ -435,5 +490,10 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let psi ← PsiCanonicity.configure colL colM colR colZ
   let y ← YCanonicity.configure advices
   return { b, d, e, g, h, gd, pkd, value, rho, psi, y }
+
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) := by
+  unfold configure
+  infer_instance
 
 end Zcash.Circuits.NoteCommit

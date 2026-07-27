@@ -178,6 +178,11 @@ def configure (z xA xP yP lambda1 lambda2 : Column .advice) : Configure Fp Confi
   createGate (qMul3Gate cfg)
   return cfg
 
+instance (z xA xP yP lambda1 lambda2 : Column .advice) :
+    ElaboratedConfigure (configure z xA xP yP lambda1 lambda2) := by
+  unfold configure
+  infer_instance
+
 /-! ## Inputs / Output
 
 Mirrors `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits derive from. -/

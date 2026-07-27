@@ -43,6 +43,11 @@ def configure (a b c : Column .advice) : Configure Fp Config := do
   createGate (addGate cfg)
   return cfg
 
+instance (a b c : Column .advice) :
+    ElaboratedConfigure (configure a b c) := by
+  unfold configure
+  infer_instance
+
 /-- The two summand cells (copied in). -/
 structure Inputs (F : Type) where
   a : F

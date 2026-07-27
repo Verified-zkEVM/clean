@@ -309,31 +309,297 @@ def ConstraintSystem.registerQueriedCells (cs : ConstraintSystem F) (owner : Str
     (cells : List (Expression F Query)) : ConstraintSystem F :=
   cells.foldl (fun cs e => cs.registerQueriedCell owner e) cs
 
+theorem ConstraintSystem.mem_instanceQueries_queryInstanceIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .instance)
+    (rotation : Rotation) (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryInstanceIndex column rotation).instanceQueries := by
+  unfold queryInstanceIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_queryAdviceIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .advice)
+    (rotation : Rotation) (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryAdviceIndex column rotation).instanceQueries := by
+  unfold queryAdviceIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_queryFixedIndex_of_mem
+    (cs : ConstraintSystem F) (column : Column .fixed)
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.queryFixedIndex column).instanceQueries := by
+  unfold queryFixedIndex
+  split <;> simp_all
+
+theorem ConstraintSystem.mem_instanceQueries_registerQueriedCell_of_mem
+    (cs : ConstraintSystem F) (owner : String)
+    (cell : Expression F Query)
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.registerQueriedCell owner cell).instanceQueries := by
+  cases cell with
+  | var queried =>
+      cases queried with
+      | selector =>
+          exact hquery
+      | fixed column _ =>
+          exact cs.mem_instanceQueries_queryFixedIndex_of_mem
+            column query hquery
+      | advice column rotation =>
+          exact cs.mem_instanceQueries_queryAdviceIndex_of_mem
+            column rotation query hquery
+      | «instance» column rotation =>
+          exact cs.mem_instanceQueries_queryInstanceIndex_of_mem
+            column rotation query hquery
+  | const =>
+      exact hquery
+  | add =>
+      exact hquery
+  | mul =>
+      exact hquery
+
+theorem ConstraintSystem.mem_instanceQueries_registerQueriedCells_of_mem
+    (cs : ConstraintSystem F) (owner : String)
+    (cells : List (Expression F Query))
+    (query : Column .instance × Rotation)
+    (hquery : query ∈ cs.instanceQueries) :
+    query ∈ (cs.registerQueriedCells owner cells).instanceQueries := by
+  induction cells generalizing cs with
+  | nil =>
+      exact hquery
+  | cons cell cells ih =>
+      rw [registerQueriedCells, List.foldl_cons]
+      apply ih
+      exact cs.mem_instanceQueries_registerQueriedCell_of_mem
+        owner cell query hquery
+
+/-- Allocation counters threaded through configure programs. -/
+structure ConfigureCounts where
+  numAdviceColumns : ℕ := 0
+  numFixedColumns : ℕ := 0
+  numInstanceColumns : ℕ := 0
+  numSelectors : ℕ := 0
+
+def ConfigureCounts.ofConstraintSystem (cs : ConstraintSystem F) :
+    ConfigureCounts where
+  numAdviceColumns := cs.numAdviceColumns
+  numFixedColumns := cs.numFixedColumns
+  numInstanceColumns := cs.numInstanceColumns
+  numSelectors := cs.numSelectors
+
 /--
-The configure monad: threads the `ConstraintSystem` being built. Mirrors passing
-`meta : &mut ConstraintSystem<F>` through Rust configure code.
+The append-only contribution of a configure program.
+
+Lists contain raw requests in program order. The final interpreter performs Halo2's
+first-encounter deduplication against the initial constraint system.
 -/
-abbrev Configure (F : Type) := StateM (ConstraintSystem F)
+structure ConfigureDelta (F : Type) where
+  gates : List (Gate F) := []
+  lookups : List (LookupArgument F) := []
+  permutationRequests : List AnyColumn := []
+  constants : List (Column .fixed) := []
+  adviceQueries : List (Column .advice × Rotation) := []
+  fixedQueries : List (Column .fixed × Rotation) := []
+  instanceQueries : List (Column .instance × Rotation) := []
+  invalidQueriedCells : List String := []
+
+def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F where
+  gates := left.gates ++ right.gates
+  lookups := left.lookups ++ right.lookups
+  permutationRequests :=
+    left.permutationRequests ++ right.permutationRequests
+  constants := left.constants ++ right.constants
+  adviceQueries := left.adviceQueries ++ right.adviceQueries
+  fixedQueries := left.fixedQueries ++ right.fixedQueries
+  instanceQueries := left.instanceQueries ++ right.instanceQueries
+  invalidQueriedCells :=
+    left.invalidQueriedCells ++ right.invalidQueriedCells
+
+private def appendFirstEncounters {α : Type} [DecidableEq α]
+    (initial requests : List α) : List α :=
+  requests.foldl
+    (fun accumulated request =>
+      if request ∈ accumulated then accumulated
+      else accumulated ++ [request])
+    initial
+
+theorem mem_appendFirstEncounters {α : Type} [DecidableEq α]
+    (value : α) (initial requests : List α) :
+    value ∈ appendFirstEncounters initial requests ↔
+      value ∈ initial ∨ value ∈ requests := by
+  induction requests generalizing initial with
+  | nil =>
+      simp [appendFirstEncounters]
+  | cons request requests ih =>
+      rw [appendFirstEncounters, List.foldl_cons]
+      change
+        value ∈ appendFirstEncounters
+            (if request ∈ initial then initial
+              else initial ++ [request])
+            requests ↔
+          value ∈ initial ∨ value ∈ request :: requests
+      rw [ih]
+      by_cases hrequest : request ∈ initial
+      · simp only [hrequest, if_pos, List.mem_cons]
+        constructor
+        · intro h
+          exact h.elim Or.inl (fun htail => Or.inr (Or.inr htail))
+        · rintro (hinitial | heq | htail)
+          · exact Or.inl hinitial
+          · subst value
+            exact Or.inl hrequest
+          · exact Or.inr htail
+      · simp [hrequest, or_assoc, or_left_comm]
+
+def ConfigureDelta.apply (delta : ConfigureDelta F)
+    (initial : ConstraintSystem F) (counts : ConfigureCounts) :
+    ConstraintSystem F where
+  numAdviceColumns := counts.numAdviceColumns
+  numFixedColumns := counts.numFixedColumns
+  numInstanceColumns := counts.numInstanceColumns
+  numSelectors := counts.numSelectors
+  gates := initial.gates ++ delta.gates
+  lookups := initial.lookups ++ delta.lookups
+  permutationColumns :=
+    appendFirstEncounters initial.permutationColumns
+      delta.permutationRequests
+  constants := initial.constants ++ delta.constants
+  adviceQueries :=
+    appendFirstEncounters initial.adviceQueries delta.adviceQueries
+  fixedQueries :=
+    appendFirstEncounters initial.fixedQueries delta.fixedQueries
+  instanceQueries :=
+    appendFirstEncounters initial.instanceQueries delta.instanceQueries
+  invalidQueriedCells :=
+    initial.invalidQueriedCells ++ delta.invalidQueriedCells
+
+/--
+The configure monad, in the same append-only style as `Circuit`.
+
+Allocation counters are threaded state; every other constraint-system contribution is
+written to `ConfigureDelta`. The `CoeFun` instance preserves the existing `program cs`
+interface by interpreting that delta at the boundary.
+-/
+structure Configure (F : Type) (α : Type) where
+  plan : ConfigureCounts → α × ConfigureDelta F × ConfigureCounts
+
+namespace Configure
+
+variable {α β : Type}
+
+def output (program : Configure F α) (counts : ConfigureCounts) : α :=
+  (program.plan counts).1
+
+def delta (program : Configure F α) (counts : ConfigureCounts) :
+    ConfigureDelta F :=
+  (program.plan counts).2.1
+
+def finalCounts (program : Configure F α) (counts : ConfigureCounts) :
+    ConfigureCounts :=
+  (program.plan counts).2.2
+
+def run (program : Configure F α) (initial : ConstraintSystem F) :
+    α × ConstraintSystem F :=
+  let counts := ConfigureCounts.ofConstraintSystem initial
+  let (output, delta, finalCounts) := program.plan counts
+  (output, delta.apply initial finalCounts)
+
+theorem mem_instanceQueries_run_iff
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (query : Column .instance × Rotation) :
+    query ∈ (program.run initial).2.instanceQueries ↔
+      query ∈ initial.instanceQueries ∨
+        query ∈
+          (program.delta
+            (ConfigureCounts.ofConstraintSystem initial)).instanceQueries := by
+  simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
+
+instance : CoeFun (Configure F α)
+    (fun _ => ConstraintSystem F → α × ConstraintSystem F) where
+  coe := run
+
+instance : Monad (Configure F) where
+  pure value := ⟨fun counts => (value, {}, counts)⟩
+  bind program next := ⟨fun counts =>
+    let (output, delta, nextCounts) := program.plan counts
+    let (nextOutput, nextDelta, finalCounts) :=
+      (next output).plan nextCounts
+    (nextOutput, delta.append nextDelta, finalCounts)⟩
+
+end Configure
+
+def ConfigureDelta.queryAny (column : AnyColumn) : ConfigureDelta F :=
+  match column with
+  | ⟨.advice, index⟩ =>
+      { adviceQueries := [(⟨index⟩, 0)] }
+  | ⟨.fixed, index⟩ =>
+      { fixedQueries := [(⟨index⟩, 0)] }
+  | ⟨.instance, index⟩ =>
+      { instanceQueries := [(⟨index⟩, 0)] }
+
+def ConfigureDelta.queriedCell (owner : String) :
+    Expression F Query → ConfigureDelta F
+  | .var (.advice column rotation) =>
+      { adviceQueries := [(column, rotation)] }
+  | .var (.fixed column _) =>
+      { fixedQueries := [(column, 0)] }
+  | .var (.instance column rotation) =>
+      { instanceQueries := [(column, rotation)] }
+  | .var (.selector _) =>
+      { invalidQueriedCells :=
+        [s!"{owner}: selector atom in queriedCells (selectors get no query index)"] }
+  | _ =>
+      { invalidQueriedCells :=
+        [s!"{owner}: non-atom expression in queriedCells"] }
+
+def ConfigureDelta.queriedCells (owner : String)
+    (cells : List (Expression F Query)) : ConfigureDelta F :=
+  cells.foldl
+    (fun delta cell => delta.append (.queriedCell owner cell)) {}
+
+/-- Instance-query requests among a gate or lookup's declared query atoms. -/
+def ConfigureDelta.instanceQueriesOfCells
+    (cells : List (Expression F Query)) :
+    List (Column .instance × Rotation) :=
+  cells.flatMap fun cell =>
+    match cell with
+    | .var (.instance column rotation) => [(column, rotation)]
+    | _ => []
 
 /-- Rust: `meta.advice_column()`. -/
 def adviceColumn : Configure F (Column .advice) :=
-  fun cs => (⟨cs.numAdviceColumns⟩, { cs with numAdviceColumns := cs.numAdviceColumns + 1 })
+  ⟨fun counts =>
+    (⟨counts.numAdviceColumns⟩, {},
+      { counts with
+        numAdviceColumns := counts.numAdviceColumns + 1 })⟩
 
 /-- Rust: `meta.fixed_column()`. -/
 def fixedColumn : Configure F (Column .fixed) :=
-  fun cs => (⟨cs.numFixedColumns⟩, { cs with numFixedColumns := cs.numFixedColumns + 1 })
+  ⟨fun counts =>
+    (⟨counts.numFixedColumns⟩, {},
+      { counts with
+        numFixedColumns := counts.numFixedColumns + 1 })⟩
 
 /-- Rust: `meta.instance_column()`. -/
 def instanceColumn : Configure F (Column .instance) :=
-  fun cs => (⟨cs.numInstanceColumns⟩, { cs with numInstanceColumns := cs.numInstanceColumns + 1 })
+  ⟨fun counts =>
+    (⟨counts.numInstanceColumns⟩, {},
+      { counts with
+        numInstanceColumns := counts.numInstanceColumns + 1 })⟩
 
 /-- Rust: `meta.selector()` (a simple selector). -/
 def selector : Configure F Selector :=
-  fun cs => (⟨cs.numSelectors, true⟩, { cs with numSelectors := cs.numSelectors + 1 })
+  ⟨fun counts =>
+    (⟨counts.numSelectors, true⟩, {},
+      { counts with numSelectors := counts.numSelectors + 1 })⟩
 
 /-- Rust: `meta.complex_selector()`. -/
 def complexSelector : Configure F Selector :=
-  fun cs => (⟨cs.numSelectors, false⟩, { cs with numSelectors := cs.numSelectors + 1 })
+  ⟨fun counts =>
+    (⟨counts.numSelectors, false⟩, {},
+      { counts with numSelectors := counts.numSelectors + 1 })⟩
 
 /-- Rust: `meta.enable_equality(column)`. Idempotent, exactly like Rust's
 `permutation::Argument::add_column` (`permutation.rs:61-65`: `if !columns.contains`),
@@ -345,24 +611,20 @@ Also registers a cur-rotation query on the column *before* the permutation appen
 (`circuit.rs:1046-1050`) — unconditionally, not gated on the column being new to the
 permutation (idempotence comes from the `query_*_index` dedup). -/
 def enableEquality (c : AnyColumn) : Configure F Unit :=
-  fun cs =>
-    let cs := cs.queryAnyIndex c
-    ((), { cs with permutationColumns :=
-      if c ∈ cs.permutationColumns then cs.permutationColumns
-      else cs.permutationColumns ++ [c] })
+  ⟨fun counts =>
+    ((), (ConfigureDelta.queryAny c).append
+      { permutationRequests := [c] }, counts)⟩
 
 /-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
 constants column and enables equality on it (constants are enforced via copies into this
 column) — including `enable_equality`'s cur fixed-query registration. -/
 def enableConstant (col : Column .fixed) : Configure F Unit :=
-  fun cs =>
-    let cs := cs.queryFixedIndex col
-    ((),
-      { cs with
-        constants := cs.constants ++ [col]
-        permutationColumns :=
-          if col.toAny ∈ cs.permutationColumns then cs.permutationColumns
-          else cs.permutationColumns ++ [col.toAny] })
+  ⟨fun counts =>
+    ((), {
+      fixedQueries := [(col, 0)]
+      constants := [col]
+      permutationRequests := [col.toAny]
+    }, counts)⟩
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
@@ -372,9 +634,9 @@ def lookupTableColumn : Configure F TableColumn := do
 Registers the gate's `queriedCells` in list order (the closure's queries all execute
 before the gate is pushed, `circuit.rs:1195-1229`), then appends the gate. -/
 def createGate (gate : Gate F) : Configure F Unit :=
-  fun cs =>
-    let cs := cs.registerQueriedCells gate.name gate.queriedCells
-    ((), { cs with gates := cs.gates ++ [gate] })
+  ⟨fun counts =>
+    ((), (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
+      { gates := [gate] }, counts)⟩
 
 /-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
 of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
@@ -401,10 +663,519 @@ def lookup (queriedCells : List (Expression F Query))
     simp [Expression.SelectorFree, queryFixed]
   have arity : inputs.length = tables.length := by
     simp [inputs, tables]
-  fun cs =>
-    let cs := cs.registerQueriedCells "lookup" queriedCells
-    let cs := tableMap.foldl (fun cs (_, tbl) => cs.queryFixedIndex tbl.inner) cs
-    ((), { cs with lookups :=
-      cs.lookups ++ [{ inputs, tables, tablesFree, arity }] })
+  ⟨fun counts =>
+    let queryDelta := ConfigureDelta.queriedCells "lookup" queriedCells
+    let tableDelta := (tableMap.map Prod.snd).foldl
+      (fun delta table =>
+        delta.append { fixedQueries := [(table.inner, 0)] }) {}
+    ((), queryDelta.append tableDelta |>.append
+      { lookups := [{ inputs, tables, tablesFree, arity }] }, counts)⟩
+
+namespace Configure
+
+variable {α β : Type}
+
+@[simp] theorem delta_pure (value : α) (counts : ConfigureCounts) :
+    delta (pure value : Configure F α) counts = {} :=
+  rfl
+
+@[simp] theorem output_pure (value : α) (counts : ConfigureCounts) :
+    output (pure value : Configure F α) counts = value :=
+  rfl
+
+@[simp] theorem finalCounts_pure (value : α) (counts : ConfigureCounts) :
+    finalCounts (pure value : Configure F α) counts = counts :=
+  rfl
+
+@[simp] theorem delta_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    delta (program >>= next) counts =
+      (program.delta counts).append
+        ((next (program.output counts)).delta
+          (program.finalCounts counts)) :=
+  rfl
+
+@[simp] theorem output_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    output (program >>= next) counts =
+      (next (program.output counts)).output
+        (program.finalCounts counts) :=
+  rfl
+
+@[simp] theorem finalCounts_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    finalCounts (program >>= next) counts =
+      (next (program.output counts)).finalCounts
+        (program.finalCounts counts) :=
+  rfl
+
+@[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
+    output (adviceColumn : Configure F (Column .advice)) counts =
+      ⟨counts.numAdviceColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_adviceColumn (counts : ConfigureCounts) :
+    finalCounts (adviceColumn : Configure F (Column .advice)) counts =
+      { counts with numAdviceColumns := counts.numAdviceColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_fixedColumn (counts : ConfigureCounts) :
+    output (fixedColumn : Configure F (Column .fixed)) counts =
+      ⟨counts.numFixedColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_fixedColumn (counts : ConfigureCounts) :
+    finalCounts (fixedColumn : Configure F (Column .fixed)) counts =
+      { counts with numFixedColumns := counts.numFixedColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_instanceColumn (counts : ConfigureCounts) :
+    output (instanceColumn : Configure F (Column .instance)) counts =
+      ⟨counts.numInstanceColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_instanceColumn (counts : ConfigureCounts) :
+    finalCounts (instanceColumn : Configure F (Column .instance)) counts =
+      { counts with numInstanceColumns := counts.numInstanceColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_selector (counts : ConfigureCounts) :
+    output (selector : Configure F Selector) counts =
+      ⟨counts.numSelectors, true⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_selector (counts : ConfigureCounts) :
+    finalCounts (selector : Configure F Selector) counts =
+      { counts with numSelectors := counts.numSelectors + 1 } :=
+  rfl
+
+@[simp] theorem output_complexSelector (counts : ConfigureCounts) :
+    output (complexSelector : Configure F Selector) counts =
+      ⟨counts.numSelectors, false⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_complexSelector (counts : ConfigureCounts) :
+    finalCounts (complexSelector : Configure F Selector) counts =
+      { counts with numSelectors := counts.numSelectors + 1 } :=
+  rfl
+
+@[simp] theorem output_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    output (enableEquality (F := F) column) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    finalCounts (enableEquality (F := F) column) counts = counts :=
+  rfl
+
+@[simp] theorem output_enableConstant
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    output (enableConstant (F := F) column) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_enableConstant
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    finalCounts (enableConstant (F := F) column) counts = counts :=
+  rfl
+
+@[simp] theorem output_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    output (createGate gate) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    finalCounts (createGate gate) counts = counts :=
+  rfl
+
+@[simp] theorem output_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    output (lookup queriedCells tableMap) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    finalCounts (lookup queriedCells tableMap) counts = counts :=
+  rfl
+
+end Configure
+
+@[simp] theorem ConfigureDelta.instanceQueries_append
+    (left right : ConfigureDelta F) :
+    (left.append right).instanceQueries =
+      left.instanceQueries ++ right.instanceQueries :=
+  rfl
+
+@[simp] theorem ConfigureDelta.queryAny_instanceQueries
+    (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).instanceQueries =
+      match column with
+      | ⟨.instance, index⟩ => [(⟨index⟩, 0)]
+      | _ => [] := by
+  cases column with
+  | mk kind index =>
+      cases kind <;> rfl
+
+@[simp] theorem ConfigureDelta.queriedCell_instanceQueries
+    (owner : String) (cell : Expression F Query) :
+    (ConfigureDelta.queriedCell owner cell).instanceQueries =
+      match cell with
+      | .var (.instance column rotation) => [(column, rotation)]
+      | _ => [] := by
+  cases cell with
+  | var query =>
+      cases query <;> rfl
+  | const value =>
+      rfl
+  | add left right =>
+      rfl
+  | mul left right =>
+      rfl
+
+private theorem ConfigureDelta.queriedCells_instanceQueries_aux
+    (owner : String) (cells : List (Expression F Query))
+    (initial : ConfigureDelta F) :
+    (cells.foldl
+      (fun delta cell => delta.append (.queriedCell owner cell))
+      initial).instanceQueries =
+        initial.instanceQueries ++
+          cells.flatMap fun cell =>
+            match cell with
+            | .var (.instance column rotation) => [(column, rotation)]
+            | _ => [] := by
+  induction cells generalizing initial with
+  | nil =>
+      simp
+  | cons cell cells ih =>
+      rw [List.foldl_cons, ih]
+      simp only [ConfigureDelta.instanceQueries_append,
+        ConfigureDelta.queriedCell_instanceQueries, List.flatMap_cons,
+        List.append_assoc]
+
+@[simp] theorem ConfigureDelta.queriedCells_instanceQueries
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).instanceQueries =
+      ConfigureDelta.instanceQueriesOfCells cells := by
+  rw [ConfigureDelta.queriedCells]
+  simpa [ConfigureDelta.instanceQueriesOfCells] using
+    ConfigureDelta.queriedCells_instanceQueries_aux
+      (F := F) owner cells {}
+
+@[simp] theorem Configure.delta_adviceColumn_instanceQueries
+    (counts : ConfigureCounts) :
+    (Configure.delta (adviceColumn : Configure F (Column .advice))
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_fixedColumn_instanceQueries
+    (counts : ConfigureCounts) :
+    (Configure.delta (fixedColumn : Configure F (Column .fixed))
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_instanceColumn_instanceQueries
+    (counts : ConfigureCounts) :
+    (Configure.delta (instanceColumn : Configure F (Column .instance))
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_selector_instanceQueries
+    (counts : ConfigureCounts) :
+    (Configure.delta (selector : Configure F Selector)
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_complexSelector_instanceQueries
+    (counts : ConfigureCounts) :
+    (Configure.delta (complexSelector : Configure F Selector)
+      counts).instanceQueries = [] :=
+  rfl
+
+theorem Configure.delta_enableEquality_instanceQueries
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    (Configure.delta (enableEquality (F := F) column)
+      counts).instanceQueries =
+        match column with
+        | ⟨.instance, index⟩ => [(⟨index⟩, 0)]
+        | _ => [] := by
+  simp only [Configure.delta, enableEquality,
+    ConfigureDelta.instanceQueries_append,
+    ConfigureDelta.queryAny_instanceQueries]
+  cases column with
+  | mk kind index =>
+      cases kind <;> rfl
+
+@[simp] theorem Configure.delta_enableEquality_advice_instanceQueries
+    (column : Column .advice) (counts : ConfigureCounts) :
+    (Configure.delta (enableEquality (F := F) column.toAny)
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_enableEquality_fixed_instanceQueries
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    (Configure.delta (enableEquality (F := F) column.toAny)
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_enableEquality_instance_instanceQueries
+    (column : Column .instance) (counts : ConfigureCounts) :
+    (Configure.delta (enableEquality (F := F) column.toAny)
+      counts).instanceQueries = [(column, 0)] :=
+  rfl
+
+@[simp] theorem Configure.delta_enableConstant_instanceQueries
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    (Configure.delta (enableConstant (F := F) column)
+      counts).instanceQueries = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_createGate_instanceQueries
+    (gate : Gate F) (counts : ConfigureCounts) :
+    (Configure.delta (createGate gate) counts).instanceQueries =
+      ConfigureDelta.instanceQueriesOfCells gate.queriedCells := by
+  simp only [Configure.delta, createGate,
+    ConfigureDelta.instanceQueries_append,
+    ConfigureDelta.queriedCells_instanceQueries, List.append_nil]
+
+@[simp] theorem Configure.delta_lookup_instanceQueries
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    (Configure.delta (lookup queriedCells tableMap) counts).instanceQueries =
+      ConfigureDelta.instanceQueriesOfCells queriedCells := by
+  simp only [Configure.delta, lookup,
+    ConfigureDelta.instanceQueries_append,
+    ConfigureDelta.queriedCells_instanceQueries]
+  have htables
+      (tables : List TableColumn) (initial : ConfigureDelta F) :
+      (tables.foldl
+        (fun delta table =>
+          delta.append { fixedQueries := [(table.inner, 0)] })
+        initial).instanceQueries = initial.instanceQueries := by
+    induction tables generalizing initial with
+    | nil =>
+        rfl
+    | cons table tables ih =>
+        rw [List.foldl_cons, ih]
+        simp only [ConfigureDelta.instanceQueries_append,
+          List.append_nil]
+  rw [htables]
+  simp
+
+open Lean Meta Simp in
+/--
+Reduce only the query-list projection of a named gate or lookup. This gives the
+configure normalizer an opacity boundary: it can discover that a large named gate has
+no instance queries without unfolding its constraints or any unrelated configure data.
+-/
+def foldConfigureInstanceQueriesProc : Simproc := fun expression => do
+  unless expression.isAppOf ``ConfigureDelta.instanceQueriesOfCells do
+    return .continue
+  try
+    let reduced ← withTransparency .default (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldConfigureInstanceQueries
+    (ConfigureDelta.instanceQueriesOfCells _) :=
+  foldConfigureInstanceQueriesProc
+attribute [simp] foldConfigureInstanceQueries
+
+open Lean Elab Tactic in
+/--
+Normalize the instance-query projection of a transparent configure program.
+
+The tactic unfolds only the outer configure definition, then follows the append-only
+writer through monadic composition. Unrelated gates, lookups, columns, and selector
+state are discarded by projection rather than materialized as a full constraint system.
+-/
+elab "configure_norm" : tactic => withMainContext do
+  try
+    evalTactic (← `(tactic| rfl))
+  catch _ =>
+    pure ()
+  if (← getGoals).isEmpty then
+    return
+  evalTactic (← `(tactic| intro counts))
+  let target ← instantiateMVars (← getMainTarget)
+  let some deltaApp := target.find? fun expression =>
+      expression.getAppFn.isConstOf ``Configure.delta
+    | throwError "configure_norm: no Configure.delta projection in target"
+  let arguments := deltaApp.getAppArgs
+  if arguments.size < 2 then
+    throwError "configure_norm: malformed Configure.delta application"
+  let program := arguments[arguments.size - 2]!
+  let some head := program.getAppFn.constName?
+    | throwError "configure_norm: configure program has no unfoldable head"
+  evalTactic (← `(tactic| unfold $(mkIdent head)))
+  evalTactic (← `(tactic|
+    simp only [
+      Configure.output, Configure.finalCounts,
+      Configure.delta_bind, Configure.delta_pure,
+      Configure.output_bind, Configure.output_pure,
+      Configure.finalCounts_bind, Configure.finalCounts_pure,
+      ConfigureDelta.instanceQueries_append,
+      Configure.delta_adviceColumn_instanceQueries,
+      Configure.delta_fixedColumn_instanceQueries,
+      Configure.delta_instanceColumn_instanceQueries,
+      Configure.delta_selector_instanceQueries,
+      Configure.delta_complexSelector_instanceQueries,
+      Configure.delta_enableEquality_advice_instanceQueries,
+      Configure.delta_enableEquality_fixed_instanceQueries,
+      Configure.delta_enableEquality_instance_instanceQueries,
+      Configure.delta_enableConstant_instanceQueries,
+      Configure.delta_createGate_instanceQueries,
+      Configure.delta_lookup_instanceQueries,
+      ConfigureDelta.queriedCells_instanceQueries,
+      lookupTableColumn,
+      List.foldl_nil, List.foldl_cons, List.map, List.append_nil,
+      List.nil_append, List.append_assoc]))
+  if !(← getGoals).isEmpty then
+    evalTactic (← `(tactic| simp))
+  if !(← getGoals).isEmpty then
+    evalTactic (← `(tactic| rfl))
+
+variable {α : Type}
+
+/--
+Reduced configure metadata used by parent circuits.
+
+`instanceQueries` is the ordered list of instance-query requests emitted by this
+program, before the constraint system's first-encounter deduplication. It is a function
+of the initial state because a program may allocate an instance column and then query
+that freshly allocated column. Most reusable child configurations emit no instance
+queries, so the metadata and its proof both default to the empty list.
+-/
+class ElaboratedConfigure (program : Configure F α) where
+  instanceQueries :
+    ConfigureCounts → List (Column .instance × Rotation) := fun _ => []
+  instanceQueries_eq : ∀ counts,
+    (program.delta counts).instanceQueries =
+      instanceQueries counts := by
+    configure_norm
+
+@[simp] theorem ElaboratedConfigure.delta_instanceQueries
+    (program : Configure F α) [elaborated : ElaboratedConfigure program]
+    (counts : ConfigureCounts) :
+    (program.delta counts).instanceQueries =
+      elaborated.instanceQueries counts :=
+  elaborated.instanceQueries_eq counts
+
+instance ElaboratedConfigure.pure (value : α) :
+    ElaboratedConfigure (pure value : Configure F α) where
+  instanceQueries_eq := by
+    intro counts
+    rfl
+
+instance ElaboratedConfigure.bind {β : Type}
+    (program : Configure F α) [programElaborated : ElaboratedConfigure program]
+    (next : α → Configure F β)
+    [nextElaborated : ∀ value, ElaboratedConfigure (next value)] :
+    ElaboratedConfigure (program >>= next) where
+  instanceQueries counts :=
+    programElaborated.instanceQueries counts ++
+      (nextElaborated (program.output counts)).instanceQueries
+        (program.finalCounts counts)
+  instanceQueries_eq := by
+    intro counts
+    rw [Configure.delta_bind, ConfigureDelta.instanceQueries_append,
+      programElaborated.instanceQueries_eq,
+      (nextElaborated (program.output counts)).instanceQueries_eq]
+
+instance ElaboratedConfigure.adviceColumn :
+    ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
+  instanceQueries_eq := Configure.delta_adviceColumn_instanceQueries
+
+instance ElaboratedConfigure.fixedColumn :
+    ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
+  instanceQueries_eq := Configure.delta_fixedColumn_instanceQueries
+
+instance ElaboratedConfigure.instanceColumn :
+    ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
+  instanceQueries_eq := Configure.delta_instanceColumn_instanceQueries
+
+instance ElaboratedConfigure.selector :
+    ElaboratedConfigure (selector : Configure F Selector) where
+  instanceQueries_eq := Configure.delta_selector_instanceQueries
+
+instance ElaboratedConfigure.complexSelector :
+    ElaboratedConfigure (complexSelector : Configure F Selector) where
+  instanceQueries_eq := Configure.delta_complexSelector_instanceQueries
+
+instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
+    ElaboratedConfigure (enableEquality (F := F) column) where
+  instanceQueries _ :=
+    match column with
+    | ⟨.instance, index⟩ => [(⟨index⟩, 0)]
+    | _ => []
+  instanceQueries_eq :=
+    Configure.delta_enableEquality_instanceQueries column
+
+instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
+    ElaboratedConfigure (enableConstant (F := F) column) where
+  instanceQueries_eq :=
+    Configure.delta_enableConstant_instanceQueries column
+
+instance ElaboratedConfigure.createGate (gate : Gate F) :
+    ElaboratedConfigure (createGate gate) where
+  instanceQueries := fun _ =>
+    ConfigureDelta.instanceQueriesOfCells gate.queriedCells
+  instanceQueries_eq :=
+    Configure.delta_createGate_instanceQueries gate
+
+instance ElaboratedConfigure.lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn)) :
+    ElaboratedConfigure (lookup queriedCells tableMap) where
+  instanceQueries := fun _ =>
+    ConfigureDelta.instanceQueriesOfCells queriedCells
+  instanceQueries_eq :=
+    Configure.delta_lookup_instanceQueries queriedCells tableMap
+
+instance ElaboratedConfigure.lookupTableColumn :
+    ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by
+  unfold Halo2.lookupTableColumn
+  infer_instance
+
+open Lean Meta Simp in
+/--
+Fold an elaborated configure program's declared instance-query summary.
+
+This is the compositional opacity boundary used by `configure_norm`: a parent may use
+the summary packaged by a child `FormalCircuit` without unfolding the child's configure
+program. Reducing the class projection unfolds only the instance and the circuit
+structure far enough to select `elaboratedConfigure`; it does not inspect synthesis or
+proof fields.
+-/
+def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
+  unless expression.getAppFn.isConstOf ``ElaboratedConfigure.instanceQueries do
+    return .continue
+  try
+    let reduced ← withTransparency .all (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldElaboratedConfigureInstanceQueries
+    (ElaboratedConfigure.instanceQueries _ _) :=
+  foldElaboratedConfigureInstanceQueriesProc
+attribute [simp] foldElaboratedConfigureInstanceQueries
 
 end Halo2
