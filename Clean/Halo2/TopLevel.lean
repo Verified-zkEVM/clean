@@ -159,17 +159,22 @@ theorem Operations.loadTable_length_le_usedRows
     (operations : Operations F) (table : TableColumn) (values : List F)
     (hload : Operation.loadTable table values ∈ operations) :
     values.length ≤ Halo2.usedRows operations := by
-  let tableLengths := operations.filterMap fun operation =>
-    match operation with
-    | .loadTable _ loaded => some loaded.length
-    | _ => none
-  have hlength : values.length ∈ tableLengths := by
-    apply List.mem_filterMap.mpr
-    exact ⟨.loadTable table values, hload, rfl⟩
-  have htable : values.length ≤ tableLengths.foldl max 0 :=
-    member_le_foldl_max tableLengths values.length 0 hlength
+  let tableExtents := operations.map Operation.tableRowExtent
+  have hextent :
+      Operation.tableRowExtent (.loadTable table values) ∈ tableExtents :=
+    List.mem_map.mpr ⟨.loadTable table values, hload, rfl⟩
+  have htable :
+      Operation.tableRowExtent (.loadTable table values) ≤
+        tableExtents.foldl max 0 :=
+    member_le_foldl_max tableExtents
+      (Operation.tableRowExtent (.loadTable table values)) 0 hextent
+  have hlength :
+      values.length ≤
+        Operation.tableRowExtent (.loadTable table values) := by
+    cases values <;> simp [Operation.tableRowExtent]
   unfold Halo2.usedRows
-  exact le_trans htable (Nat.le_max_right _ _)
+  exact hlength.trans (htable.trans
+    ((Nat.le_max_right _ _).trans (Nat.le_max_left _ _)))
 
 private theorem exists_region_operation_of_mem_indexedRegions
     {operations : Operations F} {start region : ℕ}
@@ -252,33 +257,164 @@ derived from that declaration.
 -/
 
 structure PublicInputLayout
-    (Config : Type) (PublicInput : TypeMap) [ProvableType PublicInput] where
-  cells : Config → Fin (size PublicInput) → Column .instance × ℕ
-  cells_injective : ∀ config, Function.Injective (cells config)
+    (PublicInput : TypeMap) [ProvableType PublicInput]
+    (columns : List (Column .instance)) where
+  /-- Length of the dense public prefix supplied for each queried instance column. -/
+  columnSizes : Vector ℕ columns.length
+  /-- The structured public input serializes to exactly those column prefixes. -/
+  size_eq : columnSizes.toList.sum = size PublicInput
 
 namespace PublicInputLayout
 
-variable {F Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
+variable {F : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
+    {columns : List (Column .instance)}
+
+/-- The public-input cells in column-prefix order. -/
+def cellList
+    (self : PublicInputLayout PublicInput columns) :
+    List (Column .instance × ℕ) :=
+  (columns.zip self.columnSizes.toList).flatMap fun (column, columnSize) =>
+    (List.range columnSize).map fun row => (column, row)
+
+@[simp] theorem cellList_length
+    (self : PublicInputLayout PublicInput columns) :
+    self.cellList.length = size PublicInput := by
+  rw [cellList, List.length_flatMap]
+  simp only [List.length_map, List.length_range]
+  rw [List.map_snd_zip]
+  · exact self.size_eq
+  · simp
+
+/-- The cell containing one serialized public-input element. -/
+def cells
+    (self : PublicInputLayout PublicInput columns) :
+    Fin (size PublicInput) → Column .instance × ℕ :=
+  fun i =>
+    self.cellList.get
+      ⟨i, by rw [self.cellList_length]; exact i.isLt⟩
+
+/-- A derived public-input cell belongs to one of the layout's columns. -/
+theorem cellList_fst_mem
+    (self : PublicInputLayout PublicInput columns)
+    (cell : Column .instance × ℕ)
+    (hcell : cell ∈ self.cellList) :
+    cell.1 ∈ columns := by
+  rw [cellList, List.mem_flatMap] at hcell
+  obtain ⟨⟨column, columnSize⟩, hcolumn, hcell⟩ := hcell
+  have hcolumn' :
+      column ∈
+        (columns.zip self.columnSizes.toList).map Prod.fst :=
+    List.mem_map.mpr ⟨(column, columnSize), hcolumn, rfl⟩
+  rw [List.map_fst_zip] at hcolumn'
+  · obtain ⟨row, _, rfl⟩ := List.mem_map.mp hcell
+    exact hcolumn'
+  · simp
+
+theorem cells_fst_mem_columns
+    (self : PublicInputLayout PublicInput columns)
+    (i : Fin (size PublicInput)) :
+    (self.cells i).1 ∈ columns := by
+  apply self.cellList_fst_mem
+  unfold cells
+  exact List.get_mem self.cellList
+    ⟨i, by rw [self.cellList_length]; exact i.isLt⟩
+
+/-- Prefix cells are distinct whenever their column list is distinct. -/
+theorem cellList_nodup
+    (self : PublicInputLayout PublicInput columns)
+    (hcolumns : columns.Nodup) :
+    self.cellList.Nodup := by
+  rw [cellList, List.nodup_flatMap]
+  constructor
+  · rintro ⟨column, columnSize⟩ hpair
+    apply List.nodup_range.map
+    intro left right heq
+    exact Prod.mk.inj heq |>.2
+  · let pairs := columns.zip self.columnSizes.toList
+    have hfst : (pairs.map Prod.fst).Nodup := by
+      dsimp only [pairs]
+      rw [List.map_fst_zip]
+      · exact hcolumns
+      · simp
+    have hpairs : pairs.Nodup := hfst.of_map Prod.fst
+    apply hpairs.pairwise_of_forall_ne
+    intro left hleft right hright hne
+    have hfst_ne : left.1 ≠ right.1 := by
+      intro heq
+      exact hne (List.inj_on_of_nodup_map hfst hleft hright heq)
+    simp only [Function.onFun]
+    rw [List.disjoint_left]
+    intro cell hcellLeft hcellRight
+    obtain ⟨leftRow, _, hleftCell⟩ := List.mem_map.mp hcellLeft
+    obtain ⟨rightRow, _, hrightCell⟩ := List.mem_map.mp hcellRight
+    rw [← hleftCell] at hrightCell
+    exact hfst_ne (Prod.mk.inj hrightCell |>.1.symm)
+
+/-- The derived prefix-cell map is injective. -/
+theorem cells_injective
+    (self : PublicInputLayout PublicInput columns)
+    (hcolumns : columns.Nodup) :
+    Function.Injective self.cells := by
+  intro left right heq
+  unfold cells at heq
+  apply Fin.ext
+  exact congrArg (fun index : Fin self.cellList.length => index.val)
+    ((self.cellList_nodup hcolumns).get_inj_iff.mp heq)
+
+/-- The largest public prefix length required by this layout. -/
+def usedRows
+    (self : PublicInputLayout PublicInput columns) : ℕ :=
+  self.columnSizes.toList.foldl max 0
+
+/-- Every derived prefix cell lies below the layout's row requirement. -/
+theorem cellList_snd_lt_usedRows
+    (self : PublicInputLayout PublicInput columns)
+    (cell : Column .instance × ℕ)
+    (hcell : cell ∈ self.cellList) :
+    cell.2 < self.usedRows := by
+  rw [cellList, List.mem_flatMap] at hcell
+  obtain ⟨⟨column, columnSize⟩, hcolumn, hcell⟩ := hcell
+  obtain ⟨row, hrow, rfl⟩ := List.mem_map.mp hcell
+  have hsize :
+      columnSize ∈ self.columnSizes.toList := by
+    have :
+        columnSize ∈
+          (columns.zip self.columnSizes.toList).map Prod.snd :=
+      List.mem_map.mpr ⟨(column, columnSize), hcolumn, rfl⟩
+    rw [List.map_snd_zip] at this
+    · exact this
+    · simp
+  exact (List.mem_range.mp hrow).trans_le
+    (member_le_foldl_max self.columnSizes.toList columnSize 0 hsize)
+
+theorem cells_snd_lt_usedRows
+    (self : PublicInputLayout PublicInput columns)
+    (i : Fin (size PublicInput)) :
+    (self.cells i).2 < self.usedRows := by
+  apply self.cellList_snd_lt_usedRows
+  unfold cells
+  exact List.get_mem self.cellList
+    ⟨i, by rw [self.cellList_length]; exact i.isLt⟩
 
 /-- Read the public input from its declared instance cells. -/
-def extract (self : PublicInputLayout Config PublicInput)
-    (config : Config) (env : Environment F) : PublicInput F :=
+def extract (self : PublicInputLayout PublicInput columns)
+    (env : Environment F) : PublicInput F :=
   fromElements (Vector.ofFn fun i =>
-    env.inst (self.cells config i).1 (self.cells config i).2)
+    env.inst (self.cells i).1 (self.cells i).2)
 
 /-- Associate each public-input element with its declared instance cell. -/
-def assignments (self : PublicInputLayout Config PublicInput)
-    (config : Config) (input : PublicInput F) :
+def assignments (self : PublicInputLayout PublicInput columns)
+    (input : PublicInput F) :
     Vector ((Column .instance × ℕ) × F) (size PublicInput) :=
-  Vector.ofFn fun i => (self.cells config i, (toElements input)[i])
+  Vector.ofFn fun i => (self.cells i, (toElements input)[i])
 
 theorem extract_eq
-    (self : PublicInputLayout Config PublicInput)
-    (config : Config) (env : Environment F) (input : PublicInput F)
+    (self : PublicInputLayout PublicInput columns)
+    (env : Environment F) (input : PublicInput F)
     (hvalues : ∀ i,
-      env.inst (self.cells config i).1 (self.cells config i).2 =
+      env.inst (self.cells i).1 (self.cells i).2 =
         (toElements input)[i]) :
-    self.extract config env = input := by
+    self.extract env = input := by
   unfold extract
   rw [← ProvableType.fromElements_toElements input]
   congr 1
@@ -305,6 +441,7 @@ namespace TopLevelCompilation
 variable
     {F : Type} [FiniteField F]
     {Config : Type}
+    {PublicInput : TypeMap} [ProvableType PublicInput]
 
 def config
     (circuit : FormalCircuit F Unit Config unit unit) : Config :=
@@ -314,6 +451,12 @@ def constraintSystem
     (circuit : FormalCircuit F Unit Config unit unit) :
     ConstraintSystem F :=
   circuit.toConstraintSystem () ()
+
+/-- Queried instance columns, in their first-query order. -/
+def publicInputColumns
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    List (Column .instance) :=
+  (constraintSystem circuit).queriedInstanceColumns
 
 def operations
     (circuit : FormalCircuit F Unit Config unit unit) : Operations F :=
@@ -333,115 +476,133 @@ def placement
   fun region => (regionStarts circuit).getD region 0
 
 def usedRows
-    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
-  Halo2.usedRows (operations circuit)
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
+  max (Halo2.usedRows (operations circuit)) layout.usedRows
 
 def domainExponent
-    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
-  Halo2.minimalK (constraintSystem circuit) (operations circuit)
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
+  Halo2.minimalKForRows (constraintSystem circuit) (usedRows circuit layout)
 
 def selectorMap
-    (circuit : FormalCircuit F Unit Config unit unit) : SelCompressMap :=
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    SelCompressMap :=
   deriveSelCompressMap (constraintSystem circuit)
-    (2 ^ domainExponent circuit) (selectorActivations circuit)
+    (2 ^ domainExponent circuit layout) (selectorActivations circuit)
 
 /-- The canonical domain leaves room for the circuit's complete operation footprint. -/
 theorem usedRows_le_usableRowsAt_domainExponent
-    (circuit : FormalCircuit F Unit Config unit unit) :
-    usedRows circuit ≤
-      2 ^ domainExponent circuit -
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    usedRows circuit layout ≤
+      2 ^ domainExponent circuit layout -
         (constraintSystem circuit).blindingFactors - 1 := by
   have hfit :
-      usedRows circuit + (constraintSystem circuit).blindingFactors + 1 ≤
-        2 ^ domainExponent circuit := by
+      usedRows circuit layout +
+          (constraintSystem circuit).blindingFactors + 1 ≤
+        2 ^ domainExponent circuit layout := by
     exact (Nat.le_max_left _ _).trans
-      (Halo2.minimalK_fits
-        (constraintSystem circuit) (operations circuit))
+      (Halo2.minimalKForRows_fits
+        (constraintSystem circuit) (usedRows circuit layout))
   omega
 
 def fixedAssignments
-    (circuit : FormalCircuit F Unit Config unit unit) :
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
     List (Layout.FixedAssignment F) :=
   Layout.compileFixed
-    (2 ^ domainExponent circuit -
+    (2 ^ domainExponent circuit layout -
       (constraintSystem circuit).blindingFactors - 1)
-    (selectorMap circuit) (constraintSystem circuit) (operations circuit)
+    (selectorMap circuit layout) (constraintSystem circuit) (operations circuit)
 
 def fixedRows
-    (circuit : FormalCircuit F Unit Config unit unit) : List (List F) :=
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    List (List F) :=
   Layout.denseFixedColumns
-    (2 ^ domainExponent circuit)
+    (2 ^ domainExponent circuit layout)
     (PinnedConstraintSystem.derive
-      (constraintSystem circuit) (selectorMap circuit)).numFixedColumns
-    (fixedAssignments circuit)
+      (constraintSystem circuit) (selectorMap circuit layout)).numFixedColumns
+    (fixedAssignments circuit layout)
 
 def fixedValue
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (column : Column .fixed) (row : ℤ) : F :=
-  (fixedRows circuit).getD column.index [] |>.getD
-    (row.natMod (2 ^ domainExponent circuit)) 0
+  (fixedRows circuit layout).getD column.index [] |>.getD
+    (row.natMod (2 ^ domainExponent circuit layout)) 0
 
 def environment
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) : Environment F where
   get column row :=
     match column.kind with
     | .advice => assignment.advice ⟨column.index⟩ row
-    | .fixed => fixedValue circuit ⟨column.index⟩ row
+    | .fixed => fixedValue circuit layout ⟨column.index⟩ row
     | .instance => assignment.inst ⟨column.index⟩ row
   usableRows :=
-    2 ^ domainExponent circuit -
+    2 ^ domainExponent circuit layout -
       (constraintSystem circuit).blindingFactors - 1
 
 @[simp] theorem environment_advice
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F)
     (column : Column .advice) (row : ℤ) :
-    (environment circuit assignment).advice column row =
+    (environment circuit layout assignment).advice column row =
       assignment.advice column row :=
   rfl
 
 @[simp] theorem environment_fixed
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F)
     (column : Column .fixed) (row : ℤ) :
-    (environment circuit assignment).fixed column row =
-      fixedValue circuit column row := by
+    (environment circuit layout assignment).fixed column row =
+      fixedValue circuit layout column row := by
   simp only [Environment.fixed, environment, Column.toAny]
 
 @[simp] theorem environment_inst
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F)
     (column : Column .instance) (row : ℤ) :
-    (environment circuit assignment).inst column row =
+    (environment circuit layout assignment).inst column row =
       assignment.inst column row :=
   rfl
 
 @[simp] theorem environment_usableRows
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) :
-    (environment circuit assignment).usableRows =
-      2 ^ domainExponent circuit -
+    (environment circuit layout assignment).usableRows =
+      2 ^ domainExponent circuit layout -
         (constraintSystem circuit).blindingFactors - 1 :=
   rfl
 
 def placedEnvironment
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) : Placed Environment F :=
-  ⟨placement circuit, environment circuit assignment⟩
+  ⟨placement circuit, environment circuit layout assignment⟩
 
 def proverEnvironment
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     ProverEnvironment F where
-  toEnvironment := environment circuit assignment
+  toEnvironment := environment circuit layout assignment
   hint := hint
 
 def placedProverEnvironment
     (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     Placed ProverEnvironment F :=
-  ⟨placement circuit, proverEnvironment circuit assignment hint⟩
+  ⟨placement circuit, proverEnvironment circuit layout assignment hint⟩
 
 end TopLevelCompilation
 
@@ -452,21 +613,13 @@ structure TopLevelCircuit
     [ProvableType PublicInput] where
   /-- The underlying unit-config-input, unit-input, unit-output formal circuit. -/
   formalCircuit : FormalCircuit F Unit Config unit unit
-  /-- The instance cells containing the public input. -/
-  publicInputLayout : PublicInputLayout Config PublicInput
-  /-- Every declared public-input row belongs to the circuit's evaluation domain. -/
-  publicInputRowsInDomain :
-    ∀ i,
-      (publicInputLayout.cells
-        (TopLevelCompilation.config formalCircuit) i).2 <
-        2 ^ TopLevelCompilation.domainExponent formalCircuit
-  /-- Every declared public-input column is queried at its own row. -/
-  publicInputColumnsRegistered :
-    ∀ i,
-      ((publicInputLayout.cells
-          (TopLevelCompilation.config formalCircuit) i).1,
-        (0 : Rotation)) ∈
-        (TopLevelCompilation.constraintSystem formalCircuit).instanceQueries
+  /--
+  Dense public prefixes for the instance columns derived from this circuit's own
+  configure-time query list.
+  -/
+  publicInputLayout :
+    PublicInputLayout PublicInput
+      (TopLevelCompilation.publicInputColumns formalCircuit)
   /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
   /-- Extract the private witness from a top-level execution, which starts at region zero. -/
@@ -487,7 +640,7 @@ structure TopLevelCircuit
     let config := (formalCircuit.configure () {}).1
     ∀ (env : Placed Environment F),
       combine
-        (publicInputLayout.extract config env.env)
+        (publicInputLayout.extract env.env)
         (extractPrivate config env) =
       formalCircuit.extract config () 0 env
   /-- A top-level circuit has no assumptions supplied by an enclosing circuit. -/
@@ -510,7 +663,8 @@ structure TopLevelCircuit
     ∀ (assignment : ProofAssignment F),
       formalCircuit.EnvAssumptions
         (TopLevelCompilation.config formalCircuit)
-        (TopLevelCompilation.placedEnvironment formalCircuit assignment)
+        (TopLevelCompilation.placedEnvironment
+          formalCircuit publicInputLayout assignment)
 
 namespace TopLevelCircuit
 
@@ -528,6 +682,25 @@ closed under every gate and lookup enabled by this circuit's synthesis. -/
 def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
   TopLevelCompilation.constraintSystem self.formalCircuit
+
+/-- Public-input cells are distinct by construction from queried columns and prefixes. -/
+theorem publicInputLayout_cells_injective
+    (self : TopLevelCircuit F Config PublicInput) :
+    Function.Injective self.publicInputLayout.cells := by
+  apply self.publicInputLayout.cells_injective
+  exact self.constraintSystem.queriedInstanceColumns_nodup
+
+/-- Each public-input cell's column has a verifier query at some rotation. -/
+theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
+    (self : TopLevelCircuit F Config PublicInput)
+    (i : Fin (size PublicInput)) :
+    ∃ rotation,
+      ((self.publicInputLayout.cells i).1, rotation) ∈
+        self.constraintSystem.instanceQueries := by
+  apply
+    self.constraintSystem
+      |>.exists_rotation_mem_instanceQueries_of_mem_queriedInstanceColumns
+  exact self.publicInputLayout.cells_fst_mem_columns i
 
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
@@ -554,16 +727,24 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 
 /-- The operation footprint that key generation requires to fit in usable rows. -/
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  TopLevelCompilation.usedRows self.formalCircuit
+  TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout
+
+/-- Every public-input cell is below the compiler-derived usable-row requirement. -/
+theorem publicInputLayout_cells_snd_lt_usedRows
+    (self : TopLevelCircuit F Config PublicInput)
+    (i : Fin (size PublicInput)) :
+    (self.publicInputLayout.cells i).2 < self.usedRows := by
+  exact (self.publicInputLayout.cells_snd_lt_usedRows i).trans_le
+    (Nat.le_max_right _ _)
 
 /-- The smallest keygen domain exponent derived from this circuit. -/
 def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  TopLevelCompilation.domainExponent self.formalCircuit
+  TopLevelCompilation.domainExponent self.formalCircuit self.publicInputLayout
 
 /-- The selector-compression map derived from this circuit and its fitting domain. -/
 def selectorMap
     (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
-  TopLevelCompilation.selectorMap self.formalCircuit
+  TopLevelCompilation.selectorMap self.formalCircuit self.publicInputLayout
 
 /-- The blinding-row count derived from the circuit's constraint system. -/
 def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -581,7 +762,16 @@ theorem usedRows_le_usableRowsAt_domainExponent
   simpa only [usedRows, usableRowsAt, domainExponent, blindingFactors,
     constraintSystem] using
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
-      self.formalCircuit
+      self.formalCircuit self.publicInputLayout
+
+/-- Every public-input cell lies in the compiler-derived usable-row range. -/
+theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
+    (self : TopLevelCircuit F Config PublicInput)
+    (i : Fin (size PublicInput)) :
+    (self.publicInputLayout.cells i).2 <
+      self.usableRowsAt self.domainExponent :=
+  (self.publicInputLayout_cells_snd_lt_usedRows i).trans_le
+    self.usedRows_le_usableRowsAt_domainExponent
 
 /-- The pinned constraint system derived solely from the closed circuit: the
 projection of its synthesis-closed constraint system through its circuit-owned
@@ -604,12 +794,13 @@ theorem pinnedCS_eq_derive
 def fixedAssignments
     (self : TopLevelCircuit F Config PublicInput) :
     List (Layout.FixedAssignment F) :=
-  TopLevelCompilation.fixedAssignments self.formalCircuit
+  TopLevelCompilation.fixedAssignments
+    self.formalCircuit self.publicInputLayout
 
 /-- The dense fixed columns compiled canonically from the top-level circuit. -/
 def fixedRows
     (self : TopLevelCircuit F Config PublicInput) : List (List F) :=
-  TopLevelCompilation.fixedRows self.formalCircuit
+  TopLevelCompilation.fixedRows self.formalCircuit self.publicInputLayout
 
 @[simp] theorem fixedRows_length
     (self : TopLevelCircuit F Config PublicInput) :
@@ -640,7 +831,8 @@ modulo the nonempty evaluation domain before reading the dense column.
 def fixedValue
     (self : TopLevelCircuit F Config PublicInput)
     (column : Column .fixed) (row : ℤ) : F :=
-  TopLevelCompilation.fixedValue self.formalCircuit column row
+  TopLevelCompilation.fixedValue
+    self.formalCircuit self.publicInputLayout column row
 
 /--
 Construct the complete semantic environment from exactly the proof-varying assignment.
@@ -649,20 +841,23 @@ Fixed values and usable rows are circuit-derived and cannot be supplied independ
 def environment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) : Environment F :=
-  TopLevelCompilation.environment self.formalCircuit assignment
+  TopLevelCompilation.environment
+    self.formalCircuit self.publicInputLayout assignment
 
 /-- The canonical environment paired with the circuit-owned V1 placement. -/
 def placedEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) : Placed Environment F :=
-  TopLevelCompilation.placedEnvironment self.formalCircuit assignment
+  TopLevelCompilation.placedEnvironment
+    self.formalCircuit self.publicInputLayout assignment
 
 /-- Add prover-only hints to the canonical proof assignment. -/
 def proverEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     ProverEnvironment F :=
-  TopLevelCompilation.proverEnvironment self.formalCircuit assignment hint
+  TopLevelCompilation.proverEnvironment
+    self.formalCircuit self.publicInputLayout assignment hint
 
 /-- The canonical prover environment paired with circuit-owned placement. -/
 def placedProverEnvironment
@@ -670,7 +865,7 @@ def placedProverEnvironment
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     Placed ProverEnvironment F :=
   TopLevelCompilation.placedProverEnvironment
-    self.formalCircuit assignment hint
+    self.formalCircuit self.publicInputLayout assignment hint
 
 @[simp, circuit_norm] theorem environment_advice
     (self : TopLevelCircuit F Config PublicInput)
@@ -688,7 +883,7 @@ def placedProverEnvironment
       self.fixedValue column row := by
   simpa only [environment, fixedValue] using
     TopLevelCompilation.environment_fixed
-      self.formalCircuit assignment column row
+      self.formalCircuit self.publicInputLayout assignment column row
 
 @[simp, circuit_norm] theorem environment_inst
     (self : TopLevelCircuit F Config PublicInput)
@@ -748,7 +943,7 @@ theorem lookupInputsAllocated
 /-- Read this circuit's public input from its declared instance cells. -/
 def extractPublicInput (self : TopLevelCircuit F Config PublicInput)
     (env : Environment F) : PublicInput F :=
-  self.publicInputLayout.extract self.config env
+  self.publicInputLayout.extract env
 
 /-- Read this circuit's private witness from a placed environment. -/
 def extractPrivateWitness (self : TopLevelCircuit F Config PublicInput)
@@ -781,8 +976,7 @@ theorem soundness
   unfold extractPublicInput extractPrivateWitness config
   change self.formalCircuit.Spec () ()
     (self.combine
-      (self.publicInputLayout.extract
-        (self.formalCircuit.configure () {}).1 env.env)
+      (self.publicInputLayout.extract env.env)
       (self.extractPrivate (self.formalCircuit.configure () {}).1 env))
   rw [self.extract_factorization]
   apply self.formalCircuit.soundness self.config 0 env ()

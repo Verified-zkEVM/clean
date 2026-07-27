@@ -377,27 +377,38 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
   exact habsolute.trans_le
     ((Nat.le_max_left _ _).trans (Nat.le_max_left _ _))
 
+/-- The minimal domain exponent fitting an already-derived usable-row requirement. -/
+def minimalKForRows (cs : ConstraintSystem F) (requiredRows : ℕ) : ℕ :=
+  let blinding := cs.blindingFactors
+  -- `blinding + 3 = cs.minimumRows`, without recomputing the blinding count
+  let need := max (requiredRows + blinding + 1) (blinding + 3)
+  Nat.clog 2 need
+
+/-- The derived domain fits the requested usable rows and minimum-row requirement. -/
+theorem minimalKForRows_fits
+    (cs : ConstraintSystem F) (requiredRows : ℕ) :
+    max (requiredRows + cs.blindingFactors + 1) cs.minimumRows ≤
+      2 ^ minimalKForRows cs requiredRows := by
+  simpa [minimalKForRows, ConstraintSystem.minimumRows] using
+    Nat.le_pow_clog (by omega : 1 < 2)
+      (max (requiredRows + cs.blindingFactors + 1)
+        (cs.blindingFactors + 3))
+
 /--
-The minimal domain exponent for which the circuit fits keygen's asserts.
+The minimal domain exponent for which the circuit's synthesis fits Halo 2's checks.
 
 This is an unbounded derivation. Concrete backends may impose their own supported-domain
 limit after compilation, but the semantic compiler never returns a sentinel exponent
 that fails its own fit condition.
 -/
 def minimalK (cs : ConstraintSystem F) (ops : Operations F) : ℕ :=
-  let blinding := cs.blindingFactors
-  -- `blinding + 3 = cs.minimumRows`, without recomputing the blinding count
-  let need := max (usedRows ops + blinding + 1) (blinding + 3)
-  Nat.clog 2 need
+  minimalKForRows cs (usedRows ops)
 
 /-- The total domain derivation always fits the circuit and minimum-row requirements. -/
 theorem minimalK_fits (cs : ConstraintSystem F) (ops : Operations F) :
     max (usedRows ops + cs.blindingFactors + 1) cs.minimumRows ≤
-      2 ^ minimalK cs ops := by
-  simpa [minimalK, ConstraintSystem.minimumRows] using
-    Nat.le_pow_clog (by omega : 1 < 2)
-      (max (usedRows ops + cs.blindingFactors + 1)
-        (cs.blindingFactors + 3))
+      2 ^ minimalK cs ops :=
+  minimalKForRows_fits cs (usedRows ops)
 
 section FormalCircuit
 variable [FiniteField F] {ConfigInput Config : Type} {Input Output : TypeMap}
