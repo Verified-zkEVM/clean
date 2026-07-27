@@ -81,14 +81,14 @@ def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
 
 /-- V1 region starts derived from the circuit's own operation stream. -/
 def regionStarts (self : TopLevelCircuit F Config PublicInput) : List ℕ :=
-  FloorPlanner.V1.starts (self.operations 0)
+  FloorPlanner.V1.starts self.operations
 
 /-- Selector activations produced by the circuit's own synthesis and V1 placement. -/
 def selectorActivations
     (self : TopLevelCircuit F Config PublicInput) :
     List (ℕ × ℕ) :=
   activations self.regionStarts
-    (indexedRegions (self.operations 0) 0).1
+    (indexedRegions self.operations 0).1
 
 /-- The circuit-owned V1 placement function. -/
 def placement (self : TopLevelCircuit F Config PublicInput) :
@@ -102,11 +102,11 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 
 /-- The operation footprint that key generation requires to fit in usable rows. -/
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  Halo2.usedRows (self.operations 0)
+  Halo2.usedRows self.operations
 
 /-- The smallest keygen domain exponent derived from this circuit's CS and operations. -/
 def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  Halo2.minimalK self.constraintSystem (self.operations 0)
+  Halo2.minimalK self.constraintSystem self.operations
 
 /--
 The selector-compression map derived from the circuit's own constraint system,
@@ -205,7 +205,7 @@ theorem synthesisWellFormed
     (k : ℕ) (env : Environment F)
     (husable : env.usableRows = self.usableRowsAt k)
     (hfit : self.FitsAt k) :
-    SynthesisWellFormed env (self.operations 0) := by
+    SynthesisWellFormed env self.operations := by
   apply SynthesisWellFormed.of_usedRows
   rw [husable]
   exact self.usedRows_le_usableRowsAt k hfit

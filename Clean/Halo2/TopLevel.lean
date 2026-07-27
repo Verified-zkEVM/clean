@@ -229,7 +229,6 @@ derived from that declaration.
 structure PublicInputLayout
     (Config : Type) (PublicInput : TypeMap) [ProvableType PublicInput] where
   cells : Config → Fin (size PublicInput) → Column .instance × ℕ
-  cells_injective : ∀ config, Function.Injective (cells config)
 
 namespace PublicInputLayout
 
@@ -263,66 +262,67 @@ theorem extract_eq
 
 end PublicInputLayout
 
-/--
-A closed formal circuit together with its public/private witness boundary.
-
-Configuration and synthesis inputs and the circuit output are all unit.  The public
-input occupies declared instance cells; the remaining witness is extracted
-separately.  `extract_factorization` connects this boundary to the formal circuit's
-native witness extraction, while `spec_iff` connects the top-level specification to
-the formal circuit's specification.
-
-The two closure fields correspond to the verifier and honest-prover views.  They are
-separate because `Constraints` and `ExtendsWitnesses` expose the fixed/table data
-through different predicates.
--/
+/-- A closed formal circuit together with its public/private witness boundary. -/
 structure TopLevelCircuit
     (F : Type) [FiniteField F]
     (Config : Type) (PublicInput : TypeMap)
     [ProvableType PublicInput] where
+  /-- The underlying unit-config-input, unit-input, unit-output formal circuit. -/
   formalCircuit : FormalCircuit F Unit Config unit unit
+  /-- The instance cells containing the public input. -/
   publicInputLayout : PublicInputLayout Config PublicInput
+  /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
+  /-- Extract the private witness from a top-level execution, which starts at region zero. -/
   extractPrivate :
-    Config → RegionIndex → Placed Environment F → PrivateWitness
+    Config → Placed Environment F → PrivateWitness
+  /-- Reassemble the formal circuit's witness from its public and private parts. -/
   combine :
     PublicInput F → PrivateWitness → formalCircuit.Witness F
+  /-- The top-level specification, stated explicitly at both witness parts. -/
   Spec : PublicInput F → PrivateWitness → Prop
+  /-- The split top-level specification is exactly the formal circuit's specification. -/
   spec_iff :
     ∀ publicInput privateWitness,
       Spec publicInput privateWitness ↔
         formalCircuit.Spec () () (combine publicInput privateWitness)
+  /-- Recombining both extracted parts recovers the formal circuit's extracted witness. -/
   extract_factorization :
     let config := (formalCircuit.configure () {}).1
-    ∀ (i : RegionIndex) (env : Placed Environment F),
+    ∀ (env : Placed Environment F),
       combine
         (publicInputLayout.extract config env.env)
-        (extractPrivate config i env) =
-      formalCircuit.extract config () i env
+        (extractPrivate config env) =
+      formalCircuit.extract config () 0 env
+  /-- A top-level circuit has no assumptions supplied by an enclosing circuit. -/
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
+  /-- Synthesized lookup selector activations are represented exactly. -/
   lookupRelevantSelectorActivationsExact :
     let config := (formalCircuit.configure () {}).1
     Operations.LookupRelevantSelectorActivationsExact
       ((formalCircuit.synthesize config ()).operations 0)
+  /-- Lookup inputs do not contain simple selectors. -/
   lookupInputsNoSimpleSelectors :
     let config := (formalCircuit.configure () {}).1
     Operations.LookupInputsNoSimpleSelectors
       ((formalCircuit.synthesize config ()).operations 0)
+  /-- Successful top-level synthesis discharges child assumptions for soundness. -/
   closesEnvironmentSoundness :
     let config := (formalCircuit.configure () {}).1
-    ∀ (i : RegionIndex) (env : Placed Environment F),
+    ∀ (env : Placed Environment F),
       SynthesisWellFormed env.env
-        ((formalCircuit.synthesize config ()).operations i) →
+        ((formalCircuit.synthesize config ()).operations 0) →
       Constraints env.place env.env
-        ((formalCircuit.synthesize config ()).operations i) i →
+        ((formalCircuit.synthesize config ()).operations 0) 0 →
       formalCircuit.EnvAssumptions config env
+  /-- Successful top-level synthesis discharges child assumptions for completeness. -/
   closesEnvironmentCompleteness :
     let config := (formalCircuit.configure () {}).1
-    ∀ (i : RegionIndex) (env : Placed ProverEnvironment F),
+    ∀ (env : Placed ProverEnvironment F),
       SynthesisWellFormed env.toEnvironment.env
-        ((formalCircuit.synthesize config ()).operations i) →
+        ((formalCircuit.synthesize config ()).operations 0) →
       ExtendsWitnesses env.place env.env
-        ((formalCircuit.synthesize config ()).operations i) i →
+        ((formalCircuit.synthesize config ()).operations 0) 0 →
       formalCircuit.EnvAssumptions config env.toEnvironment
 
 namespace TopLevelCircuit
@@ -343,9 +343,8 @@ def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
   self.formalCircuit.toConstraintSystem () ()
 
 /-- The closed top-level operation stream. -/
-def operations (self : TopLevelCircuit F Config PublicInput)
-    (i : RegionIndex := 0) : Operations F :=
-  (self.formalCircuit.synthesize self.config ()).operations i
+def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
+  (self.formalCircuit.synthesize self.config ()).operations 0
 
 /--
 The circuit-side static premise needed to connect synthesized gate and lookup
@@ -353,7 +352,7 @@ activations to the pinned constraint system derived from `configure`.
 -/
 def KeygenCoherent
     (self : TopLevelCircuit F Config PublicInput) : Prop :=
-  OperationsKeygenCoherent self.constraintSystem (self.operations 0)
+  OperationsKeygenCoherent self.constraintSystem self.operations
 
 /-- Configure/synthesis registration coherence follows from the circuit-derived
 constraint system; it is not a separate top-level circuit obligation. -/
@@ -382,8 +381,8 @@ def extractPublicInput (self : TopLevelCircuit F Config PublicInput)
 
 /-- Read this circuit's private witness from a placed environment. -/
 def extractPrivateWitness (self : TopLevelCircuit F Config PublicInput)
-    (i : RegionIndex) (env : Placed Environment F) : self.PrivateWitness :=
-  self.extractPrivate self.config i env
+    (env : Placed Environment F) : self.PrivateWitness :=
+  self.extractPrivate self.config env
 
 /-- The externally visible statement: some private witness satisfies the circuit spec. -/
 def Statement (self : TopLevelCircuit F Config PublicInput)
@@ -397,17 +396,17 @@ input assumption.
 -/
 theorem soundness
     (self : TopLevelCircuit F Config PublicInput)
-    (i : RegionIndex) (env : Placed Environment F)
-    (hwellFormed : SynthesisWellFormed env.env (self.operations i))
-    (hconstraints : Constraints env.place env.env (self.operations i) i) :
+    (env : Placed Environment F)
+    (hwellFormed : SynthesisWellFormed env.env self.operations)
+    (hconstraints : Constraints env.place env.env self.operations 0) :
     self.Spec
       (self.extractPublicInput env.env)
-      (self.extractPrivateWitness i env) := by
+      (self.extractPrivateWitness env) := by
   apply (self.spec_iff _ _).mpr
   unfold extractPublicInput extractPrivateWitness config
   rw [self.extract_factorization]
-  apply self.formalCircuit.soundness self.config i env ()
-  · exact self.closesEnvironmentSoundness i env hwellFormed hconstraints
+  apply self.formalCircuit.soundness self.config 0 env ()
+  · exact self.closesEnvironmentSoundness env hwellFormed hconstraints
   · rw [self.assumptions_eq]
     trivial
   · exact hconstraints
@@ -415,12 +414,12 @@ theorem soundness
 /-- A satisfying assignment establishes the external statement for its public input. -/
 theorem statement_soundness
     (self : TopLevelCircuit F Config PublicInput)
-    (i : RegionIndex) (env : Placed Environment F)
-    (hwellFormed : SynthesisWellFormed env.env (self.operations i))
-    (hconstraints : Constraints env.place env.env (self.operations i) i) :
+    (env : Placed Environment F)
+    (hwellFormed : SynthesisWellFormed env.env self.operations)
+    (hconstraints : Constraints env.place env.env self.operations 0) :
     self.Statement (self.extractPublicInput env.env) :=
-  ⟨self.extractPrivateWitness i env,
-    self.soundness i env hwellFormed hconstraints⟩
+  ⟨self.extractPrivateWitness env,
+    self.soundness env hwellFormed hconstraints⟩
 
 /--
 Generic honest-prover top-level completeness.  As on the verifier side, successful
@@ -428,22 +427,22 @@ synthesis/layout closes the environment contract internally.
 -/
 theorem completeness
     (self : TopLevelCircuit F Config PublicInput)
-    (i : RegionIndex) (env : Placed ProverEnvironment F)
-    (hwitnesses : ExtendsWitnesses env.place env.env (self.operations i) i)
-    (hwellFormed : SynthesisWellFormed env.toEnvironment.env (self.operations i))
+    (env : Placed ProverEnvironment F)
+    (hwitnesses : ExtendsWitnesses env.place env.env self.operations 0)
+    (hwellFormed : SynthesisWellFormed env.toEnvironment.env self.operations)
     (hprover : self.formalCircuit.ProverAssumptions
       (eval env (show Var unit F from ()))
-      (self.formalCircuit.extract self.config () i env.toEnvironment)
+      (self.formalCircuit.extract self.config () 0 env.toEnvironment)
       env.env.hint) :
-    Constraints env.place env.toEnvironment.env (self.operations i) i ∧
+    Constraints env.place env.toEnvironment.env self.operations 0 ∧
       self.formalCircuit.ProverSpec
         (eval env (show Var unit F from ()))
-        (eval env (self.formalCircuit.output self.config () i))
-        (self.formalCircuit.extract self.config () i env.toEnvironment)
+        (eval env (self.formalCircuit.output self.config () 0))
+        (self.formalCircuit.extract self.config () 0 env.toEnvironment)
         env.env.hint := by
-  apply self.formalCircuit.completeness self.config i env ()
+  apply self.formalCircuit.completeness self.config 0 env ()
   · exact hwitnesses
-  · exact self.closesEnvironmentCompleteness i env hwellFormed hwitnesses
+  · exact self.closesEnvironmentCompleteness env hwellFormed hwitnesses
   · rw [self.assumptions_eq]
     trivial
   · exact hprover
