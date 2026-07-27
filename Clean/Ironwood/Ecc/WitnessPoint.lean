@@ -41,30 +41,32 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
   wellFormed := by
     intro
-    rw [Gate.WellFormed]
-    intro constraint hconstraint
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
-    rcases hconstraint with rfl | rfl
-    all_goals
-      intro base scale hscale hzero
-      have hcurveEval :
-          (curveEqn x y).eval
-              (Expression.replaceSelectorValue qPoint scale base) =
+    constructor
+    · simp [Expression.selectorsCovered, querySelector,
+        queryAdvice, curveEqn]
+    · intro constraint hconstraint
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
+      rcases hconstraint with rfl | rfl
+      all_goals
+        intro base scale hscale hzero
+        have hcurveEval :
             (curveEqn x y).eval
-              (Expression.enabledGateValuation qPoint base) := by
-        apply Expression.eval_eq_of_selectorFree (curveEqn x y) (by selector_free)
-        · intro _ _
-          rfl
-        · intro _ _
-          rfl
-        · intro _ _
-          rfl
-      simp only [querySelector, queryAdvice, Expression.eval,
-        Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
-      rw [← hcurveEval, one_mul]
-      rcases mul_eq_zero.mp hzero with hscaled | hcurve
-      · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
-      · exact mul_eq_zero.mpr (.inr hcurve)
+                (Expression.replaceSelectorValue qPoint scale base) =
+              (curveEqn x y).eval
+                (Expression.enabledGateValuation qPoint base) := by
+          apply Expression.eval_eq_of_selectorFree (curveEqn x y) (by selector_free)
+          · intro _ _
+            rfl
+          · intro _ _
+            rfl
+          · intro _ _
+            rfl
+        simp only [querySelector, queryAdvice, Expression.eval,
+          Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
+        rw [← hcurveEval, one_mul]
+        rcases mul_eq_zero.mp hzero with hscaled | hcurve
+        · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
+        · exact mul_eq_zero.mpr (.inr hcurve)
 
 /-- The "witness non-identity point" gate. -/
 def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp :=

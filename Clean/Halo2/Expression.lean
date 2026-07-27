@@ -129,6 +129,42 @@ def Expression.SelectorFree {F : Type} : Expression F Query → Prop
   | .add a b => a.SelectorFree ∧ b.SelectorFree
   | .mul a b => a.SelectorFree ∧ b.SelectorFree
 
+/-- Whether every selector atom's index satisfies `domain`. -/
+def Expression.selectorsCovered
+    {F : Type} (domain : ℕ → Bool) : Expression F Query → Bool
+  | .var (.selector selector) => domain selector.index
+  | .var _ => true
+  | .const _ => true
+  | .add left right =>
+      left.selectorsCovered domain && right.selectorsCovered domain
+  | .mul left right =>
+      left.selectorsCovered domain && right.selectorsCovered domain
+
+/-- A selector-free expression is covered by every selector domain. -/
+theorem Expression.selectorsCovered_of_selectorFree
+    {F : Type} (domain : ℕ → Bool)
+    (expression : Expression F Query)
+    (hfree : expression.SelectorFree) :
+    expression.selectorsCovered domain = true := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp [Expression.SelectorFree] at hfree
+      | fixed column rotation =>
+          rfl
+      | advice column rotation =>
+          rfl
+      | «instance» column rotation =>
+          rfl
+  | const value =>
+      rfl
+  | add left right ihLeft ihRight
+  | mul left right ihLeft ihRight =>
+      simp only [Expression.SelectorFree,
+        Expression.selectorsCovered, Bool.and_eq_true] at hfree ⊢
+      exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
+
 /--
 `Environment` represents the data that is provided at runtime to concretely specify the
 witness assignment of a circuit, and any additional witness data external to the current

@@ -78,22 +78,28 @@ structure Constraint (F : Type) where
   poly : Expression F Query
 
 /--
-The one-sided semantic law required of every custom gate.
+The local laws required of every custom gate.
 
-At an enabled row, selector compression replaces the gate's distinguished selector by
-a nonzero field value. If the resulting verifier-side polynomial vanishes, the same
-compiled polynomial must vanish under Clean's selector-one/foreign-selectors-zero
-valuation. No converse or exact scaling equation is required.
+Every selector atom in a constraint must name the gate's distinguished selector. At an
+enabled row, selector compression replaces that selector by a nonzero field value; if
+the resulting verifier-side polynomial vanishes, the same compiled polynomial must
+vanish under Clean's selector-one valuation. No converse or exact scaling equation is
+required.
 -/
-def Gate.WellFormed
+structure Gate.WellFormed
     [Field F]
-    (selector : Selector) (constraints : List (Constraint F)) : Prop :=
-  ∀ constraint ∈ constraints,
-    ∀ (base : Query → F) (scale : F), scale ≠ 0 →
-      constraint.poly.eval
-          (Expression.replaceSelectorValue selector scale base) = 0 →
+    (selector : Selector) (constraints : List (Constraint F)) : Prop where
+  selectorsOwned :
+    constraints.Forall fun constraint =>
+      constraint.poly.selectorsCovered
+        (fun index => decide (index = selector.index)) = true
+  compressionSound :
+    ∀ constraint ∈ constraints,
+      ∀ (base : Query → F) (scale : F), scale ≠ 0 →
         constraint.poly.eval
-          (Expression.enabledGateValuation selector base) = 0
+            (Expression.replaceSelectorValue selector scale base) = 0 →
+          constraint.poly.eval
+            (Expression.enabledGateValuation selector base) = 0
 
 /-- A custom gate.
 
@@ -147,31 +153,40 @@ def Gate.withSelector
       { name := constraintName, poly := querySelector selector * poly }
   wellFormed := by
     intro
-    rw [Gate.WellFormed]
-    intro constraint hconstraint
-    obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
-      List.mem_map.mp hconstraint
-    intro base scale hscale hzero
-    have hpolyFree : poly.SelectorFree :=
-      hfree (constraintName, poly) hsource
-    have hpolyEval :
-        poly.eval
-            (Expression.replaceSelectorValue selector scale base) =
+    constructor
+    · rw [List.forall_iff_forall_mem]
+      intro constraint hconstraint
+      obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
+        List.mem_map.mp hconstraint
+      simp only [querySelector, Expression.selectorsCovered,
+        decide_true, Bool.true_and]
+      exact Expression.selectorsCovered_of_selectorFree
+        (fun index => decide (index = selector.index))
+        poly (hfree (constraintName, poly) hsource)
+    · intro constraint hconstraint
+      obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
+        List.mem_map.mp hconstraint
+      intro base scale hscale hzero
+      have hpolyFree : poly.SelectorFree :=
+        hfree (constraintName, poly) hsource
+      have hpolyEval :
           poly.eval
-            (Expression.enabledGateValuation selector base) := by
-      apply Expression.eval_eq_of_selectorFree poly hpolyFree
-      · intro _ _
-        rfl
-      · intro _ _
-        rfl
-      · intro _ _
-        rfl
-    simp only [querySelector, Expression.eval,
-      Expression.replaceSelectorValue, if_pos] at hzero
-    simp only [querySelector, Expression.eval,
-      Expression.enabledGateValuation, if_pos, one_mul]
-    rw [← hpolyEval]
-    exact (mul_eq_zero.mp hzero).resolve_left hscale
+              (Expression.replaceSelectorValue selector scale base) =
+            poly.eval
+              (Expression.enabledGateValuation selector base) := by
+        apply Expression.eval_eq_of_selectorFree poly hpolyFree
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+      simp only [querySelector, Expression.eval,
+        Expression.replaceSelectorValue, if_pos] at hzero
+      simp only [querySelector, Expression.eval,
+        Expression.enabledGateValuation, if_pos, one_mul]
+      rw [← hpolyEval]
+      exact (mul_eq_zero.mp hzero).resolve_left hscale
 
 @[simp] theorem Gate.withSelector_selector
     [Field F]
