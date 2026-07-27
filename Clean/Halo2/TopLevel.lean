@@ -131,26 +131,6 @@ theorem OperationsKeygenCoherent.closeWithOperations
   | loadTable =>
       trivial
 
-/--
-Generic well-formedness facts supplied by successful synthesis/layout rather than by
-the proof's constraint polynomials.
-
-The first required fact is table fit: every declared table's explicit block lies in
-the usable rows.  Further compiler invariants (for example region bounds) belong in
-this same structure when the operation semantics begins consuming them.
--/
-structure SynthesisWellFormed
-    {F : Type} [FiniteField F]
-    (env : Environment F) (operations : Operations F) : Prop where
-  tablesFit :
-    ∀ (table : TableColumn) (values : List F),
-      .loadTable table values ∈ operations →
-      values.length ≤ env.usableRows
-
-namespace SynthesisWellFormed
-
-variable {F : Type} [FiniteField F]
-
 private theorem accumulator_le_foldl_max (values : List ℕ) (accumulator : ℕ) :
     accumulator ≤ values.foldl max accumulator := by
   induction values generalizing accumulator with
@@ -173,8 +153,9 @@ private theorem member_le_foldl_max
           (accumulator_le_foldl_max tail (max accumulator value))
       · exact inductionHypothesis (max accumulator head) htail
 
-omit [FiniteField F] in
-private theorem loadTable_length_le_usedRows
+/-- Every loaded table contributes its explicit block length to the operation
+footprint used by top-level domain selection. -/
+theorem Operations.loadTable_length_le_usedRows
     (operations : Operations F) (table : TableColumn) (values : List F)
     (hload : Operation.loadTable table values ∈ operations) :
     values.length ≤ Halo2.usedRows operations := by
@@ -189,16 +170,6 @@ private theorem loadTable_length_le_usedRows
     member_le_foldl_max tableLengths values.length 0 hlength
   unfold Halo2.usedRows
   exact le_trans htable (Nat.le_max_right _ _)
-
-/-- A circuit-derived usable-row bound supplies synthesis well-formedness. -/
-theorem of_usedRows
-    (env : Environment F) (operations : Operations F)
-    (hrows : Halo2.usedRows operations ≤ env.usableRows) :
-    SynthesisWellFormed env operations where
-  tablesFit table values hload :=
-    le_trans (loadTable_length_le_usedRows operations table values hload) hrows
-
-end SynthesisWellFormed
 
 private theorem exists_region_operation_of_mem_indexedRegions
     {operations : Operations F} {start region : ℕ}
@@ -323,6 +294,156 @@ structure ProofAssignment (F : Type) where
   /-- Values of the proof's public instance columns. -/
   inst : Column .instance → ℤ → F
 
+/-!
+The canonical compiler below is defined before `TopLevelCircuit` so the structure's
+law fields can be stated directly against circuit-derived environments.
+-/
+
+namespace TopLevelCompilation
+
+variable
+    {F : Type} [FiniteField F]
+    {Config : Type}
+
+def config
+    (circuit : FormalCircuit F Unit Config unit unit) : Config :=
+  (circuit.configure () {}).1
+
+def constraintSystem
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    ConstraintSystem F :=
+  circuit.toConstraintSystem () ()
+
+def operations
+    (circuit : FormalCircuit F Unit Config unit unit) : Operations F :=
+  (circuit.synthesize (config circuit) ()).operations 0
+
+def regionStarts
+    (circuit : FormalCircuit F Unit Config unit unit) : List ℕ :=
+  FloorPlanner.V1.starts (operations circuit)
+
+def selectorActivations
+    (circuit : FormalCircuit F Unit Config unit unit) : List (ℕ × ℕ) :=
+  activations (regionStarts circuit) (indexedRegions (operations circuit) 0).1
+
+def placement
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    RegionIndex → ℕ :=
+  fun region => (regionStarts circuit).getD region 0
+
+def usedRows
+    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
+  Halo2.usedRows (operations circuit)
+
+def domainExponent
+    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
+  Halo2.minimalK (constraintSystem circuit) (operations circuit)
+
+def selectorMap
+    (circuit : FormalCircuit F Unit Config unit unit) : SelCompressMap :=
+  deriveSelCompressMap (constraintSystem circuit)
+    (2 ^ domainExponent circuit) (selectorActivations circuit)
+
+/-- The canonical domain leaves room for the circuit's complete operation footprint. -/
+theorem usedRows_le_usableRowsAt_domainExponent
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    usedRows circuit ≤
+      2 ^ domainExponent circuit -
+        (constraintSystem circuit).blindingFactors - 1 := by
+  have hfit :
+      usedRows circuit + (constraintSystem circuit).blindingFactors + 1 ≤
+        2 ^ domainExponent circuit := by
+    exact (Nat.le_max_left _ _).trans
+      (Halo2.minimalK_fits
+        (constraintSystem circuit) (operations circuit))
+  omega
+
+def fixedAssignments
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    List (Layout.FixedAssignment F) :=
+  Layout.compileFixed
+    (2 ^ domainExponent circuit -
+      (constraintSystem circuit).blindingFactors - 1)
+    (selectorMap circuit) (constraintSystem circuit) (operations circuit)
+
+def fixedRows
+    (circuit : FormalCircuit F Unit Config unit unit) : List (List F) :=
+  Layout.denseFixedColumns
+    (2 ^ domainExponent circuit)
+    (PinnedConstraintSystem.derive
+      (constraintSystem circuit) (selectorMap circuit)).numFixedColumns
+    (fixedAssignments circuit)
+
+def fixedValue
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (column : Column .fixed) (row : ℤ) : F :=
+  (fixedRows circuit).getD column.index [] |>.getD
+    (row.natMod (2 ^ domainExponent circuit)) 0
+
+def environment
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F) : Environment F where
+  get column row :=
+    match column.kind with
+    | .advice => assignment.advice ⟨column.index⟩ row
+    | .fixed => fixedValue circuit ⟨column.index⟩ row
+    | .instance => assignment.inst ⟨column.index⟩ row
+  usableRows :=
+    2 ^ domainExponent circuit -
+      (constraintSystem circuit).blindingFactors - 1
+
+@[simp] theorem environment_advice
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F)
+    (column : Column .advice) (row : ℤ) :
+    (environment circuit assignment).advice column row =
+      assignment.advice column row :=
+  rfl
+
+@[simp] theorem environment_fixed
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F)
+    (column : Column .fixed) (row : ℤ) :
+    (environment circuit assignment).fixed column row =
+      fixedValue circuit column row := by
+  simp only [Environment.fixed, environment, Column.toAny]
+
+@[simp] theorem environment_inst
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F)
+    (column : Column .instance) (row : ℤ) :
+    (environment circuit assignment).inst column row =
+      assignment.inst column row :=
+  rfl
+
+@[simp] theorem environment_usableRows
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F) :
+    (environment circuit assignment).usableRows =
+      2 ^ domainExponent circuit -
+        (constraintSystem circuit).blindingFactors - 1 :=
+  rfl
+
+def placedEnvironment
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F) : Placed Environment F :=
+  ⟨placement circuit, environment circuit assignment⟩
+
+def proverEnvironment
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F) (hint : ProverHint F) :
+    ProverEnvironment F where
+  toEnvironment := environment circuit assignment
+  hint := hint
+
+def placedProverEnvironment
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (assignment : ProofAssignment F) (hint : ProverHint F) :
+    Placed ProverEnvironment F :=
+  ⟨placement circuit, proverEnvironment circuit assignment hint⟩
+
+end TopLevelCompilation
+
 /-- A closed formal circuit together with its public/private witness boundary. -/
 structure TopLevelCircuit
     (F : Type) [FiniteField F]
@@ -367,24 +488,15 @@ structure TopLevelCircuit
     let config := (formalCircuit.configure () {}).1
     Operations.LookupInputsNoSimpleSelectors
       ((formalCircuit.synthesize config ()).operations 0)
-  /-- Successful top-level synthesis discharges child assumptions for soundness. -/
-  closesEnvironmentSoundness :
-    let config := (formalCircuit.configure () {}).1
-    ∀ (env : Placed Environment F),
-      SynthesisWellFormed env.env
-        ((formalCircuit.synthesize config ()).operations 0) →
-      Constraints env.place env.env
-        ((formalCircuit.synthesize config ()).operations 0) 0 →
-      formalCircuit.EnvAssumptions config env
-  /-- Successful top-level synthesis discharges child assumptions for completeness. -/
-  closesEnvironmentCompleteness :
-    let config := (formalCircuit.configure () {}).1
-    ∀ (env : Placed ProverEnvironment F),
-      SynthesisWellFormed env.toEnvironment.env
-        ((formalCircuit.synthesize config ()).operations 0) →
-      ExtendsWitnesses env.place env.env
-        ((formalCircuit.synthesize config ()).operations 0) 0 →
-      formalCircuit.EnvAssumptions config env.toEnvironment
+  /--
+  The canonical compiled environment supplies the residual facts that the circuit
+  cannot establish from either constraints or witness extension.
+  -/
+  closesEnvironment :
+    ∀ (assignment : ProofAssignment F),
+      formalCircuit.EnvAssumptions
+        (TopLevelCompilation.config formalCircuit)
+        (TopLevelCompilation.placedEnvironment formalCircuit assignment)
 
 namespace TopLevelCircuit
 
@@ -395,31 +507,31 @@ variable
 
 /-- The configuration produced by the top-level circuit's own configure run. -/
 def config (self : TopLevelCircuit F Config PublicInput) : Config :=
-  (self.formalCircuit.configure () {}).1
+  TopLevelCompilation.config self.formalCircuit
 
 /-- The circuit-derived constraint system used by key generation: the configure result
 closed under every gate and lookup enabled by this circuit's synthesis. -/
 def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
-  self.formalCircuit.toConstraintSystem () ()
+  TopLevelCompilation.constraintSystem self.formalCircuit
 
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
-  (self.formalCircuit.synthesize self.config ()).operations 0
+  TopLevelCompilation.operations self.formalCircuit
 
 /-- V1 region starts derived from the circuit's operation stream. -/
 def regionStarts (self : TopLevelCircuit F Config PublicInput) : List ℕ :=
-  FloorPlanner.V1.starts self.operations
+  TopLevelCompilation.regionStarts self.formalCircuit
 
 /-- Selector activations produced by synthesis and V1 placement. -/
 def selectorActivations
     (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℕ) :=
-  activations self.regionStarts (indexedRegions self.operations 0).1
+  TopLevelCompilation.selectorActivations self.formalCircuit
 
 /-- The circuit-owned V1 placement function. -/
 def placement (self : TopLevelCircuit F Config PublicInput) :
     RegionIndex → ℕ :=
-  fun region => self.regionStarts.getD region 0
+  TopLevelCompilation.placement self.formalCircuit
 
 @[simp] theorem placement_apply
     (self : TopLevelCircuit F Config PublicInput) (region : RegionIndex) :
@@ -428,17 +540,16 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 
 /-- The operation footprint that key generation requires to fit in usable rows. -/
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  Halo2.usedRows self.operations
+  TopLevelCompilation.usedRows self.formalCircuit
 
 /-- The smallest keygen domain exponent derived from this circuit. -/
 def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  Halo2.minimalK self.constraintSystem self.operations
+  TopLevelCompilation.domainExponent self.formalCircuit
 
 /-- The selector-compression map derived from this circuit and its fitting domain. -/
 def selectorMap
     (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
-  deriveSelCompressMap self.constraintSystem
-    (2 ^ self.domainExponent) self.selectorActivations
+  TopLevelCompilation.selectorMap self.formalCircuit
 
 /-- The blinding-row count derived from the circuit's constraint system. -/
 def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -453,30 +564,21 @@ def usableRowsAt
 theorem usedRows_le_usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput) :
     self.usedRows ≤ self.usableRowsAt self.domainExponent := by
-  have hfit :
-      self.usedRows + self.blindingFactors + 1 ≤
-        2 ^ self.domainExponent := by
-    exact (Nat.le_max_left _ _).trans
-      (Halo2.minimalK_fits self.constraintSystem self.operations)
-  unfold usableRowsAt
-  omega
+  simpa only [usedRows, usableRowsAt, domainExponent, blindingFactors,
+    constraintSystem] using
+    TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
+      self.formalCircuit
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
 def fixedAssignments
     (self : TopLevelCircuit F Config PublicInput) :
     List (Layout.FixedAssignment F) :=
-  Layout.compileFixed
-    (self.usableRowsAt self.domainExponent)
-    self.selectorMap self.constraintSystem self.operations
+  TopLevelCompilation.fixedAssignments self.formalCircuit
 
 /-- The dense fixed columns compiled canonically from the top-level circuit. -/
 def fixedRows
     (self : TopLevelCircuit F Config PublicInput) : List (List F) :=
-  Layout.denseFixedColumns
-    (2 ^ self.domainExponent)
-    (PinnedConstraintSystem.derive
-      self.constraintSystem self.selectorMap).numFixedColumns
-    self.fixedAssignments
+  TopLevelCompilation.fixedRows self.formalCircuit
 
 @[simp] theorem fixedRows_length
     (self : TopLevelCircuit F Config PublicInput) :
@@ -507,8 +609,7 @@ modulo the nonempty evaluation domain before reading the dense column.
 def fixedValue
     (self : TopLevelCircuit F Config PublicInput)
     (column : Column .fixed) (row : ℤ) : F :=
-  (self.fixedRows.getD column.index []).getD
-    (row.natMod (2 ^ self.domainExponent)) 0
+  TopLevelCompilation.fixedValue self.formalCircuit column row
 
 /--
 Construct the complete semantic environment from exactly the proof-varying assignment.
@@ -516,34 +617,29 @@ Fixed values and usable rows are circuit-derived and cannot be supplied independ
 -/
 def environment
     (self : TopLevelCircuit F Config PublicInput)
-    (assignment : ProofAssignment F) : Environment F where
-  get column row :=
-    match column.kind with
-    | .advice => assignment.advice ⟨column.index⟩ row
-    | .fixed => self.fixedValue ⟨column.index⟩ row
-    | .instance => assignment.inst ⟨column.index⟩ row
-  usableRows := self.usableRowsAt self.domainExponent
+    (assignment : ProofAssignment F) : Environment F :=
+  TopLevelCompilation.environment self.formalCircuit assignment
 
 /-- The canonical environment paired with the circuit-owned V1 placement. -/
 def placedEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) : Placed Environment F :=
-  ⟨self.placement, self.environment assignment⟩
+  TopLevelCompilation.placedEnvironment self.formalCircuit assignment
 
 /-- Add prover-only hints to the canonical proof assignment. -/
 def proverEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) (hint : ProverHint F) :
-    ProverEnvironment F where
-  toEnvironment := self.environment assignment
-  hint := hint
+    ProverEnvironment F :=
+  TopLevelCompilation.proverEnvironment self.formalCircuit assignment hint
 
 /-- The canonical prover environment paired with circuit-owned placement. -/
 def placedProverEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     Placed ProverEnvironment F :=
-  ⟨self.placement, self.proverEnvironment assignment hint⟩
+  TopLevelCompilation.placedProverEnvironment
+    self.formalCircuit assignment hint
 
 @[simp, circuit_norm] theorem environment_advice
     (self : TopLevelCircuit F Config PublicInput)
@@ -559,7 +655,9 @@ def placedProverEnvironment
     (column : Column .fixed) (row : ℤ) :
     (self.environment assignment).fixed column row =
       self.fixedValue column row := by
-  simp only [Environment.fixed, environment, Column.toAny]
+  simpa only [environment, fixedValue] using
+    TopLevelCompilation.environment_fixed
+      self.formalCircuit assignment column row
 
 @[simp, circuit_norm] theorem environment_inst
     (self : TopLevelCircuit F Config PublicInput)
@@ -587,15 +685,6 @@ def placedProverEnvironment
     (assignment : ProofAssignment F) :
     (self.placedEnvironment assignment).env = self.environment assignment := by
   rfl
-
-/-- Canonical compilation supplies synthesis well-formedness internally. -/
-theorem synthesisWellFormed
-    (self : TopLevelCircuit F Config PublicInput)
-    (assignment : ProofAssignment F) :
-    SynthesisWellFormed (self.environment assignment) self.operations := by
-  apply SynthesisWellFormed.of_usedRows
-  rw [self.environment_usableRows]
-  exact self.usedRows_le_usableRowsAt_domainExponent
 
 /--
 The circuit-side static premise needed to connect synthesized gate and lookup
@@ -666,9 +755,7 @@ theorem soundness
       (self.extractPrivate (self.formalCircuit.configure () {}).1 env))
   rw [self.extract_factorization]
   apply self.formalCircuit.soundness self.config 0 env ()
-  · apply self.closesEnvironmentSoundness env
-      (self.synthesisWellFormed assignment)
-    simpa [env] using hconstraints
+  · exact self.closesEnvironment assignment
   · rw [self.assumptions_eq]
     trivial
   · simpa [env] using hconstraints
@@ -716,9 +803,7 @@ theorem completeness
   let env := self.placedProverEnvironment assignment hint
   apply self.formalCircuit.completeness self.config 0 env ()
   · simpa [env, placedProverEnvironment] using hwitnesses
-  · apply self.closesEnvironmentCompleteness env
-      (self.synthesisWellFormed assignment)
-    simpa [env, placedProverEnvironment] using hwitnesses
+  · exact self.closesEnvironment assignment
   · rw [self.assumptions_eq]
     trivial
   · simpa [env, placedProverEnvironment, proverEnvironment] using hprover

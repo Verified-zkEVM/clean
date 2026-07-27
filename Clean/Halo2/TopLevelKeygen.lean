@@ -69,8 +69,8 @@ theorem usedRows_le_usableRowsAt
     (self : TopLevelCircuit F Config PublicInput) (k : ℕ)
     (hfit : self.FitsAt k) :
     self.usedRows ≤ self.usableRowsAt k := by
+  change self.usedRows ≤ 2 ^ k - self.blindingFactors - 1
   unfold FitsAt at hfit
-  unfold usableRowsAt
   omega
 
 end TopLevelCircuit
