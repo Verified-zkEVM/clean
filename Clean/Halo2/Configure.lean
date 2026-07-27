@@ -715,6 +715,100 @@ variable {α β : Type}
         (program.finalCounts counts) :=
   rfl
 
+@[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
+    output (adviceColumn : Configure F (Column .advice)) counts =
+      ⟨counts.numAdviceColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_adviceColumn (counts : ConfigureCounts) :
+    finalCounts (adviceColumn : Configure F (Column .advice)) counts =
+      { counts with numAdviceColumns := counts.numAdviceColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_fixedColumn (counts : ConfigureCounts) :
+    output (fixedColumn : Configure F (Column .fixed)) counts =
+      ⟨counts.numFixedColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_fixedColumn (counts : ConfigureCounts) :
+    finalCounts (fixedColumn : Configure F (Column .fixed)) counts =
+      { counts with numFixedColumns := counts.numFixedColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_instanceColumn (counts : ConfigureCounts) :
+    output (instanceColumn : Configure F (Column .instance)) counts =
+      ⟨counts.numInstanceColumns⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_instanceColumn (counts : ConfigureCounts) :
+    finalCounts (instanceColumn : Configure F (Column .instance)) counts =
+      { counts with numInstanceColumns := counts.numInstanceColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_selector (counts : ConfigureCounts) :
+    output (selector : Configure F Selector) counts =
+      ⟨counts.numSelectors, true⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_selector (counts : ConfigureCounts) :
+    finalCounts (selector : Configure F Selector) counts =
+      { counts with numSelectors := counts.numSelectors + 1 } :=
+  rfl
+
+@[simp] theorem output_complexSelector (counts : ConfigureCounts) :
+    output (complexSelector : Configure F Selector) counts =
+      ⟨counts.numSelectors, false⟩ :=
+  rfl
+
+@[simp] theorem finalCounts_complexSelector (counts : ConfigureCounts) :
+    finalCounts (complexSelector : Configure F Selector) counts =
+      { counts with numSelectors := counts.numSelectors + 1 } :=
+  rfl
+
+@[simp] theorem output_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    output (enableEquality (F := F) column) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    finalCounts (enableEquality (F := F) column) counts = counts :=
+  rfl
+
+@[simp] theorem output_enableConstant
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    output (enableConstant (F := F) column) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_enableConstant
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    finalCounts (enableConstant (F := F) column) counts = counts :=
+  rfl
+
+@[simp] theorem output_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    output (createGate gate) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    finalCounts (createGate gate) counts = counts :=
+  rfl
+
+@[simp] theorem output_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    output (lookup queriedCells tableMap) counts = () :=
+  rfl
+
+@[simp] theorem finalCounts_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    finalCounts (lookup queriedCells tableMap) counts = counts :=
+  rfl
+
 end Configure
 
 @[simp] theorem ConfigureDelta.instanceQueries_append
