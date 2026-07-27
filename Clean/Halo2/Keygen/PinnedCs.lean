@@ -274,8 +274,48 @@ circuit fits: every assignment row must lie in `usable_rows = 0..n − (blinding
 and `n ≥ cs.minimum_rows()` (`keygen.rs:200`). The minimal `k` satisfying those asserts is
 the faithful derived value. -/
 
-/-- The rows the keygen-view synthesize occupies: floor-planned region extents and
-loaded table lengths (both must fit in the usable rows). -/
+/-- One past the absolute row of a placed cell. -/
+def Cell.rowExtent (starts : List ℕ) (cell : Cell) : ℕ :=
+  starts.getD cell.regionIndex 0 + cell.rowOffset + 1
+
+/-- One past every copy endpoint used by a region operation. -/
+def RegionOperation.copyRowExtent
+    (starts : List ℕ) : RegionOperation F → ℕ
+  | .constrainEqual left right =>
+      max (left.rowExtent starts) (right.rowExtent starts)
+  | .constrainConstant cell _ =>
+      cell.rowExtent starts
+  | .constrainInstance cell _ row =>
+      max (cell.rowExtent starts) (row + 1)
+  | _ => 0
+
+/-- One past every copy endpoint used by a layouter operation. -/
+def Operation.copyRowExtent
+    (starts : List ℕ) : Operation F → ℕ
+  | .region _ body =>
+      (body.map (RegionOperation.copyRowExtent starts)).foldl max 0
+  | .constrainInstance cell _ row =>
+      max (cell.rowExtent starts) (row + 1)
+  | .loadTable _ _ => 0
+
+/--
+One past every row checked while loading a table. A nonempty table assigns its explicit
+prefix and then calls `fill_from_row` at `values.length`; Halo 2 checks that boundary
+itself against `usable_rows`.
+-/
+def Operation.tableRowExtent : Operation F → ℕ
+  | .loadTable _ [] => 0
+  | .loadTable _ values => values.length + 1
+  | _ => 0
+
+/--
+The rows guarded by Halo 2's `usable_rows` checks during key generation or proving:
+floor-planned assignments and selector activations, loaded-table assignments and fill
+boundary, and both endpoints of every copy.
+
+In particular, an absolute `constrainInstance` row contributes even though the copy
+consumes no region-local space.
+-/
 def usedRows (ops : Operations F) : ℕ :=
   let regions := (indexedRegions ops 0).1
   let starts := FloorPlanner.V1.starts ops
@@ -283,10 +323,11 @@ def usedRows (ops : Operations F) : ℕ :=
     (regions.map fun (index, body) =>
       starts.getD index 0 +
         (FloorPlanner.measureRegion index body).rowCount).foldl max 0
-  let tableLen := (ops.filterMap fun op => match op with
-    | .loadTable _ vals => some vals.length
-    | _ => none).foldl max 0
-  max regionEnd tableLen
+  let tableEnd :=
+    (ops.map Operation.tableRowExtent).foldl max 0
+  let copyEnd :=
+    (ops.map (Operation.copyRowExtent starts)).foldl max 0
+  max (max regionEnd tableEnd) copyEnd
 
 /--
 Every lookup operation inside an indexed region lies below the operation stream's
@@ -333,7 +374,8 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
     (Nat.add_lt_add_left hrow _).trans_le hend
   unfold usedRows
   dsimp only
-  exact habsolute.trans_le (Nat.le_max_left _ _)
+  exact habsolute.trans_le
+    ((Nat.le_max_left _ _).trans (Nat.le_max_left _ _))
 
 /--
 The minimal domain exponent for which the circuit fits keygen's asserts.
