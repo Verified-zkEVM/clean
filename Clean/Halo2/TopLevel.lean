@@ -569,6 +569,23 @@ theorem usedRows_le_usableRowsAt_domainExponent
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
       self.formalCircuit
 
+/-- The pinned constraint system derived solely from the closed circuit: the
+projection of its synthesis-closed constraint system through its circuit-owned
+selector map. -/
+def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
+    PinnedConstraintSystem F :=
+  PinnedConstraintSystem.derive self.constraintSystem self.selectorMap
+
+/--
+The circuit-owned pinned constraint system is exactly the projection using its
+circuit-owned selector map.
+-/
+theorem pinnedCS_eq_derive
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.pinnedCS =
+      PinnedConstraintSystem.derive self.constraintSystem self.selectorMap :=
+  rfl
+
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
 def fixedAssignments
     (self : TopLevelCircuit F Config PublicInput) :
