@@ -176,78 +176,6 @@ theorem Operations.loadTable_length_le_usedRows
   exact hlength.trans (htable.trans
     ((Nat.le_max_right _ _).trans (Nat.le_max_left _ _)))
 
-private theorem exists_region_operation_of_mem_indexedRegions
-    {operations : Operations F} {start region : ℕ}
-    {body : RegionOperations F}
-    (hregion : (region, body) ∈ (indexedRegions operations start).1) :
-    ∃ name, Operation.region name body ∈ operations := by
-  induction operations generalizing start with
-  | nil =>
-      simp [indexedRegions] at hregion
-  | cons operation rest ih =>
-      cases operation with
-      | region name headBody =>
-          simp only [indexedRegions, List.mem_cons] at hregion
-          rcases hregion with hhead | hrest
-          · have : body = headBody := congrArg Prod.snd hhead
-            subst body
-            exact ⟨name, List.mem_cons_self⟩
-          · obtain ⟨foundName, hfound⟩ := ih hrest
-            exact ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-      | constrainInstance cell column row =>
-          exact
-            let ⟨foundName, hfound⟩ := ih hregion
-            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-      | loadTable table values =>
-          exact
-            let ⟨foundName, hfound⟩ := ih hregion
-            ⟨foundName, List.mem_cons_of_mem _ hfound⟩
-
-/-- Select the region-local law for one indexed region body. -/
-theorem Operations.LookupRelevantSelectorActivationsExact.of_region
-    {operations : Operations F}
-    (hlaw : operations.LookupRelevantSelectorActivationsExact)
-    {region : RegionIndex} {body : RegionOperations F}
-    (hregion : (region, body) ∈ (indexedRegions operations 0).1) :
-    body.LookupRelevantSelectorActivationsExact := by
-  obtain ⟨name, hoperation⟩ :=
-    exists_region_operation_of_mem_indexedRegions hregion
-  exact List.forall_iff_forall_mem.mp hlaw
-    (.region name body) hoperation
-
-/-- Select the exact activation equivalence for one lookup selector leaf. -/
-theorem RegionOperations.LookupRelevantSelectorActivationsExact.of_lookup
-    {body : RegionOperations F}
-    (hlaw : body.LookupRelevantSelectorActivationsExact)
-    {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
-    (hlookup :
-      RegionOperation.enableLookup argument enabled row ∈ body)
-    {expression : Expression F Query}
-    (hexpression : expression ∈ argument.inputs)
-    {selector : ℕ}
-    (hselector : selector ∈ expression.selectorIndices) :
-    SelectorEnabledAtIndex enabled selector ↔
-      body.SelectorActivatedAt selector row := by
-  have hoperation :=
-    List.forall_iff_forall_mem.mp hlaw
-      (.enableLookup argument enabled row) hlookup
-  have hinput :=
-    List.forall_iff_forall_mem.mp hoperation expression hexpression
-  exact List.forall_iff_forall_mem.mp hinput selector hselector
-
-/--
-The region-local synthesis law, combined with V1's guarded placement, supplies the
-exact global selector activation rows consumed by lookup projection.
--/
-theorem Operations.LookupRelevantSelectorActivationsExact.placed
-    {operations : Operations F}
-    (hlaw : operations.LookupRelevantSelectorActivationsExact) :
-    FloorPlanner.PlacedLookupSelectorRowsExact operations
-      (FloorPlanner.V1.starts operations) := by
-  apply FloorPlanner.V1.starts_placedLookupSelectorRowsExact_of_regionLaw
-  intro region body hregion
-  exact hlaw.of_region hregion
-
 /-!
 ## Top-level public inputs
 
@@ -676,16 +604,6 @@ structure TopLevelCircuit
       formalCircuit.extract config () 0 env
   /-- A top-level circuit has no assumptions supplied by an enclosing circuit. -/
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
-  /-- Synthesized lookup selector activations are represented exactly. -/
-  lookupRelevantSelectorActivationsExact :
-    let config := (formalCircuit.configure () {}).1
-    Operations.LookupRelevantSelectorActivationsExact
-      ((formalCircuit.synthesize config ()).operations 0)
-  /-- Lookup inputs do not contain simple selectors. -/
-  lookupInputsNoSimpleSelectors :
-    let config := (formalCircuit.configure () {}).1
-    Operations.LookupInputsNoSimpleSelectors
-      ((formalCircuit.synthesize config ()).operations 0)
   /--
   The canonical compiled environment supplies the residual facts that the circuit
   cannot establish from either constraints or witness extension.
