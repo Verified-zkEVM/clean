@@ -686,6 +686,12 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout
 
+/-- The complete synthesis operation footprint is included in top-level row usage. -/
+theorem operations_usedRows_le_usedRows
+    (self : TopLevelCircuit F Config PublicInput) :
+    Halo2.usedRows self.operations ≤ self.usedRows := by
+  exact Nat.le_max_left _ _
+
 /-- Every public-input cell is below the compiler-derived usable-row requirement. -/
 theorem publicInputLayout_cells_snd_lt_usedRows
     (self : TopLevelCircuit F Config PublicInput)
