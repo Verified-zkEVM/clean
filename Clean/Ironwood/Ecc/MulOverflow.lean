@@ -271,7 +271,30 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
   synthesize cfg input := synthesize K cfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { lookups input := [LookupRangeCheck.rangeCheckLookup K input.1] }
+      registered := some ⟨by
+        intro configInput counts input i
+        keygen_registration
+        apply FormalCircuit.call_keygenRegistered (counts := counts)
+          (requirements :=
+            { lookups cfg := [LookupRangeCheck.rangeCheckLookup K cfg] })
+        · rfl
+        · rfl
+        · intro gate hgate
+          have hconfigure :
+              (LookupRangeCheck.copyCheck K (numWords K) false).configure =
+                fun cfg => pure cfg := rfl
+          rw [hconfigure, Configure.delta_pure] at hgate
+          simp at hgate
+        · intro argument hargument
+          have hconfigure :
+              (LookupRangeCheck.copyCheck K (numWords K) false).configure =
+                fun cfg => pure cfg := rfl
+          rw [hconfigure, Configure.delta_pure] at hargument
+          simp only [List.append_nil, List.mem_singleton] at hargument
+          exact List.mem_cons.mpr (Or.inl hargument)⟩
+      output := fun _ _ _ => ()
       regionCount _ := 3
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm }

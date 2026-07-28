@@ -335,6 +335,12 @@ def shortRangeCheck (K numBits : ℕ) :
     (bitshiftGate K cfg).enable (offset + 1)
     return elt
 
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg := [bitshiftGate K cfg]
+          lookups cfg := [rangeCheckLookup K cfg] }
+      registered := some ⟨by keygen_registration⟩ }
+
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
   -- table row holds a value `< 2^K`, the block holds exact contents, and the block fits the
   -- domain (`TableLoaded`; discharged by `load_tableLoaded`); (2) config well-formedness —
@@ -739,6 +745,11 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     let z0 ← cellAt cfg.runningSum offset
     return { z0, zLast }
 
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg := [rangeCheckLookup K cfg] }
+      registered := some ⟨by keygen_registration⟩ }
+
   -- Same env-level preconditions as `shortRangeCheck`: the table is loaded (`TableLoaded`),
   -- and `q_lookup`/`q_running` are distinct selectors (they are allocated separately in
   -- `configure`). The running-sum rows here have BOTH selectors on, so the distinctness is
@@ -891,6 +902,11 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     if strict then constrainConstant zLast (0 : Fp)
     return { z0, zLast }
 
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg := [rangeCheckLookup K cfg] }
+      registered := some ⟨by keygen_registration⟩ }
+
   EnvAssumptions cfg env :=
     TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
   Assumptions _ := 2 ^ (K * numWords) ≤ PALLAS_BASE_CARD ∧ 2 ^ K ≤ PALLAS_BASE_CARD
@@ -1010,6 +1026,11 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
     let z1 ← cellAt cfg.runningSum (offset + 1)
     let z13 ← cellAt cfg.runningSum (offset + 13)
     return { z0, z1, z13 }
+
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg := [rangeCheckLookup 10 cfg] }
+      registered := some ⟨by keygen_registration⟩ }
 
   EnvAssumptions cfg env :=
     TableLoaded 10 cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index

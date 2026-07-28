@@ -99,7 +99,8 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { output := fun config offset _ self =>
+    { registered := some ⟨by keygen_registration⟩
+      output := fun config offset _ self =>
         { x := .of self offset config.x, y := .of self offset config.y }
       output_eq := by intro _ _ _ _; rfl }
 
@@ -123,18 +124,7 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 
 /-- Configure/synthesis keygen law for the identity-permitting point witness. -/
 theorem point_keygenLawful : point.KeygenLawful := by
-  constructor
-  rintro ⟨x, y⟩ counts offset input region
-  simp only [point, configure, Configure.output_bind,
-    Configure.output_selector,
-    Configure.output_pure, Configure.delta_bind, Configure.delta_selector,
-    Configure.delta_createGate, Configure.delta_pure,
-    ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
-    RegionCircuit.operations_bind, operations_enable,
-    operations_assignAdvice,
-    output_assignAdvice, RegionCircuit.operations_pure,
-    List.forall_append]
-  simp [RegionOperation.KeygenRegistered]
+  exact { registered := (point.elaborated.registered.get (by rfl)).down }
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -154,6 +144,9 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     let xVar ← assignAdvice config.x offset (Witgen.MOver.toIRScalar (Point.x <$> point))
     let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
+
+  elaborated :=
+    { registered := some ⟨by keygen_registration⟩ }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
@@ -175,17 +168,7 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
 /-- Configure/synthesis keygen law for the non-identity point witness. -/
 theorem pointNonId_keygenLawful : pointNonId.KeygenLawful where
-  registered := by
-    rintro ⟨x, y⟩ counts offset input region
-    simp only [pointNonId, configure, Configure.output_bind,
-      Configure.output_selector, Configure.output_pure,
-      Configure.delta_bind, Configure.delta_selector,
-      Configure.delta_createGate, Configure.delta_pure,
-      ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
-      RegionCircuit.operations_bind, operations_enable,
-      operations_assignAdvice, output_assignAdvice,
-      RegionCircuit.operations_pure, List.forall_append]
-    simp [RegionOperation.KeygenRegistered]
+  registered := (pointNonId.elaborated.registered.get (by rfl)).down
 
 /-- The layouter-level point witnesses: the region bundles in their own regions, named
 once here as in the Rust chip (`ecc/chip/witness_point.rs`). -/
