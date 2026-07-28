@@ -1527,8 +1527,8 @@ Fold an elaborated configure program's declared instance-query summary.
 This is the compositional opacity boundary used by `configure_norm`: a parent may use
 the summary packaged by a child `FormalCircuit` without unfolding the child's configure
 program. Reducing the class projection unfolds only the instance and the circuit
-structure far enough to select `elaboratedConfigure`; it does not inspect synthesis or
-proof fields.
+structure far enough to select `elaborated.configureInfo`; it does not inspect
+synthesis or proof fields.
 -/
 def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.instanceQueries do

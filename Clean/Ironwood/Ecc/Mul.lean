@@ -334,7 +334,8 @@ private theorem incomplete_call_output (n : ℕ) (w : ℕ)
                    y := .of self (off + n + 2) cfg.lambda1 },
           zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := by
   -- TODO HALO2 circuit_norm is incomplete to resolve elaborated circuit outputs => rfl disease
-  simp only [circuit_norm, MulIncomplete.double_and_add, FormalRegionCircuit.output, ElaboratedRegionCircuit.output]
+  simp only [circuit_norm, MulIncomplete.double_and_add, FormalRegionCircuit.output,
+    ElaboratedRegionCircuit.output]
 
 /-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
 never reduced, per the whnf discipline). -/
@@ -960,11 +961,11 @@ def mul :
 
   synthesize cfg input := synthesize cfg input
 
-  elaborated cfg :=
-    { output := fun input i => (synthesize cfg input).output i
-      regionCount := fun _ => 4
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i => (synthesize_regionCount cfg input i).symm }
+  elaborated :=
+    { output := fun cfg input i => (synthesize cfg input).output i
+      regionCount _ := 4
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm }
 
   EnvAssumptions cfg env := EnvAssumptions cfg env
 

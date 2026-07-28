@@ -64,7 +64,7 @@ def circuit : FormalCircuit Fp
       constrainEqual derived.y pkDOld.y)
     pure pkDOld
 
-  elaborated _ := { regionCount _ := 6 }
+  elaborated := { regionCount _ := 6 }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 

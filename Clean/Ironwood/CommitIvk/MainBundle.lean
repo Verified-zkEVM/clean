@@ -112,7 +112,7 @@ private theorem prefixRows_ns_2 : Sinsemilla.Chain.prefixRows ns 2 = 26 := rfl
 theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rivkExtract cfg) (EnvAssumptions G cfg) (fun _ => True) (Spec G Q R) := by
   circuit_proof_start
   obtain ⟨hTableG, hMulE, hTableL, hDistinct⟩ := _hE
@@ -486,7 +486,7 @@ private theorem buildPieces (cfg : Config) (ak nk : AssignedCell Fp)
 theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rivkExtract cfg) (EnvAssumptions G cfg) (fun _ => True)
       (ProverAssumptions G Q) (fun _ _ _ _ => True) := by
   circuit_proof_start

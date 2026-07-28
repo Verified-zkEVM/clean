@@ -691,7 +691,7 @@ private theorem synth_output_eq_commit_output
 theorem soundness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (Spec G Q R) := by
   circuit_proof_start
   change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
@@ -1113,7 +1113,7 @@ theorem soundness (G : Generators) (R : FixedBase)
 theorem completeness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (ProverAssumptions G Q)
       (fun _ _ _ _ => True) := by
   circuit_proof_start

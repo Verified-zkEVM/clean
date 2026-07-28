@@ -211,15 +211,16 @@ def circuit (wlsb : WitgenIR Fp 1) :
 
   synthesize := fun (gcfg, lcfg) input => synth wlsb gcfg lcfg input
 
-  elaborated := fun (gcfg, lcfg) =>
-    { output := fun input i => .of (i + 4) 0 (gcfg.advices 6)
-      regionCount := fun _ => 5
+  elaborated :=
+    { output := fun (gcfg, _) _ i => .of (i + 4) 0 (gcfg.advices 6)
+      regionCount _ := 5
       output_eq := by
-        intro input i
+        intro (gcfg, lcfg) input i
         simp only [synth, LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
           LookupRangeCheck.witnessCheckDecomposed, circuit_norm]
         rfl
-      regionCount_eq := fun input i => (synth_regionCount wlsb gcfg lcfg input i).symm }
+      regionCount_eq := fun (gcfg, lcfg) input i =>
+        (synth_regionCount wlsb gcfg lcfg input i).symm }
 
   EnvAssumptions := fun (_, lcfg) env =>
     LookupRangeCheck.TableLoaded 10 lcfg env.env ∧

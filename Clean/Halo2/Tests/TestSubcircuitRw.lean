@@ -142,6 +142,7 @@ def layouterParent :
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
+  elaborated := { regionCount _ := 2 }
   Spec _ output _ := output.Valid
   Witness := ProvablePair Point Point
   extract := fun config _ i₀ env =>

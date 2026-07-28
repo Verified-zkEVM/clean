@@ -186,23 +186,6 @@ private theorem out_eval_lit_prover {k : ℕ} (env : Placed ProverEnvironment Fp
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
 
-/-- The elaborated instance of the `hash_message` region body (explicit — `soundness` must
-not elaborate with metavariables). -/
-instance hashRegionElaborated (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp (Sinsemilla.Chain.Inputs ns.length) (Output ns.length)
-      (fun pieces => do
-        (Sinsemilla.HashPiece.initialYQGate cfg).enable offset
-        let _yq ← assignFixed cfg.fixedYQ offset Q.y
-        let xa ← assignAdvice cfg.xA offset (constWit Q.x)
-        constrainConstant xa Q.x
-        let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
-        let z1s ← (fun self =>
-          (Vector.ofFn (fun i : Fin ns.length =>
-            AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits),
-           ([] : RegionOperations Fp)))
-        pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))) := {}
-
 /-- The `hash_message` region bundle (public `Q`): `public_q_initialization` + the chain.
 `hns`: a Sinsemilla message is nonempty (for `ns = []` the trailing dummy row's `λ₁` is
 unconstrained, so the exit `y` would be unpinned). -/
@@ -228,7 +211,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
        ([] : RegionOperations Fp)))
     pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
 
-  elaborated cfg offset := hashRegionElaborated G ns Q cfg offset
+  elaborated := {}
 
   Witness := Sinsemilla.Chain.ChainWit ns
   extract cfg offset input self env :=

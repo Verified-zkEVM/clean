@@ -999,36 +999,12 @@ private def dRowP (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironme
 
 /-! ## The bundle -/
 
-/-- Canonical elaborated instance: the `output` field is established in REDUCED
-cell-record form ONCE here (the structural ladder in `output_eq` is the one-time cost),
-so every consumer — and cps's canonical-`elaborated` unfold — sees the neat record
-instead of re-reducing the composed builder per proof site. -/
-instance elaborated (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp (Inputs ns.length) Output
-      (fun input : Var (Inputs ns.length) Fp => do
-        RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
-          (fun i base => do
-            let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
-            let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
-              (qS2Boundary (decide (i = ns.length - 1)))
-            (sinsemillaGate cfg).enable (base + ns.getD i 0))
-        let ex ← readState cfg (offset + prefixRows ns ns.length - 1)
-        let xExit ← HashPiece.cellAt cfg.xA (offset + prefixRows ns ns.length)
-        let yFin ← assignAdvice cfg.lambda1 (offset + prefixRows ns ns.length)
-          (finalYAWit ex.row xExit)
-        let _l2d ← assignAdvice cfg.lambda2 (offset + prefixRows ns ns.length) zeroWit
-        let _xpd ← assignAdvice cfg.xP (offset + prefixRows ns ns.length) zeroWit
-        let first ← readState cfg offset
-        return ({ point := { x := xExit, y := yFin }, first := first.row }
-          : Output (AssignedCell Fp))) where
-  output _ self :=
-    { point := { x := .of self (offset + prefixRows ns ns.length) cfg.xA,
-                 y := .of self (offset + prefixRows ns ns.length) cfg.lambda1 },
-      first := (HashPiece.reads cfg offset self).row }
-  output_eq := by
-    intro input self
-    simp only [circuit_norm]
+private def circuitOutputCells (cfg : Config) (ns : List ℕ) (offset : ℕ)
+    (self : RegionIndex) : Var Output Fp :=
+  { point :=
+      { x := .of self (offset + prefixRows ns ns.length) cfg.xA,
+        y := .of self (offset + prefixRows ns ns.length) cfg.lambda1 },
+    first := (HashPiece.reads cfg offset self).row }
 
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
@@ -1054,7 +1030,11 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     let first ← readState cfg offset
     return { point := { x := xExit, y := yFin }, first := first.row }
 
-  elaborated cfg offset := Chain.elaborated G ns yaIn cfg offset
+  elaborated :=
+    { output := fun cfg offset _ self => circuitOutputCells cfg ns offset self
+      output_eq := by
+        intro _ _ _ _
+        simp only [circuitOutputCells, circuit_norm] }
 
   Witness := ChainWit ns
   extract cfg offset _ self env :=
@@ -1170,10 +1150,8 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           linear_combination hyck + hq)
     obtain ⟨hPC, hZs, hContract⟩ := hfold
     -- land the output on its record components
-    rw [ElaboratedRegionCircuit.output_eq] at h_output
-    simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-      HashPiece.output_readState,
-      output_assignAdvice] at h_output
+    change eval env (circuitOutputCells cfg ns offset self) = output at h_output
+    simp only [circuitOutputCells] at h_output
     rw [eval_cells_eq_eval, output_eval_literal, point_eval_literal,
       row_eval_literal] at h_output
     simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
@@ -1484,10 +1462,8 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       · -- the trailing dummy row emits no constraints
         simp only [circuit_norm]
     · -- the honest-prover contract
-      rw [ElaboratedRegionCircuit.output_eq] at h_output
-      simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
-        HashPiece.output_readState,
-        output_assignAdvice] at h_output
+      change eval env (circuitOutputCells cfg ns offset self) = output at h_output
+      simp only [circuitOutputCells] at h_output
       rw [output_eval_literal_prover, point_eval_literal, row_eval_literal] at h_output
       simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell,
         Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
@@ -1538,7 +1514,7 @@ theorem circuit_output_eval (G : Generators) (ns : List ℕ)
               xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
               lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
               lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) } } := by
-  rw [FormalRegionCircuit.output, ((circuit G ns yaIn).elaborated cfg offset).output_eq]
+  rw [FormalRegionCircuit.output, (circuit G ns yaIn).elaborated.output_eq]
   show (eval env ((do
         RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
           (fun i base => do
@@ -1578,7 +1554,7 @@ theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
               xP := env.env.advice cfg.xP ((env.place self + offset : ℕ) : ℤ),
               lambda1 := env.env.advice cfg.lambda1 ((env.place self + offset : ℕ) : ℤ),
               lambda2 := env.env.advice cfg.lambda2 ((env.place self + offset : ℕ) : ℤ) } } := by
-  rw [FormalRegionCircuit.output, ((circuit G ns yaIn).elaborated cfg offset).output_eq]
+  rw [FormalRegionCircuit.output, (circuit G ns yaIn).elaborated.output_eq]
   show (eval env ((do
         RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
           (fun i base => do

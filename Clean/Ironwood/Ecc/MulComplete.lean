@@ -334,15 +334,15 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
 
   -- the intended output representation: the second `add.call`'s output point plus this
   -- round's running-sum cell. `derive_contract_bridges` reads it off into `round_output`.
-  elaborated cfg offset :=
-    { output := fun input self =>
+  elaborated :=
+    { output := fun cfg offset input self =>
         { acc := (Add.add.call cfg.addConfig (offset + 1)
             { p := input.acc,
               q := (Add.add.call cfg.addConfig offset
                 { p := { x := input.base.x, y := AssignedCell.of self offset cfg.addConfig.yP },
                   q := input.acc }).output self }).output self,
           z := AssignedCell.of self (offset + 2) cfg.zComplete }
-      output_eq := by intro _ _; rfl }
+      output_eq := by intro _ _ _ _; rfl }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
   Assumptions input := input.acc.Valid ∧ input.base.Valid

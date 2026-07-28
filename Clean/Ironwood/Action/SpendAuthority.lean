@@ -57,7 +57,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       { p := alphaCommitment, q := input.akP }
     pure rk
 
-  elaborated _ := { regionCount _ := 3 }
+  elaborated := { regionCount _ := 3 }
 
   EnvAssumptions := fun (fcfg, _) env =>
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env

@@ -939,12 +939,12 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   synthesize := fun (cfg, lcfg) input => HashLayer.synthesize G cfg lcfg Q hQ l input
 
-  elaborated := fun (cfg, lcfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { output := fun (cfg, lcfg) input i =>
         (HashLayer.synthesize G cfg lcfg Q hQ l input).output i
-      regionCount := fun _ => 7
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 7
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (cfg, lcfg) input i =>
         (hashLayer_regionCount G cfg lcfg Q hQ l input i).symm }
 
   EnvAssumptions := fun (cfg, lcfg) env =>
@@ -1661,17 +1661,17 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
       { left := pair.aSwapped, right := pair.bSwapped }
 
-  elaborated := fun (ccfg, cfg, lcfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { output := fun (ccfg, cfg, lcfg) input i =>
         ((do
           let pair ← assignRegion "swap"
             ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
           (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
             { left := pair.aSwapped, right := pair.bSwapped }
           : Circuit Fp (Var field Fp)).output i)
-      regionCount := fun _ => 8
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 8
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (ccfg, cfg, lcfg) input i =>
         (layer_regionCount G Q hQ l hl wsib wswap ccfg cfg lcfg input i).symm }
 
   EnvAssumptions := fun (ccfg, cfg, lcfg) env =>
@@ -1956,18 +1956,18 @@ def circuit :
     let acc ← FormalCircuit.foldCall (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d
     pure acc.node
 
-  elaborated cfg :=
-    { output := fun input i =>
+  elaborated :=
+    { output := fun cfg input i =>
         (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg input i d).1.node
-      regionCount := fun _ => 8 * d
+      regionCount _ := 8 * d
       output_eq := by
-        intro input i
+        intro cfg input i
         symm
         show (FormalCircuit.foldCall (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d >>=
           fun acc => pure acc.node).output i = _
         rw [Circuit.output_bind, FormalCircuit.foldCall_output]
         rfl
-      regionCount_eq := fun input i =>
+      regionCount_eq := fun cfg input i =>
         (fold_regionCount G Q hQ l₀ d wsib wswap cfg input i).symm }
 
   EnvAssumptions := fun (_, cfg, lcfg) env =>

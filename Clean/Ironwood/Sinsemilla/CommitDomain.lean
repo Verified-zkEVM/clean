@@ -163,8 +163,8 @@ def commit (G : Generators) (ns : List ℕ)
       { p := hashOut.point, q := blindOut }
     pure result
 
-  elaborated := fun (bcfg, hcfg, acfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { output := fun (bcfg, hcfg, acfg) input i =>
         ((do
           let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
           let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
@@ -172,9 +172,9 @@ def commit (G : Generators) (ns : List ℕ)
           let result ← Ecc.Add.addFormal.call acfg
             { p := hashOut.point, q := blindOut }
           pure result : Circuit Fp (Var Point Fp)).output i)
-      regionCount := fun _ => 4
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 4
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (bcfg, hcfg, acfg) input i =>
         (commit_regionCount G ns R Q hQ hns bcfg hcfg acfg input i).symm }
 
   EnvAssumptions := fun (bcfg, hcfg, _) env =>

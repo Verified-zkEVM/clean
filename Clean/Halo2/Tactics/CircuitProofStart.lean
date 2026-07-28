@@ -364,18 +364,23 @@ inline-do `main` contributes no constants — the structural `circuit_norm` lemm
 without unfolding, as before. -/
 def autoUnfoldsOfMain (excludeLoops : Bool := false) : TacticM (Array Name) := withMainContext do
   let goal ← instantiateMVars (← getMainTarget)
-  -- `main` is the first explicit argument of the proof head: the unique arg of
-  -- one-binder function type into `Circuit`/`RegionCircuit`.
+  -- The synthesis argument is the unique explicit argument whose one- to
+  -- three-binder result is `Circuit`/`RegionCircuit`: standalone statements used to
+  -- pass the already-applied `main`, while the merged elaboration API passes the full
+  -- `Config → ... → Circuit` family.
   let mut mainArg? : Option Expr := none
   for a in goal.getAppArgs do
-    -- syntactic one-binder check: `Circuit`/`RegionCircuit` are themselves function-type
-    -- defs, so a reducing telescope would see through them and miscount the binders
     let ty ← instantiateMVars (← inferType a)
-    let ok := match ty with
-      | .forallE _ _ body _ =>
-        body.getAppFn.constName? == some ``Circuit ||
-        body.getAppFn.constName? == some ``RegionCircuit
-      | _ => false
+    let rec hasCircuitResult (ty : Expr) (fuel : Nat) : Bool :=
+      if fuel = 0 then false
+      else
+        match ty with
+        | .forallE _ _ body _ =>
+          body.getAppFn.constName? == some ``Circuit ||
+          body.getAppFn.constName? == some ``RegionCircuit ||
+          hasCircuitResult body (fuel - 1)
+        | _ => false
+    let ok := hasCircuitResult ty 3
     if ok then
       mainArg? := some a
       break
@@ -483,7 +488,7 @@ def unfoldCanonicalElaborated : TacticM Unit := do
     let some ci := env.find? c | continue
     let isInst ← Meta.forallTelescopeReducing ci.type fun _ body =>
       pure (body.getAppFn.constName? == some ``ElaboratedRegionCircuit ||
-            body.getAppFn.constName? == some ``ElaboratedSynthesis)
+            body.getAppFn.constName? == some ``ElaboratedCircuit)
     if isInst then insts := insts.push c
   if insts.isEmpty then return
   let ids := insts.map mkIdent

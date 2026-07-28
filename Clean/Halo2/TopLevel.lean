@@ -345,7 +345,7 @@ def constraintSystem
 def configureInstanceQueries
     (circuit : FormalCircuit F Unit Config unit unit) :
     List (Column .instance × Rotation) :=
-  (circuit.elaboratedConfigure ()).instanceQueries {}
+  (circuit.elaborated.configureInfo ()).instanceQueries {}
 
 /-- Queried instance columns, in their first-query order. -/
 def publicInputColumns
@@ -371,7 +371,7 @@ theorem exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
   subst foundColumn
   refine ⟨rotation, ?_⟩
   rw [configureInstanceQueries] at hquery
-  rw [← (circuit.elaboratedConfigure ()).instanceQueries_eq] at hquery
+  rw [← (circuit.elaborated.configureInfo ()).instanceQueries_eq] at hquery
   change
     (column, rotation) ∈
       ((circuit.configure ()).run {}).2.instanceQueries

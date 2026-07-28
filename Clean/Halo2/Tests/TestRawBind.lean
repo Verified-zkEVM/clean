@@ -44,7 +44,7 @@ def double : FormalCircuit Fp
     let s ← Add.addFormal.call acfg { p := p, q := p }
     pure s
 
-  elaborated _ := { regionCount _ := 2 }
+  elaborated := { regionCount _ := 2 }
 
   Spec _ output _ := output.Valid
 

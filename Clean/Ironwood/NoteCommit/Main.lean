@@ -517,12 +517,14 @@ are in REDUCED form (cps dsimp-unfolds it — see `unfoldCanonicalElaborated`); 
 kernel certificates (NoteCommit/MainBundle hit kernel timeouts when tried). Rename back
 once the metadata substrate derives the reduced fields. -/
 instance elaboratedFolded (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedSynthesis Fp Inputs Point (synth G R Q hQ cfg) where
-  output input i := (synth G R Q hQ cfg input).output i
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    ElaboratedCircuit Fp Config Config Inputs Point
+      (fun config => pure config) (synth G R Q hQ) where
+  output cfg input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 43
-  output_eq := by intro _ _; rfl
-  regionCount_eq input i := (synth_regionCount G R Q hQ cfg input i).symm
+  output_eq := by intro _ _ _; rfl
+  regionCount_eq cfg input i :=
+    (synth_regionCount G R Q hQ cfg input i).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

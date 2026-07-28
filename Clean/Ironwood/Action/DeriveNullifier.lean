@@ -105,8 +105,8 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       { p := input.cm, q := product }
     pure nf.x
 
-  elaborated := fun (pcfg, acfg, bcfg, ecfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { output := fun (pcfg, acfg, bcfg, ecfg) input i =>
         ((do
           let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
             { x0 := input.nk, x1 := input.rho }
@@ -116,9 +116,9 @@ def circuit (K : FixedBase) : FormalCircuit Fp
           let nf ← Ecc.Add.addFormal.call ecfg
             { p := input.cm, q := product }
           pure nf.x : Circuit Fp (Var field Fp)).output i)
-      regionCount := fun _ => 9
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 9
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (pcfg, acfg, bcfg, ecfg) input i =>
         (deriveNullifier_regionCount K pcfg acfg bcfg ecfg input i).symm }
 
   EnvAssumptions := fun (_, _, bcfg, _) env =>

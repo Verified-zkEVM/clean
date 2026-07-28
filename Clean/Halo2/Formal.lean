@@ -43,20 +43,36 @@ namespace Halo2
 
 variable {F : Type} [FiniteField F] {Input Output Witness : TypeMap}
 
-/-- Bundles the circuit metadata exposed in reduced form (main Clean's
-`ElaboratedSynthesis`): the output cells and the number of region indices consumed, as
-functions of the input variable and starting region index, so parent circuits simplify
-without unfolding `main`. -/
-class ElaboratedSynthesis (F : Type) [FiniteField F] (Input Output : TypeMap)
-    [CircuitType Input] [CircuitType Output] (main : Var Input F → Circuit F (Var Output F)) where
-  output : Var Input F → RegionIndex → Var Output F := fun input i => (main input).output i
-  regionCount : Var Input F → ℕ := fun input => ((main input).operations 0).regionCount
-  output_eq : ∀ input i, output input i = (main input).output i := by intro _ _; rfl
-  regionCount_eq : ∀ input i,
-    regionCount input = ((main input).operations i).regionCount := by
+/--
+The complete reduced metadata of a layouter circuit's configure/synthesize pair.
+
+Configure elaboration stays compositional through `infer_instance`; synthesis metadata
+is flattened here because circuit authors frequently provide reduced output and region
+count functions manually. This is the single elaboration object exposed by
+`FormalCircuit` to its parents.
+-/
+class ElaboratedCircuit (F : Type) [FiniteField F]
+    (ConfigInput Config : Type) (Input Output : TypeMap)
+    [CircuitType Input] [CircuitType Output]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F)) where
+  configureInfo : ∀ input, ElaboratedConfigure (configure input) := by
+    intro input
+    try dsimp only [configure]
+    infer_instance
+  output : Config → Var Input F → RegionIndex → Var Output F :=
+    fun config input i => (synthesize config input).output i
+  regionCount : Var Input F → ℕ := fun _ => 0
+  output_eq : ∀ config input i,
+    output config input i = (synthesize config input).output i := by
+    intro _ _ _
+    rfl
+  regionCount_eq : ∀ config input i,
+    regionCount input =
+      ((synthesize config input).operations i).regionCount := by
     -- fallback: count symbolically (child call chunks via `call_regionCount` metadata —
     -- the opaque `callOps` barrier is not evaluable, by design)
-    intro _ _
+    intro _ _ _
     first
     | rfl
     | simp only [circuit_norm, Circuit.operations_bind, Circuit.operations_pure,
@@ -66,12 +82,17 @@ class ElaboratedSynthesis (F : Type) [FiniteField F] (Input Output : TypeMap)
 
 section Statements
 variable [CircuitType Input] [CircuitType Output]
+    {ConfigInput Config : Type}
 
 /-- Soundness (verifier view — hints erased). If the constraints of `main` hold at
 placement `place` from region index `i₀`, then `Spec` holds on the input, the extracted
 high-level witness, and the output. -/
 def FormalCircuit.Soundness
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F))
+    [elaborated :
+      ElaboratedCircuit F ConfigInput Config Input Output configure synthesize]
+    (config : Config)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -80,8 +101,10 @@ def FormalCircuit.Soundness
     (input : Var Input F),
   EnvAssumptions env →
   Assumptions (eval env input) →
-  Constraints env.place env.env ((main input).operations i₀) i₀ →
-  Spec (eval env input) (eval env (ElaboratedSynthesis.output main input i₀)) (extract input i₀ env)
+  Constraints env.place env.env ((synthesize config input).operations i₀) i₀ →
+  Spec (eval env input)
+    (eval env (ElaboratedCircuit.output configure synthesize config input i₀))
+    (extract input i₀ env)
 
 /-- Completeness (prover view — hints visible). Under the honest prover's witness
 generators, the soundness `Assumptions` (on the input's verifier-visible value) together
@@ -91,7 +114,11 @@ with `ProverAssumptions` imply the constraints and the `ProverSpec`.
 `ProverAssumptions`: the prover side is strictly *additional*, for hint-side facts that
 the verifier value erases. -/
 def FormalCircuit.Completeness
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F))
+    [elaborated :
+      ElaboratedCircuit F ConfigInput Config Input Output configure synthesize]
+    (config : Config)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -100,12 +127,13 @@ def FormalCircuit.Completeness
     Prop :=
   ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F)
     (input : Var Input F),
-  ExtendsWitnesses env.place env.env ((main input).operations i₀) i₀ →
+  ExtendsWitnesses env.place env.env ((synthesize config input).operations i₀) i₀ →
   EnvAssumptions env.toEnvironment →
   Assumptions (eval env.toEnvironment input) →
   ProverAssumptions (eval env input) (extract input i₀ env.toEnvironment) env.env.hint →
-  Constraints env.place env.env ((main input).operations i₀) i₀ ∧
-  ProverSpec (eval env input) (eval env (ElaboratedSynthesis.output main input i₀))
+  Constraints env.place env.env ((synthesize config input).operations i₀) i₀ ∧
+  ProverSpec (eval env input)
+    (eval env (ElaboratedCircuit.output configure synthesize config input i₀))
     (extract input i₀ env.toEnvironment) env.env.hint
 
 /-- Equivalence rewriting the layouter-level `Soundness` into a form with the input/output
@@ -113,19 +141,25 @@ def FormalCircuit.Completeness
 `FormalRegionCircuit.soundness_iff`. A proof tactic `rw`s this at the very start, so the user
 works with `input`/`output` (finite-field values) instead of `eval env …`. -/
 theorem FormalCircuit.soundness_iff
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F))
+    [ElaboratedCircuit F ConfigInput Config Input Output configure synthesize]
+    (config : Config)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
     (Spec : Value Input F → Value Output F → Witness F → Prop) :
-    FormalCircuit.Soundness main extract EnvAssumptions Assumptions Spec ↔
+    FormalCircuit.Soundness configure synthesize config
+      extract EnvAssumptions Assumptions Spec ↔
     ∀ (i₀ : RegionIndex) (env : Placed Environment F) (input_var : Var Input F)
       (input : Value Input F) (output : Value Output F),
     eval env input_var = input →
-    eval env (ElaboratedSynthesis.output main input_var i₀) = output →
+    eval env (ElaboratedCircuit.output
+      configure synthesize config input_var i₀) = output →
     EnvAssumptions env →
     Assumptions input →
-    Constraints env.place env.env ((main input_var).operations i₀) i₀ →
+    Constraints env.place env.env
+      ((synthesize config input_var).operations i₀) i₀ →
     Spec input output (extract input_var i₀ env) := by
   constructor
   · intro h i₀ env iv input output h_in h_out hE hA hC
@@ -138,23 +172,29 @@ theorem FormalCircuit.soundness_iff
 its defining equation): the `Assumptions` and `EnvAssumptions` hypotheses stay raw (see the
 region-level docstring for the rationale). -/
 theorem FormalCircuit.completeness_iff
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F))
+    [ElaboratedCircuit F ConfigInput Config Input Output configure synthesize]
+    (config : Config)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
     (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
-    FormalCircuit.Completeness main extract EnvAssumptions Assumptions ProverAssumptions
-      ProverSpec ↔
+    FormalCircuit.Completeness configure synthesize config
+      extract EnvAssumptions Assumptions ProverAssumptions ProverSpec ↔
     ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
       (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
-    eval env (ElaboratedSynthesis.output main input_var i₀) = output →
-    ExtendsWitnesses env.place env.env ((main input_var).operations i₀) i₀ →
+    eval env (ElaboratedCircuit.output
+      configure synthesize config input_var i₀) = output →
+    ExtendsWitnesses env.place env.env
+      ((synthesize config input_var).operations i₀) i₀ →
     EnvAssumptions env.toEnvironment →
     Assumptions (eval env.toEnvironment input_var) →
     ProverAssumptions input (extract input_var i₀ env.toEnvironment) env.env.hint →
-    Constraints env.place env.env ((main input_var).operations i₀) i₀ ∧
+    Constraints env.place env.env
+      ((synthesize config input_var).operations i₀) i₀ ∧
     ProverSpec input output (extract input_var i₀ env.toEnvironment) env.env.hint := by
   constructor
   · intro h i₀ env iv input output h_in h_out hW hE hA hPA
@@ -187,18 +227,15 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
   system, from what the parent hands down (`ConfigInput`) to the configuration consumed
   by `synthesize` (`Config`). Rust: `Config::configure(meta, …)`. -/
   configure : ConfigInput → Configure F Config
-  /-- Reduced configure metadata. Instance-query requests are empty for ordinary child
-  circuits and are declared explicitly by the top-level circuits that expose public
-  inputs. -/
-  elaboratedConfigure : ∀ input, ElaboratedConfigure (configure input) := by
-    intro input
+  /-- Synthesis phase: the layouter-level circuit. Rust: the chip method body. -/
+  synthesize : Config → Var Input F → Circuit F (Var Output F)
+  /-- The single reduced interface for both phases. Configure metadata is inferred
+  compositionally by default; synthesis metadata may be overridden explicitly. -/
+  elaborated :
+    ElaboratedCircuit F ConfigInput Config Input Output configure synthesize := by
     first
     | infer_instance
     | exact {}
-  /-- Synthesis phase: the layouter-level circuit. Rust: the chip method body. -/
-  synthesize : Config → Var Input F → Circuit F (Var Output F)
-  elaborated : ∀ config, ElaboratedSynthesis F Input Output (synthesize config) := by
-    intro config; first | infer_instance | exact {}
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/
   Witness : TypeMap := unit
@@ -237,10 +274,11 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
     fun _ _ _ _ => True
 
   soundness : ∀ (config : Config),
-    FormalCircuit.Soundness (synthesize config) (extract config) (EnvAssumptions config)
-      Assumptions Spec
+    FormalCircuit.Soundness (elaborated := elaborated) configure synthesize config
+      (extract config) (EnvAssumptions config) Assumptions Spec
   completeness : ∀ (config : Config),
-    FormalCircuit.Completeness (synthesize config) (extract config) (EnvAssumptions config)
+    FormalCircuit.Completeness (elaborated := elaborated) configure synthesize config
+      (extract config) (EnvAssumptions config)
       Assumptions ProverAssumptions ProverSpec
 
 /--
@@ -272,7 +310,7 @@ variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 instance (self : FormalCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
-  self.elaboratedConfigure input
+  self.elaborated.configureInfo input
 
 /--
 Selector allocation borrowed from the incoming configure state. Complete configure
@@ -282,7 +320,7 @@ by `ConfigInput` to have been allocated by their caller.
 def selectorRequirements
     (self : FormalCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
-  (self.elaboratedConfigure input).selectorRequirements counts
+  (self.elaborated.configureInfo input).selectorRequirements counts
 
 /-- Local gate and lookup selectors are allocated whenever the caller requirements hold. -/
 theorem selectorsAllocated
@@ -291,17 +329,17 @@ theorem selectorsAllocated
     (hrequirements : self.selectorRequirements input counts) :
     ((self.configure input).delta counts).SelectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
-  (self.elaboratedConfigure input).selectorsAllocated counts hrequirements
+  (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
 
 /-- The output variable of the circuit (via the elaborated metadata). -/
 def output (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
     (input : Var Input F) (i₀ : RegionIndex) : Var Output F :=
-  (self.elaborated config).output input i₀
+  self.elaborated.output config input i₀
 
 /-- Number of region indices the circuit consumes. -/
-def regionCount (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
+def regionCount (self : FormalCircuit F ConfigInput Config Input Output)
     (input : Var Input F) : ℕ :=
-  (self.elaborated config).regionCount input
+  self.elaborated.regionCount input
 
 /-- The whole `call` runtime triple, packaged with its defining equation behind an
 `opaque` reduction barrier. One mechanism, two jobs:
@@ -326,19 +364,19 @@ private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
         Var Output F × Operations F × RegionIndex //
       ∀ self config input i, f self config input i
         = (self.output config input i, (self.synthesize config input).operations i,
-           i + self.regionCount config input) } :=
+           i + self.regionCount input) } :=
   ⟨fun self config input i =>
       let r := self.synthesize config input i
-      (r.1, r.2.1, i + self.regionCount config input),
+      (r.1, r.2.1, i + self.regionCount input),
    fun self config input i => by
       -- componentwise: `output` component is exactly the elaborated `output_eq`, the
       -- other two are the `Circuit.operations`/`Circuit.nextRegionIndex` projections
       have h : (self.synthesize config input i).1 = self.output config input i :=
-        ((self.elaborated config).output_eq input i).symm
+        (self.elaborated.output_eq config input i).symm
       show ((self.synthesize config input i).1, (self.synthesize config input i).2.1,
-          i + self.regionCount config input)
+          i + self.regionCount input)
         = (self.output config input i, (self.synthesize config input).operations i,
-           i + self.regionCount config input)
+           i + self.regionCount input)
       rw [h, Circuit.operations]⟩
 
 /-- Call this circuit as a subcircuit from a parent layouter circuit: append the child's
@@ -366,7 +404,7 @@ theorem call_eq (self : FormalCircuit F ConfigInput Config Input Output)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
     self.call config input i
       = (self.output config input i, (self.synthesize config input).operations i,
-         i + self.regionCount config input) :=
+         i + self.regionCount input) :=
   (callPacked F ConfigInput Config Input Output).property self config input i
 
 /-- The chunk-opening equation, `callOps`-spelled (for sites that unfolded
@@ -437,23 +475,40 @@ creates no new regions — so, unlike `FormalCircuit`, there is no `i₀`/`regio
 constraints are `RegionOperations.Constraints` at the ambient `self`.
 -/
 
-/-- Region-level metadata exposed in reduced form: the output cells as a function of the
-input variable and the ambient region index. -/
-class ElaboratedRegionCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
+/-- Region-level counterpart of `ElaboratedCircuit`. -/
+class ElaboratedRegionCircuit (F : Type) [FiniteField F]
+    (ConfigInput Config : Type) (Input Output : TypeMap)
     [CircuitType Input] [CircuitType Output]
-    (main : Var Input F → RegionCircuit F (Var Output F)) where
-  output : Var Input F → RegionIndex → Var Output F := fun input self => (main input).output self
-  output_eq : ∀ input self, output input self = (main input).output self := by intro _ _; rfl
+    (configure : ConfigInput → Configure F Config)
+    (synthesize :
+      Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)) where
+  configureInfo : ∀ input, ElaboratedConfigure (configure input) := by
+    intro input
+    try dsimp only [configure]
+    infer_instance
+  output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
+    fun config offset input self =>
+      (synthesize config offset input).output self
+  output_eq : ∀ config offset input self,
+    output config offset input self =
+      (synthesize config offset input).output self := by
+    intro _ _ _ _
+    rfl
 
 section RegionStatements
 variable [CircuitType Input] [CircuitType Output]
+    {ConfigInput Config : Type}
 
 /-- Soundness of a region-level circuit (verifier view). If the constraints of `main`
 hold in the ambient region `self`, then `Spec` holds on the input, extracted witness,
 and output. -/
 def FormalRegionCircuit.Soundness
-    (main : Var Input F → RegionCircuit F (Var Output F))
-    [ElaboratedRegionCircuit F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize :
+      Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F))
+    [elaborated : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize]
+    (config : Config) (offset : ℕ)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -461,8 +516,11 @@ def FormalRegionCircuit.Soundness
   ∀ (self : RegionIndex) (env : Placed Environment F) (input : Var Input F),
   EnvAssumptions env →
   Assumptions (eval env input) →
-  RegionOperations.Constraints env.place self env.env ((main input).operations self) →
-  Spec (eval env input) (eval env (ElaboratedRegionCircuit.output main input self))
+  RegionOperations.Constraints env.place self env.env
+    ((synthesize config offset input).operations self) →
+  Spec (eval env input)
+    (eval env (ElaboratedRegionCircuit.output
+      configure synthesize config offset input self))
     (extract input self env)
 
 /-- Completeness of a region-level circuit (prover view). As at the layouter level, the
@@ -473,8 +531,12 @@ The prover-side predicates see the extracted `Witness` (the same designated env 
 `Spec` sees): positional gadgets state "my neighborhood holds honest values" as a
 `ProverAssumptions` on the witness. -/
 def FormalRegionCircuit.Completeness
-    (main : Var Input F → RegionCircuit F (Var Output F))
-    [ElaboratedRegionCircuit F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize :
+      Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F))
+    [elaborated : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize]
+    (config : Config) (offset : ℕ)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -482,33 +544,43 @@ def FormalRegionCircuit.Completeness
     (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
     Prop :=
   ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input : Var Input F),
-  RegionOperations.ExtendsWitnesses env.place self env.env ((main input).operations self) →
+  RegionOperations.ExtendsWitnesses env.place self env.env
+    ((synthesize config offset input).operations self) →
   EnvAssumptions env.toEnvironment →
   Assumptions (eval env.toEnvironment input) →
   ProverAssumptions (eval env input) (extract input self env.toEnvironment) env.env.hint →
-  RegionOperations.Constraints env.place self env.env ((main input).operations self) ∧
+  RegionOperations.Constraints env.place self env.env
+    ((synthesize config offset input).operations self) ∧
   ProverSpec (eval env input)
-    (eval env (ElaboratedRegionCircuit.output main input self))
+    (eval env (ElaboratedRegionCircuit.output
+      configure synthesize config offset input self))
     (extract input self env.toEnvironment) env.env.hint
 
 /-- Equivalence rewriting `Soundness` into a form with the input/output *values* intro'd
 as variables (with their defining equations). A proof tactic `rw`s this at the very start,
 so the user works with `input`/`output` (finite-field values) instead of `eval env …`. -/
 theorem FormalRegionCircuit.soundness_iff
-    (main : Var Input F → RegionCircuit F (Var Output F))
-    [ElaboratedRegionCircuit F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize :
+      Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize]
+    (config : Config) (offset : ℕ)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
     (Spec : Value Input F → Value Output F → Witness F → Prop) :
-    FormalRegionCircuit.Soundness main extract EnvAssumptions Assumptions Spec ↔
+    FormalRegionCircuit.Soundness configure synthesize config offset
+      extract EnvAssumptions Assumptions Spec ↔
     ∀ (self : RegionIndex) (env : Placed Environment F) (input_var : Var Input F)
       (input : Value Input F) (output : Value Output F),
     eval env input_var = input →
-    eval env (ElaboratedRegionCircuit.output main input_var self) = output →
+    eval env (ElaboratedRegionCircuit.output
+      configure synthesize config offset input_var self) = output →
     EnvAssumptions env →
     Assumptions input →
-    RegionOperations.Constraints env.place self env.env ((main input_var).operations self) →
+    RegionOperations.Constraints env.place self env.env
+      ((synthesize config offset input_var).operations self) →
     Spec input output (extract input_var self env) := by
   constructor
   · intro h self env iv input output h_in h_out hE hA hC
@@ -523,24 +595,31 @@ the prover eval), so the `Assumptions` hypothesis keeps the raw verifier eval �
 machinery decomposes it in gadget proofs, and `h_input`'s component equations rewrite it
 to value-level facts. -/
 theorem FormalRegionCircuit.completeness_iff
-    (main : Var Input F → RegionCircuit F (Var Output F))
-    [ElaboratedRegionCircuit F Input Output main]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize :
+      Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F))
+    [ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize]
+    (config : Config) (offset : ℕ)
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
     (ProverAssumptions : ProverValue Input F → Witness F → ProverHint F → Prop)
     (ProverSpec : ProverValue Input F → ProverValue Output F → Witness F → ProverHint F → Prop) :
-    FormalRegionCircuit.Completeness main extract EnvAssumptions Assumptions ProverAssumptions
-      ProverSpec ↔
+    FormalRegionCircuit.Completeness configure synthesize config offset
+      extract EnvAssumptions Assumptions ProverAssumptions ProverSpec ↔
     ∀ (self : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
       (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
-    eval env (ElaboratedRegionCircuit.output main input_var self) = output →
-    RegionOperations.ExtendsWitnesses env.place self env.env ((main input_var).operations self) →
+    eval env (ElaboratedRegionCircuit.output
+      configure synthesize config offset input_var self) = output →
+    RegionOperations.ExtendsWitnesses env.place self env.env
+      ((synthesize config offset input_var).operations self) →
     EnvAssumptions env.toEnvironment →
     Assumptions (eval env.toEnvironment input_var) →
     ProverAssumptions input (extract input_var self env.toEnvironment) env.env.hint →
-    RegionOperations.Constraints env.place self env.env ((main input_var).operations self) ∧
+    RegionOperations.Constraints env.place self env.env
+      ((synthesize config offset input_var).operations self) ∧
     ProverSpec input output (extract input_var self env.toEnvironment) env.env.hint := by
   constructor
   · intro h self env iv input output h_in h_out hW hE hA hPA
@@ -574,18 +653,16 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
   the configuration consumed by `synthesize` (`Config`, halo2's meaning: selectors +
   columns, e.g. `witness_point::Config`). Rust: `Config::configure(meta, …)`. -/
   configure : ConfigInput → Configure F Config
-  /-- Reduced configure metadata. Region-level gadgets ordinarily emit no instance
-  queries, so the default elaboration is empty. -/
-  elaboratedConfigure : ∀ input, ElaboratedConfigure (configure input) := by
-    intro input
-    first
-    | infer_instance
-    | exact {}
   /-- Synthesis phase: the region-level circuit, at row `offset` inside the ambient
   region. Rust: the `assign_region`-helper body at `offset`. -/
   synthesize : Config → (offset : ℕ) → Var Input F → RegionCircuit F (Var Output F)
-  elaborated : ∀ config offset,
-    ElaboratedRegionCircuit F Input Output (synthesize config offset) := fun _ _ => {}
+  /-- The single reduced interface for both phases. -/
+  elaborated :
+    ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize := by
+    first
+    | infer_instance
+    | exact {}
 
   /-- Designated env readings the contract may reference: `Spec` and the prover-side
   predicates all receive `extract`'s value. Two uses: knowledge-soundness extraction
@@ -620,11 +697,14 @@ structure FormalRegionCircuit (F : Type) [FiniteField F] (ConfigInput Config : T
     fun _ _ _ _ => True
 
   soundness : ∀ (config : Config) (offset : ℕ),
-    FormalRegionCircuit.Soundness (synthesize config offset) (extract config offset)
-      (EnvAssumptions config) Assumptions Spec
+    FormalRegionCircuit.Soundness (elaborated := elaborated)
+      configure synthesize config offset
+      (extract config offset) (EnvAssumptions config) Assumptions Spec
   completeness : ∀ (config : Config) (offset : ℕ),
-    FormalRegionCircuit.Completeness (synthesize config offset) (extract config offset)
-      (EnvAssumptions config) Assumptions ProverAssumptions ProverSpec
+    FormalRegionCircuit.Completeness (elaborated := elaborated)
+      configure synthesize config offset
+      (extract config offset) (EnvAssumptions config)
+      Assumptions ProverAssumptions ProverSpec
 
 /--
 Region-level counterpart of `FormalCircuit.KeygenLawful`.
@@ -653,13 +733,13 @@ variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
 instance (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
-  self.elaboratedConfigure input
+  self.elaborated.configureInfo input
 
 /-- Region-level counterpart of `FormalCircuit.selectorRequirements`. -/
 def selectorRequirements
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
-  (self.elaboratedConfigure input).selectorRequirements counts
+  (self.elaborated.configureInfo input).selectorRequirements counts
 
 /-- Region-level counterpart of `FormalCircuit.selectorsAllocated`. -/
 theorem selectorsAllocated
@@ -668,12 +748,12 @@ theorem selectorsAllocated
     (hrequirements : self.selectorRequirements input counts) :
     ((self.configure input).delta counts).SelectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
-  (self.elaboratedConfigure input).selectorsAllocated counts hrequirements
+  (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
 
 /-- The output variable of the region circuit, in the ambient region. -/
 def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex) : Var Output F :=
-  (self.elaborated config offset).output input region
+  self.elaborated.output config offset input region
 
 /-- The whole region-level `call` runtime pair, packaged with its defining equation behind
 an `opaque` reduction barrier; see `FormalCircuit.callPacked` for the two-jobs design. The
@@ -694,7 +774,7 @@ private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
    fun self config offset input region => by
       have h : (self.synthesize config offset input region).1
           = self.output config offset input region :=
-        ((self.elaborated config offset).output_eq input region).symm
+        (self.elaborated.output_eq config offset input region).symm
       show ((self.synthesize config offset input region).1,
           (self.synthesize config offset input region).2)
         = (self.output config offset input region,
@@ -798,14 +878,15 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     FormalCircuit F ConfigInput Config Input Output where
   name := name
   configure := child.configure
-  elaboratedConfigure := child.elaboratedConfigure
   synthesize config input := assignRegion name (child.synthesize config 0 input)
-  elaborated config :=
-    { output := fun input i => (child.synthesize config 0 input).output i
-      regionCount := fun _ => 1
-      output_eq := by intro _ _; rfl
+  elaborated :=
+    { configureInfo := child.elaborated.configureInfo
+      output := fun config input i =>
+        (child.synthesize config 0 input).output i
+      regionCount _ := 1
+      output_eq := by intro _ _ _; rfl
       regionCount_eq := by
-        intro _ _
+        intro _ _ _
         simp only [assignRegion, Circuit.operations, Operations.regionCount] }
   Witness := child.Witness
   inhabitedWitness := child.inhabitedWitness
@@ -826,7 +907,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     subst h_in h_out
     -- instantiate the child's region-level soundness at `self := i₀`
     have hsound := child.soundness config 0 i₀ env input_var hE hA hC.1
-    have hout := (child.elaborated config 0).output_eq input_var i₀
+    have hout := child.elaborated.output_eq config 0 input_var i₀
     rw [hout] at hsound
     show child.Spec (eval env input_var)
       (eval env ((child.synthesize config 0 input_var).output i₀))
@@ -845,7 +926,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     -- the two `output` spellings (layouter vs region elaborated metadata) are defeq;
     -- pin both to the raw `.output` via the region instance's `output_eq`
     refine ⟨⟨hcompl.1, trivial⟩, ?_⟩
-    have hout := (child.elaborated config 0).output_eq input_var i₀
+    have hout := child.elaborated.output_eq config 0 input_var i₀
     show child.ProverSpec (eval env input_var)
       (eval env ((child.synthesize config 0 input_var).output i₀))
       (child.extract config 0 input_var i₀ env.toEnvironment) env.env.hint

@@ -228,13 +228,14 @@ def InnerProverSpec (B : FixedBase)
   ∀ w : Fin 23, out.zs[w.val] = ((input.alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)
 
 /-- The elaborated-metadata instance, with the output cells in explicit reduced form. -/
-instance innerElab (B : FixedBaseData) (config : Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp DecomposeRunningSum.Inputs InnerOut
-      (fun input : Var DecomposeRunningSum.Inputs Fp =>
+instance innerElab (B : FixedBaseData) :
+    ElaboratedRegionCircuit Fp Config Config DecomposeRunningSum.Inputs InnerOut
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
         innerRegion B config offset input.alpha) where
-  output := fun _ self => innerOutCells config offset self
+  output := fun config offset _ self => innerOutCells config offset self
   output_eq := by
-    intro _ self
+    intro _ _ _ self
     rw [innerRegion_output]
 
 set_option linter.all false in
@@ -242,8 +243,10 @@ set_option linter.all false in
 private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Soundness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
-      (fun input : Var DecomposeRunningSum.Inputs Fp =>
-        innerRegion B.toData cfg offset input.alpha)
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B.toData config offset input.alpha)
+      cfg offset
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) (InnerSpec B) := by
   circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
@@ -906,8 +909,10 @@ set_option linter.all false in
 private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
-      (fun input : Var DecomposeRunningSum.Inputs Fp =>
-        innerRegion B.toData cfg offset input.alpha)
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B.toData config offset input.alpha)
+      cfg offset
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
       (InnerProverSpec B) := by
@@ -1025,11 +1030,11 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
 
   synthesize cfg input := synthesize B.toData cfg input
 
-  elaborated cfg :=
-    { output := fun input i => (synthesize B.toData cfg input).output i
-      regionCount := fun _ => 2
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i => (synthesize_regionCount B.toData cfg input i).symm }
+  elaborated :=
+    { output := fun cfg input i => (synthesize B.toData cfg input).output i
+      regionCount _ := 2
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg input i => (synthesize_regionCount B.toData cfg input i).symm }
 
   EnvAssumptions := EnvAssumptions
 

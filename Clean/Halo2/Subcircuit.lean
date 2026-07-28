@@ -97,14 +97,14 @@ theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input 
     (self.call config input).nextRegionIndex i
       = i + Operations.regionCount ((self.call config input).operations i) := by
   -- the `nextRegionIndex` component is opaque now: project it out of `call_eq` first
-  have hnext : (self.call config input).nextRegionIndex i = i + self.regionCount config input := by
-    show (self.call config input i).2.2 = i + self.regionCount config input
+  have hnext : (self.call config input).nextRegionIndex i = i + self.regionCount input := by
+    show (self.call config input i).2.2 = i + self.regionCount input
     rw [self.call_eq config input i]
   rw [hnext]
   congr 1
   -- `regionCount = ((synthesize …).operations i).regionCount` (elaborated metadata), and
   -- `call_operations` opens the chunk to exactly the `synthesize` ops.
-  rw [FormalCircuit.regionCount, (self.elaborated config).regionCount_eq input i,
+  rw [FormalCircuit.regionCount, self.elaborated.regionCount_eq config input i,
     FormalCircuit.call_operations]
 
 /-- Concrete-`α` restatement of `output_call` (the `Circuit.output`/`operations` element type
@@ -166,18 +166,18 @@ variable [CircuitType Input] [CircuitType Output]
 theorem FormalCircuit.call_regionCount (self : FormalCircuit F CI Cfg Input Output)
     (config : Cfg) (input : Var Input F) (i : RegionIndex) :
     Operations.regionCount ((self.call config input).operations i)
-      = self.regionCount config input := by
+      = self.regionCount input := by
   rw [FormalCircuit.call_operations]
-  exact ((self.elaborated config).regionCount_eq input i).symm
+  exact (self.elaborated.regionCount_eq config input i).symm
 
 /-- Concrete-`α` restatement of `call_regionCount` (same discr-tree-key reason as
-`output_call'`); the `ElaboratedSynthesis.regionCount_eq` default tactic uses both. -/
+`output_call'`); the `ElaboratedCircuit.regionCount_eq` default tactic uses both. -/
 theorem FormalCircuit.call_regionCount' {Output : TypeMap} [ProvableType Output]
     {CI Cfg : Type} (self : FormalCircuit F CI Cfg Input Output)
     (config : Cfg) (input : Var Input F) (i : RegionIndex) :
     Operations.regionCount
         (@Circuit.operations F _ (Output (AssignedCell F)) (self.call config input) i)
-      = self.regionCount config input :=
+      = self.regionCount input :=
   FormalCircuit.call_regionCount self config input i
 
 /-! ### Region-count folding (`circuit_norm` simproc)
@@ -186,7 +186,7 @@ One simproc folds `Operations.regionCount ((child.call cfg inp).operations j)` t
 child's literal region count, for EVERY layouter bundle (named, parameter-applied, or
 `toFormal`-lifted) and in every α-spelling — it does its own matching, so no
 per-bundle simp lemma and no discrimination-tree-key duplication. Fires only when the
-elaborated metadata `child.regionCount cfg inp` whnf-reduces to a closed `Nat` literal
+elaborated metadata `child.regionCount inp` whnf-reduces to a closed `Nat` literal
 (a symbolic count stays untouched); the proof is the generic `call_regionCount`, with
 the kernel closing the metadata-to-literal gap definitionally — the same obligation
 the historical hand-written `rw [FormalCircuit.call_regionCount]; rfl` wrappers
@@ -194,7 +194,7 @@ discharged. -/
 
 /-- Per-bundle region-count bridge registry: bundle head constant ↦ proven
 `<base>_call_regionCount` lemma. Populated by `derive_contract_bridges` (and the
-`ElaboratedSynthesis` autogenerator); consumed by `foldCallRegionCount`, which
+`ElaboratedCircuit` autogenerator); consumed by `foldCallRegionCount`, which
 instantiates the registered lemma by unification instead of re-deriving the fold —
 per-use cost drops to a lookup + `isDefEq`, and the kernel checks each bundle's
 metadata defeq ONCE (at derive time) instead of at every fold site. -/
@@ -255,12 +255,9 @@ def foldCallRegionCountProc : Simproc := fun e => do
       if let some step ← tryRegisteredBridge lemmaName e then
         return step
   try
-    -- `call` and `regionCount` share the `FormalCircuit` section telescope
-    -- (F instFF Input Output instIn instOut CI Cfg self config input), so the call's own
-    -- argument list instantiates `regionCount` directly — no `mkAppM` re-elaboration
-    let lvls := circuit.getAppFn.constLevels!
     let count ← withTransparency .default
-      (whnf (mkAppN (mkConst ``Halo2.FormalCircuit.regionCount lvls) cargs))
+      (whnf (← mkAppM ``Halo2.FormalCircuit.regionCount
+        #[cargs[cargs.size - 3]!, cargs[cargs.size - 1]!]))
     -- fold only to CLOSED counts (`evalNat`: raw/`OfNat`/`One.one` shapes all count);
     -- a symbolic/stuck metadata term stays put
     let some _ ← (Meta.evalNat count).run | return .continue
@@ -279,9 +276,9 @@ attribute [circuit_norm] foldCallRegionCount
 
 open Lean Meta Simp in
 /-- Companion to `foldCallRegionCount` for the METADATA spelling: folds
-`FormalCircuit.regionCount self config input` to its literal (after
+`FormalCircuit.regionCount self input` to its literal (after
 `call_regionCount`-style rewrites leave the projection form, e.g. in the
-`ElaboratedSynthesis.regionCount_eq` default tactic). Same closed-literal guard; the
+`ElaboratedCircuit.regionCount_eq` default tactic). Same closed-literal guard; the
 kernel closes the projection defeq. -/
 def foldRegionCountMetaProc : Simproc := fun e => do
   unless e.isAppOf ``Halo2.FormalCircuit.regionCount do return .continue
@@ -293,7 +290,7 @@ def foldRegionCountMetaProc : Simproc := fun e => do
     return .visit { expr := count, proof? := some proof }
   catch _ => return .continue
 
-simproc foldRegionCountMeta (Halo2.FormalCircuit.regionCount _ _ _) := foldRegionCountMetaProc
+simproc foldRegionCountMeta (Halo2.FormalCircuit.regionCount _ _) := foldRegionCountMetaProc
 attribute [circuit_norm] foldRegionCountMeta
 
 /-- The closed-form fold state: the accumulator input var and the base region index
@@ -304,7 +301,7 @@ def FormalCircuit.foldState (c : ℕ → FormalCircuit F CI Cfg Input Output)
   | 0 => (init, i₀)
   | m + 1 =>
     let s := FormalCircuit.foldState c toInput config init i₀ m
-    (toInput ((c m).output config s.1 s.2), s.2 + (c m).regionCount config s.1)
+    (toInput ((c m).output config s.1 s.2), s.2 + (c m).regionCount s.1)
 
 /-- The serial fold of layouter calls; returns the final accumulated input var. -/
 def FormalCircuit.foldCall (c : ℕ → FormalCircuit F CI Cfg Input Output)
@@ -370,7 +367,7 @@ theorem FormalCircuit.foldOps_regionCount (m : ℕ) :
   | succ m ih =>
     rw [FormalCircuit.foldOps]
     show _ = (FormalCircuit.foldState c toInput config init i₀ m).2
-      + (c m).regionCount config (FormalCircuit.foldState c toInput config init i₀ m).1
+      + (c m).regionCount (FormalCircuit.foldState c toInput config init i₀ m).1
     rw [Operations.regionCount_append, FormalCircuit.call_regionCount, ← Nat.add_assoc, ih]
 
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/

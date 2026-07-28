@@ -57,6 +57,7 @@ def parent :
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
+  elaborated := { regionCount _ := 2 }
   Spec _ output _ := output.Valid
   -- both children's witnessed cells (regions `i₀` and `i₀ + 1`), so each child's
   -- extract-level `ProverAssumptions` is discharged definitionally

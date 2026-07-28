@@ -718,9 +718,13 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
   rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
     wpointNonId_output, wpointNonId_output]
 
-instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedSynthesis Fp unit AddressPoints (main G B cfg) where
-  output _ i₀ :=
+instance elaborated (G : Generators) (B : Bases) :
+    ElaboratedCircuit Fp Unit Config unit AddressPoints
+      (fun _ => configure G) (main G B) where
+  configureInfo _ :=
+    { instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
+      instanceQueries_eq := by configure_norm }
+  output cfg _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
       pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
@@ -731,12 +735,13 @@ instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
                   y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
   regionCount _ := 394
   output_eq := by
-    intro _ i₀
+    intro cfg _ i₀
     simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
       Circuit.output_bind, Circuit.output_pure,
       synthWitness_output, synthWitness_nextRegionIndex, synthChecks_output,
       synthChecks_nextRegionIndex, synthNotes_output]
-  regionCount_eq := fun input i => (main_regionCount G B cfg input i).symm
+  regionCount_eq := fun cfg input i =>
+    (main_regionCount G B cfg input i).symm
 
 /-! ## Soundness -/
 
@@ -744,7 +749,8 @@ open Sinsemilla.Merkle (MerkleRoot)
 
 theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (main G B cfg) (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
+      (fun _ : Unit => configure G) (main G B) cfg
+      (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
       (Spec G B) := by
   circuit_proof_start
   let input_var_rcv := hintWitnesses.rcv
@@ -1125,7 +1131,8 @@ private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
 
 theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (main G B cfg) (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
+      (fun _ : Unit => configure G) (main G B) cfg
+      (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
       (ProverAssumptions G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   simp only [extractBase] at hPA
@@ -1856,7 +1863,7 @@ def baseCircuit (G : Generators) (B : Bases) :
   name := "OrchardActionBase"
   configure := fun _ => configure G
   synthesize := main G B
-  elaborated := fun cfg => elaborated G B cfg
+  elaborated := elaborated G B
   Witness := fun _ => ActionData
   extract := extractBase
   EnvAssumptions := EnvAssumptions
@@ -1893,12 +1900,17 @@ theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
   simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
 
-instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedSynthesis Fp unit unit (mainPost G B cfg) where
-  output _ _ := ()
+instance elaboratedPost (G : Generators) (B : Bases) :
+    ElaboratedCircuit Fp Unit Config unit unit
+      (fun _ => configure G) (mainPost G B) where
+  configureInfo _ :=
+    { instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
+      instanceQueries_eq := by configure_norm }
+  output _ _ _ := ()
   regionCount _ := 395
-  output_eq := by intro _ _; rfl
-  regionCount_eq := fun input i => (mainPost_regionCount G B cfg input i).symm
+  output_eq := by intro _ _ _; rfl
+  regionCount_eq := fun cfg input i =>
+    (mainPost_regionCount G B cfg input i).symm
 
 /-- Read the Action statement data for the fixed top-level witness program. -/
 def extractPost (cfg : Config) (_ : Var unit Fp) (i : RegionIndex)
@@ -1923,7 +1935,8 @@ def ProverAssumptionsPost (G : Generators) (B : Bases)
 
 theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => ActionData)
-      (mainPost G B cfg) (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
+      (fun _ : Unit => configure G) (mainPost G B) cfg
+      (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
       (SpecPost G B) := by
   circuit_proof_start
   set input_var : Witnesses Fp := hintWitnesses
@@ -1997,7 +2010,8 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
 
 theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => ActionData)
-      (mainPost G B cfg) (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
+      (fun _ : Unit => configure G) (mainPost G B) cfg
+      (extractPost cfg) (EnvAssumptions cfg) (fun _ => True)
       (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
   circuit_proof_start
   obtain ⟨hPA, hDca⟩ := hPA
@@ -2137,7 +2151,7 @@ def circuit (G : Generators) (B : Bases) :
   name := "OrchardAction"
   configure := fun _ => configure G
   synthesize := mainPost G B
-  elaborated := fun cfg => elaboratedPost G B cfg
+  elaborated := elaboratedPost G B
   Witness := fun _ => ActionData
   extract := extractPost
   EnvAssumptions := EnvAssumptions

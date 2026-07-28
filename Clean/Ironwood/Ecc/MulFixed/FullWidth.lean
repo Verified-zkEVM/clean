@@ -218,13 +218,14 @@ def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
 /-- The elaborated-metadata instance for the inner region's synthesize lambda, with the
 output cells in explicit reduced form (`innerOutCells`) — computing the default output
 projection runs the whole region monad (a `List.append` whnf storm). -/
-instance innerElab (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
-    (config : Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp unit InnerOut
-      (fun _ : Var unit Fp => innerRegion B config offset windows) where
-  output := fun _ self => innerOutCells config offset self
+instance innerElab (B : FixedBaseData)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) :
+    ElaboratedRegionCircuit Fp Config Config unit InnerOut
+      pure
+      (fun config offset (_ : Var unit Fp) => innerRegion B config offset windows) where
+  output := fun config offset _ self => innerOutCells config offset self
   output_eq := by
-    intro _ self
+    intro _ _ _ self
     rw [innerOutCells, innerRegion_output]
 
 /-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
@@ -621,8 +622,9 @@ private theorem fw_completeness_fixed (B : FixedBase) (cfg : Config) (offset : �
 /-- The elaborated output projection, reduced (`rfl` via `innerElab`). -/
 private theorem innerElab_output (B : FixedBaseData) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (config : Config) (offset : ℕ) (input : Var unit Fp) (self : RegionIndex) :
-    ElaboratedRegionCircuit.output
-        (fun _ : Var unit Fp => innerRegion B config offset windows) input self
+    ElaboratedRegionCircuit.output pure
+        (fun config offset (_ : Var unit Fp) => innerRegion B config offset windows)
+        config offset input self
       = innerOutCells config offset self := rfl
 
 set_option linter.all false in
@@ -630,7 +632,10 @@ set_option linter.all false in
 private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Soundness (Input := unit) (Output := InnerOut)
-      (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
+      pure
+      (fun config offset (_ : Var unit Fp) =>
+        innerRegion B.toData config offset windows)
+      cfg offset
       (fun _ self env => eval env (windowCells cfg offset self))
       (InnerEnvAssumptions cfg) (fun _ => True) (InnerSpec B) := by
   circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
@@ -803,7 +808,10 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
     (hbound : ∀ (env : Placed ProverEnvironment Fp) (w : Fin 85),
       (Witgen.MOver.eval (value := field) env windows[w.val]!).val < 8) :
     FormalRegionCircuit.Completeness (Input := unit) (Output := InnerOut)
-      (fun _ : Var unit Fp => innerRegion B.toData cfg offset windows)
+      pure
+      (fun config offset (_ : Var unit Fp) =>
+        innerRegion B.toData config offset windows)
+      cfg offset
       (fun _ self env => eval env (windowCells cfg offset self))
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
       (InnerProverSpec B) := by
@@ -945,11 +953,11 @@ def circuit (B : FixedBase) :
 
   synthesize cfg scalar := synthesize B.toData cfg (scalarWindows scalar)
 
-  elaborated cfg :=
-    { output := fun scalar i => (synthesize B.toData cfg (scalarWindows scalar)).output i
-      regionCount := fun _ => 2
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun scalar i =>
+  elaborated :=
+    { output := fun cfg scalar i => (synthesize B.toData cfg (scalarWindows scalar)).output i
+      regionCount _ := 2
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg scalar i =>
         (synthesize_regionCount B.toData cfg (scalarWindows scalar) i).symm }
 
   EnvAssumptions := EnvAssumptions

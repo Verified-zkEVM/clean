@@ -164,8 +164,8 @@ def hash (capacity : Fp) :
       (permuteRegion.call cfg 0 absorbed)
     pure permuted.x0
 
-  elaborated cfg :=
-    { output := fun input i =>
+  elaborated :=
+    { output := fun cfg input i =>
         ((do
           let init ← assignRegion "initial state for domain ConstantLength<2>"
             ((initRegion capacity).call cfg 0 ())
@@ -174,9 +174,9 @@ def hash (capacity : Fp) :
           let permuted ← assignRegion "permute state"
             (permuteRegion.call cfg 0 absorbed)
           pure permuted.x0) : Circuit Fp (Var field Fp)).output i
-      regionCount := fun _ => 3
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i => (hash_regionCount capacity cfg input i).symm }
+      regionCount _ := 3
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg input i => (hash_regionCount capacity cfg input i).symm }
 
   Spec input output _ :=
     output = Hash.HashPaddedBlock.value roundConstants capacity input

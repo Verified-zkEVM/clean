@@ -60,7 +60,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       { p := commitment, q := blind }
     pure cv
 
-  elaborated _ := { regionCount _ := 5 }
+  elaborated := { regionCount _ := 5 }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧

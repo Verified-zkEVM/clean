@@ -277,11 +277,12 @@ def InnerProverSpec (B : FixedBase)
 /-- The elaborated-metadata instance for the inner region's synthesize lambda (the
 bundle's default `{}`), local so the standalone proofs can state
 `Soundness`/`Completeness` over it. -/
-instance elaborated (B : FixedBaseData) (config : Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp DecomposeRunningSum.Inputs InnerOut
-      (fun input : Var DecomposeRunningSum.Inputs Fp =>
+instance elaborated (B : FixedBaseData) :
+    ElaboratedRegionCircuit Fp Config Config DecomposeRunningSum.Inputs InnerOut
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
         innerRegion B config offset input.alpha) where
-  output _ self :=
+  output config offset _ self :=
     { acc := { x := .of self (offset + 84) config.superConfig.addIncompleteConfig.xQR,
                y := .of self (offset + 84) config.superConfig.addIncompleteConfig.yQR },
       mulB := { x := .of self (offset + 84) config.superConfig.addConfig.xP,
@@ -289,7 +290,7 @@ instance elaborated (B : FixedBaseData) (config : Config) (offset : ℕ) :
       zs := Vector.ofFn (fun j => .of self (offset + j.val)
               config.superConfig.runningSumConfig.z) }
   output_eq := by
-    intro input self
+    intro _ _ _ _
     simp only [circuit_norm, innerRegion_output]
 
 set_option linter.all false in
@@ -778,8 +779,10 @@ the shared-budget split). -/
 private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
-      (fun input : Var DecomposeRunningSum.Inputs Fp =>
-        innerRegion B.toData cfg offset input.alpha)
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B.toData config offset input.alpha)
+      cfg offset
       (fun _ _ _ => default)
       (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
       (InnerProverSpec B) := by
@@ -836,6 +839,8 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
       (AssignedCell Fp)) :=
     innerRegion B.toData cfg offset input.alpha
 
+  elaborated := elaborated B.toData
+
   Assumptions _ := True
 
   EnvAssumptions := InnerEnvAssumptions
@@ -843,6 +848,8 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
   Spec := InnerSpec B
 
   ProverAssumptions := InnerProverAssumptions
+
+  ProverSpec := InnerProverSpec B
 
   soundness := by
     -- PROOF ARC recipe (per Mul.lean): NO structural unfolds in the list (innerRegion
@@ -1174,11 +1181,11 @@ def circuit (B : FixedBase) : FormalCircuit Fp
 
   synthesize cfg alpha := synthesize B cfg alpha
 
-  elaborated cfg :=
-    { output := fun alpha i => (synthesize B cfg alpha).output i
-      regionCount := fun _ => 4
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun alpha i => (synthesize_regionCount B cfg alpha i).symm }
+  elaborated :=
+    { output := fun cfg alpha i => (synthesize B cfg alpha).output i
+      regionCount _ := 4
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg alpha i => (synthesize_regionCount B cfg alpha i).symm }
 
   EnvAssumptions := EnvAssumptions
 
