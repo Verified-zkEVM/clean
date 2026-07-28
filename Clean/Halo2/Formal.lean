@@ -1,4 +1,4 @@
-import Clean.Halo2.Basic
+import Clean.Halo2.Tactics.Keygen
 
 /-!
 # Halo2 formal circuits — DESIGN SKETCH
@@ -60,6 +60,17 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
     intro input
     try dsimp only [configure]
     infer_instance
+  /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
+  keygenRequirements : KeygenRequirements F ConfigInput := {}
+  /-- Configure/synthesis registration certificate. `none` keeps unmigrated bundles
+  constructible while this field is rolled out; certified bundles store `some`. -/
+  registered : Option (PLift (
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (input : Var Input F) (i : RegionIndex),
+    let program := configure configInput
+    ((synthesize (program.output counts) input).operations i).KeygenRegistered
+      (keygenRequirements.gates configInput ++ (program.delta counts).gates)
+      (keygenRequirements.lookups configInput ++ (program.delta counts).lookups))) := none
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
@@ -426,6 +437,39 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
   self.callOps_eq config input i
 
 /--
+An embedded registration certificate closes a child call against any larger ambient
+gate and lookup sets. This is the compositional leaf used by `keygen_registration`.
+-/
+@[keygen_norm]
+theorem call_keygenRegistered
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (input : Var Input F) (i : RegionIndex)
+    {requirements : KeygenRequirements F ConfigInput}
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hregistered : self.elaborated.registered.isSome)
+    (hrequirements : self.elaborated.keygenRequirements = requirements)
+    (hgates :
+      ∀ gate,
+        gate ∈ requirements.gates configInput ++
+          ((self.configure configInput).delta counts).gates →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ requirements.lookups configInput ++
+          ((self.configure configInput).delta counts).lookups →
+        argument ∈ targetLookups) :
+    ((self.call
+      ((self.configure configInput).output counts)
+      input).operations i).KeygenRegistered targetGates targetLookups := by
+  rw [self.call_operations]
+  have hchild := (self.elaborated.registered.get hregistered).down
+    configInput counts input i
+  rw [hrequirements] at hchild
+  exact hchild.mono hgates hlookups
+
+/--
 A lawful layouter child remains registered when called inside a parent whose available
 argument lists contain the child's requirements and configure contribution.
 -/
@@ -486,6 +530,18 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
     intro input
     try dsimp only [configure]
     infer_instance
+  /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
+  keygenRequirements : KeygenRequirements F ConfigInput := {}
+  /-- Region-level configure/synthesis registration certificate. -/
+  registered : Option (PLift (
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex),
+    let program := configure configInput
+    ((synthesize
+      (program.output counts) offset input).operations region).Forall
+        (RegionOperation.KeygenRegistered
+          (keygenRequirements.gates configInput ++ (program.delta counts).gates)
+          (keygenRequirements.lookups configInput ++ (program.delta counts).lookups)))) := none
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
       (synthesize config offset input).output self
@@ -823,6 +879,40 @@ theorem call_operations (self : FormalRegionCircuit F ConfigInput Config Input O
   self.callOps_eq config offset input region
 
 /--
+Region-level counterpart of `FormalCircuit.call_keygenRegistered`.
+-/
+@[keygen_norm]
+theorem call_keygenRegistered
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {requirements : KeygenRequirements F ConfigInput}
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hregistered : self.elaborated.registered.isSome)
+    (hrequirements : self.elaborated.keygenRequirements = requirements)
+    (hgates :
+      ∀ gate,
+        gate ∈ requirements.gates configInput ++
+          ((self.configure configInput).delta counts).gates →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ requirements.lookups configInput ++
+          ((self.configure configInput).delta counts).lookups →
+        argument ∈ targetLookups) :
+    ((self.call
+      ((self.configure configInput).output counts)
+      offset input).operations region).Forall
+        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  rw [self.call_operations]
+  have hchild := (self.elaborated.registered.get hregistered).down
+    configInput counts offset input region
+  rw [hrequirements] at hchild
+  exact RegionOperations.keygenRegistered_mono
+    hchild hgates hlookups
+
+/--
 A lawful region child remains registered when called inside a parent whose available
 argument lists contain the child's requirements and configure contribution.
 -/
@@ -881,6 +971,14 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
   synthesize config input := assignRegion name (child.synthesize config 0 input)
   elaborated :=
     { configureInfo := child.elaborated.configureInfo
+      keygenRequirements := child.elaborated.keygenRequirements
+      registered := child.elaborated.registered.map fun registered =>
+        ⟨by
+          intro configInput counts input region
+          have hregistered := registered.down configInput counts 0 input region
+          simpa only [assignRegion, Circuit.operations,
+            Operations.KeygenRegistered, Operation.KeygenRegistered,
+            List.Forall, and_true] using hregistered⟩
       output := fun config input i =>
         (child.synthesize config 0 input).output i
       regionCount _ := 1
