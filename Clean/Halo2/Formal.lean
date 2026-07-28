@@ -44,10 +44,10 @@ namespace Halo2
 variable {F : Type} [FiniteField F] {Input Output Witness : TypeMap}
 
 /-- Bundles the circuit metadata exposed in reduced form (main Clean's
-`ElaboratedCircuit`): the output cells and the number of region indices consumed, as
+`ElaboratedSynthesis`): the output cells and the number of region indices consumed, as
 functions of the input variable and starting region index, so parent circuits simplify
 without unfolding `main`. -/
-class ElaboratedCircuit (F : Type) [FiniteField F] (Input Output : TypeMap)
+class ElaboratedSynthesis (F : Type) [FiniteField F] (Input Output : TypeMap)
     [CircuitType Input] [CircuitType Output] (main : Var Input F → Circuit F (Var Output F)) where
   output : Var Input F → RegionIndex → Var Output F := fun input i => (main input).output i
   regionCount : Var Input F → ℕ := fun input => ((main input).operations 0).regionCount
@@ -71,7 +71,7 @@ variable [CircuitType Input] [CircuitType Output]
 placement `place` from region index `i₀`, then `Spec` holds on the input, the extracted
 high-level witness, and the output. -/
 def FormalCircuit.Soundness
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -81,7 +81,7 @@ def FormalCircuit.Soundness
   EnvAssumptions env →
   Assumptions (eval env input) →
   Constraints env.place env.env ((main input).operations i₀) i₀ →
-  Spec (eval env input) (eval env (ElaboratedCircuit.output main input i₀)) (extract input i₀ env)
+  Spec (eval env input) (eval env (ElaboratedSynthesis.output main input i₀)) (extract input i₀ env)
 
 /-- Completeness (prover view — hints visible). Under the honest prover's witness
 generators, the soundness `Assumptions` (on the input's verifier-visible value) together
@@ -91,7 +91,7 @@ with `ProverAssumptions` imply the constraints and the `ProverSpec`.
 `ProverAssumptions`: the prover side is strictly *additional*, for hint-side facts that
 the verifier value erases. -/
 def FormalCircuit.Completeness
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -105,7 +105,7 @@ def FormalCircuit.Completeness
   Assumptions (eval env.toEnvironment input) →
   ProverAssumptions (eval env input) (extract input i₀ env.toEnvironment) env.env.hint →
   Constraints env.place env.env ((main input).operations i₀) i₀ ∧
-  ProverSpec (eval env input) (eval env (ElaboratedCircuit.output main input i₀))
+  ProverSpec (eval env input) (eval env (ElaboratedSynthesis.output main input i₀))
     (extract input i₀ env.toEnvironment) env.env.hint
 
 /-- Equivalence rewriting the layouter-level `Soundness` into a form with the input/output
@@ -113,7 +113,7 @@ def FormalCircuit.Completeness
 `FormalRegionCircuit.soundness_iff`. A proof tactic `rw`s this at the very start, so the user
 works with `input`/`output` (finite-field values) instead of `eval env …`. -/
 theorem FormalCircuit.soundness_iff
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -122,7 +122,7 @@ theorem FormalCircuit.soundness_iff
     ∀ (i₀ : RegionIndex) (env : Placed Environment F) (input_var : Var Input F)
       (input : Value Input F) (output : Value Output F),
     eval env input_var = input →
-    eval env (ElaboratedCircuit.output main input_var i₀) = output →
+    eval env (ElaboratedSynthesis.output main input_var i₀) = output →
     EnvAssumptions env →
     Assumptions input →
     Constraints env.place env.env ((main input_var).operations i₀) i₀ →
@@ -138,7 +138,7 @@ theorem FormalCircuit.soundness_iff
 its defining equation): the `Assumptions` and `EnvAssumptions` hypotheses stay raw (see the
 region-level docstring for the rationale). -/
 theorem FormalCircuit.completeness_iff
-    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main]
+    (main : Var Input F → Circuit F (Var Output F)) [ElaboratedSynthesis F Input Output main]
     (extract : Var Input F → RegionIndex → Placed Environment F → Witness F)
     (EnvAssumptions : Placed Environment F → Prop)
     (Assumptions : Value Input F → Prop)
@@ -149,7 +149,7 @@ theorem FormalCircuit.completeness_iff
     ∀ (i₀ : RegionIndex) (env : Placed ProverEnvironment F) (input_var : Var Input F)
       (input : ProverValue Input F) (output : ProverValue Output F),
     eval env input_var = input →
-    eval env (ElaboratedCircuit.output main input_var i₀) = output →
+    eval env (ElaboratedSynthesis.output main input_var i₀) = output →
     ExtendsWitnesses env.place env.env ((main input_var).operations i₀) i₀ →
     EnvAssumptions env.toEnvironment →
     Assumptions (eval env.toEnvironment input_var) →
@@ -197,7 +197,7 @@ structure FormalCircuit (F : Type) [FiniteField F] (ConfigInput Config : Type)
     | exact {}
   /-- Synthesis phase: the layouter-level circuit. Rust: the chip method body. -/
   synthesize : Config → Var Input F → Circuit F (Var Output F)
-  elaborated : ∀ config, ElaboratedCircuit F Input Output (synthesize config) := by
+  elaborated : ∀ config, ElaboratedSynthesis F Input Output (synthesize config) := by
     intro config; first | infer_instance | exact {}
 
   /-- The high-level witness type (default `unit`: ordinary I/O soundness). -/

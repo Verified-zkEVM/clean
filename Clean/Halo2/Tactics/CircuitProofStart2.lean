@@ -17,7 +17,7 @@ concrete output terms never propagate. Distilled from the v2-manual exemplars
   the `synthesize` pattern-match), enter the `soundness_iff`/`completeness_iff` form
   with the house binder names, split the placed env into `place`/`env`;
 - **(b)** `dsimp only [] at *` (iota-reduces the destructured-config matches), then land
-  `output_eq` on the raw do-block output via `ElaboratedCircuit.output_eq`;
+  `output_eq` on the raw do-block output via `ElaboratedSynthesis.output_eq`;
 - **(c)** per bind, one block — THE IN-PEEL ENGINE (design doc, "The in-peel engine
   (subcircuit rewriting v2)"): single `operations_bind` peel (`constraints_append` at
   `constraints`, plus `extendsWitnesses_append` at `witnesses` and the goal's
@@ -746,7 +746,7 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     run? (← `(tactic| simp only [ElaboratedRegionCircuit.output_eq]
       at $(mkIdent `output_eq):ident))
   else
-    run? (← `(tactic| simp only [ElaboratedCircuit.output_eq] at $(mkIdent `output_eq):ident))
+    run? (← `(tactic| simp only [ElaboratedSynthesis.output_eq] at $(mkIdent `output_eq):ident))
   -- open factored circuit defs (synth wrappers etc.) so the bind chain is visible
   unless unfolds.isEmpty do
     let chunk := if sound then `constraints else `witnesses

@@ -719,7 +719,7 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     wpointNonId_output, wpointNonId_output]
 
 instance elaborated (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedCircuit Fp unit AddressPoints (main G B cfg) where
+    ElaboratedSynthesis Fp unit AddressPoints (main G B cfg) where
   output _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
@@ -1894,7 +1894,7 @@ theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
     Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
 
 instance elaboratedPost (G : Generators) (B : Bases) (cfg : Config) :
-    ElaboratedCircuit Fp unit unit (mainPost G B cfg) where
+    ElaboratedSynthesis Fp unit unit (mainPost G B cfg) where
   output _ _ := ()
   regionCount _ := 395
   output_eq := by intro _ _; rfl

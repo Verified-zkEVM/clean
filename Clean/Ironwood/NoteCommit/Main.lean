@@ -518,7 +518,7 @@ kernel certificates (NoteCommit/MainBundle hit kernel timeouts when tried). Rena
 once the metadata substrate derives the reduced fields. -/
 instance elaboratedFolded (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs Point (synth G R Q hQ cfg) where
+    ElaboratedSynthesis Fp Inputs Point (synth G R Q hQ cfg) where
   output input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 43
   output_eq := by intro _ _; rfl

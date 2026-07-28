@@ -483,7 +483,7 @@ def unfoldCanonicalElaborated : TacticM Unit := do
     let some ci := env.find? c | continue
     let isInst ← Meta.forallTelescopeReducing ci.type fun _ body =>
       pure (body.getAppFn.constName? == some ``ElaboratedRegionCircuit ||
-            body.getAppFn.constName? == some ``ElaboratedCircuit)
+            body.getAppFn.constName? == some ``ElaboratedSynthesis)
     if isInst then insts := insts.push c
   if insts.isEmpty then return
   let ids := insts.map mkIdent

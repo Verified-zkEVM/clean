@@ -171,7 +171,7 @@ theorem FormalCircuit.call_regionCount (self : FormalCircuit F CI Cfg Input Outp
   exact ((self.elaborated config).regionCount_eq input i).symm
 
 /-- Concrete-`α` restatement of `call_regionCount` (same discr-tree-key reason as
-`output_call'`); the `ElaboratedCircuit.regionCount_eq` default tactic uses both. -/
+`output_call'`); the `ElaboratedSynthesis.regionCount_eq` default tactic uses both. -/
 theorem FormalCircuit.call_regionCount' {Output : TypeMap} [ProvableType Output]
     {CI Cfg : Type} (self : FormalCircuit F CI Cfg Input Output)
     (config : Cfg) (input : Var Input F) (i : RegionIndex) :
@@ -194,7 +194,7 @@ discharged. -/
 
 /-- Per-bundle region-count bridge registry: bundle head constant ↦ proven
 `<base>_call_regionCount` lemma. Populated by `derive_contract_bridges` (and the
-`ElaboratedCircuit` autogenerator); consumed by `foldCallRegionCount`, which
+`ElaboratedSynthesis` autogenerator); consumed by `foldCallRegionCount`, which
 instantiates the registered lemma by unification instead of re-deriving the fold —
 per-use cost drops to a lookup + `isDefEq`, and the kernel checks each bundle's
 metadata defeq ONCE (at derive time) instead of at every fold site. -/
@@ -281,7 +281,7 @@ open Lean Meta Simp in
 /-- Companion to `foldCallRegionCount` for the METADATA spelling: folds
 `FormalCircuit.regionCount self config input` to its literal (after
 `call_regionCount`-style rewrites leave the projection form, e.g. in the
-`ElaboratedCircuit.regionCount_eq` default tactic). Same closed-literal guard; the
+`ElaboratedSynthesis.regionCount_eq` default tactic). Same closed-literal guard; the
 kernel closes the projection defeq. -/
 def foldRegionCountMetaProc : Simproc := fun e => do
   unless e.isAppOf ``Halo2.FormalCircuit.regionCount do return .continue

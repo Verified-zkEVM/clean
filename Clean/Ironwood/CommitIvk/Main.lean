@@ -196,7 +196,7 @@ open CompElliptic.Fields.Pasta (Fq)
 
 instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs field (synth G R Q hQ cfg) where
+    ElaboratedSynthesis Fp Inputs field (synth G R Q hQ cfg) where
   output input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 14
   output_eq := by intro _ _; rfl
