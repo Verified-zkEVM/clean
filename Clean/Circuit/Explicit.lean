@@ -225,7 +225,7 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
 
 -- `bind` of two explicit circuits yields an explicit circuit
 @[explicit_circuit_constructor]
-instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
+def ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
@@ -289,7 +289,7 @@ theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g :
 
 -- `map` of an explicit circuit yields an explicit circuit
 @[explicit_circuit_constructor]
-instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   localLength n := localLength g n
@@ -305,6 +305,10 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   channelsLawful n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.channelsLawful n
+
+instance ExplicitCircuit.from_map_tc {f : α → β} {g : Circuit F α}
+    [g_explicit : ExplicitCircuit g] : ExplicitCircuit (f <$> g) :=
+  ExplicitCircuit.from_map g_explicit
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_map_output {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :

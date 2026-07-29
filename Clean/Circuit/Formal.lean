@@ -360,13 +360,13 @@ def GeneralFormalCircuit.toWithHint {F : Type} [FiniteField F] {Input Output : T
   ProverAssumptions input data hint := circuit.ProverAssumptions input data hint
   ProverSpec input output hint := circuit.ProverSpec input output hint
   soundness := by
-    simpa only [GeneralFormalCircuit.WithHint.Soundness,
+    simp only [GeneralFormalCircuit.WithHint.Soundness,
       CircuitType.eval_verifier, CircuitType.value_of_provableType]
-      using circuit.soundness
+    exact circuit.soundness
   completeness := by
-    simpa only [GeneralFormalCircuit.WithHint.Completeness,
+    simp only [GeneralFormalCircuit.WithHint.Completeness,
       CircuitType.eval_prover, CircuitType.proverValue_of_provableType]
-      using circuit.completeness
+    exact circuit.completeness
 
 @[circuit_norm]
 def GeneralFormalCircuit.channels (circuit : GeneralFormalCircuit F Input Output) :=

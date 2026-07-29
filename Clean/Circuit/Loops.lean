@@ -997,7 +997,7 @@ namespace ExplicitCircuit
 open Circuit (ConstantLength ConstantOutput forEach map mapFinRange foldl foldlRange)
 
 @[explicit_circuit_constructor]
-instance from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
+def from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F Unit} (explicit : ∀ a, ExplicitCircuit (body a))
     {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
   output _ := ()
@@ -1054,7 +1054,7 @@ theorem from_forEach_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vecto
       (List.ofFn fun (i : Fin m) => (explicit xs[i.val]).channelsWithGuarantees (n + i * ((explicit default).localLength 0))).flatten := rfl
 
 @[explicit_circuit_constructor]
-instance from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
+def from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F β} (explicit : ∀ a, ExplicitCircuit (body a))
     {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
   output n := xs.mapIdx fun i x => (explicit x).output (n + i * ((explicit default).localLength 0))
@@ -1113,7 +1113,7 @@ theorem from_map_loop_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vect
       (List.ofFn fun (i : Fin m) => (explicit xs[i.val]).channelsWithGuarantees (n + i * ((explicit default).localLength 0))).flatten := rfl
 
 @[explicit_circuit_constructor]
-instance from_mapFinRange {m : ℕ} [NeZero m]
+def from_mapFinRange {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} (explicit : ∀ i, ExplicitCircuit (body i))
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
   output n := Vector.mapFinRange m fun i => (explicit i).output (n + i * ((explicit 0).localLength 0))
@@ -1175,7 +1175,7 @@ theorem from_mapFinRange_channelsWithGuarantees {m : ℕ} [NeZero m]
       (List.ofFn fun (i : Fin m) => (explicit i).channelsWithGuarantees (n + i * ((explicit 0).localLength 0))).flatten := rfl
 
 @[explicit_circuit_constructor]
-instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
+def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     -- `explicit` is a regular explicit binder (not `[explicit]`) so the `infer_explicit_head`
     -- dispatch leaves it as a subgoal for the enclosing `infer_explicit_circuit` loop to solve
     -- (`intro b a; infer_explicit_head`), rather than going through typeclass synthesis — which
@@ -1245,7 +1245,7 @@ instance from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     · rw [(explicit default default).localLength_eq]
 
 @[explicit_circuit_constructor]
-instance from_foldlRange {m : ℕ} [Inhabited β]
+def from_foldlRange {m : ℕ} [Inhabited β]
     {body : β → Fin m → Circuit F β} (explicit : ∀ b i, ExplicitCircuit (body b i)) {init : β}
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} :
     ExplicitCircuit (foldlRange m init body constant) where

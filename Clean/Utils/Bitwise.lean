@@ -1,3 +1,4 @@
+import Std.Tactic.BVDecide
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Clean.Utils.Field
 import Mathlib.Data.Nat.Bitwise
