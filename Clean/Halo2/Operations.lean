@@ -133,8 +133,13 @@ receive an already-configured chip `Config` and use its arguments while contribu
 no configure delta of their own.
 -/
 structure KeygenRequirements (F ConfigInput : Type) where
-  gates : ConfigInput → List (Gate F) := fun _ => []
-  lookups : ConfigInput → List (LookupArgument F) := fun _ => []
+  /--
+  Provenance required of configuration values borrowed from the caller. This stays
+  folded across circuit boundaries; it never exposes a child's operation stream.
+  -/
+  configLawful : ConfigInput → Type := fun _ => Unit
+  gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
+  lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
 
 /--
 Static registration of one region operation in explicit configure-produced gate and

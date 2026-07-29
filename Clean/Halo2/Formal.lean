@@ -62,15 +62,16 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
     infer_instance
   /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
   keygenRequirements : KeygenRequirements F ConfigInput := {}
-  /-- Configure/synthesis registration certificate. `none` keeps unmigrated bundles
-  constructible while this field is rolled out; certified bundles store `some`. -/
-  registered : Option (PLift (
+  /-- Configure/synthesis registration certificate. -/
+  registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : keygenRequirements.configLawful configInput)
       (input : Var Input F) (i : RegionIndex),
     let program := configure configInput
     ((synthesize (program.output counts) input).operations i).KeygenRegistered
-      (keygenRequirements.gates configInput ++ (program.delta counts).gates)
-      (keygenRequirements.lookups configInput ++ (program.delta counts).lookups))) := none
+      (keygenRequirements.gates configInput hconfig ++ (program.delta counts).gates)
+      (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups) := by
+    keygen_registration
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
@@ -309,11 +310,12 @@ structure FormalCircuit.KeygenLawful
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : requirements.configLawful configInput)
       (input : Var Input F) (i : RegionIndex),
     let program := self.configure configInput
     ((self.synthesize (program.output counts) input).operations i).KeygenRegistered
-      (requirements.gates configInput ++ (program.delta counts).gates)
-      (requirements.lookups configInput ++ (program.delta counts).lookups)
+      (requirements.gates configInput hconfig ++ (program.delta counts).gates)
+      (requirements.lookups configInput hconfig ++ (program.delta counts).lookups)
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -322,6 +324,116 @@ instance (self : FormalCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
   self.elaborated.configureInfo input
+
+/-- The folded keygen interface exposed by a layouter circuit. -/
+abbrev keygenRequirements
+    (self : FormalCircuit F ConfigInput Config Input Output) :
+    KeygenRequirements F ConfigInput :=
+  self.elaborated.keygenRequirements
+
+/--
+Proof that a configuration value is the output of this circuit's own configure
+program, from a caller input satisfying its folded provenance requirement.
+-/
+structure Configured
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) where
+  configInput : ConfigInput
+  counts : ConfigureCounts
+  configLawful :
+    self.keygenRequirements.configLawful configInput
+  output_eq :
+    (self.configure configInput).output counts = config
+
+/-- A configure output is configured whenever its caller provenance holds. -/
+abbrev Configured.ofOutput
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    self.Configured ((self.configure configInput).output counts) :=
+  ⟨configInput, counts, hconfig, rfl⟩
+
+/-- A pure configure wrapper preserves a caller-supplied config at any allocation state. -/
+def Configured.ofPure
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    self.Configured config :=
+  ⟨config, {}, hconfig, by simp [hconfigure]⟩
+
+/-- Gate arguments available from a configured circuit handle. -/
+def Configured.gates
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) : List (Gate F) :=
+  self.keygenRequirements.gates
+      (FormalCircuit.Configured.configInput configured)
+      (FormalCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalCircuit.Configured.configInput configured)).delta
+      (FormalCircuit.Configured.counts configured)).gates
+
+/-- Lookup arguments available from a configured circuit handle. -/
+def Configured.lookups
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) :
+    List (LookupArgument F) :=
+  self.keygenRequirements.lookups
+      (FormalCircuit.Configured.configInput configured)
+      (FormalCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalCircuit.Configured.configInput configured)).delta
+      (FormalCircuit.Configured.counts configured)).lookups
+
+@[simp, keygen_norm] theorem Configured.ofPure_gates
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.gates (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.gates config hconfig := by
+  simp [Configured.gates, Configured.ofPure, hconfigure]
+
+@[simp, keygen_norm] theorem Configured.ofPure_lookups
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.lookups (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.lookups config hconfig := by
+  simp [Configured.lookups, Configured.ofPure, hconfigure]
+
+@[simp, keygen_norm] theorem Configured.ofOutput_gates
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    Configured.gates (Configured.ofOutput self configInput counts hconfig) =
+      self.keygenRequirements.gates configInput hconfig ++
+        ((self.configure configInput).delta counts).gates :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_lookups
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    Configured.lookups (Configured.ofOutput self configInput counts hconfig) =
+      self.keygenRequirements.lookups configInput hconfig ++
+        ((self.configure configInput).delta counts).lookups :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_configInput
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    FormalCircuit.Configured.configInput
+      (Configured.ofOutput self configInput counts hconfig) = configInput :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_counts
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    FormalCircuit.Configured.counts
+      (Configured.ofOutput self configInput counts hconfig) = counts :=
+  rfl
 
 /--
 Selector allocation borrowed from the incoming configure state. Complete configure
@@ -369,6 +481,7 @@ def regionCount (self : FormalCircuit F ConfigInput Config Input Output)
   `.subcircuit` constructor head used to do). `opaque` is neutral for the kernel *and* the
   elaborator across all three components; the packaged `property` re-exposes the defining
   equation as a *recorded* rewrite (`call_eq`/`call_operations` below). -/
+@[keygen_call_expression]
 private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalCircuit F CI Cfg Input Output → Cfg → Var Input F → RegionIndex →
@@ -443,31 +556,26 @@ gate and lookup sets. This is the compositional leaf used by `keygen_registratio
 @[keygen_norm]
 theorem call_keygenRegistered
     (self : FormalCircuit F ConfigInput Config Input Output)
-    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (config : Config) (hconfigured : self.Configured config)
     (input : Var Input F) (i : RegionIndex)
-    {requirements : KeygenRequirements F ConfigInput}
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
-    (hregistered : self.elaborated.registered.isSome)
-    (hrequirements : self.elaborated.keygenRequirements = requirements)
     (hgates :
       ∀ gate,
-        gate ∈ requirements.gates configInput ++
-          ((self.configure configInput).delta counts).gates →
+        gate ∈ Configured.gates hconfigured →
         gate ∈ targetGates)
     (hlookups :
       ∀ argument,
-        argument ∈ requirements.lookups configInput ++
-          ((self.configure configInput).delta counts).lookups →
+        argument ∈ Configured.lookups hconfigured →
         argument ∈ targetLookups) :
-    ((self.call
-      ((self.configure configInput).output counts)
-      input).operations i).KeygenRegistered targetGates targetLookups := by
+    ((self.call config input).operations i).KeygenRegistered
+      targetGates targetLookups := by
+  rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
   rw [self.call_operations]
-  have hchild := (self.elaborated.registered.get hregistered).down
-    configInput counts input i
-  rw [hrequirements] at hchild
-  exact hchild.mono hgates hlookups
+  exact (self.elaborated.registered
+    configInput counts hconfig input i).mono
+      (by simpa [Configured.gates] using hgates)
+      (by simpa [Configured.lookups] using hlookups)
 
 /--
 A lawful layouter child remains registered when called inside a parent whose available
@@ -478,17 +586,18 @@ theorem KeygenLawful.call_registered
     {requirements : KeygenRequirements F ConfigInput}
     (hlawful : self.KeygenLawful requirements)
     (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : requirements.configLawful configInput)
     (input : Var Input F) (i : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
     (hgates :
       ∀ gate,
-        gate ∈ requirements.gates configInput ++
+        gate ∈ requirements.gates configInput hconfig ++
           ((self.configure configInput).delta counts).gates →
         gate ∈ targetGates)
     (hlookups :
       ∀ argument,
-        argument ∈ requirements.lookups configInput ++
+        argument ∈ requirements.lookups configInput hconfig ++
           ((self.configure configInput).delta counts).lookups →
         argument ∈ targetLookups) :
     ((self.call
@@ -496,7 +605,7 @@ theorem KeygenLawful.call_registered
       input).operations i).KeygenRegistered targetGates targetLookups := by
   rw [self.call_operations]
   exact (FormalCircuit.KeygenLawful.registered
-    hlawful configInput counts input i).mono hgates hlookups
+    hlawful configInput counts hconfig input i).mono hgates hlookups
 
 /-!
 The consumption mechanism for `call` chunks lives in `Subcircuit.lean` (framework leaf
@@ -533,15 +642,17 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
   /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
   keygenRequirements : KeygenRequirements F ConfigInput := {}
   /-- Region-level configure/synthesis registration certificate. -/
-  registered : Option (PLift (
+  registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : keygenRequirements.configLawful configInput)
       (offset : ℕ) (input : Var Input F) (region : RegionIndex),
     let program := configure configInput
     ((synthesize
       (program.output counts) offset input).operations region).Forall
         (RegionOperation.KeygenRegistered
-          (keygenRequirements.gates configInput ++ (program.delta counts).gates)
-          (keygenRequirements.lookups configInput ++ (program.delta counts).lookups)))) := none
+          (keygenRequirements.gates configInput hconfig ++ (program.delta counts).gates)
+          (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups)) := by
+    keygen_registration
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
       (synthesize config offset input).output self
@@ -775,13 +886,14 @@ structure FormalRegionCircuit.KeygenLawful
     (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : requirements.configLawful configInput)
       (offset : ℕ) (input : Var Input F) (region : RegionIndex),
     let program := self.configure configInput
     ((self.synthesize
       (program.output counts) offset input).operations region).Forall
         (RegionOperation.KeygenRegistered
-          (requirements.gates configInput ++ (program.delta counts).gates)
-          (requirements.lookups configInput ++ (program.delta counts).lookups))
+          (requirements.gates configInput hconfig ++ (program.delta counts).gates)
+          (requirements.lookups configInput hconfig ++ (program.delta counts).lookups))
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -790,6 +902,113 @@ instance (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) :
     ElaboratedConfigure (self.configure input) :=
   self.elaborated.configureInfo input
+
+/-- The folded keygen interface exposed by a region circuit. -/
+abbrev keygenRequirements
+    (self : FormalRegionCircuit F ConfigInput Config Input Output) :
+    KeygenRequirements F ConfigInput :=
+  self.elaborated.keygenRequirements
+
+/-- Region-level counterpart of `FormalCircuit.Configured`. -/
+structure Configured
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) where
+  configInput : ConfigInput
+  counts : ConfigureCounts
+  configLawful :
+    self.keygenRequirements.configLawful configInput
+  output_eq :
+    (self.configure configInput).output counts = config
+
+/-- A region circuit's configure output carries folded configuration provenance. -/
+abbrev Configured.ofOutput
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    self.Configured ((self.configure configInput).output counts) :=
+  ⟨configInput, counts, hconfig, rfl⟩
+
+/-- Region-level pure-configure provenance. -/
+def Configured.ofPure
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    self.Configured config :=
+  ⟨config, {}, hconfig, by simp [hconfigure]⟩
+
+/-- Gate arguments available from a configured region-circuit handle. -/
+def Configured.gates
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) : List (Gate F) :=
+  self.keygenRequirements.gates
+      (FormalRegionCircuit.Configured.configInput configured)
+      (FormalRegionCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalRegionCircuit.Configured.configInput configured)).delta
+      (FormalRegionCircuit.Configured.counts configured)).gates
+
+/-- Lookup arguments available from a configured region-circuit handle. -/
+def Configured.lookups
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) :
+    List (LookupArgument F) :=
+  self.keygenRequirements.lookups
+      (FormalRegionCircuit.Configured.configInput configured)
+      (FormalRegionCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalRegionCircuit.Configured.configInput configured)).delta
+      (FormalRegionCircuit.Configured.counts configured)).lookups
+
+@[simp, keygen_norm] theorem Configured.ofPure_gates
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.gates (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.gates config hconfig := by
+  simp [Configured.gates, Configured.ofPure, hconfigure]
+
+@[simp, keygen_norm] theorem Configured.ofPure_lookups
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.lookups (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.lookups config hconfig := by
+  simp [Configured.lookups, Configured.ofPure, hconfigure]
+
+@[simp, keygen_norm] theorem Configured.ofOutput_gates
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    Configured.gates (Configured.ofOutput self configInput counts hconfig) =
+      self.keygenRequirements.gates configInput hconfig ++
+        ((self.configure configInput).delta counts).gates :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_lookups
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    Configured.lookups (Configured.ofOutput self configInput counts hconfig) =
+      self.keygenRequirements.lookups configInput hconfig ++
+        ((self.configure configInput).delta counts).lookups :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_configInput
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    FormalRegionCircuit.Configured.configInput
+      (Configured.ofOutput self configInput counts hconfig) = configInput :=
+  rfl
+
+@[simp, keygen_norm] theorem Configured.ofOutput_counts
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    FormalRegionCircuit.Configured.counts
+      (Configured.ofOutput self configInput counts hconfig) = counts :=
+  rfl
 
 /-- Region-level counterpart of `FormalCircuit.selectorRequirements`. -/
 def selectorRequirements
@@ -817,6 +1036,7 @@ implementation applies the child monad `synthesize` **exactly once** and reads b
 output and the operations off that single application (runtime: no metadata
 re-materialization); the `opaque` is the kernel + elaborator reduction barrier, and the
 packaged `property` re-exposes the equation (`call_eq`/`call_operations`). -/
+@[keygen_call_expression]
 private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalRegionCircuit F CI Cfg Input Output → Cfg → ℕ → Var Input F →
@@ -884,33 +1104,27 @@ Region-level counterpart of `FormalCircuit.call_keygenRegistered`.
 @[keygen_norm]
 theorem call_keygenRegistered
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
-    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (config : Config) (hconfigured : self.Configured config)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
-    {requirements : KeygenRequirements F ConfigInput}
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
-    (hregistered : self.elaborated.registered.isSome)
-    (hrequirements : self.elaborated.keygenRequirements = requirements)
     (hgates :
       ∀ gate,
-        gate ∈ requirements.gates configInput ++
-          ((self.configure configInput).delta counts).gates →
+        gate ∈ Configured.gates hconfigured →
         gate ∈ targetGates)
     (hlookups :
       ∀ argument,
-        argument ∈ requirements.lookups configInput ++
-          ((self.configure configInput).delta counts).lookups →
+        argument ∈ Configured.lookups hconfigured →
         argument ∈ targetLookups) :
-    ((self.call
-      ((self.configure configInput).output counts)
-      offset input).operations region).Forall
+    ((self.call config offset input).operations region).Forall
         (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
   rw [self.call_operations]
-  have hchild := (self.elaborated.registered.get hregistered).down
-    configInput counts offset input region
-  rw [hrequirements] at hchild
   exact RegionOperations.keygenRegistered_mono
-    hchild hgates hlookups
+    (self.elaborated.registered
+      configInput counts hconfig offset input region)
+    (by simpa [Configured.gates] using hgates)
+    (by simpa [Configured.lookups] using hlookups)
 
 /--
 A lawful region child remains registered when called inside a parent whose available
@@ -921,17 +1135,18 @@ theorem KeygenLawful.call_registered
     {requirements : KeygenRequirements F ConfigInput}
     (hlawful : self.KeygenLawful requirements)
     (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : requirements.configLawful configInput)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
     (hgates :
       ∀ gate,
-        gate ∈ requirements.gates configInput ++
+        gate ∈ requirements.gates configInput hconfig ++
           ((self.configure configInput).delta counts).gates →
         gate ∈ targetGates)
     (hlookups :
       ∀ argument,
-        argument ∈ requirements.lookups configInput ++
+        argument ∈ requirements.lookups configInput hconfig ++
           ((self.configure configInput).delta counts).lookups →
         argument ∈ targetLookups) :
     ((self.call
@@ -941,7 +1156,7 @@ theorem KeygenLawful.call_registered
   rw [self.call_operations]
   exact RegionOperations.keygenRegistered_mono
     (FormalRegionCircuit.KeygenLawful.registered
-      hlawful configInput counts offset input region)
+      hlawful configInput counts hconfig offset input region)
     hgates hlookups
 
 end FormalRegionCircuit
@@ -972,13 +1187,13 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
   elaborated :=
     { configureInfo := child.elaborated.configureInfo
       keygenRequirements := child.elaborated.keygenRequirements
-      registered := child.elaborated.registered.map fun registered =>
-        ⟨by
-          intro configInput counts input region
-          have hregistered := registered.down configInput counts 0 input region
-          simpa only [assignRegion, Circuit.operations,
-            Operations.KeygenRegistered, Operation.KeygenRegistered,
-            List.Forall, and_true] using hregistered⟩
+      registered := by
+        intro configInput counts hconfig input region
+        have hregistered := child.elaborated.registered
+          configInput counts hconfig 0 input region
+        simpa only [assignRegion, Circuit.operations,
+          Operations.KeygenRegistered, Operation.KeygenRegistered,
+          List.Forall, and_true] using hregistered
       output := fun config input i =>
         (child.synthesize config 0 input).output i
       regionCount _ := 1
@@ -1031,6 +1246,14 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     rw [hout] at hcompl
     exact hcompl.2
 
+@[simp, keygen_norm]
+theorem toFormal_keygenRequirements
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String := child.name) :
+    (child.toFormal name).keygenRequirements =
+      child.keygenRequirements :=
+  rfl
+
 /-- The region-to-layouter bridge preserves configure/synthesis keygen lawfulness. -/
 theorem KeygenLawful.toFormal
     {child : FormalRegionCircuit F ConfigInput Config Input Output}
@@ -1038,14 +1261,56 @@ theorem KeygenLawful.toFormal
     (hlawful : child.KeygenLawful requirements) (name : String := child.name) :
     (child.toFormal name).KeygenLawful requirements where
   registered := by
-    intro configInput counts input region
+    intro configInput counts hconfig input region
     have hregistered :=
       FormalRegionCircuit.KeygenLawful.registered
-        hlawful configInput counts 0 input region
+        hlawful configInput counts hconfig 0 input region
     simpa only [toFormal, assignRegion, Circuit.operations,
       Operations.KeygenRegistered, Operation.KeygenRegistered,
       List.Forall, and_true] using hregistered
 
 end FormalRegionCircuit
+
+attribute [keygen_call]
+  FormalCircuit.call_keygenRegistered
+  FormalRegionCircuit.call_keygenRegistered
+
+attribute [keygen_call_expression]
+  FormalCircuit.call
+  FormalRegionCircuit.call
+
+attribute [keygen_call_bundle]
+  FormalCircuit
+  FormalRegionCircuit
+
+attribute [keygen_configured]
+  FormalCircuit.Configured.ofOutput
+  FormalCircuit.Configured.ofPure
+  FormalRegionCircuit.Configured.ofOutput
+  FormalRegionCircuit.Configured.ofPure
+
+attribute [keygen_bundle_projection]
+  FormalCircuit.configure
+  FormalCircuit.synthesize
+  FormalCircuit.elaborated
+  FormalCircuit.keygenRequirements
+  FormalRegionCircuit.configure
+  FormalRegionCircuit.synthesize
+  FormalRegionCircuit.elaborated
+  FormalRegionCircuit.keygenRequirements
+
+attribute [keygen_metadata_projection]
+  ElaboratedCircuit.keygenRequirements
+  FormalCircuit.keygenRequirements
+  FormalCircuit.Configured.ofOutput
+  FormalCircuit.Configured.ofPure
+  FormalCircuit.Configured.gates
+  FormalCircuit.Configured.lookups
+  ElaboratedRegionCircuit.keygenRequirements
+  FormalRegionCircuit.keygenRequirements
+  FormalRegionCircuit.Configured.ofOutput
+  FormalRegionCircuit.Configured.ofPure
+  FormalRegionCircuit.Configured.gates
+  FormalRegionCircuit.Configured.lookups
 
 end Halo2

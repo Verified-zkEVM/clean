@@ -567,7 +567,7 @@ theorem FormalCircuit.KeygenLawful.operationsKeygenCoherent
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hregistered :=
     FormalCircuit.KeygenLawful.registered
-      hlawful ci counts input 0
+      hlawful ci counts () input 0
   have happlied :=
     hregistered.applyConfigureDelta
       ({} : ConstraintSystem F)
