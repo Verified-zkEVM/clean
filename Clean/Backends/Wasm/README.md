@@ -48,17 +48,18 @@ def r1csJson : Except String String := compileR1CS BN254_PRIME 1 myPoseidonOps
 | ------------------------------------------- | --------------------------------------------------- |
 | `const`, `add`, `mul`, `inv`                | ✅ Supported                                         |
 | `var`, `localVar`                           | ✅ Supported                                         |
-| `ofNat`, `val`                              | ✅ Single-word only (`.error` for multi-word)        |
+| `ofNat`                                     | ✅ Supported (zero-extends to nw limbs, reduces)      |
+| `val`                                       | ✅ Supported (keeps lowest 64 bits of integer rep)   |
 | `ite` (if-else)                             | ✅ Supported (multi-value for multi-word)            |
 | `lt`, `neq`, `not`, `and` (booleans)        | ✅ Supported                                         |
-| `feq`                                       | ✅ Single-word only (`.error` for multi-word)        |
+| `feq`                                       | ✅ Supported (pairwise limb compare for multi-word)  |
 | `lit`, `mapRange`                           | ✅ Supported                                         |
-| `append`                                    | ❌ Not yet supported (`.error`)                      |
+| `append`                                    | ✅ Supported                                         |
 | `envGet`, `listGet`, `dataGet`, `hintGet`   | ❌ Not yet supported (`.error`)                      |
 | `native` witnesses (Lean closures)          | ❌ Not compilable (`.error`)                         |
 | `idx` (outside `mapRange`)                  | ❌ Invalid (`.error`)                                |
 | lookups                                     | Ignored by witness gen; `.error` in R1CS export     |
-| interactions                                | ❌ Not supported (`.error`)                          |
+| interactions                                | ✅ Ignored by witness gen; `.error` in R1CS export |
 
 
 Unsupported operations make the compiler return `.error` with a descriptive message. Note that Nat-sorted (`NExpr`) arithmetic is performed on single 64-bit words; operations whose intermediate values exceed 2^64 wrap around.

@@ -671,18 +671,20 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
       pure (cb.push i64.eq)
     else do
       -- Multi-word: capture both operands to temp locals, compare pairwise, AND-reduce.
+      -- Compile `a` first (its nested ite may use tmpBase as scratch), capture to
+      -- upper half; then compile `e` to the lower half.
       let tmpBase := vm.nextLocal
-      let eCB ← compileFExpr vm e {}
       let aCB ← compileFExpr vm a {}
+      let eCB ← compileFExpr vm e {}
       -- Capture: highest limb first (reverse order matches stack top)
-      let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
+      let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       -- Compare pairwise: a_i vs e_i, producing i32 results (i64.eq gives i32)
       let cmpAll : List Instr := (List.range nw) >>= fun i =>
         [ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.eq ]
       -- AND-reduce all comparison results
       let andAll : List Instr := (List.range (nw-1)).map fun _ => i64.and
-      pure (cb.pushList eCB.build |>.pushList captureE |>.pushList aCB.build |>.pushList captureA
+      pure (cb.pushList aCB.build |>.pushList captureA |>.pushList eCB.build |>.pushList captureE
               |>.pushList cmpAll |>.pushList andAll |>.push i32.wrap_i64)
   | .lt a e, cb => do
     let cb ← compileNExpr vm a cb
@@ -1118,16 +1120,17 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
   -- and pushVar uses the circuit variable index from the witness IR directly.
-  let (finalVm, _, bodyInstrs) ← processFlatOps numInputs flatOps vm numInputs []
+  let (finalVm, finalVarIdx, bodyInstrs) ← processFlatOps numInputs flatOps vm numInputs []
+  -- finalVarIdx = numInputs + total witness outputs (steps don't count)
+  let witnessCount := finalVarIdx - numInputs
   let witnessWords := finalVm.nextLocal - numInputs * nw
-  let witnessCount := witnessWords / nw
   let n32 := nw * 2
   let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
   let signalBaseRaw := 4 + n32 * 4
   let signalBase := ((signalBaseRaw + 7) / 8) * 8
   let signalBytes := n32 * 4
-  let startSignal := 1 + finalVm.nextLocal / nw
+  let startSignal := 1 + numInputs + witnessCount  -- signal 0 = constant 1, then inputs, then witnesses
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
   -- Each intermediate uses nw consecutive locals
@@ -1136,12 +1139,14 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each 64-bit limb to signal memory.
-  -- Witness i is stored at local (numInputs*nw + i*nw) since witnesses are
-  -- allocated sequentially starting from numInputs*nw via vm.alloc.
+  -- Use finalVm.lookup to get the correct WASM local index for each witness
+  -- (accounting for let-step locals allocated before witnesses).
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
+    let elemIdx := 1 + numInputs + i
+    let wasmBase := finalVm.lookup elemIdx
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
-        local.get (numInputs * nw + i * nw + w),
+      [ i32.const (signalBase + elemIdx * signalBytes + w * 8),
+        local.get (wasmBase + w),
         .memStore .i64 0 alignmentI64 ]
   -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
