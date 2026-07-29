@@ -160,10 +160,10 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels
   | .brIf label => putULEB128 (arr.push opBrIf) (resolveLabel labels label)
   | .block label result body => encodeBlock arr resolveCall labels opBlock label result body
   | .loop label result body => encodeBlock arr resolveCall labels opLoop label result body
-  | .ifElse result thenBody elseBody =>
+  | .ifElse label result thenBody elseBody =>
     let arr := arr.push opIf
     let arr := encodeBlockType arr result
-    let innerLabels := ("", 0) :: labels
+    let innerLabels := (label, 0) :: labels
     let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
     let arr := if elseBody.isEmpty then arr else
       (arr.push opElse) |> fun a => elseBody.foldl (fun a' i => encodeInstr a' resolveCall innerLabels i) a

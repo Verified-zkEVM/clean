@@ -110,8 +110,8 @@ def block (label : String) (body : List Instr) : Instr := .block label none body
 def loop (label : String) (body : List Instr) : Instr := .loop label none body
 def br (label : String) : Instr := .br label
 def br_if (label : String) : Instr := .brIf label
-def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse t thenB elseB
-def ifNone (thenB elseB : List Instr) : Instr := .ifElse none thenB elseB
+def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse "" t thenB elseB
+def ifNone (thenB elseB : List Instr) : Instr := .ifElse "" none thenB elseB
 
 /-! ## Single-word field arithmetic (numWords=1) -/
 
@@ -138,7 +138,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
       locals := [("$d", .i64)]
       body := [local.get 0, local.get 1, i64.sub, local.tee 2,
                i64.const 0, i64.lt_s,
-               .ifElse (some .i64)
+               .ifElse "" (some .i64)
                  [local.get 2, i64.const pVal, i64.add]
                  [local.get 2],
                i64.const pVal, i64.rem_u] }
@@ -155,7 +155,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
                    local.get 4, i64.eqz, br_if "done",
                    local.get 4, i64.const 1, i64.and,
                    i64.eqz,
-                   .ifElse none [] [local.get 2, local.get 3, call "$fmul", local.set 2],
+                   .ifElse "" none [] [local.get 2, local.get 3, call "$fmul", local.set 2],
                    local.get 3, local.get 3, call "$fmul", local.set 3,
                    local.get 4, i64.const 1, i64.shr_u, local.set 4,
                    br "loop"
@@ -361,7 +361,7 @@ def genFmul (p numWords : ℕ) : Func :=
         local.get (q1Base+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
         local.get brIdx, i64.and, i64.or, local.set brIdx ])
     ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
-         .ifElse none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
+         .ifElse "" none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
 
   -- Build return sequence. In WASM multi-value returns, the first result type
   -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
@@ -428,7 +428,7 @@ def genFadd (p numWords : ℕ) : Func :=
   -- If no borrow (r >= p), copy tmp to result. Return in reverse order.
   let condSub : List Instr :=
     [ local.get brIdx, i64.eqz,
-      .ifElse none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
+      .ifElse "" none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
@@ -516,7 +516,7 @@ structure VarMap where
   numWords : ℕ := 1
 deriving Inhabited
 
-def VarMap.init (numInputs : ℕ) (numWords : ℕ := 1) : VarMap :=
+def VarMap.init (numInputs : ℕ) (numWords : ℕ) : VarMap :=
   { env := List.range numInputs |>.map fun i => (i, i * numWords)
     nextLocal := numInputs * numWords
     numWords }
@@ -595,7 +595,7 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
     let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
     -- Load the chosen branch's result back onto the stack (lowest limb first).
     let loadBack : List Instr := (List.range nw).map fun w => local.get (tmpBase + w)
-    pure (cond.push (.ifElse none (thenCB.build ++ captureAll) (elseCB.build ++ captureAll)) |>.pushList loadBack)
+    pure (cond.push (.ifElse "" none (thenCB.build ++ captureAll) (elseCB.build ++ captureAll)) |>.pushList loadBack)
   | .ofNat n, cb => do
     let nw := vm.numWords
     let cb ← compileNExpr vm n cb
@@ -656,7 +656,7 @@ def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeB
     let cond ← compileBExpr vm c cb
     let thenCB ← compileNExpr vm t {}
     let elseCB ← compileNExpr vm e {}
-    pure (cond.push (.ifElse (some .i64) thenCB.build elseCB.build))
+    pure (cond.push (.ifElse "" (some .i64) thenCB.build elseCB.build))
 
 /-- Conditions compile to `i32`, the native WASM boolean type.
     WASM relops on i64 operands already return i32, so no conversions are needed. -/

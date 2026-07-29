@@ -42,7 +42,7 @@ inductive Instr
   | loop (label : String) (result : Option ValType) (body : List Instr)
   | br (label : String)
   | brIf (label : String)
-  | ifElse (result : Option ValType) (thenBody : List Instr) (elseBody : List Instr)
+  | ifElse (label : String) (result : Option ValType) (thenBody : List Instr) (elseBody : List Instr)
   | memLoad (t : ValType) (offset : ℕ) (align : ℕ)
   | memStore (t : ValType) (offset : ℕ) (align : ℕ)
   | drop | select | unreachable | nop | return
@@ -110,14 +110,14 @@ def Instr.toString (i : Instr) (indent : ℕ := 0) : String :=
     pad ++ "loop $" ++ label ++ resultStr ++ "\n" ++ bodyListToString body (indent+1) ++ "\n" ++ pad ++ "end"
   | .br label => pad ++ "br $" ++ label
   | .brIf label => pad ++ "br_if $" ++ label
-  | .ifElse result thenBody elseBody =>
+  | .ifElse label result thenBody elseBody =>
     let resultStr := match result with
       | none => ""
       | some t => s!" (result {ValType.toString t})"
     let thenStr := bodyListToString thenBody (indent+1)
     let elseStr := if elseBody.isEmpty then "" else
       s!"\n{pad}else\n{bodyListToString elseBody (indent+1)}"
-    s!"{pad}if{resultStr}\n{thenStr}{elseStr}\n{pad}end"
+    s!"{pad}if $" ++ label ++ resultStr ++ "\n" ++ thenStr ++ elseStr ++ "\n" ++ pad ++ "end"
   | .memLoad t offset _ => s!"{pad}{ValType.toString t}.load offset={offset}"
   | .memStore t offset _ => s!"{pad}{ValType.toString t}.store offset={offset}"
   | .drop => s!"{pad}drop"
