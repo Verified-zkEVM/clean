@@ -238,16 +238,27 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     intro i; rw [h_z_get i]; exact h_z i
   exact spec_of_constraint input_a input_b input_c z ha hb hc h_eq'
 
+/-- `simp` does not unfold the `GetElem` instance that indexes a variable vector by a
+witness-IR index, so spell out the resulting `listGet`. -/
+private lemma getElem_nexpr {F : Type} {n : ℕ} (v : Vector (Expression F) n)
+    (i : Witgen.NExpr F) :
+    v[i] = Witgen.FExpr.listGet (v.toList.map Witgen.FExpr.expr) i := rfl
+
+/-- `simp` does not unfold the `Sub (Witgen.FExpr F)` instance, so spell out how `-` on
+witness-IR expressions evaluates. -/
+private lemma fexpr_eval_sub (ctx : Witgen.Ctx (F p)) (x y : Witgen.FExpr (F p)) :
+    Witgen.FExpr.eval ctx (x - y)
+      = Witgen.FExpr.eval ctx x - Witgen.FExpr.eval ctx y := by
+  show Witgen.FExpr.eval ctx (.add x (.mul (.const (-1)) y)) = _
+  simp only [Witgen.FExpr.eval]
+  ring
+
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
-  simp only [Fin.isLt, reduceDIte] at h_env
+  simp only [getElem_nexpr, fexpr_eval_sub, circuit_norm, Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
-  · have := (h_env.1) i
-    simp only [circuit_norm] at this
-    rw [this]; ring
-  · have := (h_env.2.1) i
-    simp only [circuit_norm] at this
-    rw [this]; ring
+  · rw [h_env.1 i]; ring
+  · rw [h_env.2.1 i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

@@ -128,6 +128,10 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   circuit_proof_start [ByteXorTable]
   simp_all only [true_and]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  obtain ⟨ h_x, h_y ⟩ := h_input
+  -- resolve the witness IR expression into the OR of the input values
+  rw [show Witgen.NExpr.eval { env := env } (input_var_x.val ||| input_var_y.val)
+    = ZMod.val input_x ||| ZMod.val input_y by rw [← h_x, ← h_y]; rfl]
   set w : F p := ZMod.val input_x ||| ZMod.val input_y
   have hw : w = ZMod.val input_x ||| ZMod.val input_y := rfl
 

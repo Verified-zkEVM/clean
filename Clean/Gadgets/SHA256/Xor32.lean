@@ -95,6 +95,12 @@ private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i =
     rw [Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le (Nat.xor_lt_two_pow hfS hgS) pow_le),
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hfgS pow_le)]
 
+/-- `simp` does not unfold the `XorOp (Witgen.NExpr F)` instance, so spell out how
+`^^^` on witness-IR expressions evaluates. -/
+private lemma nexpr_eval_xor (ctx : Witgen.Ctx (F p)) (x y : Witgen.NExpr (F p)) :
+    Witgen.NExpr.eval ctx (x ^^^ y)
+      = Witgen.NExpr.eval ctx x ^^^ Witgen.NExpr.eval ctx y := rfl
+
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
   elaborate_circuit
 
@@ -147,7 +153,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
   have henv := h_env i
-  simp only [circuit_norm] at henv
+  simp only [nexpr_eval_xor, circuit_norm] at henv
   rw [h_ai i, h_bi i] at henv
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
       input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
