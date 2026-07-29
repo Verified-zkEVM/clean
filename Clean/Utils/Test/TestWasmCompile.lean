@@ -160,6 +160,15 @@ def letStepOps : List (Operation (F p1009)) :=
       cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
     }
     if snarkOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {snarkOut.stderr}"
-    IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs wtns ({binary.size} bytes WASM)"
+    -- Verify different inputs produce different outputs (hash behavior)
+    for input in ["0", "1", "5"] do
+      IO.FS.writeFile (System.FilePath.mk "/tmp/poseidon1_input.json") (String.intercalate "" ["{\"in\": \"", input, "\"}"])
+      let r ← IO.Process.output {
+        cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
+      }
+      if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs input={input}: {r.stderr}"
+      let wtnsBytes ← IO.FS.readBinFile (System.FilePath.mk "/tmp/poseidon1_witness.wtns")
+      if wtnsBytes.size < 100 then throw <| IO.userError s!"FAIL: witness too small for input={input}"
+    IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs wtns (3 inputs, {binary.size} bytes WASM)"
 
 end TestWasmCompile
