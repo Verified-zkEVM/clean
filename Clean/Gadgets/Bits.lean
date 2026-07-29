@@ -59,7 +59,6 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
       intro i hi
       simp only [circuit_norm, bit_vars]
       rw [h_env ⟨ i, hi ⟩, getElem_fieldToBits]
-      simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, circuit_norm, h_input]
 
     show input = env (fieldFromBitsExpr bit_vars)
     rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
