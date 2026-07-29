@@ -104,7 +104,7 @@ theorem natToField_val {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
-def less_than_p (x : F p) : x.val < p := by
+theorem less_than_p (x : F p) : x.val < p := by
   rcases p with _ | n; cases p_ne_zero rfl
   exact x.is_lt
 

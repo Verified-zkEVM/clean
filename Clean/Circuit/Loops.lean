@@ -701,7 +701,6 @@ lemma mapFinRange.operations_eq : (mapFinRange m body constant).operations n =
   rw [mapFinRange, Vector.mapFinRangeM, MapM.operations_eq]
   simp only [Vector.getElem_finRange]
   congr! with i
-  change constant.localLength = (body 0).localLength 0
   rw [constant.localLength_eq 0 0]
 
 @[circuit_norm ↓]
@@ -1133,7 +1132,6 @@ def from_mapFinRange {m : ℕ} [NeZero m]
     rw [show (List.ofFn fun i : Fin m => (body i).operations (n + ↑i * (body 0).localLength)).flatten =
         (List.ofFn fun i : Fin m => (body i).operations (n + ↑i * constant.localLength)).flatten by
       congr! with i
-      change (body 0).localLength 0 = constant.localLength
       rw [constant.localLength_eq 0 0]]
     rw [Circuit.forAll_flatten_abstract (circuit:=body) constant]
     intro i
@@ -1231,7 +1229,6 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
         (body (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
           (n + ↑i * constant.localLength)).flatten by
       congr! with i
-      change (body default default).localLength 0 = constant.localLength
       rw [constant.localLength_eq (default, default) 0]]
     rw [Circuit.FoldlM.forAll_flatten_foldl (circuit:=body) (constant:=constant)]
     intro i
