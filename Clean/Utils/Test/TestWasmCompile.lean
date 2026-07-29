@@ -41,7 +41,7 @@ def expectError (label needle : String) (r : Except String String) : IO Unit :=
   (compileModule p1009 0 ([] : List (Operation (F p1009))) 1)
 
 #eval! expectOk "empty circuit R1CS exports" "\"n8\""
-  (compileR1CS p1009 0 ([] : List (Operation (F p1009))))
+  (compileR1CS p1009 0 0 ([] : List (Operation (F p1009))) 1)
 
 /-! ## numWords validation -/
 
@@ -66,7 +66,7 @@ def assertOps : List (Operation (F p1009)) :=
    .assert (.add (.var ⟨1⟩) (.mul (.const (-1)) (.var ⟨0⟩)))]
 
 #eval! expectOk "assert exports a constraint" "nConstraints"
-  (compileR1CS p1009 1 assertOps)
+  (compileR1CS p1009 1 1 assertOps 1)
 
 /-! ## Unsupported constructs are rejected with errors -/
 
@@ -74,7 +74,7 @@ def assertOps : List (Operation (F p1009)) :=
   (compileModule p1009 0
     ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))) 1)
 
-#eval! expectError "append is rejected" "append"
+#eval! expectOk "append compiles" "getWitness"
   (compileModule p1009 0
     ([.witness 2 (.ir [] (.append (.lit #v[.const 0]) (.lit #v[.const 1])))] :
       List (Operation (F p1009))) 1)
@@ -83,14 +83,14 @@ def assertOps : List (Operation (F p1009)) :=
   (compileModule p1009 0
     ([.witness 1 (.ir [] (.lit #v[.envGet (.const 0)]))] : List (Operation (F p1009))) 1)
 
-#eval! expectError "multi-word val is rejected" "val"
+#eval! expectOk "multi-word val compiles" "getWitness"
   (compileModule Specs.Poseidon.BN254_PRIME 0
     ([.witness 1 (.ir [.letN (.val (.const 1))] (.lit #v[.const 0]))] :
       List (Operation Specs.Poseidon.F)) 4)
 
 #eval! expectError "R1CS rejects native witness" "native"
-  (compileR1CS p1009 0
-    ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))))
+  (compileR1CS p1009 0 0
+    ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))) 1)
 
 /-! ## let-step indexing: steps don't shift circuit variable indices -/
 
@@ -108,6 +108,6 @@ def letStepOps : List (Operation (F p1009)) :=
   (compileModule p1009 1 letStepOps 1)
 
 #eval! expectOk "let-step R1CS exports" "\"nConstraints\""
-  (compileR1CS p1009 1 letStepOps)
+  (compileR1CS p1009 1 1 letStepOps 1)
 
 end TestWasmCompile

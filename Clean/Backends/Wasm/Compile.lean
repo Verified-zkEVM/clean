@@ -22,6 +22,39 @@ open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
 variable {F : Type} [FiniteField F]
 
+/-! ## Named constants -/
+
+-- Memory / signal layout
+private def srwmBaseAddress  : ℕ := 4   -- offset past 4-byte computed flag
+private def bytesPerI32      : ℕ := 4   -- 32-bit word width in bytes
+private def bytesPerI64      : ℕ := 8   -- 64-bit word width in bytes
+private def alignmentI32     : ℕ := 2   -- i32 alignment exponent (2^2 = 4)
+private def alignmentI64     : ℕ := 3   -- i64 alignment exponent (2^3 = 8)
+private def wasmPageSize     : ℕ := 65536
+private def wasmPageMask     : ℕ := 65535
+
+-- Limb / word arithmetic
+private def limbBits         : ℕ := 64
+private def limbModulus      : ℕ := 2^64
+private def low32Mask        : ℕ := 0xFFFFFFFF
+private def hiWordShift      : ℕ := 32
+
+-- Validation
+private def singleWordPrimeMax : ℕ := 2^32
+private def maxI64Const      : ℕ := 2^64
+
+-- snarkjs ABI
+private def snarkjsProtocolVersion : ℕ := 2
+private def snarkjsMinorVersion    : ℕ := 0
+private def snarkjsPatchVersion    : ℕ := 0
+
+-- WASM locals layout
+private def getWitnessFixedLocals : ℕ := 3  -- $i(0), $tmp(1), $idx(2)
+private def numScratchLocals      : ℕ := 4  -- lo, hi, carry, sum
+
+-- R1CS signal numbering (signal 0 = constant 1)
+private def r1csSignalOffset : ℕ := 1
+
 /-! ## Instruction builder -/
 
 structure CodeBuilder where
@@ -58,8 +91,8 @@ def i64.extend_i32_u : Instr := .unop .i64 .extend_i32_u
 
 -- i32 operations
 def i32.const (n : ℕ) : Instr := .const .i32 n
-def i32.load (off : ℕ := 0) : Instr := .memLoad .i32 off 2
-def i32.store (off : ℕ := 0) : Instr := .memStore .i32 off 2
+def i32.load (off : ℕ := 0) : Instr := .memLoad .i32 off alignmentI32
+def i32.store (off : ℕ := 0) : Instr := .memStore .i32 off alignmentI32
 def i32.wrap_i64 : Instr := .unop .i32 .wrap_i64
 def i32.eqz : Instr := .relop .i32 .eqz
 def i32.mul : Instr := .binop .i32 .mul
@@ -154,19 +187,19 @@ def genMul64x64 : Func :=
                ("$p00", .i64), ("$p01", .i64), ("$p10", .i64), ("$p11", .i64),
                ("$lo", .i64), ("$hi", .i64), ("$tmp", .i64)]
     body :=
-      [ local.get _a, i64.const 0xFFFFFFFF, i64.and, local.set a_lo,
-        local.get _a, i64.const 32, i64.shr_u, local.set a_hi,
-        local.get _b, i64.const 0xFFFFFFFF, i64.and, local.set b_lo,
-        local.get _b, i64.const 32, i64.shr_u, local.set b_hi ]
+      [ local.get _a, i64.const low32Mask, i64.and, local.set a_lo,
+        local.get _a, i64.const hiWordShift, i64.shr_u, local.set a_hi,
+        local.get _b, i64.const low32Mask, i64.and, local.set b_lo,
+        local.get _b, i64.const hiWordShift, i64.shr_u, local.set b_hi ]
       ++ [ local.get a_lo, local.get b_lo, i64.mul, local.set p00 ]
       ++ [ local.get a_lo, local.get b_hi, i64.mul, local.set p01 ]
       ++ [ local.get a_hi, local.get b_lo, i64.mul, local.set p10 ]
       ++ [ local.get a_hi, local.get b_hi, i64.mul, local.set p11 ]
       -- Compute v1+v2 first, detect overflow (carry1)
-      ++ [ local.get p01, i64.const 0xFFFFFFFF, i64.and, i64.const 32, i64.shl,
-           local.get p10, i64.const 0xFFFFFFFF, i64.and, i64.const 32, i64.shl,
+      ++ [ local.get p01, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
+           local.get p10, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
            i64.add, local.tee tmp,
-           local.get p01, i64.const 0xFFFFFFFF, i64.and, i64.const 32, i64.shl,
+           local.get p01, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
            i64.lt_u, i64.extend_i32_u, local.set hi ]  -- carry1 in hi temporarily
       -- lo = p00 + tmp, detect carry2
       ++ [ local.get p00, local.get tmp, i64.add, local.set lo,
@@ -174,8 +207,8 @@ def genMul64x64 : Func :=
            local.get hi, i64.add, local.set hi ]  -- hi = carry1 + carry2
       -- Add high parts: hi += p11 + (p01>>32) + (p10>>32)
       ++ [ local.get hi, local.get p11, i64.add,
-           local.get p01, i64.const 32, i64.shr_u, i64.add,
-           local.get p10, i64.const 32, i64.shr_u, i64.add,
+           local.get p01, i64.const hiWordShift, i64.shr_u, i64.add,
+           local.get p10, i64.const hiWordShift, i64.shr_u, i64.add,
            local.set hi ]
       ++ [ local.get lo, local.get hi ]
   }
@@ -564,12 +597,17 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
     let loadBack : List Instr := (List.range nw).map fun w => local.get (tmpBase + w)
     pure (cond.push (.ifElse none (thenCB.build ++ captureAll) (elseCB.build ++ captureAll)) |>.pushList loadBack)
   | .ofNat n, cb => do
-    if vm.numWords ≠ 1 then
-      throw s!"compileFExpr: ofNat is not yet supported for multi-word fields (numWords = {vm.numWords})"
+    let nw := vm.numWords
     let cb ← compileNExpr vm n cb
-    -- Reduce into the canonical representative: fromNat n = n mod p.
-    -- `$fadd n 0` computes (n + 0) mod p without needing the prime here.
-    pure (cb.push (i64.const 0) |>.push (call "$fadd"))
+    -- NExpr produces a single i64. Zero-extend to nw limbs, then reduce mod p via $fadd.
+    if nw = 1 then
+      pure (cb.push (i64.const 0) |>.push (call "$fadd"))
+    else
+      -- Push nw-1 zero limbs (deepest first), then the NExpr result as limb 0
+      let cb := (List.replicate (nw-1) (i64.const 0)).foldl (fun cb' i => cb'.push i) cb
+      -- Now push nw zero limbs for the second operand of $fadd
+      let cb := (List.range nw).foldl (fun cb' _ => cb'.push (i64.const 0)) cb
+      pure (cb.push (call "$fadd"))
   | .localVar i, cb => pure (pushStepVar (vm.letBase + i * vm.numWords) vm.numWords cb)
   | .envGet _, _ => .error "compileFExpr: envGet is not yet supported"
   | .listGet _ _, _ => .error "compileFExpr: listGet is not yet supported"
@@ -578,13 +616,18 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
 
 def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeBuilder
   | .const n, cb =>
-    if n < 2^64 then pure (cb.push (i64.const n))
+    if n < maxI64Const then pure (cb.push (i64.const n))
     else .error s!"compileNExpr: constant {n} does not fit in 64 bits"
   | .val x, cb =>
-    -- Naturals are single i64 words; a multi-word field element cannot be
-    -- narrowed to one word, so `val` requires numWords = 1.
+    -- Extracts the integer representative of a field element.
+    -- For multi-word, compile the FExpr (pushes nw limbs), keep only limb 0
+    -- (the lowest 64 bits of the integer representative).
     if vm.numWords = 1 then compileFExpr vm x cb
-    else .error s!"compileNExpr: val is not yet supported for multi-word fields (numWords = {vm.numWords})"
+    else do
+      let cb ← compileFExpr vm x cb
+      -- Drop upper nw-1 limbs, keeping only limb 0 on the stack
+      let drops := List.replicate (vm.numWords - 1) Instr.drop
+      pure (cb.pushList drops)
   | .idx, cb =>
     -- mapRange loops are unrolled at compile time, so the index is a constant.
     match vm.loopIdx with
@@ -621,12 +664,26 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
   | .true, cb => pure (cb.push (i32.const 1))
   | .false, cb => pure (cb.push (i32.const 0))
   | .feq a e, cb => do
-    -- Single i64 equality decides field equality only when elements are one word.
-    if vm.numWords ≠ 1 then
-      throw s!"compileBExpr: feq is not yet supported for multi-word fields (numWords = {vm.numWords})"
-    let cb ← compileFExpr vm a cb
-    let cb ← compileFExpr vm e cb
-    pure (cb.push i64.eq)
+    let nw := vm.numWords
+    if nw = 1 then do
+      let cb ← compileFExpr vm a cb
+      let cb ← compileFExpr vm e cb
+      pure (cb.push i64.eq)
+    else do
+      -- Multi-word: capture both operands to temp locals, compare pairwise, AND-reduce.
+      let tmpBase := vm.nextLocal
+      let eCB ← compileFExpr vm e {}
+      let aCB ← compileFExpr vm a {}
+      -- Capture: highest limb first (reverse order matches stack top)
+      let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
+      -- Compare pairwise: a_i vs e_i, producing i32 results (i64.eq gives i32)
+      let cmpAll : List Instr := (List.range nw) >>= fun i =>
+        [ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.eq ]
+      -- AND-reduce all comparison results
+      let andAll : List Instr := (List.range (nw-1)).map fun _ => i64.and
+      pure (cb.pushList eCB.build |>.pushList captureE |>.pushList aCB.build |>.pushList captureA
+              |>.pushList cmpAll |>.pushList andAll |>.push i32.wrap_i64)
   | .lt a e, cb => do
     let cb ← compileNExpr vm a cb
     let cb ← compileNExpr vm e cb
@@ -708,7 +765,7 @@ def loadSignal (i signalBase signalBytes numWords : ℕ) : List Instr :=
   else
     -- Load each limb from signal memory: signalBase + i*signalBytes + w*4
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + i * signalBytes + w * 8), .memLoad .i64 0 3 ]
+      [ i32.const (signalBase + i * signalBytes + w * 8), .memLoad .i64 0 alignmentI64 ]
 
 /-- Push a Nat constant as nw i64 limbs. -/
 def pushCoeff (c numWords : ℕ) : List Instr :=
@@ -762,7 +819,7 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
       let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (base + w)
       let storeAll : List Instr := (List.range nw) >>= fun w =>
         [ i32.const (signalBase + k * signalBytes + w * 8),
-          local.get (base + w), .memStore .i64 0 3 ]
+          local.get (base + w), .memStore .i64 0 alignmentI64 ]
       let localNames : List (String × ValType) :=
         (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
       let computeInstrs : List Instr := laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll ++ storeAll
@@ -828,7 +885,11 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
       pure (is ++ cb.build ++ capture)
     ) acc
     pure (vmOut, vi + n, instrs)
-  | _, .append _ _ => .error "compileVExpr: append is not yet supported"
+  | _, .append a b => do
+    -- Compile first segment (produces m elements at vi..vi+m-1),
+    -- then second segment (produces n elements at vi+m..vi+m+n-1).
+    let (vm', vi', instrs') ← compileVExpr vm vi acc a
+    compileVExpr vm' vi' instrs' b
 
 /-- process flat operations, accumulating instructions.
     `vi` tracks the next circuit-variable index (input count + sum of witness sizes).
@@ -850,8 +911,10 @@ def processFlatOps (numInputs : ℕ) :
     -- Lookups constrain existing values and allocate no witnesses,
     -- so witness generation ignores them.
     processFlatOps numInputs rest vm vi acc
-  | .interact _ :: _, _, _, _ =>
-    .error "processFlatOps: interactions are not supported by the WASM backend"
+  | .interact _ :: rest, vm, vi, acc =>
+    -- Interactions constrain values through channels but allocate no witnesses,
+    -- so witness generation ignores them (like lookups).
+    processFlatOps numInputs rest vm vi acc
 
 /-- Compile to a WASM module in WAT text form. This is the main entry point.
     `numWords` must be at least `ceil(bitLength(fieldPrime) / 64)`, and
@@ -866,7 +929,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- to avoid i64.mul overflow, i.e., p <= 2^32.
   let primeBits := Nat.log2 fieldPrime + 1
   let minWords := (primeBits + 63) / 64
-  if nw = 1 ∧ fieldPrime > 2^32 then
+  if nw = 1 ∧ fieldPrime > singleWordPrimeMax then
     throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords 2}"
   if nw * 64 < primeBits then
     throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
@@ -880,7 +943,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let witnessCount := finalVarIdx - numInputs
   let witnessWords := finalVm.nextLocal - numInputs * nw
   let n32 := nw * 2
-  let srwmBase := 4
+  let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
   let signalBaseRaw := 4 + n32 * 4
   let signalBase := ((signalBaseRaw + 7) / 8) * 8
@@ -889,7 +952,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
   -- Each intermediate uses nw consecutive locals
-  let intLocalBase := 3 + numInputs * nw
+  let intLocalBase := getWitnessFixedLocals + numInputs * nw
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
@@ -902,7 +965,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
         local.get (wasmBase + w),
-        .memStore .i64 0 3 ]
+        .memStore .i64 0 alignmentI64 ]
   -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
     (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
@@ -920,7 +983,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
-        .memLoad .i64 0 3,
+        .memLoad .i64 0 alignmentI64,
         local.set (3 + i * nw + w) ]
   -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
@@ -989,8 +1052,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
         -- Read 64-bit value from SRWM: low 32 bits at srwmBase, high 32 at srwmBase+4
         i32.const srwmBase, .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
         i32.const (srwmBase + 4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-        i64.const 32, i64.shl, i64.or,
-        .memStore .i64 0 3
+        i64.const hiWordShift, i64.shl, i64.or,
+        .memStore .i64 0 alignmentI64
       ] },
     { name := "$getWitness"
       exportName := some "getWitness"
@@ -1005,7 +1068,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$getVersion"
       exportName := some "getVersion"
       results := [.i32]
-      body := [i32.const 2] },
+      body := [i32.const snarkjsProtocolVersion] },
     { name := "$getMinorVersion"
       exportName := some "getMinorVersion"
       results := [.i32]
@@ -1026,7 +1089,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- Assemble module. Compute required memory pages for the signal array.
   let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
   let memNeeded := signalBase + totalSignals * signalBytes
-  let memPages := (memNeeded + 65535) / 65536  -- ceil division
+  let memPages := (memNeeded + wasmPageMask) / wasmPageSize  -- ceil division
   let module : Ast.Module := {
     memoryPages := memPages
     dataSegments := [(signalBase, signalInit)]
@@ -1045,7 +1108,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   -- to avoid i64.mul overflow, i.e., p <= 2^32.
   let nw := numWords
   let primeBits := Nat.log2 fieldPrime + 1
-  if nw = 1 ∧ fieldPrime > 2^32 then
+  if nw = 1 ∧ fieldPrime > singleWordPrimeMax then
     let minWords := max ((primeBits + 63) / 64) 2
     throw s!"compileModuleBinary: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {minWords}"
   if nw * 64 < primeBits then
@@ -1059,7 +1122,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   let witnessWords := finalVm.nextLocal - numInputs * nw
   let witnessCount := witnessWords / nw
   let n32 := nw * 2
-  let srwmBase := 4
+  let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
   let signalBaseRaw := 4 + n32 * 4
   let signalBase := ((signalBaseRaw + 7) / 8) * 8
@@ -1068,7 +1131,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
   -- Each intermediate uses nw consecutive locals
-  let intLocalBase := 3 + numInputs * nw
+  let intLocalBase := getWitnessFixedLocals + numInputs * nw
   let (numInt, intLocals, intCode) :=
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
@@ -1079,7 +1142,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
         local.get (numInputs * nw + i * nw + w),
-        .memStore .i64 0 3 ]
+        .memStore .i64 0 alignmentI64 ]
   -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
     (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
@@ -1097,7 +1160,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
-        .memLoad .i64 0 3,
+        .memLoad .i64 0 alignmentI64,
         local.set (3 + i * nw + w) ]
   -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
@@ -1166,8 +1229,8 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
         -- Read 64-bit value from SRWM: low 32 bits at srwmBase, high 32 at srwmBase+4
         i32.const srwmBase, .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
         i32.const (srwmBase + 4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-        i64.const 32, i64.shl, i64.or,
-        .memStore .i64 0 3
+        i64.const hiWordShift, i64.shl, i64.or,
+        .memStore .i64 0 alignmentI64
       ] },
     { name := "$getWitness"
       exportName := some "getWitness"
@@ -1182,7 +1245,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
     { name := "$getVersion"
       exportName := some "getVersion"
       results := [.i32]
-      body := [i32.const 2] },
+      body := [i32.const snarkjsProtocolVersion] },
     { name := "$getMinorVersion"
       exportName := some "getMinorVersion"
       results := [.i32]
@@ -1203,7 +1266,7 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
   -- Assemble module. Compute required memory pages for the signal array.
   let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
   let memNeeded := signalBase + totalSignals * signalBytes
-  let memPages := (memNeeded + 65535) / 65536  -- ceil division
+  let memPages := (memNeeded + wasmPageMask) / wasmPageSize  -- ceil division
   let module : Ast.Module := {
     memoryPages := memPages
     dataSegments := [(signalBase, signalInit)]

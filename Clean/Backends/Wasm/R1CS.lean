@@ -72,10 +72,11 @@ Returns a pretty-printed JSON string, or an error for operations that cannot
 be represented in R1CS (lookups, interactions) or witness IR the WASM
 backend cannot compile.
 -/
-def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Except String String := do
+def compileR1CS (fieldPrime numInputs numOutputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+    Except String String := do
   let flatOps := Operations.toFlat ops
-  -- Use the WASM compiler's VarMap to get the same signal layout
-  let vm := VarMap.init numInputs
+  -- Use the WASM compiler’s VarMap to get the same signal layout
+  let vm := VarMap.init numInputs numWords
   let (_, finalVarIdx, _) ← processFlatOps numInputs flatOps vm numInputs []
   -- finalVarIdx = numInputs + total witness outputs (steps don’t count)
   let witnessCount := finalVarIdx - numInputs
@@ -84,11 +85,13 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Except
   let (allConstraints, nVars) ← processOps vm flatOps st
   let ps := toString fieldPrime
   let constraintsArr := Json.arr (allConstraints.reverse.map constraintToJson |>.toArray)
+  let primeBits := Nat.log2 fieldPrime + 1
+  let n8 : ℕ := (primeBits + 7) / 8
   let json := Json.mkObj [
-    ("n8", Json.num 32),
+    ("n8", Json.num n8),
     ("prime", Json.str ps),
     ("nVars", Json.num nVars),
-    ("nOutputs", Json.num 1),
+    ("nOutputs", Json.num numOutputs),
     ("nPubInputs", Json.num numInputs),
     ("nPrvInputs", Json.num 0),
     ("nLabels", Json.num nVars),
