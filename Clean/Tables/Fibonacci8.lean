@@ -83,14 +83,38 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   -- simplify constraints
   simp only [boundaryFib]
   simp_assign_row
-  simp only [circuit_norm, table_norm, Nat.reduceAdd, Nat.reduceMod, zero_add, neg_eq_zero]
+  simp only [circuit_norm, table_norm, pure, MonadLift.monadLift, Nat.reduceAdd, Nat.reduceMod]
   intro ⟨ boundary1, boundary2 ⟩
 
   have hx : first_row.x = env.get 0 := by rfl
   have hy : first_row.y = env.get 1 := by rfl
+  replace boundary1 : env.get 0 = 0 := (sub_eq_zero.mp boundary1).symm
   replace boundary2 : env.get 1 = 1 := (sub_eq_zero.mp boundary2).symm
-  rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
+  simp only [hx, hy, boundary1, boundary2, ZMod.val_zero, ZMod.val_one, fib8]
   trivial
+
+lemma fibRelation_assignment_vars :
+    (fibRelation (p:=p)).finalAssignment.vars =
+      #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .aux 2] := by
+  simp only [fibRelation, TableConstraint.finalAssignment, table_assignment_norm, circuit_norm,
+    copyToVar, Gadgets.Addition8.circuit, pure, MonadLift.monadLift, explicit_provable_type]
+  simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  rfl
+
+lemma fibRelation_assignment : (fibRelation (p:=p)).finalAssignment =
+    { offset := 5, aux_length := 3,
+      vars := #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .aux 2] } := by
+  rw [← fibRelation_assignment_vars (p:=p)]
+  rfl
+
+lemma fibRelation_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+    let env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env
+    env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
+      env.get 2 = next.x ∧ env.get 3 = next.y := by
+  intro env
+  simp only [env, windowEnv, fibRelation_assignment, fibRelation_assignment_vars]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  all_goals rfl
 
 -- TODO(4.30 bump): the new isDefEq transparency rules make the heavyweight table
 -- elaboration (offset_consistent autoParam, windowEnv defeq) time out; scoped legacy mode.
@@ -133,24 +157,11 @@ def formalFibTable : FormalTable (F p) RowType := {
       set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs.toEnvironment 1 (rest.len + 1))
 
       simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
-          Gadgets.Addition8.circuit] at ConstraintsHold
+          pure, MonadLift.monadLift, Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
+      simp only [explicit_provable_type, circuit_norm] at ConstraintsHold
 
-      -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
-      -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
-      -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
-      have env_simp : env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
-                      env.get 2 = next.x ∧ env.get (2 + 1) = next.y := by
-        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
-          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
-        refine ⟨?_, ?_, ?_, ?_⟩
-        all_goals simp only [Vector.toList_mk, List.getElem_set, ite_true,
-          Vector.mapFinRange_zero, Vector.mapFinRange_succ,
-          Vector.mapRange_zero, Vector.mapRange_succ]
-        · simp only [dif_pos (by omega : 0 < 5)]; rfl
-        · simp only [dif_pos (by omega : 1 < 5)]; rfl
-        · simp only [dif_pos (by omega : 2 < 5)]; rfl
-        · simp only [dif_pos (by omega : 2 + 1 < 5)]; rfl
+      have env_simp := fibRelation_vars curr next (envs.toEnvironment 1 (rest.len + 1))
       rw [env_simp.1, env_simp.2.1, env_simp.2.2.1, env_simp.2.2.2] at ConstraintsHold
       clear env_simp
 

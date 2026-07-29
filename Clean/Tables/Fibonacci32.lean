@@ -117,12 +117,10 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32,
-    MonadLift.monadLift]
+  simp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit,
+    assignU32, pure, MonadLift.monadLift, explicit_provable_type]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
     Vector.mapRange_zero, Vector.mapRange_succ, FormalCircuitBase.localLength]
-  simp
-  simp +instances only [circuit_norm]
   rfl
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
