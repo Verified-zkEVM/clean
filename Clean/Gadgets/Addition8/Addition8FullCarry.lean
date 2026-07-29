@@ -126,6 +126,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
+    obtain ⟨x_var, y_var, carry_in_var⟩ := input
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
       Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
