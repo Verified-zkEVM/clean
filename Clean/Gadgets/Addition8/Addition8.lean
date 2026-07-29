@@ -37,8 +37,8 @@ Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
 def circuit : FormalCircuit (F p) Inputs field where
-  main := fun { x, y } =>
-    Addition8Full.circuit { x, y, carryIn := 0 }
+  main := fun input =>
+    Addition8Full.circuit { x := input.x, y := input.y, carryIn := 0 }
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 

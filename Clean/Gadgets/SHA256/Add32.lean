@@ -38,7 +38,8 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
   induction l with
   | nil => rfl
   | cons i l ih =>
-    simp only [List.foldr_cons, circuit_norm, ih]
+    simp only [List.foldr_cons, circuit_norm]
+    exact congrArg _ ih
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
@@ -392,7 +393,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [sub_sub, sub_eq_zero]
     exact hF
 
-def circuit [Fact (p > 2^33)] : FormalCircuit (F p) Inputs (fields 32) where
+def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
 
 end Add32
