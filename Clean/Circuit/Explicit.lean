@@ -224,7 +224,7 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   channelsWithGuarantees _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
-@[explicit_circuit_constructor]
+@[explicit_circuit_constructor, reducible]
 def ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
@@ -288,7 +288,7 @@ theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g :
         ExplicitCircuit.channelsWithGuarantees (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
 
 -- `map` of an explicit circuit yields an explicit circuit
-@[explicit_circuit_constructor]
+@[explicit_circuit_constructor, reducible]
 def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
