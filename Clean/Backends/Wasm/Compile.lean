@@ -13,6 +13,7 @@ import Clean.Circuit.WitnessIR
 import Clean.Circuit.Expression
 import Clean.Circuit.Operations
 import Clean.Backends.Wasm.Ast
+import Clean.Backends.Wasm.Binary
 
 namespace Backends.Wasm
 
@@ -76,9 +77,8 @@ def block (label : String) (body : List Instr) : Instr := .block label none body
 def loop (label : String) (body : List Instr) : Instr := .loop label none body
 def br (label : String) : Instr := .br label
 def br_if (label : String) : Instr := .brIf label
-def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse (match t with | some x => [x] | none => []) thenB elseB
-def ifNone (thenB elseB : List Instr) : Instr := .ifElse [] thenB elseB
-def ifMulti (ts : List ValType) (thenB elseB : List Instr) : Instr := .ifElse ts thenB elseB
+def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse t thenB elseB
+def ifNone (thenB elseB : List Instr) : Instr := .ifElse none thenB elseB
 
 /-! ## Single-word field arithmetic (numWords=1) -/
 
@@ -105,7 +105,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
       locals := [("$d", .i64)]
       body := [local.get 0, local.get 1, i64.sub, local.tee 2,
                i64.const 0, i64.lt_s,
-               .ifElse [ValType.i64]
+               .ifElse (some .i64)
                  [local.get 2, i64.const pVal, i64.add]
                  [local.get 2],
                i64.const pVal, i64.rem_u] }
@@ -122,7 +122,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
                    local.get 4, i64.eqz, br_if "done",
                    local.get 4, i64.const 1, i64.and,
                    i64.eqz,
-                   .ifElse [] [] [local.get 2, local.get 3, call "$fmul", local.set 2],
+                   .ifElse none [] [local.get 2, local.get 3, call "$fmul", local.set 2],
                    local.get 3, local.get 3, call "$fmul", local.set 3,
                    local.get 4, i64.const 1, i64.shr_u, local.set 4,
                    br "loop"
@@ -328,7 +328,7 @@ def genFmul (p numWords : ℕ) : Func :=
         local.get (q1Base+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
         local.get brIdx, i64.and, i64.or, local.set brIdx ])
     ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
-         .ifElse [] ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
+         .ifElse none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
 
   -- Build return sequence. In WASM multi-value returns, the first result type
   -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
@@ -395,7 +395,7 @@ def genFadd (p numWords : ℕ) : Func :=
   -- If no borrow (r >= p), copy tmp to result. Return in reverse order.
   let condSub : List Instr :=
     [ local.get brIdx, i64.eqz,
-      .ifElse [] ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
+      .ifElse none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
     params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
@@ -463,13 +463,22 @@ def genMultiWordArith (p numWords : ℕ) : List Func :=
     `env` is a sparse list of `(circuitVarIndex, wasmLocalIndex)` pairs.
     The fallback in `lookup` assumes a default layout where circuit variable `i`
     maps to WASM local `i * numWords`. This works for inputs (set up by `init`)
-    and for sequentially allocated witnesses. -/
+    and for sequentially allocated witnesses.
+
+    Only true circuit variables (inputs and witness outputs) appear in `env`.
+    Let-steps are allocated in a separate local-index space anchored at `letBase`;
+    they are accessed via `FExpr.localVar` / `NExpr.localVar` using a direct offset,
+    never through `lookup`. -/
 structure VarMap where
   env : List (ℕ × ℕ) := []
   nextLocal : ℕ := 0
   /-- Inside a `mapRange` body, the (compile-time constant) index of the current
       unrolled iteration; `none` outside of any `mapRange`. -/
   loopIdx : Option ℕ := none
+  /-- WASM local index of the first let-step of the current witness op.
+      `FExpr.localVar i` reads `nw` locals at `letBase + i * numWords`;
+      `NExpr.localVar i` reads the low limb at the same position.
+      Steps are dead after their enclosing op, so this is set fresh per op. -/
   letBase : ℕ := 0
   numWords : ℕ := 1
 deriving Inhabited
@@ -506,8 +515,28 @@ def pushVar (idx : ℕ) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   if nw = 1 then cb.push (local.get base)
   else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (base + w))) cb
 
+/-- Push `nw` limbs from a given WASM local base index (no env lookup).
+    Used by `FExpr.localVar` and `NExpr.localVar` for let-step access. -/
+def pushStepVar (baseWasm nw : ℕ) (cb : CodeBuilder) : CodeBuilder :=
+  if nw = 1 then cb.push (local.get baseWasm)
+  else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (baseWasm + w))) cb
+
+/-- Compile an `Expression F` (var, const, add, mul) to WASM instructions.
+    Structurally recursive on the expression tree, mirroring `Expression.eval`. -/
+def compileExpr (vm : VarMap) : Expression F → CodeBuilder → Except String CodeBuilder
+  | .var i, cb => pure (pushVar i.index vm cb)
+  | .const c, cb => pure (pushConst c vm cb)
+  | .add a e, cb => do
+    let cb ← compileExpr vm a cb
+    let cb ← compileExpr vm e cb
+    pure (cb.push (call "$fadd"))
+  | .mul a e, cb => do
+    let cb ← compileExpr vm a cb
+    let cb ← compileExpr vm e cb
+    pure (cb.push (call "$fmul"))
+
 mutual
-partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeBuilder
+def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeBuilder
   | .const c, cb => pure (pushConst c vm cb)
   | .add a e, cb => do
     let cb ← compileFExpr vm a cb
@@ -520,22 +549,20 @@ partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except Stri
   | .inv a, cb => do
     let cb ← compileFExpr vm a cb
     pure (cb.push (call "$finv"))
-  | .expr (.var i), cb => pure (pushVar i.index vm cb)
-  | .expr (.const c), cb => pure (pushConst c vm cb)
-  | .expr (.add a e), cb => do
-    let cb ← compileFExpr vm (.expr a) cb
-    let cb ← compileFExpr vm (.expr e) cb
-    pure (cb.push (call "$fadd"))
-  | .expr (.mul a e), cb => do
-    let cb ← compileFExpr vm (.expr a) cb
-    let cb ← compileFExpr vm (.expr e) cb
-    pure (cb.push (call "$fmul"))
+  | .expr e, cb => compileExpr vm e cb
   | .ite c t e, cb => do
+    let nw := vm.numWords
     let cond ← compileBExpr vm c cb
     let thenCB ← compileFExpr vm t {}
     let elseCB ← compileFExpr vm e {}
-    let results := List.replicate vm.numWords ValType.i64
-    pure (cond.push (.ifElse results thenCB.build elseCB.build))
+    -- Capture each branch's nw-limb result to temporary locals at `vm.nextLocal`.
+    -- The stack has limbs in ascending order (limb₀ deepest, limb_{nw-1} top),
+    -- so `.reverse` stores limbᵢ at `tmpBase + i`.
+    let tmpBase := vm.nextLocal
+    let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+    -- Load the chosen branch's result back onto the stack (lowest limb first).
+    let loadBack : List Instr := (List.range nw).map fun w => local.get (tmpBase + w)
+    pure (cond.push (.ifElse none (thenCB.build ++ captureAll) (elseCB.build ++ captureAll)) |>.pushList loadBack)
   | .ofNat n, cb => do
     if vm.numWords ≠ 1 then
       throw s!"compileFExpr: ofNat is not yet supported for multi-word fields (numWords = {vm.numWords})"
@@ -543,13 +570,13 @@ partial def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except Stri
     -- Reduce into the canonical representative: fromNat n = n mod p.
     -- `$fadd n 0` computes (n + 0) mod p without needing the prime here.
     pure (cb.push (i64.const 0) |>.push (call "$fadd"))
-  | .localVar i, cb => pure (pushVar (vm.letBase + i) vm cb)
+  | .localVar i, cb => pure (pushStepVar (vm.letBase + i * vm.numWords) vm.numWords cb)
   | .envGet _, _ => .error "compileFExpr: envGet is not yet supported"
   | .listGet _ _, _ => .error "compileFExpr: listGet is not yet supported"
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
   | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
 
-partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeBuilder
+def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeBuilder
   | .const n, cb =>
     if n < 2^64 then pure (cb.push (i64.const n))
     else .error s!"compileNExpr: constant {n} does not fit in 64 bits"
@@ -563,7 +590,7 @@ partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except Stri
     match vm.loopIdx with
     | some i => pure (cb.push (i64.const i))
     | none => .error "compileNExpr: idx used outside of a mapRange loop"
-  | .localVar i, cb => pure (cb.push (local.get (vm.lookup (vm.letBase + i))))
+  | .localVar i, cb => pure (cb.push (local.get (vm.letBase + i * vm.numWords)))
   | .add a e, cb => do
     let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.add)
   | .mul a e, cb => do
@@ -586,11 +613,11 @@ partial def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except Stri
     let cond ← compileBExpr vm c cb
     let thenCB ← compileNExpr vm t {}
     let elseCB ← compileNExpr vm e {}
-    pure (cond.push (.ifElse [ValType.i64] thenCB.build elseCB.build))
+    pure (cond.push (.ifElse (some .i64) thenCB.build elseCB.build))
 
 /-- Conditions compile to `i32`, the native WASM boolean type.
     WASM relops on i64 operands already return i32, so no conversions are needed. -/
-partial def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeBuilder
+def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeBuilder
   | .true, cb => pure (cb.push (i32.const 1))
   | .false, cb => pure (cb.push (i32.const 0))
   | .feq a e, cb => do
@@ -646,8 +673,13 @@ def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
     else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys
 
 open Expression (var const add mul) in
-partial def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
-  | .var i, st => ([(1 + vm.lookup i.index / vm.numWords, (1 : F))], st)  -- R1CS signal = 1 + field element index
+def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
+  | .var i, st =>
+    -- R1CS signal = 1 + circuit-variable index.
+    -- VarMap.lookup returns a WASM local index (= circuit-var-index * numWords for the
+    -- default layout). Dividing by numWords recovers the circuit-variable index,
+    -- which is the corresponding R1CS signal number (offset by 1 for the constant signal).
+    ([(1 + vm.lookup i.index / vm.numWords, (1 : F))], st)
   | .const c, st => ([(0, c)], st)
   | .add a b, st =>
     let (la, st1) := flattenExpr vm a st
@@ -739,25 +771,36 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
   (numInt, locals.reverse, instrs)
 
-/-- compile let-steps (letF/letN) to instructions. -/
+/-- compile let-steps (letF/letN) to instructions.
+    Steps are allocated at `vm.nextLocal` (direct WASM local allocation,
+    NOT through `vm.alloc` — they are not circuit variables).
+    Sets `letBase` to the first step's WASM local index.
+    Returns the same `vi` unchanged (steps don't occupy circuit-variable slots). -/
 def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
     Except String (VarMap × ℕ × List Instr) :=
-  steps.foldlM (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) step => do
+  let nw := vm.numWords
+  let stepBase := vm.nextLocal
+  -- Allocate one nw-limb slot per step, bumping nextLocal
+  let (vmInit, _) := (steps.foldl (fun (v : VarMap × ℕ) _ =>
+    ({ v.1 with nextLocal := v.1.nextLocal + nw, letBase := stepBase }, v.2)
+  ) (vm, vi))
+  let vmB := { vmInit with letBase := stepBase }
+  steps.foldlM (fun ((vm, idx, instrs) : VarMap × ℕ × List Instr) step => do
+    let wasmBase := stepBase + idx * nw
+    let locs := List.range nw |>.map fun w => wasmBase + w
     match step with
     | .letF e =>
       let cb ← compileFExpr vm e {}
-      let (vm', locs) := vm.alloc 1 vi
       -- Capture all nw limbs: forward order pops lowest limb first
-      pure (vm', vi + 1, instrs ++ cb.build ++ (locs.reverse.map fun idx => local.set idx))
+      pure (vm, idx + 1, instrs ++ cb.build ++ (locs.reverse.map fun w => local.set w))
     | .letN e =>
       let cb ← compileNExpr vm e {}
-      let (vm', locs) := vm.alloc 1 vi
       -- A Nat is a single i64: store it in the low limb and zero the rest.
       let capture := match locs with
         | [] => []
-        | base :: highs => local.set base :: (highs >>= fun idx => [i64.const 0, local.set idx])
-      pure (vm', vi + 1, instrs ++ cb.build ++ capture)
-  ) (vm, vi, [])
+        | base :: highs => local.set base :: (highs >>= fun idx' => [i64.const 0, local.set idx'])
+      pure (vm, idx + 1, instrs ++ cb.build ++ capture)
+  ) (vmB, 0, [])
 
 /-- compile a list of FExpr literals to instructions. -/
 def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F)) :
@@ -787,14 +830,15 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
     pure (vmOut, vi + n, instrs)
   | _, .append _ _ => .error "compileVExpr: append is not yet supported"
 
-/-- process flat operations, accumulating instructions. -/
+/-- process flat operations, accumulating instructions.
+    `vi` tracks the next circuit-variable index (input count + sum of witness sizes).
+    This is NOT advanced by let-steps, which live in a separate local-index space. -/
 def processFlatOps (numInputs : ℕ) :
     List (FlatOperation F) → VarMap → ℕ → List Instr → Except String (VarMap × ℕ × List Instr)
-  | [], vm, _, instrs => pure (vm, numInputs, instrs)
+  | [], vm, finalVarIdx, instrs => pure (vm, finalVarIdx, instrs)
   | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc => do
-    let vmStep := { vm with letBase := vi }
-    let (vmS, viS, stepInstrs) ← compileSteps vmStep vi steps
-    let (vmOut, viOut, outInstrs) ← compileVExpr vmS viS stepInstrs vexpr
+    let (vmS, _, stepInstrs) ← compileSteps vm vi steps
+    let (vmOut, viOut, outInstrs) ← compileVExpr vmS vi stepInstrs vexpr
     processFlatOps numInputs rest vmOut viOut (acc ++ outInstrs)
   | .witness _ (.native _) :: _, _, _, _ =>
     .error "processFlatOps: cannot compile a `native` witness (arbitrary Lean closure); rewrite it as structured witness IR"
@@ -826,6 +870,186 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords 2}"
   if nw * 64 < primeBits then
     throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
+  let vm := VarMap.init numInputs nw
+  let flatOps := Operations.toFlat ops
+  -- vi starts at numInputs so that circuit variable indices (which start at 0 for
+  -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
+  -- and pushVar uses the circuit variable index from the witness IR directly.
+  let (finalVm, finalVarIdx, bodyInstrs) ← processFlatOps numInputs flatOps vm numInputs []
+  -- finalVarIdx = numInputs + total witness outputs (steps don't count)
+  let witnessCount := finalVarIdx - numInputs
+  let witnessWords := finalVm.nextLocal - numInputs * nw
+  let n32 := nw * 2
+  let srwmBase := 4
+  -- Signal array must be 8-byte aligned for i64.store/i64.load
+  let signalBaseRaw := 4 + n32 * 4
+  let signalBase := ((signalBaseRaw + 7) / 8) * 8
+  let signalBytes := n32 * 4
+  let startSignal := 1 + numInputs + witnessCount  -- signal 0 = constant 1, then inputs, then witnesses
+  -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
+  -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
+  -- Each intermediate uses nw consecutive locals
+  let intLocalBase := 3 + numInputs * nw
+  let (numInt, intLocals, intCode) :=
+    discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
+  let totalSignals := startSignal + numInt
+  -- Build witness output stores: write each 64-bit limb to signal memory.
+  -- Witness i is stored at local (numInputs*nw + i*nw) since witnesses are
+  -- allocated sequentially starting from numInputs*nw via vm.alloc.
+  let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
+    let elemIdx := numInputs + i  -- circuit variable index of this witness
+    let wasmBase := finalVm.lookup elemIdx
+    (List.range nw) >>= fun w =>
+      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
+        local.get (wasmBase + w),
+        .memStore .i64 0 3 ]
+  -- Build the compute function
+  let inputParams := (List.range numInputs) >>= fun i =>
+    (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
+  let computeFunc : Func := {
+    name := "$compute"
+    params := inputParams
+    locals := (List.replicate witnessWords ("", .i64)) ++ [("$idx", .i64)]
+    body := bodyInstrs ++ outputStores
+  }
+  -- Build getWitness body
+  let gwInputLocals : List (String × ValType) :=
+    (List.range numInputs) >>= fun i =>
+      (List.range nw).map fun w => (s!"$in_{i}_{w}", ValType.i64)
+  -- Input loads: for each input i and limb w, read i64 from signal memory
+  let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
+    (List.range nw) >>= fun w =>
+      [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
+        .memLoad .i64 0 3,
+        local.set (3 + i * nw + w) ]
+  -- Input push: push all nw limbs per input
+  let inputPush : List Instr := (List.range numInputs) >>= fun i =>
+    (List.range nw) >>= fun w =>
+      [ local.get (3 + i * nw + w) ]
+  -- Tail: copy all n32 32-bit words of signal $i to SRWM[0..n32-1].
+  let gwTail : List Instr := (List.range n32) >>= fun w =>
+    [ i32.const (srwmBase + w * 4),
+      i32.const signalBase, local.get 0, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+      i32.const (w * 4), .binop .i32 .add,
+      i32.load 0,
+      .memStore .i32 0 2 ]
+  -- Build the getWitness function body
+  let gwBody : List Instr :=
+    [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
+    ++ [ if_ none
+          (inputLoads ++ inputPush ++ [call "$compute"] ++ intCode
+           ++ [ i32.const signalBase, i32.const 1, i32.store 0,  -- store constant 1
+                i32.const 0, i32.const 1, i32.store 0 ])           -- set computed flag
+          [] ]
+    ++ gwTail
+  -- snarkjs ABI functions
+  let abiFuncs : List Func := [
+    { name := "$getFieldNumLen32"
+      exportName := some "getFieldNumLen32"
+      results := [.i32]
+      body := [i32.const n32] },
+    { name := "$getRawPrime"
+      exportName := some "getRawPrime"
+      body := (List.range n32) >>= fun w =>
+        [ i32.const (srwmBase + w * 4), i32.const ((fieldPrime >>> (w * 32)) % (2^32)), .memStore .i32 0 2 ] },
+    { name := "$readSharedRWMemory"
+      exportName := some "readSharedRWMemory"
+      params := [("", .i32)]
+      results := [.i32]
+      body := [ i32.const srwmBase, local.get 0, i32.const 4,
+                .binop .i32 .mul, .binop .i32 .add, .memLoad .i32 0 2 ] },
+    { name := "$writeSharedRWMemory"
+      exportName := some "writeSharedRWMemory"
+      params := [("$j", .i32), ("$v", .i32)]
+      body := [ i32.const srwmBase, local.get 0, i32.const 4,
+                .binop .i32 .mul, .binop .i32 .add, local.get 1, .memStore .i32 0 2 ] },
+    { name := "$getInputSignalSize"
+      exportName := some "getInputSignalSize"
+      params := [("", .i32), ("", .i32)]
+      results := [.i32]
+      body := [i32.const (n32 / 2)] },
+    { name := "$getInputSize"
+      exportName := some "getInputSize"
+      results := [.i32]
+      body := [i32.const numInputs] },
+    { name := "$getWitnessSize"
+      exportName := some "getWitnessSize"
+      results := [.i32]
+      body := [i32.const totalSignals] },
+    { name := "$setInputSignal"
+      exportName := some "setInputSignal"
+      params := [("$hMSB", .i32), ("$hLSB", .i32), ("$idx", .i32)]
+      -- For multi-word, idx ranges over nw limbs per input. Compute which
+      -- element and which limb, then store the 64-bit value at the right offset.
+      body := [
+        -- Compute target address: signalBase + signalBytes + (idx/nw)*signalBytes + (idx%nw)*8
+        i32.const (signalBase + signalBytes),
+        local.get 2, i32.const nw, .binop .i32 .div_u, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+        local.get 2, i32.const nw, .binop .i32 .rem_u, i32.const 8, .binop .i32 .mul, .binop .i32 .add,
+        -- Read 64-bit value from SRWM: low 32 bits at srwmBase, high 32 at srwmBase+4
+        i32.const srwmBase, .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+        i32.const (srwmBase + 4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+        i64.const 32, i64.shl, i64.or,
+        .memStore .i64 0 3
+      ] },
+    { name := "$getWitness"
+      exportName := some "getWitness"
+      params := [("$i", .i32)]
+      locals := [("$tmp", ValType.i32), ("$idx", ValType.i64)]
+        ++ gwInputLocals ++ intLocals
+      body := gwBody },
+    { name := "$getMessageChar"
+      exportName := some "getMessageChar"
+      results := [.i32]
+      body := [i32.const 0] },
+    { name := "$getVersion"
+      exportName := some "getVersion"
+      results := [.i32]
+      body := [i32.const 2] },
+    { name := "$getMinorVersion"
+      exportName := some "getMinorVersion"
+      results := [.i32]
+      body := [i32.const 0] },
+    { name := "$getPatchVersion"
+      exportName := some "getPatchVersion"
+      results := [.i32]
+      body := [i32.const 0] },
+    { name := "$init"
+      exportName := some "init"
+      params := [("", .i32)]
+      body := [ i32.const 0, i32.const 0, .memStore .i32 0 2,
+                i32.const signalBase, i32.const 1, .memStore .i32 0 2 ] }
+  ]
+  -- Arithmetic helpers
+  let arithFuncs := if nw == 1 then genSingleWordArith fieldPrime
+    else genMultiWordArith fieldPrime nw
+  -- Assemble module. Compute required memory pages for the signal array.
+  let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
+  let memNeeded := signalBase + totalSignals * signalBytes
+  let memPages := (memNeeded + 65535) / 65536  -- ceil division
+  let module : Ast.Module := {
+    memoryPages := memPages
+    dataSegments := [(signalBase, signalInit)]
+    funcs := arithFuncs ++ [computeFunc,
+      { computeFunc with name := "$witness", exportName := some "witness" }]
+      ++ abiFuncs
+  }
+  pure (Module.toString module)
+
+/-- Compile to a WASM binary module (LEB128-encoded WASM, not WAT text).
+    Same parameters and validation as `compileModule`. -/
+def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+    Except String ByteArray := do
+  -- Validate that numWords is sufficient for the prime.
+  -- For single-word (nw=1), the prime must satisfy (p-1)^2 < 2^64
+  -- to avoid i64.mul overflow, i.e., p <= 2^32.
+  let nw := numWords
+  let primeBits := Nat.log2 fieldPrime + 1
+  if nw = 1 ∧ fieldPrime > 2^32 then
+    let minWords := max ((primeBits + 63) / 64) 2
+    throw s!"compileModuleBinary: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {minWords}"
+  if nw * 64 < primeBits then
+    throw s!"compileModuleBinary: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {((primeBits + 63) / 64)} words"
   let vm := VarMap.init numInputs nw
   let flatOps := Operations.toFlat ops
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
@@ -987,4 +1211,4 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       { computeFunc with name := "$witness", exportName := some "witness" }]
       ++ abiFuncs
   }
-  pure (Module.toString module)
+  pure (Binary.Module.toBinary module)

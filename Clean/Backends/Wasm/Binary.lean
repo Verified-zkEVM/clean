@@ -52,6 +52,7 @@ def encodeBlockType (arr : ByteArray) : Option ValType → ByteArray
 def encodeMemArg (arr : ByteArray) (offset align : ℕ) : ByteArray :=
   putULEB128 (putULEB128 arr align) offset
 
+mutual
 partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack) : Instr → ByteArray
   | .const .i32 n => putULEB128 (arr.push 0x41) n
   | .const .i64 n => putULEB128 (arr.push 0x42) n
@@ -77,10 +78,7 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels
   | .loop label result body => encodeBlock arr resolveCall labels 0x03 label result body
   | .ifElse result thenBody elseBody =>
     let arr := arr.push 0x04
-    let arr := match result with
-      | [] => arr.push 0x40  -- empty block type
-      | [t] => arr.push (vtOpc t)  -- single result type
-      | _ => arr.push 0x40  -- multi-value: placeholder (needs type section ref)
+    let arr := encodeBlockType arr result
     let innerLabels := ("", 0) :: labels  -- implicit label for if-else
     let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
     let arr := if elseBody.isEmpty then arr else
@@ -104,6 +102,7 @@ partial def encodeBlock (arr : ByteArray) (resolveCall : String → ℕ) (labels
   let innerLabels := (label, 0) :: labels.map fun (l, d) => (l, d + 1)
   let arr := body.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
   arr.push 0x0B
+end
 
 /-! ## Module encoding -/
 
@@ -124,7 +123,8 @@ def Module.toBinary (m : Module) : ByteArray :=
 
   -- Collect unique type signatures
   let sigs := funcs.map (fun f => (f.params.map Prod.snd, f.results))
-  let uniqueSigs := sigs.dedup
+  -- Deduplicate by foldr over List.insert (List.dedup not in Lean 4.30)
+  let uniqueSigs := List.reverse <| sigs.foldl (fun acc s => if acc.elem s then acc else s :: acc) []
   let sigIdx (sig : List ValType × List ValType) : ℕ :=
     uniqueSigs.findIdx? (fun s => s == sig) |>.getD 0
 
@@ -147,7 +147,7 @@ def Module.toBinary (m : Module) : ByteArray :=
 
   -- Export section
   let exportCount := 1 + (funcs.filter fun f => f.exportName.isSome).length
-  let exportSec := putULEB128 ByteArray.empty 0 exportCount
+  let exportSec := putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a exportCount
   -- Memory export
   let exportSec := encodeString exportSec "memory"
   let exportSec := exportSec.push 0x02 |>.push 0x00  -- mem idx 0
@@ -166,15 +166,15 @@ def Module.toBinary (m : Module) : ByteArray :=
   let codeSec := funcs.foldl (fun (arr : ByteArray) f =>
     -- Locals
     let locals := f.locals.map Prod.snd
-    let localSec := putULEB128 ByteArray.empty 0 locals.length
+    let localSec := putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a locals.length
     let localSec := locals.foldl (fun a t =>
       putULEB128 (a.push (UInt8.ofNat 1)) 0 |> fun a' => a'.push (vtOpc t)
     ) localSec
     -- Body
     let bodyArr := f.body.foldl (fun a i => encodeInstr a nameToIdx [] i) localSec
     let funcBytes := bodyArr.push 0x0B  -- end
-    putULEB128 arr 0 funcBytes.size |> fun a => a ++ funcBytes
-  ) (putULEB128 ByteArray.empty 0 codeCount)
+    putULEB128 (putULEB128 arr 0) funcBytes.size |> fun a => a ++ funcBytes
+  ) (putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a codeCount)
 
   -- Assemble: magic + version + sections
   let arr := ByteArray.empty.push 0x00 |>.push 0x61 |>.push 0x73 |>.push 0x6D  -- magic

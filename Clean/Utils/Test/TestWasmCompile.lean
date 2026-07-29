@@ -92,4 +92,22 @@ def assertOps : List (Operation (F p1009)) :=
   (compileR1CS p1009 0
     ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))))
 
+/-! ## let-step indexing: steps don't shift circuit variable indices -/
+
+/-- Two witness ops. The first uses a letF step to compute `x+1` and stores it as output 0.
+    The second witnesses a constant. If let-steps shifted circuit variable indices,
+    output 0 would be at the wrong local and the assert referencing it would fail
+    (or the output store would write the wrong value). -/
+def letStepOps : List (Operation (F p1009)) :=
+  [.witness 1 (.ir [.letF (.add (.expr (.var ⟨0⟩)) (.const 1))]
+                 (.lit #v[.localVar 0])),
+   .witness 1 (.ir [] (.lit #v[.const 42])),
+   .assert (.add (.var ⟨2⟩) (.mul (.const (-1 : F p1009)) (.var ⟨1⟩)))]
+
+#eval! expectOk "let-step circuit compiles" "getWitness"
+  (compileModule p1009 1 letStepOps 1)
+
+#eval! expectOk "let-step R1CS exports" "\"nConstraints\""
+  (compileR1CS p1009 1 letStepOps)
+
 end TestWasmCompile

@@ -16,21 +16,45 @@ open Expression (var const add mul)
 
 variable {F : Type} [FiniteField F]
 
-def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
+partial def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
     Except String (List (Constraint F) × ℕ) :=
+  -- General case: flatten the entire expression and wrap it as `lc * 1 = 0`.
+  let goGeneral (e : Expression F) (st' : FlattenState F) (rest : List (FlatOperation F)) :
+      Except String (List (Constraint F) × ℕ) :=
+    let (lc, st1) := flattenExpr vm e st'
+    processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
   match ops with
   | [] => pure (st.constraints, st.nextSignal)
-  | .witness _ _ :: rest =>
-    processOps vm rest st  -- VarMap already handles witness allocation
-  | .assert e :: rest =>
-    let (lc, st1) := flattenExpr vm e st
-    let constr : Constraint F := (lc, [(0, (1 : F))], [])
-    let st2 := { st1 with constraints := constr :: st1.constraints }
-    processOps vm rest st2
-  | .lookup _ :: _ =>
-    .error "compileR1CS: lookup constraints cannot be represented in R1CS"
-  | .interact _ :: _ =>
-    .error "compileR1CS: interactions cannot be represented in R1CS"
+  | .witness _ _ :: rest => processOps vm rest st
+  | .assert e@(.add (.mul a b) (.mul (.const c) z)) :: rest =>
+    if c = -1 then
+      let (la, st1) := flattenExpr vm a st
+      let (lb, st2) := flattenExpr vm b st1
+      let (lz, st3) := flattenExpr vm z st2
+      processOps vm rest { st3 with constraints := (la, lb, lz) :: st3.constraints }
+    else if c = 1 then
+      let (la, st1) := flattenExpr vm a st
+      let (lb, st2) := flattenExpr vm b st1
+      let (lz, st3) := flattenExpr vm z st2
+      processOps vm rest { st3 with constraints := (la, lb, scaleLinComb (-1 : F) lz) :: st3.constraints }
+    else
+      goGeneral e st rest
+  | .assert e@(.add (.mul (.const c) z) (.mul a b)) :: rest =>
+    if c = -1 then
+      let (la, st1) := flattenExpr vm a st
+      let (lb, st2) := flattenExpr vm b st1
+      let (lz, st3) := flattenExpr vm z st2
+      processOps vm rest { st3 with constraints := (la, lb, lz) :: st3.constraints }
+    else if c = 1 then
+      let (la, st1) := flattenExpr vm a st
+      let (lb, st2) := flattenExpr vm b st1
+      let (lz, st3) := flattenExpr vm z st2
+      processOps vm rest { st3 with constraints := (la, lb, scaleLinComb (-1 : F) lz) :: st3.constraints }
+    else
+      goGeneral e st rest
+  | .assert e :: rest => goGeneral e st rest
+  | .lookup _ :: _ => .error "compileR1CS: lookup constraints cannot be represented in R1CS"
+  | .interact _ :: _ => .error "compileR1CS: interactions cannot be represented in R1CS"
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
 def linCombToJson (lc : List (ℕ × F)) : Json :=
@@ -52,10 +76,9 @@ def compileR1CS (fieldPrime numInputs : ℕ) (ops : List (Operation F)) : Except
   let flatOps := Operations.toFlat ops
   -- Use the WASM compiler's VarMap to get the same signal layout
   let vm := VarMap.init numInputs
-  let (finalVm, _, _) ← processFlatOps numInputs flatOps vm numInputs []
-  -- finalVm.nextLocal counts WASM locals (limbs). Convert to field element count.
-  let witnessLocals := finalVm.nextLocal - numInputs * vm.numWords
-  let witnessCount := witnessLocals / vm.numWords
+  let (_, finalVarIdx, _) ← processFlatOps numInputs flatOps vm numInputs []
+  -- finalVarIdx = numInputs + total witness outputs (steps don’t count)
+  let witnessCount := finalVarIdx - numInputs
   let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
   let st : FlattenState F := { nextSignal := totalSignals }
   let (allConstraints, nVars) ← processOps vm flatOps st
