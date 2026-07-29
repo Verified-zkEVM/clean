@@ -393,8 +393,8 @@ template LessEqThan(n) {
 }
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := fun (x, y) =>
-    LessThan.circuit n hn (x, y + 1)
+  main := fun input =>
+    LessThan.circuit n hn (input.1, input.2 + 1)
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
@@ -462,8 +462,8 @@ template GreaterThan(n) {
 }
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := fun (x, y) =>
-    LessThan.circuit n hn (y, x)
+  main := fun input =>
+    LessThan.circuit n hn (input.2, input.1)
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -500,8 +500,8 @@ template GreaterEqThan(n) {
 }
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := fun (x, y) =>
-    LessThan.circuit n hn (y, x + 1)
+  main := fun input =>
+    LessThan.circuit n hn (input.2, input.1 + 1)
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
