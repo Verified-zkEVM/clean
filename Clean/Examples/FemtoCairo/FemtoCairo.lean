@@ -582,7 +582,7 @@ def femtoCairoStepAssumptions
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
-def femtoCairoStepSoundness
+theorem femtoCairoStepSoundness
     {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize) (fun _ _ => True)
       (femtoCairoStepSpec program) := by
@@ -619,17 +619,30 @@ def femtoCairoStepSoundness
         h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
         h_mode3_val, h_mode3_encoded_correctly ⟩ := c_decode
 
+      -- the decoded instruction spec is stated about the (stuck) `ProvableStruct.eval` of the
+      -- whole decoded instruction, while the read/next specs project out a single field first;
+      -- the two are definitionally equal, so restate the projections in the projected form
+      have h_mode1_val' : DecodedAddressingMode.val
+          (eval env (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode1) = mode1 :=
+        h_mode1_val
+      have h_mode2_val' : DecodedAddressingMode.val
+          (eval env (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode2) = mode2 :=
+        h_mode2_val
+      have h_mode3_val' : DecodedAddressingMode.val
+          (eval env (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode3) = mode3 :=
+        h_mode3_val
+
       -- satisfy assumptions of read1
       specialize c_read1 h_mode1_encoded_correctly
-      rw [h_mode1_val] at c_read1
+      rw [h_mode1_val'] at c_read1
 
       -- satisfy assumptions of read2
       specialize c_read2 h_mode2_encoded_correctly
-      rw [h_mode2_val] at c_read2
+      rw [h_mode2_val'] at c_read2
 
       -- satisfy assumptions of read3
       specialize c_read3 h_mode3_encoded_correctly
-      rw [h_mode3_val] at c_read3
+      rw [h_mode3_val'] at c_read3
 
       -- satisfy assumptions of next
       specialize c_next h_instr_type_encoded_correctly
@@ -668,7 +681,7 @@ def femtoCairoStepSoundness
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
 
-def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
+theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
@@ -711,34 +724,46 @@ def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize �
   obtain ⟨h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
     h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
     h_mode3_val, h_mode3_encoded_correctly⟩ := h_decode_env
+  -- the decode spec talks about the `ProvableStruct.eval` of the whole decoded instruction,
+  -- while the read/next specs project out a single field first; restate the projections in
+  -- the projected form (the two are definitionally equal)
+  have h_mode1_val' : DecodedAddressingMode.val
+      (eval env.toEnvironment
+        (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode1) = _ := h_mode1_val
+  have h_mode2_val' : DecodedAddressingMode.val
+      (eval env.toEnvironment
+        (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode2) = _ := h_mode2_val
+  have h_mode3_val' : DecodedAddressingMode.val
+      (eval env.toEnvironment
+        (decodeInstructionMain (var { index := i₀ }) (i₀ + 4)).1.mode3) = _ := h_mode3_val
   have h_read1_value := h_read1_env (by
     exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
-      rw [h_op1, h_mode1_val]
+      rw [h_op1, h_mode1_val']
       exact Option.isSome_iff_exists.mpr ⟨v1, h_v1⟩⟩) h_mode1_encoded_correctly
-  simp only [h_op1, h_mode1_val, h_v1] at h_read1_value
+  simp only [h_op1, h_mode1_val', h_v1] at h_read1_value
   have h_read2_value := h_read2_env (by
     exact ⟨h_mode2_encoded_correctly, h_memory_completeness, by
-      rw [h_op2, h_mode2_val]
+      rw [h_op2, h_mode2_val']
       exact Option.isSome_iff_exists.mpr ⟨v2, h_v2⟩⟩) h_mode2_encoded_correctly
-  simp only [h_op2, h_mode2_val, h_v2] at h_read2_value
+  simp only [h_op2, h_mode2_val', h_v2] at h_read2_value
   have h_read3_value := h_read3_env (by
     exact ⟨h_mode3_encoded_correctly, h_memory_completeness, by
-      rw [h_op3, h_mode3_val]
+      rw [h_op3, h_mode3_val']
       exact Option.isSome_iff_exists.mpr ⟨v3, h_v3⟩⟩) h_mode3_encoded_correctly
-  simp only [h_op3, h_mode3_val, h_v3] at h_read3_value
+  simp only [h_op3, h_mode3_val', h_v3] at h_read3_value
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [h_eval_pc]
     exact h_pc_bound
   · rw [h_rawInstrType]
     exact h_instr_bound
   · exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
-      rw [h_op1, h_mode1_val]
+      rw [h_op1, h_mode1_val']
       exact Option.isSome_iff_exists.mpr ⟨v1, h_v1⟩⟩
   · exact ⟨h_mode2_encoded_correctly, h_memory_completeness, by
-      rw [h_op2, h_mode2_val]
+      rw [h_op2, h_mode2_val']
       exact Option.isSome_iff_exists.mpr ⟨v2, h_v2⟩⟩
   · exact ⟨h_mode3_encoded_correctly, h_memory_completeness, by
-      rw [h_op3, h_mode3_val]
+      rw [h_op3, h_mode3_val']
       exact Option.isSome_iff_exists.mpr ⟨v3, h_v3⟩⟩
   · exact ⟨h_instr_type_encoded_correctly, by
       rw [h_instr_type_val, h_read1_value, h_read2_value, h_read3_value]
