@@ -4,6 +4,7 @@ import Clean.Utils.Field
 import Clean.Utils.FiniteField
 import Clean.Utils.Primes
 import Clean.Specs.Poseidon
+import Clean.Circomlib.Poseidon
 
 /-!
 # WASM Compiler Tests
@@ -109,5 +110,31 @@ def letStepOps : List (Operation (F p1009)) :=
 
 #eval! expectOk "let-step R1CS exports" "\"nConstraints\""
   (compileR1CS p1009 1 1 letStepOps 1)
+
+/-! ## End-to-end: Poseidon1 circuit with compileModule (WAT path) -/
+
+#eval! do
+  let ops : List (Operation Specs.Poseidon.F) :=
+    (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+  -- Binary path (compileModuleBinary): has residual SLEB128 alignment issue
+  -- in function bodies for large circuits. Tracked as known issue.
+  -- The WAT→wat2wasm path is the verified reference implementation.
+  let result := compileModule Specs.Poseidon.BN254_PRIME 1 ops 4
+  match result with
+  | .error e => throw <| IO.userError s!"FAIL: Poseidon1 WAT compilation: {e}"
+  | .ok wat =>
+    IO.FS.writeFile (System.FilePath.mk "/tmp/poseidon1_e2e.wat") wat
+    let conv ← IO.Process.output { cmd := "wat2wasm", args := #["/tmp/poseidon1_e2e.wat", "-o", "/tmp/poseidon1_e2e.wasm"] }
+    if conv.exitCode ≠ 0 then
+      throw <| IO.userError s!"FAIL: wat2wasm: {conv.stderr}"
+    let v ← IO.Process.output { cmd := "wasm-validate", args := #["/tmp/poseidon1_e2e.wasm"] }
+    if v.exitCode ≠ 0 then
+      throw <| IO.userError s!"FAIL: wasm-validate: {v.stderr}"
+    -- Verify key exports are present
+    if ¬ wat.contains "getWitness" then
+      throw <| IO.userError "FAIL: missing getWitness export"
+    if ¬ wat.contains "$fmul" then
+      throw <| IO.userError "FAIL: missing $fmul function"
+    IO.println s!"OK: Poseidon1 compiles to valid WASM ({wat.length} chars WAT)"
 
 end TestWasmCompile

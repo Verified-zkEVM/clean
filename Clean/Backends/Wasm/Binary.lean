@@ -81,9 +81,6 @@ private def memflagsNoMax   : UInt8 := 0x00
 private def exportKindFunc   : UInt8 := 0x00
 private def exportKindMem    : UInt8 := 0x02
 
--- Code section
-private def codeLocalGroup   : UInt8 := 1
-
 -- LEB128 encoding
 private def leb128ContBit    : ℕ := 0x80
 private def leb128Limit      : ℕ := 128
@@ -96,11 +93,18 @@ partial def putULEB128 (arr : ByteArray) (n : ℕ) : ByteArray :=
     let b := n % leb128Limit
     putULEB128 (arr.push (UInt8.ofNat (b ||| leb128ContBit))) (n / leb128Limit)
 
-/-- Signed LEB128 encoding. Not yet implemented for negative values;
-    the backend never emits negative immediates, so this is a safe no-op. -/
-def putSLEB128 (arr : ByteArray) (n : ℤ) : ByteArray :=
-  if n ≥ 0 then putULEB128 arr n.toNat
-  else arr -- Not reached: the AST never produces negative immediates
+/-- Signed LEB128 encoding. Handles both positive and negative values.
+    Encodes in two's complement: for negative n, each 7-bit group is
+    sign-extended in the final byte. -/
+partial def putSLEB128 (arr : ByteArray) (n : ℤ) : ByteArray :=
+  let b := n % 128
+  let rest := n / 128
+  -- A byte is final if the remaining value is 0 AND the sign bit (bit 6) is clear,
+  -- OR if the remaining value is -1 AND the sign bit is set (sign extension complete).
+  if (rest = 0 && b < 64) || (rest = -1 && b ≥ 64) then
+    arr.push (UInt8.ofNat (b.toNat &&& 0x7F))
+  else
+    putSLEB128 (arr.push (UInt8.ofNat ((b.toNat &&& 0x7F) ||| 0x80))) rest
 
 /-! ## WASM value type opcodes -/
 
@@ -138,8 +142,8 @@ def encodeMemArg (arr : ByteArray) (offset align : ℕ) : ByteArray :=
 
 mutual
 partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack) : Instr → ByteArray
-  | .const .i32 n => putULEB128 (arr.push opI32Const) n
-  | .const .i64 n => putULEB128 (arr.push opI64Const) n
+  | .const .i32 n => putSLEB128 (arr.push opI32Const) (if n < 2^31 then (n : ℤ) else ((n : ℤ) - (2^32 : ℤ)))
+  | .const .i64 n => putSLEB128 (arr.push opI64Const) (if n < 2^63 then (n : ℤ) else ((n : ℤ) - (2^64 : ℤ)))
   | .binop .i32 op => arr.push (UInt8.ofNat (opI32BinopBase.toNat + binopOffset op))
   | .binop .i64 op => arr.push (UInt8.ofNat (opI64BinopBase.toNat + binopOffset op))
   | .unop .i32 .wrap_i64 => arr.push opI32WrapI64
@@ -218,19 +222,19 @@ def Module.toBinary (m : Module) : ByteArray :=
     let arr := params.foldl (fun a t => a.push (vtOpc t)) arr
     putULEB128 arr results.length
     |> fun a => results.foldl (fun a' t => a'.push (vtOpc t)) a
-  ) (putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a uniqueSigs.length)
+  ) (putULEB128 ByteArray.empty uniqueSigs.length)
 
   -- Function section
   let funcSec := funcs.foldl (fun (arr : ByteArray) f =>
     putULEB128 arr (sigIdx (f.params.map Prod.snd, f.results))
-  ) (putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a funcs.length)
+  ) (putULEB128 ByteArray.empty funcs.length)
 
   -- Memory section: 1 memory, min pages only
   let memSec := ByteArray.empty.push 0x01 |>.push memflagsNoMax |> fun a => putULEB128 a m.memoryPages
 
   -- Export section
   let exportCount := 1 + (funcs.filter fun f => f.exportName.isSome).length
-  let exportSec := putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a exportCount
+  let exportSec := putULEB128 ByteArray.empty exportCount
   -- Memory export
   let exportSec := encodeString exportSec "memory"
   let exportSec := exportSec.push exportKindMem |>.push 0x00
@@ -248,14 +252,14 @@ def Module.toBinary (m : Module) : ByteArray :=
   let codeCount := funcs.length
   let codeSec := funcs.foldl (fun (arr : ByteArray) f =>
     let locals := f.locals.map Prod.snd
-    let localSec := putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a locals.length
+    let localSec := putULEB128 ByteArray.empty locals.length
     let localSec := locals.foldl (fun a t =>
-      putULEB128 (a.push codeLocalGroup) 0 |> fun a' => a'.push (vtOpc t)
+      (putULEB128 a 1).push (vtOpc t)
     ) localSec
     let bodyArr := f.body.foldl (fun a i => encodeInstr a nameToIdx [] i) localSec
     let funcBytes := bodyArr.push opEnd
-    putULEB128 (putULEB128 arr 0) funcBytes.size |> fun a => a ++ funcBytes
-  ) (putULEB128 ByteArray.empty 0 |> fun a => putULEB128 a codeCount)
+    putULEB128 arr funcBytes.size |> fun a => a ++ funcBytes
+  ) (putULEB128 ByteArray.empty codeCount)
 
   -- Assemble: magic + version + sections
   let arr := wasmMagic.foldl (fun a b => a.push b) ByteArray.empty
