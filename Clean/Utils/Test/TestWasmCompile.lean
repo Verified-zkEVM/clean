@@ -140,7 +140,7 @@ def letStepOps : List (Operation (F p1009)) :=
     if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL addOps validate: {v.stderr}"
     IO.println s!"OK: addOps circuit binary validates ({binary.size} bytes)"
 
-/-! ## End-to-end: Poseidon1 circuit → binary WASM → wasm-validate -/
+/-! ## End-to-end: Poseidon1 → binary WASM → wasm-validate → snarkjs witness -/
 
 #eval! do
   let ops : List (Operation Specs.Poseidon.F) :=
@@ -149,9 +149,17 @@ def letStepOps : List (Operation (F p1009)) :=
   match result with
   | .error e => throw <| IO.userError s!"FAIL: Poseidon1: {e}"
   | .ok binary =>
-    IO.FS.writeBinFile (System.FilePath.mk "/tmp/poseidon1_e2e.wasm") binary
-    let v ← IO.Process.output { cmd := "wasm-validate", args := #["/tmp/poseidon1_e2e.wasm"] }
+    let wasmPath := "/tmp/poseidon1_e2e.wasm"
+    IO.FS.writeBinFile (System.FilePath.mk wasmPath) binary
+    -- wasm-validate
+    let v ← IO.Process.output { cmd := "wasm-validate", args := #[wasmPath] }
     if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: wasm-validate: {v.stderr}"
-    IO.println s!"OK: Poseidon1 → valid WASM binary ({binary.size} bytes, {binary.size / 1024} KB)"
+    -- snarkjs wtns calculate (Poseidon1 of input=0)
+    IO.FS.writeFile (System.FilePath.mk "/tmp/poseidon1_input.json") "{\"in\": \"0\"}"
+    let snarkOut ← IO.Process.output {
+      cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
+    }
+    if snarkOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {snarkOut.stderr}"
+    IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs wtns ({binary.size} bytes WASM)"
 
 end TestWasmCompile

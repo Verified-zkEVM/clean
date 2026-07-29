@@ -1032,7 +1032,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       exportName := some "getInputSignalSize"
       params := [("", .i32), ("", .i32)]
       results := [.i32]
-      body := [i32.const (n32 / 2)] },
+      body := [i32.const 1] },  -- each input signal is a single field element
     { name := "$getInputSize"
       exportName := some "getInputSize"
       results := [.i32]
