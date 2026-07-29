@@ -166,6 +166,23 @@ lemma eval_add (env : Environment F) (a b : Expression F) :
     Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
   simp only [Expression.eval]
 
+/-- Expression.eval distributes over negation.
+
+The `Neg`/`Sub` instances desugar through `Expression.mul`/`Expression.add`, and simp no
+longer unfolds those instance lambdas on its own, so state the evaluation lemmas directly. -/
+@[circuit_norm]
+lemma eval_neg (env : Environment F) (a : Expression F) :
+    Expression.eval env (-a) = -(Expression.eval env a) := by
+  show Expression.eval env (Expression.mul (Expression.const (-1)) a) = _
+  simp only [Expression.eval, neg_one_mul]
+
+/-- Expression.eval distributes over subtraction -/
+@[circuit_norm]
+lemma eval_sub (env : Environment F) (a b : Expression F) :
+    Expression.eval env (a - b) = (Expression.eval env a) - (Expression.eval env b) := by
+  show Expression.eval env (Expression.add a (-b)) = _
+  simp only [Expression.eval, neg_one_mul, sub_eq_add_neg]
+
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)
