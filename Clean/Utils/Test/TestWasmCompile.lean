@@ -111,30 +111,50 @@ def letStepOps : List (Operation (F p1009)) :=
 #eval! expectOk "let-step R1CS exports" "\"nConstraints\""
   (compileR1CS p1009 1 1 letStepOps 1)
 
-/-! ## End-to-end: Poseidon1 circuit with compileModule (WAT path) -/
+/-! ## Binary path validation with simple circuits -/
+
+#eval! do
+  -- Empty circuit: binary must validate
+  let r := compileModuleBinary p1009 0 ([] : List (Operation (F p1009))) 1
+  match r with
+  | .error e => throw <| IO.userError s!"FAIL empty binary: {e}"
+  | .ok binary =>
+    IO.FS.writeBinFile (System.FilePath.mk "/tmp/test_bin_empty.wasm") binary
+    let v ← IO.Process.output { cmd := "wasm-validate", args := #["/tmp/test_bin_empty.wasm"] }
+    if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL empty validate: {v.stderr}"
+    IO.println s!"OK: empty circuit binary validates ({binary.size} bytes)"
+
+#eval! do
+  -- Witness addition circuit (single-word): binary must validate
+  let r := compileModuleBinary p1009 1 addOps 1
+  match r with
+  | .error e => throw <| IO.userError s!"FAIL addOps binary: {e}"
+  | .ok binary =>
+    IO.FS.writeBinFile (System.FilePath.mk "/tmp/test_bin_addops.wasm") binary
+    let v ← IO.Process.output { cmd := "wasm-validate", args := #["/tmp/test_bin_addops.wasm"] }
+    if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL addOps validate: {v.stderr}"
+    IO.println s!"OK: addOps circuit binary validates ({binary.size} bytes)"
+
+/-! ## End-to-end: Poseidon1 circuit via compileModuleBinary (direct WASM) -/
 
 #eval! do
   let ops : List (Operation Specs.Poseidon.F) :=
     (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
-  -- Binary path (compileModuleBinary): has residual SLEB128 alignment issue
-  -- in function bodies for large circuits. Tracked as known issue.
-  -- The WAT→wat2wasm path is the verified reference implementation.
-  let result := compileModule Specs.Poseidon.BN254_PRIME 1 ops 4
+  -- Direct binary compilation (no WAT intermediate)
+  let result := compileModuleBinary Specs.Poseidon.BN254_PRIME 1 ops 4
   match result with
-  | .error e => throw <| IO.userError s!"FAIL: Poseidon1 WAT compilation: {e}"
-  | .ok wat =>
-    IO.FS.writeFile (System.FilePath.mk "/tmp/poseidon1_e2e.wat") wat
-    let conv ← IO.Process.output { cmd := "wat2wasm", args := #["/tmp/poseidon1_e2e.wat", "-o", "/tmp/poseidon1_e2e.wasm"] }
-    if conv.exitCode ≠ 0 then
-      throw <| IO.userError s!"FAIL: wat2wasm: {conv.stderr}"
+  | .error e => throw <| IO.userError s!"FAIL: Poseidon1 binary: {e}"
+  | .ok binary =>
+    IO.FS.writeBinFile (System.FilePath.mk "/tmp/poseidon1_e2e.wasm") binary
     let v ← IO.Process.output { cmd := "wasm-validate", args := #["/tmp/poseidon1_e2e.wasm"] }
     if v.exitCode ≠ 0 then
       throw <| IO.userError s!"FAIL: wasm-validate: {v.stderr}"
-    -- Verify key exports are present
-    if ¬ wat.contains "getWitness" then
+    -- Round-trip through wasm2wat and verify exports
+    let watOut ← IO.Process.output { cmd := "wasm2wat", args := #["/tmp/poseidon1_e2e.wasm"] }
+    if watOut.exitCode ≠ 0 then
+      throw <| IO.userError s!"FAIL: wasm2wat: {watOut.stderr}"
+    if ¬ (watOut.stdout.contains "getWitness" || watOut.stdout.contains "\"getWitness\"") then
       throw <| IO.userError "FAIL: missing getWitness export"
-    if ¬ wat.contains "$fmul" then
-      throw <| IO.userError "FAIL: missing $fmul function"
-    IO.println s!"OK: Poseidon1 compiles to valid WASM ({wat.length} chars WAT)"
+    IO.println s!"OK: Poseidon1 binary validates ({binary.size} bytes)"
 
 end TestWasmCompile

@@ -1139,13 +1139,15 @@ def compileModuleBinary (fieldPrime numInputs : ℕ) (ops : List (Operation F)) 
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each 64-bit limb to signal memory.
-  -- Use finalVm.lookup to get the correct WASM local index for each witness
-  -- (accounting for let-step locals allocated before witnesses).
+  -- Signal numbering: signal 0=constant, 1..numInputs=inputs,
+  -- numInputs+1..=witness outputs. Circuit variable indices:
+  -- 0..numInputs-1=inputs, numInputs..=witnesses.
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
-    let elemIdx := 1 + numInputs + i
-    let wasmBase := finalVm.lookup elemIdx
+    let signalIdx := 1 + numInputs + i
+    let varIdx := numInputs + i
+    let wasmBase := finalVm.lookup varIdx
     (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + elemIdx * signalBytes + w * 8),
+      [ i32.const (signalBase + signalIdx * signalBytes + w * 8),
         local.get (wasmBase + w),
         .memStore .i64 0 alignmentI64 ]
   -- Build the compute function
