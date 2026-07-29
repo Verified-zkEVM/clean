@@ -377,19 +377,106 @@ Initializes the BLAKE3 state vector from input variables.
 This combines the chaining value with IV constants and counter/flags.
 -/
 def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p) :=
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input_var
   #v[
-    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
-    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+    input_var.chaining_value[0], input_var.chaining_value[1],
+    input_var.chaining_value[2], input_var.chaining_value[3],
+    input_var.chaining_value[4], input_var.chaining_value[5],
+    input_var.chaining_value[6], input_var.chaining_value[7],
     const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]),
     const (U32.fromUInt32 iv[2]), const (U32.fromUInt32 iv[3]),
-    counter_low, counter_high, block_len, flags
+    input_var.counter_low, input_var.counter_high, input_var.block_len, input_var.flags
   ]
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
+
+-- Bridge between the `ElaboratedCircuit` class projection (which is how child circuit
+-- metadata shows up in an `elaborate_circuit_with` goal) and `FormalCircuit.localLength`,
+-- which is the form the `circuit_norm` lemmas `FormalCircuit.concat_localLength` and
+-- `FormalCircuit.weakenSpec_localLength` are stated in.
+omit p_large_enough in
+private lemma elaborated_localLength_eq {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit (F p) Input Output) (input : Var Input (F p)) :
+    ElaboratedCircuit.localLength c.main input = c.localLength input := rfl
+
+omit p_large_enough in
+private lemma elaborated_channelsWithGuarantees_eq {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit (F p) Input Output) :
+    ElaboratedCircuit.channelsWithGuarantees c.main = c.channelsWithGuarantees := rfl
+
+omit p_large_enough in
+private lemma concat_channelsWithGuarantees {Input Mid Output : TypeMap}
+    [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+    (c1 : FormalCircuit (F p) Input Mid) (c2 : FormalCircuit (F p) Mid Output) h0 h1 :
+    (c1.concat c2 h0 h1).channelsWithGuarantees =
+      c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
+  simp +instances only [FormalCircuit.concat, circuit_norm, explicit_circuit_norm]
+
+omit p_large_enough in
+private lemma weakenSpec_channelsWithGuarantees {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit (F p) Input Output) (WeakerSpec : Input (F p) → Output (F p) → Prop) h :
+    (c.weakenSpec WeakerSpec h).channelsWithGuarantees = c.channelsWithGuarantees := rfl
+
+-- The local length of each stage, computed one composition level at a time. Doing this
+-- incrementally (instead of unfolding the whole `concat` chain in one `simp`) keeps the
+-- circuit structure folded, which is what makes the computation cheap.
+private lemma roundWithPermute_localLength (input : Var Round.Inputs (F p)) :
+    (roundWithPermute (p:=p)).localLength input = 768 := by
+  simp +instances only [roundWithPermute, circuit_norm, Round.circuit, Round.elaborated,
+    Permute.circuit, Permute.elaborated]
+
+private lemma twoRoundsWithPermute_localLength (input : Var Round.Inputs (F p)) :
+    (twoRoundsWithPermute (p:=p)).localLength input = 1536 := by
+  simp only [twoRoundsWithPermute, circuit_norm, roundWithPermute_localLength]
+
+private lemma fourRoundsWithPermute_localLength (input : Var Round.Inputs (F p)) :
+    (fourRoundsWithPermute (p:=p)).localLength input = 3072 := by
+  simp only [fourRoundsWithPermute, circuit_norm, twoRoundsWithPermute_localLength]
+
+private lemma sixRoundsWithPermute_localLength (input : Var Round.Inputs (F p)) :
+    (sixRoundsWithPermute (p:=p)).localLength input = 4608 := by
+  simp only [sixRoundsWithPermute, circuit_norm, fourRoundsWithPermute_localLength,
+    twoRoundsWithPermute_localLength]
+
+private lemma sixRoundsApplyStyle_localLength (input : Var Round.Inputs (F p)) :
+    (sixRoundsApplyStyle (p:=p)).localLength input = 4608 := by
+  simp only [sixRoundsApplyStyle, circuit_norm, sixRoundsWithPermute_localLength]
+
+private lemma sevenRoundsFinal_localLength (input : Var Round.Inputs (F p)) :
+    (sevenRoundsFinal (p:=p)).localLength input = 5376 := by
+  simp only [sevenRoundsFinal, circuit_norm, sixRoundsApplyStyle_localLength,
+    Round.circuit, Round.elaborated]
+
+-- The same, one level at a time, for the (empty) channel metadata.
+private lemma roundWithPermute_channels :
+    (roundWithPermute (p:=p)).channelsWithGuarantees = [] := rfl
+
+private lemma twoRoundsWithPermute_channels :
+    (twoRoundsWithPermute (p:=p)).channelsWithGuarantees = [] := by
+  rw [twoRoundsWithPermute, concat_channelsWithGuarantees, roundWithPermute_channels]
+  rfl
+
+private lemma fourRoundsWithPermute_channels :
+    (fourRoundsWithPermute (p:=p)).channelsWithGuarantees = [] := by
+  rw [fourRoundsWithPermute, concat_channelsWithGuarantees, twoRoundsWithPermute_channels]
+  rfl
+
+private lemma sixRoundsWithPermute_channels :
+    (sixRoundsWithPermute (p:=p)).channelsWithGuarantees = [] := by
+  rw [sixRoundsWithPermute, concat_channelsWithGuarantees, fourRoundsWithPermute_channels,
+    twoRoundsWithPermute_channels]
+  rfl
+
+private lemma sevenRoundsFinal_channels :
+    (sevenRoundsFinal (p:=p)).channelsWithGuarantees = [] := by
+  rw [sevenRoundsFinal, concat_channelsWithGuarantees, sixRoundsApplyStyle,
+    weakenSpec_channelsWithGuarantees, sixRoundsWithPermute_channels]
+  rfl
 
 -- TODO AUTOELAB the generated instance without here is not fully reduced, it contains
 -- nested definitions like `sevenRoundsFinal` which we have to unfold in the soundness
@@ -403,9 +490,12 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
     channelsWithGuarantees := []
   } using by
     simp +instances only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
-    simp +instances only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
-      sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
-      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
+    refine ⟨fun a => ?_, ?_⟩
+    · rw [elaborated_localLength_eq, FormalCircuit.weakenSpec_localLength,
+        sevenRoundsFinal_localLength]
+    · rw [elaborated_channelsWithGuarantees_eq, weakenSpec_channelsWithGuarantees,
+        sevenRoundsFinal_channels]
+      exact List.Subset.refl []
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
@@ -433,13 +523,19 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
+  -- destructure the input variable: since Lean 4.32 the `match` produced by
+  -- `toComponents` does not iota-reduce against an opaque variable
+  obtain ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var,
+    block_len_var, flags_var⟩ := input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector
+    ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var,
+      block_len_var, flags_var⟩
   simp only [Assumptions] at h_normalized
   simp only [circuit_norm] at *
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
