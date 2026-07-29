@@ -132,6 +132,53 @@ instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (NExpr F) (FExpr F) (
 instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (NExpr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
 
+/-! ## Normalizing the operator sugar to constructors
+
+`FExpr.eval` / `NExpr.eval` / `BExpr.eval` are defined by recursion on the constructors,
+so simp can only make progress once a sugared operator has been rewritten to the
+constructor it stands for. simp used to do that on its own by unfolding the instance
+lambdas below; as of Lean 4.32 it does not, which left every IR-authored witness stuck
+as an opaque `NExpr.eval ctx (x ^^^ y)`-style term. These `rfl` lemmas restore it.
+
+Keep this list in sync with the instances above. -/
+
+@[circuit_norm] lemma fexpr_add_def (x y : FExpr F) : x + y = FExpr.add x y := rfl
+@[circuit_norm] lemma fexpr_mul_def (x y : FExpr F) : x * y = FExpr.mul x y := rfl
+@[circuit_norm] lemma fexpr_inv_def (x : FExpr F) : x⁻¹ = FExpr.inv x := rfl
+@[circuit_norm] lemma fexpr_neg_def [Field F] (x : FExpr F) :
+    -x = FExpr.mul (.const (-1)) x := rfl
+@[circuit_norm] lemma fexpr_sub_def [Field F] (x y : FExpr F) :
+    x - y = FExpr.add x (.mul (.const (-1)) y) := rfl
+
+@[circuit_norm] lemma nexpr_add_def (x y : NExpr F) : x + y = NExpr.add x y := rfl
+@[circuit_norm] lemma nexpr_mul_def (x y : NExpr F) : x * y = NExpr.mul x y := rfl
+@[circuit_norm] lemma nexpr_div_def (x y : NExpr F) : x / y = NExpr.div x y := rfl
+@[circuit_norm] lemma nexpr_div_nat_def (x : NExpr F) (n : ℕ) : x / n = NExpr.div x n := rfl
+@[circuit_norm] lemma nexpr_mod_def (x y : NExpr F) : x % y = NExpr.mod x y := rfl
+@[circuit_norm] lemma nexpr_mod_nat_def (x : NExpr F) (n : ℕ) : x % n = NExpr.mod x n := rfl
+@[circuit_norm] lemma nexpr_land_def (x y : NExpr F) : x &&& y = NExpr.land x y := rfl
+@[circuit_norm] lemma nexpr_lor_def (x y : NExpr F) : x ||| y = NExpr.lor x y := rfl
+@[circuit_norm] lemma nexpr_lxor_def (x y : NExpr F) : x ^^^ y = NExpr.lxor x y := rfl
+@[circuit_norm] lemma nexpr_shiftL_def (x y : NExpr F) : x <<< y = NExpr.shiftL x y := rfl
+@[circuit_norm] lemma nexpr_shiftR_def (x y : NExpr F) : x >>> y = NExpr.shiftR x y := rfl
+@[circuit_norm] lemma nexpr_shiftL_nat_def (x : NExpr F) (n : ℕ) :
+    x <<< n = NExpr.shiftL x n := rfl
+@[circuit_norm] lemma nexpr_shiftR_nat_def (x : NExpr F) (n : ℕ) :
+    x >>> n = NExpr.shiftR x n := rfl
+
+@[circuit_norm] lemma bexpr_and_def (x y : BExpr F) : x &&& y = BExpr.and x y := rfl
+
+/- The `=?` sugar is a class projection over many operand-sort instances; unfolding the
+projection lets each instance reduce to the `BExpr.feq`/`BExpr.neq` it stands for. -/
+attribute [circuit_norm] EqCond.eqCond
+
+@[circuit_norm] lemma getElem_nexpr_vector_const {n : ℕ} (v : Vector F n) (i : NExpr F) (h) :
+    v[i]'h = FExpr.listGet (v.toList.map FExpr.const) i := rfl
+@[circuit_norm] lemma getElem_nexpr_vector_expr {n : ℕ} (v : Vector (Expression F) n)
+    (i : NExpr F) (h) : v[i]'h = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
+@[circuit_norm] lemma getElem_nexpr_vector_fexpr {n : ℕ} (v : Vector (FExpr F) n)
+    (i : NExpr F) (h) : v[i]'h = FExpr.listGet v.toList i := rfl
+
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
     FExpr.evalList ctx i (v.toList.map FExpr.const) = if hi : i < n then v[i] else 0 := by
