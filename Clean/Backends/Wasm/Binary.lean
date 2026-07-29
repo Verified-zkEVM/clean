@@ -276,6 +276,14 @@ def Module.toBinary (m : Module) : ByteArray :=
     putULEB128 arr funcBytes.size |> fun a => a ++ funcBytes
   ) (putULEB128 ByteArray.empty codeCount)
 
+  -- Name section (custom section id 0): maps function indices to names for debugging.
+  -- Format: "name" string, subsection_id=1, subsection_size, count, entries.
+  let nameSec :=
+    let nameMap := funcs.foldl (fun (arr : ByteArray) f =>
+      putULEB128 arr (nameToIdx f.name) |> fun a => encodeString a f.name
+    ) (putULEB128 ByteArray.empty funcs.length)
+    let subsec := putULEB128 ByteArray.empty 1 |> fun a => putULEB128 a nameMap.size |> fun a => a ++ nameMap
+    encodeString ByteArray.empty "name" ++ subsec
   -- Assemble: magic + version + sections
   let arr := wasmMagic.foldl (fun a b => a.push b) ByteArray.empty
   let arr := wasmVersion.foldl (fun a b => a.push b) arr
@@ -284,6 +292,7 @@ def Module.toBinary (m : Module) : ByteArray :=
   let arr := putSection arr sectionIdMemory memSec
   let arr := putSection arr sectionIdExport exportSec
   let arr := putSection arr sectionIdCode codeSec
+  let arr := putSection arr 0 nameSec  -- custom section 0 = name section
   arr
 
 end Backends.Wasm.Binary

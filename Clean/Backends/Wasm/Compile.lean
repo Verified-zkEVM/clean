@@ -488,9 +488,12 @@ def genFinv (p numWords : ℕ) : Func :=
     locals := (List.range N).map fun i => (s!"$r{i}", .i64)
     body := init ++ steps ++ finvRets }
 
-/-- Generate multi-word arithmetic as AST Func list. -/
+/-- Generate multi-word arithmetic as AST Func list.
+    `genFsub` (multi-word subtraction) is not included: the compiler only
+    emits `$fadd` and `$fmul` calls; field subtraction is handled via
+    `$fsub` in single-word mode only. -/
 def genMultiWordArith (p numWords : ℕ) : List Func :=
-  [ genMul64x64, genFmul p numWords, genFadd p numWords, genFsub numWords, genFinv p numWords ]
+  [ genMul64x64, genFmul p numWords, genFadd p numWords, genFinv p numWords ]
 
 /-- Maps circuit variable indices to WASM local indices.
     `env` is a sparse list of `(circuitVarIndex, wasmLocalIndex)` pairs.
