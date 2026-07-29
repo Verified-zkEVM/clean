@@ -270,6 +270,11 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
 
 export Witnessable (witness)
 
+/- simp no longer reduces these class projections against a concrete `Witnessable`
+instance on its own, which left `witness e n` stuck as an opaque application in every
+downstream proof. Unfold them explicitly as part of `circuit_norm`. -/
+attribute [circuit_norm] Witnessable.witness Witnessable.witnessIR
+
 /-- Witness a provable value computed by an arbitrary Lean closure. -/
 @[circuit_norm]
 def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}
