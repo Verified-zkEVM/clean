@@ -34,7 +34,7 @@ def main (input : Var M F × Var M F) : Circuit F Unit := do
 instance elaborated (M : TypeMap) [ProvableType M] : ElaboratedCircuit F (ProvablePair M M) unit main := by
   elaborate_circuit
 
-@[simps! (attr := circuit_norm) (config := {isSimp := false})]
+@[simps! -isSimp (attr := circuit_norm)]
 def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M) where
   main
 
@@ -46,7 +46,8 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
     constructor; swap
-    · simp only [main, circuit_norm]
+    · obtain ⟨x_var, y_var⟩ := input_var
+      simp only [main, circuit_norm]
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var
@@ -61,9 +62,8 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     rw [Vector.forall_mem_iff_forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
-    simp only [Expression.eval] at h_holds
-    rw [neg_one_mul] at h_holds
-    exact eq_of_add_neg_eq_zero h_holds
+    simp only [eval_sub, sub_eq_zero] at h_holds
+    exact h_holds
 
   completeness := by
     intro offset env input_var h_env input  h_input _ h_spec
@@ -85,9 +85,8 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec
-    simp only [Vector.getElem_map, Vector.getElem_zip, Expression.eval, neg_one_mul]
-    rw [h_spec]
-    ring
+    simp only [Vector.getElem_map, Vector.getElem_zip, eval_sub, sub_eq_zero]
+    exact h_spec
 
 -- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
 @[circuit_norm ↓, explicit_circuit_norm]

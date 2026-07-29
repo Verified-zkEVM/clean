@@ -70,7 +70,8 @@ theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumpt
   intro i hi
   rw [ProvableType.eval_fromElements]
   rw [ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
-  simp only [Expression.eval, ProvableType.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
+  simp only [eval_sub, Expression.eval, ProvableType.getElem_eval_toElements, h_selector, h_ifTrue,
+    h_ifFalse]
 
   -- Case split on the selector value
   cases h_assumptions with
@@ -104,7 +105,7 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
 Conditional selection.
 -/
 @[circuit_norm]
-def ifElse [FiniteField F] [DecidableEq F] {M : TypeMap} [ProvableType M]
+def ifElse [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
