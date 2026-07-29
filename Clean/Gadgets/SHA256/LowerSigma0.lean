@@ -213,7 +213,7 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
       rw [show valueBits x = ∑ i : Fin 32, (x[i] : F p).val * 2^i.val from rfl,
           testBit_binary_sum 32 _ hbool ⟨j + k.val, hjk⟩]
       simp only [decide_eq_decide]
-      constructor <;> intro h <;> convert h using 2
+      rfl
     · simp only [hjk, dite_false, ZMod.val_zero]
       have hval_lt : valueBits x < 2^32 := valueBits_lt_two_pow x hx
       have : valueBits x < 2 ^ (j + k.val) :=
@@ -400,7 +400,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
     have h1 := h_env1 i
-    simp only [circuit_norm] at h1
     rw [h1, hr7, hr18]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
@@ -416,7 +415,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have h1 := h_env1 i
     have h2 := h_env2 i
     simp only [circuit_norm, mul_zero, zero_add] at h2
-    simp only [circuit_norm] at h1
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr7, hr18, hs3]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
