@@ -110,9 +110,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   obtain ⟨ h_x, h_y ⟩ := h_input
-  -- resolve the witness IR expression into the AND of the input values
-  rw [show Witgen.NExpr.eval { env := env } (x_var.val &&& y_var.val)
-    = ZMod.val x &&& ZMod.val y by rw [← h_x, ← h_y]; rfl]
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
 
