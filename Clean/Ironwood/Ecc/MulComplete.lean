@@ -78,6 +78,27 @@ instance (zComplete : Column .advice) (addConfig : Add.Config) :
   unfold configure
   infer_instance
 
+@[keygen_norm]
+theorem configure_delta_gates (zComplete : Column .advice) (addConfig : Add.Config)
+    (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).delta counts).gates =
+      [decomposeGate ((configure zComplete addConfig).output counts)] := by
+  cases zComplete
+  rfl
+
+@[keygen_norm]
+theorem configure_delta_lookups (zComplete : Column .advice) (addConfig : Add.Config)
+    (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).delta counts).lookups = [] := by
+  cases zComplete
+  rfl
+
+@[keygen_norm]
+theorem configure_output_addConfig (zComplete : Column .advice) (addConfig : Add.Config)
+    (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).output counts).addConfig = addConfig := by
+  simp [configure]
+
 /-! ## Inputs / Output -/
 
 structure Inputs (F : Type) where
@@ -335,7 +356,11 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
   -- the intended output representation: the second `add.call`'s output point plus this
   -- round's running-sum cell. `derive_contract_bridges` reads it off into `round_output`.
   elaborated :=
-    { output := fun cfg offset input self =>
+    { keygenRequirements :=
+        { configLawful cfg := Add.add.Configured cfg.addConfig
+          gates cfg configured := [decomposeGate cfg] ++ configured.gates
+          lookups _ configured := configured.lookups }
+      output cfg offset input self :=
         { acc := (Add.add.call cfg.addConfig (offset + 1)
             { p := input.acc,
               q := (Add.add.call cfg.addConfig offset
@@ -584,6 +609,52 @@ def startCopy (cfg : Config) (input : Var Inputs Fp) (offset : ℕ) :
 def assign_region (numBits : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp (Column .advice × Add.Config) Config Inputs (Output numBits) where
   configure := fun (zComplete, addConfig) => configure zComplete addConfig
+  elaborated :=
+    { keygenRequirements :=
+        { configLawful input := Add.add.Configured input.2
+          gates _ configured := configured.gates
+          lookups _ configured := configured.lookups }
+      registered := by
+        intro configInput counts hconfig offset input region
+        simp_all! +zetaDelta only [
+          Configure.delta_bind, Configure.delta_pure,
+          Configure.output_bind, Configure.output_pure,
+          Configure.output_enableEquality, Configure.output_selector,
+          Configure.output_createGate,
+          ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+          ConfigureDelta.gates_queriedCells, ConfigureDelta.lookups_queriedCells,
+          List.mem_append, List.mem_cons, List.mem_singleton,
+          List.nil_append, List.append_nil, List.append_assoc]
+        simp_all only [keygen_spine]
+        constructor
+        · simp only [startCopy, circuit_norm, keygen_norm]
+        · constructor
+          · intro i
+            apply FormalRegionCircuit.call_keygenRegistered (round w i)
+            case hconfigured =>
+              apply FormalRegionCircuit.Configured.ofPure
+              · simpa only [configure_output_addConfig] using hconfig
+              · rfl
+            case hgates =>
+              intro gate hgate
+              simp only [FormalRegionCircuit.Configured.ofPure_gates,
+                FormalRegionCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements, round,
+                List.mem_append, List.mem_cons, List.not_mem_nil,
+                or_false] at hgate
+              simp only [configure_delta_gates, List.mem_append,
+                List.mem_singleton]
+              rcases hgate with hgate | hgate
+              · exact Or.inr hgate
+              · exact Or.inl hgate
+            case hlookups =>
+              intro argument hargument
+              simpa only [FormalRegionCircuit.Configured.ofPure_lookups,
+                FormalRegionCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements,
+                configure_delta_lookups, List.mem_append, List.not_mem_nil,
+                or_false, round] using hargument
+          · simp only [operations_zsCells, List.forall_nil] }
 
   synthesize cfg offset (input : Var Inputs Fp) := do
     -- copy the entering running sum

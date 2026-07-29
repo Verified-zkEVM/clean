@@ -99,8 +99,8 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := some ⟨by keygen_registration⟩
-      output := fun config offset _ self =>
+    { registered := by keygen_registration
+      output config offset _ self :=
         { x := .of self offset config.x, y := .of self offset config.y }
       output_eq := by intro _ _ _ _; rfl }
 
@@ -124,7 +124,7 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
 
 /-- Configure/synthesis keygen law for the identity-permitting point witness. -/
 theorem point_keygenLawful : point.KeygenLawful := by
-  exact { registered := (point.elaborated.registered.get (by rfl)).down }
+  exact { registered := point.elaborated.registered }
 
 /-- The "witness non-identity point" bundle (Rust `Config::point_non_id`). Mirrors `point`:
 enable the `pointNonId` gate at `offset` and
@@ -146,7 +146,7 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := some ⟨by keygen_registration⟩ }
+    { registered := by keygen_registration }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
@@ -168,7 +168,7 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
 
 /-- Configure/synthesis keygen law for the non-identity point witness. -/
 theorem pointNonId_keygenLawful : pointNonId.KeygenLawful where
-  registered := (pointNonId.elaborated.registered.get (by rfl)).down
+  registered := pointNonId.elaborated.registered
 
 /-- The layouter-level point witnesses: the region bundles in their own regions, named
 once here as in the Rust chip (`ecc/chip/witness_point.rs`). -/

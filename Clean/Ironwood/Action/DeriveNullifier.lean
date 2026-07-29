@@ -81,6 +81,22 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
 
 /-! ## The `derive_nullifier` bundle -/
 
+@[keygen_norm]
+def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
+    (Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
+      Ecc.Add.Config) where
+  configLawful cfg :=
+    (Poseidon.hash (Hash.ConstantLength.capacity 2)).Configured cfg.1 ×
+      AddChip.addFormal.Configured cfg.2.1 ×
+        (Ecc.MulFixed.BaseFieldElem.circuit K).Configured cfg.2.2.1 ×
+          Ecc.Add.addFormal.Configured cfg.2.2.2
+  gates _ configured :=
+    configured.1.gates ++ configured.2.1.gates ++
+      configured.2.2.1.gates ++ configured.2.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++
+      configured.2.2.1.lookups ++ configured.2.2.2.lookups
+
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the
 complete addition with `cm`. `Spec` is the donor contract: the nullifier is
@@ -106,7 +122,51 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     pure nf.x
 
   elaborated :=
-    { output := fun (pcfg, acfg, bcfg, ecfg) input i =>
+    { keygenRequirements := keygenRequirements K
+      registered _ _ configured _ _ := by
+        rcases configured with
+          ⟨configuredPoseidon, configuredAddChip, configuredMul, configuredAdd⟩
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append,
+          Operations.KeygenRegistered.nil, and_true]
+        constructor
+        · apply FormalCircuit.call_keygenRegistered
+              (Poseidon.hash (Hash.ConstantLength.capacity 2))
+              _ configuredPoseidon
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inl h
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inl h
+        constructor
+        · apply FormalCircuit.call_keygenRegistered
+              AddChip.addFormal _ configuredAddChip
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inl h)
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inl h)
+        constructor
+        · apply FormalCircuit.call_keygenRegistered
+              (Ecc.MulFixed.BaseFieldElem.circuit K) _ configuredMul
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr (Or.inl h))
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr (Or.inl h))
+        · apply FormalCircuit.call_keygenRegistered
+              Ecc.Add.addFormal _ configuredAdd
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr (Or.inr h))
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr (Or.inr h))
+      output cfg input i :=
+        let (pcfg, acfg, bcfg, ecfg) := cfg
         ((do
           let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
             { x0 := input.nk, x1 := input.rho }

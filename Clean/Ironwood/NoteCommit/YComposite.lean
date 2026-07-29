@@ -212,7 +212,20 @@ def circuit (wlsb : WitgenIR Fp 1) :
   synthesize := fun (gcfg, lcfg) input => synth wlsb gcfg lcfg input
 
   elaborated :=
-    { output := fun (gcfg, _) _ i => .of (i + 4) 0 (gcfg.advices 6)
+    { keygenRequirements :=
+        { gates cfg _ :=
+            [YCanonicity.gate cfg.1, LookupRangeCheck.bitshiftGate 10 cfg.2]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      registered _ _ _ _ _ := by
+        keygen_registration
+        all_goals
+          simp_all [FormalCircuit.Configured.gates,
+            FormalCircuit.Configured.ofOutput, gateChild,
+            YCanonicity.bundle, FormalRegionCircuit.toFormal,
+            FormalCircuit.keygenRequirements,
+            ElaboratedCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements]
+      output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)
       regionCount _ := 5
       output_eq := by
         intro (gcfg, lcfg) input i

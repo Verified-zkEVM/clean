@@ -95,6 +95,8 @@ copied at row 0, the input words copied at row 1, the summed output at row 2. `S
 the donor `Sponge.AddInput.value`. -/
 def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput State where
   configure := pure
+  elaborated :=
+    { keygenRequirements := { gates cfg _ := [padAndAddGate cfg] } }
 
   synthesize cfg offset (input : Var Sponge.AddInputInput Fp) := do
     (padAndAddGate cfg).enable (offset + 1)
@@ -165,7 +167,10 @@ def hash (capacity : Fp) :
     pure permuted.x0
 
   elaborated :=
-    { output := fun cfg input i =>
+    { keygenRequirements :=
+        { gates cfg _ :=
+            [padAndAddGate cfg, fullRoundGate cfg, partialRoundsGate cfg] }
+      output cfg input i :=
         ((do
           let init ← assignRegion "initial state for domain ConstantLength<2>"
             ((initRegion capacity).call cfg 0 ())

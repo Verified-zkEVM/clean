@@ -123,7 +123,10 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
   synthesize := fun (gcfg, lcfg) input => synth wb1 wd1 gcfg lcfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg.1]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      output _ _ _ := ()
       regionCount _ := 3
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>

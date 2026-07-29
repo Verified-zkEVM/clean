@@ -631,6 +631,18 @@ def ConfigureDelta.queryAny (column : AnyColumn) : ConfigureDelta F :=
   | ⟨.instance, index⟩ =>
       { instanceQueries := [(⟨index⟩, 0)] }
 
+@[simp]
+theorem ConfigureDelta.gates_queryAny (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).gates = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+@[simp]
+theorem ConfigureDelta.lookups_queryAny (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).lookups = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
 def ConfigureDelta.queriedCell (owner : String) :
     Expression F Query → ConfigureDelta F
   | .var (.advice column rotation) =>
@@ -703,6 +715,20 @@ def enableEquality (c : AnyColumn) : Configure F Unit :=
   ⟨fun _ =>
     ((), (ConfigureDelta.queryAny c).append
       { permutationRequests := [c] }, {})⟩
+
+@[simp]
+theorem Configure.delta_enableEquality_gates
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).gates = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+@[simp]
+theorem Configure.delta_enableEquality_lookups
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).lookups = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
 
 /-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
 constants column and enables equality on it (constants are enforced via copies into this

@@ -577,6 +577,62 @@ theorem call_keygenRegistered
       (by simpa [Configured.gates] using hgates)
       (by simpa [Configured.lookups] using hlookups)
 
+/-- Registration certificate specialized to a configure output. Its premises expose
+the caller requirements and local configure delta directly. -/
+theorem call_keygenRegistered_ofOutput
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (input : Var Input F) (i : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates : ∀ gate,
+      gate ∈ self.keygenRequirements.gates configInput hconfig ++
+        ((self.configure configInput).delta counts).gates →
+      gate ∈ targetGates)
+    (hlookups : ∀ argument,
+      argument ∈ self.keygenRequirements.lookups configInput hconfig ++
+        ((self.configure configInput).delta counts).lookups →
+      argument ∈ targetLookups) :
+    ((self.call
+      ((self.configure configInput).output counts) input).operations i).KeygenRegistered
+        targetGates targetLookups := by
+  apply self.call_keygenRegistered _
+      (Configured.ofOutput self configInput counts hconfig)
+  · simpa [Configured.gates, Configured.ofOutput] using hgates
+  · simpa [Configured.lookups, Configured.ofOutput] using hlookups
+
+/-- A folded call is registered in exactly the arguments carried by its configured
+handle. This conclusion shape exposes every input needed by `grind`. -/
+theorem call_keygenRegistered_exact
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex) :
+    ((self.call config input).operations i).KeygenRegistered
+      hconfigured.gates hconfigured.lookups :=
+  self.call_keygenRegistered config hconfigured input i
+    (fun _ h => h) (fun _ h => h)
+
+/-- Registration certificate in the exact opaque spelling exposed after operation-spine
+normalization. -/
+theorem callPacked_keygenRegistered
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates :
+      ∀ gate,
+        gate ∈ Configured.gates hconfigured →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ Configured.lookups hconfigured →
+        argument ∈ targetLookups) :
+    (((callPacked F ConfigInput Config Input Output).val
+      self config input i).2.1).KeygenRegistered targetGates targetLookups :=
+  call_keygenRegistered self config hconfigured input i hgates hlookups
+
 /--
 A lawful layouter child remains registered when called inside a parent whose available
 argument lists contain the child's requirements and configure contribution.
@@ -1126,6 +1182,63 @@ theorem call_keygenRegistered
     (by simpa [Configured.gates] using hgates)
     (by simpa [Configured.lookups] using hlookups)
 
+/-- Region-level registration certificate specialized to a configure output. -/
+theorem call_keygenRegistered_ofOutput
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates : ∀ gate,
+      gate ∈ self.keygenRequirements.gates configInput hconfig ++
+        ((self.configure configInput).delta counts).gates →
+      gate ∈ targetGates)
+    (hlookups : ∀ argument,
+      argument ∈ self.keygenRequirements.lookups configInput hconfig ++
+        ((self.configure configInput).delta counts).lookups →
+      argument ∈ targetLookups) :
+    ((self.call ((self.configure configInput).output counts) offset input).operations
+      region).Forall
+        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  apply self.call_keygenRegistered _
+      (Configured.ofOutput self configInput counts hconfig)
+  · simpa [Configured.gates, Configured.ofOutput] using hgates
+  · simpa [Configured.lookups, Configured.ofOutput] using hlookups
+
+/-- Region-level exact-arguments counterpart of
+`FormalCircuit.call_keygenRegistered_exact`. -/
+theorem call_keygenRegistered_exact
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    ((self.call config offset input).operations region).Forall
+      (RegionOperation.KeygenRegistered
+        hconfigured.gates hconfigured.lookups) :=
+  self.call_keygenRegistered config hconfigured offset input region
+    (fun _ h => h) (fun _ h => h)
+
+/-- Region registration certificate in the opaque spelling exposed after spine
+normalization. -/
+theorem callPacked_keygenRegistered
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    (hgates :
+      ∀ gate,
+        gate ∈ Configured.gates hconfigured →
+        gate ∈ targetGates)
+    (hlookups :
+      ∀ argument,
+        argument ∈ Configured.lookups hconfigured →
+        argument ∈ targetLookups) :
+    (((callPacked F ConfigInput Config Input Output).val
+      self config offset input region).2).Forall
+        (RegionOperation.KeygenRegistered targetGates targetLookups) :=
+  call_keygenRegistered self config hconfigured offset input region hgates hlookups
+
 /--
 A lawful region child remains registered when called inside a parent whose available
 argument lists contain the child's requirements and configure contribution.
@@ -1194,7 +1307,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations,
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
-      output := fun config input i =>
+      output config input i :=
         (child.synthesize config 0 input).output i
       regionCount _ := 1
       output_eq := by intro _ _ _; rfl
@@ -1290,27 +1403,45 @@ attribute [keygen_configured]
   FormalRegionCircuit.Configured.ofPure
 
 attribute [keygen_bundle_projection]
+  ElaboratedCircuit.keygenRequirements
   FormalCircuit.configure
   FormalCircuit.synthesize
   FormalCircuit.elaborated
   FormalCircuit.keygenRequirements
+  ElaboratedRegionCircuit.keygenRequirements
   FormalRegionCircuit.configure
   FormalRegionCircuit.synthesize
   FormalRegionCircuit.elaborated
   FormalRegionCircuit.keygenRequirements
 
-attribute [keygen_metadata_projection]
+attribute [keygen_requirement_projection]
   ElaboratedCircuit.keygenRequirements
   FormalCircuit.keygenRequirements
-  FormalCircuit.Configured.ofOutput
-  FormalCircuit.Configured.ofPure
-  FormalCircuit.Configured.gates
-  FormalCircuit.Configured.lookups
   ElaboratedRegionCircuit.keygenRequirements
   FormalRegionCircuit.keygenRequirements
-  FormalRegionCircuit.Configured.ofOutput
-  FormalRegionCircuit.Configured.ofPure
-  FormalRegionCircuit.Configured.gates
-  FormalRegionCircuit.Configured.lookups
+
+attribute [keygen_metadata_projection]
+  FormalCircuit.configure
+  FormalCircuit.elaborated
+  ElaboratedCircuit.keygenRequirements
+  FormalCircuit.keygenRequirements
+  FormalRegionCircuit.configure
+  FormalRegionCircuit.elaborated
+  ElaboratedRegionCircuit.keygenRequirements
+  FormalRegionCircuit.keygenRequirements
+
+attribute [grind norm]
+  FormalCircuit.Configured.ofPure_gates
+  FormalCircuit.Configured.ofPure_lookups
+  FormalCircuit.Configured.ofOutput_gates
+  FormalCircuit.Configured.ofOutput_lookups
+  FormalCircuit.Configured.ofOutput_configInput
+  FormalCircuit.Configured.ofOutput_counts
+  FormalRegionCircuit.Configured.ofPure_gates
+  FormalRegionCircuit.Configured.ofPure_lookups
+  FormalRegionCircuit.Configured.ofOutput_gates
+  FormalRegionCircuit.Configured.ofOutput_lookups
+  FormalRegionCircuit.Configured.ofOutput_configInput
+  FormalRegionCircuit.Configured.ofOutput_counts
 
 end Halo2

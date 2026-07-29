@@ -211,7 +211,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
        ([] : RegionOperations Fp)))
     pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
 
-  elaborated := {}
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ :=
+            [Sinsemilla.HashPiece.initialYQGate cfg,
+              Sinsemilla.HashPiece.sinsemillaGate cfg]
+          lookups cfg _ := [Sinsemilla.HashPiece.generatorLookup G cfg] } }
 
   Witness := Sinsemilla.Chain.ChainWit ns
   extract cfg offset input self env :=

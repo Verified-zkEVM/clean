@@ -45,6 +45,7 @@ the donor `ValueCanonicity.Gate.Spec` (canonical 64-bit value with its slices);
 `Assumptions` the donor rely-conditions (the slices are range-checked). -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -102,6 +103,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `GdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.gdX cfg.colL offset
@@ -188,6 +190,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `PkdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.pkdX cfg.colL offset
@@ -274,6 +277,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `RhoCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.rho cfg.colL offset
@@ -361,6 +365,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `PsiCanonicity.Gate` contract. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _p ← copyAdvice input.psi cfg.colL offset
@@ -459,6 +464,7 @@ composite threads it back as a rely. -/
 def bundle (wlsb wk3 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Row field where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     (gate cfg).enable offset

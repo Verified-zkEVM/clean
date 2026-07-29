@@ -59,6 +59,7 @@ rely-conditions (the two witnessed-bit implications move to `ProverAssumptions`)
 def bundle (wb1 wd1 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Inputs unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset

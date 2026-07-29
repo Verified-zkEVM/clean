@@ -71,6 +71,22 @@ def witnessScalarLoop (cfg : Config) (windows : Vector (Witgen.MOver Fp (Assigne
     let _k ← assignAdvice cfg.superConfig.window row (Witgen.MOver.toIRScalar windows[w]!)
     return ())
 
+@[keygen_helper]
+theorem witnessScalarLoop_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (cfg : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (offset : ℕ) (self : RegionIndex)
+    (hfullWidth : fullWidthGate cfg ∈ gates) :
+    ((witnessScalarLoop cfg windows offset).operations self).Forall
+      (RegionOperation.KeygenRegistered gates lookups) := by
+  unfold witnessScalarLoop
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    RegionCircuit.forRange'_forall, operations_enable, operations_assignAdvice,
+    List.forall_append, List.forall_cons, List.forall_nil,
+    RegionOperation.KeygenRegistered, hfullWidth, and_true]
+  exact ⟨fun _ => trivial, fun _ => trivial⟩
+
 /-- The full-width `process_window` witness values, driven by the WINDOW HINTS (not a
 scalar cell): `x_p`/`y_p`/`u` of window `w` at hint value `k_w`. -/
 def hintWindowVal (env : Placed ProverEnvironment Fp) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
@@ -120,6 +136,67 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows) offset 85
   return { acc := r.1, mulB := r.2 }
+
+@[keygen_helper]
+theorem windowChain_processWindowH_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (B : FixedBaseData) (cfg : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (offset numWindows : ℕ) (self : RegionIndex)
+    (configured : AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig)
+    (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
+    (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups) :
+    ((MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows)
+      offset numWindows).operations self).Forall
+        (RegionOperation.KeygenRegistered gates lookups) := by
+  unfold MulFixed.windowChain processWindowH
+  simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
+    List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
+  constructor
+  · exact FormalRegionCircuit.call_keygenRegistered
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
+      (offset + 1) _ self hgates hlookups
+  · intro i
+    exact FormalRegionCircuit.call_keygenRegistered
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
+      (offset + 2 + i * 1) _ self hgates hlookups
+
+@[keygen_helper]
+theorem innerRegion_keygenRegistered
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex)
+    (configured : AddIncomplete.add.Configured
+      cfg.superConfig.addIncompleteConfig) :
+    ((innerRegion B cfg offset windows).operations self).Forall
+      (RegionOperation.KeygenRegistered
+        ([fullWidthGate cfg] ++ configured.gates) configured.lookups) := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.forall_append, List.forall_nil, and_true]
+  constructor
+  · unfold witnessScalarLoop
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      RegionCircuit.forRange'_forall, operations_enable, operations_assignAdvice,
+      List.forall_append, List.forall_cons, List.forall_nil,
+      RegionOperation.KeygenRegistered, List.mem_append, List.mem_cons,
+      and_true]
+    exact ⟨fun _ => by simp, fun _ => trivial⟩
+  constructor
+  · simp only [MulFixed.fixedConstantsLoop, RegionCircuit.forRange'_forall]
+    intro i
+    unfold MulFixed.fixedConstantsWindow
+    keygen_registration
+  · unfold MulFixed.windowChain processWindowH
+    simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
+      List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
+    constructor
+    · exact FormalRegionCircuit.call_keygenRegistered
+        AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
+        (offset + 1) _ self (by grind) (by grind)
+    · intro i
+      exact FormalRegionCircuit.call_keygenRegistered
+        AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
+        (offset + 2 + i * 1) _ self (by grind) (by grind)
 
 /-- The two regions. Returns the result point `[scalar]B`. -/
 def synthesize (B : FixedBaseData) (cfg : Config) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) :
@@ -223,7 +300,41 @@ instance innerElab (B : FixedBaseData)
     ElaboratedRegionCircuit Fp Config Config unit InnerOut
       pure
       (fun config offset (_ : Var unit Fp) => innerRegion B config offset windows) where
-  output := fun config offset _ self => innerOutCells config offset self
+  keygenRequirements :=
+    { configLawful cfg :=
+        AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig
+      gates cfg configured := [fullWidthGate cfg] ++ configured.gates
+      lookups _ configured := configured.lookups }
+  registered configInput counts configured offset input self := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.forall_append, List.forall_nil, and_true]
+    constructor
+    · unfold witnessScalarLoop
+      simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+        RegionCircuit.forRange'_forall, operations_enable, operations_assignAdvice,
+        List.forall_append, List.forall_cons, List.forall_nil,
+        RegionOperation.KeygenRegistered, List.mem_append, List.mem_cons,
+        and_true]
+      constructor <;> intro <;> grind
+    constructor
+    · simp only [MulFixed.fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold MulFixed.fixedConstantsWindow
+      keygen_registration
+    · unfold MulFixed.windowChain processWindowH
+      simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
+        List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
+      constructor
+      · apply FormalRegionCircuit.call_keygenRegistered
+          AddIncomplete.add configInput.superConfig.addIncompleteConfig configured
+        · grind
+        · grind
+      · intro i
+        apply FormalRegionCircuit.call_keygenRegistered
+          AddIncomplete.add configInput.superConfig.addIncompleteConfig configured
+        · grind
+        · grind
+  output config offset _ self := innerOutCells config offset self
   output_eq := by
     intro _ _ _ self
     rw [innerOutCells, innerRegion_output]
@@ -954,7 +1065,33 @@ def circuit (B : FixedBase) :
   synthesize cfg scalar := synthesize B.toData cfg (scalarWindows scalar)
 
   elaborated :=
-    { output := fun cfg scalar i => (synthesize B.toData cfg (scalarWindows scalar)).output i
+    { keygenRequirements :=
+        { configLawful cfg :=
+            AddIncomplete.add.Configured cfg.addIncompleteConfig ×
+              Add.add.Configured cfg.addConfig
+          gates _ configured := configured.1.gates ++ configured.2.gates
+          lookups _ configured := configured.1.lookups ++ configured.2.lookups }
+      registered configInput counts configured scalar self := by
+        rcases configured with ⟨configuredAddIncomplete, configuredAdd⟩
+        simp only [configure, Configure.output_bind, Configure.output_selector,
+          Configure.output_pure,
+          Configure.delta_bind, Configure.delta_selector,
+          Configure.delta_createGate, Configure.delta_pure,
+          ConfigureDelta.gates_append, ConfigureDelta.gates_queriedCells,
+          ConfigureDelta.lookups_append, ConfigureDelta.lookups_queriedCells,
+          synthesize, Circuit.operations_bind,
+          operations_assignRegion, Operations.KeygenRegistered.append,
+          Operations.KeygenRegistered.region_cons,
+          Operations.KeygenRegistered.nil, and_true]
+        have hinner := innerRegion_keygenRegistered B.toData
+          { qMulFixedFull := { index := counts.numSelectors, simple := true },
+            superConfig := configInput }
+          0 (scalarWindows scalar) self configuredAddIncomplete
+        constructor
+        · exact RegionOperations.keygenRegistered_mono hinner
+            (by grind) (by grind)
+        · keygen_registration
+      output cfg scalar i := (synthesize B.toData cfg (scalarWindows scalar)).output i
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun cfg scalar i =>

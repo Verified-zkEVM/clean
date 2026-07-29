@@ -169,6 +169,10 @@ exit row and the interior running sums are the output. The round-to-round induct
 lives in this bundle's proofs and nowhere else. -/
 def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field (LoopOut n) where
   configure := pure
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [sinsemillaGate cfg]
+          lookups cfg _ := [generatorLookup G cfg] } }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     RegionCircuit.forRange' offset 1 n (fun r o => do
@@ -467,6 +471,10 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     FormalRegionCircuit Fp Config Config field (Output (w + 1)) where
   name := "sinsemilla hash_piece"
   configure := pure
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [sinsemillaGate cfg]
+          lookups cfg _ := [generatorLookup G cfg] } }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     -- z_0 = copy of the piece into the `bits` column (the only copy — the entering

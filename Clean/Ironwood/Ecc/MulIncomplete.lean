@@ -98,6 +98,9 @@ private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool
 
 def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
   configure := pure
+  elaborated :=
+    { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+      registered := by keygen_registration }
 
   synthesize cfg offset (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) := do
     RegionCircuit.forRange' offset 1 n (fun r o => do

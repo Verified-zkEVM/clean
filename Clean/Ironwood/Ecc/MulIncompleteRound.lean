@@ -645,8 +645,8 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     readState cfg (offset + 1)
 
   elaborated :=
-    { keygenRequirements := { gates cfg := [qMul2Gate cfg] }
-      registered := some ⟨by keygen_registration⟩ }
+    { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+      registered := by keygen_registration }
 
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)

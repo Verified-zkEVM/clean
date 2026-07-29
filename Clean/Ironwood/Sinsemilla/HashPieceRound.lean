@@ -760,6 +760,10 @@ private theorem complete_gates (G : Generators)
 generator lookup and the Sinsemilla gate at `offset`. -/
 def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
   configure := pure
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [sinsemillaGate cfg]
+          lookups cfg _ := [generatorLookup G cfg] } }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset

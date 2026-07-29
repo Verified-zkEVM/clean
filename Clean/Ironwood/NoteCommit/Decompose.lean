@@ -40,6 +40,7 @@ witness program (Rust: `RangeConstrained::bitrange_of(gd_x, 254..255)`). Output 
 witnessed `b_1` cell; `Spec` is the donor `DecomposeB.Gate.Spec`. -/
 def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -96,6 +97,7 @@ witness program (bit 254 of `x(pk_d)`). Output is the witnessed `d_0` cell; `Spe
 the donor `DecomposeD.Gate.Spec`. -/
 def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -150,6 +152,7 @@ deriving ProvableStruct
 witness. `Spec` is the donor `DecomposeE.Gate.Spec`. -/
 def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -189,6 +192,7 @@ witness program (bit 254 of `rho`). Output is the witnessed `g_0` cell; `Spec` i
 donor `DecomposeG.Gate.Spec`. -/
 def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -239,6 +243,7 @@ witness program (bit 254 of `psi`). Output is the witnessed `h_1` cell; `Spec` i
 donor `DecomposeH.Gate.Spec`. -/
 def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset

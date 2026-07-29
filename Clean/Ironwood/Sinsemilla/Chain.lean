@@ -327,6 +327,10 @@ piece-linking `sinsemillaGate` at its last row. -/
 def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
     FormalRegionCircuit Fp Config Config field unit where
   configure := pure
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [sinsemillaGate cfg]
+          lookups cfg _ := [HashPiece.generatorLookup G cfg] } }
 
   synthesize cfg base (piece : AssignedCell Fp) := do
     let prev ← readState cfg (base - 1)
@@ -1031,7 +1035,10 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     return { point := { x := xExit, y := yFin }, first := first.row }
 
   elaborated :=
-    { output := fun cfg offset _ self => circuitOutputCells cfg ns offset self
+    { keygenRequirements :=
+        { gates cfg _ := [sinsemillaGate cfg]
+          lookups cfg _ := [HashPiece.generatorLookup G cfg] }
+      output cfg offset _ self := circuitOutputCells cfg ns offset self
       output_eq := by
         intro _ _ _ _
         simp only [circuitOutputCells, circuit_norm] }

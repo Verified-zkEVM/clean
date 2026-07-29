@@ -140,6 +140,21 @@ private theorem commit_regionCount
       simp only [Operations.regionCount]]
   rw [Ecc.MulFixed.FullWidth.circuit_call_regionCount R bcfg input.r i]
 
+@[keygen_norm]
+def keygenRequirements (G : Generators) (ns : List ℕ)
+    (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) :
+    KeygenRequirements Fp
+      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) where
+  configLawful cfg :=
+    (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.1 ×
+      (HashToPoint.hashCircuit G ns Q hQ hns).Configured cfg.2.1 ×
+        Ecc.Add.addFormal.Configured cfg.2.2
+  gates _ configured :=
+    configured.1.gates ++ configured.2.1.gates ++ configured.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++
+      configured.2.2.lookups
+
 /-- `CommitDomain::commit`: `[r]R` (the `Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)`
 (the hash bundle), and the final complete addition `M + [r]R`. `Spec`: the commitment is
 `SinsemillaHashToPoint(Q, chunks) + s·R` at the extracted window scalar `s`, whenever the
@@ -164,7 +179,41 @@ def commit (G : Generators) (ns : List ℕ)
     pure result
 
   elaborated :=
-    { output := fun (bcfg, hcfg, acfg) input i =>
+    { keygenRequirements := keygenRequirements G ns R Q hQ hns
+      registered _ _ configured _ _ := by
+        rcases configured with
+          ⟨configuredBlind, configuredHash, configuredAdd⟩
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append,
+          Operations.KeygenRegistered.nil, and_true]
+        constructor
+        · apply FormalCircuit.call_keygenRegistered
+              (Ecc.MulFixed.FullWidth.circuit R) _ configuredBlind
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inl h
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inl h
+        constructor
+        · apply FormalCircuit.call_keygenRegistered
+              (HashToPoint.hashCircuit G ns Q hQ hns) _ configuredHash
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inl h)
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inl h)
+        · apply FormalCircuit.call_keygenRegistered
+              Ecc.Add.addFormal _ configuredAdd
+          · intro gate h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr h)
+          · intro argument h
+            simp only [keygenRequirements, keygen_norm]
+            exact Or.inr (Or.inr h)
+      output cfg input i :=
+        let (bcfg, hcfg, acfg) := cfg
         ((do
           let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
           let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg

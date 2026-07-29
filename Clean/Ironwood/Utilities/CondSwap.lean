@@ -101,6 +101,7 @@ parameterized by the `b` witness program and the `Bool`-valued `swap` program. O
 def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
     FormalRegionCircuit Fp Config Config Input Output where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [swapGate cfg] } }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do
     -- cond_swap.rs:97 — q_swap first

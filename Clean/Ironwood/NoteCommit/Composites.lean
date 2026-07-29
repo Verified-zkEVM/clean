@@ -103,7 +103,10 @@ def circuit :
   synthesize := fun (gcfg, lcfg) input => synth gcfg lcfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { gates cfg _ := [GdCanonicity.gate cfg.1]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
@@ -252,7 +255,10 @@ def circuit :
   synthesize := fun (gcfg, lcfg) input => synth gcfg lcfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { gates cfg _ := [PkdCanonicity.gate cfg.1]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
@@ -394,7 +400,10 @@ def circuit :
   synthesize := fun (gcfg, lcfg) input => synth gcfg lcfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { gates cfg _ := [RhoCanonicity.gate cfg.1]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
@@ -537,7 +546,10 @@ def circuit :
   synthesize := fun (gcfg, lcfg) input => synth gcfg lcfg input
 
   elaborated :=
-    { output := fun _ _ _ => ()
+    { keygenRequirements :=
+        { gates cfg _ := [PsiCanonicity.gate cfg.1]
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+      output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>

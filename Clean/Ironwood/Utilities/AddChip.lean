@@ -79,8 +79,8 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     assignAdvice cfg.c offset (sumWit input.a input.b)
 
   elaborated :=
-    { keygenRequirements := { gates cfg := [addGate cfg] }
-      registered := some ⟨by keygen_registration⟩ }
+    { keygenRequirements := { gates cfg _ := [addGate cfg] }
+      registered := by keygen_registration }
 
   Spec input output _ := output = input.a + input.b
   ProverSpec input output _ _ := output = input.a + input.b
@@ -102,7 +102,7 @@ def keygenRequirements : KeygenRequirements Fp Config :=
 /-- Configure/synthesis keygen law for the add region. -/
 theorem add_keygenLawful :
     add.KeygenLawful keygenRequirements where
-  registered := (add.elaborated.registered.get (by rfl)).down
+  registered := add.elaborated.registered
 
 /-- The layouter-level add: `add` in its own region, named once here as in the Rust
 chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
