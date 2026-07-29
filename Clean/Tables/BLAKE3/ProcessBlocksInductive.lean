@@ -83,7 +83,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     · rintro ⟨i, h_i⟩
       rcases h_spec with ⟨h_spec, _⟩
       specialize h_spec ⟨ i, h_i ⟩
-      convert h_spec
+      exact h_spec
     simp_all
 
 end BLAKE3ProcessBlocksStateNormalized
@@ -130,6 +130,17 @@ def circuit : FormalAssertion (F p) BlockInput where
 end BLAKE3BlockInputNormalized
 
 attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
+
+/--
+Projections out of `fromComponents` no longer iota-reduce under `simp`, so the
+`Conditional` gadget's `Assumptions`/`Spec` stay stuck on
+`(fromComponents ..).selector`. This lemma restores the reduction.
+-/
+@[local circuit_norm]
+private lemma fromComponents_conditional_inputs {G : Type} {M : TypeMap} [ProvableType M]
+    (s : G) (t f : M G) :
+    fromComponents (α := Conditional.Inputs M) (.cons s (.cons t (.cons f .nil)))
+      = ⟨s, t, f⟩ := rfl
 
 /--
 The step function that processes one block or passes through the state.
@@ -212,6 +223,10 @@ private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
+  -- destructure the opaque input variables: the `match` in `toComponents` no longer
+  -- iota-reduces against them, which blocks `provable_struct_simp` below
+  obtain ⟨acc_var_chaining_value, acc_var_chunk_counter, acc_var_blocks_compressed⟩ := acc_var
+  obtain ⟨x_var_block_exists, x_var_block_data⟩ := x_var
   simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
   simp only [circuit_norm] at h_input
   specialize spec_previous (by omega)
@@ -242,9 +257,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have h_addition := h_holds.2.2.2.2.1
     have h_cv_cond := h_holds.2.2.2.2.2.1
     have h_blocks_cond := h_holds.2.2.2.2.2.2
-    -- On 4.30, `fromComponents` projections no longer reduce during `simp` matching,
+    -- `fromComponents` projections do not reduce during `simp` matching,
     -- so resolve the Conditional spec by definitional equality instead.
-    replace h_cv_cond : _ = Vector.takeShort _ 8 step._proof_2 :=
+    replace h_cv_cond : _ = Vector.takeShort (n := 16) _ 8 (by omega) :=
       (h_cv_cond (Or.inr rfl)).trans (if_pos rfl)
     simp only [ProcessBlocksState.Normalized] at h_state_norm
     simp only [BlockInput.Normalized] at h_input_norm
@@ -315,7 +330,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · exact takeShort8_normalized step._proof_2 h_compress_norm
+    · exact takeShort8_normalized (by omega) h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
@@ -345,7 +360,11 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) (_ : ProverData (F p))
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
-    intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
+    intro _ _ _ acc_var x_var _ _ _ _ h_eval h_witnesses h_assumptions
+    -- destructure the opaque input variables: the `match` in `toComponents` no longer
+    -- iota-reduces against them, which blocks `provable_struct_simp` below
+    obtain ⟨acc_var_chaining_value, acc_var_chunk_counter, acc_var_blocks_compressed⟩ := acc_var
+    obtain ⟨x_var_block_exists, x_var_block_data⟩ := x_var
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
