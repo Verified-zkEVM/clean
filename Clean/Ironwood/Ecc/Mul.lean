@@ -570,6 +570,21 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       ⟨{ x := corrX, y := corrY }, comp.acc⟩
     return { result, z0, z130, k254 }
 
+  elaborated :=
+    { keygenRequirements :=
+        { configLawful cfg :=
+            Add.add.Configured cfg.addConfig ×
+              (MulIncomplete.double_and_add 124 0).Configured cfg.hiConfig ×
+              (MulIncomplete.double_and_add 125 125).Configured cfg.loConfig ×
+              (MulComplete.assign_region 3 251).Configured cfg.completeConfig
+          gates cfg configured :=
+            [lsbGate cfg] ++ configured.1.gates ++ configured.2.1.gates ++
+              configured.2.2.1.gates ++ configured.2.2.2.gates
+          lookups _ configured :=
+            configured.1.lookups ++ configured.2.1.lookups ++
+              configured.2.2.1.lookups ++ configured.2.2.2.lookups }
+      registered := by keygen_registration }
+
   Assumptions input := (input.base : Point Fp).OnCurve
 
   Spec input out _ :=
@@ -946,6 +961,115 @@ private theorem synthesize_regionCount (cfg : Config)
     Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
   simp only [synthesize, circuit_norm]
 
+@[keygen_norm]
+def keygenRequirements :
+    KeygenRequirements Fp
+      (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice)) where
+  configLawful input := Add.add.Configured input.1
+  gates _ configured := configured.gates
+  lookups input configured :=
+    LookupRangeCheck.rangeCheckLookup 10 input.2.1 :: configured.lookups
+
+@[keygen_norm]
+private theorem doubleAndAddRequirements_gates
+    (n w : ℕ) (z xA xP yP lambda1 lambda2 : Column .advice)
+    :
+    (MulIncomplete.double_and_add n w).keygenRequirements.gates
+      (z, xA, xP, yP, lambda1, lambda2) () = [] := by
+  rfl
+
+@[keygen_norm]
+private theorem doubleAndAddRequirements_lookups
+    (n w : ℕ) (z xA xP yP lambda1 lambda2 : Column .advice)
+    :
+    (MulIncomplete.double_and_add n w).keygenRequirements.lookups
+      (z, xA, xP, yP, lambda1, lambda2) () = [] := by
+  rfl
+
+@[keygen_norm]
+private theorem doubleAndAdd_configure
+    (n w : ℕ) (z xA xP yP lambda1 lambda2 : Column .advice) :
+    (MulIncomplete.double_and_add n w).configure
+      (z, xA, xP, yP, lambda1, lambda2) =
+        MulIncomplete.configure z xA xP yP lambda1 lambda2 := by
+  rfl
+
+@[keygen_norm]
+private theorem completeRequirements_gates
+    (numBits w : ℕ) (zComplete : Column .advice) (addConfig : Add.Config)
+    (hconfig : Add.add.Configured addConfig) :
+    (MulComplete.assign_region numBits w).keygenRequirements.gates
+      (zComplete, addConfig) hconfig = hconfig.gates := by
+  rfl
+
+@[keygen_norm]
+private theorem completeRequirements_lookups
+    (numBits w : ℕ) (zComplete : Column .advice) (addConfig : Add.Config)
+    (hconfig : Add.add.Configured addConfig) :
+    (MulComplete.assign_region numBits w).keygenRequirements.lookups
+      (zComplete, addConfig) hconfig = hconfig.lookups := by
+  rfl
+
+@[keygen_norm]
+private theorem complete_configure
+    (numBits w : ℕ) (zComplete : Column .advice) (addConfig : Add.Config) :
+    (MulComplete.assign_region numBits w).configure (zComplete, addConfig) =
+      MulComplete.configure zComplete addConfig := by
+  rfl
+
+@[keygen_configured]
+private def mainConfigured
+    (configInput :
+      Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+    (counts : ConfigureCounts)
+    (hconfig : keygenRequirements.configLawful configInput) :
+    (mainCircuit.toFormal "variable-base scalar mul").Configured
+      ((configure configInput.1 configInput.2.1 configInput.2.2).output counts) := by
+  let advices := configInput.2.2
+  let hiProgram :=
+    MulIncomplete.configure (advices 9) (advices 3) (advices 0)
+      (advices 1) (advices 4) (advices 5)
+  let loProgram :=
+    MulIncomplete.configure (advices 6) (advices 7) (advices 0)
+      (advices 1) (advices 8) (advices 2)
+  let completeProgram := MulComplete.configure (advices 9) configInput.1
+  apply FormalCircuit.Configured.ofPure
+  · refine ⟨hconfig, ?_, ?_, ?_⟩
+    · exact FormalRegionCircuit.Configured.ofOutput
+        (MulIncomplete.double_and_add 124 0)
+        (advices 9, advices 3, advices 0, advices 1, advices 4, advices 5)
+        counts ()
+    · exact FormalRegionCircuit.Configured.ofOutput
+        (MulIncomplete.double_and_add 125 125)
+        (advices 6, advices 7, advices 0, advices 1, advices 8, advices 2)
+        (hiProgram.finalCounts counts) ()
+    · exact FormalRegionCircuit.Configured.ofOutput
+        (MulComplete.assign_region 3 251) (advices 9, configInput.1)
+        (loProgram.finalCounts (hiProgram.finalCounts counts)) hconfig
+  · rfl
+
+@[keygen_configured]
+private def overflowConfigured
+    (configInput :
+      Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+    (counts : ConfigureCounts) :
+    (MulOverflow.circuit 10 hKW10).Configured
+      ((configure configInput.1 configInput.2.1 configInput.2.2).output
+        counts).overflowConfig := by
+  let advices := configInput.2.2
+  let hiProgram :=
+    MulIncomplete.configure (advices 9) (advices 3) (advices 0)
+      (advices 1) (advices 4) (advices 5)
+  let loProgram :=
+    MulIncomplete.configure (advices 6) (advices 7) (advices 0)
+      (advices 1) (advices 8) (advices 2)
+  let completeProgram := MulComplete.configure (advices 9) configInput.1
+  exact FormalCircuit.Configured.ofOutput
+    (MulOverflow.circuit 10 hKW10)
+    (configInput.2.1, advices 6, advices 7, advices 8)
+    (completeProgram.finalCounts
+      (loProgram.finalCounts (hiProgram.finalCounts counts))) ()
+
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 layouter-level `FormalCircuit`: the main double-and-add region plus the overflow check's three
 sibling regions after it. No `BitsHint` parameter — the working-scalar bits are derived from the
@@ -962,7 +1086,48 @@ def mul :
   synthesize cfg input := synthesize cfg input
 
   elaborated :=
-    { output := fun cfg input i => (synthesize cfg input).output i
+    { keygenRequirements
+      registered := by
+        intro configInput counts hconfig input i
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append, Operations.KeygenRegistered.nil,
+          and_true]
+        constructor
+        · apply FormalCircuit.call_keygenRegistered _ _
+            (mainConfigured configInput counts hconfig)
+          · intro gate hgate
+            simp only [mainConfigured, FormalCircuit.Configured.ofPure_gates,
+              FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+              FormalRegionCircuit.keygenRequirements,
+              ElaboratedRegionCircuit.keygenRequirements] at hgate
+            simp only [FormalRegionCircuit.Configured.gates,
+              doubleAndAddRequirements_gates, completeRequirements_gates,
+              keygen_norm, configure, keygenRequirements] at hgate ⊢
+            grind
+          · intro argument hargument
+            simp only [mainConfigured, FormalCircuit.Configured.ofPure_lookups,
+              FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+              FormalRegionCircuit.keygenRequirements,
+              ElaboratedRegionCircuit.keygenRequirements] at hargument
+            simp only [FormalRegionCircuit.Configured.lookups,
+              doubleAndAddRequirements_lookups, completeRequirements_lookups,
+              keygen_norm, configure, keygenRequirements] at hargument ⊢
+            grind
+        · apply FormalCircuit.call_keygenRegistered _ _
+            (overflowConfigured configInput counts)
+          · intro gate hgate
+            simp only [keygen_norm, configure, overflowConfigured,
+              keygenRequirements,
+              FormalCircuit.Configured.gates, FormalCircuit.keygenRequirements,
+              MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hgate ⊢
+            grind
+          · intro argument hargument
+            simp only [keygen_norm, configure, overflowConfigured,
+              keygenRequirements,
+              FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
+              MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
+            grind
+      output := fun cfg input i => (synthesize cfg input).output i
       regionCount _ := 4
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm }
