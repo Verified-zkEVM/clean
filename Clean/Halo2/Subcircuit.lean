@@ -370,6 +370,38 @@ theorem FormalCircuit.foldOps_regionCount (m : ℕ) :
       + (c m).regionCount (FormalCircuit.foldState c toInput config init i₀ m).1
     rw [Operations.regionCount_append, FormalCircuit.call_regionCount, ← Nat.add_assoc, ih]
 
+/--
+An operation-local law holds over a layouter fold exactly when it holds over every
+folded child-call chunk.
+
+This is the layouter-level counterpart of `RegionCircuit.loopAux_forall`. In
+particular, keygen registration can split a fold without opening any child's
+operation stream.
+-/
+theorem FormalCircuit.foldOps_forall (property : Operation F → Prop) (m : ℕ) :
+    (FormalCircuit.foldOps c toInput config init i₀ m).Forall property ↔
+      ∀ i : Fin m,
+        (((c i).call config
+            (FormalCircuit.foldState c toInput config init i₀ i).1).operations
+          (FormalCircuit.foldState c toInput config init i₀ i).2).Forall property := by
+  induction m with
+  | zero =>
+    simp only [FormalCircuit.foldOps, List.forall_nil, Fin.forall_fin_zero]
+  | succ m ih =>
+    rw [FormalCircuit.foldOps, List.forall_append, ih, Fin.forall_fin_succ']
+    simp only [Fin.val_castSucc, Fin.val_last]
+
+/-- `foldCall`-spelled operation-local split, registered for static keygen laws. -/
+@[keygen_norm, keygen_spine]
+theorem FormalCircuit.foldCall_forall (property : Operation F → Prop) (m : ℕ) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀).Forall property ↔
+      ∀ i : Fin m,
+        (((c i).call config
+            (FormalCircuit.foldState c toInput config init i₀ i).1).operations
+          (FormalCircuit.foldState c toInput config init i₀ i).2).Forall property := by
+  rw [FormalCircuit.foldCall_operations,
+    FormalCircuit.foldOps_forall c toInput config init i₀]
+
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
 theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)
     (m : ℕ) :
