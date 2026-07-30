@@ -874,4 +874,7 @@ elab "keygen_registration" : tactic => do
   if !(← getGoals).isEmpty then
     KeygenRegistration.finishConfigureGoals
 
+macro "keygen_registration" " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
+  `(tactic| (dsimp only [$definitions,*]; keygen_registration))
+
 end Halo2
