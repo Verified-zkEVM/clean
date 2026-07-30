@@ -1385,7 +1385,9 @@ theorem KeygenLawful.toFormal
 end FormalRegionCircuit
 
 attribute [keygen_call]
+  FormalCircuit.callPacked_keygenRegistered
   FormalCircuit.call_keygenRegistered
+  FormalRegionCircuit.callPacked_keygenRegistered
   FormalRegionCircuit.call_keygenRegistered
 
 attribute [keygen_call_expression]

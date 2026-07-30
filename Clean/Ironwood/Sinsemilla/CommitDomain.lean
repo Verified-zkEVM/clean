@@ -180,38 +180,7 @@ def commit (G : Generators) (ns : List ℕ)
 
   elaborated :=
     { keygenRequirements := keygenRequirements G ns R Q hQ hns
-      registered _ _ configured _ _ := by
-        rcases configured with
-          ⟨configuredBlind, configuredHash, configuredAdd⟩
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append,
-          Operations.KeygenRegistered.nil, and_true]
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Ecc.MulFixed.FullWidth.circuit R) _ configuredBlind
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (HashToPoint.hashCircuit G ns Q hQ hns) _ configuredHash
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-        · apply FormalCircuit.call_keygenRegistered
-              Ecc.Add.addFormal _ configuredAdd
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr h)
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr h)
+      registered := by keygen_registration
       output cfg input i :=
         let (bcfg, hcfg, acfg) := cfg
         ((do

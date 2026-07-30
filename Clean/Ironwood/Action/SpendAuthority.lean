@@ -70,28 +70,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
 
   elaborated :=
     { keygenRequirements := keygenRequirements G
-      registered _ _ configured _ _ := by
-        rcases configured with ⟨configuredFullWidth, configuredAdd⟩
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append,
-          Operations.KeygenRegistered.nil, and_true]
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Ecc.MulFixed.FullWidth.circuit G) _ configuredFullWidth
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-        · apply FormalCircuit.call_keygenRegistered
-              Ecc.Add.addFormal _ configuredAdd
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr h
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr h
+      registered := by keygen_registration
       regionCount _ := 3 }
 
   EnvAssumptions := fun (fcfg, _) env =>

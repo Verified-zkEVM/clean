@@ -123,48 +123,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
 
   elaborated :=
     { keygenRequirements := keygenRequirements K
-      registered _ _ configured _ _ := by
-        rcases configured with
-          ⟨configuredPoseidon, configuredAddChip, configuredMul, configuredAdd⟩
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append,
-          Operations.KeygenRegistered.nil, and_true]
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Poseidon.hash (Hash.ConstantLength.capacity 2))
-              _ configuredPoseidon
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              AddChip.addFormal _ configuredAddChip
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Ecc.MulFixed.BaseFieldElem.circuit K) _ configuredMul
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr (Or.inl h))
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr (Or.inl h))
-        · apply FormalCircuit.call_keygenRegistered
-              Ecc.Add.addFormal _ configuredAdd
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr (Or.inr h))
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr (Or.inr h))
+      registered := by keygen_registration
       output cfg input i :=
         let (pcfg, acfg, bcfg, ecfg) := cfg
         ((do

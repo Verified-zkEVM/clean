@@ -79,38 +79,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
 
   elaborated :=
     { keygenRequirements := keygenRequirements V R
-      registered _ _ configured _ _ := by
-        rcases configured with
-          ⟨configuredShort, configuredFullWidth, configuredAdd⟩
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append,
-          Operations.KeygenRegistered.nil, and_true]
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Ecc.MulFixed.Short.circuit V) _ configuredShort
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inl h
-        constructor
-        · apply FormalCircuit.call_keygenRegistered
-              (Ecc.MulFixed.FullWidth.circuit R) _ configuredFullWidth
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inl h)
-        · apply FormalCircuit.call_keygenRegistered
-              Ecc.Add.addFormal _ configuredAdd
-          · intro gate h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr h)
-          · intro argument h
-            simp only [keygenRequirements, keygen_norm]
-            exact Or.inr (Or.inr h)
+      registered := by keygen_registration
       regionCount _ := 5 }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>

@@ -40,7 +40,10 @@ attribute [keygen_norm]
   List.forall_append List.forall_cons
   List.mem_append List.mem_cons List.mem_singleton List.not_mem_nil
   List.nil_append List.append_nil List.append_assoc
-  and_self and_true true_and ite_self
+  and_self and_true true_and
+  or_self or_true true_or or_false false_or
+  false_implies implies_true forall_true_iff
+  ite_self
 
 attribute [grind norm]
   Configure.output_pure Configure.delta_pure
@@ -278,32 +281,6 @@ partial def unfoldMetadata : TacticM Unit := do
   reduceBundleProjections
   unfoldMetadata
 
-/-- Close the small membership disjunctions left after metadata normalization.
-At equality leaves, `assumption` benefits from kernel definitional equality (including
-structure eta), which syntactic Grind matching intentionally does not guess. -/
-partial def closeMembershipDisjunction : TacticM Bool := do
-  let state ← saveState
-  try
-    evalTactic (← `(tactic| assumption))
-  catch _ =>
-    state.restore
-  if (← getGoals).isEmpty then
-    return true
-  let target ← withMainContext do
-    whnf (← instantiateMVars (← getMainTarget))
-  unless target.isAppOfArity ``Or 2 do
-    return false
-  for constructor in [``Or.inl, ``Or.inr] do
-    let state ← saveState
-    try
-      evalTactic (← `(tactic| apply $(mkIdent constructor)))
-      if ← closeMembershipDisjunction then
-        return true
-      state.restore
-    catch _ =>
-      state.restore
-  return false
-
 /-- Reduce only concrete child bundle wrappers in call-routing side conditions. -/
 partial def closeCallSideCondition
     (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
@@ -328,8 +305,6 @@ partial def closeCallSideCondition
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
-    return
-  if ← closeMembershipDisjunction then
     return
   let state ← saveState
   try
@@ -366,22 +341,6 @@ partial def closeCallSideCondition
     return
   closeCallSideCondition (unfolded.insert head)
 
-/--
-Retry routed call obligations whenever an earlier obligation was discharged. This
-matters when a configured-handle proof assigns metavariables shared by the later gate
-and lookup inclusions.
--/
-partial def closeCallGoals : TacticM Unit := do
-  let before := (← getGoals).length
-  let mut remaining := []
-  for goal in ← getGoals do
-    setGoals [goal]
-    closeCallSideCondition
-    remaining := remaining ++ (← getGoals)
-  setGoals remaining
-  if remaining.length < before then
-    closeCallGoals
-
 /-- Apply a registered certificate for a raw circuit helper. -/
 def applyHelperCertificate : TacticM Bool := withMainContext do
   let target ← instantiateMVars (← getMainTarget)
@@ -415,12 +374,11 @@ def applyHelperCertificate : TacticM Bool := withMainContext do
 
 /-- Collect the formal-circuit-valued direct arguments of an application. -/
 def directCallBundleArguments (bundleTypes : Array Name)
-    (expression : Expr) : TacticM (Array Expr) := do
+    (expression : Expr) : MetaM (Array Expr) := do
   let mut bundles := #[]
   for argument in expression.getAppArgs do
     try
-      let type ← liftMetaM do
-        whnf (← inferType argument)
+      let type ← whnf (← inferType argument)
       if bundleTypes.any type.isAppOf && !bundles.any (· == argument) then
         bundles := bundles.push argument
     catch _ =>
@@ -433,7 +391,7 @@ a formal-circuit bundle. This follows the opaque call wrapper without inspecting
 types of every argument in the surrounding synthesis proposition.
 -/
 partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
-    (expression : Expr) : TacticM (Array Expr) := do
+    (expression : Expr) : MetaM (Array Expr) := do
   let hasCallHead :=
     (expression.getAppFn.find? fun candidate =>
       callExpressions.any candidate.isAppOf).isSome
@@ -460,12 +418,47 @@ partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
   | _ =>
       return #[]
 
+/-- Find formal-circuit-valued subexpressions without unfolding their definitions. -/
+partial def formalCallBundlesIn (bundleTypes : Array Name)
+    (expression : Expr) : MetaM (Array Expr) := do
+  try
+    let type ← whnf (← inferType expression)
+    if bundleTypes.any type.isAppOf then
+      return #[expression]
+  catch _ =>
+    pure ()
+  for argument in expression.getAppArgs do
+    let bundles ← formalCallBundlesIn bundleTypes argument
+    if !bundles.isEmpty then
+      return bundles
+  match expression with
+  | .proj _ _ value | .mdata _ value =>
+      formalCallBundlesIn bundleTypes value
+  | .letE _ _ value body _ =>
+      let bundles ← formalCallBundlesIn bundleTypes value
+      if !bundles.isEmpty then
+        return bundles
+      formalCallBundlesIn bundleTypes (body.instantiate1 value)
+  | .lam _ domain body _ | .forallE _ domain body _ =>
+      let bundles ← formalCallBundlesIn bundleTypes domain
+      if !bundles.isEmpty then
+        return bundles
+      formalCallBundlesIn bundleTypes body
+  | _ =>
+      return #[]
+
 /-- Recover the formal-circuit bundle carried by a tagged call expression. -/
-def taggedCallBundles (target : Expr) : TacticM (Array Expr) := do
-  taggedCallBundlesIn
-    (keygenCallExpressionAttr.getDecls (← getEnv))
-    (keygenCallBundleAttr.getDecls (← getEnv))
-    target
+def taggedCallBundles (target : Expr) : MetaM (Array Expr) := do
+  let env ← getEnv
+  let callExpressions := keygenCallExpressionAttr.getDecls env
+  let bundleTypes := keygenCallBundleAttr.getDecls env
+  let bundles ← taggedCallBundlesIn callExpressions bundleTypes target
+  if !bundles.isEmpty then
+    return bundles
+  unless (target.find? fun candidate =>
+      callExpressions.any candidate.isAppOf).isSome do
+    return #[]
+  formalCallBundlesIn bundleTypes target
 
 /-- Find the formal-circuit bundle type among a certificate's explicit binders. -/
 partial def certificateBundleType?
@@ -483,43 +476,203 @@ partial def certificateBundleType?
       certificateBundleType? bundleTypes (body.instantiate1 value)
   | _ => none
 
-/-- Apply the mandatory certificate of a folded layouter- or region-level child call. -/
-def applyChildCertificate : TacticM Bool := withMainContext do
-  let target ← instantiateMVars (← getMainTarget)
+/--
+Search a local configured-handle product without opening either child's circuit.
+
+Parent circuits store the provenance of each direct child in
+`KeygenRequirements.configLawful`; composition turns that type into nested products.
+The call simproc only needs to project the matching handle back out.
+-/
+partial def localProductWitness? (target : Expr) : SimpM (Option Expr) := do
+  let rec search (candidate : Expr) (fuel : Nat) : SimpM (Option Expr) := do
+    let candidateType ← withTransparency .all <| whnf (← inferType candidate)
+    if ← isDefEq candidateType target then
+      return some candidate
+    if fuel == 0 then
+      return none
+    let candidateType ← whnf candidateType
+    unless candidateType.isAppOfArity ``Prod 2 do
+      return none
+    if let some result ← search (mkProj ``Prod 0 candidate) (fuel - 1) then
+      return some result
+    search (mkProj ``Prod 1 candidate) (fuel - 1)
+
+  for declaration in ← getLCtx do
+    if let some result ← search declaration.toExpr 16 then
+      return some result
+  return none
+
+/-- Extract a proof when simp has reduced a proposition to `True`. -/
+def proofOfSimpTrue? (result : Simp.Result) : MetaM (Option Expr) := do
+  unless result.expr.isConstOf ``True do
+    return none
+  match result.proof? with
+  | some proof => return some (← mkOfEqTrue proof)
+  | none => return some (mkConst ``True.intro)
+
+/--
+Retry a call-routing proposition with only its keygen metadata made transparent.
+-/
+def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
+  let env ← getEnv
+  let mut projections : SimpTheorems := {}
+  for projection in keygenMetadataProjectionAttr.getDecls env do
+    projections ← projections.addDeclToUnfold projection
+  let ambient ← Simp.getSimpTheorems
+  -- First expose the child's requirement projection from the configured handle;
+  -- only then does the concrete bundle occur at a reducible projection.
+  let exposed ← Simp.withFreshCache <|
+    Simp.withSimpTheorems (#[projections] ++ ambient) do
+      Simp.simp expression
+  -- The formal-bundle projection leaves an opaque receiver below `gates`/`lookups`.
+  -- Reduce precisely that small `KeygenRequirements` receiver and add its definitional
+  -- equality as a local simp theorem. No synthesis field is projected or normalized.
+  let some requirementProjection :=
+      exposed.expr.find? fun expression =>
+        expression.getAppFn.isConstOf ``KeygenRequirements.gates ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.lookups
+    | return exposed
+  let arguments := requirementProjection.getAppArgs
+  let some requirement := arguments[2]?
+    | return exposed
+  let reducedRequirement ← withTransparency .all <| whnf requirement
+  if reducedRequirement == requirement then
+    return exposed
+  let reducedExpression := exposed.expr.replace fun candidate =>
+    if candidate == requirement then some reducedRequirement else none
+  unless ← withTransparency .all <| isDefEq exposed.expr reducedExpression do
+    return exposed
+  let definitionallyReduced : Simp.Result := { expr := reducedExpression }
+  let reduced ← Simp.withFreshCache <|
+    Simp.withSimpTheorems (#[projections] ++ ambient) do
+      Simp.simp reducedExpression
+  (← exposed.mkEqTrans definitionallyReduced).mkEqTrans reduced
+
+/--
+Recover or construct the configured handle required by a call certificate.
+
+Composition normally projects it from the parent's direct-child provenance product.
+Pure/output-configured helper calls instead use one of the framework constructors
+tagged `keygen_configured`.
+-/
+partial def configuredWitness? (target : Expr) (fuel : Nat := 4) :
+    SimpM (Option Expr) := do
+  let normalizedTarget ← withTransparency .all <| whnf target
+  if ← isDefEq normalizedTarget (mkConst ``Unit) then
+    return some (mkConst ``Unit.unit)
+  if let some proof ← localProductWitness? target then
+    return some proof
+  if fuel == 0 then
+    return none
+  for constructor in keygenConfiguredAttr.getDecls (← getEnv) do
+    let metaState ← getThe Meta.State
+    try
+      let goalExpr ← mkFreshExprSyntheticOpaqueMVar target
+      let sideConditions ← goalExpr.mvarId!.apply
+        (← mkConstWithFreshMVarLevels constructor)
+      for sideCondition in sideConditions do
+        unless ← sideCondition.isAssigned do
+          let sideTarget ← instantiateMVars (← sideCondition.getType)
+          if ← isProp sideTarget then
+            try
+              withTransparency .all sideCondition.refl
+              continue
+            catch _ =>
+              pure ()
+            let some proof ← proofOfSimpTrue? (← Simp.simp sideTarget)
+              | throwError "configured constructor proposition was not simplified"
+            sideCondition.assign proof
+          else
+            let some proof ← configuredWitness? sideTarget (fuel - 1)
+              | throwError "configured constructor input was not recovered"
+            sideCondition.assign proof
+      let proof ← instantiateMVars goalExpr
+      unless proof.isMVar do
+        return some proof
+      throwError "configured constructor left unresolved metavariables"
+    catch _ =>
+      set metaState
+  return none
+
+/--
+Try one folded-call certificate against a registration proposition.
+
+Meta code handles only the opaque boundary: choosing the certificate and recovering
+the direct child's configured handle. All propositional routing premises are sent back
+through the ambient simplifier.
+-/
+def proveWithCallCertificate?
+    (target bundle : Expr) (candidate : Name) : SimpM (Option Expr) := do
+  let metaState ← getThe Meta.State
+  try
+    let certificate ← mkAppM candidate #[bundle]
+    let goalExpr ← mkFreshExprSyntheticOpaqueMVar target
+    let goal := goalExpr.mvarId!
+    let sideConditions ← withTransparency .default <| goal.apply certificate
+    -- Resolve Type-valued provenance first: the later Prop premises mention this
+    -- witness through `.gates` and `.lookups`.
+    for sideCondition in sideConditions do
+      unless ← sideCondition.isAssigned do
+        let sideTarget ← sideCondition.getType
+        unless ← isProp sideTarget do
+          let some proof ← configuredWitness? sideTarget
+            | throwError m!"no direct-child configured handle for:\n{sideTarget}"
+          sideCondition.assign proof
+    for sideCondition in sideConditions do
+      unless ← sideCondition.isAssigned do
+        let sideTarget ← instantiateMVars (← sideCondition.getType)
+        let mut simplified ← Simp.simp sideTarget
+        let mut proof? ← proofOfSimpTrue? simplified
+        if proof?.isNone then
+          simplified ← simpCallRouting sideTarget
+          proof? ← proofOfSimpTrue? simplified
+        let some proof := proof?
+          | throwError "keygen call routing premise was not simplified"
+        sideCondition.assign proof
+    let proof ← instantiateMVars goalExpr
+    if proof.isMVar then
+      throwError "keygen call certificate left unresolved metavariables"
+    return some proof
+  catch _ =>
+    set metaState
+    return none
+
+/--
+Fold an opaque child call to `True` using its tagged registration certificate.
+
+This is deliberately a simproc rather than custom propositional proof search. It
+recognizes the call and chooses the certificate; ordinary `keygen_norm` simp lemmas
+prove the gate/lookup inclusions, so standard facts such as `true_or` remain fully
+composable with circuit-local simp lemmas.
+-/
+def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
   let bundles ← taggedCallBundles target
   if bundles.isEmpty then
-    return false
-  let bundleTypes := keygenCallBundleAttr.getDecls (← getEnv)
-  let candidates := keygenCallAttr.getDecls (← getEnv)
+    return .continue
+  let env ← getEnv
+  let bundleTypes := keygenCallBundleAttr.getDecls env
+  let candidates := keygenCallAttr.getDecls env
   for bundle in bundles do
-    let bundleType ← liftMetaM do whnf (← inferType bundle)
+    let bundleType ← whnf (← inferType bundle)
     let some bundleTypeHead := bundleType.getAppFn.constName?
       | continue
     for candidate in candidates do
       let candidateInfo ← getConstInfo candidate
       if certificateBundleType? bundleTypes candidateInfo.type != some bundleTypeHead then
         continue
-      let state ← saveState
-      try
-        let certificateLemma ← liftMetaM <| mkAppM candidate #[bundle]
-        let sideConditions ← (← getMainGoal).apply certificateLemma
-        let mut remaining := []
-        for sideCondition in sideConditions.reverse do
-          if ← liftMetaM sideCondition.isAssigned then
-            continue
-          setGoals [sideCondition]
-          try
-            evalTactic (← `(tactic| intros))
-          catch _ =>
-            pure ()
-          closeCallSideCondition
-          remaining := remaining ++ (← getGoals)
-        setGoals remaining
-        closeCallGoals
-        return true
-      catch _ =>
-        state.restore
-  return false
+      if let some proof ← proveWithCallCertificate? target bundle candidate then
+        return .done {
+          expr := mkConst ``True
+          proof? := some (← mkEqTrue proof) }
+  return .continue
+
+simproc callRegistration
+    (Operations.KeygenRegistered _ _ _) := callRegistrationSimproc
+
+simproc regionCallRegistration
+    (List.Forall _ _) := callRegistrationSimproc
+
+attribute [keygen_norm] callRegistration regionCallRegistration
 
 /-- Target and hypothesis types used to detect normalization progress. -/
 def goalContextTypes : TacticM (Array Expr) := withMainContext do
@@ -568,7 +721,8 @@ partial def normalize : TacticM Unit := do
     state.restore
   if (← getGoals).isEmpty then
     return
-  discard <| closeMembershipDisjunction
+  evalTactic (← `(tactic|
+    simp_all (config := { failIfUnchanged := false }) only [keygen_norm]))
 
 /-- Recursively normalize operation spines and conjunctions. -/
 partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
@@ -581,7 +735,7 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
 
   let state ← saveState
   try
-    evalTactic (← `(tactic| first | assumption | trivial))
+    evalTactic (← `(tactic| assumption))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -589,15 +743,11 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
 
   if ← applyHelperCertificate then
     return
-  if ← applyChildCertificate then
-    return
 
   normalize
   if (← getGoals).isEmpty then
     return
   if ← applyHelperCertificate then
-    return
-  if ← applyChildCertificate then
     return
 
   withMainContext do
@@ -714,6 +864,12 @@ stay opaque for explicit discharge through the compositional registration lemmas
 -/
 elab "keygen_registration" : tactic => do
   evalTactic (← `(tactic| intros))
+  KeygenRegistration.prepareConfigure
+  evalTactic (← `(tactic|
+    simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
+      keygen_spine, keygen_norm]))
+  if (← getGoals).isEmpty then
+    return
   KeygenRegistration.close
   if !(← getGoals).isEmpty then
     KeygenRegistration.finishConfigureGoals
