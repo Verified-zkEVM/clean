@@ -212,11 +212,10 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
       (fun config => pure config) (synth G R Q hQ) where
   keygenRequirements := keygenRequirements G R Q hQ
   registered := by
-    set_option maxHeartbeats 100000 in
-      keygen_registration [
-        synth,
-        synthPieces,
-        Sinsemilla.HashToPoint.witnessMessagePiece]
+    keygen_registration [
+      synth,
+      synthPieces,
+      Sinsemilla.HashToPoint.witnessMessagePiece]
   output cfg input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 14
   output_eq := by intro _ _ _; rfl

@@ -954,11 +954,10 @@ private theorem HashLayer.keygenRegistered
         (program.delta counts).gates)
       ((HashLayer.keygenRequirements G Q hQ l).lookups configInput hconfig ++
         (program.delta counts).lookups) := by
-  set_option maxHeartbeats 100000 in
-    keygen_registration [
-      HashLayer.synthesize,
-      HashToPoint.witnessMessagePiece,
-      HashToPoint.hashMessage]
+  keygen_registration [
+    HashLayer.synthesize,
+    HashToPoint.witnessMessagePiece,
+    HashToPoint.hashMessage]
 
 /-- One Merkle layer hash as a layouter-level formal circuit (`MerkleInstructions::hash_layer`),
 on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition
