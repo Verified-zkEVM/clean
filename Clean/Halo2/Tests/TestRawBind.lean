@@ -44,7 +44,29 @@ def double : FormalCircuit Fp
     let s ← Add.addFormal.call acfg { p := p, q := p }
     pure s
 
-  elaborated := { regionCount _ := 2 }
+  elaborated := {
+    keygenRequirements :=
+      { configLawful input := Add.add.Configured input.2
+        gates _ configured := configured.gates
+        lookups _ configured := configured.lookups }
+    registered := by
+      intro configInput counts hconfig input i
+      simp only [keygen_spine]
+      change Add.add.Configured configInput.2 at hconfig
+      apply Add.addFormal.call_keygenRegistered configInput.2 hconfig.toFormal
+      · intro gate hgate
+        simpa only [FormalRegionCircuit.Configured.toFormal,
+          FormalCircuit.Configured.gates,
+          FormalRegionCircuit.Configured.gates,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          List.append_nil] using hgate
+      · intro argument hargument
+        simpa only [FormalRegionCircuit.Configured.toFormal,
+          FormalCircuit.Configured.lookups,
+          FormalRegionCircuit.Configured.lookups,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          List.append_nil] using hargument
+    regionCount _ := 2 }
 
   Spec _ output _ := output.Valid
 

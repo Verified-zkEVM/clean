@@ -57,7 +57,19 @@ def parent :
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
-  elaborated := { regionCount _ := 2 }
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig input i
+      simp only [Circuit.operations_bind,
+        Operations.KeygenRegistered.append]
+      constructor
+      · exact witnessPointL.call_keygenRegistered_ofCertificate
+          (witnessPointL.configureCertificate configInput counts hconfig)
+          input i
+      · exact witnessPointR.call_keygenRegistered_ofCertificate
+          (witnessPointR.configureCertificate configInput counts hconfig)
+          input _
+    regionCount _ := 2 }
   Spec _ output _ := output.Valid
   -- both children's witnessed cells (regions `i₀` and `i₀ + 1`), so each child's
   -- extract-level `ProverAssumptions` is discharged definitionally

@@ -18,314 +18,27 @@ packed columns' fixed queries are appended by the projection (`queryWalkInit`).
 `PinnedConstraintSystem.derive` closes the loop — the
 circuit-side half of halo2's `keygen_vk`: floor plan → activations → minimal fitting
 domain → compress_selectors → pinned record.
-
-The constraint system used for those steps is closed under synthesis by construction:
-gates and lookups enabled by the operation stream but absent from the raw `configure`
-result are appended in first-enable order. This keeps a faithful circuit unchanged while
-making the compiler boundary total for every `FormalCircuit`; downstream soundness proofs
-do not need a separate configure/synthesize registration obligation.
 -/
 
 namespace Halo2
 
 variable {F : Type}
 
-/-! ## Synthesis-closed constraint systems -/
-
-/-- Every gate enabled by a region body, in operation order. -/
-def RegionOperations.enabledGates (ops : RegionOperations F) : List (Gate F) :=
-  ops.filterMap fun op => match op with
-    | .enableGate gate _ => some gate
-    | _ => none
-
-/-- Every lookup enabled by a region body, in operation order. -/
-def RegionOperations.enabledLookups (ops : RegionOperations F) :
-    List (LookupArgument F) :=
-  ops.filterMap fun op => match op with
-    | .enableLookup argument _ _ => some argument
-    | _ => none
-
-/-- Every gate enabled by a layouter operation stream, in region/operation order. -/
-def Operations.enabledGates (ops : Operations F) : List (Gate F) :=
-  ops.flatMap fun op => match op with
-    | .region _ body => body.enabledGates
-    | _ => []
-
-/-- Every lookup enabled by a layouter operation stream, in region/operation order. -/
-def Operations.enabledLookups (ops : Operations F) : List (LookupArgument F) :=
-  ops.flatMap fun op => match op with
-    | .region _ body => body.enabledLookups
-    | _ => []
-
-/-- Registration of a region body covers every gate extracted from that body. -/
-theorem RegionOperations.keygenRegistered_gate
-    {body : RegionOperations F}
-    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
-    (hregistered :
-      body.Forall (RegionOperation.KeygenRegistered gates lookups))
-    {gate : Gate F} (hgate : gate ∈ body.enabledGates) :
-    gate ∈ gates := by
-  rw [RegionOperations.enabledGates] at hgate
-  obtain ⟨operation, hoperation, henabled⟩ :=
-    List.mem_filterMap.mp hgate
-  have hoperationRegistered :=
-    List.forall_iff_forall_mem.mp hregistered operation hoperation
-  cases operation <;>
-    simp_all [RegionOperation.KeygenRegistered]
-
-/-- Delta registration covers every gate extracted from a layouter stream. -/
-theorem Operations.KeygenRegistered.gate
-    {operations : Operations F}
-    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
-    (hregistered : operations.KeygenRegistered gates lookups)
-    {gate : Gate F} (hgate : gate ∈ operations.enabledGates) :
-    gate ∈ gates := by
-  rw [Operations.enabledGates] at hgate
-  obtain ⟨operation, hoperation, hgate⟩ :=
-    List.mem_flatMap.mp hgate
-  have hoperationRegistered :=
-    List.forall_iff_forall_mem.mp hregistered operation hoperation
-  cases operation with
-  | region name body =>
-      exact RegionOperations.keygenRegistered_gate
-        hoperationRegistered hgate
-  | constrainInstance
-  | loadTable =>
-      simp at hgate
-
-/-- Registration of a region body covers every lookup extracted from that body. -/
-theorem RegionOperations.keygenRegistered_lookup
-    {body : RegionOperations F}
-    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
-    (hregistered :
-      body.Forall (RegionOperation.KeygenRegistered gates lookups))
-    {argument : LookupArgument F}
-    (hlookup : argument ∈ body.enabledLookups) :
-    argument ∈ lookups := by
-  rw [RegionOperations.enabledLookups] at hlookup
-  obtain ⟨operation, hoperation, henabled⟩ :=
-    List.mem_filterMap.mp hlookup
-  have hoperationRegistered :=
-    List.forall_iff_forall_mem.mp hregistered operation hoperation
-  cases operation <;>
-    simp_all [RegionOperation.KeygenRegistered]
-
-/-- Delta registration covers every lookup extracted from a layouter stream. -/
-theorem Operations.KeygenRegistered.lookup
-    {operations : Operations F}
-    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
-    (hregistered : operations.KeygenRegistered gates lookups)
-    {argument : LookupArgument F}
-    (hlookup : argument ∈ operations.enabledLookups) :
-    argument ∈ lookups := by
-  rw [Operations.enabledLookups] at hlookup
-  obtain ⟨operation, hoperation, hlookup⟩ :=
-    List.mem_flatMap.mp hlookup
-  have hoperationRegistered :=
-    List.forall_iff_forall_mem.mp hregistered operation hoperation
-  cases operation with
-  | region name body =>
-      exact RegionOperations.keygenRegistered_lookup
-        hoperationRegistered hlookup
-  | constrainInstance
-  | loadTable =>
-      simp at hlookup
-
-/--
-The non-selector query atoms occurring in an expression, in left-to-right syntax-tree
-order. Configure-time gates carry the more faithful closure-call order separately in
-`Gate.queriedCells`; this traversal supplies a deterministic registration order only for
-a lookup that synthesis enabled without configure having registered it.
--/
-def Expression.queryAtoms : Expression F Query → List (Expression F Query)
-  | .var (.selector _) => []
-  | atom@(.var _) => [atom]
-  | .const _ => []
-  | .add left right
-  | .mul left right => left.queryAtoms ++ right.queryAtoms
-
 /-- Every selector in a configured lookup input lies below the allocated count. -/
 def ConstraintSystem.LookupSelectorsAllocated
     (cs : ConstraintSystem F) : Prop :=
   lookupInputSelectorBound cs.lookups ≤ cs.numSelectors
 
-/-- Gates enabled by synthesis but absent from the raw configure result, preserving
-first-enable order and leaving the configured gate list itself untouched. -/
-def ConstraintSystem.missingEnabledGates [DecidableEq F]
-    (cs : ConstraintSystem F) (ops : Operations F) : List (Gate F) :=
-  (ops.enabledGates.filter fun gate => decide (gate ∉ cs.gates)).dedup
-
-/-- Lookups enabled by synthesis but absent from the raw configure result, preserving
-first-enable order and leaving the configured lookup list itself untouched. -/
-def ConstraintSystem.missingEnabledLookups [DecidableEq F]
-    (cs : ConstraintSystem F) (ops : Operations F) : List (LookupArgument F) :=
-  (ops.enabledLookups.filter fun argument => decide (argument ∉ cs.lookups)).dedup
-
-/-- Registration coherence makes the missing-gate diagnostic empty. -/
-theorem ConstraintSystem.missingEnabledGates_eq_nil
-    [DecidableEq F] {cs : ConstraintSystem F} {ops : Operations F}
-    (hregistered : OperationsKeygenCoherent cs ops) :
-    cs.missingEnabledGates ops = [] := by
-  unfold ConstraintSystem.missingEnabledGates
-  have hfiltered :
-      ops.enabledGates.filter
-          (fun gate => decide (gate ∉ cs.gates)) = [] := by
-    apply List.filter_eq_nil_iff.mpr
-    intro gate hgate
-    simp [hregistered.gate hgate]
-  rw [hfiltered]
-  rfl
-
-/-- Registration coherence makes the missing-lookup diagnostic empty. -/
-theorem ConstraintSystem.missingEnabledLookups_eq_nil
-    [DecidableEq F] {cs : ConstraintSystem F} {ops : Operations F}
-    (hregistered : OperationsKeygenCoherent cs ops) :
-    cs.missingEnabledLookups ops = [] := by
-  unfold ConstraintSystem.missingEnabledLookups
-  have hfiltered :
-      ops.enabledLookups.filter
-          (fun argument => decide (argument ∉ cs.lookups)) = [] := by
-    apply List.filter_eq_nil_iff.mpr
-    intro argument hlookup
-    simp [hregistered.lookup hlookup]
-  rw [hfiltered]
-  rfl
-
-/--
-Close a raw configure result under the gate and lookup arguments enabled by synthesis.
-
-Configured entries retain their exact order (including any deliberate duplicates);
-only the first occurrence of each missing synthesis entry is appended. Missing gates
-register their declared `queriedCells`. Missing lookups have no configure closure whose
-call order could be recorded, so their expression query atoms are registered
-deterministically from inputs followed by tables. This matters for advice-query counts
-and therefore blinding factors, not just for expression projection. The selector count
-is also closed over every lookup input's syntactic selector bound, so selector
-compression covers even a synthesis-only lookup by construction. Faithful circuits
-already allocate those selectors, making this maximum inert.
--/
-def ConstraintSystem.closeWithOperations [DecidableEq F]
-    (cs : ConstraintSystem F) (ops : Operations F) : ConstraintSystem F :=
-  let missingGates := cs.missingEnabledGates ops
-  let missingLookups := cs.missingEnabledLookups ops
-  let finalLookups := cs.lookups ++ missingLookups
-  let registeredGates := missingGates.foldl
-    (fun current gate =>
-      current.registerQueriedCells gate.name gate.queriedCells) cs
-  let registered := missingLookups.foldl
-    (fun current argument =>
-      current.registerQueriedCells "synthesis lookup"
-        ((argument.inputs ++ argument.tables).flatMap Expression.queryAtoms))
-    registeredGates
-  { registered with
-    gates := cs.gates ++ missingGates
-    lookups := finalLookups
-    numSelectors := max cs.numSelectors
-      (lookupInputSelectorBound finalLookups) }
-
-/--
-Closure is inactive when synthesis uses only configure-registered arguments and every
-configured lookup selector is allocated.
--/
-theorem ConstraintSystem.closeWithOperations_eq_self
-    [DecidableEq F] {cs : ConstraintSystem F} {ops : Operations F}
-    (hregistered : OperationsKeygenCoherent cs ops)
-    (hselectors : cs.LookupSelectorsAllocated) :
-    cs.closeWithOperations ops = cs := by
-  have hgates := cs.missingEnabledGates_eq_nil hregistered
-  have hlookups := cs.missingEnabledLookups_eq_nil hregistered
-  unfold ConstraintSystem.closeWithOperations
-  rw [hgates, hlookups]
-  simp only [List.append_nil, List.foldl_nil]
-  rw [max_eq_left hselectors]
-
-/-- Closing under synthesis preserves every configure-registered instance query. -/
-theorem ConstraintSystem.mem_instanceQueries_closeWithOperations_of_mem
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
-    (query : Column .instance × Rotation)
-    (hquery : query ∈ cs.instanceQueries) :
-    query ∈ (cs.closeWithOperations ops).instanceQueries := by
-  have fold_preserves {α : Type}
-      (items : List α)
-      (owner : α → String)
-      (cells : α → List (Expression F Query))
-      (initial : ConstraintSystem F)
-      (hinitial : query ∈ initial.instanceQueries) :
-      query ∈
-        (items.foldl
-          (fun current item =>
-            current.registerQueriedCells (owner item) (cells item))
-          initial).instanceQueries := by
-    induction items generalizing initial with
-    | nil =>
-        exact hinitial
-    | cons item items ih =>
-        rw [List.foldl_cons]
-        apply ih
-        exact initial.mem_instanceQueries_registerQueriedCells_of_mem
-          (owner item) (cells item) query hinitial
-  unfold closeWithOperations
-  dsimp only
-  apply fold_preserves
-  apply fold_preserves
-  exact hquery
-
-/-- Every selector atom in every synthesis-closed lookup input has a corresponding
-allocated selector index. This is true by construction even for a lookup that
-synthesis enabled without registering it during configure. -/
-theorem ConstraintSystem.lookupInputsAllocated_closeWithOperations
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F) :
-    ∀ argument ∈ (cs.closeWithOperations ops).lookups,
-      ∀ expression ∈ argument.inputs,
-        expression.selectorBound ≤
-          (cs.closeWithOperations ops).numSelectors := by
+/-- Allocating the configured lookup selectors bounds every lookup-input expression. -/
+theorem ConstraintSystem.LookupSelectorsAllocated.lookupInputsAllocated
+    {cs : ConstraintSystem F} (hallocated : cs.LookupSelectorsAllocated) :
+    ∀ argument ∈ cs.lookups, ∀ expression ∈ argument.inputs,
+      expression.selectorBound ≤ cs.numSelectors := by
   intro argument hargument expression hexpression
   exact le_trans
     (Expression.selectorBound_le_lookupInputSelectorBound
       hargument hexpression)
-    (le_max_right _ _)
-
-/-- Closing under synthesis preserves every configure-registered gate. -/
-theorem ConstraintSystem.mem_gates_closeWithOperations_of_mem
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
-    (gate : Gate F) (hgate : gate ∈ cs.gates) :
-    gate ∈ (cs.closeWithOperations ops).gates := by
-  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
-  exact Or.inl hgate
-
-/-- Every synthesis-enabled gate belongs to the closed constraint system. -/
-theorem ConstraintSystem.mem_gates_closeWithOperations_of_enabled
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
-    (gate : Gate F) (hgate : gate ∈ ops.enabledGates) :
-    gate ∈ (cs.closeWithOperations ops).gates := by
-  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
-  by_cases configured : gate ∈ cs.gates
-  · exact Or.inl configured
-  · apply Or.inr
-    rw [ConstraintSystem.missingEnabledGates, List.mem_dedup,
-      List.mem_filter]
-    exact ⟨hgate, by simp [configured]⟩
-
-/-- Closing under synthesis preserves every configure-registered lookup. -/
-theorem ConstraintSystem.mem_lookups_closeWithOperations_of_mem
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
-    (argument : LookupArgument F) (hargument : argument ∈ cs.lookups) :
-    argument ∈ (cs.closeWithOperations ops).lookups := by
-  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
-  exact Or.inl hargument
-
-/-- Every synthesis-enabled lookup belongs to the closed constraint system. -/
-theorem ConstraintSystem.mem_lookups_closeWithOperations_of_enabled
-    [DecidableEq F] (cs : ConstraintSystem F) (ops : Operations F)
-    (argument : LookupArgument F) (hargument : argument ∈ ops.enabledLookups) :
-    argument ∈ (cs.closeWithOperations ops).lookups := by
-  simp only [ConstraintSystem.closeWithOperations, List.mem_append]
-  by_cases configured : argument ∈ cs.lookups
-  · exact Or.inl configured
-  · apply Or.inr
-    rw [ConstraintSystem.missingEnabledLookups, List.mem_dedup,
-      List.mem_filter]
-    exact ⟨hargument, by simp [configured]⟩
+    hallocated
 
 /-! ## Constraint-system derived scalars
 
@@ -542,38 +255,27 @@ section FormalCircuit
 variable [FiniteField F] {ConfigInput Config : Type} {Input Output : TypeMap}
   [CircuitType Input] [CircuitType Output]
 
-/-- The operation stream produced by a `FormalCircuit`'s own configure/synthesize run. -/
-def FormalCircuit.toOperations (c : FormalCircuit F ConfigInput Config Input Output)
-    (ci : ConfigInput) (input : Var Input F) : Operations F :=
-  ((c.synthesize (c.configure ci {}).1 input).operations)
-
-/-- The raw configure result closed under the gates and lookups enabled by the circuit's
-own synthesis run. This is the constraint system consumed by key generation. -/
-def FormalCircuit.toConstraintSystem
+/-- A circuit with no caller requirements registers synthesis in its configure result. -/
+theorem FormalCircuit.operationsKeygenCoherent
     (c : FormalCircuit F ConfigInput Config Input Output)
-    (ci : ConfigInput) (input : Var Input F) : ConstraintSystem F :=
-  (c.configure ci {}).2.closeWithOperations (c.toOperations ci input)
-
-/-- A lawful circuit's synthesis stream is registered in its raw configure result. -/
-theorem FormalCircuit.KeygenLawful.operationsKeygenCoherent
-    {c : FormalCircuit F ConfigInput Config Input Output}
-    (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) (input : Var Input F) :
+    (ci : ConfigInput) (input : Var Input F)
+    (hrequirements : c.keygenRequirements.EmptyAt ci) :
     OperationsKeygenCoherent
       (c.configure ci {}).2
-      (c.toOperations ci input) := by
+      ((c.synthesize (c.configure ci {}).1 input).operations) := by
+  rcases hrequirements with ⟨hconfig, hgates, hlookups⟩
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hregistered :=
-    FormalCircuit.KeygenLawful.registered
-      hlawful ci counts () input 0
+    c.elaborated.registered ci counts hconfig input 0
+  simp only [hgates, hlookups, List.nil_append] at hregistered
   have happlied :=
     hregistered.applyConfigureDelta
       ({} : ConstraintSystem F)
       (program.finalCounts counts)
-  simpa only [FormalCircuit.toOperations, program, counts,
-    Configure.run, ConfigureCounts.ofConstraintSystem] using happlied
+  simpa only [program, counts, Configure.run,
+    ConfigureCounts.ofConstraintSystem] using happlied
 
 /-- A circuit meeting its configure requirements allocates every lookup-input selector. -/
 theorem FormalCircuit.lookupSelectorsAllocated
@@ -590,32 +292,6 @@ theorem FormalCircuit.lookupSelectorsAllocated
   simpa only [ConstraintSystem.LookupSelectorsAllocated, program, counts,
     Configure.run, ConfigureCounts.ofConstraintSystem,
     ConfigureDelta.apply, List.nil_append] using hallocated
-
-/--
-The synthesis-closing compatibility layer is definitionally inactive for lawful
-circuits.
--/
-theorem FormalCircuit.KeygenLawful.closeWithOperations_eq_raw
-    {c : FormalCircuit F ConfigInput Config Input Output}
-    (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) (input : Var Input F)
-    (hrequirements : c.selectorRequirements ci
-      (ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F))) :
-    (c.configure ci {}).2.closeWithOperations (c.toOperations ci input) =
-      (c.configure ci {}).2 :=
-  ConstraintSystem.closeWithOperations_eq_self
-    (hlawful.operationsKeygenCoherent ci input)
-    (c.lookupSelectorsAllocated ci hrequirements)
-
-/-- The canonical compiler already equals raw configure on every lawful circuit. -/
-theorem FormalCircuit.KeygenLawful.toConstraintSystem_eq_raw
-    {c : FormalCircuit F ConfigInput Config Input Output}
-    (hlawful : c.KeygenLawful)
-    (ci : ConfigInput) (input : Var Input F)
-    (hrequirements : c.selectorRequirements ci
-      (ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F))) :
-    c.toConstraintSystem ci input = (c.configure ci {}).2 :=
-  hlawful.closeWithOperations_eq_raw ci input hrequirements
 
 end FormalCircuit
 

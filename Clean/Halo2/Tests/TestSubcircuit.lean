@@ -38,6 +38,12 @@ def parent :
       (Unconstrained Point) Point where
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := WitnessPoint.point.call config offset input
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig offset input region
+      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
+        (WitnessPoint.point.configureCertificate configInput counts hconfig)
+        offset input region }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -81,6 +87,13 @@ def parentWithOp :
   synthesize config offset input := do
     let _ ← assignAdvice config.x (offset + 1) (Witgen.MOver.toIRScalar (Point.x <$> input))
     WitnessPoint.point.call config offset input
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig offset input region
+      simp only [keygen_spine]
+      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
+        (WitnessPoint.point.configureCertificate configInput counts hconfig)
+        offset input region }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>

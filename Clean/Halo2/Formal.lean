@@ -1572,6 +1572,16 @@ theorem toFormal_keygenRequirements
       child.keygenRequirements :=
   rfl
 
+/-- A region circuit's configured handle remains valid after lifting it to the
+layouter level. -/
+def Configured.toFormal
+    {child : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} {name : String}
+    (configured : child.Configured config) :
+    (child.toFormal name).Configured config := by
+  rcases configured with ⟨configInput, counts, hconfig, output_eq⟩
+  exact ⟨configInput, counts, hconfig, output_eq⟩
+
 /-- The region-to-layouter bridge preserves configure/synthesis keygen lawfulness. -/
 theorem KeygenLawful.toFormal
     {child : FormalRegionCircuit F ConfigInput Config Input Output}

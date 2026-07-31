@@ -17,45 +17,6 @@ namespace Halo2
 
 variable {F : Type}
 
-/--
-Closing a constraint system under an operation stream makes configure/synthesis
-registration coherence true by construction.
--/
-theorem OperationsKeygenCoherent.closeWithOperations
-    [DecidableEq F] (cs : ConstraintSystem F) (operations : Operations F) :
-    OperationsKeygenCoherent (cs.closeWithOperations operations) operations := by
-  rw [OperationsKeygenCoherent, Operations.KeygenRegistered,
-    List.forall_iff_forall_mem]
-  intro operation hoperation
-  cases operation with
-  | region name body =>
-      rw [Operation.KeygenRegistered, List.forall_iff_forall_mem]
-      intro regionOperation hregionOperation
-      cases regionOperation with
-      | enableGate gate row =>
-          apply ConstraintSystem.mem_gates_closeWithOperations_of_enabled
-          simp only [Operations.enabledGates, List.mem_flatMap]
-          refine ⟨.region name body, hoperation, ?_⟩
-          simp only [RegionOperations.enabledGates]
-          exact List.mem_filterMap.mpr
-            ⟨.enableGate gate row, hregionOperation, rfl⟩
-      | enableLookup argument selectors row =>
-          apply ConstraintSystem.mem_lookups_closeWithOperations_of_enabled
-          simp only [Operations.enabledLookups, List.mem_flatMap]
-          refine ⟨.region name body, hoperation, ?_⟩
-          simp only [RegionOperations.enabledLookups]
-          exact List.mem_filterMap.mpr
-            ⟨.enableLookup argument selectors row, hregionOperation, rfl⟩
-      | assignAdvice
-      | assignFixed
-      | constrainEqual
-      | constrainConstant
-      | constrainInstance =>
-          trivial
-  | constrainInstance
-  | loadTable =>
-      trivial
-
 private theorem accumulator_le_foldl_max (values : List ℕ) (accumulator : ℕ) :
     accumulator ≤ values.foldl max accumulator := by
   induction values generalizing accumulator with
@@ -339,7 +300,7 @@ def config
 def constraintSystem
     (circuit : FormalCircuit F Unit Config unit unit) :
     ConstraintSystem F :=
-  circuit.toConstraintSystem () ()
+  (circuit.configure () {}).2
 
 /-- Instance-query requests emitted by this circuit's configure program. -/
 def configureInstanceQueries
@@ -591,8 +552,7 @@ variable
 def config (self : TopLevelCircuit F Config PublicInput) : Config :=
   TopLevelCompilation.config self.formalCircuit
 
-/-- The circuit-derived constraint system used by key generation: the configure result
-closed under every gate and lookup enabled by this circuit's synthesis. -/
+/-- The circuit-derived constraint system used by key generation. -/
 def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
   TopLevelCompilation.constraintSystem self.formalCircuit
@@ -634,12 +594,7 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
       (self.publicInputLayout.cells i).1
       (self.publicInputLayout.cells_fst_mem_columns i)
   refine ⟨rotation, ?_⟩
-  exact
-    ConstraintSystem.mem_instanceQueries_closeWithOperations_of_mem
-      (self.formalCircuit.configure () {}).2
-      (self.formalCircuit.toOperations () ())
-      ((self.publicInputLayout.cells i).1, rotation)
-      hquery
+  exact hquery
 
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
@@ -748,9 +703,7 @@ theorem blindingFactors_lt_domainSize
     self.blindingFactors < 2 ^ self.domainExponent :=
   Nat.lt_of_succ_lt self.blindingFactors_succ_lt_domainSize
 
-/-- The pinned constraint system derived solely from the closed circuit: the
-projection of its synthesis-closed constraint system through its circuit-owned
-selector map. -/
+/-- The pinned constraint system derived solely from the closed circuit. -/
 def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
     PinnedConstraintSystem F :=
   PinnedConstraintSystem.derive self.constraintSystem self.selectorMap
@@ -900,20 +853,17 @@ constraint system; it is not a separate top-level circuit obligation. -/
 theorem keygenCoherent
     (self : TopLevelCircuit F Config PublicInput) :
     self.KeygenCoherent := by
-  apply OperationsKeygenCoherent.closeWithOperations
+  exact self.formalCircuit.operationsKeygenCoherent
+    () () self.noCallerRequirements
 
-/--
-Every selector atom in a top-level circuit's lookup inputs is allocated by its
-synthesis-closed constraint system.
--/
+/-- Every selector atom in a top-level circuit's lookup inputs is allocated. -/
 theorem lookupInputsAllocated
     (self : TopLevelCircuit F Config PublicInput) :
     ∀ argument ∈ self.constraintSystem.lookups,
       ∀ expression ∈ argument.inputs,
         expression.selectorBound ≤ self.constraintSystem.numSelectors := by
-  exact ConstraintSystem.lookupInputsAllocated_closeWithOperations
-    (self.formalCircuit.configure () {}).2
-    (self.formalCircuit.toOperations () ())
+  exact (self.formalCircuit.lookupSelectorsAllocated
+    () self.selectorRequirements).lookupInputsAllocated
 
 /-- Read this circuit's public input from its declared instance cells. -/
 def extractPublicInput (self : TopLevelCircuit F Config PublicInput)
