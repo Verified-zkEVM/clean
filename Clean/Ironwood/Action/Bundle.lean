@@ -1,4 +1,5 @@
 import Clean.Ironwood.Action.CircuitPreIronwood
+import Clean.Ironwood.Action.ConfigureCertificates
 
 /-!
 # The Orchard Action circuit: bundle contract (spec / extract / elaborated)
@@ -721,9 +722,67 @@ theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
 instance elaborated (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit AddressPoints
       (fun _ => configure G) (main G B) where
-  configureInfo _ :=
-    { instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
-      instanceQueries_eq := by configure_norm }
+  configureInfo _ := configureElaborated G
+  registered := by
+    intro configInput counts hconfig input i
+    dsimp only [main, CircuitPreIronwood.synthesize, synthesizeBase]
+    simp_all only [keygen_spine]
+    constructor
+    · dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
+      simp_all only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply Ecc.WitnessPoint.pointFormal.call_keygenRegistered_ofCertificate
+            (eccConfigureCertificate G counts).witnessPointFormal
+        | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
+            (eccConfigureCertificate G counts).witnessPointNonIdFormal
+    · constructor
+      · dsimp only [synthChecks, loadPrivate]
+        simp_all only [keygen_spine]
+        repeat' constructor
+        all_goals
+          first
+          | apply
+              (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+                B.merkleQ_onCurve 0 16 (by norm_num)
+                hintWitnesses.merkleSib
+                hintWitnesses.merkleSwap).call_keygenRegistered_ofCertificate
+                (merkle1Certificate G B counts)
+          | apply
+              (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+                B.merkleQ_onCurve 16 16 (by norm_num)
+                (fun i => hintWitnesses.merkleSib (16 + i))
+                (fun i => hintWitnesses.merkleSwap
+                  (16 + i))).call_keygenRegistered_ofCertificate
+                (merkle2Certificate G B counts)
+          | apply (ValueCommit.circuit B.valueCommitV
+              B.valueCommitR).call_keygenRegistered_ofCertificate
+              (valueCommitCertificate G B counts)
+          | apply (DeriveNullifier.circuit
+              B.nullifierK).call_keygenRegistered_ofCertificate
+              (deriveNullifierCertificate G B counts)
+          | apply (SpendAuthority.circuit
+              B.spendAuthG).call_keygenRegistered_ofCertificate
+              (spendAuthorityCertificate G B counts)
+          | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+              B.ivkQ_onCurve).call_keygenRegistered_ofCertificate
+              (commitIvkCertificate G B counts)
+          | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
+              (addressIntegrityCertificate G counts)
+      · dsimp only [synthNotes, loadPrivate]
+        simp_all only [keygen_spine]
+        repeat' constructor
+        all_goals
+          first
+          | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+              B.noteQ_onCurve).call_keygenRegistered_ofCertificate
+              (noteCommitOldCertificate G B counts)
+          | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+              B.noteQ_onCurve).call_keygenRegistered_ofCertificate
+              (noteCommitNewCertificate G B counts)
+          | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
+              (eccConfigureCertificate G counts).witnessPointNonIdFormal
   output cfg _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
@@ -1903,9 +1962,18 @@ theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
 instance elaboratedPost (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit unit
       (fun _ => configure G) (mainPost G B) where
-  configureInfo _ :=
-    { instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
-      instanceQueries_eq := by configure_norm }
+  configureInfo _ := configureElaborated G
+  registered := by
+    intro configInput counts hconfig input i
+    dsimp only [mainPost]
+    simp_all only [keygen_spine]
+    constructor
+    · apply (baseCircuit G B).call_keygenRegistered_ofCertificate
+        ((baseCircuit G B).configureCertificate configInput counts hconfig)
+    · dsimp only [synthCrossAddressChecks]
+      simp_all only [keygen_spine]
+      intro _
+      exact (baseConfigureCertificate G counts).orchardGate
   output _ _ _ := ()
   regionCount _ := 395
   output_eq := by intro _ _ _; rfl

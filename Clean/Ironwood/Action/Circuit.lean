@@ -88,19 +88,76 @@ private structure ConfigureShared where
   genTable : Sinsemilla.GeneratorTableConfig
   lagrangeCoeffs : Fin 8 → Column .fixed
 
-/-- The shared columns and chips allocated before the range-check configuration. -/
-private def configureShared : Configure Fp ConfigureShared := do
-  -- circuit.rs:273-284 — the ten advice columns
+/-- The ten advice-column allocations at the start of Action configuration. Kept as a
+small configure program so its elaborated metadata composes without reducing the full
+Action configure chain. -/
+private def configureAdvices : Configure Fp (Fin 10 → Column .advice) := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
   let a9 ← adviceColumn
-  let advices : Fin 10 → Column .advice := ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
+  return ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
+
+private instance : ElaboratedConfigure configureAdvices := by
+  unfold configureAdvices
+  infer_instance
+
+private def configureAdviceEqualitiesLow (advices : Fin 10 → Column .advice) :
+    Configure Fp Unit := do
+  enableEquality (advices 0); enableEquality (advices 1)
+  enableEquality (advices 2); enableEquality (advices 3)
+  enableEquality (advices 4)
+
+private instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureAdviceEqualitiesLow advices) := by
+  unfold configureAdviceEqualitiesLow
+  infer_instance
+
+private def configureAdviceEqualitiesHigh (advices : Fin 10 → Column .advice) :
+    Configure Fp Unit := do
+  enableEquality (advices 5)
+  enableEquality (advices 6); enableEquality (advices 7)
+  enableEquality (advices 8); enableEquality (advices 9)
+
+private instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureAdviceEqualitiesHigh advices) := by
+  unfold configureAdviceEqualitiesHigh
+  infer_instance
+
+/-- Equality registration for the public input and the ten Action advice columns. -/
+private def configureEqualities
+    (primary : Column .instance) (advices : Fin 10 → Column .advice) :
+    Configure Fp Unit := do
+  enableEquality primary
+  configureAdviceEqualitiesLow advices
+  configureAdviceEqualitiesHigh advices
+
+private instance (primary : Column .instance) (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureEqualities primary advices) := by
+  unfold configureEqualities
+  infer_instance
+
+/-- The eight Lagrange columns and their constant-enabled first column. -/
+private def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
+  let l0 ← fixedColumn; let l1 ← fixedColumn; let l2 ← fixedColumn
+  let l3 ← fixedColumn; let l4 ← fixedColumn; let l5 ← fixedColumn
+  let l6 ← fixedColumn; let l7 ← fixedColumn
+  enableConstant l0
+  return ![l0, l1, l2, l3, l4, l5, l6, l7]
+
+private instance : ElaboratedConfigure configureLagrange := by
+  unfold configureLagrange
+  infer_instance
+
+/-- The shared columns and chips allocated before the range-check configuration. -/
+private def configureShared : Configure Fp ConfigureShared := do
+  -- circuit.rs:273-284 — the ten advice columns
+  let advices ← configureAdvices
   -- circuit.rs:290-329 — `q_orchard` + the top-level checks gate
   let qOrchard ← selector
   createGate (orchardGate qOrchard advices)
   -- circuit.rs:332 — the add chip (advices 7, 8 → 6)
-  let addChipConfig ← AddChip.configure a7 a8 a6
+  let addChipConfig ← AddChip.configure (advices 7) (advices 8) (advices 6)
   -- circuit.rs:335-340 — the Sinsemilla generator table columns
   let tableIdx ← lookupTableColumn
   let tableX ← lookupTableColumn
@@ -108,20 +165,16 @@ private def configureShared : Configure Fp ConfigureShared := do
   let genTable : Sinsemilla.GeneratorTableConfig := { tableIdx, tableX, tableY }
   -- circuit.rs:343-344 — the public-input instance column
   let primary ← instanceColumn
-  enableEquality primary
   -- circuit.rs:347-349 — equality on all advices
-  enableEquality a0; enableEquality a1; enableEquality a2; enableEquality a3
-  enableEquality a4; enableEquality a5; enableEquality a6; enableEquality a7
-  enableEquality a8; enableEquality a9
+  configureEqualities primary advices
   -- circuit.rs:356-365 — the eight Lagrange-coefficient fixed columns
-  let l0 ← fixedColumn; let l1 ← fixedColumn; let l2 ← fixedColumn
-  let l3 ← fixedColumn; let l4 ← fixedColumn; let l5 ← fixedColumn
-  let l6 ← fixedColumn; let l7 ← fixedColumn
-  let lagrangeCoeffs : Fin 8 → Column .fixed := ![l0, l1, l2, l3, l4, l5, l6, l7]
-  -- circuit.rs:371 — constants on the first Lagrange column
-  enableConstant l0
+  let lagrangeCoeffs ← configureLagrange
   return { primary, qOrchard, advices, addChipConfig, genTable,
            lagrangeCoeffs }
+
+private instance : ElaboratedConfigure configureShared := by
+  unfold configureShared
+  infer_instance
 
 /-- The allocation prefix of Rust `Circuit::configure`, through the shared range check. -/
 def configureBase : Configure Fp ConfigureBase := do
@@ -130,6 +183,97 @@ def configureBase : Configure Fp ConfigureBase := do
   let lookupConfig ← LookupRangeCheck.configure 10
     (shared.advices 9) shared.genTable.tableIdx
   return { shared with lookupConfig }
+
+private instance : ElaboratedConfigure configureBase := by
+  unfold configureBase
+  infer_instance
+
+/-- The keygen capabilities exported by Action's shared configuration prefix. -/
+structure ConfigureBaseCertificate (counts : ConfigureCounts)
+    (context : KeygenContext Fp) where
+  orchardGate : orchardGate (configureBase.output counts).qOrchard
+    (configureBase.output counts).advices ∈ context.gates
+  addChip : AddChip.addFormal.ConfigurationCertificate
+    (configureBase.output counts).addChipConfig context
+  shortRange : ∀ numBits,
+    (LookupRangeCheck.shortRangeCheck 10 numBits).ConfigurationCertificate
+      (configureBase.output counts).lookupConfig context
+  bitshiftGate : LookupRangeCheck.bitshiftGate 10
+    (configureBase.output counts).lookupConfig ∈ context.gates
+  rangeLookup : LookupRangeCheck.rangeCheckLookup 10
+    (configureBase.output counts).lookupConfig ∈ context.lookups
+
+namespace ConfigureBaseCertificate
+
+/-- Transport the complete shared-prefix certificate at once. -/
+def mono {counts : ConfigureCounts} {source target : KeygenContext Fp}
+    (certificate : ConfigureBaseCertificate counts source)
+    (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    ConfigureBaseCertificate counts target where
+  orchardGate := gates _ certificate.orchardGate
+  addChip := certificate.addChip.mono gates lookups
+  shortRange numBits := (certificate.shortRange numBits).mono gates lookups
+  bitshiftGate := gates _ certificate.bitshiftGate
+  rangeLookup := lookups _ certificate.rangeLookup
+
+end ConfigureBaseCertificate
+
+/-- Construct the shared-prefix capabilities inside the owner of `configureBase`. -/
+def configureBaseCertificate (counts : ConfigureCounts) :
+    ConfigureBaseCertificate counts
+      { gates := (configureBase.delta counts).gates
+        lookups := (configureBase.delta counts).lookups } := by
+  let base := configureBase.output counts
+  let shared := configureShared.output counts
+  let addCounts : ConfigureCounts :=
+    { counts with
+      numAdviceColumns := counts.numAdviceColumns + 10
+      numSelectors := counts.numSelectors + 1 }
+  refine
+    { orchardGate := ?_
+      addChip := ?_
+      shortRange := ?_
+      bitshiftGate := ?_
+      rangeLookup := ?_ }
+  · simp [configureBase, configureShared, configureAdvices,
+      configureEqualities, configureAdviceEqualitiesLow,
+      configureAdviceEqualitiesHigh, configureLagrange]
+  · apply (AddChip.addFormalConfigureCertificate
+      (base.advices 7) (base.advices 8) (base.advices 6) addCounts).mono
+    · intro gate hgate
+      simp [base, configureBase, configureShared, configureAdvices,
+        configureEqualities, configureAdviceEqualitiesLow,
+        configureAdviceEqualitiesHigh, configureLagrange, AddChip.configure,
+        addCounts] at hgate ⊢
+      aesop
+    · intro argument hargument
+      simp [AddChip.configure] at hargument
+  · intro numBits
+    apply (LookupRangeCheck.shortRangeConfigureCertificate 10 numBits
+      (shared.advices 9) shared.genTable.tableIdx
+      (configureShared.finalCounts counts)).mono
+    · intro gate hgate
+      simp only
+      unfold configureBase
+      apply Configure.mem_gates_delta_bind_right
+      exact hgate
+    · intro argument hargument
+      simp only
+      unfold configureBase
+      apply Configure.mem_lookups_delta_bind_right
+      exact hargument
+  · simp only
+    unfold configureBase
+    apply Configure.mem_gates_delta_bind_right
+    apply Configure.mem_gates_delta_bind_left
+    rw [LookupRangeCheck.configure_delta_gates]
+    simp
+  · unfold configureBase
+    simp only
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_left
+    simp
 
 /-- The composite-chip suffix of Rust `Circuit::configure`. -/
 def configureChips (G : Generators) (base : ConfigureBase) :
@@ -169,10 +313,34 @@ def configureChips (G : Generators) (base : ConfigureBase) :
            sinsemilla1, merkle1, sinsemilla2, merkle2, commitIvkConfig,
            noteCommitOld, noteCommitNew, lookupConfig := base.lookupConfig }
 
+private instance (G : Generators) (base : ConfigureBase) :
+    ElaboratedConfigure (configureChips G base) := by
+  unfold configureChips
+  infer_instance
+
 /-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
 def configure (G : Generators) : Configure Fp Config := do
   let base ← configureBase
   configureChips G base
+
+private instance (G : Generators) : ElaboratedConfigure (configure G) := by
+  unfold configure
+  infer_instance
+
+private theorem configure_instanceQueries (G : Generators) : ∀ counts,
+    ((configure G).delta counts).instanceQueries =
+      [(⟨counts.numInstanceColumns⟩, 0)] := by
+  configure_norm
+
+/-- Reduced configure metadata shared by both Action synthesis bundles. The selector
+certificate remains the compositional one inferred from `configure`; only the public
+instance-query list is replaced by its compact normal form. -/
+@[reducible] def configureElaborated (G : Generators) :
+    ElaboratedConfigure (configure G) :=
+  let inferred : ElaboratedConfigure (configure G) := inferInstance
+  { inferred with
+    instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
+    instanceQueries_eq := configure_instanceQueries G }
 
 /-! ## Synthesize -/
 
