@@ -135,6 +135,13 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
 
 instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
-    ElaboratedConfigure (configure state partialSbox rcA rcB) := {}
+    ElaboratedConfigure (configure state partialSbox rcA rcB) where
+  selectorsAllocated := by
+    intro counts _
+    constructor
+    · simp [configure, fullRoundGate, partialRoundsGate, padAndAddGate,
+        Gate.withSelector]
+      omega
+    · simp [configure, lookupInputSelectorBound]
 
 end Zcash.Circuits.Poseidon

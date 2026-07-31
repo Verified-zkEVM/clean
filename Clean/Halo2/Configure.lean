@@ -1,5 +1,6 @@
 import Clean.Halo2.Expression
 import Clean.Halo2.Tactics.SelectorFree
+import Clean.Halo2.ConfigureAttr
 import Mathlib.Data.List.Dedup
 import Mathlib.Data.List.MinMax
 
@@ -199,6 +200,24 @@ def Gate.withSelector
     (Gate.withSelector name selector queriedCells constraints hfree).selector =
       selector :=
   rfl
+
+open Lean Meta Simp in
+/-- Reduce only a named gate's selector projection, without unfolding its constraints. -/
+def foldGateSelectorProc : Simproc := fun expression => do
+  unless expression.isAppOf ``Gate.selector do
+    return .continue
+  try
+    let reduced ← withTransparency .default (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldGateSelector (Gate.selector _) := foldGateSelectorProc
+attribute [configure_selector_norm] foldGateSelector
 
 /-- A lookup argument. Rust: `lookup::Argument<F>`
 (`halo2_proofs/src/plonk/lookup.rs:7-11`): a tuple of input expressions and a tuple of
@@ -821,6 +840,25 @@ def Expression.selectorBound : Expression F Query → ℕ
   | .add left right
   | .mul left right => max left.selectorBound right.selectorBound
 
+@[simp] theorem Expression.selectorBound_querySelector (selector : Selector) :
+    (querySelector (F := F) selector).selectorBound = selector.index + 1 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryAdvice
+    (column : Column .advice) (rotation : Rotation) :
+    (queryAdvice (F := F) column rotation).selectorBound = 0 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryFixed
+    (column : Column .fixed) :
+    (queryFixed (F := F) column).selectorBound = 0 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryInstance
+    (column : Column .instance) (rotation : Rotation) :
+    (queryInstance (F := F) column rotation).selectorBound = 0 :=
+  rfl
+
 /-- One past every selector index occurring in a lookup's input tuple. -/
 def LookupArgument.inputSelectorBound (argument : LookupArgument F) : ℕ :=
   (argument.inputs.map Expression.selectorBound).foldr max 0
@@ -957,6 +995,48 @@ theorem ConfigureDelta.SelectorsAllocated.append
         | mul =>
             simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
   exact aux cells {}
+
+private theorem foldlTableDelta_gates
+    (tables : List TableColumn) (delta : ConfigureDelta F) :
+    (tables.foldl
+      (fun current table =>
+        current.append { fixedQueries := [(table.inner, 0)] })
+      delta).gates = delta.gates := by
+  induction tables generalizing delta with
+  | nil => rfl
+  | cons table tables ih =>
+      rw [List.foldl_cons, ih]
+      simp [ConfigureDelta.append]
+
+private theorem foldlTableDelta_lookups
+    (tables : List TableColumn) (delta : ConfigureDelta F) :
+    (tables.foldl
+      (fun current table =>
+        current.append { fixedQueries := [(table.inner, 0)] })
+      delta).lookups = delta.lookups := by
+  induction tables generalizing delta with
+  | nil => rfl
+  | cons table tables ih =>
+      rw [List.foldl_cons, ih]
+      simp [ConfigureDelta.append]
+
+@[simp] theorem Configure.delta_lookup_gates
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    ((lookup queriedCells tableMap).delta counts).gates = [] := by
+  unfold Configure.delta lookup
+  simp [foldlTableDelta_gates]
+
+@[simp] theorem Configure.lookupInputSelectorBound_delta_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    lookupInputSelectorBound ((lookup queriedCells tableMap).delta counts).lookups =
+      ((tableMap.map Prod.fst).map Expression.selectorBound).foldr max 0 := by
+  unfold Configure.delta lookup lookupInputSelectorBound
+    LookupArgument.inputSelectorBound
+  simp [foldlTableDelta_lookups]
 
 namespace Configure
 
@@ -1389,14 +1469,10 @@ class ElaboratedConfigure (program : Configure F α) where
   Selector allocation required from the incoming configure state. Primitive gate and
   lookup registration expose requirements; monadic bind composes them.
   -/
-  selectorRequirements : ConfigureCounts → Prop := fun counts =>
-    (program.delta counts).SelectorsAllocated
-      (program.finalCounts counts).numSelectors
+  selectorRequirements : ConfigureCounts → Prop := fun _ => True
   selectorsAllocated : ∀ counts, selectorRequirements counts →
     (program.delta counts).SelectorsAllocated
-      (program.finalCounts counts).numSelectors := by
-    intro _ hrequirements
-    exact hrequirements
+      (program.finalCounts counts).numSelectors
 
 @[simp] theorem ElaboratedConfigure.delta_instanceQueries
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
@@ -1563,6 +1639,28 @@ instance ElaboratedConfigure.lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by
   unfold Halo2.lookupTableColumn
   infer_instance
+
+attribute [configure_selector_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind
+
+open Lean Meta Simp in
+/-- Fold the selector requirements stored in an inferred configure elaboration. -/
+def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
+  unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorRequirements do
+    return .continue
+  try
+    let reduced ← withTransparency .all (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldElaboratedConfigureSelectorRequirements
+    (ElaboratedConfigure.selectorRequirements _ _) :=
+  foldElaboratedConfigureSelectorRequirementsProc
+attribute [configure_selector_norm] foldElaboratedConfigureSelectorRequirements
 
 open Lean Meta Simp in
 /--

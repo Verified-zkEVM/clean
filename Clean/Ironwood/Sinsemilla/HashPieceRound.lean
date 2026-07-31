@@ -206,7 +206,13 @@ instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) :
     ElaboratedConfigure
-      (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) := {}
+      (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) where
+  selectorsAllocated := by
+    intro counts _
+    constructor
+    · simp [configure, initialYQGate, sinsemillaGate, Gate.withSelector]
+    · simp [configure, generatorLookup, yPExpr, yAExpr, qS3Expr,
+        xRExpr, Expression.selectorBound]
 
 /-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece
 (`hash_to_point.rs::hash_piece`, `final_piece`). Deliberately NOT `@[simp]`: proofs keep it
