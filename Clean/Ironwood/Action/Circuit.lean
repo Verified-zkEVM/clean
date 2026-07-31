@@ -323,7 +323,7 @@ def configure (G : Generators) : Configure Fp Config := do
   let base ← configureBase
   configureChips G base
 
-private instance (G : Generators) : ElaboratedConfigure (configure G) := by
+private instance elaboratedConfigure (G : Generators) : ElaboratedConfigure (configure G) := by
   unfold configure
   infer_instance
 
@@ -332,15 +332,30 @@ private theorem configure_instanceQueries (G : Generators) : ∀ counts,
       [(⟨counts.numInstanceColumns⟩, 0)] := by
   configure_norm
 
-/-- Reduced configure metadata shared by both Action synthesis bundles. The selector
-certificate remains the compositional one inferred from `configure`; only the public
-instance-query list is replaced by its compact normal form. -/
+private theorem configure_selectorRequirements (G : Generators) (counts) :
+    (elaboratedConfigure G).selectorRequirements counts := by
+  dsimp +instances only [configure_selector_norm, configure, configureBase,
+    configureChips, configureShared]
+  simp [LookupRangeCheck.rangeCheckLookup, Expression.selectorBound,
+    Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
+    Ecc.Add.add, Ecc.Mul.configure, Ecc.MulIncomplete.configure,
+    Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
+    Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+    Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure]
+
+/-- Reduced configure metadata shared by both Action synthesis bundles. Public
+instance-query and selector requirements are stored in their compact normal forms. -/
 @[reducible] def configureElaborated (G : Generators) :
     ElaboratedConfigure (configure G) :=
   let inferred : ElaboratedConfigure (configure G) := inferInstance
   { inferred with
     instanceQueries counts := [(⟨counts.numInstanceColumns⟩, 0)]
-    instanceQueries_eq := configure_instanceQueries G }
+    instanceQueries_eq := configure_instanceQueries G
+    selectorRequirements _ := True
+    selectorsAllocated counts _ :=
+      (elaboratedConfigure G).selectorsAllocated counts
+        (configure_selectorRequirements G counts) }
 
 /-! ## Synthesize -/
 

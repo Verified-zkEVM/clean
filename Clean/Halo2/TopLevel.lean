@@ -533,6 +533,10 @@ structure TopLevelCircuit
     [ProvableType PublicInput] where
   /-- The underlying unit-config-input, unit-input, unit-output formal circuit. -/
   formalCircuit : FormalCircuit F Unit Config unit unit
+  /-- A closed circuit borrows no gate or lookup arguments from an enclosing circuit. -/
+  noCallerRequirements : formalCircuit.keygenRequirements.EmptyAt ()
+  /-- A closed circuit borrows no selector allocation from an incoming configure state. -/
+  selectorRequirements : formalCircuit.selectorRequirements () {}
   /--
   Dense public prefixes for the instance columns derived from this circuit's own
   configure-time query list.

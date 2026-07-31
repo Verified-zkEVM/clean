@@ -141,6 +141,14 @@ structure KeygenRequirements (F ConfigInput : Type) where
   gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
   lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
 
+/-- A configure input has no gate or lookup requirements left for an enclosing circuit. -/
+structure KeygenRequirements.EmptyAt
+    {ConfigInput : Type} (self : KeygenRequirements F ConfigInput)
+    (input : ConfigInput) where
+  configLawful : self.configLawful input
+  gates_eq : self.gates input configLawful = []
+  lookups_eq : self.lookups input configLawful = []
+
 /--
 Static registration of one region operation in explicit configure-produced gate and
 lookup lists.
