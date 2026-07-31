@@ -73,4 +73,35 @@ instance (advices : Fin 10 → Column .advice)
   unfold configure
   infer_instance
 
+/--
+The two gates borrowed through a fixed-base wrapper are registered by the shared
+`MulFixed.configure` call inside the ECC chip.
+-/
+theorem mem_mulFixed_gates (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10)
+    (counts : ConfigureCounts) (gate : Gate Fp)
+    (hgate :
+      let cfg :=
+        ((configure advices lagrangeCoeffs rangeCheck).output counts)
+          |>.mulFixedShort.superConfig
+      gate ∈ [DecomposeRunningSum.rangeCheckGate 3 cfg.runningSumConfig,
+        MulFixed.coordsGate cfg]) :
+    gate ∈
+      ((configure advices lagrangeCoeffs rangeCheck).delta counts).gates := by
+  unfold configure
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  apply List.mem_append_right
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  apply List.mem_append_right
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  apply List.mem_append_right
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  apply List.mem_append_right
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  apply List.mem_append_left
+  unfold configure at hgate
+  simpa [MulFixed.configure, MulFixed.Short.configure,
+    DecomposeRunningSum.configure] using hgate
+
 end Zcash.Circuits.Ecc

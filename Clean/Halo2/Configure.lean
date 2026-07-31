@@ -690,6 +690,21 @@ def instanceColumn : Configure F (Column .instance) :=
     (⟨counts.numInstanceColumns⟩, {},
       { numInstanceColumns := 1 })⟩
 
+@[simp] theorem Configure.delta_adviceColumn
+    (counts : ConfigureCounts) :
+    (adviceColumn : Configure F (Column .advice)).delta counts = {} :=
+  rfl
+
+@[simp] theorem Configure.delta_fixedColumn
+    (counts : ConfigureCounts) :
+    (fixedColumn : Configure F (Column .fixed)).delta counts = {} :=
+  rfl
+
+@[simp] theorem Configure.delta_instanceColumn
+    (counts : ConfigureCounts) :
+    (instanceColumn : Configure F (Column .instance)).delta counts = {} :=
+  rfl
+
 /-- Rust: `meta.selector()` (a simple selector). -/
 def selector : Configure F Selector :=
   ⟨fun counts =>
