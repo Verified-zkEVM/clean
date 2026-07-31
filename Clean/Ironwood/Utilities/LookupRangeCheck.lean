@@ -107,6 +107,14 @@ instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   unfold configure
   infer_instance
 
+@[simp] theorem configure_delta_lookups (K : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).delta counts).lookups =
+      [rangeCheckLookup K ((configure K runningSum tableIdx).output counts)] := by
+  unfold configure lookup
+  rfl
+
 /-! ## The table loader
 
 Packaging decision: a plain `def load … : Circuit Fp Unit` emitting the single `loadTable`
