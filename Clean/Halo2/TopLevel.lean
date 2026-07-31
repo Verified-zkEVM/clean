@@ -557,6 +557,39 @@ def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
   TopLevelCompilation.constraintSystem self.formalCircuit
 
+/-- The permutation chunk width derived from the circuit's constraint system. -/
+def chunkLen (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.constraintSystem.chunkLen
+
+/-- The number of advice columns configured by the circuit. -/
+def adviceColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.constraintSystem.numAdviceColumns
+
+/-- The number of selectors configured by the circuit. -/
+def selectorCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.constraintSystem.numSelectors
+
+/-- The number of lookup arguments configured by the circuit. -/
+def lookupCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.constraintSystem.lookups.length
+
+/-- The columns participating in the circuit's permutation argument. -/
+def permutationColumns
+    (self : TopLevelCircuit F Config PublicInput) : List AnyColumn :=
+  self.constraintSystem.permutationColumns
+
+/-- The number of columns participating in the circuit's permutation argument. -/
+def permutationColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.permutationColumns.length
+
+/-- The number of chunks in the circuit's permutation argument. -/
+def permutationSetCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  (self.permutationColumnCount + self.chunkLen - 1) / self.chunkLen
+
+/-- The number of quotient-polynomial pieces required by the circuit. -/
+def quotientPieceCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  csDegree self.constraintSystem - 1
+
 /-- Public-input cells are distinct by construction from queried columns and prefixes. -/
 theorem publicInputLayout_cells_injective
     (self : TopLevelCircuit F Config PublicInput) :
@@ -641,6 +674,27 @@ theorem publicInputLayout_cells_snd_lt_usedRows
 def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   TopLevelCompilation.domainExponent self.formalCircuit self.publicInputLayout
 
+/-- The size of the circuit's smallest fitting evaluation domain. -/
+def n (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  2 ^ self.domainExponent
+
+/-- The circuit-owned domain size is the power of two selected by compilation. -/
+@[simp] theorem n_eq_two_pow_domainExponent
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.n = 2 ^ self.domainExponent := by
+  rfl
+
+/-- The circuit's evaluation domain is nonempty. -/
+theorem n_pos (self : TopLevelCircuit F Config PublicInput) :
+    0 < self.n := by
+  rw [n_eq_two_pow_domainExponent]
+  exact pow_pos (by decide) self.domainExponent
+
+/-- The circuit's evaluation-domain size is nonzero. -/
+theorem n_ne_zero (self : TopLevelCircuit F Config PublicInput) :
+    self.n ≠ 0 :=
+  Nat.ne_of_gt self.n_pos
+
 /-- The selector-compression map derived from this circuit and its fitting domain. -/
 def selectorMap
     (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
@@ -655,6 +709,13 @@ def usableRowsAt
     (self : TopLevelCircuit F Config PublicInput) (k : ℕ) : ℕ :=
   2 ^ k - self.blindingFactors - 1
 
+/-- The circuit's fitting domain leaves exactly the non-blinding prefix usable. -/
+@[simp] theorem usableRowsAt_domainExponent
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.usableRowsAt self.domainExponent =
+      self.n - self.blindingFactors - 1 := by
+  rfl
+
 /-- The total domain compiler leaves room for the full circuit footprint. -/
 theorem usedRows_le_usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput) :
@@ -667,13 +728,14 @@ theorem usedRows_le_usableRowsAt_domainExponent
 /-- The compiler-derived domain includes Halo 2's three mandatory terminal rows. -/
 theorem blindingFactors_add_three_le_domainSize
     (self : TopLevelCircuit F Config PublicInput) :
-    self.blindingFactors + 3 ≤ 2 ^ self.domainExponent := by
+    self.blindingFactors + 3 ≤ self.n := by
   have hfit := Halo2.minimalKForRows_fits
     self.constraintSystem self.usedRows
   have hminimum :
       self.constraintSystem.minimumRows ≤ 2 ^ self.domainExponent :=
     (Nat.le_max_right _ _).trans hfit
-  simpa only [ConstraintSystem.minimumRows, blindingFactors] using hminimum
+  simpa only [ConstraintSystem.minimumRows, blindingFactors,
+    n_eq_two_pow_domainExponent] using hminimum
 
 /-- Every public-input cell lies in the compiler-derived usable-row range. -/
 theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
@@ -687,26 +749,33 @@ theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
 /-- The canonical domain leaves a usable row beyond the blinding suffix. -/
 theorem blindingFactors_succ_lt_domainSize
     (self : TopLevelCircuit F Config PublicInput) :
-    self.blindingFactors + 1 < 2 ^ self.domainExponent := by
+    self.blindingFactors + 1 < self.n := by
   have hfit := (Nat.le_max_right _ _).trans
     (Halo2.minimalKForRows_fits
       (TopLevelCompilation.constraintSystem self.formalCircuit)
       (TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout))
   simp only [ConstraintSystem.minimumRows] at hfit
-  simp only [blindingFactors, domainExponent,
+  simp only [blindingFactors, n_eq_two_pow_domainExponent, domainExponent,
     TopLevelCompilation.domainExponent, constraintSystem] at *
   omega
 
 /-- The canonical domain has strictly more rows than the blinding count. -/
 theorem blindingFactors_lt_domainSize
     (self : TopLevelCircuit F Config PublicInput) :
-    self.blindingFactors < 2 ^ self.domainExponent :=
+    self.blindingFactors < self.n :=
   Nat.lt_of_succ_lt self.blindingFactors_succ_lt_domainSize
 
 /-- The pinned constraint system derived solely from the closed circuit. -/
 def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
     PinnedConstraintSystem F :=
   PinnedConstraintSystem.derive self.constraintSystem self.selectorMap
+
+/-- The query state immediately after compiling the circuit's flattened gates. -/
+def gateQueryState (self : TopLevelCircuit F Config PublicInput) : QueryState :=
+  (eraseGates
+    ((flatGates self.constraintSystem).map
+      (substSelectorMap self.selectorMap.lookup))
+    (queryWalkInit self.selectorMap self.constraintSystem)).2
 
 /--
 The circuit-owned pinned constraint system is exactly the projection using its
@@ -717,6 +786,37 @@ theorem pinnedCS_eq_derive
     self.pinnedCS =
       PinnedConstraintSystem.derive self.constraintSystem self.selectorMap :=
   rfl
+
+/-- The instance-query layout of the circuit-owned pinned constraint system. -/
+def instanceQueryLayout
+    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+  self.pinnedCS.instanceQueryLayout
+
+/-- The advice-query layout of the circuit-owned pinned constraint system. -/
+def adviceQueryLayout
+    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+  self.pinnedCS.adviceQueryLayout
+
+/-- The fixed-query layout of the circuit-owned pinned constraint system. -/
+def fixedQueryLayout
+    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+  self.pinnedCS.fixedQueryLayout
+
+/-- The number of instance queries in the circuit-owned pinned constraint system. -/
+def instanceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.instanceQueryLayout.length
+
+/-- The number of advice queries in the circuit-owned pinned constraint system. -/
+def adviceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.adviceQueryLayout.length
+
+/-- The number of fixed queries in the circuit-owned pinned constraint system. -/
+def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.fixedQueryLayout.length
+
+/-- The number of fixed columns in the circuit-owned pinned constraint system. -/
+def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.pinnedCS.numFixedColumns
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
 def fixedAssignments
@@ -732,21 +832,15 @@ def fixedRows
 
 @[simp] theorem fixedRows_length
     (self : TopLevelCircuit F Config PublicInput) :
-    self.fixedRows.length =
-      (PinnedConstraintSystem.derive
-        self.constraintSystem self.selectorMap).numFixedColumns := by
+    self.fixedRows.length = self.fixedColumnCount := by
   apply Layout.denseFixedColumns_length
 
 /-- Every compiled fixed column spans the full evaluation domain. -/
 theorem fixedRows_getD_length
     (self : TopLevelCircuit F Config PublicInput)
     (column : ℕ)
-    (hcolumn :
-      column <
-        (PinnedConstraintSystem.derive
-          self.constraintSystem self.selectorMap).numFixedColumns) :
-    (self.fixedRows.getD column []).length =
-      2 ^ self.domainExponent := by
+    (hcolumn : column < self.fixedColumnCount) :
+    (self.fixedRows.getD column []).length = self.n := by
   apply Layout.denseFixedColumns_getD_length
   exact hcolumn
 
