@@ -70,8 +70,26 @@ def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Ga
       ("v_old = 0 or enable_spends = 1", vOld * ((1 : Fp) - enableSpends)),
       ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ]
 
-/-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
-def configure (G : Generators) : Configure Fp Config := do
+/-- Columns and shared chips allocated before the composite chip assembly. -/
+structure ConfigureBase where
+  primary : Column .instance
+  qOrchard : Selector
+  advices : Fin 10 → Column .advice
+  addChipConfig : AddChip.Config
+  genTable : Sinsemilla.GeneratorTableConfig
+  lagrangeCoeffs : Fin 8 → Column .fixed
+  lookupConfig : LookupRangeCheck.Config 10
+
+private structure ConfigureShared where
+  primary : Column .instance
+  qOrchard : Selector
+  advices : Fin 10 → Column .advice
+  addChipConfig : AddChip.Config
+  genTable : Sinsemilla.GeneratorTableConfig
+  lagrangeCoeffs : Fin 8 → Column .fixed
+
+/-- The shared columns and chips allocated before the range-check configuration. -/
+private def configureShared : Configure Fp ConfigureShared := do
   -- circuit.rs:273-284 — the ten advice columns
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
@@ -102,29 +120,59 @@ def configure (G : Generators) : Configure Fp Config := do
   let lagrangeCoeffs : Fin 8 → Column .fixed := ![l0, l1, l2, l3, l4, l5, l6, l7]
   -- circuit.rs:371 — constants on the first Lagrange column
   enableConstant l0
+  return { primary, qOrchard, advices, addChipConfig, genTable,
+           lagrangeCoeffs }
+
+/-- The allocation prefix of Rust `Circuit::configure`, through the shared range check. -/
+def configureBase : Configure Fp ConfigureBase := do
+  let shared ← configureShared
   -- circuit.rs:375 — the shared 10-bit range check on `advices[9]`
-  let lookupConfig ← LookupRangeCheck.configure 10 a9 tableIdx
+  let lookupConfig ← LookupRangeCheck.configure 10
+    (shared.advices 9) shared.genTable.tableIdx
+  return { shared with lookupConfig }
+
+/-- The composite-chip suffix of Rust `Circuit::configure`. -/
+def configureChips (G : Generators) (base : ConfigureBase) :
+    Configure Fp Config := do
+  let advices := base.advices
+  let lagrangeCoeffs := base.lagrangeCoeffs
+  let a0 := advices 0; let a1 := advices 1; let a2 := advices 2
+  let a3 := advices 3; let a4 := advices 4; let a5 := advices 5
+  let a6 := advices 6; let a7 := advices 7; let a8 := advices 8
+  let a9 := advices 9
+  let l0 := lagrangeCoeffs 0; let l1 := lagrangeCoeffs 1
+  let l2 := lagrangeCoeffs 2; let l3 := lagrangeCoeffs 3
+  let l4 := lagrangeCoeffs 4; let l5 := lagrangeCoeffs 5
+  let l6 := lagrangeCoeffs 6; let l7 := lagrangeCoeffs 7
   -- circuit.rs:379-380 — the ECC chip
-  let eccConfig ← Ecc.configure advices lagrangeCoeffs lookupConfig
+  let eccConfig ← Ecc.configure advices lagrangeCoeffs base.lookupConfig
   -- circuit.rs:383-391 — Poseidon (state `advices[6..9]`, sbox `advices[5]`,
   -- `rc_a = lagrange[2..5]`, `rc_b = lagrange[5..8]`)
   let poseidonConfig ← Poseidon.configure ![a6, a7, a8] a5 ![l2, l3, l4] ![l5, l6, l7]
   -- circuit.rs:397-410 — Sinsemilla 1 (advices[0..5], pieces `advices[6]`,
   -- `y_Q` fixed `lagrange[0]`) + Merkle 1
-  let sinsemilla1 ← Sinsemilla.HashPiece.configure G a0 a1 a2 a3 a4 a6 l0 genTable
+  let sinsemilla1 ←
+    Sinsemilla.HashPiece.configure G a0 a1 a2 a3 a4 a6 l0 base.genTable
   let merkle1 ← Sinsemilla.Merkle.configure sinsemilla1
   -- circuit.rs:416-429 — Sinsemilla 2 (advices[5..], pieces `advices[7]`,
   -- `y_Q` fixed `lagrange[1]`) + Merkle 2
-  let sinsemilla2 ← Sinsemilla.HashPiece.configure G a5 a6 a7 a8 a9 a7 l1 genTable
+  let sinsemilla2 ←
+    Sinsemilla.HashPiece.configure G a5 a6 a7 a8 a9 a7 l1 base.genTable
   let merkle2 ← Sinsemilla.Merkle.configure sinsemilla2
   -- circuit.rs:433 — CommitIvk
   let commitIvkConfig ← CommitIvk.configure advices
   -- circuit.rs:437-443 — the two NoteCommit chips
   let noteCommitOld ← NoteCommit.configure advices
   let noteCommitNew ← NoteCommit.configure advices
-  return { primary, qOrchard, advices, addChipConfig, eccConfig, poseidonConfig,
+  return { primary := base.primary, qOrchard := base.qOrchard, advices,
+           addChipConfig := base.addChipConfig, eccConfig, poseidonConfig,
            sinsemilla1, merkle1, sinsemilla2, merkle2, commitIvkConfig,
-           noteCommitOld, noteCommitNew, lookupConfig }
+           noteCommitOld, noteCommitNew, lookupConfig := base.lookupConfig }
+
+/-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
+def configure (G : Generators) : Configure Fp Config := do
+  let base ← configureBase
+  configureChips G base
 
 /-! ## Synthesize -/
 
