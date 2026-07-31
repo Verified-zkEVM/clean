@@ -115,6 +115,14 @@ instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   unfold configure lookup
   rfl
 
+@[simp] theorem configure_delta_gates (K : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).delta counts).gates =
+      [bitshiftGate K ((configure K runningSum tableIdx).output counts)] := by
+  unfold configure
+  rfl
+
 /-! ## The table loader
 
 Packaging decision: a plain `def load … : Circuit Fp Unit` emitting the single `loadTable`
@@ -1201,6 +1209,27 @@ theorem witnessCheckDecomposed_keygenRegistered
       gates lookups := by
   unfold witnessCheckDecomposed
   keygen_registration
+
+/-- A short-range-check capability exported by the shared range-check configurer. -/
+def shortRangeConfigureCertificate (K numBits : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    (shortRangeCheck K numBits).ConfigurationCertificate
+      ((configure K runningSum tableIdx).output counts)
+      { gates := ((configure K runningSum tableIdx).delta counts).gates
+        lookups := ((configure K runningSum tableIdx).delta counts).lookups } := by
+  let cfg := (configure K runningSum tableIdx).output counts
+  apply ((shortRangeCheck K numBits).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hgate
+    simpa [cfg] using hgate
+  · intro argument hargument
+    simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    simpa [cfg] using hargument
 
 derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool) :=
   rangeCheckAt K numWords strict

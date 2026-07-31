@@ -366,6 +366,79 @@ def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) :=
   (hashRegion G ns Q hQ hns).toFormal
 
+attribute [keygen_metadata_projection] hashCircuit hashRegion
+
+/-- A hash-to-point capability exported by one HashPiece configure run. -/
+def hashConfigureCertificate (G : Generators) (ns : List ℕ)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : Sinsemilla.GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    (hashCircuit G ns Q hQ hns).ConfigurationCertificate
+      ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+        witnessPieces fixedYQ genTable).output counts)
+      { gates := ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+          witnessPieces fixedYQ genTable).delta counts).gates
+        lookups := ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+          witnessPieces fixedYQ genTable).delta counts).lookups } := by
+  let cfg := (Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+    witnessPieces fixedYQ genTable).output counts
+  apply ((hashRegion G ns Q hQ hns).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hgate
+    rcases List.mem_cons.mp hgate with hinitial | hsinsemilla
+    · subst gate
+      simp only
+      unfold Sinsemilla.HashPiece.configure
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_left
+      simp [cfg, Sinsemilla.HashPiece.configure]
+    · simp only [List.mem_singleton] at hsinsemilla
+      subst gate
+      simp only
+      unfold Sinsemilla.HashPiece.configure
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_left
+      simp [cfg, Sinsemilla.HashPiece.configure]
+  · intro argument hargument
+    simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    simp only [List.mem_singleton] at hargument
+    subst argument
+    simp only
+    unfold Sinsemilla.HashPiece.configure
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_left
+    simp [cfg, Sinsemilla.HashPiece.configure, lookup, Configure.delta,
+      ConfigureDelta.append, Sinsemilla.HashPiece.generatorLookup]
+
 /-- Call the hash bundle (Rust `hash_to_point` at a layouter). -/
 def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])

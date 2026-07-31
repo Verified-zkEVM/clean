@@ -700,6 +700,43 @@ def circuit (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
 
+/-- Package CommitIvk from the commitment child and the three arguments registered
+by its own piece/canonicity stages. -/
+def configurationCertificate (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) {cfg : Config}
+    {context : KeygenContext Fp}
+    (commit : (Sinsemilla.CommitDomain.commit G ns R Q hQ
+      ns_ne_nil).ConfigurationCertificate
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) context)
+    (bitshift : LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig ∈ context.gates)
+    (canonicity : CommitIvk.gate cfg.gate ∈ context.gates)
+    (rangeLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
+      context.lookups) :
+    (circuit G R Q hQ).ConfigurationCertificate cfg context := by
+  apply ((circuit G R Q hQ).configureCertificate
+    cfg {} commit.configured).mono
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    rcases List.mem_append.mp hrequired with hlocal | hcommit
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hlocal
+      rcases hlocal with hbitshift | hcanonicity
+      · rw [hbitshift]
+        exact bitshift
+      · rw [hcanonicity]
+        exact canonicity
+    · exact commit.gates_of_configured required hcommit
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    rcases List.mem_append.mp hrequired with hrange | hcommit
+    · simp only [List.mem_singleton] at hrange
+      rw [hrange]
+      exact rangeLookup
+    · exact commit.lookups_of_configured required hcommit
+
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ
 

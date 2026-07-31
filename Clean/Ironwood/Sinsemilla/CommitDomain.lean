@@ -340,6 +340,38 @@ def commit (G : Generators) (ns : List ℕ)
     · rw [hPB0]; exact hB0valid
     · rw [hBl]; exact R.smul_valid _
 
+/-- Assemble a Sinsemilla commitment capability from its three direct children. -/
+def configurationCertificate (G : Generators) (ns : List ℕ)
+    (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    {bcfg : Ecc.MulFixed.FullWidth.Config} {hcfg : HashPiece.Config}
+    {acfg : Ecc.Add.Config} {context : KeygenContext Fp}
+    (mul : (Ecc.MulFixed.FullWidth.circuit R).ConfigurationCertificate bcfg context)
+    (hash : (HashToPoint.hashCircuit G ns Q hQ hns).ConfigurationCertificate
+      hcfg context)
+    (add : Ecc.Add.addFormal.ConfigurationCertificate acfg context) :
+    (commit G ns R Q hQ hns).ConfigurationCertificate
+      (bcfg, hcfg, acfg) context := by
+  let lawful : (keygenRequirements G ns R Q hQ hns).configLawful
+      (bcfg, hcfg, acfg) := ⟨mul.configured, hash.configured, add.configured⟩
+  apply ((commit G ns R Q hQ hns).configureCertificate
+    (bcfg, hcfg, acfg) {} lawful).mono
+  · intro required hrequired
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with (hrequired | hrequired) | hrequired
+    · exact mul.gates_of_configured required hrequired
+    · exact hash.gates_of_configured required hrequired
+    · exact add.gates_of_configured required hrequired
+  · intro required hrequired
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with (hrequired | hrequired) | hrequired
+    · exact mul.lookups_of_configured required hrequired
+    · exact hash.lookups_of_configured required hrequired
+    · exact add.lookups_of_configured required hrequired
+
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns
 

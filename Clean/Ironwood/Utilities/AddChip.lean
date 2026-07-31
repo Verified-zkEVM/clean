@@ -114,6 +114,27 @@ theorem addFormal_keygenLawful :
     addFormal.KeygenLawful keygenRequirements :=
   add_keygenLawful.toFormal "c = a + b"
 
+/-- The layouter add capability exported by one AddChip configure run. -/
+def addFormalConfigureCertificate (a b c : Column .advice)
+    (counts : ConfigureCounts) :
+    addFormal.ConfigurationCertificate
+      ((configure a b c).output counts)
+      { gates := ((configure a b c).delta counts).gates
+        lookups := ((configure a b c).delta counts).lookups } := by
+  let cfg := (configure a b c).output counts
+  apply (add.configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [add, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_singleton] at hgate
+    subst gate
+    simp [cfg, configure]
+  · intro argument hargument
+    simp only [add, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    exact False.elim (List.not_mem_nil hargument)
+
 derive_contract_bridges addFormal := addFormal
 
 end Zcash.Circuits.AddChip

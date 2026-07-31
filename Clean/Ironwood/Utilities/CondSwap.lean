@@ -166,4 +166,32 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOB
 
+/-- A conditional-swap capability exported by its producing configure run. -/
+def swapConfigureCertificate
+    (a b aSwapped bSwapped swapColumn : Column .advice)
+    (counts : ConfigureCounts) (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) :
+    (swap wb wswap).ConfigurationCertificate
+      ((configure a b aSwapped bSwapped swapColumn).output counts)
+      { gates := ((configure a b aSwapped bSwapped swapColumn).delta counts).gates
+        lookups := ((configure a b aSwapped bSwapped swapColumn).delta counts).lookups } := by
+  let cfg := (configure a b aSwapped bSwapped swapColumn).output counts
+  apply ((swap wb wswap).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [swap, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_singleton] at hgate
+    subst gate
+    simp only
+    unfold configure
+    apply Configure.mem_gates_delta_bind_right
+    apply Configure.mem_gates_delta_bind_right
+    apply Configure.mem_gates_delta_bind_left
+    simp [cfg, configure]
+  · intro argument hargument
+    simp only [swap, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    exact False.elim (List.not_mem_nil hargument)
+
 end Zcash.Circuits.CondSwap

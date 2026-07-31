@@ -615,7 +615,7 @@ theorem synthGates_keygenRegistered
     ((synthGates cfg input pcs ccs iHash).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured) := by
-  keygen_registration
+  keygen_registration [synthGates]
 
 @[keygen_helper]
 theorem synth_keygenRegistered

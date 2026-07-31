@@ -227,6 +227,27 @@ def hash (capacity : Fp) :
     rw [h_input.1, h_input.2]
     rfl
 
+/-- The hash capability exported by one aggregate Poseidon configure run. -/
+def hashConfigureCertificate (capacity : Fp)
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts : ConfigureCounts) :
+    (hash capacity).ConfigurationCertificate
+      ((configure state partialSbox rcA rcB).output counts)
+      { gates := ((configure state partialSbox rcA rcB).delta counts).gates
+        lookups := ((configure state partialSbox rcA rcB).delta counts).lookups } := by
+  let cfg := (configure state partialSbox rcA rcB).output counts
+  apply ((hash capacity).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [hash, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hgate
+    rcases hgate with rfl | rfl | rfl <;> simp [cfg, configure]
+  · intro argument hargument
+    simp only [hash, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    exact False.elim (List.not_mem_nil hargument)
+
 derive_contract_bridges hash (capacity : Fp) := hash capacity
 
 end Zcash.Circuits.Poseidon
