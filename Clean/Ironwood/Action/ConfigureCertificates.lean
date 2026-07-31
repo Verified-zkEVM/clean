@@ -697,5 +697,4 @@ def deriveNullifierCertificate (G : Generators) (B : Bases)
     · exact (ecc.mulFixedBaseField B.nullifierK).lookups_of_configured argument hbase
     · exact ecc.addFormal.lookups_of_configured argument haddLookup
 
-
 end Zcash.Circuits.Action.Circuit
