@@ -27,6 +27,28 @@ initialize keygenConfiguredAttr : TagAttribute ←
   registerTagAttribute `keygen_configured
     "A constructor proving that a circuit config came from its configure program."
 
+syntax (name := keygenConfiguredOutput) "keygen_configured_output" ident : attr
+
+initialize keygenConfiguredOutputAttr : ParametricAttribute Name ←
+  registerParametricAttribute {
+    name := `keygenConfiguredOutput
+    descr := "An output-configured constructor and its matching configure projection."
+    getParam := fun _ stx => match stx with
+      | `(attr| keygen_configured_output $projection:ident) =>
+          pure projection.getId
+      | _ => throwError "expected a configure projection" }
+
+syntax (name := keygenConfiguredPure) "keygen_configured_pure" ident : attr
+
+initialize keygenConfiguredPureAttr : ParametricAttribute Name ←
+  registerParametricAttribute {
+    name := `keygenConfiguredPure
+    descr := "A pure-configured constructor and its matching configure projection."
+    getParam := fun _ stx => match stx with
+      | `(attr| keygen_configured_pure $projection:ident) =>
+          pure projection.getId
+      | _ => throwError "expected a configure projection" }
+
 initialize keygenHelperAttr : TagAttribute ←
   registerTagAttribute `keygen_helper
     "A registration certificate for a raw circuit helper."
@@ -42,5 +64,9 @@ initialize keygenRequirementProjectionAttr : TagAttribute ←
 initialize keygenMetadataProjectionAttr : TagAttribute ←
   registerTagAttribute `keygen_metadata_projection
     "A keygen metadata projection that may be unfolded without exposing synthesis operations."
+
+initialize keygenConfigureProjectionAttr : TagAttribute ←
+  registerTagAttribute `keygen_configure_projection
+    "The configure projection of a formal circuit bundle."
 
 end Halo2

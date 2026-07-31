@@ -43,6 +43,74 @@ namespace Halo2
 
 variable {F : Type} [FiniteField F] {Input Output Witness : TypeMap}
 
+/-- The keygen arguments available at a circuit boundary. -/
+structure KeygenContext (F : Type) where
+  gates : List (Gate F)
+  lookups : List (LookupArgument F)
+
+/--
+A configure result together with proof that every argument it provides or borrows is
+available in an ambient keygen context.
+
+This is the configure-side capability consumed by an opaque subcircuit call. Aggregate
+configurers may package several such values; monadic composition transports them by
+`mono` without reopening the configured child.
+-/
+structure ConfigurationCertificate
+    {ConfigInput Config : Type}
+    (requirements : KeygenRequirements F ConfigInput)
+    (configure : ConfigInput → Configure F Config)
+    (config : Config) (context : KeygenContext F) where
+  configInput : ConfigInput
+  counts : ConfigureCounts
+  configLawful : requirements.configLawful configInput
+  output_eq : (configure configInput).output counts = config
+  gates : ∀ gate,
+    gate ∈ requirements.gates configInput configLawful ++
+      ((configure configInput).delta counts).gates →
+    gate ∈ context.gates
+  lookups : ∀ argument,
+    argument ∈ requirements.lookups configInput configLawful ++
+      ((configure configInput).delta counts).lookups →
+    argument ∈ context.lookups
+
+namespace ConfigurationCertificate
+
+/-- The canonical certificate in the configure program's exact resulting context. -/
+def ofOutput
+    {ConfigInput Config : Type}
+    (requirements : KeygenRequirements F ConfigInput)
+    (configure : ConfigInput → Configure F Config)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (configLawful : requirements.configLawful configInput) :
+    ConfigurationCertificate requirements configure
+      ((configure configInput).output counts)
+      { gates := requirements.gates configInput configLawful ++
+          ((configure configInput).delta counts).gates
+        lookups := requirements.lookups configInput configLawful ++
+          ((configure configInput).delta counts).lookups } :=
+  ⟨configInput, counts, configLawful, rfl, fun _ h => h, fun _ h => h⟩
+
+/-- Transport a configured capability into a larger ambient context. -/
+def mono
+    {ConfigInput Config : Type}
+    {requirements : KeygenRequirements F ConfigInput}
+    {configure : ConfigInput → Configure F Config}
+    {config : Config} {source target : KeygenContext F}
+    (certificate : ConfigurationCertificate requirements configure config source)
+    (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    ConfigurationCertificate requirements configure config target where
+  configInput := certificate.configInput
+  counts := certificate.counts
+  configLawful := certificate.configLawful
+  output_eq := certificate.output_eq
+  gates gate hgate := gates gate (certificate.gates gate hgate)
+  lookups argument hargument :=
+    lookups argument (certificate.lookups argument hargument)
+
+end ConfigurationCertificate
+
 /--
 The complete reduced metadata of a layouter circuit's configure/synthesize pair.
 
@@ -331,6 +399,26 @@ abbrev keygenRequirements
     KeygenRequirements F ConfigInput :=
   self.elaborated.keygenRequirements
 
+/-- A configured circuit handle whose full keygen interface is available in `context`. -/
+abbrev ConfigurationCertificate
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (context : KeygenContext F) :=
+  Halo2.ConfigurationCertificate self.keygenRequirements self.configure config context
+
+/-- The certificate produced by this circuit's own configure program. -/
+def configureCertificate
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    self.ConfigurationCertificate
+      ((self.configure configInput).output counts)
+      { gates := self.keygenRequirements.gates configInput hconfig ++
+          ((self.configure configInput).delta counts).gates
+        lookups := self.keygenRequirements.lookups configInput hconfig ++
+          ((self.configure configInput).delta counts).lookups } :=
+  Halo2.ConfigurationCertificate.ofOutput
+    self.keygenRequirements self.configure configInput counts hconfig
+
 /--
 Proof that a configuration value is the output of this circuit's own configure
 program, from a caller input satisfying its folded provenance requirement.
@@ -344,6 +432,15 @@ structure Configured
     self.keygenRequirements.configLawful configInput
   output_eq :
     (self.configure configInput).output counts = config
+
+/-- Forget ambient availability while retaining configure provenance. -/
+def ConfigurationCertificate.configured
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    self.Configured config :=
+  ⟨certificate.configInput, certificate.counts,
+    certificate.configLawful, certificate.output_eq⟩
 
 /-- A configure output is configured whenever its caller provenance holds. -/
 abbrev Configured.ofOutput
@@ -382,6 +479,27 @@ def Configured.lookups
       (FormalCircuit.Configured.configLawful configured) ++
     ((self.configure (FormalCircuit.Configured.configInput configured)).delta
       (FormalCircuit.Configured.counts configured)).lookups
+
+/-- Use a layouter certificate through the familiar `Configured.gates` interface. -/
+theorem ConfigurationCertificate.gates_of_configured
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ gate, gate ∈ certificate.configured.gates → gate ∈ context.gates := by
+  intro gate hgate
+  simpa [Configured.gates, ConfigurationCertificate.configured] using
+    certificate.gates gate hgate
+
+/-- Use a layouter certificate through the familiar `Configured.lookups` interface. -/
+theorem ConfigurationCertificate.lookups_of_configured
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ argument,
+      argument ∈ certificate.configured.lookups → argument ∈ context.lookups := by
+  intro argument hargument
+  simpa [Configured.lookups, ConfigurationCertificate.configured] using
+    certificate.lookups argument hargument
 
 @[simp, keygen_norm] theorem Configured.ofPure_gates
     (self : FormalCircuit F Config Config Input Output)
@@ -548,6 +666,25 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
     (self.call config input).operations i
       = (self.synthesize config input).operations i :=
   self.callOps_eq config input i
+
+/--
+Consume a configure certificate directly. Unlike `call_keygenRegistered`, this exposes
+no gate-by-gate routing obligations to the parent.
+-/
+@[keygen_norm]
+theorem call_keygenRegistered_ofCertificate
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context)
+    (input : Var Input F) (i : RegionIndex) :
+    ((self.call config input).operations i).KeygenRegistered
+      context.gates context.lookups := by
+  rcases certificate with
+    ⟨configInput, counts, hconfig, output_eq, gates, lookups⟩
+  subst config
+  rw [self.call_operations]
+  exact (self.elaborated.registered
+    configInput counts hconfig input i).mono gates lookups
 
 /--
 An embedded registration certificate closes a child call against any larger ambient
@@ -965,6 +1102,26 @@ abbrev keygenRequirements
     KeygenRequirements F ConfigInput :=
   self.elaborated.keygenRequirements
 
+/-- Region-level configured capability in an ambient keygen context. -/
+abbrev ConfigurationCertificate
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (context : KeygenContext F) :=
+  Halo2.ConfigurationCertificate self.keygenRequirements self.configure config context
+
+/-- The certificate produced by this region circuit's configure program. -/
+def configureCertificate
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput) :
+    self.ConfigurationCertificate
+      ((self.configure configInput).output counts)
+      { gates := self.keygenRequirements.gates configInput hconfig ++
+          ((self.configure configInput).delta counts).gates
+        lookups := self.keygenRequirements.lookups configInput hconfig ++
+          ((self.configure configInput).delta counts).lookups } :=
+  Halo2.ConfigurationCertificate.ofOutput
+    self.keygenRequirements self.configure configInput counts hconfig
+
 /-- Region-level counterpart of `FormalCircuit.Configured`. -/
 structure Configured
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
@@ -975,6 +1132,15 @@ structure Configured
     self.keygenRequirements.configLawful configInput
   output_eq :
     (self.configure configInput).output counts = config
+
+/-- Forget ambient availability while retaining region-configure provenance. -/
+def ConfigurationCertificate.configured
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    self.Configured config :=
+  ⟨certificate.configInput, certificate.counts,
+    certificate.configLawful, certificate.output_eq⟩
 
 /-- A region circuit's configure output carries folded configuration provenance. -/
 abbrev Configured.ofOutput
@@ -1013,6 +1179,27 @@ def Configured.lookups
       (FormalRegionCircuit.Configured.configLawful configured) ++
     ((self.configure (FormalRegionCircuit.Configured.configInput configured)).delta
       (FormalRegionCircuit.Configured.counts configured)).lookups
+
+/-- Region-level certificate elimination through `Configured.gates`. -/
+theorem ConfigurationCertificate.gates_of_configured
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ gate, gate ∈ certificate.configured.gates → gate ∈ context.gates := by
+  intro gate hgate
+  simpa [Configured.gates, ConfigurationCertificate.configured] using
+    certificate.gates gate hgate
+
+/-- Region-level certificate elimination through `Configured.lookups`. -/
+theorem ConfigurationCertificate.lookups_of_configured
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ argument,
+      argument ∈ certificate.configured.lookups → argument ∈ context.lookups := by
+  intro argument hargument
+  simpa [Configured.lookups, ConfigurationCertificate.configured] using
+    certificate.lookups argument hargument
 
 @[simp, keygen_norm] theorem Configured.ofPure_gates
     (self : FormalRegionCircuit F Config Config Input Output)
@@ -1153,6 +1340,24 @@ theorem call_operations (self : FormalRegionCircuit F ConfigInput Config Input O
     (self.call config offset input).operations region
       = (self.synthesize config offset input).operations region :=
   self.callOps_eq config offset input region
+
+/-- Consume a region circuit's configure certificate without exposing routing premises. -/
+@[keygen_norm]
+theorem call_keygenRegistered_ofCertificate
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    ((self.call config offset input).operations region).Forall
+      (RegionOperation.KeygenRegistered context.gates context.lookups) := by
+  rcases certificate with
+    ⟨configInput, counts, hconfig, output_eq, gates, lookups⟩
+  subst config
+  rw [self.call_operations]
+  exact RegionOperations.keygenRegistered_mono
+    (self.elaborated.registered
+      configInput counts hconfig offset input region)
+    gates lookups
 
 /--
 Region-level counterpart of `FormalCircuit.call_keygenRegistered`.
@@ -1404,6 +1609,18 @@ attribute [keygen_configured]
   FormalRegionCircuit.Configured.ofOutput
   FormalRegionCircuit.Configured.ofPure
 
+attribute [keygen_configured_output FormalCircuit.configure]
+  FormalCircuit.Configured.ofOutput
+
+attribute [keygen_configured_pure FormalCircuit.configure]
+  FormalCircuit.Configured.ofPure
+
+attribute [keygen_configured_output FormalRegionCircuit.configure]
+  FormalRegionCircuit.Configured.ofOutput
+
+attribute [keygen_configured_pure FormalRegionCircuit.configure]
+  FormalRegionCircuit.Configured.ofPure
+
 attribute [keygen_bundle_projection]
   ElaboratedCircuit.keygenRequirements
   FormalCircuit.configure
@@ -1423,6 +1640,7 @@ attribute [keygen_requirement_projection]
   FormalRegionCircuit.keygenRequirements
 
 attribute [keygen_metadata_projection]
+  FormalRegionCircuit.toFormal
   FormalCircuit.configure
   FormalCircuit.elaborated
   ElaboratedCircuit.keygenRequirements
@@ -1431,6 +1649,10 @@ attribute [keygen_metadata_projection]
   FormalRegionCircuit.elaborated
   ElaboratedRegionCircuit.keygenRequirements
   FormalRegionCircuit.keygenRequirements
+
+attribute [keygen_configure_projection]
+  FormalCircuit.configure
+  FormalRegionCircuit.configure
 
 attribute [grind norm]
   FormalCircuit.Configured.ofPure_gates

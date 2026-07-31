@@ -1360,7 +1360,10 @@ elab "configure_norm" : tactic => withMainContext do
       List.foldl_nil, List.foldl_cons, List.map, List.append_nil,
       List.nil_append, List.append_assoc]))
   if !(← getGoals).isEmpty then
-    evalTactic (← `(tactic| simp))
+    try
+      evalTactic (← `(tactic| simp))
+    catch _ =>
+      pure ()
   if !(← getGoals).isEmpty then
     evalTactic (← `(tactic| rfl))
 

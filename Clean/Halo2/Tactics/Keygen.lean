@@ -97,6 +97,49 @@ theorem List.forall_nil_append {α : Type} (property : α → Prop) (values : Li
 attribute [keygen_spine] List.forall_nil
 attribute [keygen_spine] RegionCircuit.operations_ite List.forall_ite
 
+variable {F α β : Type}
+
+theorem Configure.mem_gates_delta_bind_left
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (gate : Gate F)
+    (hgate : gate ∈ (program.delta counts).gates) :
+    gate ∈ ((program >>= next).delta counts).gates := by
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  exact List.mem_append_left _ hgate
+
+theorem Configure.mem_gates_delta_bind_right
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (gate : Gate F)
+    (hgate : gate ∈
+      ((next (program.output counts)).delta
+        (program.finalCounts counts)).gates) :
+    gate ∈ ((program >>= next).delta counts).gates := by
+  rw [Configure.delta_bind, ConfigureDelta.gates_append]
+  exact List.mem_append_right _ hgate
+
+theorem Configure.mem_lookups_delta_bind_left
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (argument : LookupArgument F)
+    (hargument : argument ∈ (program.delta counts).lookups) :
+    argument ∈ ((program >>= next).delta counts).lookups := by
+  rw [Configure.delta_bind, ConfigureDelta.lookups_append]
+  exact List.mem_append_left _ hargument
+
+theorem Configure.mem_lookups_delta_bind_right
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (argument : LookupArgument F)
+    (hargument : argument ∈
+      ((next (program.output counts)).delta
+        (program.finalCounts counts)).lookups) :
+    argument ∈ ((program >>= next).delta counts).lookups := by
+  rw [Configure.delta_bind, ConfigureDelta.lookups_append]
+  exact List.mem_append_right _ hargument
+
+theorem Configure.mem_gates_delta_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    gate ∈ ((createGate gate).delta counts).gates := by
+  simp [Configure.delta_createGate]
+
 @[keygen_norm, keygen_helper]
 theorem assignAdvice_keygenRegistered
     {F : Type} [FiniteField F]
@@ -510,20 +553,145 @@ def proofOfSimpTrue? (result : Simp.Result) : MetaM (Option Expr) := do
   | some proof => return some (← mkOfEqTrue proof)
   | none => return some (mkConst ``True.intro)
 
+/-- The symbolic allocation states at every node of an append-only configure tree. -/
+partial def betaZetaHead (expression : Expr) : Expr :=
+  match expression.headBeta with
+  | .letE _ _ value body _ => betaZetaHead (body.instantiate1 value)
+  | expression => expression
+
+partial def configureNodesInProgram
+    (program counts : Expr) (fuel : Nat := 256) :
+    MetaM (Array (Expr × Expr)) := do
+  if fuel == 0 then
+    return #[(program, counts)]
+  let originalProgram := betaZetaHead program
+  let unfolded ←
+    match ← withTransparency .default <| unfoldDefinition? originalProgram with
+    | some unfolded => pure (betaZetaHead unfolded)
+    | none => pure originalProgram
+  let arguments := unfolded.getAppArgs
+  let mut parts? : Option (Expr × Expr) := none
+  if 2 ≤ arguments.size then
+    for index in [0:arguments.size - 1] do
+      let argumentType ← withTransparency .reducible <|
+        whnf (← inferType arguments[index]!)
+      if argumentType.getAppFn.isConstOf ``Configure then
+        parts? := some (arguments[index]!, arguments[index + 1]!)
+  let some (first, next) := parts?
+    | return #[(originalProgram, counts)]
+  unless (← inferType next).isForall do
+    return #[(originalProgram, counts)]
+  let firstNodes ← configureNodesInProgram first counts (fuel - 1)
+  let firstOutput ← mkAppM ``Configure.output #[first, counts]
+  let nextProgram := betaZetaHead (mkApp next firstOutput)
+  let nextCounts ← mkAppM ``Configure.finalCounts #[first, counts]
+  let remaining ← configureNodesInProgram nextProgram nextCounts (fuel - 1)
+  return #[(originalProgram, counts)] ++ firstNodes ++ remaining
+
+/-- Recover the parent configure tree's candidate child-entry allocation states. -/
+def configureNodesInTarget (target : Expr) :
+    MetaM (Array (Expr × Expr)) := do
+  let some configureApp := target.find? fun expression =>
+      expression.getAppFn.isConstOf ``Configure.delta
+    | return #[]
+  let arguments := configureApp.getAppArgs
+  if arguments.size < 2 then
+    return #[]
+  configureNodesInProgram
+    arguments[arguments.size - 2]! arguments[arguments.size - 1]!
+
+/-- The configure projection paired with a tagged `Configured` constructor. -/
+def configureProjectionOfConstructor? (env : Lean.Environment) (name : Name) :
+    Option Name :=
+  keygenConfiguredOutputAttr.getParam? env name <|>
+    keygenConfiguredPureAttr.getParam? env name
+
+def isConfiguredOfOutput (env : Lean.Environment) (name : Name) : Bool :=
+  (keygenConfiguredOutputAttr.getParam? env name).isSome
+
+def isConfiguredOfPure (env : Lean.Environment) (name : Name) : Bool :=
+  (keygenConfiguredPureAttr.getParam? env name).isSome
+
+/-- Fresh metavariables with products eta-expanded for projection-friendly unification. -/
+partial def freshProductMVars (type : Expr) (fuel : Nat := 32) : MetaM Expr := do
+  if fuel == 0 then
+    return ← mkFreshExprMVar type
+  let reducedType ← whnf type
+  unless reducedType.isAppOfArity ``Prod 2 do
+    return ← mkFreshExprMVar type
+  let arguments := reducedType.getAppArgs
+  let left ← freshProductMVars arguments[arguments.size - 2]! (fuel - 1)
+  let right ← freshProductMVars arguments[arguments.size - 1]! (fuel - 1)
+  mkAppM ``Prod.mk #[left, right]
+
 /--
 Retry a call-routing proposition with only its keygen metadata made transparent.
 -/
 def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
   let env ← getEnv
+  let requirementProjections := keygenRequirementProjectionAttr.getDecls env
+  let configureProjections := keygenConfigureProjectionAttr.getDecls env
+  let bundleTypes := keygenCallBundleAttr.getDecls env
   let mut projections : SimpTheorems := {}
   for projection in keygenMetadataProjectionAttr.getDecls env do
     projections ← projections.addDeclToUnfold projection
   let ambient ← Simp.getSimpTheorems
   -- First expose the child's requirement projection from the configured handle;
   -- only then does the concrete bundle occur at a reducible projection.
-  let exposed ← Simp.withFreshCache <|
+  let mut exposed ← Simp.withFreshCache <|
     Simp.withSimpTheorems (#[projections] ++ ambient) do
       Simp.simp expression
+  let mut unfoldedReceivers : Array Name := #[]
+  for _ in [0:8] do
+    let requirementsApp? := exposed.expr.find? fun candidate =>
+        let arguments := candidate.getAppArgs
+        9 ≤ arguments.size &&
+          (candidate.getAppFn.constName?.map requirementProjections.contains
+            |>.getD false) &&
+          (match (arguments.back?).bind (·.getAppFn.constName?) with
+           | some receiverHead => !unfoldedReceivers.contains receiverHead
+           | none => false)
+    let receiver? :=
+      match requirementsApp? with
+      | some requirementsApp => requirementsApp.getAppArgs.back?
+      | none =>
+          let configureApp? : Option Expr := exposed.expr.find? fun (candidate : Expr) =>
+            let arguments := candidate.getAppArgs
+            9 ≤ arguments.size &&
+              (candidate.getAppFn.constName?.map configureProjections.contains
+                |>.getD false) &&
+              (match (arguments.back?).bind (·.getAppFn.constName?) with
+               | some receiverHead => !unfoldedReceivers.contains receiverHead
+               | none => false)
+          match configureApp? with
+          | some configureApp =>
+              let arguments := configureApp.getAppArgs
+              some arguments[arguments.size - 1]!
+          | none =>
+              (exposed.expr.find? fun candidate =>
+                match candidate with
+                | .proj structureName _ receiver =>
+                    bundleTypes.contains structureName &&
+                    (match receiver.getAppFn.constName? with
+                     | some receiverHead =>
+                         !unfoldedReceivers.contains receiverHead
+                     | none => false)
+                | _ => false).bind fun
+                  | .proj _ _ receiver => some receiver
+                  | _ => none
+    let some receiver := receiver?
+      | break
+    let some receiverHead := receiver.getAppFn.constName?
+      | break
+    logInfo m!"keygen routing unfolds {receiverHead}"
+    if unfoldedReceivers.contains receiverHead then
+      break
+    unfoldedReceivers := unfoldedReceivers.push receiverHead
+    projections ← projections.addDeclToUnfold receiverHead
+    let next ← Simp.withFreshCache <|
+      Simp.withSimpTheorems (#[projections] ++ ambient) do
+        Simp.simp exposed.expr
+    exposed ← exposed.mkEqTrans next
   -- The formal-bundle projection leaves an opaque receiver below `gates`/`lookups`.
   -- Reduce precisely that small `KeygenRequirements` receiver and add its definitional
   -- equality as a local simp theorem. No synthesis field is projected or normalized.
@@ -548,6 +716,26 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
       Simp.simp reducedExpression
   (← exposed.mkEqTrans definitionallyReduced).mkEqTrans reduced
 
+/-- Expose only framework projections around a configure program, preserving its head. -/
+partial def exposeConfigureProgram (program : Expr) (fuel : Nat := 8) :
+    MetaM Expr := do
+  if fuel == 0 then
+    return program
+  let program := program.headBeta
+  if program.getAppFn.isProj then
+    let reduced ← withTransparency .default <| whnf program
+    if reduced != program then
+      return ← exposeConfigureProgram reduced (fuel - 1)
+  let some head := program.getAppFn.constName?
+    | return program
+  let env ← getEnv
+  let projections := keygenMetadataProjectionAttr.getDecls env
+  unless projections.contains head || env.isProjectionFn head do
+    return program
+  let some unfolded ← withTransparency .default <| unfoldDefinition? program
+    | return program
+  exposeConfigureProgram unfolded (fuel - 1)
+
 /--
 Recover or construct the configured handle required by a call certificate.
 
@@ -555,44 +743,268 @@ Composition normally projects it from the parent's direct-child provenance produ
 Pure/output-configured helper calls instead use one of the framework constructors
 tagged `keygen_configured`.
 -/
-partial def configuredWitness? (target : Expr) (fuel : Nat := 4) :
+partial def configuredWitness? (target : Expr)
+    (candidateNodes : Array (Expr × Expr) := #[]) (fuel : Nat := 8) :
     SimpM (Option Expr) := do
-  let normalizedTarget ← withTransparency .all <| whnf target
-  if ← isDefEq normalizedTarget (mkConst ``Unit) then
+  let configureProjections := keygenConfigureProjectionAttr.getDecls (← getEnv)
+  let target ← withTransparency .all <| whnf target
+  if ← isDefEq target (mkConst ``Unit) then
     return some (mkConst ``Unit.unit)
   if let some proof ← localProductWitness? target then
     return some proof
+  if target.isAppOfArity ``Prod 2 then
+    let arguments := target.getAppArgs
+    let some left ← configuredWitness? arguments[arguments.size - 2]!
+        candidateNodes (fuel - 1)
+      | return none
+    let some right ← configuredWitness? arguments[arguments.size - 1]!
+        candidateNodes (fuel - 1)
+      | return none
+    return some (← mkAppM ``Prod.mk #[left, right])
   if fuel == 0 then
     return none
-  for constructor in keygenConfiguredAttr.getDecls (← getEnv) do
+  let env ← getEnv
+  let constructors := keygenConfiguredAttr.getDecls env
+  let constructors :=
+    constructors.filter (fun name =>
+      !isConfiguredOfOutput env name) ++
+    constructors.filter (fun name =>
+      isConfiguredOfOutput env name)
+  for constructor in constructors do
+    if isConfiguredOfOutput env constructor then
+      let some configureProjection :=
+          configureProjectionOfConstructor? env constructor
+        | continue
+      let targetArguments := target.getAppArgs
+      unless 2 ≤ targetArguments.size do
+        continue
+      let self := targetArguments[targetArguments.size - 2]!
+      let config := targetArguments[targetArguments.size - 1]!
+      for (program, counts) in candidateNodes do
+        let metaState ← getThe Meta.State
+        try
+          let programType ← withTransparency .reducible <|
+            whnf (← inferType program)
+          unless programType.isAppOfArity ``Configure 2 do
+            throwError "candidate is not a configure program"
+          let programTypeArguments := programType.getAppArgs
+          let configType ← inferType config
+          unless ← isDefEq
+              programTypeArguments[programTypeArguments.size - 1]!
+              configType do
+            throwError "candidate configure output has the wrong type"
+          let candidateOutput ← mkAppM ``Configure.output #[program, counts]
+          unless ← withTransparency .default <| isDefEq candidateOutput config do
+            throwError "candidate configure output does not match the config"
+          let configureFunction ← mkAppM configureProjection #[self]
+          let configureFunctionType ← whnf (← inferType configureFunction)
+          let .forallE _ configInputType _ _ := configureFunctionType
+            | throwError "circuit configure projection is not a function"
+          let configInput ← freshProductMVars configInputType
+          let expectedProgram := mkApp configureFunction configInput
+          let some selfHead := self.getAppFn.constName?
+            | throwError "configured circuit has no named head"
+          let mut circuitDefinition : SimpTheorems := {}
+          circuitDefinition ← circuitDefinition.addDeclToUnfold selfHead
+          let expectedProgram ← Simp.withFreshCache <|
+            Simp.withSimpTheorems #[circuitDefinition] do
+              return (← Simp.simp expectedProgram).expr
+          let expectedProgram ← exposeConfigureProgram expectedProgram
+          let comparisonProgram ←
+            if expectedProgram.getAppFn.isConstOf ``Configure.mk then
+              withTransparency .default <| whnf program
+            else
+              pure program
+          logInfo m!"keygen comparing configure program for {selfHead}"
+          unless ← withTransparency .default <|
+              isDefEq expectedProgram comparisonProgram do
+            throwError "circuit configure program does not match the candidate"
+          logInfo m!"keygen compared configure program for {selfHead}"
+          let partialApplication ←
+            mkAppM constructor #[self, configInput, counts]
+          let partialType ← whnf (← inferType partialApplication)
+          let .forallE _ requirementType _ _ := partialType
+            | throwError "configured constructor has no requirement argument"
+          let some requirement ← configuredWitness?
+              requirementType candidateNodes (fuel - 1)
+            | throwError "configured requirement was not recovered"
+          let proof ← instantiateMVars (mkApp partialApplication requirement)
+          return some proof
+        catch _ =>
+          set metaState
+      continue
+    for _ in [0:1] do
+      let metaState ← getThe Meta.State
+      try
+        let goalExpr ← mkFreshExprSyntheticOpaqueMVar target
+        let sideConditions ← goalExpr.mvarId!.apply
+          (← mkConstWithFreshMVarLevels constructor)
+        for sideCondition in sideConditions do
+          unless ← sideCondition.isAssigned do
+            let sideTarget ← instantiateMVars (← sideCondition.getType)
+            if ← isProp sideTarget then
+              if isConfiguredOfPure env constructor then
+                let targetArguments := target.getAppArgs
+                unless 2 ≤ targetArguments.size do
+                  throwError "configured target has no circuit argument"
+                let self := targetArguments[targetArguments.size - 2]!
+                let some selfHead := self.getAppFn.constName?
+                  | throwError "configured circuit has no named head"
+                let mut circuitDefinition : SimpTheorems := {}
+                circuitDefinition ← circuitDefinition.addDeclToUnfold selfHead
+                circuitDefinition ← circuitDefinition.addConst ``eq_self
+                for projection in
+                    keygenMetadataProjectionAttr.getDecls (← getEnv) do
+                  circuitDefinition ←
+                    circuitDefinition.addDeclToUnfold projection
+                let mut result ← Simp.withFreshCache <|
+                  Simp.withSimpTheorems #[circuitDefinition] do
+                    Simp.simp sideTarget
+                for _ in [0:8] do
+                  if (← proofOfSimpTrue? result).isSome then
+                    break
+                  let some configureApp := result.expr.find? fun expression =>
+                      let head := expression.getAppFn.constName?
+                      head.map configureProjections.contains
+                        |>.getD false
+                    | break
+                  let arguments := configureApp.getAppArgs
+                  if arguments.size < 2 then
+                    break
+                  let receiver := arguments[arguments.size - 2]!
+                  let some receiverHead := receiver.getAppFn.constName?
+                    | break
+                  circuitDefinition ←
+                    circuitDefinition.addDeclToUnfold receiverHead
+                  let next ← Simp.withFreshCache <|
+                    Simp.withSimpTheorems #[circuitDefinition] do
+                      Simp.simp result.expr
+                  result ← result.mkEqTrans next
+                let some proof ← proofOfSimpTrue? result
+                  | throwError "circuit configure is not definitionally pure"
+                sideCondition.assign proof
+                continue
+              try
+                withTransparency .default sideCondition.refl
+                continue
+              catch _ =>
+                pure ()
+              let some proof ← proofOfSimpTrue? (← Simp.simp sideTarget)
+                | throwError "configured constructor proposition was not simplified"
+              sideCondition.assign proof
+            else
+              let some proof ←
+                  configuredWitness? sideTarget candidateNodes (fuel - 1)
+                | throwError "configured constructor input was not recovered"
+              sideCondition.assign proof
+        let proof ← instantiateMVars goalExpr
+        unless proof.isMVar do
+          return some proof
+        throwError "configured constructor left unresolved metavariables"
+      catch _ =>
+        set metaState
+  let targetArguments := target.getAppArgs
+  if 2 ≤ targetArguments.size then
+    logInfo m!"keygen configured search failed at {
+      targetArguments[targetArguments.size - 2]!.getAppFn.constName?}"
+  return none
+
+/--
+Route one configured child's gate or lookup through the append-only configure tree.
+
+This deliberately explores one side of each bind at a time. Simplifying
+`member ∈ (left ++ right)` eagerly normalizes both branches and is catastrophic for a
+large aggregate configure such as Action; the proof below backtracks over the two
+generic inclusion lemmas and never opens an unrelated suffix.
+-/
+partial def proveConfigureRoute (goal : MVarId) (sourceHead : Option Name)
+    (fuel : Nat := 256) :
+    MetaM Bool := do
+  if fuel == 0 then
+    return false
+  let target ← instantiateMVars (← goal.getType)
+  let deltaApp? := target.find? fun expression =>
+    expression.getAppFn.isConstOf ``Configure.delta
+  if let some deltaApp := deltaApp? then
+    let arguments := deltaApp.getAppArgs
+    if 2 ≤ arguments.size then
+      let program := arguments[arguments.size - 2]!
+      if program.headBeta.getAppFn.constName? == sourceHead then
+        try
+          goal.assumption
+          return true
+        catch _ =>
+          pure ()
+  let rules := #[
+    ``Configure.mem_gates_delta_bind_right,
+    ``Configure.mem_lookups_delta_bind_right,
+    ``Configure.mem_gates_delta_bind_left,
+    ``Configure.mem_lookups_delta_bind_left,
+    ``Configure.mem_gates_delta_createGate]
+  for rule in rules do
     let metaState ← getThe Meta.State
     try
-      let goalExpr ← mkFreshExprSyntheticOpaqueMVar target
-      let sideConditions ← goalExpr.mvarId!.apply
-        (← mkConstWithFreshMVarLevels constructor)
-      for sideCondition in sideConditions do
-        unless ← sideCondition.isAssigned do
-          let sideTarget ← instantiateMVars (← sideCondition.getType)
-          if ← isProp sideTarget then
-            try
-              withTransparency .all sideCondition.refl
-              continue
-            catch _ =>
-              pure ()
-            let some proof ← proofOfSimpTrue? (← Simp.simp sideTarget)
-              | throwError "configured constructor proposition was not simplified"
-            sideCondition.assign proof
-          else
-            let some proof ← configuredWitness? sideTarget (fuel - 1)
-              | throwError "configured constructor input was not recovered"
-            sideCondition.assign proof
-      let proof ← instantiateMVars goalExpr
-      unless proof.isMVar do
-        return some proof
-      throwError "configured constructor left unresolved metavariables"
+      let subgoals ← goal.apply (← mkConstWithFreshMVarLevels rule)
+      if subgoals.length == 1 &&
+          (← proveConfigureRoute subgoals[0]! sourceHead (fuel - 1)) then
+        return true
+      set metaState
     catch _ =>
       set metaState
-  return none
+  if let some deltaApp := deltaApp? then
+    let arguments := deltaApp.getAppArgs
+    if hsize : 2 ≤ arguments.size then
+      let program := arguments[arguments.size - 2]
+      if let some unfolded ← withTransparency .default <|
+          unfoldDefinition? program then
+        let unfoldedTarget := target.replace fun candidate =>
+          if candidate == program then some unfolded else none
+        try
+          let unfoldedGoal ← goal.replaceTargetDefEq unfoldedTarget
+          if ← proveConfigureRoute unfoldedGoal sourceHead (fuel - 1) then
+            return true
+        catch _ =>
+          pure ()
+  return false
+
+/-- Introduce a routing premise and prove its final membership by bind traversal. -/
+def proveConfigureRoutingPremise (goal : MVarId) : MetaM Bool := do
+  let metaState ← getThe Meta.State
+  try
+    let mut current := goal
+    let mut introduced : Option FVarId := none
+    while (← instantiateMVars (← current.getType)).isForall do
+      let (fvar, next) ← current.intro1P
+      introduced := some fvar
+      current := next
+    try
+      current.assumption
+      return true
+    catch _ =>
+      pure ()
+    let sourceHead ←
+      match introduced with
+      | none => pure none
+      | some fvar =>
+          let sourceType ← withTransparency .all <|
+            whnf (← instantiateMVars (← fvar.getType))
+          let deltaApp? := sourceType.find? fun expression =>
+            expression.getAppFn.isConstOf ``Configure.delta
+          let some deltaApp := deltaApp?
+            | pure none
+          let arguments := deltaApp.getAppArgs
+          if 2 ≤ arguments.size then
+            let program ← exposeConfigureProgram arguments[arguments.size - 2]!
+            pure program.headBeta.getAppFn.constName?
+          else
+            pure none
+    if ← proveConfigureRoute current sourceHead then
+      return true
+    set metaState
+    return false
+  catch _ =>
+    set metaState
+    return false
 
 /--
 Try one folded-call certificate against a registration proposition.
@@ -605,6 +1017,7 @@ def proveWithCallCertificate?
     (target bundle : Expr) (candidate : Name) : SimpM (Option Expr) := do
   let metaState ← getThe Meta.State
   try
+    let candidateNodes ← configureNodesInTarget target
     let certificate ← mkAppM candidate #[bundle]
     let goalExpr ← mkFreshExprSyntheticOpaqueMVar target
     let goal := goalExpr.mvarId!
@@ -615,19 +1028,24 @@ def proveWithCallCertificate?
       unless ← sideCondition.isAssigned do
         let sideTarget ← sideCondition.getType
         unless ← isProp sideTarget do
-          let some proof ← configuredWitness? sideTarget
+          let some proof ← configuredWitness? sideTarget candidateNodes
             | throwError m!"no direct-child configured handle for:\n{sideTarget}"
+          logInfo "keygen recovered configured handle"
           sideCondition.assign proof
     for sideCondition in sideConditions do
       unless ← sideCondition.isAssigned do
         let sideTarget ← instantiateMVars (← sideCondition.getType)
+        if ← proveConfigureRoutingPremise sideCondition then
+          logInfo "keygen routed configure premise"
+          continue
         let mut simplified ← Simp.simp sideTarget
         let mut proof? ← proofOfSimpTrue? simplified
         if proof?.isNone then
           simplified ← simpCallRouting sideTarget
           proof? ← proofOfSimpTrue? simplified
         let some proof := proof?
-          | throwError "keygen call routing premise was not simplified"
+          | logInfo m!"keygen routing residual:\n{simplified.expr}"
+            throwError "keygen call routing premise was not simplified"
         sideCondition.assign proof
     let proof ← instantiateMVars goalExpr
     if proof.isMVar then
@@ -876,5 +1294,10 @@ elab "keygen_registration" : tactic => do
 
 macro "keygen_registration" " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| (dsimp only [$definitions,*]; keygen_registration))
+
+elab "configure_route" : tactic => do
+  let goal ← getMainGoal
+  unless ← KeygenRegistration.proveConfigureRoutingPremise goal do
+    throwError "configure_route could not find the configured child in the parent program"
 
 end Halo2
