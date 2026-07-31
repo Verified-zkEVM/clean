@@ -95,24 +95,10 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     circuit_proof_start [addGate, readCell]
     exact ⟨by ring, h_output.symm⟩
 
-/-- The add region borrows the gate registered when its `Config` was constructed. -/
-def keygenRequirements : KeygenRequirements Fp Config :=
-  add.elaborated.keygenRequirements
-
-/-- Configure/synthesis keygen law for the add region. -/
-theorem add_keygenLawful :
-    add.KeygenLawful keygenRequirements where
-  registered := add.elaborated.registered
-
 /-- The layouter-level add: `add` in its own region, named once here as in the Rust
 chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
 def addFormal :=
   add.toFormal "c = a + b"
-
-/-- The region-to-layouter bridge preserves the add region's keygen law. -/
-theorem addFormal_keygenLawful :
-    addFormal.KeygenLawful keygenRequirements :=
-  add_keygenLawful.toFormal "c = a + b"
 
 /-- The layouter add capability exported by one AddChip configure run. -/
 def addFormalConfigureCertificate (a b c : Column .advice)
