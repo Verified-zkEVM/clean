@@ -950,6 +950,21 @@ theorem keygenCoherent
   exact self.formalCircuit.operationsKeygenCoherent
     () () self.noCallerRequirements
 
+/-- Every configured gate's activation selector is allocated. -/
+theorem gateSelectorsAllocated
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.constraintSystem.gates.Forall fun gate =>
+      gate.selector.index < self.constraintSystem.numSelectors := by
+  let program := self.formalCircuit.configure ()
+  let counts :=
+    ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
+  have hallocated :=
+    (self.formalCircuit.selectorsAllocated
+      () counts self.selectorRequirements).gates
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
+    ConfigureDelta.apply, List.nil_append] using hallocated
+
 /-- Every selector atom in a top-level circuit's lookup inputs is allocated. -/
 theorem lookupInputsAllocated
     (self : TopLevelCircuit F Config PublicInput) :
