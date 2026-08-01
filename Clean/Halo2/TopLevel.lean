@@ -709,6 +709,21 @@ def usableRowsAt
     (self : TopLevelCircuit F Config PublicInput) (k : ℕ) : ℕ :=
   2 ^ k - self.blindingFactors - 1
 
+/-- The usable-row prefix never extends beyond its evaluation domain. -/
+theorem usableRowsAt_le_domainSize
+    (self : TopLevelCircuit F Config PublicInput) (k : ℕ) :
+    self.usableRowsAt k ≤ 2 ^ k := by
+  simp only [usableRowsAt]
+  exact (Nat.sub_le _ _).trans (Nat.sub_le _ _)
+
+/-- At the circuit-selected exponent, every usable row lies in the circuit's
+domain. -/
+theorem usableRowsAt_domainExponent_le_n
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.usableRowsAt self.domainExponent ≤ self.n := by
+  rw [self.n_eq_two_pow_domainExponent]
+  exact self.usableRowsAt_le_domainSize self.domainExponent
+
 /-- The circuit's fitting domain leaves exactly the non-blinding prefix usable. -/
 @[simp] theorem usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput) :
