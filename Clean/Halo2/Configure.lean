@@ -642,6 +642,14 @@ def LookupArgument.QueriesRegistered
   lookup.inputs.Forall (·.QueriesRegistered delta) ∧
     lookup.tables.Forall (·.QueriesRegistered delta)
 
+/-- The rotation-zero query needed to evaluate a permutation column is present in
+this configure contribution. -/
+def ConfigureDelta.RegistersPermutationColumn
+    (delta : ConfigureDelta F) : AnyColumn → Prop
+  | ⟨.advice, index⟩ => (⟨index⟩, 0) ∈ delta.adviceQueries
+  | ⟨.fixed, index⟩ => (⟨index⟩, 0) ∈ delta.fixedQueries
+  | ⟨.instance, index⟩ => (⟨index⟩, 0) ∈ delta.instanceQueries
+
 def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F where
   gates := left.gates ++ right.gates
   lookups := left.lookups ++ right.lookups
@@ -673,6 +681,24 @@ theorem ConfigureDelta.RegistersQuery.append_right
   | advice | fixed | «instance» =>
       simpa [ConfigureDelta.RegistersQuery, ConfigureDelta.append] using
         List.mem_append_right _ hquery
+
+theorem ConfigureDelta.RegistersPermutationColumn.append_left
+    {left right : ConfigureDelta F} {column : AnyColumn}
+    (hcolumn : left.RegistersPermutationColumn column) :
+    (left.append right).RegistersPermutationColumn column := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;>
+    simpa [ConfigureDelta.RegistersPermutationColumn,
+      ConfigureDelta.append] using List.mem_append_left _ hcolumn
+
+theorem ConfigureDelta.RegistersPermutationColumn.append_right
+    {left right : ConfigureDelta F} {column : AnyColumn}
+    (hcolumn : right.RegistersPermutationColumn column) :
+    (left.append right).RegistersPermutationColumn column := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;>
+    simpa [ConfigureDelta.RegistersPermutationColumn,
+      ConfigureDelta.append] using List.mem_append_right _ hcolumn
 
 theorem Expression.QueriesRegistered.append_left
     {left right : ConfigureDelta F} {expression : Expression F Query}
@@ -917,6 +943,16 @@ theorem mem_fixedQueries_run_iff
         query ∈
           (program.delta
             (ConfigureCounts.ofConstraintSystem initial)).fixedQueries := by
+  simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
+
+theorem mem_permutationColumns_run_iff
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (column : AnyColumn) :
+    column ∈ (program.run initial).2.permutationColumns ↔
+      column ∈ initial.permutationColumns ∨
+        column ∈
+          (program.delta
+            (ConfigureCounts.ofConstraintSystem initial)).permutationRequests := by
   simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
 
 instance : CoeFun (Configure F α)
@@ -1282,6 +1318,8 @@ structure ConfigureDelta.QueriesLawful
     delta.gates.Forall (·.QueriedCellsRegistered delta)
   lookups_queriesRegistered :
     delta.lookups.Forall (·.QueriesRegistered delta)
+  permutationRequests_registered :
+    delta.permutationRequests.Forall delta.RegistersPermutationColumn
 
 /-- Query allocation remains true when the available allocation counts grow. -/
 theorem ConfigureDelta.QueriesLawful.mono
@@ -1302,6 +1340,7 @@ theorem ConfigureDelta.QueriesLawful.mono
   gates_queriesRegistered := hlawful.gates_queriesRegistered
   gates_queriedCellsRegistered := hlawful.gates_queriedCellsRegistered
   lookups_queriesRegistered := hlawful.lookups_queriesRegistered
+  permutationRequests_registered := hlawful.permutationRequests_registered
 
 /-- A gate-local declaration can be consumed directly once the compiler has emitted
 that gate into a lawful configure delta. -/
@@ -1370,6 +1409,12 @@ theorem ConfigureDelta.QueriesLawful.append
   · rw [ConfigureDelta.lookups_append, List.forall_append]
     exact ⟨hleft.lookups_queriesRegistered.imp fun _ hlookup => hlookup.append_left,
       hright.lookups_queriesRegistered.imp fun _ hlookup => hlookup.append_right⟩
+  · rw [ConfigureDelta.append, List.forall_append]
+    exact
+      ⟨hleft.permutationRequests_registered.imp fun _ hcolumn =>
+          hcolumn.append_left,
+        hright.permutationRequests_registered.imp fun _ hcolumn =>
+          hcolumn.append_right⟩
 
 /-- Registering one valid query atom preserves query allocation. -/
 theorem ConfigureDelta.queriedCell_queriesLawful
@@ -2465,16 +2510,15 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
   queryRequirements counts := column.Allocated counts
   queriesLawful := by
     intro counts hcolumn
-    have hpermutation :
-        ({ permutationRequests := [column] } : ConfigureDelta F).QueriesLawful
-          counts := by
-      constructor <;> simp
-    simpa [Configure.delta, Configure.finalCounts,
-      Configure.countDelta, ConfigureCountDelta.apply,
-      Halo2.enableEquality] using
-      (ConfigureDelta.queryAny_queriesLawful
-        (F := F) counts hcolumn).append
-          hpermutation
+    rcases column with ⟨kind, index⟩
+    cases kind <;>
+      constructor <;>
+        simp_all [AnyColumn.Allocated, Configure.delta,
+          Configure.finalCounts, Configure.countDelta,
+          ConfigureCountDelta.apply, Halo2.enableEquality,
+          ConfigureDelta.queryAny,
+          ConfigureDelta.RegistersPermutationColumn,
+          ConfigureDelta.append]
 
 instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
@@ -2493,10 +2537,13 @@ instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
   queryRequirements counts := column.index < counts.numFixedColumns
   queriesLawful := by
     intro counts hcolumn
+    rcases column with ⟨index⟩
     constructor <;>
       simp_all [Configure.delta, Configure.finalCounts,
         Configure.countDelta, ConfigureCountDelta.apply,
-        Halo2.enableConstant]
+        Halo2.enableConstant,
+        Column.toAny,
+        ConfigureDelta.RegistersPermutationColumn]
 
 instance ElaboratedConfigure.createGate (gate : Gate F) :
     ElaboratedConfigure (createGate gate) where
@@ -2544,6 +2591,10 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
             (ConfigureDelta.queriedCells_queriesRegistered
               gate.name gate.wellFormed.queriedCellsValid))
       · simp [queryDelta, ConfigureDelta.append]
+      · simpa [ConfigureDelta.append] using
+          hqueryDelta.permutationRequests_registered.imp
+            (fun _ hcolumn => hcolumn.append_left
+              (right := ({ gates := [gate] } : ConfigureDelta F)))
     simpa [Configure.delta, Configure.finalCounts,
       Configure.countDelta, ConfigureCountDelta.apply,
       Halo2.createGate, queryDelta] using hcombined
@@ -2630,6 +2681,10 @@ instance ElaboratedConfigure.lookup
             (F := F) (List.mem_map.mpr
               ⟨(input, table), hentry, rfl⟩)).append_right.append_left
       · simp
+    · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+        ConfigureDelta.RegistersPermutationColumn,
+        ConfigureDelta.append] using
+          hcombined.permutationRequests_registered
 
 instance ElaboratedConfigure.lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by

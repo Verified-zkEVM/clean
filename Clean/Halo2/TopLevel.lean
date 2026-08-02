@@ -861,6 +861,69 @@ def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   simp [fixedQueryLayout, gateQueryState, pinnedCS,
     PinnedConstraintSystem.derive, projectCS]
 
+/-- Equality-enabled columns have the rotation-zero query slot used by the
+permutation compiler. This follows for every top-level circuit from the configure
+program's query lawfulness. -/
+theorem permutationColumn_mem_queryLayout
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : AnyColumn} (hcolumn : column ∈ self.permutationColumns) :
+    match column with
+    | ⟨.advice, index⟩ => (index, 0) ∈ self.adviceQueryLayout
+    | ⟨.fixed, index⟩ => (index, 0) ∈ self.fixedQueryLayout
+    | ⟨.instance, index⟩ => (index, 0) ∈ self.instanceQueryLayout := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.permutationRequests := by
+    have hrun :=
+      (Configure.mem_permutationColumns_run_iff program {} column).mp
+        (by simpa [permutationColumns, constraintSystem,
+          TopLevelCompilation.constraintSystem, program] using hcolumn)
+    exact hrun.resolve_left (by simp)
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column hdelta
+  rcases column with ⟨kind, index⟩
+  cases kind with
+  | advice =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.adviceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.adviceQueries := by
+        have hrun :=
+          (Configure.mem_adviceQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [adviceQueryLayout_eq_constraintSystem]
+      exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
+  | fixed =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.fixedQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.fixedQueries := by
+        have hrun :=
+          (Configure.mem_fixedQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [fixedQueryLayout_eq_gateQueryState]
+      simpa [QueryState.ResolvesQuery, gateQueryState] using
+        queryWalkInit_resolves_fixed_of_mem self.selectorMap hquery
+  | «instance» =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.instanceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.instanceQueries := by
+        have hrun :=
+          (Configure.mem_instanceQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [instanceQueryLayout_eq_constraintSystem]
+      exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
+
 /-- The number of fixed columns in the circuit-owned pinned constraint system. -/
 def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.pinnedCS.numFixedColumns
