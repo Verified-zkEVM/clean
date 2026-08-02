@@ -868,12 +868,36 @@ def run (program : Configure F α) (initial : ConstraintSystem F) :
   let (output, delta, countDelta) := program.plan counts
   (output, delta.apply initial (countDelta.apply counts))
 
+@[simp] theorem run_numAdviceColumns
+    (program : Configure F α) (initial : ConstraintSystem F) :
+    (program.run initial).2.numAdviceColumns =
+      (program.finalCounts
+        (ConfigureCounts.ofConstraintSystem initial)).numAdviceColumns :=
+  rfl
+
 @[simp] theorem run_numFixedColumns
     (program : Configure F α) (initial : ConstraintSystem F) :
     (program.run initial).2.numFixedColumns =
       (program.finalCounts
         (ConfigureCounts.ofConstraintSystem initial)).numFixedColumns :=
   rfl
+
+@[simp] theorem run_numInstanceColumns
+    (program : Configure F α) (initial : ConstraintSystem F) :
+    (program.run initial).2.numInstanceColumns =
+      (program.finalCounts
+      (ConfigureCounts.ofConstraintSystem initial)).numInstanceColumns :=
+  rfl
+
+theorem mem_adviceQueries_run_iff
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (query : Column .advice × Rotation) :
+    query ∈ (program.run initial).2.adviceQueries ↔
+      query ∈ initial.adviceQueries ∨
+        query ∈
+          (program.delta
+            (ConfigureCounts.ofConstraintSystem initial)).adviceQueries := by
+  simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
 
 theorem mem_instanceQueries_run_iff
     (program : Configure F α) (initial : ConstraintSystem F)

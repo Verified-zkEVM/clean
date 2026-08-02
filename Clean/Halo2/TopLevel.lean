@@ -839,6 +839,22 @@ def adviceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
 def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.fixedQueryLayout.length
 
+@[simp] theorem adviceQueryLayout_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.adviceQueryLayout =
+      self.constraintSystem.adviceQueries.map fun query =>
+        (query.1.index, query.2) := by
+  simp [adviceQueryLayout, pinnedCS, PinnedConstraintSystem.derive,
+    projectCS]
+
+@[simp] theorem instanceQueryLayout_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.instanceQueryLayout =
+      self.constraintSystem.instanceQueries.map fun query =>
+        (query.1.index, query.2) := by
+  simp [instanceQueryLayout, pinnedCS, PinnedConstraintSystem.derive,
+    projectCS]
+
 @[simp] theorem fixedQueryLayout_eq_gateQueryState
     (self : TopLevelCircuit F Config PublicInput) :
     self.fixedQueryLayout = self.gateQueryState.fixed.toList := by
@@ -906,6 +922,54 @@ theorem fixedQueryLayout_columns_lt
     hlawful.fixedQueries_fst_lt_numFixedColumns query hdelta
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
     program, counts, Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hlt
+
+/-- Every advice-query slot names a column allocated by the closed configure
+program. -/
+theorem adviceQueryLayout_columns_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.adviceQueryLayout.Forall fun query =>
+      query.1 < self.constraintSystem.numAdviceColumns := by
+  rw [adviceQueryLayout_eq_constraintSystem,
+    List.forall_map_iff]
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.adviceQueries := by
+    have hrun := (Configure.mem_adviceQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hlt := List.forall_iff_forall_mem.mp
+    hlawful.adviceQueries_fst_lt_numAdviceColumns query hdelta
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run_numAdviceColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hlt
+
+/-- Every instance-query slot names a column allocated by the closed configure
+program. -/
+theorem instanceQueryLayout_columns_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.instanceQueryLayout.Forall fun query =>
+      query.1 < self.constraintSystem.numInstanceColumns := by
+  rw [instanceQueryLayout_eq_constraintSystem,
+    List.forall_map_iff]
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.instanceQueries := by
+    have hrun := (Configure.mem_instanceQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hlt := List.forall_iff_forall_mem.mp
+    hlawful.instanceQueries_fst_lt_numInstanceColumns query hdelta
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run_numInstanceColumns,
     ConfigureCounts.ofConstraintSystem_empty] using hlt
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/

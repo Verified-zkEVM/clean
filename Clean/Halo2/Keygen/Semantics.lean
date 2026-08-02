@@ -392,6 +392,48 @@ theorem queryWalkInit_resolves_fixed_of_mem
     (recordedQueries_resolves_fixed_of_mem hquery)
 
 omit [Field F] in
+/-- Selector compression only appends fixed queries; it preserves the configure-recorded
+advice-query layout exactly. -/
+@[simp] theorem queryWalkInit_advice
+    (cs : ConstraintSystem F) (map : SelCompressMap) :
+    (queryWalkInit map cs).advice.toList =
+      cs.adviceQueries.map fun query => (query.1.index, query.2) := by
+  unfold queryWalkInit
+  have aux (indices : List ℕ) (state : QueryState) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).advice =
+        state.advice := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons index indices ih =>
+        rw [List.foldl_cons, ih]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  rw [congrArg Array.toList (aux _ _)]
+  simp [recordedQueries]
+
+omit [Field F] in
+/-- Selector compression only appends fixed queries; it preserves the configure-recorded
+instance-query layout exactly. -/
+@[simp] theorem queryWalkInit_instance
+    (cs : ConstraintSystem F) (map : SelCompressMap) :
+    (queryWalkInit map cs).inst.toList =
+      cs.instanceQueries.map fun query => (query.1.index, query.2) := by
+  unfold queryWalkInit
+  have aux (indices : List ℕ) (state : QueryState) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).inst =
+        state.inst := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons index indices ih =>
+        rw [List.foldl_cons, ih]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  rw [congrArg Array.toList (aux _ _)]
+  simp [recordedQueries]
+
+omit [Field F] in
 private theorem QueryState.registerFixed_fixed_forall
     (queries : QueryState) (bound column : ℕ)
     (hqueries : queries.fixed.toList.Forall fun query => query.1 < bound)
