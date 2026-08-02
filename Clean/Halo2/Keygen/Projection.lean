@@ -67,6 +67,16 @@ structure QueryState where
   fixed : Array (ℕ × ℤ) := #[]
   inst : Array (ℕ × ℤ) := #[]
 
+@[ext] theorem QueryState.ext
+    {left right : QueryState}
+    (advice : left.advice = right.advice)
+    (fixed : left.fixed = right.fixed)
+    (inst : left.inst = right.inst) :
+    left = right := by
+  cases left
+  cases right
+  simp_all
+
 /-- Return the index of `(col, rot)` in `arr`, or `none`. -/
 def findQuery (arr : Array (ℕ × ℤ)) (col : ℕ) (rot : ℤ) : Option ℕ :=
   (arr.findIdx? (fun p => p.1 = col ∧ p.2 = rot))
