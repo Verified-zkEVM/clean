@@ -59,6 +59,7 @@ pair is
 
 where the table side is `table_idx`'s rotation-0 fixed query. Which word the gated input
 reduces to depends on which selectors are enabled at the row (running-sum vs short row). -/
+@[query_correct]
 def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp where
   inputs :=
     let qL : Expression Fp Query := querySelector cfg.qLookup

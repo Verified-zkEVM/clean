@@ -17,7 +17,7 @@ namespace Zcash.Circuits.CommitIvk
 open Halo2
 
 /-- Rust `bool_check` (`utilities.rs:141-143`): `v · (1 − v)`. -/
-@[selector_free]
+@[selector_free, query_correct]
 def boolCheck (v : Expression Fp Query) : Expression Fp Query :=
   v * ((1 : Fp) - v)
 

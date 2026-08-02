@@ -1,5 +1,6 @@
 import Clean.Halo2.TopLevel
 import Clean.Ironwood.Action.PublicInput
+import Clean.Ironwood.Action.ConfigureCertificates
 import Clean.Ironwood.Action.RealBases
 
 /-!
@@ -132,11 +133,36 @@ private theorem actionSelectorRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
+private theorem actionQueryRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).queryRequirements
+      () {} := by
+  dsimp only [FormalCircuit.queryRequirements, Circuit.circuit,
+    Circuit.elaboratedPost, Circuit.configureElaborated]
+  trivial
+
 def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
   noCallerRequirements := ⟨(), rfl, rfl⟩
   selectorRequirements := actionSelectorRequirements
+  queryRequirements := actionQueryRequirements
+  exists_rotation_mem_fixedQueries_of_lt := by
+    intro column hcolumn
+    have hbound : column <
+        ((Circuit.configure Specs.Sinsemilla.orchardGenerators).finalCounts {}).numFixedColumns := by
+      dsimp only [TopLevelCompilation.constraintSystem, Circuit.circuit] at hcolumn
+      rw [Configure.run_numFixedColumns,
+        ConfigureCounts.ofConstraintSystem_empty] at hcolumn
+      exact hcolumn
+    obtain ⟨rotation, hquery⟩ :=
+      Zcash.Circuits.Action.Circuit.configure_fixedQueries_cover
+        Specs.Sinsemilla.orchardGenerators column hbound
+    refine ⟨rotation, ?_⟩
+    dsimp only [TopLevelCompilation.constraintSystem, Circuit.circuit]
+    rw [Configure.mem_fixedQueries_run_iff]
+    apply Or.inr
+    rw [ConfigureCounts.ofConstraintSystem_empty]
+    exact hquery
   publicInputLayout := PublicInputs.layout
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>

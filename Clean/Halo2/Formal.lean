@@ -572,6 +572,23 @@ theorem selectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
   (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
 
+/-- Column allocation and query-shape requirements borrowed from the incoming
+configure state. Closed circuits normally reduce this to `True`. -/
+def queryRequirements
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
+  (self.elaborated.configureInfo input).queryRequirements counts
+
+/-- Every locally registered query is valid and names an allocated column whenever
+the caller requirements hold. -/
+theorem queriesLawful
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.queryRequirements input counts) :
+    ((self.configure input).delta counts).QueriesLawful
+      ((self.configure input).finalCounts counts) :=
+  (self.elaborated.configureInfo input).queriesLawful counts hrequirements
+
 /-- The output variable of the circuit (via the elaborated metadata). -/
 def output (self : FormalCircuit F ConfigInput Config Input Output) (config : Config)
     (input : Var Input F) (i₀ : RegionIndex) : Var Output F :=
@@ -1267,6 +1284,21 @@ theorem selectorsAllocated
     ((self.configure input).delta counts).SelectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
   (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
+
+/-- Region-level counterpart of `FormalCircuit.queryRequirements`. -/
+def queryRequirements
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
+  (self.elaborated.configureInfo input).queryRequirements counts
+
+/-- Region-level counterpart of `FormalCircuit.queriesLawful`. -/
+theorem queriesLawful
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.queryRequirements input counts) :
+    ((self.configure input).delta counts).QueriesLawful
+      ((self.configure input).finalCounts counts) :=
+  (self.elaborated.configureInfo input).queriesLawful counts hrequirements
 
 /-- The output variable of the region circuit, in the ambient region. -/
 def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (config : Config)

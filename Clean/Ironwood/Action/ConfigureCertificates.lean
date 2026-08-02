@@ -69,6 +69,58 @@ def eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
         apply Configure.mem_lookups_delta_bind_left
         exact hecc)
 
+/-- The fixed-base coordinate gate is one of the gates emitted by the complete Action
+configure program. -/
+private theorem coordsGate_mem_actionConfigure (G : Generators)
+    (counts : ConfigureCounts) :
+    Ecc.MulFixed.coordsGate
+      ((configure G).output counts).eccConfig.mulFixedShort.superConfig ∈
+      (actionConfigureContext G counts).gates := by
+  rw [configure_output_eccConfig]
+  simp only [actionConfigureContext]
+  unfold configure
+  apply Configure.mem_gates_delta_bind_right
+  unfold configureChips
+  apply Configure.mem_gates_delta_bind_left
+  apply Ecc.mem_mulFixed_gates
+  simp
+
+private theorem fixedQuery_mem_actionConfigure_of_gate
+    (G : Generators) (counts : ConfigureCounts)
+    {gate : Gate Fp} (hgate : gate ∈ (actionConfigureContext G counts).gates)
+    (column : Column .fixed)
+    (hcolumn : (queryFixed column : Expression Fp Query) ∈ gate.queriedCells) :
+    (column, 0) ∈ ((configure G).delta counts).fixedQueries := by
+  have hlawful := (configureElaborated G).queriesLawful counts trivial
+  exact hlawful.queriedCell_registered hgate hcolumn
+
+private theorem coordsGate_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts)
+    (column : Column .fixed)
+    (hcolumn :
+      (queryFixed column : Expression Fp Query) ∈
+        (Ecc.MulFixed.coordsGate
+          ((configure G).output counts).eccConfig.mulFixedShort.superConfig).queriedCells) :
+    (column, 0) ∈ ((configure G).delta counts).fixedQueries := by
+  exact fixedQuery_mem_actionConfigure_of_gate G counts
+    (coordsGate_mem_actionConfigure G counts) column hcolumn
+
+private theorem coordsGate_lagrange_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts) (index : Fin 8) :
+    (((configure G).output counts).eccConfig.mulFixedShort.superConfig.lagrangeCoeffs index,
+      0) ∈
+      ((configure G).delta counts).fixedQueries := by
+  apply coordsGate_fixedQuery_mem_actionConfigure
+  fin_cases index <;>
+    simp [Ecc.MulFixed.coordsGate, Gate.withSelector]
+
+private theorem coordsGate_fixedZ_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts) :
+    (((configure G).output counts).eccConfig.mulFixedShort.superConfig.fixedZ, 0) ∈
+      ((configure G).delta counts).fixedQueries := by
+  apply coordsGate_fixedQuery_mem_actionConfigure
+  simp [Ecc.MulFixed.coordsGate, Gate.withSelector]
+
 /-- The Poseidon hash capability transported through Action's direct Poseidon bind. -/
 private def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) :
     (Poseidon.hash (Poseidon.Hash.ConstantLength.capacity 2)).ConfigurationCertificate
@@ -137,6 +189,64 @@ private def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
     apply Configure.mem_lookups_delta_bind_right
     apply Configure.mem_lookups_delta_bind_left
     simpa [base, chipsCounts, eccCounts, poseidonCounts] using hargument
+
+private theorem sinsemilla1Gate_mem_actionConfigure (G : Generators)
+    (counts : ConfigureCounts) :
+    Sinsemilla.HashPiece.sinsemillaGate ((configure G).output counts).sinsemilla1 ∈
+      (actionConfigureContext G counts).gates := by
+  let hQ : (G.S 0).OnCurve := G.S_onCurve (by norm_num [Specs.K])
+  let certificate := sinsemilla1HashCertificate G [1] (G.S 0) hQ (by simp) counts
+  apply certificate.gates
+  rw [List.mem_append]
+  apply Or.inl
+  have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
+    simpa using certificate.output_eq
+  rw [hconfig]
+  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements]
+
+private theorem sinsemilla1Lookup_mem_actionConfigure (G : Generators)
+    (counts : ConfigureCounts) :
+    Sinsemilla.HashPiece.generatorLookup G ((configure G).output counts).sinsemilla1 ∈
+      (actionConfigureContext G counts).lookups := by
+  let hQ : (G.S 0).OnCurve := G.S_onCurve (by norm_num [Specs.K])
+  let certificate := sinsemilla1HashCertificate G [1] (G.S 0) hQ (by simp) counts
+  apply certificate.lookups
+  rw [List.mem_append]
+  apply Or.inl
+  have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
+    simpa using certificate.output_eq
+  rw [hconfig]
+  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements]
+
+private theorem sinsemilla1_qS2_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts) :
+    (((configure G).output counts).sinsemilla1.qS2, 0) ∈
+      ((configure G).delta counts).fixedQueries := by
+  apply fixedQuery_mem_actionConfigure_of_gate G counts
+    (sinsemilla1Gate_mem_actionConfigure G counts)
+  simp [Sinsemilla.HashPiece.sinsemillaGate, Gate.withSelector]
+
+private theorem sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts) (column : TableColumn)
+    (hcolumn : column ∈
+      [((configure G).output counts).sinsemilla1.generatorTable.tableIdx,
+        ((configure G).output counts).sinsemilla1.generatorTable.tableX,
+        ((configure G).output counts).sinsemilla1.generatorTable.tableY]) :
+    (column.inner, 0) ∈ ((configure G).delta counts).fixedQueries := by
+  have hlawful := (configureElaborated G).queriesLawful counts trivial
+  have hregistered := hlawful.lookupTable_registered
+    (sinsemilla1Lookup_mem_actionConfigure G counts)
+    (show (queryFixed column.inner : Expression Fp Query) ∈
+      (Sinsemilla.HashPiece.generatorLookup G
+        ((configure G).output counts).sinsemilla1).tables by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+      rcases hcolumn with rfl | rfl | rfl <;>
+        simp [Sinsemilla.HashPiece.generatorLookup])
+  exact hregistered
 
 /-- Action-facing view of the two capabilities produced by a Merkle configure. -/
 private structure MerkleCapabilities (config : Sinsemilla.Merkle.Config)
@@ -252,6 +362,88 @@ private def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
     apply Configure.mem_lookups_delta_bind_left
     simpa [base, chipsCounts, eccCounts, poseidonCounts, hash1, merkle1,
       hash2Counts] using hargument
+
+private theorem sinsemilla2Gate_mem_actionConfigure (G : Generators)
+    (counts : ConfigureCounts) :
+    Sinsemilla.HashPiece.sinsemillaGate ((configure G).output counts).sinsemilla2 ∈
+      (actionConfigureContext G counts).gates := by
+  let hQ : (G.S 0).OnCurve := G.S_onCurve (by norm_num [Specs.K])
+  let certificate := sinsemilla2HashCertificate G [1] (G.S 0) hQ (by simp) counts
+  apply certificate.gates
+  rw [List.mem_append]
+  apply Or.inl
+  have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla2 := by
+    simpa using certificate.output_eq
+  rw [hconfig]
+  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements]
+
+private theorem sinsemilla2_qS2_fixedQuery_mem_actionConfigure
+    (G : Generators) (counts : ConfigureCounts) :
+    (((configure G).output counts).sinsemilla2.qS2, 0) ∈
+      ((configure G).delta counts).fixedQueries := by
+  apply fixedQuery_mem_actionConfigure_of_gate G counts
+    (sinsemilla2Gate_mem_actionConfigure G counts)
+  simp [Sinsemilla.HashPiece.sinsemillaGate, Gate.withSelector]
+
+/-- Every fixed column allocated by the closed Action configure program is present in
+its query-registration delta. The proof is assembled from the actual gates and lookup
+argument that own the columns, plus the small allocation summary exported by
+`configure`; it does not evaluate the full circuit. -/
+theorem configure_fixedQueries_cover (G : Generators) :
+    ∀ column < ((configure G).finalCounts {}).numFixedColumns,
+      ∃ rotation, (⟨column⟩, rotation) ∈ ((configure G).delta {}).fixedQueries := by
+  rcases configure_fixedColumn_indices G with
+    ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, hcount⟩
+  intro column hcolumn
+  rw [hcount] at hcolumn
+  interval_cases column
+  · refine ⟨0, ?_⟩
+    rw [← h0]
+    exact sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure G {}
+      ((configure G).output {}).sinsemilla1.generatorTable.tableIdx (by simp)
+  · refine ⟨0, ?_⟩
+    rw [← h1]
+    exact sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure G {}
+      ((configure G).output {}).sinsemilla1.generatorTable.tableX (by simp)
+  · refine ⟨0, ?_⟩
+    rw [← h2]
+    exact sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure G {}
+      ((configure G).output {}).sinsemilla1.generatorTable.tableY (by simp)
+  · refine ⟨0, ?_⟩
+    rw [← h3]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 0
+  · refine ⟨0, ?_⟩
+    rw [← h4]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 1
+  · refine ⟨0, ?_⟩
+    rw [← h5]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 2
+  · refine ⟨0, ?_⟩
+    rw [← h6]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 3
+  · refine ⟨0, ?_⟩
+    rw [← h7]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 4
+  · refine ⟨0, ?_⟩
+    rw [← h8]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 5
+  · refine ⟨0, ?_⟩
+    rw [← h9]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 6
+  · refine ⟨0, ?_⟩
+    rw [← h10]
+    exact coordsGate_lagrange_fixedQuery_mem_actionConfigure G {} 7
+  · refine ⟨0, ?_⟩
+    rw [← h11]
+    exact coordsGate_fixedZ_fixedQuery_mem_actionConfigure G {}
+  · refine ⟨0, ?_⟩
+    rw [← h12]
+    exact sinsemilla1_qS2_fixedQuery_mem_actionConfigure G {}
+  · refine ⟨0, ?_⟩
+    rw [← h13]
+    exact sinsemilla2_qS2_fixedQuery_mem_actionConfigure G {}
 
 /-- The second Merkle configure, transported through Action's direct bind. -/
 private def merkle2Capabilities (G : Generators) (counts : ConfigureCounts) :

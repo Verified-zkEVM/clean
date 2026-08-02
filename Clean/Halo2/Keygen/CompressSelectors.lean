@@ -244,6 +244,56 @@ def process (selectors : List SelectorDescription) (maxDegree : ℕ) : SelCompre
   { newFixedCols := deg0.length + combs.length
     entries := deg0Entries ++ combEntries }
 
+/-- Every packed column emitted by `process` lies in its newly allocated fixed-column
+prefix. -/
+theorem process_entry_packedCol_lt_newFixedCols
+    (selectors : List SelectorDescription) (maxDegree : ℕ)
+    {entry : ℕ × SelCompress}
+    (hentry : entry ∈ (process selectors maxDegree).entries) :
+    entry.2.packedCol < (process selectors maxDegree).newFixedCols := by
+  let degreeZero := selectors.filter (·.maxDegree = 0)
+  let remaining := selectors.filter (·.maxDegree ≠ 0)
+  let combinations :=
+    buildCombinations maxDegree remaining.length remaining
+  change entry ∈
+    (degreeZero.zipIdx.map fun (description, column) =>
+      (description.selector, SelCompress.mk column 1 1)) ++
+    (combinations.zipIdx.flatMap fun (combination, column) =>
+      combination.zipIdx.map fun (description, position) =>
+        (description.selector,
+          SelCompress.mk (degreeZero.length + column)
+            combination.length (position + 1))) at hentry
+  change entry.2.packedCol < degreeZero.length + combinations.length
+  rw [List.mem_append] at hentry
+  rcases hentry with hdegreeZero | hcombination
+  · obtain ⟨indexed, hindexed, hentryEq⟩ :=
+      List.mem_map.mp hdegreeZero
+    rcases indexed with ⟨description, column⟩
+    subst entry
+    change column < degreeZero.length + combinations.length
+    have hcolumn := List.snd_lt_of_mem_zipIdx hindexed
+    omega
+  · rw [List.mem_flatMap] at hcombination
+    obtain ⟨indexedCombination, hindexed, hentry⟩ := hcombination
+    rcases indexedCombination with ⟨combination, column⟩
+    obtain ⟨indexedDescription, _, hentryEq⟩ :=
+      List.mem_map.mp hentry
+    rcases indexedDescription with ⟨description, position⟩
+    subst entry
+    change degreeZero.length + column <
+      degreeZero.length + combinations.length
+    have hcolumn := List.snd_lt_of_mem_zipIdx hindexed
+    omega
+
+/-- A successful association-list lookup originates in the map's entries. -/
+theorem SelCompressMap.exists_mem_entries_of_lookup
+    (map : SelCompressMap) {selector : ℕ} {compressed : SelCompress}
+    (hlookup : map.lookup selector = some compressed) :
+    ∃ entry ∈ map.entries, entry.2 = compressed := by
+  simp only [SelCompressMap.lookup, Option.map_eq_some_iff] at hlookup
+  obtain ⟨entry, hfind, hcompressed⟩ := hlookup
+  exact ⟨entry, List.mem_of_find?_eq_some hfind, hcompressed⟩
+
 /-- Per-selector maximal gate degree (`circuit.rs` `compress_selectors`, the `degrees`
 loop): over every gate polynomial, the simple selector it contains — if any — records
 the polynomial's degree. -/
@@ -282,5 +332,39 @@ def deriveSelCompressMap (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ �
   { newFixedCols := m.newFixedCols
     entries := m.entries.map fun (s, sc) =>
       (s, { sc with packedCol := sc.packedCol + cs.numFixedColumns }) }
+
+/-- Every successful lookup in the circuit-derived map names one of the packed fixed
+columns allocated by selector compression. -/
+theorem deriveSelCompressMap_lookup_packedColumn
+    (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ × ℕ))
+    {selector : ℕ} {compressed : SelCompress}
+    (hlookup : (deriveSelCompressMap cs n acts).lookup selector =
+      some compressed) :
+    ∃ index < (deriveSelCompressMap cs n acts).newFixedCols,
+      compressed.packedCol = cs.numFixedColumns + index := by
+  let table := activationTable n cs.numSelectors acts
+  let degrees := selectorMaxDegrees cs
+  let descriptions := (List.range cs.numSelectors).map fun index =>
+    SelectorDescription.mk index table[index]! degrees[index]!
+  let packing := process descriptions (csDegree cs)
+  obtain ⟨entry, hentry, hcompressed⟩ :=
+    SelCompressMap.exists_mem_entries_of_lookup
+      (deriveSelCompressMap cs n acts) hlookup
+  change entry ∈ packing.entries.map (fun (sourceSelector, source) =>
+    (sourceSelector,
+      { source with
+        packedCol := source.packedCol + cs.numFixedColumns })) at hentry
+  obtain ⟨⟨sourceSelector, source⟩, hsource, hentryEq⟩ :=
+    List.mem_map.mp hentry
+  subst entry
+  simp only at hcompressed
+  subst compressed
+  have hcolumn := process_entry_packedCol_lt_newFixedCols
+    descriptions (csDegree cs) hsource
+  refine ⟨source.packedCol, ?_, ?_⟩
+  · simpa [packing] using hcolumn
+  · change source.packedCol + cs.numFixedColumns =
+      cs.numFixedColumns + source.packedCol
+    omega
 
 end Halo2
