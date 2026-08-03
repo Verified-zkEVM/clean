@@ -19,24 +19,46 @@ A witness program (`WitgenIR F m`) is either
   vector-shaped output expression.
 
 Scalar expressions come in 3 sorts, reflecting the codebase's pervasive
-`field → ZMod.val → Nat ops → cast → field` pattern:
+`field → ZMod.val → integer ops → cast → field` pattern:
 - `FExpr` — field-sorted: embedded circuit `Expression`s (which is how callbacks read
-  inputs and earlier witnesses), env reads at computed indices, arithmetic, inverse
-  (IsZeroField), conditionals, constant-table reads, prover-data/hint reads.
-- `NExpr` — Nat-sorted: arithmetic, div/mod, bitwise ops, shifts; bridges are
-  `NExpr.val : FExpr → NExpr` and `FExpr.ofNat : NExpr → FExpr`.
-- `BExpr` — conditions: field equality and Nat comparison (requirement B.7).
+  inputs and earlier witnesses), arithmetic, inverse (IsZeroField), conditionals,
+  bit extraction, constant-table reads, prover-data/hint reads.
+- `UExpr` — **u64-sorted** (bounded nat): arithmetic, div/mod, bitwise ops, shifts;
+  bridges are `UExpr.val : FExpr → UExpr` and `FExpr.ofU64 : UExpr → FExpr`.
+- `BExpr` — conditions: field equality and u64 comparison (requirement B.7).
 
 The output is a `VExpr`: a literal list, a `mapRange n body` (body may reference the
-running index via `NExpr.idx`) — kept as a *loop* rather than unrolled — or an append.
+running index via `UExpr.idx`) — kept as a *loop* rather than unrolled — an environment
+range, a field-element bit decomposition, or an append.
+
+## Why u64 and not `ℕ`
+
+Arbitrary-precision naturals are not what a witness-generation backend wants to run
+(issue #429): they are expensive, awkward to implement outside Lean, and operations like
+unbounded `mul`/`add` have no counterpart in real code. The integer sort is therefore
+`UInt64` throughout, with **wrapping** semantics that mirror Rust's `u64`:
+
+- `UExpr.val x` is `FiniteField.val x` truncated to 64 bits (`UInt64.ofNat`, i.e. `mod 2^64`),
+- `FExpr.ofU64 n` casts back through `FiniteField.fromNat n.toNat`,
+- `UExpr.const n` truncates its `ℕ` payload the same way.
+
+Two operations that genuinely need more than 64 bits are kept at the *field* level
+instead of being expressed through the integer sort, so no gadget has to assume that a
+254-bit field element fits in a `u64`:
+
+- `FExpr.bitOf x i` — bit `i` of `FiniteField.val x` (a static bit index),
+- `VExpr.bitsOf` — the `n` low bits of `FiniteField.val x` (bit-decomposition gadgets).
+
+Similarly `VExpr.envRange offset` replaces per-element environment reads at computed
+indices, so witness offsets never round-trip through `u64`.
 
 ## TOOD Potential open issues
 
-1. **One index binder.** `NExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
+1. **One index binder.** `UExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
    nesting shadows. No surveyed gadget nests mapRanges inside a single callback. If that
    changes, `idx` generalizes to de Bruijn levels.
-2. **Untyped locals.** `localVar i` is resolved in an `F ⊕ ℕ` array with a 0 default on
-   sort mismatch / out of range, keeping `eval` total without intrinsically-typed
+2. **Untyped locals.** `localVar i` is resolved in an `F ⊕ UInt64` array with a 0 default
+   on sort mismatch / out of range, keeping `eval` total without intrinsically-typed
    syntax. A decidable well-sortedness check can be layered on top later (it will be
    needed for serialization anyway).
 -/
@@ -52,8 +74,6 @@ inductive FExpr (F : Type) where
   /-- Embedded circuit expression; this is how callbacks read input vars and earlier
   witnesses (`env x`). -/
   | expr (e : Expression F)
-  /-- Read the environment at a computed index (e.g. consecutive vars in a mapRange). -/
-  | envGet (i : NExpr F)
   | const (c : F)
   /-- Reference to an earlier `Step` result (must be a `letF` step). -/
   | localVar (i : ℕ)
@@ -61,39 +81,45 @@ inductive FExpr (F : Type) where
   | mul (x y : FExpr F)
   /-- Field inverse, with `0⁻¹ = 0` (the `IsZeroField` witness). -/
   | inv (x : FExpr F)
-  /-- Cast from the Nat sort via `FiniteField.fromNat` (the inverse of `val`;
+  /-- Cast from the u64 sort via `FiniteField.fromNat` (the inverse of `val`;
   equals `Nat.cast` on prime fields, but interprets binary digits as coefficients
   on binary fields, where `Nat.cast` would collapse via the characteristic). -/
-  | ofNat (n : NExpr F)
+  | ofU64 (n : UExpr F)
+  /-- Bit `i` of `FiniteField.val x`, as the field element `0` or `1`. Kept at the
+  field level (rather than `(x.val >>> i) % 2`) so that bit indices beyond 64 stay
+  meaningful on large fields. -/
+  | bitOf (x : FExpr F) (i : ℕ)
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
-  | listGet (xs : List (FExpr F)) (i : NExpr F)
+  | listGet (xs : List (FExpr F)) (i : UExpr F)
   /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
   row `row` of table `key` with rows of width `n`, projected at column `col`.
   Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory). -/
-  | dataGet (key : String) (n : ℕ) (row : NExpr F) (col : Fin n)
+  | dataGet (key : String) (n : ℕ) (row : UExpr F) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
-  | hintGet (key : String) (n : ℕ) (row : NExpr F) (col : Fin n)
+  | hintGet (key : String) (n : ℕ) (row : UExpr F) (col : Fin n)
 
-/-- Nat-sorted witness expressions. -/
-inductive NExpr (F : Type) where
+/-- u64-sorted (bounded-nat) witness expressions. All operations wrap modulo `2^64`,
+matching Rust's `u64`. -/
+inductive UExpr (F : Type) where
+  /-- A `ℕ` literal, truncated to 64 bits. -/
   | const (n : ℕ)
-  /-- The field→Nat bridge (`ZMod.val`). -/
+  /-- The field→u64 bridge: `ZMod.val` truncated to 64 bits. -/
   | val (x : FExpr F)
   /-- The index of the innermost enclosing `VExpr.mapRange` (0 outside). -/
   | idx
-  /-- Reference to an earlier `Step` result (must be a `letN` step). -/
+  /-- Reference to an earlier `Step` result (must be a `letU` step). -/
   | localVar (i : ℕ)
-  | add (x y : NExpr F)
-  | mul (x y : NExpr F)
-  | div (x y : NExpr F)
-  | mod (x y : NExpr F)
-  | land (x y : NExpr F)
-  | lor (x y : NExpr F)
-  | lxor (x y : NExpr F)
-  | shiftL (x y : NExpr F)
-  | shiftR (x y : NExpr F)
-  | ite (c : BExpr F) (t e : NExpr F)
+  | add (x y : UExpr F)
+  | mul (x y : UExpr F)
+  | div (x y : UExpr F)
+  | mod (x y : UExpr F)
+  | land (x y : UExpr F)
+  | lor (x y : UExpr F)
+  | lxor (x y : UExpr F)
+  | shiftL (x y : UExpr F)
+  | shiftR (x y : UExpr F)
+  | ite (c : BExpr F) (t e : UExpr F)
 
 /-- Conditions. -/
 inductive BExpr (F : Type) where
@@ -101,10 +127,10 @@ inductive BExpr (F : Type) where
   | false
   /-- Field equality condition (decided via the injective `ℕ` embedding). -/
   | feq (x y : FExpr F)
-  /-- Nat equality condition. -/
-  | neq (x y : NExpr F)
-  /-- Nat-sorted less-than condition. -/
-  | lt (x y : NExpr F)
+  /-- u64 equality condition. -/
+  | neq (x y : UExpr F)
+  /-- u64-sorted less-than condition. -/
+  | lt (x y : UExpr F)
   /-- Negation of a condition. -/
   | not (b : BExpr F)
   /-- Conjunction of conditions. -/
@@ -118,17 +144,17 @@ end
 /-- `-x` as a derived field expression. -/
 @[reducible] def FExpr.neg [Field F] (x : FExpr F) : FExpr F := .mul (.const (-1)) x
 
-/-- `2^k` as a derived Nat expression. -/
-@[reducible] def NExpr.pow2 (k : NExpr F) : NExpr F := .shiftL (.const 1) k
+/-- `2^k` as a derived u64 expression. -/
+@[reducible] def UExpr.pow2 (k : UExpr F) : UExpr F := .shiftL (.const 1) k
 
-/-- `Nat.testBit x i` as a derived Nat expression, valued in {0, 1}. -/
-@[reducible] def NExpr.testBit (x i : NExpr F) : NExpr F := .mod (.shiftR x i) (.const 2)
+/-- `Nat.testBit x i` as a derived u64 expression, valued in {0, 1}. -/
+@[reducible] def UExpr.testBit (x i : UExpr F) : UExpr F := .mod (.shiftR x i) (.const 2)
 
 /-- Evaluation context: the prover environment, the values of the `let`-steps computed
 so far, and the innermost `mapRange` index. -/
 structure Ctx (F : Type) where
   env : ProverEnvironment F
-  locals : Array (F ⊕ ℕ) := #[]
+  locals : Array (F ⊕ UInt64) := #[]
   idx : ℕ := 0
 
 section Eval
@@ -139,7 +165,6 @@ mutual
 @[circuit_norm]
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
-  | .envGet i => ctx.env.get (i.eval ctx)
   | .const c => c
   | .localVar i =>
     match ctx.locals[i]? with
@@ -148,13 +173,14 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .add x y => x.eval ctx + y.eval ctx
   | .mul x y => x.eval ctx * y.eval ctx
   | .inv x => (x.eval ctx)⁻¹
-  | .ofNat n => FiniteField.fromNat (n.eval ctx)
+  | .ofU64 n => FiniteField.fromNat (n.eval ctx).toNat
+  | .bitOf x i => FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2)
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
-  | .listGet xs i => FExpr.evalList ctx (i.eval ctx) xs
+  | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
-    ((ctx.env.data key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
+    ((ctx.env.data key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
-    ((ctx.env.hint key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
+    ((ctx.env.hint key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
 @[circuit_norm]
 def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
@@ -163,10 +189,10 @@ def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
   | i + 1, _ :: xs => FExpr.evalList ctx i xs
 
 @[circuit_norm]
-def NExpr.eval (ctx : Ctx F) : NExpr F → ℕ
-  | .const n => n
-  | .val x => FiniteField.val (x.eval ctx)
-  | .idx => ctx.idx
+def UExpr.eval (ctx : Ctx F) : UExpr F → UInt64
+  | .const n => UInt64.ofNat n
+  | .val x => UInt64.ofNat (FiniteField.val (x.eval ctx))
+  | .idx => UInt64.ofNat ctx.idx
   | .localVar i =>
     match ctx.locals[i]? with
     | some (.inr n) => n
@@ -193,6 +219,25 @@ def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .and x y => x.eval ctx && y.eval ctx
 
 end
+
+/-! ### `u64` normalization
+
+Witness-IR proofs live in `ℕ`: every u64-sorted subterm reaches the field via
+`FExpr.ofU64`, which applies `UInt64.toNat`. Pushing `toNat` through the operations turns
+a `UExpr` evaluation into ordinary `ℕ` arithmetic with explicit `% 2^64` wraps, which
+`omega` / `Nat.mod_eq_of_lt` discharge whenever the gadget's own bounds make the
+operation non-wrapping. -/
+attribute [circuit_norm]
+  UInt64.toNat_add UInt64.toNat_mul UInt64.toNat_div UInt64.toNat_mod
+  UInt64.toNat_and UInt64.toNat_or UInt64.toNat_xor
+  UInt64.toNat_shiftLeft UInt64.toNat_shiftRight
+  UInt64.toNat_ofNat' UInt64.toNat_ofNat UInt64.lt_iff_toNat_lt
+
+/-- `u64` equality is `ℕ` equality of the truncations — the shape the `toNat`-pushing
+`circuit_norm` lemmas above leave the rest of a condition in. -/
+@[circuit_norm]
+theorem UInt64.eq_iff_toNat_eq {a b : UInt64} : a = b ↔ a.toNat = b.toNat :=
+  UInt64.toNat_inj.symm
 
 variable {M : TypeMap} [ProvableType M]
 
@@ -228,6 +273,13 @@ constraint system — porting its computation to the IR must keep it a hint. -/
 inductive VExpr (F : Type) : ℕ → Type where
   | lit {n : ℕ} (es : Vector (FExpr F) n) : VExpr F n
   | mapRange (n : ℕ) (body : FExpr F) : VExpr F n
+  /-- `n` consecutive environment cells starting at `offset` — the "witness a fresh
+  variable per cell" former (`witnessAny`, table rows). The offset is a static `ℕ`, so
+  witness offsets never round-trip through the u64 sort. -/
+  | envRange {n : ℕ} (offset : ℕ) : VExpr F n
+  /-- The `n` low bits of `FiniteField.val x`, each as the field element `0` or `1` —
+  the bit-decomposition former. Kept at the field level so that `n` may exceed 64. -/
+  | bitsOf {n : ℕ} (x : FExpr F) : VExpr F n
   | append {m n : ℕ} (a : VExpr F m) (b : VExpr F n) : VExpr F (m + n)
 
 instance {n} : Coe (Vector (FExpr F) n) (VExpr F n) where
@@ -236,22 +288,25 @@ instance {n} : Coe (Vector (FExpr F) n) (VExpr F n) where
 def VExpr.eval [FiniteField F] (ctx : Ctx F) : {n : ℕ} → VExpr F n → Vector F n
   | _, .lit es => es.map (FExpr.eval ctx)
   | _, .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
+  | n, .envRange offset => .mapRange n fun i => ctx.env.get (offset + i)
+  | n, .bitsOf x => .mapRange n fun i =>
+      FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2)
   | _, .append a b => a.eval ctx ++ b.eval ctx
 
-/-- A scalar `let`-step: computes one field or Nat value from the environment and
+/-- A scalar `let`-step: computes one field or u64 value from the environment and
 earlier steps. Referenced by position via `localVar`. -/
 inductive Step (F : Type) where
   | letF (e : FExpr F)
-  | letN (e : NExpr F)
+  | letU (e : UExpr F)
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
-    (steps : List (Step F)) (locals : Array (F ⊕ ℕ) := #[]) : Array (F ⊕ ℕ) :=
+    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[]) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
   | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
-  | .letN e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where
@@ -357,6 +412,21 @@ attribute [circuit_norm] decide_eq_true_eq
 theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
+  simp [VExpr.eval, Vector.getElem_mapRange]
+
+/-- Elementwise evaluation of environment ranges, keyed on the eval term. -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_envRange [FiniteField F] (ctx : Ctx F) {n : ℕ} (offset : ℕ)
+    (i : ℕ) (hi : i < n) :
+    (VExpr.eval ctx (.envRange (n := n) offset))[i] = ctx.env.get (offset + i) := by
+  simp [VExpr.eval, Vector.getElem_mapRange]
+
+/-- Elementwise evaluation of bit decompositions, keyed on the eval term. -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_bitsOf [FiniteField F] (ctx : Ctx F) {n : ℕ} (x : FExpr F)
+    (i : ℕ) (hi : i < n) :
+    (VExpr.eval ctx (.bitsOf (n := n) x))[i]
+      = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
