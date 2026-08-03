@@ -92,6 +92,9 @@ abbrev _root_.Expression.bit (e : Expression F) (i : ℕ) : FExpr F := .bitOf (.
 /-- The `n` low bits of the field value of an IR expression, as a vector output. -/
 abbrev VExpr.bits (n : ℕ) (e : FExpr F) : VExpr F n := .bitsOf e
 
+/-- The `n` low bits of a circuit expression, as a vector output: `x.bits n`. -/
+abbrev _root_.Expression.bits (e : Expression F) (n : ℕ) : VExpr F n := .bitsOf (.expr e)
+
 /-- Cast a boolean expression to a field element that is 0 or 1. -/
 abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
 
