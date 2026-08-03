@@ -78,6 +78,10 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     let _b ← copyAdvice input.b cfg.b offset
     assignAdvice cfg.c offset (sumWit input.a input.b)
 
+  elaborated :=
+    { keygenRequirements := { gates cfg _ := [addGate cfg] }
+      registered := by keygen_registration }
+
   Spec input output _ := output = input.a + input.b
   ProverSpec input output _ _ := output = input.a + input.b
 
@@ -95,6 +99,27 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
 chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
 def addFormal :=
   add.toFormal "c = a + b"
+
+/-- The layouter add capability exported by one AddChip configure run. -/
+def addFormalConfigureCertificate (a b c : Column .advice)
+    (counts : ConfigureCounts) :
+    addFormal.ConfigurationCertificate
+      ((configure a b c).output counts)
+      { gates := ((configure a b c).delta counts).gates
+        lookups := ((configure a b c).delta counts).lookups } := by
+  let cfg := (configure a b c).output counts
+  apply (add.configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [add, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_singleton] at hgate
+    subst gate
+    simp [cfg, configure]
+  · intro argument hargument
+    simp only [add, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    exact False.elim (List.not_mem_nil hargument)
 
 derive_contract_bridges addFormal := addFormal
 

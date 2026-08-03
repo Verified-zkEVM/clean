@@ -122,6 +122,264 @@ inductive Operation (F : Type) where
 
 abbrev Operations (F : Type) := List (Operation F)
 
+/-! ## Configure/synthesis registration -/
+
+/--
+Gate and lookup arguments supplied by a circuit's caller rather than created by the
+circuit's own configure program.
+
+This is the keygen analogue of an effect requirement: leaf region circuits commonly
+receive an already-configured chip `Config` and use its arguments while contributing
+no configure delta of their own.
+-/
+structure KeygenRequirements (F ConfigInput : Type) where
+  /--
+  Provenance required of configuration values borrowed from the caller. This stays
+  folded across circuit boundaries; it never exposes a child's operation stream.
+  -/
+  configLawful : ConfigInput → Type := fun _ => Unit
+  gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
+  lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
+
+/-- A configure input has no gate or lookup requirements left for an enclosing circuit. -/
+structure KeygenRequirements.EmptyAt
+    {ConfigInput : Type} (self : KeygenRequirements F ConfigInput)
+    (input : ConfigInput) where
+  configLawful : self.configLawful input
+  gates_eq : self.gates input configLawful = []
+  lookups_eq : self.lookups input configLawful = []
+
+/--
+Static registration of one region operation in explicit configure-produced gate and
+lookup lists.
+
+Assignments and copies need no configure-phase registration. Gate and lookup
+activations must refer to arguments emitted by the same configure program.
+-/
+@[circuit_norm]
+def RegionOperation.KeygenRegistered
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    RegionOperation F → Prop
+  | .enableGate gate _ => gate ∈ gates
+  | .enableLookup argument _ _ => argument ∈ lookups
+  | _ => True
+
+/-- Static registration of one layouter operation in explicit configure metadata. -/
+@[circuit_norm]
+def Operation.KeygenRegistered
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operation F → Prop
+  | .region _ body =>
+      body.Forall (RegionOperation.KeygenRegistered gates lookups)
+  | _ => True
+
+/--
+Every gate and lookup emitted by a synthesis operation stream occurs in the supplied
+configure-produced lists.
+-/
+def Operations.KeygenRegistered
+    (operations : Operations F)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) : Prop :=
+  operations.Forall (Operation.KeygenRegistered gates lookups)
+
+@[circuit_norm]
+theorem Operations.KeygenRegistered.nil
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operations.KeygenRegistered [] gates lookups := by
+  simp [Operations.KeygenRegistered]
+
+@[circuit_norm]
+theorem Operations.KeygenRegistered.append
+    (left right : Operations F)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operations.KeygenRegistered (left ++ right) gates lookups ↔
+      Operations.KeygenRegistered left gates lookups ∧
+        Operations.KeygenRegistered right gates lookups := by
+  simp [Operations.KeygenRegistered]
+
+@[circuit_norm]
+theorem Operations.KeygenRegistered.region_cons
+    (name : String) (body : RegionOperations F) (rest : Operations F)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operations.KeygenRegistered (.region name body :: rest) gates lookups ↔
+      body.Forall (RegionOperation.KeygenRegistered gates lookups) ∧
+        Operations.KeygenRegistered rest gates lookups := by
+  simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
+
+@[circuit_norm]
+theorem Operations.KeygenRegistered.constrainInstance_cons
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operations.KeygenRegistered
+        (.constrainInstance cell column row :: rest) gates lookups ↔
+      Operations.KeygenRegistered rest gates lookups := by
+  simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
+
+@[circuit_norm]
+theorem Operations.KeygenRegistered.loadTable_cons
+    (table : TableColumn) (values : List F) (rest : Operations F)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    Operations.KeygenRegistered
+        (.loadTable table values :: rest) gates lookups ↔
+      Operations.KeygenRegistered rest gates lookups := by
+  simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
+
+/-- Registration is monotone in both configure-produced argument lists. -/
+theorem Operations.KeygenRegistered.mono
+    {operations : Operations F}
+    {sourceGates targetGates : List (Gate F)}
+    {sourceLookups targetLookups : List (LookupArgument F)}
+    (hregistered :
+      operations.KeygenRegistered sourceGates sourceLookups)
+    (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
+    (hlookups :
+      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups) :
+    operations.KeygenRegistered targetGates targetLookups := by
+  rw [Operations.KeygenRegistered,
+    List.forall_iff_forall_mem] at hregistered ⊢
+  intro operation hoperation
+  have hoperationRegistered := hregistered operation hoperation
+  cases operation with
+  | region name body =>
+      rw [Operation.KeygenRegistered,
+        List.forall_iff_forall_mem] at hoperationRegistered ⊢
+      intro regionOperation hregionOperation
+      have hregionRegistered :=
+        hoperationRegistered regionOperation hregionOperation
+      cases regionOperation with
+      | enableGate gate row =>
+          exact hgates gate hregionRegistered
+      | enableLookup argument selectors row =>
+          exact hlookups argument hregionRegistered
+      | assignAdvice
+      | assignFixed
+      | constrainEqual
+      | constrainConstant
+      | constrainInstance =>
+          trivial
+  | constrainInstance
+  | loadTable =>
+      trivial
+
+/-- Region-operation registration is monotone in both available argument lists. -/
+theorem RegionOperations.keygenRegistered_mono
+    {operations : RegionOperations F}
+    {sourceGates targetGates : List (Gate F)}
+    {sourceLookups targetLookups : List (LookupArgument F)}
+    (hregistered :
+      operations.Forall
+        (RegionOperation.KeygenRegistered sourceGates sourceLookups))
+    (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
+    (hlookups :
+      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups) :
+    operations.Forall
+      (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+  rw [List.forall_iff_forall_mem] at hregistered ⊢
+  intro operation hoperation
+  have hoperationRegistered := hregistered operation hoperation
+  cases operation with
+  | enableGate gate row =>
+      exact hgates gate hoperationRegistered
+  | enableLookup argument selectors row =>
+      exact hlookups argument hoperationRegistered
+  | assignAdvice
+  | assignFixed
+  | constrainEqual
+  | constrainConstant
+  | constrainInstance =>
+      trivial
+
+/--
+Registration against a configure delta remains true after interpreting that delta
+over any initial constraint system.
+-/
+theorem Operations.KeygenRegistered.applyConfigureDelta
+    {operations : Operations F} {delta : ConfigureDelta F}
+    (initial : ConstraintSystem F) (counts : ConfigureCounts)
+    (hregistered :
+      operations.KeygenRegistered delta.gates delta.lookups) :
+    operations.KeygenRegistered
+      (delta.apply initial counts).gates
+      (delta.apply initial counts).lookups := by
+  apply hregistered.mono
+  · intro gate hgate
+    exact List.mem_append_right initial.gates hgate
+  · intro argument hargument
+    exact List.mem_append_right initial.lookups hargument
+
+/-- Existing constraint-system spelling of configure/synthesis registration. -/
+@[circuit_norm]
+def RegionOperation.KeygenCoherent
+    (cs : ConstraintSystem F) : RegionOperation F → Prop :=
+  RegionOperation.KeygenRegistered cs.gates cs.lookups
+
+/-- Existing constraint-system spelling of configure/synthesis registration. -/
+@[circuit_norm]
+def Operation.KeygenCoherent
+    (cs : ConstraintSystem F) : Operation F → Prop :=
+  Operation.KeygenRegistered cs.gates cs.lookups
+
+/-- Every synthesis-enabled argument was registered in a constraint system. -/
+def OperationsKeygenCoherent
+    (cs : ConstraintSystem F) (operations : Operations F) : Prop :=
+  operations.KeygenRegistered cs.gates cs.lookups
+
+@[circuit_norm]
+theorem OperationsKeygenCoherent.nil
+    (cs : ConstraintSystem F) :
+    OperationsKeygenCoherent cs [] := by
+  exact Operations.KeygenRegistered.nil cs.gates cs.lookups
+
+/-- Configure/synthesis coherence composes across operation-stream append. -/
+@[circuit_norm]
+theorem OperationsKeygenCoherent.append
+    (cs : ConstraintSystem F) (left right : Operations F) :
+    OperationsKeygenCoherent cs (left ++ right) ↔
+      OperationsKeygenCoherent cs left ∧
+        OperationsKeygenCoherent cs right := by
+  exact Operations.KeygenRegistered.append
+    left right cs.gates cs.lookups
+
+/-- A region is coherent exactly when each operation in its body is coherent. -/
+@[circuit_norm]
+theorem OperationsKeygenCoherent.region_cons
+    (cs : ConstraintSystem F) (name : String)
+    (body : RegionOperations F) (rest : Operations F) :
+    OperationsKeygenCoherent cs (.region name body :: rest) ↔
+      body.Forall (RegionOperation.KeygenCoherent cs) ∧
+        OperationsKeygenCoherent cs rest := by
+  exact Operations.KeygenRegistered.region_cons
+    name body rest cs.gates cs.lookups
+
+@[circuit_norm]
+theorem OperationsKeygenCoherent.constrainInstance_cons
+    (cs : ConstraintSystem F) (cell : Cell)
+    (column : Column .instance) (row : ℕ) (rest : Operations F) :
+    OperationsKeygenCoherent cs
+        (.constrainInstance cell column row :: rest) ↔
+      OperationsKeygenCoherent cs rest := by
+  exact Operations.KeygenRegistered.constrainInstance_cons
+    cell column row rest cs.gates cs.lookups
+
+@[circuit_norm]
+theorem OperationsKeygenCoherent.loadTable_cons
+    (cs : ConstraintSystem F) (table : TableColumn)
+    (values : List F) (rest : Operations F) :
+    OperationsKeygenCoherent cs (.loadTable table values :: rest) ↔
+      OperationsKeygenCoherent cs rest := by
+  exact Operations.KeygenRegistered.loadTable_cons
+    table values rest cs.gates cs.lookups
+
+/-- Delta registration supplies coherence in every interpreted configure result. -/
+theorem Operations.KeygenRegistered.operationsKeygenCoherent_apply
+    {operations : Operations F} {delta : ConfigureDelta F}
+    (initial : ConstraintSystem F) (counts : ConfigureCounts)
+    (hregistered :
+      operations.KeygenRegistered delta.gates delta.lookups) :
+    OperationsKeygenCoherent (delta.apply initial counts) operations :=
+  hregistered.applyConfigureDelta initial counts
+
 /-! ## Selector activation vocabulary
 
 These definitions describe the operation stream itself: which selector indices occur

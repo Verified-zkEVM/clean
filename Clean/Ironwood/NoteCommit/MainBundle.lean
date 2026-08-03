@@ -691,7 +691,7 @@ private theorem synth_output_eq_commit_output
 theorem soundness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Soundness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (Spec G Q R) := by
   circuit_proof_start
   change Fp at input_gdX input_gdY input_pkdX input_pkdY input_value input_rho input_psi
@@ -1113,7 +1113,7 @@ theorem soundness (G : Generators) (R : FixedBase)
 theorem completeness (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
     FormalCircuit.Completeness (Witness := fun _ => Vector Fp 85 × Fq)
-      (synth G R Q hQ cfg)
+      (fun config : Config => pure config) (synth G R Q hQ) cfg
       (rcmExtract cfg) (EnvAssumptions G cfg) Assumptions (ProverAssumptions G Q)
       (fun _ _ _ _ => True) := by
   circuit_proof_start
@@ -1949,6 +1949,49 @@ def circuit (G : Generators) (R : FixedBase)
   ProverSpec := fun _ _ _ _ => True
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
+
+/-- Package NoteCommit from its commitment child and the arguments registered by
+its own decomposition/canonicity stages. -/
+def configurationCertificate (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) {cfg : Config}
+    {context : KeygenContext Fp}
+    (commit : (Sinsemilla.CommitDomain.commit G ns R Q hQ
+      ns_ne_nil).ConfigurationCertificate
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) context)
+    (directGates : ∀ gate, gate ∈
+      [LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig,
+        YCanonicity.gate cfg.gates.y,
+        DecomposeB.gate cfg.gates.b,
+        DecomposeD.gate cfg.gates.d,
+        DecomposeE.gate cfg.gates.e,
+        DecomposeG.gate cfg.gates.g,
+        DecomposeH.gate cfg.gates.h,
+        GdCanonicity.gate cfg.gates.gd,
+        PkdCanonicity.gate cfg.gates.pkd,
+        ValueCanonicity.gate cfg.gates.value,
+        RhoCanonicity.gate cfg.gates.rho,
+        PsiCanonicity.gate cfg.gates.psi] → gate ∈ context.gates)
+    (rangeLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
+      context.lookups) :
+    (circuit G R Q hQ).ConfigurationCertificate cfg context := by
+  apply ((circuit G R Q hQ).configureCertificate
+    cfg {} commit.configured).mono
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaboratedFolded, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    rcases List.mem_append.mp hrequired with hlocal | hcommit
+    · exact directGates required hlocal
+    · exact commit.gates_of_configured required hcommit
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaboratedFolded, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    rcases List.mem_append.mp hrequired with hrange | hcommit
+    · simp only [List.mem_singleton] at hrange
+      rw [hrange]
+      exact rangeLookup
+    · exact commit.lookups_of_configured required hcommit
 
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ

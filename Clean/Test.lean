@@ -21,7 +21,6 @@ import Clean.Halo2.Tests.TestContractBridges
 import Clean.Halo2.Tests.TestLookupMembership
 import Clean.Halo2.Tests.TestProofStart
 import Clean.Halo2.Tests.TestTupleLookup
-import Clean.Halo2.Tests.TestPinnedCsClosure
 import Clean.Halo2.Tests.TestSelectorFree
 import Clean.Ironwood.Tests.TestVkMatchAdd
 import Clean.Ironwood.Tests.TestVkLayoutAdd

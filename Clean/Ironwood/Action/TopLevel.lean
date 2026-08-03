@@ -125,9 +125,18 @@ private theorem configured_closesEnvironment
 The deployed proof-carrying Orchard Action circuit: unit synthesis input/output,
 explicit public inputs, and no unfulfilled environment contract at its boundary.
 -/
+private theorem actionSelectorRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).selectorRequirements
+      () {} := by
+  dsimp only [FormalCircuit.selectorRequirements, Circuit.circuit,
+    Circuit.elaboratedPost, Circuit.configureElaborated]
+  trivial
+
 def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
+  noCallerRequirements := ⟨(), rfl, rfl⟩
+  selectorRequirements := actionSelectorRequirements
   publicInputLayout := PublicInputs.layout
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>

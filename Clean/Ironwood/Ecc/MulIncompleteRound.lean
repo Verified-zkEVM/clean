@@ -644,6 +644,10 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     let _yP ← assignAdvice cfg.yP (offset + 2) (stepWit alpha w i (·.base.y))
     readState cfg (offset + 1)
 
+  elaborated :=
+    { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+      registered := by keygen_registration }
+
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)
 

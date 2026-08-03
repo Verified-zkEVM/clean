@@ -37,6 +37,23 @@ structure Inputs (F : Type) where
   sign : F
 deriving CircuitType
 
+@[keygen_norm]
+def keygenRequirements
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
+    KeygenRequirements Fp
+      (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
+        Ecc.Add.Config) where
+  configLawful cfg :=
+    (Ecc.MulFixed.Short.circuit V).Configured cfg.1 ×
+      (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.2.1 ×
+        Ecc.Add.addFormal.Configured cfg.2.2
+  gates _ configured :=
+    configured.1.gates ++ configured.2.1.gates ++
+      configured.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++
+      configured.2.2.lookups
+
 /-! ## The `value_commit_orchard` bundle -/
 
 /-- Rust `gadget.rs::value_commit_orchard`: `[v] ValueCommitV` (short signed), `[rcv]
@@ -60,7 +77,10 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       { p := commitment, q := blind }
     pure cv
 
-  elaborated _ := { regionCount _ := 5 }
+  elaborated :=
+    { keygenRequirements := keygenRequirements V R
+      registered := by keygen_registration
+      regionCount _ := 5 }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧

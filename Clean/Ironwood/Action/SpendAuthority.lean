@@ -40,6 +40,17 @@ structure Input (F : Type) where
   akP : Point F
 deriving CircuitType
 
+@[keygen_norm]
+def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
+    (Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) where
+  configLawful cfg :=
+    (Ecc.MulFixed.FullWidth.circuit G).Configured cfg.1 ×
+      Ecc.Add.addFormal.Configured cfg.2
+  gates _ configured :=
+    configured.1.gates ++ configured.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.lookups
+
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted
 randomizer: `rk = [alpha] SpendAuthG + ak_P` for the `alpha` read off the witnessed
@@ -57,7 +68,10 @@ def circuit (G : FixedBase) : FormalCircuit Fp
       { p := alphaCommitment, q := input.akP }
     pure rk
 
-  elaborated _ := { regionCount _ := 3 }
+  elaborated :=
+    { keygenRequirements := keygenRequirements G
+      registered := by keygen_registration
+      regionCount _ := 3 }
 
   EnvAssumptions := fun (fcfg, _) env =>
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env

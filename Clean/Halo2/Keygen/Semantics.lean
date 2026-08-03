@@ -23,19 +23,6 @@ soundness bridge needs:
 * `eraseGates_eval` / `derive_gates_eval` — the gate-list and derived-record forms.
 -/
 
-namespace Halo2.Expression
-
-/-- Every selector atom's index satisfies `dom` — with `dom := (m · |>.isSome)`, the
-compression map covers the expression. -/
-def selectorsCovered {F : Type} (dom : ℕ → Bool) : Expression F Query → Bool
-  | .var (.selector s) => dom s.index
-  | .var _ => true
-  | .const _ => true
-  | .add a b => a.selectorsCovered dom && b.selectorsCovered dom
-  | .mul a b => a.selectorsCovered dom && b.selectorsCovered dom
-
-end Halo2.Expression
-
 namespace Halo2
 
 variable {F : Type} [Field F]

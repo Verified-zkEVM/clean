@@ -380,6 +380,28 @@ theorem foldRangeVarAux_operations (rows : ℕ → ℕ) (init : β)
     simp only [Fin.val_last, Fin.val_castSucc, List.flatten_cons, List.flatten_nil,
       List.append_nil]
 
+/-- An operation-local law over a serial fold reduces to the law for every round,
+with the accumulator kept in its closed `foldAcc` form. -/
+theorem foldRangeVarAux_forall (property : RegionOperation F → Prop)
+    (rows : ℕ → ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) (k : ℕ) :
+    ((foldRangeVarAux rows init body k).operations self).Forall property ↔
+      ∀ i : Fin k,
+        ((body i.val (rows i.val)
+          (foldAcc rows init body i.val self)).operations self).Forall property := by
+  induction k with
+  | zero =>
+      change List.Forall property [] ↔
+        ∀ i : Fin 0,
+          ((body i.val (rows i.val)
+            (foldAcc rows init body i.val self)).operations self).Forall property
+      simp
+  | succ n ih =>
+      rw [foldRangeVarAux_operations_succ, List.forall_append, ih,
+        Fin.forall_fin_succ']
+      simp only [Fin.val_last, Fin.val_castSucc]
+
 /-- **The `Constraints` split**, per-round at the closed-form accumulator. -/
 @[circuit_norm ↓]
 theorem foldRangeVarAux_constraints (rows : ℕ → ℕ) (init : β)
@@ -423,6 +445,16 @@ def foldRangeVar (rows : ℕ → ℕ) (m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVarAux rows init body m
 
+theorem foldRangeVar_forall (property : RegionOperation F → Prop)
+    (rows : ℕ → ℕ) (m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) :
+    ((foldRangeVar rows m init body).operations self).Forall property ↔
+      ∀ i : Fin m,
+        ((body i.val (rows i.val)
+          (foldAcc rows init body i.val self)).operations self).Forall property :=
+  foldRangeVarAux_forall _ _ _ _ _ _
+
 @[circuit_norm ↓]
 theorem foldRangeVar_constraints (rows : ℕ → ℕ) (m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
@@ -449,6 +481,17 @@ theorem foldRangeVar_extendsWitnesses (rows : ℕ → ℕ) (m : ℕ) (init : β)
 def foldRange (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVar (fun i => offset + i * stride) m init body
+
+theorem foldRange_forall (property : RegionOperation F → Prop)
+    (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) :
+    ((foldRange offset stride m init body).operations self).Forall property ↔
+      ∀ i : Fin m,
+        ((body i.val (offset + i.val * stride)
+          (foldAcc (fun j => offset + j * stride)
+            init body i.val self)).operations self).Forall property :=
+  foldRangeVarAux_forall _ _ _ _ _ _
 
 @[circuit_norm ↓]
 theorem foldRange_constraints (offset stride m : ℕ) (init : β)

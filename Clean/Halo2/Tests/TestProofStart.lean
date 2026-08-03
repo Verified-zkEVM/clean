@@ -78,8 +78,9 @@ shape (`elaborated` instance supplied explicitly, as the structure field does). 
 run_cmd Elab.Command.liftTermElabM do
   let e ← Term.elabTermAndSynthesize
     (← `(fun (c : WitnessPoint.Config) (o : ℕ) =>
-          (haveI := WitnessPoint.point.elaborated c o
-           FormalRegionCircuit.Soundness (WitnessPoint.point.synthesize c o)
+          (haveI := WitnessPoint.point.elaborated
+           FormalRegionCircuit.Soundness WitnessPoint.point.configure
+             WitnessPoint.point.synthesize c o
              (WitnessPoint.point.extract c o) (WitnessPoint.point.EnvAssumptions c)
              WitnessPoint.point.Assumptions WitnessPoint.point.Spec))) none
   Term.synthesizeSyntheticMVarsNoPostponing

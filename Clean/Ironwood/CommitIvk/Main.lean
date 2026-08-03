@@ -194,13 +194,33 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
+@[keygen_norm]
+def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
+    (hQ : Q.OnCurve) : KeygenRequirements Fp Config where
+  configLawful cfg :=
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+  gates cfg configured :=
+    [LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig, CommitIvk.gate cfg.gate] ++
+      configured.gates
+  lookups cfg configured :=
+    [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++ configured.lookups
+
 instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
-    (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs field (synth G R Q hQ cfg) where
-  output input i := (synth G R Q hQ cfg input).output i
+    (hQ : Q.OnCurve) :
+    ElaboratedCircuit Fp Config Config Inputs field
+      (fun config => pure config) (synth G R Q hQ) where
+  keygenRequirements := keygenRequirements G R Q hQ
+  registered := by
+    keygen_registration [
+      synth,
+      synthPieces,
+      Sinsemilla.HashToPoint.witnessMessagePiece]
+  output cfg input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 14
-  output_eq := by intro _ _; rfl
-  regionCount_eq input i := (synth_regionCount G R Q hQ cfg input i).symm
+  output_eq := by intro _ _ _; rfl
+  regionCount_eq cfg input i :=
+    (synth_regionCount G R Q hQ cfg input i).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

@@ -45,6 +45,12 @@ def regionParent :
       (Unconstrained Point) Point where
   configure := fun cols => WitnessPoint.configure cols.1 cols.2
   synthesize config offset input := WitnessPoint.point.call config offset input
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig offset input region
+      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
+        (WitnessPoint.point.configureCertificate configInput counts hconfig)
+        offset input region }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -89,6 +95,13 @@ def regionParentWithOp :
   synthesize config offset input := do
     let _ ← assignAdvice config.x (offset + 1) (Witgen.MOver.toIRScalar (Point.x <$> input))
     WitnessPoint.point.call config offset input
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig offset input region
+      simp only [keygen_spine]
+      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
+        (WitnessPoint.point.configureCertificate configInput counts hconfig)
+        offset input region }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -142,6 +155,19 @@ def layouterParent :
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
+  elaborated := {
+    registered := by
+      intro configInput counts hconfig input i
+      simp only [Circuit.operations_bind,
+        Operations.KeygenRegistered.append]
+      constructor
+      · exact witnessPointL.call_keygenRegistered_ofCertificate
+          (witnessPointL.configureCertificate configInput counts hconfig)
+          input i
+      · exact witnessPointR.call_keygenRegistered_ofCertificate
+          (witnessPointR.configureCertificate configInput counts hconfig)
+          input _
+    regionCount _ := 2 }
   Spec _ output _ := output.Valid
   Witness := ProvablePair Point Point
   extract := fun config _ i₀ env =>

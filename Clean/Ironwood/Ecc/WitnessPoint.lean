@@ -41,30 +41,32 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
   wellFormed := by
     intro
-    rw [Gate.WellFormed]
-    intro constraint hconstraint
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
-    rcases hconstraint with rfl | rfl
-    all_goals
-      intro base scale hscale hzero
-      have hcurveEval :
-          (curveEqn x y).eval
-              (Expression.replaceSelectorValue qPoint scale base) =
+    constructor
+    · simp [Expression.selectorsCovered, querySelector,
+        queryAdvice, curveEqn]
+    · intro constraint hconstraint
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
+      rcases hconstraint with rfl | rfl
+      all_goals
+        intro base scale hscale hzero
+        have hcurveEval :
             (curveEqn x y).eval
-              (Expression.enabledGateValuation qPoint base) := by
-        apply Expression.eval_eq_of_selectorFree (curveEqn x y) (by selector_free)
-        · intro _ _
-          rfl
-        · intro _ _
-          rfl
-        · intro _ _
-          rfl
-      simp only [querySelector, queryAdvice, Expression.eval,
-        Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
-      rw [← hcurveEval, one_mul]
-      rcases mul_eq_zero.mp hzero with hscaled | hcurve
-      · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
-      · exact mul_eq_zero.mpr (.inr hcurve)
+                (Expression.replaceSelectorValue qPoint scale base) =
+              (curveEqn x y).eval
+                (Expression.enabledGateValuation qPoint base) := by
+          apply Expression.eval_eq_of_selectorFree (curveEqn x y) (by selector_free)
+          · intro _ _
+            rfl
+          · intro _ _
+            rfl
+          · intro _ _
+            rfl
+        simp only [querySelector, queryAdvice, Expression.eval,
+          Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
+        rw [← hcurveEval, one_mul]
+        rcases mul_eq_zero.mp hzero with hscaled | hcurve
+        · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
+        · exact mul_eq_zero.mpr (.inr hcurve)
 
 /-- The "witness non-identity point" gate. -/
 def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp :=
@@ -96,9 +98,11 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
 
-  elaborated config offset :=
-    { output := fun _ self => { x := .of self offset config.x, y := .of self offset config.y }
-      output_eq := by intro _ _; rfl }
+  elaborated :=
+    { registered := by keygen_registration
+      output config offset _ self :=
+        { x := .of self offset config.x, y := .of self offset config.y }
+      output_eq := by intro _ _ _ _; rfl }
 
   Spec _ output _ := output.Valid
   ProverAssumptions input _ _ := input.Valid
@@ -136,6 +140,9 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     let xVar ← assignAdvice config.x offset (Witgen.MOver.toIRScalar (Point.x <$> point))
     let yVar ← assignAdvice config.y offset (Witgen.MOver.toIRScalar (Point.y <$> point))
     return ⟨ xVar, yVar ⟩
+
+  elaborated :=
+    { registered := by keygen_registration }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors

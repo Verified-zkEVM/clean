@@ -256,6 +256,19 @@ def circuit (l : Fp) :
     exact ⟨h, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
       trivial, trivial⟩
 
+@[keygen_configured]
+def circuit_configured (l : Fp) (cfg : Config)
+    (hsimple : cfg.qDecompose.simple = true) :
+    (circuit l).Configured cfg := by
+  refine ⟨(cfg.aWhole, cfg.bWhole, cfg.cWhole, cfg.leftNode, cfg.rightNode,
+    cfg.z1A, cfg.z1B, cfg.b1, cfg.b2, cfg.lWhole),
+    { numSelectors := cfg.qDecompose.index }, (), ?_⟩
+  rcases cfg with ⟨⟨index, simple⟩, a, b, c, left, right, z1A, z1B,
+    b1, b2, lWhole⟩
+  simp only at hsimple
+  subst simple
+  rfl
+
 end Gate
 
 /-! ### The chip-level configure
@@ -284,6 +297,76 @@ instance (scfg : HashPiece.Config) :
     ElaboratedConfigure (configure scfg) := by
   unfold configure
   infer_instance
+
+/-- Capabilities produced by one Merkle configure run. Hashing and range checking
+remain caller-supplied because `configure` receives their already-built configs. -/
+structure ConfigureCertificate (scfg : HashPiece.Config)
+    (counts : ConfigureCounts) (context : KeygenContext Fp) where
+  condSwap : ∀ (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool),
+    (CondSwap.swap wb wswap).ConfigurationCertificate
+      (configure scfg |>.output counts).condSwap context
+  gate : ∀ l : Fp,
+    (Gate.circuit l).ConfigurationCertificate
+      (configure scfg |>.output counts).gate context
+
+namespace ConfigureCertificate
+
+def mono {scfg : HashPiece.Config} {counts : ConfigureCounts}
+    {source target : KeygenContext Fp}
+    (certificate : ConfigureCertificate scfg counts source)
+    (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    ConfigureCertificate scfg counts target where
+  condSwap wb wswap := (certificate.condSwap wb wswap).mono gates lookups
+  gate l := (certificate.gate l).mono gates lookups
+
+end ConfigureCertificate
+
+/-- Build the Merkle-local capabilities once, beside their producing configure. -/
+def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
+    ConfigureCertificate scfg counts
+      { gates := (configure scfg |>.delta counts).gates
+        lookups := (configure scfg |>.delta counts).lookups } := by
+  let swapProgram := CondSwap.configure scfg.xA scfg.xP scfg.bits
+    scfg.lambda1 scfg.lambda2
+  let gateInput := (scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2,
+    scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2)
+  refine { condSwap := ?_, gate := ?_ }
+  · intro wb wswap
+    apply (CondSwap.swapConfigureCertificate scfg.xA scfg.xP scfg.bits
+      scfg.lambda1 scfg.lambda2 counts wb wswap).mono
+    · intro gate hgate
+      simp only
+      unfold configure
+      apply Configure.mem_gates_delta_bind_left
+      exact hgate
+    · intro argument hargument
+      simp only
+      unfold configure
+      apply Configure.mem_lookups_delta_bind_left
+      exact hargument
+  · intro l
+    apply ((Gate.circuit l).configureCertificate gateInput
+      (swapProgram.finalCounts counts) ()).mono
+    · intro gate hgate
+      simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hgate
+      simp only
+      unfold configure
+      apply Configure.mem_gates_delta_bind_right
+      rcases hgate with hgate | hgate
+      · exact False.elim (List.not_mem_nil hgate)
+      · simpa [gateInput, swapProgram] using hgate
+    · intro argument hargument
+      simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hargument
+      simp only
+      unfold configure
+      apply Configure.mem_lookups_delta_bind_right
+      rcases hargument with hargument | hargument
+      · exact False.elim (List.not_mem_nil hargument)
+      · simpa [gateInput, swapProgram] using hargument
 
 /-! ### Digit toolkit
 
@@ -927,6 +1010,39 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
     rfl]
   simp only [Circuit.operations_pure, Operations.regionCount]
 
+@[keygen_norm]
+def HashLayer.keygenRequirements (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) :
+    KeygenRequirements Fp (Config × LookupRangeCheck.Config 10) where
+  configLawful cfg :=
+    (LookupRangeCheck.shortRangeCheck 10 5).Configured cfg.2 ×
+      (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).Configured
+        cfg.1.sinsemilla ×
+        (Gate.circuit (l : Fp)).Configured cfg.1.gate
+  gates _ configured :=
+    configured.1.gates ++ configured.2.1.gates ++ configured.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++ configured.2.2.lookups
+
+private theorem HashLayer.keygenRegistered
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ) :
+    ∀ (configInput : Config × LookupRangeCheck.Config 10)
+      (counts : ConfigureCounts)
+      (hconfig : (HashLayer.keygenRequirements G Q hQ l).configLawful configInput)
+      (input : Var HashLayer.Input Fp) (i : RegionIndex),
+    let program : Configure Fp (Config × LookupRangeCheck.Config 10) := pure configInput
+    ((HashLayer.synthesize G (program.output counts).1 (program.output counts).2
+      Q hQ l input).operations i).KeygenRegistered
+      ((HashLayer.keygenRequirements G Q hQ l).gates configInput hconfig ++
+        (program.delta counts).gates)
+      ((HashLayer.keygenRequirements G Q hQ l).lookups configInput hconfig ++
+        (program.delta counts).lookups) := by
+  keygen_registration [
+    HashLayer.synthesize,
+    HashToPoint.witnessMessagePiece,
+    LookupRangeCheck.witnessShortCheck,
+    HashToPoint.hashMessage]
+
 /-- One Merkle layer hash as a layouter-level formal circuit (`MerkleInstructions::hash_layer`),
 on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition
 `Gate`). -/
@@ -939,12 +1055,14 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   synthesize := fun (cfg, lcfg) input => HashLayer.synthesize G cfg lcfg Q hQ l input
 
-  elaborated := fun (cfg, lcfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { keygenRequirements := HashLayer.keygenRequirements G Q hQ l
+      registered := HashLayer.keygenRegistered G Q hQ l
+      output := fun (cfg, lcfg) input i =>
         (HashLayer.synthesize G cfg lcfg Q hQ l input).output i
-      regionCount := fun _ => 7
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 7
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (cfg, lcfg) input i =>
         (hashLayer_regionCount G cfg lcfg Q hQ l input i).symm }
 
   EnvAssumptions := fun (cfg, lcfg) env =>
@@ -1620,6 +1738,38 @@ end Layer
 derive_contract_bridges HashLayer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10) := HashLayer.circuit G Q hQ l hl
 
+/-- Assemble a hash-layer capability from its three direct child capabilities. -/
+def HashLayer.configurationCertificate (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    {cfg : Config} {lcfg : LookupRangeCheck.Config 10}
+    {context : KeygenContext Fp}
+    (range : (LookupRangeCheck.shortRangeCheck 10 5).ConfigurationCertificate
+      lcfg context)
+    (hash : (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+      (by decide)).ConfigurationCertificate cfg.sinsemilla context)
+    (gate : (Gate.circuit (l : Fp)).ConfigurationCertificate cfg.gate context) :
+    (HashLayer.circuit G Q hQ l hl).ConfigurationCertificate (cfg, lcfg) context := by
+  let lawful : (HashLayer.keygenRequirements G Q hQ l).configLawful (cfg, lcfg) :=
+    ⟨range.configured, hash.configured, gate.configured⟩
+  apply ((HashLayer.circuit G Q hQ l hl).configureCertificate
+    (cfg, lcfg) {} lawful).mono
+  · intro required hrequired
+    simp only [HashLayer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, HashLayer.keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with (hrequired | hrequired) | hrequired
+    · exact range.gates_of_configured required hrequired
+    · exact hash.gates_of_configured required hrequired
+    · exact gate.gates_of_configured required hrequired
+  · intro required hrequired
+    simp only [HashLayer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, HashLayer.keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with (hrequired | hrequired) | hrequired
+    · exact range.lookups_of_configured required hrequired
+    · exact hash.lookups_of_configured required hrequired
+    · exact gate.lookups_of_configured required hrequired
+
 /-- The region count of the layer: the swap region + the hash layer's 7. -/
 private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
@@ -1642,6 +1792,19 @@ private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurv
       rw [FormalCircuit.call_regionCount]
       rfl]
 
+@[keygen_norm]
+def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) :
+    KeygenRequirements Fp
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10) where
+  configLawful cfg :=
+    (CondSwap.swap wsib wswap).Configured cfg.1 ×
+      (HashLayer.circuit G Q hQ l hl).Configured (cfg.2.1, cfg.2.2)
+  gates _ configured := configured.1.gates ++ configured.2.gates
+  lookups _ configured := configured.1.lookups ++ configured.2.lookups
+
 /-- One Merkle path layer (the `MerklePath::calculate_root` loop body): conditionally swap
 `(node, sibling)` by the position bit — sibling and bit are prover witness programs — then
 the layer hash. `Spec` is `MerkleStep`. -/
@@ -1661,17 +1824,19 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
       { left := pair.aSwapped, right := pair.bSwapped }
 
-  elaborated := fun (ccfg, cfg, lcfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { keygenRequirements := Layer.keygenRequirements G Q hQ l hl wsib wswap
+      registered := by keygen_registration
+      output := fun (ccfg, cfg, lcfg) input i =>
         ((do
           let pair ← assignRegion "swap"
             ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
           (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
             { left := pair.aSwapped, right := pair.bSwapped }
           : Circuit Fp (Var field Fp)).output i)
-      regionCount := fun _ => 8
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 8
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (ccfg, cfg, lcfg) input i =>
         (layer_regionCount G Q hQ l hl wsib wswap ccfg cfg lcfg input i).symm }
 
   EnvAssumptions := fun (ccfg, cfg, lcfg) env =>
@@ -1796,6 +1961,36 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         simpa [proverChunks] using hB)
     rw [← h_output]
     exact hres
+
+/-- Assemble one Merkle-layer capability from its two direct children. -/
+def Layer.configurationCertificate (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    {ccfg : CondSwap.Config} {cfg : Config}
+    {lcfg : LookupRangeCheck.Config 10} {context : KeygenContext Fp}
+    (swap : (CondSwap.swap wsib wswap).ConfigurationCertificate ccfg context)
+    (hash : (HashLayer.circuit G Q hQ l hl).ConfigurationCertificate
+      (cfg, lcfg) context) :
+    (Layer.circuit G Q hQ l hl wsib wswap).ConfigurationCertificate
+      (ccfg, cfg, lcfg) context := by
+  let lawful : (Layer.keygenRequirements G Q hQ l hl wsib wswap).configLawful
+      (ccfg, cfg, lcfg) := ⟨swap.configured, hash.configured⟩
+  apply ((Layer.circuit G Q hQ l hl wsib wswap).configureCertificate
+    (ccfg, cfg, lcfg) {} lawful).mono
+  · intro required hrequired
+    simp only [Layer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Layer.keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with hrequired | hrequired
+    · exact swap.gates_of_configured required hrequired
+    · exact hash.gates_of_configured required hrequired
+  · intro required hrequired
+    simp only [Layer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Layer.keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with hrequired | hrequired
+    · exact swap.lookups_of_configured required hrequired
+    · exact hash.lookups_of_configured required hrequired
 
 /-! ### `CalculateRoot` (32-layer fold, structure) -/
 
@@ -1939,6 +2134,114 @@ private theorem input_eval_node_prover (env : Placed ProverEnvironment Fp)
   rw [ProvableStruct.Halo2.eval_cells_eq_eval_prover]
   provable_type_simp
 
+private def retargetSwapConfigured
+    {cfg : CondSwap.Config}
+    {wb wb' : WitgenIR Fp 1}
+    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    (configured : (CondSwap.swap wb swapWitness).Configured cfg) :
+    (CondSwap.swap wb' swapWitness').Configured cfg := by
+  rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
+  exact ⟨configInput, counts, configLawful, output_eq⟩
+
+private def retargetGateConfigured
+    {cfg : Gate.Config} {l l' : Fp}
+    (configured : (Gate.circuit l).Configured cfg) :
+    (Gate.circuit l').Configured cfg := by
+  rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
+  exact ⟨configInput, counts, configLawful, output_eq⟩
+
+private def retargetHashLayerConfigured
+    {cfg : Config × LookupRangeCheck.Config 10} {l l' : ℕ}
+    {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
+    (configured : (HashLayer.circuit G Q hQ l hl).Configured cfg) :
+    (HashLayer.circuit G Q hQ l' hl').Configured cfg := by
+  rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
+  exact ⟨configInput, counts,
+    ⟨configLawful.1, configLawful.2.1,
+      retargetGateConfigured configLawful.2.2⟩,
+    output_eq⟩
+
+private def retargetLayerConfigured
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
+    {wb wb' : WitgenIR Fp 1}
+    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
+    (Layer.circuit G Q hQ l' hl' wb' swapWitness').Configured cfg := by
+  rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
+  exact ⟨configInput, counts,
+    ⟨retargetSwapConfigured configLawful.1,
+      retargetHashLayerConfigured G Q hQ configLawful.2⟩,
+    output_eq⟩
+
+@[keygen_norm]
+private theorem retargetLayerConfigured_gates
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
+    {wb wb' : WitgenIR Fp 1}
+    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
+    (retargetLayerConfigured G Q hQ
+      (l' := l') (hl' := hl') (wb' := wb')
+      (swapWitness' := swapWitness') configured).gates = configured.gates := by
+  rcases configured with ⟨configInput, counts,
+    ⟨swapConfigured, hashConfigured⟩, output_eq⟩
+  rcases swapConfigured with ⟨swapInput, swapCounts, swapLawful, swapOutput⟩
+  rcases hashConfigured with ⟨hashInput, hashCounts,
+    ⟨rangeConfigured, hashToPointConfigured, gateConfigured⟩, hashOutput⟩
+  rcases gateConfigured with ⟨gateInput, gateCounts, gateLawful, gateOutput⟩
+  rfl
+
+@[keygen_norm]
+private theorem retargetLayerConfigured_lookups
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
+    {wb wb' : WitgenIR Fp 1}
+    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
+    (retargetLayerConfigured G Q hQ
+      (l' := l') (hl' := hl') (wb' := wb')
+      (swapWitness' := swapWitness') configured).lookups = configured.lookups := by
+  rcases configured with ⟨configInput, counts,
+    ⟨swapConfigured, hashConfigured⟩, output_eq⟩
+  rcases swapConfigured with ⟨swapInput, swapCounts, swapLawful, swapOutput⟩
+  rcases hashConfigured with ⟨hashInput, hashCounts,
+    ⟨rangeConfigured, hashToPointConfigured, gateConfigured⟩, hashOutput⟩
+  rcases gateConfigured with ⟨gateInput, gateCounts, gateLawful, gateOutput⟩
+  rfl
+
+@[keygen_norm]
+def keygenRequirements :
+    KeygenRequirements Fp
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10) where
+  configLawful cfg :=
+    (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg
+  gates _ configured := configured.gates
+  lookups _ configured := configured.lookups
+
+@[keygen_configured]
+private def layerAtConfigured
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    (configured : (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg) (i : ℕ) :
+    (layerAt G Q hQ l₀ wsib wswap i).Configured cfg :=
+  retargetLayerConfigured G Q hQ configured
+
+@[keygen_norm]
+private theorem layerAtConfigured_gates
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    (configured : (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg) (i : ℕ) :
+    (layerAtConfigured G Q hQ l₀ wsib wswap configured i).gates =
+      configured.gates :=
+  retargetLayerConfigured_gates G Q hQ configured
+
+@[keygen_norm]
+private theorem layerAtConfigured_lookups
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    (configured : (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg) (i : ℕ) :
+    (layerAtConfigured G Q hQ l₀ wsib wswap configured i).lookups =
+      configured.lookups :=
+  retargetLayerConfigured_lookups G Q hQ configured
+
 /-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
 `Layer.circuit` (layer `i` at `l = i`), fed by the per-layer sibling/position-bit witness
 programs. Its spec preserves the original `MerkleRoot` contract and additionally
@@ -1956,18 +2259,20 @@ def circuit :
     let acc ← FormalCircuit.foldCall (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d
     pure acc.node
 
-  elaborated cfg :=
-    { output := fun input i =>
+  elaborated :=
+    { keygenRequirements := keygenRequirements G Q hQ l₀ wsib wswap
+      registered := by keygen_registration
+      output := fun cfg input i =>
         (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg input i d).1.node
-      regionCount := fun _ => 8 * d
+      regionCount _ := 8 * d
       output_eq := by
-        intro input i
+        intro cfg input i
         symm
         show (FormalCircuit.foldCall (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d >>=
           fun acc => pure acc.node).output i = _
         rw [Circuit.output_bind, FormalCircuit.foldCall_output]
         rfl
-      regionCount_eq := fun input i =>
+      regionCount_eq := fun cfg input i =>
         (fold_regionCount G Q hQ l₀ d wsib wswap cfg input i).symm }
 
   EnvAssumptions := fun (_, cfg, lcfg) env =>
@@ -2249,10 +2554,33 @@ def circuit :
         have := i.isLt; omega)]
     exact ⟨B, hB⟩
 
+/-- Package the fold from the single layer-family capability it exposes. -/
+def configurationCertificate
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    {context : KeygenContext Fp}
+    (layer : (layerAt G Q hQ l₀ wsib wswap 0).ConfigurationCertificate
+      cfg context) :
+    (circuit G Q hQ l₀ d hld wsib wswap).ConfigurationCertificate cfg context := by
+  apply ((circuit G Q hQ l₀ d hld wsib wswap).configureCertificate
+    cfg {} layer.configured).mono
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil] at hrequired
+    exact layer.gates_of_configured required hrequired
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil] at hrequired
+    exact layer.lookups_of_configured required hrequired
+
 derive_contract_bridges circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   (l₀ d : ℕ) (hld : l₀ + d ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
   (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :=
   circuit G Q hQ l₀ d hld wsib wswap
+
+attribute [keygen_metadata_projection]
+  circuit layerAt Layer.circuit HashLayer.circuit
 
 end CalculateRoot
 

@@ -107,6 +107,22 @@ instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   unfold configure
   infer_instance
 
+@[simp] theorem configure_delta_lookups (K : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).delta counts).lookups =
+      [rangeCheckLookup K ((configure K runningSum tableIdx).output counts)] := by
+  unfold configure lookup
+  rfl
+
+@[simp] theorem configure_delta_gates (K : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).delta counts).gates =
+      [bitshiftGate K ((configure K runningSum tableIdx).output counts)] := by
+  unfold configure
+  rfl
+
 /-! ## The table loader
 
 Packaging decision: a plain `def load … : Circuit Fp Unit` emitting the single `loadTable`
@@ -334,6 +350,12 @@ def shortRangeCheck (K numBits : ℕ) :
     -- bitshift gate at `offset + 1`
     (bitshiftGate K cfg).enable (offset + 1)
     return elt
+
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [bitshiftGate K cfg]
+          lookups cfg _ := [rangeCheckLookup K cfg] }
+      registered := by keygen_registration }
 
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
   -- table row holds a value `< 2^K`, the block holds exact contents, and the block fits the
@@ -739,6 +761,11 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     let z0 ← cellAt cfg.runningSum offset
     return { z0, zLast }
 
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg _ := [rangeCheckLookup K cfg] }
+      registered := by keygen_registration }
+
   -- Same env-level preconditions as `shortRangeCheck`: the table is loaded (`TableLoaded`),
   -- and `q_lookup`/`q_running` are distinct selectors (they are allocated separately in
   -- `configure`). The running-sum rows here have BOTH selectors on, so the distinctness is
@@ -891,6 +918,11 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     if strict then constrainConstant zLast (0 : Fp)
     return { z0, zLast }
 
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg _ := [rangeCheckLookup K cfg] }
+      registered := by keygen_registration }
+
   EnvAssumptions cfg env :=
     TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
   Assumptions _ := 2 ^ (K * numWords) ≤ PALLAS_BASE_CARD ∧ 2 ^ K ≤ PALLAS_BASE_CARD
@@ -1010,6 +1042,11 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
     let z1 ← cellAt cfg.runningSum (offset + 1)
     let z13 ← cellAt cfg.runningSum (offset + 13)
     return { z0, z1, z13 }
+
+  elaborated :=
+    { keygenRequirements :=
+        { lookups cfg _ := [rangeCheckLookup 10 cfg] }
+      registered := by keygen_registration }
 
   EnvAssumptions cfg env :=
     TableLoaded 10 cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
@@ -1139,6 +1176,60 @@ def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
   assignRegion "Witness element" (do
     let _elt ← assignAdvice cfg.runningSum 0 w
     (rangeCheckAt K numWords strict).call cfg 0 ())
+
+@[keygen_norm, keygen_helper]
+theorem witnessShortCheck_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (i : RegionIndex)
+    (hgate : bitshiftGate K cfg ∈ gates)
+    (hlookup : rangeCheckLookup K cfg ∈ lookups) :
+    ((witnessShortCheck K numBits cfg w).operations i).KeygenRegistered
+      gates lookups := by
+  unfold witnessShortCheck
+  keygen_registration
+
+@[keygen_norm, keygen_helper]
+theorem witnessCheck_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex)
+    (hlookup : rangeCheckLookup K cfg ∈ lookups) :
+    ((witnessCheck K numWords strict cfg w).operations i).KeygenRegistered
+      gates lookups := by
+  unfold witnessCheck
+  keygen_registration
+
+@[keygen_norm, keygen_helper]
+theorem witnessCheckDecomposed_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
+    (hlookup : rangeCheckLookup 10 cfg ∈ lookups) :
+    ((witnessCheckDecomposed cfg w).operations i).KeygenRegistered
+      gates lookups := by
+  unfold witnessCheckDecomposed
+  keygen_registration
+
+/-- A short-range-check capability exported by the shared range-check configurer. -/
+def shortRangeConfigureCertificate (K numBits : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    (shortRangeCheck K numBits).ConfigurationCertificate
+      ((configure K runningSum tableIdx).output counts)
+      { gates := ((configure K runningSum tableIdx).delta counts).gates
+        lookups := ((configure K runningSum tableIdx).delta counts).lookups } := by
+  let cfg := (configure K runningSum tableIdx).output counts
+  apply ((shortRangeCheck K numBits).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hgate
+    simpa [cfg] using hgate
+  · intro argument hargument
+    simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    simpa [cfg] using hargument
 
 derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool) :=
   rangeCheckAt K numWords strict

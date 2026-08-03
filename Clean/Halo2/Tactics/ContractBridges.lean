@@ -44,7 +44,7 @@ myChild_call_regionCount : ∀ config input j,
   Operations.regionCount ((<bundle>.call config input).operations j) = <n>
 ```
 
-with `<n>` the `whnf`-reduced elaborated metadata (`<bundle>.regionCount config input`), proved
+with `<n>` the `whnf`-reduced elaborated metadata (`<bundle>.regionCount input`), proved
 by the generic `FormalCircuit.call_regionCount` — the kernel closes the metadata-to-literal gap
 definitionally, the same obligation the hand-written wrappers discharged with
 `rw [FormalCircuit.call_regionCount]; rfl`. This is the bridge Category 1a of the
@@ -167,15 +167,14 @@ def buildOutputBridge (baseName : Name) (bundle : Expr) :
   let lhs0 ← mkAppM projName #[bundle]
   forallTelescope (← inferType lhs0) fun args _ => do
     unless args.size ≥ 2 do return none
-    -- (config, [offset,] input, region): the elaborated instance takes all but the last two
-    let nInst := args.size - 2
-    let inst ← withTransparency .reducible (whnf (mkAppN elabField (args.extract 0 nInst)))
+    -- The merged elaboration record covers the whole configure/synthesize family.
+    -- Its `output` field itself receives (config, [offset,] input, region).
+    let inst ← withTransparency .reducible (whnf elabField)
     let outField ← try mkProjection inst `output catch _ => return none
     -- the class-method projection only unfolds at default transparency; the field value
     -- itself is a lambda (the `output := fun input self => …` shape), so the whnf stops
     -- there and the author's body is not reduced further
-    let rhs := (mkAppN (← withTransparency .default (whnf outField))
-      (args.extract nInst args.size)).headBeta
+    let rhs := (mkAppN (← withTransparency .default (whnf outField)) args).headBeta
     if (rhs.find? (·.isConstOf ``Bind.bind)).isSome then return none
     let lhs := mkAppN lhs0 args
     let eqTy ← mkEq lhs rhs
@@ -201,7 +200,7 @@ def buildOutputBridge (baseName : Name) (bundle : Expr) :
 
 /-- The call-chunk region-count bridge for a layouter-level bundle (see the module
 docstring): `<base>_call_regionCount : Operations.regionCount ((bundle.call config
-input).operations j) = <whnf of bundle.regionCount config input>`, proved by the generic
+input).operations j) = <whnf of bundle.regionCount input>`, proved by the generic
 `FormalCircuit.call_regionCount` (the kernel closes the metadata gap definitionally).
 For manual `rw`s only — simp-side folding is the `foldCallRegionCount` simproc
 (`Clean/Halo2/Subcircuit.lean`), which handles every bundle and α-spelling without
@@ -225,7 +224,7 @@ def buildRegionCountBridge (baseName : Name) (bundle : Expr) :
     let ops ← mkAppM ``Halo2.Circuit.operations #[call, j]
     let lhs ← mkAppM ``Halo2.Operations.regionCount #[ops]
     let rhs ← withTransparency .default
-      (whnf (← mkAppM ``Halo2.FormalCircuit.regionCount #[bundle, config, input]))
+      (whnf (← mkAppM ``Halo2.FormalCircuit.regionCount #[bundle, input]))
     let eqTy ← mkEq lhs rhs
     let fvars ← buildBridges.getFVars eqTy
     let genTy ← mkForallFVars fvars eqTy

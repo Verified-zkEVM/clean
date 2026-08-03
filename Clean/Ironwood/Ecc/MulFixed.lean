@@ -187,6 +187,31 @@ instance (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
   unfold configure
   infer_instance
 
+/-! ## Shared keygen requirements -/
+
+/-- The incomplete-addition gate already present in a shared fixed-base config. -/
+def incompleteAddGate (cfg : Config) : Gate Fp :=
+  let add := cfg.addIncompleteConfig
+  AddIncomplete.gate add.qAddIncomplete add.xP add.yP add.xQR add.yQR
+
+/-- The complete-addition gate already present in a shared fixed-base config. -/
+def completeAddGate (cfg : Config) : Gate Fp :=
+  let add := cfg.addConfig
+  Add.gate add.qAdd add.lambda add.xP add.yP add.xQR add.yQR
+    add.alpha add.beta add.gamma add.delta
+
+/--
+Arguments borrowed by the running-sum fixed-base inner regions: the range and coordinate
+gates registered by `MulFixed.configure`, plus the shared incomplete-addition gate.
+-/
+@[keygen_norm]
+def runningSumKeygenRequirements : KeygenRequirements Fp Config where
+  configLawful cfg := AddIncomplete.add.Configured cfg.addIncompleteConfig
+  gates cfg configured :=
+    [DecomposeRunningSum.rangeCheckGate 3 cfg.runningSumConfig, coordsGate cfg] ++
+      configured.gates
+  lookups _ configured := configured.lookups
+
 /-! ## Region-relative synthesize pieces
 
 Offset-generic `RegionCircuit`s; the wrapper bundles compose them inside one region. -/
@@ -238,6 +263,19 @@ def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
   RegionCircuit.forRange' offset 1 numWindows
     (fun w row => fixedConstantsWindow toggle B cfg w row)
 
+@[keygen_norm, keygen_helper]
+theorem fixedConstantsLoop_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex)
+    (htoggle : toggle ∈ gates) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).Forall
+      (RegionOperation.KeygenRegistered gates lookups) := by
+  simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+  intro i
+  unfold fixedConstantsWindow
+  keygen_registration
+
 /-- Witness `[window_scalar]B`'s coordinates into the add config's `x_p`/`y_p` at the window row,
 and the `u` value. Returns the window-point cells. -/
 def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Config)
@@ -271,6 +309,28 @@ def windowChain (cfg : Config)
   let accX ← cellAt cfg.addIncompleteConfig.xQR (offset + (numWindows - 1))
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
+
+@[keygen_helper]
+theorem windowChain_processWindow_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    (B : FixedBaseData) (table : ℕ → ℕ → Point Fp) (cfg : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
+    (configured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
+    (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
+    (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups) :
+    ((windowChain cfg (processWindow B table cfg alpha) offset numWindows).operations self).Forall
+      (RegionOperation.KeygenRegistered gates lookups) := by
+  unfold windowChain processWindow
+  simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
+    List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
+  constructor
+  · exact FormalRegionCircuit.call_keygenRegistered
+      AddIncomplete.add cfg.addIncompleteConfig configured
+      (offset + 1) _ self hgates hlookups
+  · intro i
+    exact FormalRegionCircuit.call_keygenRegistered
+      AddIncomplete.add cfg.addIncompleteConfig configured
+      (offset + 2 + i * 1) _ self hgates hlookups
 
 /-! ## Shared proof helpers for the wrapper bundles
 

@@ -510,6 +510,123 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
+@[keygen_norm]
+def keygenRequirements (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) : KeygenRequirements Fp Config where
+  configLawful cfg :=
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+  gates cfg configured :=
+    [LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig,
+      YCanonicity.gate cfg.gates.y,
+      DecomposeB.gate cfg.gates.b,
+      DecomposeD.gate cfg.gates.d,
+      DecomposeE.gate cfg.gates.e,
+      DecomposeG.gate cfg.gates.g,
+      DecomposeH.gate cfg.gates.h,
+      GdCanonicity.gate cfg.gates.gd,
+      PkdCanonicity.gate cfg.gates.pkd,
+      ValueCanonicity.gate cfg.gates.value,
+      RhoCanonicity.gate cfg.gates.rho,
+      PsiCanonicity.gate cfg.gates.psi] ++ configured.gates
+  lookups cfg configured :=
+    [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++
+      configured.lookups
+
+@[keygen_helper]
+theorem synthPieces_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthPieces cfg input).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+  keygen_registration
+
+@[keygen_helper]
+theorem synthChecks_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations
+      self).KeygenRegistered
+        ((keygenRequirements G R Q hQ).gates cfg configured)
+        ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.KeygenRegistered.append,
+    Operations.KeygenRegistered.nil, and_true]
+  constructor
+  · apply FormalCircuit.call_keygenRegistered_ofOutput
+      (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+      (cfg.gates.y, cfg.lookupConfig) {} ()
+    · intro gate h
+      simp [YCanonicityCheck.circuit, keygenRequirements,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
+    · intro argument h
+      simp [YCanonicityCheck.circuit, keygenRequirements,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      exact Or.inl h
+  constructor
+  · apply FormalCircuit.call_keygenRegistered_ofOutput
+      (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+      (cfg.gates.y, cfg.lookupConfig) {} ()
+    · intro gate h
+      simp [YCanonicityCheck.circuit, keygenRequirements,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
+    · intro argument h
+      simp [YCanonicityCheck.circuit, keygenRequirements,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      exact Or.inl h
+  constructor
+  · apply FormalCircuit.call_keygenRegistered
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      _ configured
+    · intro gate h
+      simp only [keygenRequirements, List.mem_append]
+      exact Or.inr h
+    · intro argument h
+      simp only [keygenRequirements, List.mem_append]
+      exact Or.inr h
+  constructor
+  · apply LookupRangeCheck.witnessCheck_keygenRegistered
+    simp [keygenRequirements]
+  constructor
+  · apply LookupRangeCheck.witnessCheck_keygenRegistered
+    simp [keygenRequirements]
+  constructor
+  · apply LookupRangeCheck.witnessCheck_keygenRegistered
+    simp [keygenRequirements]
+  · apply LookupRangeCheck.witnessCheck_keygenRegistered
+    simp [keygenRequirements]
+
+@[keygen_helper]
+theorem synthGates_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthGates cfg input pcs ccs iHash).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+  keygen_registration [synthGates]
+
+@[keygen_helper]
+theorem synth_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synth G R Q hQ cfg input).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+  keygen_registration
+
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
 instance). NOT named `elaborated`: the canonical name is reserved for instances whose fields
 are in REDUCED form (cps dsimp-unfolds it — see `unfoldCanonicalElaborated`); this one's
@@ -517,12 +634,18 @@ are in REDUCED form (cps dsimp-unfolds it — see `unfoldCanonicalElaborated`); 
 kernel certificates (NoteCommit/MainBundle hit kernel timeouts when tried). Rename back
 once the metadata substrate derives the reduced fields. -/
 instance elaboratedFolded (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config) :
-    ElaboratedCircuit Fp Inputs Point (synth G R Q hQ cfg) where
-  output input i := (synth G R Q hQ cfg input).output i
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    ElaboratedCircuit Fp Config Config Inputs Point
+      (fun config => pure config) (synth G R Q hQ) where
+  keygenRequirements := keygenRequirements G R Q hQ
+  registered configInput _ configured input self := by
+    simpa using synth_keygenRegistered
+      G R Q hQ configInput input self configured
+  output cfg input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 43
-  output_eq := by intro _ _; rfl
-  regionCount_eq input i := (synth_regionCount G R Q hQ cfg input i).symm
+  output_eq := by intro _ _ _; rfl
+  regionCount_eq cfg input i :=
+    (synth_regionCount G R Q hQ cfg input i).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

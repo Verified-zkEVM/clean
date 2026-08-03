@@ -270,11 +270,15 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   synthesize cfg input := synthesize K cfg input
 
-  elaborated cfg :=
-    { output := fun _ _ => ()
-      regionCount := fun _ => 3
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i => (synthesize_regionCount K cfg input i).symm }
+  elaborated :=
+    { keygenRequirements :=
+        { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1] }
+      registered := by
+        keygen_registration
+      output _ _ _ := ()
+      regionCount _ := 3
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm }
 
   EnvAssumptions cfg env := EnvAssumptions K cfg env
 

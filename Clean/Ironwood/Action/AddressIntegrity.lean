@@ -64,7 +64,15 @@ def circuit : FormalCircuit Fp
       constrainEqual derived.y pkDOld.y)
     pure pkDOld
 
-  elaborated _ := { regionCount _ := 6 }
+  elaborated :=
+    { keygenRequirements :=
+        { configLawful cfg :=
+            Ecc.Mul.mul.Configured cfg.1 ×
+              Ecc.WitnessPoint.pointNonIdFormal.Configured cfg.2
+          gates _ configured := configured.1.gates ++ configured.2.gates
+          lookups _ configured := configured.1.lookups ++ configured.2.lookups }
+      registered := by keygen_registration
+      regionCount _ := 6 }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 

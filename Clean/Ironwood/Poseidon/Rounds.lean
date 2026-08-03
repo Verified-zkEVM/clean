@@ -65,6 +65,7 @@ assign the next state at `offset + 1`. Positional: `Witness` is the entering sta
 `Spec` is the donor `FullRound.value`. -/
 def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [fullRoundGate cfg] } }
 
   synthesize cfg offset _ := do
     let w ← readStateRow cfg offset
@@ -118,6 +119,7 @@ checking two source rounds. Enable `s_partial` at `offset`, load `rc_a` (round `
 `PartialRounds.value` at `paramsP128 r`. -/
 def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   configure := pure
+  elaborated := { keygenRequirements := { gates cfg _ := [partialRoundsGate cfg] } }
 
   synthesize cfg offset _ := do
     let w ← readStateRow cfg offset

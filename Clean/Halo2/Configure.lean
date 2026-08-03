@@ -1,6 +1,8 @@
 import Clean.Halo2.Expression
 import Clean.Halo2.Tactics.SelectorFree
+import Clean.Halo2.ConfigureAttr
 import Mathlib.Data.List.Dedup
+import Mathlib.Data.List.MinMax
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -78,22 +80,28 @@ structure Constraint (F : Type) where
   poly : Expression F Query
 
 /--
-The one-sided semantic law required of every custom gate.
+The local laws required of every custom gate.
 
-At an enabled row, selector compression replaces the gate's distinguished selector by
-a nonzero field value. If the resulting verifier-side polynomial vanishes, the same
-compiled polynomial must vanish under Clean's selector-one/foreign-selectors-zero
-valuation. No converse or exact scaling equation is required.
+Every selector atom in a constraint must name the gate's distinguished selector. At an
+enabled row, selector compression replaces that selector by a nonzero field value; if
+the resulting verifier-side polynomial vanishes, the same compiled polynomial must
+vanish under Clean's selector-one valuation. No converse or exact scaling equation is
+required.
 -/
-def Gate.WellFormed
+structure Gate.WellFormed
     [Field F]
-    (selector : Selector) (constraints : List (Constraint F)) : Prop :=
-  ∀ constraint ∈ constraints,
-    ∀ (base : Query → F) (scale : F), scale ≠ 0 →
-      constraint.poly.eval
-          (Expression.replaceSelectorValue selector scale base) = 0 →
+    (selector : Selector) (constraints : List (Constraint F)) : Prop where
+  selectorsOwned :
+    constraints.Forall fun constraint =>
+      constraint.poly.selectorsCovered
+        (fun index => decide (index = selector.index)) = true
+  compressionSound :
+    ∀ constraint ∈ constraints,
+      ∀ (base : Query → F) (scale : F), scale ≠ 0 →
         constraint.poly.eval
-          (Expression.enabledGateValuation selector base) = 0
+            (Expression.replaceSelectorValue selector scale base) = 0 →
+          constraint.poly.eval
+            (Expression.enabledGateValuation selector base) = 0
 
 /-- A custom gate.
 
@@ -147,31 +155,69 @@ def Gate.withSelector
       { name := constraintName, poly := querySelector selector * poly }
   wellFormed := by
     intro
-    rw [Gate.WellFormed]
-    intro constraint hconstraint
-    obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
-      List.mem_map.mp hconstraint
-    intro base scale hscale hzero
-    have hpolyFree : poly.SelectorFree :=
-      hfree (constraintName, poly) hsource
-    have hpolyEval :
-        poly.eval
-            (Expression.replaceSelectorValue selector scale base) =
+    constructor
+    · rw [List.forall_iff_forall_mem]
+      intro constraint hconstraint
+      obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
+        List.mem_map.mp hconstraint
+      simp only [querySelector, Expression.selectorsCovered,
+        decide_true, Bool.true_and]
+      exact Expression.selectorsCovered_of_selectorFree
+        (fun index => decide (index = selector.index))
+        poly (hfree (constraintName, poly) hsource)
+    · intro constraint hconstraint
+      obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
+        List.mem_map.mp hconstraint
+      intro base scale hscale hzero
+      have hpolyFree : poly.SelectorFree :=
+        hfree (constraintName, poly) hsource
+      have hpolyEval :
           poly.eval
-            (Expression.enabledGateValuation selector base) := by
-      apply Expression.eval_eq_of_selectorFree poly hpolyFree
-      · intro _ _
-        rfl
-      · intro _ _
-        rfl
-      · intro _ _
-        rfl
-    simp only [querySelector, Expression.eval,
-      Expression.replaceSelectorValue, if_pos] at hzero
-    simp only [querySelector, Expression.eval,
-      Expression.enabledGateValuation, if_pos, one_mul]
-    rw [← hpolyEval]
-    exact (mul_eq_zero.mp hzero).resolve_left hscale
+              (Expression.replaceSelectorValue selector scale base) =
+            poly.eval
+              (Expression.enabledGateValuation selector base) := by
+        apply Expression.eval_eq_of_selectorFree poly hpolyFree
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+        · intro _ _
+          rfl
+      simp only [querySelector, Expression.eval,
+        Expression.replaceSelectorValue, if_pos] at hzero
+      simp only [querySelector, Expression.eval,
+        Expression.enabledGateValuation, if_pos, one_mul]
+      rw [← hpolyEval]
+      exact (mul_eq_zero.mp hzero).resolve_left hscale
+
+@[simp] theorem Gate.withSelector_selector
+    [Field F]
+    (name : String) (selector : Selector)
+    (queriedCells : List (Expression F Query))
+    (constraints : List (String × Expression F Query))
+    (hfree : ∀ constraint ∈ constraints,
+      constraint.2.SelectorFree) :
+    (Gate.withSelector name selector queriedCells constraints hfree).selector =
+      selector :=
+  rfl
+
+open Lean Meta Simp in
+/-- Reduce only a named gate's selector projection, without unfolding its constraints. -/
+def foldGateSelectorProc : Simproc := fun expression => do
+  unless expression.isAppOf ``Gate.selector do
+    return .continue
+  try
+    let reduced ← withTransparency .default (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldGateSelector (Gate.selector _) := foldGateSelectorProc
+attribute [configure_selector_norm] foldGateSelector
 
 /-- A lookup argument. Rust: `lookup::Argument<F>`
 (`halo2_proofs/src/plonk/lookup.rs:7-11`): a tuple of input expressions and a tuple of
@@ -382,6 +428,57 @@ structure ConfigureCounts where
   numInstanceColumns : ℕ := 0
   numSelectors : ℕ := 0
 
+/--
+The additive allocation contribution of a configure program.
+
+Unlike a freely returned final `ConfigureCounts`, this representation makes decreasing
+an allocation counter unrepresentable.
+-/
+structure ConfigureCountDelta where
+  numAdviceColumns : ℕ := 0
+  numFixedColumns : ℕ := 0
+  numInstanceColumns : ℕ := 0
+  numSelectors : ℕ := 0
+
+def ConfigureCountDelta.apply
+    (delta : ConfigureCountDelta) (initial : ConfigureCounts) :
+    ConfigureCounts where
+  numAdviceColumns :=
+    initial.numAdviceColumns + delta.numAdviceColumns
+  numFixedColumns :=
+    initial.numFixedColumns + delta.numFixedColumns
+  numInstanceColumns :=
+    initial.numInstanceColumns + delta.numInstanceColumns
+  numSelectors :=
+    initial.numSelectors + delta.numSelectors
+
+def ConfigureCountDelta.append
+    (left right : ConfigureCountDelta) : ConfigureCountDelta where
+  numAdviceColumns :=
+    left.numAdviceColumns + right.numAdviceColumns
+  numFixedColumns :=
+    left.numFixedColumns + right.numFixedColumns
+  numInstanceColumns :=
+    left.numInstanceColumns + right.numInstanceColumns
+  numSelectors :=
+    left.numSelectors + right.numSelectors
+
+@[simp] theorem ConfigureCountDelta.apply_append
+    (left right : ConfigureCountDelta) (initial : ConfigureCounts) :
+    (left.append right).apply initial =
+      right.apply (left.apply initial) := by
+  cases initial
+  cases left
+  cases right
+  simp [ConfigureCountDelta.append, ConfigureCountDelta.apply,
+    Nat.add_assoc]
+
+theorem ConfigureCountDelta.numSelectors_le_apply
+    (delta : ConfigureCountDelta) (initial : ConfigureCounts) :
+    initial.numSelectors ≤ (delta.apply initial).numSelectors := by
+  simp only [ConfigureCountDelta.apply]
+  omega
+
 def ConfigureCounts.ofConstraintSystem (cs : ConstraintSystem F) :
     ConfigureCounts where
   numAdviceColumns := cs.numAdviceColumns
@@ -483,7 +580,8 @@ written to `ConfigureDelta`. The `CoeFun` instance preserves the existing `progr
 interface by interpreting that delta at the boundary.
 -/
 structure Configure (F : Type) (α : Type) where
-  plan : ConfigureCounts → α × ConfigureDelta F × ConfigureCounts
+  plan : ConfigureCounts →
+    α × ConfigureDelta F × ConfigureCountDelta
 
 namespace Configure
 
@@ -496,15 +594,26 @@ def delta (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureDelta F :=
   (program.plan counts).2.1
 
+def countDelta (program : Configure F α) (counts : ConfigureCounts) :
+    ConfigureCountDelta :=
+  (program.plan counts).2.2
+
 def finalCounts (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureCounts :=
-  (program.plan counts).2.2
+  (program.countDelta counts).apply counts
+
+/-- Configure programs can only increase the selector allocation count. -/
+theorem numSelectors_le_finalCounts
+    (program : Configure F α) (counts : ConfigureCounts) :
+    counts.numSelectors ≤ (program.finalCounts counts).numSelectors :=
+  ConfigureCountDelta.numSelectors_le_apply
+    (program.countDelta counts) counts
 
 def run (program : Configure F α) (initial : ConstraintSystem F) :
     α × ConstraintSystem F :=
   let counts := ConfigureCounts.ofConstraintSystem initial
-  let (output, delta, finalCounts) := program.plan counts
-  (output, delta.apply initial finalCounts)
+  let (output, delta, countDelta) := program.plan counts
+  (output, delta.apply initial (countDelta.apply counts))
 
 theorem mem_instanceQueries_run_iff
     (program : Configure F α) (initial : ConstraintSystem F)
@@ -521,12 +630,14 @@ instance : CoeFun (Configure F α)
   coe := run
 
 instance : Monad (Configure F) where
-  pure value := ⟨fun counts => (value, {}, counts)⟩
+  pure value := ⟨fun _ => (value, {}, {})⟩
   bind program next := ⟨fun counts =>
-    let (output, delta, nextCounts) := program.plan counts
-    let (nextOutput, nextDelta, finalCounts) :=
+    let (output, delta, countDelta) := program.plan counts
+    let nextCounts := countDelta.apply counts
+    let (nextOutput, nextDelta, nextCountDelta) :=
       (next output).plan nextCounts
-    (nextOutput, delta.append nextDelta, finalCounts)⟩
+    (nextOutput, delta.append nextDelta,
+      countDelta.append nextCountDelta)⟩
 
 end Configure
 
@@ -538,6 +649,18 @@ def ConfigureDelta.queryAny (column : AnyColumn) : ConfigureDelta F :=
       { fixedQueries := [(⟨index⟩, 0)] }
   | ⟨.instance, index⟩ =>
       { instanceQueries := [(⟨index⟩, 0)] }
+
+@[simp]
+theorem ConfigureDelta.gates_queryAny (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).gates = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+@[simp]
+theorem ConfigureDelta.lookups_queryAny (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).lookups = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
 
 def ConfigureDelta.queriedCell (owner : String) :
     Expression F Query → ConfigureDelta F
@@ -572,34 +695,46 @@ def ConfigureDelta.instanceQueriesOfCells
 def adviceColumn : Configure F (Column .advice) :=
   ⟨fun counts =>
     (⟨counts.numAdviceColumns⟩, {},
-      { counts with
-        numAdviceColumns := counts.numAdviceColumns + 1 })⟩
+      { numAdviceColumns := 1 })⟩
 
 /-- Rust: `meta.fixed_column()`. -/
 def fixedColumn : Configure F (Column .fixed) :=
   ⟨fun counts =>
     (⟨counts.numFixedColumns⟩, {},
-      { counts with
-        numFixedColumns := counts.numFixedColumns + 1 })⟩
+      { numFixedColumns := 1 })⟩
 
 /-- Rust: `meta.instance_column()`. -/
 def instanceColumn : Configure F (Column .instance) :=
   ⟨fun counts =>
     (⟨counts.numInstanceColumns⟩, {},
-      { counts with
-        numInstanceColumns := counts.numInstanceColumns + 1 })⟩
+      { numInstanceColumns := 1 })⟩
+
+@[simp] theorem Configure.delta_adviceColumn
+    (counts : ConfigureCounts) :
+    (adviceColumn : Configure F (Column .advice)).delta counts = {} :=
+  rfl
+
+@[simp] theorem Configure.delta_fixedColumn
+    (counts : ConfigureCounts) :
+    (fixedColumn : Configure F (Column .fixed)).delta counts = {} :=
+  rfl
+
+@[simp] theorem Configure.delta_instanceColumn
+    (counts : ConfigureCounts) :
+    (instanceColumn : Configure F (Column .instance)).delta counts = {} :=
+  rfl
 
 /-- Rust: `meta.selector()` (a simple selector). -/
 def selector : Configure F Selector :=
   ⟨fun counts =>
     (⟨counts.numSelectors, true⟩, {},
-      { counts with numSelectors := counts.numSelectors + 1 })⟩
+      { numSelectors := 1 })⟩
 
 /-- Rust: `meta.complex_selector()`. -/
 def complexSelector : Configure F Selector :=
   ⟨fun counts =>
     (⟨counts.numSelectors, false⟩, {},
-      { counts with numSelectors := counts.numSelectors + 1 })⟩
+      { numSelectors := 1 })⟩
 
 /-- Rust: `meta.enable_equality(column)`. Idempotent, exactly like Rust's
 `permutation::Argument::add_column` (`permutation.rs:61-65`: `if !columns.contains`),
@@ -611,20 +746,34 @@ Also registers a cur-rotation query on the column *before* the permutation appen
 (`circuit.rs:1046-1050`) — unconditionally, not gated on the column being new to the
 permutation (idempotence comes from the `query_*_index` dedup). -/
 def enableEquality (c : AnyColumn) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), (ConfigureDelta.queryAny c).append
-      { permutationRequests := [c] }, counts)⟩
+      { permutationRequests := [c] }, {})⟩
+
+@[simp]
+theorem Configure.delta_enableEquality_gates
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).gates = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+@[simp]
+theorem Configure.delta_enableEquality_lookups
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).lookups = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
 
 /-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
 constants column and enables equality on it (constants are enforced via copies into this
 column) — including `enable_equality`'s cur fixed-query registration. -/
 def enableConstant (col : Column .fixed) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), {
       fixedQueries := [(col, 0)]
       constants := [col]
       permutationRequests := [col.toAny]
-    }, counts)⟩
+    }, {})⟩
 
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
@@ -634,9 +783,9 @@ def lookupTableColumn : Configure F TableColumn := do
 Registers the gate's `queriedCells` in list order (the closure's queries all execute
 before the gate is pushed, `circuit.rs:1195-1229`), then appends the gate. -/
 def createGate (gate : Gate F) : Configure F Unit :=
-  ⟨fun counts =>
+  ⟨fun _ =>
     ((), (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
-      { gates := [gate] }, counts)⟩
+      { gates := [gate] }, {})⟩
 
 /-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
 of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
@@ -663,13 +812,231 @@ def lookup (queriedCells : List (Expression F Query))
     simp [Expression.SelectorFree, queryFixed]
   have arity : inputs.length = tables.length := by
     simp [inputs, tables]
-  ⟨fun counts =>
+  ⟨fun _ =>
     let queryDelta := ConfigureDelta.queriedCells "lookup" queriedCells
     let tableDelta := (tableMap.map Prod.snd).foldl
       (fun delta table =>
         delta.append { fixedQueries := [(table.inner, 0)] }) {}
     ((), queryDelta.append tableDelta |>.append
-      { lookups := [{ inputs, tables, tablesFree, arity }] }, counts)⟩
+      { lookups := [{ inputs, tables, tablesFree, arity }] }, {})⟩
+
+@[simp] theorem ConfigureDelta.gates_append
+    (left right : ConfigureDelta F) :
+    (left.append right).gates = left.gates ++ right.gates :=
+  rfl
+
+@[simp] theorem ConfigureDelta.lookups_append
+    (left right : ConfigureDelta F) :
+    (left.append right).lookups = left.lookups ++ right.lookups :=
+  rfl
+
+/-! ## Selector allocation -/
+
+/-- One past the largest selector index occurring in an expression. -/
+def Expression.selectorBound : Expression F Query → ℕ
+  | .var (.selector selector) => selector.index + 1
+  | .var _ => 0
+  | .const _ => 0
+  | .add left right
+  | .mul left right => max left.selectorBound right.selectorBound
+
+@[simp] theorem Expression.selectorBound_querySelector (selector : Selector) :
+    (querySelector (F := F) selector).selectorBound = selector.index + 1 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryAdvice
+    (column : Column .advice) (rotation : Rotation) :
+    (queryAdvice (F := F) column rotation).selectorBound = 0 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryFixed
+    (column : Column .fixed) :
+    (queryFixed (F := F) column).selectorBound = 0 :=
+  rfl
+
+@[simp] theorem Expression.selectorBound_queryInstance
+    (column : Column .instance) (rotation : Rotation) :
+    (queryInstance (F := F) column rotation).selectorBound = 0 :=
+  rfl
+
+/-- One past every selector index occurring in a lookup's input tuple. -/
+def LookupArgument.inputSelectorBound (argument : LookupArgument F) : ℕ :=
+  (argument.inputs.map Expression.selectorBound).foldr max 0
+
+/-- One past every input-selector index occurring in a lookup list. -/
+def lookupInputSelectorBound (arguments : List (LookupArgument F)) : ℕ :=
+  (arguments.map LookupArgument.inputSelectorBound).foldr max 0
+
+private theorem foldr_max_append (left right : List ℕ) :
+    (left ++ right).foldr max 0 =
+      max (left.foldr max 0) (right.foldr max 0) := by
+  induction left with
+  | nil =>
+      simp
+  | cons value left ih =>
+      simp only [List.cons_append, List.foldr_cons, ih]
+      exact (max_assoc value (left.foldr max 0)
+        (right.foldr max 0)).symm
+
+@[simp] theorem lookupInputSelectorBound_append
+    (left right : List (LookupArgument F)) :
+    lookupInputSelectorBound (left ++ right) =
+      max (lookupInputSelectorBound left)
+        (lookupInputSelectorBound right) := by
+  simp only [lookupInputSelectorBound, List.map_append,
+    foldr_max_append]
+
+/-- A selected lookup input expression lies below the whole lookup-list bound. -/
+theorem Expression.selectorBound_le_lookupInputSelectorBound
+    {arguments : List (LookupArgument F)} {argument : LookupArgument F}
+    (hargument : argument ∈ arguments)
+    {expression : Expression F Query} (hexpression : expression ∈ argument.inputs) :
+    expression.selectorBound ≤ lookupInputSelectorBound arguments := by
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨argument, hargument, rfl⟩)
+  apply List.le_max_of_le' 0
+    (List.mem_map.mpr ⟨expression, hexpression, rfl⟩)
+  exact le_rfl
+
+/--
+Every gate selector and lookup-input selector emitted by a configure delta lies below
+the final allocated selector count. Gate well-formedness then gives the same bound for
+every selector atom in each gate constraint.
+-/
+structure ConfigureDelta.SelectorsAllocated
+    (delta : ConfigureDelta F) (numSelectors : ℕ) : Prop where
+  gates :
+    delta.gates.Forall fun gate => gate.selector.index < numSelectors
+  lookups :
+    lookupInputSelectorBound delta.lookups ≤ numSelectors
+
+/-- Selector allocation remains true when the available count grows. -/
+theorem ConfigureDelta.SelectorsAllocated.mono
+    {delta : ConfigureDelta F} {source target : ℕ}
+    (hallocated : delta.SelectorsAllocated source)
+    (hcount : source ≤ target) :
+    delta.SelectorsAllocated target where
+  gates := hallocated.gates.imp fun _ hgate => hgate.trans_le hcount
+  lookups := hallocated.lookups.trans hcount
+
+/-- The empty configure contribution allocates no selectors. -/
+theorem ConfigureDelta.SelectorsAllocated.empty (numSelectors : ℕ) :
+    ({} : ConfigureDelta F).SelectorsAllocated numSelectors := by
+  constructor
+  · simp
+  · simp [lookupInputSelectorBound]
+
+/-- Allocation laws compose across append-only configure deltas. -/
+theorem ConfigureDelta.SelectorsAllocated.append
+    {left right : ConfigureDelta F} {numSelectors : ℕ}
+    (hleft : left.SelectorsAllocated numSelectors)
+    (hright : right.SelectorsAllocated numSelectors) :
+    (left.append right).SelectorsAllocated numSelectors where
+  gates := by
+    simpa only [ConfigureDelta.gates_append, List.forall_append] using
+      And.intro hleft.gates hright.gates
+  lookups := by
+    simp only [ConfigureDelta.lookups_append,
+      lookupInputSelectorBound_append]
+    exact max_le hleft.lookups hright.lookups
+
+@[simp] theorem ConfigureDelta.gates_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).gates = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).gates = delta.gates := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
+@[simp] theorem ConfigureDelta.lookups_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).lookups = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).lookups = delta.lookups := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
+private theorem foldlTableDelta_gates
+    (tables : List TableColumn) (delta : ConfigureDelta F) :
+    (tables.foldl
+      (fun current table =>
+        current.append { fixedQueries := [(table.inner, 0)] })
+      delta).gates = delta.gates := by
+  induction tables generalizing delta with
+  | nil => rfl
+  | cons table tables ih =>
+      rw [List.foldl_cons, ih]
+      simp [ConfigureDelta.append]
+
+private theorem foldlTableDelta_lookups
+    (tables : List TableColumn) (delta : ConfigureDelta F) :
+    (tables.foldl
+      (fun current table =>
+        current.append { fixedQueries := [(table.inner, 0)] })
+      delta).lookups = delta.lookups := by
+  induction tables generalizing delta with
+  | nil => rfl
+  | cons table tables ih =>
+      rw [List.foldl_cons, ih]
+      simp [ConfigureDelta.append]
+
+@[simp] theorem Configure.delta_lookup_gates
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    ((lookup queriedCells tableMap).delta counts).gates = [] := by
+  unfold Configure.delta lookup
+  simp [foldlTableDelta_gates]
+
+@[simp] theorem Configure.lookupInputSelectorBound_delta_lookup
+    (queriedCells : List (Expression F Query))
+    (tableMap : List (Expression F Query × TableColumn))
+    (counts : ConfigureCounts) :
+    lookupInputSelectorBound ((lookup queriedCells tableMap).delta counts).lookups =
+      ((tableMap.map Prod.fst).map Expression.selectorBound).foldr max 0 := by
+  unfold Configure.delta lookup lookupInputSelectorBound
+    LookupArgument.inputSelectorBound
+  simp [foldlTableDelta_lookups]
 
 namespace Configure
 
@@ -677,6 +1044,11 @@ variable {α β : Type}
 
 @[simp] theorem delta_pure (value : α) (counts : ConfigureCounts) :
     delta (pure value : Configure F α) counts = {} :=
+  rfl
+
+@[simp] theorem countDelta_pure
+    (value : α) (counts : ConfigureCounts) :
+    countDelta (pure value : Configure F α) counts = {} :=
   rfl
 
 @[simp] theorem output_pure (value : α) (counts : ConfigureCounts) :
@@ -687,12 +1059,36 @@ variable {α β : Type}
     finalCounts (pure value : Configure F α) counts = counts :=
   rfl
 
+@[simp] theorem delta_selector (counts : ConfigureCounts) :
+    delta (selector : Configure F Selector) counts = {} :=
+  rfl
+
+@[simp] theorem delta_complexSelector (counts : ConfigureCounts) :
+    delta (complexSelector : Configure F Selector) counts = {} :=
+  rfl
+
+@[simp] theorem delta_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    delta (createGate gate) counts =
+      (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
+        { gates := [gate] } :=
+  rfl
+
 @[simp] theorem delta_bind
     (program : Configure F α) (next : α → Configure F β)
     (counts : ConfigureCounts) :
     delta (program >>= next) counts =
       (program.delta counts).append
         ((next (program.output counts)).delta
+          (program.finalCounts counts)) :=
+  rfl
+
+@[simp] theorem countDelta_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    countDelta (program >>= next) counts =
+      (program.countDelta counts).append
+        ((next (program.output counts)).countDelta
           (program.finalCounts counts)) :=
   rfl
 
@@ -710,7 +1106,7 @@ variable {α β : Type}
     finalCounts (program >>= next) counts =
       (next (program.output counts)).finalCounts
         (program.finalCounts counts) :=
-  rfl
+  by simp [finalCounts]
 
 @[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
     output (adviceColumn : Configure F (Column .advice)) counts =
@@ -1044,7 +1440,10 @@ elab "configure_norm" : tactic => withMainContext do
       List.foldl_nil, List.foldl_cons, List.map, List.append_nil,
       List.nil_append, List.append_assoc]))
   if !(← getGoals).isEmpty then
-    evalTactic (← `(tactic| simp))
+    try
+      evalTactic (← `(tactic| simp))
+    catch _ =>
+      pure ()
   if !(← getGoals).isEmpty then
     evalTactic (← `(tactic| rfl))
 
@@ -1066,6 +1465,14 @@ class ElaboratedConfigure (program : Configure F α) where
     (program.delta counts).instanceQueries =
       instanceQueries counts := by
     configure_norm
+  /--
+  Selector allocation required from the incoming configure state. Primitive gate and
+  lookup registration expose requirements; monadic bind composes them.
+  -/
+  selectorRequirements : ConfigureCounts → Prop := fun _ => True
+  selectorsAllocated : ∀ counts, selectorRequirements counts →
+    (program.delta counts).SelectorsAllocated
+      (program.finalCounts counts).numSelectors
 
 @[simp] theorem ElaboratedConfigure.delta_instanceQueries
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
@@ -1079,6 +1486,10 @@ instance ElaboratedConfigure.pure (value : α) :
   instanceQueries_eq := by
     intro counts
     rfl
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.bind {β : Type}
     (program : Configure F α) [programElaborated : ElaboratedConfigure program]
@@ -1094,26 +1505,63 @@ instance ElaboratedConfigure.bind {β : Type}
     rw [Configure.delta_bind, ConfigureDelta.instanceQueries_append,
       programElaborated.instanceQueries_eq,
       (nextElaborated (program.output counts)).instanceQueries_eq]
+  selectorRequirements counts :=
+    programElaborated.selectorRequirements counts ∧
+      (nextElaborated (program.output counts)).selectorRequirements
+        (program.finalCounts counts)
+  selectorsAllocated := by
+    intro counts hrequirements
+    rw [Configure.delta_bind, Configure.finalCounts_bind]
+    apply ConfigureDelta.SelectorsAllocated.append
+    · exact
+        (programElaborated.selectorsAllocated counts hrequirements.1).mono
+          ((next (program.output counts)).numSelectors_le_finalCounts
+            (program.finalCounts counts))
+    · exact
+        (nextElaborated (program.output counts)).selectorsAllocated
+          (program.finalCounts counts) hrequirements.2
 
 instance ElaboratedConfigure.adviceColumn :
     ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
   instanceQueries_eq := Configure.delta_adviceColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.fixedColumn :
     ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
   instanceQueries_eq := Configure.delta_fixedColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.instanceColumn :
     ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
   instanceQueries_eq := Configure.delta_instanceColumn_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty counts.numSelectors
 
 instance ElaboratedConfigure.selector :
     ElaboratedConfigure (selector : Configure F Selector) where
   instanceQueries_eq := Configure.delta_selector_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty
+      (counts.numSelectors + 1)
 
 instance ElaboratedConfigure.complexSelector :
     ElaboratedConfigure (complexSelector : Configure F Selector) where
   instanceQueries_eq := Configure.delta_complexSelector_instanceQueries
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    exact ConfigureDelta.SelectorsAllocated.empty
+      (counts.numSelectors + 1)
 
 instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     ElaboratedConfigure (enableEquality (F := F) column) where
@@ -1123,11 +1571,35 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     | _ => []
   instanceQueries_eq :=
     Configure.delta_enableEquality_instanceQueries column
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    rcases column with ⟨kind, index⟩
+    cases kind
+    all_goals
+      constructor
+      · simp [Configure.delta, Configure.finalCounts,
+          Configure.countDelta, ConfigureCountDelta.apply,
+          Halo2.enableEquality, ConfigureDelta.queryAny]
+      · simp [Configure.delta, Configure.finalCounts,
+          Configure.countDelta, ConfigureCountDelta.apply,
+          Halo2.enableEquality, ConfigureDelta.queryAny,
+          lookupInputSelectorBound]
 
 instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
   instanceQueries_eq :=
     Configure.delta_enableConstant_instanceQueries column
+  selectorRequirements _ := True
+  selectorsAllocated := by
+    intro counts _
+    constructor
+    · simp [Configure.delta, Configure.finalCounts,
+        Configure.countDelta, ConfigureCountDelta.apply,
+        Halo2.enableConstant]
+    · simp [Configure.delta, Configure.finalCounts,
+        Configure.countDelta, ConfigureCountDelta.apply,
+        Halo2.enableConstant, lookupInputSelectorBound]
 
 instance ElaboratedConfigure.createGate (gate : Gate F) :
     ElaboratedConfigure (createGate gate) where
@@ -1135,6 +1607,13 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
     ConfigureDelta.instanceQueriesOfCells gate.queriedCells
   instanceQueries_eq :=
     Configure.delta_createGate_instanceQueries gate
+  selectorRequirements counts :=
+    gate.selector.index < counts.numSelectors
+  selectorsAllocated := by
+    intro counts hselector
+    constructor
+    · simpa [Configure.delta_createGate] using hselector
+    · simp [Configure.delta_createGate, lookupInputSelectorBound]
 
 instance ElaboratedConfigure.lookup
     (queriedCells : List (Expression F Query))
@@ -1144,11 +1623,44 @@ instance ElaboratedConfigure.lookup
     ConfigureDelta.instanceQueriesOfCells queriedCells
   instanceQueries_eq :=
     Configure.delta_lookup_instanceQueries queriedCells tableMap
+  selectorRequirements counts :=
+    (Configure.delta (Halo2.lookup queriedCells tableMap) counts).gates = [] ∧
+      lookupInputSelectorBound
+        ((Halo2.lookup queriedCells tableMap).delta counts).lookups ≤
+          counts.numSelectors
+  selectorsAllocated := by
+    intro counts hselectors
+    constructor
+    · rw [hselectors.1]
+      trivial
+    · simpa using hselectors.2
 
 instance ElaboratedConfigure.lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by
   unfold Halo2.lookupTableColumn
   infer_instance
+
+attribute [configure_selector_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind
+
+open Lean Meta Simp in
+/-- Fold the selector requirements stored in an inferred configure elaboration. -/
+def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
+  unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorRequirements do
+    return .continue
+  try
+    let reduced ← withTransparency .all (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldElaboratedConfigureSelectorRequirements
+    (ElaboratedConfigure.selectorRequirements _ _) :=
+  foldElaboratedConfigureSelectorRequirementsProc
+attribute [configure_selector_norm] foldElaboratedConfigureSelectorRequirements
 
 open Lean Meta Simp in
 /--
@@ -1157,8 +1669,8 @@ Fold an elaborated configure program's declared instance-query summary.
 This is the compositional opacity boundary used by `configure_norm`: a parent may use
 the summary packaged by a child `FormalCircuit` without unfolding the child's configure
 program. Reducing the class projection unfolds only the instance and the circuit
-structure far enough to select `elaboratedConfigure`; it does not inspect synthesis or
-proof fields.
+structure far enough to select `elaborated.configureInfo`; it does not inspect
+synthesis or proof fields.
 -/
 def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.instanceQueries do

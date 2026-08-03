@@ -186,23 +186,6 @@ private theorem out_eval_lit_prover {k : ℕ} (env : Placed ProverEnvironment Fp
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
 
-/-- The elaborated instance of the `hash_message` region body (explicit — `soundness` must
-not elaborate with metavariables). -/
-instance hashRegionElaborated (G : Generators) (ns : List ℕ) (Q : Point Fp)
-    (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
-    ElaboratedRegionCircuit Fp (Sinsemilla.Chain.Inputs ns.length) (Output ns.length)
-      (fun pieces => do
-        (Sinsemilla.HashPiece.initialYQGate cfg).enable offset
-        let _yq ← assignFixed cfg.fixedYQ offset Q.y
-        let xa ← assignAdvice cfg.xA offset (constWit Q.x)
-        constrainConstant xa Q.x
-        let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
-        let z1s ← (fun self =>
-          (Vector.ofFn (fun i : Fin ns.length =>
-            AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits),
-           ([] : RegionOperations Fp)))
-        pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))) := {}
-
 /-- The `hash_message` region bundle (public `Q`): `public_q_initialization` + the chain.
 `hns`: a Sinsemilla message is nonempty (for `ns = []` the trailing dummy row's `λ₁` is
 unconstrained, so the exit `y` would be unpinned). -/
@@ -228,7 +211,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
        ([] : RegionOperations Fp)))
     pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
 
-  elaborated cfg offset := hashRegionElaborated G ns Q cfg offset
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ :=
+            [Sinsemilla.HashPiece.initialYQGate cfg,
+              Sinsemilla.HashPiece.sinsemillaGate cfg]
+          lookups cfg _ := [Sinsemilla.HashPiece.generatorLookup G cfg] } }
 
   Witness := Sinsemilla.Chain.ChainWit ns
   extract cfg offset input self env :=
@@ -377,6 +365,79 @@ def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     FormalCircuit Fp Sinsemilla.HashPiece.Config Sinsemilla.HashPiece.Config
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) :=
   (hashRegion G ns Q hQ hns).toFormal
+
+attribute [keygen_metadata_projection] hashCircuit hashRegion
+
+/-- A hash-to-point capability exported by one HashPiece configure run. -/
+def hashConfigureCertificate (G : Generators) (ns : List ℕ)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : Sinsemilla.GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    (hashCircuit G ns Q hQ hns).ConfigurationCertificate
+      ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+        witnessPieces fixedYQ genTable).output counts)
+      { gates := ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+          witnessPieces fixedYQ genTable).delta counts).gates
+        lookups := ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+          witnessPieces fixedYQ genTable).delta counts).lookups } := by
+  let cfg := (Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+    witnessPieces fixedYQ genTable).output counts
+  apply ((hashRegion G ns Q hQ hns).configureCertificate cfg {} ()).mono
+  · intro gate hgate
+    simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hgate
+    rcases List.mem_cons.mp hgate with hinitial | hsinsemilla
+    · subst gate
+      simp only
+      unfold Sinsemilla.HashPiece.configure
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_left
+      simp [cfg, Sinsemilla.HashPiece.configure]
+    · simp only [List.mem_singleton] at hsinsemilla
+      subst gate
+      simp only
+      unfold Sinsemilla.HashPiece.configure
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_right
+      apply Configure.mem_gates_delta_bind_left
+      simp [cfg, Sinsemilla.HashPiece.configure]
+  · intro argument hargument
+    simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hargument
+    simp only [List.mem_singleton] at hargument
+    subst argument
+    simp only
+    unfold Sinsemilla.HashPiece.configure
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_right
+    apply Configure.mem_lookups_delta_bind_left
+    simp [cfg, Sinsemilla.HashPiece.configure, lookup, Configure.delta,
+      ConfigureDelta.append, Sinsemilla.HashPiece.generatorLookup]
 
 /-- Call the hash bundle (Rust `hash_to_point` at a layouter). -/
 def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)

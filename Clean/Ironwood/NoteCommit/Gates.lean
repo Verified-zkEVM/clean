@@ -496,4 +496,22 @@ instance (advices : Fin 10 → Column .advice) :
   unfold configure
   infer_instance
 
+@[keygen_norm]
+theorem configure_delta_gates (advices : Fin 10 → Column .advice)
+    (counts : ConfigureCounts) :
+    ((configure advices).delta counts).gates =
+      [DecomposeB.gate ((configure advices).output counts).b,
+        DecomposeD.gate ((configure advices).output counts).d,
+        DecomposeE.gate ((configure advices).output counts).e,
+        DecomposeG.gate ((configure advices).output counts).g,
+        DecomposeH.gate ((configure advices).output counts).h,
+        GdCanonicity.gate ((configure advices).output counts).gd,
+        PkdCanonicity.gate ((configure advices).output counts).pkd,
+        ValueCanonicity.gate ((configure advices).output counts).value,
+        RhoCanonicity.gate ((configure advices).output counts).rho,
+        PsiCanonicity.gate ((configure advices).output counts).psi,
+        YCanonicity.gate ((configure advices).output counts).y] := by
+  unfold configure
+  rfl
+
 end Zcash.Circuits.NoteCommit

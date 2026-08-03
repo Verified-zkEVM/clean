@@ -746,7 +746,8 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     run? (← `(tactic| simp only [ElaboratedRegionCircuit.output_eq]
       at $(mkIdent `output_eq):ident))
   else
-    run? (← `(tactic| simp only [ElaboratedCircuit.output_eq] at $(mkIdent `output_eq):ident))
+    run? (← `(tactic| simp only [ElaboratedCircuit.output_eq]
+      at $(mkIdent `output_eq):ident))
   -- open factored circuit defs (synth wrappers etc.) so the bind chain is visible
   unless unfolds.isEmpty do
     let chunk := if sound then `constraints else `witnesses

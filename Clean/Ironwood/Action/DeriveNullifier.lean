@@ -81,6 +81,22 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
 
 /-! ## The `derive_nullifier` bundle -/
 
+@[keygen_norm]
+def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
+    (Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
+      Ecc.Add.Config) where
+  configLawful cfg :=
+    (Poseidon.hash (Hash.ConstantLength.capacity 2)).Configured cfg.1 ×
+      AddChip.addFormal.Configured cfg.2.1 ×
+        (Ecc.MulFixed.BaseFieldElem.circuit K).Configured cfg.2.2.1 ×
+          Ecc.Add.addFormal.Configured cfg.2.2.2
+  gates _ configured :=
+    configured.1.gates ++ configured.2.1.gates ++
+      configured.2.2.1.gates ++ configured.2.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++
+      configured.2.2.1.lookups ++ configured.2.2.2.lookups
+
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the
 complete addition with `cm`. `Spec` is the donor contract: the nullifier is
@@ -105,8 +121,11 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       { p := input.cm, q := product }
     pure nf.x
 
-  elaborated := fun (pcfg, acfg, bcfg, ecfg) =>
-    { output := fun input i =>
+  elaborated :=
+    { keygenRequirements := keygenRequirements K
+      registered := by keygen_registration
+      output cfg input i :=
+        let (pcfg, acfg, bcfg, ecfg) := cfg
         ((do
           let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
             { x0 := input.nk, x1 := input.rho }
@@ -116,9 +135,9 @@ def circuit (K : FixedBase) : FormalCircuit Fp
           let nf ← Ecc.Add.addFormal.call ecfg
             { p := input.cm, q := product }
           pure nf.x : Circuit Fp (Var field Fp)).output i)
-      regionCount := fun _ => 9
-      output_eq := by intro _ _; rfl
-      regionCount_eq := fun input i =>
+      regionCount _ := 9
+      output_eq := by intro _ _ _; rfl
+      regionCount_eq := fun (pcfg, acfg, bcfg, ecfg) input i =>
         (deriveNullifier_regionCount K pcfg acfg bcfg ecfg input i).symm }
 
   EnvAssumptions := fun (_, _, bcfg, _) env =>

@@ -96,7 +96,7 @@ temporarily when debugging a mismatch. -/
         ++ regionAssignFixed (ZMod.val : Fp → ℕ) starts regions))
   let compiledFixed : List (ℕ × ℕ × ℕ) :=
     (Halo2.Layout.compileFixed usable actionSelMap
-      ((Action.Circuit.configure aG {}).2.closeWithOperations ops) ops).map
+      (Action.Circuit.configure aG {}).2 ops).map
         fun (column, row, value) => (column, row, ZMod.val value)
   Json.runChecks [
     -- keygen `Assembly` σ replay from the fixture's OWN ordered copy list

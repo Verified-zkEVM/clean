@@ -48,6 +48,9 @@ rounds, 28 double partial rounds, 4 full rounds. `Spec`: the outgoing state is t
 `Permute.value` of the incoming one. -/
 def permuteRegion : FormalRegionCircuit Fp Config Config State State where
   configure := pure
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg] } }
 
   synthesize cfg offset (input : Var State Fp) := do
     -- Pow5State::load (pow5.rs:536-550)
