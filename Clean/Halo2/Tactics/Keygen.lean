@@ -18,6 +18,8 @@ namespace Halo2
 
 open Lean
 
+initialize registerTraceClass `Halo2.keygen
+
 attribute [keygen_norm]
   Configure.delta_bind Configure.delta_pure
   Configure.delta_enableEquality_gates
@@ -683,7 +685,7 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
       | break
     let some receiverHead := receiver.getAppFn.constName?
       | break
-    logInfo m!"keygen routing unfolds {receiverHead}"
+    trace[Halo2.keygen] "routing unfolds {receiverHead}"
     if unfoldedReceivers.contains receiverHead then
       break
     unfoldedReceivers := unfoldedReceivers.push receiverHead
@@ -815,11 +817,11 @@ partial def configuredWitness? (target : Expr)
               withTransparency .default <| whnf program
             else
               pure program
-          logInfo m!"keygen comparing configure program for {selfHead}"
+          trace[Halo2.keygen] "comparing configure program for {selfHead}"
           unless ← withTransparency .default <|
               isDefEq expectedProgram comparisonProgram do
             throwError "circuit configure program does not match the candidate"
-          logInfo m!"keygen compared configure program for {selfHead}"
+          trace[Halo2.keygen] "compared configure program for {selfHead}"
           let partialApplication ←
             mkAppM constructor #[self, configInput, counts]
           let partialType ← whnf (← inferType partialApplication)
@@ -905,7 +907,7 @@ partial def configuredWitness? (target : Expr)
         set metaState
   let targetArguments := target.getAppArgs
   if 2 ≤ targetArguments.size then
-    logInfo m!"keygen configured search failed at {
+    trace[Halo2.keygen] "configured search failed at {
       targetArguments[targetArguments.size - 2]!.getAppFn.constName?}"
   return none
 
@@ -1030,13 +1032,13 @@ def proveWithCallCertificate?
         unless ← isProp sideTarget do
           let some proof ← configuredWitness? sideTarget candidateNodes
             | throwError m!"no direct-child configured handle for:\n{sideTarget}"
-          logInfo "keygen recovered configured handle"
+          trace[Halo2.keygen] "recovered configured handle"
           sideCondition.assign proof
     for sideCondition in sideConditions do
       unless ← sideCondition.isAssigned do
         let sideTarget ← instantiateMVars (← sideCondition.getType)
         if ← proveConfigureRoutingPremise sideCondition then
-          logInfo "keygen routed configure premise"
+          trace[Halo2.keygen] "routed configure premise"
           continue
         let mut simplified ← Simp.simp sideTarget
         let mut proof? ← proofOfSimpTrue? simplified
@@ -1044,7 +1046,7 @@ def proveWithCallCertificate?
           simplified ← simpCallRouting sideTarget
           proof? ← proofOfSimpTrue? simplified
         let some proof := proof?
-          | logInfo m!"keygen routing residual:\n{simplified.expr}"
+          | trace[Halo2.keygen] "routing residual:\n{simplified.expr}"
             throwError "keygen call routing premise was not simplified"
         sideCondition.assign proof
     let proof ← instantiateMVars goalExpr
