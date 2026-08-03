@@ -239,6 +239,55 @@ attribute [circuit_norm]
 theorem UInt64.eq_iff_toNat_eq {a b : UInt64} : a = b ↔ a.toNat = b.toNat :=
   UInt64.toNat_inj.symm
 
+section U64Wrap
+open Lean Meta Simp
+
+/-- Closed `ℕ` value of an expression, seeing through `b ^ k` (which `Meta.evalNat` does
+not reduce at the `Monoid.toPow` instance that `2 ^ 64` elaborates to). -/
+private partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
+  if let some n ← evalNat e |>.run then return some n
+  if e.isAppOfArity ``HPow.hPow 6 then
+    let args := e.getAppArgs
+    let some b ← natLit? args[4]! | return none
+    let some k ← natLit? args[5]! | return none
+    if k ≤ 64 && b ≤ 64 then return some (b ^ k)
+  return none
+
+/--
+Erase a `u64` wrap that provably does not wrap.
+
+Pushing `UInt64.toNat` through a `UExpr` evaluation leaves two kinds of truncation
+behind: `n % 2^64` (from `UExpr.val`, `UExpr.const` and the arithmetic operations) and
+`n % 64` (the shift-amount mask of `<<<` / `>>>`). Gadgets always work well inside those
+bounds — bytes, 32-bit limbs, bit indices — but the bound lives in the gadget's own
+assumptions (`x.val < 256`, `i < 32`, …), so no unconditional rewrite can remove the
+wrap, and a conditional simp lemma cannot discharge it either.
+
+This simproc closes exactly that gap: on `n % 2^64` / `n % 64` it asks `omega` (with the
+local hypotheses as facts) whether `n` is already below the modulus, and rewrites to `n`
+when it is. Other moduli are left alone, so ordinary `% 256`-style specification
+arithmetic is untouched.
+-/
+private def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``HMod.hMod 6 do return .continue
+  let args := e.getAppArgs
+  let n := args[4]!
+  let m := args[5]!
+  unless (← whnfR (← inferType n)).isConstOf ``Nat do return .continue
+  let some mVal ← natLit? m | return .continue
+  unless mVal == 18446744073709551616 || mVal == 64 do return .continue
+  let g ← mkFreshExprMVar (← mkAppM ``LT.lt #[n, m])
+  try
+    let some g' ← g.mvarId!.falseOrByContra | return .continue
+    g'.withContext do Lean.Elab.Tactic.Omega.omega (← getLocalHyps).toList g'
+  catch _ =>
+    return .continue
+  return .done { expr := n, proof? := ← mkAppM ``Nat.mod_eq_of_lt #[g] }
+
+simproc u64Wrap ((_ : ℕ) % _) := u64WrapSimproc
+attribute [circuit_norm] u64Wrap
+end U64Wrap
+
 variable {M : TypeMap} [ProvableType M]
 
 /-- Evaluation for higher-level provable types. -/
