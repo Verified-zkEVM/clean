@@ -32,13 +32,13 @@ private def bitsVal (a : Var (fields 32) (F p)) : Witgen.UExpr (F p) :=
 
 omit h_large in
 private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
-    (bitsVal a).eval { env } = evalBitsNat env a := by
+    (bitsVal a).eval { env } = UInt64.ofNat (evalBitsNat env a) := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
   generalize List.finRange 32 = l
   induction l with
   | nil => rfl
   | cons i l ih =>
-    simp only [List.foldr_cons, circuit_norm, ih]
+    simp only [List.foldr_cons, circuit_norm, ih, UInt64.ofNat_add, UInt64.ofNat_mul]
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
@@ -308,11 +308,28 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
+  -- The witnessed values are `evalBitsNat` of the inputs, which equal `valueBits`
+  have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=
+    evalBitsNat_eq_valueBits env input_var_a input_a h_input_a
+  have h_evalBits_b : evalBitsNat env input_var_b = valueBits input_b :=
+    evalBitsNat_eq_valueBits env input_var_b input_b h_input_b
+  -- valueBits bounds
+  have hva_lt : valueBits input_a < 2^32 := valueBits_lt_two_pow input_a ha
+  have hvb_lt : valueBits input_b < 2^32 := valueBits_lt_two_pow input_b hb
+  -- These bounds have to be in context *before* normalizing the witness equations, so
+  -- that the `u64Wrap` simproc can discharge the `% 2^64` truncations introduced by the
+  -- `UInt64`-sorted witness IR.
+  have ha_lt : evalBitsNat env input_var_a < 2^32 := by omega
+  have hb_lt : evalBitsNat env input_var_b < 2^32 := by omega
+  simp only [bitsVal_eval, UInt64.toNat_ofNat', Nat.shiftRight_eq_div_pow,
+    Witgen.u64Wrap] at h_env_z h_env_cout
   set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith
+  have hS_eq : S = valueBits input_a + valueBits input_b := by
+    rw [hS_def, h_evalBits_a, h_evalBits_b]
+  have hS_lt_33 : S < 2^33 := by rw [hS_eq]; linarith
   refine ⟨fun i => ?_, ?_, ?_⟩
   · -- Boolean constraint for z[i]: z[i] * (z[i] - 1) = 0
     have henv_i := h_env_z i
@@ -324,17 +341,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rcases Nat.mod_two_eq_zero_or_one (S / 2^32) with h | h <;>
       rw [h] <;> push_cast <;> ring
   · -- Linear constraint: FA + FB - FZ - 2^32 * cout = 0 in F p
-    -- We prove evalBitsNat env a = valueBits input_a, similarly for b
-    have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=
-      evalBitsNat_eq_valueBits env input_var_a input_a h_input_a
-    have h_evalBits_b : evalBitsNat env input_var_b = valueBits input_b :=
-      evalBitsNat_eq_valueBits env input_var_b input_b h_input_b
-    have hS_eq : S = valueBits input_a + valueBits input_b := by
-      rw [hS_def, h_evalBits_a, h_evalBits_b]
-    -- valueBits bounds
-    have hva_lt : valueBits input_a < 2^32 := valueBits_lt_two_pow input_a ha
-    have hvb_lt : valueBits input_b < 2^32 := valueBits_lt_two_pow input_b hb
-    have hS_lt_33 : S < 2^33 := by rw [hS_eq]; linarith
     -- Bit decomposition of S % 2^32: S % 2^32 = ∑ i, (S%2^32 / 2^i % 2) * 2^i
     have h_S_mod_lt : S % 2^32 < 2^32 := Nat.mod_lt _ (by norm_num)
     -- S / 2^32 ∈ {0, 1} since S < 2^33
