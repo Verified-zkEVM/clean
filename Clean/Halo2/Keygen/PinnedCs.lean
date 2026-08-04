@@ -194,7 +194,128 @@ def usedRows (ops : Operations F) : ℕ :=
     (ops.map Operation.tableRowExtent).foldl max 0
   let copyEnd :=
     (ops.map (Operation.copyRowExtent starts)).foldl max 0
-  max (max regionEnd tableEnd) copyEnd
+  let constantAllocationEnd :=
+    FloorPlanner.V1.firstUnassignedRow
+      (FloorPlanner.V1.planOperations ops).2
+  max (max regionEnd tableEnd) (max copyEnd constantAllocationEnd)
+
+/-- A region operation's copy footprint is bounded by its enclosing region's
+copy footprint. -/
+theorem RegionOperation.copyRowExtent_le_operation
+    (starts : List ℕ) (body : RegionOperations F)
+    (operation : RegionOperation F) (hoperation : operation ∈ body) :
+    operation.copyRowExtent starts ≤
+      (Operation.region "" body).copyRowExtent starts := by
+  exact FloorPlanner.value_le_foldl_max_of_mem
+    (body.map (RegionOperation.copyRowExtent starts)) id 0
+    (operation.copyRowExtent starts)
+    (List.mem_map.mpr ⟨operation, hoperation, rfl⟩)
+
+/-- An operation's copy footprint is bounded by the complete operation stream's
+usable-row footprint. -/
+theorem Operation.copyRowExtent_le_usedRows
+    (ops : Operations F) (operation : Operation F)
+    (hoperation : operation ∈ ops) :
+    operation.copyRowExtent (FloorPlanner.V1.starts ops) ≤ usedRows ops := by
+  let starts := FloorPlanner.V1.starts ops
+  let copyEnd :=
+    (ops.map (Operation.copyRowExtent starts)).foldl max 0
+  have hcopy : operation.copyRowExtent starts ≤ copyEnd :=
+    FloorPlanner.value_le_foldl_max_of_mem
+      (ops.map (Operation.copyRowExtent starts)) id 0
+      (operation.copyRowExtent starts)
+      (List.mem_map.mpr ⟨operation, hoperation, rfl⟩)
+  unfold usedRows
+  dsimp only
+  exact hcopy.trans ((Nat.le_max_left _ _).trans (Nat.le_max_right _ _))
+
+/-- The complete operation footprint includes V1's constant-allocation frontier. -/
+theorem V1_firstUnassignedRow_le_usedRows (ops : Operations F) :
+    FloorPlanner.V1.firstUnassignedRow
+        (FloorPlanner.V1.planOperations ops).2 ≤
+      usedRows ops := by
+  unfold usedRows
+  dsimp only
+  exact (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)
+
+/-- Every V1 deferred constant allocation lies below the complete operation
+footprint. -/
+theorem V1_constantAssignments_row_lt_usedRows
+    (ops : Operations F) (constantColumns : List ℕ)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈
+        FloorPlanner.V1.constantAssignments ops constantColumns) :
+    row < usedRows ops :=
+  (FloorPlanner.V1.constantAssignments_row_lt_firstUnassignedRow
+    ops constantColumns hassignment).trans_le
+      (V1_firstUnassignedRow_le_usedRows ops)
+
+/-- Both cells constrained equal lie below the operation stream's row footprint. -/
+theorem cells_row_lt_usedRows_of_constrainEqual_mem
+    (ops : Operations F) (name : String) (body : RegionOperations F)
+    (hregion : Operation.region name body ∈ ops)
+    (left right : Cell)
+    (hcopy : RegionOperation.constrainEqual left right ∈ body) :
+    (FloorPlanner.V1.starts ops).getD left.regionIndex 0 + left.rowOffset <
+        usedRows ops ∧
+      (FloorPlanner.V1.starts ops).getD right.regionIndex 0 + right.rowOffset <
+        usedRows ops := by
+  have hbody := RegionOperation.copyRowExtent_le_operation
+    (FloorPlanner.V1.starts ops) body (.constrainEqual left right) hcopy
+  have hstream := Operation.copyRowExtent_le_usedRows
+    ops (.region name body) hregion
+  simp only [Operation.copyRowExtent] at hbody hstream
+  simp only [RegionOperation.copyRowExtent, Cell.rowExtent] at hbody
+  omega
+
+/-- A cell constrained to a constant lies below the operation stream's row
+footprint. -/
+theorem cell_row_lt_usedRows_of_constrainConstant_mem
+    (ops : Operations F) (name : String) (body : RegionOperations F)
+    (hregion : Operation.region name body ∈ ops)
+    (cell : Cell) (value : F)
+    (hcopy : RegionOperation.constrainConstant cell value ∈ body) :
+    (FloorPlanner.V1.starts ops).getD cell.regionIndex 0 + cell.rowOffset <
+      usedRows ops := by
+  have hbody := RegionOperation.copyRowExtent_le_operation
+    (FloorPlanner.V1.starts ops) body (.constrainConstant cell value) hcopy
+  have hstream := Operation.copyRowExtent_le_usedRows
+    ops (.region name body) hregion
+  simp only [Operation.copyRowExtent] at hbody hstream
+  simp only [RegionOperation.copyRowExtent, Cell.rowExtent] at hbody
+  omega
+
+/-- Both endpoints of a region-level instance copy lie below the operation stream's
+row footprint. -/
+theorem rows_lt_usedRows_of_region_constrainInstance_mem
+    (ops : Operations F) (name : String) (body : RegionOperations F)
+    (hregion : Operation.region name body ∈ ops)
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (hcopy : RegionOperation.constrainInstance cell column row ∈ body) :
+    (FloorPlanner.V1.starts ops).getD cell.regionIndex 0 + cell.rowOffset <
+        usedRows ops ∧
+      row < usedRows ops := by
+  have hbody := RegionOperation.copyRowExtent_le_operation
+    (FloorPlanner.V1.starts ops) body (.constrainInstance cell column row) hcopy
+  have hstream := Operation.copyRowExtent_le_usedRows
+    ops (.region name body) hregion
+  simp only [Operation.copyRowExtent] at hbody hstream
+  simp only [RegionOperation.copyRowExtent, Cell.rowExtent] at hbody
+  omega
+
+/-- Both endpoints of a layouter-level instance copy lie below the operation stream's
+row footprint. -/
+theorem rows_lt_usedRows_of_constrainInstance_mem
+    (ops : Operations F) (cell : Cell) (column : Column .instance) (row : ℕ)
+    (hcopy : Operation.constrainInstance cell column row ∈ ops) :
+    (FloorPlanner.V1.starts ops).getD cell.regionIndex 0 + cell.rowOffset <
+        usedRows ops ∧
+      row < usedRows ops := by
+  have hstream := Operation.copyRowExtent_le_usedRows
+    ops (.constrainInstance cell column row) hcopy
+  simp only [Operation.copyRowExtent, Cell.rowExtent] at hstream
+  omega
 
 /--
 Every lookup operation inside an indexed region lies below the operation stream's

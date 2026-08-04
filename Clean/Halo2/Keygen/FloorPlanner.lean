@@ -5114,22 +5114,115 @@ def Allocations.unboundedStart (a : Allocations) : ℕ :=
   | some (s, l) => s + l
   | none => 0
 
+/-- One step of `free_intervals`, exposed separately so its elementary range
+invariants do not depend on unfolding the imperative loop. -/
+private def Allocations.freeIntervalsNext (endBound : Option ℕ)
+    (state : MProd (Array (ℕ × Option ℕ)) ℕ) (interval : ℕ × ℕ) :
+    MProd (Array (ℕ × Option ℕ)) ℕ :=
+  let (regionStart, regionLength) := interval
+  let output := state.fst
+  let row := state.snd
+  let past : Bool := match endBound with
+    | some endRow => decide (regionStart ≥ endRow)
+    | none => false
+  if !past then
+    let output :=
+      if row < regionStart then output.push (row, some regionStart)
+      else output
+    ⟨output, max row (regionStart + regionLength)⟩
+  else
+    state
+
 /-- `free_intervals(start, end)` (`strategy.rs:64-98`): the unallocated intervals of this
 column intersecting `[start, end)`, as `(spaceStart, spaceEnd?)` (`end? = none` unbounded).
 Verbatim port of the `scan`: a region with `start ≥ end` is skipped without advancing `row`,
 and the final unbounded item emits `[row, end)` when `end = none ∨ row < end`. -/
 def Allocations.freeIntervals (a : Allocations) (start : ℕ) (endBound : Option ℕ) :
-    List (ℕ × Option ℕ) := Id.run do
-  let mut row := start
-  let mut out : Array (ℕ × Option ℕ) := #[]
-  for (rs, rlen) in a do
-    let past : Bool := match endBound with | some e => decide (rs ≥ e) | none => false
-    if !past then
-      if row < rs then out := out.push (row, some rs)
-      row := max row (rs + rlen)
-  let emitFinal : Bool := match endBound with | some e => decide (row < e) | none => true
-  if emitFinal then out := out.push (row, endBound)
-  return out.toList
+    List (ℕ × Option ℕ) :=
+  let result : MProd (Array (ℕ × Option ℕ)) ℕ := Id.run <|
+    forIn a.toList ⟨#[], start⟩ fun interval state =>
+      pure (.yield (Allocations.freeIntervalsNext endBound state interval))
+  let output :=
+    match endBound with
+    | some endRow =>
+        if result.snd < endRow then
+          result.fst.push (result.snd, some endRow)
+        else result.fst
+    | none => result.fst.push (result.snd, none)
+  output.toList
+
+private theorem list_forIn_yield_invariant
+    {ι S : Type} (items : List ι) (next : ι → S → S)
+    (property : S → Prop) (initial : S)
+    (hnext : ∀ item state, property state → property (next item state))
+    (hinitial : property initial) :
+    property (Id.run <|
+      forIn items initial fun item state =>
+        pure (.yield (next item state))) := by
+  induction items generalizing initial with
+  | nil => simpa using hinitial
+  | cons item items inductionHypothesis =>
+      rw [List.forIn_cons]
+      exact inductionHypothesis _ (hnext item initial hinitial)
+
+/-- Every bounded free interval ends within the requested upper bound. -/
+theorem Allocations.freeIntervals_end_le
+    (allocations : Allocations) (start endRow : ℕ)
+    {intervalStart intervalEnd : ℕ}
+    (hinterval :
+      (intervalStart, some intervalEnd) ∈
+        allocations.freeIntervals start (some endRow)) :
+    intervalEnd ≤ endRow := by
+  let Good := fun state : MProd (Array (ℕ × Option ℕ)) ℕ =>
+    ∀ interval ∈ state.fst.toList,
+      ∀ foundEnd, interval.2 = some foundEnd → foundEnd ≤ endRow
+  let initial : MProd (Array (ℕ × Option ℕ)) ℕ := ⟨#[], start⟩
+  let result : MProd (Array (ℕ × Option ℕ)) ℕ := Id.run <|
+    forIn allocations.toList initial fun interval state =>
+      pure (.yield (Allocations.freeIntervalsNext (some endRow) state interval))
+  have hresult : Good result := by
+    apply list_forIn_yield_invariant allocations.toList
+      (fun interval state =>
+        Allocations.freeIntervalsNext (some endRow) state interval)
+      Good initial
+    · intro interval state hstate
+      rcases interval with ⟨regionStart, regionLength⟩
+      simp only [Allocations.freeIntervalsNext]
+      by_cases hpast : regionStart ≥ endRow
+      · simp [hpast]
+        exact hstate
+      · simp only [hpast, decide_false, Bool.not_false]
+        by_cases hgap : state.snd < regionStart
+        · simp only [hgap, ↓reduceIte]
+          intro found hfound foundEnd hfoundEnd
+          simp at hfound
+          rcases hfound with hfound | rfl
+          · exact hstate found (by simpa using hfound) foundEnd hfoundEnd
+          · simp only [Option.some.injEq] at hfoundEnd
+            subst foundEnd
+            omega
+        · simp only [hgap, ↓reduceIte]
+          exact hstate
+    · intro interval hinterval foundEnd hfoundEnd
+      simp [initial] at hinterval
+
+  unfold Allocations.freeIntervals at hinterval
+  dsimp only at hinterval
+  change
+    (intervalStart, some intervalEnd) ∈
+      (if result.snd < endRow then
+        result.fst.push (result.snd, some endRow)
+      else result.fst).toList at hinterval
+  by_cases hfinal : result.snd < endRow
+  · simp only [hfinal, ↓reduceIte, Array.toList_push,
+      List.mem_append, List.mem_singleton] at hinterval
+    rcases hinterval with hprevious | hlast
+    · exact hresult (intervalStart, some intervalEnd) hprevious
+        intervalEnd rfl
+    · exact Nat.le_of_eq (by simpa using congrArg Prod.snd hlast)
+  · simp only [hfinal, ↓reduceIte] at hinterval
+    exact hresult (intervalStart, some intervalEnd) hinterval
+      intervalEnd rfl
 
 /-- The circuit's per-column allocations. -/
 abbrev CircuitAllocations := Std.HashMap RegionColumn Allocations
@@ -5885,6 +5978,25 @@ def freeRows (colAllocs : CircuitAllocations) (colIdx endRow : ℕ) : List ℕ :
       | some e => (List.range (e - s)).map (· + s)
       | none => []
 
+/-- Every bounded constant-allocation position lies below its requested end row. -/
+theorem mem_freeRows_lt
+    (colAllocs : CircuitAllocations) (colIdx endRow row : ℕ)
+    (hrow : row ∈ freeRows colAllocs colIdx endRow) :
+    row < endRow := by
+  rw [freeRows, List.mem_flatMap] at hrow
+  obtain ⟨⟨intervalStart, intervalEnd⟩, hinterval, hrow⟩ := hrow
+  cases intervalEnd with
+  | none => simp at hrow
+  | some intervalEnd =>
+      rw [List.mem_map] at hrow
+      obtain ⟨offset, hoffset, rfl⟩ := hrow
+      have hoffsetBound := List.mem_range.mp hoffset
+      have hintervalBound :=
+        Allocations.freeIntervals_end_le
+          (colAllocs.getD (.column .fixed colIdx) #[])
+          0 endRow hinterval
+      omega
+
 /--
 The V1 constants allocation `(value, constantsColIdx, row)`, retaining field values.
 
@@ -5900,6 +6012,35 @@ def constantAssignments (ops : Operations F) (constCols : List ℕ) :
   let positions : List (ℕ × ℕ) := constCols.flatMap fun c =>
     (freeRows colAllocs c endRow).map fun row => (c, row)
   (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
+
+/-- Every V1 constant allocation lies below the planner's first unassigned row. -/
+theorem constantAssignments_row_lt_firstUnassignedRow
+    (ops : Operations F) (constCols : List ℕ)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈ constantAssignments ops constCols) :
+    row < firstUnassignedRow (planOperations ops).2 := by
+  let allocations := (planOperations ops).2
+  let endRow := firstUnassignedRow allocations
+  let positions : List (ℕ × ℕ) := constCols.flatMap fun currentColumn =>
+    (freeRows allocations currentColumn endRow).map fun currentRow =>
+      (currentColumn, currentRow)
+  rw [constantAssignments, List.mem_map] at hassignment
+  obtain ⟨⟨⟨foundColumn, foundRow⟩, foundValue⟩,
+    hzipped, hequal⟩ := hassignment
+  have hposition : (foundColumn, foundRow) ∈ positions :=
+    (List.of_mem_zip hzipped).1
+  have hrow : foundRow < endRow := by
+    dsimp only [positions] at hposition
+    rw [List.mem_flatMap] at hposition
+    obtain ⟨currentColumn, hcolumn, hposition⟩ := hposition
+    rw [List.mem_map] at hposition
+    obtain ⟨currentRow, hcurrentRow, hposition⟩ := hposition
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj hposition
+    exact mem_freeRows_lt allocations currentColumn endRow
+      currentRow hcurrentRow
+  obtain ⟨rfl, rfl, rfl⟩ := hequal
+  exact hrow
 
 end V1
 
