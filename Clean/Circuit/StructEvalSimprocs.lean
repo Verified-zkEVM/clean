@@ -195,9 +195,9 @@ private def isProvableStructLike (type : Expr) : MetaM Bool := do
       let instType ← mkAppM ``DerivedCircuitType #[m]
       if (← trySynthInstance instType) matches .some _ then
         return true
-  -- `S ps F`: check `ProvableStruct (S ps)`. `.instances` whnf, not `.reducible`: since
-  -- Lean 4.32, class projections through the `ProvableType`-derived instance (`Var M F` /
-  -- `Value M F` spellings) no longer reduce at reducible transparency, and a failure here
+  -- `S ps F`: check `ProvableStruct (S ps)`. `.instances` whnf, not `.reducible`: class
+  -- projections through the `ProvableType`-derived instance (`Var M F` /
+  -- `Value M F` spellings) do not reduce at reducible transparency, and a failure here
   -- is silent — equalities just stop splitting.
   let type' ← withTransparency .instances <| whnf type
   let .app typeCtor _ := type' | return false

@@ -278,8 +278,8 @@ def circuit : FormalAssertion (F p) U32 where
   Spec inputs := inputs.Normalized
 
   soundness := by
-    -- destructure `x_var` up front: since Lean 4.32, `simp` no longer iota-reduces the
-    -- `match` coming from `main`'s destructuring `let` against an opaque variable
+    -- destructure `x_var` up front: `simp` does not iota-reduce the `match` coming from
+    -- `main`'s destructuring `let` against an opaque variable
     rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 

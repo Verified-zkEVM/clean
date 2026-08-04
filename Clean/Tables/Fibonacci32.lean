@@ -120,8 +120,8 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
   -- NOTE: do *not* add `explicit_provable_type` to the `dsimp` set here. It unfolds the
   -- `ProvableStruct` layout into raw `Vector.cast`s, which makes the goal ill-typed at
   -- `instances` transparency; the closing `rfl` then reduces the entire assignment term at
-  -- default transparency and needs >14GB. `pure` is needed since 4.32 (destructuring binds
-  -- keep a `match pure ...` that simp no longer reduces), and the `+instances` pass is what
+  -- default transparency and needs >14GB. `pure` is needed (destructuring binds leave a
+  -- `match pure ...` that simp does not reduce), and the `+instances` pass is what
   -- collapses `ElaboratedCircuit.localLength` of the `Equality` subcircuit to `0`.
   dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit,
     assignU32, pure, MonadLift.monadLift]

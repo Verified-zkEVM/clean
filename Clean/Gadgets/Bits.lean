@@ -49,7 +49,6 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     constructor
     · intro i
       rw [h_env i]
-      simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, circuit_norm]
       rcases Nat.mod_two_eq_zero_or_one (input.val >>> i.val) with h | h <;> simp [h, IsBool]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
