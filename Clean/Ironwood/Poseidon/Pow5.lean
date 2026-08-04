@@ -42,7 +42,7 @@ structure Config where
   sPadAndAdd : Selector
 
 /-- Rust `pow_5` (`pow5.rs:89-92`): `v² · v² · v`, in the source's exact association. -/
-@[selector_free]
+@[selector_free, query_correct]
 def pow5Expr (v : Expression Fp Query) : Expression Fp Query :=
   let v2 := v * v
   v2 * v2 * v
@@ -113,35 +113,64 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
     [("", padAndAdd 0), ("", padAndAdd 1),
      ("", queryAdvice (cfg.state 2) (-1) - queryAdvice (cfg.state 2) 1)]
 
-/-- Rust `Pow5Chip::configure` (`pow5.rs:56-202`), VK-exact: equality on the state
-columns then `rc_b` (`pow5.rs:77-82`), the three selectors in allocation order, the
-three gates in registration order. -/
-def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
-    (rcA rcB : Fin 3 → Column .fixed) : Configure Fp Config := do
+@[reducible] def configureEqualities
+    (state : Fin 3 → Column .advice) (rcB : Fin 3 → Column .fixed) :
+    Configure Fp Unit := do
   enableEquality (state 0).toAny
   enableEquality (state 1).toAny
   enableEquality (state 2).toAny
   enableEquality (rcB 0).toAny
   enableEquality (rcB 1).toAny
   enableEquality (rcB 2).toAny
+
+instance (state : Fin 3 → Column .advice)
+    (rcB : Fin 3 → Column .fixed) :
+    ElaboratedConfigure (configureEqualities state rcB) := by
+  unfold configureEqualities
+  infer_instance
+
+@[reducible] def configureGates (cfg : Config) : Configure Fp Unit := do
+  createGate (fullRoundGate cfg)
+  createGate (partialRoundsGate cfg)
+  createGate (padAndAddGate cfg)
+
+instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
+  unfold configureGates
+  infer_instance
+
+/-- Rust `Pow5Chip::configure` (`pow5.rs:56-202`), VK-exact: equality on the state
+columns then `rc_b` (`pow5.rs:77-82`), the three selectors in allocation order, the
+three gates in registration order. -/
+def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) : Configure Fp Config := do
+  configureEqualities state rcB
   let sFull ← selector
   let sPartial ← selector
   let sPadAndAdd ← selector
   let cfg : Config := { state, partialSbox, rcA, rcB, sFull, sPartial, sPadAndAdd }
-  createGate (fullRoundGate cfg)
-  createGate (partialRoundsGate cfg)
-  createGate (padAndAddGate cfg)
+  configureGates cfg
   return cfg
+
+@[reducible] def configureElaborated
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) :
+    ElaboratedConfigure (configure state partialSbox rcA rcB) := by
+  dsimp only [configure]
+  infer_instance
 
 instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
-    ElaboratedConfigure (configure state partialSbox rcA rcB) where
-  selectorsAllocated := by
-    intro counts _
-    constructor
-    · simp [configure, fullRoundGate, partialRoundsGate, padAndAddGate,
-        Gate.withSelector]
-      omega
-    · simp [configure, lookupInputSelectorBound]
+    ElaboratedConfigure (configure state partialSbox rcA rcB) :=
+  { configureElaborated state partialSbox rcA rcB with
+    selectorRequirements _ := True
+    selectorsAllocated := by
+      intro counts _
+      constructor
+      · simp [configure, configureEqualities, configureGates,
+          fullRoundGate, partialRoundsGate, padAndAddGate,
+          Gate.withSelector]
+        omega
+      · simp [configure, configureEqualities, configureGates,
+          lookupInputSelectorBound] }
 
 end Zcash.Circuits.Poseidon

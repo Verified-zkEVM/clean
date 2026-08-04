@@ -46,7 +46,7 @@ structure Config where
 
 /-- Rust `utilities.rs::range_check(word, range)` (lines 170-174), the exact halo2 AST:
 `(1..range).fold(word, |acc, i| acc * (Constant(i) − word))`. -/
-@[selector_free]
+@[selector_free, query_correct]
 def rangeCheckExpr (range : ℕ) (word : Expression Fp Query) : Expression Fp Query :=
   ((List.range range).drop 1).foldl
     (fun acc (i : ℕ) => acc * (Expression.const (i : Fp) - word)) word

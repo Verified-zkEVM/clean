@@ -1,4 +1,5 @@
 import Clean.Halo2.Keygen.PinnedCs
+import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
 
 /-!
@@ -498,6 +499,18 @@ structure TopLevelCircuit
   noCallerRequirements : formalCircuit.keygenRequirements.EmptyAt ()
   /-- A closed circuit borrows no selector allocation from an incoming configure state. -/
   selectorRequirements : formalCircuit.selectorRequirements () {}
+  /-- A closed circuit borrows no queryable columns from an incoming configure state. -/
+  queryRequirements : formalCircuit.queryRequirements () {}
+  /-- Every fixed column allocated by the closed configure program is queried. Child
+  circuits may leave this obligation to a parent that queries their column later, so the
+  law belongs specifically at the top-level boundary. -/
+  exists_rotation_mem_fixedQueries_of_lt :
+    ∀ column <
+        (TopLevelCompilation.constraintSystem formalCircuit).numFixedColumns,
+      ∃ rotation,
+        (⟨column⟩, rotation) ∈
+          (TopLevelCompilation.constraintSystem formalCircuit).fixedQueries := by
+    configure_norm
   /--
   Dense public prefixes for the instance columns derived from this circuit's own
   configure-time query list.
@@ -785,12 +798,9 @@ def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
     PinnedConstraintSystem F :=
   PinnedConstraintSystem.derive self.constraintSystem self.selectorMap
 
-/-- The query state immediately after compiling the circuit's flattened gates. -/
+/-- The authoritative query layout used to compile this circuit's expressions. -/
 def gateQueryState (self : TopLevelCircuit F Config PublicInput) : QueryState :=
-  (eraseGates
-    ((flatGates self.constraintSystem).map
-      (substSelectorMap self.selectorMap.lookup))
-    (queryWalkInit self.selectorMap self.constraintSystem)).2
+  queryWalkInit self.selectorMap self.constraintSystem
 
 /--
 The circuit-owned pinned constraint system is exactly the projection using its
@@ -829,9 +839,201 @@ def adviceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
 def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.fixedQueryLayout.length
 
+@[simp] theorem adviceQueryLayout_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.adviceQueryLayout =
+      self.constraintSystem.adviceQueries.map fun query =>
+        (query.1.index, query.2) := by
+  simp [adviceQueryLayout, pinnedCS, PinnedConstraintSystem.derive,
+    projectCS]
+
+@[simp] theorem instanceQueryLayout_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.instanceQueryLayout =
+      self.constraintSystem.instanceQueries.map fun query =>
+        (query.1.index, query.2) := by
+  simp [instanceQueryLayout, pinnedCS, PinnedConstraintSystem.derive,
+    projectCS]
+
+@[simp] theorem fixedQueryLayout_eq_gateQueryState
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedQueryLayout = self.gateQueryState.fixed.toList := by
+  simp [fixedQueryLayout, gateQueryState, pinnedCS,
+    PinnedConstraintSystem.derive, projectCS]
+
+/-- Equality-enabled columns have the rotation-zero query slot used by the
+permutation compiler. This follows for every top-level circuit from the configure
+program's query lawfulness. -/
+theorem permutationColumn_mem_queryLayout
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : AnyColumn} (hcolumn : column ∈ self.permutationColumns) :
+    match column with
+    | ⟨.advice, index⟩ => (index, 0) ∈ self.adviceQueryLayout
+    | ⟨.fixed, index⟩ => (index, 0) ∈ self.fixedQueryLayout
+    | ⟨.instance, index⟩ => (index, 0) ∈ self.instanceQueryLayout := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.permutationRequests := by
+    have hrun :=
+      (Configure.mem_permutationColumns_run_iff program {} column).mp
+        (by simpa [permutationColumns, constraintSystem,
+          TopLevelCompilation.constraintSystem, program] using hcolumn)
+    exact hrun.resolve_left (by simp)
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column hdelta
+  rcases column with ⟨kind, index⟩
+  cases kind with
+  | advice =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.adviceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.adviceQueries := by
+        have hrun :=
+          (Configure.mem_adviceQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [adviceQueryLayout_eq_constraintSystem]
+      exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
+  | fixed =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.fixedQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.fixedQueries := by
+        have hrun :=
+          (Configure.mem_fixedQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [fixedQueryLayout_eq_gateQueryState]
+      simpa [QueryState.ResolvesQuery, gateQueryState] using
+        queryWalkInit_resolves_fixed_of_mem self.selectorMap hquery
+  | «instance» =>
+      have hdeltaQuery : (⟨index⟩, 0) ∈ delta.instanceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hquery : (⟨index⟩, 0) ∈ self.constraintSystem.instanceQueries := by
+        have hrun :=
+          (Configure.mem_instanceQueries_run_iff
+            program {} (⟨index⟩, 0)).mpr
+              (Or.inr (by simpa only [delta] using hdeltaQuery))
+        simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+          program] using hrun
+      rw [instanceQueryLayout_eq_constraintSystem]
+      exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
+
 /-- The number of fixed columns in the circuit-owned pinned constraint system. -/
 def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.pinnedCS.numFixedColumns
+
+@[simp] theorem fixedColumnCount_eq
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedColumnCount =
+      self.constraintSystem.numFixedColumns + self.selectorMap.newFixedCols := by
+  simp [fixedColumnCount, pinnedCS, PinnedConstraintSystem.derive, projectCS]
+
+/-- Every fixed column in the post-compression verifier constraint system has a query
+slot. Original columns are covered by the closed circuit's configure law; selector
+compression covers its appended suffix by construction. -/
+theorem exists_rotation_mem_fixedQueryLayout_of_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    ∀ column < self.fixedColumnCount,
+      ∃ rotation, (column, rotation) ∈ self.fixedQueryLayout := by
+  intro column hcolumn
+  rw [fixedColumnCount_eq] at hcolumn
+  by_cases horiginal : column < self.constraintSystem.numFixedColumns
+  · obtain ⟨rotation, hquery⟩ :=
+      self.exists_rotation_mem_fixedQueries_of_lt column horiginal
+    refine ⟨rotation, ?_⟩
+    rw [fixedQueryLayout_eq_gateQueryState]
+    simpa [QueryState.ResolvesQuery, gateQueryState] using
+      queryWalkInit_resolves_fixed_of_mem self.selectorMap hquery
+  · let index := column - self.constraintSystem.numFixedColumns
+    have hindex : index < self.selectorMap.newFixedCols := by
+      omega
+    have hcolumnEq :
+        self.constraintSystem.numFixedColumns + index = column := by
+      omega
+    refine ⟨0, ?_⟩
+    rw [fixedQueryLayout_eq_gateQueryState]
+    rw [← hcolumnEq]
+    simpa [QueryState.ResolvesQuery, gateQueryState] using
+      queryWalkInit_resolves_packedColumn
+        self.constraintSystem self.selectorMap hindex
+
+/-- Every fixed-query slot names a column in the post-compression verifier constraint
+system. -/
+theorem fixedQueryLayout_columns_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedQueryLayout.Forall fun query =>
+      query.1 < self.fixedColumnCount := by
+  rw [fixedQueryLayout_eq_gateQueryState, fixedColumnCount_eq]
+  apply queryWalkInit_fixedQueries_bounded
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.fixedQueries := by
+    have hrun := (Configure.mem_fixedQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hlt := List.forall_iff_forall_mem.mp
+    hlawful.fixedQueries_fst_lt_numFixedColumns query hdelta
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hlt
+
+/-- Every advice-query slot names a column allocated by the closed configure
+program. -/
+theorem adviceQueryLayout_columns_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.adviceQueryLayout.Forall fun query =>
+      query.1 < self.constraintSystem.numAdviceColumns := by
+  rw [adviceQueryLayout_eq_constraintSystem,
+    List.forall_map_iff]
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.adviceQueries := by
+    have hrun := (Configure.mem_adviceQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hlt := List.forall_iff_forall_mem.mp
+    hlawful.adviceQueries_fst_lt_numAdviceColumns query hdelta
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run_numAdviceColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hlt
+
+/-- Every instance-query slot names a column allocated by the closed configure
+program. -/
+theorem instanceQueryLayout_columns_lt
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.instanceQueryLayout.Forall fun query =>
+      query.1 < self.constraintSystem.numInstanceColumns := by
+  rw [instanceQueryLayout_eq_constraintSystem,
+    List.forall_map_iff]
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.instanceQueries := by
+    have hrun := (Configure.mem_instanceQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hlt := List.forall_iff_forall_mem.mp
+    hlawful.instanceQueries_fst_lt_numInstanceColumns query hdelta
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run_numInstanceColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hlt
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
 def fixedAssignments
@@ -988,6 +1190,120 @@ theorem lookupInputsAllocated
         expression.selectorBound ≤ self.constraintSystem.numSelectors := by
   exact (self.formalCircuit.lookupSelectorsAllocated
     () self.selectorRequirements).lookupInputsAllocated
+
+/-- Every query declaration emitted by the closed configure program is valid and
+names a column allocated by that program. -/
+theorem configureQueriesLawful
+    (self : TopLevelCircuit F Config PublicInput) :
+    ((self.formalCircuit.configure ()).delta {}).QueriesLawful
+      ((self.formalCircuit.configure ()).finalCounts {}) :=
+  self.formalCircuit.queriesLawful () {} self.queryRequirements
+
+/-- Every selector-compressed gate expression resolves read-only against the circuit's
+compiler-derived query layout. -/
+theorem gateQueriesResolved
+    (self : TopLevelCircuit F Config PublicInput) :
+    ∀ expression ∈ flatGates self.constraintSystem,
+      (substSelectorMap self.selectorMap.lookup expression).QueriesResolved
+        self.gateQueryState := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.configureQueriesLawful
+  intro expression hexpression
+  rw [flatGates, List.mem_flatMap] at hexpression
+  obtain ⟨gate, hgate, hexpression⟩ := hexpression
+  obtain ⟨constraint, hconstraint, rfl⟩ :=
+    List.mem_map.mp hexpression
+  have hgateDelta : gate ∈ delta.gates := by
+    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+      program, delta, Configure.run, ConfigureCounts.ofConstraintSystem,
+      ConfigureDelta.apply, List.nil_append] using hgate
+  have hgateRegistered : gate.QueriesRegistered delta :=
+    List.forall_iff_forall_mem.mp hlawful.gates_queriesRegistered
+      gate hgateDelta
+  have hregistered : constraint.poly.QueriesRegistered delta :=
+    List.forall_iff_forall_mem.mp hgateRegistered
+      constraint hconstraint
+  have hsource : constraint.poly.QueriesResolved self.gateQueryState := by
+    simpa only [gateQueryState, constraintSystem,
+      TopLevelCompilation.constraintSystem, program, delta, counts,
+      Configure.run, ConfigureCounts.ofConstraintSystem,
+      ConfigureDelta.apply, List.nil_append] using
+      hregistered.queriesResolved_queryWalkInit_apply
+        (initial := {}) (counts := counts) self.selectorMap
+  apply substSelectorMap_queriesResolved self.selectorMap.lookup
+    self.gateQueryState constraint.poly hsource
+  intro selector compressed hlookup
+  simpa only [selectorMap, TopLevelCompilation.selectorMap,
+    gateQueryState, constraintSystem, n, TopLevelCompilation.constraintSystem] using
+    queryWalkInit_resolves_deriveSelCompressMap_lookup
+      self.constraintSystem self.n self.selectorActivations hlookup
+
+/-- Every selector-compressed lookup expression resolves against the same authoritative
+query layout. -/
+theorem lookupQueriesResolved
+    (self : TopLevelCircuit F Config PublicInput) :
+    ∀ argument ∈ self.constraintSystem.lookups,
+      (argument.inputs.map
+        (substSelectorMap self.selectorMap.lookup)).Forall
+          (·.QueriesResolved self.gateQueryState) ∧
+      (argument.tables.map
+        (substSelectorMap self.selectorMap.lookup)).Forall
+          (·.QueriesResolved self.gateQueryState) := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.configureQueriesLawful
+  intro argument hargument
+  have hargumentDelta : argument ∈ delta.lookups := by
+    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+      program, delta, Configure.run, ConfigureCounts.ofConstraintSystem,
+      ConfigureDelta.apply, List.nil_append] using hargument
+  have hregistered : argument.QueriesRegistered delta :=
+    List.forall_iff_forall_mem.mp hlawful.lookups_queriesRegistered
+      argument hargumentDelta
+  have resolve (expression : Expression F Query)
+      (hexpression : expression.QueriesRegistered delta) :
+      (substSelectorMap self.selectorMap.lookup expression).QueriesResolved
+        self.gateQueryState := by
+    have hsource : expression.QueriesResolved self.gateQueryState := by
+      simpa only [gateQueryState, constraintSystem,
+        TopLevelCompilation.constraintSystem, program, delta, counts,
+        Configure.run, ConfigureCounts.ofConstraintSystem,
+        ConfigureDelta.apply, List.nil_append] using
+        hexpression.queriesResolved_queryWalkInit_apply
+          (initial := {}) (counts := counts) self.selectorMap
+    apply substSelectorMap_queriesResolved self.selectorMap.lookup
+      self.gateQueryState expression hsource
+    intro selector compressed hlookup
+    simpa only [selectorMap, TopLevelCompilation.selectorMap,
+      gateQueryState, constraintSystem, n,
+      TopLevelCompilation.constraintSystem] using
+      queryWalkInit_resolves_deriveSelCompressMap_lookup
+        self.constraintSystem self.n self.selectorActivations hlookup
+  constructor
+  · rw [List.forall_iff_forall_mem]
+    intro expression hexpression
+    obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp hexpression
+    exact resolve source
+      (List.forall_iff_forall_mem.mp hregistered.1 source hsource)
+  · rw [List.forall_iff_forall_mem]
+    intro expression hexpression
+    obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp hexpression
+    exact resolve source
+      (List.forall_iff_forall_mem.mp hregistered.2 source hsource)
+
+/-- A closed circuit's configure program contains no malformed query declarations. -/
+theorem invalidQueriedCells_eq_nil
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.constraintSystem.invalidQueriedCells = [] := by
+  have h := self.configureQueriesLawful.invalidQueriedCells_eq_nil
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    Configure.run, ConfigureCounts.ofConstraintSystem,
+    ConfigureDelta.apply, List.nil_append] using h
 
 /-- Read this circuit's public input from its declared instance cells. -/
 def extractPublicInput (self : TopLevelCircuit F Config PublicInput)

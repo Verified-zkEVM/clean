@@ -22,7 +22,7 @@ structure Config where
   y : Column .advice
 
 /-- `y² = x³ + b`, the short-Weierstrass curve equation over the point's columns. -/
-@[selector_free]
+@[selector_free, query_correct]
 def curveEqn (x y : Column .advice) : Expression Fp Query :=
   let x : Expression Fp Query := queryAdvice x 0
   let y : Expression Fp Query := queryAdvice y 0
@@ -40,11 +40,10 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
     [ ⟨ "x == 0 v on_curve", qPoint * queryAdvice x 0 * curveEqn x y ⟩,
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
   wellFormed := by
-    intro
-    constructor
+    refine ⟨by query_correct, by query_correct, ?_, ?_⟩
     · simp [Expression.selectorsCovered, querySelector,
         queryAdvice, curveEqn]
-    · intro constraint hconstraint
+    · intro _ constraint hconstraint
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
       rcases hconstraint with rfl | rfl
       all_goals

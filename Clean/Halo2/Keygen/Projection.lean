@@ -60,112 +60,104 @@ deriving DecidableEq, Repr
 
 variable {F : Type}
 
-/-- The mutable state of the query walk: the three query layouts accumulated so far, in
-first-encounter order. -/
+/-- The three authoritative query layouts. Expression projection only resolves indices
+against these arrays; it never repairs a missing configure-time declaration. -/
 structure QueryState where
   advice : Array (ℕ × ℤ) := #[]
   fixed : Array (ℕ × ℤ) := #[]
   inst : Array (ℕ × ℤ) := #[]
 
+@[ext] theorem QueryState.ext
+    {left right : QueryState}
+    (advice : left.advice = right.advice)
+    (fixed : left.fixed = right.fixed)
+    (inst : left.inst = right.inst) :
+    left = right := by
+  cases left
+  cases right
+  simp_all
+
 /-- Return the index of `(col, rot)` in `arr`, or `none`. -/
 def findQuery (arr : Array (ℕ × ℤ)) (col : ℕ) (rot : ℤ) : Option ℕ :=
   (arr.findIdx? (fun p => p.1 = col ∧ p.2 = rot))
 
-/-- Register `(col, rot)` in the advice layout, returning its index (existing or new). -/
-def QueryState.advIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ × QueryState :=
-  match findQuery s.advice col rot with
-  | some i => (i, s)
-  | none => (s.advice.size, { s with advice := s.advice.push (col, rot) })
+/-- Resolve an advice query against the authoritative layout. The out-of-range fallback
+is unreachable for query-lawful circuits and does not mutate the layout. -/
+def QueryState.advIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ :=
+  (findQuery s.advice col rot).getD s.advice.size
 
-def QueryState.fixIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ × QueryState :=
-  match findQuery s.fixed col rot with
-  | some i => (i, s)
-  | none => (s.fixed.size, { s with fixed := s.fixed.push (col, rot) })
+def QueryState.fixIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ :=
+  (findQuery s.fixed col rot).getD s.fixed.size
 
-def QueryState.instIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ × QueryState :=
-  match findQuery s.inst col rot with
-  | some i => (i, s)
-  | none => (s.inst.size, { s with inst := s.inst.push (col, rot) })
+def QueryState.instIdx (s : QueryState) (col : ℕ) (rot : ℤ) : ℕ :=
+  (findQuery s.inst col rot).getD s.inst.size
+
+/-- Register the fixed query created by selector compression. This is the sole layout
+extension in the projection pipeline and corresponds to Halo2 allocating each packed
+selector column and immediately querying it at rotation zero. -/
+def QueryState.registerFixed (s : QueryState) (col : ℕ) : QueryState :=
+  match findQuery s.fixed col 0 with
+  | some _ => s
+  | none => { s with fixed := s.fixed.push (col, 0) }
 
 section Erase
 variable [Field F] [DecidableEq F]
 
-/-- Erase one `Expression F Query` into a `RichExpression F`, threading the query-walk
-state. Traversal order (left operand before right, atom on encounter) is what determines the
-query indices, so it must match the order the Rust gate closure *builds* its expression.
-The Rust `std::ops` build left-to-right (`a - b` builds `a`, then `b`, then combines), so a
-plain left-to-right structural traversal reproduces it.
+/-- Erase one `Expression F Query` into a `RichExpression F`, resolving every ordinary
+query against the supplied layout. Query order was already fixed by configure, rather
+than reconstructed from the finished AST.
 
 A `Query.selector` atom erases to `.selector`; post-compression it is substituted away
 before the walk (`substSelectorMap`), so it survives only in the pre-compression view. -/
-def eraseExpr : Expression F Query → QueryState → RichExpression F × QueryState
-  | .const c, s => (.constant c, s)
-  | .var (.selector sel), s => (.selector sel.index, s)
+def eraseExpr : Expression F Query → QueryState → RichExpression F
+  | .const c, _ => .constant c
+  | .var (.selector sel), _ => .selector sel.index
   | .var (.advice col rot), s =>
-      let (i, s) := s.advIdx col.index rot
-      (.advice i, s)
+      .advice (s.advIdx col.index rot)
   | .var (.fixed col rot), s =>
-      let (i, s) := s.fixIdx col.index rot
-      (.fixed i, s)
+      .fixed (s.fixIdx col.index rot)
   | .var (.instance col rot), s =>
-      let (i, s) := s.instIdx col.index rot
-      (.instance i, s)
+      .instance (s.instIdx col.index rot)
   -- Neg/Sub lower to `mul (const (-1)) e`; recognise it as `.negated`. A left constant
   -- otherwise is a genuine `Expression::Constant * e` product (const-on-left is how the
   -- ports spell Rust `Constant(c) * e`).
   | .mul (.const c) e, s =>
       if c = (-1 : F) then
-        let (e', s) := eraseExpr e s
-        (.negated e', s)
+        .negated (eraseExpr e s)
       else
-        let (e', s) := eraseExpr e s
-        (.product (.constant c) e', s)
+        .product (.constant c) (eraseExpr e s)
   -- A RIGHT constant is Rust's `Expression * F` (`impl Mul<F>`), which builds
   -- `Expression::Scaled(e, c)`. The `mulConstant` marker (`Expression.lean`): Rust's
   -- right-constant `Product` (`e * Expression::Constant(c)`), spelled `e * (const c * const 1)`.
   | .mul e (.mul (.const c) (.const one)), s =>
       if one = (1 : F) then
-        let (e', s) := eraseExpr e s
-        (.product e' (.constant c), s)
+        .product (eraseExpr e s) (.constant c)
       else
-        let (e', s) := eraseExpr e s
-        let (i', s) := eraseExpr (.mul (.const c) (.const one)) s
-        (.product e' i', s)
+        .product (eraseExpr e s)
+          (eraseExpr (.mul (.const c) (.const one)) s)
   | .mul e (.const c), s =>
-      let (e', s) := eraseExpr e s
-      (.scaled e' c, s)
+      .scaled (eraseExpr e s) c
   | .add a b, s =>
-      let (a', s) := eraseExpr a s
-      let (b', s) := eraseExpr b s
-      (.sum a' b', s)
+      .sum (eraseExpr a s) (eraseExpr b s)
   | .mul a b, s =>
-      let (a', s) := eraseExpr a s
-      let (b', s) := eraseExpr b s
-      (.product a' b', s)
+      .product (eraseExpr a s) (eraseExpr b s)
 
 /-- Erase a list of gate polynomials in order, threading the query walk. -/
-def eraseGates : List (Expression F Query) → QueryState → List (RichExpression F) × QueryState
-  | [], s => ([], s)
-  | p :: ps, s =>
-      let (e, s) := eraseExpr p s
-      let (es, s) := eraseGates ps s
-      (e :: es, s)
+def eraseGates (expressions : List (Expression F Query))
+    (queries : QueryState) : List (RichExpression F) :=
+  expressions.map (eraseExpr · queries)
 
 /-- Erase a whole `LookupArgument` (its input and table expression lists), threading the
 query walk. Mirrors `eraseGates` but returns a `LookupFixture`. -/
-def eraseLookup (arg : LookupArgument F) (s : QueryState) :
-    LookupFixture F × QueryState :=
-  let (inputs, s) := eraseGates arg.inputs s
-  let (tables, s) := eraseGates arg.tables s
-  ({ inputs, tables }, s)
+def eraseLookup (arg : LookupArgument F) (queries : QueryState) :
+    LookupFixture F :=
+  { inputs := eraseGates arg.inputs queries
+    tables := eraseGates arg.tables queries }
 
 /-- Erase a list of lookups in registration order, threading the walk. -/
-def eraseLookups : List (LookupArgument F) → QueryState → List (LookupFixture F) × QueryState
-  | [], s => ([], s)
-  | a :: as, s =>
-      let (l, s) := eraseLookup a s
-      let (ls, s) := eraseLookups as s
-      (l :: ls, s)
+def eraseLookups (arguments : List (LookupArgument F))
+    (queries : QueryState) : List (LookupFixture F) :=
+  arguments.map (eraseLookup · queries)
 
 end Erase
 
@@ -189,7 +181,7 @@ at column-allocation time inside `compress_selectors` (`circuit.rs:1267-1274`, v
 `query_fixed_index` in the allocate closure), BEFORE the substituted gates are walked. -/
 def queryWalkInit (map : SelCompressMap) (cs : ConstraintSystem F) : QueryState :=
   (List.range map.newFixedCols).foldl
-    (fun s i => (s.fixIdx (cs.numFixedColumns + i) 0).2) (recordedQueries cs)
+    (fun s i => s.registerFixed (cs.numFixedColumns + i)) (recordedQueries cs)
 
 /-- Selector substitution is inert on selector-free expressions. -/
 theorem substSelectorMap_eq_of_selectorFree
@@ -238,16 +230,15 @@ def projectCS [Field F] [DecidableEq F] (map : SelCompressMap) (cs : ConstraintS
       arity := by simp [a.arity] })
   -- plain projections (not `let (a, b) := …` matches), so record-field access reduces
   -- structurally without evaluating the walk
-  let gs := eraseGates polys (queryWalkInit map cs)
-  let lks := eraseLookups lookups' gs.2
+  let queries := queryWalkInit map cs
   { numAdviceColumns := cs.numAdviceColumns
     numFixedColumns := cs.numFixedColumns + map.newFixedCols
     numInstanceColumns := cs.numInstanceColumns
     numSelectors := cs.numSelectors
-    adviceQueryLayout := lks.2.advice.toList
-    fixedQueryLayout := lks.2.fixed.toList
-    instanceQueryLayout := lks.2.inst.toList
-    gates := gs.1
-    lookups := lks.1 }
+    adviceQueryLayout := queries.advice.toList
+    fixedQueryLayout := queries.fixed.toList
+    instanceQueryLayout := queries.inst.toList
+    gates := eraseGates polys queries
+    lookups := eraseLookups lookups' queries }
 
 end Halo2

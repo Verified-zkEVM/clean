@@ -108,6 +108,32 @@ def PinnedConstraintSystem.derive [Field F] [DecidableEq F] (cs : ConstraintSyst
     constants := cs.constants.map (·.index)
     minimumDegree := none }
 
+/-- Lookup inputs in the pinned constraint system are the selector-substituted source
+inputs erased against the authoritative configure-derived query layout. -/
+theorem PinnedConstraintSystem.derive_lookupInputExprs_getD
+    [Field F] [DecidableEq F]
+    (cs : ConstraintSystem F) (map : SelCompressMap)
+    (index : ℕ) (hindex : index < cs.lookups.length) :
+    (PinnedConstraintSystem.derive cs map).lookupInputExprs.getD index [] =
+      eraseGates
+        (cs.lookups[index].inputs.map (substSelectorMap map.lookup))
+        (queryWalkInit map cs) := by
+  simp [PinnedConstraintSystem.derive, projectCS, eraseLookups, eraseLookup,
+    List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hindex]
+
+/-- Lookup tables in the pinned constraint system are the selector-substituted source
+tables erased against the authoritative configure-derived query layout. -/
+theorem PinnedConstraintSystem.derive_lookupTableExprs_getD
+    [Field F] [DecidableEq F]
+    (cs : ConstraintSystem F) (map : SelCompressMap)
+    (index : ℕ) (hindex : index < cs.lookups.length) :
+    (PinnedConstraintSystem.derive cs map).lookupTableExprs.getD index [] =
+      eraseGates
+        (cs.lookups[index].tables.map (substSelectorMap map.lookup))
+        (queryWalkInit map cs) := by
+  simp [PinnedConstraintSystem.derive, projectCS, eraseLookups, eraseLookup,
+    List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hindex]
+
 /-! ## The domain exponent `k`, derived
 
 Rust does not compute `k` — orchard pins `const K: u32 = 11` and keygen *asserts* the

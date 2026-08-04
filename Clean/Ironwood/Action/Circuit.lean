@@ -323,6 +323,55 @@ def configure (G : Generators) : Configure Fp Config := do
   let base ← configureBase
   configureChips G base
 
+@[simp] theorem configure_output_eccConfig (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig =
+      (Ecc.configure (configureBase.output counts).advices
+        (configureBase.output counts).lagrangeCoeffs
+        (configureBase.output counts).lookupConfig).output
+          (configureBase.finalCounts counts) := by
+  simp [configure, configureChips]
+
+/-- The fixed-column identities exported by the closed Action configuration. Keeping
+this allocation summary next to `configure` lets later lawfulness proofs reason about
+the small column interface without reducing the full gate stack. -/
+theorem configure_fixedColumn_indices (G : Generators) :
+    let cfg := (configure G).output {}
+    cfg.sinsemilla1.generatorTable.tableIdx.inner = ⟨0⟩ ∧
+    cfg.sinsemilla1.generatorTable.tableX.inner = ⟨1⟩ ∧
+    cfg.sinsemilla1.generatorTable.tableY.inner = ⟨2⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 0 = ⟨3⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 1 = ⟨4⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 2 = ⟨5⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 3 = ⟨6⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 4 = ⟨7⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 5 = ⟨8⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 6 = ⟨9⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 7 = ⟨10⟩ ∧
+    cfg.eccConfig.mulFixedShort.superConfig.fixedZ = ⟨11⟩ ∧
+    cfg.sinsemilla1.qS2 = ⟨12⟩ ∧
+    cfg.sinsemilla2.qS2 = ⟨13⟩ ∧
+    ((configure G).finalCounts {}).numFixedColumns = 14 := by
+  simp [configure, configureBase, configureChips, configureShared,
+    configureAdvices, configureAdviceEqualitiesLow,
+    configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
+    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure,
+    Poseidon.configure, Sinsemilla.HashPiece.configure,
+    Sinsemilla.Merkle.configure, CommitIvk.configure, NoteCommit.configure,
+    Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
+    Ecc.Add.add, Ecc.Mul.configure, Ecc.MulIncomplete.configure,
+    Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
+    Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+    Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure, CondSwap.configure,
+    Sinsemilla.Merkle.Gate.configure,
+    NoteCommit.DecomposeB.configure, NoteCommit.DecomposeD.configure,
+    NoteCommit.DecomposeE.configure, NoteCommit.DecomposeG.configure,
+    NoteCommit.DecomposeH.configure, NoteCommit.GdCanonicity.configure,
+    NoteCommit.PkdCanonicity.configure, NoteCommit.ValueCanonicity.configure,
+    NoteCommit.RhoCanonicity.configure, NoteCommit.PsiCanonicity.configure,
+    NoteCommit.YCanonicity.configure]
+
 private instance elaboratedConfigure (G : Generators) : ElaboratedConfigure (configure G) := by
   unfold configure
   infer_instance
@@ -344,6 +393,26 @@ private theorem configure_selectorRequirements (G : Generators) (counts) :
     Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
     DecomposeRunningSum.configure]
 
+private theorem configure_queryRequirements (G : Generators) (counts) :
+    (elaboratedConfigure G).queryRequirements counts := by
+  dsimp +instances only [configure_query_norm, configure, configureBase,
+    configureChips, configureShared]
+  simp +arith [configureBase, configureChips, configureShared,
+    configureAdvices, configureAdviceEqualitiesLow,
+    configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
+    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure,
+    LookupRangeCheck.rangeCheckLookup, Poseidon.configure,
+    Sinsemilla.HashPiece.configure, Sinsemilla.Merkle.configure,
+    CommitIvk.configure, NoteCommit.configure,
+    Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
+    Ecc.Add.add, Ecc.Mul.configure, Ecc.MulIncomplete.configure,
+    Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
+    Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+    Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure, Configure.finalCounts_numAdviceColumns,
+    Configure.finalCounts_numFixedColumns,
+    Configure.finalCounts_numInstanceColumns]
+
 /-- Reduced configure metadata shared by both Action synthesis bundles. Public
 instance-query and selector requirements are stored in their compact normal forms. -/
 @[reducible] def configureElaborated (G : Generators) :
@@ -355,7 +424,11 @@ instance-query and selector requirements are stored in their compact normal form
     selectorRequirements _ := True
     selectorsAllocated counts _ :=
       (elaboratedConfigure G).selectorsAllocated counts
-        (configure_selectorRequirements G counts) }
+        (configure_selectorRequirements G counts)
+    queryRequirements _ := True
+    queriesLawful counts _ :=
+      (elaboratedConfigure G).queriesLawful counts
+        (configure_queryRequirements G counts) }
 
 /-! ## Synthesize -/
 

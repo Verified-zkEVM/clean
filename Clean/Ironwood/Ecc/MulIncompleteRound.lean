@@ -69,7 +69,7 @@ column, and the boundary gates `q_mul_1`/`q_mul_3` tie the derived form to real 
 start/end. -/
 
 /-- `x_R = λ₁² − x_A − x_P` at `rot`. -/
-@[selector_free]
+@[selector_free, query_correct]
 def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let xP : Expression Fp Query := queryAdvice cfg.xP rot
@@ -78,7 +78,7 @@ def xRExpr (cfg : Config) (rot : Rotation) : Expression Fp Query :=
 
 /-- `y_a = (λ₁ + λ₂)(x_A − x_R) · TWO_INV` at `rot`. The trailing `TWO_INV = (2 : Fp)⁻¹` factor
 matches the compiled Rust gate (VK-faithful). -/
-@[selector_free]
+@[selector_free, query_correct]
 def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
   let xA : Expression Fp Query := queryAdvice cfg.xA rot
   let l1 : Expression Fp Query := queryAdvice cfg.lambda1 rot
@@ -87,7 +87,7 @@ def yA (cfg : Config) (rot : Rotation) : Expression Fp Query :=
 
 /-- Constraints used for `q_mul_{2,3} == 1`. `yANext` is the next-row `y_a`: derived
 (`yA cfg 1`) for `q_mul_2`, the witnessed final `y` for `q_mul_3`. -/
-@[selector_free]
+@[selector_free, query_correct]
 def forLoopPolys (cfg : Config) (yANext : Expression Fp Query) :
     List (String × Expression Fp Query) :=
   -- z_i
@@ -127,21 +127,21 @@ def forLoopPolys (cfg : Config) (yANext : Expression Fp Query) :
 derived next-row `y_a`. -/
 def qMul1Gate (cfg : Config) : Gate Fp :=
   -- `y_a(next)` is built before `y_a_witnessed` in the Rust closure, so the `Y_A` helper's
-  -- atoms (xA/λ₁/λ₂ @ next) register ahead of `λ₁ @ cur`.
+  -- atoms (xA/λ₁/λ₂/xP @ next) register ahead of `λ₁ @ cur`.
   Gate.withSelector "q_mul_1 == 1 checks" cfg.qMul1
     [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
-      queryAdvice cfg.lambda1 0 ] <|
+      queryAdvice cfg.xP 1, queryAdvice cfg.lambda1 0 ] <|
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     [("init y_a", yAWitnessed - yA cfg 1)]
 
 /-- The `q_mul_2` gate: `x_p`/`y_p` are constant on the next row, plus the shared loop body with the
 next-row `y_a` derived. -/
 def qMul2Gate (cfg : Config) : Gate Fp :=
-  -- `y_a(next)` registers xA/λ₁/λ₂ @ next first; then the closure's own `x_p`/`y_p` lets;
+  -- `y_a(next)` registers xA/λ₁/λ₂/xP @ next first; then the closure's own `x_p`/`y_p` lets;
   -- then `for_loop`'s queries (its cur-row atoms already deduped by the `Y_A`/`x_r` calls).
   Gate.withSelector "q_mul_2 == 1 checks" cfg.qMul2
     [ queryAdvice cfg.xA 1, queryAdvice cfg.lambda1 1, queryAdvice cfg.lambda2 1,
-      queryAdvice cfg.xP 0, queryAdvice cfg.xP 1, queryAdvice cfg.yP 0, queryAdvice cfg.yP 1,
+      queryAdvice cfg.xP 1, queryAdvice cfg.xP 0, queryAdvice cfg.yP 0, queryAdvice cfg.yP 1,
       queryAdvice cfg.z 0, queryAdvice cfg.z (-1), queryAdvice cfg.xA 0,
       queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let xPCur : Expression Fp Query := queryAdvice cfg.xP 0

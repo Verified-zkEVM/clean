@@ -232,25 +232,270 @@ theorem substSelectorMap_selectorFree (m : ℕ → Option SelCompress)
       simp [substSelectorMap, Expression.SelectorFree,
         Expression.selectorsCovered, iha, ihb, Bool.and_eq_true]
 
-/-! ## The query walk interprets its own layout
+/-! ## Query resolution preserves evaluation
 
-`eraseExpr` threads a `QueryState`; the index it hands an atom refers to the layout the
-walk *finishes* with (entries are only appended). `Interprets` says the evaluation
-families read a layout correctly; `Extends` is the append-only ordering that carries
-interpretation back to every intermediate state. -/
+`eraseExpr` resolves ordinary queries against a fixed `QueryState`. `Interprets` says the
+evaluation families read that layout correctly; `QueriesResolved` rules out the
+diagnostic out-of-range fallback used for malformed inputs. -/
 
-/-- `s'` extends `s`: every layout is a prefix. Walk steps only append. -/
-def QueryState.Extends (s' s : QueryState) : Prop :=
-  s.advice.toList <+: s'.advice.toList ∧ s.fixed.toList <+: s'.fixed.toList ∧
-    s.inst.toList <+: s'.inst.toList
+/-- A query has an authoritative slot in a projection layout. Selectors use their own
+pre-compression representation and need no ordinary-query slot. -/
+def QueryState.ResolvesQuery (s : QueryState) : Query → Prop
+  | .selector _ => True
+  | .advice column rotation => (column.index, rotation) ∈ s.advice
+  | .fixed column rotation => (column.index, rotation) ∈ s.fixed
+  | .instance column rotation => (column.index, rotation) ∈ s.inst
 
-theorem QueryState.Extends.refl (s : QueryState) : s.Extends s :=
-  ⟨List.prefix_refl _, List.prefix_refl _, List.prefix_refl _⟩
+/-- Every ordinary query in an expression resolves against the supplied layout. -/
+def Expression.QueriesResolved
+    (s : QueryState) : Expression F Query → Prop
+  | .var query => s.ResolvesQuery query
+  | .const _ => True
+  | .add left right =>
+      left.QueriesResolved s ∧ right.QueriesResolved s
+  | .mul left right =>
+      left.QueriesResolved s ∧ right.QueriesResolved s
 
-/-- Transitivity, staged as `s₃ ⊒ s₂ ⊒ s₁ → s₃ ⊒ s₁`. -/
-theorem QueryState.Extends.trans {s₁ s₂ s₃ : QueryState}
-    (h₂₁ : s₂.Extends s₁) (h₃₂ : s₃.Extends s₂) : s₃.Extends s₁ :=
-  ⟨h₂₁.1.trans h₃₂.1, h₂₁.2.1.trans h₃₂.2.1, h₂₁.2.2.trans h₃₂.2.2⟩
+omit [Field F] in
+private theorem queriesResolved_foldl_mul
+    (queries : QueryState) (factors : List (Expression F Query))
+    (accumulator : Expression F Query)
+    (haccumulator : accumulator.QueriesResolved queries)
+    (hfactors : ∀ factor ∈ factors, factor.QueriesResolved queries) :
+    (factors.foldl (· * ·) accumulator).QueriesResolved queries := by
+  induction factors generalizing accumulator with
+  | nil => exact haccumulator
+  | cons factor factors ih =>
+      rw [List.foldl_cons]
+      exact ih _ ⟨haccumulator, hfactors factor (by simp)⟩
+        (fun next hnext => hfactors next (by simp [hnext]))
+
+/-- A selector replacement resolves as soon as its packed fixed query does. -/
+theorem selReplacement_queriesResolved (description : SelCompress)
+    (queries : QueryState)
+    (hpacked : queries.ResolvesQuery (.fixed ⟨description.packedCol⟩ 0)) :
+    (selReplacement (F := F) description).QueriesResolved queries := by
+  unfold selReplacement
+  apply queriesResolved_foldl_mul queries
+  · exact hpacked
+  · intro factor hfactor
+    rw [List.mem_filterMap] at hfactor
+    obtain ⟨index, _, hresult⟩ := hfactor
+    by_cases hroot : index + 1 = description.assignedRoot
+    · simp [hroot] at hresult
+    · rw [if_neg hroot, Option.some_inj] at hresult
+      subst factor
+      simpa [Expression.QueriesResolved] using hpacked
+
+/-- Selector substitution preserves resolution when every replacement's packed query
+has been registered by selector compression. -/
+theorem substSelectorMap_queriesResolved
+    (map : ℕ → Option SelCompress) (queries : QueryState)
+    (expression : Expression F Query)
+    (hsource : expression.QueriesResolved queries)
+    (hpacked : ∀ selector description,
+      map selector = some description →
+        queries.ResolvesQuery (.fixed ⟨description.packedCol⟩ 0)) :
+    (substSelectorMap map expression).QueriesResolved queries := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector selector =>
+          simp only [substSelectorMap]
+          split
+          · rename_i description hdescription
+            exact selReplacement_queriesResolved description queries
+              (hpacked selector.index description hdescription)
+          · trivial
+      | advice | fixed | «instance» => exact hsource
+  | const => trivial
+  | add left right ihLeft ihRight
+  | mul left right ihLeft ihRight =>
+      exact ⟨ihLeft hsource.1, ihRight hsource.2⟩
+
+omit [Field F] in
+theorem ConfigureDelta.RegistersQuery.resolves_recordedQueries_apply
+    {delta : ConfigureDelta F} {counts : ConfigureCounts}
+    {initial : ConstraintSystem F} {query : Query}
+    (hquery : delta.RegistersQuery query) :
+    (recordedQueries (delta.apply initial counts)).ResolvesQuery query := by
+  cases query with
+  | selector => trivial
+  | advice column rotation =>
+      simp only [QueryState.ResolvesQuery, recordedQueries,
+        ConfigureDelta.apply, List.mem_toArray, List.mem_map]
+      exact ⟨(column, rotation),
+        (mem_appendFirstEncounters _ _ _).2 (Or.inr hquery), rfl⟩
+  | fixed column rotation =>
+      simp only [QueryState.ResolvesQuery, recordedQueries,
+        ConfigureDelta.apply, List.mem_toArray, List.mem_map]
+      exact ⟨(column, rotation),
+        (mem_appendFirstEncounters _ _ _).2 (Or.inr hquery), rfl⟩
+  | «instance» column rotation =>
+      simp only [QueryState.ResolvesQuery, recordedQueries,
+        ConfigureDelta.apply, List.mem_toArray, List.mem_map]
+      exact ⟨(column, rotation),
+        (mem_appendFirstEncounters _ _ _).2 (Or.inr hquery), rfl⟩
+
+omit [Field F] in
+theorem QueryState.ResolvesQuery.registerFixed
+    {queries : QueryState} {query : Query} (column : ℕ)
+    (hquery : queries.ResolvesQuery query) :
+    (queries.registerFixed column).ResolvesQuery query := by
+  cases query with
+  | selector => trivial
+  | advice | «instance» =>
+      unfold QueryState.registerFixed
+      split <;> exact hquery
+  | fixed queryColumn rotation =>
+      unfold QueryState.registerFixed
+      split
+      · exact hquery
+      · exact Array.mem_push_of_mem (column, 0) hquery
+
+omit [Field F] in
+theorem QueryState.ResolvesQuery.of_recorded_queryWalkInit
+    {cs : ConstraintSystem F} {map : SelCompressMap} {query : Query}
+    (hquery : (recordedQueries cs).ResolvesQuery query) :
+    (queryWalkInit map cs).ResolvesQuery query := by
+  unfold Halo2.queryWalkInit
+  have aux (indices : List ℕ) (state : QueryState)
+      (hquery : state.ResolvesQuery query) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).ResolvesQuery
+          query := by
+    induction indices generalizing state with
+    | nil => exact hquery
+    | cons index indices ih =>
+        rw [List.foldl_cons]
+        exact ih _ (hquery.registerFixed (cs.numFixedColumns + index))
+  exact aux _ _ hquery
+
+omit [Field F] in
+theorem recordedQueries_resolves_fixed_of_mem
+    {cs : ConstraintSystem F} {column : Column .fixed} {rotation : Rotation}
+    (hquery : (column, rotation) ∈ cs.fixedQueries) :
+    (recordedQueries cs).ResolvesQuery (.fixed column rotation) := by
+  simp only [QueryState.ResolvesQuery, recordedQueries,
+    List.mem_toArray, List.mem_map]
+  exact ⟨(column, rotation), hquery, rfl⟩
+
+omit [Field F] in
+/-- Every fixed query recorded by configure remains in the selector-compressed query
+layout. -/
+theorem queryWalkInit_resolves_fixed_of_mem
+    {cs : ConstraintSystem F} (map : SelCompressMap)
+    {column : Column .fixed} {rotation : Rotation}
+    (hquery : (column, rotation) ∈ cs.fixedQueries) :
+    (queryWalkInit map cs).ResolvesQuery (.fixed column rotation) :=
+  QueryState.ResolvesQuery.of_recorded_queryWalkInit
+    (recordedQueries_resolves_fixed_of_mem hquery)
+
+omit [Field F] in
+/-- Selector compression only appends fixed queries; it preserves the configure-recorded
+advice-query layout exactly. -/
+@[simp] theorem queryWalkInit_advice
+    (cs : ConstraintSystem F) (map : SelCompressMap) :
+    (queryWalkInit map cs).advice.toList =
+      cs.adviceQueries.map fun query => (query.1.index, query.2) := by
+  unfold queryWalkInit
+  have aux (indices : List ℕ) (state : QueryState) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).advice =
+        state.advice := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons index indices ih =>
+        rw [List.foldl_cons, ih]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  rw [congrArg Array.toList (aux _ _)]
+  simp [recordedQueries]
+
+omit [Field F] in
+/-- Selector compression only appends fixed queries; it preserves the configure-recorded
+instance-query layout exactly. -/
+@[simp] theorem queryWalkInit_instance
+    (cs : ConstraintSystem F) (map : SelCompressMap) :
+    (queryWalkInit map cs).inst.toList =
+      cs.instanceQueries.map fun query => (query.1.index, query.2) := by
+  unfold queryWalkInit
+  have aux (indices : List ℕ) (state : QueryState) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).inst =
+        state.inst := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons index indices ih =>
+        rw [List.foldl_cons, ih]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  rw [congrArg Array.toList (aux _ _)]
+  simp [recordedQueries]
+
+omit [Field F] in
+private theorem QueryState.registerFixed_fixed_forall
+    (queries : QueryState) (bound column : ℕ)
+    (hqueries : queries.fixed.toList.Forall fun query => query.1 < bound)
+    (hcolumn : column < bound) :
+    (queries.registerFixed column).fixed.toList.Forall fun query =>
+      query.1 < bound := by
+  unfold QueryState.registerFixed
+  split
+  · exact hqueries
+  · simpa using And.intro hqueries hcolumn
+
+omit [Field F] in
+/-- The query projection contains only configure-recorded fixed columns and the packed
+selector suffix. -/
+theorem queryWalkInit_fixedQueries_bounded
+    (cs : ConstraintSystem F) (map : SelCompressMap)
+    (hrecorded : cs.fixedQueries.Forall fun query =>
+      query.1.index < cs.numFixedColumns) :
+    (queryWalkInit map cs).fixed.toList.Forall fun query =>
+      query.1 < cs.numFixedColumns + map.newFixedCols := by
+  unfold queryWalkInit
+  have hinitial : (recordedQueries cs).fixed.toList.Forall fun query =>
+      query.1 < cs.numFixedColumns + map.newFixedCols := by
+    have hlist : (recordedQueries cs).fixed.toList =
+        cs.fixedQueries.map fun query => (query.1.index, query.2) := by
+      simp [recordedQueries]
+    rw [hlist, List.forall_map_iff]
+    exact hrecorded.imp fun query hquery =>
+      hquery.trans_le (Nat.le_add_right _ _)
+  have aux (indices : List ℕ) (state : QueryState)
+      (hindices : indices.Forall (· < map.newFixedCols))
+      (hstate : state.fixed.toList.Forall fun query =>
+        query.1 < cs.numFixedColumns + map.newFixedCols) :
+      (indices.foldl (fun current index =>
+        current.registerFixed (cs.numFixedColumns + index)) state).fixed.toList.Forall
+          fun query => query.1 < cs.numFixedColumns + map.newFixedCols := by
+    induction indices generalizing state with
+    | nil => exact hstate
+    | cons index indices ih =>
+        rw [List.foldl_cons, List.forall_cons] at *
+        apply ih _ hindices.2
+        exact state.registerFixed_fixed_forall _ _ hstate
+          (Nat.add_lt_add_left hindices.1 _)
+  apply aux _ _ (List.forall_iff_forall_mem.mpr fun index hindex => ?_) hinitial
+  exact List.mem_range.mp hindex
+
+omit [Field F] in
+/-- Configure-time semantic registration gives read-only projection resolution. -/
+theorem Expression.QueriesRegistered.queriesResolved_queryWalkInit_apply
+    {delta : ConfigureDelta F} {counts : ConfigureCounts}
+    {initial : ConstraintSystem F} (map : SelCompressMap)
+    {expression : Expression F Query}
+    (hregistered : expression.QueriesRegistered delta) :
+    expression.QueriesResolved
+      (queryWalkInit map (delta.apply initial counts)) := by
+  induction expression with
+  | var query =>
+      exact hregistered.resolves_recordedQueries_apply
+        |>.of_recorded_queryWalkInit
+  | const => trivial
+  | add _ _ ihLeft ihRight | mul _ _ ihLeft ihRight =>
+      exact ⟨ihLeft hregistered.1, ihRight hregistered.2⟩
 
 /-- The families `fE`/`aE`/`iE` interpret `s`'s query layouts against the valuation `v`:
 index `i` of a layout reads the same value as its registered `(column, rotation)` query. -/
@@ -258,23 +503,6 @@ structure Interprets (s : QueryState) (fE aE iE : ℕ → F) (v : Query → F) :
   advice : ∀ (i c : ℕ) (r : ℤ), s.advice[i]? = some (c, r) → aE i = v (.advice ⟨c⟩ r)
   fixed : ∀ (i c : ℕ) (r : ℤ), s.fixed[i]? = some (c, r) → fE i = v (.fixed ⟨c⟩ r)
   inst : ∀ (i c : ℕ) (r : ℤ), s.inst[i]? = some (c, r) → iE i = v (.instance ⟨c⟩ r)
-
-private theorem getElem?_of_prefix {l l' : List (ℕ × ℤ)} (h : l <+: l') {i : ℕ}
-    {p : ℕ × ℤ} (hp : l[i]? = some p) : l'[i]? = some p := by
-  obtain ⟨t, rfl⟩ := h
-  have hlt : i < l.length := (List.getElem?_eq_some_iff.mp hp).1
-  rwa [List.getElem?_append_left hlt]
-
-omit [Field F] in
-/-- Interpretation restricts along `Extends`: prefixes agree entrywise. -/
-theorem Interprets.mono {s s' : QueryState} {fE aE iE : ℕ → F} {v : Query → F}
-    (hint : Interprets s' fE aE iE v) (hext : s'.Extends s) : Interprets s fE aE iE v where
-  advice i c r h := hint.advice i c r (by
-    rw [← Array.getElem?_toList] at h ⊢; exact getElem?_of_prefix hext.1 h)
-  fixed i c r h := hint.fixed i c r (by
-    rw [← Array.getElem?_toList] at h ⊢; exact getElem?_of_prefix hext.2.1 h)
-  inst i c r h := hint.inst i c r (by
-    rw [← Array.getElem?_toList] at h ⊢; exact getElem?_of_prefix hext.2.2 h)
 
 /-! ### Registration correctness of the three index lookups -/
 
@@ -286,53 +514,109 @@ private theorem findQuery_spec {arr : Array (ℕ × ℤ)} {c : ℕ} {r : ℤ} {i
   rw [Array.getElem?_eq_some_iff]
   exact ⟨hlt, Prod.ext h1 h2⟩
 
-private theorem advIdx_spec (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.advIdx c r).2).advice[(s.advIdx c r).1]? = some (c, r) := by
+omit [Field F] in
+theorem QueryState.registerFixed_resolves
+    (queries : QueryState) (column : ℕ) :
+    (queries.registerFixed column).ResolvesQuery (.fixed ⟨column⟩ 0) := by
+  unfold QueryState.registerFixed
+  split
+  · rename_i hexisting
+    simp only [QueryState.ResolvesQuery]
+    have hspec := Array.getElem?_eq_some_iff.mp
+      (findQuery_spec hexisting)
+    rw [← hspec.2]
+    exact Array.getElem_mem hspec.1
+  · simp [QueryState.ResolvesQuery]
+
+omit [Field F] in
+theorem queryWalkInit_resolves_packedColumn
+    (cs : ConstraintSystem F) (map : SelCompressMap) {index : ℕ}
+    (hindex : index < map.newFixedCols) :
+    (queryWalkInit map cs).ResolvesQuery
+      (.fixed ⟨cs.numFixedColumns + index⟩ 0) := by
+  unfold queryWalkInit
+  have hmem : index ∈ List.range map.newFixedCols :=
+    List.mem_range.mpr hindex
+  have preserve (indices : List ℕ) (queries : QueryState)
+      {query : Query} (hquery : queries.ResolvesQuery query) :
+      (indices.foldl (fun state next => state.registerFixed
+        (cs.numFixedColumns + next)) queries).ResolvesQuery query := by
+    induction indices generalizing queries with
+    | nil => exact hquery
+    | cons next indices ih =>
+        rw [List.foldl_cons]
+        exact ih _ (hquery.registerFixed (cs.numFixedColumns + next))
+  have aux (indices : List ℕ) (queries : QueryState)
+      (hmem : index ∈ indices) :
+      (indices.foldl (fun state next => state.registerFixed
+        (cs.numFixedColumns + next)) queries).ResolvesQuery
+          (.fixed ⟨cs.numFixedColumns + index⟩ 0) := by
+    induction indices generalizing queries with
+    | nil => simp at hmem
+    | cons next indices ih =>
+        rw [List.foldl_cons]
+        rw [List.mem_cons] at hmem
+        rcases hmem with rfl | hmem
+        · exact preserve indices _
+            (queries.registerFixed_resolves (cs.numFixedColumns + index))
+        · exact ih _ hmem
+  exact aux _ _ hmem
+
+omit [Field F] in
+theorem queryWalkInit_resolves_deriveSelCompressMap_lookup
+    (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ × ℕ))
+    {selector : ℕ} {compressed : SelCompress}
+    (hlookup : (deriveSelCompressMap cs n acts).lookup selector =
+      some compressed) :
+    (queryWalkInit (deriveSelCompressMap cs n acts) cs).ResolvesQuery
+      (.fixed ⟨compressed.packedCol⟩ 0) := by
+  obtain ⟨index, hindex, hcolumn⟩ :=
+    deriveSelCompressMap_lookup_packedColumn cs n acts hlookup
+  rw [hcolumn]
+  exact queryWalkInit_resolves_packedColumn cs
+    (deriveSelCompressMap cs n acts) hindex
+
+private theorem advIdx_spec (s : QueryState) (c : ℕ) (r : ℤ)
+    (hregistered : (c, r) ∈ s.advice) :
+    s.advice[s.advIdx c r]? = some (c, r) := by
   unfold QueryState.advIdx
   cases hf : findQuery s.advice c r with
   | some i => simpa using findQuery_spec hf
-  | none => simp
+  | none =>
+      have hnone : s.advice.findIdx?
+          (fun pair => pair.1 = c ∧ pair.2 = r) = none := by
+        simpa [findQuery] using hf
+      have hfalse := Array.findIdx?_eq_none_iff.mp hnone
+        (c, r) hregistered
+      simp at hfalse
 
-private theorem fixIdx_spec (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.fixIdx c r).2).fixed[(s.fixIdx c r).1]? = some (c, r) := by
+private theorem fixIdx_spec (s : QueryState) (c : ℕ) (r : ℤ)
+    (hregistered : (c, r) ∈ s.fixed) :
+    s.fixed[s.fixIdx c r]? = some (c, r) := by
   unfold QueryState.fixIdx
   cases hf : findQuery s.fixed c r with
   | some i => simpa using findQuery_spec hf
-  | none => simp
+  | none =>
+      have hnone : s.fixed.findIdx?
+          (fun pair => pair.1 = c ∧ pair.2 = r) = none := by
+        simpa [findQuery] using hf
+      have hfalse := Array.findIdx?_eq_none_iff.mp hnone
+        (c, r) hregistered
+      simp at hfalse
 
-private theorem instIdx_spec (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.instIdx c r).2).inst[(s.instIdx c r).1]? = some (c, r) := by
+private theorem instIdx_spec (s : QueryState) (c : ℕ) (r : ℤ)
+    (hregistered : (c, r) ∈ s.inst) :
+    s.inst[s.instIdx c r]? = some (c, r) := by
   unfold QueryState.instIdx
   cases hf : findQuery s.inst c r with
   | some i => simpa using findQuery_spec hf
-  | none => simp
-
-private theorem advIdx_extends (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.advIdx c r).2).Extends s := by
-  unfold QueryState.advIdx
-  cases findQuery s.advice c r with
-  | some i => exact QueryState.Extends.refl s
   | none =>
-      exact ⟨by simp only [Array.toList_push]; exact List.prefix_append _ _,
-        List.prefix_refl _, List.prefix_refl _⟩
-
-private theorem fixIdx_extends (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.fixIdx c r).2).Extends s := by
-  unfold QueryState.fixIdx
-  cases findQuery s.fixed c r with
-  | some i => exact QueryState.Extends.refl s
-  | none =>
-      exact ⟨List.prefix_refl _,
-        by simp only [Array.toList_push]; exact List.prefix_append _ _, List.prefix_refl _⟩
-
-private theorem instIdx_extends (s : QueryState) (c : ℕ) (r : ℤ) :
-    ((s.instIdx c r).2).Extends s := by
-  unfold QueryState.instIdx
-  cases findQuery s.inst c r with
-  | some i => exact QueryState.Extends.refl s
-  | none =>
-      exact ⟨List.prefix_refl _, List.prefix_refl _,
-        by simp only [Array.toList_push]; exact List.prefix_append _ _⟩
+      have hnone : s.inst.findIdx?
+          (fun pair => pair.1 = c ∧ pair.2 = r) = none := by
+        simpa [findQuery] using hf
+      have hfalse := Array.findIdx?_eq_none_iff.mp hnone
+        (c, r) hregistered
+      simp at hfalse
 
 variable [DecidableEq F]
 
@@ -345,7 +629,7 @@ turn them into plain unfolding equations by splitting the guarded subterm's head
 private theorem eraseExpr_mulConstant (e : Expression F Query) (c : F) (s : QueryState)
     (he : ∀ c' : F, e = .const c' → False) :
     eraseExpr (.mul e (.mul (.const c) (.const 1))) s
-      = ((eraseExpr e s).1.product (.constant c), (eraseExpr e s).2) := by
+      = (eraseExpr e s).product (.constant c) := by
   cases e with
   | const c' => exact absurd rfl (he c')
   | var q => simp only [eraseExpr, if_true]
@@ -355,9 +639,8 @@ private theorem eraseExpr_mulConstant (e : Expression F Query) (c : F) (s : Quer
 private theorem eraseExpr_mul_const_mul_const_of_ne_one (e : Expression F Query) (c one : F)
     (s : QueryState) (he : ∀ c' : F, e = .const c' → False) (hone : ¬one = 1) :
     eraseExpr (.mul e (.mul (.const c) (.const one))) s
-      = ((eraseExpr e s).1.product
-          (eraseExpr (.mul (.const c) (.const one)) (eraseExpr e s).2).1,
-         (eraseExpr (.mul (.const c) (.const one)) (eraseExpr e s).2).2) := by
+      = (eraseExpr e s).product
+          (eraseExpr (.mul (.const c) (.const one)) s) := by
   cases e with
   | const c' => exact absurd rfl (he c')
   | var q => simp only [eraseExpr, if_neg hone]
@@ -367,7 +650,7 @@ private theorem eraseExpr_mul_const_mul_const_of_ne_one (e : Expression F Query)
 private theorem eraseExpr_mul_const (e : Expression F Query) (c : F) (s : QueryState)
     (he : ∀ c' : F, e = .const c' → False) :
     eraseExpr (.mul e (.const c)) s
-      = ((eraseExpr e s).1.scaled c, (eraseExpr e s).2) := by
+      = (eraseExpr e s).scaled c := by
   cases e with
   | const c' => exact absurd rfl (he c')
   | var q => simp only [eraseExpr]
@@ -379,8 +662,7 @@ private theorem eraseExpr_mul (a b : Expression F Query) (s : QueryState)
     (hb1 : ∀ c one : F, b = .mul (.const c) (.const one) → False)
     (hb2 : ∀ c : F, b = .const c → False) :
     eraseExpr (.mul a b) s
-      = ((eraseExpr a s).1.product (eraseExpr b (eraseExpr a s).2).1,
-         (eraseExpr b (eraseExpr a s).2).2) := by
+      = (eraseExpr a s).product (eraseExpr b s) := by
   cases a with
   | const c => exact absurd rfl (ha c)
   | var qa =>
@@ -432,123 +714,76 @@ private theorem eraseExpr_mul (a b : Expression F Query) (s : QueryState)
           | add _ _ => simp only [eraseExpr]
           | mul _ _ => simp only [eraseExpr]
 
-/-- The walk only appends: `eraseExpr`'s output state extends its input state. -/
-theorem eraseExpr_extends (e : Expression F Query) (s : QueryState) :
-    ((eraseExpr e s).2).Extends s := by
-  induction e, s using eraseExpr.induct with
-  | case1 c s => exact QueryState.Extends.refl s
-  | case2 sel s => exact QueryState.Extends.refl s
-  | case3 col rot s i s₁ heq =>
-      have := advIdx_extends s col.index rot
-      simpa [eraseExpr, heq] using this
-  | case4 col rot s i s₁ heq =>
-      have := fixIdx_extends s col.index rot
-      simpa [eraseExpr, heq] using this
-  | case5 col rot s i s₁ heq =>
-      have := instIdx_extends s col.index rot
-      simpa [eraseExpr, heq] using this
-  | case6 e s e' s₁ heq ih =>
-      simpa only [eraseExpr, if_true, heq] using ih
-  | case7 c e s hc e' s₁ heq ih =>
-      simpa only [eraseExpr, if_neg hc, heq] using ih
-  | case8 e c s he e' s₁ heq ih =>
-      rw [eraseExpr_mulConstant e c s he]
-      exact ih
-  | case9 e c one s he hone e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      rw [eraseExpr_mul_const_mul_const_of_ne_one e c one s he hone]
-      simp only [heq] at ih₁ ⊢
-      exact QueryState.Extends.trans ih₁ ih₂
-  | case10 e c s he e' s₁ heq ih =>
-      rw [eraseExpr_mul_const e c s he]
-      exact ih
-  | case11 a b s e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      simp only [eraseExpr]
-      simp only [heq] at ih₁ ⊢
-      exact QueryState.Extends.trans ih₁ ih₂
-  | case12 a b s ha hb1 hb2 e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      rw [eraseExpr_mul a b s ha hb1 hb2]
-      simp only [heq] at ih₁ ⊢
-      exact QueryState.Extends.trans ih₁ ih₂
-
-/-- **Erasure preserves evaluation.** If the evaluation families interpret the layout of
-any state extending the walk's output — in practice the whole-circuit walk's final state
-— then the erased selector-free expression evaluates to the original at `v`. -/
+/-- **Erasure preserves evaluation.** If every query resolves against the interpreted
+layout, erasing a selector-free expression preserves its value. -/
 theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
-    (e : Expression F Query) (s sfin : QueryState)
+    (e : Expression F Query) (queries : QueryState)
     (hfree : e.SelectorFree)
-    (hext : sfin.Extends (eraseExpr e s).2)
-    (hint : Interprets sfin fE aE iE v) :
-    RichExpression.eval fE aE iE (eraseExpr e s).1 = e.eval v := by
-  induction e, s using eraseExpr.induct with
-  | case1 c s => rfl
-  | case2 sel s => simp [Expression.SelectorFree] at hfree
-  | case3 col rot s i s₁ heq =>
-      show RichExpression.eval fE aE iE (.advice (s.advIdx col.index rot).1)
-        = v (.advice col rot)
-      have hspec := advIdx_spec s col.index rot
-      have := (hint.mono (by simpa [eraseExpr, heq] using hext)).advice
-        (s.advIdx col.index rot).1 col.index rot (by rw [heq] at hspec ⊢; exact hspec)
-      simpa using this
-  | case4 col rot s i s₁ heq =>
-      show RichExpression.eval fE aE iE (.fixed (s.fixIdx col.index rot).1)
-        = v (.fixed col rot)
-      have hspec := fixIdx_spec s col.index rot
-      have := (hint.mono (by simpa [eraseExpr, heq] using hext)).fixed
-        (s.fixIdx col.index rot).1 col.index rot (by rw [heq] at hspec ⊢; exact hspec)
-      simpa using this
-  | case5 col rot s i s₁ heq =>
-      show RichExpression.eval fE aE iE (.instance (s.instIdx col.index rot).1)
-        = v (.instance col rot)
-      have hspec := instIdx_spec s col.index rot
-      have := (hint.mono (by simpa [eraseExpr, heq] using hext)).inst
-        (s.instIdx col.index rot).1 col.index rot (by rw [heq] at hspec ⊢; exact hspec)
-      simpa using this
-  | case6 e s e' s₁ heq ih =>
-      simp only [eraseExpr, if_true] at hext ⊢
+    (hresolved : e.QueriesResolved queries)
+    (hint : Interprets queries fE aE iE v) :
+    RichExpression.eval fE aE iE (eraseExpr e queries) = e.eval v := by
+  induction e, queries using eraseExpr.induct with
+  | case1 c queries => rfl
+  | case2 sel queries => simp [Expression.SelectorFree] at hfree
+  | case3 col rot queries =>
+      exact hint.advice (queries.advIdx col.index rot) col.index rot
+        (advIdx_spec queries col.index rot hresolved)
+  | case4 col rot queries =>
+      exact hint.fixed (queries.fixIdx col.index rot) col.index rot
+        (fixIdx_spec queries col.index rot hresolved)
+  | case5 col rot queries =>
+      exact hint.inst (queries.instIdx col.index rot) col.index rot
+        (instIdx_spec queries col.index rot hresolved)
+  | case6 e queries ih =>
       simp only [Expression.SelectorFree, true_and] at hfree
-      rw [RichExpression.eval, ih hfree hext,
+      simp only [Expression.QueriesResolved, true_and] at hresolved
+      simp only [eraseExpr, if_true]
+      rw [RichExpression.eval, ih hfree hresolved hint,
         show (Expression.mul (.const (-1)) e).eval v = -1 * e.eval v from rfl]
       ring
-  | case7 c e s hc e' s₁ heq ih =>
-      simp only [eraseExpr, if_neg hc] at hext ⊢
+  | case7 c e queries hc ih =>
       simp only [Expression.SelectorFree, true_and] at hfree
-      rw [RichExpression.eval, RichExpression.eval, ih hfree hext]
+      simp only [Expression.QueriesResolved, true_and] at hresolved
+      simp only [eraseExpr, if_neg hc]
+      rw [RichExpression.eval, RichExpression.eval, ih hfree hresolved hint]
       rfl
-  | case8 e c s he e' s₁ heq ih =>
-      rw [eraseExpr_mulConstant e c s he] at hext ⊢
+  | case8 e c queries he ih =>
+      rw [eraseExpr_mulConstant e c queries he]
       simp only [Expression.SelectorFree, and_true] at hfree
-      rw [RichExpression.eval, RichExpression.eval, ih hfree hext,
+      simp only [Expression.QueriesResolved, and_true] at hresolved
+      rw [RichExpression.eval, RichExpression.eval, ih hfree hresolved hint,
         show (Expression.mul e (.mul (.const c) (.const 1))).eval v
           = e.eval v * (c * 1) from rfl]
       ring
-  | case9 e c one s he hone e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      rw [eraseExpr_mul_const_mul_const_of_ne_one e c one s he hone] at hext ⊢
-      simp only [heq] at hext ih₁ ⊢
+  | case9 e c one queries he hone ih₁ ih₂ =>
+      rw [eraseExpr_mul_const_mul_const_of_ne_one e c one queries he hone]
       simp only [Expression.SelectorFree, and_true] at hfree
+      simp only [Expression.QueriesResolved, and_true] at hresolved
       simp only [RichExpression.eval]
-      rw [ih₁ hfree (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
-        ih₂ (by simp [Expression.SelectorFree]) hext]
+      rw [ih₁ hfree hresolved hint,
+        ih₂ (by simp [Expression.SelectorFree])
+          (by simp [Expression.QueriesResolved]) hint]
       rfl
-  | case10 e c s he e' s₁ heq ih =>
-      rw [eraseExpr_mul_const e c s he] at hext ⊢
+  | case10 e c queries he ih =>
+      rw [eraseExpr_mul_const e c queries he]
       simp only [Expression.SelectorFree, and_true] at hfree
-      rw [RichExpression.eval, ih hfree hext]
+      simp only [Expression.QueriesResolved, and_true] at hresolved
+      rw [RichExpression.eval, ih hfree hresolved hint]
       rfl
-  | case11 a b s e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      simp only [eraseExpr] at hext ⊢
-      simp only [heq] at hext ih₁ ⊢
+  | case11 a b queries ih₁ ih₂ =>
       simp only [Expression.SelectorFree] at hfree
-      simp only [RichExpression.eval]
-      rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
-        ih₂ hfree.2 hext]
+      simp only [Expression.QueriesResolved] at hresolved
+      simp only [eraseExpr, RichExpression.eval]
+      rw [ih₁ hfree.1 hresolved.1 hint,
+        ih₂ hfree.2 hresolved.2 hint]
       rfl
-  | case12 a b s ha hb1 hb2 e' s₁ heq e'' s₂ heq₂ ih₁ ih₂ =>
-      rw [eraseExpr_mul a b s ha hb1 hb2] at hext ⊢
-      simp only [heq] at hext ih₁ ⊢
+  | case12 a b queries ha hb1 hb2 ih₁ ih₂ =>
+      rw [eraseExpr_mul a b queries ha hb1 hb2]
       simp only [Expression.SelectorFree] at hfree
+      simp only [Expression.QueriesResolved] at hresolved
       simp only [RichExpression.eval]
-      rw [ih₁ hfree.1 (QueryState.Extends.trans (eraseExpr_extends _ _) hext),
-        ih₂ hfree.2 hext]
+      rw [ih₁ hfree.1 hresolved.1 hint,
+        ih₂ hfree.2 hresolved.2 hint]
       rfl
 
 /-! ## The composed per-gate step -/
@@ -558,60 +793,38 @@ families interpreting the walk's layout — the result is the original gate expr
 the selector-replacement valuation. -/
 theorem eraseExpr_substSelectorMap_eval (m : ℕ → Option SelCompress)
     (fE aE iE : ℕ → F) (v : Query → F)
-    (p : Expression F Query) (s sfin : QueryState)
+    (p : Expression F Query) (queries : QueryState)
     (hcov : p.selectorsCovered (fun i => (m i).isSome) = true)
-    (hext : sfin.Extends (eraseExpr (substSelectorMap m p) s).2)
-    (hint : Interprets sfin fE aE iE v) :
-    RichExpression.eval fE aE iE (eraseExpr (substSelectorMap m p) s).1
+    (hresolved : (substSelectorMap m p).QueriesResolved queries)
+    (hint : Interprets queries fE aE iE v) :
+    RichExpression.eval fE aE iE (eraseExpr (substSelectorMap m p) queries)
       = p.eval (substValuation m v) := by
-  rw [eraseExpr_eval fE aE iE v _ s sfin
-      ((substSelectorMap_selectorFree m p).2 hcov) hext hint,
+  rw [eraseExpr_eval fE aE iE v _ queries
+      ((substSelectorMap_selectorFree m p).2 hcov) hresolved hint,
     substSelectorMap_eval]
 
-/-! ## Threading the erasure lemmas through the gate list -/
-
-/-- The gate-list walk only appends: `eraseGates`' output state extends its input. -/
-theorem eraseGates_extends (ps : List (Expression F Query)) (s : QueryState) :
-    ((eraseGates ps s).2).Extends s := by
-  induction ps generalizing s with
-  | nil => exact QueryState.Extends.refl s
-  | cons p ps ih =>
-      simp only [eraseGates]
-      exact QueryState.Extends.trans (eraseExpr_extends p s) (ih (eraseExpr p s).2)
+/-! ## Lifting erasure to the gate list -/
 
 /-- The walk erases gate lists length-preservingly. -/
 theorem eraseGates_length (ps : List (Expression F Query)) (s : QueryState) :
-    (eraseGates ps s).1.length = ps.length := by
-  induction ps generalizing s with
-  | nil => rfl
-  | cons p ps ih => simp only [eraseGates, List.length_cons, ih]
+    (eraseGates ps s).length = ps.length := by
+  simp [eraseGates]
 
 /-- **Erasure preserves evaluation, gate-list form.** Each erased gate evaluates to its
-source expression, position by position, when the families interpret a state extending
-the walk's output. -/
+source expression position by position. -/
 theorem eraseGates_eval (fE aE iE : ℕ → F) (v : Query → F)
-    (ps : List (Expression F Query)) (s sfin : QueryState)
+    (ps : List (Expression F Query)) (queries : QueryState)
     (hfree : ∀ p ∈ ps, p.SelectorFree)
-    (hext : sfin.Extends (eraseGates ps s).2)
-    (hint : Interprets sfin fE aE iE v) :
-    ∀ (j : ℕ) (_h1 : j < (eraseGates ps s).1.length) (_h2 : j < ps.length),
-      RichExpression.eval fE aE iE (eraseGates ps s).1[j] = Expression.eval v ps[j] := by
-  induction ps generalizing s with
-  | nil => exact fun j _ h2 => absurd h2 (Nat.not_lt_zero j)
-  | cons p ps ih =>
-      intro j h1 h2
-      simp only [eraseGates] at hext h1 ⊢
-      cases j with
-      | zero =>
-          simp only [List.getElem_cons_zero]
-          exact eraseExpr_eval fE aE iE v p s sfin
-            (hfree p (List.mem_cons_self ..))
-            (QueryState.Extends.trans (eraseGates_extends ps (eraseExpr p s).2) hext) hint
-      | succ j =>
-          simp only [List.getElem_cons_succ]
-          exact ih (eraseExpr p s).2
-            (fun q hq => hfree q (List.mem_cons_of_mem p hq)) hext
-            j (by simpa using h1) (by simpa using h2)
+    (hresolved : ∀ p ∈ ps, p.QueriesResolved queries)
+    (hint : Interprets queries fE aE iE v) :
+    ∀ (j : ℕ) (_h1 : j < (eraseGates ps queries).length) (_h2 : j < ps.length),
+      RichExpression.eval fE aE iE (eraseGates ps queries)[j] =
+        Expression.eval v ps[j] := by
+  intro j hprojected hsource
+  simp only [eraseGates, List.getElem_map]
+  exact eraseExpr_eval fE aE iE v ps[j] queries
+    (hfree ps[j] (List.getElem_mem hsource))
+    (hresolved ps[j] (List.getElem_mem hsource)) hint
 
 /-! ## Semantics of the derived record -/
 
@@ -620,8 +833,8 @@ configure-recorded walk state. -/
 theorem PinnedConstraintSystem.derive_gates (cs : ConstraintSystem F)
     (map : SelCompressMap) :
     (PinnedConstraintSystem.derive cs map).gates
-      = (eraseGates ((flatGates cs).map (substSelectorMap map.lookup))
-          (queryWalkInit map cs)).1 := by
+      = eraseGates ((flatGates cs).map (substSelectorMap map.lookup))
+          (queryWalkInit map cs) := by
   simp only [PinnedConstraintSystem.derive, projectCS]
 
 /-- The derived record has one gate polynomial per flattened source gate. -/
@@ -637,9 +850,10 @@ theorem PinnedConstraintSystem.derive_gates_eval (cs : ConstraintSystem F)
     (map : SelCompressMap) (fE aE iE : ℕ → F) (v : Query → F)
     (hcov : ∀ p ∈ flatGates cs,
       p.selectorsCovered (fun i => (map.lookup i).isSome) = true)
-    (hint : Interprets
-      (eraseGates ((flatGates cs).map (substSelectorMap map.lookup))
-        (queryWalkInit map cs)).2 fE aE iE v)
+    (hresolved : ∀ p ∈ flatGates cs,
+      (substSelectorMap map.lookup p).QueriesResolved
+        (queryWalkInit map cs))
+    (hint : Interprets (queryWalkInit map cs) fE aE iE v)
     (j : ℕ) (hg : j < (PinnedConstraintSystem.derive cs map).gates.length)
     (hp : j < (flatGates cs).length) :
     RichExpression.eval fE aE iE (PinnedConstraintSystem.derive cs map).gates[j]
@@ -651,8 +865,11 @@ theorem PinnedConstraintSystem.derive_gates_eval (cs : ConstraintSystem F)
     exact (substSelectorMap_selectorFree _ q).2 (hcov q hq)
   rw [List.getElem_of_eq (PinnedConstraintSystem.derive_gates cs map) hg]
   have h := eraseGates_eval fE aE iE v
-    ((flatGates cs).map (substSelectorMap map.lookup)) (queryWalkInit map cs) _ hfree
-    (QueryState.Extends.refl _) hint j
+    ((flatGates cs).map (substSelectorMap map.lookup)) (queryWalkInit map cs)
+    hfree (by
+      intro p hp'
+      obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp'
+      exact hresolved q hq) hint j
     ((PinnedConstraintSystem.derive_gates cs map) ▸ hg) (by simpa using hp)
   rw [List.getElem_map, substSelectorMap_eval] at h
   exact h

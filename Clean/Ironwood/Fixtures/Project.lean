@@ -26,17 +26,16 @@ open Halo2
 flatten gates, run the query walk + erasure starting from the configure-recorded query
 layouts, erase the lookups, read the counts. Simple selectors survive as `.selector`. -/
 def projectCS (cs : ConstraintSystem Fp) : CsFixture :=
-  let (gates, s) := eraseGates (flatGates cs) (recordedQueries cs)
-  let (lookups, s) := eraseLookups cs.lookups s
+  let queries := recordedQueries cs
   { numAdviceColumns := cs.numAdviceColumns
     numFixedColumns := cs.numFixedColumns
     numInstanceColumns := cs.numInstanceColumns
     numSelectors := cs.numSelectors
-    adviceQueryLayout := s.advice.toList
-    fixedQueryLayout := s.fixed.toList
-    instanceQueryLayout := s.inst.toList
-    gates := gates
-    lookups := lookups }
+    adviceQueryLayout := queries.advice.toList
+    fixedQueryLayout := queries.fixed.toList
+    instanceQueryLayout := queries.inst.toList
+    gates := eraseGates (flatGates cs) queries
+    lookups := eraseLookups cs.lookups queries }
 
 /-! ## Post-compression projection (single-selector gadget)
 
@@ -62,17 +61,15 @@ by 1, then run the same walk seeded with the packed column's fixed query. -/
 def projectCSPost (cs : ConstraintSystem Fp) : CsFixture :=
   let packedCol := cs.numFixedColumns
   let polys := (flatGates cs).map (substSelector packedCol)
-  let s0 := recordedQueries cs
-  let s0 := (s0.fixIdx packedCol 0).2
-  let (gates, s) := eraseGates polys s0
+  let queries := (recordedQueries cs).registerFixed packedCol
   { numAdviceColumns := cs.numAdviceColumns
     numFixedColumns := cs.numFixedColumns + 1
     numInstanceColumns := cs.numInstanceColumns
     numSelectors := cs.numSelectors
-    adviceQueryLayout := s.advice.toList
-    fixedQueryLayout := s.fixed.toList
-    instanceQueryLayout := s.inst.toList
-    gates := gates }
+    adviceQueryLayout := queries.advice.toList
+    fixedQueryLayout := queries.fixed.toList
+    instanceQueryLayout := queries.inst.toList
+    gates := eraseGates polys queries }
 
 /-- Project the post-compression CS with a Rust-dumped selector-compression map — exactly
 the Clean-core `Halo2.projectCS`: substitute every selector (in gates and lookups) by its
