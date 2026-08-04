@@ -26,7 +26,7 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 
 /-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
-private def bitsVal (a : Var (fields 32) (F p)) : Witgen.UExpr (F p) :=
+private def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 

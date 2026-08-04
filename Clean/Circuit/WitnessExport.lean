@@ -76,7 +76,7 @@ def FExpr.listToJson : List (FExpr F) → List Json
   | [] => []
   | x :: xs => x.toJson :: FExpr.listToJson xs
 
-def UExpr.toJson : UExpr F → Json
+def U64Expr.toJson : U64Expr F → Json
   | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n)]
   | .val x => Json.mkObj [("type", "val"), ("arg", x.toJson)]
   | .idx => Json.mkObj [("type", "idx")]
@@ -98,14 +98,15 @@ def BExpr.toJson : BExpr F → Json
   | .false => Json.mkObj [("type", "false")]
   | .feq x y => Json.mkObj [("type", "eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .neq x y => Json.mkObj [("type", "u64Eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .lt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .lt x y => Json.mkObj [("type", "u64Lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .flt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .not b => Json.mkObj [("type", "not"), ("arg", b.toJson)]
   | .and x y => Json.mkObj [("type", "and"), ("lhs", x.toJson), ("rhs", y.toJson)]
 
 end
 
 instance : ToJson (FExpr F) := ⟨FExpr.toJson⟩
-instance : ToJson (UExpr F) := ⟨UExpr.toJson⟩
+instance : ToJson (U64Expr F) := ⟨U64Expr.toJson⟩
 instance : ToJson (BExpr F) := ⟨BExpr.toJson⟩
 
 def VExpr.toJson {n : ℕ} : VExpr F n → Json

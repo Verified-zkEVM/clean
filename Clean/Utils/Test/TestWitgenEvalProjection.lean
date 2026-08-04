@@ -20,12 +20,12 @@ def TestTable (F : Type) : Table F TestRow where
   name := "test"
   Contains _ _ := True
 
-example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.UExpr F) :
+example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.U64Expr F) :
     Witgen.FExpr.eval ctx ((TestTable F).dataGet row).second =
       (((ctx.env.data.getTable (TestTable F))[(row.eval ctx).toNat]?.getD default).second) := by
   simp [circuit_norm]
 
-example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.UExpr F) :
+example {F : Type} [FiniteField F] (ctx : Witgen.Ctx F) (row : Witgen.U64Expr F) :
     Witgen.FExpr.eval ctx ((TestTable F).hintGet row).second =
       ((fromElements (((ctx.env.hint (TestTable F).name (size TestRow))[(row.eval ctx).toNat]?).getD default)
         : TestRow F).second) := by

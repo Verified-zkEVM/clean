@@ -155,17 +155,17 @@ def Table.fromStatic (table : StaticTable F Row) : Table F Row :=
 namespace Table
 
 /-- Read a typed row from committed prover data. -/
-def dataGet (table : Table F Row) (row : Witgen.UExpr F) : Row (Witgen.FExpr F) :=
+def dataGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
   fromElements <| Vector.mapFinRange (size Row) fun col =>
     Witgen.FExpr.dataGet table.name (size Row) row col
 
 /-- Read a typed row from prover hints. -/
-def hintGet (table : Table F Row) (row : Witgen.UExpr F) : Row (Witgen.FExpr F) :=
+def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
   fromElements <| Vector.mapFinRange (size Row) fun col =>
     Witgen.FExpr.hintGet table.name (size Row) row col
 
 @[circuit_norm]
-lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.UExpr F) (ctx : Witgen.Ctx F) :
+lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
     Witgen.eval ctx (table.dataGet row) =
       ((ctx.env.data.getTable table)[(row.eval ctx).toNat]?.getD default) := by
   simp only [Witgen.eval, dataGet, ProverData.getTable]
@@ -178,7 +178,7 @@ lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.UExpr F) 
     simp only [default, ProvableType.toElements_fromElements]
 
 @[circuit_norm]
-lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.UExpr F) (ctx : Witgen.Ctx F) :
+lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
     Witgen.eval ctx (table.hintGet row) =
       fromElements (((ctx.env.hint table.name (size Row))[(row.eval ctx).toNat]?).getD default) := by
   simp only [Witgen.eval, hintGet]

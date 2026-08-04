@@ -6,20 +6,20 @@ import Clean.Circuit.WitnessIR
 Makes witness-IR programs read like normal code:
 
 - typeclass operators on the IR expression types (`+ * - ⁻¹` on `FExpr`;
-  `+ * / % &&& ||| ^^^ <<< >>>` on `UExpr`), numeric literals via `OfNat`,
+  `+ * / % &&& ||| ^^^ <<< >>>` on `U64Expr`), numeric literals via `OfNat`,
   and a coercion from circuit `Expression`s,
-- dot-notation bridges `x.val : UExpr` (on `Expression` and `FExpr`) and
+- dot-notation bridges `x.val : U64Expr` (on `Expression` and `FExpr`) and
   `n.toField : FExpr`,
 - condition notation `=?` / `<?`,
 - `VExpr.range n fun i => ...` — loop former whose body receives the index as an
-  `UExpr` (applied to `.idx` at construction time, so the lambda is authoring-time
+  `U64Expr` (applied to `.idx` at construction time, so the lambda is authoring-time
   only and the result is first-order data),
 - a builder monad `Witgen.M` with `letF`/`letU` for shared intermediate values.
 
 Example (SHA256 `Add32`-style):
 ```
 witnessVectorProgram 32 do
-  let s ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : UExpr F)
+  let s ← (bitsVal a + bitsVal b) % ((2^32 : ℕ) : U64Expr F)
   return .range 32 fun i => ((s >>> i) % 2).toField
 ```
 -/
@@ -45,26 +45,26 @@ instance : Inv (FExpr F) := ⟨.inv⟩
 instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
 instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
-instance : Coe ℕ (UExpr F) := ⟨.const⟩
-instance {n : ℕ} : OfNat (UExpr F) n := ⟨.const n⟩
-instance : Inhabited (UExpr F) where
+instance : Coe ℕ (U64Expr F) := ⟨.const⟩
+instance {n : ℕ} : OfNat (U64Expr F) n := ⟨.const n⟩
+instance : Inhabited (U64Expr F) where
   default := .const 0
-instance : Add (UExpr F) := ⟨.add⟩
-instance : Mul (UExpr F) := ⟨.mul⟩
-instance : Div (UExpr F) := ⟨.div⟩
-instance : HDiv (UExpr F) ℕ (UExpr F) where
+instance : Add (U64Expr F) := ⟨.add⟩
+instance : Mul (U64Expr F) := ⟨.mul⟩
+instance : Div (U64Expr F) := ⟨.div⟩
+instance : HDiv (U64Expr F) ℕ (U64Expr F) where
   hDiv n m := .div n m
-instance : Mod (UExpr F) := ⟨.mod⟩
-instance : HMod (UExpr F) ℕ (UExpr F) where
+instance : Mod (U64Expr F) := ⟨.mod⟩
+instance : HMod (U64Expr F) ℕ (U64Expr F) where
   hMod n m := .mod n m
-instance : AndOp (UExpr F) := ⟨.land⟩
-instance : OrOp (UExpr F) := ⟨.lor⟩
-instance : XorOp (UExpr F) := ⟨.lxor⟩
-instance : ShiftLeft (UExpr F) := ⟨.shiftL⟩
-instance : ShiftRight (UExpr F) := ⟨.shiftR⟩
-instance : HShiftLeft (UExpr F) ℕ (UExpr F) where
+instance : AndOp (U64Expr F) := ⟨.land⟩
+instance : OrOp (U64Expr F) := ⟨.lor⟩
+instance : XorOp (U64Expr F) := ⟨.lxor⟩
+instance : ShiftLeft (U64Expr F) := ⟨.shiftL⟩
+instance : ShiftRight (U64Expr F) := ⟨.shiftR⟩
+instance : HShiftLeft (U64Expr F) ℕ (U64Expr F) where
   hShiftLeft n m := .shiftL n m
-instance : HShiftRight (UExpr F) ℕ (UExpr F) where
+instance : HShiftRight (U64Expr F) ℕ (U64Expr F) where
   hShiftRight n m := .shiftR n m
 
 /-- A single field-sorted expression is a length-1 witness program, so scalar
@@ -74,13 +74,13 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 /-! ## Bridges as dot notation -/
 
 /-- The `u64` value of an IR field expression (truncated `ZMod.val`): `e.val`. -/
-abbrev FExpr.val (e : FExpr F) : UExpr F := .val e
+abbrev FExpr.val (e : FExpr F) : U64Expr F := .val e
 
 /-- The `u64` value of a circuit expression, as a witness-IR expression: `x.val`. -/
-abbrev _root_.Expression.val (e : Expression F) : UExpr F := .val (.expr e)
+abbrev _root_.Expression.val (e : Expression F) : U64Expr F := .val (.expr e)
 
 /-- Cast a u64-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
-abbrev UExpr.toField (n : UExpr F) : FExpr F := .ofU64 n
+abbrev U64Expr.toField (n : U64Expr F) : FExpr F := .ofU64 n
 
 /-- Bit `i` of the field value of an IR expression, as the field element `0` or `1`.
 Unlike `(e.val >>> i) % 2` this is computed at the field level, so `i` may exceed 64. -/
@@ -122,27 +122,49 @@ instance [NatCast F] : EqCond (Expression F) ℕ F where eqCond x n := .feq x (n
 instance [NatCast F] : EqCond ℕ (Expression F) F where eqCond n x := .feq (n : F) x
 instance [NatCast F] : EqCond (FExpr F) ℕ F where eqCond x n := .feq x (n : F)
 instance [NatCast F] : EqCond ℕ (FExpr F) F where eqCond n x := .feq (n : F) x
-instance : EqCond (UExpr F) (UExpr F) F := ⟨.neq⟩
-instance : EqCond (UExpr F) ℕ F where eqCond x n := .neq x (.const n)
-instance : EqCond ℕ (UExpr F) F where eqCond n x := .neq (.const n) x
+instance : EqCond (U64Expr F) (U64Expr F) F := ⟨.neq⟩
+instance : EqCond (U64Expr F) ℕ F where eqCond x n := .neq x (.const n)
+instance : EqCond ℕ (U64Expr F) F where eqCond n x := .neq (.const n) x
 
-@[inherit_doc BExpr.lt] infix:50 " <? " => BExpr.lt
+/-- Overload witness-IR less-than tests while keeping a single parser entry for `<?`.
+Field-sorted operands become `BExpr.flt` (comparing `FiniteField.val`s, so it stays exact
+on fields wider than 64 bits); u64-sorted operands become `BExpr.lt`. -/
+class LtCond (α β : Type) (F : outParam Type) where
+  /-- Build a witness-IR less-than condition for these operand sorts. -/
+  ltCond : α → β → BExpr F
+
+@[inherit_doc LtCond.ltCond] infix:50 " <? " => LtCond.ltCond
+
+instance : LtCond (FExpr F) (FExpr F) F := ⟨.flt⟩
+instance : LtCond (Expression F) (FExpr F) F where ltCond x y := .flt x y
+instance : LtCond (FExpr F) (Expression F) F where ltCond x y := .flt x y
+instance : LtCond (FExpr F) F F where ltCond x y := .flt x y
+instance : LtCond F (FExpr F) F where ltCond x y := .flt x y
+instance : LtCond (Expression F) F F where ltCond x y := .flt x y
+instance : LtCond F (Expression F) F where ltCond x y := .flt x y
+instance [NatCast F] : LtCond (Expression F) ℕ F where ltCond x n := .flt x (n : F)
+instance [NatCast F] : LtCond ℕ (Expression F) F where ltCond n x := .flt (n : F) x
+instance [NatCast F] : LtCond (FExpr F) ℕ F where ltCond x n := .flt x (n : F)
+instance [NatCast F] : LtCond ℕ (FExpr F) F where ltCond n x := .flt (n : F) x
+instance : LtCond (U64Expr F) (U64Expr F) F := ⟨.lt⟩
+instance : LtCond (U64Expr F) ℕ F where ltCond x n := .lt x (.const n)
+instance : LtCond ℕ (U64Expr F) F where ltCond n x := .lt (.const n) x
 
 instance : Inhabited (BExpr F) := ⟨.false⟩
 instance : AndOp (BExpr F) := ⟨.and⟩
 
 /-! ## Index access notation for .listGet -/
 
-instance {F : Type} {n : ℕ} : GetElem (Vector F n) (UExpr F) (FExpr F) (fun _ _ => True) where
+instance {F : Type} {n : ℕ} : GetElem (Vector F n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet (v.toList.map FExpr.const) i
 
-instance {F : Type} {n : ℕ} : GetElem (Vector (Expression F) n) (UExpr F) (FExpr F) (fun _ _ => True) where
+instance {F : Type} {n : ℕ} : GetElem (Vector (Expression F) n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet (v.toList.map FExpr.expr) i
 
-instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (UExpr F) (FExpr F) (fun _ _ => True) :=
-  inferInstanceAs (GetElem (Vector (Expression F) n) (UExpr F) _ _)
+instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (U64Expr F) (FExpr F) (fun _ _ => True) :=
+  inferInstanceAs (GetElem (Vector (Expression F) n) (U64Expr F) _ _)
 
-instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (UExpr F) (FExpr F) (fun _ _ => True) where
+instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
 
 @[circuit_norm]
@@ -168,14 +190,14 @@ lemma evalList_map_vector_fexpr {F : Type} {ctx : Ctx F} [FiniteField F] {n : �
 
 /-! ## Loop former -/
 
-/-- Vector output built per index; the body receives the loop index as an `UExpr`.
+/-- Vector output built per index; the body receives the loop index as an `U64Expr`.
 The lambda is applied to `.idx` at construction time — authoring-time HOAS,
 first-order result. -/
-def VExpr.range (n : ℕ) (body : UExpr F → FExpr F) : VExpr F n :=
+def VExpr.range (n : ℕ) (body : U64Expr F → FExpr F) : VExpr F n :=
   .mapRange n (body .idx)
 
 @[circuit_norm]
-theorem VExpr.range_def (n : ℕ) (body : UExpr F → FExpr F) :
+theorem VExpr.range_def (n : ℕ) (body : U64Expr F → FExpr F) :
     VExpr.range n body = .mapRange n (body .idx) := rfl
 
 /-! ## Builder monad for stepped programs -/
@@ -205,13 +227,13 @@ theorem M.map_def (f : α → β) (m : M F α) :
     (f <$> m) = fun s => let (a, s') := m s; (f a, s') := rfl
 
 /-- Bind a u64-sorted value as a shared step; returns a reference to it. -/
-def letU (e : UExpr F) : M F (UExpr F) :=
+def letU (e : U64Expr F) : M F (U64Expr F) :=
   fun s => (.localVar s.size, s.push (.letU e))
 
-instance : CoeOut (UExpr F) (M F (UExpr F)) := ⟨letU⟩
+instance : CoeOut (U64Expr F) (M F (U64Expr F)) := ⟨letU⟩
 
 @[circuit_norm]
-theorem letU_def (e : UExpr F) :
+theorem letU_def (e : U64Expr F) :
     letU e = fun s => (.localVar s.size, s.push (.letU e)) := rfl
 
 /-- Bind a field-sorted value as a shared step; returns a reference to it. -/
@@ -247,7 +269,7 @@ def evalBool (env : ProverEnvironment F) (program : M F (BExpr F)) : Bool :=
   out.eval { env, locals := evalSteps env steps.toList }
 
 @[circuit_norm]
-def evalU64 (env : ProverEnvironment F) (program : M F (UExpr F)) : UInt64 :=
+def evalU64 (env : ProverEnvironment F) (program : M F (U64Expr F)) : UInt64 :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
@@ -382,23 +404,23 @@ export UnconstrainedBool (unconstrainedBool)
 
 /-- IR-backed prover-only u64 input for `GeneralFormalCircuit.WithHint`. -/
 structure UnconstrainedU64 (F : Type) where
-  program : Witgen.M F (Witgen.UExpr F)
+  program : Witgen.M F (Witgen.U64Expr F)
 
 namespace UnconstrainedU64
 open Witgen
 
 @[reducible] instance : CircuitType UnconstrainedU64 where
-  Var F := M F (UExpr F)
+  Var F := M F (U64Expr F)
   ProverValue _ := UInt64
   Value _ := Unit
   evalVerifier _ _ := ()
   evalProver env program := program.evalU64 env
 
 instance : Inhabited (Var UnconstrainedU64 F) :=
-  inferInstanceAs (Inhabited (M F (UExpr F)))
+  inferInstanceAs (Inhabited (M F (U64Expr F)))
 
 @[circuit_norm] lemma var_of_unconstrainedU64 :
-    Var UnconstrainedU64 F = M F (UExpr F) := rfl
+    Var UnconstrainedU64 F = M F (U64Expr F) := rfl
 
 @[circuit_norm] lemma proverValue_of_unconstrainedU64 :
     ProverValue UnconstrainedU64 F = UInt64 := rfl
@@ -417,12 +439,12 @@ instance : Inhabited (Var UnconstrainedU64 F) :=
   rfl
 
 @[circuit_norm] lemma eval_unconstrainedU64_prover' [FiniteField F] :
-  @eval (ProverEnvironment F) (M F (UExpr F)) UInt64 (CircuitType.proverEval UnconstrainedU64)
+  @eval (ProverEnvironment F) (M F (U64Expr F)) UInt64 (CircuitType.proverEval UnconstrainedU64)
     = M.evalU64 := by
   with_unfolding_all rfl
 
 @[circuit_norm]
-def unconstrainedU64 (program : Witgen.M F (Witgen.UExpr F)) : Var UnconstrainedU64 F :=
+def unconstrainedU64 (program : Witgen.M F (Witgen.U64Expr F)) : Var UnconstrainedU64 F :=
   program
 end UnconstrainedU64
 

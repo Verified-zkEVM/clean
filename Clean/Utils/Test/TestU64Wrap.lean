@@ -1,4 +1,4 @@
-import Clean.Circuit.WitnessIR
+import Clean.Circuit.WitnessIRSugar
 
 /-!
 Regression tests for the `u64Wrap` simproc: the `% 2^64` / `% 64` truncations left behind
@@ -22,3 +22,29 @@ example (a : ℕ) : a % 18446744073709551616 = a % 2 ^ 64 := by
 example (a : ℕ) (h : a < 8) : a % 256 = a := by
   fail_if_success simp only [circuit_norm]
   omega
+
+/-!
+`<?` overloads on the operand sort: field-sorted operands compare `ZMod.val`s exactly,
+u64-sorted operands compare `u64`s (and so agree only below `2^64`).
+-/
+section LtCond
+open Witgen
+variable {F : Type} [FiniteField F]
+
+/-- Field operands produce the exact `ZMod.val` comparison, with no truncation. -/
+example (ctx : Ctx F) (x y : FExpr F) :
+    (x <? y).eval ctx = decide (FiniteField.val (x.eval ctx) < FiniteField.val (y.eval ctx)) :=
+  rfl
+
+/-- u64 operands still produce the `u64` comparison. -/
+example (ctx : Ctx F) (x y : U64Expr F) :
+    (x <? y).eval ctx = decide (x.eval ctx < y.eval ctx) :=
+  rfl
+
+/-- `x.val <? y.val` goes through the u64 sort, so it compares truncated values —
+the field-sorted form above is the one to use when operands may exceed `2^64`. -/
+example (ctx : Ctx F) (x y : FExpr F) :
+    (x.val <? y.val).eval ctx
+      = decide (FiniteField.val (x.eval ctx) % 2^64 < FiniteField.val (y.eval ctx) % 2^64) := by
+  simp [BExpr.eval, U64Expr.eval, UInt64.lt_iff_toNat_lt]
+end LtCond

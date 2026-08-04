@@ -26,35 +26,35 @@ let z ← witness (Vector.ofFn fun (i : Fin 32) => .expr (a[i] * b[i]))
 Building blocks:
 
 - `Expression F` coerces into `FExpr` (`.expr`), so circuit vars/expressions drop in.
-- `x.val : UExpr` (the **u64** value of an expression: `ZMod.val` truncated to 64 bits),
+- `x.val : U64Expr` (the **u64** value of an expression: `ZMod.val` truncated to 64 bits),
   `n.toField : FExpr` (cast back, via `FiniteField.fromNat` so it is also correct on
   binary fields).
-- `UExpr` has `+ * / % &&& ||| ^^^ <<< >>>` and `OfNat` literals, all with wrapping
+- `U64Expr` has `+ * / % &&& ||| ^^^ <<< >>>` and `OfNat` literals, all with wrapping
   `u64` semantics; `FExpr` has `+ * - ⁻¹` and constants.
-- conditions: `a =? b` (field equality), `a <? b` (u64 comparison), used with `.ite`.
-- bit extraction stays at the *field* level, so it is not limited to 64 bits:
-  `x.bit i : FExpr` is bit `i` of `ZMod.val x`, and `x.bits n : VExpr F n` is its `n`
-  low bits (`Bits`, `Num2Bits`, `BinSub`).
+- conditions: `a =? b` (equality) and `a <? b` (comparison), used with `.ite`. Both
+  overload on the operand sort: field-sorted operands compare `ZMod.val`s exactly,
+  u64-sorted operands compare `u64`s.
+- bit extraction is field-sorted, so it is not limited to 64 bits: `x.bit i : FExpr` is
+  bit `i` of `ZMod.val x`, and `x.bits n : VExpr F n` is its `n` low bits.
+- `VExpr.envRange offset` witnesses a run of `n` consecutive environment cells.
 
-### The integer sort is `u64`, and it wraps
+### Wrapping, and what it means for proofs
 
-Witness IR is meant to be executable outside Lean (`#witgen_json` → a Rust interpreter),
-so its integer sort is `UInt64`, not `ℕ` (issue #429). Every operation wraps modulo
-`2^64`, exactly like Rust's `u64`; `x.val` truncates and `n.toField` casts back through
-`UInt64.toNat`. Gadgets work on bytes, 32-bit limbs and small indices, so the wraps are
+The integer sort is `UInt64` and every operation on it wraps modulo `2^64`, exactly like
+Rust's `u64`. Gadgets work on bytes, 32-bit limbs and small indices, so the wraps are
 never taken — and in proofs the `circuit_norm` simproc `u64Wrap` erases a `% 2^64` (or a
 shift's `% 64`) as soon as `omega` can bound the operand from the gadget's own
-assumptions. If a wrap survives simplification, the missing piece is usually a bound
-that has not been destructured into the local context yet.
+assumptions. If a wrap survives simplification, the missing piece is usually a bound that
+has not been destructured into the local context yet.
 
-Anything genuinely wider than 64 bits must stay field-sorted: use `x.bit i` / `x.bits n`
-for bit decomposition, and `VExpr.envRange offset` for a run of environment cells.
+Anything genuinely wider than 64 bits must stay field-sorted: `x.bit i` / `x.bits n` for
+bit decomposition, `a <? b` on field operands for comparison.
 
 ## Programs with sharing: `witnessProgram`
 
 When a typed witness needs `let`-bound shared values, use `witnessProgram`.
 It is `witness`, but in the `Witgen.M` builder monad. Binding an `FExpr` or
-`UExpr` with `←` creates a shared witness-IR step:
+`U64Expr` with `←` creates a shared witness-IR step:
 
 ```lean
 let z ← witnessProgram do
@@ -63,7 +63,7 @@ let z ← witnessProgram do
 ```
 
 For vector witnesses, `witnessVectorProgram` exposes the lower-level `VExpr` API,
-including compact loops via `.range` (the lambda receives the index as a `UExpr`):
+including compact loops via `.range` (the lambda receives the index as a `U64Expr`):
 
 ```lean
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
