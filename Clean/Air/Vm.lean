@@ -614,8 +614,7 @@ theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
     have env_data_eq : (table.environment row).data = witness.data := witness.data_eq_of_mem_allTables _ table_mem
     simp only [← env_data_eq, AbstractInteraction.eval_guarantees, AbstractInteraction.eval_requirements,
       Operations.forall_interactionsWith_iff]
-    convert constraints table table_mem row row_mem
-    all_goals rfl
+    exact constraints table table_mem row row_mem
   -- to get the conclusion about the verifier, we specialize to index 0
   specialize grts_of_reqs reqs_of_grts 0 activeInteractions_pulls_length_pos
   rw [witness.activeInteractions_pulls_getElem_zero_eq,

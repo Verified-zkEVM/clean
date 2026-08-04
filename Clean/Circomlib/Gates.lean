@@ -834,7 +834,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           main input_var2 >>= fun out2 =>
           AND.circuit (out1, out2)).operations offset) by
         convert this
-        exact funext fun F => ((CircuitType.var_of_provableType (M := field) F).symm : Expression F = Var field F)
+        rfl
 
       rw [h_main_eq] at h_local_witnesses
       rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_local_witnesses

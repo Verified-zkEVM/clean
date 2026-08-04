@@ -306,6 +306,10 @@ def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     rw [Circuit.map_operations_eq]
     exact g_explicit.channelsLawful n
 
+instance ExplicitCircuit.from_map_tc {f : α → β} {g : Circuit F α}
+    [g_explicit : ExplicitCircuit g] : ExplicitCircuit (f <$> g) :=
+  ExplicitCircuit.from_map g_explicit
+
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_map_output {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
     @ExplicitCircuit.output F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = f (ExplicitCircuit.output g n) := rfl

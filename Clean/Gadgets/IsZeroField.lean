@@ -23,6 +23,6 @@ def circuit : FormalCircuit F field field where
     b = (if x = 0 then 1 else 0)
 
   soundness := by circuit_proof_all
-  completeness := by circuit_proof_all
+  completeness := by circuit_proof_all [Witgen.EqCond.eqCond]
 
 end Gadgets.IsZeroField

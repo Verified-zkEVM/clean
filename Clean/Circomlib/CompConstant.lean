@@ -297,8 +297,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     and_intros
     · ext i hi
       have h_parts_i := h_parts ⟨i, hi⟩
-      simpa [Vector.getElem_map, Vector.getElem_mapRange,
-        apply_ite (Expression.eval env.toEnvironment), circuit_norm] using h_parts_i
+      simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
+      exact h_parts_i
     · exact h_sout
     · exact h_sout_lt
     · exact h_out

@@ -240,12 +240,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
-  simp only [Fin.isLt, reduceDIte] at h_env
+  simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
-  · have := (h_env.1) i
-    rw [this]; ring
-  · have := (h_env.2.1) i
-    rw [this]; ring
+  · rw [h_env.1 i]; ring
+  · rw [h_env.2.1 i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

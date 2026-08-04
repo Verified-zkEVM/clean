@@ -38,8 +38,8 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
   induction l with
   | nil => rfl
   | cons i l ih =>
-    simp only [circuit_norm] at ih
-    simp only [List.foldr_cons, circuit_norm, ih]
+    simp only [List.foldr_cons, circuit_norm]
+    exact congrArg _ ih
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/

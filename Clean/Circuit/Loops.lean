@@ -21,8 +21,7 @@ lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m]
     Vector.toList <$> (xs.mapM body) = xs.toList.mapM body := by
   rw [←Array.toList_mapM]
   suffices toList <$> mapM body xs = Array.toList <$> Array.mapM body xs.toArray by
-    convert this
-    rfl
+    exact this
   rw [←Vector.toArray_mapM, Functor.map_map]
   congr
 

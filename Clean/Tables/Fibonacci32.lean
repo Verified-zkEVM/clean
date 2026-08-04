@@ -117,8 +117,14 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32,
-    MonadLift.monadLift]
+  -- NOTE: do *not* add `explicit_provable_type` to the `dsimp` set here. It unfolds the
+  -- `ProvableStruct` layout into raw `Vector.cast`s, which makes the goal ill-typed at
+  -- `instances` transparency; the closing `rfl` then reduces the entire assignment term at
+  -- default transparency and needs >14GB. `pure` is needed since 4.32 (destructuring binds
+  -- keep a `match pure ...` that simp no longer reduces), and the `+instances` pass is what
+  -- collapses `ElaboratedCircuit.localLength` of the `Equality` subcircuit to `0`.
+  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit,
+    assignU32, pure, MonadLift.monadLift]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
     Vector.mapRange_zero, Vector.mapRange_succ, FormalCircuitBase.localLength]
   simp
@@ -156,9 +162,8 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironme
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
   set env := recursiveRelation.windowEnv  ⟨<+> +> curr +> next, rfl⟩ aux_env
   simp only [table_norm, circuit_norm, recursiveRelation,
-    assignU32, Gadgets.Addition32.circuit]
-  simp +instances only [table_norm, circuit_norm, Gadgets.Equality.circuit,
-    RowType.fromComponents_cons]
+    assignU32, Gadgets.Addition32.circuit, pure, MonadLift.monadLift]
+  simp +instances only [table_norm, circuit_norm, RowType.fromComponents_cons]
   rintro ⟨ h_add, h_eq ⟩
   simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
@@ -176,8 +181,9 @@ omit p_large_enough in
 lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
     #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
        .input ⟨0, 7⟩] := by
-  dsimp only [table_assignment_norm, circuit_norm, boundary]
-  dsimp only [table_assignment_norm, circuit_norm, MonadLift.monadLift]
+  dsimp only [table_assignment_norm, circuit_norm, boundary, pure, MonadLift.monadLift]
+  simp only [circuit_norm, FormalCircuitBase.localLength]
+  simp +instances only [circuit_norm]
   with_unfolding_all rfl
 
 omit p_large_enough in
@@ -200,8 +206,7 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvi
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
-  simp only [table_norm, boundary, circuit_norm]
-  dsimp only [table_norm, table_assignment_norm, circuit_norm, MonadLift.monadLift]
+  simp only [table_norm, boundary, circuit_norm, pure, MonadLift.monadLift]
   simp +instances only [circuit_norm, table_norm, RowType.fromComponents_cons, and_imp]
   have ⟨hx, hy⟩ := boundary_vars first_row aux_env
   simp only [circuit_norm] at hx hy

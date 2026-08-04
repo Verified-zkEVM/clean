@@ -203,12 +203,14 @@ def circuit : FormalAssertion (F p) U64 where
   Spec inputs := inputs.Normalized
 
   soundness := by
-    rintro i0 env ⟨v0, v1, v2, v3, v4, v5, v6, v7⟩
+    -- destructure `x_var` up front: since Lean 4.32, `simp` no longer iota-reduces the
+    -- `match` coming from `main`'s destructuring `let` against an opaque variable
+    rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env ⟨v0, v1, v2, v3, v4, v5, v6, v7⟩ _hint
+    rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ _hint
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 

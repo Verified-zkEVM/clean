@@ -213,7 +213,7 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
       rw [show valueBits x = ∑ i : Fin 32, (x[i] : F p).val * 2^i.val from rfl,
           testBit_binary_sum 32 _ hbool ⟨j + k.val, hjk⟩]
       simp only [decide_eq_decide]
-      constructor <;> intro h <;> convert h using 2 <;> rfl
+      rfl
     · simp only [hjk, dite_false, ZMod.val_zero]
       have hval_lt : valueBits x < 2^32 := valueBits_lt_two_pow x hx
       have : valueBits x < 2 ^ (j + k.val) :=

@@ -94,8 +94,7 @@ lemma interactionsWith_of_exposedChannels {table : Component F} {channel : RawCh
     table.operations.interactionsWith channel = interactions := by
   rw [Component.interactionsWith_eq]
   simp only [circuit_norm, Component.exposedChannels] at *
-  convert table.circuit.interactionsWith_eq_of_mem_exposedChannels _ _ _ h_exposed
-  rfl
+  exact table.circuit.interactionsWith_eq_of_mem_exposedChannels _ _ _ h_exposed
 
 lemma constraintsHold_iff (env : Environment F) :
     component.operations.ConstraintsHold env ↔ component.rowOperations.ConstraintsHold env := by
@@ -129,8 +128,7 @@ lemma inChannelsOrGuarantees (env : Environment F) :
     component.operations.InChannelsOrGuaranteesFull component.circuit.channelsWithGuarantees env := by
   have h := component.circuit.in_channels_or_guarantees_full
   simp only [circuit_norm, interactions_eq] at *
-  convert h component.rowInputVar component.rowOffset env
-  rfl
+  exact h _ _ env
 
 -- this is the circuit's soundness theorem, stated in "instantiated" form
 theorem weakSoundness {component : Component F} {env : Environment F} :
@@ -145,9 +143,8 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   have h_assumptions' : component.circuit.Assumptions (eval env inputVar) env.data := by
     simpa only [Assumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset] using h_assumptions
   convert component.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
-  all_goals first
-    | rfl
-    | simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
+  simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
+  rfl
 end Component
 
 /-- Concrete rows and prover data for one flat AIR component. -/

@@ -34,7 +34,7 @@ def main (input : Var M F × Var M F) : Circuit F Unit := do
 instance elaborated (M : TypeMap) [ProvableType M] : ElaboratedCircuit F (ProvablePair M M) unit main := by
   elaborate_circuit
 
-@[simps! (attr := circuit_norm) (isSimp := false)]
+@[simps! -isSimp (attr := circuit_norm)]
 def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M) where
   main
 
@@ -45,12 +45,12 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     intro offset env input_var input h_input _ h_holds
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
-    -- destructure before splitting: the `match input_var` in `main` only reduces on a literal pair
+    constructor; swap
+    · obtain ⟨x_var, y_var⟩ := input_var
+      simp only [main, circuit_norm]
+
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var
-    constructor; swap
-    · simp only [main, circuit_norm]
-
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy]
@@ -62,7 +62,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     rw [Vector.forall_mem_iff_forall_getElem] at h_holds
     specialize h_holds i hi
     rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
-    rw [eval_sub, sub_eq_zero] at h_holds
+    simp only [eval_sub, sub_eq_zero] at h_holds
     exact h_holds
 
   completeness := by
@@ -85,9 +85,8 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     intro i hi
     specialize h_spec i hi
     simp only [Vector.getElem_map] at h_spec
-    simp only [Vector.getElem_map, Vector.getElem_zip, eval_sub]
-    rw [h_spec]
-    ring
+    simp only [Vector.getElem_map, Vector.getElem_zip, eval_sub, sub_eq_zero]
+    exact h_spec
 
 -- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
 @[circuit_norm ↓, explicit_circuit_norm]

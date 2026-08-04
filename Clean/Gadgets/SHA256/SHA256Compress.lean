@@ -185,9 +185,7 @@ private lemma sha256Compress_eq_valStateAfterRound
             (Specs.SHA256.K[i.val]'(by have := i.isLt; omega)).toNat
             (input_schedule[i.val]'(by have := i.isLt; omega))) input_state =
         valStateAfterRound input_state input_schedule k by
-    have := h 64 (le_refl 64)
-    convert this using 1
-    rfl
+    exact h 64 (le_refl 64)
   intro k hk
   induction k with
   | zero => simp [valStateAfterRound, Fin.foldl_zero]
