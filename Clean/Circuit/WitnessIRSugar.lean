@@ -71,6 +71,30 @@ instance : HShiftRight (NExpr F) ℕ (NExpr F) where
 sites can pass an `FExpr` to the generic `witness`. -/
 instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 
+/-! The `FExpr.eval`/`NExpr.eval` matchers do not unfold the operator instances above,
+so evaluation would get stuck on operator-sugared IR. Desugar to constructors in
+`circuit_norm` via per-operator rfl-lemmas; the evaluators' own match equations then apply. -/
+
+@[circuit_norm] theorem FExpr.add_def (x y : FExpr F) : x + y = .add x y := rfl
+@[circuit_norm] theorem FExpr.mul_def (x y : FExpr F) : x * y = .mul x y := rfl
+@[circuit_norm] theorem FExpr.inv_def (x : FExpr F) : x⁻¹ = .inv x := rfl
+@[circuit_norm] theorem FExpr.neg_def [Field F] (x : FExpr F) : -x = FExpr.neg x := rfl
+@[circuit_norm] theorem FExpr.sub_def [Field F] (x y : FExpr F) : x - y = FExpr.sub x y := rfl
+
+@[circuit_norm] theorem NExpr.add_def (x y : NExpr F) : x + y = .add x y := rfl
+@[circuit_norm] theorem NExpr.mul_def (x y : NExpr F) : x * y = .mul x y := rfl
+@[circuit_norm] theorem NExpr.div_def (x y : NExpr F) : x / y = .div x y := rfl
+@[circuit_norm] theorem NExpr.hDiv_def (x : NExpr F) (m : ℕ) : x / m = NExpr.div x (.const m) := rfl
+@[circuit_norm] theorem NExpr.mod_def (x y : NExpr F) : x % y = .mod x y := rfl
+@[circuit_norm] theorem NExpr.hMod_def (x : NExpr F) (m : ℕ) : x % m = NExpr.mod x (.const m) := rfl
+@[circuit_norm] theorem NExpr.land_def (x y : NExpr F) : x &&& y = .land x y := rfl
+@[circuit_norm] theorem NExpr.lor_def (x y : NExpr F) : x ||| y = .lor x y := rfl
+@[circuit_norm] theorem NExpr.lxor_def (x y : NExpr F) : x ^^^ y = .lxor x y := rfl
+@[circuit_norm] theorem NExpr.shiftL_def (x y : NExpr F) : x <<< y = .shiftL x y := rfl
+@[circuit_norm] theorem NExpr.shiftR_def (x y : NExpr F) : x >>> y = .shiftR x y := rfl
+@[circuit_norm] theorem NExpr.hShiftL_def (x : NExpr F) (m : ℕ) : x <<< m = NExpr.shiftL x (.const m) := rfl
+@[circuit_norm] theorem NExpr.hShiftR_def (x : NExpr F) (m : ℕ) : x >>> m = NExpr.shiftR x (.const m) := rfl
+
 /-! ## Bridges as dot notation -/
 
 /-- The `ℕ` value of an IR field expression: `e.val`. -/
@@ -118,6 +142,37 @@ instance : EqCond ℕ (NExpr F) F where eqCond n x := .neq (.const n) x
 instance : Inhabited (BExpr F) := ⟨.false⟩
 instance : AndOp (BExpr F) := ⟨.and⟩
 
+/-! Desugar `=?`/`&&&` conditions to constructors, for the same reason as the operator
+lemmas above. One lemma per `EqCond` instance. -/
+
+@[circuit_norm] theorem EqCond.fexpr_fexpr_def (x y : FExpr F) : (x =? y) = BExpr.feq x y := rfl
+@[circuit_norm] theorem EqCond.expr_fexpr_def (x : Expression F) (y : FExpr F) :
+  (x =? y) = BExpr.feq (.expr x) y := rfl
+@[circuit_norm] theorem EqCond.fexpr_expr_def (x : FExpr F) (y : Expression F) :
+  (x =? y) = BExpr.feq x (.expr y) := rfl
+@[circuit_norm] theorem EqCond.fexpr_const_def (x : FExpr F) (y : F) :
+  (x =? y) = BExpr.feq x (.const y) := rfl
+@[circuit_norm] theorem EqCond.const_fexpr_def (x : F) (y : FExpr F) :
+  (x =? y) = BExpr.feq y (.const x) := rfl
+@[circuit_norm] theorem EqCond.expr_const_def (x : Expression F) (y : F) :
+  (x =? y) = BExpr.feq (.expr x) (.const y) := rfl
+@[circuit_norm] theorem EqCond.const_expr_def (x : F) (y : Expression F) :
+  (x =? y) = BExpr.feq (.const x) (.expr y) := rfl
+@[circuit_norm] theorem EqCond.expr_nat_def [NatCast F] (x : Expression F) (n : ℕ) :
+  (x =? n) = BExpr.feq (.expr x) (.const (n : F)) := rfl
+@[circuit_norm] theorem EqCond.nat_expr_def [NatCast F] (n : ℕ) (x : Expression F) :
+  (n =? x) = BExpr.feq (.const (n : F)) (.expr x) := rfl
+@[circuit_norm] theorem EqCond.fexpr_nat_def [NatCast F] (x : FExpr F) (n : ℕ) :
+  (x =? n) = BExpr.feq x (.const (n : F)) := rfl
+@[circuit_norm] theorem EqCond.nat_fexpr_def [NatCast F] (n : ℕ) (x : FExpr F) :
+  (n =? x) = BExpr.feq (.const (n : F)) x := rfl
+@[circuit_norm] theorem EqCond.nexpr_nexpr_def (x y : NExpr F) : (x =? y) = BExpr.neq x y := rfl
+@[circuit_norm] theorem EqCond.nexpr_nat_def (x : NExpr F) (n : ℕ) :
+  (x =? n) = BExpr.neq x (.const n) := rfl
+@[circuit_norm] theorem EqCond.nat_nexpr_def (n : ℕ) (x : NExpr F) :
+  (n =? x) = BExpr.neq (.const n) x := rfl
+@[circuit_norm] theorem BExpr.and_def (x y : BExpr F) : x &&& y = BExpr.and x y := rfl
+
 /-! ## Index access notation for .listGet -/
 
 instance {F : Type} {n : ℕ} : GetElem (Vector F n) (NExpr F) (FExpr F) (fun _ _ => True) where
@@ -132,52 +187,15 @@ instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (NExpr F) (FExpr F) (
 instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (NExpr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
 
-/-! ## Normalizing the operator sugar to constructors
+/-! Desugar the `GetElem` instances above to `FExpr.listGet`, for the same reason as the
+operator lemmas: matchers and simp keying do not see through the instances. -/
 
-`FExpr.eval` / `NExpr.eval` / `BExpr.eval` are defined by recursion on the constructors,
-so simp can only make progress once a sugared operator has been rewritten to the
-constructor it stands for. simp used to do that on its own by unfolding the instance
-lambdas below; as of Lean 4.32 it does not, which left every IR-authored witness stuck
-as an opaque `NExpr.eval ctx (x ^^^ y)`-style term. These `rfl` lemmas restore it.
-
-Keep this list in sync with the instances above. -/
-
-@[circuit_norm] lemma fexpr_add_def (x y : FExpr F) : x + y = FExpr.add x y := rfl
-@[circuit_norm] lemma fexpr_mul_def (x y : FExpr F) : x * y = FExpr.mul x y := rfl
-@[circuit_norm] lemma fexpr_inv_def (x : FExpr F) : x⁻¹ = FExpr.inv x := rfl
-@[circuit_norm] lemma fexpr_neg_def [Field F] (x : FExpr F) :
-    -x = FExpr.mul (.const (-1)) x := rfl
-@[circuit_norm] lemma fexpr_sub_def [Field F] (x y : FExpr F) :
-    x - y = FExpr.add x (.mul (.const (-1)) y) := rfl
-
-@[circuit_norm] lemma nexpr_add_def (x y : NExpr F) : x + y = NExpr.add x y := rfl
-@[circuit_norm] lemma nexpr_mul_def (x y : NExpr F) : x * y = NExpr.mul x y := rfl
-@[circuit_norm] lemma nexpr_div_def (x y : NExpr F) : x / y = NExpr.div x y := rfl
-@[circuit_norm] lemma nexpr_div_nat_def (x : NExpr F) (n : ℕ) : x / n = NExpr.div x n := rfl
-@[circuit_norm] lemma nexpr_mod_def (x y : NExpr F) : x % y = NExpr.mod x y := rfl
-@[circuit_norm] lemma nexpr_mod_nat_def (x : NExpr F) (n : ℕ) : x % n = NExpr.mod x n := rfl
-@[circuit_norm] lemma nexpr_land_def (x y : NExpr F) : x &&& y = NExpr.land x y := rfl
-@[circuit_norm] lemma nexpr_lor_def (x y : NExpr F) : x ||| y = NExpr.lor x y := rfl
-@[circuit_norm] lemma nexpr_lxor_def (x y : NExpr F) : x ^^^ y = NExpr.lxor x y := rfl
-@[circuit_norm] lemma nexpr_shiftL_def (x y : NExpr F) : x <<< y = NExpr.shiftL x y := rfl
-@[circuit_norm] lemma nexpr_shiftR_def (x y : NExpr F) : x >>> y = NExpr.shiftR x y := rfl
-@[circuit_norm] lemma nexpr_shiftL_nat_def (x : NExpr F) (n : ℕ) :
-    x <<< n = NExpr.shiftL x n := rfl
-@[circuit_norm] lemma nexpr_shiftR_nat_def (x : NExpr F) (n : ℕ) :
-    x >>> n = NExpr.shiftR x n := rfl
-
-@[circuit_norm] lemma bexpr_and_def (x y : BExpr F) : x &&& y = BExpr.and x y := rfl
-
-/- The `=?` sugar is a class projection over many operand-sort instances; unfolding the
-projection lets each instance reduce to the `BExpr.feq`/`BExpr.neq` it stands for. -/
-attribute [circuit_norm] EqCond.eqCond
-
-@[circuit_norm] lemma getElem_nexpr_vector_const {n : ℕ} (v : Vector F n) (i : NExpr F) (h) :
-    v[i]'h = FExpr.listGet (v.toList.map FExpr.const) i := rfl
-@[circuit_norm] lemma getElem_nexpr_vector_expr {n : ℕ} (v : Vector (Expression F) n)
-    (i : NExpr F) (h) : v[i]'h = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
-@[circuit_norm] lemma getElem_nexpr_vector_fexpr {n : ℕ} (v : Vector (FExpr F) n)
-    (i : NExpr F) (h) : v[i]'h = FExpr.listGet v.toList i := rfl
+@[circuit_norm] theorem getElem_vector_const_def {F : Type} {n : ℕ} (v : Vector F n) (i : NExpr F) :
+    v[i] = FExpr.listGet (v.toList.map FExpr.const) i := rfl
+@[circuit_norm] theorem getElem_vector_expr_def {F : Type} {n : ℕ} (v : Vector (Expression F) n) (i : NExpr F) :
+    v[i] = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
+@[circuit_norm] theorem getElem_vector_fexpr_def {F : Type} {n : ℕ} (v : Vector (FExpr F) n) (i : NExpr F) :
+    v[i] = FExpr.listGet v.toList i := rfl
 
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
