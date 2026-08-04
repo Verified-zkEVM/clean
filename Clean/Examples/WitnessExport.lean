@@ -103,4 +103,66 @@ info: {"version": 1,
 #guard_msgs in
 #witgen_json (Gadgets.IsZeroField.circuit (F := F pBabybear))
 
+-- JSON schema golden tests for the u64 sort and the field-level bit decomposition
+private def u64Circuit : Circuit (F pBabybear) (Expression (F pBabybear)) := do
+  let x : Expression (F pBabybear) ← witness (F := F pBabybear) 5
+  witness (((x.val &&& 3) >>> 1) % 2).toField
+
+private def bitsCircuit : Circuit (F pBabybear) (Var (fields 2) (F pBabybear)) := do
+  let x : Expression (F pBabybear) ← witness (F := F pBabybear) 5
+  witnessVector 2 (x.bits 2)
+
+/--
+info: {"version": 1,
+ "operations":
+ [{"witness": 1,
+   "code":
+   {"steps": [],
+    "output":
+    {"type": "elements", "elements": [{"value": 5, "type": "const"}]}}},
+  {"witness": 1,
+   "code":
+   {"steps": [],
+    "output":
+    {"type": "elements",
+     "elements":
+     [{"type": "ofU64",
+       "arg":
+       {"type": "mod",
+        "rhs": {"value": 2, "type": "const"},
+        "lhs":
+        {"type": "shiftRight",
+         "rhs": {"value": 1, "type": "const"},
+         "lhs":
+         {"type": "and",
+          "rhs": {"value": 3, "type": "const"},
+          "lhs":
+          {"type": "val",
+           "arg":
+           {"type": "expr", "expr": {"type": "var", "index": 0}}}}}}}]}}}],
+ "localLength": 2}
+-/
+#guard_msgs in
+#witgen_json u64Circuit
+
+/--
+info: {"version": 1,
+ "operations":
+ [{"witness": 1,
+   "code":
+   {"steps": [],
+    "output":
+    {"type": "elements", "elements": [{"value": 5, "type": "const"}]}}},
+  {"witness": 2,
+   "code":
+   {"steps": [],
+    "output":
+    {"type": "bitsOf",
+     "n": 2,
+     "arg": {"type": "expr", "expr": {"type": "var", "index": 0}}}}}],
+ "localLength": 3}
+-/
+#guard_msgs in
+#witgen_json bitsCircuit
+
 end Examples.WitnessExport

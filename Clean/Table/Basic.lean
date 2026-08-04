@@ -397,8 +397,7 @@ def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       inputSize := ctx.inputSize,
-      circuit := ctx.circuit ++ [.witness (size S) (.ir []
-        (.range (size S) fun i => .envGet (((ctx.offset : ℕ) : Witgen.NExpr F) + i)))],
+      circuit := ctx.circuit ++ [.witness (size S) (.ir [] (.envRange ctx.offset))],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')

@@ -102,6 +102,12 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
       · linarith [hx, hy, ‹Fact (p > 512)›.elim]
       · grw [Nat.mod_lt _ (by norm_num)]
         linarith [‹Fact (p > 512)›.elim]
+    -- the witness is computed in `u64` arithmetic, which doesn't wrap here since
+    -- `input_x + input_y` is a sum of two bytes
+    have h_no_wrap : ZMod.val (input_x + input_y) < 2 ^ 64 := by
+      rw [ZMod.val_add_of_lt (by linarith [‹Fact (p > 512)›.elim])]
+      omega
+    rw [Nat.mod_eq_of_lt h_no_wrap] at h_env
     change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 

@@ -9,7 +9,7 @@ variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
 def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
+  let bits ← witnessVector n (x.bits n)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits assertBool
