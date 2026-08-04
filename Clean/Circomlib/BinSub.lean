@@ -244,11 +244,11 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     (2^n : F p)
 
   -- Witness output bits
-  let out ← witnessVector n (.range n fun i => ((lin.val >>> i) % 2).toField)
+  let out ← witnessVector n (lin.bits n)
 
   -- Witness aux bit
   -- the borrow bit is exactly the nth bit of lin
-  let aux ← witness ((lin.val >>> n) % 2).toField
+  let aux ← witness (lin.bit n)
 
   -- Calculate output linear sum and constrain bits
   let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do

@@ -159,8 +159,10 @@ def fetchInstruction
 
     return { rawInstrType, op1, op2, op3 }
 
+  -- the witness generator computes program addresses in `u64`,
+  -- so the program has to fit into that index range
   ProverAssumptions
-  | pc, _, _ => pc.val + 3 < programSize
+  | pc, _, _ => pc.val + 3 < programSize ∧ programSize ≤ 2^64
 
   Spec
   | pc, output, _ =>
@@ -180,12 +182,16 @@ def fetchInstruction
 
   completeness := by
     circuit_proof_start [Table.staticOfFn]
+    obtain ⟨ h_pc_bound, h_programSize_u64 ⟩ := h_assumptions
     have val_3 : ZMod.val (3 : F p) = 3 := ZMod.val_natCast_of_lt (by linarith)
     have val_2 : ZMod.val (2 : F p) = 2 := ZMod.val_natCast_of_lt (by linarith)
     have val_1 : ZMod.val (1 : F p) = 1 := ZMod.val_one p
     have : input.val < programSize := by linarith
     have : input.val + 1 < programSize := by linarith
     have : input.val + 2 < programSize := by linarith
+    -- the addresses are computed in `u64` by the witness generator;
+    -- this bound lets the `u64` wrapping simplify away
+    have h_no_wrap : input.val + 3 < 2^64 := by omega
     -- TODO `field` should get simped away
     change F p at input
     have : (input + 1).val = input.val + 1 := by field_to_nat
@@ -219,10 +225,11 @@ def memory (env : ProverData (F p)) : Fin (memorySize env) → F p :=
   fun i => mem[i.val].value
 
 -- to satisfy memory lookup constraints, the prover needs to make sure that `memory[addr] = (addr, ·)`,
--- and that the memory is non-empty (so we can use address 0 as a dummy address)
+-- that the memory is non-empty (so we can use address 0 as a dummy address),
+-- and that it fits into the `u64` index range used by the witness generator
 def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   let mem := env.getTable MemoryTable;
-  mem.size > 0 ∧
+  mem.size > 0 ∧ mem.size ≤ 2^64 ∧
   ∀ (addr : F p) (ha : addr.val < mem.size), mem[addr.val].address = addr
 
 /--
@@ -368,7 +375,9 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [circuit_norm, explicit_provable_type, DecodedAddressingMode.mk.injEq, State.mk.injEq] at h_input
     simp only [h_input, DecodedAddressingMode.val, memoryAccess, MemoryCompletenessAssumption] at h_assumptions addr1_def addr2_def ⊢
-    obtain ⟨ h_mode_encode, ⟨ h_pos, h_mem_completeness ⟩, h_mem_access ⟩ := h_assumptions
+    obtain ⟨ h_mode_encode, ⟨ h_pos, h_size_le, h_mem_completeness ⟩, h_mem_access ⟩ := h_assumptions
+    -- the witness generator indexes memory in `u64`; this bound lets the wrapping simplify away
+    have h_size_le' : memoryTable.size ≤ 2^64 := h_size_le
 
     -- simplify the goal using MemoryCompletenessAssumption and witness info
     suffices h_goal : addr1.val < memoryTable.size ∧ addr2.val < memoryTable.size by
@@ -570,14 +579,17 @@ def femtoCairoStepSpec
 /--
   Assumptions required for the FemtoCairo step circuit completeness.
   1. ValidProgramSize: programSize + 3 < p (ensures no field wraparound in address arithmetic)
-  2. ValidProgram: All instruction bytes in program memory are < 256
-  3. MemoryCompletenessAssumption: memory table is non-empty and filled correctly
-  4. The state transition succeeds (execution doesn't fail)
+  2. programSize ≤ 2^64: the program fits into the `u64` index range that the witness
+     generator uses to address it
+  3. ValidProgram: All instruction bytes in program memory are < 256
+  4. MemoryCompletenessAssumption: memory table is non-empty and filled correctly
+  5. The state transition succeeds (execution doesn't fail)
 -/
 def femtoCairoStepAssumptions
     {programSize : ℕ} (program : Fin programSize → F p)
     (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
   ValidProgramSize p programSize ∧
+  programSize ≤ 2^64 ∧
   ValidProgram program ∧
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
@@ -675,7 +687,8 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, decodeInstruction, readFromMemory, nextState, Gadgets.toBits]
 
-  obtain ⟨h_valid_size, h_valid_program, h_memory_completeness, h_transition_isSome⟩ := h_assumptions
+  obtain ⟨h_valid_size, h_programSize_u64, h_valid_program, h_memory_completeness,
+    h_transition_isSome⟩ := h_assumptions
 
   -- Decompose transition into components
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
@@ -701,7 +714,7 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
   have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
     rw [← State.eval_pc env input_var, h_input]
   simp only [h_eval_pc] at h_fetch_env
-  specialize h_fetch_env h_pc_bound
+  specialize h_fetch_env ⟨h_pc_bound, h_programSize_u64⟩
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
   obtain ⟨h_rawInstrType, h_op1, h_op2, h_op3⟩ := h_fetch_env
   specialize h_decode_env (by
@@ -728,7 +741,7 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
   simp only [h_op3, h_mode3_val, h_v3] at h_read3_value
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [h_eval_pc]
-    exact h_pc_bound
+    exact ⟨h_pc_bound, h_programSize_u64⟩
   · rw [h_rawInstrType]
     exact h_instr_bound
   · exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
@@ -773,7 +786,9 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
 
   -- For completeness, we assume that execution on the initial state succeeds, for all steps up to a maximum N
   InputAssumptions i _ _ := i < n
+  -- the witness generator indexes the program in `u64`, so the program has to fit
   InitialStateAssumptions initialState env :=
+    programSize ≤ 2^64 ∧
     MemoryCompletenessAssumption env ∧
     ∀ i ≤ n, (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) i).isSome
 
@@ -784,7 +799,7 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
 
   completeness := by
     intro initialState i env acc_var x_var acc x xs xs_len h_eval h_witnesses
-    rintro ⟨ ⟨ h_mem_completeness, h_initial_state ⟩, h_spec, h_i⟩
+    rintro ⟨ ⟨ h_programSize_u64, h_mem_completeness, h_initial_state ⟩, h_spec, h_i⟩
     specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions, MemoryCompletenessAssumption]
 

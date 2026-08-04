@@ -107,8 +107,10 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
+  -- destructure the byte bounds first, so that the `u64Wrap` simproc can discharge
+  -- the `% 2^64` truncations coming from the witness IR
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  simp_all only [circuit_norm, main, ByteXorTable, Inputs.mk.injEq]
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
 

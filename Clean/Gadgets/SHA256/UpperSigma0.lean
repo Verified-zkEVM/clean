@@ -169,6 +169,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [h1, hr2, hr13]
     have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
     have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
+    -- the witness IR computes the xor on `u64`s; the operands are bits, so nothing wraps
+    have b2v : ZMod.val input[(i + 2).val] < 2 := IsBool.val_lt_two b2
+    have b13v : ZMod.val input[(i + 13).val] < 2 := IsBool.val_lt_two b13
+    simp only [circuit_norm]
     have hc : ((input[(i + 2).val].val ^^^ input[(i + 13).val].val : ℕ) : F p) =
         input[(i + 2).val] + input[(i + 13).val] -
           2 * input[(i + 2).val] * input[(i + 13).val] := by
@@ -198,6 +202,12 @@ theorem completeness : Completeness (F p) main Assumptions := by
           2 * ((r2.val ^^^ r13.val : ℕ) : F p) * r22 := by
       rw [← IsBool.xor_eq_val_xor hxor1_bool b22, ZMod.natCast_val]
       exact ZMod.cast_id p _
+    -- the witness IR computes the xors on `u64`s; all operands are bits, so nothing wraps
+    have b2v : ZMod.val r2 < 2 := IsBool.val_lt_two b2
+    have b13v : ZMod.val r13 < 2 := IsBool.val_lt_two b13
+    have b22v : ZMod.val r22 < 2 := IsBool.val_lt_two b22
+    have hxor1v : ZMod.val (((r2.val ^^^ r13.val : ℕ) : F p)) < 2 := IsBool.val_lt_two hxor1_bool
+    simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where

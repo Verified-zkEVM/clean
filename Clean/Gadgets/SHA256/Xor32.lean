@@ -146,7 +146,13 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have h_bi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_b[i.val] = input_b[i] := by
     intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
+  -- the witness generator computes in `u64`; these bounds let the wrapping simplify away
+  have ha_lt : ZMod.val (Expression.eval env.toEnvironment input_var_a[i.val]) < 2 ^ 64 := by
+    rw [h_ai i]; rcases ha i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
+  have hb_lt : ZMod.val (Expression.eval env.toEnvironment input_var_b[i.val]) < 2 ^ 64 := by
+    rw [h_bi i]; rcases hb i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have henv := h_env i
+  simp only [circuit_norm] at henv
   rw [h_ai i, h_bi i] at henv
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
       input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
