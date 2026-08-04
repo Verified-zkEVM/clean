@@ -113,7 +113,7 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
     [("", padAndAdd 0), ("", padAndAdd 1),
      ("", queryAdvice (cfg.state 2) (-1) - queryAdvice (cfg.state 2) 1)]
 
-@[reducible] private def configureEqualities
+@[reducible] def configureEqualities
     (state : Fin 3 → Column .advice) (rcB : Fin 3 → Column .fixed) :
     Configure Fp Unit := do
   enableEquality (state 0).toAny
@@ -123,18 +123,18 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
   enableEquality (rcB 1).toAny
   enableEquality (rcB 2).toAny
 
-private instance (state : Fin 3 → Column .advice)
+instance (state : Fin 3 → Column .advice)
     (rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configureEqualities state rcB) := by
   unfold configureEqualities
   infer_instance
 
-@[reducible] private def configureGates (cfg : Config) : Configure Fp Unit := do
+@[reducible] def configureGates (cfg : Config) : Configure Fp Unit := do
   createGate (fullRoundGate cfg)
   createGate (partialRoundsGate cfg)
   createGate (padAndAddGate cfg)
 
-private instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
+instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
   unfold configureGates
   infer_instance
 
@@ -151,7 +151,7 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
   configureGates cfg
   return cfg
 
-@[reducible] private def configureElaborated
+@[reducible] def configureElaborated
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) := by

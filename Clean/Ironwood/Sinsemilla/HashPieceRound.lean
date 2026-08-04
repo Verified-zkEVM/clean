@@ -206,7 +206,7 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   return cfg
 
 set_option synthInstance.maxSize 2048 in
-@[reducible] private def configureElaborated
+@[reducible] def configureElaborated
     (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) :

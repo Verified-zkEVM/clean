@@ -110,7 +110,7 @@ def PinnedConstraintSystem.derive [Field F] [DecidableEq F] (cs : ConstraintSyst
 
 /-- Lookup inputs in the pinned constraint system are the selector-substituted source
 inputs erased against the authoritative configure-derived query layout. -/
-@[simp] theorem PinnedConstraintSystem.derive_lookupInputExprs_getD
+theorem PinnedConstraintSystem.derive_lookupInputExprs_getD
     [Field F] [DecidableEq F]
     (cs : ConstraintSystem F) (map : SelCompressMap)
     (index : ℕ) (hindex : index < cs.lookups.length) :
@@ -123,7 +123,7 @@ inputs erased against the authoritative configure-derived query layout. -/
 
 /-- Lookup tables in the pinned constraint system are the selector-substituted source
 tables erased against the authoritative configure-derived query layout. -/
-@[simp] theorem PinnedConstraintSystem.derive_lookupTableExprs_getD
+theorem PinnedConstraintSystem.derive_lookupTableExprs_getD
     [Field F] [DecidableEq F]
     (cs : ConstraintSystem F) (map : SelCompressMap)
     (index : ℕ) (hindex : index < cs.lookups.length) :
