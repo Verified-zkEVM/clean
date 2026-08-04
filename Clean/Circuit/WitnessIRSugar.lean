@@ -45,27 +45,28 @@ instance : Inv (FExpr F) := ⟨.inv⟩
 instance [Field F] : Neg (FExpr F) := ⟨.neg⟩
 instance [Field F] : Sub (FExpr F) := ⟨.sub⟩
 
-instance : Coe ℕ (U64Expr F) := ⟨.const⟩
-instance {n : ℕ} : OfNat (U64Expr F) n := ⟨.const n⟩
+instance : Coe ℕ (U64Expr F) := ⟨(.const <| UInt64.ofNat ·)⟩
+instance : Coe UInt64 (U64Expr F) := ⟨.const⟩
+instance {n : ℕ} : OfNat (U64Expr F) n := ⟨.const (OfNat.ofNat n)⟩
 instance : Inhabited (U64Expr F) where
   default := .const 0
 instance : Add (U64Expr F) := ⟨.add⟩
 instance : Mul (U64Expr F) := ⟨.mul⟩
 instance : Div (U64Expr F) := ⟨.div⟩
 instance : HDiv (U64Expr F) ℕ (U64Expr F) where
-  hDiv n m := .div n m
+  hDiv n m := .div n (.const (UInt64.ofNat m))
 instance : Mod (U64Expr F) := ⟨.mod⟩
 instance : HMod (U64Expr F) ℕ (U64Expr F) where
-  hMod n m := .mod n m
+  hMod n m := .mod n (.const (UInt64.ofNat m))
 instance : AndOp (U64Expr F) := ⟨.land⟩
 instance : OrOp (U64Expr F) := ⟨.lor⟩
 instance : XorOp (U64Expr F) := ⟨.lxor⟩
 instance : ShiftLeft (U64Expr F) := ⟨.shiftL⟩
 instance : ShiftRight (U64Expr F) := ⟨.shiftR⟩
 instance : HShiftLeft (U64Expr F) ℕ (U64Expr F) where
-  hShiftLeft n m := .shiftL n m
+  hShiftLeft n m := .shiftL n (.const (UInt64.ofNat m))
 instance : HShiftRight (U64Expr F) ℕ (U64Expr F) where
-  hShiftRight n m := .shiftR n m
+  hShiftRight n m := .shiftR n (.const (UInt64.ofNat m))
 
 /-- A single field-sorted expression is a length-1 witness program, so scalar
 sites can pass an `FExpr` to the generic `witness`. -/
@@ -82,13 +83,6 @@ abbrev _root_.Expression.val (e : Expression F) : U64Expr F := .val (.expr e)
 /-- Cast a u64-sorted IR expression back into the field (via `FiniteField.fromNat`). -/
 abbrev U64Expr.toField (n : U64Expr F) : FExpr F := .ofU64 n
 
-/-- Bit `i` of the field value of an IR expression, as the field element `0` or `1`.
-Unlike `(e.val >>> i) % 2` this is computed at the field level, so `i` may exceed 64. -/
-abbrev FExpr.bit (e : FExpr F) (i : ℕ) : FExpr F := .bitOf e i
-
-/-- Bit `i` of the field value of a circuit expression: `x.bit i`. -/
-abbrev _root_.Expression.bit (e : Expression F) (i : ℕ) : FExpr F := .bitOf (.expr e) i
-
 /-- The `n` low bits of the field value of an IR expression, as a vector output. -/
 abbrev VExpr.bits (n : ℕ) (e : FExpr F) : VExpr F n := .bitsOf e
 
@@ -97,6 +91,25 @@ abbrev _root_.Expression.bits (e : Expression F) (n : ℕ) : VExpr F n := .bitsO
 
 /-- Cast a boolean expression to a field element that is 0 or 1. -/
 abbrev BExpr.toField [Field F] (b : BExpr F) : FExpr F := .ite b 1 0
+
+/-- Bit `i` of the field value of an IR expression, as the field element `0` or `1`. -/
+abbrev FExpr.bit [Field F] (e : FExpr F) (i : ℕ) : FExpr F := (BExpr.bit e i).toField
+
+/-- Bit `i` of the field value of a circuit expression: `x.bit i`. -/
+abbrev _root_.Expression.bit [Field F] (e : Expression F) (i : ℕ) : FExpr F :=
+  (BExpr.bit (.expr e) i).toField
+
+/-- A bit-valued condition cast into the field is the corresponding `0`/`1` element —
+the same normal form `VExpr.bitsOf` evaluates to, so bit-decomposition proofs see one
+shape whether the bit index is static or the loop index. Keyed as a pre-rewrite so it
+fires before `FExpr.eval` unfolds the underlying `ite`. -/
+@[circuit_norm ↓]
+theorem FExpr.eval_bit [FiniteField F] (ctx : Ctx F) (e : FExpr F) (i : ℕ) :
+    FExpr.eval ctx (e.bit i) = FiniteField.fromNat (FiniteField.val (e.eval ctx) >>> i % 2) := by
+  simp only [FExpr.eval, BExpr.eval, ← Nat.decide_shiftRight_mod_two_eq_one,
+    decide_eq_true_eq]
+  rcases Nat.mod_two_eq_zero_or_one (FiniteField.val (e.eval ctx) >>> i) with h | h <;>
+    simp [h]
 
 /-! ## Conditions -/
 
@@ -123,8 +136,8 @@ instance [NatCast F] : EqCond ℕ (Expression F) F where eqCond n x := .feq (n :
 instance [NatCast F] : EqCond (FExpr F) ℕ F where eqCond x n := .feq x (n : F)
 instance [NatCast F] : EqCond ℕ (FExpr F) F where eqCond n x := .feq (n : F) x
 instance : EqCond (U64Expr F) (U64Expr F) F := ⟨.neq⟩
-instance : EqCond (U64Expr F) ℕ F where eqCond x n := .neq x (.const n)
-instance : EqCond ℕ (U64Expr F) F where eqCond n x := .neq (.const n) x
+instance : EqCond (U64Expr F) ℕ F where eqCond x n := .neq x (.const (UInt64.ofNat n))
+instance : EqCond ℕ (U64Expr F) F where eqCond n x := .neq (.const (UInt64.ofNat n)) x
 
 /-- Overload witness-IR less-than tests while keeping a single parser entry for `<?`.
 Field-sorted operands become `BExpr.flt` (comparing `FiniteField.val`s, so it stays exact
@@ -147,8 +160,8 @@ instance [NatCast F] : LtCond ℕ (Expression F) F where ltCond n x := .flt (n :
 instance [NatCast F] : LtCond (FExpr F) ℕ F where ltCond x n := .flt x (n : F)
 instance [NatCast F] : LtCond ℕ (FExpr F) F where ltCond n x := .flt (n : F) x
 instance : LtCond (U64Expr F) (U64Expr F) F := ⟨.lt⟩
-instance : LtCond (U64Expr F) ℕ F where ltCond x n := .lt x (.const n)
-instance : LtCond ℕ (U64Expr F) F where ltCond n x := .lt (.const n) x
+instance : LtCond (U64Expr F) ℕ F where ltCond x n := .lt x (.const (UInt64.ofNat n))
+instance : LtCond ℕ (U64Expr F) F where ltCond n x := .lt (.const (UInt64.ofNat n)) x
 
 instance : Inhabited (BExpr F) := ⟨.false⟩
 instance : AndOp (BExpr F) := ⟨.and⟩

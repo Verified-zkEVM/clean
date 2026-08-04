@@ -48,3 +48,19 @@ example (ctx : Ctx F) (x y : FExpr F) :
       = decide (FiniteField.val (x.eval ctx) % 2^64 < FiniteField.val (y.eval ctx) % 2^64) := by
   simp [BExpr.eval, U64Expr.eval, UInt64.lt_iff_toNat_lt]
 end LtCond
+
+section BitOf
+open Witgen
+variable {F : Type} [FiniteField F]
+
+/-- `BExpr.bit` is a condition; casting it into the field gives the `0`/`1` element, in
+the same normal form `VExpr.bitsOf` produces for the loop-indexed case. -/
+example (ctx : Ctx F) (x : FExpr F) (i : ℕ) :
+    FExpr.eval ctx (x.bit i) = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
+  simp only [circuit_norm]
+
+/-- The bit index is a static `ℕ`, so it is exact past 64 on large fields. -/
+example (ctx : Ctx F) (x : FExpr F) :
+    (BExpr.bit x 200).eval ctx = (FiniteField.val (x.eval ctx)).testBit 200 :=
+  rfl
+end BitOf

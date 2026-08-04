@@ -65,8 +65,6 @@ inductive FExpr (F : Type) where
   equals `Nat.cast` on prime fields, but interprets binary digits as coefficients
   on binary fields, where `Nat.cast` would collapse via the characteristic). -/
   | ofU64 (n : U64Expr F)
-  /-- Bit `i` of `FiniteField.val x`, as the field element `0` or `1`. -/
-  | bitOf (x : FExpr F) (i : ℕ)
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
@@ -80,8 +78,7 @@ inductive FExpr (F : Type) where
 /-- u64-sorted (bounded-nat) witness expressions. All operations wrap modulo `2^64`,
 matching Rust's `u64`. -/
 inductive U64Expr (F : Type) where
-  /-- A `ℕ` literal, truncated to 64 bits. -/
-  | const (n : ℕ)
+  | const (n : UInt64)
   /-- The field→u64 bridge: `ZMod.val` truncated to 64 bits. -/
   | val (x : FExpr F)
   /-- The index of the innermost enclosing `VExpr.mapRange` (0 outside). -/
@@ -112,6 +109,8 @@ inductive BExpr (F : Type) where
   /-- Field-sorted less-than condition, comparing the `ℕ` values of both operands
   (`FiniteField.val`), so it is exact on fields wider than 64 bits. -/
   | flt (x y : FExpr F)
+  /-- Bit `i` of `FiniteField.val x` is set. -/
+  | bit (x : FExpr F) (i : ℕ)
   /-- Negation of a condition. -/
   | not (b : BExpr F)
   /-- Conjunction of conditions. -/
@@ -155,7 +154,6 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .mul x y => x.eval ctx * y.eval ctx
   | .inv x => (x.eval ctx)⁻¹
   | .ofU64 n => FiniteField.fromNat (n.eval ctx).toNat
-  | .bitOf x i => FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2)
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
@@ -171,7 +169,7 @@ def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
 
 @[circuit_norm]
 def U64Expr.eval (ctx : Ctx F) : U64Expr F → UInt64
-  | .const n => UInt64.ofNat n
+  | .const n => n
   | .val x => UInt64.ofNat (FiniteField.val (x.eval ctx))
   | .idx => UInt64.ofNat ctx.idx
   | .localVar i =>
@@ -197,6 +195,7 @@ def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .neq x y => x.eval ctx = y.eval ctx
   | .lt x y => x.eval ctx < y.eval ctx
   | .flt x y => FiniteField.val (x.eval ctx) < FiniteField.val (y.eval ctx)
+  | .bit x i => (FiniteField.val (x.eval ctx)).testBit i
   | .not b => !b.eval ctx
   | .and x y => x.eval ctx && y.eval ctx
 

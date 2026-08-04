@@ -60,7 +60,6 @@ def FExpr.toJson : FExpr F → Json
   | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .inv x => Json.mkObj [("type", "inv"), ("arg", x.toJson)]
   | .ofU64 n => Json.mkObj [("type", "ofU64"), ("arg", n.toJson)]
-  | .bitOf x i => Json.mkObj [("type", "bitOf"), ("arg", x.toJson), ("bit", Lean.toJson i)]
   | .ite c t e => Json.mkObj [("type", "ite"),
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
   | .listGet xs i => Json.mkObj [("type", "listGet"),
@@ -77,7 +76,7 @@ def FExpr.listToJson : List (FExpr F) → List Json
   | x :: xs => x.toJson :: FExpr.listToJson xs
 
 def U64Expr.toJson : U64Expr F → Json
-  | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n)]
+  | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n.toNat)]
   | .val x => Json.mkObj [("type", "val"), ("arg", x.toJson)]
   | .idx => Json.mkObj [("type", "idx")]
   | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
@@ -100,6 +99,7 @@ def BExpr.toJson : BExpr F → Json
   | .neq x y => Json.mkObj [("type", "u64Eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .lt x y => Json.mkObj [("type", "u64Lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .flt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .bit x i => Json.mkObj [("type", "bit"), ("arg", x.toJson), ("bit", Lean.toJson i)]
   | .not b => Json.mkObj [("type", "not"), ("arg", b.toJson)]
   | .and x y => Json.mkObj [("type", "and"), ("lhs", x.toJson), ("rhs", y.toJson)]
 
