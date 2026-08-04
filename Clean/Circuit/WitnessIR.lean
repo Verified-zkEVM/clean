@@ -495,6 +495,15 @@ theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
     (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
   with_unfolding_all rfl
 
+/-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
+(`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
+Not in `circuit_norm`: firing on transient literal-vector spellings changes downstream
+goal shapes; cite it explicitly where needed. -/
+theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
+    (x : FExpr F) (env : ProverEnvironment F) :
+    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
+  with_unfolding_all rfl
+
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
 @[circuit_norm]

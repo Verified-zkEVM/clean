@@ -10,7 +10,7 @@ instance (p : ℕ) : ToJson (F p) where
 
 variable {F : Type} [FiniteField F] [ToJson F]
 
-def exprToJson [ToJson F]: Expression F → Json
+def exprToJson : Expression F → Json
   | .var v => Json.mkObj [
     ("type", Json.str "var"),
     ("index", Json.num v.index)

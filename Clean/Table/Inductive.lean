@@ -118,22 +118,45 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
+/--
+Helper for reasoning about the cell assignment produced by a single-row constraint:
+variables at indices below `size S` are assigned to that row's input cells.
+Stated for a generic `ops`, so that all vector lengths stay symbolic and clean.
+-/
+private lemma single_vars_first {W : ℕ+} {S : TypeMap} [ProvableType S]
+    {r0 : Fin W} {ops : Operations F} {j : ℕ} (hj : j < size S)
+    (hoff : j < (assignmentFromCircuit ((CellAssignment.empty W).pushRow r0) ops).offset) :
+    (assignmentFromCircuit ((CellAssignment.empty W).pushRow r0) ops).vars[j]'hoff
+      = .input ⟨r0, ⟨j, hj⟩⟩ := by
+  simp [CellAssignment.assignmentFromCircuit_vars, CellAssignment.pushRow, CellAssignment.empty,
+    Vector.getElem_cast, Vector.getElem_mapFinRange, hj]
+
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : ProverEnvironment F} :
   ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
-  set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
-  simp only [equalityConstraint, circuit_norm, table_norm, MonadLift.monadLift]
+  obtain ⟨row₁, row₂⟩ := row
+  set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> (row₁, row₂), rfl⟩ env
+  simp only [equalityConstraint, circuit_norm, table_norm, MonadLift.monadLift, pure]
 
-  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
-    have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
-    simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm,
-      MonadLift.monadLift] at h_env'
-    have hi' : i < size State + size Input := by linarith
-    simp [h_env', hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get]
-    exact (Vector.getElem_append_left hi).symm
+  have h_sp : size (ProvablePair State Input) = size State + size Input := rfl
 
-  have h_env : (eval env'.toEnvironment (varFromOffset State 0 : State (Expression F)) : State F) = row.1 := by
+  have h_env_in i (hi : i < size State) : (toElements row₁)[i] = env'.get i := by
+    have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> (row₁, row₂), _⟩ env := rfl
+    simp only [windowEnv, TableConstraint.finalAssignment, equalityConstraint, circuit_norm,
+      table_norm, MonadLift.monadLift, pure] at h_env'
+    rw [h_env']
+    dsimp only
+    split
+    · rw [single_vars_first (j := i) (by rw [h_sp]; omega)]
+      simp
+      exact (Vector.getElem_append_left hi).symm
+    · exfalso; apply ‹¬_›
+      simp only [CellAssignment.assignmentFromCircuit_offset, CellAssignment.pushRow_offset,
+        CellAssignment.empty, h_sp]
+      omega
+
+  have h_env : (eval env'.toEnvironment (varFromOffset State 0 : State (Expression F)) : State F) = row₁ := by
     rw [ProvableType.ext_iff]
     intro i hi
     rw [h_env_in i hi, ProvableType.eval_varFromOffset,
@@ -239,11 +262,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
     change ConstraintsHold.Soundness env'.toEnvironment _ at constraints
     simp only [table_norm, circuit_norm, witnessAny, inductiveConstraint, zero_add, Nat.add_zero,
-      MonadLift.monadLift] at constraints
+      MonadLift.monadLift, pure] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
     simp only [windowEnv, TableConstraint.finalAssignment, inductiveConstraint, circuit_norm, table_norm,
-      MonadLift.monadLift, witnessAny, zero_add, Nat.add_zero] at h_env'
+      MonadLift.monadLift, witnessAny, zero_add, Nat.add_zero, pure] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
     set x := size Input
@@ -314,7 +337,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       convert (h_env_input_1 i hi).symm
       simp only [ProvableType.eval_varFromOffset,
         ProvableType.toElements_fromElements, zero_add]
-      convert Vector.getElem_mapRange _ hi
+      exact Vector.getElem_mapRange _ hi
 
     have input_eq_2 : eval env'.toEnvironment curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
@@ -323,7 +346,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       convert (h_env_input_2 i hi).symm
       simp only [s, ProvableType.eval_varFromOffset,
         ProvableType.toElements_fromElements, zero_add]
-      convert Vector.getElem_mapRange _ hi using 1
+      rw [Vector.getElem_mapRange]
       ac_rfl
 
     have next_eq : eval env'.toEnvironment (varFromOffset (F := F) State (size State + size Input + main_ops.localLength)) = next.1 := by
@@ -377,7 +400,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
-      table_assignment_norm, circuit_norm, witnessAny, MonadLift.monadLift,
+      table_assignment_norm, circuit_norm, witnessAny, MonadLift.monadLift, pure,
       CellAssignment.assignmentFromCircuit_offset]
 
 end InductiveTable

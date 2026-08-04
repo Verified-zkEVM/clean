@@ -72,6 +72,34 @@ instance : HShiftRight (U64Expr F) ℕ (U64Expr F) where
 sites can pass an `FExpr` to the generic `witness`. -/
 instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 
+/-! The `FExpr.eval`/`U64Expr.eval` matchers do not unfold the operator instances above,
+so evaluation would get stuck on operator-sugared IR. Desugar to constructors in
+`circuit_norm` via per-operator rfl-lemmas; the evaluators' own match equations then apply. -/
+
+@[circuit_norm] theorem FExpr.add_def (x y : FExpr F) : x + y = .add x y := rfl
+@[circuit_norm] theorem FExpr.mul_def (x y : FExpr F) : x * y = .mul x y := rfl
+@[circuit_norm] theorem FExpr.inv_def (x : FExpr F) : x⁻¹ = .inv x := rfl
+@[circuit_norm] theorem FExpr.neg_def [Field F] (x : FExpr F) : -x = FExpr.neg x := rfl
+@[circuit_norm] theorem FExpr.sub_def [Field F] (x y : FExpr F) : x - y = FExpr.sub x y := rfl
+
+@[circuit_norm] theorem U64Expr.add_def (x y : U64Expr F) : x + y = .add x y := rfl
+@[circuit_norm] theorem U64Expr.mul_def (x y : U64Expr F) : x * y = .mul x y := rfl
+@[circuit_norm] theorem U64Expr.div_def (x y : U64Expr F) : x / y = .div x y := rfl
+@[circuit_norm] theorem U64Expr.hDiv_def (x : U64Expr F) (m : ℕ) :
+  x / m = U64Expr.div x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.mod_def (x y : U64Expr F) : x % y = .mod x y := rfl
+@[circuit_norm] theorem U64Expr.hMod_def (x : U64Expr F) (m : ℕ) :
+  x % m = U64Expr.mod x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.land_def (x y : U64Expr F) : x &&& y = .land x y := rfl
+@[circuit_norm] theorem U64Expr.lor_def (x y : U64Expr F) : x ||| y = .lor x y := rfl
+@[circuit_norm] theorem U64Expr.lxor_def (x y : U64Expr F) : x ^^^ y = .lxor x y := rfl
+@[circuit_norm] theorem U64Expr.shiftL_def (x y : U64Expr F) : x <<< y = .shiftL x y := rfl
+@[circuit_norm] theorem U64Expr.shiftR_def (x y : U64Expr F) : x >>> y = .shiftR x y := rfl
+@[circuit_norm] theorem U64Expr.hShiftL_def (x : U64Expr F) (m : ℕ) :
+  x <<< m = U64Expr.shiftL x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.hShiftR_def (x : U64Expr F) (m : ℕ) :
+  x >>> m = U64Expr.shiftR x (.const (UInt64.ofNat m)) := rfl
+
 /-! ## Bridges as dot notation -/
 
 /-- The `u64` value of an IR field expression (truncated `ZMod.val`): `e.val`. -/
@@ -166,6 +194,66 @@ instance : LtCond ℕ (U64Expr F) F where ltCond n x := .lt (.const (UInt64.ofNa
 instance : Inhabited (BExpr F) := ⟨.false⟩
 instance : AndOp (BExpr F) := ⟨.and⟩
 
+/-! Desugar `=?`/`&&&` conditions to constructors, for the same reason as the operator
+lemmas above. One lemma per `EqCond` instance. -/
+
+@[circuit_norm] theorem EqCond.fexpr_fexpr_def (x y : FExpr F) : (x =? y) = BExpr.feq x y := rfl
+@[circuit_norm] theorem EqCond.expr_fexpr_def (x : Expression F) (y : FExpr F) :
+  (x =? y) = BExpr.feq (.expr x) y := rfl
+@[circuit_norm] theorem EqCond.fexpr_expr_def (x : FExpr F) (y : Expression F) :
+  (x =? y) = BExpr.feq x (.expr y) := rfl
+@[circuit_norm] theorem EqCond.fexpr_const_def (x : FExpr F) (y : F) :
+  (x =? y) = BExpr.feq x (.const y) := rfl
+@[circuit_norm] theorem EqCond.const_fexpr_def (x : F) (y : FExpr F) :
+  (x =? y) = BExpr.feq y (.const x) := rfl
+@[circuit_norm] theorem EqCond.expr_const_def (x : Expression F) (y : F) :
+  (x =? y) = BExpr.feq (.expr x) (.const y) := rfl
+@[circuit_norm] theorem EqCond.const_expr_def (x : F) (y : Expression F) :
+  (x =? y) = BExpr.feq (.const x) (.expr y) := rfl
+@[circuit_norm] theorem EqCond.expr_nat_def [NatCast F] (x : Expression F) (n : ℕ) :
+  (x =? n) = BExpr.feq (.expr x) (.const (n : F)) := rfl
+@[circuit_norm] theorem EqCond.nat_expr_def [NatCast F] (n : ℕ) (x : Expression F) :
+  (n =? x) = BExpr.feq (.const (n : F)) (.expr x) := rfl
+@[circuit_norm] theorem EqCond.fexpr_nat_def [NatCast F] (x : FExpr F) (n : ℕ) :
+  (x =? n) = BExpr.feq x (.const (n : F)) := rfl
+@[circuit_norm] theorem EqCond.nat_fexpr_def [NatCast F] (n : ℕ) (x : FExpr F) :
+  (n =? x) = BExpr.feq (.const (n : F)) x := rfl
+@[circuit_norm] theorem EqCond.u64_u64_def (x y : U64Expr F) : (x =? y) = BExpr.neq x y := rfl
+@[circuit_norm] theorem EqCond.u64_nat_def (x : U64Expr F) (n : ℕ) :
+  (x =? n) = BExpr.neq x (.const (UInt64.ofNat n)) := rfl
+@[circuit_norm] theorem EqCond.nat_u64_def (n : ℕ) (x : U64Expr F) :
+  (n =? x) = BExpr.neq (.const (UInt64.ofNat n)) x := rfl
+@[circuit_norm] theorem BExpr.and_def (x y : BExpr F) : x &&& y = BExpr.and x y := rfl
+
+/-! Same treatment for `<?`. One lemma per `LtCond` instance. -/
+
+@[circuit_norm] theorem LtCond.fexpr_fexpr_def (x y : FExpr F) : (x <? y) = BExpr.flt x y := rfl
+@[circuit_norm] theorem LtCond.expr_fexpr_def (x : Expression F) (y : FExpr F) :
+  (x <? y) = BExpr.flt (.expr x) y := rfl
+@[circuit_norm] theorem LtCond.fexpr_expr_def (x : FExpr F) (y : Expression F) :
+  (x <? y) = BExpr.flt x (.expr y) := rfl
+@[circuit_norm] theorem LtCond.fexpr_const_def (x : FExpr F) (y : F) :
+  (x <? y) = BExpr.flt x (.const y) := rfl
+@[circuit_norm] theorem LtCond.const_fexpr_def (x : F) (y : FExpr F) :
+  (x <? y) = BExpr.flt (.const x) y := rfl
+@[circuit_norm] theorem LtCond.expr_const_def (x : Expression F) (y : F) :
+  (x <? y) = BExpr.flt (.expr x) (.const y) := rfl
+@[circuit_norm] theorem LtCond.const_expr_def (x : F) (y : Expression F) :
+  (x <? y) = BExpr.flt (.const x) (.expr y) := rfl
+@[circuit_norm] theorem LtCond.expr_nat_def [NatCast F] (x : Expression F) (n : ℕ) :
+  (x <? n) = BExpr.flt (.expr x) (.const (n : F)) := rfl
+@[circuit_norm] theorem LtCond.nat_expr_def [NatCast F] (n : ℕ) (x : Expression F) :
+  (n <? x) = BExpr.flt (.const (n : F)) (.expr x) := rfl
+@[circuit_norm] theorem LtCond.fexpr_nat_def [NatCast F] (x : FExpr F) (n : ℕ) :
+  (x <? n) = BExpr.flt x (.const (n : F)) := rfl
+@[circuit_norm] theorem LtCond.nat_fexpr_def [NatCast F] (n : ℕ) (x : FExpr F) :
+  (n <? x) = BExpr.flt (.const (n : F)) x := rfl
+@[circuit_norm] theorem LtCond.u64_u64_def (x y : U64Expr F) : (x <? y) = BExpr.lt x y := rfl
+@[circuit_norm] theorem LtCond.u64_nat_def (x : U64Expr F) (n : ℕ) :
+  (x <? n) = BExpr.lt x (.const (UInt64.ofNat n)) := rfl
+@[circuit_norm] theorem LtCond.nat_u64_def (n : ℕ) (x : U64Expr F) :
+  (n <? x) = BExpr.lt (.const (UInt64.ofNat n)) x := rfl
+
 /-! ## Index access notation for .listGet -/
 
 instance {F : Type} {n : ℕ} : GetElem (Vector F n) (U64Expr F) (FExpr F) (fun _ _ => True) where
@@ -179,6 +267,16 @@ instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (U64Expr F) (FExpr F)
 
 instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
+
+/-! Desugar the `GetElem` instances above to `FExpr.listGet`, for the same reason as the
+operator lemmas: matchers and simp keying do not see through the instances. -/
+
+@[circuit_norm] theorem getElem_vector_const_def {F : Type} {n : ℕ} (v : Vector F n) (i : U64Expr F) :
+    v[i] = FExpr.listGet (v.toList.map FExpr.const) i := rfl
+@[circuit_norm] theorem getElem_vector_expr_def {F : Type} {n : ℕ} (v : Vector (Expression F) n) (i : U64Expr F) :
+    v[i] = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
+@[circuit_norm] theorem getElem_vector_fexpr_def {F : Type} {n : ℕ} (v : Vector (FExpr F) n) (i : U64Expr F) :
+    v[i] = FExpr.listGet v.toList i := rfl
 
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :

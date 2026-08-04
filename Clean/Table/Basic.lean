@@ -313,6 +313,17 @@ theorem bind_def {β : Type} (f : TableConstraint W S F α) (g : α → TableCon
     let (a, ctx') := f ctx
     g a ctx' := rfl
 
+@[table_norm, table_assignment_norm]
+theorem pure_def (a : α) : (pure a : TableConstraint W S F α) = fun ctx => (a, ctx) := rfl
+
+/- Matchers do not see through the `Id` monad's `pure`, leaving goals stuck on
+`match pure (a, ctx) with ...`; reduce it in simp. -/
+@[table_norm, table_assignment_norm]
+theorem id_pure_def {α : Type} (a : α) : (pure a : Id α) = a := rfl
+
+@[table_norm, table_assignment_norm]
+theorem id_bind_def {α β : Type} (a : Id α) (f : α → Id β) : (a >>= f) = f a := rfl
+
 instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 

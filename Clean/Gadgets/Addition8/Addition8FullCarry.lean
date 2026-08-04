@@ -128,8 +128,9 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
+    obtain ⟨x, y, carryIn⟩ := input
+    simp_all +instances only [circuit_norm, Witgen.WitgenIR.eval_ofFExprs_one, circuit, main,
+      FormalAssertion.toSubcircuit, Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
 end Gadgets.Addition8FullCarry

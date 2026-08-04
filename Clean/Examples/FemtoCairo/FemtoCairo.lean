@@ -594,7 +594,7 @@ def femtoCairoStepAssumptions
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
-def femtoCairoStepSoundness
+theorem femtoCairoStepSoundness
     {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize) (fun _ _ => True)
       (femtoCairoStepSpec program) := by
@@ -680,7 +680,7 @@ def femtoCairoStepSoundness
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
 
-def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
+theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
   (h_programSize : programSize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by

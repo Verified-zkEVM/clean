@@ -104,7 +104,7 @@ theorem natToField_val {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
-def less_than_p (x : F p) : x.val < p := by
+theorem less_than_p (x : F p) : x.val < p := by
   rcases p with _ | n; cases p_ne_zero rfl
   exact x.is_lt
 
@@ -128,7 +128,7 @@ def floorDiv (x : F p) (c : ℕ+) : F p := (x.val / c : ℕ)
 lemma mod_val {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val = x.val % c := by
   rw [mod, ZMod.val_natCast_of_lt]
   grw [Nat.mod_lt x.val c.pos]
-  exact lt
+  exact lt.le
 
 lemma floorDiv_val {x : F p} {c : ℕ+} : (floorDiv x c).val = x.val / c := by
   rw [floorDiv, ZMod.val_natCast_of_lt]

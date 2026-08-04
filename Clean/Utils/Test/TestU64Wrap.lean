@@ -46,7 +46,7 @@ the field-sorted form above is the one to use when operands may exceed `2^64`. -
 example (ctx : Ctx F) (x y : FExpr F) :
     (x.val <? y.val).eval ctx
       = decide (FiniteField.val (x.eval ctx) % 2^64 < FiniteField.val (y.eval ctx) % 2^64) := by
-  simp [BExpr.eval, U64Expr.eval, UInt64.lt_iff_toNat_lt]
+  simp [circuit_norm, UInt64.lt_iff_toNat_lt]
 end LtCond
 
 section BitOf
