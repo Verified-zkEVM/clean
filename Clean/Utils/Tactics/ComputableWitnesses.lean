@@ -5,9 +5,9 @@ import Clean.Circuit.Explicit
 
 Automation for the common `FormalCircuitBase.ComputableWitnesses` proof shape.
 
-The tactic deliberately uses controlled simp sets and performs at most two rounds of
-unfolding circuit-valued wrapper definitions. Circuits needing more abstraction layers
-should express those layers as subcircuits instead.
+The tactic uses controlled simp sets and unfolds only a `main` declaration in the current
+scope; child subcircuit constants remain opaque, and their obligations are discharged
+through the composition lemmas and `grind` rules in `Clean.Circuit.Subcircuit`.
 -/
 
 open Lean Meta Simp Elab Tactic
@@ -58,8 +58,7 @@ def structEqSplitProc : Simproc := fun e => do
 
 simproc structEqSplit (_ = _) := structEqSplitProc
 
-private def runComputableWitnesses
-    (extraTerms : Array (TSyntax `term)) (unfoldCircuitConsts : Bool) : TacticM Unit := do
+private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
   let lemmasArray ← extraTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
   let simpPass : TacticM Unit := do
@@ -70,18 +69,12 @@ private def runComputableWitnesses
       catch _ =>
         pure ()
   simpPass
-  if !unfoldCircuitConsts then
-    unless (← getGoals).isEmpty do
-      try
-        evalTactic (← `(tactic| unfold $(mkIdent `main):ident))
-      catch _ =>
-        pure ()
-      simpPass
-  else
-    for _ in [0:2] do
-      unless (← getGoals).isEmpty do
-        evalTactic (← `(tactic| unfold_formal_circuit_consts))
-        simpPass
+  unless (← getGoals).isEmpty do
+    try
+      evalTactic (← `(tactic| unfold $(mkIdent `main):ident))
+    catch _ =>
+      pure ()
+    simpPass
   unless (← getGoals).isEmpty do
     evalTactic (← `(tactic| intros))
   unless (← getGoals).isEmpty do
@@ -98,23 +91,17 @@ private def runComputableWitnesses
 
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,
-two bounded rounds of circuit-wrapper unfolding, structural splitting of the operations/output
-conjunction, and `grind`.
+unfolding of the current `main` declaration (child subcircuit constants remain opaque),
+structural splitting of the operations/output conjunction, and `grind`.
 
-Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]`.
+Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]` — e.g. a child
+bundle name to reduce its `output`/`localLength` metadata when witness expressions embed the
+child's output under a binder, where `grind`'s E-matching cannot reach it.
 -/
 syntax "computable_witnesses" ("[" term,* "]")? : tactic
 
-/--
-Experimental variant of `computable_witnesses` that does not unfold circuit-valued constants.
-It unfolds a `main` declaration in the current scope, while child subcircuit constants remain opaque.
--/
-syntax "computable_witnesses'" ("[" term,* "]")? : tactic
-
 elab_rules : tactic
   | `(tactic| computable_witnesses $[[$terms:term,*]]?) =>
-      runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[]) true
-  | `(tactic| computable_witnesses' $[[$terms:term,*]]?) =>
-      runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[]) false
+      runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
 
 end ComputableWitnesses
