@@ -6430,6 +6430,31 @@ theorem constantValues_length_le_constantAssignments_length
   rw [hlength]
   omega
 
+/-- A complete V1 allocation preserves the constant-value stream in order. -/
+theorem constantAssignments_map_fst
+    (ops : Operations F) (constantColumns : List ℕ)
+    (hfull :
+      (constantValues ops).length ≤
+        (constantAssignments ops constantColumns).length) :
+    (constantAssignments ops constantColumns).map Prod.fst =
+      constantValues ops := by
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  let endRow := placementEndFrom shapes regionStarts
+  let positions : List (ℕ × ℕ) := constantColumns.flatMap fun column =>
+    (constantFreeRowsFrom shapes regionStarts endRow column).map fun row =>
+      (column, row)
+  have hpositions : (constantValues ops).length ≤ positions.length := by
+    have hlength :
+        (constantValues ops).length ≤
+          min positions.length (constantValues ops).length := by
+      simpa only [constantAssignments, positions, shapes, regionStarts,
+        endRow, List.length_map, List.length_zip] using hfull
+    omega
+  simp only [constantAssignments, List.map_map]
+  simpa only [Function.comp_apply] using
+    List.map_snd_zip hpositions
+
 /-- Every V1 constant allocation uses one of the configured constants columns. -/
 theorem constantAssignments_column_mem
     (ops : Operations F) (constCols : List ℕ)
