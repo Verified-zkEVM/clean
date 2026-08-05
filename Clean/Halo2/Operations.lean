@@ -228,6 +228,17 @@ def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
   rowCount := max left.rowCount right.rowCount
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
 
+@[circuit_norm] theorem combine_columns (left right : RegionSynthesisSummary) :
+    (left.combine right).columns = left.columns ++ right.columns := rfl
+
+@[circuit_norm] theorem combine_rowCount (left right : RegionSynthesisSummary) :
+    (left.combine right).rowCount = max left.rowCount right.rowCount := rfl
+
+@[circuit_norm] theorem combine_constantSiteCount
+    (left right : RegionSynthesisSummary) :
+    (left.combine right).constantSiteCount =
+      left.constantSiteCount + right.constantSiteCount := rfl
+
 @[circuit_norm] theorem combine_empty (summary : RegionSynthesisSummary) :
     summary.combine {} = summary := by
   cases summary
@@ -242,6 +253,17 @@ def ofOperation (operation : RegionOperation F) : RegionSynthesisSummary where
   columns := regionOperationShapeColumns operation
   rowCount := regionOperationRowExtent operation
   constantSiteCount := regionOperationConstantSiteCount operation
+
+@[circuit_norm] theorem ofOperation_columns (operation : RegionOperation F) :
+    (ofOperation operation).columns = regionOperationShapeColumns operation := rfl
+
+@[circuit_norm] theorem ofOperation_rowCount (operation : RegionOperation F) :
+    (ofOperation operation).rowCount = regionOperationRowExtent operation := rfl
+
+@[circuit_norm] theorem ofOperation_constantSiteCount
+    (operation : RegionOperation F) :
+    (ofOperation operation).constantSiteCount =
+      regionOperationConstantSiteCount operation := rfl
 
 end RegionSynthesisSummary
 
@@ -298,6 +320,19 @@ def combine (left right : SynthesisSummary) : SynthesisSummary where
     left.columnOccupancy column + right.columnOccupancy column
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
 
+@[circuit_norm] theorem combine_columns (left right : SynthesisSummary) :
+    (left.combine right).columns = left.columns ++ right.columns := rfl
+
+@[circuit_norm] theorem combine_columnOccupancy
+    (left right : SynthesisSummary) (column : RegionColumn) :
+    (left.combine right).columnOccupancy column =
+      left.columnOccupancy column + right.columnOccupancy column := rfl
+
+@[circuit_norm] theorem combine_constantSiteCount
+    (left right : SynthesisSummary) :
+    (left.combine right).constantSiteCount =
+      left.constantSiteCount + right.constantSiteCount := rfl
+
 @[circuit_norm] theorem combine_empty (summary : SynthesisSummary) :
     summary.combine {} = summary := by
   apply SynthesisSummary.ext
@@ -319,6 +354,18 @@ def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
   columnOccupancy := fun column =>
     if column ∈ summary.columns then summary.rowCount else 0
   constantSiteCount := summary.constantSiteCount
+
+@[circuit_norm] theorem ofRegion_columns (summary : RegionSynthesisSummary) :
+    (ofRegion summary).columns = summary.columns := rfl
+
+@[circuit_norm] theorem ofRegion_columnOccupancy
+    (summary : RegionSynthesisSummary) (column : RegionColumn) :
+    (ofRegion summary).columnOccupancy column =
+      if column ∈ summary.columns then summary.rowCount else 0 := rfl
+
+@[circuit_norm] theorem ofRegion_constantSiteCount
+    (summary : RegionSynthesisSummary) :
+    (ofRegion summary).constantSiteCount = summary.constantSiteCount := rfl
 
 /-- The greatest exact occupied length among the columns named by the summary. -/
 def maxColumnOccupancy (summary : SynthesisSummary) : ℕ :=

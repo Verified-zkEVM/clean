@@ -143,7 +143,7 @@ private theorem actionQueryRequirements :
 def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
-  noCallerRequirements := ⟨(), rfl, rfl⟩
+  noCallerRequirements := ⟨(), rfl, rfl, rfl, fun _ => rfl⟩
   selectorRequirements := actionSelectorRequirements
   queryRequirements := actionQueryRequirements
   exists_rotation_mem_fixedQueries_of_lt := by
