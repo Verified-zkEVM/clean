@@ -65,7 +65,7 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assump
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
--- TODO(eval-normalization): anti-pattern bridges (they rewrite toward `ProvableType.eval`,
+-- TODO COMPWIT: anti-pattern bridges (they rewrite toward `ProvableType.eval`,
 -- which should never be user-facing). The subcircuit-chain obligations in this file still
 -- depend on the atomization these provide; replace once grind-side composite-eval
 -- congruence is worked out.

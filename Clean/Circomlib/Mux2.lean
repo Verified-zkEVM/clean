@@ -155,8 +155,8 @@ def circuit : FormalCircuit (F p) Inputs field where
       obtain ⟨h_c, h_s⟩ := h_input
       apply (MultiMux2.circuit 1).toSubcircuit_computableWitnesses
       simp only [circuit_norm, eval_vector]
-      -- `grind` sees the hypothesis and goal `Expression.eval`s as distinct atoms here
-      -- (instance-spelling mismatch), so apply the elementwise facts directly
+      -- TODO COMPWIT: `grind` sees the hypothesis and goal `Expression.eval`s as distinct
+      -- atoms here (instance-spelling mismatch), so apply the elementwise facts directly
       refine ⟨congrArg (fun x => #[x]) ?_, ?_⟩
       · ext i hi
         simp only [Vector.getElem_map]
