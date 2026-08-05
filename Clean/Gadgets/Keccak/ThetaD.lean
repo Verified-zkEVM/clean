@@ -82,6 +82,28 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   main, Assumptions, Spec, soundness, completeness
+  computableWitnesses := by
+    intro n input env env'
+    simp only [circuit_norm, main]
+    -- every chained node's type-index offset carries a stuck `+ 0` (dependent motive),
+    -- hence the offset-decoupled composition lemma at each node
+    -- both children's localLength metadata is constant but tactic-defined (not
+    -- simp-unfoldable by name); expose it by rfl for the offset arithmetic
+    have er : ∀ (o : Fin 64) (x : Var U64 (F p)),
+        (Rotation64.circuit (p := p) o).localLength x = 16 := fun _ _ => rfl
+    have ex : ∀ x : Var Xor64.Inputs (F p),
+        (Xor64.circuit (p := p)).localLength x = 8 := fun _ => rfl
+    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h => ?_⟩
+    all_goals first
+      | exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [er, ex]) fun h_agrees => by
+            simp only [circuit_norm]
+            first
+              | grind
+              | exact ⟨by grind, FormalCircuit.output_of_input_eq _ (by grind)
+                  (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [er, ex]; omega))⟩
+      | grind
 }
 
 end Gadgets.Keccak256.ThetaD

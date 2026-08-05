@@ -436,6 +436,26 @@ lemma FlatOperation.forAll_agree_of_imp {F} [FiniteField F] {P : Prop}
         (fun hP => (FlatOperation.forAll_cons.mp (h_src hP)).2)
         (fun h_agrees => h (ProverEnvironment.agreesBelow_of_le h_agrees (Nat.le_add_right n op.singleLocalLength)))
 
+/-- A uniform premise commutes out of the `ComputableWitnesses` conditions: obligations
+whose conditions all carry the same hypothesis (e.g. the parent's input equality) follow
+from the premise-free obligation. Used when a parent inlines a child circuit's `main`, so
+the child's operations appear in the parent's obligation directly. -/
+theorem Operations.computableWitnesses_of_premise {F : Type} [FiniteField F] {P : Prop}
+    {n : ℕ} {ops : Operations F} {env env' : ProverEnvironment F}
+    (h : P → ops.ComputableWitnesses n env env') :
+    ops.forAll n {
+      witness := fun n' _ compute => P → env.AgreesBelow n' env' →
+        compute.eval env = compute.eval env'
+      subcircuit := fun n' _ s => P → s.ComputableWitnesses n' env env' } := by
+  simp only [Operations.ComputableWitnesses] at h
+  induction ops generalizing n with
+  | nil => trivial
+  | cons op ops ih =>
+    rw [Operations.forAll_cons]
+    refine ⟨?_, ih fun hp => (Operations.forAll_cons.mp (h hp)).2⟩
+    cases op <;> simp only [Condition.apply] <;> intro hp <;>
+      simpa [Condition.apply] using (Operations.forAll_cons.mp (h hp)).1
+
 namespace FormalCircuitBase
 variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
 

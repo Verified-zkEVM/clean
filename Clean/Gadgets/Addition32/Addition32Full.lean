@@ -153,4 +153,46 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   Spec
   soundness
   completeness
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨x, y, carryIn⟩ := input
+    simp only [circuit_norm, main]
+    have eL : ∀ (inp : Var Addition8FullCarry.Inputs (F p)) (off : ℕ),
+        Operations.localLength (Addition8FullCarry.main inp off).2 = 2 := fun _ _ => rfl
+    -- the four Addition8FullCarry runs are inlined; each group's obligation comes from the
+    -- child bundle's own computableWitnesses via OnlyAccessedBelow, with the carry chain's
+    -- variables covered by the per-op agreement
+    haveI := (Addition8FullCarry.circuit (p := p)).elaborated
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, fun hp hag => ?_⟩
+    · apply Operations.computableWitnesses_of_premise
+      intro hp
+      try ring_nf
+      apply (Addition8FullCarry.circuit (p := p)).computableWitnesses'_onlyAccessedBelow
+      intro hag
+      simp only [circuit_norm, Addition8FullCarry.main, eL] at hag ⊢
+      grind
+    · apply Operations.computableWitnesses_of_premise
+      intro hp
+      try ring_nf
+      apply (Addition8FullCarry.circuit (p := p)).computableWitnesses'_onlyAccessedBelow
+      intro hag
+      simp only [circuit_norm, Addition8FullCarry.main, eL] at hag ⊢
+      grind
+    · apply Operations.computableWitnesses_of_premise
+      intro hp
+      try ring_nf
+      apply (Addition8FullCarry.circuit (p := p)).computableWitnesses'_onlyAccessedBelow
+      intro hag
+      simp only [circuit_norm, Addition8FullCarry.main, eL] at hag ⊢
+      grind
+    · apply Operations.computableWitnesses_of_premise
+      intro hp
+      try ring_nf
+      apply (Addition8FullCarry.circuit (p := p)).computableWitnesses'_onlyAccessedBelow
+      intro hag
+      simp only [circuit_norm, Addition8FullCarry.main, eL] at hag ⊢
+      grind
+    · -- output: the four groups' witnessed limbs and the final carry
+      simp only [circuit_norm, Addition8FullCarry.main, eL] at hag ⊢
+      grind
 end Gadgets.Addition32Full
