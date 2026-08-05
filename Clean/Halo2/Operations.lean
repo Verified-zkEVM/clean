@@ -274,6 +274,33 @@ def regionSynthesisSummary : RegionOperations F → RegionSynthesisSummary
       (RegionSynthesisSummary.ofOperation operation).combine
         (regionSynthesisSummary rest)
 
+@[circuit_norm] theorem regionSynthesisSummary_nil_columns :
+    (regionSynthesisSummary ([] : RegionOperations F)).columns = [] := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_nil_rowCount :
+    (regionSynthesisSummary ([] : RegionOperations F)).rowCount = 0 := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_nil_constantSiteCount :
+    (regionSynthesisSummary ([] : RegionOperations F)).constantSiteCount = 0 := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_cons_columns
+    (operation : RegionOperation F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (operation :: rest)).columns =
+      regionOperationShapeColumns operation ++
+        (regionSynthesisSummary rest).columns := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_cons_rowCount
+    (operation : RegionOperation F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (operation :: rest)).rowCount =
+      max (regionOperationRowExtent operation)
+        (regionSynthesisSummary rest).rowCount := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_cons_constantSiteCount
+    (operation : RegionOperation F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (operation :: rest)).constantSiteCount =
+      regionOperationConstantSiteCount operation +
+        (regionSynthesisSummary rest).constantSiteCount := rfl
+
 theorem regionOperationRowExtent_le_synthesisSummary_of_mem
     (operations : RegionOperations F) (operation : RegionOperation F)
     (hoperation : operation ∈ operations) :
@@ -419,6 +446,72 @@ def synthesisSummary : Operations F → SynthesisSummary
         (synthesisSummary rest)
   | .constrainInstance _ _ _ :: rest => synthesisSummary rest
   | .loadTable _ _ :: rest => synthesisSummary rest
+
+@[circuit_norm] theorem synthesisSummary_nil_columns :
+    (synthesisSummary ([] : Operations F)).columns = [] := rfl
+
+@[circuit_norm] theorem synthesisSummary_nil_columnOccupancy
+    (column : RegionColumn) :
+    (synthesisSummary ([] : Operations F)).columnOccupancy column = 0 := rfl
+
+@[circuit_norm] theorem synthesisSummary_nil_constantSiteCount :
+    (synthesisSummary ([] : Operations F)).constantSiteCount = 0 := rfl
+
+@[circuit_norm] theorem synthesisSummary_region_cons_columns
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    (synthesisSummary (.region name body :: rest)).columns =
+      (regionSynthesisSummary body).columns ++
+        (synthesisSummary rest).columns := rfl
+
+@[circuit_norm] theorem synthesisSummary_region_cons_columnOccupancy
+    (name : String) (body : RegionOperations F) (rest : Operations F)
+    (column : RegionColumn) :
+    (synthesisSummary (.region name body :: rest)).columnOccupancy column =
+      (if column ∈ (regionSynthesisSummary body).columns then
+        (regionSynthesisSummary body).rowCount else 0) +
+      (synthesisSummary rest).columnOccupancy column := rfl
+
+@[circuit_norm] theorem synthesisSummary_region_cons_constantSiteCount
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    (synthesisSummary (.region name body :: rest)).constantSiteCount =
+      (regionSynthesisSummary body).constantSiteCount +
+        (synthesisSummary rest).constantSiteCount := rfl
+
+@[circuit_norm] theorem synthesisSummary_constrainInstance_cons_columns
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) :
+    (synthesisSummary (.constrainInstance cell column row :: rest)).columns =
+      (synthesisSummary rest).columns := rfl
+
+@[circuit_norm] theorem synthesisSummary_constrainInstance_cons_columnOccupancy
+    (cell : Cell) (instanceColumn : Column .instance) (row : ℕ)
+    (rest : Operations F) (column : RegionColumn) :
+    (synthesisSummary
+      (.constrainInstance cell instanceColumn row :: rest)).columnOccupancy column =
+        (synthesisSummary rest).columnOccupancy column := rfl
+
+@[circuit_norm] theorem synthesisSummary_constrainInstance_cons_constantSiteCount
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) :
+    (synthesisSummary
+      (.constrainInstance cell column row :: rest)).constantSiteCount =
+        (synthesisSummary rest).constantSiteCount := rfl
+
+@[circuit_norm] theorem synthesisSummary_loadTable_cons_columns
+    (column : TableColumn) (values : List F) (rest : Operations F) :
+    (synthesisSummary (.loadTable column values :: rest)).columns =
+      (synthesisSummary rest).columns := rfl
+
+@[circuit_norm] theorem synthesisSummary_loadTable_cons_columnOccupancy
+    (tableColumn : TableColumn) (values : List F) (rest : Operations F)
+    (column : RegionColumn) :
+    (synthesisSummary (.loadTable tableColumn values :: rest)).columnOccupancy column =
+      (synthesisSummary rest).columnOccupancy column := rfl
+
+@[circuit_norm] theorem synthesisSummary_loadTable_cons_constantSiteCount
+    (column : TableColumn) (values : List F) (rest : Operations F) :
+    (synthesisSummary (.loadTable column values :: rest)).constantSiteCount =
+      (synthesisSummary rest).constantSiteCount := rfl
 
 @[circuit_norm] theorem regionSynthesisSummary_append
     (left right : RegionOperations F) :
