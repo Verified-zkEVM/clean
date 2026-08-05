@@ -168,6 +168,88 @@ def pointFormal :=
 
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
+@[circuit_norm]
+theorem pointFormal_synthesisSummary_columns
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) :
+    (pointFormal.elaborated.synthesisSummary config input region).columns =
+      [.selector config.qPoint.index, .column .advice config.x.index,
+        .column .advice config.y.index] := by
+  unfold pointFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_columns]
+  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq]
+  simp only [point, circuit_norm]
+  simp [pointGate]
+
+@[circuit_norm]
+theorem pointFormal_synthesisSummary_columnOccupancy
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
+    (pointFormal.elaborated.synthesisSummary
+      config input region).columnOccupancy column =
+      if column ∈ [.selector config.qPoint.index,
+          .column .advice config.x.index,
+          .column .advice config.y.index]
+      then 1 else 0 := by
+  unfold pointFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_columnOccupancy]
+  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq,
+    ElaboratedRegionCircuit.synthesisSummary_rowCount_eq]
+  simp only [point, circuit_norm]
+  simp [pointGate]
+
+@[circuit_norm]
+theorem pointFormal_synthesisSummary_constantSiteCount
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) :
+    (pointFormal.elaborated.synthesisSummary
+      config input region).constantSiteCount = 0 := by
+  unfold pointFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount]
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [point, circuit_norm]
+
+@[circuit_norm]
+theorem pointNonIdFormal_synthesisSummary_columns
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) :
+    (pointNonIdFormal.elaborated.synthesisSummary config input region).columns =
+      [.selector config.qPointNonId.index, .column .advice config.x.index,
+        .column .advice config.y.index] := by
+  unfold pointNonIdFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_columns]
+  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq]
+  simp only [pointNonId, circuit_norm]
+  simp [pointNonIdGate, Gate.withSelector]
+
+@[circuit_norm]
+theorem pointNonIdFormal_synthesisSummary_columnOccupancy
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
+    (pointNonIdFormal.elaborated.synthesisSummary
+      config input region).columnOccupancy column =
+      if column ∈ [.selector config.qPointNonId.index,
+          .column .advice config.x.index,
+          .column .advice config.y.index]
+      then 1 else 0 := by
+  unfold pointNonIdFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_columnOccupancy]
+  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq,
+    ElaboratedRegionCircuit.synthesisSummary_rowCount_eq]
+  simp only [pointNonId, circuit_norm]
+  simp [pointNonIdGate, Gate.withSelector]
+
+@[circuit_norm]
+theorem pointNonIdFormal_synthesisSummary_constantSiteCount
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (region : RegionIndex) :
+    (pointNonIdFormal.elaborated.synthesisSummary
+      config input region).constantSiteCount = 0 := by
+  unfold pointNonIdFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount]
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [pointNonId, circuit_norm]
+
 
 /-- The non-identity witness circuit's two positional output cells. -/
 @[keygen_output_norm]

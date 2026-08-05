@@ -198,7 +198,7 @@ variable [CircuitType Input] [CircuitType Output]
     {synthesize : Config → Var Input F → Circuit F (Var Output F)}
 
 /-- Project exact synthesis columns without exposing unrelated elaborated metadata. -/
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedCircuit.synthesisSummary_columns_eq
     (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
@@ -209,7 +209,7 @@ theorem ElaboratedCircuit.synthesisSummary_columns_eq
     (self.synthesisSummary_eq config input i)
 
 /-- Project one exact column occupancy without exposing unrelated metadata. -/
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedCircuit.synthesisSummary_columnOccupancy_eq
     (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
     (config : Config) (input : Var Input F) (i : RegionIndex)
@@ -221,7 +221,7 @@ theorem ElaboratedCircuit.synthesisSummary_columnOccupancy_eq
     (self.synthesisSummary_eq config input i)
 
 /-- Project the exact deferred-constant request count without exposing unrelated metadata. -/
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedCircuit.synthesisSummary_constantSiteCount_eq
     (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
@@ -1119,7 +1119,7 @@ variable [CircuitType Input] [CircuitType Output]
     {synthesize :
       Config → ℕ → Var Input F → RegionCircuit F (Var Output F)}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedRegionCircuit.synthesisSummary_columns_eq
     (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
       configure synthesize)
@@ -1131,7 +1131,7 @@ theorem ElaboratedRegionCircuit.synthesisSummary_columns_eq
   congrArg FloorPlanner.RegionSynthesisSummary.columns
     (self.synthesisSummary_eq config offset input region)
 
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedRegionCircuit.synthesisSummary_rowCount_eq
     (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
       configure synthesize)
@@ -1143,7 +1143,7 @@ theorem ElaboratedRegionCircuit.synthesisSummary_rowCount_eq
   congrArg FloorPlanner.RegionSynthesisSummary.rowCount
     (self.synthesisSummary_eq config offset input region)
 
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq
     (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
       configure synthesize)
