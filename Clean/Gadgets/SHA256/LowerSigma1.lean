@@ -225,6 +225,26 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by
+    intro n input env env'
+    simp only [circuit_norm, main, lowerSigma1, xor32, rotr32, shr32, Vector.ext_iff]
+    refine ⟨⟨fun h hag => ?_, fun h hag => ?_, ?_⟩, fun h hag => ?_⟩
+    · intro i hi
+      simp only [circuit_norm, Vector.getElem_rotate]
+      -- TODO COMPWIT grind does not instantiate `h` at the `% 32` rotation indices on its own
+      have hr1 := h ((i + 17) % 32) (by omega)
+      have hr2 := h ((i + 19) % 32) (by omega)
+      grind
+    · intro i hi
+      have hz := hag.1 (n + i) (by omega)
+      split_ifs with hc
+      · have h3 := h (i + 10 % 32) (by omega)
+        grind
+      · grind
+    · -- assert-only forEach group: no witnesses, trivially computable
+      ring_nf
+      simp only [Circuit.forEach.forAll, circuit_norm]
+    · grind
 
 end LowerSigma1
 end Gadgets.SHA256

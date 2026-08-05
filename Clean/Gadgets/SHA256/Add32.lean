@@ -31,8 +31,8 @@ private def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 
 omit h_large in
-private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
-    (bitsVal a).eval { env } = UInt64.ofNat (evalBitsNat env a) := by
+private lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) :
+    (bitsVal a).eval ctx = UInt64.ofNat (evalBitsNat ctx.env a) := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
   generalize List.finRange 32 = l
   induction l with
@@ -40,6 +40,17 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
   | cons i l ih =>
     simp only [circuit_norm] at ih
     simp only [List.foldr_cons, circuit_norm, ih, UInt64.ofNat_add, UInt64.ofNat_mul]
+
+omit h_large in
+private lemma evalBitsNat_congr {env env' : ProverEnvironment (F p)} {a : Var (fields 32) (F p)}
+    (h : Vector.map (Expression.eval env.toEnvironment) a =
+      Vector.map (Expression.eval env'.toEnvironment) a) :
+    evalBitsNat env a = evalBitsNat env' a := by
+  rw [evalBitsNat, evalBitsNat]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  have hi := congrArg (fun v => v[i.val]'(by omega)) h
+  simp only [Vector.getElem_map] at hi
+  exact congrArg (fun x : F p => x.val * 2 ^ i.val) hi
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
@@ -401,6 +412,20 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨a, b⟩ := input
+    simp only [circuit_norm, main, add32]
+    refine ⟨⟨fun h hag => ?_, fun h hag => ?_⟩, fun h hag => ?_⟩ <;>
+      have key := evalBitsNat_congr (a := a) h.1 <;>
+      have keyb := evalBitsNat_congr (a := b) h.2
+    · -- z-vector program: elementwise, with the let-step's value congruent via the keys
+      ext i hi
+      simp only [circuit_norm, bitsVal_eval, key, keyb]
+    · -- carry-out
+      simp only [circuit_norm, bitsVal_eval, key, keyb]
+    · -- output: the 33 fresh witness variables
+      grind
 
 end Add32
 end Gadgets.SHA256
