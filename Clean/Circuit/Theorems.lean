@@ -399,6 +399,21 @@ theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOp
 end FlatOperation
 
 namespace Operations
+/-- Monotonicity of `forAll` under a pointwise (op-independent) condition implication. -/
+theorem forAll_mono {c c' : Condition F} {n : ℕ} {ops : Operations F}
+    (hw : ∀ n' (m : ℕ) (compute : WitgenIR F m), c.witness n' m compute → c'.witness n' m compute)
+    (ha : ∀ n' (e : Expression F), c.assert n' e → c'.assert n' e)
+    (hl : ∀ n' (l : Lookup F), c.lookup n' l → c'.lookup n' l)
+    (hi : ∀ n' (i : AbstractInteraction F), c.interact n' i → c'.interact n' i)
+    (hs : ∀ n' {m : ℕ} (s : Subcircuit F m), c.subcircuit n' s → c'.subcircuit n' s) :
+    forAll n c ops → forAll n c' ops := by
+  intro h
+  induction ops generalizing n with
+  | nil => trivial
+  | cons op ops ih =>
+    rw [forAll_cons] at h ⊢
+    exact ⟨by cases op <;> simp_all [Condition.apply] <;> solve_by_elim, ih h.2⟩
+
 theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
     (forAll n (c.implies c') ops) → (forAll n c ops → forAll n c' ops) := by
   simp only [Condition.implies]

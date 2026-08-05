@@ -69,6 +69,21 @@ def booleanAnd : FormalCircuit (F p) Input field where
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
     <;> simp_all
 
+  computableWitnesses := by
+    -- explicit version of `computable_witnesses`, split where grind needs help
+    intro n input env env'
+    obtain ⟨x, y⟩ := input
+    simp only [circuit_norm, computable_witnesses_norm, ComputableWitnesses.structEqSplit]
+    refine ⟨fun h_input => ?_, ?_⟩
+    · -- WithHint subcircuit node: the composition lemma, input equality from the components
+      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
+      -- rewriting under `decide` leaves two different `DecidableEq (F p)` instance
+      -- constants (`instDecidableEqF` vs `FiniteField.instDecidableEq`); close at the
+      -- Prop level, where the instance is irrelevant
+      simp only [circuit_norm, h_input.1, h_input.2]
+      congr 1 <;> exact decide_eq_decide.mpr Iff.rfl
+    · grind
+
 structure MixedInput (F : Type) where
   someElement : U32 F
   someHint : UnconstrainedNative Bool F

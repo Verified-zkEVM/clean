@@ -288,6 +288,21 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
 
+  computableWitnesses := by
+    intro n' input env env'
+    simp only [circuit_norm, computable_witnesses_norm, main]
+    -- both witnesses read `lin`, a Fin.foldl the grind rules cannot see under; its
+    -- evaluations are bridged through `inputLinearSub_eval_eq_sub`
+    have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl
+    have bridge' := inputLinearSub_eval_eq_sub env'.toEnvironment input _ rfl
+    simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
+    refine ⟨⟨fun h h_ag => ?_, fun h h_ag => ?_⟩, fun h h_ag => ?_⟩
+    · ext i hi
+      simp only [circuit_norm]
+      rw [bridge, bridge', h]
+    · rw [bridge, bridge', h]
+    · grind
+
   soundness := by
     circuit_proof_start
 
