@@ -1349,6 +1349,10 @@ structure ConfigureDelta.QueriesLawful
     delta.lookups.Forall (·.QueriesRegistered delta)
   permutationRequests_registered :
     delta.permutationRequests.Forall delta.RegistersPermutationColumn
+  /-- `enableConstant` also enables equality on its constants column. -/
+  constants_permutationRequests :
+    delta.constants.Forall fun column =>
+      column.toAny ∈ delta.permutationRequests
 
 /-- Query allocation remains true when the available allocation counts grow. -/
 theorem ConfigureDelta.QueriesLawful.mono
@@ -1370,6 +1374,7 @@ theorem ConfigureDelta.QueriesLawful.mono
   gates_queriedCellsRegistered := hlawful.gates_queriedCellsRegistered
   lookups_queriesRegistered := hlawful.lookups_queriesRegistered
   permutationRequests_registered := hlawful.permutationRequests_registered
+  constants_permutationRequests := hlawful.constants_permutationRequests
 
 /-- A gate-local declaration can be consumed directly once the compiler has emitted
 that gate into a lawful configure delta. -/
@@ -1444,6 +1449,11 @@ theorem ConfigureDelta.QueriesLawful.append
           hcolumn.append_left,
         hright.permutationRequests_registered.imp fun _ hcolumn =>
           hcolumn.append_right⟩
+  · rw [ConfigureDelta.append, List.forall_append]
+    exact ⟨hleft.constants_permutationRequests.imp fun column hcolumn =>
+      List.mem_append_left _ hcolumn,
+      hright.constants_permutationRequests.imp fun column hcolumn =>
+        List.mem_append_right _ hcolumn⟩
 
 /-- Registering one valid query atom preserves query allocation. -/
 theorem ConfigureDelta.queriedCell_queriesLawful
@@ -2652,6 +2662,8 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
           hqueryDelta.permutationRequests_registered.imp
             (fun _ hcolumn => hcolumn.append_left
               (right := ({ gates := [gate] } : ConfigureDelta F)))
+      · simpa [ConfigureDelta.append] using
+          hqueryDelta.constants_permutationRequests
     simpa [Configure.delta, Configure.finalCounts,
       Configure.countDelta, ConfigureCountDelta.apply,
       Halo2.createGate, queryDelta] using hcombined
@@ -2742,6 +2754,9 @@ instance ElaboratedConfigure.lookup
         ConfigureDelta.RegistersPermutationColumn,
         ConfigureDelta.append] using
           hcombined.permutationRequests_registered
+    · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+        ConfigureDelta.append] using
+          hcombined.constants_permutationRequests
 
 instance ElaboratedConfigure.lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by

@@ -6430,6 +6430,30 @@ theorem constantValues_length_le_constantAssignments_length
   rw [hlength]
   omega
 
+/-- Every V1 constant allocation uses one of the configured constants columns. -/
+theorem constantAssignments_column_mem
+    (ops : Operations F) (constCols : List ℕ)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈ constantAssignments ops constCols) :
+    column ∈ constCols := by
+  let positions : List (ℕ × ℕ) := constCols.flatMap fun currentColumn =>
+    (constantFreeRows ops currentColumn).map fun currentRow =>
+      (currentColumn, currentRow)
+  rw [constantAssignments, List.mem_map] at hassignment
+  obtain ⟨⟨⟨foundColumn, foundRow⟩, foundValue⟩,
+    hzipped, hequal⟩ := hassignment
+  have hposition : (foundColumn, foundRow) ∈ positions :=
+    (List.of_mem_zip hzipped).1
+  dsimp only [positions] at hposition
+  rw [List.mem_flatMap] at hposition
+  obtain ⟨currentColumn, hcolumn, hposition⟩ := hposition
+  rw [List.mem_map] at hposition
+  obtain ⟨currentRow, _, hposition⟩ := hposition
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj hposition
+  obtain ⟨rfl, rfl, rfl⟩ := hequal
+  exact hcolumn
+
 /-- Every V1 constant allocation lies below the final placed-region end. -/
 theorem constantAssignments_row_lt_placementEnd
     (ops : Operations F) (constCols : List ℕ)

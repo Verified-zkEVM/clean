@@ -672,6 +672,26 @@ def constantCapacityLowerBound
   self.synthesisSummary.constantCapacityLowerBound
     self.constraintSystem.constants
 
+/-- Every configured constants column is equality-enabled by `enableConstant`. -/
+theorem constantColumn_mem_permutationColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : Column .fixed}
+    (hcolumn : column ∈ self.constraintSystem.constants) :
+    column.toAny ∈ self.permutationColumns := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  have hlawful : delta.QueriesLawful (program.finalCounts {}) :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.constants := by
+    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+      program, Configure.run, Configure.delta, ConfigureDelta.apply,
+      List.nil_append] using hcolumn
+  have hrequest : column.toAny ∈ delta.permutationRequests :=
+    List.forall_iff_forall_mem.mp
+      hlawful.constants_permutationRequests column hdelta
+  exact (Configure.mem_permutationColumns_run_iff program {} column.toAny).mpr
+    (Or.inr hrequest)
+
 /-- V1 allocates one constants-column cell for every deferred constant request. -/
 theorem constantValues_length_le_constantAssignments_length
     (self : TopLevelCircuit F Config PublicInput) :
