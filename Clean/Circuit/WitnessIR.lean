@@ -448,14 +448,14 @@ theorem VExpr.getElem_eval_mapRange (ctx : Ctx F) (n : ℕ) (body : FExpr F)
 
 /-- Elementwise evaluation of environment ranges, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_envRange [FiniteField F] (ctx : Ctx F) {n : ℕ} (offset : ℕ)
+theorem VExpr.getElem_eval_envRange (ctx : Ctx F) {n : ℕ} (offset : ℕ)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.envRange (n := n) offset))[i] = ctx.env.get (offset + i) := by
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of bit decompositions, keyed on the eval term. -/
-@[circuit_norm ↓]
-theorem VExpr.getElem_eval_bitsOf [FiniteField F] (ctx : Ctx F) {n : ℕ} (x : FExpr F)
+@[circuit_norm ↓, grind =]
+theorem VExpr.getElem_eval_bitsOf (ctx : Ctx F) {n : ℕ} (x : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.bitsOf (n := n) x))[i]
       = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
