@@ -1112,6 +1112,51 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
         FormalRegionCircuit.call_synthesisSummary,
         FormalRegionCircuit.call_synthesisSummary']
 
+section RegionSynthesisSummary
+variable [CircuitType Input] [CircuitType Output]
+    {ConfigInput Config : Type}
+    {configure : ConfigInput → Configure F Config}
+    {synthesize :
+      Config → ℕ → Var Input F → RegionCircuit F (Var Output F)}
+
+@[circuit_norm]
+theorem ElaboratedRegionCircuit.synthesisSummary_columns_eq
+    (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    (self.synthesisSummary config offset input region).columns =
+      (FloorPlanner.regionSynthesisSummary
+        ((synthesize config offset input).operations region)).columns :=
+  congrArg FloorPlanner.RegionSynthesisSummary.columns
+    (self.synthesisSummary_eq config offset input region)
+
+@[circuit_norm]
+theorem ElaboratedRegionCircuit.synthesisSummary_rowCount_eq
+    (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    (self.synthesisSummary config offset input region).rowCount =
+      (FloorPlanner.regionSynthesisSummary
+        ((synthesize config offset input).operations region)).rowCount :=
+  congrArg FloorPlanner.RegionSynthesisSummary.rowCount
+    (self.synthesisSummary_eq config offset input region)
+
+@[circuit_norm]
+theorem ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq
+    (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    (self.synthesisSummary config offset input region).constantSiteCount =
+      (FloorPlanner.regionSynthesisSummary
+        ((synthesize config offset input).operations region)).constantSiteCount :=
+  congrArg FloorPlanner.RegionSynthesisSummary.constantSiteCount
+    (self.synthesisSummary_eq config offset input region)
+
+end RegionSynthesisSummary
+
 section RegionStatements
 variable [CircuitType Input] [CircuitType Output]
     {ConfigInput Config : Type}
@@ -1997,6 +2042,37 @@ theorem toFormal_keygenRequirements
     (child.toFormal name).keygenRequirements =
       child.keygenRequirements :=
   rfl
+
+@[circuit_norm]
+theorem toFormal_synthesisSummary_columns
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String) (config : Config) (input : Var Input F)
+    (region : RegionIndex) :
+    ((child.toFormal name).elaborated.synthesisSummary
+      config input region).columns =
+        (child.elaborated.synthesisSummary config 0 input region).columns := rfl
+
+@[circuit_norm]
+theorem toFormal_synthesisSummary_columnOccupancy
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String) (config : Config) (input : Var Input F)
+    (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
+    ((child.toFormal name).elaborated.synthesisSummary
+      config input region).columnOccupancy column =
+        if column ∈ (child.elaborated.synthesisSummary
+          config 0 input region).columns then
+          (child.elaborated.synthesisSummary config 0 input region).rowCount
+        else 0 := rfl
+
+@[circuit_norm]
+theorem toFormal_synthesisSummary_constantSiteCount
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String) (config : Config) (input : Var Input F)
+    (region : RegionIndex) :
+    ((child.toFormal name).elaborated.synthesisSummary
+      config input region).constantSiteCount =
+        (child.elaborated.synthesisSummary
+          config 0 input region).constantSiteCount := rfl
 
 /-- A region circuit's configured handle remains valid after lifting it to the
 layouter level. -/

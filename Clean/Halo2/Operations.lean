@@ -191,7 +191,7 @@ theorem mem_foldl_addColumn_iff
         aesop
 
 /-- The one-past-last row measured for a region operation. -/
-def regionOperationRowExtent : RegionOperation F → ℕ
+@[circuit_norm] def regionOperationRowExtent : RegionOperation F → ℕ
   | .assignAdvice _ row _
   | .assignFixed _ row _
   | .enableGate _ row
@@ -201,7 +201,7 @@ def regionOperationRowExtent : RegionOperation F → ℕ
   | .constrainInstance _ _ _ => 0
 
 /-- The columns added to a region shape by one operation. -/
-def regionOperationShapeColumns : RegionOperation F → List RegionColumn
+@[circuit_norm] def regionOperationShapeColumns : RegionOperation F → List RegionColumn
   | .assignAdvice column _ _ => [.column .advice column.index]
   | .assignFixed column _ _ => [.column .fixed column.index]
   | .enableGate gate _ => [.selector gate.selector.index]
@@ -211,7 +211,7 @@ def regionOperationShapeColumns : RegionOperation F → List RegionColumn
   | .constrainInstance _ _ _ => []
 
 /-- Whether an operation asks V1 to allocate a deferred constant cell. -/
-def regionOperationConstantSiteCount : RegionOperation F → ℕ
+@[circuit_norm] def regionOperationConstantSiteCount : RegionOperation F → ℕ
   | .constrainConstant _ _ => 1
   | _ => 0
 
