@@ -75,6 +75,6 @@ def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   soundness := soundness offset
   completeness := completeness offset
   computableWitnesses := by
-    computable_witnesses' [output]
+    computable_witnesses [output]
 
 end Gadgets.Rotation64

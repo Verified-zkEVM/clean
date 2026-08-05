@@ -55,9 +55,6 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     -- This effectively checks if the field element is in the "upper half" of the field
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
 
-  computableWitnesses := by
-    computable_witnesses' [eval_vector, Vector.ext_iff]
-
   soundness := by
     circuit_proof_start [CompConstant.circuit]
     -- Proof follows easily from the fact that Sign is a

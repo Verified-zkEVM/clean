@@ -84,7 +84,5 @@ def circuit : FormalCircuit (F p) Inputs U64 where
   Spec
   soundness
   completeness
-  computableWitnesses := by
-    computable_witnesses' [Inputs.mk.injEq]
 
 end Gadgets.And.And64

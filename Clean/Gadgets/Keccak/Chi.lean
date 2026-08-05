@@ -61,6 +61,4 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   Spec
   soundness
   completeness
-  computableWitnesses := by
-    computable_witnesses' [eval_vector, Vector.ext_iff]
 end Gadgets.Keccak256.Chi

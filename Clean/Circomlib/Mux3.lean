@@ -97,6 +97,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> split <;> decide
       output[i] = (c[i])[idx]
 
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
+
   soundness := by
     simp +instances only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -144,9 +147,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       have h_env_i := h_env ⟨i, hi⟩
       rw [h_env_i]
       ring
-
-  computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
 
 end MultiMux3
 

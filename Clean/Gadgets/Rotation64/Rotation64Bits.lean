@@ -114,6 +114,4 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-  computableWitnesses := by
-    computable_witnesses [output, U64.ByteVector.fromLimbs_inj, Vector.ext_iff]
 end Gadgets.Rotation64Bits

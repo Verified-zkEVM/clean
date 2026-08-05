@@ -121,13 +121,16 @@ theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit]
   simp_all +arith
 
+omit [DecidableEq F] in
 lemma eval_fin_foldl_mul {env : ProverEnvironment F} {n m : ℕ} :
   Expression.eval (F:=F) env (Fin.foldl m (fun acc i => acc * var ⟨n + ↑i * 2 + 1⟩) 1)
     = Fin.foldl m (fun acc i => acc * Expression.eval env (var ⟨n + ↑i * 2 + 1⟩)) 1 := by
-  sorry
+  induction m with
+  | zero => simp [Expression.eval]
+  | succ m ih => simp only [Fin.foldl_succ_last, Fin.val_castSucc, Expression.eval, ih]
 
 theorem computableWitnesses : FormalCircuitBase.ComputableWitnesses (main (F:=F) (M:=M)) := by
-  computable_witnesses [eval_fin_foldl_mul]
+  computable_witnesses [IsZeroField.circuit, eval_fin_foldl_mul]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   main

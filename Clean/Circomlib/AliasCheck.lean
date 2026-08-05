@@ -41,9 +41,6 @@ def circuit : FormalAssertion (F p) (fields 254) where
 
   Spec bits := fromBits (bits.map ZMod.val) < p
 
-  computableWitnesses := by
-    computable_witnesses' [eval_vector, Vector.ext_iff]
-
   soundness := by
     circuit_proof_start [CompConstant.circuit]
     obtain ⟨ h_comp, h_eq ⟩ := h_holds

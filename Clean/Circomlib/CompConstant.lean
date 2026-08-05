@@ -149,21 +149,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
         · rfl
         · simp only [circuit_norm]
           grind
-      · intros _ h_agrees _ _
-        have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-        let child := Num2Bits.circuit 135 hp
-        letI : ElaboratedCircuit (F p) field (fields 135) child.main := child.elaborated
-        have h_input :
-            Eval.eval env (var (F := F p) ⟨n + 127⟩) =
-              Eval.eval env' (var (F := F p) ⟨n + 127⟩) := by
-          simp only [circuit_norm]
-          grind
-        have h_output := FormalCircuitBase.output_of_input_eq
-          (circuit := child.base)
-          (n := n + 127 + 1) (input := var ⟨n + 127⟩) h_input h_agrees
-        rw [ProvableType.getElem_eval_fields_prover,
-          ProvableType.getElem_eval_fields_prover]
-        exact congrArg (fun v => v[127]) h_output
+      · grind
     · grind
 
   soundness := by
