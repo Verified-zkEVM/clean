@@ -205,8 +205,68 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact ⟨n_t1, by simp_all⟩
   · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
 
+/-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
+private lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
+    (f : ℕ → ℕ) (h : ∀ i < n, env.get i = env'.get i) (hf : ∀ i < 32, f i < n) :
+    Vector.map (Expression.eval env.toEnvironment)
+        (Vector.mapRange 32 fun i => var ⟨f i⟩ : Vector (Expression (F p)) 32) =
+      Vector.map (Expression.eval env'.toEnvironment)
+        (Vector.mapRange 32 fun i => var ⟨f i⟩) := by
+  refine Vector.ext fun i hi => ?_
+  simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
+  exact h (f i) (hf i (by omega))
+
+/-- Env-agreement transfers to the output state vector (own heartbeat budget): fresh witness
+windows lie below the bound, the remaining entries evaluate through the input state. -/
+private lemma output_eval_congr {env env' : ProverEnvironment (F p)}
+    {state : SHA256State (Expression (F p))} {n : ℕ}
+    (hstate : (eval env.toEnvironment state : SHA256State (F p)) = eval env'.toEnvironment state)
+    (h_agrees : env.AgreesBelow (n + 455) env') :
+    (eval env.toEnvironment
+        (#v[Vector.mapRange 32 fun i => var ⟨n + i + 389⟩,
+            state[0], state[1], state[2],
+            Vector.mapRange 32 fun i => var ⟨n + i + 422⟩,
+            state[4], state[5], state[6]] : Var SHA256State (F p)) : SHA256State (F p)) =
+      eval env'.toEnvironment
+        (#v[Vector.mapRange 32 fun i => var ⟨n + i + 389⟩,
+            state[0], state[1], state[2],
+            Vector.mapRange 32 fun i => var ⟨n + i + 422⟩,
+            state[4], state[5], state[6]] : Var SHA256State (F p)) := by
+  have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr hstate jj hjj
+  simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> rw [ProvableType.eval_fields, ProvableType.eval_fields]
+  · exact mapRange_var_eval_congr (fun i => n + i + 389) h_agrees.1 (fun i hi => by omega)
+  · exact hel 0 (by omega)
+  · exact hel 1 (by omega)
+  · exact hel 2 (by omega)
+  · exact mapRange_var_eval_congr (fun i => n + i + 422) h_agrees.1 (fun i hi => by omega)
+  · exact hel 4 (by omega)
+  · exact hel 5 (by omega)
+  · exact hel 6 (by omega)
+
 def circuit : FormalCircuit (F p) Inputs SHA256State where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨state, k, w⟩ := input
+    -- constant but tactic-defined localLength metadata, exposed by rfl for offset arithmetic
+    have e1 : ∀ x, (UpperSigma1.circuit (p:=p)).localLength x = 64 := fun _ => rfl
+    have e2 : ∀ x, (UpperSigma0.circuit (p:=p)).localLength x = 64 := fun _ => rfl
+    have e3 : ∀ x, (Ch32.circuit (p:=p)).localLength x = 32 := fun _ => rfl
+    have e4 : ∀ x, (Add32.circuit (p:=p)).localLength x = 33 := fun _ => rfl
+    have e5 : ∀ x, (Maj32.circuit (p:=p)).localLength x = 64 := fun _ => rfl
+    simp only [circuit_norm, main, sha256Round, e1, e2, e3, e4, e5]
+    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩,
+      fun h h_agrees => ?output⟩
+    case output => exact output_eval_congr h.1 h_agrees
+    all_goals
+      exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by try simp only [e1, e2, e3, e4, e5]; try omega) fun h_agrees => by
+          have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
+          simp only [circuit_norm]
+          (try and_intros) <;> grind
 
 end SHA256Round
 end Gadgets.SHA256

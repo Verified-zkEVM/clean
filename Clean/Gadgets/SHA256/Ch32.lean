@@ -32,6 +32,15 @@ structure Inputs (F : Type) where
   g : fields 32 F
 deriving ProvableStruct
 
+/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` decompose literal
+`Inputs` evals into the `Vector.map` component spelling used by `circuit_norm`. -/
+@[grind =]
+theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (e f g : fields 32 (Expression F)) :
+    eval env ({ e := e, f := f, g := g } : Inputs (Expression F)) =
+      { e := Vector.map (Expression.eval env) e, f := Vector.map (Expression.eval env) f, g := Vector.map (Expression.eval env) g } := by
+  simp only [circuit_norm, eval_vector]
+
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   ch32 input.e input.f input.g
 

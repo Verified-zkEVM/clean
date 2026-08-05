@@ -61,5 +61,40 @@ def shr32 (k : Fin 32) (a : Var (fields 32) (F p)) : Var (fields 32) (F p) :=
     then a[i.val + k.val]'h
     else (0 : Expression (F p))
 
+omit [Fact (p > 2)] in
+/-- `fields`-valued outputs are decomposed to `Vector.map` by `circuit_norm`, which splits
+the composite-eval atom that `FormalCircuit.output_of_input_eq` is keyed on; this restates
+output congruence under env agreement in the map spelling. -/
+theorem output_map_eval_congr {Input : TypeMap} [ProvableType Input] {sz : ℕ}
+    (circuit : FormalCircuit (F p) Input (fields sz))
+    {input_var : Var Input (F p)} {env env' : ProverEnvironment (F p)} {n m : ℕ}
+    (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
+    (h_agrees : env.AgreesBelow m env')
+    (hm : n + circuit.localLength input_var ≤ m) :
+    Vector.map (Expression.eval env.toEnvironment) (circuit.output input_var n) =
+      Vector.map (Expression.eval env'.toEnvironment) (circuit.output input_var n) := by
+  have h := FormalCircuit.output_of_input_eq circuit input_eq
+    (ProverEnvironment.agreesBelow_of_le h_agrees hm)
+  simp only [circuit_norm] at h
+  exact h
+
+grind_pattern output_map_eval_congr =>
+  Vector.map (Expression.eval env.toEnvironment) (circuit.output input_var n),
+  ProverEnvironment.AgreesBelow m env env'
+
+omit [Fact (p > 2)] in
+/-- Elementwise (map-spelled) consequence of a composite schedule eval equality. -/
+theorem map_eval_getElem_congr {env env' : ProverEnvironment (F p)} {m : ℕ}
+    {xs : Vector (fields 32 (Expression (F p))) m}
+    (hxs : (eval env.toEnvironment xs : Vector (fields 32 (F p)) m) = eval env'.toEnvironment xs)
+    (i : ℕ) (hi : i < m) :
+    Vector.map (Expression.eval env.toEnvironment) xs[i] =
+      Vector.map (Expression.eval env'.toEnvironment) xs[i] := by
+  simp only [eval_vector] at hxs
+  have h := congrArg (fun v => v[i]'hi) hxs
+  simp only [Vector.getElem_map] at h
+  simp only [circuit_norm] at h ⊢
+  exact h
+
 end Gadgets.SHA256
 end

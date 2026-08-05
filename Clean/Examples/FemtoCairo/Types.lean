@@ -130,6 +130,130 @@ structure StateTransitionInput (F : Type) where
   v3 : F
 deriving ProvableStruct
 
+/-! Constructor-keyed composite eval rules (see `U64.eval_mk`): decomposition fires only on
+struct literals, and component evals commute into projections of the opaque composite eval,
+which is the atom `grind`'s subcircuit composition rules pattern on. -/
+
+section EvalLemmas
+variable {F : Type} [FiniteField F] (env : Environment F)
+
+/-- Decomposition into components (see `U64.eval_eq_components`): deliberately untagged,
+supply as an explicit hint where a composite eval hypothesis must be split. -/
+theorem State.eval_eq_components (x : State (Expression F)) :
+    eval env x =
+      ⟨Expression.eval env x.pc, Expression.eval env x.ap, Expression.eval env x.fp⟩ := by
+  with_unfolding_all rfl
+
+theorem RawInstruction.eval_eq_components (x : RawInstruction (Expression F)) :
+    eval env x =
+      ⟨Expression.eval env x.rawInstrType, Expression.eval env x.op1,
+       Expression.eval env x.op2, Expression.eval env x.op3⟩ := by
+  with_unfolding_all rfl
+
+theorem DecodedInstructionType.eval_eq_components (x : DecodedInstructionType (Expression F)) :
+    eval env x =
+      ⟨Expression.eval env x.isAdd, Expression.eval env x.isMul,
+       Expression.eval env x.isStoreState, Expression.eval env x.isLoadState⟩ := by
+  with_unfolding_all rfl
+
+theorem DecodedAddressingMode.eval_eq_components (x : DecodedAddressingMode (Expression F)) :
+    eval env x =
+      ⟨Expression.eval env x.isDoubleAddressing, Expression.eval env x.isApRelative,
+       Expression.eval env x.isFpRelative, Expression.eval env x.isImmediate⟩ := by
+  with_unfolding_all rfl
+
+theorem DecodedInstruction.eval_eq_components (x : DecodedInstruction (Expression F)) :
+    eval env x =
+      ⟨eval env x.instrType, eval env x.mode1, eval env x.mode2, eval env x.mode3⟩ := by
+  simp only [circuit_norm]
+
+@[grind =]
+theorem State.eval_mk (pc ap fp : Expression F) :
+    eval env (⟨pc, ap, fp⟩ : State (Expression F)) =
+      ⟨Expression.eval env pc, Expression.eval env ap, Expression.eval env fp⟩ := by
+  with_unfolding_all rfl
+
+@[grind =]
+theorem RawInstruction.eval_mk (t o1 o2 o3 : Expression F) :
+    eval env (⟨t, o1, o2, o3⟩ : RawInstruction (Expression F)) =
+      ⟨Expression.eval env t, Expression.eval env o1,
+       Expression.eval env o2, Expression.eval env o3⟩ := by
+  with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstructionType.eval_mk (a m s l : Expression F) :
+    eval env (⟨a, m, s, l⟩ : DecodedInstructionType (Expression F)) =
+      ⟨Expression.eval env a, Expression.eval env m,
+       Expression.eval env s, Expression.eval env l⟩ := by
+  with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstructionType.eval_isAdd (x : DecodedInstructionType (Expression F)) :
+    Expression.eval env x.isAdd = (eval env x).isAdd := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstructionType.eval_isMul (x : DecodedInstructionType (Expression F)) :
+    Expression.eval env x.isMul = (eval env x).isMul := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstructionType.eval_isStoreState (x : DecodedInstructionType (Expression F)) :
+    Expression.eval env x.isStoreState = (eval env x).isStoreState := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstructionType.eval_isLoadState (x : DecodedInstructionType (Expression F)) :
+    Expression.eval env x.isLoadState = (eval env x).isLoadState := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedAddressingMode.eval_mk (d a f i : Expression F) :
+    eval env (⟨d, a, f, i⟩ : DecodedAddressingMode (Expression F)) =
+      ⟨Expression.eval env d, Expression.eval env a,
+       Expression.eval env f, Expression.eval env i⟩ := by
+  with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedAddressingMode.eval_isDoubleAddressing (x : DecodedAddressingMode (Expression F)) :
+    Expression.eval env x.isDoubleAddressing = (eval env x).isDoubleAddressing := by
+  with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedAddressingMode.eval_isApRelative (x : DecodedAddressingMode (Expression F)) :
+    Expression.eval env x.isApRelative = (eval env x).isApRelative := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedAddressingMode.eval_isFpRelative (x : DecodedAddressingMode (Expression F)) :
+    Expression.eval env x.isFpRelative = (eval env x).isFpRelative := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedAddressingMode.eval_isImmediate (x : DecodedAddressingMode (Expression F)) :
+    Expression.eval env x.isImmediate = (eval env x).isImmediate := by with_unfolding_all rfl
+
+@[grind =]
+theorem DecodedInstruction.eval_mk (t : DecodedInstructionType (Expression F))
+    (m1 m2 m3 : DecodedAddressingMode (Expression F)) :
+    eval env ({ instrType := t, mode1 := m1, mode2 := m2, mode3 := m3 } :
+        DecodedInstruction (Expression F)) =
+      { instrType := eval env t, mode1 := eval env m1, mode2 := eval env m2,
+        mode3 := eval env m3 } := by
+  simp only [circuit_norm]
+
+@[grind =]
+theorem DecodedInstruction.eval_instrType (x : DecodedInstruction (Expression F)) :
+    eval env x.instrType = (eval env x).instrType := by simp only [circuit_norm]
+
+@[grind =]
+theorem DecodedInstruction.eval_mode1 (x : DecodedInstruction (Expression F)) :
+    eval env x.mode1 = (eval env x).mode1 := by simp only [circuit_norm]
+
+@[grind =]
+theorem DecodedInstruction.eval_mode2 (x : DecodedInstruction (Expression F)) :
+    eval env x.mode2 = (eval env x).mode2 := by simp only [circuit_norm]
+
+@[grind =]
+theorem DecodedInstruction.eval_mode3 (x : DecodedInstruction (Expression F)) :
+    eval env x.mode3 = (eval env x).mode3 := by simp only [circuit_norm]
+
+end EvalLemmas
+
 /--
   Convert the one-hot encoding of an instruction type back to its numeric representation.
 -/
