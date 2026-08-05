@@ -814,7 +814,7 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
   self.callOps_eq config input i
 
 /-- A call exposes the child's exact reduced synthesis footprint. -/
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary
     (self : FormalCircuit F ConfigInput Config Input Output)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
@@ -823,7 +823,7 @@ theorem call_synthesisSummary
   rw [self.call_operations]
   exact (self.elaborated.synthesisSummary_eq config input i).symm
 
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
     (self : FormalCircuit F ConfigInput Config Input Output)
     (config : Config) (input : Var Input F) (i : RegionIndex) :
@@ -1715,7 +1715,7 @@ theorem call_operations (self : FormalRegionCircuit F ConfigInput Config Input O
   self.callOps_eq config offset input region
 
 /-- A region call exposes the child's exact reduced synthesis footprint. -/
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (offset : ℕ) (input : Var Input F)
@@ -1726,7 +1726,7 @@ theorem call_synthesisSummary
   rw [self.call_operations]
   exact (self.elaborated.synthesisSummary_eq config offset input region).symm
 
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (offset : ℕ) (input : Var Input F)
@@ -2043,7 +2043,7 @@ theorem toFormal_keygenRequirements
       child.keygenRequirements :=
   rfl
 
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_columns
     (child : FormalRegionCircuit F ConfigInput Config Input Output)
     (name : String) (config : Config) (input : Var Input F)
@@ -2052,7 +2052,7 @@ theorem toFormal_synthesisSummary_columns
       config input region).columns =
         (child.elaborated.synthesisSummary config 0 input region).columns := rfl
 
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_columnOccupancy
     (child : FormalRegionCircuit F ConfigInput Config Input Output)
     (name : String) (config : Config) (input : Var Input F)
@@ -2064,7 +2064,7 @@ theorem toFormal_synthesisSummary_columnOccupancy
           (child.elaborated.synthesisSummary config 0 input region).rowCount
         else 0 := rfl
 
-@[circuit_norm]
+@[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_constantSiteCount
     (child : FormalRegionCircuit F ConfigInput Config Input Output)
     (name : String) (config : Config) (input : Var Input F)

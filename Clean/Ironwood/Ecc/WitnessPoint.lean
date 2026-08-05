@@ -168,7 +168,7 @@ def pointFormal :=
 
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointFormal_synthesisSummary_columns
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) :
@@ -181,7 +181,7 @@ theorem pointFormal_synthesisSummary_columns
   simp only [point, circuit_norm]
   simp [pointGate]
 
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointFormal_synthesisSummary_columnOccupancy
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
@@ -198,7 +198,7 @@ theorem pointFormal_synthesisSummary_columnOccupancy
   simp only [point, circuit_norm]
   simp [pointGate]
 
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointFormal_synthesisSummary_constantSiteCount
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) :
@@ -209,7 +209,7 @@ theorem pointFormal_synthesisSummary_constantSiteCount
   rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
   simp only [point, circuit_norm]
 
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointNonIdFormal_synthesisSummary_columns
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) :
@@ -222,7 +222,7 @@ theorem pointNonIdFormal_synthesisSummary_columns
   simp only [pointNonId, circuit_norm]
   simp [pointNonIdGate, Gate.withSelector]
 
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointNonIdFormal_synthesisSummary_columnOccupancy
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
@@ -239,7 +239,7 @@ theorem pointNonIdFormal_synthesisSummary_columnOccupancy
   simp only [pointNonId, circuit_norm]
   simp [pointNonIdGate, Gate.withSelector]
 
-@[circuit_norm]
+@[circuit_norm ↑, synthesis_summary_norm]
 theorem pointNonIdFormal_synthesisSummary_constantSiteCount
     (config : Config) (input : Var (Unconstrained Point) Fp)
     (region : RegionIndex) :

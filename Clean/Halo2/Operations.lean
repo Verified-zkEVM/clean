@@ -1,5 +1,6 @@
 import Clean.Halo2.Configure
 import Clean.Halo2.Provable
+import Clean.Halo2.SynthesisSummaryAttr
 import Clean.Halo2.WitnessIR
 
 /-!
@@ -549,6 +550,43 @@ def synthesisSummary : Operations F → SynthesisSummary
         · funext column
           simp [SynthesisSummary.combine, Nat.add_assoc]
         · simp [SynthesisSummary.combine, Nat.add_assoc]
+
+attribute [synthesis_summary_norm]
+  regionOperationRowExtent
+  regionOperationShapeColumns
+  regionOperationConstantSiteCount
+  RegionSynthesisSummary.combine_columns
+  RegionSynthesisSummary.combine_rowCount
+  RegionSynthesisSummary.combine_constantSiteCount
+  RegionSynthesisSummary.ofOperation_columns
+  RegionSynthesisSummary.ofOperation_rowCount
+  RegionSynthesisSummary.ofOperation_constantSiteCount
+  regionSynthesisSummary_nil_columns
+  regionSynthesisSummary_nil_rowCount
+  regionSynthesisSummary_nil_constantSiteCount
+  regionSynthesisSummary_cons_columns
+  regionSynthesisSummary_cons_rowCount
+  regionSynthesisSummary_cons_constantSiteCount
+  SynthesisSummary.combine_columns
+  SynthesisSummary.combine_columnOccupancy
+  SynthesisSummary.combine_constantSiteCount
+  SynthesisSummary.ofRegion_columns
+  SynthesisSummary.ofRegion_columnOccupancy
+  SynthesisSummary.ofRegion_constantSiteCount
+  synthesisSummary_nil_columns
+  synthesisSummary_nil_columnOccupancy
+  synthesisSummary_nil_constantSiteCount
+  synthesisSummary_region_cons_columns
+  synthesisSummary_region_cons_columnOccupancy
+  synthesisSummary_region_cons_constantSiteCount
+  synthesisSummary_constrainInstance_cons_columns
+  synthesisSummary_constrainInstance_cons_columnOccupancy
+  synthesisSummary_constrainInstance_cons_constantSiteCount
+  synthesisSummary_loadTable_cons_columns
+  synthesisSummary_loadTable_cons_columnOccupancy
+  synthesisSummary_loadTable_cons_constantSiteCount
+  regionSynthesisSummary_append
+  synthesisSummary_append
 
 end FloorPlanner
 
