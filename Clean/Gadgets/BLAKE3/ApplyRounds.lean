@@ -403,6 +403,17 @@ structure Inputs (F : Type) where
   flags : U32 F
 deriving ProvableStruct
 
+/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` split node-input
+equalities in `computableWitnesses` proofs. -/
+@[grind =]
+theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (cv : Vector (U32 (Expression F)) 8) (bw : Vector (U32 (Expression F)) 16)
+    (ch cl bl fl : U32 (Expression F)) :
+    eval env (Inputs.mk cv bw ch cl bl fl) =
+      Inputs.mk (eval env cv) (eval env bw) (eval env ch) (eval env cl) (eval env bl)
+        (eval env fl) := by
+  simp only [circuit_norm]
+
 /--
 Initializes the BLAKE3 state vector from input variables.
 This combines the chaining value with IV constants and counter/flags.

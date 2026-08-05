@@ -48,36 +48,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
 set_option maxRecDepth 8192 in
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   main, Assumptions, Spec, soundness, completeness
-  computableWitnesses := by
-    intro n input env env'
-    have eA : ∀ v, (ApplyRounds.circuit (p:=p)).localLength v = 5376 := fun _ => rfl
-    have eF : ∀ v, (FinalStateUpdate.circuit (p:=p)).localLength v = 64 := fun _ => rfl
-    simp only [circuit_norm, main, eA, eF]
-    refine ⟨⟨fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _
-        (by first | exact h | (simp only [circuit_norm]; exact h))
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eF]; try omega)) fun h_agrees => ?_
-      have oAR := FormalCircuit.output_of_input_eq (ApplyRounds.circuit (p:=p)) (n := n)
-        (by first | exact h | (simp only [circuit_norm]; exact h))
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eA]; omega))
-      simp only [circuit_norm]
-      first
-        | exact oAR
-        | exact ⟨oAR, congrArg (fun s : ApplyRounds.Inputs (F p) => s.chaining_value) h⟩
-    · have oAR := FormalCircuit.output_of_input_eq (ApplyRounds.circuit (p:=p)) (n := n)
-        (by first | exact h | (simp only [circuit_norm]; exact h))
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eA]; omega))
-      have oF := FormalCircuit.output_of_input_eq (FinalStateUpdate.circuit (p:=p))
-        (input_var := ⟨(ApplyRounds.circuit (p:=p)).output input n, input.chaining_value⟩)
-        (n := n + 5376)
-        (by simp only [circuit_norm]
-            first
-              | exact oAR
-              | exact ⟨oAR, congrArg (fun s : ApplyRounds.Inputs (F p) => s.chaining_value) h⟩)
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eA, eF]; omega))
-      simp only [circuit_norm]
-      (try and_intros) <;> first | grind | exact oF
 }
 
 end Gadgets.BLAKE3.Compress
