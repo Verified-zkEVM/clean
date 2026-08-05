@@ -124,7 +124,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
-private lemma state_elem_congr {env env' : ProverEnvironment (F p)}
+lemma state_elem_congr {env env' : ProverEnvironment (F p)}
     {state : BLAKE3State (Expression (F p))}
     (h1 : eval env.toEnvironment state = eval env'.toEnvironment state) (i : Fin 16) :
     eval env.toEnvironment state[(i : ℕ)] = eval env'.toEnvironment state[(i : ℕ)] :=
@@ -597,7 +597,7 @@ private lemma node14_out_congr {env env' : ProverEnvironment (F p)}
 set_option maxRecDepth 2048 in
 /-- Env-agreement transfers to the output state: the four set slots are fresh witness
 windows below the bound, the remaining entries evaluate through the input state. -/
-private lemma output_eval_congr {env env' : ProverEnvironment (F p)}
+lemma output_eval_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))} {n : ℕ}
     (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
     (h_agrees : env.AgreesBelow (n + 96) env') :
