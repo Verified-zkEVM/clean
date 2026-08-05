@@ -1956,6 +1956,21 @@ def circuit (G : Generators) (R : FixedBase)
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
 
+@[keygen_norm]
+theorem Configured.inputPermutationColumns_eq
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    {cfg : Config} (configured : (circuit G R Q hQ).Configured cfg)
+    (input : Var Inputs Fp) :
+    configured.inputPermutationColumns input =
+      [input.gdX.cell.column, input.gdY.cell.column,
+        input.pkdX.cell.column, input.pkdY.cell.column,
+        input.value.cell.column, input.rho.cell.column,
+        input.psi.cell.column] := by
+  simp only [FormalCircuit.Configured.inputPermutationColumns,
+    circuit, FormalCircuit.keygenRequirements,
+    elaboratedFolded, ElaboratedCircuit.keygenRequirements,
+    keygenRequirements]
+
 /-- Package NoteCommit from its commitment child and the arguments registered by
 its own decomposition/canonicity stages. -/
 def configurationCertificate (G : Generators) (R : FixedBase)

@@ -910,6 +910,32 @@ def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
       let _ ← copyAdvice dca (cfg.advices 9) row
       (orchardGate cfg.qOrchard cfg.advices).enable row)
 
+@[keygen_helper]
+theorem synthCrossAddressChecks_keygenRegistered
+    (cfg : Config) (pts : Var AddressPoints Fp)
+    (gates : List (Gate Fp)) (lookups : List (LookupArgument Fp))
+    (permutationColumns : List AnyColumn) (i : RegionIndex)
+    (hadvice : ∀ index, (cfg.advices index).toAny ∈ permutationColumns)
+    (hprimary : cfg.primary.toAny ∈ permutationColumns)
+    (hgdOldX : pts.gdOld.x.cell.column ∈ permutationColumns)
+    (hgdOldY : pts.gdOld.y.cell.column ∈ permutationColumns)
+    (hpkdOldX : pts.pkdOld.x.cell.column ∈ permutationColumns)
+    (hpkdOldY : pts.pkdOld.y.cell.column ∈ permutationColumns)
+    (hgdNewX : pts.gdNew.x.cell.column ∈ permutationColumns)
+    (hgdNewY : pts.gdNew.y.cell.column ∈ permutationColumns)
+    (hpkdNewX : pts.pkdNew.x.cell.column ∈ permutationColumns)
+    (hpkdNewY : pts.pkdNew.y.cell.column ∈ permutationColumns)
+    (horchard : orchardGate cfg.qOrchard cfg.advices ∈ gates) :
+    ((synthCrossAddressChecks cfg pts).operations i).KeygenRegistered
+      gates lookups permutationColumns := by
+  simp only [synthCrossAddressChecks, keygen_spine]
+  keygen_registration
+  all_goals
+    first
+    | simpa only [keygen_output_norm] using hadvice 0
+    | rename_i row
+      fin_cases row <;> simp_all
+
 /-- Rust `Circuit::synthesize_base` (`circuit.rs:461-828`): the staged witness /
 integrity-check / note-commitment composition, returning the `AddressPoints` the
 ironwood cross-address stage reads. This alone is the pre-ironwood (fixed post-NU 6.2)

@@ -1201,4 +1201,15 @@ theorem configure_output_merkle2_xA_mem_permutationRequests
   simpa [configure, configureChips] using
     (baseConfigureCertificate G counts).advicePermutationColumn 5
 
+/-- The Orchard gate emitted by Action configure is available to the final Action
+regions. -/
+@[keygen_norm]
+theorem configure_output_orchardGate_mem_gates
+    (G : Generators) (counts : ConfigureCounts) :
+    orchardGate ((configure G).output counts).qOrchard
+        ((configure G).output counts).advices ∈
+      ((configure G).delta counts).gates := by
+  simpa only [actionConfigureContext] using
+    (baseConfigureCertificate G counts).orchardGate
+
 end Zcash.Circuits.Action.Circuit

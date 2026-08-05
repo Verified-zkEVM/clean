@@ -678,6 +678,68 @@ theorem synthChecks_output_permutationColumns (G : Generators) (R : FixedBase)
     grind
   rcases this with rfl | rfl <;> simp [permutationColumns, NoteCommit.permutationColumns]
 
+/-- The final commitment result occupies the complete-addition output columns. -/
+theorem synthChecks_output_cm (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).cm =
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+          r := input.rcm }
+        (i + 10) := by
+  exact congrArg CheckCells.cm
+    (synthChecks_output G R Q hQ cfg input pcs iHash i)
+
+private theorem output_property_bind {α β : Type} (P : β → Prop)
+    (x : Circuit Fp α) (f : α → Circuit Fp β) (i : RegionIndex)
+    (h : ∀ a j, P ((f a).output j)) : P ((x >>= f).output i) := by
+  rw [Circuit.output_bind]
+  exact h _ _
+
+theorem synth_output_columns (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synth G R Q hQ cfg input).output i).x.cell.column = cfg.addConfig.xQR.toAny ∧
+      ((synth G R Q hQ cfg input).output i).y.cell.column = cfg.addConfig.yQR.toAny := by
+  simp only [synth]
+  refine output_property_bind
+    (fun output : Var Point Fp =>
+      output.x.cell.column = cfg.addConfig.xQR.toAny ∧
+        output.y.cell.column = cfg.addConfig.yQR.toAny)
+    currentRegion (fun i₀ => do
+      let pcs ← synthPieces cfg input
+      let ccs ← synthChecks G R Q hQ cfg input pcs (i₀ + 27)
+      synthGates cfg input pcs ccs (i₀ + 27)
+      pure ccs.cm) i ?_
+  intro i₀ j₀
+  refine output_property_bind
+    (fun output : Var Point Fp =>
+      output.x.cell.column = cfg.addConfig.xQR.toAny ∧
+        output.y.cell.column = cfg.addConfig.yQR.toAny)
+    (synthPieces cfg input) (fun pcs => do
+    let ccs ← synthChecks G R Q hQ cfg input pcs (i₀ + 27)
+    synthGates cfg input pcs ccs (i₀ + 27)
+    pure ccs.cm) j₀ ?_
+  intro pcs j₁
+  simp only [Circuit.output_bind, Circuit.output_pure]
+  rw [synthChecks_output_cm]
+  simp only [Sinsemilla.CommitDomain.commit_output_cells,
+    AssignedCell.of_cell, Cell.of_column]
+  exact ⟨trivial, trivial⟩
+
+theorem synth_output_x_column (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synth G R Q hQ cfg input).output i).x.cell.column = cfg.addConfig.xQR.toAny :=
+  (synth_output_columns G R Q hQ cfg input i).1
+
+theorem synth_output_y_column (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synth G R Q hQ cfg input).output i).y.cell.column = cfg.addConfig.yQR.toAny :=
+  (synth_output_columns G R Q hQ cfg input i).2
+
 theorem mem_permutationColumns_of_child {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
     (hcolumn : column ∈ childColumns) :

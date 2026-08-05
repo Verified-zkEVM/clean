@@ -396,4 +396,14 @@ def configurationCertificate (G : Generators) (ns : List ℕ)
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns
 
+/-- The commitment result occupies the complete-addition output columns. -/
+theorem commit_output_cells (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (i : RegionIndex) :
+    (commit G ns R Q hQ hns).output cfg input i =
+      { x := .of (i + 3) 1 cfg.2.2.xQR,
+        y := .of (i + 3) 1 cfg.2.2.yQR } := by
+  rfl
+
 end Zcash.Circuits.Sinsemilla.CommitDomain
