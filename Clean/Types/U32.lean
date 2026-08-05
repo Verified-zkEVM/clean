@@ -39,13 +39,47 @@ namespace U32
 @[grind =]
 theorem size_eq : size U32 = 4 := rfl
 
-@[grind =]
 theorem eval_eq_components {F : Type} [FiniteField F]
     (env : Environment F) (x : U32 (Expression F)) :
     eval env x =
       { x0 := eval env x.x0, x1 := eval env x.x1,
         x2 := eval env x.x2, x3 := eval env x.x3 } := by
   with_unfolding_all rfl
+
+/-- Constructor-keyed composite eval: decomposition fires only on `U32` literals, keeping
+opaque composite evals intact as `grind` atoms. -/
+@[grind =]
+theorem eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (a0 a1 a2 a3 : Expression F) :
+    eval env (⟨a0, a1, a2, a3⟩ : U32 (Expression F)) =
+      ⟨Expression.eval env a0, Expression.eval env a1,
+       Expression.eval env a2, Expression.eval env a3⟩ := by
+  simp only [eval_eq_components, circuit_norm]
+
+/-! Component evals commute into projections of the composite eval (rather than the
+composite exploding into components): opaque composite evals are the `grind` atoms that
+subcircuit composition rules are patterned on, and env-agreement transfers between them
+by congruence. -/
+
+@[grind =]
+theorem eval_x0 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x0 = (eval env x).x0 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x1 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x1 = (eval env x).x1 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x2 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x2 = (eval env x).x2 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x3 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x3 = (eval env x).x3 := by
+  simp only [eval_eq_components, circuit_norm]
 
 def toLimbs {F} (x : U32 F) : Vector F 4 := toElements x
 def fromLimbs {F} (v : Vector F 4) : U32 F := fromElements v

@@ -83,5 +83,8 @@ def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 where
   Spec := Spec off
   soundness := soundness off
   completeness := completeness off
+  computableWitnesses := by
+    -- the witness is selected by an `if`-nest on `off`; decide it first
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
 end Gadgets.Rotation32Bytes

@@ -150,6 +150,15 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
   unfold eval
   rfl
 
+/-- Normalize the `Var M F`-spelled type argument of eval terms to the concrete
+`M (Expression F)` spelling (`rfl`, but the two elaborate to distinct terms): per the
+normal-form doctrine above, and so that eval atoms are congruent inside `grind`. -/
+@[circuit_norm, grind norm] lemma eval_var_concrete (env : Environment F) (v : Var M F) :
+    eval env v = eval env (v : M (Expression F)) := rfl
+
+@[circuit_norm, grind norm] lemma eval_var_concrete_prover (env : ProverEnvironment F) (v : Var M F) :
+    eval env v = eval env (v : M (Expression F)) := rfl
+
 @[circuit_norm, grind norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
     eval env v = eval env.toEnvironment v := by
   rw [eval_var_prover, eval_var]
@@ -207,6 +216,8 @@ instance : ProvableType field where
   fromElements := fun ⟨⟨[x]⟩, _⟩ => x
 instance : NonEmptyProvableType field where
 
+@[grind =] theorem size_field : size field = 1 := rfl
+
 namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
@@ -244,6 +255,8 @@ instance (priority := high) : ProvableType (fields n) where
   size := n
   toElements x := x
   fromElements v := v
+
+@[grind norm] theorem size_fields (n : ℕ) : size (fields n) = n := rfl
 
 instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
   nonempty := Nat.zero_lt_succ n

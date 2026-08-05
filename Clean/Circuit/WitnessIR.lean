@@ -479,7 +479,7 @@ theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
   rfl
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind =]
 theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env } := by
@@ -487,7 +487,7 @@ theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
   simp [ofFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, grind =]
 theorem WitgenIR.getElem_eval_ofCompositeFExpr (e : value (FExpr F))
     (env : ProverEnvironment F) (i : ℕ) (hi : i < size value) :
     ((ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by

@@ -163,6 +163,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by
+    computable_witnesses [xor32, eval_vector, Vector.ext_iff]
 
 end Xor32
 end Gadgets.SHA256

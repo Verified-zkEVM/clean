@@ -111,7 +111,9 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
   simpPass
   unless (← getGoals).isEmpty do
     withMainContext do
-      let target ← whnf (← getMainTarget)
+      -- syntactic head check: `whnf` on post-simp targets can blow the heartbeat budget
+      -- (the And is exposed by the simp pass whenever it is going to be)
+      let target := (← instantiateMVars (← getMainTarget)).consumeMData
       -- `simp_all` first, guarded: hypotheses like `∀ i < n, eval env s[i] = eval env' s[i]`
       -- are rewrite rules that close congruence goals grind occasionally leaves open; when
       -- neither closes the goal, `grind`'s failure (with diagnostics) is the one reported
