@@ -71,6 +71,25 @@ def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
 def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
   Spec x := x.Normalized
+  computableWitnesses := by
+    intro n input env env'
+    have eN : ∀ v, (U32.AssertNormalized.circuit (p:=p)).localLength v = 0 := fun _ => rfl
+    simp only [circuit_norm, main, eN]
+    (try and_intros) <;>
+      first
+        | (intro i h
+           refine FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+             (by first | omega | (simp only [circuit_norm, eN]; try omega)) fun h_agrees => ?_
+           simp only [circuit_norm]
+           grind)
+        | (intro h
+           refine FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+             (by first | omega | (simp only [circuit_norm, eN]; try omega)) fun h_agrees => ?_
+           simp only [circuit_norm]
+           grind)
+        | grind
+        | exact fun _ => trivial
+        | trivial
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
@@ -259,8 +278,8 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp only [ProcessBlocksState.toChunkState, U32.value] at h_acc_lt
     simp only [ProcessBlocksState.toChunkState] at h_acc_eq
     have h_add_value_nowrap :
-        ZMod.val (env.get 5553) + ZMod.val (env.get 5555) * 256 +
-            ZMod.val (env.get 5557) * 256 ^ 2 + ZMod.val (env.get 5559) * 256 ^ 3 =
+        ZMod.val (env.get 5554) + ZMod.val (env.get 5556) * 256 +
+            ZMod.val (env.get 5558) * 256 ^ 2 + ZMod.val (env.get 5560) * 256 ^ 3 =
           ZMod.val acc_blocks_compressed.x0 + ZMod.val acc_blocks_compressed.x1 * 256 +
               ZMod.val acc_blocks_compressed.x2 * 256 ^ 2 +
             ZMod.val acc_blocks_compressed.x3 * 256 ^ 3 + 1 := by
@@ -308,7 +327,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     · exact takeShort8_normalized (by norm_num) h_compress_norm
     constructor
     · exact h_state_norm.2.1
-    change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
+    change ({ x0 := env.get 5554, x1 := env.get 5556, x2 := env.get 5558, x3 := env.get 5560 } : U32 (F p)).Normalized
     exact h_add_norm
   · simp only [h_x, decide_false, cond_false]
     simp only [circuit_norm] at h_holds
@@ -413,6 +432,6 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   completeness
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
-    omega
+    try omega
 end
 end Tables.BLAKE3.ProcessBlocksInductive
