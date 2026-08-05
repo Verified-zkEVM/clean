@@ -273,8 +273,133 @@ theorem completeness : Completeness (F p) main Assumptions := by
         · norm_num
       · exact h_or2.2
 
+omit p_large_enough in
+private lemma eval_components {env env' : Environment (F p)} {input : Var Inputs (F p)}
+    (h : ProvableStruct.eval env input = ProvableStruct.eval env' input) :
+    eval env input.state.blocks_compressed = eval env' input.state.blocks_compressed ∧
+    eval env input.base_flags = eval env' input.base_flags := by
+  obtain ⟨⟨cv, cc, bc⟩, bl, bd, bf⟩ := input
+  simp only [circuit_norm] at h ⊢
+  grind
+
+omit p_large_enough in
+private lemma or1_input_eq {env env' : Environment (F p)} {bf : Var U32 (F p)}
+    {z : Var field (F p)}
+    (hbf : eval env bf = eval env' bf) (hz : eval env z = eval env' z) :
+    eval env (Or32.Inputs.mk bf (U32.mk (z * Expression.const 1) 0 0 0)) =
+      eval env' (Or32.Inputs.mk bf (U32.mk (z * Expression.const 1) 0 0 0)) := by
+  simp only [circuit_norm] at hbf hz ⊢
+  grind
+
+omit p_large_enough in
+private lemma or2_input_eq {env env' : Environment (F p)} {w : Var U32 (F p)}
+    (hw : eval env w = eval env' w) :
+    eval env (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) =
+      eval env' (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) := by
+  simp only [circuit_norm] at hw ⊢
+  grind
+
+omit p_large_enough in
+private lemma compress_input_eq {env env' : Environment (F p)} {input : Var Inputs (F p)}
+    {fl : Var U32 (F p)}
+    (h : ProvableStruct.eval env input = ProvableStruct.eval env' input)
+    (hfl : eval env fl = eval env' fl) :
+    eval env (ApplyRounds.Inputs.mk input.state.chaining_value (bytesToWords input.buffer_data)
+        (U32.mk 0 0 0 0) input.state.chunk_counter (U32.mk input.buffer_len 0 0 0) fl) =
+      eval env' (ApplyRounds.Inputs.mk input.state.chaining_value (bytesToWords input.buffer_data)
+        (U32.mk 0 0 0 0) input.state.chunk_counter (U32.mk input.buffer_len 0 0 0) fl) := by
+  obtain ⟨⟨cv, cc, bc⟩, bl, bd, bf⟩ := input
+  simp only [circuit_norm] at h hfl ⊢
+  try rw [eval_bytesToWords, eval_bytesToWords]
+  grind [eval_bytesToWords]
+
+omit p_large_enough in
+private lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
+    (h_agrees : env.AgreesBelow m env') (hk : k + 4 ≤ m) :
+    eval env.toEnvironment (varFromOffset U32 k : Var U32 (F p)) =
+      eval env'.toEnvironment (varFromOffset U32 k : Var U32 (F p)) := by
+  simp only [ProvableType.eval_varFromOffset, circuit_norm, Vector.mapRange_succ, Vector.mapRange_zero]
+  refine congrArg fromElements ?_
+  simp only [Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
+  and_intros <;> exact h_agrees.1 _ (by omega)
+
+omit p_large_enough in
+private lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
+    (h_agrees : env.AgreesBelow (n + 5457) env') :
+    eval env.toEnvironment
+        ((#v[varFromOffset U32 (n + 9 + 4 + 4 + 5376),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4)] : Vector (U32 (Expression (F p))) 16).take 8) =
+      eval env'.toEnvironment
+        ((#v[varFromOffset U32 (n + 9 + 4 + 4 + 5376),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
+         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4)] : Vector (U32 (Expression (F p))) 16).take 8) := by
+  simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
+    List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
+    circuit_norm, eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
+  (try and_intros) <;> (refine output_windows_eq h_agrees ?_; omega)
+
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
+  computableWitnesses := by
+    intro n input env env'
+    have eZ : ∀ v, (IsZero.circuit (F := F p) (M := U32)).localLength v = 9 := fun _ => rfl
+    have eO : ∀ v, (Or32.circuit (p := p)).localLength v = 4 := fun _ => rfl
+    simp only [circuit_norm, main, eZ, eO]
+    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
+    · exact FormalCircuit.toSubcircuit_computableWitnesses _ (eval_components h).1
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by simp only [circuit_norm, eZ]) fun h_agrees => ?_
+      exact or1_input_eq (eval_components h).2
+        (FormalCircuit.output_of_input_eq _ (eval_components h).1
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega)))
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by simp only [circuit_norm, eZ, eO]; try omega) fun h_agrees => ?_
+      exact or2_input_eq
+        (FormalCircuit.output_of_input_eq _
+          (or1_input_eq (eval_components h).2
+            (FormalCircuit.output_of_input_eq _ (eval_components h).1
+              (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega))))
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega)))
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by simp only [circuit_norm, eZ, eO]; try omega) fun h_agrees => ?_
+      exact compress_input_eq h
+        (FormalCircuit.output_of_input_eq _
+          (or2_input_eq
+            (FormalCircuit.output_of_input_eq _
+              (or1_input_eq (eval_components h).2
+                (FormalCircuit.output_of_input_eq _ (eval_components h).1
+                  (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega))))
+              (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega))))
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega)))
+    · exact output_take8_eq h_agrees
 }
 
 end Gadgets.BLAKE3.FinalizeChunk
