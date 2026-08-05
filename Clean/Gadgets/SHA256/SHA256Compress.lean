@@ -395,8 +395,8 @@ private lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
       simp only [Vector.getElem_map]
       rw [ProvableType.eval_fields, ProvableType.eval_fields]
       exact hel jj (by omega)
-  exact (ProvableType.eval_vector env.toEnvironment (stateVar i₀ input_var_state k)).trans
-    (hm.trans (ProvableType.eval_vector env'.toEnvironment (stateVar i₀ input_var_state k)).symm)
+  exact (eval_vector env.toEnvironment (stateVar i₀ input_var_state k)).trans
+    (hm.trans (eval_vector env'.toEnvironment (stateVar i₀ input_var_state k)).symm)
 
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness

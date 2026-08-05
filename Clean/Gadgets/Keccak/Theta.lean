@@ -34,5 +34,22 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   main, Assumptions, Spec, soundness, completeness
+  computableWitnesses := by
+    intro n input env env'
+    simp only [circuit_norm, main]
+    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h => ?_⟩
+    · exact FormalCircuit.toSubcircuit_computableWitnesses _ h
+    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by omega) (FormalCircuit.output_onlyAccessedBelow _ fun _ => h)
+    · -- ThetaXor consumes the original input and ThetaD's output
+      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by omega) fun h_agrees => ?_
+      simp only [circuit_norm]
+      refine ⟨h, ?_⟩
+      exact FormalCircuit.output_of_input_eq _
+        (FormalCircuit.output_of_input_eq _ h
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)))
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+    · grind
 }
 end Gadgets.Keccak256.Theta

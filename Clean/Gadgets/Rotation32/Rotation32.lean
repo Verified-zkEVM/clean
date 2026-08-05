@@ -72,5 +72,20 @@ def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
+  computableWitnesses := by
+    intro n input env env'
+    simp only [circuit_norm, main, output]
+    refine ⟨⟨fun h_input => ?_, fun h_input => ?_⟩, fun h_input => ?_⟩
+    · exact FormalCircuit.toSubcircuit_computableWitnesses _ h_input
+    · -- the second child consumes the first child's output; its type-index offset carries
+      -- a stuck `+ 0` (dependent motive), hence the offset-decoupled composition lemma
+      exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by omega) (FormalCircuit.output_onlyAccessedBelow _ fun _ => h_input)
+    · -- output: `U32.fromLimbs` over fresh witness windows
+      simp only [circuit_norm, Rotation32Bits.output, U32.ByteVector.eval_fromLimbs]
+      intro h_agrees
+      refine congrArg U32.fromLimbs (Vector.ext fun i hi => ?_)
+      simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
+      grind
 
 end Gadgets.Rotation32
