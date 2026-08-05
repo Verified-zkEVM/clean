@@ -1,4 +1,5 @@
 import Clean.Gadgets.Xor.Xor32
+import Mathlib.Tactic.IntervalCases
 import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
@@ -108,6 +109,14 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ⟨chaining_value_norm 4, state_norm 12⟩, ⟨chaining_value_norm 5, state_norm 13⟩,
     ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
+omit [Fact (p > 2 ^ 16 + 2 ^ 8)] in
+private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
+    (h : ∀ i < n, env.get i = env'.get i) (hk : k + 4 ≤ n) :
+    eval env (varFromOffset U32 k : U32 (Expression (F p))) =
+      eval env' (varFromOffset U32 k : U32 (Expression (F p))) := by
+  simp only [ProvableType.eval_varFromOffset, size, Vector.mapRange_succ, Vector.mapRange_zero]
+  grind
+
 def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   main := main
   elaborated := elaborated
@@ -115,5 +124,23 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨state, chaining_value⟩ := input
+    simp only [circuit_norm, main]
+    -- sixteen independent Xor32 nodes; their type-index offsets carry stuck `+ 0`s
+    -- (dependent motive) and the child's constant localLength is tactic-defined, so it
+    -- is exposed by rfl for the offset arithmetic
+    have ex : ∀ x : Var Gadgets.Xor32.Inputs (F p),
+        (Gadgets.Xor32.circuit (p := p)).localLength x = 4 := fun _ => rfl
+    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
+             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
+    all_goals first
+      | exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [ex]) fun h_agrees => by simp only [circuit_norm]; grind
+      | -- output: a literal vector of fresh witness windows, elementwise below n + 64
+        (simp only [circuit_norm, eval_vector, Array.mk.injEq, List.cons.injEq, and_true]
+         and_intros <;> exact varFromOffset_eval_congr (p := p) h_agrees.1 (by omega))
 
 end Gadgets.BLAKE3.FinalStateUpdate
