@@ -115,5 +115,18 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
+  computableWitnesses := by
+    intro n input env env'
+    simp only [circuit_norm, main]
+    constructor
+    -- TODO COMPWIT the toLimbs component-commute bridge is not a global grind rule
+    · intro i
+      grind [U32.ByteVector.getElem_eval_toLimbs]
+    · -- output: `U32.fromLimbs` over fresh witness windows below the bound
+      intro hin h_agrees
+      simp only [circuit_norm, output, U32.ByteVector.eval_fromLimbs]
+      refine congrArg U32.fromLimbs (Vector.ext fun i hi => ?_)
+      simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
+      grind
 
 end Gadgets.Rotation32Bits

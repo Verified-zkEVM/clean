@@ -226,7 +226,7 @@ private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ
   simp only [ProvableType.eval_varFromOffset]
   refine congrArg fromElements (Vector.ext fun i hi => ?_)
   simp only [Vector.getElem_mapRange]
-  exact h (k + i) (by simp only [circuit_norm] at hi hk ⊢; omega)
+  exact h (k + i) (by first | omega | (simp only [circuit_norm] at hi hk ⊢; omega))
 
 /-- Env-agreement below `i₀ + k * 227` transfers to the whole variable-level schedule
 after `k` steps: initial entries evaluate through the input block, expanded entries are
@@ -247,7 +247,10 @@ private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
     refine Vector.ext fun j hj => ?_
     simp only [Vector.getElem_map, Vector.getElem_append]
     split_ifs with hj16
-    · exact congrArg (fun v => v[j]'(by simp only [circuit_norm] at hj16 ⊢; omega)) h
+    · have hc := congrArg
+        (fun v => v[j]'(by first | omega | (simp only [circuit_norm] at hj16 ⊢; omega))) h
+      simp only [Vector.getElem_map] at hc
+      exact hc
     · simp only [Vector.getElem_replicate, circuit_norm, Vector.map_replicate]
   | succ k ih =>
     intro hk hag
@@ -257,14 +260,17 @@ private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
     simp only [varSchedule, dif_pos hk48, eval_vector] at hprev ⊢
     refine Vector.ext fun j hj => ?_
     simp only [Vector.getElem_map]
-    simp only [circuit_norm] at hj
+    try simp only [circuit_norm] at hj
     by_cases hjk : j = k + 16
     · subst hjk
       simp only [Vector.getElem_set_self]
       exact varFromOffset_eval_congr (fun i hi => hag i hi) (by omega)
-    · rw [Vector.getElem_set_ne (by omega) (by omega) (by omega),
-        Vector.getElem_set_ne (by omega) (by omega) (by omega)]
-      exact congrArg (fun v => v[j]'(by simp only [circuit_norm]; omega)) hprev
+    · -- both sides carry the same (env-independent) `set` term, so one rewrite hits both
+      rw [Vector.getElem_set_ne (by omega) (by omega) (by omega)]
+      have hc := congrArg
+        (fun v => v[j]'(by first | omega | (simp only [circuit_norm]; omega))) hprev
+      simp only [Vector.getElem_map] at hc
+      exact hc
 
 /-- The soundness inductive invariant. Given the constraints `h_holds` hold for every step,
     the variable-level schedule at step `k` matches the value-level schedule and is normalized. -/
@@ -610,6 +616,9 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
     have es1 : ∀ x, (LowerSigma1.circuit (p:=p)).localLength x = 64 := fun _ => rfl
     have es0 : ∀ x, (LowerSigma0.circuit (p:=p)).localLength x = 64 := fun _ => rfl
     have ea : ∀ x, (Add32.circuit (p:=p)).localLength x = 33 := fun _ => rfl
+    -- `Vector.get` spellings in `scheduleStep` bridge to `getElem` by rfl
+    have hget : ∀ (v : Vector (fields 32 (Expression (F p))) 64) (i : Fin 64),
+        v.get i = v[i.val] := fun _ _ => rfl
     constructor
     · intro i
       obtain ⟨iv, hiv⟩ := i
@@ -629,7 +638,7 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
         have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
       all_goals
         simp only [circuit_norm]
-        (try and_intros) <;> grind [es1, es0, ea, Vector.get_eq_getElem]
+        (try and_intros) <;> grind
     · intro h hag
       exact varSchedule_eval_congr (i₀ := n) h 48 (by omega) fun j hj => hag.1 j (by omega)
 
