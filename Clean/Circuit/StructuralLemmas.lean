@@ -63,7 +63,6 @@ def concat
         simp +instances only [circuit_norm, explicit_circuit_norm] at hs ⊢
         omega
 
-
 @[circuit_norm]
 lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by

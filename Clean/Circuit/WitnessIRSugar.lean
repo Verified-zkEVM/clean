@@ -261,7 +261,6 @@ theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironm
     program.toIRLiteral.eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
 
-
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M
