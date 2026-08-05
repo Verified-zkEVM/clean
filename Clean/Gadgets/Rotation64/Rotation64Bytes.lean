@@ -48,6 +48,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
   subcircuitsConsistent x i0 := by
+    obtain ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := x
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   channelsLawful := by

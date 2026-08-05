@@ -26,17 +26,35 @@ let z ← witness (Vector.ofFn fun (i : Fin 32) => .expr (a[i] * b[i]))
 Building blocks:
 
 - `Expression F` coerces into `FExpr` (`.expr`), so circuit vars/expressions drop in.
-- `x.val : NExpr` (the `ℕ` value of an expression), `n.toField : FExpr` (cast back,
-  via `FiniteField.fromNat` so it is also correct on binary fields).
-- `NExpr` has `+ * / % &&& ||| ^^^ <<< >>>` and `OfNat` literals; `FExpr` has
-  `+ * - ⁻¹` and constants.
-- conditions: `a =? b` (field equality), `a <? b` (Nat comparison), used with `.ite`.
+- `x.val : U64Expr` (the **u64** value of an expression: `ZMod.val` truncated to 64 bits),
+  `n.toField : FExpr` (cast back, via `FiniteField.fromNat` so it is also correct on
+  binary fields).
+- `U64Expr` has `+ * / % &&& ||| ^^^ <<< >>>` and `OfNat` literals, all with wrapping
+  `u64` semantics; `FExpr` has `+ * - ⁻¹` and constants.
+- conditions: `a =? b` (equality) and `a <? b` (comparison), used with `.ite`. Both
+  overload on the operand sort: field-sorted operands compare `ZMod.val`s exactly,
+  u64-sorted operands compare `u64`s.
+- bit extraction is field-sorted, so it is not limited to 64 bits: `x.bit i : FExpr` is
+  bit `i` of `ZMod.val x`, and `x.bits n : VExpr F n` is its `n` low bits.
+- `VExpr.envRange offset` witnesses a run of `n` consecutive environment cells.
+
+### Wrapping, and what it means for proofs
+
+The integer sort is `UInt64` and every operation on it wraps modulo `2^64`, exactly like
+Rust's `u64`. Gadgets work on bytes, 32-bit limbs and small indices, so the wraps are
+never taken — and in proofs the `circuit_norm` simproc `u64Wrap` erases a `% 2^64` (or a
+shift's `% 64`) as soon as `omega` can bound the operand from the gadget's own
+assumptions. If a wrap survives simplification, the missing piece is usually a bound that
+has not been destructured into the local context yet.
+
+Anything genuinely wider than 64 bits must stay field-sorted: `x.bit i` / `x.bits n` for
+bit decomposition, `a <? b` on field operands for comparison.
 
 ## Programs with sharing: `witnessProgram`
 
 When a typed witness needs `let`-bound shared values, use `witnessProgram`.
 It is `witness`, but in the `Witgen.M` builder monad. Binding an `FExpr` or
-`NExpr` with `←` creates a shared witness-IR step:
+`U64Expr` with `←` creates a shared witness-IR step:
 
 ```lean
 let z ← witnessProgram do
@@ -45,7 +63,7 @@ let z ← witnessProgram do
 ```
 
 For vector witnesses, `witnessVectorProgram` exposes the lower-level `VExpr` API,
-including compact loops via `.range` (the lambda receives the index as an `NExpr`):
+including compact loops via `.range` (the lambda receives the index as a `U64Expr`):
 
 ```lean
 -- SHA256 Add32: shared 32-bit sum, then one output bit per index
@@ -53,8 +71,8 @@ let z ← witnessVectorProgram 32 do
   let sum ← (bitsVal a + bitsVal b) % (2^32 : ℕ)
   return .range 32 fun i => ((sum >>> i) % 2).toField
 
--- generic-length bit decomposition (Bits, Bitify)
-let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
+-- generic-length bit decomposition (Bits, Bitify) — field-level, so `n` may exceed 64
+let bits ← witnessVector n (x.bits n)
 ```
 
 `witnessIR` remains available for constructing a `WitgenIR` directly.
@@ -63,7 +81,7 @@ let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
 
 When a program starts by binding an *opaque* sub-program — typically reading an
 `Unconstrained*` hint passed in from the caller — derive values from it with a plain
-Lean `let`, not `←`/`letN`/`letF`:
+Lean `let`, not `←`/`letU`/`letF`:
 
 ```lean
 let row ← witnessProgram do
@@ -72,7 +90,7 @@ let row ← witnessProgram do
   return CoordsRow.mk k.toField xs[k] ys[k] us[k]
 ```
 
-A `letN` here would allocate its local at a step index that depends on the opaque
+A `letU` here would allocate its local at a step index that depends on the opaque
 prefix's step count, and — more fundamentally — proofs would need to know that the
 prefix's own output is unaffected by the extension of the locals array, an invariant
 with no syntactic handle in `circuit_norm`. Plain `let` duplicates the derived node in

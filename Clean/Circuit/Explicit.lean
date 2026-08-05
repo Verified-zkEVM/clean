@@ -224,8 +224,8 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   channelsWithGuarantees _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
+@[explicit_circuit_constructor, implicit_reducible]
+def ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
@@ -288,8 +288,8 @@ theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g :
         ExplicitCircuit.channelsWithGuarantees (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
 
 -- `map` of an explicit circuit yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+@[explicit_circuit_constructor, implicit_reducible]
+def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   localLength n := localLength g n
@@ -305,6 +305,10 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   channelsLawful n := by
     rw [Circuit.map_operations_eq]
     exact g_explicit.channelsLawful n
+
+instance ExplicitCircuit.from_map_tc {f : α → β} {g : Circuit F α}
+    [g_explicit : ExplicitCircuit g] : ExplicitCircuit (f <$> g) :=
+  ExplicitCircuit.from_map g_explicit
 
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_map_output {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
@@ -689,6 +693,51 @@ def inferExplicitHead : TacticM Unit := withMainContext do
 
 elab "infer_explicit_head" : tactic => inferExplicitHead
 
+/--
+If the goal is `ExplicitCircuit c` where `c` (after beta) is a `match` on a local variable,
+destructure that variable with `cases` so the match can reduce. This supports the pervasive
+`fun (x, y) => ...` / `fun { x, y } => ...` pattern-match style for circuit `main`s: the
+matcher cannot reduce on an opaque variable, and matcher reduction does not eta-expand
+structure variables, so we introduce the constructor form explicitly. Single-constructor
+structures only — `cases` then yields exactly one goal.
+
+If instead every discriminant is already a constructor application (e.g. because an
+enclosing `cases_match_discr` substituted the outer variable everywhere, turning a nested
+match's discriminant from a variable into a literal), destructuring has nothing left to do;
+`reduceMatcher?` can iota-reduce the match directly against the literal, so `change` the
+goal to that reduced form instead of erroring out.
+-/
+def casesMatchDiscr : TacticM Unit := withMainContext do
+  let target ← getMainTarget
+  let args := target.getAppArgs
+  unless target.getAppFn.isConstOf ``ExplicitCircuit && !args.isEmpty do
+    throwError "target is not an ExplicitCircuit"
+  let circuit := args[args.size - 1]!.headBeta
+  let some declName := circuit.getAppFn.constName?
+    | throwError "circuit head is not a constant"
+  let some info ← getMatcherInfo? declName
+    | throwError "circuit head is not a matcher"
+  let mArgs := circuit.getAppArgs
+  let firstDiscr := info.numParams + 1
+  for i in [0:info.numDiscrs] do
+    let idx := firstDiscr + i
+    if h : idx < mArgs.size then
+      let discr := mArgs[idx]
+      if discr.isFVar then
+        liftMetaTactic fun g => do
+          let goals ← g.cases discr.fvarId!
+          return goals.toList.map (·.mvarId)
+        return
+  -- no variable discriminant left: the match is stuck only because nothing has forced its
+  -- iota reduction yet, not because a variable needs destructuring first
+  match ← reduceMatcher? circuit with
+  | .reduced reduced =>
+    let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) reduced.headBeta)
+    liftMetaTactic fun g => return [← g.change newTarget (checkDefEq := false)]
+  | _ => throwError "no local-variable discriminant to destructure, and the match does not reduce"
+
+elab "cases_match_discr" : tactic => casesMatchDiscr
+
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
@@ -697,6 +746,8 @@ macro_rules
       first
         -- O(1) head dispatch via the `explicit_circuit_constructor` registry.
         | infer_explicit_head
+        -- a `match` stuck on a variable (pattern-match lambda `main`s): destructure and retry
+        | cases_match_discr
         -- Fallback for heads that are user defs unfolding to a core constructor:
         -- prefer structural decomposition before typeclass search, so it doesn't
         -- `whnf` a large body and expand fixed-size `Vector.ofFn` witnesses.

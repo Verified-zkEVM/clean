@@ -34,7 +34,8 @@ def KeccakBlock.value (block : KeccakBlock (F p)) := block.map U64.value
 
 -- lemmas
 
-def KeccakRow.normalized_iff (row : KeccakRow (F p)) :
+omit [Fact (Nat.Prime p)] p_large_enough in
+theorem KeccakRow.normalized_iff (row : KeccakRow (F p)) :
     row.Normalized ↔
     row[0].Normalized ∧
     row[1].Normalized ∧

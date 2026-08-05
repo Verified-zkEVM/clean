@@ -289,11 +289,13 @@ def circuit : FormalAssertion (F p) U32 where
   Spec inputs := inputs.Normalized
 
   soundness := by
-    rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    -- destructure `x_var` up front: `simp` does not iota-reduce the `match` coming from
+    -- `main`'s destructuring `let` against an opaque variable
+    rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
 end U32.AssertNormalized

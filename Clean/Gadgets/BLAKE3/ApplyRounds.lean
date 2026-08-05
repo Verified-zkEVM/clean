@@ -19,6 +19,11 @@ Lemma to handle the notational difference between BLAKE3State.value and Vector.m
 lemma blake3_value_eq_map_value {p : ℕ} (msg : Vector (U32 (F p)) 16) :
   BLAKE3State.value msg = Vector.map U32.value msg := rfl
 
+open Specs.BLAKE3 (msgPermutation) in
+def output (input : Var Round.Inputs (F p)) (offset : ℕ) : Var Round.Inputs (F p) :=
+  { state := Round.circuit.output input offset,
+    message := Vector.ofFn fun i ↦ input.message[msgPermutation[i]] }
+
 /--
 A FormalCircuit that performs one round followed by permuting the message.
 Both input and output are Round.Inputs (state and message).
@@ -33,13 +38,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
 
-  -- TODO default causes proof churn, fix locally
   elaborated := by elaborate_circuit_with {
-    localLength input := Round.circuit.localLength input + Permute.circuit.localLength input.message
-    output input offset :=
-      let state_out := Round.circuit.output input offset
-      let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
-      ⟨state_out, msg_out⟩
+    output input offset := output input offset
   }
 
   Assumptions := Round.Assumptions
@@ -402,10 +402,12 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
     output input i₀ := main input |>.output i₀
     channelsWithGuarantees := []
   } using by
-    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
-    simp +instances only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
+    -- get rid of output with less unfolding
+    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle]
+    -- localLength and channelsWithGuarantees need full unfolding down to `roundWithPermute` / `Round.circuit`
+    simp +instances only [circuit_norm, sevenRoundsFinal, sixRoundsApplyStyle,
       sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
-      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
+      Round.circuit]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
@@ -433,13 +435,14 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
-  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
+  obtain ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩ := input_var
+  set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector
+    ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩
   simp only [Assumptions] at h_normalized
   simp only [circuit_norm] at *
-  provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env (cv_var[i]'(by omega))).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
@@ -484,8 +487,12 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
     apply initial_state_and_messages_are_normalized env
-    · simp only [circuit_norm, h_input]
-      rfl
+      ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+       input_var_counter_low, input_var_block_len, input_var_flags⟩
+      input_block_words input_chaining_value input_counter_high input_counter_low
+      input_block_len input_flags
+    · simp only [circuit_norm]
+      exact h_input
     · simp only [Assumptions]
       aesop
   )
@@ -524,8 +531,12 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized (p := p) env
-  · simp only [h_input, circuit_norm]
-    rfl
+    ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+     input_var_counter_low, input_var_block_len, input_var_flags⟩
+    input_block_words input_chaining_value input_counter_high input_counter_low
+    input_block_len input_flags
+  · simp only [circuit_norm]
+    exact h_input
   · simp only [Assumptions]
     aesop
 

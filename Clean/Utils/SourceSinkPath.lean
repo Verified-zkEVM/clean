@@ -62,9 +62,9 @@ variable {S : Type*} [DecidableEq S] [Fintype S]
 /-- A transition from one state to another. -/
 @[reducible] def Transition (S : Type*) := S × S
 
-instance [Fintype S] : Fintype (Transition S) := instFintypeProd S S
+instance : Fintype (Transition S) := instFintypeProd S S
 
-instance [DecidableEq S] : DecidableEq (Transition S) := instDecidableEqProd
+instance : DecidableEq (Transition S) := instDecidableEqProd
 
 /-- A run is a function assigning a natural number to each transition,
     representing how many times that transition is used. -/
@@ -81,23 +81,23 @@ noncomputable def Run.size {S : Type*} [Fintype S] [DecidableEq S] (R : Run S) :
   ∑ t : Transition S, R t
 
 /-- Count how many times a transition appears in a path (as consecutive elements). -/
-def countTransitionInPath [DecidableEq S] (t : Transition S) (path : List S) : ℕ :=
+def countTransitionInPath (t : Transition S) (path : List S) : ℕ :=
   (path.zip path.tail).count t
 
 /-- A path is contained in a run if the count of each transition in the path
     does not exceed its capacity in the run. -/
-def Run.containsPath [DecidableEq S] (R : Run S) (path : List S) : Prop :=
+def Run.containsPath (R : Run S) (path : List S) : Prop :=
   ∀ t : Transition S, countTransitionInPath t path ≤ R t
 
 /-- A cycle is a non-empty path where the first and last states are the same,
     and the cycle is contained in the run (so it can be removed). -/
-def Run.hasCycle [DecidableEq S] (R : Run S) : Prop :=
+def Run.hasCycle (R : Run S) : Prop :=
   ∃ (cycle : List S), cycle.length ≥ 2 ∧
     cycle.head? = cycle.getLast? ∧
     R.containsPath cycle
 
 /-- A run is acyclic if it contains no cycles. -/
-def Run.isAcyclic [DecidableEq S] (R : Run S) : Prop :=
+def Run.isAcyclic (R : Run S) : Prop :=
   ¬R.hasCycle
 
 /-- Remove one instance of a cycle from a run. -/
@@ -105,7 +105,7 @@ def Run.removeCycle (R : Run S) (cycle : List S) : Run S :=
   fun t => R t - countTransitionInPath t cycle
 
 /-- A state is reachable from another via transitions in the run. -/
-def Run.reachable [DecidableEq S] (R : Run S) (start finish : S) : Prop :=
+def Run.reachable (R : Run S) (start finish : S) : Prop :=
   ∃ (path : List S), path.head? = some start ∧ path.getLast? = some finish ∧
     path ≠ [] ∧ R.containsPath path
 
@@ -482,11 +482,11 @@ lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
 -- Lemmas about cycle removal and net flow
 
 /-- For any list, count how many times x appears as first component in consecutive pairs. -/
-def countAsFirst [DecidableEq S] (xs : List S) (x : S) : ℕ :=
+def countAsFirst (xs : List S) (x : S) : ℕ :=
   (xs.zip xs.tail).countP (fun p => p.1 = x)
 
 /-- For any list, count how many times x appears as second component in consecutive pairs. -/
-def countAsSecond [DecidableEq S] (xs : List S) (x : S) : ℕ :=
+def countAsSecond (xs : List S) (x : S) : ℕ :=
   (xs.zip xs.tail).countP (fun p => p.2 = x)
 
 set_option linter.unusedSectionVars false in
