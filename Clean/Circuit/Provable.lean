@@ -514,7 +514,7 @@ attribute [grind norm] Prod.mk.injEq
 
 -- resolve `eval`, `const` and `varFromOffset` for a few basic types
 
-@[circuit_norm ↓ high]
+@[circuit_norm ↓ high, grind =]
 theorem eval_field (env : Environment F) (x : field (Expression F)) :
     Eval.eval env x = Expression.eval env x := by
   rw [CircuitType.eval_expression]

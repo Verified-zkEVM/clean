@@ -722,6 +722,44 @@ theorem FormalCircuit.output_onlyAccessedBelow {env env' : ProverEnvironment F}
   have hout := (circuit.computableWitnesses' hin).2 h_agrees
   simpa only [CircuitType.eval_var_prover_to_verifier] using hout
 
+/-- Elementwise companion to `output_of_input_eq` for `fields`-valued outputs. Parent witness
+expressions embed the child's output per element, as `Expression.eval … (output)[i]`, so the
+composite-`eval` rules never match there; the multi-pattern below keys this rule on the pair of
+element spellings instead. Stated on `FormalCircuitBase` so it covers every bundle kind
+(`FormalCircuit`, `GeneralFormalCircuit`, …) through their `base` projection. -/
+theorem FormalCircuitBase.output_getElem_of_input_eq {env env' : ProverEnvironment F} {m : ℕ}
+    (circuit : FormalCircuitBase F Input (fields m))
+    (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
+    (h_agrees : env.AgreesBelow (n + circuit.localLength input_var) env')
+    (i : ℕ) (hi : i < m) :
+    Expression.eval env.toEnvironment (circuit.output input_var n)[i]
+      = Expression.eval env'.toEnvironment (circuit.output input_var n)[i] := by
+  haveI := circuit.elaborated
+  have h := circuit.output_of_input_eq
+    (by simpa only [CircuitType.eval_var_prover_to_verifier] using input_eq) h_agrees
+  rw [ProvableType.getElem_eval_fields_prover _ i hi, ProvableType.getElem_eval_fields_prover _ i hi, h]
+
+grind_pattern FormalCircuitBase.output_getElem_of_input_eq =>
+  Expression.eval env.toEnvironment (circuit.output input_var n)[i],
+  Expression.eval env'.toEnvironment (circuit.output input_var n)[i]
+
+/-- `field`-output companion to `output_of_input_eq`, keyed on the plain `Expression.eval`
+spelling that parent witness expressions contain. -/
+theorem FormalCircuitBase.output_field_of_input_eq {env env' : ProverEnvironment F}
+    (circuit : FormalCircuitBase F Input field)
+    (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
+    (h_agrees : env.AgreesBelow (n + circuit.localLength input_var) env') :
+    Expression.eval env.toEnvironment (circuit.output input_var n)
+      = Expression.eval env'.toEnvironment (circuit.output input_var n) := by
+  haveI := circuit.elaborated
+  have h := circuit.output_of_input_eq
+    (by simpa only [CircuitType.eval_var_prover_to_verifier] using input_eq) h_agrees
+  simpa only [circuit_norm] using h
+
+grind_pattern FormalCircuitBase.output_field_of_input_eq =>
+  Expression.eval env.toEnvironment (circuit.output input_var n),
+  Expression.eval env'.toEnvironment (circuit.output input_var n)
+
 theorem FormalAssertion.toSubcircuit_computableWitnesses {env env' : ProverEnvironment F}
     (circuit : FormalAssertion F Input)
     (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var) :

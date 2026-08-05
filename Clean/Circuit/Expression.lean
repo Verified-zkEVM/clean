@@ -160,17 +160,36 @@ instance [Field F] : Inhabited (Expression F) where
 section EvalLemmas
 variable [Field F]
 
+/-! The eval distribution rules are keyed on the operator spellings (`a + b`, not
+`Expression.add a b`): circuits are written in operator sugar, so that is the form goals
+contain, and `grind` in particular never unfolds the `HAdd`/`Sub`/`Neg`/`Mul` instances
+down to the constructors. The operator forms are definitionally the constructors, so
+they prove by `rfl` and also apply wherever the constructor spelling appears. -/
+
 /-- Expression.eval distributes over multiplication -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
-    Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
-  simp only [Expression.eval]
+    Expression.eval env (a * b) = Expression.eval env a * Expression.eval env b := rfl
 
 /-- Expression.eval distributes over addition -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_add (env : Environment F) (a b : Expression F) :
-    Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
-  simp only [Expression.eval]
+    Expression.eval env (a + b) = Expression.eval env a + Expression.eval env b := rfl
+
+/-- Expression.eval distributes over negation. Not a `grind` rule: the `Neg` instance
+desugars `-a` to `.mul (.const (-1)) a`, and the `-1` literal hidden in the pattern trips
+a grind internalization bug ("term has not been internalized"). -/
+lemma eval_neg (env : Environment F) (a : Expression F) :
+    Expression.eval env (-a) = -Expression.eval env a := by
+  show Expression.eval env (.mul (.const (-1)) a) = -Expression.eval env a
+  simp only [Expression.eval, neg_one_mul]
+
+/-- Expression.eval distributes over subtraction -/
+@[grind =]
+lemma eval_sub (env : Environment F) (a b : Expression F) :
+    Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by
+  show Expression.eval env (.add a (-b)) = Expression.eval env a - Expression.eval env b
+  simp only [Expression.eval, neg_one_mul, Expression.add_neg_eq_sub]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
