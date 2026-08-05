@@ -1,7 +1,6 @@
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Mathlib.Combinatorics.Enumerative.Composition
 import Init.Data.List.Find
-import Batteries.Data.Vector.Lemmas
 
 variable {α β : Type} {n m : ℕ}
 
@@ -204,13 +203,13 @@ theorem getElem_mapFinRange {n} {create : Fin n → α} :
 attribute [grind norm] Vector.getElem_map Vector.getElem_mapFinRange
 
 /-- Pointwise consequence of equality between two maps of the same vector.
-The generated grind multi-pattern requires the indexed `get` and both mapped vectors. -/
+The generated grind multi-pattern requires the indexed element and both mapped vectors. -/
 @[grind .]
-theorem map_eq_map_get (v : Vector α n) (f g : α → β)
-    (h : v.map f = v.map g) (i : Fin n) :
-    f (v.get i) = g (v.get i) := by
-  have h := congrArg (fun w => w.get i) h
-  simpa only [Vector.get_eq_getElem, Vector.getElem_map] using h
+theorem map_eq_map_getElem (v : Vector α n) (f g : α → β)
+    (h : v.map f = v.map g) (i : ℕ) (hi : i < n) :
+    f v[i] = g v[i] := by
+  have h := congrArg (fun w => w[i]) h
+  simpa only [Vector.getElem_map] using h
 
 lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
     Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
