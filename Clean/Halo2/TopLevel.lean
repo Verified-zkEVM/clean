@@ -692,6 +692,26 @@ theorem constantColumn_mem_permutationColumns
   exact (Configure.mem_permutationColumns_run_iff program {} column.toAny).mpr
     (Or.inr hrequest)
 
+/-- Every V1 constant allocation uses an equality-enabled constants column. -/
+theorem constantAssignmentColumn_mem_permutationColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈
+        FloorPlanner.V1.constantAssignments self.operations
+          (self.constraintSystem.constants.map (·.index))) :
+    (AnyColumn.mk .fixed column) ∈ self.permutationColumns := by
+  have hcolumn := FloorPlanner.V1.constantAssignments_column_mem
+    self.operations (self.constraintSystem.constants.map (·.index))
+    hassignment
+  obtain ⟨configuredColumn, hconfigured, hindex⟩ :=
+    List.mem_map.mp hcolumn
+  have hpermutation :=
+    self.constantColumn_mem_permutationColumns hconfigured
+  cases configuredColumn
+  simpa only [Column.toAny, AnyColumn.mk.injEq] using
+    hindex ▸ hpermutation
+
 /-- V1 allocates one constants-column cell for every deferred constant request. -/
 theorem constantValues_length_le_constantAssignments_length
     (self : TopLevelCircuit F Config PublicInput) :
