@@ -206,7 +206,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
 
 /-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
-private lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
+lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
     (f : ℕ → ℕ) (h : ∀ i < n, env.get i = env'.get i) (hf : ∀ i < 32, f i < n) :
     Vector.map (Expression.eval env.toEnvironment)
         (Vector.mapRange 32 fun i => var ⟨f i⟩ : Vector (Expression (F p)) 32) =
