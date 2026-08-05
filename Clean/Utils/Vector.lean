@@ -1,6 +1,7 @@
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Mathlib.Combinatorics.Enumerative.Composition
 import Init.Data.List.Find
+import Batteries.Data.Vector.Lemmas
 
 variable {α β : Type} {n m : ℕ}
 
@@ -209,8 +210,7 @@ theorem map_eq_map_get (v : Vector α n) (f g : α → β)
     (h : v.map f = v.map g) (i : Fin n) :
     f (v.get i) = g (v.get i) := by
   have h := congrArg (fun w => w.get i) h
-  change (v.map f)[i.val] = (v.map g)[i.val] at h
-  simpa only [Vector.getElem_map] using h
+  simpa only [Vector.get_eq_getElem, Vector.getElem_map] using h
 
 lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
     Vector.mapFinRange n (fun i => f v[i]) = v.map f := by

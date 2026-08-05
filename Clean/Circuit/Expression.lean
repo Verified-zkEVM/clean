@@ -176,24 +176,11 @@ lemma eval_mul (env : Environment F) (a b : Expression F) :
 lemma eval_add (env : Environment F) (a b : Expression F) :
     Expression.eval env (a + b) = Expression.eval env a + Expression.eval env b := rfl
 
-/-- Expression.eval distributes over negation. Not a `grind` rule: the `Neg` instance
-desugars `-a` to `.mul (.const (-1)) a`, and the `-1` literal hidden in the pattern trips
-a grind internalization bug ("term has not been internalized"). -/
-lemma eval_neg (env : Environment F) (a : Expression F) :
-    Expression.eval env (-a) = -Expression.eval env a := by
-  show Expression.eval env (.mul (.const (-1)) a) = -Expression.eval env a
-  simp only [Expression.eval, neg_one_mul]
-
-/-- Expression.eval distributes over subtraction -/
-@[grind =]
-lemma eval_sub (env : Environment F) (a b : Expression F) :
-    Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by
-  show Expression.eval env (.add a (-b)) = Expression.eval env a - Expression.eval env b
-  simp only [Expression.eval, neg_one_mul, Expression.add_neg_eq_sub]
-
 /-- Expression.eval distributes over negation. Keyed on the `-a` surface syntax: the
 `Expression.eval` matcher does not unfold the composite `Neg`/`Sub` instances, so the
-`Expression.mul`-keyed lemmas do not reach these spellings. -/
+`Expression.mul`-keyed lemmas do not reach these spellings. Not a `grind` rule: the
+`-1` literal hidden in the desugared pattern trips a grind internalization bug
+("term has not been internalized"). -/
 @[circuit_norm]
 lemma eval_neg (env : Environment F) (a : Expression F) :
     Expression.eval env (-a) = -Expression.eval env a := by
@@ -201,10 +188,10 @@ lemma eval_neg (env : Environment F) (a : Expression F) :
   simp only [Expression.eval, neg_one_mul]
 
 /-- Expression.eval distributes over subtraction (see `eval_neg`). -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_sub (env : Environment F) (a b : Expression F) :
     Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by
-  show Expression.eval env (Expression.add a (-b)) = _
+  show Expression.eval env (a + -b) = _
   rw [eval_add, eval_neg, ← sub_eq_add_neg]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
