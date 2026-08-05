@@ -72,7 +72,8 @@ private theorem num2Bits_main_output_eq_iff
   have h_input' : Eval.eval env (input : Var field (F p)) = Eval.eval env' input := by
     simp only [CircuitType.eval_var_field_prover]
     exact h_input
-  simpa only [child, CircuitType.eval_var_prover_to_verifier] using hw h_input' h_agrees
+  simpa only [child, Num2Bits.arbitraryBitLengthCircuit, CircuitType.proverValue_of_provableType,
+    circuit_norm] using hw h_input' h_agrees
 
 set_option linter.constructorNameAsVariable false
 

@@ -98,6 +98,9 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   completeness
   computableWitnesses := by
     intro n input env env'
+    -- destructure up front: simp does not iota-reduce the `match` coming from `main`'s
+    -- destructuring against an opaque variable
+    obtain ⟨selector, ifTrue, ifFalse⟩ := input
     refine ⟨?_, ?_⟩
     · -- forAll part (witnesses/subcircuits are computable) — closes automatically
       simp only [circuit_norm]

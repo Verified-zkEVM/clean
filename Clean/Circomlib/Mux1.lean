@@ -69,6 +69,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
+
   soundness := by
     circuit_proof_start
     intro i hi
@@ -91,17 +94,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
     rw [h_env_i, h_input.2]
-
-  computableWitnesses := by
-    simp only [main, circuit_norm, computable_witnesses_norm,
-      ComputableWitnesses.structEqSplit, eval_vector, ProvableType.eval_fieldPair,
-      Vector.ext_iff, explicit_provable_type]
-    intros
-    apply And.intro
-    · intros
-      -- TODO COMPWIT why is this working when grind doesn't? should we have it as a fallback?
-      simp_all only
-    · grind
 
 end MultiMux1
 
@@ -140,6 +132,17 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨c, s⟩ := input
+    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+    refine ⟨?_, ?_⟩
+    · intro h_input
+      apply (MultiMux1.circuit 1).toSubcircuit_computableWitnesses
+      simp only [circuit_norm, eval_vector, Vector.ext_iff]
+      grind
+    · grind
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s
@@ -159,18 +162,6 @@ def circuit : FormalCircuit (F p) Inputs field where
   completeness := by
     circuit_proof_start [MultiMux1.circuit]
     exact h_assumptions
-
-  computableWitnesses := by
-    simp only [main, circuit_norm, computable_witnesses_norm, MultiMux1.circuit,
-      ComputableWitnesses.structEqSplit, Vector.ext_iff, explicit_provable_type]
-    intros
-    apply And.intro
-    · intros
-      apply (MultiMux1.circuit 1).toSubcircuit_computableWitnesses
-      -- TODO COMPWIT grind should be able to come up with this split
-      simp only [circuit_norm, eval_vector]
-      grind
-    · grind
 
 end Mux1
 

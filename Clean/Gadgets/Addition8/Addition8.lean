@@ -26,11 +26,6 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm]
-    grind
-
 namespace Addition8
 structure Inputs (F : Type) where
   x: F
@@ -54,11 +49,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
-
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm, Inputs.mk.injEq]
-    grind
 
 end Addition8
 end Gadgets

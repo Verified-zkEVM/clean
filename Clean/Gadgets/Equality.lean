@@ -115,10 +115,13 @@ statement stops matching. -/
 theorem toSubcircuit_computableWitnesses {m n : ℕ} (input : Var (ProvablePair M M) F)
     {env env' : ProverEnvironment F} :
     ((circuit M).toSubcircuit m input).ComputableWitnesses n env env' := by
-  have h_n : ((circuit M).toSubcircuit n input).ComputableWitnesses n env env' := by
+  -- destructure up front: simp does not iota-reduce the pair `match` coming from `main`'s
+  -- destructuring against an opaque variable
+  obtain ⟨x, y⟩ := input
+  have h_n : ((circuit M).toSubcircuit n (x, y)).ComputableWitnesses n env env' := by
     simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit, main,
       Operations.forAll_toFlat_iff, Operations.forAllFlat, circuit_norm]
-  have h_ops : ((circuit M).main input).operations m = ((circuit M).main input).operations n := by
+  have h_ops : ((circuit M).main (x, y)).operations m = ((circuit M).main (x, y)).operations n := by
     simp only [circuit, main]
     rw [Circuit.forEach.operations_eq, Circuit.forEach.operations_eq]
     rfl

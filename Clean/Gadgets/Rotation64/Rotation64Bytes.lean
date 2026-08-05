@@ -93,11 +93,6 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 where
   soundness := soundness off
   completeness := completeness off
   computableWitnesses := by
-    intro n input env env'
-    fin_cases off <;>
-      simp_all only [main, circuit_norm, Fin.reduceFinMk, Fin.reduceEq, reduceIte] <;>
-      intro h_input _ <;>
-      simp only [U64.eval_eq_components] at h_input ⊢ <;>
-      injection h_input <;>
-      simp_all only
+    -- the witness is selected by an `if`-nest on `off`; decide it first
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 end Gadgets.Rotation64Bytes

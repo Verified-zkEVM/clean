@@ -168,6 +168,26 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨c, s⟩ := input
+    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
+    refine ⟨?_, ?_⟩
+    · intro h_input
+      obtain ⟨h_c, h_s⟩ := h_input
+      apply (MultiMux3.circuit 1).toSubcircuit_computableWitnesses
+      simp only [circuit_norm, eval_vector]
+      -- `grind` sees the hypothesis and goal `Expression.eval`s as distinct atoms here
+      -- (instance-spelling mismatch), so apply the elementwise facts directly
+      refine ⟨congrArg (fun x => #[x]) ?_, ?_⟩
+      · ext i hi
+        simp only [Vector.getElem_map]
+        exact h_c i hi
+      · ext i hi
+        simp only [Vector.getElem_map]
+        exact h_s i hi
+    · grind
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
@@ -194,28 +214,6 @@ def circuit : FormalCircuit (F p) Inputs field where
   completeness := by
     circuit_proof_start [MultiMux3.circuit]
     exact h_assumptions
-
-  computableWitnesses := by
-    simp only [circuit_norm, computable_witnesses_norm,
-      ComputableWitnesses.structEqSplit, Vector.ext_iff, explicit_provable_type]
-    unfold_formal_circuit_consts
-    try simp only [circuit_norm, computable_witnesses_norm, explicit_provable_type]
-    intros offset input env env'
-    apply And.intro
-    · intro h_input
-      apply (MultiMux3.circuit 1).toSubcircuit_computableWitnesses
-      simp only [circuit_norm, eval_vector]
-      congr 1
-      · apply congrArg (fun x => #v[x])
-        rw [Vector.ext_iff]
-        intro i hi
-        simp only [Vector.getElem_map]
-        exact h_input.1 i hi
-      · rw [Vector.ext_iff]
-        intro i hi
-        simp only [Vector.getElem_map]
-        exact h_input.2 i hi
-    · grind
 
 end Mux3
 

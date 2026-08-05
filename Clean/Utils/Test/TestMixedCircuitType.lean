@@ -148,10 +148,7 @@ def boolU64Parent : GeneralFormalCircuit F field field where
       simp only [circuit_norm]
       intro h_input
       apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
-      -- rewriting the parent input under `decide` leaves a defeq-but-not-syntactic
-      -- `Decidable` instance, so close the residual reflexivity goal explicitly
       simp only [circuit_norm, h_input]
-      rfl
     · -- output is the parent input itself, fixed by the input agreement
       intro h_input _
       simpa only [circuit_norm, CircuitType.eval_var_prover_to_verifier] using h_input
