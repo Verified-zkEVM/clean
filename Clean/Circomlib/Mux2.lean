@@ -155,8 +155,12 @@ def circuit : FormalCircuit (F p) Inputs field where
       obtain ⟨h_c, h_s⟩ := h_input
       apply (MultiMux2.circuit 1).toSubcircuit_computableWitnesses
       simp only [circuit_norm, eval_vector]
-      -- TODO COMPWIT: `grind` sees the hypothesis and goal `Expression.eval`s as distinct
-      -- atoms here (instance-spelling mismatch), so apply the elementwise facts directly
+      -- TODO COMPWIT: grind leaves this congruence open even though (verified under
+      -- `pp.explicit` via `computable_witnesses_probe`) hypothesis and goal agree on every
+      -- instance spelling and the argument eq-classes merge. Order-dependent — a clean
+      -- retype of the sequent closes — so likely the ring/field module's normal forms
+      -- going stale after late eqc merges; upstream (Lean grind) suspect. Apply the
+      -- elementwise facts directly instead.
       refine ⟨congrArg (fun x => #[x]) ?_, ?_⟩
       · ext i hi
         simp only [Vector.getElem_map]

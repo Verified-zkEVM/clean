@@ -139,4 +139,27 @@ elab_rules : tactic
   | `(tactic| computable_witnesses $[[$terms:term,*]]?) =>
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
 
+/-- Diagnostic variant of `computable_witnesses` without the `simp_all` fallback, so
+`grind`'s failure state is visible. Not for committed proofs. -/
+syntax "computable_witnesses_probe" ("[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| computable_witnesses_probe $[[$terms:term,*]]?) => do
+      let lemmasArray ← (terms.map (fun terms => terms.getElems) |>.getD #[]).mapM fun term =>
+        `(Lean.Parser.Tactic.simpLemma| $term:term)
+      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+      try evalTactic (← `(tactic| unfold $(mkIdent `main):ident)) catch _ => pure ()
+      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+      evalTactic (← `(tactic| intros))
+      destructureProvableStructVars
+      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+      evalTacticSeq (← `(tacticSeq|
+        apply And.intro
+        · intros
+          (try and_intros) <;> grind
+        · grind))
+
 end ComputableWitnesses
