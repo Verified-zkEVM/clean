@@ -45,6 +45,24 @@ namespace RegionCircuit
 
 variable {F : Type} [FiniteField F] {α β : Type}
 
+/-- Mapping a vector's backing list contains the image of every vector element. -/
+theorem Vector.map_getElem_mem_toList {n : ℕ} (values : Vector α n) (f : α → β)
+    (i : Fin n) : f values[i] ∈ values.toList.map f := by
+  apply List.mem_map.mpr
+  refine ⟨values[i], ?_, rfl⟩
+  have hi : i.val < values.toList.length := by
+    rw [Vector.length_toList]
+    exact i.isLt
+  have hmem := List.getElem_mem hi
+  rwa [Vector.getElem_toList hi] at hmem
+
+/-- The bounds-checked spelling used by source loops has the same membership fact. -/
+theorem Vector.map_getElem!_mem_toList {n : ℕ} [Inhabited α]
+    (values : Vector α n) (f : α → β) (i : Fin n) :
+    f values[i.val]! ∈ values.toList.map f := by
+  rw [getElem!_pos values i.val i.isLt]
+  exact Vector.map_getElem_mem_toList values f i
+
 /-! ## Generic per-round splits on the `List.ofFn`-flatten form
 
 The fundamental split lemmas, keyed on `(List.ofFn f).flatten` — the shape a loop's `operations`
@@ -357,6 +375,21 @@ theorem foldAcc_succ (rows : ℕ → ℕ) (init : β) (body : (i : ℕ) → ℕ 
     foldAcc rows init body (k + 1) self
       = (body k (rows k) (foldAcc rows init body k self)).output self := rfl
 
+/-- An invariant of the initial accumulator and every body output holds for every
+closed-form accumulator in a serial fold. -/
+theorem foldAcc_property (property : β → Prop)
+    (rows : ℕ → ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β) (self : RegionIndex)
+    (hinit : property init)
+    (hbody : ∀ i acc, property acc → property ((body i (rows i) acc).output self)) :
+    ∀ k, property (foldAcc rows init body k self) := by
+  intro k
+  induction k with
+  | zero => simpa only [foldAcc_zero] using hinit
+  | succ k ih =>
+      rw [foldAcc_succ]
+      exact hbody k _ ih
+
 /-- Per-round operations decomposition: round `k`'s ops read the accumulator at round `k`
 (`foldAcc … k`), the closed form. Holds by `rfl` via `operations_bind`. -/
 theorem foldRangeVarAux_operations_succ (rows : ℕ → ℕ) (init : β)
@@ -481,6 +514,12 @@ theorem foldRangeVar_extendsWitnesses (rows : ℕ → ℕ) (m : ℕ) (init : β)
 def foldRange (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVar (fun i => offset + i * stride) m init body
+
+@[circuit_norm]
+theorem foldRange_output (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β) (self : RegionIndex) :
+    (foldRange offset stride m init body).output self =
+      foldAcc (fun i => offset + i * stride) init body m self := rfl
 
 theorem foldRange_forall (property : RegionOperation F → Prop)
     (offset stride m : ℕ) (init : β)

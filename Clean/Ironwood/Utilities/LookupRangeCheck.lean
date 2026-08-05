@@ -355,7 +355,8 @@ def shortRangeCheck (K numBits : ℕ) :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [bitshiftGate K cfg]
-          lookups cfg _ := [rangeCheckLookup K cfg] }
+          lookups cfg _ := [rangeCheckLookup K cfg]
+          permutationColumns cfg _ := [cfg.runningSum] }
       registered := by keygen_registration }
 
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
@@ -764,7 +765,9 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
 
   elaborated :=
     { keygenRequirements :=
-        { lookups cfg _ := [rangeCheckLookup K cfg] }
+        { lookups cfg _ := [rangeCheckLookup K cfg]
+          permutationColumns cfg _ := [cfg.runningSum]
+          inputPermutationColumns _ _ input := [input.element.cell.column] }
       registered := by keygen_registration }
 
   -- Same env-level preconditions as `shortRangeCheck`: the table is loaded (`TableLoaded`),
@@ -921,7 +924,8 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
 
   elaborated :=
     { keygenRequirements :=
-        { lookups cfg _ := [rangeCheckLookup K cfg] }
+        { lookups cfg _ := [rangeCheckLookup K cfg]
+          permutationColumns cfg _ := [cfg.runningSum] }
       registered := by keygen_registration }
 
   EnvAssumptions cfg env :=
@@ -1046,7 +1050,8 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
 
   elaborated :=
     { keygenRequirements :=
-        { lookups cfg _ := [rangeCheckLookup 10 cfg] }
+        { lookups cfg _ := [rangeCheckLookup 10 cfg]
+          permutationColumns cfg _ := [cfg.runningSum] }
       registered := by keygen_registration }
 
   EnvAssumptions cfg env :=
@@ -1158,6 +1163,16 @@ def copyCheck (K numWords : ℕ) (strict : Bool) :
   (rangeCheck K numWords strict).toFormal
     s!"{numWords} words range check"
 
+/-- The range-check wrapper's final cell stays in the configured running-sum column. -/
+@[keygen_norm]
+theorem copyCheck_output_zLast_column (K numWords : ℕ) (strict : Bool)
+    (cfg : Config K) (input : Var Inputs Fp) (i : RegionIndex) :
+    ((copyCheck K numWords strict).output cfg input i).zLast.cell.column = cfg.runningSum := by
+  unfold FormalCircuit.output
+  rw [(copyCheck K numWords strict).elaborated.output_eq]
+  simp only [copyCheck, FormalRegionCircuit.toFormal, rangeCheck, circuit_norm]
+  split <;> rfl
+
 /-- Rust `witness_short_check` (`lookup_range_check.rs:271-294`): its own
 `"Range check {num_bits} bits"` region, witnessing the element from the caller-supplied
 program `w` at `(running_sum, 0)` — NO copy — then the positional `shortRangeCheck`.
@@ -1169,6 +1184,13 @@ def witnessShortCheck (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) :
     let _ ← (shortRangeCheck K numBits).call cfg 0 ()
     pure elt)
 
+/-- The cell returned by `witnessShortCheck` stays in the configured running-sum column. -/
+@[keygen_norm]
+theorem witnessShortCheck_output_column (K numBits : ℕ) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).output i).cell.column = cfg.runningSum := by
+  simp only [witnessShortCheck, circuit_norm]
+
 /-- Rust `witness_check` (`lookup_range_check.rs:143-161`): its own `"Witness element"`
 region, witnessing the element at `(running_sum, 0)` from the caller-supplied program
 `w`, then the positional word-wise `rangeCheckAt`. Returns the `(z0, zLast)` cells. -/
@@ -1178,36 +1200,91 @@ def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
     let _elt ← assignAdvice cfg.runningSum 0 w
     (rangeCheckAt K numWords strict).call cfg 0 ())
 
+/-- Every cell returned by the decomposed witness check stays in the running-sum column. -/
+@[keygen_norm]
+theorem witnessCheckDecomposed_output_z0_column (cfg : Config 10)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).output i).z0.cell.column = cfg.runningSum := by
+  simp only [witnessCheckDecomposed, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
+  simp only [rangeCheckAtDecomposed, circuit_norm]
+
+@[keygen_norm]
+theorem witnessCheckDecomposed_output_z1_column (cfg : Config 10)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).output i).z1.cell.column = cfg.runningSum := by
+  simp only [witnessCheckDecomposed, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
+  simp only [rangeCheckAtDecomposed, circuit_norm]
+
+@[keygen_norm]
+theorem witnessCheckDecomposed_output_z13_column (cfg : Config 10)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).output i).z13.cell.column = cfg.runningSum := by
+  simp only [witnessCheckDecomposed, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
+  simp only [rangeCheckAtDecomposed, circuit_norm]
+
+/-- Both cells returned by `witnessCheck` stay in its running-sum column. -/
+@[keygen_norm]
+theorem witnessCheck_output_z0_column (K numWords : ℕ) (strict : Bool)
+    (cfg : Config K) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w).output i).z0.cell.column = cfg.runningSum := by
+  simp only [witnessCheck, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAt K numWords strict).elaborated.output_eq]
+  simp only [rangeCheckAt, circuit_norm]
+  split <;> rfl
+
+@[keygen_norm]
+theorem witnessCheck_output_zLast_column (K numWords : ℕ) (strict : Bool)
+    (cfg : Config K) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w).output i).zLast.cell.column = cfg.runningSum := by
+  simp only [witnessCheck, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAt K numWords strict).elaborated.output_eq]
+  simp only [rangeCheckAt, circuit_norm]
+  split <;> rfl
+
 @[keygen_norm, keygen_helper]
 theorem witnessShortCheck_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
     (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
     (i : RegionIndex)
     (hgate : bitshiftGate K cfg ∈ gates)
-    (hlookup : rangeCheckLookup K cfg ∈ lookups) :
+    (hlookup : rangeCheckLookup K cfg ∈ lookups)
+    (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessShortCheck K numBits cfg w).operations i).KeygenRegistered
-      gates lookups := by
+      gates lookups permutationColumns := by
   unfold witnessShortCheck
   keygen_registration
 
 @[keygen_norm, keygen_helper]
 theorem witnessCheck_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
     (K numWords : ℕ) (strict : Bool) (cfg : Config K)
     (w : WitgenIR Fp 1) (i : RegionIndex)
-    (hlookup : rangeCheckLookup K cfg ∈ lookups) :
+    (hlookup : rangeCheckLookup K cfg ∈ lookups)
+    (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessCheck K numWords strict cfg w).operations i).KeygenRegistered
-      gates lookups := by
+      gates lookups permutationColumns := by
   unfold witnessCheck
   keygen_registration
 
 @[keygen_norm, keygen_helper]
 theorem witnessCheckDecomposed_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
     (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
-    (hlookup : rangeCheckLookup 10 cfg ∈ lookups) :
+    (hlookup : rangeCheckLookup 10 cfg ∈ lookups)
+    (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessCheckDecomposed cfg w).operations i).KeygenRegistered
-      gates lookups := by
+      gates lookups permutationColumns := by
   unfold witnessCheckDecomposed
   keygen_registration
 
@@ -1218,7 +1295,9 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
     (shortRangeCheck K numBits).ConfigurationCertificate
       ((configure K runningSum tableIdx).output counts)
       { gates := ((configure K runningSum tableIdx).delta counts).gates
-        lookups := ((configure K runningSum tableIdx).delta counts).lookups } := by
+        lookups := ((configure K runningSum tableIdx).delta counts).lookups
+        permutationColumns :=
+          ((configure K runningSum tableIdx).delta counts).permutationRequests } := by
   let cfg := (configure K runningSum tableIdx).output counts
   apply ((shortRangeCheck K numBits).configureCertificate cfg {} ()).mono
   · intro gate hgate
@@ -1231,6 +1310,13 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     simpa [cfg] using hargument
+  · intro column hcolumn
+    simp only [keygen_norm, shortRangeCheck,
+      FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_singleton] at hcolumn
+    subst column
+    simp only [keygen_norm, cfg, configure]
 
 derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool) :=
   rangeCheckAt K numWords strict

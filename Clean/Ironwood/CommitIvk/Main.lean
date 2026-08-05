@@ -115,6 +115,12 @@ structure PieceCells where
   b2 : AssignedCell Fp
   d0 : AssignedCell Fp
 
+@[keygen_norm]
+def PieceCells.permutationColumns (cells : PieceCells) : List AnyColumn :=
+  [cells.a.cell.column, cells.b.cell.column, cells.c.cell.column,
+    cells.d.cell.column, cells.b0.cell.column, cells.b2.cell.column,
+    cells.d0.cell.column]
+
 /-- Stage 1 (7 regions): the four message pieces interleaved with the three
 sub-piece short checks (`commit_ivk.rs:289-350`). -/
 def synthPieces (cfg : Config) (ak nk : AssignedCell Fp) :
@@ -177,6 +183,7 @@ theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (synthPieces cfg ak nk).nextRegionIndex i = i + 7 := by
   rfl
 
+@[keygen_output_norm]
 theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
     (synthPieces cfg ak nk).output i
@@ -194,9 +201,35 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
+def permutationColumns (cfg : Config) (childColumns : List AnyColumn) :
+    List AnyColumn :=
+  ([cfg.hashConfig.witnessPieces, cfg.hashConfig.bits,
+      cfg.lookupConfig.runningSum] : List AnyColumn) ++
+    CommitIvk.permutationColumns cfg.gate ++ childColumns
+
+theorem synthPieces_output_permutationColumns (cfg : Config)
+    (ak nk : AssignedCell Fp) (childColumns : List AnyColumn)
+    (i : RegionIndex) :
+    ∀ column, column ∈ ((synthPieces cfg ak nk).output i).permutationColumns →
+      column ∈ permutationColumns cfg childColumns := by
+  intro column hcolumn
+  simp only [synthPieces_output, PieceCells.permutationColumns,
+    AssignedCell.of_cell, Cell.of_column, List.mem_cons,
+    List.not_mem_nil, or_false, or_self] at hcolumn
+  have : column = cfg.hashConfig.witnessPieces.toAny ∨
+      column = cfg.lookupConfig.runningSum.toAny := by
+    grind
+  rcases this with rfl | rfl <;> simp [permutationColumns]
+
+theorem zCell_column_mem_permutationColumns (cfg : Config)
+    (childColumns : List AnyColumn) (iHash : RegionIndex) (i j : ℕ) :
+    (zCell cfg.hashConfig iHash i j).cell.column ∈
+      permutationColumns cfg childColumns := by
+  simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
+
 @[keygen_norm]
 def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
-    (hQ : Q.OnCurve) : KeygenRequirements Fp Config where
+    (hQ : Q.OnCurve) : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
@@ -205,6 +238,73 @@ def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
       configured.gates
   lookups cfg configured :=
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++ configured.lookups
+  permutationColumns cfg configured :=
+    permutationColumns cfg configured.permutationColumns
+  inputPermutationColumns _ _ input :=
+    [input.ak.cell.column, input.nk.cell.column]
+
+@[keygen_helper]
+theorem synthPieces_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthPieces cfg input.ak input.nk).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input) := by
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input := by
+    simp [keygenRequirements, permutationColumns]
+  keygen_registration [synthPieces,
+    Sinsemilla.HashToPoint.witnessMessagePiece]
+
+@[keygen_helper]
+theorem synth_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synth G R Q hQ cfg input).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input) := by
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input := by
+    simp [keygenRequirements, permutationColumns]
+  have hChild := fun column =>
+    show column ∈ configured.permutationColumns →
+      column ∈
+        (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns
+            cfg configured input from by
+      intro hcolumn
+      simp only [keygenRequirements, List.mem_append]
+      left
+      exact List.mem_append_right _ hcolumn
+  have hPieces := synthPieces_output_permutationColumns
+    cfg input.ak input.nk configured.permutationColumns
+      (currentRegion.nextRegionIndex self)
+  have hZ := fun i j =>
+    zCell_column_mem_permutationColumns
+      cfg configured.permutationColumns (currentRegion.output self + 9) i j
+  have hCanonicity : ∀ column,
+      column ∈ CommitIvk.permutationColumns cfg.gate ++
+        ([cfg.lookupConfig.runningSum] : List AnyColumn) →
+      column ∈
+        (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns
+            cfg configured input := by
+    intro column hcolumn
+    simp [keygenRequirements, permutationColumns] at hcolumn ⊢
+    grind
+  keygen_registration [synth]
 
 instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) :
@@ -212,10 +312,7 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
       (fun config => pure config) (synth G R Q hQ) where
   keygenRequirements := keygenRequirements G R Q hQ
   registered := by
-    keygen_registration [
-      synth,
-      synthPieces,
-      Sinsemilla.HashToPoint.witnessMessagePiece]
+    keygen_registration
   output cfg input i := (synth G R Q hQ cfg input).output i
   regionCount _ := 14
   output_eq := by intro _ _ _; rfl

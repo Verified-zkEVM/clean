@@ -221,6 +221,30 @@ def GateSpec (l : Fp) (input : Inputs Fp) : Prop :=
   Spec input.aWhole input.bWhole input.cWhole input.leftNode input.rightNode
     input.z1A input.z1B input.b1 input.b2 l
 
+abbrev ConfigInput :=
+  Column .advice × Column .advice × Column .advice × Column .advice ×
+    Column .advice × Column .advice × Column .advice × Column .advice ×
+    Column .advice × Column .advice
+
+def permutationColumns (input : ConfigInput) : List AnyColumn :=
+  let (a, b, c, left, right, z1A, z1B, b1, b2, lw) := input
+  [a, b, c, left, right, z1A, z1B, b1, b2, lw]
+
+@[implicit_reducible]
+def elaborated (l : Fp) :
+    ElaboratedRegionCircuit Fp ConfigInput Config Inputs unit
+      (fun (a, b, c, left, right, z1A, z1B, b1, b2, lw) =>
+        configure a b c left right z1A z1B b1 b2 lw)
+      (fun cfg offset input => body cfg l input offset) :=
+  { keygenRequirements :=
+      { permutationColumns input _ := permutationColumns input
+        inputPermutationColumns _ _ input :=
+          [input.aWhole.cell.column, input.bWhole.cell.column,
+            input.cWhole.cell.column, input.leftNode.cell.column,
+            input.rightNode.cell.column, input.z1A.cell.column,
+            input.z1B.cell.column, input.b1.cell.column, input.b2.cell.column] }
+    registered := by keygen_registration [body, permutationColumns] }
+
 /-- The decomposition-gate gadget. Pure assertion (`unit` output). Soundness: the four polys imply
 `GateSpec`; completeness: `GateSpec` (the honest-caller precondition, like `MulOverflow`) implies
 the polys.
@@ -229,13 +253,11 @@ STRUCTURE-COMPLETE-WITH-STATED-SORRIES: both directions reduce to `spec_of_polys
 `polysZero_of_spec` after peeling the ten copies + the gate via `circuit_norm` (the
 `MulOverflow.circuit` pattern); the copies chain each gate-window cell to its input component. -/
 def circuit (l : Fp) :
-    FormalRegionCircuit Fp
-      (Column .advice × Column .advice × Column .advice × Column .advice × Column .advice ×
-        Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
-      Config Inputs unit where
+    FormalRegionCircuit Fp ConfigInput Config Inputs unit where
   name := "Check piece decomposition"
   configure := fun (a, b, c, left, right, z1A, z1B, b1, b2, lw) =>
     configure a b c left right z1A z1B b1 b2 lw
+  elaborated := elaborated l
   synthesize cfg offset input := body cfg l input offset
   Assumptions _ := True
   Spec input _ _ := GateSpec l input
@@ -316,10 +338,12 @@ def mono {scfg : HashPiece.Config} {counts : ConfigureCounts}
     {source target : KeygenContext Fp}
     (certificate : ConfigureCertificate scfg counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
-    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureCertificate scfg counts target where
-  condSwap wb wswap := (certificate.condSwap wb wswap).mono gates lookups
-  gate l := (certificate.gate l).mono gates lookups
+  condSwap wb wswap := (certificate.condSwap wb wswap).mono gates lookups permutationColumns
+  gate l := (certificate.gate l).mono gates lookups permutationColumns
 
 end ConfigureCertificate
 
@@ -327,7 +351,12 @@ end ConfigureCertificate
 def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
     ConfigureCertificate scfg counts
       { gates := (configure scfg |>.delta counts).gates
-        lookups := (configure scfg |>.delta counts).lookups } := by
+        lookups := (configure scfg |>.delta counts).lookups
+        permutationColumns :=
+          Gate.permutationColumns
+            (scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2,
+              scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2) ++
+            (configure scfg |>.delta counts).permutationRequests } := by
   let swapProgram := CondSwap.configure scfg.xA scfg.xP scfg.bits
     scfg.lambda1 scfg.lambda2
   let gateInput := (scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2,
@@ -346,6 +375,10 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       unfold configure
       apply Configure.mem_lookups_delta_bind_left
       exact hargument
+    · intro column hcolumn
+      apply List.mem_append_right
+      unfold configure
+      exact Configure.mem_permutationRequests_delta_bind_left _ _ _ _ hcolumn
   · intro l
     apply ((Gate.circuit l).configureCertificate gateInput
       (swapProgram.finalCounts counts) ()).mono
@@ -367,6 +400,15 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       rcases hargument with hargument | hargument
       · exact False.elim (List.not_mem_nil hargument)
       · simpa [gateInput, swapProgram] using hargument
+    · intro column hcolumn
+      simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact List.mem_append_left _ (by simpa [gateInput] using hcolumn)
+      · apply List.mem_append_right
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        simpa [gateInput, swapProgram] using hcolumn
 
 /-! ### Digit toolkit
 
@@ -1013,7 +1055,8 @@ private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
 @[keygen_norm]
 def HashLayer.keygenRequirements (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) :
-    KeygenRequirements Fp (Config × LookupRangeCheck.Config 10) where
+    KeygenRequirements Fp (Config × LookupRangeCheck.Config 10)
+      (Var HashLayer.Input Fp) where
   configLawful cfg :=
     (LookupRangeCheck.shortRangeCheck 10 5).Configured cfg.2 ×
       (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).Configured
@@ -1023,25 +1066,11 @@ def HashLayer.keygenRequirements (G : Generators) (Q : Point Fp)
     configured.1.gates ++ configured.2.1.gates ++ configured.2.2.gates
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++ configured.2.2.lookups
-
-private theorem HashLayer.keygenRegistered
-    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ) :
-    ∀ (configInput : Config × LookupRangeCheck.Config 10)
-      (counts : ConfigureCounts)
-      (hconfig : (HashLayer.keygenRequirements G Q hQ l).configLawful configInput)
-      (input : Var HashLayer.Input Fp) (i : RegionIndex),
-    let program : Configure Fp (Config × LookupRangeCheck.Config 10) := pure configInput
-    ((HashLayer.synthesize G (program.output counts).1 (program.output counts).2
-      Q hQ l input).operations i).KeygenRegistered
-      ((HashLayer.keygenRequirements G Q hQ l).gates configInput hconfig ++
-        (program.delta counts).gates)
-      ((HashLayer.keygenRequirements G Q hQ l).lookups configInput hconfig ++
-        (program.delta counts).lookups) := by
-  keygen_registration [
-    HashLayer.synthesize,
-    HashToPoint.witnessMessagePiece,
-    LookupRangeCheck.witnessShortCheck,
-    HashToPoint.hashMessage]
+  permutationColumns _ configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.permutationColumns
+  inputPermutationColumns _ _ input :=
+    [input.left.cell.column, input.right.cell.column]
 
 /-- One Merkle layer hash as a layouter-level formal circuit (`MerkleInstructions::hash_layer`),
 on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition
@@ -1057,7 +1086,9 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   elaborated :=
     { keygenRequirements := HashLayer.keygenRequirements G Q hQ l
-      registered := HashLayer.keygenRegistered G Q hQ l
+      registered := by
+        keygen_registration [HashLayer.synthesize,
+          HashToPoint.witnessMessagePiece, HashToPoint.hashMessage]
       output := fun (cfg, lcfg) input i =>
         (HashLayer.synthesize G cfg lcfg Q hQ l input).output i
       regionCount _ := 7
@@ -1798,7 +1829,8 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
     (wsib : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool) :
     KeygenRequirements Fp
-      (CondSwap.Config × Config × LookupRangeCheck.Config 10) where
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
+      (Var Layer.Input Fp) where
   configLawful cfg :=
     (CondSwap.swap wsib wswap).Configured cfg.1 ×
       (HashLayer.circuit G Q hQ l hl).Configured (cfg.2.1, cfg.2.2)
@@ -2213,7 +2245,8 @@ private theorem retargetLayerConfigured_lookups
 @[keygen_norm]
 def keygenRequirements :
     KeygenRequirements Fp
-      (CondSwap.Config × Config × LookupRangeCheck.Config 10) where
+      (CondSwap.Config × Config × LookupRangeCheck.Config 10)
+      (Var Layer.Input Fp) where
   configLawful cfg :=
     (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg
   gates _ configured := configured.gates

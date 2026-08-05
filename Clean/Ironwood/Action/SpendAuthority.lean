@@ -42,7 +42,7 @@ deriving CircuitType
 
 @[keygen_norm]
 def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
-    (Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) where
+    (Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) (Var Input Fp) where
   configLawful cfg :=
     (Ecc.MulFixed.FullWidth.circuit G).Configured cfg.1 ×
       Ecc.Add.addFormal.Configured cfg.2
@@ -50,6 +50,12 @@ def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
     configured.1.gates ++ configured.2.gates
   lookups _ configured :=
     configured.1.lookups ++ configured.2.lookups
+  permutationColumns cfg configured :=
+    configured.1.permutationColumns ++ configured.2.permutationColumns ++
+      ([cfg.1.superConfig.addConfig.xQR,
+        cfg.1.superConfig.addConfig.yQR] : List AnyColumn)
+  inputPermutationColumns _ _ input :=
+    [input.akP.x.cell.column, input.akP.y.cell.column]
 
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted

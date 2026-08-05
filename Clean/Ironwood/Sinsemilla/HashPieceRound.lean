@@ -205,6 +205,65 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   createGate (sinsemillaGate cfg)
   return cfg
 
+theorem configure_output_xA (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).xA
+      = xA := by
+  rfl
+
+theorem configure_output_bits (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).bits
+      = bits := by
+  rfl
+
+theorem configure_output_lambda1 (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).lambda1 = lambda1 := by
+  rfl
+
+theorem configure_xA_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    xA.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_bits_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    bits.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_lambda1_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    lambda1.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
 set_option synthInstance.maxSize 2048 in
 @[reducible] def configureElaborated
     (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)

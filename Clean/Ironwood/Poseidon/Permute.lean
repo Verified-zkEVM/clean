@@ -50,7 +50,16 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
   configure := pure
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg] } }
+        { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
+          permutationColumns cfg _ :=
+            [cfg.state 0, cfg.state 1, cfg.state 2]
+          inputPermutationColumns _ _ input :=
+            [input.x0.cell.column, input.x1.cell.column,
+              input.x2.cell.column] }
+      output cfg offset _ self := stateRow cfg (offset + 36) self
+      output_eq := by
+        intro _ _ _ _
+        rfl }
 
   synthesize cfg offset (input : Var State Fp) := do
     -- Pow5State::load (pow5.rs:536-550)

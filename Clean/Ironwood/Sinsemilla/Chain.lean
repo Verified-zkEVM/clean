@@ -330,7 +330,9 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [HashPiece.generatorLookup G cfg] } }
+          lookups cfg _ := [HashPiece.generatorLookup G cfg]
+          permutationColumns cfg _ := [cfg.bits]
+          inputPermutationColumns _ _ input := [input.cell.column] } }
 
   synthesize cfg base (piece : AssignedCell Fp) := do
     let prev ← readState cfg (base - 1)
@@ -1037,7 +1039,10 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [HashPiece.generatorLookup G cfg] }
+          lookups cfg _ := [HashPiece.generatorLookup G cfg]
+          permutationColumns cfg _ := [cfg.bits]
+          inputPermutationColumns _ _ input :=
+            input.pieces.toList.map (·.cell.column) }
       output cfg offset _ self := circuitOutputCells cfg ns offset self
       output_eq := by
         intro _ _ _ _

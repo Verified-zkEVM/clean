@@ -45,7 +45,14 @@ the donor `ValueCanonicity.Gate.Spec` (canonical 64-bit value with its slices);
 `Assumptions` the donor rely-conditions (the slices are range-checked). -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputPermutationColumns _ _ input :=
+            [input.value.cell.column, input.d2.cell.column,
+              input.d3.cell.column, input.e0.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -103,7 +110,16 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `GdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputPermutationColumns _ _ input :=
+            [input.gdX.cell.column, input.b0.cell.column,
+              input.b1.cell.column, input.a.cell.column,
+              input.aPrime.cell.column, input.z13A.cell.column,
+              input.z13APrime.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.gdX cfg.colL offset
@@ -190,7 +206,16 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `PkdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputPermutationColumns _ _ input :=
+            [input.pkdX.cell.column, input.b3.cell.column,
+              input.d0.cell.column, input.c.cell.column,
+              input.b3CPrime.cell.column, input.z13C.cell.column,
+              input.z14B3CPrime.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.pkdX cfg.colL offset
@@ -277,7 +302,16 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `RhoCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputPermutationColumns _ _ input :=
+            [input.rho.cell.column, input.e1.cell.column,
+              input.g0.cell.column, input.f.cell.column,
+              input.e1FPrime.cell.column, input.z13F.cell.column,
+              input.z14E1FPrime.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _x ← copyAdvice input.rho cfg.colL offset
@@ -365,7 +399,16 @@ def toDonor (row : Row Fp) : DRow Fp :=
 `PsiCanonicity.Gate` contract. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputPermutationColumns _ _ input :=
+            [input.psi.cell.column, input.h0.cell.column,
+              input.g1.cell.column, input.h1.cell.column,
+              input.g2.cell.column, input.g1G2Prime.cell.column,
+              input.z13G.cell.column, input.z13G1G2Prime.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     let _p ← copyAdvice input.psi cfg.colL offset
@@ -464,7 +507,17 @@ composite threads it back as a rely. -/
 def bundle (wlsb wk3 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Row field where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.advices 5, cfg.advices 6, cfg.advices 7,
+              cfg.advices 8, cfg.advices 9]
+          inputPermutationColumns _ _ input :=
+            [input.y.cell.column, input.k0.cell.column,
+              input.k2.cell.column, input.j.cell.column,
+              input.z1J.cell.column, input.z13J.cell.column,
+              input.jPrime.cell.column, input.z13JPrime.cell.column] } }
 
   synthesize cfg offset (input : Row (AssignedCell Fp)) := do
     (gate cfg).enable offset

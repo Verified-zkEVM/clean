@@ -99,6 +99,21 @@ theorem configure_output_addConfig (zComplete : Column .advice) (addConfig : Add
     ((configure zComplete addConfig).output counts).addConfig = addConfig := by
   simp [configure]
 
+theorem configure_output_zComplete (zComplete : Column .advice)
+    (addConfig : Add.Config) (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).output counts).zComplete = zComplete := by
+  simp [configure]
+
+theorem configure_output_zComplete_mem_permutationRequests
+    (zComplete : Column .advice) (addConfig : Add.Config)
+    (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).output counts).zComplete.toAny ∈
+      ((configure zComplete addConfig).delta counts).permutationRequests := by
+  rw [configure_output_zComplete]
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
 /-! ## Inputs / Output -/
 
 structure Inputs (F : Type) where
@@ -359,15 +374,20 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     { keygenRequirements :=
         { configLawful cfg := Add.add.Configured cfg.addConfig
           gates cfg configured := [decomposeGate cfg] ++ configured.gates
-          lookups _ configured := configured.lookups }
+          lookups _ configured := configured.lookups
+          permutationColumns cfg configured :=
+            cfg.zComplete :: configured.permutationColumns
+          inputPermutationColumns _ _ input :=
+            [input.base.x.cell.column, input.base.y.cell.column,
+              input.acc.x.cell.column, input.acc.y.cell.column] }
       output cfg offset input self :=
-        { acc := (Add.add.call cfg.addConfig (offset + 1)
-            { p := input.acc,
-              q := (Add.add.call cfg.addConfig offset
-                { p := { x := input.base.x, y := AssignedCell.of self offset cfg.addConfig.yP },
-                  q := input.acc }).output self }).output self,
+        { acc :=
+            { x := .of self (offset + 2) cfg.addConfig.xQR
+              y := .of self (offset + 2) cfg.addConfig.yQR },
           z := AssignedCell.of self (offset + 2) cfg.zComplete }
-      output_eq := by intro _ _ _ _; rfl }
+      output_eq := by
+        intro _ _ _ _
+        simp only [circuit_norm, keygen_output_norm] }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
   Assumptions input := input.acc.Valid ∧ input.base.Valid
@@ -398,8 +418,16 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     circuit_proof_start2 [decomposeGate, Add.add]
     obtain ⟨hAccV, hBaseV⟩ := assumptions
     -- fold the elaborated output spelling onto the peel's atoms
-    rw [tmp_eq, acc'_eq] at output_eq
-    obtain ⟨hAccOut, -⟩ := output_eq
+    simp only [keygen_output_norm] at acc'_eq
+    have hAccOut : eval
+        ({ place := place, env := env } : Placed Environment Fp) acc' =
+        ({ x := output_acc_x, y := output_acc_y } : Point Fp) := by
+      rw [Point.eval_eq, Point.mk.injEq]
+      constructor
+      · rw [← congrArg Point.x acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.1
+      · rw [← congrArg Point.y acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.2
     obtain ⟨hbool, hswitch⟩ := region_1
     rw [region_0] at hswitch
     set zP := env.advice cfg.zComplete ((place self + offset : ℕ) : ℤ) with hzP
@@ -442,8 +470,16 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     obtain ⟨hAccV, hBaseV⟩ := assumptions
     have hzPrev := prover_assumptions
     -- fold the elaborated output spelling onto the peel's atoms
-    rw [tmp_eq, acc'_eq] at output_eq
-    obtain ⟨hAccOut, -⟩ := output_eq
+    simp only [keygen_output_norm] at acc'_eq
+    have hAccOut : eval
+        ({ place := place, env := env.toEnvironment } : Placed Environment Fp) acc' =
+        ({ x := output_acc_x, y := output_acc_y } : Point Fp) := by
+      rw [Point.eval_eq, Point.mk.injEq]
+      constructor
+      · rw [← congrArg Point.x acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.1
+      · rw [← congrArg Point.y acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.2
     -- land the honest witness values in the goal, then split on the round's bit
     rw [region_0, region_1, hzPrev, zRunValue_step input_z (kBitsWindow input_alpha w) iter]
     rcases Bool.dichotomy (kBitsWindow input_alpha w iter) with hb | hb <;>
@@ -606,6 +642,48 @@ def startCopy (cfg : Config) (input : Var Inputs Fp) (offset : ℕ) :
   let _z ← copyAdvice input.z cfg.zComplete offset
   return ()
 
+/-- The accumulator threaded through complete-addition rounds is initially the
+external accumulator and thereafter occupies the complete-addition output columns. -/
+private theorem roundFoldAcc_eq (w offset : ℕ) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) (k : ℕ) :
+    RegionCircuit.foldAcc (fun j => offset + j * 2)
+      ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+      (fun i r acc => do
+        let out ← (round w i).call cfg r
+          { alpha := input.alpha, base := input.base, z := input.z, acc }
+        pure out.acc)
+      k self =
+        match k with
+        | 0 => { x := input.xA, y := input.yA }
+        | i + 1 =>
+          { x := .of self (offset + 2 * i + 2) cfg.addConfig.xQR
+            y := .of self (offset + 2 * i + 2) cfg.addConfig.yQR } := by
+  cases k with
+  | zero => rw [RegionCircuit.foldAcc_zero]
+  | succ i =>
+    rw [RegionCircuit.foldAcc_succ]
+    simp only [circuit_norm, keygen_output_norm]
+    constructor <;> congr 2 <;> omega
+
+private theorem roundFoldAcc_columns (w offset : ℕ) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) (k : ℕ) :
+    let acc := RegionCircuit.foldAcc (fun j => offset + j * 2)
+      ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+      (fun i r acc => do
+        let out ← (round w i).call cfg r
+          { alpha := input.alpha, base := input.base, z := input.z, acc }
+        pure out.acc)
+      k self
+    (acc.x.cell.column = input.xA.cell.column ∨
+        acc.x.cell.column = cfg.addConfig.xQR.toAny) ∧
+      (acc.y.cell.column = input.yA.cell.column ∨
+        acc.y.cell.column = cfg.addConfig.yQR.toAny) := by
+  dsimp only
+  rw [roundFoldAcc_eq]
+  cases k with
+  | zero => exact ⟨Or.inl rfl, Or.inl rfl⟩
+  | succ _ => exact ⟨Or.inr rfl, Or.inr rfl⟩
+
 def assign_region (numBits : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp (Column .advice × Add.Config) Config Inputs (Output numBits) where
   configure := fun (zComplete, addConfig) => configure zComplete addConfig
@@ -613,7 +691,12 @@ def assign_region (numBits : ℕ) (w : ℕ) :
     { keygenRequirements :=
         { configLawful input := Add.add.Configured input.2
           gates _ configured := configured.gates
-          lookups _ configured := configured.lookups }
+          lookups _ configured := configured.lookups
+          permutationColumns _ configured := configured.permutationColumns
+          inputPermutationColumns _ _ input :=
+            [input.base.x.cell.column, input.base.y.cell.column,
+              input.xA.cell.column, input.yA.cell.column,
+              input.z.cell.column] }
       registered := by
         intro configInput counts hconfig offset input region
         simp_all! +zetaDelta only [
@@ -622,12 +705,22 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           Configure.output_enableEquality, Configure.output_selector,
           Configure.output_createGate,
           ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+          ConfigureDelta.permutationRequests_append,
+          Configure.delta_enableEquality_permutationRequests,
           ConfigureDelta.gates_queriedCells, ConfigureDelta.lookups_queriedCells,
+          ConfigureDelta.permutationRequests_queriedCells,
           List.mem_append, List.mem_cons, List.mem_singleton,
           List.nil_append, List.append_nil, List.append_assoc]
         simp_all only [keygen_spine]
         constructor
         · simp only [startCopy, circuit_norm, keygen_norm]
+          right
+          right
+          right
+          right
+          left
+          exact configure_output_zComplete_mem_permutationRequests
+            configInput.1 configInput.2 counts
         · constructor
           · intro i
             apply FormalRegionCircuit.call_keygenRegistered (round w i)
@@ -654,7 +747,26 @@ def assign_region (numBits : ℕ) (w : ℕ) :
                 ElaboratedRegionCircuit.keygenRequirements,
                 configure_delta_lookups, List.mem_append, List.not_mem_nil,
                 or_false, round] using hargument
-          · simp only [operations_zsCells, List.forall_nil] }
+            case hpermutationColumns => keygen_registration
+            case hinputPermutationColumns =>
+              have hacc := roundFoldAcc_columns w offset
+                ((configure configInput.1 configInput.2).output counts)
+                input region i
+              keygen_registration
+          · simp only [operations_zsCells, List.forall_nil]
+      output cfg offset input self :=
+        { acc :=
+            match numBits with
+            | 0 => { x := input.xA, y := input.yA }
+            | k + 1 =>
+              { x := .of self (offset + 2 * k + 2) cfg.addConfig.xQR
+                y := .of self (offset + 2 * k + 2) cfg.addConfig.yQR }
+          zs := Vector.ofFn fun j => .of self (offset + 2 * j.val + 2) cfg.zComplete }
+      output_eq := by
+        intro cfg offset input self
+        simp only [circuit_norm, keygen_output_norm, RegionCircuit.foldRange_output]
+        rw [← roundFoldAcc_eq w offset cfg input self numBits]
+        rfl }
 
   synthesize cfg offset (input : Var Inputs Fp) := do
     -- copy the entering running sum
@@ -729,6 +841,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           · rw [RegionCircuit.foldAcc_succ]
             simp only [round_output, circuit_norm] at h3 ⊢
             exact h3)
+    rw [roundFoldAcc_eq w offset cfg
+      { alpha := input_var_alpha,
+        base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z }
+      self numBits] at hout
     -- ── assemble `RoundInvariant` ──
     refine ⟨bits', ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain: the fold's per-round steps, re-indexed onto the output cells
@@ -806,6 +923,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
             exact hPSacc
           · rw [show (↑i + 1) * 2 = ↑i * 2 + 2 from by ring]
             exact hPSz)
+    rw [roundFoldAcc_eq w offset cfg
+      { alpha := input_var_alpha,
+        base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z }
+      self numBits] at haccN
     -- ── assemble: copy constraint + per-round constraints + `RoundInvariant` ──
     refine ⟨⟨region_0, fun i => hCall i⟩, ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain on the honest values
@@ -830,5 +952,20 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       exact accPoint_valid hBaseV hAcc0V (kBitsWindow input_alpha w) numBits
     · -- accumulator value
       exact hOutAcc.symm.trans haccN
+
+@[keygen_norm]
+theorem Configured.permutationColumns_eq (numBits w : ℕ) {cfg : Config}
+    (configured : (assign_region numBits w).Configured cfg) :
+    configured.permutationColumns =
+      Add.permutationColumns cfg.addConfig ++ ([cfg.zComplete] : List AnyColumn) := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  calc
+    _ = hconfig.permutationColumns ++ ([configInput.1] : List AnyColumn) := by
+      simp only [FormalRegionCircuit.Configured.permutationColumns,
+        FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+        assign_region, configure, keygen_norm]
+    _ = Add.permutationColumns configInput.2 ++ ([configInput.1] : List AnyColumn) := by
+      rw [Add.Configured.permutationColumns_eq hconfig]
 
 end Zcash.Circuits.Ecc.MulComplete

@@ -151,6 +151,32 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
   configureGates cfg
   return cfg
 
+/-- Every state column is equality-enabled by the Pow5 configure program. -/
+theorem state_mem_configure_permutationRequests
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts : ConfigureCounts) (i : Fin 3) :
+    (state i).toAny ∈
+      ((configure state partialSbox rcA rcB).delta counts).permutationRequests := by
+  fin_cases i
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
 @[reducible] def configureElaborated
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :

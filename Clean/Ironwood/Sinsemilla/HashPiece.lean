@@ -474,7 +474,9 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] } }
+          lookups cfg _ := [generatorLookup G cfg]
+          permutationColumns cfg _ := [cfg.bits]
+          inputPermutationColumns _ _ input := [input.cell.column] } }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     -- z_0 = copy of the piece into the `bits` column (the only copy — the entering

@@ -6,8 +6,9 @@ import Lean.Elab.Tactic
 /-!
 # Configure/synthesis registration automation
 
-`keygen_registration` proves that every gate and lookup enabled by a circuit's synthesis
-stream was either supplied by its caller or appended by its configure program.  The
+`keygen_registration` proves that every gate, lookup, and equality-dependent operation
+in a circuit's synthesis stream is covered by caller-supplied or configure-produced
+capabilities. The
 normalization set is deliberately separate from `circuit_norm`: registration proofs
 open configure deltas and operation streams, while ordinary circuit proofs preserve
 formal-circuit call boundaries. Parent circuits discharge those folded calls with the
@@ -16,14 +17,21 @@ generic `call_keygenRegistered` lemmas.
 
 namespace Halo2
 
+attribute [keygen_norm]
+  RegionCircuit.Vector.map_getElem_mem_toList
+  RegionCircuit.Vector.map_getElem!_mem_toList
+
 open Lean
 
 initialize registerTraceClass `Halo2.keygen
 
 attribute [keygen_norm]
   Configure.delta_bind Configure.delta_pure
+  Configure.delta_permutationRequests
   Configure.delta_enableEquality_gates
   Configure.delta_enableEquality_lookups
+  Configure.delta_enableEquality_permutationRequests
+  Configure.plan_enableEquality_permutationRequests
   Configure.delta_selector Configure.delta_complexSelector
   Configure.delta_createGate
   Configure.output_bind Configure.output_pure
@@ -33,7 +41,10 @@ attribute [keygen_norm]
   Configure.output_enableConstant Configure.output_createGate
   Configure.output_lookup
   ConfigureDelta.gates_append ConfigureDelta.lookups_append
+  ConfigureDelta.permutationRequests_append
   ConfigureDelta.gates_queriedCells ConfigureDelta.lookups_queriedCells
+  ConfigureDelta.permutationRequests_queryAny
+  ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
@@ -45,7 +56,11 @@ attribute [keygen_norm]
   and_self and_true true_and
   or_self or_true true_or or_false false_or
   false_implies implies_true forall_true_iff
+  forall_eq forall_eq_or_imp imp_self or_imp
   ite_self
+  Cell.of_column AssignedCell.of_cell
+  output_assignAdvice output_assignRegion output_cellAt
+  Vector.getElem_ofFn
 
 attribute [grind norm]
   Configure.output_pure Configure.delta_pure
@@ -137,6 +152,31 @@ theorem Configure.mem_lookups_delta_bind_right
   rw [Configure.delta_bind, ConfigureDelta.lookups_append]
   exact List.mem_append_right _ hargument
 
+theorem Configure.mem_permutationRequests_delta_bind_left
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈ (program.delta counts).permutationRequests) :
+    column ∈ ((program >>= next).delta counts).permutationRequests := by
+  rw [Configure.delta_bind, ConfigureDelta.permutationRequests_append]
+  exact List.mem_append_left _ hcolumn
+
+theorem Configure.mem_permutationRequests_delta_bind_right
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈
+      ((next (program.output counts)).delta
+        (program.finalCounts counts)).permutationRequests) :
+    column ∈ ((program >>= next).delta counts).permutationRequests := by
+  rw [Configure.delta_bind, ConfigureDelta.permutationRequests_append]
+  exact List.mem_append_right _ hcolumn
+
+theorem Configure.mem_permutationRequests_delta_enableEquality
+    {kind : ColumnKind} (column : Column kind) (counts : ConfigureCounts) :
+    column.toAny ∈
+      ((enableEquality (F := F) column).delta counts).permutationRequests := by
+  rw [Configure.delta_enableEquality_permutationRequests]
+  exact List.mem_singleton_self column.toAny
+
 theorem Configure.mem_gates_delta_createGate
     (gate : Gate F) (counts : ConfigureCounts) :
     gate ∈ ((createGate gate).delta counts).gates := by
@@ -146,9 +186,10 @@ theorem Configure.mem_gates_delta_createGate
 theorem assignAdvice_keygenRegistered
     {F : Type} [FiniteField F]
     (column : Column .advice) (row : ℕ) (compute : WitgenIR F 1)
-    (self : RegionIndex) (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (self : RegionIndex) (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
     ((assignAdvice column row compute).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups) := by
+      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
   simp only [operations_assignAdvice, List.forall_cons,
     RegionOperation.KeygenRegistered, List.forall_nil, and_self]
 
@@ -634,10 +675,22 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
   let requirementProjections := keygenRequirementProjectionAttr.getDecls env
   let configureProjections := keygenConfigureProjectionAttr.getDecls env
   let bundleTypes := keygenCallBundleAttr.getDecls env
-  let mut projections : SimpTheorems := {}
+  let outputProjections : SimpTheorems ←
+    match ← getSimpExtension? `keygen_output_norm with
+    | some extension => extension.getTheorems
+    | none => pure {}
+  let mut projections := outputProjections
   for projection in keygenMetadataProjectionAttr.getDecls env do
     projections ← projections.addDeclToUnfold projection
-  let ambient ← Simp.getSimpTheorems
+  projections ← projections.addConst ``List.mem_append
+  projections ← projections.addConst ``List.mem_cons
+  projections ← projections.addConst ``Cell.of_column
+  projections ← projections.addConst ``AssignedCell.of_cell
+  let mut ambient ← Simp.getSimpTheorems
+  for declaration in ← getLCtx do
+    if ← isProp declaration.type then
+      let fact := declaration.toExpr
+      ambient ← ambient.addTheorem (.fvar declaration.fvarId) fact
   -- First expose the child's requirement projection from the configured handle;
   -- only then does the concrete bundle occur at a reducible projection.
   let mut exposed ← Simp.withFreshCache <|
@@ -694,16 +747,20 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
       Simp.withSimpTheorems (#[projections] ++ ambient) do
         Simp.simp exposed.expr
     exposed ← exposed.mkEqTrans next
-  -- The formal-bundle projection leaves an opaque receiver below `gates`/`lookups`.
+  -- The formal-bundle projection leaves an opaque receiver below the requirement
+  -- projections.
   -- Reduce precisely that small `KeygenRequirements` receiver and add its definitional
   -- equality as a local simp theorem. No synthesis field is projected or normalized.
   let some requirementProjection :=
       exposed.expr.find? fun expression =>
         expression.getAppFn.isConstOf ``KeygenRequirements.gates ||
-          expression.getAppFn.isConstOf ``KeygenRequirements.lookups
+          expression.getAppFn.isConstOf ``KeygenRequirements.lookups ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
     | return exposed
   let arguments := requirementProjection.getAppArgs
-  let some requirement := arguments[2]?
+  -- `F`, `ConfigInput`, and `InputVar` precede the structure receiver.
+  let some requirement := arguments[3]?
     | return exposed
   let reducedRequirement ← withTransparency .all <| whnf requirement
   if reducedRequirement == requirement then
@@ -912,7 +969,7 @@ partial def configuredWitness? (target : Expr)
   return none
 
 /--
-Route one configured child's gate or lookup through the append-only configure tree.
+Route one configured child's keygen capability through the append-only configure tree.
 
 This deliberately explores one side of each bind at a time. Simplifying
 `member ∈ (left ++ right)` eagerly normalizes both branches and is catastrophic for a
@@ -940,8 +997,11 @@ partial def proveConfigureRoute (goal : MVarId) (sourceHead : Option Name)
   let rules := #[
     ``Configure.mem_gates_delta_bind_right,
     ``Configure.mem_lookups_delta_bind_right,
+    ``Configure.mem_permutationRequests_delta_bind_right,
     ``Configure.mem_gates_delta_bind_left,
     ``Configure.mem_lookups_delta_bind_left,
+    ``Configure.mem_permutationRequests_delta_bind_left,
+    ``Configure.mem_permutationRequests_delta_enableEquality,
     ``Configure.mem_gates_delta_createGate]
   for rule in rules do
     let metaState ← getThe Meta.State
@@ -1087,7 +1147,7 @@ def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
   return .continue
 
 simproc callRegistration
-    (Operations.KeygenRegistered _ _ _) := callRegistrationSimproc
+    (Operations.KeygenRegistered _ _ _ _) := callRegistrationSimproc
 
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc
@@ -1244,7 +1304,9 @@ partial def prepareConfigure (unfolded : Std.HashSet Name := {}) : TacticM Unit 
         Configure.output_enableConstant, Configure.output_createGate,
         Configure.output_lookup,
         ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+        ConfigureDelta.permutationRequests_append,
         ConfigureDelta.gates_queriedCells, ConfigureDelta.lookups_queriedCells,
+        ConfigureDelta.permutationRequests_queriedCells,
         List.mem_append, List.mem_cons, List.mem_singleton,
         List.nil_append, List.append_nil, List.append_assoc]))
   catch _ =>
@@ -1283,15 +1345,20 @@ configure/synthesis heads that still block a registration goal. Formal-circuit c
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
 elab "keygen_registration" : tactic => do
+  trace[Halo2.keygen] "keygen_registration: introductions"
   evalTactic (← `(tactic| intros))
+  trace[Halo2.keygen] "keygen_registration: configure preparation"
   KeygenRegistration.prepareConfigure
+  trace[Halo2.keygen] "keygen_registration: initial normalization"
   evalTactic (← `(tactic|
     simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
-      keygen_spine, keygen_norm]))
+      keygen_spine, keygen_norm, keygen_output_norm]))
   if (← getGoals).isEmpty then
     return
+  trace[Halo2.keygen] "keygen_registration: structural close"
   KeygenRegistration.close
   if !(← getGoals).isEmpty then
+    trace[Halo2.keygen] "keygen_registration: configure fallback"
     KeygenRegistration.finishConfigureGoals
 
 macro "keygen_registration" " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>

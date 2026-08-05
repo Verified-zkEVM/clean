@@ -105,7 +105,14 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [GdCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputPermutationColumns _ _ input :=
+            [input.gdX.cell.column, input.b0.cell.column,
+              input.b1.cell.column, input.a.cell.column,
+              input.z13A.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
@@ -257,7 +264,14 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [PkdCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputPermutationColumns _ _ input :=
+            [input.pkdX.cell.column, input.b3.cell.column,
+              input.d0.cell.column, input.c.cell.column,
+              input.z13C.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
@@ -402,7 +416,14 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [RhoCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputPermutationColumns _ _ input :=
+            [input.rho.cell.column, input.e1.cell.column,
+              input.g0.cell.column, input.f.cell.column,
+              input.z13F.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl
@@ -548,7 +569,14 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [PsiCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputPermutationColumns _ _ input :=
+            [input.psi.cell.column, input.h0.cell.column,
+              input.g1.cell.column, input.h1.cell.column,
+              input.g2.cell.column, input.z13G.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
       output_eq := by intro _ _ _; rfl

@@ -84,7 +84,7 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
 @[keygen_norm]
 def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
     (Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
-      Ecc.Add.Config) where
+      Ecc.Add.Config) (Var Input Fp) where
   configLawful cfg :=
     (Poseidon.hash (Hash.ConstantLength.capacity 2)).Configured cfg.1 ×
       AddChip.addFormal.Configured cfg.2.1 ×
@@ -96,6 +96,15 @@ def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.1.lookups ++ configured.2.2.2.lookups
+  permutationColumns cfg configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns ++
+        ([cfg.1.state 0, cfg.2.1.c,
+          cfg.2.2.1.superConfig.addConfig.xQR,
+          cfg.2.2.1.superConfig.addConfig.yQR] : List AnyColumn)
+  inputPermutationColumns _ _ input :=
+    [input.nk.cell.column, input.rho.cell.column, input.psi.cell.column,
+      input.cm.x.cell.column, input.cm.y.cell.column]
 
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the

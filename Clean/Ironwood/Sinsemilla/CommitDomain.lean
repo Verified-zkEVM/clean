@@ -144,7 +144,8 @@ private theorem commit_regionCount
 def keygenRequirements (G : Generators) (ns : List ℕ)
     (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) :
     KeygenRequirements Fp
-      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) where
+      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+      (Var (Input ns.length) Fp) where
   configLawful cfg :=
     (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.1 ×
       (HashToPoint.hashCircuit G ns Q hQ hns).Configured cfg.2.1 ×
@@ -154,6 +155,11 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.lookups
+  permutationColumns _ configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.permutationColumns
+  inputPermutationColumns _ _ input :=
+    input.pieces.toList.map (·.cell.column)
 
 /-- `CommitDomain::commit`: `[r]R` (the `Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)`
 (the hash bundle), and the final complete addition `M + [r]R`. `Spec`: the commitment is
@@ -180,18 +186,17 @@ def commit (G : Generators) (ns : List ℕ)
 
   elaborated :=
     { keygenRequirements := keygenRequirements G ns R Q hQ hns
-      registered := by keygen_registration
-      output cfg input i :=
-        let (bcfg, hcfg, acfg) := cfg
-        ((do
-          let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
-          let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
-            { pieces := input.pieces }
-          let result ← Ecc.Add.addFormal.call acfg
-            { p := hashOut.point, q := blindOut }
-          pure result : Circuit Fp (Var Point Fp)).output i)
+      registered configInput counts configured input self := by
+        have hmulAdd := Ecc.MulFixed.FullWidth.Configured.addPermutationColumns_subset
+          R configured.1
+        keygen_registration
+      output cfg _ i :=
+        { x := .of (i + 3) 1 cfg.2.2.xQR
+          y := .of (i + 3) 1 cfg.2.2.yQR }
       regionCount _ := 4
-      output_eq := by intro _ _ _; rfl
+      output_eq := by
+        intro _ _ _
+        simp only [circuit_norm, keygen_output_norm]
       regionCount_eq := fun (bcfg, hcfg, acfg) input i =>
         (commit_regionCount G ns R Q hQ hns bcfg hcfg acfg input i).symm }
 
@@ -274,8 +279,16 @@ def commit (G : Generators) (ns : List ℕ)
       · rw [hPB]; exact hBvalid
       · rw [hBl]; exact R.smul_valid _)
     obtain ⟨hVout, hSum⟩ := hAddS
-    refine ⟨hVout, ?_⟩
-    rw [hSum, hPB, hBl]
+    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp) result
+        : Value Point Fp) = { x := output_x, y := output_y } := by
+      rw [← result_eq]
+      rw [Ecc.Add.addFormal_output, Ecc.Add.add_output_cells]
+      rw [ProvableType.Halo2.eval_cells, Sinsemilla.Chain.point_eval_literal]
+      congr 1
+      · exact output_eq.1
+      · exact output_eq.2
+    rw [← hresult]
+    exact ⟨hVout, by rw [hSum, hPB, hBl]⟩
 
   completeness := by
     circuit_proof_start2
@@ -371,6 +384,14 @@ def configurationCertificate (G : Generators) (ns : List ℕ)
     · exact mul.lookups_of_configured required hrequired
     · exact hash.lookups_of_configured required hrequired
     · exact add.lookups_of_configured required hrequired
+  · intro column hcolumn
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with (hmul | hhash) | hadd
+    · exact mul.permutationColumns_of_configured column hmul
+    · exact hash.permutationColumns_of_configured column hhash
+    · exact add.permutationColumns_of_configured column hadd
 
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns

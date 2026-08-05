@@ -202,6 +202,10 @@ structure ConfigureBaseCertificate (counts : ConfigureCounts)
     (configureBase.output counts).lookupConfig ∈ context.gates
   rangeLookup : LookupRangeCheck.rangeCheckLookup 10
     (configureBase.output counts).lookupConfig ∈ context.lookups
+  advicePermutationColumn : ∀ index,
+    (configureBase.output counts).advices index ∈ context.permutationColumns
+  primaryPermutationColumn :
+    (configureBase.output counts).primary ∈ context.permutationColumns
 
 namespace ConfigureBaseCertificate
 
@@ -209,13 +213,19 @@ namespace ConfigureBaseCertificate
 def mono {counts : ConfigureCounts} {source target : KeygenContext Fp}
     (certificate : ConfigureBaseCertificate counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
-    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureBaseCertificate counts target where
   orchardGate := gates _ certificate.orchardGate
   addChip := certificate.addChip.mono gates lookups
   shortRange numBits := (certificate.shortRange numBits).mono gates lookups
   bitshiftGate := gates _ certificate.bitshiftGate
   rangeLookup := lookups _ certificate.rangeLookup
+  advicePermutationColumn index :=
+    permutationColumns _ (certificate.advicePermutationColumn index)
+  primaryPermutationColumn :=
+    permutationColumns _ certificate.primaryPermutationColumn
 
 end ConfigureBaseCertificate
 
@@ -223,7 +233,8 @@ end ConfigureBaseCertificate
 def configureBaseCertificate (counts : ConfigureCounts) :
     ConfigureBaseCertificate counts
       { gates := (configureBase.delta counts).gates
-        lookups := (configureBase.delta counts).lookups } := by
+        lookups := (configureBase.delta counts).lookups
+        permutationColumns := (configureBase.delta counts).permutationRequests } := by
   let base := configureBase.output counts
   let shared := configureShared.output counts
   let addCounts : ConfigureCounts :=
@@ -235,7 +246,9 @@ def configureBaseCertificate (counts : ConfigureCounts) :
       addChip := ?_
       shortRange := ?_
       bitshiftGate := ?_
-      rangeLookup := ?_ }
+      rangeLookup := ?_
+      advicePermutationColumn := ?_
+      primaryPermutationColumn := ?_ }
   · simp [configureBase, configureShared, configureAdvices,
       configureEqualities, configureAdviceEqualitiesLow,
       configureAdviceEqualitiesHigh, configureLagrange]
@@ -274,6 +287,14 @@ def configureBaseCertificate (counts : ConfigureCounts) :
     apply Configure.mem_lookups_delta_bind_right
     apply Configure.mem_lookups_delta_bind_left
     simp
+  · intro index
+    fin_cases index <;>
+      simp [configureBase, configureShared, configureAdvices,
+        configureEqualities, configureAdviceEqualitiesLow,
+        configureAdviceEqualitiesHigh, configureLagrange]
+  · simp [configureBase, configureShared, configureAdvices,
+      configureEqualities, configureAdviceEqualitiesLow,
+      configureAdviceEqualitiesHigh, configureLagrange]
 
 /-- The composite-chip suffix of Rust `Circuit::configure`. -/
 def configureChips (G : Generators) (base : ConfigureBase) :

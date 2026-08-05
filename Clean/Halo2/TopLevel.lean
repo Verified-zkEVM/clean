@@ -511,6 +511,14 @@ structure TopLevelCircuit
         (⟨column⟩, rotation) ∈
           (TopLevelCompilation.constraintSystem formalCircuit).fixedQueries := by
     configure_norm
+  /-- The exact number of deferred constant requests fits the capacity guaranteed by
+  exact compositional column occupancies. -/
+  constantSiteCount_le_constantCapacityLowerBound :
+    let config := TopLevelCompilation.config formalCircuit
+    let summary := formalCircuit.elaborated.synthesisSummary config () 0
+    summary.constantSiteCount ≤
+      summary.constantCapacityLowerBound
+        (TopLevelCompilation.constraintSystem formalCircuit).constants
   /--
   Dense public prefixes for the instance columns derived from this circuit's own
   configure-time query list.
@@ -645,6 +653,43 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
 /-- The closed top-level operation stream. -/
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
   TopLevelCompilation.operations self.formalCircuit
+
+/-- Exact compositional footprint published by the formal circuit. -/
+def synthesisSummary (self : TopLevelCircuit F Config PublicInput) :
+    FloorPlanner.SynthesisSummary :=
+  self.formalCircuit.elaborated.synthesisSummary self.config () 0
+
+theorem synthesisSummary_eq_operations
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.synthesisSummary = FloorPlanner.synthesisSummary self.operations := by
+  exact self.formalCircuit.elaborated.synthesisSummary_eq self.config () 0
+
+def constantSiteCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.synthesisSummary.constantSiteCount
+
+def constantCapacityLowerBound
+    (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.synthesisSummary.constantCapacityLowerBound
+    self.constraintSystem.constants
+
+/-- V1 allocates one constants-column cell for every deferred constant request. -/
+theorem constantValues_length_le_constantAssignments_length
+    (self : TopLevelCircuit F Config PublicInput) :
+    (FloorPlanner.V1.constantValues self.operations).length ≤
+      (FloorPlanner.V1.constantAssignments self.operations
+        (self.constraintSystem.constants.map (·.index))).length := by
+  apply FloorPlanner.V1.constantValues_length_le_constantAssignments_length
+  rw [FloorPlanner.V1.constantValues_length]
+  have hcapacity :
+      self.synthesisSummary.constantSiteCount ≤
+        self.synthesisSummary.constantCapacityLowerBound
+          self.constraintSystem.constants := by
+    simpa only [synthesisSummary, constraintSystem, config] using
+      self.constantSiteCount_le_constantCapacityLowerBound
+  rw [self.synthesisSummary_eq_operations] at hcapacity
+  exact hcapacity.trans
+    (FloorPlanner.V1.synthesisSummary_constantCapacityLowerBound_le
+      self.operations self.constraintSystem.constants)
 
 /-- V1 region starts derived from the circuit's operation stream. -/
 def regionStarts (self : TopLevelCircuit F Config PublicInput) : List ℕ :=

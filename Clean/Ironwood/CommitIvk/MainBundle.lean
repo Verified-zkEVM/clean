@@ -711,7 +711,10 @@ def configurationCertificate (G : Generators) (R : FixedBase)
     (bitshift : LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig ∈ context.gates)
     (canonicity : CommitIvk.gate cfg.gate ∈ context.gates)
     (rangeLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
-      context.lookups) :
+      context.lookups)
+    (requiredPermutationColumns : ∀ column,
+      column ∈ permutationColumns cfg commit.configured.permutationColumns →
+        column ∈ context.permutationColumns) :
     (circuit G R Q hQ).ConfigurationCertificate cfg context := by
   apply ((circuit G R Q hQ).configureCertificate
     cfg {} commit.configured).mono
@@ -736,6 +739,11 @@ def configurationCertificate (G : Generators) (R : FixedBase)
       rw [hrange]
       exact rangeLookup
     · exact commit.lookups_of_configured required hcommit
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    exact requiredPermutationColumns required hrequired
 
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ

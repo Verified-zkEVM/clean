@@ -840,6 +840,12 @@ def delta (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureDelta F :=
   (program.plan counts).2.1
 
+theorem delta_permutationRequests (program : Configure F α)
+    (counts : ConfigureCounts) :
+    (program.delta counts).permutationRequests =
+      (program.plan counts).2.1.permutationRequests :=
+  rfl
+
 def countDelta (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureCountDelta :=
   (program.plan counts).2.2
@@ -989,6 +995,11 @@ theorem ConfigureDelta.gates_queryAny (column : AnyColumn) :
 @[simp]
 theorem ConfigureDelta.lookups_queryAny (column : AnyColumn) :
     (ConfigureDelta.queryAny (F := F) column).lookups = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+theorem ConfigureDelta.permutationRequests_queryAny (column : AnyColumn) :
+    (ConfigureDelta.queryAny (F := F) column).permutationRequests = [] := by
   rcases column with ⟨kind, index⟩
   cases kind <;> rfl
 
@@ -1220,6 +1231,18 @@ theorem Configure.delta_enableEquality_lookups
   rcases column with ⟨kind, index⟩
   cases kind <;> rfl
 
+theorem Configure.delta_enableEquality_permutationRequests
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).permutationRequests = [column] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
+theorem Configure.plan_enableEquality_permutationRequests
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).plan counts).2.1.permutationRequests = [column] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
 /-- Rust: `meta.enable_constant(column)` (`circuit.rs:1038-1044`): registers the
 constants column and enables equality on it (constants are enforced via copies into this
 column) — including `enable_equality`'s cur fixed-query registration. -/
@@ -1293,6 +1316,12 @@ def lookup (queriedCells : List (Expression F Query))
 @[simp] theorem ConfigureDelta.lookups_append
     (left right : ConfigureDelta F) :
     (left.append right).lookups = left.lookups ++ right.lookups :=
+  rfl
+
+theorem ConfigureDelta.permutationRequests_append
+    (left right : ConfigureDelta F) :
+    (left.append right).permutationRequests =
+      left.permutationRequests ++ right.permutationRequests :=
   rfl
 
 /-! ## Selector allocation -/
@@ -1641,6 +1670,34 @@ theorem ConfigureDelta.SelectorsAllocated.append
           (fun current cell =>
             current.append (ConfigureDelta.queriedCell owner cell))
           delta).lookups = delta.lookups := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
+theorem ConfigureDelta.permutationRequests_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).permutationRequests = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).permutationRequests = delta.permutationRequests := by
     intro remaining
     induction remaining with
     | nil =>

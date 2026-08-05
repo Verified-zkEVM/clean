@@ -52,7 +52,7 @@ section
 variable [CircuitType Input] [CircuitType Output]
 
 /-- `output` of a layouter `call` (the child's output) — a `circuit_norm` accessor lemma. -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :
     (self.call config input).output i = self.output config input i :=
@@ -62,7 +62,7 @@ theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (
 
 /-- `output` of a region-level `call` (the child's elaborated output) — the region-level
 analogue of `FormalCircuit.output_call`. `@[circuit_norm]`. -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalRegionCircuit.output_call {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
@@ -77,7 +77,7 @@ the generic lemma's discr-tree key then misses under `simp`), the region-level a
 
 `@[circuit_norm]` like the layouter `output_call'` (an earlier exclusion protected v1-era
 by-hand `rw [FormalRegionCircuit.output_call]` targets; the corpus no longer depends on it). -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalRegionCircuit.output_call' {Output : TypeMap} [ProvableType Output] {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
@@ -110,7 +110,7 @@ theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input 
 /-- Concrete-`α` restatement of `output_call` (the `Circuit.output`/`operations` element type
 is rewritten to the concrete `Output (AssignedCell F)` by `var_of_provableType`; the generic
 lemma's discr-tree key then misses under `simp`). -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalCircuit.output_call' {Output : TypeMap} [ProvableType Output]
     (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :

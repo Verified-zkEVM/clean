@@ -18,7 +18,8 @@ open Specs.Sinsemilla (Generators)
 private def actionConfigureContext (G : Generators) (counts : ConfigureCounts) :
     KeygenContext Fp :=
   { gates := ((configure G).delta counts).gates
-    lookups := ((configure G).delta counts).lookups }
+    lookups := ((configure G).delta counts).lookups
+    permutationColumns := ((configure G).delta counts).permutationRequests }
 
 private theorem configure_output_lookupConfig (G : Generators)
     (counts : ConfigureCounts) :
@@ -547,6 +548,12 @@ def baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
       unfold configure
       apply Configure.mem_lookups_delta_bind_left
       exact hargument)
+    (by
+      intro column hcolumn
+      simp only [actionConfigureContext]
+      unfold configure
+      apply Configure.mem_permutationRequests_delta_bind_left
+      exact hcolumn)
 
 /-- The single AddChip gate configured directly in Action's shared prefix. -/
 private def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
@@ -632,6 +639,7 @@ def commitIvkCertificate (G : Generators) (B : Bases)
     exact base.bitshiftGate
   exact CommitIvk.Main.configurationCertificate G B.commitIvkR B.ivkQ
     B.ivkQ_onCurve commit bitshift (commitIvkGate_mem G counts) base.rangeLookup
+      (by keygen_registration)
 
 private theorem noteCommitOldDirectGates (G : Generators)
     (counts : ConfigureCounts) : ∀ gate, gate ∈
@@ -725,6 +733,7 @@ def noteCommitOldCertificate (G : Generators) (B : Bases)
     NoteCommit.Main.ns_ne_nil (ecc.mulFixedFull B.noteCommitR) hash ecc.addFormal
   exact NoteCommit.Main.configurationCertificate G B.noteCommitR B.noteQ
     B.noteQ_onCurve commit (noteCommitOldDirectGates G counts) base.rangeLookup
+      (by keygen_registration)
 
 def noteCommitNewCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
@@ -745,6 +754,7 @@ def noteCommitNewCertificate (G : Generators) (B : Bases)
     NoteCommit.Main.ns_ne_nil (ecc.mulFixedFull B.noteCommitR) hash ecc.addFormal
   exact NoteCommit.Main.configurationCertificate G B.noteCommitR B.noteQ
     B.noteQ_onCurve commit (noteCommitNewDirectGates G counts) base.rangeLookup
+      (by keygen_registration)
 
 /-- ValueCommit's three borrowed ECC capabilities, composed without reopening ECC. -/
 def valueCommitCertificate (G : Generators) (B : Bases)

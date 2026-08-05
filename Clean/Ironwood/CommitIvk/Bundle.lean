@@ -52,6 +52,12 @@ def toDonor (row : Inputs Fp) (b1 d1 : Fp) : DRow Fp :=
     row.d0, d1, row.z13A, row.z13C, row.aPrime, row.b2CPrime, row.z13APrime,
     row.z14B2CPrime⟩
 
+/-- Advice columns into which the bundle copies its inputs. -/
+@[keygen_norm]
+def permutationColumns (cfg : Config) : List AnyColumn :=
+  [cfg.advices 0, cfg.advices 1, cfg.advices 2, cfg.advices 3,
+    cfg.advices 5, cfg.advices 6, cfg.advices 7, cfg.advices 8]
+
 /-- Rust `CommitIvkChip` canonicity `assign` (`commit_ivk.rs:519-660`), parameterized by
 the `b_1`/`d_1` witness programs. The `(b1, d1)` readings are the extraction data;
 `Spec` is the donor `CommitIvk.Gate.Spec` at them, `Assumptions` the input-only donor
@@ -59,7 +65,19 @@ rely-conditions (the two witnessed-bit implications move to `ProverAssumptions`)
 def bundle (wb1 wd1 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Inputs unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ := permutationColumns cfg
+          inputPermutationColumns _ _ input :=
+            [input.ak.cell.column, input.a.cell.column,
+              input.bWhole.cell.column, input.b0.cell.column,
+              input.b2.cell.column, input.z13A.cell.column,
+              input.aPrime.cell.column, input.z13APrime.cell.column,
+              input.nk.cell.column, input.c.cell.column,
+              input.dWhole.cell.column, input.d0.cell.column,
+              input.z13C.cell.column, input.b2CPrime.cell.column,
+              input.z14B2CPrime.cell.column] } }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset

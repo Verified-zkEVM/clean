@@ -67,20 +67,32 @@ theorem sumWit_eval (a b : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
   simp only [sumWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
-/-- Rust `AddInstruction::add`'s region body (`add_chip.rs:71-91`): `q_add` at row 0,
-copy `a` and `b` in, assign `c = a + b`. `Spec`: the output is the field sum. -/
-def add : FormalRegionCircuit Fp Config Config Inputs field where
-  configure := pure
-
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
+/-- Rust `AddInstruction::add`'s region body (`add_chip.rs:71-91`). -/
+def synthesize (cfg : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) : RegionCircuit Fp (AssignedCell Fp) := do
     (addGate cfg).enable offset
     let _a ← copyAdvice input.a cfg.a offset
     let _b ← copyAdvice input.b cfg.b offset
     assignAdvice cfg.c offset (sumWit input.a input.b)
 
+/-- Rust `AddInstruction::add`'s region body (`add_chip.rs:71-91`): `q_add` at row 0,
+copy `a` and `b` in, assign `c = a + b`. `Spec`: the output is the field sum. -/
+def add : FormalRegionCircuit Fp Config Config Inputs field where
+  configure := pure
+
+  synthesize := synthesize
+
   elaborated :=
-    { keygenRequirements := { gates cfg _ := [addGate cfg] }
-      registered := by keygen_registration }
+    { keygenRequirements :=
+        { gates cfg _ := [addGate cfg]
+          permutationColumns input _ := [input.a, input.b]
+          inputPermutationColumns _ _ input :=
+            [input.a.cell.column, input.b.cell.column] }
+      registered := by keygen_registration [synthesize]
+      output cfg offset _ self := .of self offset cfg.c
+      output_eq := by
+        intro _ _ _ _
+        simp only [synthesize, circuit_norm] }
 
   Spec input output _ := output = input.a + input.b
   ProverSpec input output _ _ := output = input.a + input.b
@@ -106,7 +118,9 @@ def addFormalConfigureCertificate (a b c : Column .advice)
     addFormal.ConfigurationCertificate
       ((configure a b c).output counts)
       { gates := ((configure a b c).delta counts).gates
-        lookups := ((configure a b c).delta counts).lookups } := by
+        lookups := ((configure a b c).delta counts).lookups
+        permutationColumns := ([a, b] : List AnyColumn) ++
+          ((configure a b c).delta counts).permutationRequests } := by
   let cfg := (configure a b c).output counts
   apply (add.configureCertificate cfg {} ()).mono
   · intro gate hgate
@@ -120,6 +134,10 @@ def addFormalConfigureCertificate (a b c : Column .advice)
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     exact False.elim (List.not_mem_nil hargument)
+  · intro column hcolumn
+    simpa only [keygen_norm, add, cfg, configure,
+      FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] using hcolumn
 
 derive_contract_bridges addFormal := addFormal
 

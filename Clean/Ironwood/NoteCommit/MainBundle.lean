@@ -162,7 +162,9 @@ private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
           g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
           z13G := zCell cfg.hashConfig iHash 6 13,
           z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
-  simp only [synthGates, circuit_norm, decomposeB_output,
+  simp only [synthGates, synthDecompositions, synthCanonicity,
+    synthGdPkdValueCanonicity, synthRhoPsiCanonicity,
+    circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output] at h
   exact h
 
@@ -322,7 +324,9 @@ private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
           z13G := zCell cfg.hashConfig iHash 6 13,
           z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9)) :
     Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀ := by
-  simp only [synthGates, circuit_norm, decomposeB_output,
+  simp only [synthGates, synthDecompositions, synthCanonicity,
+    synthGdPkdValueCanonicity, synthRhoPsiCanonicity,
+    circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output]
   exact h
 
@@ -487,7 +491,9 @@ private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
           g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
           z13G := zCell cfg.hashConfig iHash 6 13,
           z13G1G2Prime := ccs.gZs.zLast }).operations (i₀ + 9)) (i₀ + 9) := by
-  simp only [synthGates, circuit_norm, decomposeB_output,
+  simp only [synthGates, synthDecompositions, synthCanonicity,
+    synthGdPkdValueCanonicity, synthRhoPsiCanonicity,
+    circuit_norm, decomposeB_output,
     decomposeD_output, decomposeG_output, decomposeH_output] at h
   exact h
 
@@ -1972,7 +1978,10 @@ def configurationCertificate (G : Generators) (R : FixedBase)
         RhoCanonicity.gate cfg.gates.rho,
         PsiCanonicity.gate cfg.gates.psi] → gate ∈ context.gates)
     (rangeLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
-      context.lookups) :
+      context.lookups)
+    (requiredPermutationColumns : ∀ column,
+      column ∈ permutationColumns cfg commit.configured.permutationColumns →
+        column ∈ context.permutationColumns) :
     (circuit G R Q hQ).ConfigurationCertificate cfg context := by
   apply ((circuit G R Q hQ).configureCertificate
     cfg {} commit.configured).mono
@@ -1992,6 +2001,11 @@ def configurationCertificate (G : Generators) (R : FixedBase)
       rw [hrange]
       exact rangeLookup
     · exact commit.lookups_of_configured required hcommit
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaboratedFolded, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    exact requiredPermutationColumns required hrequired
 
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ

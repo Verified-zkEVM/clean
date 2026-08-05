@@ -93,46 +93,8 @@ before first-fit (`strategy.rs:177-178`, `region_columns.sort_unstable()`):
 * every concrete column sorts BEFORE every selector (`Column(_) < Selector(_)`);
 * selectors compare by their index (`self.0.cmp(&other.0)`). -/
 
-/-- A virtual column in a region's shape: a concrete column (kind + index) or a selector
-(by index). Rust `RegionColumn`. -/
-inductive RegionColumn where
-  | column : ColumnKind → ℕ → RegionColumn
-  | selector : ℕ → RegionColumn
-deriving DecidableEq, Repr, BEq, ReflBEq, LawfulBEq
-
-namespace RegionColumn
-
-/-- `Any`'s consensus-critical rank: `Instance(0) < Advice(1) < Fixed(2)`
-(`plonk/circuit.rs:95` "sort Instance < Advice < Fixed"). -/
-def kindRank : ColumnKind → ℕ
-  | .instance => 0
-  | .advice => 1
-  | .fixed => 2
-
-/-- The `RegionColumn::Ord` sort key as a lexicographically-ordered triple
-`(group, subrank, index)`: concrete columns are group 0 (subrank = `kindRank`), selectors
-group 1 — so all columns precede all selectors (`layouter.rs:151-152`). -/
-def ordKey : RegionColumn → ℕ × ℕ × ℕ
-  | .column k i => (0, kindRank k, i)
-  | .selector i => (1, 0, i)
-
-/-- Hash via `ordKey` (avoids needing `Hashable ColumnKind`); consistent with `BEq`
-because `ordKey` is injective on `RegionColumn`. -/
-instance : Hashable RegionColumn := ⟨fun c => hash c.ordKey⟩
-
-/-- Strict `RegionColumn::Ord` (`layouter.rs:146-155`), spelled out lexicographically on
-`ordKey` (Lean's `<` on `ℕ × ℕ × ℕ` is not lexicographic). -/
-def lt (a b : RegionColumn) : Bool :=
-  let (a1, a2, a3) := a.ordKey
-  let (b1, b2, b3) := b.ordKey
-  a1 < b1 || (a1 == b1 && (a2 < b2 || (a2 == b2 && a3 < b3)))
-
-/-- Is this a concrete advice column? Used by the V1 sort key (advice-area). -/
-def isAdvice : RegionColumn → Bool
-  | .column .advice _ => true
-  | _ => false
-
-end RegionColumn
+/- `RegionColumn` and its ordering live in `Operations.lean`, where compositional
+circuit summaries can use the planner's canonical column vocabulary. -/
 
 /-- Sort a region's column set by `RegionColumn::Ord` (`strategy.rs:177-178`). The input is a
 set (deduplicated), so the order is total. -/
@@ -152,47 +114,38 @@ deriving Repr, Inhabited
 /-- Add a column to a shape's set (dedup; first-seen order — the list is re-sorted by
 `RegionColumn::Ord` at slotting, and the advice-count/row-count are order-independent). -/
 def addCol (cols : List RegionColumn) (c : RegionColumn) : List RegionColumn :=
-  if cols.contains c then cols else cols ++ [c]
+  addColumn cols c
 
-/-- The one-past-last row touched by a region operation. Copy-only operations touch no
-new row; every semantically active gate, lookup, or assignment contributes its offset. -/
-def regionOperationRowExtent : RegionOperation F → ℕ
-  | .assignAdvice _ row _
-  | .assignFixed _ row _
-  | .enableGate _ row
-  | .enableLookup _ _ row => row + 1
-  | .constrainEqual _ _
-  | .constrainConstant _ _
-  | .constrainInstance _ _ _ => 0
+/- The one-past-last row touched by a region operation is shared with compositional
+summaries in `Operations.lean`. -/
+-- `regionOperationRowExtent` is shared with compositional summaries in Operations.
 
 /-- Add the columns touched by one operation to a region's measured column set. -/
 def addOperationColumns
     (columns : List RegionColumn) (operation : RegionOperation F) :
     List RegionColumn :=
-  match operation with
-  | .assignAdvice column _ _ =>
-      addCol columns (.column .advice column.index)
-  | .assignFixed column _ _ =>
-      addCol columns (.column .fixed column.index)
-  | .enableGate gate _ =>
-      addCol columns (.selector gate.selector.index)
-  | .enableLookup _ enabled _ =>
-      enabled.foldl
-        (fun current selector =>
-          addCol current (.selector selector.index))
-        columns
-  | _ => columns
+  (regionOperationShapeColumns operation).foldl addCol columns
 
 /-- Measure one region body to its `RegionShape` (`layouter.rs`, `impl RegionLayouter for
 RegionShape`). See the module header for the per-operation contribution. -/
 def measureRegion (idx : ℕ) (body : RegionOperations F) : RegionShape :=
+  let summary := regionSynthesisSummary body
   { index := idx
-    columns := body.foldl addOperationColumns []
-    rowCount :=
-      body.foldl
-        (fun current operation =>
-          max current (regionOperationRowExtent operation))
-        0 }
+    columns := summary.columns.foldl addCol []
+    rowCount := summary.rowCount }
+
+theorem mem_measureRegion_columns_iff
+    (index : ℕ) (body : RegionOperations F) (column : RegionColumn) :
+    column ∈ (measureRegion index body).columns ↔
+      column ∈ (regionSynthesisSummary body).columns := by
+  simp only [measureRegion]
+  rw [show addCol = addColumn by rfl, mem_foldl_addColumn_iff]
+  simp
+
+@[circuit_norm] theorem measureRegion_rowCount
+    (index : ℕ) (body : RegionOperations F) :
+    (measureRegion index body).rowCount =
+      (regionSynthesisSummary body).rowCount := rfl
 
 private theorem foldl_max_accumulator_le
     {α : Type}
@@ -230,7 +183,7 @@ theorem row_lt_measureRegion_of_enableLookup_mem
     (hlookup : RegionOperation.enableLookup argument enabled row ∈ body) :
     row < (measureRegion idx body).rowCount := by
   rw [Nat.lt_iff_add_one_le]
-  exact value_le_foldl_max_of_mem body regionOperationRowExtent 0
+  exact regionOperationRowExtent_le_synthesisSummary_of_mem body
     (.enableLookup argument enabled row) hlookup
 
 /-- Measure every `assignRegion` region (in region-index order; `loadTable`/layouter-level
@@ -238,6 +191,88 @@ theorem row_lt_measureRegion_of_enableLookup_mem
 `v1.rs:183-184`). -/
 def measureRegions (ops : Operations F) : List RegionShape :=
   (indexedRegions ops 0).1.map fun (idx, body) => measureRegion idx body
+
+/-- Total length occupied in one planner column.  Shared-column intervals are
+row-disjoint under V1, so this compositional sum is exact. -/
+def columnOccupiedLength (shapes : List RegionShape) (column : RegionColumn) : ℕ :=
+  match shapes with
+  | [] => 0
+  | shape :: rest =>
+      (if column ∈ shape.columns then shape.rowCount else 0) +
+        columnOccupiedLength rest column
+
+theorem columnOccupiedLength_nil (column : RegionColumn) :
+    columnOccupiedLength [] column = 0 := rfl
+
+theorem columnOccupiedLength_cons
+    (shape : RegionShape) (rest : List RegionShape) (column : RegionColumn) :
+    columnOccupiedLength (shape :: rest) column =
+      (if column ∈ shape.columns then shape.rowCount else 0) +
+        columnOccupiedLength rest column := rfl
+
+theorem indexedRegions_indices_eq_range
+    (ops : Operations F) (initial : ℕ) :
+    (indexedRegions ops initial).1.map Prod.fst =
+      List.range' initial ops.regionCount := by
+  induction ops generalizing initial with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body =>
+          simp only [indexedRegions, Operations.regionCount,
+            List.map_cons]
+          rw [inductionHypothesis]
+          rw [show 1 + Operations.regionCount rest =
+              Operations.regionCount rest + 1 by omega,
+            List.range'_succ]
+      | constrainInstance cell column row =>
+          simpa only [indexedRegions, Operations.regionCount] using
+            inductionHypothesis initial
+      | loadTable table values =>
+          simpa only [indexedRegions, Operations.regionCount] using
+            inductionHypothesis initial
+
+theorem measureRegions_indices_nodup (ops : Operations F) :
+    ((measureRegions ops).map (·.index)).Nodup := by
+  have hmap :
+      (measureRegions ops).map (·.index) =
+        (indexedRegions ops 0).1.map Prod.fst := by
+    simp [measureRegions, measureRegion]
+  rw [hmap, indexedRegions_indices_eq_range]
+  exact List.nodup_range'
+
+theorem synthesisSummary_columnOccupancy_eq
+    (ops : Operations F) (column : RegionColumn) :
+    (synthesisSummary ops).columnOccupancy column =
+      columnOccupiedLength (measureRegions ops) column := by
+  have general : ∀ (operations : Operations F) (initial : ℕ),
+      (synthesisSummary operations).columnOccupancy column =
+        columnOccupiedLength
+          ((indexedRegions operations initial).1.map fun (index, body) =>
+            measureRegion index body) column := by
+    intro operations
+    induction operations with
+    | nil =>
+        intro initial
+        rfl
+    | cons operation rest inductionHypothesis =>
+        intro initial
+        cases operation with
+        | region name body =>
+            simp only [synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofRegion, indexedRegions, List.map_cons,
+              columnOccupiedLength_cons]
+            simp only [mem_measureRegion_columns_iff,
+              measureRegion_rowCount]
+            congr 1
+            simpa only [] using inductionHypothesis (initial + 1)
+        | constrainInstance cell instanceColumn row =>
+            simpa only [synthesisSummary, indexedRegions] using
+              inductionHypothesis initial
+        | loadTable table values =>
+            simpa only [synthesisSummary, indexedRegions] using
+              inductionHypothesis initial
+  simpa only [measureRegions] using general ops 0
 
 /-- Number of distinct advice columns the region touches (the V1 sort key's factor). -/
 def RegionShape.adviceCols (s : RegionShape) : ℕ :=
@@ -5635,60 +5670,48 @@ def activatesSelectorAt (selector row : ℕ) : RegionOperation F → Prop
 private theorem mem_addCol_self
     (columns : List RegionColumn) (column : RegionColumn) :
     column ∈ addCol columns column := by
-  unfold addCol
-  by_cases hcontains : columns.contains column = true
-  · simp only [hcontains, ↓reduceIte]
-    exact List.contains_iff_mem.mp hcontains
-  · have hnotmem : column ∉ columns := by
-      simpa only [List.contains_iff_mem] using hcontains
-    simp [hnotmem]
+  by_cases hcolumn : column ∈ columns <;>
+    simp [addCol, addColumn, hcolumn]
 
 private theorem mem_addCol_of_mem
     (columns : List RegionColumn) (added column : RegionColumn)
     (hcolumn : column ∈ columns) :
     column ∈ addCol columns added := by
-  unfold addCol
-  split <;> simp_all
+  by_cases hadded : added ∈ columns <;>
+    simp [addCol, addColumn, hadded, hcolumn]
 
 private theorem mem_foldl_addCol_of_initial_mem
-    (selectors : List Selector) (columns : List RegionColumn)
+    (added : List RegionColumn) (columns : List RegionColumn)
     {column : RegionColumn} (hcolumn : column ∈ columns) :
-    column ∈
-      selectors.foldl
-        (fun current next => addCol current (.selector next.index))
-        columns := by
-  induction selectors generalizing columns with
+    column ∈ added.foldl addCol columns := by
+  induction added generalizing columns with
   | nil =>
       exact hcolumn
   | cons head tail ih =>
       simp only [List.foldl_cons]
-      exact ih _ (mem_addCol_of_mem columns (.selector head.index) column hcolumn)
+      exact ih _ (mem_addCol_of_mem columns head column hcolumn)
 
 private theorem mem_foldl_addCol_of_mem
-    (selectors : List Selector) (columns : List RegionColumn)
-    {selector : Selector} (hselector : selector ∈ selectors) :
-    RegionColumn.selector selector.index ∈
-      selectors.foldl
-        (fun current next => addCol current (.selector next.index))
-        columns := by
-  induction selectors generalizing columns with
+    (added : List RegionColumn) (columns : List RegionColumn)
+    {column : RegionColumn} (hcolumn : column ∈ added) :
+    column ∈ added.foldl addCol columns := by
+  induction added generalizing columns with
   | nil =>
-      simp at hselector
+      simp at hcolumn
   | cons head tail ih =>
-      simp only [List.mem_cons] at hselector
+      simp only [List.mem_cons] at hcolumn
       simp only [List.foldl_cons]
-      rcases hselector with rfl | htail
+      rcases hcolumn with rfl | htail
       · exact mem_foldl_addCol_of_initial_mem tail _
-          (mem_addCol_self columns (.selector selector.index))
-      · exact ih (addCol columns (.selector head.index)) htail
+          (mem_addCol_self columns column)
+      · exact ih (addCol columns head) htail
 
 private theorem mem_addOperationColumns_of_mem
     (columns : List RegionColumn) (operation : RegionOperation F)
     {column : RegionColumn} (hcolumn : column ∈ columns) :
     column ∈ addOperationColumns columns operation := by
-  cases operation <;>
-    simp [addOperationColumns, mem_addCol_of_mem,
-      mem_foldl_addCol_of_initial_mem, hcolumn]
+  exact mem_foldl_addCol_of_initial_mem
+    (regionOperationShapeColumns operation) columns hcolumn
 
 private theorem mem_foldl_addOperationColumns_of_initial_mem
     (body : RegionOperations F) (columns : List RegionColumn)
@@ -5716,13 +5739,14 @@ private theorem selector_mem_foldl_addOperationColumns_of_activation
       simp only [List.foldl_cons]
       rcases hoperation with rfl | htail
       · apply mem_foldl_addOperationColumns_of_initial_mem
+        apply mem_foldl_addCol_of_mem
         cases operation with
         | enableGate gate operationRow =>
             rcases hactivation with ⟨rfl, rfl⟩
-            exact mem_addCol_self columns (.selector gate.selector.index)
+            simp [regionOperationShapeColumns]
         | enableLookup argument enabled operationRow =>
             rcases hactivation with ⟨⟨selected, hselected, rfl⟩, rfl⟩
-            exact mem_foldl_addCol_of_mem enabled columns hselected
+            exact List.mem_map.mpr ⟨selected, hselected, rfl⟩
         | assignAdvice | assignFixed | constrainEqual | constrainConstant |
             constrainInstance =>
             contradiction
@@ -5735,8 +5759,20 @@ theorem selector_mem_measureRegion_of_activatesSelectorAt
     {selector row : ℕ}
     (hactivation : activatesSelectorAt selector row operation) :
     RegionColumn.selector selector ∈ (measureRegion idx body).columns := by
-  exact selector_mem_foldl_addOperationColumns_of_activation
-    body [] hoperation hactivation
+  have hcolumn : RegionColumn.selector selector ∈
+      (regionSynthesisSummary body).columns := by
+    apply mem_regionSynthesisSummary_columns_of_mem body operation hoperation
+    cases operation with
+    | enableGate gate operationRow =>
+        rcases hactivation with ⟨rfl, rfl⟩
+        simp [regionOperationShapeColumns]
+    | enableLookup argument enabled operationRow =>
+        rcases hactivation with ⟨⟨selected, hselected, rfl⟩, rfl⟩
+        exact List.mem_map.mpr ⟨selected, hselected, rfl⟩
+    | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+        constrainInstance => contradiction
+  exact mem_foldl_addCol_of_mem
+    (regionSynthesisSummary body).columns [] hcolumn
 
 /-- Every selector activation row lies in its measured region interval. -/
 theorem row_lt_measureRegion_of_activatesSelectorAt
@@ -5749,7 +5785,7 @@ theorem row_lt_measureRegion_of_activatesSelectorAt
   | enableGate gate operationRow =>
       rcases hactivation with ⟨_, rfl⟩
       rw [Nat.lt_iff_add_one_le]
-      exact value_le_foldl_max_of_mem body regionOperationRowExtent 0
+      exact regionOperationRowExtent_le_synthesisSummary_of_mem body
         (.enableGate gate operationRow) hoperation
   | enableLookup argument enabled operationRow =>
       rcases hactivation with ⟨_, rfl⟩
@@ -5909,6 +5945,274 @@ def planOperations
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
 def starts (ops : Operations F) : List ℕ := (planOperations ops).1
 
+def placementEndFrom (shapes : List RegionShape) (regionStarts : List ℕ) : ℕ :=
+  shapes.map (fun shape =>
+    regionStarts.getD shape.index 0 + shape.rowCount)
+    |>.foldl max 0
+
+theorem shape_end_le_placementEndFrom_of_mem
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (shape : RegionShape) (hshape : shape ∈ shapes) :
+    regionStarts.getD shape.index 0 + shape.rowCount ≤
+      placementEndFrom shapes regionStarts := by
+  exact value_le_foldl_max_of_mem
+    (shapes.map fun current =>
+      regionStarts.getD current.index 0 + current.rowCount)
+    id 0
+    (regionStarts.getD shape.index 0 + shape.rowCount)
+    (List.mem_map.mpr ⟨shape, hshape, rfl⟩)
+
+/-- Rows occupied in one column, as a finite set of placed half-open intervals. -/
+def occupiedRowsIn (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn) : Finset ℕ :=
+  shapes.foldr (fun shape occupied =>
+    if column ∈ shape.columns then
+      Finset.Ico (regionStarts.getD shape.index 0)
+          (regionStarts.getD shape.index 0 + shape.rowCount) ∪ occupied
+    else occupied) ∅
+
+theorem occupiedRowsIn_nil
+    (regionStarts : List ℕ) (column : RegionColumn) :
+    occupiedRowsIn [] regionStarts column = ∅ := rfl
+
+theorem occupiedRowsIn_cons
+    (shape : RegionShape) (rest : List RegionShape)
+    (regionStarts : List ℕ) (column : RegionColumn) :
+    occupiedRowsIn (shape :: rest) regionStarts column =
+      if column ∈ shape.columns then
+        Finset.Ico (regionStarts.getD shape.index 0)
+            (regionStarts.getD shape.index 0 + shape.rowCount) ∪
+          occupiedRowsIn rest regionStarts column
+      else occupiedRowsIn rest regionStarts column := rfl
+
+theorem mem_occupiedRowsIn_iff
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn) (row : ℕ) :
+    row ∈ occupiedRowsIn shapes regionStarts column ↔
+      ∃ shape ∈ shapes,
+        column ∈ shape.columns ∧
+          regionStarts.getD shape.index 0 ≤ row ∧
+          row < regionStarts.getD shape.index 0 + shape.rowCount := by
+  induction shapes with
+  | nil => simp [occupiedRowsIn_nil]
+  | cons shape rest inductionHypothesis =>
+      by_cases hcolumn : column ∈ shape.columns
+      · simp only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          Finset.mem_union, Finset.mem_Ico, inductionHypothesis,
+          List.mem_cons, exists_eq_or_imp, true_and]
+      · simp only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          inductionHypothesis, List.mem_cons, exists_eq_or_imp,
+          false_and, false_or]
+
+theorem occupiedRowsIn_card_le_columnOccupiedLength
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn) :
+    (occupiedRowsIn shapes regionStarts column).card ≤
+      columnOccupiedLength shapes column := by
+  induction shapes with
+  | nil => simp [occupiedRowsIn, columnOccupiedLength]
+  | cons shape rest inductionHypothesis =>
+      by_cases hcolumn : column ∈ shape.columns
+      · simp only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          columnOccupiedLength_cons]
+        apply (Finset.card_union_le _ _).trans
+        have hinterval :
+            (Finset.Ico (regionStarts.getD shape.index 0)
+              (regionStarts.getD shape.index 0 + shape.rowCount)).card =
+              shape.rowCount := by
+          rw [Nat.card_Ico]
+          omega
+        exact Nat.add_le_add (Nat.le_of_eq hinterval) (by
+          exact inductionHypothesis)
+      · simpa only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          columnOccupiedLength_cons, zero_add] using
+          inductionHypothesis
+
+theorem occupiedRowsIn_card_eq_columnOccupiedLength
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn)
+    (hindices : (shapes.map (·.index)).Nodup)
+    (hdisjoint : SharedColumnIntervalsDisjoint shapes regionStarts) :
+    (occupiedRowsIn shapes regionStarts column).card =
+      columnOccupiedLength shapes column := by
+  induction shapes with
+  | nil => simp only [occupiedRowsIn_nil, Finset.card_empty,
+      columnOccupiedLength_nil]
+  | cons shape rest inductionHypothesis =>
+      rw [List.map_cons, List.nodup_cons] at hindices
+      have hrestDisjoint : SharedColumnIntervalsDisjoint rest regionStarts := by
+        intro left right hleft hright hne currentColumn
+          hleftColumn hrightColumn
+        exact hdisjoint (by simp [hleft]) (by simp [hright]) hne
+          hleftColumn hrightColumn
+      have hrestCard := inductionHypothesis hindices.2 hrestDisjoint
+      by_cases hcolumn : column ∈ shape.columns
+      · have hintervals : Disjoint
+            (Finset.Ico (regionStarts.getD shape.index 0)
+              (regionStarts.getD shape.index 0 + shape.rowCount))
+            (occupiedRowsIn rest regionStarts column) := by
+          rw [Finset.disjoint_left]
+          intro row hshapeRow hrestRow
+          rw [Finset.mem_Ico] at hshapeRow
+          obtain ⟨other, hother, hotherColumn, hotherRow⟩ :=
+            (mem_occupiedRowsIn_iff rest regionStarts column row).mp hrestRow
+          have hindex : shape.index ≠ other.index := by
+            intro hequal
+            apply hindices.1
+            exact List.mem_map.mpr ⟨other, hother, hequal.symm⟩
+          have hplaced := hdisjoint (by simp) (by simp [hother]) hindex
+            hcolumn hotherColumn
+          unfold RowIntervalsDisjoint at hplaced
+          omega
+        simp only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          columnOccupiedLength_cons]
+        rw [Finset.card_union_of_disjoint hintervals, Nat.card_Ico,
+          hrestCard]
+        omega
+      · simpa only [occupiedRowsIn_cons, hcolumn, ↓reduceIte,
+          columnOccupiedLength_cons, zero_add] using hrestCard
+
+theorem columnOccupiedLength_le_placementEndFrom
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn)
+    (hindices : (shapes.map (·.index)).Nodup)
+    (hdisjoint : SharedColumnIntervalsDisjoint shapes regionStarts) :
+    columnOccupiedLength shapes column ≤
+      placementEndFrom shapes regionStarts := by
+  rw [← occupiedRowsIn_card_eq_columnOccupiedLength
+    shapes regionStarts column hindices hdisjoint]
+  have hsubset : occupiedRowsIn shapes regionStarts column ⊆
+      Finset.range (placementEndFrom shapes regionStarts) := by
+    intro row hrow
+    rw [Finset.mem_range]
+    obtain ⟨shape, hshape, hcolumn, hbounds⟩ :=
+      (mem_occupiedRowsIn_iff shapes regionStarts column row).mp hrow
+    exact hbounds.2.trans_le
+      (shape_end_le_placementEndFrom_of_mem
+        shapes regionStarts shape hshape)
+  simpa using Finset.card_le_card hsubset
+
+/-- One past the last row occupied by any placed region.  This is Halo 2 V1's
+`first_unassigned_row`, stated directly from the final placement rather than through
+the planner's internal per-column allocation map. -/
+def placementEnd (ops : Operations F) : ℕ :=
+  placementEndFrom (measureRegions ops) (starts ops)
+
+def rowOccupiedIn (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn) (row : ℕ) : Bool :=
+  match shapes with
+  | [] => false
+  | shape :: rest =>
+      (shape.columns.contains column &&
+        decide (regionStarts.getD shape.index 0 ≤ row) &&
+        decide (row < regionStarts.getD shape.index 0 + shape.rowCount)) ||
+      rowOccupiedIn rest regionStarts column row
+
+theorem rowOccupiedIn_eq_true_iff_mem_occupiedRowsIn
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (column : RegionColumn) (row : ℕ) :
+    rowOccupiedIn shapes regionStarts column row = true ↔
+      row ∈ occupiedRowsIn shapes regionStarts column := by
+  induction shapes with
+  | nil => simp [rowOccupiedIn, occupiedRowsIn]
+  | cons shape rest inductionHypothesis =>
+      by_cases hcolumn : column ∈ shape.columns
+      · simp [rowOccupiedIn, occupiedRowsIn, hcolumn,
+          inductionHypothesis]
+      · simp [rowOccupiedIn, occupiedRowsIn, hcolumn,
+          inductionHypothesis]
+
+/-- Whether a placed region occupies `row` in `column`. -/
+def rowOccupied (ops : Operations F) (column : RegionColumn) (row : ℕ) : Bool :=
+  rowOccupiedIn (measureRegions ops) (starts ops) column row
+
+def constantFreeRowsFrom (shapes : List RegionShape) (regionStarts : List ℕ)
+    (endRow column : ℕ) : List ℕ :=
+  (List.range endRow).filter fun row =>
+    !rowOccupiedIn shapes regionStarts (.column .fixed column) row
+
+private theorem filter_not_length_add_filter_length
+    (values : List ℕ) (predicate : ℕ → Bool) :
+    (values.filter fun value => !predicate value).length +
+      (values.filter predicate).length = values.length := by
+  induction values with
+  | nil => rfl
+  | cons value values inductionHypothesis =>
+      cases hpredicate : predicate value <;>
+        simp [hpredicate] <;> omega
+
+theorem constantFreeRowsFrom_length_lowerBound
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (endRow column : ℕ) :
+    endRow - columnOccupiedLength shapes (.column .fixed column) ≤
+      (constantFreeRowsFrom shapes regionStarts endRow column).length := by
+  let occupied :=
+    (List.range endRow).filter fun row =>
+      rowOccupiedIn shapes regionStarts (.column .fixed column) row
+  have hoccupiedNodup : occupied.Nodup :=
+    List.Nodup.filter _ List.nodup_range
+  have hsubset : occupied.toFinset ⊆
+      occupiedRowsIn shapes regionStarts (.column .fixed column) := by
+    intro row hrow
+    rw [List.mem_toFinset, List.mem_filter] at hrow
+    exact (rowOccupiedIn_eq_true_iff_mem_occupiedRowsIn
+      shapes regionStarts (.column .fixed column) row).mp hrow.2
+  have hoccupied : occupied.length ≤
+      columnOccupiedLength shapes (.column .fixed column) := by
+    rw [← List.toFinset_card_of_nodup hoccupiedNodup]
+    exact (Finset.card_le_card hsubset).trans
+      (occupiedRowsIn_card_le_columnOccupiedLength
+        shapes regionStarts (.column .fixed column))
+  have hpartition :
+      (constantFreeRowsFrom shapes regionStarts endRow column).length +
+        occupied.length = endRow := by
+    simpa only [constantFreeRowsFrom, occupied, List.length_range] using
+      filter_not_length_add_filter_length (List.range endRow)
+        (fun row => rowOccupiedIn shapes regionStarts
+          (.column .fixed column) row)
+  omega
+
+/-- Compositional lower bound on the total deferred-constant capacity.  The placement
+end is bounded below by every column's exact occupied length; subtracting a constant
+column's exact occupied length therefore counts slots guaranteed free in that column. -/
+def constantCapacityLowerBound (ops : Operations F)
+    (constantColumns : List ℕ) : ℕ :=
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  let endRow := placementEndFrom shapes regionStarts
+  (constantColumns.map fun column =>
+    endRow - columnOccupiedLength shapes (.column .fixed column)).sum
+
+theorem mem_constantFreeRowsFrom_lt
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (endRow column row : ℕ)
+    (hrow : row ∈ constantFreeRowsFrom shapes regionStarts endRow column) :
+    row < endRow := by
+  rw [constantFreeRowsFrom, List.mem_filter] at hrow
+  exact List.mem_range.mp hrow.1
+
+/-- Free rows of a concrete fixed column below V1's final region end, in ascending
+order.  This is the extensional content of `Allocations.free_intervals` used by Halo 2
+for deferred constants. -/
+def constantFreeRows (ops : Operations F) (column : ℕ) : List ℕ :=
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  constantFreeRowsFrom shapes regionStarts
+    (placementEndFrom shapes regionStarts) column
+
+theorem constantCapacityLowerBound_le_positions_length
+    (ops : Operations F) (constantColumns : List ℕ) :
+    constantCapacityLowerBound ops constantColumns ≤
+      (constantColumns.flatMap fun column =>
+        (constantFreeRows ops column).map fun row => (column, row)).length := by
+  rw [List.length_flatMap]
+  apply List.sum_le_sum
+  intro column hcolumn
+  simp only [List.length_map, constantFreeRows]
+  exact constantFreeRowsFrom_length_lowerBound
+    (measureRegions ops) (starts ops)
+    (placementEndFrom (measureRegions ops) (starts ops)) column
+
 /--
 V1 placement makes regions sharing any measured column row-disjoint by construction,
 independently of the legacy candidate's sorting implementation.
@@ -5937,6 +6241,39 @@ theorem starts_sharedColumnIntervalsDisjoint
   · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
       (measureRegions ops)
 
+/-- Every column's exact compositional occupancy fits below V1's placement end. -/
+theorem columnOccupiedLength_le_placementEnd
+    (ops : Operations F) (column : RegionColumn) :
+    columnOccupiedLength (measureRegions ops) column ≤
+      V1.placementEnd ops := by
+  exact columnOccupiedLength_le_placementEndFrom
+    (measureRegions ops) (V1.starts ops) column
+    (measureRegions_indices_nodup ops)
+    (V1.starts_sharedColumnIntervalsDisjoint ops)
+
+theorem synthesisSummary_maxColumnOccupancy_le_placementEnd
+    (ops : Operations F) :
+    (synthesisSummary ops).maxColumnOccupancy ≤ V1.placementEnd ops := by
+  apply SynthesisSummary.maxColumnOccupancy_le
+  intro column hcolumn
+  rw [synthesisSummary_columnOccupancy_eq]
+  exact V1.columnOccupiedLength_le_placementEnd ops column
+
+theorem synthesisSummary_constantCapacityLowerBound_le
+    (ops : Operations F) (constantColumns : List (Column .fixed)) :
+    (synthesisSummary ops).constantCapacityLowerBound constantColumns ≤
+      V1.constantCapacityLowerBound ops (constantColumns.map (·.index)) := by
+  unfold SynthesisSummary.constantCapacityLowerBound
+  unfold V1.constantCapacityLowerBound
+  simp only [List.map_map]
+  apply List.sum_le_sum
+  intro column hcolumn
+  rw [SynthesisSummary.fixedColumnOccupancy,
+    synthesisSummary_columnOccupancy_eq]
+  exact Nat.sub_le_sub_right
+    (synthesisSummary_maxColumnOccupancy_le_placementEnd ops)
+    (columnOccupiedLength (measureRegions ops) (.column .fixed column.index))
+
 /-- The full V1 shared-column invariant implies its virtual-selector projection. -/
 theorem starts_sharedSelectorIntervalsDisjoint
     (ops : Operations F) :
@@ -5959,11 +6296,57 @@ region-then-body order during the assignment pass (`v1.rs:122`). -/
 /-- `plan.constants` values in collection order (`assign_advice_from_constant` /
 `constrain_constant` push `(constant, cell)`; we keep the constant), region-index order then
 body order (`v1.rs` `AssignmentPass` runs regions in order). -/
+def regionConstantValues (body : RegionOperations F) : List F :=
+  match body with
+  | [] => []
+  | .constrainConstant _ value :: rest =>
+      value :: regionConstantValues rest
+  | _ :: rest => regionConstantValues rest
+
 def constantValues (ops : Operations F) : List F :=
   (indexedRegions ops 0).1.flatMap fun (_, body) =>
-    body.filterMap fun op => match op with
-      | .constrainConstant _ v => some v
-      | _ => none
+    regionConstantValues body
+
+theorem regionConstantValues_length
+    (body : RegionOperations F) :
+    (regionConstantValues body).length =
+      (regionSynthesisSummary body).constantSiteCount := by
+  induction body with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation <;>
+        simp [regionConstantValues, regionSynthesisSummary,
+          RegionSynthesisSummary.combine,
+          RegionSynthesisSummary.ofOperation,
+          regionOperationConstantSiteCount, inductionHypothesis,
+          Nat.add_comm]
+
+theorem constantValues_length
+    (ops : Operations F) :
+    (constantValues ops).length =
+      (synthesisSummary ops).constantSiteCount := by
+  have general : ∀ (operations : Operations F) (initial : ℕ),
+      ((indexedRegions operations initial).1.flatMap fun (_, body) =>
+        regionConstantValues body).length =
+        (synthesisSummary operations).constantSiteCount := by
+    intro operations
+    induction operations with
+    | nil => intro initial; rfl
+    | cons operation rest inductionHypothesis =>
+        intro initial
+        cases operation with
+        | region name body =>
+            simp only [indexedRegions, List.flatMap_cons, List.length_append,
+              synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofRegion, regionConstantValues_length]
+            rw [inductionHypothesis]
+        | constrainInstance cell column row =>
+            simpa only [indexedRegions, synthesisSummary] using
+              inductionHypothesis initial
+        | loadTable table values =>
+            simpa only [indexedRegions, synthesisSummary] using
+              inductionHypothesis initial
+  exact general ops 0
 
 /-- `first_unassigned_row` (`v1.rs:83-87`): the max `unbounded_interval_start` over all
 allocated columns. -/
@@ -6007,38 +6390,72 @@ natural-number encoding.
 -/
 def constantAssignments (ops : Operations F) (constCols : List ℕ) :
     List (F × ℕ × ℕ) :=
-  let (_, colAllocs) := planOperations ops
-  let endRow := firstUnassignedRow colAllocs
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  let endRow := placementEndFrom shapes regionStarts
   let positions : List (ℕ × ℕ) := constCols.flatMap fun c =>
-    (freeRows colAllocs c endRow).map fun row => (c, row)
+    (constantFreeRowsFrom shapes regionStarts endRow c).map fun row => (c, row)
   (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
 
-/-- Every V1 constant allocation lies below the planner's first unassigned row. -/
-theorem constantAssignments_row_lt_firstUnassignedRow
+/-- The compositional capacity law is sufficient for V1 to allocate every deferred
+constant site; `zip` therefore does not truncate the constant-value stream. -/
+theorem constantValues_length_le_constantAssignments_length
+    (ops : Operations F) (constantColumns : List ℕ)
+    (hcapacity :
+      (constantValues ops).length ≤
+        constantCapacityLowerBound ops constantColumns) :
+    (constantValues ops).length ≤
+      (constantAssignments ops constantColumns).length := by
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  let endRow := placementEndFrom shapes regionStarts
+  let positions : List (ℕ × ℕ) := constantColumns.flatMap fun column =>
+    (constantFreeRowsFrom shapes regionStarts endRow column).map fun row =>
+      (column, row)
+  have hlower : constantCapacityLowerBound ops constantColumns ≤
+      positions.length := by
+    dsimp only [positions]
+    rw [List.length_flatMap]
+    apply List.sum_le_sum
+    intro column hcolumn
+    simp only [List.length_map]
+    exact constantFreeRowsFrom_length_lowerBound
+      shapes regionStarts endRow column
+  have hpositions : (constantValues ops).length ≤ positions.length :=
+    hcapacity.trans hlower
+  have hlength :
+      (constantAssignments ops constantColumns).length =
+        min positions.length (constantValues ops).length := by
+    simp [constantAssignments, positions, shapes, regionStarts, endRow]
+  rw [hlength]
+  omega
+
+/-- Every V1 constant allocation lies below the final placed-region end. -/
+theorem constantAssignments_row_lt_placementEnd
     (ops : Operations F) (constCols : List ℕ)
     {value : F} {column row : ℕ}
     (hassignment :
       (value, column, row) ∈ constantAssignments ops constCols) :
-    row < firstUnassignedRow (planOperations ops).2 := by
-  let allocations := (planOperations ops).2
-  let endRow := firstUnassignedRow allocations
+    row < placementEnd ops := by
   let positions : List (ℕ × ℕ) := constCols.flatMap fun currentColumn =>
-    (freeRows allocations currentColumn endRow).map fun currentRow =>
+    (constantFreeRows ops currentColumn).map fun currentRow =>
       (currentColumn, currentRow)
   rw [constantAssignments, List.mem_map] at hassignment
   obtain ⟨⟨⟨foundColumn, foundRow⟩, foundValue⟩,
     hzipped, hequal⟩ := hassignment
   have hposition : (foundColumn, foundRow) ∈ positions :=
     (List.of_mem_zip hzipped).1
-  have hrow : foundRow < endRow := by
+  have hrow : foundRow < placementEnd ops := by
     dsimp only [positions] at hposition
     rw [List.mem_flatMap] at hposition
     obtain ⟨currentColumn, hcolumn, hposition⟩ := hposition
     rw [List.mem_map] at hposition
     obtain ⟨currentRow, hcurrentRow, hposition⟩ := hposition
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hposition
-    exact mem_freeRows_lt allocations currentColumn endRow
-      currentRow hcurrentRow
+    exact mem_constantFreeRowsFrom_lt
+      (measureRegions ops) (starts ops)
+      (placementEndFrom (measureRegions ops) (starts ops))
+      currentColumn currentRow hcurrentRow
   obtain ⟨rfl, rfl, rfl⟩ := hequal
   exact hrow
 

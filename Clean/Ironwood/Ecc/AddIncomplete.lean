@@ -65,6 +65,11 @@ structure Inputs (F : Type) where
   q : Point F
 deriving ProvableStruct
 
+/-- The point-coordinate columns registered for equality by `AddIncomplete.add.configure`. -/
+@[keygen_norm]
+def permutationColumns (config : Config) : List AnyColumn :=
+  [config.xP, config.yP, config.xQR, config.yQR]
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config
     Inputs Point where
@@ -78,6 +83,12 @@ def add : FormalRegionCircuit Fp
     let qAddIncomplete ← selector
     createGate (gate qAddIncomplete xP yP xQR yQR)
     return { qAddIncomplete, xP, yP, xQR, yQR }
+
+  elaborated :=
+    { keygenRequirements :=
+        { inputPermutationColumns _ _ input :=
+            [input.p.x.cell.column, input.p.y.cell.column,
+              input.q.x.cell.column, input.q.y.cell.column] } }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add_incomplete` selector at `offset`
@@ -129,6 +140,32 @@ def add : FormalRegionCircuit Fp
     obtain ⟨-, -, hxne⟩ := assumptions
     simp_all only
     grind
+
+@[keygen_norm]
+theorem Configured.permutationColumns_eq {config : Config}
+    (configured : add.Configured config) :
+    configured.permutationColumns = permutationColumns config := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    add, permutationColumns, List.singleton_append]
+
+@[keygen_norm]
+theorem Configured.inputPermutationColumns_eq {config : Config}
+    (configured : add.Configured config) (input : Var Inputs Fp) :
+    configured.inputPermutationColumns input =
+      [input.p.x.cell.column, input.p.y.cell.column,
+        input.q.x.cell.column, input.q.y.cell.column] := by
+  rfl
+
+@[keygen_norm]
+theorem configure_output_permutationColumns
+    (xP yP xQR yQR : Column .advice) (counts : ConfigureCounts) :
+    permutationColumns
+        ((add.configure (xP, yP, xQR, yQR)).output counts) =
+      [xP, yP, xQR, yQR] := by
+  simp [add, permutationColumns]
 
 end AddIncomplete
 

@@ -184,20 +184,13 @@ In particular, an absolute `constrainInstance` row contributes even though the c
 consumes no region-local space.
 -/
 def usedRows (ops : Operations F) : ℕ :=
-  let regions := (indexedRegions ops 0).1
   let starts := FloorPlanner.V1.starts ops
-  let regionEnd :=
-    (regions.map fun (index, body) =>
-      starts.getD index 0 +
-        (FloorPlanner.measureRegion index body).rowCount).foldl max 0
+  let regionEnd := FloorPlanner.V1.placementEnd ops
   let tableEnd :=
     (ops.map Operation.tableRowExtent).foldl max 0
   let copyEnd :=
     (ops.map (Operation.copyRowExtent starts)).foldl max 0
-  let constantAllocationEnd :=
-    FloorPlanner.V1.firstUnassignedRow
-      (FloorPlanner.V1.planOperations ops).2
-  max (max regionEnd tableEnd) (max copyEnd constantAllocationEnd)
+  max (max regionEnd tableEnd) copyEnd
 
 /-- A region operation's copy footprint is bounded by its enclosing region's
 copy footprint. -/
@@ -227,16 +220,15 @@ theorem Operation.copyRowExtent_le_usedRows
       (List.mem_map.mpr ⟨operation, hoperation, rfl⟩)
   unfold usedRows
   dsimp only
-  exact hcopy.trans ((Nat.le_max_left _ _).trans (Nat.le_max_right _ _))
+  exact hcopy.trans (Nat.le_max_right _ _)
 
 /-- The complete operation footprint includes V1's constant-allocation frontier. -/
-theorem V1_firstUnassignedRow_le_usedRows (ops : Operations F) :
-    FloorPlanner.V1.firstUnassignedRow
-        (FloorPlanner.V1.planOperations ops).2 ≤
+theorem V1_placementEnd_le_usedRows (ops : Operations F) :
+    FloorPlanner.V1.placementEnd ops ≤
       usedRows ops := by
-  unfold usedRows
+  unfold FloorPlanner.V1.placementEnd usedRows
   dsimp only
-  exact (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)
+  exact Nat.le_max_left _ _ |>.trans (Nat.le_max_left _ _)
 
 /-- Every V1 deferred constant allocation lies below the complete operation
 footprint. -/
@@ -247,9 +239,9 @@ theorem V1_constantAssignments_row_lt_usedRows
       (value, column, row) ∈
         FloorPlanner.V1.constantAssignments ops constantColumns) :
     row < usedRows ops :=
-  (FloorPlanner.V1.constantAssignments_row_lt_firstUnassignedRow
+  (FloorPlanner.V1.constantAssignments_row_lt_placementEnd
     ops constantColumns hassignment).trans_le
-      (V1_firstUnassignedRow_le_usedRows ops)
+      (V1_placementEnd_le_usedRows ops)
 
 /-- Both cells constrained equal lie below the operation stream's row footprint. -/
 theorem cells_row_lt_usedRows_of_constrainEqual_mem
@@ -360,9 +352,15 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
   have habsolute :
       starts.getD region 0 + row < regionEnd :=
     (Nat.add_lt_add_left hrow _).trans_le hend
+  have habsolute' :
+      starts.getD region 0 + row <
+        FloorPlanner.V1.placementEnd ops := by
+    simpa only [regionEnd, FloorPlanner.V1.placementEnd,
+      FloorPlanner.V1.placementEndFrom, FloorPlanner.measureRegions,
+      List.map_map, Function.comp_apply] using habsolute
   unfold usedRows
   dsimp only
-  exact habsolute.trans_le
+  exact habsolute'.trans_le
     ((Nat.le_max_left _ _).trans (Nat.le_max_left _ _))
 
 /-- The minimal domain exponent fitting an already-derived usable-row requirement. -/
@@ -406,17 +404,22 @@ variable [FiniteField F] {ConfigInput Config : Type} {Input Output : TypeMap}
 theorem FormalCircuit.operationsKeygenCoherent
     (c : FormalCircuit F ConfigInput Config Input Output)
     (ci : ConfigInput) (input : Var Input F)
-    (hrequirements : c.keygenRequirements.EmptyAt ci) :
+    (hrequirements : KeygenRequirements.EmptyAt
+      (self := FormalCircuit.keygenRequirements
+        (Input := Input) (Output := Output) c) ci) :
     OperationsKeygenCoherent
       (c.configure ci {}).2
       ((c.synthesize (c.configure ci {}).1 input).operations) := by
-  rcases hrequirements with ⟨hconfig, hgates, hlookups⟩
+  rcases hrequirements with
+    ⟨hconfig, hgates, hlookups, hpermutationColumns,
+      hinputPermutationColumns⟩
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hregistered :=
     c.elaborated.registered ci counts hconfig input 0
-  simp only [hgates, hlookups, List.nil_append] at hregistered
+  simp only [hgates, hlookups, hpermutationColumns,
+    hinputPermutationColumns input, List.nil_append, List.append_nil] at hregistered
   have happlied :=
     hregistered.applyConfigureDelta
       ({} : ConstraintSystem F)

@@ -125,7 +125,16 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            permutationColumns cfg.1 ++ ([cfg.2.runningSum] : List AnyColumn)
+          inputPermutationColumns _ _ input :=
+            [input.ak.cell.column, input.a.cell.column,
+              input.bWhole.cell.column, input.b0.cell.column,
+              input.b2.cell.column, input.z13A.cell.column,
+              input.nk.cell.column, input.c.cell.column,
+              input.dWhole.cell.column, input.d0.cell.column,
+              input.z13C.cell.column] }
       output _ _ _ := ()
       regionCount _ := 3
       output_eq := by intro _ _ _; rfl

@@ -205,12 +205,34 @@ Arguments borrowed by the running-sum fixed-base inner regions: the range and co
 gates registered by `MulFixed.configure`, plus the shared incomplete-addition gate.
 -/
 @[keygen_norm]
-def runningSumKeygenRequirements : KeygenRequirements Fp Config where
+def runningSumKeygenRequirements : KeygenRequirements Fp Config Unit where
   configLawful cfg := AddIncomplete.add.Configured cfg.addIncompleteConfig
   gates cfg configured :=
     [DecomposeRunningSum.rangeCheckGate 3 cfg.runningSumConfig, coordsGate cfg] ++
       configured.gates
   lookups _ configured := configured.lookups
+  permutationColumns cfg _ :=
+    DecomposeRunningSum.permutationColumns cfg.runningSumConfig ++
+      ([cfg.window] : List AnyColumn) ++
+        ([cfg.u] : List AnyColumn) ++
+          Add.permutationColumns cfg.addConfig ++
+            AddIncomplete.permutationColumns cfg.addIncompleteConfig
+
+@[keygen_norm]
+theorem configure_output_runningSumPermutationColumns
+    (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
+    (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config)
+    (counts : ConfigureCounts)
+    (configured : runningSumKeygenRequirements.configLawful
+      ((configure lagrangeCoeffs window u addConfig addIncompleteConfig).output counts)) :
+    runningSumKeygenRequirements.permutationColumns
+        ((configure lagrangeCoeffs window u addConfig addIncompleteConfig).output counts)
+        configured =
+      ([window, window, u] : List AnyColumn) ++
+        Add.permutationColumns addConfig ++
+          AddIncomplete.permutationColumns addIncompleteConfig := by
+  simp [runningSumKeygenRequirements, configure,
+    DecomposeRunningSum.permutationColumns, DecomposeRunningSum.configure]
 
 /-! ## Region-relative synthesize pieces
 
@@ -266,11 +288,12 @@ def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
 @[keygen_norm, keygen_helper]
 theorem fixedConstantsLoop_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
     (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (offset numWindows : ℕ) (self : RegionIndex)
     (htoggle : toggle ∈ gates) :
     ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups) := by
+      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
   simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
   intro i
   unfold fixedConstantsWindow
@@ -285,6 +308,22 @@ def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Co
   let y ← assignAdvice cfg.addConfig.yP row (yPWit tbl alpha w)
   let _u ← assignAdvice cfg.u row (uWit B alpha w)
   return { x, y }
+
+@[keygen_norm]
+theorem processWindow_output_x_column (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) :
+    ((processWindow B table cfg alpha w row).output self).x.cell.column =
+      cfg.addConfig.xP := by
+  simp only [processWindow, circuit_norm]
+
+@[keygen_norm]
+theorem processWindow_output_y_column (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) :
+    ((processWindow B table cfg alpha w row).output self).y.cell.column =
+      cfg.addConfig.yP := by
+  simp only [processWindow, circuit_norm]
 
 /-- The shared window chain: `initialize_accumulator` (window 0), the incomplete-addition loop
 over windows `1..numWindows−2` (window 1's accumulator q-copy is REAL — the window-0 point; later
@@ -313,24 +352,57 @@ def windowChain (cfg : Config)
 @[keygen_helper]
 theorem windowChain_processWindow_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
     (B : FixedBaseData) (table : ℕ → ℕ → Point Fp) (cfg : Config)
     (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
     (configured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
     (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
-    (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups) :
+    (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ configured.permutationColumns → column ∈ permutationColumns)
+    (hprocessColumns : ∀ column,
+      column ∈ Add.permutationColumns cfg.addConfig → column ∈ permutationColumns) :
     ((windowChain cfg (processWindow B table cfg alpha) offset numWindows).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups) := by
+      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
   unfold windowChain processWindow
   simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
     List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
   constructor
   · exact FormalRegionCircuit.call_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
-      (offset + 1) _ self hgates hlookups
+      (offset + 1) _ self hgates hlookups hpermutationColumns
+      (by
+        intro column h
+        rw [AddIncomplete.Configured.inputPermutationColumns_eq] at h
+        simp only [circuit_norm] at h
+        rcases h with h | h | h | h
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h]
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h]
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h]
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h])
   · intro i
     exact FormalRegionCircuit.call_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
-      (offset + 2 + i * 1) _ self hgates hlookups
+      (offset + 2 + i * 1) _ self hgates hlookups hpermutationColumns
+      (by
+        intro column h
+        rw [AddIncomplete.Configured.inputPermutationColumns_eq] at h
+        simp only [circuit_norm] at h
+        rcases h with h | h | h | h
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h]
+        · apply hprocessColumns column
+          simp [Add.permutationColumns, h]
+        · apply hpermutationColumns column
+          rw [AddIncomplete.Configured.permutationColumns_eq]
+          simp [AddIncomplete.permutationColumns, h]
+        · apply hpermutationColumns column
+          rw [AddIncomplete.Configured.permutationColumns_eq]
+          simp [AddIncomplete.permutationColumns, h])
 
 /-! ## Shared proof helpers for the wrapper bundles
 

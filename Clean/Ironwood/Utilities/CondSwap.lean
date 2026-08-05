@@ -101,7 +101,11 @@ parameterized by the `b` witness program and the `Bool`-valued `swap` program. O
 def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
     FormalRegionCircuit Fp Config Config Input Output where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [swapGate cfg] } }
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [swapGate cfg]
+          permutationColumns input _ := [input.a]
+          inputPermutationColumns _ _ input := [input.a.cell.column] } }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do
     -- cond_swap.rs:97 — q_swap first
@@ -174,7 +178,9 @@ def swapConfigureCertificate
     (swap wb wswap).ConfigurationCertificate
       ((configure a b aSwapped bSwapped swapColumn).output counts)
       { gates := ((configure a b aSwapped bSwapped swapColumn).delta counts).gates
-        lookups := ((configure a b aSwapped bSwapped swapColumn).delta counts).lookups } := by
+        lookups := ((configure a b aSwapped bSwapped swapColumn).delta counts).lookups
+        permutationColumns :=
+          ((configure a b aSwapped bSwapped swapColumn).delta counts).permutationRequests } := by
   let cfg := (configure a b aSwapped bSwapped swapColumn).output counts
   apply ((swap wb wswap).configureCertificate cfg {} ()).mono
   · intro gate hgate
@@ -193,5 +199,10 @@ def swapConfigureCertificate
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     exact False.elim (List.not_mem_nil hargument)
+  · intro column hcolumn
+    simp only [keygen_norm, swap, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] at hcolumn
+    subst column
+    simp only [keygen_norm, cfg, configure]
 
 end Zcash.Circuits.CondSwap

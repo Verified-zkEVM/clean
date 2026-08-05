@@ -272,7 +272,11 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   elaborated :=
     { keygenRequirements :=
-        { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1] }
+        { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1]
+          permutationColumns input _ := [input.1.runningSum]
+          inputPermutationColumns _ _ input :=
+            [input.alpha.cell.column, input.z0.cell.column,
+              input.z130.cell.column, input.k254.cell.column] }
       registered := by
         keygen_registration
       output _ _ _ := ()

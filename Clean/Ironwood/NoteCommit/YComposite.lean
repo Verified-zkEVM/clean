@@ -215,7 +215,11 @@ def circuit (wlsb : WitgenIR Fp 1) :
     { keygenRequirements :=
         { gates cfg _ :=
             [YCanonicity.gate cfg.1, LookupRangeCheck.bitshiftGate 10 cfg.2]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.advices 5, cfg.1.advices 6, cfg.1.advices 7,
+              cfg.1.advices 8, cfg.1.advices 9, cfg.2.runningSum]
+          inputPermutationColumns _ _ input := [input.y.cell.column] }
       registered _ _ _ _ _ := by
         keygen_registration
       output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)

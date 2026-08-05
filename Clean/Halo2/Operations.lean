@@ -122,17 +122,307 @@ inductive Operation (F : Type) where
 
 abbrev Operations (F : Type) := List (Operation F)
 
+/-! ## Compositional synthesis footprint
+
+The floor planner measures columns and row extents from the synthesis stream.  Keep
+that vocabulary here, below both circuit monads, so formal circuits can expose a small
+exact summary without exposing their operation lists. -/
+
+namespace FloorPlanner
+
+/-- A concrete or virtual column participating in a region's floor-planner shape. -/
+inductive RegionColumn where
+  | column : ColumnKind → ℕ → RegionColumn
+  | selector : ℕ → RegionColumn
+deriving DecidableEq, Repr, BEq, ReflBEq, LawfulBEq
+
+namespace RegionColumn
+
+/-- `Any`'s consensus-critical ordering rank. -/
+def kindRank : ColumnKind → ℕ
+  | .instance => 0
+  | .advice => 1
+  | .fixed => 2
+
+/-- An injective key used by hashing and the floor planner's ordering. -/
+def ordKey : RegionColumn → ℕ × ℕ × ℕ
+  | .column kind index => (0, kindRank kind, index)
+  | .selector index => (1, 0, index)
+
+instance : Hashable RegionColumn := ⟨fun column => hash column.ordKey⟩
+
+/-- The consensus-critical strict order used by Halo 2's V1 planner. -/
+def lt (left right : RegionColumn) : Bool :=
+  let (leftGroup, leftKind, leftIndex) := left.ordKey
+  let (rightGroup, rightKind, rightIndex) := right.ordKey
+  leftGroup < rightGroup ||
+    (leftGroup == rightGroup &&
+      (leftKind < rightKind ||
+        (leftKind == rightKind && leftIndex < rightIndex)))
+
+def isAdvice : RegionColumn → Bool
+  | .column .advice _ => true
+  | _ => false
+
+end RegionColumn
+
+/-- Add a column to a first-seen-order finite set. -/
+def addColumn (columns : List RegionColumn) (column : RegionColumn) :
+    List RegionColumn :=
+  if column ∈ columns then columns else columns ++ [column]
+
+/-- Union two first-seen-order finite column sets. -/
+def unionColumns (left right : List RegionColumn) : List RegionColumn :=
+  right.foldl addColumn left
+
+theorem mem_foldl_addColumn_iff
+    (added initial : List RegionColumn) (column : RegionColumn) :
+    column ∈ added.foldl addColumn initial ↔
+      column ∈ initial ∨ column ∈ added := by
+  induction added generalizing initial with
+  | nil => simp
+  | cons head rest inductionHypothesis =>
+      rw [List.foldl_cons, inductionHypothesis]
+      by_cases hhead : head ∈ initial
+      · simp only [addColumn, hhead, ↓reduceIte, List.mem_cons]
+        aesop
+      · simp only [addColumn, hhead, ↓reduceIte, List.mem_append,
+          List.mem_cons]
+        aesop
+
+/-- The one-past-last row measured for a region operation. -/
+def regionOperationRowExtent : RegionOperation F → ℕ
+  | .assignAdvice _ row _
+  | .assignFixed _ row _
+  | .enableGate _ row
+  | .enableLookup _ _ row => row + 1
+  | .constrainEqual _ _
+  | .constrainConstant _ _
+  | .constrainInstance _ _ _ => 0
+
+/-- The columns added to a region shape by one operation. -/
+def regionOperationShapeColumns : RegionOperation F → List RegionColumn
+  | .assignAdvice column _ _ => [.column .advice column.index]
+  | .assignFixed column _ _ => [.column .fixed column.index]
+  | .enableGate gate _ => [.selector gate.selector.index]
+  | .enableLookup _ enabled _ => enabled.map fun selector => .selector selector.index
+  | .constrainEqual _ _
+  | .constrainConstant _ _
+  | .constrainInstance _ _ _ => []
+
+/-- Whether an operation asks V1 to allocate a deferred constant cell. -/
+def regionOperationConstantSiteCount : RegionOperation F → ℕ
+  | .constrainConstant _ _ => 1
+  | _ => 0
+
+/-- Exact summary of a fragment synthesized inside one ambient region. -/
+@[ext] structure RegionSynthesisSummary where
+  columns : List RegionColumn := []
+  rowCount : ℕ := 0
+  constantSiteCount : ℕ := 0
+
+namespace RegionSynthesisSummary
+
+def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
+  columns := left.columns ++ right.columns
+  rowCount := max left.rowCount right.rowCount
+  constantSiteCount := left.constantSiteCount + right.constantSiteCount
+
+@[circuit_norm] theorem combine_empty (summary : RegionSynthesisSummary) :
+    summary.combine {} = summary := by
+  cases summary
+  simp [combine]
+
+@[circuit_norm] theorem empty_combine (summary : RegionSynthesisSummary) :
+    ({} : RegionSynthesisSummary).combine summary = summary := by
+  cases summary
+  simp [combine]
+
+def ofOperation (operation : RegionOperation F) : RegionSynthesisSummary where
+  columns := regionOperationShapeColumns operation
+  rowCount := regionOperationRowExtent operation
+  constantSiteCount := regionOperationConstantSiteCount operation
+
+end RegionSynthesisSummary
+
+/-- Exact synthesis summary of a region-operation stream. -/
+def regionSynthesisSummary : RegionOperations F → RegionSynthesisSummary
+  | [] => {}
+  | operation :: rest =>
+      (RegionSynthesisSummary.ofOperation operation).combine
+        (regionSynthesisSummary rest)
+
+theorem regionOperationRowExtent_le_synthesisSummary_of_mem
+    (operations : RegionOperations F) (operation : RegionOperation F)
+    (hoperation : operation ∈ operations) :
+    regionOperationRowExtent operation ≤
+      (regionSynthesisSummary operations).rowCount := by
+  induction operations with
+  | nil => simp at hoperation
+  | cons head rest inductionHypothesis =>
+      rw [List.mem_cons] at hoperation
+      simp only [regionSynthesisSummary, RegionSynthesisSummary.combine,
+        RegionSynthesisSummary.ofOperation]
+      rcases hoperation with rfl | hrest
+      · exact Nat.le_max_left _ _
+      · exact (inductionHypothesis hrest).trans (Nat.le_max_right _ _)
+
+theorem mem_regionSynthesisSummary_columns_of_mem
+    (operations : RegionOperations F) (operation : RegionOperation F)
+    (hoperation : operation ∈ operations) (column : RegionColumn)
+    (hcolumn : column ∈ regionOperationShapeColumns operation) :
+    column ∈ (regionSynthesisSummary operations).columns := by
+  induction operations with
+  | nil => simp at hoperation
+  | cons head rest inductionHypothesis =>
+      rw [List.mem_cons] at hoperation
+      simp only [regionSynthesisSummary, RegionSynthesisSummary.combine,
+        RegionSynthesisSummary.ofOperation, List.mem_append]
+      rcases hoperation with rfl | hrest
+      · exact Or.inl hcolumn
+      · exact Or.inr (inductionHypothesis hrest)
+
+/-- Exact summary of a layouter synthesis stream.  `columnOccupancy column` is the
+sum of region heights allocated in `column`; placement can move those intervals but
+cannot change their total occupied length. -/
+@[ext] structure SynthesisSummary where
+  columns : List RegionColumn := []
+  columnOccupancy : RegionColumn → ℕ := fun _ => 0
+  constantSiteCount : ℕ := 0
+
+namespace SynthesisSummary
+
+def combine (left right : SynthesisSummary) : SynthesisSummary where
+  columns := left.columns ++ right.columns
+  columnOccupancy := fun column =>
+    left.columnOccupancy column + right.columnOccupancy column
+  constantSiteCount := left.constantSiteCount + right.constantSiteCount
+
+@[circuit_norm] theorem combine_empty (summary : SynthesisSummary) :
+    summary.combine {} = summary := by
+  apply SynthesisSummary.ext
+  · simp [combine]
+  · funext column
+    simp [combine]
+  · simp [combine]
+
+@[circuit_norm] theorem empty_combine (summary : SynthesisSummary) :
+    ({} : SynthesisSummary).combine summary = summary := by
+  apply SynthesisSummary.ext
+  · simp [combine]
+  · funext column
+    simp [combine]
+  · simp [combine]
+
+def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
+  columns := summary.columns
+  columnOccupancy := fun column =>
+    if column ∈ summary.columns then summary.rowCount else 0
+  constantSiteCount := summary.constantSiteCount
+
+/-- The greatest exact occupied length among the columns named by the summary. -/
+def maxColumnOccupancy (summary : SynthesisSummary) : ℕ :=
+  (summary.columns.map summary.columnOccupancy).foldl max 0
+
+theorem maxColumnOccupancy_le
+    (summary : SynthesisSummary) (bound : ℕ)
+    (hbound : ∀ column ∈ summary.columns,
+      summary.columnOccupancy column ≤ bound) :
+    summary.maxColumnOccupancy ≤ bound := by
+  unfold maxColumnOccupancy
+  have general : ∀ (values : List ℕ) (accumulator : ℕ),
+      accumulator ≤ bound →
+      (∀ value ∈ values, value ≤ bound) →
+      values.foldl max accumulator ≤ bound := by
+    intro values
+    induction values with
+    | nil =>
+        intro accumulator haccumulator hvalues
+        exact haccumulator
+    | cons value rest inductionHypothesis =>
+        intro accumulator haccumulator hvalues
+        rw [List.foldl_cons]
+        apply inductionHypothesis (max accumulator value)
+        · exact Nat.max_le.mpr ⟨haccumulator, hvalues value (by simp)⟩
+        · intro candidate hcandidate
+          exact hvalues candidate (by simp [hcandidate])
+  apply general _ 0 (Nat.zero_le _)
+  intro value hvalue
+  obtain ⟨column, hcolumn, rfl⟩ := List.mem_map.mp hvalue
+  exact hbound column hcolumn
+
+/-- Exact occupied length of a fixed column. -/
+def fixedColumnOccupancy (summary : SynthesisSummary)
+    (column : Column .fixed) : ℕ :=
+  summary.columnOccupancy (.column .fixed column.index)
+
+/-- Guaranteed deferred-constant capacity from exact compositional occupancies. -/
+def constantCapacityLowerBound (summary : SynthesisSummary)
+    (constantColumns : List (Column .fixed)) : ℕ :=
+  (constantColumns.map fun column =>
+    summary.maxColumnOccupancy - summary.fixedColumnOccupancy column).sum
+
+end SynthesisSummary
+
+/-- Exact compositional summary of a complete layouter operation stream. -/
+def synthesisSummary : Operations F → SynthesisSummary
+  | [] => {}
+  | .region _ body :: rest =>
+      (SynthesisSummary.ofRegion (regionSynthesisSummary body)).combine
+        (synthesisSummary rest)
+  | .constrainInstance _ _ _ :: rest => synthesisSummary rest
+  | .loadTable _ _ :: rest => synthesisSummary rest
+
+@[circuit_norm] theorem regionSynthesisSummary_append
+    (left right : RegionOperations F) :
+    regionSynthesisSummary (left ++ right) =
+      (regionSynthesisSummary left).combine (regionSynthesisSummary right) := by
+  induction left with
+  | nil =>
+      apply RegionSynthesisSummary.ext <;>
+        simp [RegionSynthesisSummary.combine, regionSynthesisSummary]
+  | cons operation rest inductionHypothesis =>
+      simp only [List.cons_append, regionSynthesisSummary,
+        inductionHypothesis]
+      apply RegionSynthesisSummary.ext
+      · simp [RegionSynthesisSummary.combine]
+      · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
+      · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
+
+@[circuit_norm] theorem synthesisSummary_append
+    (left right : Operations F) :
+    synthesisSummary (left ++ right) =
+      (synthesisSummary left).combine (synthesisSummary right) := by
+  induction left with
+  | nil =>
+      apply SynthesisSummary.ext
+      · simp [SynthesisSummary.combine, synthesisSummary]
+      · funext column
+        simp [SynthesisSummary.combine, synthesisSummary]
+      · simp [SynthesisSummary.combine, synthesisSummary]
+  | cons operation rest inductionHypothesis =>
+      cases operation <;>
+        simp only [List.cons_append, synthesisSummary,
+          inductionHypothesis]
+      · apply SynthesisSummary.ext
+        · simp [SynthesisSummary.combine]
+        · funext column
+          simp [SynthesisSummary.combine, Nat.add_assoc]
+        · simp [SynthesisSummary.combine, Nat.add_assoc]
+
+end FloorPlanner
+
 /-! ## Configure/synthesis registration -/
 
 /--
-Gate and lookup arguments supplied by a circuit's caller rather than created by the
-circuit's own configure program.
+Gate, lookup, and equality-column capabilities supplied by a circuit's caller rather
+than created by the circuit's own configure program.
 
 This is the keygen analogue of an effect requirement: leaf region circuits commonly
 receive an already-configured chip `Config` and use its arguments while contributing
 no configure delta of their own.
 -/
-structure KeygenRequirements (F ConfigInput : Type) where
+structure KeygenRequirements (F ConfigInput InputVar : Type) where
   /--
   Provenance required of configuration values borrowed from the caller. This stays
   folded across circuit boundaries; it never exposes a child's operation stream.
@@ -140,89 +430,114 @@ structure KeygenRequirements (F ConfigInput : Type) where
   configLawful : ConfigInput → Type := fun _ => Unit
   gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
   lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
+  permutationColumns : ∀ input, configLawful input → List AnyColumn := fun _ _ => []
+  /-- Equality-enabled columns required by the concrete cells passed to synthesis. -/
+  inputPermutationColumns : ∀ configInput, configLawful configInput →
+      InputVar → List AnyColumn := fun _ _ _ => []
 
-/-- A configure input has no gate or lookup requirements left for an enclosing circuit. -/
+/-- A configure input has no keygen requirements left for an enclosing circuit. -/
 structure KeygenRequirements.EmptyAt
-    {ConfigInput : Type} (self : KeygenRequirements F ConfigInput)
+    {ConfigInput InputVar : Type}
+    (self : KeygenRequirements F ConfigInput InputVar)
     (input : ConfigInput) where
   configLawful : self.configLawful input
   gates_eq : self.gates input configLawful = []
   lookups_eq : self.lookups input configLawful = []
+  permutationColumns_eq : self.permutationColumns input configLawful = []
+  inputPermutationColumns_eq : ∀ inputVar,
+    self.inputPermutationColumns input configLawful inputVar = []
 
 /--
 Static registration of one region operation in explicit configure-produced gate and
 lookup lists.
 
-Assignments and copies need no configure-phase registration. Gate and lookup
-activations must refer to arguments emitted by the same configure program.
+Assignments need no configure-phase registration. Gate and lookup activations must
+refer to arguments emitted by configure; copy-like operations must use columns on
+which configure enabled equality.
 -/
 @[circuit_norm]
 def RegionOperation.KeygenRegistered
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
     RegionOperation F → Prop
   | .enableGate gate _ => gate ∈ gates
   | .enableLookup argument _ _ => argument ∈ lookups
+  | .constrainEqual left right =>
+      left.column ∈ permutationColumns ∧ right.column ∈ permutationColumns
+  | .constrainConstant cell _ => cell.column ∈ permutationColumns
+  | .constrainInstance cell column _ =>
+      cell.column ∈ permutationColumns ∧ column.toAny ∈ permutationColumns
   | _ => True
 
 /-- Static registration of one layouter operation in explicit configure metadata. -/
 @[circuit_norm]
 def Operation.KeygenRegistered
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
     Operation F → Prop
   | .region _ body =>
-      body.Forall (RegionOperation.KeygenRegistered gates lookups)
+      body.Forall (RegionOperation.KeygenRegistered gates lookups permutationColumns)
+  | .constrainInstance cell column _ =>
+      cell.column ∈ permutationColumns ∧ column.toAny ∈ permutationColumns
   | _ => True
 
 /--
-Every gate and lookup emitted by a synthesis operation stream occurs in the supplied
-configure-produced lists.
+Every gate, lookup, and equality-dependent operation emitted by synthesis is covered
+by the supplied configure-produced capabilities.
 -/
 def Operations.KeygenRegistered
     (operations : Operations F)
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) : Prop :=
-  operations.Forall (Operation.KeygenRegistered gates lookups)
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) : Prop :=
+  operations.Forall (Operation.KeygenRegistered gates lookups permutationColumns)
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.nil
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
-    Operations.KeygenRegistered [] gates lookups := by
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
+    Operations.KeygenRegistered [] gates lookups permutationColumns := by
   simp [Operations.KeygenRegistered]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.append
     (left right : Operations F)
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
-    Operations.KeygenRegistered (left ++ right) gates lookups ↔
-      Operations.KeygenRegistered left gates lookups ∧
-        Operations.KeygenRegistered right gates lookups := by
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
+    Operations.KeygenRegistered (left ++ right) gates lookups permutationColumns ↔
+      Operations.KeygenRegistered left gates lookups permutationColumns ∧
+        Operations.KeygenRegistered right gates lookups permutationColumns := by
   simp [Operations.KeygenRegistered]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.region_cons
     (name : String) (body : RegionOperations F) (rest : Operations F)
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
-    Operations.KeygenRegistered (.region name body :: rest) gates lookups ↔
-      body.Forall (RegionOperation.KeygenRegistered gates lookups) ∧
-        Operations.KeygenRegistered rest gates lookups := by
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
+    Operations.KeygenRegistered (.region name body :: rest) gates lookups permutationColumns ↔
+      body.Forall (RegionOperation.KeygenRegistered gates lookups permutationColumns) ∧
+        Operations.KeygenRegistered rest gates lookups permutationColumns := by
   simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.constrainInstance_cons
     (cell : Cell) (column : Column .instance) (row : ℕ)
     (rest : Operations F)
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
     Operations.KeygenRegistered
-        (.constrainInstance cell column row :: rest) gates lookups ↔
-      Operations.KeygenRegistered rest gates lookups := by
-  simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
+        (.constrainInstance cell column row :: rest) gates lookups permutationColumns ↔
+      cell.column ∈ permutationColumns ∧ column.toAny ∈ permutationColumns ∧
+        Operations.KeygenRegistered rest gates lookups permutationColumns := by
+  simp [Operations.KeygenRegistered, Operation.KeygenRegistered, and_assoc]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.loadTable_cons
     (table : TableColumn) (values : List F) (rest : Operations F)
-    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (permutationColumns : List AnyColumn) :
     Operations.KeygenRegistered
-        (.loadTable table values :: rest) gates lookups ↔
-      Operations.KeygenRegistered rest gates lookups := by
+        (.loadTable table values :: rest) gates lookups permutationColumns ↔
+      Operations.KeygenRegistered rest gates lookups permutationColumns := by
   simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
 
 /-- Registration is monotone in both configure-produced argument lists. -/
@@ -230,12 +545,15 @@ theorem Operations.KeygenRegistered.mono
     {operations : Operations F}
     {sourceGates targetGates : List (Gate F)}
     {sourceLookups targetLookups : List (LookupArgument F)}
+    {sourcePermutationColumns targetPermutationColumns : List AnyColumn}
     (hregistered :
-      operations.KeygenRegistered sourceGates sourceLookups)
+      operations.KeygenRegistered sourceGates sourceLookups sourcePermutationColumns)
     (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
     (hlookups :
-      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups) :
-    operations.KeygenRegistered targetGates targetLookups := by
+      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ sourcePermutationColumns → column ∈ targetPermutationColumns) :
+    operations.KeygenRegistered targetGates targetLookups targetPermutationColumns := by
   rw [Operations.KeygenRegistered,
     List.forall_iff_forall_mem] at hregistered ⊢
   intro operation hoperation
@@ -253,12 +571,19 @@ theorem Operations.KeygenRegistered.mono
       | enableLookup argument selectors row =>
           exact hlookups argument hregionRegistered
       | assignAdvice
-      | assignFixed
-      | constrainEqual
-      | constrainConstant
-      | constrainInstance =>
+      | assignFixed =>
           trivial
-  | constrainInstance
+      | constrainEqual left right =>
+          exact ⟨hpermutationColumns left.column hregionRegistered.1,
+            hpermutationColumns right.column hregionRegistered.2⟩
+      | constrainConstant cell value =>
+          exact hpermutationColumns cell.column hregionRegistered
+      | constrainInstance cell column row =>
+          exact ⟨hpermutationColumns cell.column hregionRegistered.1,
+            hpermutationColumns column.toAny hregionRegistered.2⟩
+  | constrainInstance cell column row =>
+      exact ⟨hpermutationColumns cell.column hoperationRegistered.1,
+        hpermutationColumns column.toAny hoperationRegistered.2⟩
   | loadTable =>
       trivial
 
@@ -267,14 +592,19 @@ theorem RegionOperations.keygenRegistered_mono
     {operations : RegionOperations F}
     {sourceGates targetGates : List (Gate F)}
     {sourceLookups targetLookups : List (LookupArgument F)}
+    {sourcePermutationColumns targetPermutationColumns : List AnyColumn}
     (hregistered :
       operations.Forall
-        (RegionOperation.KeygenRegistered sourceGates sourceLookups))
+        (RegionOperation.KeygenRegistered sourceGates sourceLookups
+          sourcePermutationColumns))
     (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
     (hlookups :
-      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups) :
+      ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ sourcePermutationColumns → column ∈ targetPermutationColumns) :
     operations.Forall
-      (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+      (RegionOperation.KeygenRegistered targetGates targetLookups
+        targetPermutationColumns) := by
   rw [List.forall_iff_forall_mem] at hregistered ⊢
   intro operation hoperation
   have hoperationRegistered := hregistered operation hoperation
@@ -284,11 +614,16 @@ theorem RegionOperations.keygenRegistered_mono
   | enableLookup argument selectors row =>
       exact hlookups argument hoperationRegistered
   | assignAdvice
-  | assignFixed
-  | constrainEqual
-  | constrainConstant
-  | constrainInstance =>
+  | assignFixed =>
       trivial
+  | constrainEqual left right =>
+      exact ⟨hpermutationColumns left.column hoperationRegistered.1,
+        hpermutationColumns right.column hoperationRegistered.2⟩
+  | constrainConstant cell value =>
+      exact hpermutationColumns cell.column hoperationRegistered
+  | constrainInstance cell column row =>
+      exact ⟨hpermutationColumns cell.column hoperationRegistered.1,
+        hpermutationColumns column.toAny hoperationRegistered.2⟩
 
 /--
 Registration against a configure delta remains true after interpreting that delta
@@ -298,38 +633,43 @@ theorem Operations.KeygenRegistered.applyConfigureDelta
     {operations : Operations F} {delta : ConfigureDelta F}
     (initial : ConstraintSystem F) (counts : ConfigureCounts)
     (hregistered :
-      operations.KeygenRegistered delta.gates delta.lookups) :
+      operations.KeygenRegistered delta.gates delta.lookups
+        delta.permutationRequests) :
     operations.KeygenRegistered
       (delta.apply initial counts).gates
-      (delta.apply initial counts).lookups := by
+      (delta.apply initial counts).lookups
+      (delta.apply initial counts).permutationColumns := by
   apply hregistered.mono
   · intro gate hgate
     exact List.mem_append_right initial.gates hgate
   · intro argument hargument
     exact List.mem_append_right initial.lookups hargument
+  · intro column hcolumn
+    rw [ConfigureDelta.apply, mem_appendFirstEncounters]
+    exact Or.inr hcolumn
 
 /-- Existing constraint-system spelling of configure/synthesis registration. -/
 @[circuit_norm]
 def RegionOperation.KeygenCoherent
     (cs : ConstraintSystem F) : RegionOperation F → Prop :=
-  RegionOperation.KeygenRegistered cs.gates cs.lookups
+  RegionOperation.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
 
 /-- Existing constraint-system spelling of configure/synthesis registration. -/
 @[circuit_norm]
 def Operation.KeygenCoherent
     (cs : ConstraintSystem F) : Operation F → Prop :=
-  Operation.KeygenRegistered cs.gates cs.lookups
+  Operation.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
 
 /-- Every synthesis-enabled argument was registered in a constraint system. -/
 def OperationsKeygenCoherent
     (cs : ConstraintSystem F) (operations : Operations F) : Prop :=
-  operations.KeygenRegistered cs.gates cs.lookups
+  operations.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.nil
     (cs : ConstraintSystem F) :
     OperationsKeygenCoherent cs [] := by
-  exact Operations.KeygenRegistered.nil cs.gates cs.lookups
+  exact Operations.KeygenRegistered.nil cs.gates cs.lookups cs.permutationColumns
 
 /-- Configure/synthesis coherence composes across operation-stream append. -/
 @[circuit_norm]
@@ -339,7 +679,7 @@ theorem OperationsKeygenCoherent.append
       OperationsKeygenCoherent cs left ∧
         OperationsKeygenCoherent cs right := by
   exact Operations.KeygenRegistered.append
-    left right cs.gates cs.lookups
+    left right cs.gates cs.lookups cs.permutationColumns
 
 /-- A region is coherent exactly when each operation in its body is coherent. -/
 @[circuit_norm]
@@ -350,7 +690,7 @@ theorem OperationsKeygenCoherent.region_cons
       body.Forall (RegionOperation.KeygenCoherent cs) ∧
         OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.region_cons
-    name body rest cs.gates cs.lookups
+    name body rest cs.gates cs.lookups cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.constrainInstance_cons
@@ -358,9 +698,11 @@ theorem OperationsKeygenCoherent.constrainInstance_cons
     (column : Column .instance) (row : ℕ) (rest : Operations F) :
     OperationsKeygenCoherent cs
         (.constrainInstance cell column row :: rest) ↔
-      OperationsKeygenCoherent cs rest := by
+      cell.column ∈ cs.permutationColumns ∧
+        column.toAny ∈ cs.permutationColumns ∧
+        OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.constrainInstance_cons
-    cell column row rest cs.gates cs.lookups
+    cell column row rest cs.gates cs.lookups cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.loadTable_cons
@@ -369,14 +711,15 @@ theorem OperationsKeygenCoherent.loadTable_cons
     OperationsKeygenCoherent cs (.loadTable table values :: rest) ↔
       OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.loadTable_cons
-    table values rest cs.gates cs.lookups
+    table values rest cs.gates cs.lookups cs.permutationColumns
 
 /-- Delta registration supplies coherence in every interpreted configure result. -/
 theorem Operations.KeygenRegistered.operationsKeygenCoherent_apply
     {operations : Operations F} {delta : ConfigureDelta F}
     (initial : ConstraintSystem F) (counts : ConfigureCounts)
     (hregistered :
-      operations.KeygenRegistered delta.gates delta.lookups) :
+      operations.KeygenRegistered delta.gates delta.lookups
+        delta.permutationRequests) :
     OperationsKeygenCoherent (delta.apply initial counts) operations :=
   hregistered.applyConfigureDelta initial counts
 

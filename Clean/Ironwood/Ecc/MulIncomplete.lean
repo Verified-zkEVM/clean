@@ -284,6 +284,24 @@ def double_and_add (n : ℕ) (w : ℕ) :
   configure := fun (z, xA, xP, yP, lambda1, lambda2) =>
     configure z xA xP yP lambda1 lambda2
 
+  elaborated :=
+    { keygenRequirements :=
+        { permutationColumns input _ :=
+            let (_, xA, xP, yP, _, _) := input
+            [xA, xP, yP]
+          inputPermutationColumns _ _ input :=
+            [input.z.cell.column, input.acc.x.cell.column,
+              input.acc.y.cell.column, input.base.x.cell.column,
+              input.base.y.cell.column] }
+      output cfg offset _ self :=
+        { acc :=
+            { x := .of self (offset + n + 2) cfg.xA
+              y := .of self (offset + n + 2) cfg.lambda1 }
+          zs := Vector.ofFn fun j => .of self (offset + 1 + j.val) cfg.z }
+      output_eq := by
+        intro _ _ _ _
+        simp only [circuit_norm, keygen_output_norm] }
+
   synthesize cfg offset (input : Var Inputs Fp) := do
     -- start copies (Rust execution order), materializing round 0's neighborhood
     let _z ← copyAdvice input.z cfg.z offset
@@ -641,5 +659,17 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hkl, hbx, hby] at hlast
       rw [hbx, hby]
       exact hlast
+
+@[keygen_norm]
+theorem Configured.permutationColumns_eq (n w : ℕ) {cfg : Config}
+    (configured : (double_and_add n w).Configured cfg) :
+    configured.permutationColumns =
+      ([cfg.xA, cfg.xP, cfg.yP, cfg.z, cfg.lambda1] : List AnyColumn) := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    double_and_add, configure, keygen_norm, List.singleton_append]
+  rfl
 
 end Zcash.Circuits.Ecc.MulIncomplete

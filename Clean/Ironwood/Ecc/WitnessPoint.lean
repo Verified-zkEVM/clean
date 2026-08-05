@@ -169,6 +169,14 @@ def pointFormal :=
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
 
+/-- The non-identity witness circuit's two positional output cells. -/
+@[keygen_output_norm]
+theorem pointNonIdFormal_output_cells (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    pointNonIdFormal.output config input self =
+      { x := .of self 0 config.x, y := .of self 0 config.y } := by
+  rfl
+
 derive_contract_bridges pointFormal := pointFormal
 
 derive_contract_bridges pointNonIdFormal := pointNonIdFormal

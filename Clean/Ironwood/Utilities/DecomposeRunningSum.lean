@@ -42,6 +42,10 @@ structure Config where
   qRangeCheck : Selector
   z : Column .advice
 
+/-- The running-sum column registered for equality by `configure`. -/
+@[keygen_norm]
+def permutationColumns (config : Config) : List AnyColumn := [config.z]
+
 /-! ## The "range check" gate -/
 
 /-- Rust `utilities.rs::range_check(word, range)` (lines 170-174), the exact halo2 AST:
@@ -291,6 +295,11 @@ def copyDecompose (W numWindows : ℕ) :
     FormalRegionCircuit Fp (Selector × Column .advice) Config Inputs (Output (numWindows + 1)) where
   configure := fun (q, z) => configure W q z
 
+  elaborated :=
+    { keygenRequirements :=
+        { inputPermutationColumns _ _ input := [input.alpha.cell.column] }
+      registered := by keygen_registration [configure, enableEquality] }
+
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     -- `copy_decompose`: `z_0` is a copy of `α` (line 130)
     let _z0 ← copyAdvice input.alpha cfg.z offset
@@ -395,6 +404,27 @@ def copyDecompose (W numWindows : ℕ) :
       intro w
       rw [← h_output_zs w.val w.isLt]
       exact hz w.val (by omega)
+
+/-- The strict decomposition config registers exactly its running-sum column for equality. -/
+@[keygen_norm]
+theorem copyDecompose_configured_permutationColumns_eq
+    (W numWindows : ℕ) {config : Config}
+    (configured : (copyDecompose W numWindows).Configured config) :
+    configured.permutationColumns = permutationColumns config := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    copyDecompose, configure, permutationColumns, List.singleton_append]
+
+/-- The strict decomposition's only input copy comes from `alpha`. -/
+@[keygen_norm]
+theorem copyDecompose_configured_inputPermutationColumns_eq
+    (W numWindows : ℕ) {config : Config}
+    (configured : (copyDecompose W numWindows).Configured config)
+    (input : Var Inputs Fp) :
+    configured.inputPermutationColumns input = [input.alpha.cell.column] := by
+  rfl
 
 /-- The bundle's output variable (rfl — the `loop_output` pattern): the whole running-sum
 cell vector at rows `offset + j`. Keeps parents' output projections lazy (no whnf through

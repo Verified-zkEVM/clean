@@ -42,7 +42,7 @@ def keygenRequirements
     (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     KeygenRequirements Fp
       (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
-        Ecc.Add.Config) where
+        Ecc.Add.Config) (Var Inputs Fp) where
   configLawful cfg :=
     (Ecc.MulFixed.Short.circuit V).Configured cfg.1 ×
       (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.2.1 ×
@@ -53,6 +53,15 @@ def keygenRequirements
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.lookups
+  permutationColumns cfg configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.permutationColumns ++
+        ([cfg.1.superConfig.addConfig.xQR,
+          cfg.1.superConfig.addConfig.yP,
+          cfg.2.1.superConfig.addConfig.xQR,
+          cfg.2.1.superConfig.addConfig.yQR] : List AnyColumn)
+  inputPermutationColumns _ _ input :=
+    [input.magnitude.cell.column, input.sign.cell.column]
 
 /-! ## The `value_commit_orchard` bundle -/
 

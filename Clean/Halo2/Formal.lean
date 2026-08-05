@@ -47,6 +47,7 @@ variable {F : Type} [FiniteField F] {Input Output Witness : TypeMap}
 structure KeygenContext (F : Type) where
   gates : List (Gate F)
   lookups : List (LookupArgument F)
+  permutationColumns : List AnyColumn
 
 /--
 A configure result together with proof that every argument it provides or borrows is
@@ -57,8 +58,8 @@ configurers may package several such values; monadic composition transports them
 `mono` without reopening the configured child.
 -/
 structure ConfigurationCertificate
-    {ConfigInput Config : Type}
-    (requirements : KeygenRequirements F ConfigInput)
+    {ConfigInput Config InputVar : Type}
+    (requirements : KeygenRequirements F ConfigInput InputVar)
     (configure : ConfigInput → Configure F Config)
     (config : Config) (context : KeygenContext F) where
   configInput : ConfigInput
@@ -73,13 +74,17 @@ structure ConfigurationCertificate
     argument ∈ requirements.lookups configInput configLawful ++
       ((configure configInput).delta counts).lookups →
     argument ∈ context.lookups
+  permutationColumns : ∀ column,
+    column ∈ requirements.permutationColumns configInput configLawful ++
+      ((configure configInput).delta counts).permutationRequests →
+    column ∈ context.permutationColumns
 
 namespace ConfigurationCertificate
 
 /-- The canonical certificate in the configure program's exact resulting context. -/
 def ofOutput
-    {ConfigInput Config : Type}
-    (requirements : KeygenRequirements F ConfigInput)
+    {ConfigInput Config InputVar : Type}
+    (requirements : KeygenRequirements F ConfigInput InputVar)
     (configure : ConfigInput → Configure F Config)
     (configInput : ConfigInput) (counts : ConfigureCounts)
     (configLawful : requirements.configLawful configInput) :
@@ -88,18 +93,22 @@ def ofOutput
       { gates := requirements.gates configInput configLawful ++
           ((configure configInput).delta counts).gates
         lookups := requirements.lookups configInput configLawful ++
-          ((configure configInput).delta counts).lookups } :=
-  ⟨configInput, counts, configLawful, rfl, fun _ h => h, fun _ h => h⟩
+          ((configure configInput).delta counts).lookups
+        permutationColumns := requirements.permutationColumns configInput configLawful ++
+          ((configure configInput).delta counts).permutationRequests } :=
+  ⟨configInput, counts, configLawful, rfl, fun _ h => h, fun _ h => h, fun _ h => h⟩
 
 /-- Transport a configured capability into a larger ambient context. -/
 def mono
-    {ConfigInput Config : Type}
-    {requirements : KeygenRequirements F ConfigInput}
+    {ConfigInput Config InputVar : Type}
+    {requirements : KeygenRequirements F ConfigInput InputVar}
     {configure : ConfigInput → Configure F Config}
     {config : Config} {source target : KeygenContext F}
     (certificate : ConfigurationCertificate requirements configure config source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
-    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigurationCertificate requirements configure config target where
   configInput := certificate.configInput
   counts := certificate.counts
@@ -108,6 +117,8 @@ def mono
   gates gate hgate := gates gate (certificate.gates gate hgate)
   lookups argument hargument :=
     lookups argument (certificate.lookups argument hargument)
+  permutationColumns column hcolumn :=
+    permutationColumns column (certificate.permutationColumns column hcolumn)
 
 end ConfigurationCertificate
 
@@ -128,8 +139,8 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
     intro input
     try dsimp only [configure]
     infer_instance
-  /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
-  keygenRequirements : KeygenRequirements F ConfigInput := {}
+  /-- Keygen capabilities supplied by the caller rather than local configure. -/
+  keygenRequirements : KeygenRequirements F ConfigInput (Var Input F) := {}
   /-- Configure/synthesis registration certificate. -/
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
@@ -138,11 +149,20 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
     let program := configure configInput
     ((synthesize (program.output counts) input).operations i).KeygenRegistered
       (keygenRequirements.gates configInput hconfig ++ (program.delta counts).gates)
-      (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups) := by
+      (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups)
+      (keygenRequirements.permutationColumns configInput hconfig ++
+        (program.delta counts).permutationRequests ++
+        keygenRequirements.inputPermutationColumns configInput hconfig input) := by
     keygen_registration
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
+  /-- Exact compositional footprint of synthesis.  Parents use this reduced value
+  without unfolding the child's operation stream. -/
+  synthesisSummary : Config → Var Input F → RegionIndex →
+      FloorPlanner.SynthesisSummary :=
+    fun config input i =>
+      FloorPlanner.synthesisSummary ((synthesize config input).operations i)
   output_eq : ∀ config input i,
     output config input i = (synthesize config input).output i := by
     intro _ _ _
@@ -159,6 +179,59 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         Operations.regionCount_append, Operations.regionCount,
         FormalCircuit.call_regionCount, FormalCircuit.call_regionCount',
         Nat.add_assoc, Nat.reduceAdd]
+  synthesisSummary_eq : ∀ config input i,
+    synthesisSummary config input i =
+      FloorPlanner.synthesisSummary
+        ((synthesize config input).operations i) := by
+    intro _ _ _
+    first
+    | rfl
+    | simp only [circuit_norm, Circuit.operations_bind,
+        Circuit.operations_pure, FloorPlanner.synthesisSummary_append,
+        FormalCircuit.call_synthesisSummary,
+        FormalCircuit.call_synthesisSummary']
+
+section SynthesisSummary
+variable [CircuitType Input] [CircuitType Output]
+    {ConfigInput Config : Type}
+    {configure : ConfigInput → Configure F Config}
+    {synthesize : Config → Var Input F → Circuit F (Var Output F)}
+
+/-- Project exact synthesis columns without exposing unrelated elaborated metadata. -/
+@[circuit_norm]
+theorem ElaboratedCircuit.synthesisSummary_columns_eq
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    (self.synthesisSummary config input i).columns =
+      (FloorPlanner.synthesisSummary
+        ((synthesize config input).operations i)).columns :=
+  congrArg FloorPlanner.SynthesisSummary.columns
+    (self.synthesisSummary_eq config input i)
+
+/-- Project one exact column occupancy without exposing unrelated metadata. -/
+@[circuit_norm]
+theorem ElaboratedCircuit.synthesisSummary_columnOccupancy_eq
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (config : Config) (input : Var Input F) (i : RegionIndex)
+    (column : FloorPlanner.RegionColumn) :
+    (self.synthesisSummary config input i).columnOccupancy column =
+      (FloorPlanner.synthesisSummary
+        ((synthesize config input).operations i)).columnOccupancy column :=
+  congrArg (fun summary => summary.columnOccupancy column)
+    (self.synthesisSummary_eq config input i)
+
+/-- Project the exact deferred-constant request count without exposing unrelated metadata. -/
+@[circuit_norm]
+theorem ElaboratedCircuit.synthesisSummary_constantSiteCount_eq
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    (self.synthesisSummary config input i).constantSiteCount =
+      (FloorPlanner.synthesisSummary
+        ((synthesize config input).operations i)).constantSiteCount :=
+  congrArg FloorPlanner.SynthesisSummary.constantSiteCount
+    (self.synthesisSummary_eq config input i)
+
+end SynthesisSummary
 
 section Statements
 variable [CircuitType Input] [CircuitType Output]
@@ -375,7 +448,7 @@ structure FormalCircuit.KeygenLawful
     {ConfigInput Config : Type}
     [CircuitType Input] [CircuitType Output]
     (self : FormalCircuit F ConfigInput Config Input Output)
-    (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
+    (requirements : KeygenRequirements F ConfigInput (Var Input F) := {}) : Prop where
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (hconfig : requirements.configLawful configInput)
@@ -384,6 +457,9 @@ structure FormalCircuit.KeygenLawful
     ((self.synthesize (program.output counts) input).operations i).KeygenRegistered
       (requirements.gates configInput hconfig ++ (program.delta counts).gates)
       (requirements.lookups configInput hconfig ++ (program.delta counts).lookups)
+      (requirements.permutationColumns configInput hconfig ++
+        (program.delta counts).permutationRequests ++
+        requirements.inputPermutationColumns configInput hconfig input)
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -396,7 +472,7 @@ instance (self : FormalCircuit F ConfigInput Config Input Output)
 /-- The folded keygen interface exposed by a layouter circuit. -/
 abbrev keygenRequirements
     (self : FormalCircuit F ConfigInput Config Input Output) :
-    KeygenRequirements F ConfigInput :=
+    KeygenRequirements F ConfigInput (Var Input F) :=
   self.elaborated.keygenRequirements
 
 /-- A configured circuit handle whose full keygen interface is available in `context`. -/
@@ -415,7 +491,9 @@ def configureCertificate
       { gates := self.keygenRequirements.gates configInput hconfig ++
           ((self.configure configInput).delta counts).gates
         lookups := self.keygenRequirements.lookups configInput hconfig ++
-          ((self.configure configInput).delta counts).lookups } :=
+          ((self.configure configInput).delta counts).lookups
+        permutationColumns := self.keygenRequirements.permutationColumns configInput hconfig ++
+          ((self.configure configInput).delta counts).permutationRequests } :=
   Halo2.ConfigurationCertificate.ofOutput
     self.keygenRequirements self.configure configInput counts hconfig
 
@@ -480,6 +558,25 @@ def Configured.lookups
     ((self.configure (FormalCircuit.Configured.configInput configured)).delta
       (FormalCircuit.Configured.counts configured)).lookups
 
+/-- Equality-enabled columns available from a configured circuit handle. -/
+def Configured.permutationColumns
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) : List AnyColumn :=
+  self.keygenRequirements.permutationColumns
+      (FormalCircuit.Configured.configInput configured)
+      (FormalCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalCircuit.Configured.configInput configured)).delta
+      (FormalCircuit.Configured.counts configured)).permutationRequests
+
+/-- Equality-enabled columns required by the concrete input of this call. -/
+def Configured.inputPermutationColumns
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config)
+    (input : Var Input F) : List AnyColumn :=
+  self.keygenRequirements.inputPermutationColumns
+    (FormalCircuit.Configured.configInput configured)
+    (FormalCircuit.Configured.configLawful configured) input
+
 /-- Use a layouter certificate through the familiar `Configured.gates` interface. -/
 theorem ConfigurationCertificate.gates_of_configured
     {self : FormalCircuit F ConfigInput Config Input Output}
@@ -501,6 +598,18 @@ theorem ConfigurationCertificate.lookups_of_configured
   simpa [Configured.lookups, ConfigurationCertificate.configured] using
     certificate.lookups argument hargument
 
+/-- Use a layouter certificate through `Configured.permutationColumns`. -/
+theorem ConfigurationCertificate.permutationColumns_of_configured
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ column,
+      column ∈ certificate.configured.permutationColumns →
+        column ∈ context.permutationColumns := by
+  intro column hcolumn
+  simpa [Configured.permutationColumns, ConfigurationCertificate.configured] using
+    certificate.permutationColumns column hcolumn
+
 @[simp, keygen_norm] theorem Configured.ofPure_gates
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
@@ -518,6 +627,26 @@ theorem ConfigurationCertificate.lookups_of_configured
     Configured.lookups (Configured.ofPure self config hconfig hconfigure) =
       self.keygenRequirements.lookups config hconfig := by
   simp [Configured.lookups, Configured.ofPure, hconfigure]
+
+@[keygen_norm] theorem Configured.ofPure_permutationColumns
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.permutationColumns (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.permutationColumns config hconfig := by
+  simp [Configured.permutationColumns, Configured.ofPure, hconfigure]
+
+@[keygen_norm] theorem Configured.ofPure_inputPermutationColumns
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config)
+    (input : Var Input F) :
+    Configured.inputPermutationColumns
+        (Configured.ofPure self config hconfig hconfigure) input =
+      self.keygenRequirements.inputPermutationColumns config hconfig input := by
+  simp [Configured.inputPermutationColumns, Configured.ofPure]
 
 @[simp, keygen_norm] theorem Configured.ofOutput_gates
     (self : FormalCircuit F ConfigInput Config Input Output)
@@ -563,7 +692,7 @@ def selectorRequirements
     (input : ConfigInput) (counts : ConfigureCounts) : Prop :=
   (self.elaborated.configureInfo input).selectorRequirements counts
 
-/-- Local gate and lookup selectors are allocated whenever the caller requirements hold. -/
+/-- Local keygen capabilities are allocated whenever the caller requirements hold. -/
 theorem selectorsAllocated
     (self : FormalCircuit F ConfigInput Config Input Output)
     (input : ConfigInput) (counts : ConfigureCounts)
@@ -684,6 +813,26 @@ theorem call_operations (self : FormalCircuit F ConfigInput Config Input Output)
       = (self.synthesize config input).operations i :=
   self.callOps_eq config input i
 
+/-- A call exposes the child's exact reduced synthesis footprint. -/
+@[circuit_norm]
+theorem call_synthesisSummary
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    FloorPlanner.synthesisSummary ((self.call config input).operations i) =
+      self.elaborated.synthesisSummary config input i := by
+  rw [self.call_operations]
+  exact (self.elaborated.synthesisSummary_eq config input i).symm
+
+@[circuit_norm]
+theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        (@Circuit.operations F _ (Output (AssignedCell F))
+          (self.call config input) i) =
+      self.elaborated.synthesisSummary config input i :=
+  self.call_synthesisSummary config input i
+
 /--
 Consume a configure certificate directly. Unlike `call_keygenRegistered`, this exposes
 no gate-by-gate routing obligations to the parent.
@@ -693,19 +842,30 @@ theorem call_keygenRegistered_ofCertificate
     (self : FormalCircuit F ConfigInput Config Input Output)
     {config : Config} {context : KeygenContext F}
     (certificate : self.ConfigurationCertificate config context)
-    (input : Var Input F) (i : RegionIndex) :
+    (input : Var Input F) (i : RegionIndex)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ self.keygenRequirements.inputPermutationColumns
+        certificate.configInput certificate.configLawful input →
+      column ∈ context.permutationColumns) :
     ((self.call config input).operations i).KeygenRegistered
-      context.gates context.lookups := by
+      context.gates context.lookups context.permutationColumns := by
   rcases certificate with
-    ⟨configInput, counts, hconfig, output_eq, gates, lookups⟩
+    ⟨configInput, counts, hconfig, output_eq, gates, lookups, permutationColumns⟩
   subst config
   rw [self.call_operations]
   exact (self.elaborated.registered
-    configInput counts hconfig input i).mono gates lookups
+    configInput counts hconfig input i).mono gates lookups (by
+      intro column hcolumn
+      simp only [List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact permutationColumns column (by
+          simpa only [List.mem_append] using hcolumn)
+      · exact hinputPermutationColumns column hcolumn)
 
 /--
 An embedded registration certificate closes a child call against any larger ambient
-gate and lookup sets. This is the compositional leaf used by `keygen_registration`.
+gate, lookup, and equality-column sets. This is the compositional leaf used by
+`keygen_registration`.
 -/
 @[keygen_norm]
 theorem call_keygenRegistered
@@ -714,6 +874,7 @@ theorem call_keygenRegistered
     (input : Var Input F) (i : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ Configured.gates hconfigured →
@@ -721,15 +882,29 @@ theorem call_keygenRegistered
     (hlookups :
       ∀ argument,
         argument ∈ Configured.lookups hconfigured →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ Configured.permutationColumns hconfigured →
+        column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ Configured.inputPermutationColumns hconfigured input →
+        column ∈ targetPermutationColumns) :
     ((self.call config input).operations i).KeygenRegistered
-      targetGates targetLookups := by
+      targetGates targetLookups targetPermutationColumns := by
   rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
   rw [self.call_operations]
   exact (self.elaborated.registered
     configInput counts hconfig input i).mono
       (by simpa [Configured.gates] using hgates)
       (by simpa [Configured.lookups] using hlookups)
+      (by
+        intro column hcolumn
+        simp only [List.mem_append] at hcolumn
+        rcases hcolumn with hcolumn | hcolumn
+        · exact hpermutationColumns column (by
+            simpa [Configured.permutationColumns] using hcolumn)
+        · exact hinputPermutationColumns column (by
+            simpa [Configured.inputPermutationColumns] using hcolumn))
 
 /-- Registration certificate specialized to a configure output. Its premises expose
 the caller requirements and local configure delta directly. -/
@@ -740,6 +915,7 @@ theorem call_keygenRegistered_ofOutput
     (input : Var Input F) (i : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates : ∀ gate,
       gate ∈ self.keygenRequirements.gates configInput hconfig ++
         ((self.configure configInput).delta counts).gates →
@@ -747,14 +923,26 @@ theorem call_keygenRegistered_ofOutput
     (hlookups : ∀ argument,
       argument ∈ self.keygenRequirements.lookups configInput hconfig ++
         ((self.configure configInput).delta counts).lookups →
-      argument ∈ targetLookups) :
+      argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ self.keygenRequirements.permutationColumns configInput hconfig ++
+        ((self.configure configInput).delta counts).permutationRequests →
+      column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈
+        self.keygenRequirements.inputPermutationColumns configInput hconfig input →
+      column ∈ targetPermutationColumns) :
     ((self.call
       ((self.configure configInput).output counts) input).operations i).KeygenRegistered
-        targetGates targetLookups := by
+        targetGates targetLookups targetPermutationColumns := by
   apply self.call_keygenRegistered _
       (Configured.ofOutput self configInput counts hconfig)
   · simpa [Configured.gates, Configured.ofOutput] using hgates
   · simpa [Configured.lookups, Configured.ofOutput] using hlookups
+  · simpa [Configured.permutationColumns, Configured.ofOutput] using
+      hpermutationColumns
+  · simpa [Configured.inputPermutationColumns, Configured.ofOutput] using
+      hinputPermutationColumns
 
 /-- A folded call is registered in exactly the arguments carried by its configured
 handle. This conclusion shape exposes every input needed by `grind`. -/
@@ -763,9 +951,13 @@ theorem call_keygenRegistered_exact
     (config : Config) (hconfigured : self.Configured config)
     (input : Var Input F) (i : RegionIndex) :
     ((self.call config input).operations i).KeygenRegistered
-      hconfigured.gates hconfigured.lookups :=
+      hconfigured.gates hconfigured.lookups
+        (hconfigured.permutationColumns ++
+          hconfigured.inputPermutationColumns input) :=
   self.call_keygenRegistered config hconfigured input i
     (fun _ h => h) (fun _ h => h)
+    (fun _ h => List.mem_append_left _ h)
+    (fun _ h => List.mem_append_right _ h)
 
 /-- Registration certificate in the exact opaque spelling exposed after operation-spine
 normalization. -/
@@ -775,6 +967,7 @@ theorem callPacked_keygenRegistered
     (input : Var Input F) (i : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ Configured.gates hconfigured →
@@ -782,10 +975,18 @@ theorem callPacked_keygenRegistered
     (hlookups :
       ∀ argument,
         argument ∈ Configured.lookups hconfigured →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ Configured.permutationColumns hconfigured →
+        column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ Configured.inputPermutationColumns hconfigured input →
+        column ∈ targetPermutationColumns) :
     (((callPacked F ConfigInput Config Input Output).val
-      self config input i).2.1).KeygenRegistered targetGates targetLookups :=
+      self config input i).2.1).KeygenRegistered targetGates targetLookups
+        targetPermutationColumns :=
   call_keygenRegistered self config hconfigured input i hgates hlookups
+    hpermutationColumns hinputPermutationColumns
 
 /--
 A lawful layouter child remains registered when called inside a parent whose available
@@ -793,13 +994,14 @@ argument lists contain the child's requirements and configure contribution.
 -/
 theorem KeygenLawful.call_registered
     {self : FormalCircuit F ConfigInput Config Input Output}
-    {requirements : KeygenRequirements F ConfigInput}
+    {requirements : KeygenRequirements F ConfigInput (Var Input F)}
     (hlawful : self.KeygenLawful requirements)
     (configInput : ConfigInput) (counts : ConfigureCounts)
     (hconfig : requirements.configLawful configInput)
     (input : Var Input F) (i : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ requirements.gates configInput hconfig ++
@@ -809,13 +1011,29 @@ theorem KeygenLawful.call_registered
       ∀ argument,
         argument ∈ requirements.lookups configInput hconfig ++
           ((self.configure configInput).delta counts).lookups →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ requirements.permutationColumns configInput hconfig ++
+        ((self.configure configInput).delta counts).permutationRequests →
+      column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈
+        requirements.inputPermutationColumns configInput hconfig input →
+      column ∈ targetPermutationColumns) :
     ((self.call
       ((self.configure configInput).output counts)
-      input).operations i).KeygenRegistered targetGates targetLookups := by
+      input).operations i).KeygenRegistered targetGates targetLookups
+        targetPermutationColumns := by
   rw [self.call_operations]
   exact (FormalCircuit.KeygenLawful.registered
     hlawful configInput counts hconfig input i).mono hgates hlookups
+      (by
+        intro column hcolumn
+        simp only [List.mem_append] at hcolumn
+        rcases hcolumn with hcolumn | hcolumn
+        · exact hpermutationColumns column (by
+            simpa only [List.mem_append] using hcolumn)
+        · exact hinputPermutationColumns column hcolumn)
 
 /-!
 The consumption mechanism for `call` chunks lives in `Subcircuit.lean` (framework leaf
@@ -849,8 +1067,8 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
     intro input
     try dsimp only [configure]
     infer_instance
-  /-- Gate and lookup arguments supplied by the caller rather than local configure. -/
-  keygenRequirements : KeygenRequirements F ConfigInput := {}
+  /-- Keygen capabilities supplied by the caller rather than local configure. -/
+  keygenRequirements : KeygenRequirements F ConfigInput (Var Input F) := {}
   /-- Region-level configure/synthesis registration certificate. -/
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
@@ -861,16 +1079,37 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
       (program.output counts) offset input).operations region).Forall
         (RegionOperation.KeygenRegistered
           (keygenRequirements.gates configInput hconfig ++ (program.delta counts).gates)
-          (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups)) := by
+          (keygenRequirements.lookups configInput hconfig ++ (program.delta counts).lookups)
+          (keygenRequirements.permutationColumns configInput hconfig ++
+            (program.delta counts).permutationRequests ++
+            keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
     keygen_registration
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
       (synthesize config offset input).output self
+  /-- Exact footprint contributed inside the ambient region. -/
+  synthesisSummary : Config → ℕ → Var Input F → RegionIndex →
+      FloorPlanner.RegionSynthesisSummary :=
+    fun config offset input self =>
+      FloorPlanner.regionSynthesisSummary
+        ((synthesize config offset input).operations self)
   output_eq : ∀ config offset input self,
     output config offset input self =
       (synthesize config offset input).output self := by
     intro _ _ _ _
     rfl
+  synthesisSummary_eq : ∀ config offset input self,
+    synthesisSummary config offset input self =
+      FloorPlanner.regionSynthesisSummary
+        ((synthesize config offset input).operations self) := by
+    intro _ _ _ _
+    first
+    | rfl
+    | simp only [circuit_norm, RegionCircuit.operations_bind,
+        RegionCircuit.operations_pure,
+        FloorPlanner.regionSynthesisSummary_append,
+        FormalRegionCircuit.call_synthesisSummary,
+        FormalRegionCircuit.call_synthesisSummary']
 
 section RegionStatements
 variable [CircuitType Input] [CircuitType Output]
@@ -1093,7 +1332,7 @@ structure FormalRegionCircuit.KeygenLawful
     {ConfigInput Config : Type}
     [CircuitType Input] [CircuitType Output]
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
-    (requirements : KeygenRequirements F ConfigInput := {}) : Prop where
+    (requirements : KeygenRequirements F ConfigInput (Var Input F) := {}) : Prop where
   registered :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (hconfig : requirements.configLawful configInput)
@@ -1103,7 +1342,10 @@ structure FormalRegionCircuit.KeygenLawful
       (program.output counts) offset input).operations region).Forall
         (RegionOperation.KeygenRegistered
           (requirements.gates configInput hconfig ++ (program.delta counts).gates)
-          (requirements.lookups configInput hconfig ++ (program.delta counts).lookups))
+          (requirements.lookups configInput hconfig ++ (program.delta counts).lookups)
+          (requirements.permutationColumns configInput hconfig ++
+            (program.delta counts).permutationRequests ++
+            requirements.inputPermutationColumns configInput hconfig input))
 
 namespace FormalRegionCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
@@ -1116,7 +1358,7 @@ instance (self : FormalRegionCircuit F ConfigInput Config Input Output)
 /-- The folded keygen interface exposed by a region circuit. -/
 abbrev keygenRequirements
     (self : FormalRegionCircuit F ConfigInput Config Input Output) :
-    KeygenRequirements F ConfigInput :=
+    KeygenRequirements F ConfigInput (Var Input F) :=
   self.elaborated.keygenRequirements
 
 /-- Region-level configured capability in an ambient keygen context. -/
@@ -1135,7 +1377,9 @@ def configureCertificate
       { gates := self.keygenRequirements.gates configInput hconfig ++
           ((self.configure configInput).delta counts).gates
         lookups := self.keygenRequirements.lookups configInput hconfig ++
-          ((self.configure configInput).delta counts).lookups } :=
+          ((self.configure configInput).delta counts).lookups
+        permutationColumns := self.keygenRequirements.permutationColumns configInput hconfig ++
+          ((self.configure configInput).delta counts).permutationRequests } :=
   Halo2.ConfigurationCertificate.ofOutput
     self.keygenRequirements self.configure configInput counts hconfig
 
@@ -1197,6 +1441,25 @@ def Configured.lookups
     ((self.configure (FormalRegionCircuit.Configured.configInput configured)).delta
       (FormalRegionCircuit.Configured.counts configured)).lookups
 
+/-- Equality-enabled columns available from a configured region-circuit handle. -/
+def Configured.permutationColumns
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config) : List AnyColumn :=
+  self.keygenRequirements.permutationColumns
+      (FormalRegionCircuit.Configured.configInput configured)
+      (FormalRegionCircuit.Configured.configLawful configured) ++
+    ((self.configure (FormalRegionCircuit.Configured.configInput configured)).delta
+      (FormalRegionCircuit.Configured.counts configured)).permutationRequests
+
+/-- Equality-enabled columns required by the concrete region-circuit input. -/
+def Configured.inputPermutationColumns
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config)
+    (input : Var Input F) : List AnyColumn :=
+  self.keygenRequirements.inputPermutationColumns
+    (FormalRegionCircuit.Configured.configInput configured)
+    (FormalRegionCircuit.Configured.configLawful configured) input
+
 /-- Region-level certificate elimination through `Configured.gates`. -/
 theorem ConfigurationCertificate.gates_of_configured
     {self : FormalRegionCircuit F ConfigInput Config Input Output}
@@ -1218,6 +1481,18 @@ theorem ConfigurationCertificate.lookups_of_configured
   simpa [Configured.lookups, ConfigurationCertificate.configured] using
     certificate.lookups argument hargument
 
+/-- Region-level certificate elimination through `Configured.permutationColumns`. -/
+theorem ConfigurationCertificate.permutationColumns_of_configured
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} {context : KeygenContext F}
+    (certificate : self.ConfigurationCertificate config context) :
+    ∀ column,
+      column ∈ certificate.configured.permutationColumns →
+        column ∈ context.permutationColumns := by
+  intro column hcolumn
+  simpa [Configured.permutationColumns, ConfigurationCertificate.configured] using
+    certificate.permutationColumns column hcolumn
+
 @[simp, keygen_norm] theorem Configured.ofPure_gates
     (self : FormalRegionCircuit F Config Config Input Output)
     (config : Config)
@@ -1235,6 +1510,26 @@ theorem ConfigurationCertificate.lookups_of_configured
     Configured.lookups (Configured.ofPure self config hconfig hconfigure) =
       self.keygenRequirements.lookups config hconfig := by
   simp [Configured.lookups, Configured.ofPure, hconfigure]
+
+@[keygen_norm] theorem Configured.ofPure_permutationColumns
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config) :
+    Configured.permutationColumns (Configured.ofPure self config hconfig hconfigure) =
+      self.keygenRequirements.permutationColumns config hconfig := by
+  simp [Configured.permutationColumns, Configured.ofPure, hconfigure]
+
+@[keygen_norm] theorem Configured.ofPure_inputPermutationColumns
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config)
+    (input : Var Input F) :
+    Configured.inputPermutationColumns
+        (Configured.ofPure self config hconfig hconfigure) input =
+      self.keygenRequirements.inputPermutationColumns config hconfig input := by
+  simp [Configured.inputPermutationColumns, Configured.ofPure]
 
 @[simp, keygen_norm] theorem Configured.ofOutput_gates
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
@@ -1373,23 +1668,57 @@ theorem call_operations (self : FormalRegionCircuit F ConfigInput Config Input O
       = (self.synthesize config offset input).operations region :=
   self.callOps_eq config offset input region
 
+/-- A region call exposes the child's exact reduced synthesis footprint. -/
+@[circuit_norm]
+theorem call_synthesisSummary
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((self.call config offset input).operations region) =
+      self.elaborated.synthesisSummary config offset input region := by
+  rw [self.call_operations]
+  exact (self.elaborated.synthesisSummary_eq config offset input region).symm
+
+@[circuit_norm]
+theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        (@RegionCircuit.operations F _ (Output (AssignedCell F))
+          (self.call config offset input) region) =
+      self.elaborated.synthesisSummary config offset input region :=
+  self.call_synthesisSummary config offset input region
+
 /-- Consume a region circuit's configure certificate without exposing routing premises. -/
 @[keygen_norm]
 theorem call_keygenRegistered_ofCertificate
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     {config : Config} {context : KeygenContext F}
     (certificate : self.ConfigurationCertificate config context)
-    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ self.keygenRequirements.inputPermutationColumns
+        certificate.configInput certificate.configLawful input →
+      column ∈ context.permutationColumns) :
     ((self.call config offset input).operations region).Forall
-      (RegionOperation.KeygenRegistered context.gates context.lookups) := by
+      (RegionOperation.KeygenRegistered context.gates context.lookups
+        context.permutationColumns) := by
   rcases certificate with
-    ⟨configInput, counts, hconfig, output_eq, gates, lookups⟩
+    ⟨configInput, counts, hconfig, output_eq, gates, lookups, permutationColumns⟩
   subst config
   rw [self.call_operations]
   exact RegionOperations.keygenRegistered_mono
     (self.elaborated.registered
       configInput counts hconfig offset input region)
-    gates lookups
+    gates lookups (by
+      intro column hcolumn
+      simp only [List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact permutationColumns column (by
+          simpa only [List.mem_append] using hcolumn)
+      · exact hinputPermutationColumns column hcolumn)
 
 /--
 Region-level counterpart of `FormalCircuit.call_keygenRegistered`.
@@ -1401,6 +1730,7 @@ theorem call_keygenRegistered
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ Configured.gates hconfigured →
@@ -1408,9 +1738,16 @@ theorem call_keygenRegistered
     (hlookups :
       ∀ argument,
         argument ∈ Configured.lookups hconfigured →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ Configured.permutationColumns hconfigured →
+        column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ Configured.inputPermutationColumns hconfigured input →
+        column ∈ targetPermutationColumns) :
     ((self.call config offset input).operations region).Forall
-        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+        (RegionOperation.KeygenRegistered targetGates targetLookups
+          targetPermutationColumns) := by
   rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
   rw [self.call_operations]
   exact RegionOperations.keygenRegistered_mono
@@ -1418,6 +1755,14 @@ theorem call_keygenRegistered
       configInput counts hconfig offset input region)
     (by simpa [Configured.gates] using hgates)
     (by simpa [Configured.lookups] using hlookups)
+    (by
+      intro column hcolumn
+      simp only [List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact hpermutationColumns column (by
+          simpa [Configured.permutationColumns] using hcolumn)
+      · exact hinputPermutationColumns column (by
+          simpa [Configured.inputPermutationColumns] using hcolumn))
 
 /-- Region-level registration certificate specialized to a configure output. -/
 theorem call_keygenRegistered_ofOutput
@@ -1427,6 +1772,7 @@ theorem call_keygenRegistered_ofOutput
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates : ∀ gate,
       gate ∈ self.keygenRequirements.gates configInput hconfig ++
         ((self.configure configInput).delta counts).gates →
@@ -1434,14 +1780,27 @@ theorem call_keygenRegistered_ofOutput
     (hlookups : ∀ argument,
       argument ∈ self.keygenRequirements.lookups configInput hconfig ++
         ((self.configure configInput).delta counts).lookups →
-      argument ∈ targetLookups) :
+      argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ self.keygenRequirements.permutationColumns configInput hconfig ++
+        ((self.configure configInput).delta counts).permutationRequests →
+      column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈
+        self.keygenRequirements.inputPermutationColumns configInput hconfig input →
+      column ∈ targetPermutationColumns) :
     ((self.call ((self.configure configInput).output counts) offset input).operations
       region).Forall
-        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+        (RegionOperation.KeygenRegistered targetGates targetLookups
+          targetPermutationColumns) := by
   apply self.call_keygenRegistered _
       (Configured.ofOutput self configInput counts hconfig)
   · simpa [Configured.gates, Configured.ofOutput] using hgates
   · simpa [Configured.lookups, Configured.ofOutput] using hlookups
+  · simpa [Configured.permutationColumns, Configured.ofOutput] using
+      hpermutationColumns
+  · simpa [Configured.inputPermutationColumns, Configured.ofOutput] using
+      hinputPermutationColumns
 
 /-- Region-level exact-arguments counterpart of
 `FormalCircuit.call_keygenRegistered_exact`. -/
@@ -1451,9 +1810,13 @@ theorem call_keygenRegistered_exact
     (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
     ((self.call config offset input).operations region).Forall
       (RegionOperation.KeygenRegistered
-        hconfigured.gates hconfigured.lookups) :=
+        hconfigured.gates hconfigured.lookups
+          (hconfigured.permutationColumns ++
+            hconfigured.inputPermutationColumns input)) :=
   self.call_keygenRegistered config hconfigured offset input region
     (fun _ h => h) (fun _ h => h)
+    (fun _ h => List.mem_append_left _ h)
+    (fun _ h => List.mem_append_right _ h)
 
 /-- Region registration certificate in the opaque spelling exposed after spine
 normalization. -/
@@ -1463,6 +1826,7 @@ theorem callPacked_keygenRegistered
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ Configured.gates hconfigured →
@@ -1470,11 +1834,19 @@ theorem callPacked_keygenRegistered
     (hlookups :
       ∀ argument,
         argument ∈ Configured.lookups hconfigured →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ Configured.permutationColumns hconfigured →
+        column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ Configured.inputPermutationColumns hconfigured input →
+        column ∈ targetPermutationColumns) :
     (((callPacked F ConfigInput Config Input Output).val
       self config offset input region).2).Forall
-        (RegionOperation.KeygenRegistered targetGates targetLookups) :=
+        (RegionOperation.KeygenRegistered targetGates targetLookups
+          targetPermutationColumns) :=
   call_keygenRegistered self config hconfigured offset input region hgates hlookups
+    hpermutationColumns hinputPermutationColumns
 
 /--
 A lawful region child remains registered when called inside a parent whose available
@@ -1482,13 +1854,14 @@ argument lists contain the child's requirements and configure contribution.
 -/
 theorem KeygenLawful.call_registered
     {self : FormalRegionCircuit F ConfigInput Config Input Output}
-    {requirements : KeygenRequirements F ConfigInput}
+    {requirements : KeygenRequirements F ConfigInput (Var Input F)}
     (hlawful : self.KeygenLawful requirements)
     (configInput : ConfigInput) (counts : ConfigureCounts)
     (hconfig : requirements.configLawful configInput)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
     (hgates :
       ∀ gate,
         gate ∈ requirements.gates configInput hconfig ++
@@ -1498,16 +1871,31 @@ theorem KeygenLawful.call_registered
       ∀ argument,
         argument ∈ requirements.lookups configInput hconfig ++
           ((self.configure configInput).delta counts).lookups →
-        argument ∈ targetLookups) :
+        argument ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ requirements.permutationColumns configInput hconfig ++
+        ((self.configure configInput).delta counts).permutationRequests →
+      column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈
+        requirements.inputPermutationColumns configInput hconfig input →
+      column ∈ targetPermutationColumns) :
     ((self.call
       ((self.configure configInput).output counts)
       offset input).operations region).Forall
-        (RegionOperation.KeygenRegistered targetGates targetLookups) := by
+        (RegionOperation.KeygenRegistered targetGates targetLookups
+          targetPermutationColumns) := by
   rw [self.call_operations]
   exact RegionOperations.keygenRegistered_mono
     (FormalRegionCircuit.KeygenLawful.registered
       hlawful configInput counts hconfig offset input region)
-    hgates hlookups
+    hgates hlookups (by
+      intro column hcolumn
+      simp only [List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact hpermutationColumns column (by
+          simpa only [List.mem_append] using hcolumn)
+      · exact hinputPermutationColumns column hcolumn)
 
 end FormalRegionCircuit
 
@@ -1545,12 +1933,30 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
       output config input i :=
-        (child.synthesize config 0 input).output i
+        child.output config 0 input i
       regionCount _ := 1
-      output_eq := by intro _ _ _; rfl
+      synthesisSummary config input region :=
+        FloorPlanner.SynthesisSummary.ofRegion
+          (child.elaborated.synthesisSummary config 0 input region)
+      output_eq := by
+        intro config input i
+        rw [output_assignRegion]
+        exact child.elaborated.output_eq config 0 input i
       regionCount_eq := by
         intro _ _ _
-        simp only [assignRegion, Circuit.operations, Operations.regionCount] }
+        simp only [assignRegion, Circuit.operations, Operations.regionCount]
+      synthesisSummary_eq := by
+        intro config input region
+        simp only [assignRegion, Circuit.operations,
+          FloorPlanner.synthesisSummary]
+        have hsummary :
+            child.elaborated.synthesisSummary config 0 input region =
+              FloorPlanner.regionSynthesisSummary
+                (child.synthesize config 0 input region).2 := by
+          simpa only [RegionCircuit.operations] using
+            child.elaborated.synthesisSummary_eq config 0 input region
+        rw [← hsummary]
+        exact FloorPlanner.SynthesisSummary.combine_empty _ |>.symm }
   Witness := child.Witness
   inhabitedWitness := child.inhabitedWitness
   extract config input i₀ env := child.extract config 0 input i₀ env
@@ -1569,13 +1975,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     simp only [Circuit.operations, assignRegion, Halo2.Constraints] at hC
     subst h_in h_out
     -- instantiate the child's region-level soundness at `self := i₀`
-    have hsound := child.soundness config 0 i₀ env input_var hE hA hC.1
-    have hout := child.elaborated.output_eq config 0 input_var i₀
-    rw [hout] at hsound
-    show child.Spec (eval env input_var)
-      (eval env ((child.synthesize config 0 input_var).output i₀))
-      (child.extract config 0 input_var i₀ env)
-    exact hsound
+    exact child.soundness config 0 i₀ env input_var hE hA hC.1
 
   completeness := by
     intro config
@@ -1586,15 +1986,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     subst h_in h_out
     -- instantiate the child's region-level completeness at `self := i₀`
     have hcompl := child.completeness config 0 i₀ env input_var hW.1 hE hA hpa
-    -- the two `output` spellings (layouter vs region elaborated metadata) are defeq;
-    -- pin both to the raw `.output` via the region instance's `output_eq`
-    refine ⟨⟨hcompl.1, trivial⟩, ?_⟩
-    have hout := child.elaborated.output_eq config 0 input_var i₀
-    show child.ProverSpec (eval env input_var)
-      (eval env ((child.synthesize config 0 input_var).output i₀))
-      (child.extract config 0 input_var i₀ env.toEnvironment) env.env.hint
-    rw [hout] at hcompl
-    exact hcompl.2
+    exact ⟨⟨hcompl.1, trivial⟩, hcompl.2⟩
 
 @[simp, keygen_norm]
 theorem toFormal_keygenRequirements
@@ -1617,7 +2009,7 @@ def Configured.toFormal
 /-- The region-to-layouter bridge preserves configure/synthesis keygen lawfulness. -/
 theorem KeygenLawful.toFormal
     {child : FormalRegionCircuit F ConfigInput Config Input Output}
-    {requirements : KeygenRequirements F ConfigInput}
+    {requirements : KeygenRequirements F ConfigInput (Var Input F)}
     (hlawful : child.KeygenLawful requirements) (name : String := child.name) :
     (child.toFormal name).KeygenLawful requirements where
   registered := by
@@ -1695,6 +2087,133 @@ attribute [keygen_metadata_projection]
 attribute [keygen_configure_projection]
   FormalCircuit.configure
   FormalRegionCircuit.configure
+
+open Lean Meta Simp in
+/-- Reduce a concrete circuit's declared output metadata without adding a projection
+lemma for every circuit bundle. Circuits with a reduced elaborated `output` field stop
+at that field; opaque or still-symbolic bundles are left unchanged. -/
+def foldDeclaredOutputProc : Simproc := fun expression => do
+  let isRegion := expression.isAppOf ``FormalRegionCircuit.output
+  unless expression.isAppOf ``FormalCircuit.output || isRegion do
+    return .continue
+  try
+    let arguments := expression.getAppArgs
+    let explicitArity := if isRegion then 5 else 4
+    unless explicitArity ≤ arguments.size do
+      return .continue
+    let self := arguments[arguments.size - explicitArity]!
+    let some unfoldedSelf ← withTransparency .default <| unfoldDefinition? self
+      | return .continue
+    let some unfoldedOutput ←
+        withTransparency .default <| unfoldDefinition? expression
+      | return .continue
+    let withBundle := unfoldedOutput.replace fun candidate =>
+      if candidate == self then some unfoldedSelf else none
+    let withBundle ← withTransparency .reducible <| whnf withBundle
+    let elaboratedOutput :=
+      if isRegion then ``ElaboratedRegionCircuit.output else ``ElaboratedCircuit.output
+    let some outputProjection := withBundle.find? fun candidate =>
+        candidate.getAppFn.isConstOf elaboratedOutput
+      | return .continue
+    let some projectionInfo ← getProjectionFnInfo? elaboratedOutput
+      | return .continue
+    let projectionArguments := outputProjection.getAppArgs
+    unless projectionInfo.numParams < projectionArguments.size do
+      return .continue
+    let elaborated := projectionArguments[projectionInfo.numParams]!
+    let reducedElaborated ← withTransparency .default <| whnf elaborated
+    let reducedElaborated ←
+      if reducedElaborated != elaborated then
+        pure reducedElaborated
+      else
+        match ← withTransparency .default <| unfoldDefinition? elaborated with
+        | some unfoldedElaborated => pure unfoldedElaborated
+        | none => pure elaborated
+    let withElaborated := withBundle.replace fun candidate =>
+      if candidate == elaborated then some reducedElaborated else none
+    let reduced ← withTransparency .reducible <| whnf withElaborated
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldFormalCircuitDeclaredOutput
+    (FormalCircuit.output _ _ _ _) := foldDeclaredOutputProc
+
+simproc foldFormalRegionCircuitDeclaredOutput
+    (FormalRegionCircuit.output _ _ _ _ _) := foldDeclaredOutputProc
+
+attribute [keygen_output_norm]
+  foldFormalCircuitDeclaredOutput
+  foldFormalRegionCircuitDeclaredOutput
+
+open Lean Meta Simp in
+/-- Reduce a configured circuit's declared input-dependent equality requirements.
+This is the keygen analogue of `foldDeclaredOutputProc`: it exposes only the small
+`KeygenRequirements.inputPermutationColumns` field and never unfolds synthesis. -/
+def foldDeclaredInputPermutationColumnsProc : Simproc := fun expression => do
+  let isRegion :=
+    expression.isAppOf ``FormalRegionCircuit.Configured.inputPermutationColumns
+  unless expression.isAppOf ``FormalCircuit.Configured.inputPermutationColumns ||
+      isRegion do
+    return .continue
+  try
+    let arguments := expression.getAppArgs
+    unless 4 ≤ arguments.size do
+      return .continue
+    let self := arguments[arguments.size - 4]!
+    let some unfoldedSelf ← withTransparency .default <| unfoldDefinition? self
+      | return .continue
+    let some unfoldedProjection ←
+        withTransparency .default <| unfoldDefinition? expression
+      | return .continue
+    let withBundle := unfoldedProjection.replace fun candidate =>
+      if candidate == self then some unfoldedSelf else none
+    let withBundle ← withTransparency .default <| whnf withBundle
+    let some requirementProjection := withBundle.find? fun candidate =>
+        candidate.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
+      | if withBundle == expression then
+          return .continue
+        let proof ← mkExpectedTypeHint
+          (← mkEqRefl expression) (← mkEq expression withBundle)
+        return .visit { expr := withBundle, proof? := some proof }
+    let requirementArguments := requirementProjection.getAppArgs
+    unless 3 < requirementArguments.size do
+      return .continue
+    let requirements := requirementArguments[3]!
+    let reducedRequirements ← withTransparency .default <| whnf requirements
+    let reducedRequirements ←
+      if reducedRequirements != requirements then
+        pure reducedRequirements
+      else
+        match ← withTransparency .default <| unfoldDefinition? requirements with
+        | some unfoldedRequirements => pure unfoldedRequirements
+        | none => pure requirements
+    let withRequirements := withBundle.replace fun candidate =>
+      if candidate == requirements then some reducedRequirements else none
+    let reduced ← withTransparency .reducible <| whnf withRequirements
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldFormalCircuitDeclaredInputPermutationColumns
+    (FormalCircuit.Configured.inputPermutationColumns _ _) :=
+  foldDeclaredInputPermutationColumnsProc
+
+simproc foldFormalRegionCircuitDeclaredInputPermutationColumns
+    (FormalRegionCircuit.Configured.inputPermutationColumns _ _) :=
+  foldDeclaredInputPermutationColumnsProc
+
+attribute [keygen_norm]
+  foldFormalCircuitDeclaredInputPermutationColumns
+  foldFormalRegionCircuitDeclaredInputPermutationColumns
 
 attribute [grind norm]
   FormalCircuit.Configured.ofPure_gates

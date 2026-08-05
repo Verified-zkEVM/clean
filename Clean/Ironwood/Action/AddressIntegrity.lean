@@ -70,7 +70,14 @@ def circuit : FormalCircuit Fp
             Ecc.Mul.mul.Configured cfg.1 ×
               Ecc.WitnessPoint.pointNonIdFormal.Configured cfg.2
           gates _ configured := configured.1.gates ++ configured.2.gates
-          lookups _ configured := configured.1.lookups ++ configured.2.lookups }
+          lookups _ configured := configured.1.lookups ++ configured.2.lookups
+          permutationColumns cfg configured :=
+            ([cfg.1.addConfig.xQR, cfg.1.addConfig.yQR,
+              cfg.2.x, cfg.2.y] : List AnyColumn) ++
+              configured.1.permutationColumns ++ configured.2.permutationColumns
+          inputPermutationColumns _ _ input :=
+            [input.ivk.cell.column, input.gDOld.x.cell.column,
+              input.gDOld.y.cell.column] }
       registered := by keygen_registration
       regionCount _ := 6 }
 

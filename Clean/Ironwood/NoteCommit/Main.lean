@@ -224,6 +224,15 @@ structure PieceCells where
   g1 : AssignedCell Fp
   h0 : AssignedCell Fp
 
+/-- Columns of the stage-1 cells consumed by later copy operations. -/
+@[keygen_norm]
+def PieceCells.permutationColumns (cells : PieceCells) : List AnyColumn :=
+  [cells.a.cell.column, cells.b.cell.column, cells.c.cell.column,
+    cells.d.cell.column, cells.e.cell.column, cells.f.cell.column,
+    cells.g.cell.column, cells.h.cell.column, cells.b0.cell.column,
+    cells.b3.cell.column, cells.d2.cell.column, cells.e0.cell.column,
+    cells.e1.cell.column, cells.g1.cell.column, cells.h0.cell.column]
+
 /-- Stage 1 (15 regions): the eight message pieces interleaved with the seven
 sub-piece short checks (`note_commit.rs:1608-1653`). -/
 def synthPieces (cfg : Config) (input : Var Inputs Fp) :
@@ -262,6 +271,15 @@ structure CheckCells where
   eZs : Var LookupRangeCheck.Output Fp
   gZs : Var LookupRangeCheck.Output Fp
 
+/-- Columns of the stage-2 cells consumed by the final gate stage. -/
+@[keygen_norm]
+def CheckCells.permutationColumns (cells : CheckCells) : List AnyColumn :=
+  [cells.b2.cell.column, cells.d1.cell.column,
+    cells.aZs.z0.cell.column, cells.aZs.zLast.cell.column,
+    cells.bZs.z0.cell.column, cells.bZs.zLast.cell.column,
+    cells.eZs.z0.cell.column, cells.eZs.zLast.cell.column,
+    cells.gZs.z0.cell.column, cells.gZs.zLast.cell.column]
+
 /-- Stage 2 (18 regions): the two y-canonicity flows, `CommitDomain::commit`, and the
 four canonicity `witness_check`s (`note_commit.rs:1654-1737`). -/
 def synthChecks (G : Generators) (R : FixedBase)
@@ -285,9 +303,22 @@ def synthChecks (G : Generators) (R : FixedBase)
     (PsiCanonicityCheck.g1G2PrimeWit pcs.g1 (zCell cfg.hashConfig iHash 6 1))
   pure { b2, d1, cm, aZs, bZs, eZs, gZs }
 
-/-- Stage 3 (10 regions): the gate regions (`note_commit.rs:1739-1795`). -/
-def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
-    (ccs : CheckCells) (iHash : RegionIndex) : Circuit Fp Unit := do
+/-- Outputs of the five message-decomposition regions consumed by the five canonicity
+regions. -/
+structure GateCells where
+  b1 : AssignedCell Fp
+  d0 : AssignedCell Fp
+  g0 : AssignedCell Fp
+  h1 : AssignedCell Fp
+
+@[keygen_norm]
+def GateCells.permutationColumns (cells : GateCells) : List AnyColumn :=
+  [cells.b1.cell.column, cells.d0.cell.column,
+    cells.g0.cell.column, cells.h1.cell.column]
+
+/-- The five message-decomposition regions at the start of stage 3. -/
+def synthDecompositions (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash : RegionIndex) : Circuit Fp GateCells := do
   let b1 ← ((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
     "NoteCommit MessagePiece b").call cfg.gates.b
     { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }
@@ -301,23 +332,87 @@ def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
     { g := pcs.g, g1 := pcs.g1, g2 := zCell cfg.hashConfig iHash 6 1 }
   let h1 ← ((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
     "NoteCommit MessagePiece h").call cfg.gates.h { h := pcs.h, h0 := pcs.h0 }
+  pure { b1, d0, g0, h1 }
+
+private theorem decomposeB_toFormal_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeB.Config) (input : Var DecomposeB.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeB.bundle w).toFormal name).output cfg input i =
+      AssignedCell.of i 0 cfg.colR := by
+  show (((DecomposeB.bundle w).synthesize cfg 0 input)).output i = _
+  simp only [DecomposeB.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeD_toFormal_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeD.Config) (input : Var DecomposeD.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeD.bundle w).toFormal name).output cfg input i =
+      AssignedCell.of i 0 cfg.colM := by
+  show (((DecomposeD.bundle w).synthesize cfg 0 input)).output i = _
+  simp only [DecomposeD.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeG_toFormal_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeG.Config) (input : Var DecomposeG.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeG.bundle w).toFormal name).output cfg input i =
+      AssignedCell.of i 0 cfg.colM := by
+  show (((DecomposeG.bundle w).synthesize cfg 0 input)).output i = _
+  simp only [DecomposeG.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+
+private theorem decomposeH_toFormal_output (w : WitgenIR Fp 1) (name : String)
+    (cfg : DecomposeH.Config) (input : Var DecomposeH.Inputs Fp) (i : RegionIndex) :
+    ((DecomposeH.bundle w).toFormal name).output cfg input i =
+      AssignedCell.of i 0 cfg.colR := by
+  show (((DecomposeH.bundle w).synthesize cfg 0 input)).output i = _
+  simp only [DecomposeH.bundle, circuit_norm, RegionCircuit.output_bind]
+
+@[keygen_output_norm]
+theorem synthDecompositions_output (cfg : Config) (input : Var Inputs Fp)
+    (pcs : PieceCells) (ccs : CheckCells) (iHash i : RegionIndex) :
+    (synthDecompositions cfg input pcs ccs iHash).output i =
+      { b1 := .of i 0 cfg.gates.b.colR
+        d0 := .of (i + 1) 0 cfg.gates.d.colM
+        g0 := .of (i + 3) 0 cfg.gates.g.colM
+        h1 := .of (i + 4) 0 cfg.gates.h.colR } := by
+  simp only [synthDecompositions, circuit_norm,
+    decomposeB_toFormal_output, decomposeD_toFormal_output,
+    decomposeG_toFormal_output, decomposeH_toFormal_output]
+
+/-- Canonicity regions for the diversified base point, recipient key, and value. -/
+def synthGdPkdValueCanonicity (cfg : Config) (input : Var Inputs Fp)
+    (pcs : PieceCells) (ccs : CheckCells) (gcs : GateCells)
+    (iHash : RegionIndex) : Circuit Fp Unit := do
   let _ ← (GdCanonicity.bundle.toFormal "NoteCommit input g_d").call cfg.gates.gd
-    { gdX := input.gdX, b0 := pcs.b0, b1, a := pcs.a, aPrime := ccs.aZs.z0,
+    { gdX := input.gdX, b0 := pcs.b0, b1 := gcs.b1, a := pcs.a, aPrime := ccs.aZs.z0,
       z13A := zCell cfg.hashConfig iHash 0 13, z13APrime := ccs.aZs.zLast }
   let _ ← (PkdCanonicity.bundle.toFormal "NoteCommit input pk_d").call cfg.gates.pkd
-    { pkdX := input.pkdX, b3 := pcs.b3, d0, c := pcs.c, b3CPrime := ccs.bZs.z0,
+    { pkdX := input.pkdX, b3 := pcs.b3, d0 := gcs.d0, c := pcs.c, b3CPrime := ccs.bZs.z0,
       z13C := zCell cfg.hashConfig iHash 2 13, z14B3CPrime := ccs.bZs.zLast }
   let _ ← (ValueCanonicity.bundle.toFormal "NoteCommit input value").call cfg.gates.value
     { value := input.value, d2 := pcs.d2, d3 := zCell cfg.hashConfig iHash 3 1,
       e0 := pcs.e0 }
+  pure ()
+
+/-- Canonicity regions for rho and psi. -/
+def synthRhoPsiCanonicity (cfg : Config) (input : Var Inputs Fp)
+    (pcs : PieceCells) (ccs : CheckCells) (gcs : GateCells)
+    (iHash : RegionIndex) : Circuit Fp Unit := do
   let _ ← (RhoCanonicity.bundle.toFormal "NoteCommit input rho").call cfg.gates.rho
-    { rho := input.rho, e1 := pcs.e1, g0, f := pcs.f, e1FPrime := ccs.eZs.z0,
+    { rho := input.rho, e1 := pcs.e1, g0 := gcs.g0, f := pcs.f, e1FPrime := ccs.eZs.z0,
       z13F := zCell cfg.hashConfig iHash 5 13, z14E1FPrime := ccs.eZs.zLast }
   let _ ← (PsiCanonicity.bundle.toFormal "NoteCommit input psi").call cfg.gates.psi
-    { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1,
+    { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1 := gcs.h1,
       g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
       z13G := zCell cfg.hashConfig iHash 6 13, z13G1G2Prime := ccs.gZs.zLast }
   pure ()
+
+/-- The five canonicity regions at the end of stage 3. -/
+def synthCanonicity (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash : RegionIndex) : Circuit Fp Unit := do
+  synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash
+  synthRhoPsiCanonicity cfg input pcs ccs gcs iHash
+
+/-- Stage 3 (10 regions): the gate regions (`note_commit.rs:1739-1795`). -/
+def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash : RegionIndex) : Circuit Fp Unit := do
+  let gcs ← synthDecompositions cfg input pcs ccs iHash
+  synthCanonicity cfg input pcs ccs gcs iHash
 
 /-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
 The `rcm` blinding scalar enters as the input's nat-valued reading program. -/
@@ -410,12 +505,46 @@ theorem synthChecks_regionCount (G : Generators) (R : FixedBase)
     Circuit.operations_bind, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
 
+theorem synthDecompositions_regionCount (cfg : Config) (input : Var Inputs Fp)
+    (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
+    Operations.regionCount
+      ((synthDecompositions cfg input pcs ccs iHash).operations i) = 5 := by
+  simp only [synthDecompositions, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append]
+
+theorem synthGdPkdValueCanonicity_regionCount (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (gcs : GateCells) (iHash : RegionIndex) (i : RegionIndex) :
+    Operations.regionCount
+      ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations i) = 3 := by
+  simp only [synthGdPkdValueCanonicity, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append]
+
+theorem synthRhoPsiCanonicity_regionCount (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (gcs : GateCells) (iHash : RegionIndex) (i : RegionIndex) :
+    Operations.regionCount
+      ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations i) = 2 := by
+  simp only [synthRhoPsiCanonicity, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.regionCount_append]
+
+theorem synthCanonicity_regionCount (cfg : Config) (input : Var Inputs Fp)
+    (pcs : PieceCells) (ccs : CheckCells) (gcs : GateCells)
+    (iHash : RegionIndex) (i : RegionIndex) :
+    Operations.regionCount
+      ((synthCanonicity cfg input pcs ccs gcs iHash).operations i) = 5 := by
+  simp only [synthCanonicity, circuit_norm, Circuit.operations_bind,
+    Operations.regionCount_append]
+  rw [synthGdPkdValueCanonicity_regionCount,
+    synthRhoPsiCanonicity_regionCount]
+
 theorem synthGates_regionCount (cfg : Config) (input : Var Inputs Fp)
     (pcs : PieceCells) (ccs : CheckCells) (iHash : RegionIndex) (i : RegionIndex) :
     Operations.regionCount
       ((synthGates cfg input pcs ccs iHash).operations i) = 10 := by
   simp only [synthGates, circuit_norm, Circuit.operations_bind,
     Operations.regionCount_append]
+  rw [synthDecompositions_regionCount, synthCanonicity_regionCount]
 
 /-- The region count of the flow: 15 piece/short regions, the 18-region check stage,
 the 10 gate regions — 43. -/
@@ -454,6 +583,7 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
       + 1 + 1 + 1 + 1 = i + 18
   rw [yc_call_nextRegionIndex, yc_call_nextRegionIndex, commit_call_nextRegionIndex]
 
+@[keygen_output_norm]
 theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
     (synthPieces cfg input).output i
@@ -474,6 +604,7 @@ theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
           h0 := .of (i + 13) 0 cfg.lookupConfig.runningSum } := by
   rfl
 
+@[keygen_output_norm]
 theorem synthChecks_output (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Var Inputs Fp) (pcs : PieceCells) (iHash : RegionIndex)
@@ -510,9 +641,168 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
+/-- Equality-enabled columns used by NoteCommit's local copy operations, together with
+the columns required by its commitment child. -/
+def permutationColumns (cfg : Config) (childColumns : List AnyColumn) : List AnyColumn :=
+  ([cfg.hashConfig.witnessPieces, cfg.hashConfig.bits,
+    cfg.lookupConfig.runningSum,
+    cfg.gates.b.colL, cfg.gates.b.colM, cfg.gates.b.colR,
+    cfg.gates.d.colL, cfg.gates.d.colM, cfg.gates.d.colR,
+    cfg.gates.e.colL, cfg.gates.e.colM, cfg.gates.e.colR,
+    cfg.gates.g.colL, cfg.gates.g.colM,
+    cfg.gates.h.colL, cfg.gates.h.colM, cfg.gates.h.colR,
+    cfg.gates.gd.colL, cfg.gates.gd.colM, cfg.gates.gd.colR, cfg.gates.gd.colZ,
+    cfg.gates.pkd.colL, cfg.gates.pkd.colM, cfg.gates.pkd.colR, cfg.gates.pkd.colZ,
+    cfg.gates.value.colL, cfg.gates.value.colM, cfg.gates.value.colR,
+      cfg.gates.value.colZ,
+    cfg.gates.rho.colL, cfg.gates.rho.colM, cfg.gates.rho.colR, cfg.gates.rho.colZ,
+    cfg.gates.psi.colL, cfg.gates.psi.colM, cfg.gates.psi.colR, cfg.gates.psi.colZ,
+    cfg.gates.y.advices 5, cfg.gates.y.advices 6, cfg.gates.y.advices 7,
+      cfg.gates.y.advices 8, cfg.gates.y.advices 9] : List AnyColumn) ++
+    childColumns
+
+theorem synthPieces_output_permutationColumns (cfg : Config)
+    (input : Var Inputs Fp) (childColumns : List AnyColumn) (i : RegionIndex) :
+    ∀ column, column ∈ ((synthPieces cfg input).output i).permutationColumns →
+      column ∈ permutationColumns cfg childColumns := by
+  intro column hcolumn
+  simp only [synthPieces_output, PieceCells.permutationColumns,
+    AssignedCell.of_cell, Cell.of_column, List.mem_cons,
+    List.not_mem_nil, or_false, or_self] at hcolumn
+  have : column = cfg.hashConfig.witnessPieces.toAny ∨
+      column = cfg.lookupConfig.runningSum.toAny := by
+    grind
+  rcases this with rfl | rfl <;> simp [permutationColumns]
+
+theorem synthChecks_output_permutationColumns (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (iHash i : RegionIndex)
+    (childColumns : List AnyColumn) :
+    ∀ column,
+      column ∈
+        ((synthChecks G R Q hQ cfg input pcs iHash).output i).permutationColumns →
+      column ∈ permutationColumns cfg childColumns := by
+  intro column hcolumn
+  simp only [synthChecks_output, CheckCells.permutationColumns,
+    AssignedCell.of_cell, Cell.of_column, List.mem_cons,
+    List.not_mem_nil, or_false, or_self] at hcolumn
+  have : column = (cfg.gates.y.advices 6).toAny ∨
+      column = cfg.lookupConfig.runningSum.toAny := by
+    grind
+  rcases this with rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_child {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈ childColumns) :
+    column ∈ permutationColumns cfg childColumns := by
+  exact List.mem_append_right _ hcolumn
+
+theorem mem_permutationColumns_of_decomposeB {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.b.colL, cfg.gates.b.colM, cfg.gates.b.colR] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_decomposeD {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.d.colL, cfg.gates.d.colM, cfg.gates.d.colR] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_decomposeE {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.e.colL, cfg.gates.e.colM, cfg.gates.e.colR] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_decomposeG {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.g.colL, cfg.gates.g.colM] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_decomposeH {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.h.colL, cfg.gates.h.colM, cfg.gates.h.colR] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_gd {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.gd.colL, cfg.gates.gd.colM,
+        cfg.gates.gd.colR, cfg.gates.gd.colZ] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_pkd {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.pkd.colL, cfg.gates.pkd.colM,
+        cfg.gates.pkd.colR, cfg.gates.pkd.colZ] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_value {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.value.colL, cfg.gates.value.colM,
+        cfg.gates.value.colR, cfg.gates.value.colZ] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_rho {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.rho.colL, cfg.gates.rho.colM,
+        cfg.gates.rho.colR, cfg.gates.rho.colZ] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_psi {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.psi.colL, cfg.gates.psi.colM,
+        cfg.gates.psi.colR, cfg.gates.psi.colZ] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+
+theorem mem_permutationColumns_of_y {column : AnyColumn}
+    (cfg : Config) (childColumns : List AnyColumn)
+    (hcolumn : column ∈
+      ([cfg.gates.y.advices 5, cfg.gates.y.advices 6,
+        cfg.gates.y.advices 7, cfg.gates.y.advices 8,
+        cfg.gates.y.advices 9, cfg.lookupConfig.runningSum] : List AnyColumn)) :
+    column ∈ permutationColumns cfg childColumns := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns]
+
+theorem zCell_column_mem_permutationColumns (cfg : Config)
+    (childColumns : List AnyColumn) (iHash : RegionIndex) (i j : ℕ) :
+    (zCell cfg.hashConfig iHash i j).cell.column ∈
+      permutationColumns cfg childColumns := by
+  simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
+
 @[keygen_norm]
 def keygenRequirements (G : Generators) (R : FixedBase)
-    (Q : Point Fp) (hQ : Q.OnCurve) : KeygenRequirements Fp Config where
+    (Q : Point Fp) (hQ : Q.OnCurve) :
+    KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
@@ -532,6 +822,11 @@ def keygenRequirements (G : Generators) (R : FixedBase)
   lookups cfg configured :=
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++
       configured.lookups
+  permutationColumns cfg configured := permutationColumns cfg configured.permutationColumns
+  inputPermutationColumns _ _ input :=
+    [input.gdX.cell.column, input.gdY.cell.column,
+      input.pkdX.cell.column, input.pkdY.cell.column,
+      input.value.cell.column, input.rho.cell.column, input.psi.cell.column]
 
 @[keygen_helper]
 theorem synthPieces_keygenRegistered
@@ -540,7 +835,19 @@ theorem synthPieces_keygenRegistered
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
     ((synthPieces cfg input).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
-      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input) := by
+  have hBitshift : LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig ∈
+      (keygenRequirements G R Q hQ).gates cfg configured := by
+    simp [keygenRequirements]
+  have hLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
+      (keygenRequirements G R Q hQ).lookups cfg configured := by
+    simp [keygenRequirements]
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input := by
+    simp [keygenRequirements, permutationColumns]
   keygen_registration
 
 @[keygen_helper]
@@ -552,7 +859,10 @@ theorem synthChecks_keygenRegistered
     ((synthChecks G R Q hQ cfg input pcs iHash).operations
       self).KeygenRegistered
         ((keygenRequirements G R Q hQ).gates cfg configured)
-        ((keygenRequirements G R Q hQ).lookups cfg configured) := by
+        ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+          pcs.permutationColumns) := by
   simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
     Operations.KeygenRegistered.append,
     Operations.KeygenRegistered.nil, and_true]
@@ -570,6 +880,16 @@ theorem synthChecks_keygenRegistered
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       exact Or.inl h
+    · intro column h
+      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
+    · intro column h
+      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
   constructor
   · apply FormalCircuit.call_keygenRegistered_ofOutput
       (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
@@ -584,6 +904,16 @@ theorem synthChecks_keygenRegistered
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       exact Or.inl h
+    · intro column h
+      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
+    · intro column h
+      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h ⊢
+      aesop
   constructor
   · apply FormalCircuit.call_keygenRegistered
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
@@ -594,17 +924,138 @@ theorem synthChecks_keygenRegistered
     · intro argument h
       simp only [keygenRequirements, List.mem_append]
       exact Or.inr h
+    · intro column h
+      exact List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ h))
+    · intro column h
+      apply List.mem_append_right
+      simp only [Sinsemilla.CommitDomain.commit,
+        Sinsemilla.CommitDomain.keygenRequirements,
+        FormalCircuit.Configured.inputPermutationColumns,
+        FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h
+      simp only [Vector.toList, List.map_cons, List.map_nil, List.mem_cons,
+        List.not_mem_nil, or_false] at h
+      simp only [PieceCells.permutationColumns, List.mem_cons,
+        List.not_mem_nil, or_false]
+      rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns := by
+    simp [keygenRequirements, permutationColumns]
   constructor
   · apply LookupRangeCheck.witnessCheck_keygenRegistered
-    simp [keygenRequirements]
+    · simp [keygenRequirements]
+    · exact hRunningSum
   constructor
   · apply LookupRangeCheck.witnessCheck_keygenRegistered
-    simp [keygenRequirements]
+    · simp [keygenRequirements]
+    · exact hRunningSum
   constructor
   · apply LookupRangeCheck.witnessCheck_keygenRegistered
-    simp [keygenRequirements]
+    · simp [keygenRequirements]
+    · exact hRunningSum
   · apply LookupRangeCheck.witnessCheck_keygenRegistered
-    simp [keygenRequirements]
+    · simp [keygenRequirements]
+    · exact hRunningSum
+
+theorem synthDecompositions_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthDecompositions cfg input pcs ccs iHash).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns ++ ccs.permutationColumns) := by
+  have hB := fun column =>
+    mem_permutationColumns_of_decomposeB (column := column) cfg configured.permutationColumns
+  have hD := fun column =>
+    mem_permutationColumns_of_decomposeD (column := column) cfg configured.permutationColumns
+  have hE := fun column =>
+    mem_permutationColumns_of_decomposeE (column := column) cfg configured.permutationColumns
+  have hG := fun column =>
+    mem_permutationColumns_of_decomposeG (column := column) cfg configured.permutationColumns
+  have hH := fun column =>
+    mem_permutationColumns_of_decomposeH (column := column) cfg configured.permutationColumns
+  have hZ := fun i j =>
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Operations.KeygenRegistered.append]
+  repeat' apply And.intro
+  all_goals keygen_registration
+
+theorem synthGdPkdValueCanonicity_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations
+      self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns ++ ccs.permutationColumns ++
+        gcs.permutationColumns) := by
+  have hGd := fun column =>
+    mem_permutationColumns_of_gd (column := column) cfg configured.permutationColumns
+  have hPkd := fun column =>
+    mem_permutationColumns_of_pkd (column := column) cfg configured.permutationColumns
+  have hValue := fun column =>
+    mem_permutationColumns_of_value (column := column) cfg configured.permutationColumns
+  have hZ := fun i j =>
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
+    Operations.KeygenRegistered.append]
+  repeat' apply And.intro
+  all_goals keygen_registration
+
+theorem synthRhoPsiCanonicity_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations
+      self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns ++ ccs.permutationColumns ++
+        gcs.permutationColumns) := by
+  have hRho := fun column =>
+    mem_permutationColumns_of_rho (column := column) cfg configured.permutationColumns
+  have hPsi := fun column =>
+    mem_permutationColumns_of_psi (column := column) cfg configured.permutationColumns
+  have hZ := fun i j =>
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
+    Operations.KeygenRegistered.append]
+  repeat' apply And.intro
+  all_goals keygen_registration
+
+theorem synthCanonicity_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthCanonicity cfg input pcs ccs gcs iHash).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns ++ ccs.permutationColumns ++
+        gcs.permutationColumns) := by
+  simp only [synthCanonicity, Circuit.operations_bind,
+    Operations.KeygenRegistered.append]
+  constructor
+  · apply synthGdPkdValueCanonicity_keygenRegistered
+  · apply synthRhoPsiCanonicity_keygenRegistered
 
 @[keygen_helper]
 theorem synthGates_keygenRegistered
@@ -614,8 +1065,50 @@ theorem synthGates_keygenRegistered
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
     ((synthGates cfg input pcs ccs iHash).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
-      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
-  keygen_registration [synthGates]
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
+        pcs.permutationColumns ++ ccs.permutationColumns) := by
+  simp only [synthGates, Circuit.operations_bind,
+    Operations.KeygenRegistered.append]
+  constructor
+  · exact synthDecompositions_keygenRegistered
+      G R Q hQ cfg input pcs ccs iHash self configured
+  · apply (synthCanonicity_keygenRegistered
+      G R Q hQ cfg input pcs ccs _ iHash _ configured).mono
+      (fun _ h => h) (fun _ h => h)
+    intro column hcolumn
+    rw [List.mem_append] at hcolumn
+    rcases hcolumn with hcolumn | hcolumn
+    · exact hcolumn
+    · simp only [synthDecompositions_output, GateCells.permutationColumns,
+        AssignedCell.of_cell, Cell.of_column, List.mem_cons,
+        List.not_mem_nil, or_false] at hcolumn
+      have hParent : ∀ {column : AnyColumn},
+          column ∈ permutationColumns cfg configured.permutationColumns →
+          column ∈
+            (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+              (keygenRequirements G R Q hQ).inputPermutationColumns
+                cfg configured input ++ pcs.permutationColumns ++
+                  ccs.permutationColumns := by
+        intro column hcolumn
+        apply List.mem_append_left
+        apply List.mem_append_left
+        apply List.mem_append_left
+        simpa only [keygenRequirements] using hcolumn
+      rcases hcolumn with rfl | rfl | rfl | rfl
+      · apply hParent
+        apply mem_permutationColumns_of_decomposeB
+        simp
+      · apply hParent
+        apply mem_permutationColumns_of_decomposeD
+        simp
+      · apply hParent
+        apply mem_permutationColumns_of_decomposeG
+        simp
+      · apply hParent
+        apply mem_permutationColumns_of_decomposeH
+        simp
 
 @[keygen_helper]
 theorem synth_keygenRegistered
@@ -624,8 +1117,50 @@ theorem synth_keygenRegistered
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
     ((synth G R Q hQ cfg input).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
-      ((keygenRequirements G R Q hQ).lookups cfg configured) := by
-  keygen_registration
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input) := by
+  simp only [synth, Circuit.operations_bind, currentRegion_operations,
+    currentRegion_nextRegionIndex, currentRegion_output,
+    Circuit.operations_pure, Operations.KeygenRegistered.append,
+    Operations.KeygenRegistered.nil, true_and, and_true]
+  have hParent : ∀ {column : AnyColumn},
+      column ∈ permutationColumns cfg configured.permutationColumns →
+      column ∈
+        (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns
+            cfg configured input := by
+    intro column hcolumn
+    apply List.mem_append_left
+    simpa only [keygenRequirements] using hcolumn
+  constructor
+  · exact synthPieces_keygenRegistered G R Q hQ cfg input self configured
+  constructor
+  · apply (synthChecks_keygenRegistered G R Q hQ cfg input _ _ _ configured).mono
+      (fun _ h => h) (fun _ h => h)
+    intro column hcolumn
+    rw [List.mem_append] at hcolumn
+    rcases hcolumn with hcolumn | hcolumn
+    · exact hcolumn
+    · apply hParent
+      exact synthPieces_output_permutationColumns
+        cfg input configured.permutationColumns self column hcolumn
+  · apply (synthGates_keygenRegistered G R Q hQ cfg input _ _ _ _ configured).mono
+      (fun _ h => h) (fun _ h => h)
+    intro column hcolumn
+    rw [List.mem_append] at hcolumn
+    rcases hcolumn with hcolumn | hcolumn
+    · rw [List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact hcolumn
+      · apply hParent
+        exact synthPieces_output_permutationColumns
+          cfg input configured.permutationColumns self column hcolumn
+    · apply hParent
+      exact synthChecks_output_permutationColumns
+        G R Q hQ cfg input ((synthPieces cfg input).output self)
+          (self + 27) ((synthPieces cfg input).nextRegionIndex self)
+          configured.permutationColumns column hcolumn
 
 /-- The elaborated metadata, standalone (the factored soundness statement needs the
 instance). NOT named `elaborated`: the canonical name is reserved for instances whose fields
