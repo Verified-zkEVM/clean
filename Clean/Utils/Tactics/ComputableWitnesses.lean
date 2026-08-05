@@ -58,6 +58,36 @@ def structEqSplitProc : Simproc := fun e => do
 
 simproc structEqSplit (_ = _) := structEqSplitProc
 
+/-- Find a local variable of `ProvableStruct` type (e.g. an opaque circuit input) that can be
+destructured: `simp`/`grind` do not iota-reduce the `match` coming from `main`'s destructuring
+`let` against an opaque variable, so the tactic case-splits such variables up front. -/
+private def findProvableStructVar : TacticM (Option FVarId) :=
+  withMainContext do
+    for decl in ← getLCtx do
+      if decl.isImplementationDetail then continue
+      -- `.instances` whnf, not `.reducible`: inputs are typed through the `Var M F` class
+      -- projection, which does not reduce at reducible transparency
+      let ty ← withTransparency .instances <| whnf (← instantiateMVars decl.type)
+      let .const tyName _ := ty.getAppFn | continue
+      unless isStructure (← getEnv) tyName do continue
+      let args := ty.getAppArgs
+      unless args.size ≥ 1 do continue
+      let M := mkAppN ty.getAppFn args.pop
+      let inst ← try? do
+        synthInstance (← mkAppM ``ProvableStruct #[M])
+      if inst.isSome then
+        return some decl.fvarId
+    return none
+
+/-- Destructure all `ProvableStruct`-typed local variables (fixpoint, bounded). -/
+private def destructureProvableStructVars : TacticM Unit := do
+  for _ in [0:8] do
+    if (← getGoals).isEmpty then return
+    let some fvarId ← findProvableStructVar | return
+    liftMetaTactic fun goal => do
+      let subgoals ← goal.cases fvarId
+      return subgoals.map (·.mvarId) |>.toList
+
 private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
   let lemmasArray ← extraTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
@@ -77,17 +107,21 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     simpPass
   unless (← getGoals).isEmpty do
     evalTactic (← `(tactic| intros))
+  destructureProvableStructVars
+  simpPass
   unless (← getGoals).isEmpty do
     withMainContext do
       let target ← whnf (← getMainTarget)
+      -- `simp_all` fallback: hypotheses like `∀ i < n, eval env s[i] = eval env' s[i]` are
+      -- rewrite rules that close congruence goals grind occasionally leaves open
       if target.isAppOfArity ``And 2 then
         evalTacticSeq (← `(tacticSeq|
           apply And.intro
           · intros
-            (try and_intros) <;> grind
-          · grind))
+            (try and_intros) <;> first | grind | simp_all
+          · first | grind | simp_all))
       else
-        evalTactic (← `(tactic| grind))
+        evalTactic (← `(tactic| first | grind | simp_all))
 
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,
