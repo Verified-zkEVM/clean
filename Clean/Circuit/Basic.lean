@@ -427,6 +427,13 @@ def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : Prove
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
+/-- `AgreesBelow` is symmetric; as a forward `grind` rule so both orientations are
+available when discharging composition-rule premises. -/
+@[grind →]
+theorem ProverEnvironment.AgreesBelow.symm {F} {n : ℕ} {env env' : ProverEnvironment F}
+    (h : env.AgreesBelow n env') : env'.AgreesBelow n env :=
+  ⟨fun i hi => (h.1 i hi).symm, h.2.1.symm, h.2.2.symm⟩
+
 @[computable_witnesses_norm, grind]
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
   env.AgreesBelow n env' → f env = f env'

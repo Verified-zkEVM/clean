@@ -519,7 +519,10 @@ end FormalCircuitBase
 
 section
 variable {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-variable {env : Environment F} {env_p : ProverEnvironment F} {input_var : Var Input F} {n : ℕ}
+-- `input_var` at the concrete `Input (Expression F)` type (not `Var Input F`): per the
+-- normal-form doctrine in `Provable.lean`, eval lemmas must elaborate at the concrete
+-- type so their `@eval` atoms are congruent with goal terms inside `grind`.
+variable {env : Environment F} {env_p : ProverEnvironment F} {input_var : Input (Expression F)} {n : ℕ}
 
 -- Simplification lemmas for toSubcircuit.localLength
 
@@ -663,6 +666,7 @@ theorem FormalAssertion.toSubcircuit_usesLocalWitnesses (circuit : FormalAsserti
 
 -- (One-directional) simplification lemmas for toSubcircuit.ComputableWitnesses
 
+@[grind ←]
 theorem FormalCircuit.toSubcircuit_computableWitnesses {env env' : ProverEnvironment F}
     (circuit : FormalCircuit F Input Output)
     (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var) :
@@ -718,9 +722,9 @@ theorem FormalCircuit.output_onlyAccessedBelow {env env' : ProverEnvironment F}
   intro h_agrees
   have hn := ProverEnvironment.agreesBelow_of_le h_agrees (Nat.le_add_right n (circuit.localLength input_var))
   have hin : eval env input_var = eval env' input_var := by
-    simpa only [CircuitType.eval_var_prover_to_verifier] using h hn
+    simpa only [CircuitType.eval_expression_prover_to_verifier] using h hn
   have hout := (circuit.computableWitnesses' hin).2 h_agrees
-  simpa only [CircuitType.eval_var_prover_to_verifier] using hout
+  simpa only [CircuitType.eval_expression_prover_to_verifier] using hout
 
 /-- Elementwise companion to `output_of_input_eq` for `fields`-valued outputs. Parent witness
 expressions embed the child's output per element, as `Expression.eval … (output)[i]`, so the

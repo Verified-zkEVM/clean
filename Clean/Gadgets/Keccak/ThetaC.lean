@@ -60,12 +60,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
--- TODO COMPWIT: anti-pattern bridges (they rewrite toward `ProvableType.eval`,
--- which should never be user-facing). The subcircuit-chain obligations in this file still
--- depend on the atomization these provide; replace once grind-side composite-eval
--- congruence is worked out.
-attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
-
 def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   main := main
   elaborated := elaborated
@@ -73,5 +67,9 @@ def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  computableWitnesses := by
+    -- reduce the child's localLength/output metadata: with five chained calls, the
+    -- unreduced offset sums send grind's case-splitting off a cliff
+    computable_witnesses [Xor64.circuit]
 
 end Gadgets.Keccak256.ThetaC

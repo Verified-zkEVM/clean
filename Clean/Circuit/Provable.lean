@@ -129,8 +129,10 @@ ordinary simplification.
 @[circuit_norm, grind norm] lemma value_of_provableType (F) :
   Value M F = M F := rfl
 
-instance : VerifierEval F (Var M F) (M F) := verifierEval M
-instance : ProverEval F (Var M F) (M F) := proverEval M
+-- Deliberately only one instance pair, keyed on the concrete `M (Expression F)` type:
+-- a second `Var M F`-keyed pair would register distinct instance constants for defeq
+-- types, splitting eval terms into incongruent `grind` atoms. `Var M F` reduces to
+-- `M (Expression F)` during instance search.
 instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 @[circuit_norm] instance : ProverEval F (M (Expression F)) (M F) := proverEval M
 

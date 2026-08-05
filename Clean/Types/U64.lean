@@ -40,7 +40,6 @@ namespace U64
 @[grind =]
 theorem size_eq : size U64 = 8 := rfl
 
-@[grind =]
 theorem eval_eq_components {F : Type} [FiniteField F]
     (env : Environment F) (x : U64 (Expression F)) :
     eval env x =
@@ -49,6 +48,54 @@ theorem eval_eq_components {F : Type} [FiniteField F]
         x4 := eval env x.x4, x5 := eval env x.x5,
         x6 := eval env x.x6, x7 := eval env x.x7 } := by
   with_unfolding_all rfl
+
+/-- Constructor-keyed composite eval: decomposition fires only on `U64` literals, keeping
+opaque composite evals intact as `grind` atoms. -/
+@[grind =]
+theorem eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (a0 a1 a2 a3 a4 a5 a6 a7 : Expression F) :
+    eval env (⟨a0, a1, a2, a3, a4, a5, a6, a7⟩ : U64 (Expression F)) =
+      ⟨Expression.eval env a0, Expression.eval env a1, Expression.eval env a2,
+       Expression.eval env a3, Expression.eval env a4, Expression.eval env a5,
+       Expression.eval env a6, Expression.eval env a7⟩ := by
+  simp only [eval_eq_components, circuit_norm]
+
+/-! Component evals commute into projections of the composite eval (rather than the
+composite exploding into components): opaque composite evals are the `grind` atoms that
+subcircuit composition rules are patterned on, and env-agreement transfers between them
+by congruence. -/
+
+@[grind =]
+theorem eval_x0 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x0 = (eval env x).x0 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x1 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x1 = (eval env x).x1 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x2 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x2 = (eval env x).x2 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x3 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x3 = (eval env x).x3 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x4 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x4 = (eval env x).x4 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x5 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x5 = (eval env x).x5 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x6 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x6 = (eval env x).x6 := by simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x7 {F : Type} [FiniteField F] (env : Environment F) (x : U64 (Expression F)) :
+    Expression.eval env x.x7 = (eval env x).x7 := by simp only [eval_eq_components, circuit_norm]
 
 def toLimbs {F} (x : U64 F) : Vector F 8 := toElements x
 def fromLimbs {F} (v : Vector F 8) : U64 F := fromElements v
