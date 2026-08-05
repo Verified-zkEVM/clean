@@ -65,6 +65,10 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assump
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
+-- TODO(eval-normalization): anti-pattern bridges (they rewrite toward `ProvableType.eval`,
+-- which should never be user-facing). The subcircuit-chain obligations in this file still
+-- depend on the atomization these provide; replace once grind-side composite-eval
+-- congruence is worked out.
 attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
 
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where

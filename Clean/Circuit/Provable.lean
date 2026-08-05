@@ -148,7 +148,7 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
   unfold eval
   rfl
 
-@[circuit_norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
+@[circuit_norm, grind norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
     eval env v = eval env.toEnvironment v := by
   rw [eval_var_prover, eval_var]
 
@@ -160,7 +160,7 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
     eval env v = ProvableType.eval env.toEnvironment v := by
   rw [eval_var_prover]
 
-@[circuit_norm] lemma eval_expression_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
+@[circuit_norm, grind norm] lemma eval_expression_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
     eval env v = eval env.toEnvironment v := by
   rw [eval_expression_prover, eval_expression]
 
@@ -773,7 +773,7 @@ theorem eval_vector (env : Environment F)
   rw [Vector.flatten_toChunks]
   simp [explicit_provable_type]
 
-@[grind norm, grind _=_]
+@[grind norm, grind =]
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
     eval env x[i] = (eval env x)[i] := by
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)

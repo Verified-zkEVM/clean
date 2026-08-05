@@ -112,16 +112,17 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
   unless (← getGoals).isEmpty do
     withMainContext do
       let target ← whnf (← getMainTarget)
-      -- `simp_all` fallback: hypotheses like `∀ i < n, eval env s[i] = eval env' s[i]` are
-      -- rewrite rules that close congruence goals grind occasionally leaves open
+      -- `simp_all` first, guarded: hypotheses like `∀ i < n, eval env s[i] = eval env' s[i]`
+      -- are rewrite rules that close congruence goals grind occasionally leaves open; when
+      -- neither closes the goal, `grind`'s failure (with diagnostics) is the one reported
       if target.isAppOfArity ``And 2 then
         evalTacticSeq (← `(tacticSeq|
           apply And.intro
           · intros
-            (try and_intros) <;> first | grind | simp_all
-          · first | grind | simp_all))
+            (try and_intros) <;> first | (simp_all; done) | grind
+          · first | (simp_all; done) | grind))
       else
-        evalTactic (← `(tactic| first | grind | simp_all))
+        evalTactic (← `(tactic| first | (simp_all; done) | grind))
 
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,

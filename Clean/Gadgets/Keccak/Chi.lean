@@ -52,6 +52,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
+-- TODO(eval-normalization): anti-pattern bridges (they rewrite toward `ProvableType.eval`,
+-- which should never be user-facing). The subcircuit-chain obligations in this file still
+-- depend on the atomization these provide; replace once grind-side composite-eval
+-- congruence is worked out.
 attribute [local grind =] CircuitType.eval_var CircuitType.eval_expression
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
