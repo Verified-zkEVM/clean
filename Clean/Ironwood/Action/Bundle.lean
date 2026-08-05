@@ -446,23 +446,6 @@ private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
       = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
         : Var Point Fp) := rfl
 
-private theorem ai_output
-    (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
-    (inp : Var AddressIntegrity.Input Fp) (i : RegionIndex) :
-    (AddressIntegrity.circuit).output c inp i
-      = ({ x := AssignedCell.of (i + 4) 0 c.2.x, y := AssignedCell.of (i + 4) 0 c.2.y }
-        : Var Point Fp) := by
-  change ((do
-    let derived ← Ecc.Mul.mul.call c.1 { alpha := inp.ivk, base := inp.gDOld }
-    let pkDOld ← Ecc.WitnessPoint.pointNonIdFormal.call c.2 inp.pkDOld
-    assignRegion "constrain equal" (do
-      constrainEqual derived.x pkDOld.x
-      constrainEqual derived.y pkDOld.y)
-    pure pkDOld : Circuit Fp (Var Point Fp)).output i) = _
-  simp only [Circuit.output_bind, Circuit.output_pure,
-    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call']
-  rw [Ecc.Mul.mul_call_regionCount, wpointNonId_output]
-
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
     (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
@@ -703,7 +686,7 @@ theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     output_advance_bind (ai_call_nextRegionIndex _ _),
     Circuit.output_pure]
   simp only [output_assignRegion, output_assignAdvice, FormalCircuit.output_call',
-    ai_output, Nat.add_assoc, Nat.reduceAdd]
+    AddressIntegrity.circuit_output, Nat.add_assoc, Nat.reduceAdd]
 
 theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
@@ -725,6 +708,13 @@ instance elaborated (G : Generators) (B : Bases) :
   configureInfo _ := configureElaborated G
   registered := by
     intro configInput counts hconfig input i
+    have hadvice := configure_output_advice_mem_permutationRequests G counts
+    have hprimary := configure_output_primary_mem_permutationRequests G counts
+    have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
+    have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
+    have haddX := configure_output_add_xQR_mem_permutationRequests G counts
+    have haddY := configure_output_add_yQR_mem_permutationRequests G counts
+    have hmerkle1 := configure_output_merkle1_xA_mem_permutationRequests G counts
     dsimp only [main, CircuitPreIronwood.synthesize, synthesizeBase]
     simp_all only [keygen_spine]
     constructor
@@ -737,10 +727,12 @@ instance elaborated (G : Generators) (B : Bases) :
             (eccConfigureCertificate G counts).witnessPointFormal
         | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
             (eccConfigureCertificate G counts).witnessPointNonIdFormal
+      all_goals simp only [keygen_norm]
     · constructor
       · dsimp only [synthChecks, loadPrivate]
         simp_all only [keygen_spine]
-        repeat' constructor
+        repeat' first
+          | (guard_target =~ (_ ∧ _); constructor)
         all_goals
           first
           | apply
@@ -770,6 +762,10 @@ instance elaborated (G : Generators) (B : Bases) :
               (commitIvkCertificate G B counts)
           | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
               (addressIntegrityCertificate G counts)
+          | skip
+        all_goals simp_all only [keygen_norm, keygen_output_norm,
+          synthWitness_output, actionConfigureContext_permutationColumns,
+          Nat.reduceEqDiff, if_false]
       · dsimp only [synthNotes, loadPrivate]
         simp_all only [keygen_spine]
         repeat' constructor
@@ -917,7 +913,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     show Point.OnCurve _
     simp only [circuit_norm, Point.eval_eq]
     exact hGdS)
-  rw [AddressIntegrity.circuit_spec_eq, ai_output] at hAIS
+  rw [AddressIntegrity.circuit_spec_eq, AddressIntegrity.circuit_output] at hAIS
   rw [aiInputs_eval_eq] at hAIS
   simp only [Point.eval_eq, circuit_norm, Nat.add_zero,
     Nat.add_assoc, Nat.reduceAdd] at hAIS

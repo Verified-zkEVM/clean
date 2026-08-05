@@ -89,7 +89,16 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   elaborated :=
     { keygenRequirements := keygenRequirements V R
       registered := by keygen_registration
-      regionCount _ := 5 }
+      output cfg _ i :=
+        { x := .of (i + 4) 1 cfg.2.2.xQR,
+          y := .of (i + 4) 1 cfg.2.2.yQR }
+      regionCount _ := 5
+      output_eq := by
+        intro cfg input i
+        simp only [Circuit.output_bind, Circuit.output_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount', circuit_norm,
+          Ecc.Add.addFormal_output_cells] }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
     Ecc.MulFixed.Short.EnvAssumptions scfg env ∧
@@ -118,9 +127,17 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
         rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
       by rw [hBl]; exact R.smul_valid _⟩
     refine ⟨hm_lt, ?_⟩
+    rw [Ecc.Add.addFormal_output_cells] at cv_eq
+    have hcv : ({ x := output_x, y := output_y } : Point Fp) =
+        eval (⟨place, env⟩ : Placed Environment Fp) cv := by
+      rw [← cv_eq]
+      simp only [Point.eval_eq, circuit_norm]
+      simp_all
     rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
-    · exact Or.inl ⟨hsign, by simp_all⟩
-    · exact Or.inr ⟨hsign, by simp_all⟩
+    · refine Or.inl ⟨hsign, ?_⟩
+      rw [hcv, hAddS.2, hCm, hBl]
+    · refine Or.inr ⟨hsign, ?_⟩
+      rw [hcv, hAddS.2, hCm, hBl]
 
   completeness := by
     circuit_proof_start2 [Ecc.MulFixed.Short.circuit, Ecc.MulFixed.FullWidth.circuit,

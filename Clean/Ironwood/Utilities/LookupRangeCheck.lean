@@ -481,6 +481,18 @@ def shortRangeCheck (K numBits : ℕ) :
     · -- the honest-prover contract: the output IS the extraction cell
       exact hOut.symm
 
+/-- The short range check registers exactly its running-sum column for equality. -/
+@[keygen_norm]
+theorem shortRangeCheck_configured_permutationColumns_eq
+    (K numBits : ℕ) {cfg : Config K}
+    (configured : (shortRangeCheck K numBits).Configured cfg) :
+    configured.permutationColumns = [cfg.runningSum.toAny] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    shortRangeCheck, List.singleton_append]
+
 /-! ## The pure telescoping algebra for `range_check`
 
 Lifted `K`-generically from the phase-one donor `Clean/Orchard/Utilities.lean`,

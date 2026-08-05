@@ -645,21 +645,8 @@ open CompElliptic.Fields.Pasta (Fq)
 the columns required by its commitment child. -/
 def permutationColumns (cfg : Config) (childColumns : List AnyColumn) : List AnyColumn :=
   ([cfg.hashConfig.witnessPieces, cfg.hashConfig.bits,
-    cfg.lookupConfig.runningSum,
-    cfg.gates.b.colL, cfg.gates.b.colM, cfg.gates.b.colR,
-    cfg.gates.d.colL, cfg.gates.d.colM, cfg.gates.d.colR,
-    cfg.gates.e.colL, cfg.gates.e.colM, cfg.gates.e.colR,
-    cfg.gates.g.colL, cfg.gates.g.colM,
-    cfg.gates.h.colL, cfg.gates.h.colM, cfg.gates.h.colR,
-    cfg.gates.gd.colL, cfg.gates.gd.colM, cfg.gates.gd.colR, cfg.gates.gd.colZ,
-    cfg.gates.pkd.colL, cfg.gates.pkd.colM, cfg.gates.pkd.colR, cfg.gates.pkd.colZ,
-    cfg.gates.value.colL, cfg.gates.value.colM, cfg.gates.value.colR,
-      cfg.gates.value.colZ,
-    cfg.gates.rho.colL, cfg.gates.rho.colM, cfg.gates.rho.colR, cfg.gates.rho.colZ,
-    cfg.gates.psi.colL, cfg.gates.psi.colM, cfg.gates.psi.colR, cfg.gates.psi.colZ,
-    cfg.gates.y.advices 5, cfg.gates.y.advices 6, cfg.gates.y.advices 7,
-      cfg.gates.y.advices 8, cfg.gates.y.advices 9] : List AnyColumn) ++
-    childColumns
+    cfg.lookupConfig.runningSum] : List AnyColumn) ++
+    NoteCommit.permutationColumns cfg.gates ++ childColumns
 
 theorem synthPieces_output_permutationColumns (cfg : Config)
     (input : Var Inputs Fp) (childColumns : List AnyColumn) (i : RegionIndex) :
@@ -672,7 +659,7 @@ theorem synthPieces_output_permutationColumns (cfg : Config)
   have : column = cfg.hashConfig.witnessPieces.toAny ∨
       column = cfg.lookupConfig.runningSum.toAny := by
     grind
-  rcases this with rfl | rfl <;> simp [permutationColumns]
+  rcases this with rfl | rfl <;> simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem synthChecks_output_permutationColumns (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -689,7 +676,7 @@ theorem synthChecks_output_permutationColumns (G : Generators) (R : FixedBase)
   have : column = (cfg.gates.y.advices 6).toAny ∨
       column = cfg.lookupConfig.runningSum.toAny := by
     grind
-  rcases this with rfl | rfl <;> simp [permutationColumns]
+  rcases this with rfl | rfl <;> simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_child {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -703,7 +690,8 @@ theorem mem_permutationColumns_of_decomposeB {column : AnyColumn}
       ([cfg.gates.b.colL, cfg.gates.b.colM, cfg.gates.b.colR] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_decomposeD {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -711,7 +699,8 @@ theorem mem_permutationColumns_of_decomposeD {column : AnyColumn}
       ([cfg.gates.d.colL, cfg.gates.d.colM, cfg.gates.d.colR] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_decomposeE {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -719,7 +708,8 @@ theorem mem_permutationColumns_of_decomposeE {column : AnyColumn}
       ([cfg.gates.e.colL, cfg.gates.e.colM, cfg.gates.e.colR] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_decomposeG {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -727,7 +717,7 @@ theorem mem_permutationColumns_of_decomposeG {column : AnyColumn}
       ([cfg.gates.g.colL, cfg.gates.g.colM] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl <;> simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_decomposeH {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -735,7 +725,8 @@ theorem mem_permutationColumns_of_decomposeH {column : AnyColumn}
       ([cfg.gates.h.colL, cfg.gates.h.colM, cfg.gates.h.colR] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_gd {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -744,7 +735,8 @@ theorem mem_permutationColumns_of_gd {column : AnyColumn}
         cfg.gates.gd.colR, cfg.gates.gd.colZ] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_pkd {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -753,7 +745,8 @@ theorem mem_permutationColumns_of_pkd {column : AnyColumn}
         cfg.gates.pkd.colR, cfg.gates.pkd.colZ] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_value {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -762,7 +755,8 @@ theorem mem_permutationColumns_of_value {column : AnyColumn}
         cfg.gates.value.colR, cfg.gates.value.colZ] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_rho {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -771,7 +765,8 @@ theorem mem_permutationColumns_of_rho {column : AnyColumn}
         cfg.gates.rho.colR, cfg.gates.rho.colZ] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_psi {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -780,7 +775,8 @@ theorem mem_permutationColumns_of_psi {column : AnyColumn}
         cfg.gates.psi.colR, cfg.gates.psi.colZ] : List AnyColumn)) :
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-  rcases hcolumn with rfl | rfl | rfl | rfl <;> simp [permutationColumns]
+  rcases hcolumn with rfl | rfl | rfl | rfl <;>
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem mem_permutationColumns_of_y {column : AnyColumn}
     (cfg : Config) (childColumns : List AnyColumn)
@@ -791,7 +787,7 @@ theorem mem_permutationColumns_of_y {column : AnyColumn}
     column ∈ permutationColumns cfg childColumns := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
   rcases hcolumn with rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp [permutationColumns]
+    simp [permutationColumns, NoteCommit.permutationColumns]
 
 theorem zCell_column_mem_permutationColumns (cfg : Config)
     (childColumns : List AnyColumn) (iHash : RegionIndex) (i j : ℕ) :
@@ -882,11 +878,13 @@ theorem synthChecks_keygenRegistered
       exact Or.inl h
     · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        NoteCommit.permutationColumns,
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop
     · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        NoteCommit.permutationColumns,
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop
@@ -906,11 +904,13 @@ theorem synthChecks_keygenRegistered
       exact Or.inl h
     · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        NoteCommit.permutationColumns,
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop
     · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
+        NoteCommit.permutationColumns,
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop

@@ -402,6 +402,36 @@ theorem FormalCircuit.foldCall_forall (property : Operation F → Prop) (m : ℕ
   rw [FormalCircuit.foldCall_operations,
     FormalCircuit.foldOps_forall c toInput config init i₀]
 
+/-- Register a serial fold compositionally from one configured handle per round and
+an invariant covering the equality columns of each folded input. -/
+theorem FormalCircuit.foldCall_keygenRegistered
+    (m : ℕ)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    {targetPermutationColumns : List AnyColumn}
+    (configured : ∀ i : Fin m, (c i).Configured config)
+    (hgates : ∀ i gate,
+      gate ∈ (configured i).gates → gate ∈ targetGates)
+    (hlookups : ∀ i argument,
+      argument ∈ (configured i).lookups → argument ∈ targetLookups)
+    (hpermutationColumns : ∀ i column,
+      column ∈ (configured i).permutationColumns →
+        column ∈ targetPermutationColumns)
+    (hinputPermutationColumns : ∀ i column,
+      column ∈ (configured i).inputPermutationColumns
+          (FormalCircuit.foldState c toInput config init i₀ i).1 →
+        column ∈ targetPermutationColumns) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀).KeygenRegistered
+      targetGates targetLookups targetPermutationColumns := by
+  rw [Operations.KeygenRegistered, FormalCircuit.foldCall_forall]
+  intro i
+  exact FormalCircuit.call_keygenRegistered
+    (c i) config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+    (hgates i) (hlookups i) (hpermutationColumns i)
+    (hinputPermutationColumns i)
+
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
 theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)
     (m : ℕ) :

@@ -471,6 +471,21 @@ structure Config where
   psi : PsiCanonicity.Config
   y : YCanonicity.Config
 
+/-- Equality-enabled columns used by the configured NoteCommit gates. -/
+def permutationColumns (cfg : Config) : List AnyColumn :=
+  [cfg.b.colL, cfg.b.colM, cfg.b.colR,
+    cfg.d.colL, cfg.d.colM, cfg.d.colR,
+    cfg.e.colL, cfg.e.colM, cfg.e.colR,
+    cfg.g.colL, cfg.g.colM,
+    cfg.h.colL, cfg.h.colM, cfg.h.colR,
+    cfg.gd.colL, cfg.gd.colM, cfg.gd.colR, cfg.gd.colZ,
+    cfg.pkd.colL, cfg.pkd.colM, cfg.pkd.colR, cfg.pkd.colZ,
+    cfg.value.colL, cfg.value.colM, cfg.value.colR, cfg.value.colZ,
+    cfg.rho.colL, cfg.rho.colM, cfg.rho.colR, cfg.rho.colZ,
+    cfg.psi.colL, cfg.psi.colM, cfg.psi.colR, cfg.psi.colZ,
+    cfg.y.advices 5, cfg.y.advices 6, cfg.y.advices 7,
+      cfg.y.advices 8, cfg.y.advices 9]
+
 /-- Rust `NoteCommitConfig::configure` (`note_commit.rs:1456-1560`), VK-exact: `col_l/m/r/z
 = advices[6..10]`, the eleven gates in registration order. -/
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
@@ -495,6 +510,19 @@ instance (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure
   infer_instance
+
+/-- Every local copy column produced by NoteCommit configure is one of advices 5–9. -/
+theorem mem_adviceColumns_of_mem_configure_output_permutationColumns
+    (advices : Fin 10 → Column .advice) (counts : ConfigureCounts)
+    (column : AnyColumn)
+    (hcolumn : column ∈ permutationColumns ((configure advices).output counts)) :
+    column ∈ ([advices 5, advices 6, advices 7, advices 8, advices 9] :
+      List AnyColumn) := by
+  simp [permutationColumns, configure, DecomposeB.configure, DecomposeD.configure,
+    DecomposeE.configure, DecomposeG.configure, DecomposeH.configure,
+    GdCanonicity.configure, PkdCanonicity.configure, ValueCanonicity.configure,
+    RhoCanonicity.configure, PsiCanonicity.configure, YCanonicity.configure] at hcolumn ⊢
+  grind
 
 @[keygen_norm]
 theorem configure_delta_gates (advices : Fin 10 → Column .advice)

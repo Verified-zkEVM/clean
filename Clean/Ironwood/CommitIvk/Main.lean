@@ -196,6 +196,19 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
           d0 := .of (i + 5) 0 cfg.lookupConfig.runningSum } := by
   rfl
 
+@[keygen_output_norm]
+theorem synth_output (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    (synth G R Q hQ cfg input).output i =
+      AssignedCell.of (i + 10) 1 cfg.addConfig.xQR := by
+  simp only [synth, Circuit.output_bind, Circuit.output_pure,
+    NoteCommit.Main.currentRegion_output,
+    NoteCommit.Main.currentRegion_nextRegionIndex,
+    synthPieces_output, synthPieces_nextRegionIndex,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    Sinsemilla.CommitDomain.commit_output, Nat.add_assoc, Nat.reduceAdd]
+
 /-! ## The bundle contract -/
 
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
@@ -313,9 +326,9 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
   keygenRequirements := keygenRequirements G R Q hQ
   registered := by
     keygen_registration
-  output cfg input i := (synth G R Q hQ cfg input).output i
+  output cfg _ i := AssignedCell.of (i + 10) 1 cfg.addConfig.xQR
   regionCount _ := 14
-  output_eq := by intro _ _ _; rfl
+  output_eq := fun cfg input i => (synth_output G R Q hQ cfg input i).symm
   regionCount_eq cfg input i :=
     (synth_regionCount G R Q hQ cfg input i).symm
 

@@ -134,18 +134,14 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     { keygenRequirements := keygenRequirements K
       registered := by keygen_registration
       output cfg input i :=
-        let (pcfg, acfg, bcfg, ecfg) := cfg
-        ((do
-          let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
-            { x0 := input.nk, x1 := input.rho }
-          let scalar ← AddChip.addFormal.call acfg
-            { a := hash, b := input.psi }
-          let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-          let nf ← Ecc.Add.addFormal.call ecfg
-            { p := input.cm, q := product }
-          pure nf.x : Circuit Fp (Var field Fp)).output i)
+        .of (i + 8) 1 cfg.2.2.2.xQR
       regionCount _ := 9
-      output_eq := by intro _ _ _; rfl
+      output_eq := by
+        intro cfg input i
+        simp only [Circuit.output_bind, Circuit.output_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount', circuit_norm,
+          Ecc.Add.addFormal_output_cells]
       regionCount_eq := fun (pcfg, acfg, bcfg, ecfg) input i =>
         (deriveNullifier_regionCount K pcfg acfg bcfg ecfg input i).symm }
 
@@ -179,16 +175,11 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       rw [Ecc.Add.addFormal_assumptions_eq]
       exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩)
     rw [Ecc.Add.addFormal_spec_eq] at hAddS
-    have hSum : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
-        : Value Point Fp)
-        = ({ x := input_cm_x, y := input_cm_y } : Point Fp)
-          + (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_2
-            : Value Point Fp) := hAddS.2
-    rw [← h_output]
-    rw [show AssignedCell.eval place env x_gen_out_3.x
-      = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
-          : Value Point Fp).x from by simp only [Point.eval_eq, circuit_norm]]
-    rw [hSum, hB, hS, hH, constantLength_value_two]
+    rw [Ecc.Add.addFormal_output_cells] at hAddS
+    have hSum := congrArg Point.x hAddS.2
+    simp only [Point.eval_eq, circuit_norm] at hSum
+    simp only [Point.eval_eq, circuit_norm] at hB
+    rw [← h_output, hSum, hB, hS, hH, constantLength_value_two]
 
   completeness := by
     circuit_proof_start

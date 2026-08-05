@@ -44,6 +44,13 @@ def witnessMessagePiece (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) 
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "witness message piece" (assignAdvice cfg.witnessPieces 0 w)
 
+/-- A witnessed message piece stays in the chip's witness-piece column. -/
+@[keygen_norm]
+theorem witnessMessagePiece_output_column (cfg : Sinsemilla.HashPiece.Config)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessMessagePiece cfg w).output i).cell.column = cfg.witnessPieces := by
+  simp only [witnessMessagePiece, circuit_norm]
+
 /-! ## The layouter-level `hash_message`
 
 The formal wrapper is `(hashRegion …).toFormal` (below); `hashMessage` is its `.call`. -/

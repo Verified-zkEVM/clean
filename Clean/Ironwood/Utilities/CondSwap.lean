@@ -103,9 +103,16 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
   configure := pure
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ := [swapGate cfg]
-          permutationColumns input _ := [input.a]
-          inputPermutationColumns _ _ input := [input.a.cell.column] } }
+      { gates cfg _ := [swapGate cfg]
+        permutationColumns input _ :=
+          [input.a, input.aSwapped, input.bSwapped]
+        inputPermutationColumns _ _ input := [input.a.cell.column] }
+      output := fun cfg offset _ self =>
+        { aSwapped := AssignedCell.of self offset cfg.aSwapped
+          bSwapped := AssignedCell.of self offset cfg.bSwapped }
+      output_eq := by
+        intro cfg offset input self
+        simp only [circuit_norm] }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do
     -- cond_swap.rs:97 — q_swap first
@@ -170,6 +177,37 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOB
 
+/-- The first swap output stays in its configured advice column. -/
+@[keygen_norm]
+theorem swap_output_aSwapped_column (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+    (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
+    ((swap wb wswap).output cfg offset input self).aSwapped.cell.column = cfg.aSwapped := by
+  unfold FormalRegionCircuit.output swap
+  rfl
+
+/-- The second swap output stays in its configured advice column. -/
+@[keygen_norm]
+theorem swap_output_bSwapped_column (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+    (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
+    ((swap wb wswap).output cfg offset input self).bSwapped.cell.column = cfg.bSwapped := by
+  unfold FormalRegionCircuit.output swap
+  rfl
+
+/-- A configured swap exposes its input and both output columns for equality. -/
+@[keygen_norm]
+theorem swap_configured_permutationColumns_eq (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) {cfg : Config}
+    (configured : (swap wb wswap).Configured cfg) :
+    configured.permutationColumns =
+      [cfg.a.toAny, cfg.aSwapped.toAny, cfg.bSwapped.toAny] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    swap, Configure.delta_pure, List.append_nil]
+
 /-- A conditional-swap capability exported by its producing configure run. -/
 def swapConfigureCertificate
     (a b aSwapped bSwapped swapColumn : Column .advice)
@@ -180,7 +218,8 @@ def swapConfigureCertificate
       { gates := ((configure a b aSwapped bSwapped swapColumn).delta counts).gates
         lookups := ((configure a b aSwapped bSwapped swapColumn).delta counts).lookups
         permutationColumns :=
-          ((configure a b aSwapped bSwapped swapColumn).delta counts).permutationRequests } := by
+          [aSwapped.toAny, bSwapped.toAny] ++
+            ((configure a b aSwapped bSwapped swapColumn).delta counts).permutationRequests } := by
   let cfg := (configure a b aSwapped bSwapped swapColumn).output counts
   apply ((swap wb wswap).configureCertificate cfg {} ()).mono
   · intro gate hgate
@@ -202,7 +241,13 @@ def swapConfigureCertificate
   · intro column hcolumn
     simp only [keygen_norm, swap, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements] at hcolumn
-    subst column
-    simp only [keygen_norm, cfg, configure]
+    rcases hcolumn with hcolumn | hcolumn | hcolumn
+    · subst column
+      apply List.mem_append_right
+      simp only [keygen_norm, cfg, configure]
+    · subst column
+      simp [cfg, configure]
+    · subst column
+      simp [cfg, configure]
 
 end Zcash.Circuits.CondSwap

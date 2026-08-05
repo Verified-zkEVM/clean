@@ -446,12 +446,35 @@ in the Rust chip (`ecc/chip.rs`: `assign_region(|| "complete point addition", â€
 def addFormal :=
   add.toFormal "complete point addition"
 
+/-- The layouter-level complete addition has the same positional output as its single
+region. -/
+@[keygen_norm]
+theorem addFormal_output_cells (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    addFormal.output config input self =
+      { x := .of self 1 config.xQR,
+        y := .of self 1 config.yQR } := by
+  rfl
+
 /-- The complete-addition region's positional output cells. -/
 theorem add_output_cells (config : Config) (offset : â„•) (input : Var Inputs Fp)
     (self : RegionIndex) :
     add.output config offset input self =
       { x := .of self (offset + 1) config.xQR,
         y := .of self (offset + 1) config.yQR } := rfl
+
+/-- The layouter-level complete addition returns its coordinates in `xQR` and `yQR`. -/
+@[keygen_norm]
+theorem addFormal_output_x_column (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (addFormal.output config input self).x.cell.column = config.xQR := by
+  rfl
+
+@[keygen_norm]
+theorem addFormal_output_y_column (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (addFormal.output config input self).y.cell.column = config.yQR := by
+  rfl
 
 derive_contract_bridges addFormal := addFormal
 

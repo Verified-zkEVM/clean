@@ -77,7 +77,16 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   elaborated :=
     { keygenRequirements := keygenRequirements G
       registered := by keygen_registration
-      regionCount _ := 3 }
+      output cfg _ i :=
+        { x := .of (i + 2) 1 cfg.2.xQR,
+          y := .of (i + 2) 1 cfg.2.yQR }
+      regionCount _ := 3
+      output_eq := by
+        intro cfg input i
+        simp only [Circuit.output_bind, Circuit.output_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount', circuit_norm,
+          Ecc.Add.addFormal_output_cells] }
 
   EnvAssumptions := fun (fcfg, _) env =>
     Ecc.MulFixed.FullWidth.EnvAssumptions fcfg env
@@ -96,7 +105,13 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
     have hAl := alphaCommitment_spec env_assumptions
     have hAddS := rk_spec ⟨by rw [hAl]; exact G.smul_valid _, assumptions⟩
-    simp_all
+    rw [Ecc.Add.addFormal_output_cells] at rk_eq
+    have hrk : ({ x := output_x, y := output_y } : Point Fp) =
+        eval (⟨place, env⟩ : Placed Environment Fp) rk := by
+      rw [← rk_eq]
+      simp only [Point.eval_eq, circuit_norm]
+      simp_all
+    rw [hrk, hAddS.2, hAl]
   completeness := by
     circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
     have hAl := alphaCommitment_spec env_assumptions

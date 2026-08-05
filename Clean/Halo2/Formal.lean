@@ -844,8 +844,7 @@ theorem call_keygenRegistered_ofCertificate
     (certificate : self.ConfigurationCertificate config context)
     (input : Var Input F) (i : RegionIndex)
     (hinputPermutationColumns : ∀ column,
-      column ∈ self.keygenRequirements.inputPermutationColumns
-        certificate.configInput certificate.configLawful input →
+      column ∈ certificate.configured.inputPermutationColumns input →
       column ∈ context.permutationColumns) :
     ((self.call config input).operations i).KeygenRegistered
       context.gates context.lookups context.permutationColumns := by
@@ -860,7 +859,9 @@ theorem call_keygenRegistered_ofCertificate
       rcases hcolumn with hcolumn | hcolumn
       · exact permutationColumns column (by
           simpa only [List.mem_append] using hcolumn)
-      · exact hinputPermutationColumns column hcolumn)
+      · exact hinputPermutationColumns column (by
+          simpa [Configured.inputPermutationColumns,
+            ConfigurationCertificate.configured] using hcolumn))
 
 /--
 An embedded registration certificate closes a child call against any larger ambient
@@ -1699,8 +1700,7 @@ theorem call_keygenRegistered_ofCertificate
     (certificate : self.ConfigurationCertificate config context)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     (hinputPermutationColumns : ∀ column,
-      column ∈ self.keygenRequirements.inputPermutationColumns
-        certificate.configInput certificate.configLawful input →
+      column ∈ certificate.configured.inputPermutationColumns input →
       column ∈ context.permutationColumns) :
     ((self.call config offset input).operations region).Forall
       (RegionOperation.KeygenRegistered context.gates context.lookups
@@ -1718,7 +1718,9 @@ theorem call_keygenRegistered_ofCertificate
       rcases hcolumn with hcolumn | hcolumn
       · exact permutationColumns column (by
           simpa only [List.mem_append] using hcolumn)
-      · exact hinputPermutationColumns column hcolumn)
+      · exact hinputPermutationColumns column (by
+          simpa [Configured.inputPermutationColumns,
+            ConfigurationCertificate.configured] using hcolumn))
 
 /--
 Region-level counterpart of `FormalCircuit.call_keygenRegistered`.

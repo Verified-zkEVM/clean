@@ -79,7 +79,16 @@ def circuit : FormalCircuit Fp
             [input.ivk.cell.column, input.gDOld.x.cell.column,
               input.gDOld.y.cell.column] }
       registered := by keygen_registration
-      regionCount _ := 6 }
+      output cfg _ i :=
+        { x := .of (i + 4) 0 cfg.2.x,
+          y := .of (i + 4) 0 cfg.2.y }
+      regionCount _ := 6
+      output_eq := by
+        intro cfg input i
+        simp only [Circuit.output_bind, Circuit.output_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount', circuit_norm,
+          Ecc.WitnessPoint.pointNonIdFormal_output_cells] }
 
   EnvAssumptions := fun (mcfg, _) env => Ecc.Mul.EnvAssumptions mcfg env
 
@@ -103,7 +112,27 @@ def circuit : FormalCircuit Fp
       Ecc.Mul.Assumptions, Ecc.Mul.Spec]
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially sound
-    simp_all
+    rw [Ecc.WitnessPoint.pointNonIdFormal_output_cells] at pkDOld_eq
+    have hpkCells := congrArg Point.coords pkDOld_eq
+    simp only [Point.coords, Prod.mk.injEq] at hpkCells
+    have hpkDOld : ({ x := output_x, y := output_y } : Point Fp) =
+        { x := AssignedCell.eval place env pkDOld_x,
+          y := AssignedCell.eval place env pkDOld_y } := by
+      apply Point.ext_coords
+      simp only [Point.coords, Prod.mk.injEq, ← hpkCells.1, ← hpkCells.2,
+        circuit_norm]
+      exact ⟨output_eq.1.symm, output_eq.2.symm⟩
+    have hderived := derived_spec env_assumptions assumptions
+    have hpkValue :
+        ({ x := AssignedCell.eval place env pkDOld_x,
+           y := AssignedCell.eval place env pkDOld_y } : Point Fp) =
+          ZMod.val (show Fp from input_ivk) •
+            ({ x := input_gDOld_x, y := input_gDOld_y } : Point Fp) := by
+      rw [← hderived]
+      apply Point.ext_coords
+      simp only [Point.coords, Prod.mk.injEq]
+      exact ⟨region_0.1.symm, region_0.2.symm⟩
+    exact ⟨hpkDOld ▸ pkDOld_spec, hpkDOld.trans hpkValue⟩
 
   completeness := by
     circuit_proof_start2 [Ecc.Mul.mul, Ecc.WitnessPoint.pointNonIdFormal,

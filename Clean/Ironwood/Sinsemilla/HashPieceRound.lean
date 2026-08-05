@@ -213,6 +213,14 @@ theorem configure_output_xA (G : Generators)
       = xA := by
   rfl
 
+theorem configure_output_xP (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).xP
+      = xP := by
+  rfl
+
 theorem configure_output_bits (G : Generators)
     (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
     (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
@@ -229,6 +237,14 @@ theorem configure_output_lambda1 (G : Generators)
       counts).lambda1 = lambda1 := by
   rfl
 
+theorem configure_output_lambda2 (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).lambda2 = lambda2 := by
+  rfl
+
 theorem configure_xA_mem_permutationRequests (G : Generators)
     (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
     (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
@@ -236,6 +252,17 @@ theorem configure_xA_mem_permutationRequests (G : Generators)
     xA.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
       counts).permutationRequests := by
   unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_xP_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    xP.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
   apply Configure.mem_permutationRequests_delta_bind_left
   exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
@@ -263,6 +290,57 @@ theorem configure_lambda1_mem_permutationRequests (G : Generators)
   apply Configure.mem_permutationRequests_delta_bind_right
   apply Configure.mem_permutationRequests_delta_bind_left
   exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_lambda2_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    lambda2.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+/-- The five equality-enabled HashPiece columns are all present in its configure log. -/
+theorem configure_equalityColumn_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈
+      ([xA, xP, bits, lambda1, lambda2] : List AnyColumn)) :
+    column ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl | rfl
+  · exact configure_xA_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_xP_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_bits_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_lambda1_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_lambda2_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+
+/-- The equality-enabled columns of a configured HashPiece are present in its configure log. -/
+theorem configure_output_equalityColumn_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : let cfg :=
+        (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts
+      column ∈ ([cfg.xA, cfg.xP, cfg.bits, cfg.lambda1, cfg.lambda2] : List AnyColumn)) :
+    column ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  apply configure_equalityColumn_mem_permutationRequests G xA xP bits lambda1 lambda2
+    witnessPieces fixedYQ genTable counts column
+  simpa only [configure_output_xA, configure_output_xP, configure_output_bits,
+    configure_output_lambda1, configure_output_lambda2] using hcolumn
 
 set_option synthInstance.maxSize 2048 in
 @[reducible] def configureElaborated

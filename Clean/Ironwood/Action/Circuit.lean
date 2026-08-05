@@ -137,6 +137,25 @@ private instance (primary : Column .instance) (advices : Fin 10 → Column .advi
   unfold configureEqualities
   infer_instance
 
+private theorem configureEqualities_advicePermutationColumn
+    (primary : Column .instance) (advices : Fin 10 → Column .advice)
+    (counts : ConfigureCounts) (index : Fin 10) :
+    (advices index).toAny ∈
+      ((configureEqualities primary advices).delta counts).permutationRequests := by
+  fin_cases index <;>
+    simp only [configureEqualities, configureAdviceEqualitiesLow,
+      configureAdviceEqualitiesHigh, keygen_norm] <;>
+    simp
+
+private theorem configureEqualities_primaryPermutationColumn
+    (primary : Column .instance) (advices : Fin 10 → Column .advice)
+    (counts : ConfigureCounts) :
+    primary.toAny ∈
+      ((configureEqualities primary advices).delta counts).permutationRequests := by
+  unfold configureEqualities
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality primary counts
+
 /-- The eight Lagrange columns and their constant-enabled first column. -/
 private def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
   let l0 ← fixedColumn; let l1 ← fixedColumn; let l2 ← fixedColumn
@@ -176,6 +195,62 @@ private instance : ElaboratedConfigure configureShared := by
   unfold configureShared
   infer_instance
 
+/-- Every advice column allocated by the shared Action prefix is registered for equality. -/
+private theorem configureShared_advicePermutationColumn
+    (counts : ConfigureCounts) (index : Fin 10) :
+    ((configureShared.output counts).advices index).toAny ∈
+      (configureShared.delta counts).permutationRequests := by
+  unfold configureShared
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact configureEqualities_advicePermutationColumn _ _ _ index
+
+/-- The public-input column allocated by the shared Action prefix is registered for equality. -/
+private theorem configureShared_primaryPermutationColumn
+    (counts : ConfigureCounts) :
+    (configureShared.output counts).primary.toAny ∈
+      (configureShared.delta counts).permutationRequests := by
+  unfold configureShared
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact configureEqualities_primaryPermutationColumn _ _ _
+
+/-- The AddChip gate created by the shared prefix is present in that prefix's gate log. -/
+private theorem configureShared_addChipGate (counts : ConfigureCounts) :
+    AddChip.addGate (configureShared.output counts).addChipConfig ∈
+      (configureShared.delta counts).gates := by
+  unfold configureShared
+  apply Configure.mem_gates_delta_bind_right
+  apply Configure.mem_gates_delta_bind_right
+  apply Configure.mem_gates_delta_bind_right
+  apply Configure.mem_gates_delta_bind_left
+  simp [AddChip.configure]
+
+/-- The top-level Orchard gate created by the shared prefix is present in its gate log. -/
+private theorem configureShared_orchardGate (counts : ConfigureCounts) :
+    orchardGate (configureShared.output counts).qOrchard
+      (configureShared.output counts).advices ∈
+        (configureShared.delta counts).gates := by
+  unfold configureShared
+  apply Configure.mem_gates_delta_bind_right
+  apply Configure.mem_gates_delta_bind_right
+  apply Configure.mem_gates_delta_bind_left
+  exact Configure.mem_gates_delta_createGate _ _
+
 /-- The allocation prefix of Rust `Circuit::configure`, through the shared range check. -/
 def configureBase : Configure Fp ConfigureBase := do
   let shared ← configureShared
@@ -187,6 +262,41 @@ def configureBase : Configure Fp ConfigureBase := do
 private instance : ElaboratedConfigure configureBase := by
   unfold configureBase
   infer_instance
+
+/-- Equality registration from the shared prefix survives the range-check suffix. -/
+private theorem configureBase_advicePermutationColumn
+    (counts : ConfigureCounts) (index : Fin 10) :
+    ((configureBase.output counts).advices index).toAny ∈
+      (configureBase.delta counts).permutationRequests := by
+  unfold configureBase
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact configureShared_advicePermutationColumn counts index
+
+/-- The shared public-input equality registration survives the range-check suffix. -/
+private theorem configureBase_primaryPermutationColumn
+    (counts : ConfigureCounts) :
+    (configureBase.output counts).primary.toAny ∈
+      (configureBase.delta counts).permutationRequests := by
+  unfold configureBase
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact configureShared_primaryPermutationColumn counts
+
+/-- The shared AddChip gate survives the range-check suffix. -/
+private theorem configureBase_addChipGate (counts : ConfigureCounts) :
+    AddChip.addGate (configureBase.output counts).addChipConfig ∈
+      (configureBase.delta counts).gates := by
+  unfold configureBase
+  apply Configure.mem_gates_delta_bind_left
+  exact configureShared_addChipGate counts
+
+/-- The shared top-level Orchard gate survives the range-check suffix. -/
+private theorem configureBase_orchardGate (counts : ConfigureCounts) :
+    orchardGate (configureBase.output counts).qOrchard
+      (configureBase.output counts).advices ∈
+        (configureBase.delta counts).gates := by
+  unfold configureBase
+  apply Configure.mem_gates_delta_bind_left
+  exact configureShared_orchardGate counts
 
 /-- The keygen capabilities exported by Action's shared configuration prefix. -/
 structure ConfigureBaseCertificate (counts : ConfigureCounts)
@@ -203,9 +313,9 @@ structure ConfigureBaseCertificate (counts : ConfigureCounts)
   rangeLookup : LookupRangeCheck.rangeCheckLookup 10
     (configureBase.output counts).lookupConfig ∈ context.lookups
   advicePermutationColumn : ∀ index,
-    (configureBase.output counts).advices index ∈ context.permutationColumns
+    ((configureBase.output counts).advices index).toAny ∈ context.permutationColumns
   primaryPermutationColumn :
-    (configureBase.output counts).primary ∈ context.permutationColumns
+    (configureBase.output counts).primary.toAny ∈ context.permutationColumns
 
 namespace ConfigureBaseCertificate
 
@@ -218,8 +328,9 @@ def mono {counts : ConfigureCounts} {source target : KeygenContext Fp}
       column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureBaseCertificate counts target where
   orchardGate := gates _ certificate.orchardGate
-  addChip := certificate.addChip.mono gates lookups
-  shortRange numBits := (certificate.shortRange numBits).mono gates lookups
+  addChip := certificate.addChip.mono gates lookups permutationColumns
+  shortRange numBits :=
+    (certificate.shortRange numBits).mono gates lookups permutationColumns
   bitshiftGate := gates _ certificate.bitshiftGate
   rangeLookup := lookups _ certificate.rangeLookup
   advicePermutationColumn index :=
@@ -249,19 +360,24 @@ def configureBaseCertificate (counts : ConfigureCounts) :
       rangeLookup := ?_
       advicePermutationColumn := ?_
       primaryPermutationColumn := ?_ }
-  · simp [configureBase, configureShared, configureAdvices,
-      configureEqualities, configureAdviceEqualitiesLow,
-      configureAdviceEqualitiesHigh, configureLagrange]
+  · exact configureBase_orchardGate counts
   · apply (AddChip.addFormalConfigureCertificate
       (base.advices 7) (base.advices 8) (base.advices 6) addCounts).mono
     · intro gate hgate
-      simp [base, configureBase, configureShared, configureAdvices,
-        configureEqualities, configureAdviceEqualitiesLow,
-        configureAdviceEqualitiesHigh, configureLagrange, AddChip.configure,
-        addCounts] at hgate ⊢
-      aesop
+      simp [AddChip.configure] at hgate
+      subst gate
+      exact configureBase_addChipGate counts
     · intro argument hargument
       simp [AddChip.configure] at hargument
+    · intro column hcolumn
+      simp only [List.mem_append, List.mem_cons, List.not_mem_nil,
+        or_false] at hcolumn
+      rcases hcolumn with (hcolumn | hcolumn) | hcolumn
+      · subst column
+        exact configureBase_advicePermutationColumn counts 7
+      · subst column
+        exact configureBase_advicePermutationColumn counts 8
+      · simp only [AddChip.configure, keygen_norm] at hcolumn
   · intro numBits
     apply (LookupRangeCheck.shortRangeConfigureCertificate 10 numBits
       (shared.advices 9) shared.genTable.tableIdx
@@ -276,6 +392,11 @@ def configureBaseCertificate (counts : ConfigureCounts) :
       unfold configureBase
       apply Configure.mem_lookups_delta_bind_right
       exact hargument
+    · intro column hcolumn
+      simp only
+      unfold configureBase
+      apply Configure.mem_permutationRequests_delta_bind_right
+      exact hcolumn
   · simp only
     unfold configureBase
     apply Configure.mem_gates_delta_bind_right
@@ -288,13 +409,8 @@ def configureBaseCertificate (counts : ConfigureCounts) :
     apply Configure.mem_lookups_delta_bind_left
     simp
   · intro index
-    fin_cases index <;>
-      simp [configureBase, configureShared, configureAdvices,
-        configureEqualities, configureAdviceEqualitiesLow,
-        configureAdviceEqualitiesHigh, configureLagrange]
-  · simp [configureBase, configureShared, configureAdvices,
-      configureEqualities, configureAdviceEqualitiesLow,
-      configureAdviceEqualitiesHigh, configureLagrange]
+    exact configureBase_advicePermutationColumn counts index
+  · exact configureBase_primaryPermutationColumn counts
 
 /-- The composite-chip suffix of Rust `Circuit::configure`. -/
 def configureChips (G : Generators) (base : ConfigureBase) :
