@@ -111,4 +111,45 @@ def circuit : FormalCircuit (F p) Input KeccakState where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  computableWitnesses := by
+    intro n input env env'
+    obtain ⟨state, block⟩ := input
+    have eX : ∀ v, (Xor64.circuit (p:=p)).localLength v = 8 := fun _ => rfl
+    simp only [circuit_norm, main]
+    refine ⟨⟨fun i h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
+    · -- Xor64 nodes on input elements
+      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by simp only [circuit_norm, eX]; try omega) fun h_agrees => by
+          simp only [circuit_norm]
+          (try and_intros) <;> grind
+    · -- the permutation consumes xor windows and untouched input elements
+      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by simp only [circuit_norm, eX]; try omega) fun h_agrees => by
+          have hout : ∀ (v : Var Xor64.Inputs (F p)) (m : ℕ),
+              (Xor64.circuit (p:=p)).output v m = varFromOffset U64 m := fun _ _ => rfl
+          simp only [eX] at h_agrees
+          simp only [circuit_norm, eval_vector, hout, eX]
+          refine Vector.ext fun j hj => ?_
+          simp only [Vector.getElem_map, Vector.getElem_append, Vector.getElem_mapFinRange]
+          split_ifs
+          · simp only [ProvableType.eval_varFromOffset, circuit_norm,
+              Vector.mapRange_succ, Vector.mapRange_zero]
+            have hjR : j.succ * 8 ≤ RATE * 8 := Nat.mul_le_mul_right 8 (by assumption)
+            refine congrArg fromElements ?_
+            simp only [Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
+            and_intros <;> exact h_agrees.1 _ (by omega)
+          · exact (getElem_eval_vector env.toEnvironment state _ (by omega)).trans
+              ((congrArg (fun s : KeccakState (F p) => s[RATE + (j - RATE)]'(by omega)) h.1).trans
+                (getElem_eval_vector env'.toEnvironment state _ (by omega)).symm)
+    · -- output: the permutation's fresh witness windows
+      try simp only [eX] at h_agrees
+      simp only [Permutation.stateVar, circuit_norm, eval_vector]
+      refine Vector.ext fun j hj => ?_
+      simp only [Vector.getElem_map, Vector.getElem_set, Vector.getElem_mapRange]
+      try split_ifs
+      all_goals
+        simp only [ProvableType.eval_varFromOffset, circuit_norm,
+          Vector.mapRange_succ, Vector.mapRange_zero]
+        grind
+
 end Gadgets.Keccak256.AbsorbBlock
