@@ -270,7 +270,7 @@ use whnf, so conjunctions hidden behind definitional unfolding (`Operations.forA
 concrete op lists) split as well; child obligations stay intact via the head guard. -/
 private partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if fuel == 0 then return [g]
-  let t := (← instantiateMVars (← g.getType)).consumeMData
+  let _t := (← instantiateMVars (← g.getType)).consumeMData
   -- `apply`/`intro` unify up to whnf, which also splits conjunctions reachable only
   -- by definitional unfolding (`Operations.forAll` over bind-chains). This is safe
   -- only because `unfold_formal_circuit_consts` ran first: whnf-unifying against a
@@ -351,12 +351,19 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     -- deterministic split to leaves
     splitStructure
     -- per-leaf: cheap normalization + head dispatch
-    let evalClose : TSyntax `tactic ← `(tactic|
+    -- Base close plus one shape-dispatched route: `Vector.ext` is only ever correct on
+    -- an equality of vectors, so it is selected by inspecting the goal, not tried
+    -- blindly in an alternatives chain.
+    let baseClose : TSyntax `tactic ← `(tactic|
       first
         | assumption
         | (simp_all; done)
         | (simp_all [circuit_norm, computable_witnesses_norm]; done)
-        | (congr 1 <;> first | assumption | grind)
+        | grind)
+    let vecClose : TSyntax `tactic ← `(tactic|
+      first
+        | assumption
+        | (simp_all; done)
         | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
              List.map_cons, List.map_nil, ProvableType.eval_varFromOffset, Vector.mapRange_succ,
              Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
@@ -368,6 +375,29 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
              Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
            (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector])
         | grind)
+    -- the window/elementwise route applies to eval-congruence goals: both sides are
+    -- eval applications of the same variable term under the two environments (output
+    -- windows, child-output metadata, vector states) — recognized by shape, whether
+    -- the value type is a vector or a provable struct
+    let isEvalCongrEq : TacticM Bool := withMainContext do
+      let t := (← instantiateMVars (← getMainTarget)).consumeMData
+      let some (_, lhs, rhs) := t.eq? | return false
+      let ty ← instantiateMVars (← inferType lhs)
+      let tyW ← withTransparency .instances <| whnf ty
+      if tyW.getAppFn.isConstOf ``Vector then return true
+      if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
+          (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
+        return true
+      -- goals over witness variables/windows: agreement-based congruence territory
+      return (t.find? fun e =>
+        e.getAppFn.isConstOf `Expression.var ||
+        e.getAppFn.isConstOf `ProvableType.varFromOffset).isSome
+    let evalCloseRun : TacticM Unit := do
+      if (← getGoals).isEmpty then return
+      if ← isEvalCongrEq then
+        evalTactic vecClose
+      else
+        evalTactic baseClose
     let leafDispatch : TacticM Unit := withMainContext do
       -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
       try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
@@ -381,7 +411,7 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       evalTactic (← `(tactic| assert_local_lengths))
       withMainContext do
         let t := (← instantiateMVars (← getMainTarget)).consumeMData
-        let .const headName _ := t.getAppFn | evalTactic evalClose
+        let .const headName _ := t.getAppFn | evalCloseRun
         if headName == `Subcircuit.ComputableWitnesses then
           let tryVariant (nm : Name) : TacticM Bool := do
             let st ← Tactic.saveState
@@ -402,13 +432,13 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
             unless (← getGoals).isEmpty do
               evalTactic (← `(tactic| (try chain_output_facts)))
               unless (← getGoals).isEmpty do
-                evalTactic evalClose
+                evalCloseRun
           else
             evalTactic (← `(tactic| grind))
         else
           evalTactic (← `(tactic| (try chain_output_facts)))
           unless (← getGoals).isEmpty do
-            evalTactic evalClose
+            evalCloseRun
     let goals ← getGoals
     for g in goals do
       setGoals [g]
