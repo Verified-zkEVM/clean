@@ -13,6 +13,7 @@ mod lookup;
 mod lookup_trace;
 mod prover;
 mod verifier;
+pub mod witness_generation;
 
 pub use check_constraints::*;
 pub use clean_air::*;

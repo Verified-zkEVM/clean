@@ -16,4 +16,7 @@ lean_lib CleanTests where
 lean_exe export_fibonacci_witness where
   root := `Clean.Examples.FibonacciWitnessExport
 
+lean_exe export_fibonacci_witness_rust where
+  root := `Clean.Examples.FibonacciWitnessRust
+
 require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.32.2"
