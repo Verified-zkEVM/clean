@@ -16,14 +16,6 @@ structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
 deriving ProvableStruct
 
-/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` split node-input
-equalities in `computableWitnesses` proofs. -/
-@[grind =]
-theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
-    (st : BLAKE3State (Expression F)) (cv : Vector (U32 (Expression F)) 8) :
-    eval env (Inputs.mk st cv) = Inputs.mk (eval env st) (eval env cv) := by
-  simp only [circuit_norm]
-
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
 

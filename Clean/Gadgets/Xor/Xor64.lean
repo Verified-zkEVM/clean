@@ -15,14 +15,6 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` split node-input
-equalities in `computableWitnesses` proofs. -/
-@[grind =]
-theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
-    (x y : U64 (Expression F)) :
-    eval env (Inputs.mk x y) = Inputs.mk (eval env x) (eval env y) := by
-  simp only [circuit_norm]
-
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z ← witness <|
