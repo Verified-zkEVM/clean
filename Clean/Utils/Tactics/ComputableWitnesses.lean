@@ -615,31 +615,38 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
           (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
         return true
       return false
-    -- when both sides of an eval-congruence goal share the same argument whose head is
-    -- a plain (non-bundle) definition — e.g. a child's Var-typed output metadata def like
-    -- `Permutation.stateVar`, already substituted for `c.output` by metadata reduction —
-    -- unfold that head: it is data, not a proof boundary, and unfolding exposes the
-    -- `varFromOffset` spelling the eval simp lemmas need
+    -- Var-typed metadata helper defs tagged `@[computable_witnesses_metadata]`
+    -- (`Permutation.stateVar`, `BLAKE3.G.output`, …) block the eval simp lemmas;
+    -- delta-expand them in the goal to expose their `varFromOffset` spelling.
+    -- Environment-clean (`unfold` would generate the helper's equation lemmas here
+    -- and collide with sibling modules doing the same) and shape-agnostic
+    -- (conjunction goals included). Opt-in by label: return-type shape cannot
+    -- separate safe helpers from spellings the chainer's facts key on.
     let unfoldSharedEvalArgHeads : TacticM Unit := withMainContext do
+      let labeledSet ← labelled `computable_witnesses_metadata
+      if labeledSet.isEmpty then return
+      let ctx ← Simp.mkContext
+        { zeta := true, beta := true, proj := true, iota := true, instances := true }
+        (simpTheorems := #[]) (← Meta.getSimpCongrTheorems)
+      let mut t := (← instantiateMVars (← getMainTarget)).consumeMData
+      let mut changed := false
+      -- iterate: labeled helpers can be nested inside other labeled helpers
+      -- (`Rotation32.output` inside `BLAKE3.G.output`)
       for _ in [0:4] do
-        if (← getGoals).isEmpty then return
-        let t := (← instantiateMVars (← getMainTarget)).consumeMData
-        let some (_, lhs, rhs) := t.eq? | return
-        unless lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! do return
-        let .const argHead _ := lhs.appArg!.getAppFn | return
-        let some ci := (← getEnv).find? argHead | return
-        unless ci.hasValue do return
-        -- only `Var`-typed metadata defs (e.g. a child's output helper like
-        -- `Permutation.stateVar : Var KeccakState (F p)`, stored reducible-unfolded as
-        -- `KeccakState (Expression (F p))`): polymorphic operator heads must keep their
-        -- spelling for the vector simp lemmas, and witness-IR construction defs
-        -- (`FExpr`-typed values) must keep theirs for the IR eval lemmas
-        let body := ci.type.getForallBody
-        let isVarTyped := body.getAppFn.isConstOf `CircuitType.Var ||
-          (body.isApp && body.getAppFn.isConst &&
-            body.appArg!.getAppFn.isConstOf `Expression)
-        unless isVarTyped do return
-        try evalTactic (← `(tactic| unfold $(mkIdent argHead):ident)) catch _ => return
+        let names ← IO.mkRef (#[] : Array Name)
+        t.forEach fun sub => do
+          let .const c _ := sub.getAppFn | return ()
+          if labeledSet.contains c then
+            names.modify fun a => if a.contains c then a else a.push c
+        let allowed ← names.get
+        if allowed.isEmpty then break
+        let expanded ← Meta.deltaExpand t (allowed.contains ·)
+        let t' := (← Meta.dsimp expanded ctx).1
+        if t' == t then break
+        t := t'
+        changed := true
+      unless changed do return
+      liftMetaTactic fun g => do return [← g.change t]
     -- `grind` internalizes every hypothesis and whnf-normalizes its terms; a
     -- `localLength`-equation whose LHS is a raw operations list (e.g. Permutation's 24
     -- rounds) blows the heartbeat budget during that normalization. The equations have
@@ -667,8 +674,10 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       if (← getGoals).isEmpty then return
       try clearOpsLengthHyps catch _ => pure ()
       if (← try syntacticAssumption; pure true catch _ => pure false) then return
+      -- expose labeled helper metadata before routing: the expansion produces the
+      -- `varFromOffset` atoms the route test looks for
+      try unfoldSharedEvalArgHeads catch _ => pure ()
       if ← isEvalCongrEq then
-        try unfoldSharedEvalArgHeads catch _ => pure ()
         evalTactic vecClose
       else
         evalTactic baseClose

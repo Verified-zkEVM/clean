@@ -46,6 +46,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
     |>.set c state_c
     |>.set d state_d
 
+@[computable_witnesses_metadata]
 def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : ℕ) : Vector (U32 (Expression (F p))) 16 :=
   (state : Vector (U32 (Expression (F p))) 16)
     |>.set a (⟨var ⟨i₀ + 56⟩, var ⟨i₀ + 58⟩, var ⟨i₀ + 60⟩, var ⟨i₀ + 62⟩⟩) a.is_lt

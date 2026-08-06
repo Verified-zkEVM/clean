@@ -17,6 +17,7 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   ∧ out_state.value = keccakPermutation state.value
 
 /-- state in the ith round, starting from offset n -/
+@[computable_witnesses_metadata]
 def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))

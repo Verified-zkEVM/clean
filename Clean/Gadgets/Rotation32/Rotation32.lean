@@ -32,6 +32,7 @@ def Spec (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
+@[computable_witnesses_metadata]
 def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
   Rotation32Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 

@@ -17,3 +17,10 @@ register_label_attr explicit_circuit_unfold_type
 `Pure.pure`, `Circuit.forEach`, `subcircuit`), and applies the matching lemma directly instead
 of trying each by `apply`.  Register a new circuit constructor by tagging its `from_*` lemma. -/
 register_label_attr explicit_circuit_constructor
+
+/-- Var-typed metadata helper definitions (a circuit's output helper such as
+`Permutation.stateVar` or `BLAKE3.G.output`) that `computable_witnesses` may
+delta-expand to expose their `varFromOffset` spelling for the eval simp lemmas.
+Opt-in: unfolding a definition whose folded spelling the close or the output
+chainer relies on breaks those proofs, so shape-based detection is not viable. -/
+register_label_attr computable_witnesses_metadata
