@@ -18,6 +18,74 @@ integration convenience must not be obtained by weakening the proved relation.
 The work should also leave behind a reusable Plonky3 backend rather than an integration whose
 architecture or data formats are specific to FemtoCairo.
 
+## Initial unblocked slice: `FibonacciWithChannels`
+
+The first implementation target is the `fibonacciEnsemble` defined in
+`Clean/Examples/FibonacciWithChannels.lean`. This slice establishes the reusable backend substrate
+before addressing FemtoCairo's unresolved external-data semantics.
+
+This is a meaningful backend target rather than a replacement toy example. It exercises:
+
+- multiple same-row AIR components (`pushBytes`, `add8`, and `fib8`);
+- a verifier/public-input circuit;
+- static, lookup-like, and VM-state channels (`bytes`, `add8`, and `fibonacci`);
+- conditional and non-constant interaction multiplicities;
+- channel communication across rows and components; and
+- an end-to-end formally proved Fibonacci statement.
+
+None of these channel guarantees depends semantically on external `ProverData`. Therefore this
+slice does not require a design for binding external program or memory data into the proof.
+
+The Lean example proves ensemble soundness but does not currently define an executable
+`EnsembleWitness` builder. The slice must therefore include an example-level Rust trace-input
+driver. Given a requested step count, it must supply Fibonacci transition rows, corresponding
+`add8` rows, balanced byte multiplicities, any valid disabled padding rows, and the claimed final
+public state. Generated Witgen code then completes the local witness columns for those rows.
+
+This trace-input driver is permitted to understand Fibonacci execution. It must use a generic
+backend interface for component descriptions, row witness generation, channel topology, proving,
+and verification; that topology must not be reassembled in a Fibonacci-specific backend adapter.
+The chosen trace heights and padding policy are statement metadata and must be enforced by the
+verifier.
+
+All otherwise applicable backend requirements in this document apply to the initial slice. In
+particular, it must use generated direct Rust constraints, generated Rust witness code, generic
+multi-component channel support, public inputs, verifier-bound trace metadata, documentation, and
+CI. It must not reach the goal by extending legacy `Clean/Table`, using the existing FemtoCairo
+adapter, interpreting the constraint AST in the proving hot path, or invoking Lean for witness
+generation at proving time.
+
+Support for witness operations or channel semantics that read external `ProverData` may be
+rejected explicitly by the initial exporter. Such operations must not be silently ignored or
+given a weaker backend meaning.
+
+Completing this slice deliberately defers, but does not resolve or remove, the requirements for
+sound external-data binding and the FemtoCairo demo. Those remain release blockers for the final
+grant milestone.
+
+### Initial-slice acceptance criteria
+
+The `FibonacciWithChannels` slice is complete when all of the following hold:
+
+1. A documented Clean command generates a reproducible Rust artifact from `fibonacciEnsemble`.
+2. The generated backend represents all ensemble components and the `bytes`, `add8`, and
+   `fibonacci` channels without example-specific Rust topology.
+3. Generated direct Rust code evaluates component constraints and interactions; the runtime JSON
+   constraint interpreter is not used.
+4. A Rust trace-input driver plus generated Rust witness code constructs every component trace
+   without invoking Lean at proving time; the boundary between supplied row inputs and generated
+   local witnesses is documented.
+5. The prover and verifier accept the public Fibonacci input explicitly and establish the
+   Clean-level statement represented by `fibonacci_soundness`.
+6. Plonky3 channel arguments enforce balance across all participating rows and components,
+   including conditional multiplicities and the public-input verifier interaction.
+7. A valid proof generated with a verifier-unexpected static trace height is rejected.
+8. Negative tests reject altered public values, unbalanced or malformed channel traces, and
+   invalid component witnesses.
+9. A non-trivial parameterized Fibonacci run reports witness-generation, proving, and verification
+   time together with trace dimensions and proof size.
+10. The maintained generation, build, proof, and verification workflow runs in CI.
+
 ## Recorded decisions
 
 ### Soundness correspondence is a release blocker
