@@ -67,6 +67,10 @@ def fullRoundGate (cfg : Config) : Gate Fp :=
         - queryAdvice (cfg.state nextIdx) 1
     [("", row 0), ("", row 1), ("", row 2)]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem fullRoundGate_selector (cfg : Config) :
+    (fullRoundGate cfg).selector = cfg.sFull := rfl
+
 /-- Rust `"partial rounds"` gate (`pow5.rs:116-160`): the double-round row. `mid i` is the
 MDS row over `(mid_0_sbox, cur₁ + rc_a₁, cur₂ + rc_a₂)`; `next i` is the `m_inv` row over
 the next-row state; constraints are `state[0]` round a (S-box), `state[0]` round b, and the
@@ -97,6 +101,10 @@ def partialRoundsGate (cfg : Config) : Gate Fp :=
      ("", mid 1 + rcB 1 - next 1),
      ("", mid 2 + rcB 2 - next 2)]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem partialRoundsGate_selector (cfg : Config) :
+    (partialRoundsGate cfg).selector = cfg.sPartial := rfl
+
 /-- Rust `"pad-and-add"` gate (`pow5.rs:162-186`): over rows `prev`/`cur`/`next`, each
 rate word satisfies `initial + input - output`, and the capacity element is copied
 through unchanged. -/
@@ -112,6 +120,10 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
         - queryAdvice (cfg.state i) 1
     [("", padAndAdd 0), ("", padAndAdd 1),
      ("", queryAdvice (cfg.state 2) (-1) - queryAdvice (cfg.state 2) 1)]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem padAndAddGate_selector (cfg : Config) :
+    (padAndAddGate cfg).selector = cfg.sPadAndAdd := rfl
 
 @[reducible] def configureEqualities
     (state : Fin 3 → Column .advice) (rcB : Fin 3 → Column .fixed) :

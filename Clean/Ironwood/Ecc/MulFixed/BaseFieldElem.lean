@@ -20,7 +20,8 @@ namespace Zcash.Circuits.Ecc.MulFixed.BaseFieldElem
 
 open Halo2
 open Ecc.MulFixed (coordsGate fixedConstantsLoop processWindow)
-open DecomposeRunningSum (copyDecompose rangeCheckExpr)
+open DecomposeRunningSum
+  (copyDecompose copyDecomposeSynthesisSummary rangeCheckExpr)
 open Ecc.MulFixed (FixedBase)
 open Ecc.MulFixed (FixedBaseData)
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -136,6 +137,30 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : Assig
     offset 85
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
+/-- Reduced footprint of the base-field multiplication inner region. -/
+def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (copyDecomposeSynthesisSummary 85
+      cfg.superConfig.runningSumConfig offset).combine
+    ((fixedConstantsLoopSynthesisSummary (coordsGate cfg.superConfig)
+      cfg.superConfig offset 85).combine
+      (windowChainSynthesisSummary cfg.superConfig offset 85))
+
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((innerRegion B cfg offset alpha).operations self) =
+      innerRegionSynthesisSummary cfg offset := by
+  simp only [innerRegion, innerRegionSynthesisSummary,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [windowChain_synthesisSummary_eq]
+  intro w row
+  exact processWindow_synthesisSummary_eq B
+    (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha w row self
+
 /-- The honest `α₀' = (α − z_84·2^252) + 2^130 − t_p` witness, from the α and `z_84`
 cells. -/
 def alphaZeroPrimeWit (alpha z84 : AssignedCell Fp) : WitgenIR Fp 1 :=
@@ -179,6 +204,54 @@ def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : Assigned
   let _ ← copyAdvice z44 (cfg.canonAdvices 1) 2
   let _ ← copyAdvice z43 (cfg.canonAdvices 2) 2
   return ()
+
+/-- Reduced footprint of the 13-word witness-check region. -/
+def witnessCheck13SynthesisSummary
+    (cfg : LookupRangeCheck.Config 10) :
+    FloorPlanner.SynthesisSummary :=
+  LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false cfg
+
+@[synthesis_summary_norm]
+theorem witnessCheck13_synthesisSummary_eq
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((witnessCheck13 cfg w).operations self) =
+      witnessCheck13SynthesisSummary cfg := by
+  simpa only [witnessCheck13SynthesisSummary, witnessCheck13,
+    LookupRangeCheck.witnessCheck, circuit_norm] using
+      LookupRangeCheck.witnessCheck_synthesisSummary
+        10 13 false cfg w self
+
+/-- Reduced footprint of the three-row canonicity block. -/
+def canonicityRegionSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qMulFixedBaseField.index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 2).index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 1).index,
+      .column .advice (cfg.canonAdvices 2).index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 1).index,
+      .column .advice (cfg.canonAdvices 2).index]
+    3 0
+
+@[synthesis_summary_norm]
+theorem canonicityRegion_synthesisSummary_eq
+    (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
+    (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations self) =
+      canonicityRegionSynthesisSummary cfg := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+    omega
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
 
 /-! ## The inner-region bundle (proof boundary for region 1)
 
@@ -376,9 +449,14 @@ bundle's default `{}`), local so the standalone proofs can state
                 y := .of self (offset + 84) config.superConfig.addConfig.yP },
       zs := Vector.ofFn (fun j => .of self (offset + j.val)
               config.superConfig.runningSumConfig.z) }
+  synthesisSummary config offset _ _ :=
+    innerRegionSynthesisSummary config offset
   output_eq := by
     intro _ _ _ _
     simp only [circuit_norm, innerRegion_output]
+  synthesisSummary_eq := by
+    intro _ _ input self
+    exact (innerRegion_synthesisSummary_eq B _ _ input.alpha self).symm
 
 set_option linter.all false in
 /-- The honest per-window point values (shared by the fixed-rows and chain completeness
@@ -1116,6 +1194,13 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
 
   completeness := fun cfg offset => inner_completeness B cfg offset
 
+@[synthesis_summary_norm]
+theorem inner_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (input : Var DecomposeRunningSum.Inputs Fp) (self : RegionIndex) :
+    (inner B).elaborated.synthesisSummary cfg offset input self =
+      innerRegionSynthesisSummary cfg offset := rfl
+
 /-- The four layouter pieces in source order. Returns the result point `[α]B`. -/
 def synthesize (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) :
     Circuit Fp (Var Point Fp) := do
@@ -1168,6 +1253,27 @@ private theorem synthesize_regionCount (B : FixedBase) (cfg : Config)
     Operations.regionCount ((synthesize B cfg alpha).operations i) = 4 := by
   simp only [synthesize, witnessCheck13, circuit_norm, operations_assignRegion,
     Operations.regionCount]
+
+/-- Reduced footprint of the four top-level regions. -/
+def circuitSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (innerRegionSynthesisSummary cfg 0)).combine
+    ((FloorPlanner.SynthesisSummary.ofRegion
+        (Add.synthesisSummary cfg.superConfig.addConfig 0)).combine
+      ((witnessCheck13SynthesisSummary cfg.lookupConfig).combine
+        (FloorPlanner.SynthesisSummary.ofRegion
+          (canonicityRegionSynthesisSummary cfg))))
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize B cfg alpha).operations self) =
+      circuitSynthesisSummary cfg := by
+  simp only [synthesize, circuitSynthesisSummary, Circuit.operations_bind,
+    Circuit.operations_pure, FloorPlanner.synthesisSummary_append,
+    operations_assignRegion, synthesis_summary_norm]
 
 /-- The range-check chunk's output cells (positional `z0`/`z13`). -/
 private theorem rca_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
@@ -1375,10 +1481,14 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }
+      synthesisSummary cfg _ _ := circuitSynthesisSummary cfg
       regionCount _ := 4
       output_eq := by
         intro _ _ _
         simp only [synthesize, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ alpha self
+        exact (synthesize_synthesisSummary_eq B _ alpha self).symm
       regionCount_eq := fun cfg alpha i => (synthesize_regionCount B cfg alpha i).symm }
 
   EnvAssumptions := EnvAssumptions
@@ -1706,6 +1816,12 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         rw [← hax, ← hay]
       rw [hpt]
       exact Or.inl hOn
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (B : FixedBase) (cfg : Config)
+    (input : Var field Fp) (region : RegionIndex) :
+    (circuit B).elaborated.synthesisSummary cfg input region =
+      circuitSynthesisSummary cfg := rfl
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 

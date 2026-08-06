@@ -285,6 +285,88 @@ def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
   RegionCircuit.forRange' offset 1 numWindows
     (fun w row => fixedConstantsWindow toggle B cfg w row)
 
+/-- Reduced footprint of one fixed-table row. -/
+def fixedConstantsWindowSynthesisSummary
+    (toggle : Gate Fp) (cfg : Config) (row : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector toggle.selector.index,
+      .column .fixed (cfg.lagrangeCoeffs 0).index,
+      .column .fixed (cfg.lagrangeCoeffs 1).index,
+      .column .fixed (cfg.lagrangeCoeffs 2).index,
+      .column .fixed (cfg.lagrangeCoeffs 3).index,
+      .column .fixed (cfg.lagrangeCoeffs 4).index,
+      .column .fixed (cfg.lagrangeCoeffs 5).index,
+      .column .fixed (cfg.lagrangeCoeffs 6).index,
+      .column .fixed (cfg.lagrangeCoeffs 7).index,
+      .column .fixed cfg.fixedZ.index]
+    (row + 1) 0
+
+/-- Reduced footprint of the fixed-table loop, composed from its row summaries. -/
+def fixedConstantsLoopSynthesisSummary
+    (toggle : Gate Fp) (cfg : Config) (offset numWindows : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .repeatColumns
+    [.selector toggle.selector.index,
+      .column .fixed (cfg.lagrangeCoeffs 0).index,
+      .column .fixed (cfg.lagrangeCoeffs 1).index,
+      .column .fixed (cfg.lagrangeCoeffs 2).index,
+      .column .fixed (cfg.lagrangeCoeffs 3).index,
+      .column .fixed (cfg.lagrangeCoeffs 4).index,
+      .column .fixed (cfg.lagrangeCoeffs 5).index,
+      .column .fixed (cfg.lagrangeCoeffs 6).index,
+      .column .fixed (cfg.lagrangeCoeffs 7).index,
+      .column .fixed cfg.fixedZ.index]
+    offset 1 1 0 numWindows
+
+@[synthesis_summary_norm]
+theorem fixedConstantsWindow_synthesisSummary_eq
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (w row : ℕ) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((fixedConstantsWindow toggle B cfg w row).operations self) =
+      fixedConstantsWindowSynthesisSummary toggle cfg row := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm]
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm]
+    omega
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm]
+
+@[synthesis_summary_norm]
+theorem fixedConstantsLoop_synthesisSummary_eq
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((fixedConstantsLoop toggle B cfg offset numWindows).operations self) =
+      fixedConstantsLoopSynthesisSummary toggle cfg offset numWindows := by
+  unfold fixedConstantsLoopSynthesisSummary
+  simp only [fixedConstantsLoop, fixedConstantsWindowSynthesisSummary,
+    RegionCircuit.forRange'_regionSynthesisSummary, synthesis_summary_norm,
+    Nat.mul_one]
+  simpa [Nat.add_assoc] using
+    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+      [.selector toggle.selector.index,
+        .column .fixed (cfg.lagrangeCoeffs 0).index,
+        .column .fixed (cfg.lagrangeCoeffs 1).index,
+        .column .fixed (cfg.lagrangeCoeffs 2).index,
+        .column .fixed (cfg.lagrangeCoeffs 3).index,
+        .column .fixed (cfg.lagrangeCoeffs 4).index,
+        .column .fixed (cfg.lagrangeCoeffs 5).index,
+        .column .fixed (cfg.lagrangeCoeffs 6).index,
+        .column .fixed (cfg.lagrangeCoeffs 7).index,
+        .column .fixed cfg.fixedZ.index]
+      offset 1 1 0 numWindows)
+
+@[synthesis_summary_norm]
+theorem fixedConstantsLoopSynthesisSummary_constantSiteCount
+    (toggle : Gate Fp) (cfg : Config) (offset numWindows : ℕ) :
+    (fixedConstantsLoopSynthesisSummary toggle cfg offset
+      numWindows).constantSiteCount = 0 := by
+  cases numWindows <;> rfl
+
 @[keygen_norm, keygen_helper]
 theorem fixedConstantsLoop_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
@@ -321,6 +403,84 @@ def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Co
   let y ← assignAdvice cfg.addConfig.yP row (yPWit tbl alpha w)
   let _u ← assignAdvice cfg.u row (uWit B alpha w)
   return { x, y }
+
+/-- Reduced footprint of one fixed-base window witness. -/
+def processWindowSynthesisSummary (cfg : Config) (row : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice cfg.addConfig.xP.index,
+      .column .advice cfg.addConfig.yP.index,
+      .column .advice cfg.u.index]
+    (row + 1) 0
+
+def windowStepColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
+  [.column .advice cfg.addConfig.xP.index,
+    .column .advice cfg.addConfig.yP.index,
+    .column .advice cfg.u.index,
+    .selector cfg.addIncompleteConfig.qAddIncomplete.index,
+    .column .advice cfg.addIncompleteConfig.xP.index,
+    .column .advice cfg.addIncompleteConfig.yP.index,
+    .column .advice cfg.addIncompleteConfig.xQR.index,
+    .column .advice cfg.addIncompleteConfig.yQR.index,
+    .column .advice cfg.addIncompleteConfig.xQR.index,
+    .column .advice cfg.addIncompleteConfig.yQR.index]
+
+def windowStepSynthesisSummary (cfg : Config) (row : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns (windowStepColumns cfg) (row + 2) 0
+
+@[synthesis_summary_norm]
+theorem processWindow_combine_addIncomplete_synthesisSummary
+    (cfg : Config) (row : ℕ) :
+    (processWindowSynthesisSummary cfg row).combine
+        (AddIncomplete.synthesisSummary cfg.addIncompleteConfig row) =
+      windowStepSynthesisSummary cfg row := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary, windowStepColumns, synthesis_summary_norm]
+  · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary,
+      FloorPlanner.RegionSynthesisSummary.combine_rowCount,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+    omega
+  · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary,
+      FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount,
+      Nat.zero_add]
+
+@[synthesis_summary_norm]
+theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
+    FloorPlanner.RegionSynthesisSummary.ofColumns
+        ([.column .advice cfg.addConfig.xP.index,
+          .column .advice cfg.addConfig.yP.index,
+          .column .advice cfg.u.index] ++
+        [.selector cfg.addIncompleteConfig.qAddIncomplete.index,
+          .column .advice cfg.addIncompleteConfig.xP.index,
+          .column .advice cfg.addIncompleteConfig.yP.index,
+          .column .advice cfg.addIncompleteConfig.xQR.index,
+          .column .advice cfg.addIncompleteConfig.yQR.index,
+          .column .advice cfg.addIncompleteConfig.xQR.index,
+          .column .advice cfg.addIncompleteConfig.yQR.index])
+        (max (row + 1) (row + 2)) (0 + 0) =
+      FloorPlanner.RegionSynthesisSummary.ofColumns
+        (windowStepColumns cfg) (row + 2) 0 := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · rfl
+  · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+    omega
+  · rfl
+
+@[synthesis_summary_norm]
+theorem processWindow_synthesisSummary_eq
+    (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Config)
+    (alpha : AssignedCell Fp) (w row : ℕ) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((processWindow B tbl cfg alpha w row).operations self) =
+      processWindowSynthesisSummary cfg row := by
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+  omega
 
 @[keygen_norm]
 theorem processWindow_output_x_column (B : FixedBaseData)
@@ -362,6 +522,57 @@ def windowChain (cfg : Config)
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
 
+/-- Reduced footprint of the shared window chain. The caller supplies a window
+witness whose footprint is `processWindowSynthesisSummary`. -/
+def windowChainSynthesisSummary (cfg : Config)
+    (offset numWindows : ℕ) : FloorPlanner.RegionSynthesisSummary :=
+  (processWindowSynthesisSummary cfg offset).combine
+    ((processWindowSynthesisSummary cfg (offset + 1)).combine
+      ((AddIncomplete.synthesisSummary cfg.addIncompleteConfig (offset + 1)).combine
+        ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+            (windowStepColumns cfg) (offset + 2) 1 2 0
+              (numWindows - 3)).combine
+          (processWindowSynthesisSummary cfg (offset + (numWindows - 1))))))
+
+@[synthesis_summary_norm]
+theorem windowChain_synthesisSummary_eq
+    (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (offset numWindows : ℕ) (self : RegionIndex)
+    (hprocess : ∀ w row,
+      FloorPlanner.regionSynthesisSummary ((processW w row).operations self) =
+        processWindowSynthesisSummary cfg row) :
+    FloorPlanner.regionSynthesisSummary
+        ((windowChain cfg processW offset numWindows).operations self) =
+      windowChainSynthesisSummary cfg offset numWindows := by
+  have hrepeat :
+      (List.ofFn fun i : Fin (numWindows - 3) =>
+        FloorPlanner.RegionSynthesisSummary.ofColumns
+          (windowStepColumns cfg) (offset + 2 + i.val + 2) 0).foldr
+          FloorPlanner.RegionSynthesisSummary.combine {} =
+        FloorPlanner.RegionSynthesisSummary.repeatColumns
+          (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3) := by
+    simpa [Nat.add_assoc] using
+      (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+        (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3))
+  unfold windowChainSynthesisSummary
+  simp only [windowChain,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, operations_cellAt,
+    synthesis_summary_norm, hprocess, Nat.mul_one,
+    FloorPlanner.RegionSynthesisSummary.empty_combine_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.combine_empty,
+    processWindowSynthesisSummary, AddIncomplete.synthesisSummary, hrepeat]
+
+@[synthesis_summary_norm]
+theorem windowChainSynthesisSummary_constantSiteCount
+    (cfg : Config) (offset numWindows : ℕ) :
+    (windowChainSynthesisSummary cfg offset
+      numWindows).constantSiteCount = 0 := by
+  simp only [windowChainSynthesisSummary, synthesis_summary_norm,
+    processWindowSynthesisSummary, AddIncomplete.synthesisSummary]
+  simp
+
 /-- The shared window chain requests no deferred constant allocations when its
 per-window witness program does not. -/
 theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
@@ -377,16 +588,8 @@ theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
   simp only [windowChain, RegionCircuit.operations_bind,
     RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
     synthesis_summary_norm]
-  rw [hprocessW, hprocessW, hprocessW]
-  simp only [Nat.zero_add, circuit_norm]
-  have allZero :
-      (fun i : Fin (numWindows - 3) =>
-        (FloorPlanner.regionSynthesisSummary
-          ((processW (i.val + 2) (offset + 2 + i.val * 1)).operations
-            region)).constantSiteCount) = fun _ => 0 := by
-    funext i
-    exact hprocessW _ _
-  rw [allZero]
+  simp only [hprocessW, operations_cellAt, synthesis_summary_norm,
+    AddIncomplete.synthesisSummary, List.map_ofFn, Function.comp_def]
   simp
 
 /-- The standard fixed-base window witness program requests no deferred constants. -/

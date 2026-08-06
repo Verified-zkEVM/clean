@@ -134,6 +134,10 @@ def qMul1Gate (cfg : Config) : Gate Fp :=
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     [("init y_a", yAWitnessed - yA cfg 1)]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem qMul1Gate_selector (cfg : Config) :
+    (qMul1Gate cfg).selector = cfg.qMul1 := rfl
+
 /-- The `q_mul_2` gate: `x_p`/`y_p` are constant on the next row, plus the shared loop body with the
 next-row `y_a` derived. -/
 def qMul2Gate (cfg : Config) : Gate Fp :=
@@ -152,6 +156,10 @@ def qMul2Gate (cfg : Config) : Gate Fp :=
        ("y_p_check", yPCur - yPNext) ]
       ++ forLoopPolys cfg (yA cfg 1))
 
+@[circuit_norm, synthesis_summary_norm]
+theorem qMul2Gate_selector (cfg : Config) :
+    (qMul2Gate cfg).selector = cfg.qMul2 := rfl
+
 /-- The `q_mul_3` gate: the loop body on the last row, with the next-row `y_a` the WITNESSED final
 `y` in the `λ₁` column (a bare query, not a derived `Y_A`). -/
 def qMul3Gate (cfg : Config) : Gate Fp :=
@@ -163,6 +171,10 @@ def qMul3Gate (cfg : Config) : Gate Fp :=
       queryAdvice cfg.yP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
     forLoopPolys cfg yAFinal
+
+@[circuit_norm, synthesis_summary_norm]
+theorem qMul3Gate_selector (cfg : Config) :
+    (qMul3Gate cfg).selector = cfg.qMul3 := rfl
 
 /-- Rust `Config::configure`: enable equality on `z` and `λ₁`, allocate the three selectors, and
 register the three gates. The columns are handed down by `mul.rs` (different for `hi`/`lo`). -/
@@ -646,7 +658,27 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
 
   elaborated :=
     { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
-      registered := by keygen_registration }
+      registered := by keygen_registration
+      synthesisSummary config offset _ _ :=
+        .ofColumns
+          [.selector config.qMul2.index,
+            .column .advice config.z.index,
+            .column .advice config.xA.index,
+            .column .advice config.lambda1.index,
+            .column .advice config.lambda2.index,
+            .column .advice config.xP.index,
+            .column .advice config.yP.index]
+          (offset + 3) 0
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, qMul2Gate_selector, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.nil_append, List.singleton_append]
+        · simp only [circuit_norm]
+          omega
+        · simp only [circuit_norm] }
 
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)

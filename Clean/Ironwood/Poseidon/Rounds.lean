@@ -59,27 +59,127 @@ theorem rowWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
   simp only [rowWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
+def fullRoundSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.sFull.index,
+      .column .fixed (config.rcA 0).index,
+      .column .fixed (config.rcA 1).index,
+      .column .fixed (config.rcA 2).index,
+      .column .advice (config.state 0).index,
+      .column .advice (config.state 1).index,
+      .column .advice (config.state 2).index]
+    (offset + 2) 0
+
+def partialRoundSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.sPartial.index,
+      .column .fixed (config.rcA 0).index,
+      .column .fixed (config.rcA 1).index,
+      .column .fixed (config.rcA 2).index,
+      .column .advice config.partialSbox.index,
+      .column .fixed (config.rcB 0).index,
+      .column .fixed (config.rcB 1).index,
+      .column .fixed (config.rcB 2).index,
+      .column .advice (config.state 0).index,
+      .column .advice (config.state 1).index,
+      .column .advice (config.state 2).index]
+    (offset + 2) 0
+
+def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
+    (_ : Var unit Fp) : RegionCircuit Fp (Var State Fp) := do
+  let w ← readStateRow cfg offset
+  (fullRoundGate cfg).enable offset
+  let _rc0 ← assignFixed (cfg.rcA 0) offset (roundConstants r).x0
+  let _rc1 ← assignFixed (cfg.rcA 1) offset (roundConstants r).x1
+  let _rc2 ← assignFixed (cfg.rcA 2) offset (roundConstants r).x2
+  let _n0 ← assignAdvice (cfg.state 0) (offset + 1)
+    (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x0)
+  let _n1 ← assignAdvice (cfg.state 1) (offset + 1)
+    (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x1)
+  let _n2 ← assignAdvice (cfg.state 2) (offset + 1)
+    (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x2)
+  readStateRow cfg (offset + 1)
+
+@[reducible] def fullRoundElaborated (r : ℕ) :
+    ElaboratedRegionCircuit Fp Config Config unit State pure
+      (fullRoundSynthesize r) :=
+  { keygenRequirements := { gates cfg _ := [fullRoundGate cfg] }
+    output config offset _ self := stateRow config (offset + 1) self
+    synthesisSummary config offset _ _ :=
+      fullRoundSynthesisSummary config offset
+    output_eq := by
+      intro _ _ _ _
+      simp only [fullRoundSynthesize, circuit_norm]
+    synthesisSummary_eq := by
+      intro _ _ _ _
+      unfold fullRoundSynthesisSummary
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+        simp only [fullRoundSynthesize, circuit_norm, fullRoundGate_selector,
+          List.flatMap_cons, List.flatMap_nil,
+          FloorPlanner.regionOperationShapeColumns, List.append_nil,
+          List.nil_append, List.singleton_append]
+      · simp only [fullRoundSynthesize, circuit_norm]
+        omega
+      · simp only [fullRoundSynthesize, circuit_norm] }
+
+def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
+    (_ : Var unit Fp) : RegionCircuit Fp (Var State Fp) := do
+  let w ← readStateRow cfg offset
+  (partialRoundsGate cfg).enable offset
+  let _rc0 ← assignFixed (cfg.rcA 0) offset (roundConstants r).x0
+  let _rc1 ← assignFixed (cfg.rcA 1) offset (roundConstants r).x1
+  let _rc2 ← assignFixed (cfg.rcA 2) offset (roundConstants r).x2
+  let _mid ← assignAdvice cfg.partialSbox offset
+    (rowWit w fun s => PartialRounds.mid0SboxValue
+      (PartialRounds.paramsP128 roundConstants r) s)
+  let _rb0 ← assignFixed (cfg.rcB 0) offset (roundConstants (r + 1)).x0
+  let _rb1 ← assignFixed (cfg.rcB 1) offset (roundConstants (r + 1)).x1
+  let _rb2 ← assignFixed (cfg.rcB 2) offset (roundConstants (r + 1)).x2
+  let _n0 ← assignAdvice (cfg.state 0) (offset + 1)
+    (rowWit w fun s =>
+      (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x0)
+  let _n1 ← assignAdvice (cfg.state 1) (offset + 1)
+    (rowWit w fun s =>
+      (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x1)
+  let _n2 ← assignAdvice (cfg.state 2) (offset + 1)
+    (rowWit w fun s =>
+      (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x2)
+  readStateRow cfg (offset + 1)
+
+@[reducible] def partialRoundElaborated (r : ℕ) :
+    ElaboratedRegionCircuit Fp Config Config unit State pure
+      (partialRoundSynthesize r) :=
+  { keygenRequirements := { gates cfg _ := [partialRoundsGate cfg] }
+    output config offset _ self := stateRow config (offset + 1) self
+    synthesisSummary config offset _ _ :=
+      partialRoundSynthesisSummary config offset
+    output_eq := by
+      intro _ _ _ _
+      simp only [partialRoundSynthesize, circuit_norm]
+    synthesisSummary_eq := by
+      intro _ _ _ _
+      unfold partialRoundSynthesisSummary
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+        simp only [partialRoundSynthesize, circuit_norm,
+          partialRoundsGate_selector, List.flatMap_cons,
+          List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+          List.append_nil, List.nil_append, List.singleton_append]
+      · simp only [partialRoundSynthesize, circuit_norm]
+        omega
+      · simp only [partialRoundSynthesize, circuit_norm] }
+
 /-- Rust `Pow5State::full_round` at source round `r` (`pow5.rs:434-459` + `round`,
 552-592): enable `s_full` at `offset`, load the `rc_a` round constants at `offset`,
 assign the next state at `offset + 1`. Positional: `Witness` is the entering state row,
 `Spec` is the donor `FullRound.value`. -/
 def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [fullRoundGate cfg] } }
-
-  synthesize cfg offset _ := do
-    let w ← readStateRow cfg offset
-    (fullRoundGate cfg).enable offset
-    let _rc0 ← assignFixed (cfg.rcA 0) offset (roundConstants r).x0
-    let _rc1 ← assignFixed (cfg.rcA 1) offset (roundConstants r).x1
-    let _rc2 ← assignFixed (cfg.rcA 2) offset (roundConstants r).x2
-    let _n0 ← assignAdvice (cfg.state 0) (offset + 1)
-      (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x0)
-    let _n1 ← assignAdvice (cfg.state 1) (offset + 1)
-      (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x1)
-    let _n2 ← assignAdvice (cfg.state 2) (offset + 1)
-      (rowWit w fun s => (FullRound.value (FullRound.params roundConstants mds r) s).x2)
-    readStateRow cfg (offset + 1)
+  synthesize := fullRoundSynthesize r
+  elaborated := fullRoundElaborated r
 
   Witness := State
   extract cfg offset _ self env := eval env (stateRow cfg offset self)
@@ -89,7 +189,8 @@ def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   ProverSpec _ out w _ := out = FullRound.value (FullRound.params roundConstants mds r) w
 
   soundness := by
-    circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
+    circuit_proof_start [fullRoundElaborated, fullRoundSynthesize,
+      fullRoundGate, pow5Expr, stateRow, FullRound.value,
       FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod]
     obtain ⟨⟨hg0, hg1, hg2⟩, hrc0, hrc1, hrc2⟩ := hc
     rw [hrc0, hrc1, hrc2] at hg0 hg1 hg2
@@ -97,7 +198,8 @@ def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
       by linear_combination -hg2⟩
 
   completeness := by
-    circuit_proof_start [fullRoundGate, pow5Expr, stateRow, FullRound.value,
+    circuit_proof_start [fullRoundElaborated, fullRoundSynthesize,
+      fullRoundGate, pow5Expr, stateRow, FullRound.value,
       FullRound.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
@@ -119,30 +221,8 @@ checking two source rounds. Enable `s_partial` at `offset`, load `rc_a` (round `
 `PartialRounds.value` at `paramsP128 r`. -/
 def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [partialRoundsGate cfg] } }
-
-  synthesize cfg offset _ := do
-    let w ← readStateRow cfg offset
-    (partialRoundsGate cfg).enable offset
-    let _rc0 ← assignFixed (cfg.rcA 0) offset (roundConstants r).x0
-    let _rc1 ← assignFixed (cfg.rcA 1) offset (roundConstants r).x1
-    let _rc2 ← assignFixed (cfg.rcA 2) offset (roundConstants r).x2
-    let _mid ← assignAdvice cfg.partialSbox offset
-      (rowWit w fun s => PartialRounds.mid0SboxValue
-        (PartialRounds.paramsP128 roundConstants r) s)
-    let _rb0 ← assignFixed (cfg.rcB 0) offset (roundConstants (r + 1)).x0
-    let _rb1 ← assignFixed (cfg.rcB 1) offset (roundConstants (r + 1)).x1
-    let _rb2 ← assignFixed (cfg.rcB 2) offset (roundConstants (r + 1)).x2
-    let _n0 ← assignAdvice (cfg.state 0) (offset + 1)
-      (rowWit w fun s =>
-        (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x0)
-    let _n1 ← assignAdvice (cfg.state 1) (offset + 1)
-      (rowWit w fun s =>
-        (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x1)
-    let _n2 ← assignAdvice (cfg.state 2) (offset + 1)
-      (rowWit w fun s =>
-        (PartialRounds.value (PartialRounds.paramsP128 roundConstants r) s).x2)
-    readStateRow cfg (offset + 1)
+  synthesize := partialRoundSynthesize r
+  elaborated := partialRoundElaborated r
 
   Witness := State
   extract cfg offset _ self env := eval env (stateRow cfg offset self)
@@ -153,7 +233,8 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
     out = PartialRounds.value (PartialRounds.paramsP128 roundConstants r) w
 
   soundness := by
-    circuit_proof_start [partialRoundsGate, pow5Expr, stateRow,
+    circuit_proof_start [partialRoundElaborated, partialRoundSynthesize,
+      partialRoundsGate, pow5Expr, stateRow,
       PartialRounds.value, PartialRounds.mid0SboxValue, PartialRounds.paramsP128,
       PartialRounds.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
     obtain ⟨⟨gmid, gb, gl1, gl2⟩, ha0, ha1, ha2, hb0, hb1, hb2⟩ := hc
@@ -182,7 +263,8 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
       simpa using happ.symm
 
   completeness := by
-    circuit_proof_start [partialRoundsGate, pow5Expr, stateRow,
+    circuit_proof_start [partialRoundElaborated, partialRoundSynthesize,
+      partialRoundsGate, pow5Expr, stateRow,
       PartialRounds.value, PartialRounds.mid0SboxValue, PartialRounds.paramsP128,
       PartialRounds.params, pow5, Nat.add_assoc, Nat.reduceMod, rowValue, readCell]
     refine ⟨⟨by ring, ?_, ?_, ?_⟩,
@@ -190,6 +272,18 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
     · exact nextInv_cancel ⟨0, by norm_num⟩ _ _ _
     · exact nextInv_cancel ⟨1, by norm_num⟩ _ _ _
     · exact nextInv_cancel ⟨2, by norm_num⟩ _ _ _
+
+@[synthesis_summary_norm]
+theorem fullRound_synthesisSummary_eq (r : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var unit Fp) (self : RegionIndex) :
+    (fullRound r).elaborated.synthesisSummary cfg offset input self =
+      fullRoundSynthesisSummary cfg offset := rfl
+
+@[synthesis_summary_norm]
+theorem partialRound_synthesisSummary_eq (r : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var unit Fp) (self : RegionIndex) :
+    (partialRound r).elaborated.synthesisSummary cfg offset input self =
+      partialRoundSynthesisSummary cfg offset := rfl
 
 derive_contract_bridges fullRound (r : ℕ) := fullRound r
 

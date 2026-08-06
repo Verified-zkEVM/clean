@@ -154,6 +154,17 @@ def gateChild (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp)) :
 derive_contract_bridges gateChild (wlsb : WitgenIR Fp 1)
   (input : Inputs (AssignedCell Fp)) := gateChild wlsb input
 
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary (wlsb : WitgenIR Fp 1)
+    (input : Var Inputs Fp) (cfg : YCanonicity.Config)
+    (row : Var YCanonicity.Row Fp) (region : RegionIndex) :
+    (gateChild wlsb input).elaborated.synthesisSummary cfg row region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (YCanonicity.synthesisSummary cfg 0) := by
+  unfold gateChild
+  rw [FormalRegionCircuit.toFormal_synthesisSummary]
+  rfl
+
 /-- The gate child's output, at its concrete cell (one hop deeper than the generated
 `gateChild_output`, which stops at the lifted region bundle's folded output). -/
 private theorem gateChild_output_cells (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp))
@@ -161,7 +172,7 @@ private theorem gateChild_output_cells (wlsb : WitgenIR Fp 1) (input : Inputs (A
     (gateChild wlsb input).output cfg row i
       = AssignedCell.of i 0 (cfg.advices 6) := by
   show ((YCanonicity.bundle wlsb (k3Wit input.y)).synthesize cfg 0 row).output i = _
-  simp only [YCanonicity.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+  exact YCanonicity.bundleSynthesize_output wlsb (k3Wit input.y) cfg 0 row i
 
 theorem gateChild_call_witnesses (wlsb : WitgenIR Fp 1)
     (input : Inputs (AssignedCell Fp)) (cfg : YCanonicity.Config)
@@ -190,6 +201,16 @@ def synth (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
   (gateChild wlsb input).call gcfg
     { y := input.y, k0 := k0, k2 := k2, j := jZs.z0, z1J := jZs.z1, z13J := jZs.z13,
       jPrime := jpZs.z0, z13JPrime := jpZs.zLast }
+
+def synthesisSummary (gcfg : YCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) :
+    FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lcfg).combine
+    ((LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lcfg).combine
+        ((LookupRangeCheck.witnessCheckDecomposedSynthesisSummary lcfg).combine
+        ((LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false lcfg).combine
+          (FloorPlanner.SynthesisSummary.ofRegion
+            (YCanonicity.synthesisSummary gcfg 0)))))
 
 theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
     (lcfg : LookupRangeCheck.Config 10) (input : Inputs (AssignedCell Fp))
@@ -224,6 +245,13 @@ def circuit (wlsb : WitgenIR Fp 1) :
         keygen_registration
       output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)
       regionCount _ := 5
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheckDecomposed_synthesisSummary,
+          LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex,
+          LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by
         intro (gcfg, lcfg) input i
         simp only [synth, LookupRangeCheck.witnessShortCheck, LookupRangeCheck.witnessCheck,
@@ -309,7 +337,8 @@ def circuit (wlsb : WitgenIR Fp 1) :
     -- region chunk (defeq) and destructure it like the bundle's own completeness
     rw [gateChild_call_witnesses] at hWgate
     have hWgate' := hWgate
-    simp only [YCanonicity.bundle, YCanonicity.gate, circuit_norm, readCell] at hWgate'
+    simp only [YCanonicity.bundle, YCanonicity.bundleSynthesize,
+      YCanonicity.gate, circuit_norm, readCell] at hWgate'
     obtain ⟨hgy, hglsb, hgk0, hgk2, hgk3, hgj, hgz1, hgz13, hgjp, hgz13p⟩ := hWgate'
     rw [h_input] at hWk0 hWk2 hWj hgk3
     rw [decomposed_output] at hWjp
@@ -462,6 +491,13 @@ def circuit (wlsb : WitgenIR Fp 1) :
         rw [shifted_high_zero (by norm_num) (by norm_num)
           (by rw [cast_bitrange_val (by norm_num)]; exact hatp)]
         simp
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (wlsb : WitgenIR Fp 1)
+    (cfg : YCanonicity.Config × LookupRangeCheck.Config 10)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit wlsb).elaborated.synthesisSummary cfg input region =
+      synthesisSummary cfg.1 cfg.2 := rfl
 
 derive_contract_bridges circuit (wlsb : WitgenIR Fp 1) := circuit wlsb
 

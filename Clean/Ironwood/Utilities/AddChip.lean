@@ -77,6 +77,15 @@ def synthesize (cfg : Config) (offset : ℕ)
 
 /-- Rust `AddInstruction::add`'s region body (`add_chip.rs:71-91`): `q_add` at row 0,
 copy `a` and `b` in, assign `c = a + b`. `Spec`: the output is the field sum. -/
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qAdd.index,
+      .column .advice cfg.a.index,
+      .column .advice cfg.b.index,
+      .column .advice cfg.c.index]
+    (offset + 1) 0
+
 def add : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
 
@@ -90,9 +99,21 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
             [input.a.cell.column, input.b.cell.column] }
       registered := by keygen_registration [synthesize]
       output cfg offset _ self := .of self offset cfg.c
+      synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
       output_eq := by
         intro _ _ _ _
-        simp only [synthesize, circuit_norm] }
+        simp only [synthesize, circuit_norm]
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [synthesisSummary, synthesize, circuit_norm, addGate]
+          simp only [List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.nil_append, List.singleton_append]
+        · simp only [synthesisSummary, synthesize, circuit_norm, addGate]
+          omega
+        · simp only [synthesisSummary, synthesize, circuit_norm, addGate] }
 
   Spec input output _ := output = input.a + input.b
   ProverSpec input output _ _ := output = input.a + input.b
@@ -111,6 +132,12 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
 chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
 def addFormal :=
   add.toFormal "c = a + b"
+
+@[synthesis_summary_norm]
+theorem addFormal_synthesisSummary_eq
+    (cfg : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    addFormal.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion (synthesisSummary cfg 0) := rfl
 
 /-- The layouter add capability exported by one AddChip configure run. -/
 def addFormalConfigureCertificate (a b c : Column .advice)

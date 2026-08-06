@@ -131,7 +131,7 @@ RegionShape`). See the module header for the per-operation contribution. -/
 def measureRegion (idx : ℕ) (body : RegionOperations F) : RegionShape :=
   let summary := regionSynthesisSummary body
   { index := idx
-    columns := summary.columns.foldl addCol []
+    columns := summary.columns
     rowCount := summary.rowCount }
 
 theorem mem_measureRegion_columns_iff
@@ -139,8 +139,6 @@ theorem mem_measureRegion_columns_iff
     column ∈ (measureRegion index body).columns ↔
       column ∈ (regionSynthesisSummary body).columns := by
   simp only [measureRegion]
-  rw [show addCol = addColumn by rfl, mem_foldl_addColumn_iff]
-  simp
 
 @[circuit_norm] theorem measureRegion_rowCount
     (index : ℕ) (body : RegionOperations F) :
@@ -5771,8 +5769,7 @@ theorem selector_mem_measureRegion_of_activatesSelectorAt
         exact List.mem_map.mpr ⟨selected, hselected, rfl⟩
     | assignAdvice | assignFixed | constrainEqual | constrainConstant |
         constrainInstance => contradiction
-  exact mem_foldl_addCol_of_mem
-    (regionSynthesisSummary body).columns [] hcolumn
+  exact hcolumn
 
 /-- Every selector activation row lies in its measured region interval. -/
 theorem row_lt_measureRegion_of_activatesSelectorAt

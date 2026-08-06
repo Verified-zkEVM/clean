@@ -177,6 +177,29 @@ def gateRegion (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp))
   (overflowGate K cfg).enable 1
   return ()
 
+@[synthesis_summary_norm]
+theorem gateRegion_synthesisSummary
+    (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp))
+    (sCell sMinusLo130 : AssignedCell Fp) (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((gateRegion K cfg input sCell sMinusLo130).operations region) =
+      .ofColumns
+        [.column .advice cfg.adv0.index,
+          .column .advice cfg.adv0.index,
+          .column .advice cfg.adv0.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv2.index,
+          .selector cfg.qOverflow.index]
+        3 0 := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm,
+      configure_selector_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+    omega
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+
 /-- The layouter-level `overflow_check` body: the three faithful sibling regions plus the
 copyCheck child. -/
 def synthesize (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp)) :
@@ -261,6 +284,24 @@ theorem synthesize_regionCount (K : ℕ) (cfg : Config K) (input : Inputs (Assig
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
 
+def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
+    : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (.ofColumns [.column .advice cfg.adv0.index] 1 0)).combine
+    ((LookupRangeCheck.copyCheckSynthesisSummary
+        K (numWords K) false cfg.lookupConfig).combine
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (.ofColumns
+          [.column .advice cfg.adv0.index,
+            .column .advice cfg.adv0.index,
+            .column .advice cfg.adv0.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv2.index,
+            .selector cfg.qOverflow.index]
+          3 0)))
+
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
       Column .advice) (Config K) Inputs unit where
@@ -281,8 +322,13 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
         keygen_registration
       output _ _ _ := ()
       regionCount _ := 3
+      synthesisSummary cfg _ _ := circuitSynthesisSummary K cfg
       output_eq := by intro _ _ _; rfl
-      regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm }
+      regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm
+      synthesisSummary_eq := by
+        intro _ _ _
+        simp only [circuitSynthesisSummary, synthesize,
+          circuit_norm, synthesis_summary_norm, configure_selector_norm] }
 
   EnvAssumptions cfg env := EnvAssumptions K cfg env
 
@@ -386,6 +432,13 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       · rw [h]; ring
       · rw [mul_inv_cancel₀ hz]; ring
       · rw [hzLastZero h]; ring
+
+/-- The overflow circuit exposes its reduced layouter footprint. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (K : ℕ) (hKW : K * numWords K = 130)
+    (cfg : Config K) (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit K hKW).elaborated.synthesisSummary cfg input region =
+      circuitSynthesisSummary K cfg := rfl
 
 end MulOverflow
 

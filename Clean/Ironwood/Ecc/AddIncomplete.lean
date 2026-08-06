@@ -70,6 +70,18 @@ deriving ProvableStruct
 def permutationColumns (config : Config) : List AnyColumn :=
   [config.xP, config.yP, config.xQR, config.yQR]
 
+def synthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qAddIncomplete.index,
+      .column .advice config.xP.index,
+      .column .advice config.yP.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index]
+    (offset + 2) 0
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config
     Inputs Point where
@@ -88,7 +100,19 @@ def add : FormalRegionCircuit Fp
     { keygenRequirements :=
         { inputPermutationColumns _ _ input :=
             [input.p.x.cell.column, input.p.y.cell.column,
-              input.q.x.cell.column, input.q.y.cell.column] } }
+              input.q.x.cell.column, input.q.y.cell.column] }
+      synthesisSummary config offset _ _ := synthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [synthesisSummary]
+          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, gate, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.nil_append, List.singleton_append]
+        · simp only [synthesisSummary, circuit_norm, gate]
+          omega
+        · simp only [synthesisSummary, circuit_norm, gate] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add_incomplete` selector at `offset`
@@ -143,13 +167,25 @@ def add : FormalRegionCircuit Fp
 
 /-- Incomplete addition never requests a deferred constant allocation. -/
 @[synthesis_summary_norm]
+theorem add_synthesisSummary_eq
+    (config : Config) (offset : ℕ) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    add.elaborated.synthesisSummary config offset input region =
+      synthesisSummary config offset := rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_constantSiteCount (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).constantSiteCount = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem add_synthesisSummary_constantSiteCount
     (config : Config) (offset : ℕ) (input : Inputs (AssignedCell Fp))
     (region : RegionIndex) :
     (add.elaborated.synthesisSummary
       config offset input region).constantSiteCount = 0 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [add, circuit_norm]
+  rw [add_synthesisSummary_eq]
+  simp only [synthesisSummary, circuit_norm]
 
 @[keygen_norm]
 theorem Configured.permutationColumns_eq {config : Config}

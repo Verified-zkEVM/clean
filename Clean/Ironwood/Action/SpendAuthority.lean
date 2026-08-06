@@ -57,6 +57,13 @@ def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
   inputPermutationColumns _ _ input :=
     [input.akP.x.cell.column, input.akP.y.cell.column]
 
+def synthesisSummary
+    (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Ecc.MulFixed.FullWidth.circuitSynthesisSummary cfg.1).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (Ecc.Add.synthesisSummary cfg.2 0))
+
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted
 randomizer: `rk = [alpha] SpendAuthG + ak_P` for the `alpha` read off the witnessed
@@ -81,6 +88,10 @@ def circuit (G : FixedBase) : FormalCircuit Fp
         { x := .of (i + 2) 1 cfg.2.xQR,
           y := .of (i + 2) 1 cfg.2.yQR }
       regionCount _ := 3
+      synthesisSummary cfg _ _ := synthesisSummary cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro cfg input i
         simp only [Circuit.output_bind, Circuit.output_pure,
@@ -116,6 +127,13 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
     have hAl := alphaCommitment_spec env_assumptions
     exact ⟨env_assumptions, by rw [hAl]; exact G.smul_valid _, assumptions⟩
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (G : FixedBase)
+    (config : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    (circuit G).elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
 
 derive_contract_bridges circuit (G : FixedBase) := circuit G
 

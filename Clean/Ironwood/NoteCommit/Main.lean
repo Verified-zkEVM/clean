@@ -583,6 +583,106 @@ theorem synthChecks_nextRegionIndex (G : Generators) (R : FixedBase)
       + 1 + 1 + 1 + 1 = i + 18
   rw [yc_call_nextRegionIndex, yc_call_nextRegionIndex, commit_call_nextRegionIndex]
 
+/-- Fully reduced footprint of the fifteen piece-witnessing regions. -/
+def synthPiecesSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  let piece := Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary
+    cfg.hashConfig
+  let short := LookupRangeCheck.witnessShortCheckSynthesisSummary
+    10 cfg.lookupConfig
+  [piece, short, short, piece, piece, short, piece, short, short,
+    piece, piece, short, piece, short, piece].foldr
+      FloorPlanner.SynthesisSummary.combine {}
+
+/-- Fully reduced footprint of the two y checks, commitment, and four word checks. -/
+def synthChecksSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  let y := YCanonicityCheck.synthesisSummary
+    cfg.gates.y cfg.lookupConfig
+  [y, y,
+    Sinsemilla.CommitDomain.commitSynthesisSummary ns
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig),
+    LookupRangeCheck.witnessCheckSynthesisSummary
+      10 13 false cfg.lookupConfig,
+    LookupRangeCheck.witnessCheckSynthesisSummary
+      10 14 false cfg.lookupConfig,
+    LookupRangeCheck.witnessCheckSynthesisSummary
+      10 14 false cfg.lookupConfig,
+    LookupRangeCheck.witnessCheckSynthesisSummary
+      10 13 false cfg.lookupConfig].foldr
+        FloorPlanner.SynthesisSummary.combine {}
+
+/-- Fully reduced footprint of the five decomposition and five canonicity regions. -/
+def synthGatesSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  let region (summary : FloorPlanner.RegionSynthesisSummary) :=
+    FloorPlanner.SynthesisSummary.ofRegion summary
+  [region (DecomposeB.synthesisSummary cfg.gates.b 0),
+    region (DecomposeD.synthesisSummary cfg.gates.d 0),
+    region (DecomposeE.synthesisSummary cfg.gates.e 0),
+    region (DecomposeG.synthesisSummary cfg.gates.g 0),
+    region (DecomposeH.synthesisSummary cfg.gates.h 0),
+    region (GdCanonicity.synthesisSummary cfg.gates.gd 0),
+    region (PkdCanonicity.synthesisSummary cfg.gates.pkd 0),
+    region (ValueCanonicity.synthesisSummary cfg.gates.value 0),
+    region (RhoCanonicity.synthesisSummary cfg.gates.rho 0),
+    region (PsiCanonicity.synthesisSummary cfg.gates.psi 0)].foldr
+      FloorPlanner.SynthesisSummary.combine {}
+
+/-- Exact reduced footprint of the complete 43-region NoteCommit flow. -/
+def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (synthPiecesSynthesisSummary cfg).combine
+    ((synthChecksSynthesisSummary cfg).combine
+      (synthGatesSynthesisSummary cfg))
+
+@[synthesis_summary_norm]
+theorem synthPieces_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthPieces cfg input).operations region) =
+      synthPiecesSynthesisSummary cfg := by
+  simp only [synthPiecesSynthesisSummary, synthPieces, circuit_norm,
+    synthesis_summary_norm, List.foldr_cons, List.foldr_nil,
+    FloorPlanner.SynthesisSummary.combine_empty]
+
+@[synthesis_summary_norm]
+theorem synthChecks_synthesisSummary_eq
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synthChecks G R Q hQ cfg input pcs iHash).operations region) =
+      synthChecksSynthesisSummary cfg := by
+  simp only [synthChecksSynthesisSummary, synthChecks, circuit_norm,
+    synthesis_summary_norm,
+    List.foldr_cons, List.foldr_nil,
+    FloorPlanner.SynthesisSummary.combine_empty]
+  rw [LookupRangeCheck.witnessCheck_synthesisSummary,
+    LookupRangeCheck.witnessCheck_synthesisSummary,
+    LookupRangeCheck.witnessCheck_synthesisSummary,
+    LookupRangeCheck.witnessCheck_synthesisSummary]
+
+@[synthesis_summary_norm]
+theorem synthGates_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (iHash region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synthGates cfg input pcs ccs iHash).operations region) =
+      synthGatesSynthesisSummary cfg := by
+  simp only [synthGatesSynthesisSummary, synthGates, synthDecompositions,
+    synthCanonicity, synthGdPkdValueCanonicity,
+    synthRhoPsiCanonicity, circuit_norm, synthesis_summary_norm,
+    List.foldr_cons, List.foldr_nil,
+    FloorPlanner.SynthesisSummary.combine_empty]
+
+@[synthesis_summary_norm]
+theorem synth_synthesisSummary_eq
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synth G R Q hQ cfg input).operations region) =
+      synthesisSummary cfg := by
+  simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+
 @[keygen_output_norm]
 theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex) :
@@ -1224,13 +1324,53 @@ theorem synth_keygenRegistered
           (self + 27) ((synthPieces cfg input).nextRegionIndex self)
           configured.permutationColumns column hcolumn
 
-/-- The elaborated metadata, standalone (the factored soundness statement needs the
-instance). NOT named `elaborated`: the canonical name is reserved for instances whose fields
-are in REDUCED form (cps dsimp-unfolds it — see `unfoldCanonicalElaborated`); this one's
-`output` is the folded `(synth …).output`, and unfolding that in consumers bloats their
-kernel certificates (NoteCommit/MainBundle hit kernel timeouts when tried). Rename back
-once the metadata substrate derives the reduced fields. -/
-instance elaboratedFolded (G : Generators) (R : FixedBase)
+/-- The reduced output metadata exported to parent circuits. -/
+def output (cfg : Config) (self : RegionIndex) : Var Point Fp :=
+  { x := .of (self + 28) 1 cfg.addConfig.xQR
+    y := .of (self + 28) 1 cfg.addConfig.yQR }
+
+@[keygen_output_norm]
+theorem output_x_column (cfg : Config) (self : RegionIndex) :
+    (output cfg self).x.cell.column = cfg.addConfig.xQR := rfl
+
+@[keygen_output_norm]
+theorem output_y_column (cfg : Config) (self : RegionIndex) :
+    (output cfg self).y.cell.column = cfg.addConfig.yQR := rfl
+
+theorem synth_output_eq_commit_output
+    (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (synth G R Q hQ cfg input).output self
+      = (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+          { pieces :=
+              #v[AssignedCell.of self 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 1 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 2 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 4 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 7 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 8 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 10 + 2) 0 cfg.hashConfig.witnessPieces,
+                AssignedCell.of (self + 12 + 2) 0 cfg.hashConfig.witnessPieces],
+            r := input.rcm }
+          (self + 15 + 5 + 5) := by
+  show ((synthChecks G R Q hQ cfg input
+      ((synthPieces cfg input).output self) (self + 27)).output
+    ((synthPieces cfg input).nextRegionIndex self)).cm = _
+  rw [synthChecks_output]
+  rfl
+
+theorem synth_output_eq (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (synth G R Q hQ cfg input).output self = output cfg self := by
+  rw [synth_output_eq_commit_output G R Q hQ cfg input self,
+    Sinsemilla.CommitDomain.commit_output_cells]
+  simp only [output, Nat.reduceAdd, Nat.add_assoc]
+
+/-- Canonical elaborated metadata, with fully reduced output and synthesis summary. -/
+instance elaborated (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) :
     ElaboratedCircuit Fp Config Config Inputs Point
       (fun config => pure config) (synth G R Q hQ) where
@@ -1238,11 +1378,14 @@ instance elaboratedFolded (G : Generators) (R : FixedBase)
   registered configInput _ configured input self := by
     simpa using synth_keygenRegistered
       G R Q hQ configInput input self configured
-  output cfg input i := (synth G R Q hQ cfg input).output i
+  output cfg _ self := output cfg self
   regionCount _ := 43
-  output_eq := by intro _ _ _; rfl
+  synthesisSummary cfg _ _ := synthesisSummary cfg
+  output_eq cfg input self := (synth_output_eq G R Q hQ cfg input self).symm
   regionCount_eq cfg input i :=
     (synth_regionCount G R Q hQ cfg input i).symm
+  synthesisSummary_eq cfg input region :=
+    (synth_synthesisSummary_eq G R Q hQ cfg input region).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

@@ -138,6 +138,10 @@ def sinsemillaGate (cfg : Config) : Gate Fp :=
             + qS3Expr cfg * (2 : Fp) * l1Next)
     [("secant line", secant), ("y check", yCheck)]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem sinsemillaGate_selector (cfg : Config) :
+    (sinsemillaGate cfg).selector = cfg.qS1 := rfl
+
 /-! ## The 3-tuple generator lookup
 
 The input tuple (gated by `q_s1` and `q_run = q_s2 − q_s3`):
@@ -917,12 +921,39 @@ private theorem complete_gates (G : Generators)
 /-- One interior hash-word round at word index `i`, at its own row `offset`. Assigns row
 `offset + 1`'s cells (running sum, stepped accumulator x, next word's slopes), enables the
 generator lookup and the Sinsemilla gate at `offset`. -/
+def roundColumns (config : Config) : List FloorPlanner.RegionColumn :=
+    [.column .fixed config.qS2.index,
+      .column .advice config.bits.index,
+      .column .advice config.xP.index,
+      .column .advice config.lambda1.index,
+      .column .advice config.lambda2.index,
+      .column .advice config.xA.index,
+      .selector config.qS1.index,
+      .selector config.qS1.index]
+
+def roundSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns (roundColumns config) (offset + 2) 0
+
 def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
   configure := pure
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] } }
+          lookups cfg _ := [generatorLookup G cfg] }
+      synthesisSummary config offset _ _ := roundSynthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [roundSynthesisSummary, roundColumns]
+          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, sinsemillaGate_selector,
+            List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.nil_append, List.singleton_append, List.map_cons, List.map_nil]
+        · simp only [roundSynthesisSummary, roundColumns, circuit_norm]
+          omega
+        · simp only [roundSynthesisSummary, circuit_norm] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset
@@ -997,6 +1028,14 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
       hH hchain hUsable hBlock
 
+/-- The interior round exposes its reduced synthesis summary. -/
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_eq
+    (G : Generators) (i : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((round G i).elaborated.synthesisSummary config offset piece region) =
+      roundSynthesisSummary config offset := rfl
+
 /-- An interior hash-word round requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem round_synthesisSummary_constantSiteCount
@@ -1004,8 +1043,8 @@ theorem round_synthesisSummary_constantSiteCount
     (piece : AssignedCell Fp) (region : RegionIndex) :
     ((round G i).elaborated.synthesisSummary
       config offset piece region).constantSiteCount = 0 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [round, circuit_norm]
+  rw [round_synthesisSummary_eq]
+  simp only [roundSynthesisSummary, circuit_norm]
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]

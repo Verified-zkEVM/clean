@@ -12,8 +12,6 @@ namespace Zcash.Circuits.Action
 open Halo2
 open Circuit
 
-set_option maxHeartbeats 20000
-
 private theorem initialGeneratorTableIdx_mem
     (cfg : Config) (i : RegionIndex) :
     Operation.loadTable cfg.sinsemilla1.generatorTable.tableIdx
@@ -165,24 +163,9 @@ def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
     exact hquery
   constantSiteCount_le_constantCapacityLowerBound := by
     dsimp only
-    rw [(circuit Specs.Sinsemilla.orchardGenerators orchardBases).elaborated.synthesisSummary_eq]
-    rw [circuit_synthesize_eq]
-    simp only [mainPost, synthCrossAddressChecks, circuit_norm,
-      Circuit.operations_bind, Circuit.operations_pure,
-      FloorPlanner.synthesisSummary_append,
-      FormalCircuit.call_synthesisSummary]
-    simp [FloorPlanner.synthesisSummary,
-      FloorPlanner.regionSynthesisSummary,
-      FloorPlanner.RegionSynthesisSummary.combine,
-      FloorPlanner.RegionSynthesisSummary.ofOperation,
-      FloorPlanner.SynthesisSummary.combine,
-      FloorPlanner.SynthesisSummary.ofRegion,
-      FloorPlanner.SynthesisSummary.constantCapacityLowerBound,
-      FloorPlanner.SynthesisSummary.maxColumnOccupancy,
-      FloorPlanner.SynthesisSummary.fixedColumnOccupancy,
-      FloorPlanner.regionOperationShapeColumns,
-      FloorPlanner.regionOperationRowExtent,
-      FloorPlanner.regionOperationConstantSiteCount]
+    rw [Zcash.Circuits.Action.Circuit.circuit_synthesisSummary_eq]
+    set_option maxRecDepth 10000 in
+      decide
   publicInputLayout := PublicInputs.layout
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>

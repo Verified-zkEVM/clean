@@ -153,6 +153,14 @@ theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
   simp only [main]
   rw [synthesize_regionCount]
 
+@[synthesis_summary_norm]
+theorem main_synthesisSummary_eq (G : Generators) (B : Bases)
+    (cfg : Config) (input : Var unit Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary ((main G B cfg input).operations region) =
+      synthesizeBaseSynthesisSummary cfg := by
+  rw [main, CircuitPreIronwood.synthesize,
+    synthesizeBase_synthesisSummary_eq]
+
 /-! ## The extracted data -/
 
 /-- Everything the Action statement speaks about, read off a satisfying assignment:
@@ -715,6 +723,7 @@ instance elaborated (G : Generators) (B : Bases) :
     have haddX := configure_output_add_xQR_mem_permutationRequests G counts
     have haddY := configure_output_add_yQR_mem_permutationRequests G counts
     have hmerkle1 := configure_output_merkle1_xA_mem_permutationRequests G counts
+    have hmerkle2 := configure_output_merkle2_xA_mem_permutationRequests G counts
     dsimp only [main, CircuitPreIronwood.synthesize, synthesizeBase]
     simp_all only [keygen_spine]
     constructor
@@ -768,7 +777,8 @@ instance elaborated (G : Generators) (B : Bases) :
           Nat.reduceEqDiff, if_false]
       · dsimp only [synthNotes, loadPrivate]
         simp_all only [keygen_spine]
-        repeat' constructor
+        repeat' first
+          | (guard_target =~ (_ ∧ _); constructor)
         all_goals
           first
           | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -779,6 +789,11 @@ instance elaborated (G : Generators) (B : Bases) :
               (noteCommitNewCertificate G B counts)
           | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
               (eccConfigureCertificate G counts).witnessPointNonIdFormal
+          | skip
+        all_goals simp_all only [keygen_norm, keygen_output_norm,
+          synthWitness_output, synthChecks_output,
+          actionConfigureContext_permutationColumns,
+          Nat.reduceEqDiff, if_false]
   output cfg _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
@@ -789,6 +804,7 @@ instance elaborated (G : Generators) (B : Bases) :
       pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
                   y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
   regionCount _ := 394
+  synthesisSummary cfg _ _ := synthesizeBaseSynthesisSummary cfg
   output_eq := by
     intro cfg _ i₀
     simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
@@ -797,6 +813,8 @@ instance elaborated (G : Generators) (B : Bases) :
       synthChecks_nextRegionIndex, synthNotes_output]
   regionCount_eq := fun cfg input i =>
     (main_regionCount G B cfg input i).symm
+  synthesisSummary_eq := fun cfg input region =>
+    (main_synthesisSummary_eq G B cfg input region).symm
 
 /-! ## Soundness -/
 
@@ -921,7 +939,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   -- ── stage C: the note commitments and the final checks ──
   simp only [synthChecks_output, synthChecks_nextRegionIndex,
     synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hN
-  simp only [synthNotes, loadPrivate, circuit_norm] at hN
+  simp only [synthNotes, synthOrchardChecks, loadPrivate, circuit_norm] at hN
   have hNCo := hN.1
   have hEqR := hN.2.1
   have hGdN := hN.2.2.1
@@ -1468,7 +1486,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
     -- ── stage C witnesses and contracts ──
     simp only [synthChecks_output, synthChecks_nextRegionIndex,
       synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
-    simp only [synthNotes, loadPrivate, circuit_norm] at hWn
+    simp only [synthNotes, synthOrchardChecks, loadPrivate, circuit_norm] at hWn
     obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
     simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
     have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
@@ -1786,7 +1804,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                · have h := hPkd
                  rw [← hIvkVal] at h
                  with_unfolding_all exact h)⟩
-    · simp only [synthNotes, loadPrivate, circuit_norm, Nat.add_assoc, Nat.reduceAdd]
+    · simp only [synthNotes, synthOrchardChecks, loadPrivate, circuit_norm,
+        Nat.add_assoc, Nat.reduceAdd]
       refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · exact Halo2.SubcircuitRw.layouter_completeness_leaf
           (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1929,6 +1948,12 @@ def baseCircuit (G : Generators) (B : Bases) :
   soundness := soundness G B
   completeness := completeness G B
 
+@[synthesis_summary_norm]
+theorem baseCircuit_synthesisSummary_eq (G : Generators) (B : Bases)
+    (config : Config) (input : Var unit Fp) (region : RegionIndex) :
+    (baseCircuit G B).elaborated.synthesisSummary config input region =
+      synthesizeBaseSynthesisSummary config := rfl
+
 /-! ## The ironwood (post-NU 6.3) circuit bundle
 
 The main circuit: the proven base circuit called as a subcircuit, then the
@@ -1949,11 +1974,26 @@ def mainPost (G : Generators) (B : Bases) (cfg : Config) :
   synthCrossAddressChecks cfg pts
   pure ()
 
+def mainPostSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (synthesizeBaseSynthesisSummary cfg).combine
+    (synthCrossAddressChecksSynthesisSummary cfg)
+
+@[synthesis_summary_norm]
+theorem mainPost_synthesisSummary_eq (G : Generators) (B : Bases)
+    (cfg : Config) (input : Var unit Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((mainPost G B cfg input).operations region) =
+      mainPostSynthesisSummary cfg := by
+  simp only [mainPost, mainPostSynthesisSummary, circuit_norm,
+    synthesis_summary_norm]
+
 theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
     (input : Var unit Fp) (i : RegionIndex) :
     Operations.regionCount ((mainPost G B cfg input).operations i) = 395 := by
-  simp only [mainPost, synthCrossAddressChecks, circuit_norm, Circuit.operations_bind,
-    Circuit.operations_pure, Operations.regionCount_append, Operations.regionCount]
+  simp only [mainPost, synthCrossAddressChecks, circuit_norm,
+    Circuit.operations_bind, Circuit.operations_pure,
+    Operations.regionCount_append, Operations.regionCount]
 
 instance elaboratedPost (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit unit
@@ -1966,15 +2006,39 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     constructor
     · apply (baseCircuit G B).call_keygenRegistered_ofCertificate
         ((baseCircuit G B).configureCertificate configInput counts hconfig)
-    · dsimp only [synthCrossAddressChecks]
-      simp_all only [keygen_spine]
-      intro _
-      exact (baseConfigureCertificate G counts).orchardGate
+      intro column hcolumn
+      simp only [FormalCircuit.Configured.inputPermutationColumns,
+        FormalCircuit.keygenRequirements, baseCircuit,
+        ElaboratedCircuit.keygenRequirements, elaborated,
+        List.not_mem_nil] at hcolumn
+    · apply synthCrossAddressChecks_keygenRegistered
+      · exact configure_output_advice_mem_permutationRequests G counts
+      · exact configure_output_primary_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_x_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_y_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_x_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_y_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_x_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_y_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_x_mem_permutationRequests G counts
+      · simpa only [FormalCircuit.output_call', base_output] using
+          configure_output_witnessPoint_y_mem_permutationRequests G counts
+      · exact (baseConfigureCertificate G counts).orchardGate
   output _ _ _ := ()
   regionCount _ := 395
+  synthesisSummary cfg _ _ := mainPostSynthesisSummary cfg
   output_eq := by intro _ _ _; rfl
   regionCount_eq := fun cfg input i =>
     (mainPost_regionCount G B cfg input i).symm
+  synthesisSummary_eq := fun cfg input region =>
+    (mainPost_synthesisSummary_eq G B cfg input region).symm
 
 /-- Read the Action statement data for the fixed top-level witness program. -/
 def extractPost (cfg : Config) (_ : Var unit Fp) (i : RegionIndex)
@@ -2018,7 +2082,7 @@ theorem soundnessPost (G : Generators) (B : Bases) (cfg : Config) :
   obtain ⟨hSB, -, -, -, -⟩ := hS
   -- ── the cross-address region: four `dca · (old − new) = 0` rows ──
   rw [base_output] at hX
-  simp only [synthCrossAddressChecks, circuit_norm] at hX
+  simp only [synthCrossAddressChecks, synthCrossAddressRow, circuit_norm] at hX
   have h0 := hX 0
   have h1 := hX 1
   have h2 := hX 2
@@ -2093,7 +2157,7 @@ theorem completenessPost (G : Generators) (B : Bases) (cfg : Config) :
   · -- the cross-address region at the honest values
     rw [base_output]
     rw [base_output] at hWx
-    simp only [synthCrossAddressChecks, circuit_norm] at hWx ⊢
+    simp only [synthCrossAddressChecks, synthCrossAddressRow, circuit_norm] at hWx ⊢
     have hw0 := hWx 0
     have hw1 := hWx 1
     have hw2 := hWx 2
@@ -2225,5 +2289,11 @@ def circuit (G : Generators) (B : Bases) :
   ProverSpec := fun _ _ _ _ => True
   soundness := soundnessPost G B
   completeness := completenessPost G B
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (G : Generators) (B : Bases)
+    (config : Config) (input : Var unit Fp) (region : RegionIndex) :
+    (circuit G B).elaborated.synthesisSummary config input region =
+      mainPostSynthesisSummary config := rfl
 
 end Zcash.Circuits.Action.Circuit

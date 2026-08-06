@@ -239,6 +239,38 @@ theorem mem_equalityColumns_of_mem_permutationColumns
   simp only [permutationColumns, List.mem_cons, List.not_mem_nil, or_false] at hcolumn ⊢
   grind
 
+/-- Reduced two-row footprint of the decomposition gate. -/
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  FloorPlanner.RegionSynthesisSummary.ofColumns
+    [.selector cfg.qDecompose.index,
+      .column .advice cfg.lWhole.index,
+      .column .advice cfg.aWhole.index,
+      .column .advice cfg.bWhole.index,
+      .column .advice cfg.cWhole.index,
+      .column .advice cfg.leftNode.index,
+      .column .advice cfg.rightNode.index,
+      .column .advice cfg.z1A.index,
+      .column .advice cfg.z1B.index,
+      .column .advice cfg.b1.index,
+      .column .advice cfg.b2.index]
+    (offset + 2) 1
+
+theorem synthesisSummary_eq (cfg : Config) (l : Fp)
+    (input : Var Inputs Fp) (offset : ℕ) (self : RegionIndex) :
+    synthesisSummary cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((body cfg l input offset).operations self) := by
+  rw [synthesisSummary]
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [body, circuit_norm, synthesis_summary_norm,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
+  · simp only [body, circuit_norm, synthesis_summary_norm,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+    omega
+  · simp only [body, circuit_norm, synthesis_summary_norm,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+
 @[implicit_reducible]
 def elaborated (l : Fp) :
     ElaboratedRegionCircuit Fp ConfigInput Config Inputs unit
@@ -252,6 +284,9 @@ def elaborated (l : Fp) :
             input.cWhole.cell.column, input.leftNode.cell.column,
             input.rightNode.cell.column, input.z1A.cell.column,
             input.z1B.cell.column, input.b1.cell.column, input.b2.cell.column] }
+    synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
+    synthesisSummary_eq := fun cfg offset input self =>
+      synthesisSummary_eq cfg l input offset self
     registered := by keygen_registration [body, permutationColumns] }
 
 /-- The decomposition-gate gadget. Pure assertion (`unit` output). Soundness: the four polys imply
@@ -286,6 +321,12 @@ def circuit (l : Fp) :
     dsimp only at h
     exact ⟨h, trivial, trivial, trivial, trivial, trivial, trivial, trivial, trivial,
       trivial, trivial⟩
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary (l : Fp) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit l).elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
 
 @[keygen_configured]
 def circuit_configured (l : Fp) (cfg : Config)
@@ -1183,6 +1224,41 @@ private theorem HashLayer.gate_keygenRegistered
     all_goals grind
   · exact Operations.KeygenRegistered.nil _ _ _
 
+/-- Reduced layouter footprint of one Merkle hash layer. -/
+def HashLayer.synthesisSummary (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla).combine
+    ((LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lookupCfg).combine
+      ((LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lookupCfg).combine
+        ((HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla).combine
+          ((HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla).combine
+            ((HashToPoint.hashCircuitSynthesisSummary
+                HashLayer.merkleNs cfg.sinsemilla).combine
+              (FloorPlanner.SynthesisSummary.ofRegion
+                (Gate.synthesisSummary cfg.gate 0)))))))
+
+theorem HashLayer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) (input : Var HashLayer.Input Fp)
+    (region : RegionIndex) :
+    HashLayer.synthesisSummary cfg lookupCfg =
+      FloorPlanner.synthesisSummary
+        ((HashLayer.synthesize G cfg lookupCfg Q hQ l input).operations region) := by
+  rw [HashLayer.synthesisSummary]
+  simp only [HashLayer.synthesize, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append]
+  repeat' first
+    | rw [HashToPoint.witnessMessagePiece_synthesisSummary]
+    | rw [LookupRangeCheck.witnessShortCheck_synthesisSummary]
+  rw [HashToPoint.hashMessage_synthesisSummary]
+  simp only [HashToPoint.witnessMessagePiece_nextRegionIndex,
+    LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+    operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons,
+    FloorPlanner.synthesisSummary_nil,
+    Gate.circuit_synthesisSummary, circuit_norm, synthesis_summary_norm,
+    Nat.add_assoc]
+
 /-- One Merkle layer hash as a layouter-level formal circuit (`MerkleInstructions::hash_layer`),
 on the proven children (`witnessShortCheck` ×2, the `hash_to_point` bundle, the decomposition
 `Gate`). -/
@@ -1197,6 +1273,10 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   elaborated :=
     { keygenRequirements := HashLayer.keygenRequirements G Q hQ l
+      synthesisSummary cfg _ _ := HashLayer.synthesisSummary cfg.1 cfg.2
+      synthesisSummary_eq := by
+        intro cfg input region
+        exact HashLayer.synthesisSummary_eq G Q hQ l cfg.1 cfg.2 input region
       registered := by
         intro configInput counts hconfig input i
         unfold HashLayer.synthesize
@@ -1420,17 +1500,8 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     · intro B hB
       have hres := hContract B (by rw [hchunksIs]; exact hB)
       dsimp only [] at hres
-      rw [show ((HashLayer.synthesize G cfg.1 cfg.2 Q hQ l
-          { left := input_var_left, right := input_var_right }).output i₀)
-        = AssignedCell.of (i₀ + 3 + 2)
-            (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
-            cfg.1.sinsemilla.xA from by
-        show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
-            cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
-        rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
-      simp only [AssignedCell.eval_of_advice] at h_output
       rw [← h_output]
-      exact hres.1
+      simpa only [Nat.add_assoc, Nat.reduceAdd, Nat.zero_add] using hres.1
 
   completeness := by
     circuit_proof_start
@@ -1722,17 +1793,17 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         exact hB)
       rw [HashToPoint.hashCircuit_output_eval_prover] at hPSH'
       obtain ⟨hpx, -⟩ := hPSH'
-      rw [show ((HashLayer.synthesize G cfg.1 cfg.2 Q hQ l
-          { left := input_var_left, right := input_var_right }).output i₀)
-        = AssignedCell.of (i₀ + 3 + 2)
-            (0 + Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
-            cfg.1.sinsemilla.xA from by
-        show (((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call
-            cfg.1.sinsemilla _).output (i₀ + 3 + 2)).point.x = _
-        rw [FormalCircuit.output_call, HashToPoint.hashCircuit_output_point_x]] at h_output
-      simp only [AssignedCell.eval_of_advice] at h_output
       rw [← h_output]
-      exact hpx
+      simpa only [Nat.add_assoc, Nat.reduceAdd, Nat.zero_add] using hpx
+
+@[synthesis_summary_norm]
+theorem HashLayer.circuit_synthesisSummary_eq
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10)
+    (cfg : Config × LookupRangeCheck.Config 10)
+    (input : Var HashLayer.Input Fp) (region : RegionIndex) :
+    (HashLayer.circuit G Q hQ l hl).elaborated.synthesisSummary
+      cfg input region = HashLayer.synthesisSummary cfg.1 cfg.2 := rfl
 
 /-! ### Merkle path (`MerkleStep` / `MerkleRoot`, lifted verbatim) -/
 
@@ -1893,8 +1964,7 @@ theorem HashLayer.circuit_output_column (G : Generators) (Q : Point Fp)
     (cfg : Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Var HashLayer.Input Fp) (i : RegionIndex) :
     ((HashLayer.circuit G Q hQ l hl).output (cfg, lcfg) input i).cell.column =
-      cfg.sinsemilla.xA := by
-  simp only [HashLayer.circuit_output, AssignedCell.of_cell, Cell.of_column]
+      cfg.sinsemilla.xA := rfl
 
 /-- The column carrying a hash-layer output is included in its equality-column summary. -/
 @[keygen_norm]
@@ -2071,8 +2141,8 @@ private theorem layer_output (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       let pair ← assignRegion "swap"
         ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
       (HashLayer.circuit G Q hQ l hl).call (cfg, lcfg)
-        { left := pair.aSwapped, right := pair.bSwapped }
-      : Circuit Fp (Var field Fp)).output i =
+        { left := pair.aSwapped, right := pair.bSwapped }) :
+      Circuit Fp (Var field Fp)).output i =
         AssignedCell.of (i + 6)
           (Sinsemilla.Chain.prefixRows HashLayer.merkleNs HashLayer.merkleNs.length)
           cfg.sinsemilla.xA := by
@@ -2097,6 +2167,41 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
     configured.1.permutationColumns ++ configured.2.permutationColumns
   inputPermutationColumns _ _ input := [input.node.cell.column]
 
+/-- Reduced footprint of one conditional-swap and hash layer. -/
+def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.selector ccfg.qSwap.index,
+          .column .advice ccfg.a.index,
+          .column .advice ccfg.b.index,
+          .column .advice ccfg.swap.index,
+          .column .advice ccfg.aSwapped.index,
+          .column .advice ccfg.bSwapped.index]
+        1 0)).combine
+    (HashLayer.synthesisSummary cfg lookupCfg)
+
+theorem Layer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
+    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) (input : Var Layer.Input Fp)
+    (region : RegionIndex) :
+    Layer.synthesisSummary ccfg cfg lookupCfg =
+      FloorPlanner.synthesisSummary
+        (((do
+          let pair ← assignRegion "swap"
+            ((CondSwap.swap wsib wswap).call ccfg 0 { a := input.node })
+          (HashLayer.circuit G Q hQ l hl).call (cfg, lookupCfg)
+            { left := pair.aSwapped, right := pair.bSwapped }) :
+          Circuit Fp (Var field Fp)).operations region) := by
+  rw [Layer.synthesisSummary]
+  simp only [Circuit.operations_bind,
+    operations_assignRegion, FloorPlanner.synthesisSummary_region_cons,
+    CondSwap.swap_synthesisSummary_eq,
+    HashLayer.circuit_synthesisSummary_eq, circuit_norm,
+    synthesis_summary_norm]
+
 /-- One Merkle path layer (the `MerklePath::calculate_root` loop body): conditionally swap
 `(node, sibling)` by the position bit — sibling and bit are prover witness programs — then
 the layer hash. `Spec` is `MerkleStep`. -/
@@ -2118,6 +2223,11 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
   elaborated :=
     { keygenRequirements := Layer.keygenRequirements G Q hQ l hl wsib wswap
+      synthesisSummary cfg _ _ := Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2
+      synthesisSummary_eq := by
+        intro cfg input region
+        exact Layer.synthesisSummary_eq G Q hQ l hl wsib wswap
+          cfg.1 cfg.2.1 cfg.2.2 input region
       registered := by keygen_registration
       output := fun (_, cfg, _) _ i =>
         AssignedCell.of (i + 6)
@@ -2179,12 +2289,16 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         : Value HashLayer.Input Fp).right
       = AssignedCell.eval place env x_gen_out_0.bSwapped from rfl,
       hBread, hBSw] at hrightEq
-    refine ⟨lv, rv, hlv, hrv, ?_, hcontract⟩
+    refine ⟨lv, rv, hlv, hrv, ?_, ?_⟩
     rcases hbool with h0 | h1
     · rw [if_neg (show ¬ _ = (1 : Fp) from by rw [h0]; decide)] at hleftEq
       exact Or.inl hleftEq
     · rw [if_pos h1] at hrightEq
       exact Or.inr hrightEq
+    intro B hB
+    rw [← h_output]
+    simpa only [HashLayer.circuit_output, AssignedCell.eval_of_advice,
+      Nat.add_assoc, Nat.reduceAdd] using hcontract B hB
 
   completeness := by
     circuit_proof_start
@@ -2728,6 +2842,33 @@ private theorem synthesize_keygenRegistered :
     exact foldState_node_column_mem G Q hQ l₀ wsib wswap
       hconfig input region i
 
+/-- Reduced summary of all Merkle layers, composed from each layer's declared
+summary at its fold state. -/
+def synthesisSummary
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    : FloorPlanner.SynthesisSummary :=
+  FloorPlanner.SynthesisSummary.replicate d
+    (Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2)
+
+theorem synthesisSummary_eq
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) :
+    synthesisSummary d cfg =
+      FloorPlanner.synthesisSummary
+        ((synthesize G Q hQ l₀ d wsib wswap cfg input).operations region) := by
+  rw [synthesize, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    FormalCircuit.foldCall_operations]
+  rw [← FormalCircuit.foldSynthesisSummary_eq]
+  symm
+  apply FormalCircuit.foldSynthesisSummary_eq_replicate
+  · intro i
+    rfl
+  · rw [Layer.synthesisSummary_eq G Q hQ ((l₀ + 0) % 2 ^ 10)
+        (Nat.mod_lt _ (by norm_num)) (wsib 0) (wswap 0)
+        cfg.1 cfg.2.1 cfg.2.2 input region]
+    exact FloorPlanner.synthesisSummary_columns_nodup _
+
 /-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
 `Layer.circuit` (layer `i` at `l = i`), fed by the per-layer sibling/position-bit witness
 programs. Its spec preserves the original `MerkleRoot` contract and additionally
@@ -2745,6 +2886,8 @@ def circuit :
 
   elaborated :=
     { keygenRequirements := keygenRequirements G Q hQ l₀ wsib wswap
+      synthesisSummary cfg _ _ := synthesisSummary d cfg
+      synthesisSummary_eq := synthesisSummary_eq G Q hQ l₀ d wsib wswap
       registered := synthesize_keygenRegistered G Q hQ l₀ d wsib wswap
       output := fun cfg input i =>
         (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg input i d).1.node
@@ -3037,6 +3180,15 @@ def circuit :
       Nat.mod_eq_of_lt (show l₀ + (↑i : ℕ) < 2 ^ 10 from by
         have := i.isLt; omega)]
     exact ⟨B, hB⟩
+
+/-- A calculate-root call publishes the fold's reduced synthesis summary. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (config : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) :
+    (circuit G Q hQ l₀ d hld wsib wswap).elaborated.synthesisSummary
+        config input region =
+      synthesisSummary d config := rfl
 
 /-- The calculate-root output column is determined by the fold shape alone. -/
 @[keygen_norm]

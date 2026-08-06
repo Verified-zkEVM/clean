@@ -191,6 +191,161 @@ theorem mem_foldl_addColumn_iff
           List.mem_cons]
         aesop
 
+theorem mem_unionColumns_iff
+    (left right : List RegionColumn) (column : RegionColumn) :
+    column ∈ unionColumns left right ↔ column ∈ left ∨ column ∈ right :=
+  mem_foldl_addColumn_iff right left column
+
+theorem unionColumns_addColumn_right
+    (left right : List RegionColumn) (column : RegionColumn) :
+    unionColumns left (addColumn right column) =
+      addColumn (unionColumns left right) column := by
+  by_cases hcolumn : column ∈ right
+  · have hunion : column ∈ unionColumns left right :=
+      (mem_unionColumns_iff left right column).2 (.inr hcolumn)
+    rw [addColumn, if_pos hcolumn, addColumn, if_pos hunion]
+  · rw [addColumn, if_neg hcolumn]
+    unfold unionColumns
+    rw [List.foldl_append]
+    rfl
+
+theorem unionColumns_assoc
+    (left middle right : List RegionColumn) :
+    unionColumns (unionColumns left middle) right =
+      unionColumns left (unionColumns middle right) := by
+  induction right generalizing middle with
+  | nil => rfl
+  | cons column rest inductionHypothesis =>
+      change unionColumns
+          (addColumn (unionColumns left middle) column) rest =
+        unionColumns left (unionColumns (addColumn middle column) rest)
+      rw [← unionColumns_addColumn_right]
+      exact inductionHypothesis (addColumn middle column)
+
+theorem unionColumns_normalize_right
+    (left right : List RegionColumn) :
+    unionColumns left (unionColumns [] right) = unionColumns left right := by
+  rw [← unionColumns_assoc]
+  rfl
+
+/-- Unioning columns already present on the left changes nothing. -/
+theorem unionColumns_eq_left_of_subset
+    (left right : List RegionColumn) (hsubset : ∀ column ∈ right, column ∈ left) :
+    unionColumns left right = left := by
+  induction right generalizing left with
+  | nil => rfl
+  | cons column rest inductionHypothesis =>
+      change unionColumns (addColumn left column) rest = left
+      rw [addColumn, if_pos (hsubset column (by simp))]
+      exact inductionHypothesis left fun candidate hcandidate =>
+        hsubset candidate (by simp [hcandidate])
+
+theorem unionColumns_self (columns : List RegionColumn) :
+    unionColumns columns columns = columns :=
+  unionColumns_eq_left_of_subset columns columns fun _ => id
+
+theorem unionColumns_normalized_left (columns : List RegionColumn) :
+    unionColumns (unionColumns [] columns) columns = unionColumns [] columns :=
+  unionColumns_eq_left_of_subset _ _ fun column hcolumn =>
+    (mem_unionColumns_iff [] columns column).2 (.inr hcolumn)
+
+@[circuit_norm, synthesis_summary_norm]
+theorem unionColumns_nil_right (columns : List RegionColumn) :
+    unionColumns columns [] = columns := rfl
+
+theorem unionColumns_normalize_append
+    (left right : List RegionColumn) :
+    unionColumns [] (left ++ right) =
+      unionColumns (unionColumns [] left) (unionColumns [] right) := by
+  unfold unionColumns
+  rw [List.foldl_append]
+  exact (unionColumns_normalize_right _ _).symm
+
+/-- Appending only columns already covered by the first source list does not change
+its normalized column summary. -/
+theorem unionColumns_normalize_append_redundant
+    (left right : List RegionColumn)
+    (hsubset : ∀ column ∈ right, column ∈ left) :
+    unionColumns [] (left ++ right) = unionColumns [] left := by
+  rw [unionColumns_normalize_append]
+  apply unionColumns_eq_left_of_subset
+  intro column hcolumn
+  have hright := (mem_unionColumns_iff [] right column).1 hcolumn
+  have hright' : column ∈ right := hright.resolve_left (by simp)
+  exact (mem_unionColumns_iff [] left column).2
+    (.inr (hsubset column hright'))
+
+/-- Adjacent normalized column fragments reduce to one normalized source list. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem unionColumns_merge_normalized
+    (left right : List RegionColumn) :
+    unionColumns (unionColumns [] left) (unionColumns [] right) =
+      unionColumns [] (left ++ right) :=
+  (unionColumns_normalize_append left right).symm
+
+@[circuit_norm, synthesis_summary_norm]
+theorem unionColumns_collapse_normalized
+    (left right : List RegionColumn)
+    (rest : List RegionColumn) :
+    unionColumns (unionColumns [] left)
+        (unionColumns (unionColumns [] right) rest) =
+      unionColumns (unionColumns [] (left ++ right)) rest := by
+  rw [← unionColumns_assoc, ← unionColumns_normalize_append]
+
+theorem mem_foldr_unionColumns_iff
+    (columns : List (List RegionColumn)) (column : RegionColumn) :
+    column ∈ columns.foldr unionColumns [] ↔
+      ∃ members ∈ columns, column ∈ members := by
+  induction columns with
+  | nil => simp
+  | cons members rest inductionHypothesis =>
+      rw [List.foldr_cons, mem_unionColumns_iff, inductionHypothesis]
+      aesop
+
+theorem addColumn_nodup
+    (columns : List RegionColumn) (column : RegionColumn)
+    (hcolumns : columns.Nodup) :
+    (addColumn columns column).Nodup := by
+  by_cases hcolumn : column ∈ columns
+  · simpa [addColumn, hcolumn]
+  · simpa [addColumn, hcolumn] using
+      hcolumns.append (by simp) (by simpa using hcolumn)
+
+theorem unionColumns_nodup
+    (left right : List RegionColumn) (hleft : left.Nodup) :
+    (unionColumns left right).Nodup := by
+  induction right generalizing left with
+  | nil => exact hleft
+  | cons column rest inductionHypothesis =>
+      exact inductionHypothesis _ (addColumn_nodup left column hleft)
+
+theorem unionColumns_empty_left
+    (columns : List RegionColumn) (hcolumns : columns.Nodup) :
+    unionColumns [] columns = columns := by
+  have general : ∀ (left right : List RegionColumn), right.Nodup →
+      (∀ column ∈ right, column ∉ left) →
+      unionColumns left right = left ++ right := by
+    intro left right hright hdisjoint
+    induction right generalizing left with
+    | nil => simp [unionColumns]
+    | cons column rest inductionHypothesis =>
+        rw [List.nodup_cons] at hright
+        have hcolumn : column ∉ left := hdisjoint column (by simp)
+        change unionColumns (addColumn left column) rest =
+          left ++ column :: rest
+        rw [addColumn, if_neg hcolumn]
+        rw [inductionHypothesis (left ++ [column]) hright.2]
+        · simp [List.append_assoc]
+        · intro candidate hcandidate
+          simp only [List.mem_append, List.mem_singleton, not_or]
+          exact ⟨hdisjoint candidate (by simp [hcandidate]),
+            fun heq => hright.1 (heq ▸ hcandidate)⟩
+  simpa using general [] columns hcolumns (by simp)
+
+theorem unionColumns_normalized_nil_left (columns : List RegionColumn) :
+    unionColumns [] (unionColumns [] columns) = unionColumns [] columns :=
+  unionColumns_empty_left _ (unionColumns_nodup [] columns (by simp))
+
 /-- The one-past-last row measured for a region operation. -/
 @[circuit_norm] def regionOperationRowExtent : RegionOperation F → ℕ
   | .assignAdvice _ row _
@@ -224,39 +379,197 @@ theorem mem_foldl_addColumn_iff
 
 namespace RegionSynthesisSummary
 
+/-- A reduced region summary from its distinct-column source list and exact numerical
+footprint. -/
+def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
+    RegionSynthesisSummary where
+  columns := unionColumns [] columns
+  rowCount := rowCount
+  constantSiteCount := constantSiteCount
+
+/-- The closed-form summary of `count` repetitions of the same column shape,
+whose `i`th repetition occupies through
+`offset + stride * i + rowCount` and requests `constantSiteCount` constants. -/
+def repeatColumns (columns : List RegionColumn) (offset stride rowCount
+    constantSiteCount count : ℕ) : RegionSynthesisSummary :=
+  if count = 0 then {}
+  else
+    ofColumns columns
+      (offset + stride * (count - 1) + rowCount)
+      (count * constantSiteCount)
+
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_columns (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count).columns =
+      if count = 0 then [] else unionColumns [] columns := by
+  cases count <;> rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_rowCount (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count).rowCount =
+      if count = 0 then 0 else offset + stride * (count - 1) + rowCount := by
+  cases count <;> rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_constantSiteCount (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count).constantSiteCount =
+      count * constantSiteCount := by
+  cases count <;> simp [repeatColumns, ofColumns]
+
+@[circuit_norm, synthesis_summary_norm] theorem ofColumns_columns
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
+    (ofColumns columns rowCount constantSiteCount).columns =
+      unionColumns [] columns := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem ofColumns_rowCount
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
+    (ofColumns columns rowCount constantSiteCount).rowCount = rowCount := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem ofColumns_constantSiteCount
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
+    (ofColumns columns rowCount constantSiteCount).constantSiteCount =
+      constantSiteCount := rfl
+
 def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
-  columns := left.columns ++ right.columns
+  columns := unionColumns left.columns right.columns
   rowCount := max left.rowCount right.rowCount
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
 
-@[circuit_norm] theorem combine_columns (left right : RegionSynthesisSummary) :
-    (left.combine right).columns = left.columns ++ right.columns := rfl
+@[circuit_norm, synthesis_summary_norm]
+theorem combine_columns (left right : RegionSynthesisSummary) :
+    (left.combine right).columns =
+      unionColumns left.columns right.columns := rfl
 
-@[circuit_norm] theorem combine_rowCount (left right : RegionSynthesisSummary) :
+@[circuit_norm, synthesis_summary_norm]
+theorem combine_rowCount (left right : RegionSynthesisSummary) :
     (left.combine right).rowCount = max left.rowCount right.rowCount := rfl
 
-@[circuit_norm] theorem combine_constantSiteCount
+@[circuit_norm, synthesis_summary_norm] theorem combine_constantSiteCount
     (left right : RegionSynthesisSummary) :
     (left.combine right).constantSiteCount =
       left.constantSiteCount + right.constantSiteCount := rfl
 
-@[circuit_norm] theorem combine_empty (summary : RegionSynthesisSummary) :
+/-- Combining two reduced column summaries keeps a single reduced column source and
+combines only their numerical footprints. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem ofColumns_combine_ofColumns
+    (leftColumns rightColumns : List RegionColumn)
+    (leftRows rightRows leftConstants rightConstants : ℕ) :
+    (ofColumns leftColumns leftRows leftConstants).combine
+        (ofColumns rightColumns rightRows rightConstants) =
+      ofColumns (leftColumns ++ rightColumns)
+        (max leftRows rightRows) (leftConstants + rightConstants) := by
+  apply RegionSynthesisSummary.ext
+  · exact unionColumns_merge_normalized _ _
+  · rfl
+  · rfl
+
+/-- Deferred-constant requests of a reduced summary fold are the sum of the
+component requests. -/
+@[synthesis_summary_norm]
+theorem foldr_combine_constantSiteCount
+    (summaries : List RegionSynthesisSummary) :
+    (summaries.foldr combine {}).constantSiteCount =
+      (summaries.map (fun summary => summary.constantSiteCount)).sum := by
+  induction summaries with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, combine_constantSiteCount,
+        List.map_cons, List.sum_cons, inductionHypothesis]
+
+@[circuit_norm, synthesis_summary_norm] theorem combine_empty
+    (summary : RegionSynthesisSummary) :
     summary.combine {} = summary := by
   cases summary
-  simp [combine]
+  simp [combine, unionColumns]
 
-@[circuit_norm] theorem empty_combine (summary : RegionSynthesisSummary) :
+theorem empty_combine (summary : RegionSynthesisSummary)
+    (hcolumns : summary.columns.Nodup) :
     ({} : RegionSynthesisSummary).combine summary = summary := by
-  cases summary
-  simp [combine]
+  apply RegionSynthesisSummary.ext
+  · exact unionColumns_empty_left _ hcolumns
+  · simp [combine]
+  · simp [combine]
+
+/-- An explicitly reduced summary is a left identity target as well as a right
+identity source. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem empty_combine_ofColumns (columns : List RegionColumn)
+    (rowCount constantSiteCount : ℕ) :
+    ({} : RegionSynthesisSummary).combine
+        (ofColumns columns rowCount constantSiteCount) =
+      ofColumns columns rowCount constantSiteCount :=
+  empty_combine _ (unionColumns_nodup [] columns (by simp))
+
+private theorem foldr_ofColumns_eq_repeatColumns_combine
+    (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
+    (accumulator : RegionSynthesisSummary) (haccumulator : accumulator.columns.Nodup) :
+    (List.ofFn fun i : Fin count =>
+      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount).foldr
+        combine accumulator =
+      (repeatColumns columns offset stride rowCount constantSiteCount count).combine
+        accumulator := by
+  induction count generalizing accumulator with
+  | zero =>
+      simpa [repeatColumns] using (empty_combine accumulator haccumulator).symm
+  | succ count inductionHypothesis =>
+      rw [List.ofFn_succ']
+      simp only [List.concat_eq_append, List.foldr_append, List.foldr,
+        Fin.val_castSucc]
+      rw [inductionHypothesis]
+      · cases count with
+        | zero =>
+            apply RegionSynthesisSummary.ext
+            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+                combine_columns]
+              exact unionColumns_empty_left _
+                (unionColumns_nodup _ _
+                  (unionColumns_nodup [] columns (by simp)))
+            · simp [repeatColumns, combine]
+            · simp [repeatColumns, combine]
+        | succ count =>
+            apply RegionSynthesisSummary.ext
+            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+                combine_columns, ofColumns_columns, Nat.add_one_sub_one]
+              rw [← unionColumns_assoc, unionColumns_self]
+            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+                combine_rowCount, ofColumns_rowCount, Fin.val_last,
+                Nat.add_one_sub_one]
+              rw [Nat.max_eq_right]
+              exact (Nat.add_le_add_right
+                (Nat.add_le_add_left
+                  (Nat.mul_le_mul_left stride (Nat.le_succ count)) offset) rowCount).trans
+                    (Nat.le_max_left _ _)
+            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+                combine_constantSiteCount, ofColumns_constantSiteCount,
+                Nat.add_one_sub_one, Nat.succ_mul]
+              omega
+      · exact unionColumns_nodup _ _
+          (unionColumns_nodup [] columns (by simp))
+
+/-- Folding repeated identical region shapes reduces to a constant-size summary. -/
+@[synthesis_summary_norm]
+theorem foldr_ofColumns_eq_repeatColumns
+    (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ) :
+    (List.ofFn fun i : Fin count =>
+      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount).foldr
+        combine {} =
+      repeatColumns columns offset stride rowCount constantSiteCount count := by
+  rw [foldr_ofColumns_eq_repeatColumns_combine]
+  · exact combine_empty _
+  · simp
 
 def ofOperation (operation : RegionOperation F) : RegionSynthesisSummary where
-  columns := regionOperationShapeColumns operation
+  columns := unionColumns [] (regionOperationShapeColumns operation)
   rowCount := regionOperationRowExtent operation
   constantSiteCount := regionOperationConstantSiteCount operation
 
 @[circuit_norm] theorem ofOperation_columns (operation : RegionOperation F) :
-    (ofOperation operation).columns = regionOperationShapeColumns operation := rfl
+    (ofOperation operation).columns =
+      unionColumns [] (regionOperationShapeColumns operation) := rfl
 
 @[circuit_norm] theorem ofOperation_rowCount (operation : RegionOperation F) :
     (ofOperation operation).rowCount = regionOperationRowExtent operation := rfl
@@ -275,6 +588,15 @@ def regionSynthesisSummary : RegionOperations F → RegionSynthesisSummary
       (RegionSynthesisSummary.ofOperation operation).combine
         (regionSynthesisSummary rest)
 
+theorem regionSynthesisSummary_columns_nodup
+    (operations : RegionOperations F) :
+    (regionSynthesisSummary operations).columns.Nodup := by
+  induction operations with
+  | nil => simp [regionSynthesisSummary]
+  | cons operation rest _ =>
+      exact unionColumns_nodup _ _
+        (unionColumns_nodup [] (regionOperationShapeColumns operation) (by simp))
+
 @[circuit_norm] theorem regionSynthesisSummary_nil_columns :
     (regionSynthesisSummary ([] : RegionOperations F)).columns = [] := rfl
 
@@ -284,23 +606,301 @@ def regionSynthesisSummary : RegionOperations F → RegionSynthesisSummary
 @[circuit_norm] theorem regionSynthesisSummary_nil_constantSiteCount :
     (regionSynthesisSummary ([] : RegionOperations F)).constantSiteCount = 0 := rfl
 
-@[circuit_norm] theorem regionSynthesisSummary_cons_columns
+/-- The empty operation stream has the empty reduced summary. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_nil :
+    regionSynthesisSummary ([] : RegionOperations F) = {} := rfl
+
+theorem regionSynthesisSummary_cons_columns
     (operation : RegionOperation F) (rest : RegionOperations F) :
     (regionSynthesisSummary (operation :: rest)).columns =
-      regionOperationShapeColumns operation ++
+      unionColumns (unionColumns [] (regionOperationShapeColumns operation))
         (regionSynthesisSummary rest).columns := rfl
 
-@[circuit_norm] theorem regionSynthesisSummary_cons_rowCount
+theorem regionSynthesisSummary_columns_eq_unionColumns
+    (operations : RegionOperations F) :
+    (regionSynthesisSummary operations).columns =
+      unionColumns [] (operations.flatMap regionOperationShapeColumns) := by
+  induction operations with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      simp only [regionSynthesisSummary_cons_columns, List.flatMap_cons,
+        inductionHypothesis, unionColumns_normalize_right]
+      unfold unionColumns
+      rw [List.foldl_append]
+
+theorem regionSynthesisSummary_cons_rowCount
     (operation : RegionOperation F) (rest : RegionOperations F) :
     (regionSynthesisSummary (operation :: rest)).rowCount =
       max (regionOperationRowExtent operation)
         (regionSynthesisSummary rest).rowCount := rfl
 
-@[circuit_norm] theorem regionSynthesisSummary_cons_constantSiteCount
+theorem regionSynthesisSummary_cons_constantSiteCount
     (operation : RegionOperation F) (rest : RegionOperations F) :
     (regionSynthesisSummary (operation :: rest)).constantSiteCount =
       regionOperationConstantSiteCount operation +
         (regionSynthesisSummary rest).constantSiteCount := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainEqual_cons_columns
+    (left right : Cell) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.constrainEqual left right :: rest)).columns =
+      (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  simp only [regionOperationShapeColumns, unionColumns_nil_right]
+  exact unionColumns_empty_left _ (regionSynthesisSummary_columns_nodup rest)
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainEqual_cons_rowCount
+    (left right : Cell) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.constrainEqual left right :: rest)).rowCount =
+      (regionSynthesisSummary rest).rowCount := by
+  simp only [regionSynthesisSummary_cons_rowCount, regionOperationRowExtent,
+    Nat.zero_max]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainEqual_cons_constantSiteCount
+    (left right : Cell) (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.constrainEqual left right :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
+
+/-- Copy constraints do not occupy rows, columns, or deferred constant sites. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainEqual_cons
+    (left right : Cell) (rest : RegionOperations F) :
+    regionSynthesisSummary (.constrainEqual left right :: rest) =
+      regionSynthesisSummary rest := by
+  apply RegionSynthesisSummary.ext
+  · exact regionSynthesisSummary_constrainEqual_cons_columns left right rest
+  · exact regionSynthesisSummary_constrainEqual_cons_rowCount left right rest
+  · exact regionSynthesisSummary_constrainEqual_cons_constantSiteCount left right rest
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainConstant_cons_columns
+    (cell : Cell) (constant : F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.constrainConstant cell constant :: rest)).columns =
+      (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  simp only [regionOperationShapeColumns, unionColumns_nil_right]
+  exact unionColumns_empty_left _ (regionSynthesisSummary_columns_nodup rest)
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainConstant_cons_rowCount
+    (cell : Cell) (constant : F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.constrainConstant cell constant :: rest)).rowCount =
+      (regionSynthesisSummary rest).rowCount := by
+  simp only [regionSynthesisSummary_cons_rowCount, regionOperationRowExtent,
+    Nat.zero_max]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainInstance_cons_columns
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.constrainInstance cell column row :: rest)).columns =
+        (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  simp only [regionOperationShapeColumns, unionColumns_nil_right]
+  exact unionColumns_empty_left _ (regionSynthesisSummary_columns_nodup rest)
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainInstance_cons_rowCount
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.constrainInstance cell column row :: rest)).rowCount =
+        (regionSynthesisSummary rest).rowCount := by
+  simp only [regionSynthesisSummary_cons_rowCount, regionOperationRowExtent,
+    Nat.zero_max]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignAdvice_cons_columns
+    (column : Column .advice) (row : ℕ) (value : WitgenIR F 1)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.assignAdvice column row value :: rest)).columns =
+      unionColumns (unionColumns [] [.column .advice column.index])
+        (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignAdvice_cons_rowCount
+    (column : Column .advice) (row : ℕ) (value : WitgenIR F 1)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.assignAdvice column row value :: rest)).rowCount =
+      max (row + 1) (regionSynthesisSummary rest).rowCount := by
+  rw [regionSynthesisSummary_cons_rowCount]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignAdvice_cons_constantSiteCount
+    (column : Column .advice) (row : ℕ) (value : WitgenIR F 1)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.assignAdvice column row value :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignFixed_cons_columns
+    (column : Column .fixed) (row : ℕ) (value : F)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.assignFixed column row value :: rest)).columns =
+      unionColumns (unionColumns [] [.column .fixed column.index])
+        (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignFixed_cons_rowCount
+    (column : Column .fixed) (row : ℕ) (value : F)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.assignFixed column row value :: rest)).rowCount =
+      max (row + 1) (regionSynthesisSummary rest).rowCount := by
+  rw [regionSynthesisSummary_cons_rowCount]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignFixed_cons_constantSiteCount
+    (column : Column .fixed) (row : ℕ) (value : F)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.assignFixed column row value :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableGate_cons_columns
+    (gate : Gate F) (row : ℕ) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.enableGate gate row :: rest)).columns =
+      unionColumns (unionColumns [] [.selector gate.selector.index])
+        (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableGate_cons_rowCount
+    (gate : Gate F) (row : ℕ) (rest : RegionOperations F) :
+    (regionSynthesisSummary (.enableGate gate row :: rest)).rowCount =
+      max (row + 1) (regionSynthesisSummary rest).rowCount := by
+  rw [regionSynthesisSummary_cons_rowCount]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableGate_cons_constantSiteCount
+    (gate : Gate F) (row : ℕ) (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.enableGate gate row :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableLookup_cons_columns
+    (lookup : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.enableLookup lookup enabled row :: rest)).columns =
+      unionColumns (unionColumns [] (enabled.map fun selector =>
+        .selector selector.index)) (regionSynthesisSummary rest).columns := by
+  rw [regionSynthesisSummary_cons_columns]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableLookup_cons_rowCount
+    (lookup : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary (.enableLookup lookup enabled row :: rest)).rowCount =
+      max (row + 1) (regionSynthesisSummary rest).rowCount := by
+  rw [regionSynthesisSummary_cons_rowCount]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableLookup_cons_constantSiteCount
+    (lookup : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.enableLookup lookup enabled row :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainConstant_cons_constantSiteCount
+    (cell : Cell) (constant : F) (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.constrainConstant cell constant :: rest)).constantSiteCount =
+        1 + (regionSynthesisSummary rest).constantSiteCount := by
+  rw [regionSynthesisSummary_cons_constantSiteCount]
+  rfl
+
+/-- A single advice assignment reduces to its concrete one-column summary. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_single_assignAdvice
+    (column : Column .advice) (row : ℕ) (value : WitgenIR F 1) :
+    regionSynthesisSummary [.assignAdvice column row value] =
+      RegionSynthesisSummary.ofColumns
+        [.column .advice column.index] (row + 1) 0 := by
+  apply RegionSynthesisSummary.ext
+  · simp only [regionSynthesisSummary_assignAdvice_cons_columns,
+      regionSynthesisSummary_nil_columns, RegionSynthesisSummary.ofColumns_columns,
+      unionColumns_nil_right]
+  · simp only [regionSynthesisSummary_assignAdvice_cons_rowCount,
+      regionSynthesisSummary_nil_rowCount, RegionSynthesisSummary.ofColumns_rowCount,
+      Nat.max_zero]
+  · simp only [regionSynthesisSummary_assignAdvice_cons_constantSiteCount,
+      regionSynthesisSummary_nil_constantSiteCount,
+      RegionSynthesisSummary.ofColumns_constantSiteCount]
+
+/-- A single fixed assignment reduces to its concrete one-column summary. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_single_assignFixed
+    (column : Column .fixed) (row : ℕ) (value : F) :
+    regionSynthesisSummary [.assignFixed column row value] =
+      RegionSynthesisSummary.ofColumns
+        [.column .fixed column.index] (row + 1) 0 := by
+  apply RegionSynthesisSummary.ext
+  · simp only [regionSynthesisSummary_assignFixed_cons_columns,
+      regionSynthesisSummary_nil_columns, RegionSynthesisSummary.ofColumns_columns,
+      unionColumns_nil_right]
+  · simp only [regionSynthesisSummary_assignFixed_cons_rowCount,
+      regionSynthesisSummary_nil_rowCount, RegionSynthesisSummary.ofColumns_rowCount,
+      Nat.max_zero]
+  · simp only [regionSynthesisSummary_assignFixed_cons_constantSiteCount,
+      regionSynthesisSummary_nil_constantSiteCount,
+      RegionSynthesisSummary.ofColumns_constantSiteCount]
+
+/-- A single gate enable reduces to its selector-column summary. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_single_enableGate
+    (gate : Gate F) (row : ℕ) :
+    regionSynthesisSummary [.enableGate gate row] =
+      RegionSynthesisSummary.ofColumns
+        [.selector gate.selector.index] (row + 1) 0 := by
+  apply RegionSynthesisSummary.ext
+  · simp only [regionSynthesisSummary_enableGate_cons_columns,
+      regionSynthesisSummary_nil_columns,
+      RegionSynthesisSummary.ofColumns_columns, unionColumns_nil_right]
+  · simp only [regionSynthesisSummary_enableGate_cons_rowCount,
+      regionSynthesisSummary_nil_rowCount,
+      RegionSynthesisSummary.ofColumns_rowCount, Nat.max_zero]
+  · simp only [regionSynthesisSummary_enableGate_cons_constantSiteCount,
+      regionSynthesisSummary_nil_constantSiteCount,
+      RegionSynthesisSummary.ofColumns_constantSiteCount]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_constrainInstance_cons_constantSiteCount
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.constrainInstance cell column row :: rest)).constantSiteCount =
+        (regionSynthesisSummary rest).constantSiteCount := by
+  simp only [regionSynthesisSummary_cons_constantSiteCount,
+    regionOperationConstantSiteCount, Nat.zero_add]
 
 theorem regionOperationRowExtent_le_synthesisSummary_of_mem
     (operations : RegionOperations F) (operation : RegionOperation F)
@@ -327,10 +927,11 @@ theorem mem_regionSynthesisSummary_columns_of_mem
   | cons head rest inductionHypothesis =>
       rw [List.mem_cons] at hoperation
       simp only [regionSynthesisSummary, RegionSynthesisSummary.combine,
-        RegionSynthesisSummary.ofOperation, List.mem_append]
+        RegionSynthesisSummary.ofOperation]
+      apply (mem_unionColumns_iff _ _ _).2
       rcases hoperation with rfl | hrest
-      · exact Or.inl hcolumn
-      · exact Or.inr (inductionHypothesis hrest)
+      · exact .inl ((mem_unionColumns_iff _ _ _).2 (.inr hcolumn))
+      · exact .inr (inductionHypothesis hrest)
 
 /-- A region program which never requests a deferred constant cell has zero
 constant-allocation demand. -/
@@ -373,36 +974,82 @@ cannot change their total occupied length. -/
 namespace SynthesisSummary
 
 def combine (left right : SynthesisSummary) : SynthesisSummary where
-  columns := left.columns ++ right.columns
+  columns := unionColumns left.columns right.columns
   columnOccupancy := fun column =>
     left.columnOccupancy column + right.columnOccupancy column
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
 
-@[circuit_norm] theorem combine_columns (left right : SynthesisSummary) :
-    (left.combine right).columns = left.columns ++ right.columns := rfl
+/-- Fully reduced summary of `count` identical layouter fragments. -/
+def replicate (count : ℕ) (summary : SynthesisSummary) : SynthesisSummary where
+  columns := if count = 0 then [] else summary.columns
+  columnOccupancy := fun column => count * summary.columnOccupancy column
+  constantSiteCount := count * summary.constantSiteCount
 
-@[circuit_norm] theorem combine_columnOccupancy
+@[circuit_norm, synthesis_summary_norm]
+theorem replicate_columns (count : ℕ) (summary : SynthesisSummary) :
+    (replicate count summary).columns =
+      if count = 0 then [] else summary.columns := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem replicate_columnOccupancy (count : ℕ) (summary : SynthesisSummary)
+    (column : RegionColumn) :
+    (replicate count summary).columnOccupancy column =
+      count * summary.columnOccupancy column := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem replicate_constantSiteCount (count : ℕ) (summary : SynthesisSummary) :
+    (replicate count summary).constantSiteCount =
+      count * summary.constantSiteCount := rfl
+
+theorem replicate_succ (count : ℕ) (summary : SynthesisSummary)
+    (hcolumns : summary.columns.Nodup) :
+    (replicate count summary).combine summary = replicate (count + 1) summary := by
+  apply SynthesisSummary.ext
+  · cases count with
+    | zero =>
+        change unionColumns [] summary.columns = summary.columns
+        exact unionColumns_empty_left _ hcolumns
+    | succ count =>
+        change unionColumns summary.columns summary.columns = summary.columns
+        exact unionColumns_self summary.columns
+  · funext column
+    change count * summary.columnOccupancy column +
+      summary.columnOccupancy column =
+        (count + 1) * summary.columnOccupancy column
+    rw [Nat.add_mul, Nat.one_mul]
+  · change count * summary.constantSiteCount + summary.constantSiteCount =
+      (count + 1) * summary.constantSiteCount
+    rw [Nat.add_mul, Nat.one_mul]
+
+@[circuit_norm, synthesis_summary_norm]
+theorem combine_columns (left right : SynthesisSummary) :
+    (left.combine right).columns =
+      unionColumns left.columns right.columns := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem combine_columnOccupancy
     (left right : SynthesisSummary) (column : RegionColumn) :
     (left.combine right).columnOccupancy column =
       left.columnOccupancy column + right.columnOccupancy column := rfl
 
-@[circuit_norm] theorem combine_constantSiteCount
+@[circuit_norm, synthesis_summary_norm] theorem combine_constantSiteCount
     (left right : SynthesisSummary) :
     (left.combine right).constantSiteCount =
       left.constantSiteCount + right.constantSiteCount := rfl
 
-@[circuit_norm] theorem combine_empty (summary : SynthesisSummary) :
+@[circuit_norm, synthesis_summary_norm] theorem combine_empty
+    (summary : SynthesisSummary) :
     summary.combine {} = summary := by
   apply SynthesisSummary.ext
-  · simp [combine]
+  · simp [combine, unionColumns]
   · funext column
     simp [combine]
   · simp [combine]
 
-@[circuit_norm] theorem empty_combine (summary : SynthesisSummary) :
+theorem empty_combine (summary : SynthesisSummary)
+    (hcolumns : summary.columns.Nodup) :
     ({} : SynthesisSummary).combine summary = summary := by
   apply SynthesisSummary.ext
-  · simp [combine]
+  · exact unionColumns_empty_left _ hcolumns
   · funext column
     simp [combine]
   · simp [combine]
@@ -413,15 +1060,25 @@ def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
     if column ∈ summary.columns then summary.rowCount else 0
   constantSiteCount := summary.constantSiteCount
 
-@[circuit_norm] theorem ofRegion_columns (summary : RegionSynthesisSummary) :
+@[circuit_norm, synthesis_summary_norm]
+theorem ofRegion_empty :
+    ofRegion ({} : RegionSynthesisSummary) = ({} : SynthesisSummary) := by
+  apply SynthesisSummary.ext
+  · rfl
+  · funext column
+    simp [ofRegion]
+  · rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem ofRegion_columns (summary : RegionSynthesisSummary) :
     (ofRegion summary).columns = summary.columns := rfl
 
-@[circuit_norm] theorem ofRegion_columnOccupancy
+@[circuit_norm, synthesis_summary_norm] theorem ofRegion_columnOccupancy
     (summary : RegionSynthesisSummary) (column : RegionColumn) :
     (ofRegion summary).columnOccupancy column =
       if column ∈ summary.columns then summary.rowCount else 0 := rfl
 
-@[circuit_norm] theorem ofRegion_constantSiteCount
+@[circuit_norm, synthesis_summary_norm] theorem ofRegion_constantSiteCount
     (summary : RegionSynthesisSummary) :
     (ofRegion summary).constantSiteCount = summary.constantSiteCount := rfl
 
@@ -442,7 +1099,7 @@ theorem maxColumnOccupancy_le
     intro values
     induction values with
     | nil =>
-        intro accumulator haccumulator hvalues
+        intro accumulator haccumulator _
         exact haccumulator
     | cons value rest inductionHypothesis =>
         intro accumulator haccumulator hvalues
@@ -478,6 +1135,46 @@ def synthesisSummary : Operations F → SynthesisSummary
   | .constrainInstance _ _ _ :: rest => synthesisSummary rest
   | .loadTable _ _ :: rest => synthesisSummary rest
 
+@[circuit_norm, synthesis_summary_norm]
+theorem synthesisSummary_nil :
+    synthesisSummary ([] : Operations F) = {} := rfl
+
+/-- A layouter region reduces to its region summary, composed with the already-reduced
+summary of the remaining operation stream. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem synthesisSummary_region_cons
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    synthesisSummary (.region name body :: rest) =
+      (SynthesisSummary.ofRegion (regionSynthesisSummary body)).combine
+      (synthesisSummary rest) := rfl
+
+/-- Instance constraints do not allocate region cells or deferred constants. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem synthesisSummary_constrainInstance_cons
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) :
+    synthesisSummary (.constrainInstance cell column row :: rest) =
+      synthesisSummary rest := rfl
+
+/-- Table loads are tracked by keygen data, not by the region-allocation summary. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem synthesisSummary_loadTable_cons
+    (column : TableColumn) (values : List F) (rest : Operations F) :
+    synthesisSummary (.loadTable column values :: rest) =
+      synthesisSummary rest := rfl
+
+theorem synthesisSummary_columns_nodup (operations : Operations F) :
+    (synthesisSummary operations).columns.Nodup := by
+  induction operations with
+  | nil => simp [synthesisSummary]
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region _ body =>
+          exact unionColumns_nodup _ _
+            (regionSynthesisSummary_columns_nodup body)
+      | constrainInstance => exact inductionHypothesis
+      | loadTable => exact inductionHypothesis
+
 @[circuit_norm] theorem synthesisSummary_nil_columns :
     (synthesisSummary ([] : Operations F)).columns = [] := rfl
 
@@ -491,7 +1188,7 @@ def synthesisSummary : Operations F → SynthesisSummary
 @[circuit_norm] theorem synthesisSummary_region_cons_columns
     (name : String) (body : RegionOperations F) (rest : Operations F) :
     (synthesisSummary (.region name body :: rest)).columns =
-      (regionSynthesisSummary body).columns ++
+      unionColumns (regionSynthesisSummary body).columns
         (synthesisSummary rest).columns := rfl
 
 @[circuit_norm] theorem synthesisSummary_region_cons_columnOccupancy
@@ -550,31 +1247,35 @@ def synthesisSummary : Operations F → SynthesisSummary
       (regionSynthesisSummary left).combine (regionSynthesisSummary right) := by
   induction left with
   | nil =>
-      apply RegionSynthesisSummary.ext <;>
-        simp [RegionSynthesisSummary.combine, regionSynthesisSummary]
+      simp only [List.nil_append, regionSynthesisSummary]
+      apply RegionSynthesisSummary.ext
+      · exact (unionColumns_empty_left _
+          (regionSynthesisSummary_columns_nodup right)).symm
+      · simp [RegionSynthesisSummary.combine]
+      · simp [RegionSynthesisSummary.combine]
   | cons operation rest inductionHypothesis =>
       simp only [List.cons_append, regionSynthesisSummary,
         inductionHypothesis]
       apply RegionSynthesisSummary.ext
-      · simp [RegionSynthesisSummary.combine]
+      · simp [RegionSynthesisSummary.combine, unionColumns_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
 
-/-- Columns of concatenated region fragments compose by concatenating their exact
+/-- Columns of concatenated region fragments compose by unioning their reduced
 column summaries. -/
 @[synthesis_summary_norm]
 theorem regionSynthesisSummary_flatten_columns
     (fragments : List (RegionOperations F)) :
     (regionSynthesisSummary fragments.flatten).columns =
       (fragments.map fun operations =>
-        (regionSynthesisSummary operations).columns).flatten := by
+        (regionSynthesisSummary operations).columns).foldr unionColumns [] := by
   induction fragments with
-  | nil => simp only [List.flatten_nil, List.map_nil,
+  | nil => simp only [List.flatten_nil, List.map_nil, List.foldr_nil,
       regionSynthesisSummary_nil_columns]
   | cons fragment rest inductionHypothesis =>
       rw [List.flatten_cons, regionSynthesisSummary_append,
         RegionSynthesisSummary.combine_columns, List.map_cons,
-        List.flatten_cons, inductionHypothesis]
+        List.foldr_cons, inductionHypothesis]
 
 /-- The height of concatenated fragments is the maximum of their exact heights. -/
 @[synthesis_summary_norm]
@@ -607,28 +1308,45 @@ theorem regionSynthesisSummary_flatten_constantSiteCount
         RegionSynthesisSummary.combine_constantSiteCount, List.map_cons,
         List.sum_cons, inductionHypothesis]
 
-@[circuit_norm] theorem synthesisSummary_append
+/-- A flattened stream is summarized compositionally from the already-reduced
+summary of each fragment. -/
+@[synthesis_summary_norm]
+theorem regionSynthesisSummary_flatten
+    (fragments : List (RegionOperations F)) :
+    regionSynthesisSummary fragments.flatten =
+      (fragments.map regionSynthesisSummary).foldr
+        RegionSynthesisSummary.combine {} := by
+  induction fragments with
+  | nil => rfl
+  | cons fragment rest inductionHypothesis =>
+      rw [List.flatten_cons, regionSynthesisSummary_append,
+        List.map_cons, List.foldr_cons, inductionHypothesis]
+
+@[circuit_norm, synthesis_summary_norm] theorem synthesisSummary_append
     (left right : Operations F) :
     synthesisSummary (left ++ right) =
       (synthesisSummary left).combine (synthesisSummary right) := by
   induction left with
   | nil =>
+      simp only [List.nil_append, synthesisSummary]
       apply SynthesisSummary.ext
-      · simp [SynthesisSummary.combine, synthesisSummary]
+      · exact (unionColumns_empty_left _
+          (synthesisSummary_columns_nodup right)).symm
       · funext column
-        simp [SynthesisSummary.combine, synthesisSummary]
-      · simp [SynthesisSummary.combine, synthesisSummary]
+        simp [SynthesisSummary.combine]
+      · simp [SynthesisSummary.combine]
   | cons operation rest inductionHypothesis =>
       cases operation <;>
         simp only [List.cons_append, synthesisSummary,
           inductionHypothesis]
       · apply SynthesisSummary.ext
-        · simp [SynthesisSummary.combine]
+        · simp [SynthesisSummary.combine, unionColumns_assoc]
         · funext column
           simp [SynthesisSummary.combine, Nat.add_assoc]
         · simp [SynthesisSummary.combine, Nat.add_assoc]
 
 attribute [synthesis_summary_norm]
+  foldGateSelector
   regionOperationRowExtent
   regionOperationShapeColumns
   regionOperationConstantSiteCount
@@ -641,9 +1359,6 @@ attribute [synthesis_summary_norm]
   regionSynthesisSummary_nil_columns
   regionSynthesisSummary_nil_rowCount
   regionSynthesisSummary_nil_constantSiteCount
-  regionSynthesisSummary_cons_columns
-  regionSynthesisSummary_cons_rowCount
-  regionSynthesisSummary_cons_constantSiteCount
   SynthesisSummary.combine_columns
   SynthesisSummary.combine_columnOccupancy
   SynthesisSummary.combine_constantSiteCount

@@ -320,6 +320,13 @@ def SlotPS (G : Generators) (n : ℕ) (piece : Fp) (w : SlotReads (n + 1) Fp) : 
     w.last.lambda2 * w.last.lambda2 = w.next.xA + xR w.last + w.last.xA ∧
     2 * w.last.lambda2 * (w.last.xA - w.next.xA) - yA w.last = 2 * B.y
 
+/-- A slot contributes exactly its `HashPiece` child's reduced footprint; its state
+reads are operation-free. -/
+def slotSynthesisSummary (ns : List ℕ) (i : ℕ) (cfg : Config)
+    (base : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  HashPiece.circuitSynthesisSummary (ns.getD i 0) cfg base
+
 /-- One piece slot as a `Unit`-output formal circuit (the loop stays homogeneous — the
 piece call's width-dependent output lives inside this bundle). Slot `i` of the width list
 `ns`: the `HashPiece` call at its own base row, the boundary `q_s2` re-pin, and the
@@ -332,7 +339,11 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
           permutationColumns cfg _ := [cfg.bits]
-          inputPermutationColumns _ _ input := [input.cell.column] } }
+          inputPermutationColumns _ _ input := [input.cell.column] }
+      synthesisSummary cfg base _ _ := slotSynthesisSummary ns i cfg base
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        simp only [slotSynthesisSummary, circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg base (piece : AssignedCell Fp) := do
     let prev ← readState cfg (base - 1)
@@ -398,6 +409,21 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         hchain'
       exact hres
 
+@[synthesis_summary_norm]
+theorem slot_synthesisSummary_eq
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (cfg : Config) (base : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) :
+    (slot G ns yaIn i).elaborated.synthesisSummary cfg base piece self =
+      slotSynthesisSummary ns i cfg base := rfl
+
+@[synthesis_summary_norm]
+theorem slotSynthesisSummary_constantSiteCount
+    (ns : List ℕ) (i : ℕ) (cfg : Config) (base : ℕ) :
+    (slotSynthesisSummary ns i cfg base).constantSiteCount = 0 := by
+  simp only [slotSynthesisSummary, synthesis_summary_norm]
+
 /-- A Sinsemilla message slot requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem slot_synthesisSummary_constantSiteCount
@@ -407,10 +433,8 @@ theorem slot_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     ((slot G ns yaIn i).elaborated.synthesisSummary
       config offset piece region).constantSiteCount = 0 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [slot, RegionCircuit.operations_bind,
-    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
-  simp only [circuit_norm]
+  rw [slot_synthesisSummary_eq]
+  simp only [synthesis_summary_norm]
 
 /-! Contract bridges for the slot child (generated — including over the function-typed
 `yaIn` binder); only the applied deep-extract bridge stays hand-written. -/
@@ -1026,6 +1050,68 @@ private def circuitOutputCells (cfg : Config) (ns : List ℕ) (offset : ℕ)
         y := .of self (offset + prefixRows ns ns.length) cfg.lambda1 },
     first := (HashPiece.reads cfg offset self).row }
 
+/-- Reduced footprint of one chain-loop iteration: one slot, the boundary fixed
+assignment, and the linking selector enable. -/
+def slotIterationSynthesisSummary (ns : List ℕ) (i : ℕ)
+    (cfg : Config) (base : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (slotSynthesisSummary ns i cfg base).combine
+    (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .fixed cfg.qS2.index,
+        .selector (sinsemillaGate cfg).selector.index]
+      (base + ns.getD i 0 + 1) 0)
+
+@[synthesis_summary_norm]
+theorem slotIteration_synthesisSummary_eq
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((do
+          let _ ← (slot G ns yaIn i).call cfg base piece
+          let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+            (qS2Boundary (decide (i = ns.length - 1)))
+          (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self) =
+      slotIterationSynthesisSummary ns i cfg base := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
+    omega
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem slotIterationSynthesisSummary_constantSiteCount
+    (ns : List ℕ) (i : ℕ) (cfg : Config) (base : ℕ) :
+    (slotIterationSynthesisSummary ns i cfg base).constantSiteCount = 0 := by
+  simp only [slotIterationSynthesisSummary, synthesis_summary_norm]
+
+/-- Reduced footprint of the whole chain region. -/
+def circuitSynthesisSummary (ns : List ℕ) (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  ((List.ofFn fun i : Fin ns.length =>
+      slotIterationSynthesisSummary ns i.val cfg
+        (offset + prefixRows ns i.val)).foldr
+      FloorPlanner.RegionSynthesisSummary.combine {}).combine
+    (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.lambda1.index,
+        .column .advice cfg.lambda2.index,
+        .column .advice cfg.xP.index]
+      (offset + prefixRows ns ns.length + 1) 0)
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_constantSiteCount
+    (ns : List ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary ns cfg offset).constantSiteCount = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm,
+    List.map_ofFn, Function.comp_def]
+  simp
+
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
   name := "sinsemilla hash_all_pieces"
@@ -1058,9 +1144,31 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           inputPermutationColumns _ _ input :=
             input.pieces.toList.map (·.cell.column) }
       output cfg offset _ self := circuitOutputCells cfg ns offset self
+      synthesisSummary cfg offset _ _ := circuitSynthesisSummary ns cfg offset
       output_eq := by
         intro _ _ _ _
-        simp only [circuitOutputCells, circuit_norm] }
+        simp only [circuitOutputCells, circuit_norm]
+      synthesisSummary_eq := by
+        intro cfg offset input self
+        symm
+        simp only [circuitSynthesisSummary, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure,
+          FloorPlanner.regionSynthesisSummary_append,
+          RegionCircuit.forRangeVar'_regionSynthesisSummary]
+        apply congrArg₂ FloorPlanner.RegionSynthesisSummary.combine
+        · apply congrArg (List.foldr
+              FloorPlanner.RegionSynthesisSummary.combine {})
+          apply congrArg List.ofFn
+          funext i
+          rw [← slotIteration_synthesisSummary_eq G ns yaIn i.val cfg
+            (offset + prefixRows ns i.val) input.pieces[i.val]! self]
+          simp only [RegionCircuit.operations_bind,
+            FloorPlanner.regionSynthesisSummary_append]
+        · apply FloorPlanner.RegionSynthesisSummary.ext
+          · simp only [circuit_norm, synthesis_summary_norm]
+          · simp only [circuit_norm, synthesis_summary_norm]
+            omega
+          · simp only [circuit_norm, synthesis_summary_norm] }
 
   Witness := ChainWit ns
   extract cfg offset _ self env :=
@@ -1524,6 +1632,14 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         simp only [prefixRows_zero, Nat.add_zero, dRowP] at h
         rw [h, hAy]
 
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (input : Var (Inputs ns.length) Fp) (self : RegionIndex) :
+    (circuit G ns yaIn).elaborated.synthesisSummary cfg offset input self =
+      circuitSynthesisSummary ns cfg offset := rfl
+
 /-- A complete Sinsemilla message chain requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_constantSiteCount
@@ -1532,11 +1648,8 @@ theorem circuit_synthesisSummary_constantSiteCount
     (input : Var (Inputs ns.length) Fp) (region : RegionIndex) :
     ((circuit G ns yaIn).elaborated.synthesisSummary
       config offset input region).constantSiteCount = 0 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [circuit, RegionCircuit.operations_bind,
-    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
-  simp only [circuit_norm]
-  simp
+  rw [circuit_synthesisSummary_eq]
+  simp only [synthesis_summary_norm]
 
 /-- The chain's eval'd output, landed on raw advice reads (the public composition lemma —
 what `hash_message`-level consumers rewrite `(circuit …).output` with). -/

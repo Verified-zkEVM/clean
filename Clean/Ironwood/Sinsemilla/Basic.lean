@@ -50,6 +50,18 @@ def load (G : Generators) (cfg : GeneratorTableConfig) : Circuit Fp Unit := do
   loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x))
   loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y))
 
+/-- Table loading allocates no layouter regions and requests no deferred constants. -/
+def loadSynthesisSummary : FloorPlanner.SynthesisSummary := {}
+
+@[synthesis_summary_norm]
+theorem load_synthesisSummary_eq (G : Generators)
+    (cfg : GeneratorTableConfig) (region : RegionIndex) :
+  FloorPlanner.synthesisSummary ((load G cfg).operations region) =
+      loadSynthesisSummary := by
+  simp only [load, loadSynthesisSummary, circuit_norm,
+    FloorPlanner.synthesisSummary_loadTable_cons,
+    FloorPlanner.synthesisSummary_nil]
+
 /-- The generator-table-contents predicate a Sinsemilla consumer's `EnvAssumptions`
 references — the three-column analogue of `LookupRangeCheck.TableLoaded`. Three conjuncts
 (mirroring `TableLoaded`'s design; discharged by `load_generatorTableLoaded`):

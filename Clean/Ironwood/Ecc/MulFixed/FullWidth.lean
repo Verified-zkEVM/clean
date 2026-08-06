@@ -83,6 +83,56 @@ def witnessScalarLoop (cfg : Config) (windows : Vector (Witgen.MOver Fp (Assigne
     let _k ← assignAdvice cfg.superConfig.window row (Witgen.MOver.toIRScalar windows[w]!)
     return ())
 
+/-- Reduced footprint of the selector and advice passes that witness all 85 windows. -/
+def witnessScalarLoopSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.repeatColumns
+      [.selector cfg.qMulFixedFull.index] offset 1 1 0 85).combine
+    (FloorPlanner.RegionSynthesisSummary.repeatColumns
+      [.column .advice cfg.superConfig.window.index] offset 1 1 0 85)
+
+@[synthesis_summary_norm]
+theorem witnessScalarLoop_synthesisSummary_eq
+    (cfg : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (offset : ℕ) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((witnessScalarLoop cfg windows offset).operations self) =
+      witnessScalarLoopSynthesisSummary cfg offset := by
+  have hselectors :=
+    FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+      [.selector cfg.qMulFixedFull.index] offset 1 1 0 85
+  have hwindows :=
+    FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+      [.column .advice cfg.superConfig.window.index] offset 1 1 0 85
+  simp only [witnessScalarLoop, witnessScalarLoopSynthesisSummary,
+    RegionCircuit.operations_bind, FloorPlanner.regionSynthesisSummary_append,
+    RegionCircuit.forRange'_regionSynthesisSummary, circuit_norm,
+    synthesis_summary_norm, Nat.mul_one]
+  rw [show
+    (List.ofFn fun i : Fin 85 =>
+      FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.selector cfg.1.index] (offset + i.val + 1) 0).foldr
+          FloorPlanner.RegionSynthesisSummary.combine {} =
+        FloorPlanner.RegionSynthesisSummary.repeatColumns
+          [.selector cfg.qMulFixedFull.index] offset 1 1 0 85 by
+      simpa [Nat.add_assoc] using hselectors]
+  rw [show
+    (List.ofFn fun i : Fin 85 =>
+      FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .advice cfg.superConfig.window.index]
+          (offset + i.val + 1) 0).foldr
+          FloorPlanner.RegionSynthesisSummary.combine {} =
+        FloorPlanner.RegionSynthesisSummary.repeatColumns
+          [.column .advice cfg.superConfig.window.index] offset 1 1 0 85 by
+      simpa [Nat.add_assoc] using hwindows]
+
+@[synthesis_summary_norm]
+theorem witnessScalarLoopSynthesisSummary_constantSiteCount
+    (cfg : Config) (offset : ℕ) :
+    (witnessScalarLoopSynthesisSummary cfg offset).constantSiteCount = 0 := by
+  simp only [witnessScalarLoopSynthesisSummary, synthesis_summary_norm]
+
 @[keygen_helper]
 theorem witnessScalarLoop_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
@@ -141,6 +191,18 @@ def processWindowH (B : FixedBaseData) (cfg : Config) (windows : Vector (Witgen.
   let y ← assignAdvice cfg.superConfig.addConfig.yP row (yPWitH B windows w)
   let _u ← assignAdvice cfg.superConfig.u row (uWitH B windows w)
   return { x, y }
+
+@[synthesis_summary_norm]
+theorem processWindowH_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (w row : ℕ) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((processWindowH B cfg windows w row).operations self) =
+      processWindowSynthesisSummary cfg.superConfig row := by
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [processWindowH, processWindowSynthesisSummary, circuit_norm]
+  omega
 
 @[keygen_norm]
 theorem processWindowH_output_x_column (B : FixedBaseData) (cfg : Config)
@@ -204,6 +266,29 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
   -- the shared window chain: init (window 0), incomplete additions (1..83), MSB (84)
   let r ← MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows) offset 85
   return { acc := r.1, mulB := r.2 }
+
+/-- Reduced footprint of the full-width inner region. -/
+def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (witnessScalarLoopSynthesisSummary cfg offset).combine
+    ((fixedConstantsLoopSynthesisSummary (fullWidthGate cfg) cfg.superConfig
+      offset 85).combine
+      (windowChainSynthesisSummary cfg.superConfig offset 85))
+
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((innerRegion B cfg offset windows).operations self) =
+      innerRegionSynthesisSummary cfg offset := by
+  simp only [innerRegion, innerRegionSynthesisSummary,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [windowChain_synthesisSummary_eq]
+  intro w row
+  exact processWindowH_synthesisSummary_eq B cfg windows w row self
 
 @[keygen_helper]
 theorem windowChain_processWindowH_keygenRegistered
@@ -370,9 +455,14 @@ instance innerElab (B : FixedBaseData)
   registered configInput counts configured offset input self :=
     innerRegion_keygenRegistered B configInput offset windows self counts input configured
   output config offset _ self := innerOutCells config offset self
+  synthesisSummary config offset _ _ :=
+    innerRegionSynthesisSummary config offset
   output_eq := by
     intro _ _ _ self
     rw [innerOutCells, innerRegion_output]
+  synthesisSummary_eq := by
+    intro _ _ _ self
+    exact (innerRegion_synthesisSummary_eq B _ _ windows self).symm
 seal innerRegion in
 @[synthesis_summary_norm]
 theorem innerRegion_synthesisSummary_constantSiteCount
@@ -1099,6 +1189,25 @@ private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
     Operations.regionCount ((synthesize B cfg windows).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
 
+/-- Reduced footprint of the two top-level regions. -/
+def circuitSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+    (innerRegionSynthesisSummary cfg 0)).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (Add.synthesisSummary cfg.superConfig.addConfig 0))
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize B cfg windows).operations self) =
+      circuitSynthesisSummary cfg := by
+  simp only [synthesize, circuitSynthesisSummary, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append, operations_assignRegion,
+    synthesis_summary_norm]
+
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
 /-- `[s]B` for the full-width scalar encoded by the witnessed windows. The input is the scalar's
@@ -1138,10 +1247,14 @@ def circuit (B : FixedBase) :
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }
+      synthesisSummary cfg _ _ := circuitSynthesisSummary cfg
       regionCount _ := 2
       output_eq := by
         intro _ _ _
         simp only [synthesize, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ _ self
+        exact (synthesize_synthesisSummary_eq B.toData _ _ self).symm
       regionCount_eq := fun cfg scalar i =>
         (synthesize_regionCount B.toData cfg (scalarWindows scalar) i).symm }
 
@@ -1285,6 +1398,19 @@ def circuit (B : FixedBase) :
       rw [hax, hay]
       exact Or.inl hOn
 
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (input : Var UnconstrainedNat Fp)
+    (self : RegionIndex) :
+    (circuit B).elaborated.synthesisSummary cfg input self =
+      circuitSynthesisSummary cfg := rfl
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_constantSiteCount (config : Config) :
+    (circuitSynthesisSummary config).constantSiteCount = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm,
+    innerRegionSynthesisSummary, Add.synthesisSummary]
+
 /-- Full-width fixed-base multiplication requests no deferred constant allocations. -/
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_constantSiteCount
@@ -1292,14 +1418,8 @@ theorem circuit_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     ((circuit B).elaborated.synthesisSummary
       config input region).constantSiteCount = 0 := by
-  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [circuit, synthesis_summary_norm]
-  simp only [synthesize, Circuit.operations_bind,
-    FloorPlanner.synthesisSummary_append, synthesis_summary_norm]
-  simp only [operations_assignRegion,
-    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
-    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero,
-    synthesis_summary_norm]
+  rw [circuit_synthesisSummary_eq]
+  exact circuitSynthesisSummary_constantSiteCount config
 
 /-- The complete-addition columns remain equality-enabled through the full-width bundle. -/
 theorem Configured.addPermutationColumns_subset (B : FixedBase) {cfg : Config}

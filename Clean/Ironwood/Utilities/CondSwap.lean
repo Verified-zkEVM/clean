@@ -110,9 +110,29 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       output := fun cfg offset _ self =>
         { aSwapped := AssignedCell.of self offset cfg.aSwapped
           bSwapped := AssignedCell.of self offset cfg.bSwapped }
+      synthesisSummary cfg offset _ _ :=
+        .ofColumns
+          [.selector cfg.qSwap.index,
+            .column .advice cfg.a.index,
+            .column .advice cfg.b.index,
+            .column .advice cfg.swap.index,
+            .column .advice cfg.aSwapped.index,
+            .column .advice cfg.bSwapped.index]
+          (offset + 1) 0
       output_eq := by
         intro cfg offset input self
-        simp only [circuit_norm] }
+        simp only [circuit_norm]
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, swapGate]
+          simp only [List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.nil_append, List.singleton_append]
+        · simp only [circuit_norm, swapGate]
+          omega
+        · simp only [circuit_norm, swapGate] }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do
     -- cond_swap.rs:97 — q_swap first
@@ -176,6 +196,21 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
         linear_combination -hOA
       · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOB
+
+@[synthesis_summary_norm]
+theorem swap_synthesisSummary_eq
+    (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (cfg : Config) (offset : ℕ) (input : Var Input Fp)
+    (region : RegionIndex) :
+    (swap wb wswap).elaborated.synthesisSummary cfg offset input region =
+      FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.selector cfg.qSwap.index,
+          .column .advice cfg.a.index,
+          .column .advice cfg.b.index,
+          .column .advice cfg.swap.index,
+          .column .advice cfg.aSwapped.index,
+          .column .advice cfg.bSwapped.index]
+        (offset + 1) 0 := rfl
 
 /-- The first swap output stays in its configured advice column. -/
 @[keygen_norm]

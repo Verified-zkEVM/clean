@@ -85,6 +85,14 @@ instance (x y : Column .advice) :
   unfold configure
   infer_instance
 
+def pointSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qPoint.index,
+      .column .advice config.x.index,
+      .column .advice config.y.index]
+    (offset + 1) 0
+
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
@@ -101,7 +109,18 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     { registered := by keygen_registration
       output config offset _ self :=
         { x := .of self offset config.x, y := .of self offset config.y }
-      output_eq := by intro _ _ _ _; rfl }
+      synthesisSummary config offset _ _ := pointSynthesisSummary config offset
+      output_eq := by intro _ _ _ _; rfl
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [pointSynthesisSummary, circuit_norm, pointGate, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.singleton_append]
+        · simp only [pointSynthesisSummary, circuit_norm, pointGate]
+          omega
+        · simp only [pointSynthesisSummary, circuit_norm, pointGate] }
 
   Spec _ output _ := output.Valid
   ProverAssumptions input _ _ := input.Valid
@@ -128,6 +147,14 @@ assign x/y; but the gate has no identity escape hatch, so the `Spec` is *strictl
 valid curve point. The Rust additionally errors when the value is known to be the identity;
 that non-identity precondition is carried on the honest prover as `ProverAssumptions` (the
 input is `Unconstrained`, so — like `point` — the honest-side facts about it live there). -/
+def pointNonIdSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qPointNonId.index,
+      .column .advice config.x.index,
+      .column .advice config.y.index]
+    (offset + 1) 0
+
 def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
@@ -141,7 +168,20 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := by keygen_registration }
+    { registered := by keygen_registration
+      synthesisSummary config offset _ _ :=
+        pointNonIdSynthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate,
+            List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.singleton_append]
+        · simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate]
+          omega
+        · simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate] }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
@@ -168,87 +208,20 @@ def pointFormal :=
 
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointFormal_synthesisSummary_columns
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) :
-    (pointFormal.elaborated.synthesisSummary config input region).columns =
-      [.selector config.qPoint.index, .column .advice config.x.index,
-        .column .advice config.y.index] := by
-  unfold pointFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_columns]
-  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq]
-  simp only [point, circuit_norm]
-  simp [pointGate]
 
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointFormal_synthesisSummary_columnOccupancy
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
-    (pointFormal.elaborated.synthesisSummary
-      config input region).columnOccupancy column =
-      if column ∈ [.selector config.qPoint.index,
-          .column .advice config.x.index,
-          .column .advice config.y.index]
-      then 1 else 0 := by
-  unfold pointFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_columnOccupancy]
-  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq,
-    ElaboratedRegionCircuit.synthesisSummary_rowCount_eq]
-  simp only [point, circuit_norm]
-  simp [pointGate]
+@[synthesis_summary_norm]
+theorem pointFormal_synthesisSummary_eq (config : Config)
+    (input : Var (Unconstrained Point) Fp) (region : RegionIndex) :
+    pointFormal.elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (pointSynthesisSummary config 0) := rfl
 
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointFormal_synthesisSummary_constantSiteCount
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) :
-    (pointFormal.elaborated.synthesisSummary
-      config input region).constantSiteCount = 0 := by
-  unfold pointFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount]
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [point, circuit_norm]
-
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointNonIdFormal_synthesisSummary_columns
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) :
-    (pointNonIdFormal.elaborated.synthesisSummary config input region).columns =
-      [.selector config.qPointNonId.index, .column .advice config.x.index,
-        .column .advice config.y.index] := by
-  unfold pointNonIdFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_columns]
-  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq]
-  simp only [pointNonId, circuit_norm]
-  simp [pointNonIdGate, Gate.withSelector]
-
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointNonIdFormal_synthesisSummary_columnOccupancy
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) (column : FloorPlanner.RegionColumn) :
-    (pointNonIdFormal.elaborated.synthesisSummary
-      config input region).columnOccupancy column =
-      if column ∈ [.selector config.qPointNonId.index,
-          .column .advice config.x.index,
-          .column .advice config.y.index]
-      then 1 else 0 := by
-  unfold pointNonIdFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_columnOccupancy]
-  rw [ElaboratedRegionCircuit.synthesisSummary_columns_eq,
-    ElaboratedRegionCircuit.synthesisSummary_rowCount_eq]
-  simp only [pointNonId, circuit_norm]
-  simp [pointNonIdGate, Gate.withSelector]
-
-@[circuit_norm ↑, synthesis_summary_norm]
-theorem pointNonIdFormal_synthesisSummary_constantSiteCount
-    (config : Config) (input : Var (Unconstrained Point) Fp)
-    (region : RegionIndex) :
-    (pointNonIdFormal.elaborated.synthesisSummary
-      config input region).constantSiteCount = 0 := by
-  unfold pointNonIdFormal
-  rw [FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount]
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [pointNonId, circuit_norm]
+@[synthesis_summary_norm]
+theorem pointNonIdFormal_synthesisSummary_eq (config : Config)
+    (input : Var (Unconstrained Point) Fp) (region : RegionIndex) :
+    pointNonIdFormal.elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (pointNonIdSynthesisSummary config 0) := rfl
 
 
 /-- The non-identity witness circuit's two positional output cells. -/

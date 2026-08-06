@@ -106,6 +106,17 @@ def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
     [input.nk.cell.column, input.rho.cell.column, input.psi.cell.column,
       input.cm.x.cell.column, input.cm.y.cell.column]
 
+def synthesisSummary
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Poseidon.hashSynthesisSummary cfg.1).combine
+    ((FloorPlanner.SynthesisSummary.ofRegion
+      (AddChip.synthesisSummary cfg.2.1 0)).combine
+      ((Ecc.MulFixed.BaseFieldElem.circuitSynthesisSummary cfg.2.2.1).combine
+        (FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.Add.synthesisSummary cfg.2.2.2 0))))
+
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the
 complete addition with `cm`. `Spec` is the donor contract: the nullifier is
@@ -136,6 +147,10 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       output cfg input i :=
         .of (i + 8) 1 cfg.2.2.2.xQR
       regionCount _ := 9
+      synthesisSummary cfg _ _ := synthesisSummary cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro cfg input i
         simp only [Circuit.output_bind, Circuit.output_pure,
@@ -192,6 +207,14 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       trivial, ?_, trivial⟩
     rw [Ecc.Add.addFormal_assumptions_eq]
     exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (K : FixedBase)
+    (config : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    (circuit K).elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
 
 derive_contract_bridges circuit (K : FixedBase) := circuit K
 

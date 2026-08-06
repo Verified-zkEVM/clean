@@ -64,6 +64,15 @@ theorem readCellWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment F
   simp only [readCellWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
+/-- Reduced synthesis footprint of the initial-state region. -/
+def initRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice (cfg.state 0).index,
+      .column .advice (cfg.state 1).index,
+      .column .advice (cfg.state 2).index]
+    (offset + 1) 3
+
 /-- Rust `Pow5Chip::initial_state`'s region body (`pow5.rs:277-308`): the domain's
 initial state from constrained constants. -/
 def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State where
@@ -76,8 +85,20 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
         { x0 := .of self offset (cfg.state 0)
           x1 := .of self offset (cfg.state 1)
           x2 := .of self offset (cfg.state 2) }
-      output_eq := by
+      synthesisSummary cfg offset _ _ :=
+        initRegionSynthesisSummary cfg offset
+      synthesisSummary_eq := by
         intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
+          omega
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
+      output_eq := by
+        intro cfg _ _ _
         rfl }
 
   synthesize cfg offset _ := do
@@ -100,6 +121,23 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
     simp_all only [circuit_norm]
     rw [← h_output.1, ← h_output.2.1]
 
+/-- The initial-state bundle exposes its already-reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem initRegion_synthesisSummary (capacity : Fp) (cfg : Config)
+    (offset : ℕ) (input : Var unit Fp) (self : RegionIndex) :
+    (initRegion capacity).elaborated.synthesisSummary cfg offset input self =
+      initRegionSynthesisSummary cfg offset := rfl
+
+/-- Reduced synthesis footprint of the pad-and-add region. -/
+def addInputRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.sPadAndAdd.index,
+      .column .advice (cfg.state 0).index,
+      .column .advice (cfg.state 1).index,
+      .column .advice (cfg.state 2).index]
+    (offset + 3) 0
+
 /-- Rust `Pow5Chip::add_input`'s region body (`pow5.rs:310-396`), `ConstantLength<2>`
 shape (both rate words are `Message` cells): `s_pad_and_add` at row 1, the initial state
 copied at row 0, the input words copied at row 1, the summed output at row 2. `Spec` is
@@ -121,6 +159,31 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
         { x0 := .of self (offset + 2) (cfg.state 0)
           x1 := .of self (offset + 2) (cfg.state 1)
           x2 := .of self (offset + 2) (cfg.state 2) }
+      synthesisSummary cfg offset _ _ :=
+        addInputRegionSynthesisSummary cfg offset
+      synthesisSummary_eq := by
+        intro cfg _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [addInputRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm, configure_selector_norm]
+          refine (FloorPlanner.unionColumns_normalize_append_redundant
+            [.selector cfg.sPadAndAdd.index,
+              .column .advice (cfg.state 0).index,
+              .column .advice (cfg.state 1).index,
+              .column .advice (cfg.state 2).index]
+            [.column .advice (cfg.state 0).index,
+              .column .advice (cfg.state 1).index,
+              .column .advice (cfg.state 0).index,
+              .column .advice (cfg.state 1).index,
+              .column .advice (cfg.state 2).index] ?_).symm
+          intro column hcolumn
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn ⊢
+          tauto
+        · simp only [addInputRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm, configure_selector_norm]
+          omega
+        · simp only [addInputRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm, configure_selector_norm]
       output_eq := by
         intro _ _ _ _
         rfl }
@@ -156,6 +219,13 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
+/-- The pad-and-add bundle exposes its already-reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem addInputRegion_synthesisSummary (cfg : Config) (offset : ℕ)
+    (input : Var Sponge.AddInputInput Fp) (self : RegionIndex) :
+    addInputRegion.elaborated.synthesisSummary cfg offset input self =
+      addInputRegionSynthesisSummary cfg offset := rfl
+
 derive_contract_bridges initRegion (capacity : Fp) := initRegion capacity
 
 derive_contract_bridges addInputRegion := addInputRegion
@@ -187,6 +257,16 @@ def synthesize (capacity : Fp) (cfg : Config)
       (permuteRegion.call cfg 0 absorbed)
     pure permuted.x0
 
+/-- Reduced layouter-level synthesis footprint of the three hash regions. -/
+def hashSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (initRegionSynthesisSummary cfg 0)).combine
+    ((FloorPlanner.SynthesisSummary.ofRegion
+        (addInputRegionSynthesisSummary cfg 0)).combine
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (permuteSynthesisSummary cfg 0)))
+
 /-- Rust `Hash::<ConstantLength<2>>::hash` (`poseidon.rs:269-286`) on the Pow5 chip:
 initial state, pad-and-add, one permutation; the digest is `state[0]`. `Spec` is the
 donor one-block hash value `HashPaddedBlock.value`. -/
@@ -207,11 +287,16 @@ def hash (capacity : Fp) :
             [input.x0.cell.column, input.x1.cell.column] }
       output cfg _ i := .of (i + 2) 36 (cfg.state 0)
       regionCount _ := 3
+      synthesisSummary cfg _ _ := hashSynthesisSummary cfg
       registered := by keygen_registration [synthesize]
       output_eq := by
         intro _ _ _
         simp only [synthesize, circuit_norm, keygen_output_norm, stateRow]
-      regionCount_eq := fun cfg input i => (hash_regionCount capacity cfg input i).symm }
+      regionCount_eq := fun cfg input i => (hash_regionCount capacity cfg input i).symm
+      synthesisSummary_eq := by
+        intro _ _ _
+        simp only [hashSynthesisSummary, synthesize, circuit_norm,
+          synthesis_summary_norm] }
 
   Spec input output _ :=
     output = Hash.HashPaddedBlock.value roundConstants capacity input
@@ -258,6 +343,13 @@ def hash (capacity : Fp) :
     rw [h2]
     rw [h_input.1, h_input.2]
     rfl
+
+/-- The hash circuit exposes its reduced three-region footprint directly. -/
+@[synthesis_summary_norm]
+theorem hash_synthesisSummary_eq (capacity : Fp) (cfg : Config)
+    (input : Var Sponge.Rate2 Fp) (region : RegionIndex) :
+    (hash capacity).elaborated.synthesisSummary cfg input region =
+      hashSynthesisSummary cfg := rfl
 
 /-- The hash capability exported by one aggregate Poseidon configure run. -/
 def hashConfigureCertificate (capacity : Fp)

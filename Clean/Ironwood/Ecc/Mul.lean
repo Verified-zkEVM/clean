@@ -85,6 +85,10 @@ def lsbGate (cfg : Config) : Gate Fp :=
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
     [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem lsbGate_selector (cfg : Config) :
+    (lsbGate cfg).selector = cfg.qMulLsb := rfl
+
 /-! ## Configure -/
 
 /-- Instantiates the two incomplete configs from the shared 10-advice bundle, delegates to each
@@ -447,6 +451,75 @@ structure MainOutputs (F : Type) where
   k254 : F
 deriving ProvableStruct
 
+/-- Reduced synthesis footprint of the complete double-and-add region. -/
+def mainCircuitSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (Add.synthesisSummary cfg.addConfig offInit).combine
+    ((FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .advice cfg.hiConfig.z.index] (offHi + 1) 1).combine
+      ((MulIncomplete.doubleAndAddSynthesisSummary 124
+          cfg.hiConfig offHi).combine
+        ((MulIncomplete.doubleAndAddSynthesisSummary 125
+            cfg.loConfig offLo).combine
+          ((MulComplete.circuitSynthesisSummary 3
+              cfg.completeConfig offComp).combine
+            ((FloorPlanner.RegionSynthesisSummary.ofColumns
+                [.column .advice cfg.completeConfig.zComplete.index,
+                  .column .advice cfg.addConfig.xP.index,
+                  .column .advice cfg.addConfig.yP.index,
+                  .column .advice cfg.addConfig.xP.index,
+                  .column .advice cfg.addConfig.yP.index,
+                  .selector cfg.qMulLsb.index]
+                (offLsb + 2) 0).combine
+              (Add.synthesisSummary cfg.addConfig offLsb))))))
+
+theorem mainCircuitSynthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    mainCircuitSynthesisSummary cfg =
+      FloorPlanner.regionSynthesisSummary
+        ((do
+          let acc ← Add.add.call cfg.addConfig offInit ⟨input.base, input.base⟩
+          let zInit ← assignAdvice cfg.hiConfig.z offHi (.ofFExpr (.const 0))
+          constrainConstant zInit 0
+          let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
+            ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+              input.base, acc, zInit⟩
+          let z130 ← cellAt cfg.hiConfig.z (offHi + 1 + 124)
+          let k254 ← cellAt cfg.hiConfig.z (offHi + 1)
+          let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig offLo
+            ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+              input.base, hi.acc, z130⟩
+          let zLo ← cellAt cfg.loConfig.z (offLo + 1 + 125)
+          let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig offComp
+            ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+              input.base, lo.acc.x, lo.acc.y, zLo⟩
+          let z1 ← cellAt cfg.completeConfig.zComplete (offComp + 2 * 2 + 2)
+          let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
+            (.ofFExpr (.add (.mul (.const 2) (.expr z1))
+              (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+                (.const 1) (.const 0))))
+          let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
+          let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
+          let corrX ← assignAdvice cfg.addConfig.xP offLsb
+            (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+              (.const 0) (.expr input.base.x)))
+          let corrY ← assignAdvice cfg.addConfig.yP offLsb
+            (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+              (.const 0) (Witgen.FExprOver.neg (.expr input.base.y))))
+          (lsbGate cfg).enable offLsb
+          let result ← Add.add.call cfg.addConfig offLsb
+            ⟨{ x := corrX, y := corrY }, comp.acc⟩
+          return { result, z0, z130, k254 } :
+            RegionCircuit Fp (Var MainOutputs Fp)).operations self) := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+    omega
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+
 /-- The main double-and-add region as a bundle. `Spec` is the pre-overflow seam: some bit
 families drive the three chained double-and-add phases plus the constraint-forced LSB, the
 running-sum cells carry their chain values, and the result is the assembled scalar
@@ -515,9 +588,14 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
           z0 := .of self (offLsb + 1) cfg.completeConfig.zComplete
           z130 := .of self (offHi + 1 + 124) cfg.hiConfig.z
           k254 := .of self (offHi + 1) cfg.hiConfig.z }
+      synthesisSummary cfg _ input self :=
+        mainCircuitSynthesisSummary cfg
       output_eq := by
         intro _ _ _ _
-        simp only [circuit_norm, keygen_output_norm] }
+        simp only [circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro cfg _ input self
+        exact mainCircuitSynthesisSummary_eq cfg input self }
 
   Assumptions input := (input.base : Point Fp).OnCurve
 
@@ -891,6 +969,13 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       · simp only [if_true]
         exact Point.valid_zero
 
+/-- The main region exposes its reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem mainCircuit_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    mainCircuit.elaborated.synthesisSummary cfg 0 input self =
+      mainCircuitSynthesisSummary cfg := rfl
+
 @[keygen_output_norm]
 theorem mainCircuit_output (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
@@ -918,6 +1003,13 @@ def synthesize (cfg : Config) (input : Var Inputs Fp) :
   let _ov ← (MulOverflow.circuit 10 hKW10).call cfg.overflowConfig
     ⟨input.alpha, m.z0, m.z130, m.k254⟩
   return m.result
+
+/-- Reduced synthesis footprint of scalar multiplication's main region and overflow
+subcircuit. -/
+def mulSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (mainCircuitSynthesisSummary cfg)).combine
+    (MulOverflow.circuitSynthesisSummary 10 cfg.overflowConfig)
 
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
@@ -1169,12 +1261,17 @@ def mul :
         { x := .of self (offLsb + 1) cfg.addConfig.xQR
           y := .of self (offLsb + 1) cfg.addConfig.yQR }
       regionCount _ := 4
+      synthesisSummary cfg _ _ := mulSynthesisSummary cfg
       output_eq := by
         intro _ _ _
         unfold synthesize
         rw [Circuit.output_bind, FormalCircuit.output_call', Circuit.output_bind,
           Circuit.output_pure, mainCircuit_output]
-      regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm }
+      regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm
+      synthesisSummary_eq := by
+        intro _ _ _
+        simp only [mulSynthesisSummary, synthesize, circuit_norm,
+          synthesis_summary_norm] }
 
   EnvAssumptions cfg env := EnvAssumptions cfg env
 
@@ -1294,6 +1391,12 @@ def mul :
        by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]⟩, ?_⟩
     rw [hz0v, hz130v, hk254v]
     exact Ecc.Mul.overflow_spec_honest input_alpha rfl rfl rfl
+
+@[synthesis_summary_norm]
+theorem mul_synthesisSummary_eq (cfg : Config) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    mul.elaborated.synthesisSummary cfg input region =
+      mulSynthesisSummary cfg := rfl
 
 derive_contract_bridges mul := mul
 

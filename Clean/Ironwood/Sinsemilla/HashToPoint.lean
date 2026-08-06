@@ -44,6 +44,29 @@ def witnessMessagePiece (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) 
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "witness message piece" (assignAdvice cfg.witnessPieces 0 w)
 
+def witnessMessagePieceSynthesisSummary
+    (cfg : Sinsemilla.HashPiece.Config) : FloorPlanner.SynthesisSummary :=
+  FloorPlanner.SynthesisSummary.ofRegion
+    (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.witnessPieces.index] 1 0)
+
+@[synthesis_summary_norm]
+theorem witnessMessagePiece_synthesisSummary
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+      ((witnessMessagePiece cfg w).operations region) =
+        witnessMessagePieceSynthesisSummary cfg := by
+  simp only [witnessMessagePieceSynthesisSummary, witnessMessagePiece,
+    operations_assignRegion, circuit_norm, synthesis_summary_norm]
+
+@[circuit_norm]
+theorem witnessMessagePiece_nextRegionIndex
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    (witnessMessagePiece cfg w).nextRegionIndex region = region + 1 := by
+  simp only [witnessMessagePiece, circuit_norm]
+
 /-- Witnessing a message piece requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem witnessMessagePiece_synthesisSummary_constantSiteCount
@@ -51,9 +74,8 @@ theorem witnessMessagePiece_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     (FloorPlanner.synthesisSummary
       ((witnessMessagePiece config w).operations region)).constantSiteCount = 0 := by
-  simp only [witnessMessagePiece, operations_assignRegion,
-    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
-    FloorPlanner.synthesisSummary_nil_constantSiteCount, circuit_norm]
+  rw [witnessMessagePiece_synthesisSummary]
+  simp only [witnessMessagePieceSynthesisSummary, synthesis_summary_norm]
 
 /-- A witnessed message piece stays in the chip's witness-piece column. -/
 @[keygen_norm]
@@ -204,6 +226,65 @@ private theorem out_eval_lit_prover {k : ℕ} (env : Placed ProverEnvironment Fp
   rw [show p = ({ x := p.x, y := p.y } : Point (AssignedCell Fp)) from rfl,
     Sinsemilla.Chain.point_eval_literal, Sinsemilla.Chain.eval_fields_eq_map]
 
+def z1Cells (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (offset : ℕ) : RegionCircuit Fp (Var (fields ns.length) Fp) :=
+  fun self =>
+    (Vector.ofFn (fun i : Fin ns.length =>
+      AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits),
+     [])
+
+@[circuit_norm]
+theorem z1Cells_operations (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (offset : ℕ) (self : RegionIndex) :
+    (z1Cells ns cfg offset).operations self = [] := rfl
+
+@[circuit_norm]
+theorem z1Cells_output (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (offset : ℕ) (self : RegionIndex) :
+    (z1Cells ns cfg offset).output self =
+      Vector.ofFn (fun i : Fin ns.length =>
+        AssignedCell.of self
+          (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits) := rfl
+
+def hashRegionSynthesize (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ)
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
+    RegionCircuit Fp (Var (Output ns.length) Fp) := do
+  (Sinsemilla.HashPiece.initialYQGate cfg).enable offset
+  let _yq ← assignFixed cfg.fixedYQ offset Q.y
+  let xa ← assignAdvice cfg.xA offset (constWit Q.x)
+  constrainConstant xa Q.x
+  let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
+  let z1s ← z1Cells ns cfg offset
+  pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
+
+@[circuit_norm]
+theorem hashRegionSynthesize_output (G : Generators) (ns : List ℕ)
+    (Q : Point Fp) (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) :
+    (hashRegionSynthesize G ns Q cfg offset input).output self =
+      { point :=
+          { x := AssignedCell.of self
+              (offset + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA,
+            y := AssignedCell.of self
+              (offset + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 },
+        z1s := Vector.ofFn (fun i : Fin ns.length =>
+          AssignedCell.of self
+            (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits) } := by
+  simp only [hashRegionSynthesize, circuit_norm, keygen_output_norm]
+  exact ⟨rfl, rfl⟩
+
+def hashRegionSynthesisSummary (ns : List ℕ)
+    (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+    [.selector (Sinsemilla.HashPiece.initialYQGate cfg).selector.index,
+      .column .fixed cfg.fixedYQ.index,
+      .column .advice cfg.xA.index]
+    (offset + 1) 1).combine
+      (Sinsemilla.Chain.circuitSynthesisSummary ns cfg offset)
+
 /-- The `hash_message` region bundle (public `Q`): `public_q_initialization` + the chain.
 `hns`: a Sinsemilla message is nonempty (for `ns = []` the trailing dummy row's `λ₁` is
 unconstrained, so the exit `y` would be unpinned). -/
@@ -214,20 +295,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
   name := "hash_to_point"
   configure := pure
 
-  synthesize cfg offset (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) := do
-    -- public_q_initialization
-    (Sinsemilla.HashPiece.initialYQGate cfg).enable offset
-    let _yq ← assignFixed cfg.fixedYQ offset Q.y
-    let xa ← assignAdvice cfg.xA offset (constWit Q.x)
-    constrainConstant xa Q.x
-    -- hash_all_pieces
-    let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
-    -- name the z_1 cells (no ops)
-    let z1s ← (fun self =>
-      (Vector.ofFn (fun i : Fin ns.length =>
-        AssignedCell.of self (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits),
-       ([] : RegionOperations Fp)))
-    pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
+  synthesize := hashRegionSynthesize G ns Q
 
   elaborated :=
     { keygenRequirements :=
@@ -247,12 +315,19 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           z1s := Vector.ofFn (fun i : Fin ns.length =>
             AssignedCell.of self
               (offset + Sinsemilla.Chain.prefixRows ns ↑i + 1) cfg.bits) }
+      synthesisSummary cfg offset _ _ := hashRegionSynthesisSummary ns cfg offset
+      synthesisSummary_eq := by
+        intro cfg offset input self
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        all_goals
+          simp only [hashRegionSynthesisSummary, hashRegionSynthesize,
+            circuit_norm, synthesis_summary_norm]
+          rw [z1Cells_operations]
+          simp only [synthesis_summary_norm, Nat.max_zero]
+        rw [← max_assoc, max_self, ← max_assoc, max_self]
       output_eq := by
         intro config offset input self
-        simp only [circuit_norm, keygen_output_norm]
-        constructor
-        · congr 1
-        · rfl }
+        exact (hashRegionSynthesize_output G ns Q config offset input self).symm }
 
   Witness := Sinsemilla.Chain.ChainWit ns
   extract cfg offset input self env :=
@@ -416,6 +491,16 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             (congrArg (fun output : Value Sinsemilla.Chain.Output Fp => output.point.y) hout).symm
           _ = B0.y := hpy⟩
 
+@[synthesis_summary_norm]
+theorem hashRegion_synthesisSummary
+    (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (config : Sinsemilla.HashPiece.Config) (offset : ℕ)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    (hashRegion G ns Q hQ hns).elaborated.synthesisSummary
+      config offset input region =
+        hashRegionSynthesisSummary ns config offset := rfl
+
 /-- A hash-to-point region requests one deferred constant cell for the public
 initial point's x-coordinate. -/
 @[synthesis_summary_norm]
@@ -426,11 +511,8 @@ theorem hashRegion_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     ((hashRegion G ns Q hQ hns).elaborated.synthesisSummary
       config 0 input region).constantSiteCount = 1 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [hashRegion, RegionCircuit.operations_bind,
-    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
-  simp only [circuit_norm]
-  rfl
+  rw [hashRegion_synthesisSummary]
+  simp only [hashRegionSynthesisSummary, synthesis_summary_norm]
 
 /-- The layouter-level `hash_message` bundle: the `"hash_to_point"` region (Rust
 `SinsemillaChip::hash_to_point`). -/
@@ -439,6 +521,21 @@ def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     FormalCircuit Fp Sinsemilla.HashPiece.Config Sinsemilla.HashPiece.Config
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) :=
   (hashRegion G ns Q hQ hns).toFormal
+
+/-- Fully reduced layouter summary of a hash-to-point call. -/
+def hashCircuitSynthesisSummary (ns : List ℕ)
+    (config : Sinsemilla.HashPiece.Config) : FloorPlanner.SynthesisSummary :=
+  FloorPlanner.SynthesisSummary.ofRegion
+    (hashRegionSynthesisSummary ns config 0)
+
+@[synthesis_summary_norm]
+theorem hashCircuit_synthesisSummary
+    (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (config : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    (hashCircuit G ns Q hQ hns).elaborated.synthesisSummary
+      config input region = hashCircuitSynthesisSummary ns config := rfl
 
 /-- Lifting hash-to-point to a layouter region preserves its one deferred
 constant request. -/
@@ -565,6 +662,18 @@ def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Con
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
     Circuit Fp (Var (Output ns.length) Fp) :=
   (hashCircuit G ns Q hQ hns).call cfg pieces
+
+@[synthesis_summary_norm]
+theorem hashMessage_synthesisSummary
+    (G : Generators) (ns : List ℕ) (config : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+      ((hashMessage G ns config Q hQ hns input).operations region) =
+        (hashCircuit G ns Q hQ hns).elaborated.synthesisSummary
+          config input region := by
+  simp only [hashMessage, FormalCircuit.call_synthesisSummary]
 
 /-- Calling hash-to-point preserves its one deferred constant request. -/
 @[synthesis_summary_norm]

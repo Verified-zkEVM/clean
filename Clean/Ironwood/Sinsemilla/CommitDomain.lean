@@ -161,6 +161,14 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
   inputPermutationColumns _ _ input :=
     input.pieces.toList.map (·.cell.column)
 
+def commitSynthesisSummary (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Ecc.MulFixed.FullWidth.circuitSynthesisSummary cfg.1).combine
+    ((HashToPoint.hashCircuitSynthesisSummary ns cfg.2.1).combine
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (Ecc.Add.synthesisSummary cfg.2.2 0)))
+
 /-- `CommitDomain::commit`: `[r]R` (the `Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)`
 (the hash bundle), and the final complete addition `M + [r]R`. `Spec`: the commitment is
 `SinsemillaHashToPoint(Q, chunks) + s·R` at the extracted window scalar `s`, whenever the
@@ -194,6 +202,10 @@ def commit (G : Generators) (ns : List ℕ)
         { x := .of (i + 3) 1 cfg.2.2.xQR
           y := .of (i + 3) 1 cfg.2.2.yQR }
       regionCount _ := 4
+      synthesisSummary cfg _ _ := commitSynthesisSummary ns cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [commitSynthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro _ _ _
         simp only [circuit_norm, keygen_output_norm]
@@ -392,6 +404,15 @@ def configurationCertificate (G : Generators) (ns : List ℕ)
     · exact mul.permutationColumns_of_configured column hmul
     · exact hash.permutationColumns_of_configured column hhash
     · exact add.permutationColumns_of_configured column hadd
+
+@[synthesis_summary_norm]
+theorem commit_synthesisSummary_eq
+    (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (region : RegionIndex) :
+    (commit G ns R Q hQ hns).elaborated.synthesisSummary cfg input region =
+      commitSynthesisSummary ns cfg := rfl
 
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns

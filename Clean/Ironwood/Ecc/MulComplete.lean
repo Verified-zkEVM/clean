@@ -348,6 +348,40 @@ structure RoundOutput (F : Type) where
   z : F
 deriving ProvableStruct
 
+def roundColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
+    [.column .advice cfg.zComplete.index,
+      .column .advice cfg.zComplete.index,
+      .column .advice cfg.addConfig.yP.index,
+      .selector cfg.qDecompose.index,
+      .selector cfg.addConfig.qAdd.index,
+      .column .advice cfg.addConfig.xP.index,
+      .column .advice cfg.addConfig.yP.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .column .advice cfg.addConfig.alpha.index,
+      .column .advice cfg.addConfig.beta.index,
+      .column .advice cfg.addConfig.gamma.index,
+      .column .advice cfg.addConfig.delta.index,
+      .column .advice cfg.addConfig.lambda.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .selector cfg.addConfig.qAdd.index,
+      .column .advice cfg.addConfig.xP.index,
+      .column .advice cfg.addConfig.yP.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .column .advice cfg.addConfig.alpha.index,
+      .column .advice cfg.addConfig.beta.index,
+      .column .advice cfg.addConfig.gamma.index,
+      .column .advice cfg.addConfig.delta.index,
+      .column .advice cfg.addConfig.lambda.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index]
+
+def roundSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns (roundColumns cfg) (offset + 3) 0
+
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
 
@@ -385,9 +419,20 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
             { x := .of self (offset + 2) cfg.addConfig.xQR
               y := .of self (offset + 2) cfg.addConfig.yQR },
           z := AssignedCell.of self (offset + 2) cfg.zComplete }
+      synthesisSummary cfg offset _ _ := roundSynthesisSummary cfg offset
       output_eq := by
         intro _ _ _ _
-        simp only [circuit_norm, keygen_output_norm] }
+        simp only [circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+          omega
+        · simp only [roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm] }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
   Assumptions input := input.acc.Valid ∧ input.base.Valid
@@ -502,6 +547,13 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
       refine ⟨⟨rfl, ⟨by simp, by simp⟩, ⟨hUv, hAccV⟩, hAccV, hTmpV⟩, ?_, rfl⟩
       rw [← hAccOut, hAccE, hTmpE]
       simp [stepPoint, stepBasePoint]
+
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_eq
+    (w iter : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var RoundInputs Fp) (region : RegionIndex) :
+    (round w iter).elaborated.synthesisSummary cfg offset input region =
+      roundSynthesisSummary cfg offset := rfl
 
 /-- Name a whole vector of `z` cells at fixed region-local rows, emitting no op — the running-sum
 `Output.zs` cells. (`MulIncomplete.cellVec`, inlined; the round-`iter` `z_i` cell is at
@@ -642,6 +694,15 @@ def startCopy (cfg : Config) (input : Var Inputs Fp) (offset : ℕ) :
   let _z ← copyAdvice input.z cfg.zComplete offset
   return ()
 
+@[synthesis_summary_norm]
+theorem startCopy_synthesisSummary (cfg : Config) (input : Var Inputs Fp)
+    (offset : ℕ) (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((startCopy cfg input offset).operations region) =
+      .ofColumns [.column .advice cfg.zComplete.index] (offset + 1) 0 := by
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [startCopy, circuit_norm, synthesis_summary_norm, Nat.max_zero]
+
 /-- The accumulator threaded through complete-addition rounds is initially the
 external accumulator and thereafter occupies the complete-addition output columns. -/
 private theorem roundFoldAcc_eq (w offset : ℕ) (cfg : Config)
@@ -683,6 +744,27 @@ private theorem roundFoldAcc_columns (w offset : ℕ) (cfg : Config)
   cases k with
   | zero => exact ⟨Or.inl rfl, Or.inl rfl⟩
   | succ _ => exact ⟨Or.inr rfl, Or.inr rfl⟩
+
+def roundsSynthesisSummary (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
+  .repeatColumns (roundColumns cfg) offset 2 3 0 numBits
+
+@[synthesis_summary_norm]
+theorem foldr_roundSynthesisSummary_eq (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) :
+    (List.ofFn fun i : Fin numBits =>
+      roundSynthesisSummary cfg (offset + i.val * 2)).foldr
+        FloorPlanner.RegionSynthesisSummary.combine {} =
+      roundsSynthesisSummary numBits cfg offset := by
+  simpa [roundSynthesisSummary, Nat.mul_comm, Nat.add_assoc] using
+    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+      (roundColumns cfg) offset 2 3 0 numBits)
+
+def circuitSynthesisSummary (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.zComplete.index] (offset + 1) 0).combine
+    (roundsSynthesisSummary numBits cfg offset)
 
 def assign_region (numBits : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp (Column .advice × Add.Config) Config Inputs (Output numBits) where
@@ -762,11 +844,24 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               { x := .of self (offset + 2 * k + 2) cfg.addConfig.xQR
                 y := .of self (offset + 2 * k + 2) cfg.addConfig.yQR }
           zs := Vector.ofFn fun j => .of self (offset + 2 * j.val + 2) cfg.zComplete }
+      synthesisSummary cfg offset _ _ := circuitSynthesisSummary numBits cfg offset
       output_eq := by
         intro cfg offset input self
         simp only [circuit_norm, keygen_output_norm, RegionCircuit.foldRange_output]
         rw [← roundFoldAcc_eq w offset cfg input self numBits]
-        rfl }
+        rfl
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+            circuit_norm, synthesis_summary_norm,
+            foldr_roundSynthesisSummary_eq]
+        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+            circuit_norm, synthesis_summary_norm,
+            foldr_roundSynthesisSummary_eq]
+        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+            circuit_norm, synthesis_summary_norm,
+            foldr_roundSynthesisSummary_eq] }
 
   synthesize cfg offset (input : Var Inputs Fp) := do
     -- copy the entering running sum
@@ -952,6 +1047,14 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       exact accPoint_valid hBaseV hAcc0V (kBitsWindow input_alpha w) numBits
     · -- accumulator value
       exact hOutAcc.symm.trans haccN
+
+/-- The complete-multiplication bundle exposes its reduced footprint. -/
+@[synthesis_summary_norm]
+theorem assign_region_synthesisSummary_eq
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (assign_region numBits w).elaborated.synthesisSummary cfg offset input self =
+      circuitSynthesisSummary numBits cfg offset := rfl
 
 @[keygen_norm]
 theorem Configured.permutationColumns_eq (numBits w : ℕ) {cfg : Config}

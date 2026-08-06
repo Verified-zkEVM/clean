@@ -45,6 +45,13 @@ structure Input (F : Type) where
   pkDOld : Unconstrained Point F
 deriving CircuitType
 
+def synthesisSummary
+    (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Ecc.Mul.mulSynthesisSummary cfg.1).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (Ecc.WitnessPoint.pointNonIdSynthesisSummary cfg.2 0))
+
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality
 constraint between them. `Spec` is knowledge soundness at the input `ivk` cell:
@@ -83,6 +90,10 @@ def circuit : FormalCircuit Fp
         { x := .of (i + 4) 0 cfg.2.x,
           y := .of (i + 4) 0 cfg.2.y }
       regionCount _ := 6
+      synthesisSummary cfg _ _ := synthesisSummary cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro cfg input i
         simp only [Circuit.output_bind, Circuit.output_pure,
@@ -140,6 +151,13 @@ def circuit : FormalCircuit Fp
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially complete
     grind
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (config : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    circuit.elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
 
 derive_contract_bridges circuit := circuit
 

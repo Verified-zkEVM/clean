@@ -205,6 +205,22 @@ theorem forRange'_operations (offset stride m : ℕ)
           (body i.val (offset + i.val * stride)).operations self).flatten :=
   loopAux_operations _ _ _ _
 
+/-- Exact compositional summary of a region loop, expressed only through the
+already-reduced summary of each round. -/
+@[synthesis_summary_norm]
+theorem forRange'_regionSynthesisSummary
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((forRange' offset stride m body).operations self) =
+      (List.ofFn fun i : Fin m =>
+        FloorPlanner.regionSynthesisSummary
+          ((body i.val (offset + i.val * stride)).operations self)).foldr
+            FloorPlanner.RegionSynthesisSummary.combine {} := by
+  rw [forRange'_operations, FloorPlanner.regionSynthesisSummary_flatten,
+    List.map_ofFn]
+  rfl
+
 /-- Operation-local laws over `forRange'`, split by symbolic round. -/
 theorem forRange'_forall (property : RegionOperation F → Prop)
     (offset stride m : ℕ)
@@ -241,7 +257,8 @@ theorem forRange'_regionSynthesisSummary_columns
       ((forRange' offset stride m body).operations self)).columns =
       (List.ofFn fun i : Fin m =>
         (FloorPlanner.regionSynthesisSummary
-          ((body i.val (offset + i.val * stride)).operations self)).columns).flatten := by
+          ((body i.val (offset + i.val * stride)).operations self)).columns).foldr
+            FloorPlanner.unionColumns [] := by
   rw [forRange'_operations,
     FloorPlanner.regionSynthesisSummary_flatten_columns, List.map_ofFn]
   congr 2
@@ -298,7 +315,8 @@ theorem mem_forRange'_regionSynthesisSummary_columns
         ((body i.val (offset + i.val * stride)).operations self)).columns) :
     column ∈ (FloorPlanner.regionSynthesisSummary
       ((forRange' offset stride m body).operations self)).columns := by
-  rw [forRange'_regionSynthesisSummary_columns, List.mem_flatten]
+  rw [forRange'_regionSynthesisSummary_columns,
+    FloorPlanner.mem_foldr_unionColumns_iff]
   exact ⟨_, List.mem_ofFn.mpr ⟨i, rfl⟩, hcolumn⟩
 
 /-- Exact deferred-constant demand of a region loop. -/
@@ -350,6 +368,21 @@ theorem forRangeVar'_operations (rows : ℕ → ℕ) (m : ℕ)
       = (List.ofFn fun i : Fin m => (body i.val (rows i.val)).operations self).flatten :=
   loopAux_operations _ _ _ _
 
+/-- Exact compositional summary of a variable-stride region loop. -/
+@[synthesis_summary_norm]
+theorem forRangeVar'_regionSynthesisSummary
+    (rows : ℕ → ℕ) (m : ℕ)
+    (body : ℕ → ℕ → RegionCircuit F Unit) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((forRangeVar' rows m body).operations self) =
+      (List.ofFn fun i : Fin m =>
+        FloorPlanner.regionSynthesisSummary
+          ((body i.val (rows i.val)).operations self)).foldr
+            FloorPlanner.RegionSynthesisSummary.combine {} := by
+  rw [forRangeVar'_operations, FloorPlanner.regionSynthesisSummary_flatten,
+    List.map_ofFn]
+  rfl
+
 /-- Exact columns contributed by a variable-stride region loop. -/
 @[synthesis_summary_norm]
 theorem forRangeVar'_regionSynthesisSummary_columns
@@ -359,7 +392,8 @@ theorem forRangeVar'_regionSynthesisSummary_columns
       ((forRangeVar' rows m body).operations self)).columns =
       (List.ofFn fun i : Fin m =>
         (FloorPlanner.regionSynthesisSummary
-          ((body i.val (rows i.val)).operations self)).columns).flatten := by
+          ((body i.val (rows i.val)).operations self)).columns).foldr
+            FloorPlanner.unionColumns [] := by
   rw [forRangeVar'_operations,
     FloorPlanner.regionSynthesisSummary_flatten_columns, List.map_ofFn]
   congr 2
@@ -662,6 +696,26 @@ theorem foldRange_output (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) (self : RegionIndex) :
     (foldRange offset stride m init body).output self =
       foldAcc (fun i => offset + i * stride) init body m self := rfl
+
+/-- Exact compositional summary of a serial region fold, expressed through the
+already-reduced summary of each accumulator-dependent round. -/
+@[synthesis_summary_norm]
+theorem foldRange_regionSynthesisSummary
+    (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((foldRange offset stride m init body).operations self) =
+      (List.ofFn fun i : Fin m =>
+        FloorPlanner.regionSynthesisSummary
+          ((body i.val (offset + i.val * stride)
+            (foldAcc (fun j => offset + j * stride)
+              init body i.val self)).operations self)).foldr
+        FloorPlanner.RegionSynthesisSummary.combine {} := by
+  unfold foldRange foldRangeVar
+  rw [foldRangeVarAux_operations,
+    FloorPlanner.regionSynthesisSummary_flatten, List.map_ofFn]
+  rfl
 
 theorem foldRange_forall (property : RegionOperation F → Prop)
     (offset stride m : ℕ) (init : β)

@@ -331,6 +331,27 @@ def rYProgram (px py qx qy : FExpr Fp) : FExpr Fp :=
 def permutationColumns (config : Config) : List AnyColumn :=
   [config.xP, config.yP, config.xQR, config.yQR]
 
+def synthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qAdd.index,
+      .column .advice config.xP.index,
+      .column .advice config.yP.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index,
+      .column .advice config.alpha.index,
+      .column .advice config.beta.index,
+      .column .advice config.gamma.index,
+      .column .advice config.delta.index,
+      .column .advice config.lambda.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_constantSiteCount (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).constantSiteCount = 0 := rfl
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice ×
       Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
@@ -355,9 +376,21 @@ def add : FormalRegionCircuit Fp
       output config offset _ self :=
         { x := .of self (offset + 1) config.xQR,
           y := .of self (offset + 1) config.yQR }
+      synthesisSummary config offset _ _ := synthesisSummary config offset
       output_eq := by
         intro _ _ _ _
-        rfl }
+        rfl
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [synthesisSummary]
+          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, gate, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.nil_append, List.singleton_append]
+        · simp only [synthesisSummary, circuit_norm, gate]
+          omega
+        · simp only [synthesisSummary, circuit_norm, gate] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add` selector at `offset`
@@ -446,6 +479,20 @@ in the Rust chip (`ecc/chip.rs`: `assign_region(|| "complete point addition", �
 def addFormal :=
   add.toFormal "complete point addition"
 
+@[synthesis_summary_norm]
+theorem addFormal_synthesisSummary_eq
+    (config : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    addFormal.elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion (synthesisSummary config 0) := rfl
+
+/-- Complete addition requests no deferred constant allocations inside its region. -/
+@[synthesis_summary_norm]
+theorem add_synthesisSummary_eq
+    (config : Config) (offset : ℕ) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    add.elaborated.synthesisSummary config offset input region =
+      synthesisSummary config offset := rfl
+
 /-- Complete addition requests no deferred constant allocations inside its region. -/
 @[synthesis_summary_norm]
 theorem add_synthesisSummary_constantSiteCount
@@ -453,8 +500,8 @@ theorem add_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     (add.elaborated.synthesisSummary
       config offset input region).constantSiteCount = 0 := by
-  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [add, circuit_norm]
+  rw [add_synthesisSummary_eq]
+  simp only [synthesisSummary, circuit_norm]
 
 /-- Complete addition requests no deferred constant allocations. -/
 @[synthesis_summary_norm]

@@ -22,7 +22,8 @@ namespace Zcash.Circuits.Ecc.MulFixed.Short
 open Halo2
 open Ecc.MulFixed
   (coordsGate fixedConstantsLoop processWindow windowChain FixedBaseData)
-open DecomposeRunningSum (copyDecompose rangeCheckExpr)
+open DecomposeRunningSum
+  (copyDecompose copyDecomposeSynthesisSummary rangeCheckExpr)
 open Ecc.MulFixed.Short (FixedBase)
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 
@@ -111,6 +112,31 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
       magnitude) offset 22
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
+/-- Reduced footprint of the short-multiplication inner region. -/
+def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (copyDecomposeSynthesisSummary 22
+      cfg.superConfig.runningSumConfig offset).combine
+    ((fixedConstantsLoopSynthesisSummary (coordsGate cfg.superConfig)
+      cfg.superConfig offset 22).combine
+      (windowChainSynthesisSummary cfg.superConfig offset 22))
+
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((innerRegion B cfg offset magnitude).operations self) =
+      innerRegionSynthesisSummary cfg offset := by
+  simp only [innerRegion, innerRegionSynthesisSummary,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [windowChain_synthesisSummary_eq]
+  intro w row
+  exact processWindow_synthesisSummary_eq B
+    (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+    magnitude w row self
+
 /-- Region 2, "Short fixed-base mul (most significant word)": the complete addition at
 offset 0, then the sign row at offset 1. Returns the result point (`magnitude_mul.x`,
 conditionally-negated `y`). -/
@@ -127,6 +153,33 @@ def mswRegion (cfg : Config) (acc mulB : Point (AssignedCell Fp))
   -- witness the conditionally-negated y into `add.y_p`
   let yVar ← assignAdvice cfg.superConfig.addConfig.yP 1 (yVarWit sign magnitudeMul.y)
   return { x := magnitudeMul.x, y := yVar }
+
+/-- Reduced footprint of the complete-addition and sign-adjustment region. -/
+def mswRegionSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (Add.synthesisSummary cfg.superConfig.addConfig 0).combine
+    (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.superConfig.window.index,
+        .column .advice cfg.superConfig.u.index,
+        .selector cfg.qMulFixedShort.index,
+        .column .advice cfg.superConfig.addConfig.yP.index]
+      2 0)
+
+@[synthesis_summary_norm]
+theorem mswRegion_synthesisSummary_eq
+    (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((mswRegion cfg acc mulB sign z21).operations self) =
+      mswRegionSynthesisSummary cfg := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [mswRegionSynthesisSummary, mswRegion, circuit_norm,
+      synthesis_summary_norm, shortGate]
+  · simp only [mswRegionSynthesisSummary, mswRegion, circuit_norm,
+      synthesis_summary_norm, shortGate]
+    omega
+  · simp only [mswRegionSynthesisSummary, mswRegion, circuit_norm,
+      synthesis_summary_norm, shortGate]
 
 /-! ## The inner-region bundle
 
@@ -390,9 +443,14 @@ instance innerElab (B : FixedBaseData) :
     simpa using innerRegion_keygenRegistered
       B configInput offset input.alpha region configured
   output config offset _ self := innerOutCells config offset self
+  synthesisSummary config offset _ _ :=
+    innerRegionSynthesisSummary config offset
   output_eq := by
     intro _ _ _ self
     rw [innerRegion_output]
+  synthesisSummary_eq := by
+    intro _ _ input self
+    exact (innerRegion_synthesisSummary_eq B _ _ input.alpha self).symm
 @[synthesis_summary_norm]
 theorem innerRegion_synthesisSummary_constantSiteCount
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
@@ -402,6 +460,18 @@ theorem innerRegion_synthesisSummary_constantSiteCount
   simp only [innerRegion, RegionCircuit.operations_bind,
     RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
     synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem innerRegionSynthesisSummary_constantSiteCount
+    (cfg : Config) (offset : ℕ) :
+    (innerRegionSynthesisSummary cfg offset).constantSiteCount = 1 := by
+  simp only [innerRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mswRegionSynthesisSummary_constantSiteCount (cfg : Config) :
+    (mswRegionSynthesisSummary cfg).constantSiteCount = 0 := by
+  simp only [mswRegionSynthesisSummary, synthesis_summary_norm,
+    Add.synthesisSummary]
 
 
 set_option linter.all false in
@@ -1187,6 +1257,23 @@ private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
     Operations.regionCount ((synthesize B cfg input).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
 
+/-- Reduced footprint of the inner and sign-adjustment regions. -/
+def circuitSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+    (innerRegionSynthesisSummary cfg 0)).combine
+    (FloorPlanner.SynthesisSummary.ofRegion (mswRegionSynthesisSummary cfg))
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize B cfg input).operations self) =
+      circuitSynthesisSummary cfg := by
+  simp only [synthesize, circuitSynthesisSummary, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append, operations_assignRegion,
+    synthesis_summary_norm]
+  rw [mswRegion_synthesisSummary_eq]
+
 @[keygen_helper]
 theorem mswRegion_keygenRegistered
     (cfg : Config) (acc mulB : Point (AssignedCell Fp))
@@ -1253,10 +1340,14 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yP }
+      synthesisSummary cfg _ _ := circuitSynthesisSummary cfg
       regionCount _ := 2
       output_eq := by
         intro _ _ _
         simp only [synthesize, mswRegion, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ input self
+        exact (synthesize_synthesisSummary_eq B.toData _ input self).symm
       regionCount_eq := fun cfg input i => (synthesize_regionCount B.toData cfg input i).symm }
 
   EnvAssumptions := EnvAssumptions
@@ -1499,6 +1590,19 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         rw [hWyVar, hs]
         ring
 
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (circuit B).elaborated.synthesisSummary cfg input self =
+      circuitSynthesisSummary cfg := rfl
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_constantSiteCount
+    (config : Config) :
+    (circuitSynthesisSummary config).constantSiteCount = 1 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
 /-- Short fixed-base multiplication requests exactly its strict decomposition's
 single deferred constant allocation. -/
 @[synthesis_summary_norm]
@@ -1507,17 +1611,8 @@ theorem circuit_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     ((circuit B).elaborated.synthesisSummary
       config input region).constantSiteCount = 1 := by
-  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
-  simp only [circuit, synthesis_summary_norm]
-  simp only [synthesize, Circuit.operations_bind,
-    FloorPlanner.synthesisSummary_append, synthesis_summary_norm]
-  simp only [operations_assignRegion,
-    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
-    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero]
-  rw [innerRegion_synthesisSummary_constantSiteCount]
-  simp only [mswRegion, circuit_norm]
-  rw [← Add.add.elaborated.synthesisSummary_constantSiteCount_eq]
-  rw [Add.add_synthesisSummary_constantSiteCount]
+  rw [circuit_synthesisSummary_eq]
+  exact circuitSynthesisSummary_constantSiteCount config
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 

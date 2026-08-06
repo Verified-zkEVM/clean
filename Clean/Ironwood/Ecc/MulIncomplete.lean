@@ -96,18 +96,70 @@ private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool
     rw [hstep, ihb]
     rfl
 
+def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .repeatColumns
+    [.selector cfg.qMul2.index,
+      .column .advice cfg.z.index,
+      .column .advice cfg.xA.index,
+      .column .advice cfg.lambda1.index,
+      .column .advice cfg.lambda2.index,
+      .column .advice cfg.xP.index,
+      .column .advice cfg.yP.index]
+    offset 1 3 0 n
+
+def loopProgram (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) : RegionCircuit Fp (Var (LoopOut n) Fp) := do
+  RegionCircuit.forRange' offset 1 n (fun r o => do
+    let _ ← (round (w + r)).call cfg o alpha)
+  let exit ← readState cfg (offset + n)
+  let zs ← cellVec cfg.z (fun j => offset + 1 + j) n
+  return { exit, zs }
+
+theorem loopProgram_operations (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    (loopProgram n w cfg offset alpha).operations self =
+      (RegionCircuit.forRange' offset 1 n (fun r o => do
+        let _ ← (round (w + r)).call cfg o alpha)).operations self := by
+  simp only [loopProgram, RegionCircuit.operations_bind, operations_readState,
+    operations_cellVec, RegionCircuit.operations_pure, List.append_nil]
+
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    loopSynthesisSummary n cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((loopProgram n w cfg offset alpha).operations self) := by
+  rw [loopProgram_operations, RegionCircuit.forRange'_regionSynthesisSummary]
+  unfold loopSynthesisSummary
+  rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+  apply congrArg (List.foldr FloorPlanner.RegionSynthesisSummary.combine {})
+  apply congrArg List.ofFn
+  funext i
+  rw [show
+    ((do
+      let _ ← (round (w + i.val)).call cfg (offset + i.val * 1) alpha
+      pure () : RegionCircuit Fp Unit).operations self) =
+        ((round (w + i.val)).call cfg (offset + i.val * 1) alpha).operations self by
+      simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+        List.append_nil]]
+  rw [Nat.mul_one]
+  simpa [round, Nat.add_assoc] using
+    (FormalRegionCircuit.call_synthesisSummary
+      (round (w + i.val)) cfg (offset + i.val) alpha self).symm
+
+@[reducible] def loopElaborated (n w : ℕ) :
+    ElaboratedRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n)
+      pure (loopProgram n w) :=
+  { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+    synthesisSummary cfg offset _ _ := loopSynthesisSummary n cfg offset
+    synthesisSummary_eq := loopSynthesisSummary_eq n w
+    registered := by keygen_registration }
+
 def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
   configure := pure
-  elaborated :=
-    { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
-      registered := by keygen_registration }
-
-  synthesize cfg offset (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) := do
-    RegionCircuit.forRange' offset 1 n (fun r o => do
-      let _ ← (round (w + r)).call cfg o alpha)
-    let exit ← readState cfg (offset + n)
-    let zs ← cellVec cfg.z (fun j => offset + 1 + j) n
-    return { exit, zs }
+  synthesize := loopProgram n w
+  elaborated := loopElaborated n w
 
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)
@@ -242,6 +294,15 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       rw [show offset + 1 + ↑j = offset + (↑j + 1) from by omega]
       exact congrArg State.z hj
 
+@[synthesis_summary_norm]
+theorem loop_regionSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        (((loop n w).synthesize cfg offset alpha).operations self) =
+      loopSynthesisSummary n cfg offset := by
+  simpa only [loop] using
+    (loopSynthesisSummary_eq n w cfg offset alpha self).symm
+
 /-- The loop's output variable: exit neighborhood + interstitial z cells (rfl). -/
 @[circuit_norm]
 theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
@@ -276,6 +337,26 @@ theorem initLambdaWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)
   simp only [initLambdaWit, Witgen.WitgenIROver.eval_native_apply]
   rfl
 
+def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.z.index,
+        .column .advice cfg.xA.index,
+        .column .advice cfg.lambda1.index,
+        .column .advice cfg.xP.index,
+        .column .advice cfg.yP.index,
+        .column .advice cfg.lambda1.index,
+        .column .advice cfg.lambda2.index,
+        .selector cfg.qMul1.index]
+      (offset + 2) 0).combine
+    ((loopSynthesisSummary n cfg offset).combine
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.selector cfg.qMul3.index,
+          .column .advice cfg.z.index,
+          .column .advice cfg.xA.index,
+          .column .advice cfg.lambda1.index]
+        (offset + n + 3) 0))
+
 def double_and_add (n : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice ×
@@ -293,6 +374,22 @@ def double_and_add (n : ℕ) (w : ℕ) :
             [input.z.cell.column, input.acc.x.cell.column,
               input.acc.y.cell.column, input.base.x.cell.column,
               input.base.y.cell.column] }
+      synthesisSummary cfg offset _ _ :=
+        doubleAndAddSynthesisSummary n cfg offset
+      synthesisSummary_eq := by
+        intro cfg offset input self
+        unfold doubleAndAddSynthesisSummary
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [circuit_norm, synthesis_summary_norm,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
+          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
+        · simp only [circuit_norm, synthesis_summary_norm,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
+          omega
+        · simp only [circuit_norm, synthesis_summary_norm,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
       output cfg offset _ self :=
         { acc :=
             { x := .of self (offset + n + 2) cfg.xA
@@ -659,6 +756,14 @@ def double_and_add (n : ℕ) (w : ℕ) :
       rw [hkl, hbx, hby] at hlast
       rw [hbx, hby]
       exact hlast
+
+/-- The complete incomplete-multiplication bundle exposes its reduced footprint. -/
+@[synthesis_summary_norm]
+theorem double_and_add_synthesisSummary_eq
+    (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (double_and_add n w).elaborated.synthesisSummary cfg offset input self =
+      doubleAndAddSynthesisSummary n cfg offset := rfl
 
 @[keygen_norm]
 theorem Configured.permutationColumns_eq (n w : ℕ) {cfg : Config}

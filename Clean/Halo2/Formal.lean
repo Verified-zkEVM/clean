@@ -160,9 +160,7 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
   /-- Exact compositional footprint of synthesis.  Parents use this reduced value
   without unfolding the child's operation stream. -/
   synthesisSummary : Config → Var Input F → RegionIndex →
-      FloorPlanner.SynthesisSummary :=
-    fun config input i =>
-      FloorPlanner.synthesisSummary ((synthesize config input).operations i)
+      FloorPlanner.SynthesisSummary
   output_eq : ∀ config input i,
     output config input i = (synthesize config input).output i := by
     intro _ _ _
@@ -1090,10 +1088,7 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
       (synthesize config offset input).output self
   /-- Exact footprint contributed inside the ambient region. -/
   synthesisSummary : Config → ℕ → Var Input F → RegionIndex →
-      FloorPlanner.RegionSynthesisSummary :=
-    fun config offset input self =>
-      FloorPlanner.regionSynthesisSummary
-        ((synthesize config offset input).operations self)
+      FloorPlanner.RegionSynthesisSummary
   output_eq : ∀ config offset input self,
     output config offset input self =
       (synthesize config offset input).output self := by
@@ -1737,6 +1732,31 @@ theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
       self.elaborated.synthesisSummary config offset input region :=
   self.call_synthesisSummary config offset input region
 
+/-- A fixed-stride loop of region-circuit calls reduces to the fold of the children'
+already-reduced summaries. The result is the synthesis-summary normal form for
+composite gadgets built from homogeneous child circuits. -/
+@[synthesis_summary_norm]
+theorem forRange'_call_synthesisSummary
+    (circuits : ℕ → FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset stride count : ℕ)
+    (inputs : ℕ → Var Input F) (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((RegionCircuit.forRange' offset stride count fun i row => do
+          let _ ← (circuits i).call config row (inputs i)
+          pure ()).operations region) =
+      (List.ofFn fun i : Fin count =>
+        (circuits i.val).elaborated.synthesisSummary config
+          (offset + i.val * stride) (inputs i.val) region).foldr
+            FloorPlanner.RegionSynthesisSummary.combine {} := by
+  rw [RegionCircuit.forRange'_regionSynthesisSummary]
+  apply congrArg (List.foldr FloorPlanner.RegionSynthesisSummary.combine {})
+  apply congrArg List.ofFn
+  funext i
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    List.append_nil]
+  exact (circuits i.val).call_synthesisSummary config
+    (offset + i.val * stride) (inputs i.val) region
+
 /-- Consume a region circuit's configure certificate without exposing routing premises. -/
 @[keygen_norm]
 theorem call_keygenRegistered_ofCertificate
@@ -2051,6 +2071,17 @@ theorem toFormal_synthesisSummary_columns
     ((child.toFormal name).elaborated.synthesisSummary
       config input region).columns =
         (child.elaborated.synthesisSummary config 0 input region).columns := rfl
+
+/-- Lifting a region circuit turns its reduced region footprint into the corresponding
+single-region layouter footprint. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem toFormal_synthesisSummary
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String) (config : Config) (input : Var Input F)
+    (region : RegionIndex) :
+    (child.toFormal name).elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (child.elaborated.synthesisSummary config 0 input region) := rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_columnOccupancy

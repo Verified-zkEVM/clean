@@ -183,6 +183,42 @@ theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (synthPieces cfg ak nk).nextRegionIndex i = i + 7 := by
   rfl
 
+/-- Exact reduced footprint of the seven message-piece regions. -/
+def synthPiecesSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  let piece := Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary
+    cfg.hashConfig
+  let short := LookupRangeCheck.witnessShortCheckSynthesisSummary
+    10 cfg.lookupConfig
+  [piece, short, short, piece, piece, short, piece].foldr
+    FloorPlanner.SynthesisSummary.combine {}
+
+/-- Exact reduced footprint of the complete fourteen-region CommitIvk flow. -/
+def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (synthPiecesSynthesisSummary cfg).combine
+    ((Sinsemilla.CommitDomain.commitSynthesisSummary ns
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)).combine
+      (Canonicity.circuitSynthesisSummary cfg.gate cfg.lookupConfig))
+
+@[synthesis_summary_norm]
+theorem synthPieces_synthesisSummary_eq (cfg : Config)
+    (ak nk : AssignedCell Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synthPieces cfg ak nk).operations region) =
+      synthPiecesSynthesisSummary cfg := by
+  simp only [synthPiecesSynthesisSummary, synthPieces, circuit_norm,
+    synthesis_summary_norm, List.foldr_cons, List.foldr_nil,
+    FloorPlanner.SynthesisSummary.combine_empty]
+
+@[synthesis_summary_norm]
+theorem synth_synthesisSummary_eq
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synth G R Q hQ cfg input).operations region) =
+      synthesisSummary cfg := by
+  simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+
 @[keygen_output_norm]
 theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
@@ -328,9 +364,12 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
     keygen_registration
   output cfg _ i := AssignedCell.of (i + 10) 1 cfg.addConfig.xQR
   regionCount _ := 14
+  synthesisSummary cfg _ _ := synthesisSummary cfg
   output_eq := fun cfg input i => (synth_output G R Q hQ cfg input i).symm
   regionCount_eq cfg input i :=
     (synth_regionCount G R Q hQ cfg input i).symm
+  synthesisSummary_eq cfg input region :=
+    (synth_synthesisSummary_eq G R Q hQ cfg input region).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

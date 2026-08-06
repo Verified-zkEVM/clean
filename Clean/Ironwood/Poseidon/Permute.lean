@@ -30,6 +30,98 @@ private theorem partialRound_output_eq (r : ℕ) (cfg : Config) (o : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
     (partialRound r).output cfg o input self = stateRow cfg (o + 1) self := rfl
 
+def permuteSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice (cfg.state 0).index,
+        .column .advice (cfg.state 1).index,
+        .column .advice (cfg.state 2).index]
+      (offset + 1) 0).combine
+    ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+      [.selector cfg.sFull.index,
+        .column .fixed (cfg.rcA 0).index,
+        .column .fixed (cfg.rcA 1).index,
+        .column .fixed (cfg.rcA 2).index,
+        .column .advice (cfg.state 0).index,
+        .column .advice (cfg.state 1).index,
+        .column .advice (cfg.state 2).index]
+      offset 1 2 0 4).combine
+      ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+        [.selector cfg.sPartial.index,
+          .column .fixed (cfg.rcA 0).index,
+          .column .fixed (cfg.rcA 1).index,
+          .column .fixed (cfg.rcA 2).index,
+          .column .advice cfg.partialSbox.index,
+          .column .fixed (cfg.rcB 0).index,
+          .column .fixed (cfg.rcB 1).index,
+          .column .fixed (cfg.rcB 2).index,
+          .column .advice (cfg.state 0).index,
+          .column .advice (cfg.state 1).index,
+          .column .advice (cfg.state 2).index]
+        (offset + 4) 1 2 0 28).combine
+        (FloorPlanner.RegionSynthesisSummary.repeatColumns
+          [.selector cfg.sFull.index,
+            .column .fixed (cfg.rcA 0).index,
+            .column .fixed (cfg.rcA 1).index,
+            .column .fixed (cfg.rcA 2).index,
+            .column .advice (cfg.state 0).index,
+            .column .advice (cfg.state 1).index,
+            .column .advice (cfg.state 2).index]
+          (offset + 32) 1 2 0 4)))
+
+@[circuit_norm]
+def permuteSynthesize (cfg : Config) (offset : ℕ) (input : Var State Fp) :
+    RegionCircuit Fp (Var State Fp) := do
+  let _c0 ← copyAdvice input.x0 (cfg.state 0) offset
+  let _c1 ← copyAdvice input.x1 (cfg.state 1) offset
+  let _c2 ← copyAdvice input.x2 (cfg.state 2) offset
+  RegionCircuit.forRange' offset 1 4 (fun r o => do
+    let _ ← (fullRound r).call cfg o ()
+    pure ())
+  RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+    let _ ← (partialRound (4 + 2 * r)).call cfg o ()
+    pure ())
+  RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
+    let _ ← (fullRound (60 + r)).call cfg o ()
+    pure ())
+  readStateRow cfg (offset + 36)
+
+@[reducible]
+def permuteElaborated :
+    ElaboratedRegionCircuit Fp Config Config State State pure
+      permuteSynthesize :=
+  { keygenRequirements :=
+      { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
+        permutationColumns cfg _ :=
+          [cfg.state 0, cfg.state 1, cfg.state 2]
+        inputPermutationColumns _ _ input :=
+          [input.x0.cell.column, input.x1.cell.column,
+            input.x2.cell.column] }
+    output cfg offset _ self := stateRow cfg (offset + 36) self
+    synthesisSummary cfg offset _ _ :=
+      permuteSynthesisSummary cfg offset
+    synthesisSummary_eq := by
+      intro cfg offset input self
+      simp only [permuteSynthesisSummary]
+      rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one, FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one, FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+        omega
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+    output_eq := by
+      intro _ _ _ _
+      simp only [permuteSynthesize, circuit_norm] }
+
 /-- Chain a per-row step family into a `Fin.foldl` (the donor `Permute.value` shape). -/
 private theorem foldl_of_steps (f : ℕ → State Fp → State Fp) (st : ℕ → State Fp)
     (base : ℕ) : ∀ n : ℕ,
@@ -48,34 +140,8 @@ rounds, 28 double partial rounds, 4 full rounds. `Spec`: the outgoing state is t
 `Permute.value` of the incoming one. -/
 def permuteRegion : FormalRegionCircuit Fp Config Config State State where
   configure := pure
-  elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
-          permutationColumns cfg _ :=
-            [cfg.state 0, cfg.state 1, cfg.state 2]
-          inputPermutationColumns _ _ input :=
-            [input.x0.cell.column, input.x1.cell.column,
-              input.x2.cell.column] }
-      output cfg offset _ self := stateRow cfg (offset + 36) self
-      output_eq := by
-        intro _ _ _ _
-        rfl }
-
-  synthesize cfg offset (input : Var State Fp) := do
-    -- Pow5State::load (pow5.rs:536-550)
-    let _c0 ← copyAdvice input.x0 (cfg.state 0) offset
-    let _c1 ← copyAdvice input.x1 (cfg.state 1) offset
-    let _c2 ← copyAdvice input.x2 (cfg.state 2) offset
-    RegionCircuit.forRange' offset 1 4 (fun r o => do
-      let _ ← (fullRound r).call cfg o ()
-      pure ())
-    RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
-      let _ ← (partialRound (4 + 2 * r)).call cfg o ()
-      pure ())
-    RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
-      let _ ← (fullRound (60 + r)).call cfg o ()
-      pure ())
-    readStateRow cfg (offset + 36)
+  synthesize := permuteSynthesize
+  elaborated := permuteElaborated
 
   Spec input output _ := output = Permute.value roundConstants input
 
@@ -227,6 +293,13 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     show st (32 + 4) = Permute.value roundConstants (st 0)
     rw [hC, show (32 : ℕ) = 4 + 28 from rfl, hB, show (4 : ℕ) = 0 + 4 from rfl, hA]
     rfl
+
+/-- The permutation bundle exposes its already-reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem permuteRegion_synthesisSummary (cfg : Config) (offset : ℕ)
+    (input : Var State Fp) (self : RegionIndex) :
+    permuteRegion.elaborated.synthesisSummary cfg offset input self =
+      permuteSynthesisSummary cfg offset := rfl
 
 derive_contract_bridges permuteRegion := permuteRegion
 

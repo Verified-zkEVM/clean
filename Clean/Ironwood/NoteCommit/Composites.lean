@@ -74,6 +74,13 @@ def gateChild : FormalCircuit Fp GdCanonicity.Config GdCanonicity.Config GdCanon
 
 derive_contract_bridges gateChild := gateChild
 
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : GdCanonicity.Config)
+    (input : Var GdCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (GdCanonicity.synthesisSummary cfg 0) := rfl
+
 /-- The synthesize body (Rust `gd_x_canonicity` flow): the `witness_check` of `a'`, then
 the gate region with `a' = z_0` and `z13_a' = z_13` wired in. -/
 def synth (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
@@ -83,6 +90,12 @@ def synth (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
       aPrime := aZs.z0, z13A := input.z13A, z13APrime := aZs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : GdCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (GdCanonicity.synthesisSummary gcfg 0))
 
 /-- The region count of `synth`: the `witnessCheck` region and the gate child's region. -/
 theorem synth_regionCount (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
@@ -115,6 +128,11 @@ def circuit :
               input.z13A.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -239,6 +257,13 @@ def gateChild : FormalCircuit Fp PkdCanonicity.Config PkdCanonicity.Config PkdCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : PkdCanonicity.Config)
+    (input : Var PkdCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (PkdCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 14 false lcfg (b3CPrimeWit input.b3 input.c)
@@ -246,6 +271,12 @@ def synth (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { pkdX := input.pkdX, b3 := input.b3, d0 := input.d0, c := input.c,
       b3CPrime := zs.z0, z13C := input.z13C, z14B3CPrime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : PkdCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 14 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (PkdCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -274,6 +305,11 @@ def circuit :
               input.z13C.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -391,6 +427,13 @@ def gateChild : FormalCircuit Fp RhoCanonicity.Config RhoCanonicity.Config RhoCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : RhoCanonicity.Config)
+    (input : Var RhoCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (RhoCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 14 false lcfg (e1FPrimeWit input.e1 input.f)
@@ -398,6 +441,12 @@ def synth (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { rho := input.rho, e1 := input.e1, g0 := input.g0, f := input.f,
       e1FPrime := zs.z0, z13F := input.z13F, z14E1FPrime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : RhoCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 14 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (RhoCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -426,6 +475,11 @@ def circuit :
               input.z13F.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -544,6 +598,13 @@ def gateChild : FormalCircuit Fp PsiCanonicity.Config PsiCanonicity.Config PsiCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : PsiCanonicity.Config)
+    (input : Var PsiCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (PsiCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 13 false lcfg (g1G2PrimeWit input.g1 input.g2)
@@ -551,6 +612,12 @@ def synth (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1, g2 := input.g2,
       g1G2Prime := zs.z0, z13G := input.z13G, z13G1G2Prime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : PsiCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (PsiCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -579,6 +646,11 @@ def circuit :
               input.g2.cell.column, input.z13G.cell.column] }
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }

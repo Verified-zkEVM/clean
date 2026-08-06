@@ -323,6 +323,19 @@ def FormalCircuit.foldOps (c : ℕ → FormalCircuit F CI Cfg Input Output)
       ++ ((c m).call config (FormalCircuit.foldState c toInput config init i₀ m).1).operations
         (FormalCircuit.foldState c toInput config init i₀ m).2
 
+/-- Reduced synthesis summary of a serial circuit fold, composed from the
+already-reduced summaries of its children. -/
+def FormalCircuit.foldSynthesisSummary
+    (c : ℕ → FormalCircuit F CI Cfg Input Output)
+    (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
+    (i₀ : RegionIndex) : ℕ → FloorPlanner.SynthesisSummary
+  | 0 => {}
+  | m + 1 =>
+    (FormalCircuit.foldSynthesisSummary c toInput config init i₀ m).combine
+      ((c m).elaborated.synthesisSummary config
+        (FormalCircuit.foldState c toInput config init i₀ m).1
+        (FormalCircuit.foldState c toInput config init i₀ m).2)
+
 variable (c : ℕ → FormalCircuit F CI Cfg Input Output)
   (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
   (i₀ : RegionIndex)
@@ -347,6 +360,46 @@ theorem FormalCircuit.foldCall_operations (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).operations i₀
       = FormalCircuit.foldOps c toInput config init i₀ m := by
   rw [Circuit.operations, FormalCircuit.foldCall_run]
+
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldSynthesisSummary_eq (m : ℕ) :
+    FormalCircuit.foldSynthesisSummary c toInput config init i₀ m =
+      FloorPlanner.synthesisSummary
+        (FormalCircuit.foldOps c toInput config init i₀ m) := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldSynthesisSummary, FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldSynthesisSummary, FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_append, FormalCircuit.call_synthesisSummary,
+        inductionHypothesis]
+
+/-- A fold whose children have one common reduced footprint is represented by
+the constant-size replicated summary, not a nested composition tree. -/
+theorem FormalCircuit.foldSynthesisSummary_eq_replicate
+    (summary : FloorPlanner.SynthesisSummary)
+    (hsummary : ∀ i,
+      (c i).elaborated.synthesisSummary config
+        (FormalCircuit.foldState c toInput config init i₀ i).1
+        (FormalCircuit.foldState c toInput config init i₀ i).2 = summary)
+    (hcolumns : summary.columns.Nodup) : ∀ m,
+    FormalCircuit.foldSynthesisSummary c toInput config init i₀ m =
+      FloorPlanner.SynthesisSummary.replicate m summary
+  | 0 => by
+      apply FloorPlanner.SynthesisSummary.ext
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · funext column
+        simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+  | m + 1 => by
+      rw [FormalCircuit.foldSynthesisSummary,
+        FormalCircuit.foldSynthesisSummary_eq_replicate summary hsummary hcolumns m,
+        hsummary m,
+        FloorPlanner.SynthesisSummary.replicate_succ m summary hcolumns]
 
 /-- Exact deferred-constant demand of a serial circuit fold. -/
 @[synthesis_summary_norm]

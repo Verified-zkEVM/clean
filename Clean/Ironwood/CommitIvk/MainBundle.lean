@@ -677,6 +677,13 @@ def circuit (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
 
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (config : Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit G R Q hQ).elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
+
 /-- Package CommitIvk from the commitment child and the three arguments registered
 by its own piece/canonicity stages. -/
 def configurationCertificate (G : Generators) (R : FixedBase)
