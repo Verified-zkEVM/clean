@@ -25,24 +25,45 @@ Before changing the Plonky3 backend, Clean must gain a generic, executable way t
 feature, not a Plonky3 or Fibonacci feature, and must be testable with the Lean reference evaluator
 in isolation.
 
-An ensemble witness generator must separate two responsibilities:
+Ensemble witness generation is driven automatically by channel imbalance. The verifier row is
+constructed from the public input and its channel interactions seed a deterministic worklist.
+Opposite interactions carrying the same channel message cancel. Any remaining interaction is
+routed to the component registered to handle that channel and polarity; materializing or updating
+that row may produce more interactions. Generation terminates when the worklist is balanced.
 
-- an ensemble-specific structured program supplies public input and the primary input rows for
-  each component; and
-- a generic builder derives the component order and widths from the `Ensemble`, runs each
-  component's existing row-local Witgen IR to complete its rows, constructs the verifier row, and
-  assembles the `EnsembleWitness`.
+Components must explicitly declare how channel demand materializes their rows. The initial
+surface has three modes:
 
-The generic builder must not know Fibonacci component names, channel names, row schedules, or
-trace topology. `FibonacciWithChannels` may define the program that produces its Fibonacci,
-`add8`, and byte-multiplicity inputs, but it must do so through the same authoring interface
-available to any ensemble.
+- **push-driven**: an unmatched push creates one component row per occurrence;
+- **pull-driven chip**: unmatched pulls create one row per distinct message, and repeated pulls
+  increment that row's multiplicity; and
+- **fixed**: rows exist up front, and matching demand updates declared multiplicity slots.
 
-The generator must be represented as structured, exportable witness IR. The existing
-`WitgenIR F m` is row-local and fixed-output-size, so the implementation may extend it or compose it
-with an ensemble-level IR. In either case, the exportable language must represent the required
-multi-table construction, row iteration, and accumulator/scan computations without embedding
-native Lean closures.
+These modes may share one implementation parameterized by trigger polarity, allocation policy,
+and aggregation policy. The declarations must also specify how a trigger message and multiplicity
+map to component input cells. The builder must not attempt to infer allocation, deduplication,
+termination, or padding policy from circuit expressions.
+
+The generic builder derives component order and widths from the `Ensemble`, runs each component's
+existing row-local Witgen IR to complete rows, evaluates the rows' channel interactions, constructs
+the verifier row, and assembles the `EnsembleWitness`. It must not know Fibonacci component names,
+channel names, or schedules.
+
+When an existing row is updated—for example, when a chip multiplicity increases—the builder must
+replace that row's previous contribution to channel imbalance with its new contribution. It must
+not enqueue unchanged nested interactions again.
+
+For `FibonacciWithChannels`, the verifier's initial-state push drives `fib8` rows until a generated
+final-state push cancels the verifier's final pull. The `add8` pulls produced inside those rows
+drive multiplicity-coalesced `add8` rows. Their byte pulls update the fixed byte row's
+multiplicities. This behavior is obtained from generic modes and component declarations, not from
+a bespoke Fibonacci trace algorithm.
+
+The generation declarations and worklist operations must be structured, exportable witness IR.
+The existing `WitgenIR F m` is row-local and fixed-output-size, so the implementation may extend it
+or compose it with an ensemble-level IR. In either case, the exportable representation must cover
+multi-table allocation, deterministic worklist iteration, row updates, and accumulator/scan
+computations without embedding native Lean closures.
 
 The same IR must be the source for generated Rust witness code. Rust generation is
 backend-independent: it produces component traces and public inputs, not Plonky3 constraints or
@@ -66,22 +87,27 @@ reject unsupported data-dependent programs rather than ignore them.
 
 ### Ensemble-witness milestone acceptance criteria
 
-1. A generic Lean API associates an exportable witness generator with an arbitrary
-   `Air.Flat.Ensemble` without example-specific logic in the builder.
+1. A generic Lean API associates explicit row-generation modes with components of an arbitrary
+   `Air.Flat.Ensemble`, without example-specific logic in the builder.
 2. Given generator inputs, the Lean evaluator returns a structurally valid `EnsembleWitness` or an
    actionable validation error.
 3. The builder automatically invokes each component's existing row-local Witgen IR; ensemble
    authors do not duplicate local witness computations.
-4. The structured IR can express multiple component tables, row loops, accumulator/scan state,
+4. The worklist eagerly cancels opposite equal messages and supports push-driven per-occurrence,
+   pull-driven message-coalesced, and fixed-row multiplicity-updating generation.
+5. Updating a row changes the global channel imbalance by the delta between its old and new
+   interactions, so unchanged nested pulls or pushes are not counted twice.
+6. Missing or ambiguous handlers, malformed row inputs, non-termination/fuel exhaustion,
+   multiplicity overflow, and unsupported padding are reported as explicit errors.
+7. The structured IR can express multiple component tables, deterministic worklist/scan state,
    public input construction, and trace padding needed by `FibonacciWithChannels`.
-5. All code reachable through the export path is structured IR; native witness closures are
+8. All code reachable through the export path is structured IR; native witness closures are
    rejected with their locations.
-6. A Fibonacci generator written through the generic interface produces a non-trivial witness in
-   Lean whose component constraints and `bytes`, `add8`, and `fibonacci` channel balances pass
-   executable checks.
-7. Backend-independent Rust code is generated from the same witness IR and differentially tested
+9. Fibonacci generation declarations produce a non-trivial witness in Lean whose component
+   constraints and `bytes`, `add8`, and `fibonacci` channel balances pass executable checks.
+10. Backend-independent Rust code is generated from the same witness IR and differentially tested
    against Lean on the Fibonacci witness, including trace contents and public inputs.
-8. The interface and trusted status are documented: the generator is not completeness-proved and
+11. The interface and trusted status are documented: the generator is not completeness-proved and
    generated witness correctness is not part of the soundness argument.
 
 ## Delivery milestone 2: Plonky3 support for `FibonacciWithChannels`
