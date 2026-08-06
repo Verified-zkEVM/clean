@@ -74,11 +74,14 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let proving_started = Instant::now();
     let (proof, _) = prove_ensemble(&config, &airs, traces, &public_values);
     let proving_elapsed = proving_started.elapsed();
+    let proof_json_bytes = serde_json::to_vec(&proof)
+        .expect("proof serialization failed")
+        .len();
     let verification_started = Instant::now();
     verify_ensemble(&config, &airs, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
     eprintln!(
-        "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, verification={:?}",
+        "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, verification={:?}, proof_json={proof_json_bytes} bytes",
         verification_started.elapsed()
     );
 }
