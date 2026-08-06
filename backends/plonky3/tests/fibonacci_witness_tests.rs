@@ -12,6 +12,7 @@ use common::setup;
 use p3_baby_bear::BabyBear;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_matrix::Matrix;
+use std::time::Instant;
 
 fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
@@ -54,7 +55,8 @@ fn extracted_rust_coalesces_repeated_chip_pulls() {
 #[test]
 fn extracted_fibonacci_air_proves_and_verifies() {
     let config = setup::test_config(7);
-    let public_values = vec![field(32), field(5), field(226)];
+    let public_values = vec![field(4096), field(59), field(29)];
+    let witness_started = Instant::now();
     let witness =
         generated::generate(&public_values).expect("extracted Rust witness generation failed");
 
@@ -63,12 +65,20 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let traces = padded.traces;
     assert_eq!(
         traces.iter().map(Matrix::height).collect::<Vec<_>>(),
-        vec![32, 32, 32, 32]
+        vec![32, 4096, 512, 32]
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let airs = generated::FibonacciWitnessProgramAir::all(&trace_heights, &padded.active_rows);
+    let witness_elapsed = witness_started.elapsed();
+    let proving_started = Instant::now();
     let (proof, _) = prove_ensemble(&config, &airs, traces, &public_values);
+    let proving_elapsed = proving_started.elapsed();
+    let verification_started = Instant::now();
     verify_ensemble(&config, &airs, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
+    eprintln!(
+        "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, verification={:?}",
+        verification_started.elapsed()
+    );
 }
