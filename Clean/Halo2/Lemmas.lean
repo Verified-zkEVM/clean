@@ -268,6 +268,48 @@ theorem RegionOperations.constraints_ite {c : Prop} [Decidable c] (place : Regio
 theorem operations_constrainConstant (a : AssignedCell F) (v : F) (self : RegionIndex) :
     (constrainConstant a v).operations self = [.constrainConstant a.cell v] := rfl
 
+/-! Deferred-constant demand of primitive region operations. These projection
+lemmas let synthesis-summary proofs stay at the DSL level. -/
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_assignAdvice_constantSiteCount
+    (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((assignAdvice col row compute).operations self)).constantSiteCount = 0 := by
+  rw [operations_assignAdvice]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_assignFixed_constantSiteCount
+    (col : Column .fixed) (row : ℕ) (value : F) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((assignFixed col row value).operations self)).constantSiteCount = 0 := by
+  rw [operations_assignFixed]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_enable_constantSiteCount
+    (gate : Gate F) (row : ℕ) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((gate.enable row).operations self)).constantSiteCount = 0 := by
+  rw [operations_enable]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_constrainConstant_constantSiteCount
+    (cell : AssignedCell F) (value : F) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((constrainConstant cell value).operations self)).constantSiteCount = 1 := by
+  rw [operations_constrainConstant]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_pure_constantSiteCount (value : α) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((pure value : RegionCircuit F α).operations self)).constantSiteCount = 0 := by
+  rw [RegionCircuit.operations_pure]
+  rfl
+
 @[circuit_norm]
 theorem operations_assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
     (col : Column .advice) (row : ℕ) (self : RegionIndex) :
