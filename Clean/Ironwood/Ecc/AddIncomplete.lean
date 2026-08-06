@@ -141,6 +141,16 @@ def add : FormalRegionCircuit Fp
     simp_all only
     grind
 
+/-- Incomplete addition never requests a deferred constant allocation. -/
+@[synthesis_summary_norm]
+theorem add_synthesisSummary_constantSiteCount
+    (config : Config) (offset : ℕ) (input : Inputs (AssignedCell Fp))
+    (region : RegionIndex) :
+    (add.elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [add, circuit_norm]
+
 @[keygen_norm]
 theorem Configured.permutationColumns_eq {config : Config}
     (configured : add.Configured config) :

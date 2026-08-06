@@ -215,6 +215,22 @@ theorem forRange'_forall (property : RegionOperation F → Prop)
         ((body i.val (offset + i.val * stride)).operations self).Forall property :=
   loopAux_forall property _ _ _ _
 
+/-- A region loop requests no deferred constant cells when every iteration requests
+none. The proof composes the exact summaries without unfolding any iteration body. -/
+theorem forRange'_regionSynthesisSummary_constantSiteCount_eq_zero
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hbody : ∀ i : Fin m,
+      (FloorPlanner.regionSynthesisSummary
+        ((body i.val (offset + i.val * stride)).operations self)).constantSiteCount = 0) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).constantSiteCount = 0 := by
+  apply FloorPlanner.regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+  rw [forRange'_forall]
+  intro i
+  apply FloorPlanner.forall_regionOperationConstantSiteCount_eq_zero_of_regionSynthesisSummary
+  exact hbody i
+
 @[circuit_norm ↓]
 theorem forRange'_constraints (offset stride m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)

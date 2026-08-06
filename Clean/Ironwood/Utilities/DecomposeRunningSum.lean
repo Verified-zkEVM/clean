@@ -405,6 +405,35 @@ def copyDecompose (W numWindows : ℕ) :
       rw [← h_output_zs w.val w.isLt]
       exact hz w.val (by omega)
 
+/-- Strict decomposition has exactly one deferred constant allocation: its final
+running-sum cell is constrained to zero. -/
+@[synthesis_summary_norm]
+theorem copyDecompose_synthesisSummary_constantSiteCount
+    (W numWindows : ℕ) (config : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) (region : RegionIndex) :
+    ((copyDecompose W numWindows).elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 1 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [copyDecompose, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
+    synthesis_summary_norm]
+  have enables :
+      (FloorPlanner.regionSynthesisSummary
+        ((enableLoop W config offset numWindows).operations region)).constantSiteCount = 0 := by
+    apply FloorPlanner.regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+    simp only [enableLoop, RegionCircuit.forRange'_forall]
+    intro i
+    simp only [circuit_norm]
+  have assignments :
+      (FloorPlanner.regionSynthesisSummary
+        ((assignLoop W config input.alpha offset numWindows).operations region)).constantSiteCount = 0 := by
+    apply FloorPlanner.regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+    simp only [assignLoop, RegionCircuit.forRange'_forall]
+    intro i
+    simp only [circuit_norm]
+  rw [enables, assignments]
+  simp only [circuit_norm]
+
 /-- The strict decomposition config registers exactly its running-sum column for equality. -/
 @[keygen_norm]
 theorem copyDecompose_configured_permutationColumns_eq

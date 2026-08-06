@@ -393,6 +393,16 @@ instance innerElab (B : FixedBaseData) :
   output_eq := by
     intro _ _ _ self
     rw [innerRegion_output]
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((innerRegion B cfg offset magnitude).operations self)).constantSiteCount = 1 := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
+    synthesis_summary_norm]
+
 
 set_option linter.all false in
 /-- The inner region's soundness, standalone (own declaration budget). -/

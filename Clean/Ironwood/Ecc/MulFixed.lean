@@ -299,6 +299,19 @@ theorem fixedConstantsLoop_keygenRegistered
   unfold fixedConstantsWindow
   keygen_registration
 
+/-- Assigning the per-window fixed data requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem fixedConstantsLoop_synthesisSummary_constantSiteCount
+    (toggle : Gate Fp) (B : FixedBaseData) (config : Config)
+    (offset numWindows : ℕ) (region : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((fixedConstantsLoop toggle B config offset numWindows).operations
+        region)).constantSiteCount = 0 := by
+  apply FloorPlanner.regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+  simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+  intro i
+  simp only [fixedConstantsWindow, circuit_norm]
+
 /-- Witness `[window_scalar]B`'s coordinates into the add config's `x_p`/`y_p` at the window row,
 and the `u` value. Returns the window-point cells. -/
 def processWindow (B : FixedBaseData) (tbl : ℕ → ℕ → Point Fp) (cfg : Config)
@@ -348,6 +361,43 @@ def windowChain (cfg : Config)
   let accX ← cellAt cfg.addIncompleteConfig.xQR (offset + (numWindows - 1))
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
+
+/-- The shared window chain requests no deferred constant allocations when its
+per-window witness program does not. -/
+theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
+    (config : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (offset numWindows : ℕ) (region : RegionIndex)
+    (hprocessW : ∀ w row,
+      (FloorPlanner.regionSynthesisSummary
+        ((processW w row).operations region)).constantSiteCount = 0) :
+    (FloorPlanner.regionSynthesisSummary
+      ((windowChain config processW
+        offset numWindows).operations region)).constantSiteCount = 0 := by
+  simp only [windowChain, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
+    synthesis_summary_norm]
+  rw [hprocessW, hprocessW, hprocessW]
+  simp only [Nat.zero_add, circuit_norm]
+  apply RegionCircuit.forRange'_regionSynthesisSummary_constantSiteCount_eq_zero
+  intro i
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [hprocessW]
+  simp only [Nat.zero_add, circuit_norm]
+
+/-- The standard fixed-base window witness program requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem windowChain_processWindow_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (table : ℕ → ℕ → Point Fp) (config : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ)
+    (region : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((windowChain config (processWindow B table config alpha)
+        offset numWindows).operations region)).constantSiteCount = 0 := by
+  apply windowChain_synthesisSummary_constantSiteCount_eq_zero
+  intro w row
+  simp only [processWindow, circuit_norm]
 
 @[keygen_helper]
 theorem windowChain_processWindow_keygenRegistered

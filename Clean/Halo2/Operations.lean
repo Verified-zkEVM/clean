@@ -332,6 +332,36 @@ theorem mem_regionSynthesisSummary_columns_of_mem
       · exact Or.inl hcolumn
       · exact Or.inr (inductionHypothesis hrest)
 
+/-- A region program which never requests a deferred constant cell has zero
+constant-allocation demand. -/
+theorem regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+    (operations : RegionOperations F)
+    (hoperations : operations.Forall fun operation =>
+      regionOperationConstantSiteCount operation = 0) :
+    (regionSynthesisSummary operations).constantSiteCount = 0 := by
+  induction operations with
+  | nil =>
+      rw [regionSynthesisSummary_nil_constantSiteCount]
+  | cons operation rest inductionHypothesis =>
+      rw [regionSynthesisSummary_cons_constantSiteCount]
+      simp only [List.forall_cons] at hoperations
+      rw [hoperations.1, inductionHypothesis hoperations.2, Nat.zero_add]
+
+/-- Zero deferred-constant demand means that every operation in the region avoids
+requesting one. This is the converse used to compose exact summaries through loops. -/
+theorem forall_regionOperationConstantSiteCount_eq_zero_of_regionSynthesisSummary
+    (operations : RegionOperations F)
+    (hsummary : (regionSynthesisSummary operations).constantSiteCount = 0) :
+    operations.Forall fun operation =>
+      regionOperationConstantSiteCount operation = 0 := by
+  induction operations with
+  | nil => simp only [List.Forall]
+  | cons operation rest inductionHypothesis =>
+      rw [regionSynthesisSummary_cons_constantSiteCount] at hsummary
+      obtain ⟨hoperation, hrest⟩ := Nat.add_eq_zero_iff.mp hsummary
+      rw [List.forall_cons]
+      exact ⟨hoperation, inductionHypothesis hrest⟩
+
 /-- Exact summary of a layouter synthesis stream.  `columnOccupancy column` is the
 sum of region heights allocated in `column`; placement can move those intervals but
 cannot change their total occupied length. -/

@@ -100,6 +100,20 @@ theorem witnessScalarLoop_keygenRegistered
     RegionOperation.KeygenRegistered, hfullWidth, and_true]
   exact ⟨fun _ => trivial, fun _ => trivial⟩
 
+/-- Witnessing the scalar windows requests no deferred constant allocations. -/
+@[synthesis_summary_norm]
+theorem witnessScalarLoop_synthesisSummary_constantSiteCount
+    (config : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (offset : ℕ) (region : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((witnessScalarLoop config windows offset).operations
+        region)).constantSiteCount = 0 := by
+  apply FloorPlanner.regionSynthesisSummary_constantSiteCount_eq_zero_of_forall
+  unfold witnessScalarLoop
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    List.forall_append, RegionCircuit.forRange'_forall, circuit_norm]
+
 /-- The full-width `process_window` witness values, driven by the WINDOW HINTS (not a
 scalar cell): `x_p`/`y_p`/`u` of window `w` at hint value `k_w`. -/
 def hintWindowVal (env : Placed ProverEnvironment Fp) (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
@@ -143,6 +157,31 @@ theorem processWindowH_output_y_column (B : FixedBaseData) (cfg : Config)
     ((processWindowH B cfg windows w row).output self).y.cell.column =
       cfg.superConfig.addConfig.yP := by
   simp only [processWindowH, circuit_norm]
+
+/-- A hinted window witness only assigns advice. -/
+@[synthesis_summary_norm]
+theorem processWindowH_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (config : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (w row : ℕ) (region : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((processWindowH B config windows w row).operations
+        region)).constantSiteCount = 0 := by
+  simp only [processWindowH, circuit_norm]
+
+/-- The hinted full-width window chain requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem windowChain_processWindowH_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (config : Config)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (offset numWindows : ℕ) (region : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((windowChain config.superConfig (processWindowH B config windows)
+        offset numWindows).operations region)).constantSiteCount = 0 := by
+  apply windowChain_synthesisSummary_constantSiteCount_eq_zero
+  intro w row
+  exact processWindowH_synthesisSummary_constantSiteCount
+    B config windows w row region
 
 structure InnerOut (F : Type) where
   -- The exit accumulator after windows 0..83.
@@ -334,6 +373,18 @@ instance innerElab (B : FixedBaseData)
   output_eq := by
     intro _ _ _ self
     rw [innerOutCells, innerRegion_output]
+seal innerRegion in
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((innerRegion B cfg offset windows).operations self)).constantSiteCount = 0 := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
+    synthesis_summary_norm]
+
 
 /-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
 private theorem ofFn8_get_hint (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
