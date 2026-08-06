@@ -111,6 +111,5 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
-  computableWitnesses := by computable_witnesses [main]
 
 end Gadgets.Keccak256.Permutation

@@ -98,6 +98,5 @@ def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
   Assumptions
   soundness := soundness rc
   completeness := completeness rc
-  computableWitnesses := by computable_witnesses [main]
 
 end Gadgets.Keccak256.KeccakRound

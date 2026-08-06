@@ -111,5 +111,4 @@ def circuit : FormalCircuit (F p) Input KeccakState where
   Spec := Spec
   soundness := soundness
   completeness := completeness
-  computableWitnesses := by computable_witnesses [main]
 end Gadgets.Keccak256.AbsorbBlock

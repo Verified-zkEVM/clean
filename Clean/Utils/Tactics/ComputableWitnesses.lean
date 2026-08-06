@@ -140,7 +140,7 @@ elab "assert_local_lengths" : tactic => withMainContext do
     unless decl.isImplementationDetail do
       scan := scan.push (← instantiateMVars decl.type)
   let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
-  let eqs ← IO.mkRef (#[] : Array (Expr × Simp.Result × Nat))
+  let eqs ← IO.mkRef (#[] : Array (Expr × Simp.Result × Option Nat))
   for tgt in scan do
    tgt.forEach fun e => do
     let .const name _ := e.getAppFn | return ()
@@ -148,12 +148,17 @@ elab "assert_local_lengths" : tactic => withMainContext do
     if e.hasLooseBVars || e.hasMVar then return ()
     if (← seen.get).contains e then return ()
     seen.modify (·.insert e)
+    unless (← try inferType e catch _ => return ()).isConstOf `Nat do return ()
     let r ← try simpLocalLength e catch _ => return ()
-    let some k ← try natValOf r.expr catch _ => return () | return ()
-    eqs.modify (·.push (e, r, k))
+    let k? ← try natValOf r.expr catch _ => pure none
+    if k?.isNone && r.expr == e then return ()
+    eqs.modify (·.push (e, r, k?))
   let mut i := 0
-  for (e, r, k) in (← eqs.get) do
-    let lit := mkNatLit k
+  for (e, r, k?) in (← eqs.get) do
+    -- symbolic lengths (parameterized circuits, e.g. `Num2Bits.circuit (n+1)`) assert
+    -- their simp normal form instead of a numeral — omega gets the bound arithmetic
+    -- either way
+    let lit := match k? with | some k => mkNatLit k | none => r.expr
     let eqType ← mkEq e lit
     -- the defeq gap is only between the simp-reduced form and the numeral (cheap
     -- metadata projections + arithmetic); the reduction from the original spelling is
@@ -180,8 +185,20 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   unless name == `FormalCircuitBase.localLength ||
       name == `ElaboratedCircuit.localLength do return .continue
   if e.hasLooseBVars || e.hasMVar then return .continue
-  let some k ← try natValOf e catch _ => return .continue | return .continue
-  return .visit (mkNatLit k)
+  if let some k ← try natValOf e catch _ => pure none then
+    return .visit (mkNatLit k)
+  -- parameterized circuits have symbolic lengths (e.g. `Num2Bits.circuit (n+1)` has
+  -- localLength `n+1`); the metadata projection is still a cheap definitional step
+  unless (← inferType e).isConstOf `Nat do return .continue
+  let w := (← try withDefault <| whnf e catch _ => return .continue).headBeta
+  if w == e then return .continue
+  let leaked := w.find? fun sub =>
+    sub.getAppFn.isConstOf `FormalCircuitBase.localLength ||
+    sub.getAppFn.isConstOf `ElaboratedCircuit.localLength ||
+    sub.getAppFn.isConstOf `Operations.localLength ||
+    sub.getAppFn.isConstOf `Circuit
+  if leaked.isSome then return .continue
+  return .visit w
 
 /- shape-only pattern: the localLength constants live downstream of this file, so they
 cannot be named in the pattern; the proc bails immediately on other heads. Declared
@@ -370,7 +387,10 @@ elab "chain_output_facts" : tactic => withMainContext do
   let acc ← IO.mkRef (#[] : Array Expr)
   collectOutputsGo tgt seen acc
   for o in (← acc.get) do
-    let step (lemName : Name) : TacticM Unit := do
+    -- re-enter the CURRENT main goal's context: facts chained for earlier outputs
+    -- (e.g. the inner output of a nested `RhoPi.output (Theta.output …)`) must be
+    -- visible to this step's premises, and the entry-time context predates them
+    let step (lemName : Name) : TacticM Unit := withMainContext do
       let lem ← mkConstWithFreshMVarLevels lemName
       let (ms, _, concl) ← forallMetaTelescope (← inferType lem)
       let some (_, lhs, rhs) := concl.eq? | throwError "conclusion not an equality"
@@ -490,8 +510,17 @@ private def destructureProvableStructVars : TacticM Unit := do
       return subgoals.map (·.mvarId) |>.toList
 
 private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
-  let lemmasArray ← extraTerms.mapM fun term =>
+  let mut lemmasArray ← extraTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
+  -- self-supply the current `main` as a simp lemma so every pass (leaf simp, close,
+  -- offset discharge) can unfold occurrences that only surface after early rewriting;
+  -- robust against obligations with no `main` in scope
+  -- ambiguity-tolerant: with several `main`s in scope, include all resolutions — a
+  -- constant that does not occur in the goal contributes no rewrites
+  let mainNames ← try resolveGlobalConst (mkIdent `main) catch _ => pure []
+  for mainName in mainNames do
+    lemmasArray := lemmasArray.push
+      (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent mainName):term))
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try
@@ -501,10 +530,6 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
         pure ()
   simpPass
   unless (← getGoals).isEmpty do
-    try
-      evalTactic (← `(tactic| unfold $(mkIdent `main):ident))
-    catch _ =>
-      pure ()
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
     -- are the current circuit's own structure and always unfold; `FormalCircuit`-variant
     -- bundles are proof boundaries and never do (unfolding them destroys the
@@ -555,6 +580,14 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     -- the value type is a vector or a provable struct
     let isEvalCongrEq : TacticM Bool := withMainContext do
       let t := (← instantiateMVars (← getMainTarget)).consumeMData
+      -- witness-window / child-output atoms mark eval-congruence territory whatever
+      -- the goal's connective shape (equality, conjunction of equalities, …)
+      if (t.find? fun e =>
+          e.getAppFn.isConstOf `Expression.var ||
+          e.getAppFn.isConstOf `ProvableType.varFromOffset ||
+          e.getAppFn.isConstOf `FormalCircuitBase.output ||
+          e.getAppFn.isConstOf `ElaboratedCircuit.output).isSome then
+        return true
       let some (_, lhs, rhs) := t.eq? | return false
       let ty ← instantiateMVars (← inferType lhs)
       let tyW ← withTransparency .instances <| whnf ty
@@ -562,19 +595,13 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
           (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
         return true
-      -- goals over witness variables/windows: agreement-based congruence territory
-      return (t.find? fun e =>
-        e.getAppFn.isConstOf `Expression.var ||
-        e.getAppFn.isConstOf `ProvableType.varFromOffset).isSome
+      return false
     -- when both sides of an eval-congruence goal share the same argument whose head is
     -- a plain (non-bundle) definition — e.g. a child's Var-typed output metadata def like
     -- `Permutation.stateVar`, already substituted for `c.output` by metadata reduction —
     -- unfold that head: it is data, not a proof boundary, and unfolding exposes the
     -- `varFromOffset` spelling the eval simp lemmas need
     let unfoldSharedEvalArgHeads : TacticM Unit := withMainContext do
-      let bundleHeads : List Name :=
-        [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
-         `GeneralFormalCircuit.WithHint, `FormalAssertion, `Circuit]
       for _ in [0:4] do
         if (← getGoals).isEmpty then return
         let t := (← instantiateMVars (← getMainTarget)).consumeMData
@@ -623,13 +650,9 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       if (← try syntacticAssumption; pure true catch _ => pure false) then return
       if ← isEvalCongrEq then
         try unfoldSharedEvalArgHeads catch _ => pure ()
-        dbg_trace "cw# vecClose"
         evalTactic vecClose
-        dbg_trace "cw# vecClose done"
       else
-        dbg_trace "cw# baseClose"
         evalTactic baseClose
-        dbg_trace "cw# baseClose done"
     let leafDispatch : TacticM Unit := withMainContext do
       -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
       try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
@@ -640,9 +663,7 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
           $lemmasArray,*] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return
-      dbg_trace "cw# pre-assert"
       evalTactic (← `(tactic| assert_local_lengths))
-      dbg_trace "cw# post-assert"
       withMainContext do
         let t := (← instantiateMVars (← getMainTarget)).consumeMData
         let .const headName _ := t.getAppFn | evalCloseRun
@@ -670,10 +691,8 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
               `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
             unless applied do
               if ← tryVariant nm then applied := true
-          dbg_trace s!"cw# variant applied={applied}"
           if applied then
             simpPass
-            dbg_trace "cw# post-variant simpPass"
             unless (← getGoals).isEmpty do
               evalTactic (← `(tactic| (try chain_output_facts)))
               unless (← getGoals).isEmpty do
@@ -681,9 +700,7 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
           else
             evalTactic (← `(tactic| grind))
         else
-          dbg_trace "cw# chain (non-CW head)"
           evalTactic (← `(tactic| (try chain_output_facts)))
-          dbg_trace "cw# chained"
           unless (← getGoals).isEmpty do
             evalCloseRun
     let goals ← getGoals
