@@ -132,6 +132,4 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   Spec := Spec
   soundness := soundness
   completeness := completeness
-  computableWitnesses := by
-    computable_witnesses
 end Gadgets.BLAKE3.FinalStateUpdate

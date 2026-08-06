@@ -82,6 +82,4 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]
 
-  computableWitnesses := by
-    computable_witnesses
 end Gadgets.Keccak256
