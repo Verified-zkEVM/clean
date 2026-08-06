@@ -560,6 +560,53 @@ def synthesisSummary : Operations F → SynthesisSummary
       · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
 
+/-- Columns of concatenated region fragments compose by concatenating their exact
+column summaries. -/
+@[synthesis_summary_norm]
+theorem regionSynthesisSummary_flatten_columns
+    (fragments : List (RegionOperations F)) :
+    (regionSynthesisSummary fragments.flatten).columns =
+      (fragments.map fun operations =>
+        (regionSynthesisSummary operations).columns).flatten := by
+  induction fragments with
+  | nil => simp only [List.flatten_nil, List.map_nil,
+      regionSynthesisSummary_nil_columns]
+  | cons fragment rest inductionHypothesis =>
+      rw [List.flatten_cons, regionSynthesisSummary_append,
+        RegionSynthesisSummary.combine_columns, List.map_cons,
+        List.flatten_cons, inductionHypothesis]
+
+/-- The height of concatenated fragments is the maximum of their exact heights. -/
+@[synthesis_summary_norm]
+theorem regionSynthesisSummary_flatten_rowCount
+    (fragments : List (RegionOperations F)) :
+    (regionSynthesisSummary fragments.flatten).rowCount =
+      (fragments.map fun operations =>
+        (regionSynthesisSummary operations).rowCount).foldr max 0 := by
+  induction fragments with
+  | nil => simp only [List.flatten_nil, List.map_nil, List.foldr_nil,
+      regionSynthesisSummary_nil_rowCount]
+  | cons fragment rest inductionHypothesis =>
+      rw [List.flatten_cons, regionSynthesisSummary_append,
+        RegionSynthesisSummary.combine_rowCount, List.map_cons,
+        List.foldr_cons, inductionHypothesis]
+
+/-- Deferred-constant demand of concatenated fragments is the sum of their exact
+demands. -/
+@[synthesis_summary_norm]
+theorem regionSynthesisSummary_flatten_constantSiteCount
+    (fragments : List (RegionOperations F)) :
+    (regionSynthesisSummary fragments.flatten).constantSiteCount =
+      (fragments.map fun operations =>
+        (regionSynthesisSummary operations).constantSiteCount).sum := by
+  induction fragments with
+  | nil => simp only [List.flatten_nil, List.map_nil, List.sum_nil,
+      regionSynthesisSummary_nil_constantSiteCount]
+  | cons fragment rest inductionHypothesis =>
+      rw [List.flatten_cons, regionSynthesisSummary_append,
+        RegionSynthesisSummary.combine_constantSiteCount, List.map_cons,
+        List.sum_cons, inductionHypothesis]
+
 @[circuit_norm] theorem synthesisSummary_append
     (left right : Operations F) :
     synthesisSummary (left ++ right) =

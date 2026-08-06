@@ -446,6 +446,26 @@ in the Rust chip (`ecc/chip.rs`: `assign_region(|| "complete point addition", â€
 def addFormal :=
   add.toFormal "complete point addition"
 
+/-- Complete addition requests no deferred constant allocations inside its region. -/
+@[synthesis_summary_norm]
+theorem add_synthesisSummary_constantSiteCount
+    (config : Config) (offset : â„•) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    (add.elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [add, circuit_norm]
+
+/-- Complete addition requests no deferred constant allocations. -/
+@[synthesis_summary_norm]
+theorem addFormal_synthesisSummary_constantSiteCount
+    (config : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    (addFormal.elaborated.synthesisSummary
+      config input region).constantSiteCount = 0 := by
+  unfold addFormal
+  rw [FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount]
+  exact add_synthesisSummary_constantSiteCount config 0 input region
+
 /-- The layouter-level complete addition has the same positional output as its single
 region. -/
 @[keygen_norm]

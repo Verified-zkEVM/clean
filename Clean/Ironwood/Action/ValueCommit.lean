@@ -149,6 +149,20 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     refine ⟨⟨hSEnv, hmag, hsign⟩, hFEnv, ?_, by rw [hBl]; exact R.smul_valid _⟩
     rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _
 
+/-- A value commitment requests only the short scalar's strict-decomposition
+constant allocation. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (config : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
+      Ecc.Add.Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    ((circuit V R).elaborated.synthesisSummary
+      config input region).constantSiteCount = 1 := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+    FloorPlanner.synthesisSummary_append, synthesis_summary_norm]
+
 derive_contract_bridges circuit (V : Ecc.MulFixed.Short.FixedBase)
   (R : FixedBase) := circuit V R
 

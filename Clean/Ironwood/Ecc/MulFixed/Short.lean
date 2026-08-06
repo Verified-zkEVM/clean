@@ -1499,6 +1499,26 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         rw [hWyVar, hs]
         ring
 
+/-- Short fixed-base multiplication requests exactly its strict decomposition's
+single deferred constant allocation. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    ((circuit B).elaborated.synthesisSummary
+      config input region).constantSiteCount = 1 := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, synthesis_summary_norm]
+  simp only [synthesize, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append, synthesis_summary_norm]
+  simp only [operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero]
+  rw [innerRegion_synthesisSummary_constantSiteCount]
+  simp only [mswRegion, circuit_norm]
+  rw [← Add.add.elaborated.synthesisSummary_constantSiteCount_eq]
+  rw [Add.add_synthesisSummary_constantSiteCount]
+
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 
 end Zcash.Circuits.Ecc.MulFixed.Short

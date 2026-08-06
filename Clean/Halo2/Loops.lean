@@ -231,6 +231,49 @@ theorem forRange'_regionSynthesisSummary_constantSiteCount_eq_zero
   apply FloorPlanner.forall_regionOperationConstantSiteCount_eq_zero_of_regionSynthesisSummary
   exact hbody i
 
+/-- Exact columns contributed by a region loop, one summarized fragment per
+iteration. -/
+@[synthesis_summary_norm]
+theorem forRange'_regionSynthesisSummary_columns
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).columns =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (offset + i.val * stride)).operations self)).columns).flatten := by
+  rw [forRange'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_columns, List.map_ofFn]
+  congr 2
+
+/-- Exact maximum row extent of a region loop. -/
+@[synthesis_summary_norm]
+theorem forRange'_regionSynthesisSummary_rowCount
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).rowCount =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (offset + i.val * stride)).operations self)).rowCount).foldr max 0 := by
+  rw [forRange'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_rowCount, List.map_ofFn]
+  congr 2
+
+/-- Exact deferred-constant demand of a region loop. -/
+@[synthesis_summary_norm]
+theorem forRange'_regionSynthesisSummary_constantSiteCount
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (offset + i.val * stride)).operations self)).constantSiteCount).sum := by
+  rw [forRange'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_constantSiteCount, List.map_ofFn]
+  congr 2
+
 @[circuit_norm ↓]
 theorem forRange'_constraints (offset stride m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)

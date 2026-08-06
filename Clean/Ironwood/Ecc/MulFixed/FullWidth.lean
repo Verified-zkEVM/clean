@@ -1285,6 +1285,22 @@ def circuit (B : FixedBase) :
       rw [hax, hay]
       exact Or.inl hOn
 
+/-- Full-width fixed-base multiplication requests no deferred constant allocations. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (region : RegionIndex) :
+    ((circuit B).elaborated.synthesisSummary
+      config input region).constantSiteCount = 0 := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, synthesis_summary_norm]
+  simp only [synthesize, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append, synthesis_summary_norm]
+  simp only [operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero,
+    synthesis_summary_norm]
+
 /-- The complete-addition columns remain equality-enabled through the full-width bundle. -/
 theorem Configured.addPermutationColumns_subset (B : FixedBase) {cfg : Config}
     (configured : (circuit B).Configured cfg) :

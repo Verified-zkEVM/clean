@@ -379,12 +379,15 @@ theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
     synthesis_summary_norm]
   rw [hprocessW, hprocessW, hprocessW]
   simp only [Nat.zero_add, circuit_norm]
-  apply RegionCircuit.forRange'_regionSynthesisSummary_constantSiteCount_eq_zero
-  intro i
-  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
-  rw [hprocessW]
-  simp only [Nat.zero_add, circuit_norm]
+  have allZero :
+      (fun i : Fin (numWindows - 3) =>
+        (FloorPlanner.regionSynthesisSummary
+          ((processW (i.val + 2) (offset + 2 + i.val * 1)).operations
+            region)).constantSiteCount) = fun _ => 0 := by
+    funext i
+    exact hprocessW _ _
+  rw [allZero]
+  simp
 
 /-- The standard fixed-base window witness program requests no deferred constants. -/
 @[synthesis_summary_norm]
